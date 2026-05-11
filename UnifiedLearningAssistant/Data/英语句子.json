@@ -1,0 +1,42 @@
+[
+  {
+    "Sentence": "I love reading books.",
+    "Translation": "我喜欢读书。",
+    "Grammar": "主谓宾结构，love 是及物动词",
+    "Id": "1",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  },
+  {
+    "Sentence": "She is a beautiful girl.",
+    "Translation": "她是一个漂亮的女孩。",
+    "Grammar": "主系表结构，is 是系动词",
+    "Id": "2",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  },
+  {
+    "Sentence": "He goes to school every day.",
+    "Translation": "他每天去上学。",
+    "Grammar": "主谓结构，goes 是不及物动词",
+    "Id": "3",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  },
+  {
+    "Sentence": "They are playing football.",
+    "Translation": "他们正在踢足球。",
+    "Grammar": "现在进行时，be + doing",
+    "Id": "4",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  },
+  {
+    "Sentence": "We will visit our grandparents tomorrow.",
+    "Translation": "我们明天将去看望祖父母。",
+    "Grammar": "一般将来时，will + 动词原形",
+    "Id": "5",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  }
+]

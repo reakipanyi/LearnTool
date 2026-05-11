@@ -1,0 +1,747 @@
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
+using UnifiedLearningAssistant.Common;
+using UnifiedLearningAssistant.Models.Pdf;
+using UnifiedLearningAssistant.Services.AI;
+using UnifiedLearningAssistant.Services.Pdf;
+using UnifiedLearningAssistant.Services.TTS;
+using UnifiedLearningAssistant.Views;
+
+namespace UnifiedLearningAssistant.Presenters
+{
+    public class PdfPresenter : IDisposable
+    {
+        private IPdfView? _view;
+        private readonly ILogger<PdfPresenter> _logger;
+        private readonly IPdfService _pdfService;
+        private readonly IOcrService _ocrService;
+        private readonly ITranslationService _translationService;
+        private readonly IAnnotationService _annotationService;
+        private readonly IAiQuestionService _aiQuestionService;
+        private readonly ITTSService _ttsService;
+        private CancellationTokenSource? _cts;
+
+        private string _currentPdfPath = "";
+        private int _currentPageIndex = 0;
+        private string _lastFolderPath = "";
+        private bool _isDisposed = false;
+        private readonly Dictionary<int, string> _pageTexts = new Dictionary<int, string>();
+        private readonly object _renderLock = new object();
+        private readonly Dictionary<string, Bitmap> _renderCache = new Dictionary<string, Bitmap>();
+        private const int RenderCacheSize = 10;
+        private readonly string _sessionPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "lastsession.json");
+        private readonly SemaphoreSlim _renderSemaphore = new SemaphoreSlim(2, 5);
+        private readonly HashSet<int> _preRenderingPages = new HashSet<int>();
+        // 存储每个文件的最后浏览页数
+        private readonly Dictionary<string, int> _filePageMap = new Dictionary<string, int>();
+
+        // 会话数据记录
+        private record SessionData(
+            string? Folder, 
+            string? FilePath, 
+            Dictionary<string, int> FilePageMap
+        );
+
+        public PdfPresenter(ILogger<PdfPresenter> logger, IPdfService pdfService, IOcrService ocrService,
+            ITranslationService translationService, IAnnotationService annotationService,
+            IAiQuestionService aiQuestionService, ITTSService ttsService)
+        {
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _pdfService = pdfService ?? throw new ArgumentNullException(nameof(pdfService));
+            _ocrService = ocrService ?? throw new ArgumentNullException(nameof(ocrService));
+            _translationService = translationService ?? throw new ArgumentNullException(nameof(translationService));
+            _annotationService = annotationService ?? throw new ArgumentNullException(nameof(annotationService));
+            _aiQuestionService = aiQuestionService ?? throw new ArgumentNullException(nameof(aiQuestionService));
+            _ttsService = ttsService ?? throw new ArgumentNullException(nameof(ttsService));
+            _cts = new CancellationTokenSource();
+            _logger.LogInformation("PdfPresenter initialized");
+        }
+
+        public void SetView(IPdfView view)
+        {
+            if (_view == view)
+                return;
+
+            UnsubscribeFromEvents();
+            _view = view;
+            SubscribeToEvents();
+        }
+
+        private void SubscribeToEvents()
+        {
+            if (_view == null)
+                return;
+
+            _view.FileSelected += View_FileSelected;
+            _view.PageChanged += View_PageChanged;
+            _view.OcrSelectionComplete += View_OcrSelectionComplete;
+            _view.AiQuestionAsked += View_AiQuestionAsked;
+            _view.AddWordToLearningList += View_AddWordToLearningList;
+            _view.SpeakTranslation += View_SpeakTranslation;
+            _view.SelectOcrClicked += View_SelectOcrClicked;
+            _view.TranslateClicked += View_TranslateClicked;
+        }
+
+        private void UnsubscribeFromEvents()
+        {
+            if (_view == null)
+                return;
+
+            _view.FileSelected -= View_FileSelected;
+            _view.PageChanged -= View_PageChanged;
+            _view.OcrSelectionComplete -= View_OcrSelectionComplete;
+            _view.AiQuestionAsked -= View_AiQuestionAsked;
+            _view.AddWordToLearningList -= View_AddWordToLearningList;
+            _view.SpeakTranslation -= View_SpeakTranslation;
+            _view.SelectOcrClicked -= View_SelectOcrClicked;
+            _view.TranslateClicked -= View_TranslateClicked;
+        }
+
+        private void SaveSession()
+        {
+            try
+            {
+                var data = new SessionData(_lastFolderPath, _currentPdfPath, new Dictionary<string, int>(_filePageMap));
+                var json = JsonSerializer.Serialize(data);
+                File.WriteAllText(_sessionPath, json);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to save session");
+            }
+        }
+
+        public (string? Folder, string? FilePath, Dictionary<string, int>? FilePageMap) LoadSession()
+        {
+            try
+            {
+                if (!File.Exists(_sessionPath)) return (null, null, null);
+                var json = File.ReadAllText(_sessionPath);
+                var data = JsonSerializer.Deserialize<SessionData>(json);
+                if (data == null) return (null, null, null);
+                return (data.Folder, data.FilePath, data.FilePageMap);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load session");
+                return (null, null, null);
+            }
+        }
+
+        public void LoadLastSessionAndRestore()
+        {
+            try
+            {
+                var (folder, filePath, filePageMap) = LoadSession();
+                if (filePageMap != null)
+                {
+                    foreach (var kvp in filePageMap)
+                    {
+                        _filePageMap[kvp.Key] = kvp.Value;
+                    }
+                }
+                
+                if (!string.IsNullOrEmpty(folder) && Directory.Exists(folder))
+                {
+                    _lastFolderPath = folder;
+                    LoadFolder(folder);
+                    
+                    if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
+                    {
+                        var fileName = Path.GetFileName(filePath);
+                        _currentPdfPath = filePath;
+                        LoadPdfFile(filePath);
+                        
+                        // 恢复最后浏览的页数
+                        if (_filePageMap.TryGetValue(filePath, out int savedPage))
+                        {
+                            _currentPageIndex = savedPage;
+                            _view.SetCurrentPageIndex(savedPage);
+                            _ = RenderAndDisplayCurrentPageAsync();
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to restore last session");
+            }
+        }
+
+        private string GetRenderCacheKey(int pageIndex)
+        {
+            return $"{_currentPdfPath}_{pageIndex}";
+        }
+
+        public int PageCount => _pdfService?.PageCount ?? 0;
+
+        public void LoadFolder(string folder)
+        {
+            if (!Directory.Exists(folder))
+            {
+                _view.ShowError("文件夹不存在");
+                return;
+            }
+
+            _lastFolderPath = folder;
+            var pdfFiles = Directory.EnumerateFiles(folder, "*.pdf")
+                                   .Select(f => Path.GetFileName(f))
+                                   .ToList();
+            _view.SetFileList(pdfFiles);
+            SaveSession();
+        }
+
+        private void LoadPdfFile(string filePath)
+        {
+            _pdfService.Load(filePath);
+            _view.SetPageCount(_pdfService.PageCount);
+        }
+
+        public void LoadPdf(string fileName)
+        {
+            try
+            {
+                var filePath = Path.Combine(_lastFolderPath, fileName);
+                if (!File.Exists(filePath))
+                {
+                    _view.ShowError("文件不存在");
+                    return;
+                }
+
+                // 先保存当前文件的进度
+                if (!string.IsNullOrEmpty(_currentPdfPath))
+                {
+                    _filePageMap[_currentPdfPath] = _currentPageIndex;
+                }
+                
+                ClearRenderCache();
+                
+                _currentPdfPath = filePath;
+                LoadPdfFile(filePath);
+                
+                // 检查是否有保存的页数
+                if (_filePageMap.TryGetValue(filePath, out int savedPage))
+                {
+                    _currentPageIndex = savedPage;
+                }
+                else
+                {
+                    _currentPageIndex = 0;
+                }
+                
+                _view.SetCurrentPageIndex(_currentPageIndex);
+                _ = RenderAndDisplayCurrentPageAsync();
+                SaveSession();
+                _logger.LogInformation("Loaded PDF: {Path}", filePath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load PDF file: {Path}", fileName);
+                _view.ShowError("无法加载PDF文件");
+            }
+        }
+
+        public void RenderPage(int pageIndex)
+        {
+            if (pageIndex < 0 || pageIndex >= _pdfService.PageCount)
+                return;
+
+            _currentPageIndex = pageIndex;
+            _view.SetCurrentPageIndex(pageIndex);
+            _ = RenderAndDisplayCurrentPageAsync();
+        }
+
+        private async Task RenderAndDisplayCurrentPageAsync()
+        {
+            try
+            {
+                var pageSize = _pdfService.GetPageSize(_currentPageIndex);
+                if (pageSize.Width <= 0 || pageSize.Height <= 0)
+                {
+                    _logger.LogWarning("Invalid page size for page {PageIndex}", _currentPageIndex);
+                    return;
+                }
+
+                int renderWidth = 1000;
+                int renderHeight = (int)(renderWidth * pageSize.Height / pageSize.Width);
+
+                var bitmap = await GetRenderedPageAsync(_currentPageIndex, renderWidth, renderHeight);
+                if (bitmap != null)
+                {
+                    _view.DisplayImage(bitmap);
+                }
+                
+                // 保存当前页面进度
+                _filePageMap[_currentPdfPath] = _currentPageIndex;
+                SaveSession();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to render page {PageIndex}", _currentPageIndex);
+                _view.ShowError("渲染页面失败");
+            }
+        }
+
+        public async Task<Bitmap> GetRenderedPageAsync(int pageIndex, int renderW, int renderH)
+        {
+            if (_pdfService == null) return null;
+            if (pageIndex < 0 || pageIndex >= _pdfService.PageCount) return null;
+
+            var cacheKey = GetRenderCacheKey(pageIndex);
+            lock (_renderLock)
+            {
+                if (_renderCache.TryGetValue(cacheKey, out var cached))
+                {
+                    return (Bitmap)cached.Clone();
+                }
+            }
+
+            await _renderSemaphore.WaitAsync();
+            try
+            {
+                lock (_renderLock)
+                {
+                    if (_renderCache.TryGetValue(cacheKey, out var cachedAfterWait))
+                    {
+                        return (Bitmap)cachedAfterWait.Clone();
+                    }
+                }
+
+                var bmp = await Task.Run(() => RenderPageToBitmap(pageIndex, renderW, renderH), 
+                    _cts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+                if (bmp == null) return null;
+
+                lock (_renderLock)
+                {
+                    if (!_renderCache.ContainsKey(cacheKey))
+                    {
+                        _renderCache[cacheKey] = (Bitmap)bmp.Clone();
+                        while (_renderCache.Count > RenderCacheSize)
+                        {
+                            var keyToRemove = _renderCache.Keys.First();
+                            if (_renderCache.TryGetValue(keyToRemove, out var oldBmp))
+                            {
+                                _renderCache.Remove(keyToRemove);
+                                try 
+                                { 
+                                    oldBmp.Dispose(); 
+                                } 
+                                catch (Exception ex)
+                                {
+                                    _logger.LogWarning(ex, "Failed to dispose old cached bitmap");
+                                }
+                            }
+                        }
+                    }
+                }
+
+                _ = Task.Run(() => PreRenderNeighborsInternal(pageIndex, renderW, renderH), 
+                    _cts?.Token ?? CancellationToken.None);
+
+                return bmp;
+            }
+            finally
+            {
+                _renderSemaphore.Release();
+            }
+        }
+
+        private void PreRenderNeighborsInternal(int pageIndex, int renderW, int renderH)
+        {
+            if (_cts?.IsCancellationRequested ?? true) return;
+
+            var neighbors = new[] { pageIndex - 2, pageIndex - 1, pageIndex + 1, pageIndex + 2 };
+            foreach (var p in neighbors)
+            {
+                if (_cts?.IsCancellationRequested ?? true) return;
+                if (p < 0 || p >= _pdfService.PageCount) continue;
+
+                bool shouldRender = false;
+                lock (_renderLock)
+                {
+                    var key = GetRenderCacheKey(p);
+                    if (!_renderCache.ContainsKey(key) && !_preRenderingPages.Contains(p))
+                    {
+                        _preRenderingPages.Add(p);
+                        shouldRender = true;
+                    }
+                }
+
+                if (shouldRender)
+                {
+                    try
+                    {
+                        var bmp = RenderPageToBitmap(p, renderW, renderH);
+                        if (bmp == null) continue;
+
+                        lock (_renderLock)
+                        {
+                            var key = GetRenderCacheKey(p);
+                            if (!_renderCache.ContainsKey(key)) 
+                            {
+                                _renderCache[key] = (Bitmap)bmp.Clone();
+                            }
+                            _preRenderingPages.Remove(p);
+
+                            while (_renderCache.Count > RenderCacheSize)
+                            {
+                                var keyToRemove = _renderCache.Keys.First();
+                                if (_renderCache.TryGetValue(keyToRemove, out var oldBmp))
+                                {
+                                    _renderCache.Remove(keyToRemove);
+                                    try 
+                                    { 
+                                        oldBmp.Dispose(); 
+                                    } 
+                                    catch (Exception ex2)
+                                    {
+                                        _logger.LogWarning(ex2, "Failed to dispose old cached bitmap in pre-render");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to pre-render neighbor page {PageIndex}", p);
+                        lock (_renderLock)
+                        {
+                            _preRenderingPages.Remove(p);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void ClearRenderCache()
+        {
+            lock (_renderLock)
+            {
+                foreach (var kvp in _renderCache)
+                {
+                    try
+                    {
+                        kvp.Value.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to dispose cached bitmap during clear");
+                    }
+                }
+                _renderCache.Clear();
+                _preRenderingPages.Clear();
+            }
+        }
+
+        public async Task EnsurePageTextAsync(int pageIndex)
+        {
+            if (_pageTexts.ContainsKey(pageIndex)) return;
+            try
+            {
+                var text = _pdfService.GetPdfText(pageIndex);
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    _pageTexts[pageIndex] = text;
+                    _view.SetPageText(pageIndex, text);
+                    return;
+                }
+
+                var bmp = _pdfService.RenderPage(pageIndex, 1200, 1600);
+                var ocrText = await OcrBitmapAsync(bmp);
+                if (!string.IsNullOrWhiteSpace(ocrText))
+                {
+                    _pageTexts[pageIndex] = ocrText;
+                    _view.SetPageText(pageIndex, ocrText);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to ensure page text for page {PageIndex}", pageIndex);
+            }
+        }
+
+        public async Task<string?> OcrBitmapAsync(Bitmap bmp)
+        {
+            if (!_ocrService.IsAvailable)
+                return null;
+
+            return await _ocrService.RecognizeTextAsync(bmp);
+        }
+
+        public async Task<string?> TranslateAsync(string text)
+        {
+            if (!_translationService.IsAvailable)
+                return null;
+
+            return await _translationService.TranslateAsync(text);
+        }
+
+        public async Task OcrCropAndTranslateAsync(Bitmap img, Rectangle selRect, Rectangle imgDisplayRect)
+        {
+            if (!_ocrService.IsAvailable)
+            {
+                var errorMsg = _ocrService.InitErrorMessage ?? "OCR服务未配置";
+                _view.ShowWarning($"OCR服务未初始化:\n{errorMsg}");
+                return;
+            }
+
+            try
+            {
+                float scaleX = (float)img.Width / imgDisplayRect.Width;
+                float scaleY = (float)img.Height / imgDisplayRect.Height;
+
+                var actualRect = new Rectangle(
+                    (int)(selRect.X * scaleX),
+                    (int)(selRect.Y * scaleY),
+                    (int)(selRect.Width * scaleX),
+                    (int)(selRect.Height * scaleY));
+
+                using var cropped = img.Clone(actualRect, img.PixelFormat);
+                var recognizedText = await _ocrService.RecognizeTextAsync(cropped);
+
+                if (!string.IsNullOrWhiteSpace(recognizedText))
+                {
+                    string translation = await _translationService.TranslateAsync(recognizedText) ?? "翻译失败";
+                    _view.ShowTranslationDialog(recognizedText, translation, "");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "OCR识别失败");
+                _view.ShowError("OCR识别失败");
+            }
+        }
+
+        public async Task SpeakTextAsync(string text, string language, float speed)
+        {
+            if (!_ttsService.Available)
+                return;
+
+            string lang = language == Constants.Language.Chinese ? "zh" : "en";
+            await _ttsService.SpeakAsync(text, lang, speed);
+        }
+
+        public async Task<string> GetAiAnswerAsync(string question, string context = "", CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return await _aiQuestionService.AskAsync(question, context);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogDebug("GetAiAnswerAsync was cancelled");
+                return "操作已取消";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get AI answer");
+                return "获取答案失败";
+            }
+        }
+
+        public void TogglePenMode(bool enabled)
+        {
+        }
+
+        public void ClearAnnotationsCurrentPage()
+        {
+            _annotationService.ClearAnnotation(_currentPdfPath, _currentPageIndex);
+        }
+
+        public void AddAnnotationStroke(float[] normalizedPoints, int colorArgb, float thickness, int imageWidth, int imageHeight)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_currentPdfPath)) return;
+                var pageSize = _pdfService.GetPageSize(_currentPageIndex);
+                float pageW = pageSize.Width > 0 ? pageSize.Width : imageWidth;
+                float pageH = pageSize.Height > 0 ? pageSize.Height : imageHeight;
+                var pts = new List<float>();
+                for (int i = 0; i + 1 < normalizedPoints.Length; i += 2)
+                {
+                    var nx = normalizedPoints[i];
+                    var ny = normalizedPoints[i + 1];
+                    var imgX = nx * imageWidth;
+                    var imgY = ny * imageHeight;
+                    var pageX = imgX * (pageW / Math.Max(1, (float)imageWidth));
+                    var pageY = imgY * (pageH / Math.Max(1, (float)imageHeight));
+                    pts.Add(pageX / pageW);
+                    pts.Add(pageY / pageH);
+                }
+                var stroke = new AnnotationStroke
+                {
+                    Points = pts.ToArray(),
+                    ColorArgb = colorArgb,
+                    Thickness = thickness
+                };
+                _annotationService.AddStroke(_currentPdfPath, _currentPageIndex, stroke);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to add annotation stroke");
+            }
+        }
+
+        public void SaveAnnotationForCurrentPage(Bitmap overlay)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_currentPdfPath)) return;
+                _annotationService.SaveAnnotation(_currentPdfPath, _currentPageIndex, overlay);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to save annotation for current page");
+            }
+        }
+
+        public Bitmap RenderPageToBitmap(int pageIndex, int renderW, int renderH)
+        {
+            if (_pdfService == null) return null;
+            if (pageIndex < 0 || pageIndex >= _pdfService.PageCount) return null;
+
+            var pageSize = _pdfService.GetPageSize(pageIndex);
+            if (pageSize.Width > 0 && pageSize.Height > 0)
+            {
+                var pageRatio = pageSize.Width / pageSize.Height;
+                var boxRatio = (float)renderW / Math.Max(1, renderH);
+                int w = renderW, h = renderH;
+                if (pageRatio > boxRatio)
+                {
+                    h = Math.Max(1, (int)Math.Round(renderW / pageRatio));
+                }
+                else
+                {
+                    w = Math.Max(1, (int)Math.Round(renderH * pageRatio));
+                }
+                return _pdfService.RenderPage(pageIndex, w, h);
+            }
+            return _pdfService.RenderPage(pageIndex, renderW, renderH);
+        }
+
+        public void RememberCurrentPageForFile(string filePath, int pageIndex)
+        {
+        }
+
+        public void RememberCurrentPageForCurrentFile(int pageIndex)
+        {
+            _currentPageIndex = pageIndex;
+            _filePageMap[_currentPdfPath] = pageIndex;
+            SaveSession();
+        }
+
+        public void SetQuestionInput(string text)
+        {
+            _view.SetQuestionInput(text);
+        }
+
+        private void View_FileSelected(object? sender, EventArgs e)
+        {
+            var selectedFile = _view.GetSelectedFile();
+            if (!string.IsNullOrWhiteSpace(selectedFile))
+            {
+                LoadPdf(selectedFile);
+            }
+        }
+
+        private void View_PageChanged(object? sender, EventArgs e)
+        {
+            var pageText = _view.GetPageText();
+            if (int.TryParse(pageText, out int pageNum) && pageNum > 0)
+            {
+                RenderPage(pageNum - 1);
+            }
+        }
+
+        private async void View_OcrSelectionComplete(object? sender, EventArgs e)
+        {
+            try
+            {
+                _cts?.Token.ThrowIfCancellationRequested();
+                
+                var img = _view.GetCurrentImage() as Bitmap;
+                var selection = _view.GetSelectionRect();
+                var displayRect = _view.GetDisplayRect();
+                if (img != null && selection.HasValue)
+                {
+                    await OcrCropAndTranslateAsync(img, selection.Value, displayRect);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogDebug("View_OcrSelectionComplete was cancelled");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in View_OcrSelectionComplete");
+            }
+        }
+
+        private async void View_AiQuestionAsked(object? sender, EventArgs e)
+        {
+            try
+            {
+                _cts?.Token.ThrowIfCancellationRequested();
+                
+                var question = _view.GetPageText();
+                var answer = await GetAiAnswerAsync(question, "", _cts?.Token ?? CancellationToken.None);
+                _view.UpdateAiAnswer(answer);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogDebug("View_AiQuestionAsked was cancelled");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in View_AiQuestionAsked");
+            }
+        }
+
+        private void View_AddWordToLearningList(object? sender, EventArgs e)
+        {
+            OnAddWordToLearningList?.Invoke(this, new AddWordEventArgs { Word = "", Language = "" });
+        }
+
+        private void View_SpeakTranslation(object? sender, EventArgs e)
+        {
+        }
+
+        private void View_SelectOcrClicked(object? sender, EventArgs e)
+        {
+            View_OcrSelectionComplete(sender, e);
+        }
+
+        private void View_TranslateClicked(object? sender, EventArgs e)
+        {
+        }
+
+        public void Dispose()
+        {
+            if (!_isDisposed)
+            {
+                // 最后保存一次会话
+                SaveSession();
+                
+                UnsubscribeFromEvents();
+                _cts?.Cancel();
+                
+                ClearRenderCache();
+                
+                _cts?.Dispose();
+                _renderSemaphore.Dispose();
+                _pdfService.Dispose();
+                _logger.LogInformation("PdfPresenter disposed");
+                _isDisposed = true;
+            }
+        }
+
+        public event EventHandler<AddWordEventArgs>? OnAddWordToLearningList;
+    }
+
+    public class AddWordEventArgs : EventArgs
+    {
+        public string Word { get; set; } = string.Empty;
+        public string Language { get; set; } = string.Empty;
+    }
+}

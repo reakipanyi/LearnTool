@@ -1,0 +1,794 @@
+using UnifiedLearningAssistant.Common;
+using UnifiedLearningAssistant.Presenters;
+using UnifiedLearningAssistant.Services;
+using UnifiedLearningAssistant.Views;
+
+namespace UnifiedLearningAssistant.Forms
+{
+    public partial class MainForm : Form, IMainView
+    {
+        private readonly MainPresenter _presenter;
+        private readonly IPdfView _pdfView;
+        private readonly IWindowManager _windowManager;
+        private bool _isDisposed = false;
+
+        public MainForm(MainPresenter presenter, IPdfView pdfView, IWindowManager windowManager)
+        {
+            InitializeComponent();
+            _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
+
+            _pdfView = pdfView ?? throw new ArgumentNullException(nameof(pdfView));
+            _windowManager = windowManager ?? throw new ArgumentNullException(nameof(windowManager));
+
+            this.EnableHighDpi();
+            Load += MainForm_Load;
+        }
+
+        private void MainForm_Load(object? sender, EventArgs e)
+        {
+            _presenter.SetView(this);
+            _presenter.Initialize();
+
+            _presenter.OnStartLearning += Presenter_OnStartLearning;
+            _presenter.OnOpenSettings += Presenter_OnOpenSettings;
+            _presenter.OnOpenEditor += Presenter_OnOpenEditor;
+            _presenter.OnOpenStatistics += Presenter_OnOpenStatistics;
+
+            if (_pdfView is UserControl uc)
+            {
+                if (_pdfView is PdfReaderForm form)
+                {
+                    pdfReaderForm = form;
+                }
+                uc.Dock = DockStyle.Fill;
+                tabPagePdf.Controls.Add(uc);
+                uc.Show();
+            }
+            else
+            {
+                throw new InvalidOperationException("IPdfView 未实现为 UserControl 类型。");
+            }
+        }
+
+        private async void Presenter_OnStartLearning(object? sender, Presenters.LearningStartEventArgs e)
+        {
+            await _windowManager.OpenLearningWindowAsync(e.UserId, e.Language, e.SubCategory, e.WordBankFile, e.Mode, e.SortOrder);
+        }
+
+        private void Presenter_OnOpenSettings(object? sender, EventArgs e)
+        {
+            _windowManager.OpenSettingsWindow();
+        }
+
+        private void Presenter_OnOpenEditor(object? sender, EventArgs e)
+        {
+            _windowManager.OpenEditorWindow();
+        }
+
+        private void Presenter_OnOpenStatistics(object? sender, EventArgs e)
+        {
+            _windowManager.OpenStatisticsWindow();
+        }
+
+        #region IMainView Implementation
+
+        public string SelectedUser
+        {
+            get => comboBoxUser.Text;
+            set => comboBoxUser.Text = value;
+        }
+
+        public string SelectedLanguage
+        {
+            get => radioChinese.Checked ? Constants.Language.Chinese : Constants.Language.English;
+            set
+            {
+                radioChinese.Checked = value == Constants.Language.Chinese;
+                radioEnglish.Checked = value == Constants.Language.English;
+            }
+        }
+
+        public string SelectedSubCategory
+        {
+            get => comboBoxSubCategory.Text;
+            set => comboBoxSubCategory.Text = value;
+        }
+
+        public string SelectedMode
+        {
+            get => radioStudyMode.Checked ? Constants.LearningMode.Study : Constants.LearningMode.Quick;
+            set
+            {
+                radioStudyMode.Checked = value == Constants.LearningMode.Study;
+                radioQuickMode.Checked = value == Constants.LearningMode.Quick;
+            }
+        }
+
+        public string SelectedWordBankFile
+        {
+            get => comboBoxWordBank.Text;
+            set => comboBoxWordBank.Text = value;
+        }
+
+        public string ProgressSummary
+        {
+            get => textBoxProgress.Text;
+            set => textBoxProgress.Text = value;
+        }
+
+        public string SelectedSortOrder
+        {
+            get => comboBoxSortOrder.Text;
+            set => comboBoxSortOrder.Text = value;
+        }
+
+        public string StatusText
+        {
+            get => toolStripStatusLabel.Text;
+            set => toolStripStatusLabel.Text = value;
+        }
+
+        public event EventHandler? UserChanged;
+        public event EventHandler? LanguageChanged;
+        public event EventHandler? SubCategoryChanged;
+        public event EventHandler? ModeChanged;
+        public event EventHandler? WordBankChanged;
+        public event EventHandler? StartLearningClicked;
+        public event EventHandler? ContinueLearningClicked;
+        public event EventHandler? OpenSettingsClicked;
+        public event EventHandler? OpenEditorClicked;
+        public event EventHandler? OpenStatisticsClicked;
+        public event EventHandler? SortOrderChanged;
+        public event EventHandler? TabChanged;
+
+        public void ShowMessage(string msg)
+        {
+            MessageBox.Show(msg);
+        }
+
+        public void RefreshUserList(IEnumerable<string> users)
+        {
+            comboBoxUser.Items.Clear();
+            foreach (var user in users)
+            {
+                comboBoxUser.Items.Add(user);
+            }
+        }
+
+        public void RefreshSubCategories(IEnumerable<string> subCats)
+        {
+            comboBoxSubCategory.Items.Clear();
+            foreach (var cat in subCats)
+            {
+                comboBoxSubCategory.Items.Add(cat);
+            }
+        }
+
+        public void RefreshWordBankFiles(IEnumerable<string> files)
+        {
+            comboBoxWordBank.Items.Clear();
+            foreach (var file in files)
+            {
+                comboBoxWordBank.Items.Add(file);
+            }
+        }
+
+        public void SetTabPage(string tabName)
+        {
+            if (tabName == tabPageLearning.Text || tabName == "双语学习")
+            {
+                tabControl1.SelectedTab = tabPageLearning;
+            }
+            else if (tabName == tabPagePdf.Text || tabName == "PDF" || tabName == "PDF阅读助手")
+            {
+                tabControl1.SelectedTab = tabPagePdf;
+            }
+        }
+
+        public void UpdateStatus(string status)
+        {
+            StatusText = status;
+        }
+
+        #endregion
+
+        #region WinForms Designer Generated Code
+
+        private System.ComponentModel.IContainer components = null;
+        private TabControl tabControl1;
+        private TabPage tabPageLearning;
+        private Panel panelMain;
+        private GroupBox groupBoxUser;
+        private ComboBox comboBoxUser;
+        private Label labelUser;
+        private GroupBox groupBoxLearning;
+        private GroupBox groupBoxLanguage;
+        private RadioButton radioChinese;
+        private RadioButton radioEnglish;
+        private Label labelLanguage;
+        private GroupBox groupBoxMode;
+        private Label labelMode;
+        private RadioButton radioStudyMode;
+        private RadioButton radioQuickMode;
+        private Label labelSubCategory;
+        private ComboBox comboBoxSubCategory;
+        private Label labelWordBank;
+        private ComboBox comboBoxWordBank;
+        private Button buttonStartLearning;
+        private Button buttonContinueLearning;
+        private Button buttonSettings;
+        private Button buttonOpenEditor;
+        private Button buttonOpenPdfReader;
+        private Button buttonOpenStatistics;
+        private PdfReaderForm? pdfReaderForm;
+        private GroupBox groupBoxProgress;
+        private TextBox textBoxProgress;
+        private Label labelSortOrder;
+        private ComboBox comboBoxSortOrder;
+        private MenuStrip menuStrip1;
+        private ToolStripMenuItem toolStripMenuItemFile;
+        private ToolStripMenuItem toolStripMenuItemNewUser;
+        private ToolStripMenuItem toolStripMenuItemExit;
+        private ToolStripMenuItem toolStripMenuItemSettings;
+        private ToolStripMenuItem toolStripMenuItemHelp;
+        private ToolStripStatusLabel toolStripStatusLabel;
+        private TabPage tabPagePdf;
+        private StatusStrip statusStrip1;
+
+        private void InitializeComponent()
+        {
+            tabControl1 = new TabControl();
+            tabPageLearning = new TabPage();
+            panelMain = new Panel();
+            groupBoxProgress = new GroupBox();
+            textBoxProgress = new TextBox();
+            buttonOpenStatistics = new Button();
+            buttonOpenPdfReader = new Button();
+            buttonOpenEditor = new Button();
+            buttonSettings = new Button();
+            buttonContinueLearning = new Button();
+            buttonStartLearning = new Button();
+            groupBoxLearning = new GroupBox();
+            groupBoxLanguage = new GroupBox();
+            labelLanguage = new Label();
+            radioChinese = new RadioButton();
+            radioEnglish = new RadioButton();
+            groupBoxMode = new GroupBox();
+            labelMode = new Label();
+            radioStudyMode = new RadioButton();
+            radioQuickMode = new RadioButton();
+            labelSubCategory = new Label();
+            comboBoxSubCategory = new ComboBox();
+            labelWordBank = new Label();
+            comboBoxWordBank = new ComboBox();
+            labelSortOrder = new Label();
+            comboBoxSortOrder = new ComboBox();
+            groupBoxUser = new GroupBox();
+            comboBoxUser = new ComboBox();
+            labelUser = new Label();
+            tabPagePdf = new TabPage();
+            menuStrip1 = new MenuStrip();
+            toolStripMenuItemFile = new ToolStripMenuItem();
+            toolStripMenuItemNewUser = new ToolStripMenuItem();
+            toolStripMenuItemExit = new ToolStripMenuItem();
+            toolStripMenuItemSettings = new ToolStripMenuItem();
+            toolStripMenuItemHelp = new ToolStripMenuItem();
+            statusStrip1 = new StatusStrip();
+            toolStripStatusLabel = new ToolStripStatusLabel();
+            tabControl1.SuspendLayout();
+            tabPageLearning.SuspendLayout();
+            panelMain.SuspendLayout();
+            groupBoxProgress.SuspendLayout();
+            groupBoxLearning.SuspendLayout();
+            groupBoxLanguage.SuspendLayout();
+            groupBoxMode.SuspendLayout();
+            groupBoxUser.SuspendLayout();
+            menuStrip1.SuspendLayout();
+            statusStrip1.SuspendLayout();
+            SuspendLayout();
+            // 
+            // tabControl1
+            // 
+            tabControl1.Controls.Add(tabPageLearning);
+            tabControl1.Controls.Add(tabPagePdf);
+            tabControl1.Dock = DockStyle.Fill;
+            tabControl1.Location = new Point(0, 25);
+            tabControl1.Name = "tabControl1";
+            tabControl1.SelectedIndex = 0;
+            tabControl1.Size = new Size(900, 707);
+            tabControl1.TabIndex = 0;
+            tabControl1.SelectedIndexChanged += TabControl1_SelectedIndexChanged;
+            // 
+            // tabPageLearning
+            // 
+            tabPageLearning.Controls.Add(panelMain);
+            tabPageLearning.Location = new Point(4, 26);
+            tabPageLearning.Name = "tabPageLearning";
+            tabPageLearning.Padding = new Padding(3);
+            tabPageLearning.Size = new Size(892, 677);
+            tabPageLearning.TabIndex = 0;
+            tabPageLearning.Text = "双语学习";
+            // 
+            // panelMain
+            // 
+            panelMain.Controls.Add(groupBoxProgress);
+            panelMain.Controls.Add(buttonOpenStatistics);
+            panelMain.Controls.Add(buttonOpenPdfReader);
+            panelMain.Controls.Add(buttonOpenEditor);
+            panelMain.Controls.Add(buttonSettings);
+            panelMain.Controls.Add(buttonContinueLearning);
+            panelMain.Controls.Add(buttonStartLearning);
+            panelMain.Controls.Add(groupBoxLearning);
+            panelMain.Controls.Add(groupBoxUser);
+            panelMain.Dock = DockStyle.Fill;
+            panelMain.Location = new Point(3, 3);
+            panelMain.Name = "panelMain";
+            panelMain.Size = new Size(886, 671);
+            panelMain.TabIndex = 0;
+            // 
+            // groupBoxProgress
+            // 
+            groupBoxProgress.Controls.Add(textBoxProgress);
+            groupBoxProgress.Location = new Point(620, 17);
+            groupBoxProgress.Name = "groupBoxProgress";
+            groupBoxProgress.Size = new Size(250, 204);
+            groupBoxProgress.TabIndex = 12;
+            groupBoxProgress.TabStop = false;
+            groupBoxProgress.Text = "学习统计摘要";
+            // 
+            // textBoxProgress
+            // 
+            textBoxProgress.Location = new Point(15, 34);
+            textBoxProgress.Multiline = true;
+            textBoxProgress.Name = "textBoxProgress";
+            textBoxProgress.ReadOnly = true;
+            textBoxProgress.ScrollBars = ScrollBars.Vertical;
+            textBoxProgress.Size = new Size(220, 158);
+            textBoxProgress.TabIndex = 0;
+            // 
+            // buttonOpenStatistics
+            // 
+            buttonOpenStatistics.Location = new Point(620, 275);
+            buttonOpenStatistics.Name = "buttonOpenStatistics";
+            buttonOpenStatistics.Size = new Size(250, 40);
+            buttonOpenStatistics.TabIndex = 13;
+            buttonOpenStatistics.Text = "📊 学习统计";
+            buttonOpenStatistics.Click += ButtonOpenStatistics_Click;
+            // 
+            // buttonOpenPdfReader
+            // 
+            buttonOpenPdfReader.Location = new Point(750, 227);
+            buttonOpenPdfReader.Name = "buttonOpenPdfReader";
+            buttonOpenPdfReader.Size = new Size(120, 40);
+            buttonOpenPdfReader.TabIndex = 12;
+            buttonOpenPdfReader.Text = "📖 PDF阅读";
+            buttonOpenPdfReader.Click += ButtonOpenPdfReader_Click;
+            // 
+            // buttonOpenEditor
+            // 
+            buttonOpenEditor.Location = new Point(620, 227);
+            buttonOpenEditor.Name = "buttonOpenEditor";
+            buttonOpenEditor.Size = new Size(120, 40);
+            buttonOpenEditor.TabIndex = 11;
+            buttonOpenEditor.Text = "📝 模板编辑";
+            buttonOpenEditor.Click += ButtonOpenEditor_Click;
+            // 
+            // buttonSettings
+            // 
+            buttonSettings.Location = new Point(620, 340);
+            buttonSettings.Name = "buttonSettings";
+            buttonSettings.Size = new Size(120, 40);
+            buttonSettings.TabIndex = 14;
+            buttonSettings.Text = "⚙️ 设置";
+            buttonSettings.Click += ButtonSettings_Click;
+            // 
+            // buttonContinueLearning
+            // 
+            buttonContinueLearning.Location = new Point(315, 329);
+            buttonContinueLearning.Name = "buttonContinueLearning";
+            buttonContinueLearning.Size = new Size(150, 51);
+            buttonContinueLearning.TabIndex = 10;
+            buttonContinueLearning.Text = "继续学习";
+            buttonContinueLearning.Click += ButtonContinueLearning_Click;
+            // 
+            // buttonStartLearning
+            // 
+            buttonStartLearning.Location = new Point(145, 329);
+            buttonStartLearning.Name = "buttonStartLearning";
+            buttonStartLearning.Size = new Size(150, 51);
+            buttonStartLearning.TabIndex = 9;
+            buttonStartLearning.Text = "开始学习";
+            buttonStartLearning.Click += ButtonStartLearning_Click;
+            // 
+            // groupBoxLearning
+            // 
+            groupBoxLearning.Controls.Add(groupBoxLanguage);
+            groupBoxLearning.Controls.Add(groupBoxMode);
+            groupBoxLearning.Controls.Add(labelSubCategory);
+            groupBoxLearning.Controls.Add(comboBoxSubCategory);
+            groupBoxLearning.Controls.Add(labelWordBank);
+            groupBoxLearning.Controls.Add(comboBoxWordBank);
+            groupBoxLearning.Controls.Add(labelSortOrder);
+            groupBoxLearning.Controls.Add(comboBoxSortOrder);
+            groupBoxLearning.Location = new Point(30, 113);
+            groupBoxLearning.Name = "groupBoxLearning";
+            groupBoxLearning.Size = new Size(560, 210);
+            groupBoxLearning.TabIndex = 1;
+            groupBoxLearning.TabStop = false;
+            groupBoxLearning.Text = "快速开始";
+            // 
+            // groupBoxLanguage
+            // 
+            groupBoxLanguage.Controls.Add(labelLanguage);
+            groupBoxLanguage.Controls.Add(radioChinese);
+            groupBoxLanguage.Controls.Add(radioEnglish);
+            groupBoxLanguage.Location = new Point(15, 25);
+            groupBoxLanguage.Name = "groupBoxLanguage";
+            groupBoxLanguage.Size = new Size(250, 60);
+            groupBoxLanguage.TabIndex = 0;
+            groupBoxLanguage.TabStop = false;
+            groupBoxLanguage.Text = "语言";
+            // 
+            // labelLanguage
+            // 
+            labelLanguage.Location = new Point(10, 22);
+            labelLanguage.Name = "labelLanguage";
+            labelLanguage.Size = new Size(60, 23);
+            labelLanguage.TabIndex = 0;
+            labelLanguage.Text = "选择:";
+            // 
+            // radioChinese
+            // 
+            radioChinese.Checked = true;
+            radioChinese.Location = new Point(80, 20);
+            radioChinese.Name = "radioChinese";
+            radioChinese.Size = new Size(80, 27);
+            radioChinese.TabIndex = 1;
+            radioChinese.TabStop = true;
+            radioChinese.Text = "中文";
+            radioChinese.CheckedChanged += RadioChinese_CheckedChanged;
+            // 
+            // radioEnglish
+            // 
+            radioEnglish.Location = new Point(170, 20);
+            radioEnglish.Name = "radioEnglish";
+            radioEnglish.Size = new Size(80, 27);
+            radioEnglish.TabIndex = 2;
+            radioEnglish.Text = "英语";
+            radioEnglish.CheckedChanged += RadioEnglish_CheckedChanged;
+            // 
+            // groupBoxMode
+            // 
+            groupBoxMode.Controls.Add(labelMode);
+            groupBoxMode.Controls.Add(radioStudyMode);
+            groupBoxMode.Controls.Add(radioQuickMode);
+            groupBoxMode.Location = new Point(275, 25);
+            groupBoxMode.Name = "groupBoxMode";
+            groupBoxMode.Size = new Size(250, 60);
+            groupBoxMode.TabIndex = 1;
+            groupBoxMode.TabStop = false;
+            groupBoxMode.Text = "模式";
+            // 
+            // labelMode
+            // 
+            labelMode.Location = new Point(10, 22);
+            labelMode.Name = "labelMode";
+            labelMode.Size = new Size(60, 23);
+            labelMode.TabIndex = 0;
+            labelMode.Text = "选择:";
+            // 
+            // radioStudyMode
+            // 
+            radioStudyMode.Checked = true;
+            radioStudyMode.Location = new Point(80, 20);
+            radioStudyMode.Name = "radioStudyMode";
+            radioStudyMode.Size = new Size(80, 27);
+            radioStudyMode.TabIndex = 1;
+            radioStudyMode.TabStop = true;
+            radioStudyMode.Text = "学习模式";
+            radioStudyMode.CheckedChanged += RadioStudyMode_CheckedChanged;
+            // 
+            // radioQuickMode
+            // 
+            radioQuickMode.Location = new Point(170, 20);
+            radioQuickMode.Name = "radioQuickMode";
+            radioQuickMode.Size = new Size(80, 27);
+            radioQuickMode.TabIndex = 2;
+            radioQuickMode.Text = "快速模式";
+            radioQuickMode.CheckedChanged += RadioQuickMode_CheckedChanged;
+            // 
+            // labelSubCategory
+            // 
+            labelSubCategory.Location = new Point(15, 98);
+            labelSubCategory.Name = "labelSubCategory";
+            labelSubCategory.Size = new Size(100, 23);
+            labelSubCategory.TabIndex = 2;
+            labelSubCategory.Text = "学习类型:";
+            // 
+            // comboBoxSubCategory
+            // 
+            comboBoxSubCategory.FormattingEnabled = true;
+            comboBoxSubCategory.Location = new Point(120, 96);
+            comboBoxSubCategory.Name = "comboBoxSubCategory";
+            comboBoxSubCategory.Size = new Size(200, 25);
+            comboBoxSubCategory.TabIndex = 2;
+            comboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
+            // 
+            // labelWordBank
+            // 
+            labelWordBank.Location = new Point(15, 130);
+            labelWordBank.Name = "labelWordBank";
+            labelWordBank.Size = new Size(100, 23);
+            labelWordBank.TabIndex = 4;
+            labelWordBank.Text = "词库文件:";
+            // 
+            // comboBoxWordBank
+            // 
+            comboBoxWordBank.FormattingEnabled = true;
+            comboBoxWordBank.Location = new Point(120, 127);
+            comboBoxWordBank.Name = "comboBoxWordBank";
+            comboBoxWordBank.Size = new Size(200, 25);
+            comboBoxWordBank.TabIndex = 5;
+            comboBoxWordBank.SelectedIndexChanged += ComboBoxWordBank_SelectedIndexChanged;
+            // 
+            // labelSortOrder
+            // 
+            labelSortOrder.Location = new Point(15, 165);
+            labelSortOrder.Name = "labelSortOrder";
+            labelSortOrder.Size = new Size(100, 23);
+            labelSortOrder.TabIndex = 6;
+            labelSortOrder.Text = "排序方式:";
+            // 
+            // comboBoxSortOrder
+            // 
+            comboBoxSortOrder.FormattingEnabled = true;
+            comboBoxSortOrder.Items.AddRange(new object[] { "顺序", "Random" });
+            comboBoxSortOrder.Location = new Point(120, 162);
+            comboBoxSortOrder.Name = "comboBoxSortOrder";
+            comboBoxSortOrder.Size = new Size(150, 25);
+            comboBoxSortOrder.TabIndex = 8;
+            comboBoxSortOrder.Text = "顺序";
+            comboBoxSortOrder.SelectedIndexChanged += ComboBoxSortOrder_SelectedIndexChanged;
+            // 
+            // groupBoxUser
+            // 
+            groupBoxUser.Controls.Add(comboBoxUser);
+            groupBoxUser.Controls.Add(labelUser);
+            groupBoxUser.Location = new Point(30, 17);
+            groupBoxUser.Name = "groupBoxUser";
+            groupBoxUser.Size = new Size(350, 79);
+            groupBoxUser.TabIndex = 0;
+            groupBoxUser.TabStop = false;
+            groupBoxUser.Text = "多玩家";
+            // 
+            // comboBoxUser
+            // 
+            comboBoxUser.FormattingEnabled = true;
+            comboBoxUser.Location = new Point(80, 34);
+            comboBoxUser.Name = "comboBoxUser";
+            comboBoxUser.Size = new Size(250, 25);
+            comboBoxUser.TabIndex = 1;
+            comboBoxUser.SelectedIndexChanged += ComboBoxUser_SelectedIndexChanged;
+            // 
+            // labelUser
+            // 
+            labelUser.Location = new Point(20, 37);
+            labelUser.Name = "labelUser";
+            labelUser.Size = new Size(50, 23);
+            labelUser.TabIndex = 0;
+            labelUser.Text = "玩家:";
+            // 
+            // tabPagePdf
+            // 
+            tabPagePdf.Location = new Point(4, 26);
+            tabPagePdf.Name = "tabPagePdf";
+            tabPagePdf.Padding = new Padding(3);
+            tabPagePdf.Size = new Size(892, 677);
+            tabPagePdf.TabIndex = 1;
+            tabPagePdf.Text = "PDF阅读助手";
+            // 
+            // menuStrip1
+            // 
+            menuStrip1.Items.AddRange(new ToolStripItem[] { toolStripMenuItemFile, toolStripMenuItemSettings, toolStripMenuItemHelp });
+            menuStrip1.Location = new Point(0, 0);
+            menuStrip1.Name = "menuStrip1";
+            menuStrip1.Size = new Size(900, 25);
+            menuStrip1.TabIndex = 1;
+            // 
+            // toolStripMenuItemFile
+            // 
+            toolStripMenuItemFile.DropDownItems.AddRange(new ToolStripItem[] { toolStripMenuItemNewUser, toolStripMenuItemExit });
+            toolStripMenuItemFile.Name = "toolStripMenuItemFile";
+            toolStripMenuItemFile.Size = new Size(44, 21);
+            toolStripMenuItemFile.Text = "文件";
+            // 
+            // toolStripMenuItemNewUser
+            // 
+            toolStripMenuItemNewUser.Name = "toolStripMenuItemNewUser";
+            toolStripMenuItemNewUser.Size = new Size(124, 22);
+            toolStripMenuItemNewUser.Text = "新建玩家";
+            // 
+            // toolStripMenuItemExit
+            // 
+            toolStripMenuItemExit.Name = "toolStripMenuItemExit";
+            toolStripMenuItemExit.Size = new Size(124, 22);
+            toolStripMenuItemExit.Text = "退出";
+            toolStripMenuItemExit.Click += ToolStripMenuItemExit_Click;
+            // 
+            // toolStripMenuItemSettings
+            // 
+            toolStripMenuItemSettings.Name = "toolStripMenuItemSettings";
+            toolStripMenuItemSettings.Size = new Size(44, 21);
+            toolStripMenuItemSettings.Text = "设置";
+            toolStripMenuItemSettings.Click += ToolStripMenuItemSettings_Click;
+            // 
+            // toolStripMenuItemHelp
+            // 
+            toolStripMenuItemHelp.Name = "toolStripMenuItemHelp";
+            toolStripMenuItemHelp.Size = new Size(44, 21);
+            toolStripMenuItemHelp.Text = "帮助";
+            // 
+            // statusStrip1
+            // 
+            statusStrip1.Items.AddRange(new ToolStripItem[] { toolStripStatusLabel });
+            statusStrip1.Location = new Point(0, 710);
+            statusStrip1.Name = "statusStrip1";
+            statusStrip1.Size = new Size(900, 22);
+            statusStrip1.TabIndex = 2;
+            // 
+            // toolStripStatusLabel
+            // 
+            toolStripStatusLabel.Name = "toolStripStatusLabel";
+            toolStripStatusLabel.Size = new Size(32, 17);
+            toolStripStatusLabel.Text = "就绪";
+            // 
+            // MainForm
+            // 
+            AutoScaleDimensions = new SizeF(7F, 17F);
+            AutoScaleMode = AutoScaleMode.Font;
+            ClientSize = new Size(900, 732);
+            Controls.Add(statusStrip1);
+            Controls.Add(tabControl1);
+            Controls.Add(menuStrip1);
+            MainMenuStrip = menuStrip1;
+            Name = "MainForm";
+            Text = "统一学习助手";
+            tabControl1.ResumeLayout(false);
+            tabPageLearning.ResumeLayout(false);
+            panelMain.ResumeLayout(false);
+            groupBoxProgress.ResumeLayout(false);
+            groupBoxProgress.PerformLayout();
+            groupBoxLearning.ResumeLayout(false);
+            groupBoxLanguage.ResumeLayout(false);
+            groupBoxMode.ResumeLayout(false);
+            groupBoxUser.ResumeLayout(false);
+            menuStrip1.ResumeLayout(false);
+            menuStrip1.PerformLayout();
+            statusStrip1.ResumeLayout(false);
+            statusStrip1.PerformLayout();
+            ResumeLayout(false);
+            PerformLayout();
+        }
+
+        #endregion
+
+        #region Event Handlers
+
+        private void ComboBoxUser_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            UserChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void RadioChinese_CheckedChanged(object? sender, EventArgs e)
+        {
+            if (radioChinese.Checked)
+                LanguageChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void RadioEnglish_CheckedChanged(object? sender, EventArgs e)
+        {
+            if (radioEnglish.Checked)
+                LanguageChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ComboBoxSubCategory_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            SubCategoryChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void RadioStudyMode_CheckedChanged(object? sender, EventArgs e)
+        {
+            if (radioStudyMode.Checked)
+                ModeChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void RadioQuickMode_CheckedChanged(object? sender, EventArgs e)
+        {
+            if (radioQuickMode.Checked)
+                ModeChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ComboBoxWordBank_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            WordBankChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ComboBoxSortOrder_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            SortOrderChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ButtonStartLearning_Click(object? sender, EventArgs e)
+        {
+            StartLearningClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ButtonContinueLearning_Click(object? sender, EventArgs e)
+        {
+            ContinueLearningClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ButtonSettings_Click(object? sender, EventArgs e)
+        {
+            OpenSettingsClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ButtonOpenEditor_Click(object? sender, EventArgs e)
+        {
+            OpenEditorClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ButtonOpenPdfReader_Click(object? sender, EventArgs e)
+        {
+            SetTabPage("PDF阅读助手");
+        }
+
+        private void ButtonOpenStatistics_Click(object? sender, EventArgs e)
+        {
+            OpenStatisticsClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ToolStripMenuItemSettings_Click(object? sender, EventArgs e)
+        {
+            OpenSettingsClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ToolStripMenuItemExit_Click(object? sender, EventArgs e)
+        {
+            Application.Exit();
+        }
+
+        private void TabControl1_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            TabChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        #endregion
+
+        protected override void Dispose(bool disposing)
+        {
+            if (_isDisposed)
+                return;
+
+            if (disposing)
+            {
+                if (_presenter != null)
+                {
+                    _presenter.OnStartLearning -= Presenter_OnStartLearning;
+                    _presenter.OnOpenSettings -= Presenter_OnOpenSettings;
+                    _presenter.OnOpenEditor -= Presenter_OnOpenEditor;
+                    _presenter.OnOpenStatistics -= Presenter_OnOpenStatistics;
+                    (_presenter as IDisposable)?.Dispose();
+                }
+
+                if (components != null)
+                {
+                    components.Dispose();
+                }
+            }
+
+            _isDisposed = true;
+            base.Dispose(disposing);
+        }
+    }
+}

@@ -1,0 +1,42 @@
+[
+  {
+    "Phrase": "good morning",
+    "Meaning": "早上好",
+    "Example": "Good morning, how are you?",
+    "Id": "1",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  },
+  {
+    "Phrase": "thank you",
+    "Meaning": "谢谢你",
+    "Example": "Thank you for your help.",
+    "Id": "2",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  },
+  {
+    "Phrase": "excuse me",
+    "Meaning": "对不起，打扰一下",
+    "Example": "Excuse me, can you help me?",
+    "Id": "3",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  },
+  {
+    "Phrase": "have a good time",
+    "Meaning": "玩得开心",
+    "Example": "Have a good time at the party!",
+    "Id": "4",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  },
+  {
+    "Phrase": "see you later",
+    "Meaning": "一会儿见",
+    "Example": "I have to go now, see you later!",
+    "Id": "5",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  }
+]

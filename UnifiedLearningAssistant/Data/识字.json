@@ -1,0 +1,52 @@
+[
+  {
+    "Character": "人",
+    "Pinyin": "rén",
+    "Meaning": "人类，人民",
+    "StrokeCount": "2",
+    "Radical": "人",
+    "Id": "1",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  },
+  {
+    "Character": "山",
+    "Pinyin": "shān",
+    "Meaning": "地面形成的高耸的部分",
+    "StrokeCount": "3",
+    "Radical": "山",
+    "Id": "2",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  },
+  {
+    "Character": "水",
+    "Pinyin": "shuǐ",
+    "Meaning": "无色无味的液体",
+    "StrokeCount": "4",
+    "Radical": "水",
+    "Id": "3",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  },
+  {
+    "Character": "日",
+    "Pinyin": "rì",
+    "Meaning": "太阳，白天",
+    "StrokeCount": "4",
+    "Radical": "日",
+    "Id": "4",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  },
+  {
+    "Character": "月",
+    "Pinyin": "yuè",
+    "Meaning": "月亮，月份",
+    "StrokeCount": "4",
+    "Radical": "月",
+    "Id": "5",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  }
+]

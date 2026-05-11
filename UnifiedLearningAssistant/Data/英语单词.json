@@ -1,0 +1,52 @@
+[
+  {
+    "Word": "apple",
+    "Phonetic": "/ˈæpl/",
+    "Meaning": "苹果",
+    "Example": "I eat an apple every day.",
+    "PartOfSpeech": "n.",
+    "Id": "1",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  },
+  {
+    "Word": "book",
+    "Phonetic": "/bʊk/",
+    "Meaning": "书，书本",
+    "Example": "This is a good book.",
+    "PartOfSpeech": "n.",
+    "Id": "2",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  },
+  {
+    "Word": "cat",
+    "Phonetic": "/kæt/",
+    "Meaning": "猫",
+    "Example": "The cat is sleeping.",
+    "PartOfSpeech": "n.",
+    "Id": "3",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  },
+  {
+    "Word": "dog",
+    "Phonetic": "/dɒɡ/",
+    "Meaning": "狗",
+    "Example": "I have a pet dog.",
+    "PartOfSpeech": "n.",
+    "Id": "4",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  },
+  {
+    "Word": "elephant",
+    "Phonetic": "/ˈelɪfənt/",
+    "Meaning": "大象",
+    "Example": "The elephant is very big.",
+    "PartOfSpeech": "n.",
+    "Id": "5",
+    "CreatedAt": "2024-01-01T00:00:00",
+    "UpdatedAt": "2024-01-01T00:00:00"
+  }
+]
