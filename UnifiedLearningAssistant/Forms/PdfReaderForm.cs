@@ -1277,8 +1277,19 @@ namespace UnifiedLearningAssistant.Forms
                 int newX = panelNavigation.Left + deltaX;
                 int newY = panelNavigation.Top + deltaY;
 
-                int leftBoundary = panelLeftContainer?.Width ?? 0;
-                int rightBoundary = ClientSize.Width - panelNavigation.Width - (tabControlTools?.Width ?? 0);
+                int leftBoundary = 0;
+                if (panelLeftContainer != null && panelLeftContainer.Visible)
+                {
+                    leftBoundary = panelLeftContainer.Width;
+                }
+
+                int rightBoundary = ClientSize.Width - panelNavigation.Width;
+                if (tabControlTools != null && tabControlTools.Visible)
+                {
+                    rightBoundary -= tabControlTools.Width;
+                }
+
+                rightBoundary = Math.Max(leftBoundary, rightBoundary);
 
                 newX = Math.Max(leftBoundary, Math.Min(newX, rightBoundary));
                 newY = Math.Max(0, Math.Min(newY, ClientSize.Height - panelNavigation.Height));
@@ -1399,7 +1410,7 @@ namespace UnifiedLearningAssistant.Forms
                     return;
                 }
 
-                var a = async () => { await OcrFullImageAsync(img); };
+                await OcrFullImageAsync(img);
             }
             catch (Exception ex)
             {
