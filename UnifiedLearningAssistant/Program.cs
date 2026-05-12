@@ -11,7 +11,8 @@ namespace UnifiedLearningAssistant
 {
     internal static class Program
     {
-        private static IServiceProvider? _serviceProvider;
+        // 新增功能：优化依赖注入 - 添加全局服务提供程序
+        public static IServiceProvider ServiceProvider { get; private set; } = null!;
 
         private static IServiceProvider BuildServiceProvider()
         {
@@ -21,6 +22,7 @@ namespace UnifiedLearningAssistant
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+                .AddJsonFile("appsettings.Development.json", optional: true, reloadOnChange: true) // 新增：开发环境配置
                 .Build();
 
             services.AddSingleton<IConfiguration>(configuration);
@@ -43,9 +45,10 @@ namespace UnifiedLearningAssistant
             {
                 builder.AddConsole();
                 builder.SetMinimumLevel(LogLevel.Information);
+                // Note: Debug logger provider can be added via Microsoft.Extensions.Logging.Debug package if desired
             });
 
-            // 3. 核心服务（移除重复，统一生命周期）
+            // 3. 核心服务（统一生命周期管理）
             services.AddSingleton<Services.Persistence.IDataPersistenceService, Services.Persistence.DataPersistenceService>();
             services.AddSingleton<Services.Cache.ICacheService>(sp =>
             {
@@ -53,9 +56,16 @@ namespace UnifiedLearningAssistant
                 var cachePath = Path.Combine(cacheDir, "cache.json");
                 return new Services.Cache.CacheService(cachePath);
             });
-            services.AddTransient<Services.TTS.ITTSService, Services.TTS.QwenTtsService>();
+            services.AddTransient<Services.TTS.ITTSService>(sp =>
+            {
+                var ttsConfig = sp.GetRequiredService<TtsConfig>();
+                return new Services.TTS.QwenTtsService(ttsConfig.ApiKey, ttsConfig.BaseUrl);
+            });
             services.AddTransient<Services.AI.IAiQuestionService, Services.AI.AiQuestionService>();
-            services.AddSingleton<Services.Learning.IContentLoaderService, Services.Learning.ContentLoaderService>(); // 统一为 Singleton
+            services.AddSingleton<Services.Learning.IContentLoaderService, Services.Learning.ContentLoaderService>();
+            services.AddSingleton<Services.Learning.IUserSessionService, Services.Learning.UserSessionService>();
+            services.AddSingleton<Services.Learning.IProgressService, Services.Learning.ProgressService>();
+            services.AddSingleton<Services.Learning.IExportService, Services.Learning.ExportService>();
             services.AddSingleton<Services.AI.IAIService, Services.AI.SiliconFlowAIService>();
             services.AddSingleton<Services.Pdf.IPdfService, Services.Pdf.PdfiumPdfService>();
             services.AddSingleton<Services.Pdf.IOcrService, Services.Pdf.TesseractOcrService>();
@@ -82,6 +92,8 @@ namespace UnifiedLearningAssistant
             // 视图接口映射
             services.AddScoped<ISettingView>(sp => sp.GetRequiredService<SettingForm>());
             services.AddScoped<ILearningView>(sp => sp.GetRequiredService<LearningForm>());
+            services.AddScoped<IPdfView>(sp => sp.GetRequiredService<PdfReaderForm>());
+            services.AddScoped<IMainView>(sp => sp.GetRequiredService<MainForm>());
             services.AddScoped<IResultView>(sp => sp.GetRequiredService<ResultForm>());
             services.AddScoped<IContentEditorView>(sp => sp.GetRequiredService<ContentEditorForm>());
 
@@ -114,24 +126,22 @@ namespace UnifiedLearningAssistant
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            IServiceProvider serviceProvider = null!;
             ILogger<MainForm> logger = null!;
 
             try
             {
-                serviceProvider = BuildServiceProvider();
-                _serviceProvider = serviceProvider;
-                logger = serviceProvider.GetRequiredService<ILogger<MainForm>>();
+                ServiceProvider = BuildServiceProvider();
+                logger = ServiceProvider.GetRequiredService<ILogger<MainForm>>();
+                logger.LogInformation("服务容器初始化成功");
             }
             catch (Exception ex)
             {
-                // 若依赖注入容器构建失败，尝试使用控制台输出
                 Console.WriteLine($"致命错误: 服务容器初始化失败 - {ex.Message}");
                 MessageBox.Show($"程序初始化失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
-            // 注册全局异常处理（使用已获取的 logger，若为 null 则用控制台）
+            // 注册全局异常处理
             Application.ThreadException += (s, e) =>
             {
                 logger?.LogError(e.Exception, "UI 线程未处理异常");
@@ -145,28 +155,43 @@ namespace UnifiedLearningAssistant
                 if (logger == null && ex != null) Console.WriteLine($"Domain Exception: {ex}");
             };
 
-            MainForm mainForm;
             try
             {
-                // 手动解决循环依赖问题
-                var pdfReaderForm = serviceProvider.GetRequiredService<PdfReaderForm>();
-                var pdfPresenter = serviceProvider.GetRequiredService<PdfPresenter>();
-                pdfReaderForm.SetPresenter(pdfPresenter);
+                // 使用 Scope 来解析 Scoped 生命周期的 Presenter/Form
+                // 保持 scope 存活直到 Application.Run 结束，以便 Scoped 服务在主窗体生命周期内有效
+                using var appScope = ServiceProvider.CreateScope();
+                var scopedProvider = appScope.ServiceProvider;
 
-                // 现在构建 MainForm，手动传递所需的依赖项
-                var mainPresenter = serviceProvider.GetRequiredService<MainPresenter>();
-                var windowManager = serviceProvider.GetRequiredService<IWindowManager>();
-                
-                mainForm = new MainForm(mainPresenter, pdfReaderForm, windowManager);
+                var mainForm = scopedProvider.GetRequiredService<MainForm>();
+                var pdfPresenter = scopedProvider.GetRequiredService<PdfPresenter>();
+                var pdfReaderForm = scopedProvider.GetRequiredService<PdfReaderForm>();
+
+                // 设置 Presenter 与 View 关系
+                pdfReaderForm.SetPresenter(pdfPresenter);
+                mainForm.SetPdfPresenter(pdfPresenter);
+
+                logger.LogInformation("主窗体创建成功，启动应用程序");
+                Application.Run(mainForm);
+                // 在 Application.Run 返回后，appScope.Dispose() 会自动释放 Scoped 服务
             }
             catch (Exception ex)
             {
+                string msg = $"{ex.Message}\n{ex.StackTrace}";
+                Console.WriteLine(msg);
                 logger?.LogError(ex, "无法创建主窗体");
                 MessageBox.Show($"无法启动主窗体: {ex.Message}\n{ex.StackTrace}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
             }
+        }
 
-            Application.Run(mainForm);
+        // 新增功能：全局服务访问辅助方法
+        public static T GetRequiredService<T>() where T : notnull
+        {
+            return ServiceProvider.GetRequiredService<T>();
+        }
+
+        public static T? GetService<T>()
+        {
+            return ServiceProvider.GetService<T>();
         }
     }
 }

@@ -3,6 +3,7 @@ using UnifiedLearningAssistant.Common;
 using UnifiedLearningAssistant.Models.Config;
 using UnifiedLearningAssistant.Models.User;
 using UnifiedLearningAssistant.Services.Cache;
+using UnifiedLearningAssistant.Services.Utils;
 
 namespace UnifiedLearningAssistant.Services.Persistence
 {
@@ -21,7 +22,10 @@ namespace UnifiedLearningAssistant.Services.Persistence
         {
             try
             {
-                return _configuration.Get<AppConfig>() ?? new AppConfig();
+                var config = _configuration.Get<AppConfig>() ?? new AppConfig();
+                // 新增功能：配置安全优化 - 解密敏感信息
+                DecryptSensitiveConfig(config);
+                return config;
             }
             catch
             {
@@ -33,11 +37,52 @@ namespace UnifiedLearningAssistant.Services.Persistence
         {
             try
             {
+                // 新增功能：配置安全优化 - 保存时加密敏感信息
+                // MemberwiseClone is protected; perform a deep clone via JSON serialization
+                var json = Common.JsonHelper.Serialize(config);
+                var configToSave = Common.JsonHelper.Deserialize<AppConfig>(json) ?? new AppConfig();
+                EncryptSensitiveConfig(configToSave);
+
                 var path = Path.Combine(FileHelper.GetAppDirectory(), "appsettings.json");
-                JsonHelper.SaveToFile(path, config);
+                JsonHelper.SaveToFile(path, configToSave);
             }
             catch
             {
+            }
+        }
+
+        // 新增功能：配置安全优化 - 加密敏感配置
+        private void EncryptSensitiveConfig(AppConfig config)
+        {
+            if (config.TtsConfig != null)
+            {
+                config.TtsConfig.ApiKey = SecureConfigManager.Encrypt(config.TtsConfig.ApiKey);
+            }
+            if (config.AiConfig != null)
+            {
+                config.AiConfig.ApiKey = SecureConfigManager.Encrypt(config.AiConfig.ApiKey);
+            }
+            if (config.TranslationConfig != null)
+            {
+                config.TranslationConfig.BaiduAppId = SecureConfigManager.Encrypt(config.TranslationConfig.BaiduAppId);
+            }
+        }
+
+        // 新增功能：配置安全优化 - 解密敏感配置
+        private void DecryptSensitiveConfig(AppConfig config)
+        {
+            if (config.TtsConfig != null)
+            {
+                config.TtsConfig.ApiKey = SecureConfigManager.Decrypt(config.TtsConfig.ApiKey);
+            }
+            if (config.AiConfig != null)
+            {
+                config.AiConfig.ApiKey = SecureConfigManager.Decrypt(config.AiConfig.ApiKey);
+            }
+            if (config.TranslationConfig != null)
+            {
+                config.TranslationConfig.BaiduAppId = SecureConfigManager.Decrypt(config.TranslationConfig.BaiduAppId);
+                config.TranslationConfig.BaiduSecret = SecureConfigManager.Decrypt(config.TranslationConfig.BaiduSecret);
             }
         }
 

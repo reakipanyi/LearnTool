@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using System.Media;
 using UnifiedLearningAssistant.Common;
 using UnifiedLearningAssistant.Models.Learning;
 using UnifiedLearningAssistant.Services.AI;
@@ -131,19 +132,15 @@ namespace UnifiedLearningAssistant.Presenters
         {
             if (!_ttsService.Available) return;
 
-            try
+
+            string text = item.GetMainContent();
+            string lang = _currentLanguage == Constants.Language.Chinese ? "zh" : "en";
+            string filePath = await _ttsService.SpeakAsync(text, lang);
+            if (!File.Exists(filePath)) return;
+
+            using (var player = new SoundPlayer(filePath))
             {
-                string text = item.GetMainContent();
-                string lang = _currentLanguage == Constants.Language.Chinese ? "zh" : "en";
-                await _ttsService.SpeakAsync(text, lang);
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.LogDebug("PlayPronunciationAsync was cancelled");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to play pronunciation");
+                player.PlaySync();
             }
         }
 
@@ -189,7 +186,7 @@ namespace UnifiedLearningAssistant.Presenters
             try
             {
                 _cts?.Token.ThrowIfCancellationRequested();
-                
+
                 if (_studyEngine.HasNext())
                 {
                     _studyEngine.MoveNext();

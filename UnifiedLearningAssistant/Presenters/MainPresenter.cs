@@ -1,11 +1,8 @@
 using Microsoft.Extensions.Logging;
 using UnifiedLearningAssistant.Common;
-using UnifiedLearningAssistant.Models.Config;
-using UnifiedLearningAssistant.Models.User;
 using UnifiedLearningAssistant.Services;
 using UnifiedLearningAssistant.Services.Cache;
 using UnifiedLearningAssistant.Services.Learning;
-using UnifiedLearningAssistant.Services.Persistence;
 using UnifiedLearningAssistant.Services.TTS;
 using UnifiedLearningAssistant.Views;
 
@@ -14,11 +11,15 @@ namespace UnifiedLearningAssistant.Presenters
     public class MainPresenter : IDisposable
     {
         private readonly ILogger<MainPresenter> _logger;
-        private readonly IDataPersistenceService _persistenceService;
+        private readonly IUserSessionService _sessionService;
         private readonly IContentLoaderService _contentLoaderService;
+        private readonly IProgressService _progressService;
+        private readonly IExportService _exportService;
         private readonly ITTSService _ttsService;
         private readonly ICacheService _cacheService;
         private readonly IWindowManager _windowManager;
+        
+        private PdfPresenter? _pdfPresenter;
         private IMainView? _view;
 
         private string _currentUserId = "Guest";
@@ -35,19 +36,34 @@ namespace UnifiedLearningAssistant.Presenters
 
         public MainPresenter(
             ILogger<MainPresenter> logger,
-            IDataPersistenceService persistenceService,
+            IUserSessionService sessionService,
             IContentLoaderService contentLoaderService,
+            IProgressService progressService,
+            IExportService exportService,
             ITTSService ttsService,
             ICacheService cacheService,
             IWindowManager windowManager)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
+            _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
             _contentLoaderService = contentLoaderService ?? throw new ArgumentNullException(nameof(contentLoaderService));
+            _progressService = progressService ?? throw new ArgumentNullException(nameof(progressService));
+            _exportService = exportService ?? throw new ArgumentNullException(nameof(exportService));
             _ttsService = ttsService ?? throw new ArgumentNullException(nameof(ttsService));
             _cacheService = cacheService ?? throw new ArgumentNullException(nameof(cacheService));
             _windowManager = windowManager ?? throw new ArgumentNullException(nameof(windowManager));
             _logger.LogInformation("MainPresenter initialized");
+        }
+
+        public void SetPdfPresenter(PdfPresenter pdfPresenter)
+        {
+            _pdfPresenter = pdfPresenter;
+            UpdatePdfPresenterConfig();
+        }
+
+        private void UpdatePdfPresenterConfig()
+        {
+            _pdfPresenter?.SetCurrentUserAndConfig(_currentUserId, _currentLanguage, _currentSubCategory);
         }
 
         public void SetView(IMainView view)
@@ -76,6 +92,7 @@ namespace UnifiedLearningAssistant.Presenters
             _view.OpenSettingsClicked += View_OpenSettingsClicked;
             _view.OpenEditorClicked += View_OpenEditorClicked;
             _view.OpenStatisticsClicked += View_OpenStatisticsClicked;
+            _view.ExportErrorBookClicked += View_ExportErrorBookClicked;
             _view.TabChanged += View_TabChanged;
         }
 
@@ -95,6 +112,7 @@ namespace UnifiedLearningAssistant.Presenters
             _view.OpenSettingsClicked -= View_OpenSettingsClicked;
             _view.OpenEditorClicked -= View_OpenEditorClicked;
             _view.OpenStatisticsClicked -= View_OpenStatisticsClicked;
+            _view.ExportErrorBookClicked -= View_ExportErrorBookClicked;
             _view.TabChanged -= View_TabChanged;
         }
 
@@ -114,22 +132,13 @@ namespace UnifiedLearningAssistant.Presenters
 
         private void LoadSession()
         {
-            var session = _persistenceService.LoadSession();
-            if (!string.IsNullOrWhiteSpace(session.CurrentUserId))
-            {
-                _currentUserId = session.CurrentUserId;
-                _view.SelectedUser = _currentUserId;
-            }
+            _currentUserId = _sessionService.LoadSession();
+            _view.SelectedUser = _currentUserId;
         }
 
         private void RefreshUserList()
         {
-            var users = _persistenceService.GetUserIds();
-            if (!users.Any())
-            {
-                _persistenceService.CreateUserProfile("Guest", "访客");
-                users = new List<string> { "Guest" };
-            }
+            var users = _sessionService.GetUserList();
             _view.RefreshUserList(users);
         }
 
@@ -158,27 +167,7 @@ namespace UnifiedLearningAssistant.Presenters
 
         private void UpdateProgressSummary()
         {
-            var profile = _persistenceService.LoadUserProfile(_currentUserId);
-            var progress = profile.LearningProgress;
-
-            int totalKnown = 0;
-            int totalUnknown = 0;
-            double accuracy = 0;
-
-            if (progress.CategoryProgresses.TryGetValue(_currentSubCategory, out var catProgress))
-            {
-                totalKnown = catProgress.KnownItems.Count;
-                totalUnknown = catProgress.UnknownItems.Count;
-                if (catProgress.TotalTestCount > 0)
-                {
-                    accuracy = (double)catProgress.CorrectCount / catProgress.TotalTestCount * 100;
-                }
-            }
-
-            _view.ProgressSummary = $"玩家: {profile.UserName}\n" +
-                $"品类: {_currentLanguage} > {_currentSubCategory}\n" +
-                $"已掌握: {totalKnown} | 未掌握: {totalUnknown}\n" +
-                $"正确率: {accuracy:F1}%";
+            _view.ProgressSummary = _progressService.GetProgressSummary(_currentUserId, _currentLanguage, _currentSubCategory);
         }
 
         private void UpdateStatus()
@@ -194,6 +183,7 @@ namespace UnifiedLearningAssistant.Presenters
             _currentUserId = _view.SelectedUser;
             UpdateProgressSummary();
             SaveSession();
+            UpdatePdfPresenterConfig();
         }
 
         private void View_LanguageChanged(object? sender, EventArgs e)
@@ -201,6 +191,7 @@ namespace UnifiedLearningAssistant.Presenters
             _currentLanguage = _view.SelectedLanguage;
             RefreshSubCategories();
             UpdateProgressSummary();
+            UpdatePdfPresenterConfig();
         }
 
         private void View_SubCategoryChanged(object? sender, EventArgs e)
@@ -208,6 +199,7 @@ namespace UnifiedLearningAssistant.Presenters
             _currentSubCategory = _view.SelectedSubCategory;
             RefreshWordBankFiles();
             UpdateProgressSummary();
+            UpdatePdfPresenterConfig();
         }
 
         private void View_ModeChanged(object? sender, EventArgs e)
@@ -267,6 +259,36 @@ namespace UnifiedLearningAssistant.Presenters
             OnOpenStatistics?.Invoke(this, EventArgs.Empty);
         }
 
+        private void View_ExportErrorBookClicked(object? sender, EventArgs e)
+        {
+            try
+            {
+                var errorBookItems = _exportService.GetErrorBookItems(_currentUserId);
+                
+                if (errorBookItems.Count == 0)
+                {
+                    _view?.ShowMessage("错题本为空，没有可导出的内容！");
+                    return;
+                }
+
+                using var saveFileDialog = new SaveFileDialog();
+                saveFileDialog.Filter = "文本文件 (*.txt)|*.txt|CSV文件 (*.csv)|*.csv";
+                saveFileDialog.Title = "保存错题本";
+                saveFileDialog.FileName = $"错题本_{_currentUserId}_{DateTime.Now:yyyyMMdd_HHmmss}";
+
+                if (saveFileDialog.ShowDialog() == DialogResult.OK)
+                {
+                    var result = _exportService.ExportErrorBook(_currentUserId, saveFileDialog.FileName);
+                    _view?.ShowMessage(result);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "导出错题本失败");
+                _view?.ShowMessage($"导出错题本失败：{ex.Message}");
+            }
+        }
+
         private void View_TabChanged(object? sender, EventArgs e)
         {
             SaveSession();
@@ -274,10 +296,7 @@ namespace UnifiedLearningAssistant.Presenters
 
         private void SaveSession()
         {
-            var session = _persistenceService.LoadSession();
-            session.CurrentUserId = _currentUserId;
-            session.LastAccessTime = DateTime.Now;
-            _persistenceService.SaveSession(session);
+            _sessionService.SaveSession(_currentUserId);
         }
 
         public void Dispose()

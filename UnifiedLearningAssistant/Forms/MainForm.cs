@@ -50,6 +50,12 @@ namespace UnifiedLearningAssistant.Forms
             }
         }
 
+        // 新增功能：PDF生词本联动 - 设置PDF Presenter
+        public void SetPdfPresenter(PdfPresenter pdfPresenter)
+        {
+            _presenter.SetPdfPresenter(pdfPresenter);
+        }
+
         private async void Presenter_OnStartLearning(object? sender, Presenters.LearningStartEventArgs e)
         {
             await _windowManager.OpenLearningWindowAsync(e.UserId, e.Language, e.SubCategory, e.WordBankFile, e.Mode, e.SortOrder);
@@ -138,6 +144,8 @@ namespace UnifiedLearningAssistant.Forms
         public event EventHandler? OpenSettingsClicked;
         public event EventHandler? OpenEditorClicked;
         public event EventHandler? OpenStatisticsClicked;
+        // 新增功能：错题本导出 - 导出事件
+        public event EventHandler? ExportErrorBookClicked;
         public event EventHandler? SortOrderChanged;
         public event EventHandler? TabChanged;
 
@@ -220,6 +228,8 @@ namespace UnifiedLearningAssistant.Forms
         private Button buttonOpenEditor;
         private Button buttonOpenPdfReader;
         private Button buttonOpenStatistics;
+        // 新增功能：错题本导出 - 导出按钮
+        private Button buttonExportErrorBook;
         private PdfReaderForm? pdfReaderForm;
         private GroupBox groupBoxProgress;
         private TextBox textBoxProgress;
@@ -266,6 +276,7 @@ namespace UnifiedLearningAssistant.Forms
             groupBoxUser = new GroupBox();
             comboBoxUser = new ComboBox();
             labelUser = new Label();
+            buttonExportErrorBook = new Button();
             tabPagePdf = new TabPage();
             menuStrip1 = new MenuStrip();
             toolStripMenuItemFile = new ToolStripMenuItem();
@@ -320,6 +331,7 @@ namespace UnifiedLearningAssistant.Forms
             panelMain.Controls.Add(buttonStartLearning);
             panelMain.Controls.Add(groupBoxLearning);
             panelMain.Controls.Add(groupBoxUser);
+            panelMain.Controls.Add(buttonExportErrorBook);
             panelMain.Dock = DockStyle.Fill;
             panelMain.Location = new Point(3, 3);
             panelMain.Name = "panelMain";
@@ -375,10 +387,10 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonSettings
             // 
-            buttonSettings.Location = new Point(620, 340);
+            buttonSettings.Location = new Point(620, 390);
             buttonSettings.Name = "buttonSettings";
             buttonSettings.Size = new Size(120, 40);
-            buttonSettings.TabIndex = 14;
+            buttonSettings.TabIndex = 16;
             buttonSettings.Text = "⚙️ 设置";
             buttonSettings.Click += ButtonSettings_Click;
             // 
@@ -578,6 +590,16 @@ namespace UnifiedLearningAssistant.Forms
             labelUser.TabIndex = 0;
             labelUser.Text = "玩家:";
             // 
+            // buttonExportErrorBook
+            // 
+            buttonExportErrorBook.Location = new Point(620, 330);
+            buttonExportErrorBook.Name = "buttonExportErrorBook";
+            buttonExportErrorBook.Size = new Size(250, 40);
+            buttonExportErrorBook.TabIndex = 15;
+            buttonExportErrorBook.Text = "📝 导出错题本";
+            buttonExportErrorBook.UseVisualStyleBackColor = true;
+            buttonExportErrorBook.Click += ButtonExportErrorBook_Click;
+            // 
             // tabPagePdf
             // 
             tabPagePdf.Location = new Point(4, 26);
@@ -748,6 +770,12 @@ namespace UnifiedLearningAssistant.Forms
             OpenStatisticsClicked?.Invoke(this, EventArgs.Empty);
         }
 
+        // 新增功能：错题本导出 - 导出按钮点击事件
+        private void ButtonExportErrorBook_Click(object? sender, EventArgs e)
+        {
+            ExportErrorBookClicked?.Invoke(this, EventArgs.Empty);
+        }
+
         private void ToolStripMenuItemSettings_Click(object? sender, EventArgs e)
         {
             OpenSettingsClicked?.Invoke(this, EventArgs.Empty);
@@ -790,5 +818,6 @@ namespace UnifiedLearningAssistant.Forms
             _isDisposed = true;
             base.Dispose(disposing);
         }
+
     }
 }

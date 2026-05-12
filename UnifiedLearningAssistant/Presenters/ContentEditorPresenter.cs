@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.Data;
 using UnifiedLearningAssistant.Models.Learning;
 using UnifiedLearningAssistant.Services.AI;
 using UnifiedLearningAssistant.Services.Learning;
@@ -15,7 +16,7 @@ namespace UnifiedLearningAssistant.Presenters
         private readonly IContentLoaderService _contentLoaderService;
         private readonly IAiQuestionService _aiQuestionService;
 
-        public ContentEditorPresenter(ILogger<ContentEditorPresenter> logger, IContentEditorView view, 
+        public ContentEditorPresenter(ILogger<ContentEditorPresenter> logger, IContentEditorView view,
             IContentLoaderService contentLoaderService, IAiQuestionService aiQuestionService)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -31,6 +32,8 @@ namespace UnifiedLearningAssistant.Presenters
             _view.ExportClicked += OnExportClicked;
             _view.InsertTemplateClicked += OnInsertTemplateClicked;
             _view.GenerateWithAIClicked += OnGenerateWithAIClicked;
+            _view.GridCellEndEdit += OnGridCellEndEdit;
+            _view.GridRowsAdded += OnGridRowsAdded;
             _logger.LogInformation("ContentEditorPresenter initialized");
         }
 
@@ -120,7 +123,50 @@ namespace UnifiedLearningAssistant.Presenters
 
         private void OnTemplateDeleteClicked(object? sender, EventArgs e)
         {
-            _view.ShowMessage("请先导入或加载数据后再进行删除操作");
+            var dataTable = _view.GridDataSource as DataTable;
+            if (dataTable == null || dataTable.Rows.Count == 0)
+            {
+                _view.ShowMessage("请先导入或加载数据后再进行删除操作");
+                return;
+            }
+
+            int[] selectedIndices = _view.SelectedRowIndices;
+            if (selectedIndices.Length == 0)
+            {
+                _view.ShowMessage("请选择要删除的行");
+                return;
+            }
+
+            if (MessageBox.Show($"确定要删除选中的 {selectedIndices.Length} 行数据吗？", "确认删除",
+                MessageBoxButtons.YesNo) == DialogResult.Yes)
+            {
+                for (int i = selectedIndices.Length - 1; i >= 0; i--)
+                {
+                    dataTable.Rows.RemoveAt(selectedIndices[i]);
+                }
+                UpdateJsonFromGrid();
+                _view.ShowMessage($"已删除 {selectedIndices.Length} 行数据");
+            }
+        }
+
+        private void OnGridCellEndEdit(object? sender, EventArgs e)
+        {
+            UpdateJsonFromGrid();
+        }
+
+        private void OnGridRowsAdded(object? sender, EventArgs e)
+        {
+            UpdateJsonFromGrid();
+        }
+
+        private void UpdateJsonFromGrid()
+        {
+            var dataTable = _view.GridDataSource as DataTable;
+            if (dataTable != null)
+            {
+                string json = JsonConvert.SerializeObject(dataTable, Formatting.None);
+                _view.CurrentEditItemJson = json;
+            }
         }
 
         private void OnImportClicked(object? sender, EventArgs e)
@@ -370,6 +416,8 @@ namespace UnifiedLearningAssistant.Presenters
             _view.ExportClicked -= OnExportClicked;
             _view.InsertTemplateClicked -= OnInsertTemplateClicked;
             _view.GenerateWithAIClicked -= OnGenerateWithAIClicked;
+            _view.GridCellEndEdit -= OnGridCellEndEdit;
+            _view.GridRowsAdded -= OnGridRowsAdded;
             _logger.LogInformation("ContentEditorPresenter disposed");
         }
     }

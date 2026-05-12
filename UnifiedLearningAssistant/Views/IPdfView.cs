@@ -12,12 +12,32 @@ namespace UnifiedLearningAssistant.Views
         void ShowTranslationDialog(string original, string translation, string grammar);
         void UpdateAiAnswer(string answer);
         void SetQuestionInput(string text);
+        // 新增功能：中等级 - UI响应性改进，加载状态管理
+        void SetLoadingState(bool isLoading);
+        void ShowMessage(string message);
+        // 新增功能：中等级 - PDF页面缩略图
+        void ClearThumbnails();
+        void AddThumbnail(int pageIndex, Image thumbnail);
+        void HighlightThumbnail(int pageIndex);
+        // 新增功能：低优先级 - PDF搜索和高亮
+        void UpdateSearchResultCount(int count);
+        void SetSearchPanelVisible(bool visible);
+        // 新增功能：低优先级 - 夜间模式
+        void NightMode();
+        // 新增功能：OCR语言切换
+        void SetCurrentLanguage(string language);
+        void UpdateLanguageButtonText(string text);
+        string GetCurrentLanguage();
 
         string GetSelectedFile();
         string GetPageText();
+        string GetQuestionText();
+        string GetTranslationText();
+        string GetOriginalText();
         Image? GetCurrentImage();
         Rectangle? GetSelectionRect();
         Rectangle GetDisplayRect();
+        Rectangle GetImageDisplayRect();
 
         event EventHandler? FileSelected;
         event EventHandler? PageChanged;
@@ -27,5 +47,11 @@ namespace UnifiedLearningAssistant.Views
         event EventHandler? SpeakTranslation;
         event EventHandler? SelectOcrClicked;
         event EventHandler? TranslateClicked;
+        event EventHandler<string>? SearchTextChanged;
+        event EventHandler? SearchNext;
+        event EventHandler? SearchPrevious;
+        event EventHandler? ToggleSearchPanel;
+        event EventHandler? ToggleNightMode;
+        event EventHandler? LanguageChanged;
     }
 }

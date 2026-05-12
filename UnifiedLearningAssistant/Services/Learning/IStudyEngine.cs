@@ -14,6 +14,8 @@ namespace UnifiedLearningAssistant.Services.Learning
         void SaveProgress();
         void ResetProgress();
         List<LearningItem> GetUnknownItems();
+        // 新增功能：PDF生词本联动 - 添加未掌握项
+        void AddUnknownItem(string content, string subCategory);
         int CurrentIndex { get; }
         int TotalCount { get; }
         IReadOnlyList<string> KnownItems { get; }

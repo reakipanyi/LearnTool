@@ -1,90 +1,90 @@
-using NAudio.Wave;
-using UnifiedLearningAssistant.Models.Config;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace UnifiedLearningAssistant.Services.TTS
 {
-    public class QwenTtsService : ITTSService, IDisposable
+    public class QwenTtsService : ITTSService
     {
-        private readonly QwenTtsClient _client;
-        private readonly TtsConfig _config;
-        private WaveOutEvent? _waveOut;
-        private bool _isSpeaking;
-        private readonly object _lock = new object();
+        private readonly QwenTtsClient? _client;
 
-        public QwenTtsService(TtsConfig config)
+        public QwenTtsService(string? apiKey, string? endpoint)
         {
-            _config = config;
-            _client = new QwenTtsClient(config.ApiKey, config.BaseUrl);
-        }
-
-        public bool IsSpeaking => _isSpeaking;
-
-        public bool Available => !string.IsNullOrWhiteSpace(_config.ApiKey);
-
-        public async Task SpeakAsync(string text, string language = "zh", float speed = 1.0f)
-        {
-            if (!Available)
-                return;
-
-            lock (_lock)
-            {
-                if (_isSpeaking)
-                {
-                    StopAsync().Wait();
-                }
-                _isSpeaking = true;
-            }
-
             try
             {
-                var audioBytes = await _client.SynthesizeAsync(text, _config.Model, _config.Voice, speed * _config.Speed, _config.Volume);
-                if (audioBytes == null || audioBytes.Length == 0)
-                    return;
-
-                using var memoryStream = new MemoryStream(audioBytes);
-                using var reader = new Mp3FileReader(memoryStream);
-                
-                _waveOut = new WaveOutEvent();
-                _waveOut.Init(reader);
-                _waveOut.PlaybackStopped += (s, e) =>
-                {
-                    lock (_lock)
-                    {
-                        _isSpeaking = false;
-                    }
-                    _waveOut?.Dispose();
-                    _waveOut = null;
-                };
-                _waveOut.Play();
+                _client = new QwenTtsClient(apiKey, endpoint);
             }
             catch
             {
-                lock (_lock)
-                {
-                    _isSpeaking = false;
-                }
+                _client = null;
             }
         }
 
-        public Task StopAsync()
+        public bool Available => _client != null && _client.Available;
+
+        public bool IsSpeaking => throw new NotImplementedException();
+
+
+
+        public async Task<string?> SpeakAsync(string text, string? language = null, float? speed = null)
         {
-            lock (_lock)
+            if (string.IsNullOrWhiteSpace(text)) return null;
+            if (_client == null || !_client.Available) return null;
+
+            try
             {
-                if (_waveOut != null)
-                {
-                    _waveOut.Stop();
-                    _waveOut.Dispose();
-                    _waveOut = null;
-                }
-                _isSpeaking = false;
+                // create temp dir
+                var dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TTSTemp");
+                Directory.CreateDirectory(dir);
+
+                // create deterministic filename based on SHA1 of text + language + speed
+                using var sha1 = SHA1.Create();
+                var meta = (text ?? string.Empty) + "|" + (language ?? string.Empty) + "|" + (speed?.ToString() ?? string.Empty);
+                var hash = sha1.ComputeHash(Encoding.UTF8.GetBytes(meta));
+                var sb = new StringBuilder();
+                foreach (var b in hash) sb.Append(b.ToString("x2"));
+                var fname = sb.ToString() + ".wav";
+                var path = Path.Combine(dir, fname);
+
+                if (File.Exists(path)) return path;
+
+                var wav = await _client.SynthesizeAsync(text: text, voice: "Serena", language: language ?? "English", speed: speed ?? 1.0f, format: "wav").ConfigureAwait(false);
+
+                await File.WriteAllBytesAsync(path, wav).ConfigureAwait(false);
+                return path;
             }
-            return Task.CompletedTask;
+            catch
+            {
+                return null;
+            }
+        }
+
+        public async Task<byte[]?> SpeakSteamAsync(string text, string? language = null, float? speed = null, string? format = null)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return null;
+            if (_client == null || !_client.Available) return null;
+            try
+            {
+                var fmt = string.IsNullOrWhiteSpace(format) ? "wav" : format;
+                var bytes = await _client.SynthesizeAsync(text: text, voice: "Serena", language: language ?? "English", speed: speed ?? 1.0f, format: fmt).ConfigureAwait(false);
+                return bytes;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         public void Dispose()
         {
-            StopAsync().Wait();
-            _waveOut?.Dispose();
+            try { _client?.Dispose(); } catch { }
         }
+
+        public Task StopAsync()
+        {
+            throw new NotImplementedException();
+        }
+
+
     }
 }
+

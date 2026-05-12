@@ -1,14 +1,39 @@
 namespace UnifiedLearningAssistant.Models.Learning
 {
+    /// <summary>
+    /// 成语学习项
+    /// </summary>
     public class ChineseIdiom : LearningItem
     {
+        /// <summary>
+        /// 成语
+        /// </summary>
         public string Idiom { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// 拼音
+        /// </summary>
         public string Pinyin { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// 释义
+        /// </summary>
         public string Meaning { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// 出处
+        /// </summary>
         public string Origin { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// 例句
+        /// </summary>
         public string Example { get; set; } = string.Empty;
 
+        /// <inheritdoc/>
         public override string GetMainContent() => Idiom;
+        
+        /// <inheritdoc/>
         public override string GetDisplayText() 
         {
             var parts = new List<string>();
@@ -22,6 +47,8 @@ namespace UnifiedLearningAssistant.Models.Learning
                 parts.Add($"出处: {Origin}");
             return string.Join(" | ", parts);
         }
+        
+        /// <inheritdoc/>
         public override string GetPronunciation() => Pinyin;
     }
 }

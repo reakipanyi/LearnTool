@@ -5,6 +5,7 @@ using UnifiedLearningAssistant.Models.Pdf;
 using UnifiedLearningAssistant.Services.AI;
 using UnifiedLearningAssistant.Services.Pdf;
 using UnifiedLearningAssistant.Services.TTS;
+using UnifiedLearningAssistant.Services.Learning;
 using UnifiedLearningAssistant.Views;
 
 namespace UnifiedLearningAssistant.Presenters
@@ -19,21 +20,38 @@ namespace UnifiedLearningAssistant.Presenters
         private readonly IAnnotationService _annotationService;
         private readonly IAiQuestionService _aiQuestionService;
         private readonly ITTSService _ttsService;
+        // 新增功能：PDF生词本联动 - 添加学习引擎
+        private readonly IStudyEngine _studyEngine;
         private CancellationTokenSource? _cts;
 
-        private string _currentPdfPath = "";
+        private string _currentPdfPath = string.Empty;
         private int _currentPageIndex = 0;
         private string _lastFolderPath = "";
         private bool _isDisposed = false;
         private readonly Dictionary<int, string> _pageTexts = new Dictionary<int, string>();
         private readonly object _renderLock = new object();
+        // 新增功能：优化PDF渲染 - 使用LRU缓存策略
+        private readonly LinkedList<string> _cacheAccessOrder = new LinkedList<string>();
         private readonly Dictionary<string, Bitmap> _renderCache = new Dictionary<string, Bitmap>();
-        private const int RenderCacheSize = 10;
+        private const int RenderCacheSize = 15; // 增加缓存大小
+        // 新增功能：中等级 - PDF缩略图缓存
+        private readonly Dictionary<int, Bitmap> _thumbnailCache = new Dictionary<int, Bitmap>();
+        private bool _isGeneratingThumbnails = false;
+        // 新增功能：低优先级 - PDF搜索
+        private string _currentSearchText = "";
+        private List<int> _searchResultPages = new List<int>();
+        private int _currentSearchIndex = -1;
+        // 新增功能：低优先级 - 夜间模式
+        private bool _isNightMode = false;
         private readonly string _sessionPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "lastsession.json");
         private readonly SemaphoreSlim _renderSemaphore = new SemaphoreSlim(2, 5);
         private readonly HashSet<int> _preRenderingPages = new HashSet<int>();
         // 存储每个文件的最后浏览页数
         private readonly Dictionary<string, int> _filePageMap = new Dictionary<string, int>();
+        // 新增功能：PDF生词本联动 - 当前用户ID和语言
+        private string _currentUserId = "Guest";
+        private string _currentLanguage = Constants.Language.English;
+        private string _currentSubCategory = Constants.SubCategory.EnglishWord;
 
         // 会话数据记录
         private record SessionData(
@@ -44,7 +62,7 @@ namespace UnifiedLearningAssistant.Presenters
 
         public PdfPresenter(ILogger<PdfPresenter> logger, IPdfService pdfService, IOcrService ocrService,
             ITranslationService translationService, IAnnotationService annotationService,
-            IAiQuestionService aiQuestionService, ITTSService ttsService)
+            IAiQuestionService aiQuestionService, ITTSService ttsService, IStudyEngine studyEngine)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _pdfService = pdfService ?? throw new ArgumentNullException(nameof(pdfService));
@@ -53,8 +71,18 @@ namespace UnifiedLearningAssistant.Presenters
             _annotationService = annotationService ?? throw new ArgumentNullException(nameof(annotationService));
             _aiQuestionService = aiQuestionService ?? throw new ArgumentNullException(nameof(aiQuestionService));
             _ttsService = ttsService ?? throw new ArgumentNullException(nameof(ttsService));
+            // 新增功能：PDF生词本联动 - 注入学习引擎
+            _studyEngine = studyEngine ?? throw new ArgumentNullException(nameof(studyEngine));
             _cts = new CancellationTokenSource();
             _logger.LogInformation("PdfPresenter initialized");
+        }
+
+        // 新增功能：PDF生词本联动 - 设置当前用户和学习配置
+        public void SetCurrentUserAndConfig(string userId, string language, string subCategory)
+        {
+            _currentUserId = userId;
+            _currentLanguage = language;
+            _currentSubCategory = subCategory;
         }
 
         public void SetView(IPdfView view)
@@ -80,6 +108,15 @@ namespace UnifiedLearningAssistant.Presenters
             _view.SpeakTranslation += View_SpeakTranslation;
             _view.SelectOcrClicked += View_SelectOcrClicked;
             _view.TranslateClicked += View_TranslateClicked;
+            // 新增功能：低优先级 - 搜索事件
+            _view.SearchTextChanged += View_SearchTextChanged;
+            _view.SearchNext += View_SearchNext;
+            _view.SearchPrevious += View_SearchPrevious;
+            _view.ToggleSearchPanel += View_ToggleSearchPanel;
+            // 新增功能：低优先级 - 夜间模式事件
+            _view.ToggleNightMode += View_ToggleNightMode;
+            // 新增功能：OCR语言切换事件
+            _view.LanguageChanged += View_LanguageChanged;
         }
 
         private void UnsubscribeFromEvents()
@@ -95,6 +132,15 @@ namespace UnifiedLearningAssistant.Presenters
             _view.SpeakTranslation -= View_SpeakTranslation;
             _view.SelectOcrClicked -= View_SelectOcrClicked;
             _view.TranslateClicked -= View_TranslateClicked;
+            // 新增功能：低优先级 - 搜索事件
+            _view.SearchTextChanged -= View_SearchTextChanged;
+            _view.SearchNext -= View_SearchNext;
+            _view.SearchPrevious -= View_SearchPrevious;
+            _view.ToggleSearchPanel -= View_ToggleSearchPanel;
+            // 新增功能：低优先级 - 夜间模式事件
+            _view.ToggleNightMode -= View_ToggleNightMode;
+            // 新增功能：OCR语言切换事件
+            _view.LanguageChanged -= View_LanguageChanged;
         }
 
         private void SaveSession()
@@ -197,7 +243,7 @@ namespace UnifiedLearningAssistant.Presenters
             _view.SetPageCount(_pdfService.PageCount);
         }
 
-        public void LoadPdf(string fileName)
+        public async Task LoadPdf(string fileName)
         {
             try
             {
@@ -208,6 +254,9 @@ namespace UnifiedLearningAssistant.Presenters
                     return;
                 }
 
+                // 新增功能：中等级 - UI响应性改进，显示加载指示器
+                _view.SetLoadingState(true);
+
                 // 先保存当前文件的进度
                 if (!string.IsNullOrEmpty(_currentPdfPath))
                 {
@@ -215,6 +264,7 @@ namespace UnifiedLearningAssistant.Presenters
                 }
                 
                 ClearRenderCache();
+                ClearThumbnailCache();
                 
                 _currentPdfPath = filePath;
                 LoadPdfFile(filePath);
@@ -230,7 +280,11 @@ namespace UnifiedLearningAssistant.Presenters
                 }
                 
                 _view.SetCurrentPageIndex(_currentPageIndex);
-                _ = RenderAndDisplayCurrentPageAsync();
+                await RenderAndDisplayCurrentPageAsync();
+                
+                // 新增功能：中等级 - 异步生成PDF缩略图
+                _ = GenerateThumbnailsAsync();
+                
                 SaveSession();
                 _logger.LogInformation("Loaded PDF: {Path}", filePath);
             }
@@ -239,19 +293,33 @@ namespace UnifiedLearningAssistant.Presenters
                 _logger.LogError(ex, "Failed to load PDF file: {Path}", fileName);
                 _view.ShowError("无法加载PDF文件");
             }
+            finally
+            {
+                // 新增功能：中等级 - UI响应性改进，隐藏加载指示器
+                _view.SetLoadingState(false);
+            }
         }
 
-        public void RenderPage(int pageIndex)
+        public async Task RenderPage(int pageIndex)
         {
             if (pageIndex < 0 || pageIndex >= _pdfService.PageCount)
                 return;
 
             _currentPageIndex = pageIndex;
             _view.SetCurrentPageIndex(pageIndex);
-            _ = RenderAndDisplayCurrentPageAsync();
+            _view.SetLoadingState(true);
+            try
+            {
+                await RenderAndDisplayCurrentPageAsync();
+            }
+            finally
+            {
+                _view.SetLoadingState(false);
+            }
         }
 
-        private async Task RenderAndDisplayCurrentPageAsync()
+        // 公开一个可供外部调用的异步渲染入口
+        public async Task RenderAndDisplayCurrentPageAsync()
         {
             try
             {
@@ -268,8 +336,16 @@ namespace UnifiedLearningAssistant.Presenters
                 var bitmap = await GetRenderedPageAsync(_currentPageIndex, renderWidth, renderHeight);
                 if (bitmap != null)
                 {
+                    // 新增功能：低优先级 - 夜间模式反色
+                    if (_isNightMode)
+                    {
+                        InvertColors(bitmap);
+                    }
                     _view.DisplayImage(bitmap);
                 }
+                
+                // 新增功能：中等级 - 高亮当前页面对应的缩略图
+                _view.HighlightThumbnail(_currentPageIndex);
                 
                 // 保存当前页面进度
                 _filePageMap[_currentPdfPath] = _currentPageIndex;
@@ -279,6 +355,21 @@ namespace UnifiedLearningAssistant.Presenters
             {
                 _logger.LogError(ex, "Failed to render page {PageIndex}", _currentPageIndex);
                 _view.ShowError("渲染页面失败");
+            }
+        }
+
+        // 新增功能：优化PDF渲染 - LRU缓存策略
+        private void UpdateCacheAccessOrder(string cacheKey)
+        {
+            lock (_renderLock)
+            {
+                // 如果已存在，移到链表末尾（最近使用）
+                var node = _cacheAccessOrder.Find(cacheKey);
+                if (node != null)
+                {
+                    _cacheAccessOrder.Remove(node);
+                }
+                _cacheAccessOrder.AddLast(cacheKey);
             }
         }
 
@@ -292,6 +383,8 @@ namespace UnifiedLearningAssistant.Presenters
             {
                 if (_renderCache.TryGetValue(cacheKey, out var cached))
                 {
+                    // 更新访问顺序
+                    UpdateCacheAccessOrder(cacheKey);
                     return (Bitmap)cached.Clone();
                 }
             }
@@ -303,6 +396,7 @@ namespace UnifiedLearningAssistant.Presenters
                 {
                     if (_renderCache.TryGetValue(cacheKey, out var cachedAfterWait))
                     {
+                        UpdateCacheAccessOrder(cacheKey);
                         return (Bitmap)cachedAfterWait.Clone();
                     }
                 }
@@ -316,12 +410,15 @@ namespace UnifiedLearningAssistant.Presenters
                     if (!_renderCache.ContainsKey(cacheKey))
                     {
                         _renderCache[cacheKey] = (Bitmap)bmp.Clone();
-                        while (_renderCache.Count > RenderCacheSize)
+                        UpdateCacheAccessOrder(cacheKey);
+                        
+                        // 如果超过缓存大小，移除最久未使用的
+                        while (_renderCache.Count > RenderCacheSize && _cacheAccessOrder.Count > 0)
                         {
-                            var keyToRemove = _renderCache.Keys.First();
-                            if (_renderCache.TryGetValue(keyToRemove, out var oldBmp))
+                            var oldestKey = _cacheAccessOrder.First.Value;
+                            if (_renderCache.TryGetValue(oldestKey, out var oldBmp))
                             {
-                                _renderCache.Remove(keyToRemove);
+                                _renderCache.Remove(oldestKey);
                                 try 
                                 { 
                                     oldBmp.Dispose(); 
@@ -331,11 +428,13 @@ namespace UnifiedLearningAssistant.Presenters
                                     _logger.LogWarning(ex, "Failed to dispose old cached bitmap");
                                 }
                             }
+                            _cacheAccessOrder.RemoveFirst();
                         }
                     }
                 }
 
-                _ = Task.Run(() => PreRenderNeighborsInternal(pageIndex, renderW, renderH), 
+                // 新增功能：优化PDF渲染 - 智能预渲染
+                _ = Task.Run(() => SmartPreRenderAsync(pageIndex, renderW, renderH), 
                     _cts?.Token ?? CancellationToken.None);
 
                 return bmp;
@@ -346,15 +445,32 @@ namespace UnifiedLearningAssistant.Presenters
             }
         }
 
-        private void PreRenderNeighborsInternal(int pageIndex, int renderW, int renderH)
+        // 新增功能：优化PDF渲染 - 智能预渲染策略
+        private async Task SmartPreRenderAsync(int currentPage, int renderW, int renderH)
         {
             if (_cts?.IsCancellationRequested ?? true) return;
 
-            var neighbors = new[] { pageIndex - 2, pageIndex - 1, pageIndex + 1, pageIndex + 2 };
-            foreach (var p in neighbors)
+            // 只预渲染最可能需要的页面（当前页前后各1-2页，根据总页数调整）
+            var pagesToRender = new List<int>();
+            
+            if (currentPage - 1 >= 0) pagesToRender.Add(currentPage - 1);
+            if (currentPage + 1 < PageCount) pagesToRender.Add(currentPage + 1);
+            
+            // 如果文档很长，再增加更多预渲染
+            if (PageCount > 50)
+            {
+                if (currentPage - 2 >= 0) pagesToRender.Add(currentPage - 2);
+                if (currentPage + 2 < PageCount) pagesToRender.Add(currentPage + 2);
+            }
+
+            // 打乱顺序以平衡
+            var rnd = new Random();
+            pagesToRender = pagesToRender.OrderBy(_ => rnd.Next()).ToList();
+
+            foreach (var p in pagesToRender)
             {
                 if (_cts?.IsCancellationRequested ?? true) return;
-                if (p < 0 || p >= _pdfService.PageCount) continue;
+                if (p < 0 || p >= PageCount) continue;
 
                 bool shouldRender = false;
                 lock (_renderLock)
@@ -380,30 +496,14 @@ namespace UnifiedLearningAssistant.Presenters
                             if (!_renderCache.ContainsKey(key)) 
                             {
                                 _renderCache[key] = (Bitmap)bmp.Clone();
+                                UpdateCacheAccessOrder(key);
                             }
                             _preRenderingPages.Remove(p);
-
-                            while (_renderCache.Count > RenderCacheSize)
-                            {
-                                var keyToRemove = _renderCache.Keys.First();
-                                if (_renderCache.TryGetValue(keyToRemove, out var oldBmp))
-                                {
-                                    _renderCache.Remove(keyToRemove);
-                                    try 
-                                    { 
-                                        oldBmp.Dispose(); 
-                                    } 
-                                    catch (Exception ex2)
-                                    {
-                                        _logger.LogWarning(ex2, "Failed to dispose old cached bitmap in pre-render");
-                                    }
-                                }
-                            }
                         }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to pre-render neighbor page {PageIndex}", p);
+                        _logger.LogWarning(ex, "Failed to pre-render page {PageIndex}", p);
                         lock (_renderLock)
                         {
                             _preRenderingPages.Remove(p);
@@ -429,20 +529,29 @@ namespace UnifiedLearningAssistant.Presenters
                     }
                 }
                 _renderCache.Clear();
+                _cacheAccessOrder.Clear();
                 _preRenderingPages.Clear();
             }
         }
 
+        private readonly object _pageTextsLock = new object();
+
         public async Task EnsurePageTextAsync(int pageIndex)
         {
-            if (_pageTexts.ContainsKey(pageIndex)) return;
+            lock (_pageTextsLock)
+            {
+                if (_pageTexts.ContainsKey(pageIndex)) return;
+            }
             try
             {
                 var text = _pdfService.GetPdfText(pageIndex);
                 if (!string.IsNullOrWhiteSpace(text))
                 {
-                    _pageTexts[pageIndex] = text;
-                    _view.SetPageText(pageIndex, text);
+                    lock (_pageTextsLock)
+                    {
+                        _pageTexts[pageIndex] = text;
+                    }
+                    _view?.SetPageText(pageIndex, text);
                     return;
                 }
 
@@ -450,14 +559,22 @@ namespace UnifiedLearningAssistant.Presenters
                 var ocrText = await OcrBitmapAsync(bmp);
                 if (!string.IsNullOrWhiteSpace(ocrText))
                 {
-                    _pageTexts[pageIndex] = ocrText;
-                    _view.SetPageText(pageIndex, ocrText);
+                    lock (_pageTextsLock)
+                    {
+                        _pageTexts[pageIndex] = ocrText;
+                    }
+                    _view?.SetPageText(pageIndex, ocrText);
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to ensure page text for page {PageIndex}", pageIndex);
             }
+        }
+
+        public bool IsOcrAvailable()
+        {
+            return _ocrService.IsAvailable;
         }
 
         public async Task<string?> OcrBitmapAsync(Bitmap bmp)
@@ -485,18 +602,75 @@ namespace UnifiedLearningAssistant.Presenters
                 return;
             }
 
+            if (img == null || img.Width == 0 || img.Height == 0)
+            {
+                _view.ShowWarning("图像无效");
+                return;
+            }
+
+            if (selRect.Width <= 0 || selRect.Height <= 0)
+            {
+                _view.ShowWarning("请框选一个有效的区域");
+                return;
+            }
+
             try
             {
-                float scaleX = (float)img.Width / imgDisplayRect.Width;
-                float scaleY = (float)img.Height / imgDisplayRect.Height;
+                var imageDisplayRect = _view.GetImageDisplayRect();
 
-                var actualRect = new Rectangle(
-                    (int)(selRect.X * scaleX),
-                    (int)(selRect.Y * scaleY),
-                    (int)(selRect.Width * scaleX),
-                    (int)(selRect.Height * scaleY));
+                if (imageDisplayRect.Width == 0 || imageDisplayRect.Height == 0)
+                {
+                    _view.ShowWarning("图像显示区域无效");
+                    return;
+                }
 
-                using var cropped = img.Clone(actualRect, img.PixelFormat);
+                float scaleX = (float)img.Width / imageDisplayRect.Width;
+                float scaleY = (float)img.Height / imageDisplayRect.Height;
+
+                float actualX = (selRect.X - imageDisplayRect.X) * scaleX;
+                float actualY = (selRect.Y - imageDisplayRect.Y) * scaleY;
+                float actualWidth = selRect.Width * scaleX;
+                float actualHeight = selRect.Height * scaleY;
+
+                actualX = Math.Max(0, actualX);
+                actualY = Math.Max(0, actualY);
+
+                if (actualX >= img.Width || actualY >= img.Height)
+                {
+                    _view.ShowWarning("选择区域超出图像范围");
+                    return;
+                }
+
+                actualWidth = Math.Min(img.Width - actualX, actualWidth);
+                actualHeight = Math.Min(img.Height - actualY, actualHeight);
+
+                if (actualWidth <= 0 || actualHeight <= 0)
+                {
+                    _view.ShowWarning("选择区域无效，请重新选择");
+                    return;
+                }
+
+                if (actualWidth < 10 || actualHeight < 10)
+                {
+                    _view.ShowWarning("选择区域太小，请选择更大的区域");
+                    return;
+                }
+
+                var intRect = new Rectangle(
+                    (int)Math.Round(actualX),
+                    (int)Math.Round(actualY),
+                    (int)Math.Round(actualWidth),
+                    (int)Math.Round(actualHeight));
+
+                if (intRect.Width <= 0 || intRect.Height <= 0 ||
+                    intRect.X + intRect.Width > img.Width ||
+                    intRect.Y + intRect.Height > img.Height)
+                {
+                    _view.ShowWarning("裁剪区域无效，请重新选择");
+                    return;
+                }
+
+                using var cropped = img.Clone(intRect, img.PixelFormat);
                 var recognizedText = await _ocrService.RecognizeTextAsync(cropped);
 
                 if (!string.IsNullOrWhiteSpace(recognizedText))
@@ -504,11 +678,20 @@ namespace UnifiedLearningAssistant.Presenters
                     string translation = await _translationService.TranslateAsync(recognizedText) ?? "翻译失败";
                     _view.ShowTranslationDialog(recognizedText, translation, "");
                 }
+                else
+                {
+                    _view.ShowWarning("未识别到文字，请尝试调整选择区域");
+                }
+            }
+            catch (ArgumentOutOfRangeException ex)
+            {
+                _logger.LogError(ex, "OCR识别失败：裁剪区域超出范围");
+                _view.ShowError("裁剪区域超出范围，请重新选择");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "OCR识别失败");
-                _view.ShowError("OCR识别失败");
+                _view.ShowError("OCR识别失败：" + ex.Message);
             }
         }
 
@@ -631,6 +814,28 @@ namespace UnifiedLearningAssistant.Presenters
             SaveSession();
         }
 
+        public void NextPage()
+        {
+            if (_pdfService == null) return;
+            
+            var nextPage = _currentPageIndex + 1;
+            if (nextPage < _pdfService.PageCount)
+            {
+                _ = RenderPage(nextPage);
+            }
+        }
+
+        public void PreviousPage()
+        {
+            if (_pdfService == null) return;
+            
+            var prevPage = _currentPageIndex - 1;
+            if (prevPage >= 0)
+            {
+                _ = RenderPage(prevPage);
+            }
+        }
+
         public void SetQuestionInput(string text)
         {
             _view.SetQuestionInput(text);
@@ -684,7 +889,19 @@ namespace UnifiedLearningAssistant.Presenters
             {
                 _cts?.Token.ThrowIfCancellationRequested();
                 
-                var question = _view.GetPageText();
+                var question = _view.GetQuestionText();
+                if (string.IsNullOrWhiteSpace(question))
+                {
+                    question = _view.GetPageText();
+                }
+                
+                if (string.IsNullOrWhiteSpace(question))
+                {
+                    _view.ShowWarning("请输入要提问的内容");
+                    return;
+                }
+
+                _view.SetLoadingState(true);
                 var answer = await GetAiAnswerAsync(question, "", _cts?.Token ?? CancellationToken.None);
                 _view.UpdateAiAnswer(answer);
             }
@@ -695,16 +912,63 @@ namespace UnifiedLearningAssistant.Presenters
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in View_AiQuestionAsked");
+                _view.ShowError("AI提问失败: " + ex.Message);
+            }
+            finally
+            {
+                _view.SetLoadingState(false);
             }
         }
 
         private void View_AddWordToLearningList(object? sender, EventArgs e)
         {
-            OnAddWordToLearningList?.Invoke(this, new AddWordEventArgs { Word = "", Language = "" });
+            if (_view == null || _studyEngine == null)
+            {
+                _logger.LogWarning("View_AddWordToLearningList called with null view or study engine");
+                return;
+            }
+
+            var word = _view.GetOriginalText();
+            if (string.IsNullOrWhiteSpace(word))
+            {
+                word = _view.GetQuestionText();
+            }
+            
+            if (!string.IsNullOrWhiteSpace(word))
+            {
+                try
+                {
+                    _studyEngine.Initialize(_currentUserId, _currentLanguage, _currentSubCategory, "", "", "");
+                    _studyEngine.AddUnknownItem(word.Trim(), _currentSubCategory);
+                    _view.ShowMessage($"已将 \"{word.Trim()}\" 添加到生词本");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to add word to learning list: {Word}", word);
+                    _view.ShowError("添加到生词本失败: " + ex.Message);
+                }
+            }
+            else
+            {
+                _view.ShowWarning("请先输入要添加的单词");
+            }
+            OnAddWordToLearningList?.Invoke(this, new AddWordEventArgs { Word = word ?? string.Empty, Language = _currentLanguage });
         }
 
         private void View_SpeakTranslation(object? sender, EventArgs e)
         {
+            try
+            {
+                var text = _view.GetTranslationText();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    _ = SpeakTextAsync(text, "zh", 1.0f);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in View_SpeakTranslation");
+            }
         }
 
         private void View_SelectOcrClicked(object? sender, EventArgs e)
@@ -714,6 +978,157 @@ namespace UnifiedLearningAssistant.Presenters
 
         private void View_TranslateClicked(object? sender, EventArgs e)
         {
+        }
+
+        // 新增功能：低优先级 - 搜索事件处理程序
+        private void View_SearchTextChanged(object? sender, string searchText)
+        {
+            _currentSearchText = searchText;
+            _ = PerformSearchAsync(searchText);
+        }
+
+        private void View_SearchNext(object? sender, EventArgs e)
+        {
+            if (_searchResultPages.Count > 0)
+            {
+                _currentSearchIndex = (_currentSearchIndex + 1) % _searchResultPages.Count;
+                var nextPage = _searchResultPages[_currentSearchIndex];
+                RenderPage(nextPage);
+            }
+        }
+
+        private void View_SearchPrevious(object? sender, EventArgs e)
+        {
+            if (_searchResultPages.Count > 0)
+            {
+                _currentSearchIndex = _currentSearchIndex - 1;
+                if (_currentSearchIndex < 0)
+                    _currentSearchIndex = _searchResultPages.Count - 1;
+                var prevPage = _searchResultPages[_currentSearchIndex];
+                RenderPage(prevPage);
+            }
+        }
+
+        private void View_ToggleSearchPanel(object? sender, EventArgs e)
+        {
+        }
+
+        // 新增功能：低优先级 - 夜间模式切换
+        private void View_ToggleNightMode(object? sender, EventArgs e)
+        {
+            _isNightMode = !_isNightMode;
+            // 重新渲染当前页面以应用反色
+            _ = RenderAndDisplayCurrentPageAsync();
+        }
+
+        private void View_LanguageChanged(object? sender, EventArgs e)
+        {
+            if (_view == null || _ocrService == null)
+            {
+                _logger.LogWarning("View_LanguageChanged called with null view or OCR service");
+                return;
+            }
+
+            var language = _view.GetCurrentLanguage();
+            if (!string.IsNullOrWhiteSpace(language))
+            {
+                try
+                {
+                    bool success = _ocrService.SetLanguage(language);
+                    if (!success)
+                    {
+                        _view.ShowWarning($"无法切换到语言: {language}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to change OCR language to {Language}", language);
+                    _view.ShowError("语言切换失败: " + ex.Message);
+                }
+            }
+        }
+
+        private async Task PerformSearchAsync(string searchText)
+        {
+            _searchResultPages.Clear();
+            _currentSearchIndex = -1;
+
+            if (string.IsNullOrWhiteSpace(searchText))
+            {
+                _view.UpdateSearchResultCount(0);
+                return;
+            }
+
+            try
+            {
+                var totalPages = _pdfService?.PageCount ?? 0;
+                for (int i = 0; i < totalPages; i++)
+                {
+                    // 确保我们有当前页面的文本
+                    await EnsurePageTextAsync(i);
+
+                    if (_pageTexts.TryGetValue(i, out string? pageText) &&
+                        !string.IsNullOrWhiteSpace(pageText) &&
+                        pageText.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        _searchResultPages.Add(i);
+                    }
+                }
+
+                _view.UpdateSearchResultCount(_searchResultPages.Count);
+
+                // 如果找到结果，跳转到第一个匹配页
+                if (_searchResultPages.Count > 0)
+                {
+                    _currentSearchIndex = 0;
+                    RenderPage(_searchResultPages[0]);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "搜索失败");
+            }
+        }
+
+        // 新增功能：低优先级 - 图像反色方法
+        private void InvertColors(Bitmap bitmap)
+        {
+            try
+            {
+                // 使用LockBits提高性能
+                var rect = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
+                var data = bitmap.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadWrite, bitmap.PixelFormat);
+                
+                // 计算像素字节大小
+                int bytesPerPixel = Image.GetPixelFormatSize(bitmap.PixelFormat) / 8;
+                
+                // 创建缓冲区
+                IntPtr ptr = data.Scan0;
+                int bytes = Math.Abs(data.Stride) * bitmap.Height;
+                byte[] rgbValues = new byte[bytes];
+                System.Runtime.InteropServices.Marshal.Copy(ptr, rgbValues, 0, bytes);
+                
+                // 反色处理
+                for (int i = 0; i < rgbValues.Length; i += bytesPerPixel)
+                {
+                    // 反色：255 - 原值
+                    if (bytesPerPixel >= 3)
+                    {
+                        rgbValues[i] = (byte)(255 - rgbValues[i]);     // Blue
+                        rgbValues[i + 1] = (byte)(255 - rgbValues[i + 1]); // Green
+                        rgbValues[i + 2] = (byte)(255 - rgbValues[i + 2]); // Red
+                    }
+                    // 如果有Alpha通道，不改变它
+                }
+                
+                // 复制回位图
+                System.Runtime.InteropServices.Marshal.Copy(rgbValues, 0, ptr, bytes);
+                bitmap.UnlockBits(data);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "反色渲染失败");
+            }
         }
 
         public void Dispose()
@@ -727,6 +1142,7 @@ namespace UnifiedLearningAssistant.Presenters
                 _cts?.Cancel();
                 
                 ClearRenderCache();
+                ClearThumbnailCache();
                 
                 _cts?.Dispose();
                 _renderSemaphore.Dispose();
@@ -734,6 +1150,94 @@ namespace UnifiedLearningAssistant.Presenters
                 _logger.LogInformation("PdfPresenter disposed");
                 _isDisposed = true;
             }
+        }
+
+        // 新增功能：中等级 - PDF缩略图相关方法
+        private void ClearThumbnailCache()
+        {
+            lock (_renderLock)
+            {
+                foreach (var bitmap in _thumbnailCache.Values)
+                {
+                    try
+                    {
+                        bitmap.Dispose();
+                    }
+                    catch
+                    {
+                    }
+                }
+                _thumbnailCache.Clear();
+            }
+            _view.ClearThumbnails();
+        }
+
+        private async Task GenerateThumbnailsAsync()
+        {
+            if (_isGeneratingThumbnails) return;
+            _isGeneratingThumbnails = true;
+
+            try
+            {
+                if (_pdfService == null)
+                {
+                    _logger.LogWarning("GenerateThumbnailsAsync: _pdfService is null");
+                    return;
+                }
+
+                var totalPages = _pdfService.PageCount;
+                _logger.LogInformation($"GenerateThumbnailsAsync: Total pages = {totalPages}");
+                
+                if (totalPages == 0) 
+                {
+                    _logger.LogWarning("GenerateThumbnailsAsync: No pages to generate thumbnails for");
+                    return;
+                }
+
+                for (int i = 0; i < totalPages; i++)
+                {
+                    if (_cts?.IsCancellationRequested ?? false) break;
+                    
+                    try
+                    {
+                        var thumbnail = await GetThumbnailAsync(i);
+                        _logger.LogInformation($"Generated thumbnail for page {i}: {(thumbnail != null ? $"success ({thumbnail.Width}x{thumbnail.Height})" : "failed")}");
+                        _view.AddThumbnail(i, thumbnail);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to generate thumbnail for page {PageIndex}", i);
+                    }
+                }
+            }
+            finally
+            {
+                _isGeneratingThumbnails = false;
+            }
+        }
+
+        private async Task<Bitmap> GetThumbnailAsync(int pageIndex)
+        {
+            lock (_renderLock)
+            {
+                if (_thumbnailCache.TryGetValue(pageIndex, out var cached))
+                {
+                    return (Bitmap)cached.Clone();
+                }
+            }
+
+            var thumbnail = await Task.Run(() => RenderPageToBitmap(pageIndex, 100, 140));
+            if (thumbnail != null)
+            {
+                lock (_renderLock)
+                {
+                    if (!_thumbnailCache.ContainsKey(pageIndex))
+                    {
+                        _thumbnailCache[pageIndex] = (Bitmap)thumbnail.Clone();
+                    }
+                }
+            }
+            return thumbnail;
         }
 
         public event EventHandler<AddWordEventArgs>? OnAddWordToLearningList;

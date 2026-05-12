@@ -1,15 +1,40 @@
 namespace UnifiedLearningAssistant.Models.Learning
 {
+    /// <summary>
+    /// 汉字学习项
+    /// </summary>
     public class ChineseCharacter : LearningItem
     {
+        /// <summary>
+        /// 汉字
+        /// </summary>
         public string Character { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// 拼音
+        /// </summary>
         public string Pinyin { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// 释义
+        /// </summary>
         public string Meaning { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// 笔画数
+        /// </summary>
         public string StrokeCount { get; set; } = string.Empty;
+        
+        /// <summary>
+        /// 部首
+        /// </summary>
         public string Radical { get; set; } = string.Empty;
 
 
+        /// <inheritdoc/>
         public override string GetMainContent() => Character;
+        
+        /// <inheritdoc/>
         public override string GetDisplayText() 
         {
             var parts = new List<string>();
@@ -23,6 +48,8 @@ namespace UnifiedLearningAssistant.Models.Learning
                 parts.Add($"部首: {Radical}");
             return string.Join(" | ", parts);
         }
+        
+        /// <inheritdoc/>
         public override string GetPronunciation() => Pinyin;
 
 
