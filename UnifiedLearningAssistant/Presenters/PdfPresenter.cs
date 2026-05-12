@@ -572,6 +572,11 @@ namespace UnifiedLearningAssistant.Presenters
             }
         }
 
+        public bool IsOcrAvailable()
+        {
+            return _ocrService.IsAvailable;
+        }
+
         public async Task<string?> OcrBitmapAsync(Bitmap bmp)
         {
             if (!_ocrService.IsAvailable)
