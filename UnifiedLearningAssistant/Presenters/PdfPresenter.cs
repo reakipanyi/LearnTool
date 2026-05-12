@@ -30,8 +30,10 @@ namespace UnifiedLearningAssistant.Presenters
         private bool _isDisposed = false;
         private readonly Dictionary<int, string> _pageTexts = new Dictionary<int, string>();
         private readonly object _renderLock = new object();
+        // 新增功能：优化PDF渲染 - 使用LRU缓存策略
+        private readonly LinkedList<string> _cacheAccessOrder = new LinkedList<string>();
         private readonly Dictionary<string, Bitmap> _renderCache = new Dictionary<string, Bitmap>();
-        private const int RenderCacheSize = 10;
+        private const int RenderCacheSize = 15; // 增加缓存大小
         private readonly string _sessionPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "lastsession.json");
         private readonly SemaphoreSlim _renderSemaphore = new SemaphoreSlim(2, 5);
         private readonly HashSet<int> _preRenderingPages = new HashSet<int>();
@@ -299,6 +301,21 @@ namespace UnifiedLearningAssistant.Presenters
             }
         }
 
+        // 新增功能：优化PDF渲染 - LRU缓存策略
+        private void UpdateCacheAccessOrder(string cacheKey)
+        {
+            lock (_renderLock)
+            {
+                // 如果已存在，移到链表末尾（最近使用）
+                var node = _cacheAccessOrder.Find(cacheKey);
+                if (node != null)
+                {
+                    _cacheAccessOrder.Remove(node);
+                }
+                _cacheAccessOrder.AddLast(cacheKey);
+            }
+        }
+
         public async Task<Bitmap> GetRenderedPageAsync(int pageIndex, int renderW, int renderH)
         {
             if (_pdfService == null) return null;
@@ -309,6 +326,8 @@ namespace UnifiedLearningAssistant.Presenters
             {
                 if (_renderCache.TryGetValue(cacheKey, out var cached))
                 {
+                    // 更新访问顺序
+                    UpdateCacheAccessOrder(cacheKey);
                     return (Bitmap)cached.Clone();
                 }
             }
@@ -320,6 +339,7 @@ namespace UnifiedLearningAssistant.Presenters
                 {
                     if (_renderCache.TryGetValue(cacheKey, out var cachedAfterWait))
                     {
+                        UpdateCacheAccessOrder(cacheKey);
                         return (Bitmap)cachedAfterWait.Clone();
                     }
                 }
@@ -333,12 +353,15 @@ namespace UnifiedLearningAssistant.Presenters
                     if (!_renderCache.ContainsKey(cacheKey))
                     {
                         _renderCache[cacheKey] = (Bitmap)bmp.Clone();
-                        while (_renderCache.Count > RenderCacheSize)
+                        UpdateCacheAccessOrder(cacheKey);
+                        
+                        // 如果超过缓存大小，移除最久未使用的
+                        while (_renderCache.Count > RenderCacheSize && _cacheAccessOrder.Count > 0)
                         {
-                            var keyToRemove = _renderCache.Keys.First();
-                            if (_renderCache.TryGetValue(keyToRemove, out var oldBmp))
+                            var oldestKey = _cacheAccessOrder.First.Value;
+                            if (_renderCache.TryGetValue(oldestKey, out var oldBmp))
                             {
-                                _renderCache.Remove(keyToRemove);
+                                _renderCache.Remove(oldestKey);
                                 try 
                                 { 
                                     oldBmp.Dispose(); 
@@ -348,11 +371,13 @@ namespace UnifiedLearningAssistant.Presenters
                                     _logger.LogWarning(ex, "Failed to dispose old cached bitmap");
                                 }
                             }
+                            _cacheAccessOrder.RemoveFirst();
                         }
                     }
                 }
 
-                _ = Task.Run(() => PreRenderNeighborsInternal(pageIndex, renderW, renderH), 
+                // 新增功能：优化PDF渲染 - 智能预渲染
+                _ = Task.Run(() => SmartPreRenderAsync(pageIndex, renderW, renderH), 
                     _cts?.Token ?? CancellationToken.None);
 
                 return bmp;
@@ -363,15 +388,32 @@ namespace UnifiedLearningAssistant.Presenters
             }
         }
 
-        private void PreRenderNeighborsInternal(int pageIndex, int renderW, int renderH)
+        // 新增功能：优化PDF渲染 - 智能预渲染策略
+        private async Task SmartPreRenderAsync(int currentPage, int renderW, int renderH)
         {
             if (_cts?.IsCancellationRequested ?? true) return;
 
-            var neighbors = new[] { pageIndex - 2, pageIndex - 1, pageIndex + 1, pageIndex + 2 };
-            foreach (var p in neighbors)
+            // 只预渲染最可能需要的页面（当前页前后各1-2页，根据总页数调整）
+            var pagesToRender = new List<int>();
+            
+            if (currentPage - 1 >= 0) pagesToRender.Add(currentPage - 1);
+            if (currentPage + 1 < PageCount) pagesToRender.Add(currentPage + 1);
+            
+            // 如果文档很长，再增加更多预渲染
+            if (PageCount > 50)
+            {
+                if (currentPage - 2 >= 0) pagesToRender.Add(currentPage - 2);
+                if (currentPage + 2 < PageCount) pagesToRender.Add(currentPage + 2);
+            }
+
+            // 打乱顺序以平衡
+            var rnd = new Random();
+            pagesToRender = pagesToRender.OrderBy(_ => rnd.Next()).ToList();
+
+            foreach (var p in pagesToRender)
             {
                 if (_cts?.IsCancellationRequested ?? true) return;
-                if (p < 0 || p >= _pdfService.PageCount) continue;
+                if (p < 0 || p >= PageCount) continue;
 
                 bool shouldRender = false;
                 lock (_renderLock)
@@ -397,30 +439,14 @@ namespace UnifiedLearningAssistant.Presenters
                             if (!_renderCache.ContainsKey(key)) 
                             {
                                 _renderCache[key] = (Bitmap)bmp.Clone();
+                                UpdateCacheAccessOrder(key);
                             }
                             _preRenderingPages.Remove(p);
-
-                            while (_renderCache.Count > RenderCacheSize)
-                            {
-                                var keyToRemove = _renderCache.Keys.First();
-                                if (_renderCache.TryGetValue(keyToRemove, out var oldBmp))
-                                {
-                                    _renderCache.Remove(keyToRemove);
-                                    try 
-                                    { 
-                                        oldBmp.Dispose(); 
-                                    } 
-                                    catch (Exception ex2)
-                                    {
-                                        _logger.LogWarning(ex2, "Failed to dispose old cached bitmap in pre-render");
-                                    }
-                                }
-                            }
                         }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to pre-render neighbor page {PageIndex}", p);
+                        _logger.LogWarning(ex, "Failed to pre-render page {PageIndex}", p);
                         lock (_renderLock)
                         {
                             _preRenderingPages.Remove(p);
@@ -446,6 +472,7 @@ namespace UnifiedLearningAssistant.Presenters
                     }
                 }
                 _renderCache.Clear();
+                _cacheAccessOrder.Clear();
                 _preRenderingPages.Clear();
             }
         }
