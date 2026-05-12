@@ -369,7 +369,7 @@ namespace UnifiedLearningAssistant.Forms
             {
                 if (s is Control c && c.Tag is int idx)
                 {
-                    RenderPage(idx);
+                    NavigateToPage(idx);
                 }
             };
 
@@ -386,7 +386,7 @@ namespace UnifiedLearningAssistant.Forms
             {
                 if (s is Control c && c.Tag is int idx)
                 {
-                    RenderPage(idx);
+                    NavigateToPage(idx);
                 }
             };
 
@@ -416,10 +416,11 @@ namespace UnifiedLearningAssistant.Forms
             }
         }
 
-        // 新增功能：中等级 - 私有方法用于触发页码更改事件
-        private void RenderPage(int pageIndex)
+        // 新增功能：中等级 - 私有方法用于翻页
+        private void NavigateToPage(int pageIndex)
         {
-            PageChanged?.Invoke(this, EventArgs.Empty);
+            // 直接调用 presenter 的渲染方法
+            _presenter?.RenderPage(pageIndex);
         }
 
         public string GetSelectedFile()
@@ -1213,8 +1214,8 @@ namespace UnifiedLearningAssistant.Forms
             var currentPage = int.TryParse(textBoxPage.Text, out var p) ? p : 1;
             if (currentPage < _presenter.PageCount)
             {
-                _presenter.RenderPage(currentPage);
-                _presenter.RememberCurrentPageForCurrentFile(currentPage);
+                _presenter.RenderPage(currentPage - 1);
+                _presenter.RememberCurrentPageForCurrentFile(currentPage - 1);
             }
         }
 
