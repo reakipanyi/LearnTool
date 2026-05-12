@@ -1,5 +1,5 @@
-using System.Drawing.Drawing2D;
 using Microsoft.Extensions.Logging;
+using System.Drawing.Drawing2D;
 using UnifiedLearningAssistant.Presenters;
 using UnifiedLearningAssistant.Views;
 using UnifiedLearningAssistant.Views.UI;
@@ -274,7 +274,7 @@ namespace UnifiedLearningAssistant.Forms
         }
 
         // 新增功能：低优先级 - 夜间模式切换
-        public void ToggleNightMode()
+        public void NightMode()
         {
             _isNightMode = !_isNightMode;
             ApplyNightMode();
@@ -308,8 +308,9 @@ namespace UnifiedLearningAssistant.Forms
             }
 
             // 重新渲染当前页面以应用反色（如果需要）
-            if (_presenter != null && !string.IsNullOrWhiteSpace(_currentPdfPath))
+            if (_presenter != null)
             {
+                // 请求 Presenter 重新渲染当前页（Presenter 公开了异步渲染方法）
                 _ = _presenter.RenderAndDisplayCurrentPageAsync();
             }
         }
@@ -328,7 +329,7 @@ namespace UnifiedLearningAssistant.Forms
             };
             _nightModeButton.Click += (s, e) =>
             {
-                ToggleNightMode();
+                NightMode();
                 ToggleNightMode?.Invoke(this, EventArgs.Empty);
             };
 
@@ -459,6 +460,7 @@ namespace UnifiedLearningAssistant.Forms
         public event EventHandler? SearchNext;
         public event EventHandler? SearchPrevious;
         public event EventHandler? ToggleSearchPanel;
+        public event EventHandler? ToggleNightMode;
 
         #endregion
 

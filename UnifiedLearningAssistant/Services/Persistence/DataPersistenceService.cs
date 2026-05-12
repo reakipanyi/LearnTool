@@ -38,9 +38,11 @@ namespace UnifiedLearningAssistant.Services.Persistence
             try
             {
                 // 新增功能：配置安全优化 - 保存时加密敏感信息
-                var configToSave = (AppConfig)config.MemberwiseClone();
+                // MemberwiseClone is protected; perform a deep clone via JSON serialization
+                var json = Common.JsonHelper.Serialize(config);
+                var configToSave = Common.JsonHelper.Deserialize<AppConfig>(json) ?? new AppConfig();
                 EncryptSensitiveConfig(configToSave);
-                
+
                 var path = Path.Combine(FileHelper.GetAppDirectory(), "appsettings.json");
                 JsonHelper.SaveToFile(path, configToSave);
             }
@@ -62,11 +64,7 @@ namespace UnifiedLearningAssistant.Services.Persistence
             }
             if (config.TranslationConfig != null)
             {
-                config.TranslationConfig.ApiKey = SecureConfigManager.Encrypt(config.TranslationConfig.ApiKey);
-            }
-            if (config.OcrConfig != null)
-            {
-                config.OcrConfig.ApiKey = SecureConfigManager.Encrypt(config.OcrConfig.ApiKey);
+                config.TranslationConfig.AppKey = SecureConfigManager.Encrypt(config.TranslationConfig.AppKey);
             }
         }
 
@@ -83,11 +81,8 @@ namespace UnifiedLearningAssistant.Services.Persistence
             }
             if (config.TranslationConfig != null)
             {
-                config.TranslationConfig.ApiKey = SecureConfigManager.Decrypt(config.TranslationConfig.ApiKey);
-            }
-            if (config.OcrConfig != null)
-            {
-                config.OcrConfig.ApiKey = SecureConfigManager.Decrypt(config.OcrConfig.ApiKey);
+                config.TranslationConfig.AppKey = SecureConfigManager.Decrypt(config.TranslationConfig.AppKey);
+                config.TranslationConfig.AppSecret = SecureConfigManager.Decrypt(config.TranslationConfig.AppSecret);
             }
         }
 

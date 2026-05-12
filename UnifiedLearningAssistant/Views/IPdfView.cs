@@ -23,7 +23,7 @@ namespace UnifiedLearningAssistant.Views
         void UpdateSearchResultCount(int count);
         void SetSearchPanelVisible(bool visible);
         // 新增功能：低优先级 - 夜间模式
-        void ToggleNightMode();
+        void NightMode();
 
         string GetSelectedFile();
         string GetPageText();

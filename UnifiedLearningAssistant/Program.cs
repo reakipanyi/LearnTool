@@ -45,7 +45,7 @@ namespace UnifiedLearningAssistant
             {
                 builder.AddConsole();
                 builder.SetMinimumLevel(LogLevel.Information);
-                builder.AddDebug(); // 新增：添加调试日志
+                // Note: Debug logger provider can be added via Microsoft.Extensions.Logging.Debug package if desired
             });
 
             // 3. 核心服务（统一生命周期管理）
@@ -85,6 +85,8 @@ namespace UnifiedLearningAssistant
             // 视图接口映射
             services.AddScoped<ISettingView>(sp => sp.GetRequiredService<SettingForm>());
             services.AddScoped<ILearningView>(sp => sp.GetRequiredService<LearningForm>());
+            services.AddScoped<IPdfView>(sp => sp.GetRequiredService<PdfReaderForm>());
+            services.AddScoped<IMainView>(sp => sp.GetRequiredService<MainForm>());
             services.AddScoped<IResultView>(sp => sp.GetRequiredService<ResultForm>());
             services.AddScoped<IContentEditorView>(sp => sp.GetRequiredService<ContentEditorForm>());
 
@@ -148,17 +150,22 @@ namespace UnifiedLearningAssistant
 
             try
             {
-                // 新增功能：优化依赖注入 - 使用统一的服务提供程序
-                var mainForm = ServiceProvider.GetRequiredService<MainForm>();
-                var pdfPresenter = ServiceProvider.GetRequiredService<PdfPresenter>();
-                var pdfReaderForm = ServiceProvider.GetRequiredService<PdfReaderForm>();
-                
-                // 设置Presenter关系
+                // 使用 Scope 来解析 Scoped 生命周期的 Presenter/Form
+                // 保持 scope 存活直到 Application.Run 结束，以便 Scoped 服务在主窗体生命周期内有效
+                using var appScope = ServiceProvider.CreateScope();
+                var scopedProvider = appScope.ServiceProvider;
+
+                var mainForm = scopedProvider.GetRequiredService<MainForm>();
+                var pdfPresenter = scopedProvider.GetRequiredService<PdfPresenter>();
+                var pdfReaderForm = scopedProvider.GetRequiredService<PdfReaderForm>();
+
+                // 设置 Presenter 与 View 关系
                 pdfReaderForm.SetPresenter(pdfPresenter);
                 mainForm.SetPdfPresenter(pdfPresenter);
-                
+
                 logger.LogInformation("主窗体创建成功，启动应用程序");
                 Application.Run(mainForm);
+                // 在 Application.Run 返回后，appScope.Dispose() 会自动释放 Scoped 服务
             }
             catch (Exception ex)
             {

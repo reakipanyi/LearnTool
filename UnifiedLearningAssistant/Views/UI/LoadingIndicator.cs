@@ -1,7 +1,3 @@
-using System;
-using System.Drawing;
-using System.Windows.Forms;
-
 namespace UnifiedLearningAssistant.Views.UI
 {
     // 新增功能：中等级 - UI响应性改进，加载指示器
@@ -9,7 +5,7 @@ namespace UnifiedLearningAssistant.Views.UI
     {
         private bool _isLoading = false;
         private int _angle = 0;
-        private Timer? _timer;
+        private System.Windows.Forms.Timer? _timer;
 
         public LoadingIndicator()
         {
@@ -19,10 +15,10 @@ namespace UnifiedLearningAssistant.Views.UI
                 ControlStyles.OptimizedDoubleBuffer,
                 true);
             DoubleBuffered = true;
-            BackColor = Color.Transparent;
+            BackColor = Color.White;
             Size = new Size(50, 50);
 
-            _timer = new Timer();
+            _timer = new System.Windows.Forms.Timer();
             _timer.Interval = 30;
             _timer.Tick += Timer_Tick;
         }

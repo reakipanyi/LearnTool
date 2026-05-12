@@ -42,8 +42,8 @@ namespace UnifiedLearningAssistant.Presenters
             _view.TTSVolume = (int)(_config.TtsConfig.Volume * 100);
             _view.FontSize = _config.AppSettings.DefaultFontSize;
             _view.Theme = _config.AppSettings.Theme;
-            _view.BaiduAppId = _config.TranslationConfig.BaiduAppId;
-            _view.BaiduSecret = _config.TranslationConfig.BaiduSecret;
+            _view.BaiduAppId = _config.TranslationConfig.AppKey;
+            _view.BaiduSecret = _config.TranslationConfig.AppSecret;
         }
 
         private void View_SaveClicked(object? sender, EventArgs e)
@@ -60,8 +60,8 @@ namespace UnifiedLearningAssistant.Presenters
                 _config.TtsConfig.Volume = _view.TTSVolume / 100f;
                 _config.AppSettings.DefaultFontSize = _view.FontSize;
                 _config.AppSettings.Theme = _view.Theme;
-                _config.TranslationConfig.BaiduAppId = _view.BaiduAppId;
-                _config.TranslationConfig.BaiduSecret = _view.BaiduSecret;
+                _config.TranslationConfig.AppKey = _view.BaiduAppId;
+                _config.TranslationConfig.AppSecret = _view.BaiduSecret;
 
                 _persistenceService.SaveConfig(_config);
                 _persistenceService.PersistCache();

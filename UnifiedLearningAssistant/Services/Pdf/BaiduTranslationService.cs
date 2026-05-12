@@ -16,7 +16,7 @@ namespace UnifiedLearningAssistant.Services.Pdf
             _httpClient.BaseAddress = new Uri("https://fanyi-api.baidu.com/api/trans/vip/translate");
         }
 
-        public bool IsAvailable => !string.IsNullOrWhiteSpace(_config.BaiduAppId) && !string.IsNullOrWhiteSpace(_config.BaiduSecret);
+        public bool IsAvailable => !string.IsNullOrWhiteSpace(_config.AppKey) && !string.IsNullOrWhiteSpace(_config.AppSecret);
 
         public async Task<string?> TranslateAsync(string text, string from = "auto", string to = "zh")
         {
@@ -33,7 +33,7 @@ namespace UnifiedLearningAssistant.Services.Pdf
                     { "q", text },
                     { "from", from },
                     { "to", to },
-                    { "appid", _config.BaiduAppId },
+                    { "appid", _config.AppKey },
                     { "salt", salt },
                     { "sign", sign }
                 };
@@ -55,7 +55,7 @@ namespace UnifiedLearningAssistant.Services.Pdf
 
         private string CalculateSign(string text, string salt)
         {
-            var input = _config.BaiduAppId + text + salt + _config.BaiduSecret;
+            var input = _config.AppKey + text + salt + _config.AppSecret;
             using var md5 = MD5.Create();
             var bytes = md5.ComputeHash(Encoding.UTF8.GetBytes(input));
             var sb = new StringBuilder();

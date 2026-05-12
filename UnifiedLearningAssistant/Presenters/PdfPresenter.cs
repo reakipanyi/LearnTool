@@ -24,7 +24,7 @@ namespace UnifiedLearningAssistant.Presenters
         private readonly IStudyEngine _studyEngine;
         private CancellationTokenSource? _cts;
 
-        private string _currentPdfPath = "";
+        private string _currentPdfPath = string.Empty;
         private int _currentPageIndex = 0;
         private string _lastFolderPath = "";
         private bool _isDisposed = false;
@@ -239,7 +239,7 @@ namespace UnifiedLearningAssistant.Presenters
             _view.SetPageCount(_pdfService.PageCount);
         }
 
-        public async void LoadPdf(string fileName)
+        public async Task LoadPdf(string fileName)
         {
             try
             {
@@ -296,7 +296,7 @@ namespace UnifiedLearningAssistant.Presenters
             }
         }
 
-        public async void RenderPage(int pageIndex)
+        public async Task RenderPage(int pageIndex)
         {
             if (pageIndex < 0 || pageIndex >= _pdfService.PageCount)
                 return;
@@ -314,7 +314,8 @@ namespace UnifiedLearningAssistant.Presenters
             }
         }
 
-        private async Task RenderAndDisplayCurrentPageAsync()
+        // 公开一个可供外部调用的异步渲染入口
+        public async Task RenderAndDisplayCurrentPageAsync()
         {
             try
             {
