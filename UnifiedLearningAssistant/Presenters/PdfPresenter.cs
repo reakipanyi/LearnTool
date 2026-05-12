@@ -34,6 +34,9 @@ namespace UnifiedLearningAssistant.Presenters
         private readonly LinkedList<string> _cacheAccessOrder = new LinkedList<string>();
         private readonly Dictionary<string, Bitmap> _renderCache = new Dictionary<string, Bitmap>();
         private const int RenderCacheSize = 15; // 增加缓存大小
+        // 新增功能：中等级 - PDF缩略图缓存
+        private readonly Dictionary<int, Bitmap> _thumbnailCache = new Dictionary<int, Bitmap>();
+        private bool _isGeneratingThumbnails = false;
         private readonly string _sessionPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "lastsession.json");
         private readonly SemaphoreSlim _renderSemaphore = new SemaphoreSlim(2, 5);
         private readonly HashSet<int> _preRenderingPages = new HashSet<int>();
@@ -216,7 +219,7 @@ namespace UnifiedLearningAssistant.Presenters
             _view.SetPageCount(_pdfService.PageCount);
         }
 
-        public void LoadPdf(string fileName)
+        public async void LoadPdf(string fileName)
         {
             try
             {
@@ -227,6 +230,9 @@ namespace UnifiedLearningAssistant.Presenters
                     return;
                 }
 
+                // 新增功能：中等级 - UI响应性改进，显示加载指示器
+                _view.SetLoadingState(true);
+
                 // 先保存当前文件的进度
                 if (!string.IsNullOrEmpty(_currentPdfPath))
                 {
@@ -234,6 +240,7 @@ namespace UnifiedLearningAssistant.Presenters
                 }
                 
                 ClearRenderCache();
+                ClearThumbnailCache();
                 
                 _currentPdfPath = filePath;
                 LoadPdfFile(filePath);
@@ -249,7 +256,11 @@ namespace UnifiedLearningAssistant.Presenters
                 }
                 
                 _view.SetCurrentPageIndex(_currentPageIndex);
-                _ = RenderAndDisplayCurrentPageAsync();
+                await RenderAndDisplayCurrentPageAsync();
+                
+                // 新增功能：中等级 - 异步生成PDF缩略图
+                _ = GenerateThumbnailsAsync();
+                
                 SaveSession();
                 _logger.LogInformation("Loaded PDF: {Path}", filePath);
             }
@@ -258,16 +269,29 @@ namespace UnifiedLearningAssistant.Presenters
                 _logger.LogError(ex, "Failed to load PDF file: {Path}", fileName);
                 _view.ShowError("无法加载PDF文件");
             }
+            finally
+            {
+                // 新增功能：中等级 - UI响应性改进，隐藏加载指示器
+                _view.SetLoadingState(false);
+            }
         }
 
-        public void RenderPage(int pageIndex)
+        public async void RenderPage(int pageIndex)
         {
             if (pageIndex < 0 || pageIndex >= _pdfService.PageCount)
                 return;
 
             _currentPageIndex = pageIndex;
             _view.SetCurrentPageIndex(pageIndex);
-            _ = RenderAndDisplayCurrentPageAsync();
+            _view.SetLoadingState(true);
+            try
+            {
+                await RenderAndDisplayCurrentPageAsync();
+            }
+            finally
+            {
+                _view.SetLoadingState(false);
+            }
         }
 
         private async Task RenderAndDisplayCurrentPageAsync()
@@ -289,6 +313,9 @@ namespace UnifiedLearningAssistant.Presenters
                 {
                     _view.DisplayImage(bitmap);
                 }
+                
+                // 新增功能：中等级 - 高亮当前页面对应的缩略图
+                _view.HighlightThumbnail(_currentPageIndex);
                 
                 // 保存当前页面进度
                 _filePageMap[_currentPdfPath] = _currentPageIndex;
@@ -781,6 +808,7 @@ namespace UnifiedLearningAssistant.Presenters
                 _cts?.Cancel();
                 
                 ClearRenderCache();
+                ClearThumbnailCache();
                 
                 _cts?.Dispose();
                 _renderSemaphore.Dispose();
@@ -788,6 +816,84 @@ namespace UnifiedLearningAssistant.Presenters
                 _logger.LogInformation("PdfPresenter disposed");
                 _isDisposed = true;
             }
+        }
+
+        // 新增功能：中等级 - PDF缩略图相关方法
+        private void ClearThumbnailCache()
+        {
+            lock (_renderLock)
+            {
+                foreach (var bitmap in _thumbnailCache.Values)
+                {
+                    try
+                    {
+                        bitmap.Dispose();
+                    }
+                    catch
+                    {
+                    }
+                }
+                _thumbnailCache.Clear();
+            }
+            _view.ClearThumbnails();
+        }
+
+        private async Task GenerateThumbnailsAsync()
+        {
+            if (_isGeneratingThumbnails) return;
+            _isGeneratingThumbnails = true;
+
+            try
+            {
+                var totalPages = _pdfService?.PageCount ?? 0;
+                if (totalPages == 0) return;
+
+                for (int i = 0; i < totalPages; i++)
+                {
+                    if (_cts?.IsCancellationRequested ?? false) break;
+                    
+                    await Task.Run(async () =>
+                    {
+                        try
+                        {
+                            var thumbnail = await GetThumbnailAsync(i);
+                            _view.AddThumbnail(i, thumbnail);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to generate thumbnail for page {PageIndex}", i);
+                        }
+                    });
+                }
+            }
+            finally
+            {
+                _isGeneratingThumbnails = false;
+            }
+        }
+
+        private async Task<Bitmap> GetThumbnailAsync(int pageIndex)
+        {
+            lock (_renderLock)
+            {
+                if (_thumbnailCache.TryGetValue(pageIndex, out var cached))
+                {
+                    return (Bitmap)cached.Clone();
+                }
+            }
+
+            var thumbnail = await Task.Run(() => RenderPageToBitmap(pageIndex, 100, 140));
+            if (thumbnail != null)
+            {
+                lock (_renderLock)
+                {
+                    if (!_thumbnailCache.ContainsKey(pageIndex))
+                    {
+                        _thumbnailCache[pageIndex] = (Bitmap)thumbnail.Clone();
+                    }
+                }
+            }
+            return thumbnail;
         }
 
         public event EventHandler<AddWordEventArgs>? OnAddWordToLearningList;

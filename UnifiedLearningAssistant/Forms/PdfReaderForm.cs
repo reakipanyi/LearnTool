@@ -2,6 +2,7 @@ using System.Drawing.Drawing2D;
 using Microsoft.Extensions.Logging;
 using UnifiedLearningAssistant.Presenters;
 using UnifiedLearningAssistant.Views;
+using UnifiedLearningAssistant.Views.UI;
 
 namespace UnifiedLearningAssistant.Forms
 {
@@ -23,6 +24,8 @@ namespace UnifiedLearningAssistant.Forms
 
         private bool _isNavPanelDragging = false;
         private Point _navPanelStartPoint = Point.Empty;
+        // 新增功能：中等级 - UI响应性改进，添加加载指示器
+        private LoadingIndicator? _loadingIndicator;
 
         public PdfReaderForm(ILogger<PdfReaderForm> logger)
         {
@@ -115,6 +118,112 @@ namespace UnifiedLearningAssistant.Forms
             textBoxQuestion.Text = text;
         }
 
+        // 新增功能：中等级 - UI响应性改进，加载状态管理
+        public void SetLoadingState(bool isLoading)
+        {
+            if (_loadingIndicator != null)
+            {
+                _loadingIndicator.Visible = isLoading;
+                _loadingIndicator.IsLoading = isLoading;
+                if (isLoading)
+                {
+                    _loadingIndicator.BringToFront();
+                }
+            }
+        }
+
+        public void ShowMessage(string message)
+        {
+            MessageBox.Show(message, "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        // 新增功能：中等级 - PDF页面缩略图
+        public void ClearThumbnails()
+        {
+            if (flowLayoutPanelThumbnails != null)
+            {
+                foreach (Control control in flowLayoutPanelThumbnails.Controls)
+                {
+                    control.Dispose();
+                }
+                flowLayoutPanelThumbnails.Controls.Clear();
+            }
+        }
+
+        public void AddThumbnail(int pageIndex, Image thumbnail)
+        {
+            if (flowLayoutPanelThumbnails == null) return;
+
+            var panel = new Panel();
+            panel.Size = new Size(100, 140);
+            panel.Margin = new Padding(5);
+            panel.BackColor = Color.White;
+            panel.BorderStyle = BorderStyle.FixedSingle;
+            panel.Tag = pageIndex;
+
+            var pictureBox = new PictureBox();
+            pictureBox.Image = thumbnail;
+            pictureBox.Size = new Size(90, 115);
+            pictureBox.Location = new Point(5, 5);
+            pictureBox.SizeMode = PictureBoxSizeMode.Zoom;
+            pictureBox.Tag = pageIndex;
+            pictureBox.Click += (s, e) =>
+            {
+                if (s is Control c && c.Tag is int idx)
+                {
+                    RenderPage(idx);
+                }
+            };
+
+            var label = new Label();
+            label.Text = (pageIndex + 1).ToString();
+            label.Location = new Point(5, 120);
+            label.Size = new Size(90, 15);
+            label.TextAlign = ContentAlignment.MiddleCenter;
+            label.Font = new Font("Microsoft YaHei UI", 8F);
+
+            panel.Controls.Add(pictureBox);
+            panel.Controls.Add(label);
+            panel.Click += (s, e) =>
+            {
+                if (s is Control c && c.Tag is int idx)
+                {
+                    RenderPage(idx);
+                }
+            };
+
+            flowLayoutPanelThumbnails.Controls.Add(panel);
+        }
+
+        public void HighlightThumbnail(int pageIndex)
+        {
+            if (flowLayoutPanelThumbnails == null) return;
+
+            foreach (Control control in flowLayoutPanelThumbnails.Controls)
+            {
+                if (control is Panel panel)
+                {
+                    if (panel.Tag is int idx && idx == pageIndex)
+                    {
+                        panel.BackColor = Color.FromArgb(100, 150, 250);
+                        panel.BorderStyle = BorderStyle.Fixed3D;
+                        panel.BringToFront();
+                    }
+                    else
+                    {
+                        panel.BackColor = Color.White;
+                        panel.BorderStyle = BorderStyle.FixedSingle;
+                    }
+                }
+            }
+        }
+
+        // 新增功能：中等级 - 私有方法用于触发页码更改事件
+        private void RenderPage(int pageIndex)
+        {
+            PageChanged?.Invoke(this, EventArgs.Empty);
+        }
+
         public string GetSelectedFile()
         {
             return treeViewFiles.SelectedNode?.Text ?? string.Empty;
@@ -157,6 +266,9 @@ namespace UnifiedLearningAssistant.Forms
         private TreeView treeViewFiles;
         private Panel panelPdf;
         private PictureBox pictureBoxPdf;
+        // 新增功能：中等级 - PDF页面缩略图侧边栏
+        private Panel panelThumbnails;
+        private FlowLayoutPanel flowLayoutPanelThumbnails;
         private TabControl tabControlTools;
         private TabPage tabPageOcr;
         private Button buttonSelectOcr;
@@ -190,7 +302,12 @@ namespace UnifiedLearningAssistant.Forms
             treeViewFiles = new TreeView();
             panelPdf = new Panel();
             pictureBoxPdf = new PictureBox();
+            // 新增功能：中等级 - PDF页面缩略图侧边栏
+            panelThumbnails = new Panel();
+            flowLayoutPanelThumbnails = new FlowLayoutPanel();
             tabControlTools = new TabControl();
+            // 新增功能：中等级 - 加载指示器初始化
+            _loadingIndicator = new LoadingIndicator();
             tabPageOcr = new TabPage();
             buttonSelectOcr = new Button();
             textBoxOcrResult = new TextBox();
@@ -232,16 +349,40 @@ namespace UnifiedLearningAssistant.Forms
             treeViewFiles.Dock = DockStyle.Left;
             treeViewFiles.Location = new Point(0, 0);
             treeViewFiles.Name = "treeViewFiles";
-            treeViewFiles.Size = new Size(200, 600);
+            treeViewFiles.Size = new Size(150, 600);
             treeViewFiles.TabIndex = 0;
             treeViewFiles.AfterSelect += TreeViewFiles_AfterSelect;
+            // 
+            // panelThumbnails
+            // 
+            // 新增功能：中等级 - PDF页面缩略图侧边栏
+            panelThumbnails.Dock = DockStyle.Left;
+            panelThumbnails.Width = 120;
+            panelThumbnails.BackColor = Color.FromArgb(240, 240, 240);
+            panelThumbnails.AutoScroll = true;
+            panelThumbnails.Controls.Add(flowLayoutPanelThumbnails);
+            // 
+            // flowLayoutPanelThumbnails
+            // 
+            flowLayoutPanelThumbnails.Dock = DockStyle.Fill;
+            flowLayoutPanelThumbnails.AutoScroll = true;
+            flowLayoutPanelThumbnails.FlowDirection = FlowDirection.TopDown;
+            flowLayoutPanelThumbnails.WrapContents = false;
             // 
             // panelPdf
             // 
             panelPdf.Controls.Add(pictureBoxPdf);
-            panelPdf.Location = new Point(200, 0);
+            // 新增功能：中等级 - 添加加载指示器到panelPdf
+            _loadingIndicator.Name = "loadingIndicator";
+            _loadingIndicator.Size = new Size(60, 60);
+            _loadingIndicator.Location = new Point(235, 270);
+            _loadingIndicator.Anchor = AnchorStyles.None;
+            _loadingIndicator.IsLoading = false;
+            _loadingIndicator.Visible = false;
+            panelPdf.Controls.Add(_loadingIndicator);
+            panelPdf.Location = new Point(270, 0); // treeViewFiles(150) + panelThumbnails(120)
             panelPdf.Name = "panelPdf";
-            panelPdf.Size = new Size(600, 600);
+            panelPdf.Size = new Size(530, 600);
             panelPdf.TabIndex = 1;
             // 
             // pictureBoxPdf
@@ -445,9 +586,9 @@ namespace UnifiedLearningAssistant.Forms
             panelNavigation.Controls.Add(textBoxPage);
             panelNavigation.Controls.Add(buttonPrev);
             panelNavigation.Controls.Add(buttonOpenFolder);
-            panelNavigation.Location = new Point(210, 10);
+            panelNavigation.Location = new Point(280, 10);
             panelNavigation.Name = "panelNavigation";
-            panelNavigation.Size = new Size(550, 50);
+            panelNavigation.Size = new Size(480, 50);
             panelNavigation.TabIndex = 3;
             panelNavigation.MouseDown += PanelNavigation_MouseDown;
             panelNavigation.MouseMove += PanelNavigation_MouseMove;
@@ -530,7 +671,9 @@ namespace UnifiedLearningAssistant.Forms
             // 
             Controls.Add(panelNavigation);
             Controls.Add(tabControlTools);
+            // 新增功能：中等级 - 添加缩略图侧边栏
             Controls.Add(panelPdf);
+            Controls.Add(panelThumbnails);
             Controls.Add(treeViewFiles);
             Name = "PdfReaderForm";
             Size = new Size(1100, 600);
