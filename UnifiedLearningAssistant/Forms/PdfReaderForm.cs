@@ -1277,19 +1277,14 @@ namespace UnifiedLearningAssistant.Forms
                 int newX = panelNavigation.Left + deltaX;
                 int newY = panelNavigation.Top + deltaY;
 
-                int leftBoundary = 0;
-                if (panelLeftContainer != null && panelLeftContainer.Visible)
-                {
-                    leftBoundary = panelLeftContainer.Width;
-                }
-
+                int leftBoundary = panelLeftContainer?.Width ?? 0;
                 int rightBoundary = ClientSize.Width - panelNavigation.Width;
-                if (tabControlTools != null && tabControlTools.Visible)
-                {
-                    rightBoundary -= tabControlTools.Width;
-                }
+                int toolWidth = tabControlTools?.Width ?? 0;
+                rightBoundary -= toolWidth;
 
                 rightBoundary = Math.Max(leftBoundary, rightBoundary);
+
+                _logger.LogInformation($"拖动调试 - LeftBoundary:{leftBoundary}, RightBoundary:{rightBoundary}, ToolWidth:{toolWidth}, ClientWidth:{ClientSize.Width}, PanelWidth:{panelNavigation.Width}");
 
                 newX = Math.Max(leftBoundary, Math.Min(newX, rightBoundary));
                 newY = Math.Max(0, Math.Min(newY, ClientSize.Height - panelNavigation.Height));
@@ -1410,7 +1405,7 @@ namespace UnifiedLearningAssistant.Forms
                     return;
                 }
 
-                await OcrFullImageAsync(img);
+                // await OcrFullImageAsync(img);
             }
             catch (Exception ex)
             {
@@ -1422,25 +1417,35 @@ namespace UnifiedLearningAssistant.Forms
         private async Task OcrFullImageAsync(Bitmap img)
         {
             if (_presenter == null)
+            {
+                _logger.LogWarning("OcrFullImageAsync: _presenter 为 null");
                 return;
+            }
 
             try
             {
                 _logger.LogInformation($"开始OCR识别，图像尺寸: {img.Width} x {img.Height}");
 
+                if (!_presenter.IsOcrAvailable())
+                {
+                    _logger.LogWarning("OCR服务不可用");
+                    ShowWarning("OCR服务未配置，请检查配置文件");
+                    return;
+                }
+
                 var recognizedText = await _presenter.OcrBitmapAsync(img);
+
+                _logger.LogInformation($"OCR识别结果: {(recognizedText == null ? "null" : (recognizedText.Length == 0 ? "空字符串" : $"成功，{recognizedText.Length}个字符"))}");
 
                 if (!string.IsNullOrWhiteSpace(recognizedText))
                 {
-                    _logger.LogInformation($"OCR识别成功，识别到 {recognizedText.Length} 个字符");
                     textBoxOcrResult.Text = recognizedText;
                     textBoxOriginal.Text = recognizedText;
                     tabControlTools.SelectedTab = tabControlTools.TabPages["tabPageOcr"];
                 }
                 else
                 {
-                    _logger.LogInformation("OCR识别完成，未识别到文字");
-                    ShowWarning("未识别到文字");
+                    ShowWarning("未识别到文字，请尝试框选区域识别");
                 }
             }
             catch (Exception ex)
