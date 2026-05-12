@@ -227,6 +227,53 @@ namespace UnifiedLearningAssistant.Services.Learning
             return 0;
         }
 
+        // 新增功能：PDF生词本联动 - 添加未掌握项
+        public void AddUnknownItem(string content, string subCategory)
+        {
+            // 保存当前状态
+            var savedUserId = _currentUserId;
+            var savedSubCategory = _currentSubCategory;
+            var savedUnknownItems = _unknownItems.ToList();
+            var savedKnownItems = _knownItems.ToList();
+
+            try
+            {
+                // 加载用户的完整资料
+                var profile = _persistenceService.LoadUserProfile(savedUserId);
+                
+                // 找到或创建对应的分类进度
+                if (!profile.LearningProgress.CategoryProgresses.TryGetValue(subCategory, out var catProgress))
+                {
+                    catProgress = new CategoryProgress { CategoryName = subCategory };
+                    profile.LearningProgress.CategoryProgresses[subCategory] = catProgress;
+                }
+
+                // 添加到未掌握列表（如果不在已掌握列表中）
+                if (!catProgress.KnownItems.Contains(content) && !catProgress.UnknownItems.Contains(content))
+                {
+                    catProgress.UnknownItems.Add(content);
+                }
+                else if (catProgress.KnownItems.Contains(content))
+                {
+                    // 如果已经在已掌握列表中，移除它并添加到未掌握
+                    catProgress.KnownItems.Remove(content);
+                    if (!catProgress.UnknownItems.Contains(content))
+                    {
+                        catProgress.UnknownItems.Add(content);
+                    }
+                }
+
+                // 保存用户资料
+                _persistenceService.SaveUserProfile(profile);
+            }
+            finally
+            {
+                // 恢复当前状态
+                _currentUserId = savedUserId;
+                _currentSubCategory = savedSubCategory;
+            }
+        }
+
         private void ShuffleList<T>(List<T> list)
         {
             lock (_randomLock)

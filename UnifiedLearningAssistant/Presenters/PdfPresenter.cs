@@ -5,6 +5,7 @@ using UnifiedLearningAssistant.Models.Pdf;
 using UnifiedLearningAssistant.Services.AI;
 using UnifiedLearningAssistant.Services.Pdf;
 using UnifiedLearningAssistant.Services.TTS;
+using UnifiedLearningAssistant.Services.Learning;
 using UnifiedLearningAssistant.Views;
 
 namespace UnifiedLearningAssistant.Presenters
@@ -19,6 +20,8 @@ namespace UnifiedLearningAssistant.Presenters
         private readonly IAnnotationService _annotationService;
         private readonly IAiQuestionService _aiQuestionService;
         private readonly ITTSService _ttsService;
+        // 新增功能：PDF生词本联动 - 添加学习引擎
+        private readonly IStudyEngine _studyEngine;
         private CancellationTokenSource? _cts;
 
         private string _currentPdfPath = "";
@@ -34,6 +37,10 @@ namespace UnifiedLearningAssistant.Presenters
         private readonly HashSet<int> _preRenderingPages = new HashSet<int>();
         // 存储每个文件的最后浏览页数
         private readonly Dictionary<string, int> _filePageMap = new Dictionary<string, int>();
+        // 新增功能：PDF生词本联动 - 当前用户ID和语言
+        private string _currentUserId = "Guest";
+        private string _currentLanguage = Constants.Language.English;
+        private string _currentSubCategory = Constants.SubCategory.EnglishWord;
 
         // 会话数据记录
         private record SessionData(
@@ -44,7 +51,7 @@ namespace UnifiedLearningAssistant.Presenters
 
         public PdfPresenter(ILogger<PdfPresenter> logger, IPdfService pdfService, IOcrService ocrService,
             ITranslationService translationService, IAnnotationService annotationService,
-            IAiQuestionService aiQuestionService, ITTSService ttsService)
+            IAiQuestionService aiQuestionService, ITTSService ttsService, IStudyEngine studyEngine)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _pdfService = pdfService ?? throw new ArgumentNullException(nameof(pdfService));
@@ -53,8 +60,18 @@ namespace UnifiedLearningAssistant.Presenters
             _annotationService = annotationService ?? throw new ArgumentNullException(nameof(annotationService));
             _aiQuestionService = aiQuestionService ?? throw new ArgumentNullException(nameof(aiQuestionService));
             _ttsService = ttsService ?? throw new ArgumentNullException(nameof(ttsService));
+            // 新增功能：PDF生词本联动 - 注入学习引擎
+            _studyEngine = studyEngine ?? throw new ArgumentNullException(nameof(studyEngine));
             _cts = new CancellationTokenSource();
             _logger.LogInformation("PdfPresenter initialized");
+        }
+
+        // 新增功能：PDF生词本联动 - 设置当前用户和学习配置
+        public void SetCurrentUserAndConfig(string userId, string language, string subCategory)
+        {
+            _currentUserId = userId;
+            _currentLanguage = language;
+            _currentSubCategory = subCategory;
         }
 
         public void SetView(IPdfView view)
@@ -700,7 +717,17 @@ namespace UnifiedLearningAssistant.Presenters
 
         private void View_AddWordToLearningList(object? sender, EventArgs e)
         {
-            OnAddWordToLearningList?.Invoke(this, new AddWordEventArgs { Word = "", Language = "" });
+            // 新增功能：PDF生词本联动 - 获取当前选中的单词并添加到学习列表
+            var word = _view.GetPageText(); // 假设问题文本框中有要添加的单词
+            if (!string.IsNullOrWhiteSpace(word))
+            {
+                // 初始化StudyEngine（如果需要）
+                _studyEngine.Initialize(_currentUserId, _currentLanguage, _currentSubCategory, "", "", "");
+                // 添加到未掌握列表
+                _studyEngine.AddUnknownItem(word.Trim(), _currentSubCategory);
+                _view.ShowMessage($"已将 \"{word.Trim()}\" 添加到生词本");
+            }
+            OnAddWordToLearningList?.Invoke(this, new AddWordEventArgs { Word = word, Language = _currentLanguage });
         }
 
         private void View_SpeakTranslation(object? sender, EventArgs e)

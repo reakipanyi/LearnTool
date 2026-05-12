@@ -21,6 +21,8 @@ namespace UnifiedLearningAssistant.Views
         event EventHandler? OpenSettingsClicked;
         event EventHandler? OpenEditorClicked;
         event EventHandler? OpenStatisticsClicked;
+        // 新增功能：错题本导出 - 添加导出事件
+        event EventHandler? ExportErrorBookClicked;
         event EventHandler? SortOrderChanged;
         event EventHandler? TabChanged;
 

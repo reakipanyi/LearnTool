@@ -19,6 +19,8 @@ namespace UnifiedLearningAssistant.Presenters
         private readonly ITTSService _ttsService;
         private readonly ICacheService _cacheService;
         private readonly IWindowManager _windowManager;
+        // 新增功能：PDF生词本联动 - 添加PDF Presenter引用
+        private PdfPresenter? _pdfPresenter;
         private IMainView? _view;
 
         private string _currentUserId = "Guest";
@@ -50,6 +52,19 @@ namespace UnifiedLearningAssistant.Presenters
             _logger.LogInformation("MainPresenter initialized");
         }
 
+        // 新增功能：PDF生词本联动 - 设置PDF Presenter
+        public void SetPdfPresenter(PdfPresenter pdfPresenter)
+        {
+            _pdfPresenter = pdfPresenter;
+            UpdatePdfPresenterConfig();
+        }
+
+        // 新增功能：PDF生词本联动 - 更新PDF Presenter的配置
+        private void UpdatePdfPresenterConfig()
+        {
+            _pdfPresenter?.SetCurrentUserAndConfig(_currentUserId, _currentLanguage, _currentSubCategory);
+        }
+
         public void SetView(IMainView view)
         {
             if (_view == view)
@@ -76,6 +91,8 @@ namespace UnifiedLearningAssistant.Presenters
             _view.OpenSettingsClicked += View_OpenSettingsClicked;
             _view.OpenEditorClicked += View_OpenEditorClicked;
             _view.OpenStatisticsClicked += View_OpenStatisticsClicked;
+            // 新增功能：错题本导出 - 订阅导出事件
+            _view.ExportErrorBookClicked += View_ExportErrorBookClicked;
             _view.TabChanged += View_TabChanged;
         }
 
@@ -95,6 +112,8 @@ namespace UnifiedLearningAssistant.Presenters
             _view.OpenSettingsClicked -= View_OpenSettingsClicked;
             _view.OpenEditorClicked -= View_OpenEditorClicked;
             _view.OpenStatisticsClicked -= View_OpenStatisticsClicked;
+            // 新增功能：错题本导出 - 取消订阅导出事件
+            _view.ExportErrorBookClicked -= View_ExportErrorBookClicked;
             _view.TabChanged -= View_TabChanged;
         }
 
@@ -194,6 +213,7 @@ namespace UnifiedLearningAssistant.Presenters
             _currentUserId = _view.SelectedUser;
             UpdateProgressSummary();
             SaveSession();
+            UpdatePdfPresenterConfig();
         }
 
         private void View_LanguageChanged(object? sender, EventArgs e)
@@ -201,6 +221,7 @@ namespace UnifiedLearningAssistant.Presenters
             _currentLanguage = _view.SelectedLanguage;
             RefreshSubCategories();
             UpdateProgressSummary();
+            UpdatePdfPresenterConfig();
         }
 
         private void View_SubCategoryChanged(object? sender, EventArgs e)
@@ -208,6 +229,7 @@ namespace UnifiedLearningAssistant.Presenters
             _currentSubCategory = _view.SelectedSubCategory;
             RefreshWordBankFiles();
             UpdateProgressSummary();
+            UpdatePdfPresenterConfig();
         }
 
         private void View_ModeChanged(object? sender, EventArgs e)
@@ -265,6 +287,51 @@ namespace UnifiedLearningAssistant.Presenters
         private void View_OpenStatisticsClicked(object? sender, EventArgs e)
         {
             OnOpenStatistics?.Invoke(this, EventArgs.Empty);
+        }
+
+        // 新增功能：错题本导出 - 导出事件处理
+        private void View_ExportErrorBookClicked(object? sender, EventArgs e)
+        {
+            try
+            {
+                // 获取用户的学习进度
+                var profile = _persistenceService.LoadUserProfile(_currentUserId);
+                var allUnknownItems = new List<string>();
+
+                // 收集所有分类的未掌握项目
+                foreach (var catProgress in profile.LearningProgress.CategoryProgresses.Values)
+                {
+                    allUnknownItems.AddRange(catProgress.UnknownItems);
+                }
+
+                if (allUnknownItems.Count == 0)
+                {
+                    _view?.ShowMessage("错题本为空，没有可导出的内容！");
+                    return;
+                }
+
+                // 显示保存文件对话框
+                using var saveFileDialog = new SaveFileDialog();
+                saveFileDialog.Filter = "文本文件 (*.txt)|*.txt|CSV文件 (*.csv)|*.csv";
+                saveFileDialog.Title = "保存错题本";
+                saveFileDialog.FileName = $"错题本_{_currentUserId}_{DateTime.Now:yyyyMMdd_HHmmss}";
+
+                if (saveFileDialog.ShowDialog() == DialogResult.OK)
+                {
+                    // 根据文件扩展名选择格式
+                    var content = string.Join(Environment.NewLine, allUnknownItems.Distinct());
+                    
+                    File.WriteAllText(saveFileDialog.FileName, content, System.Text.Encoding.UTF8);
+                    
+                    _view?.ShowMessage($"错题本已成功导出到：\n{saveFileDialog.FileName}");
+                    _logger.LogInformation($"错题本已导出到 {saveFileDialog.FileName}，共 {allUnknownItems.Distinct().Count()} 个项目");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "导出错题本失败");
+                _view?.ShowMessage($"导出错题本失败：{ex.Message}");
+            }
         }
 
         private void View_TabChanged(object? sender, EventArgs e)

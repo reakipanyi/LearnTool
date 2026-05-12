@@ -149,15 +149,17 @@ namespace UnifiedLearningAssistant
             try
             {
                 // 手动解决循环依赖问题
-                var pdfReaderForm = serviceProvider.GetRequiredService<PdfReaderForm>();
-                var pdfPresenter = serviceProvider.GetRequiredService<PdfPresenter>();
-                pdfReaderForm.SetPresenter(pdfPresenter);
+            var pdfReaderForm = serviceProvider.GetRequiredService<PdfReaderForm>();
+            var pdfPresenter = serviceProvider.GetRequiredService<PdfPresenter>();
+            pdfReaderForm.SetPresenter(pdfPresenter);
 
-                // 现在构建 MainForm，手动传递所需的依赖项
-                var mainPresenter = serviceProvider.GetRequiredService<MainPresenter>();
-                var windowManager = serviceProvider.GetRequiredService<IWindowManager>();
-                
-                mainForm = new MainForm(mainPresenter, pdfReaderForm, windowManager);
+            // 现在构建MainForm，手动传递所需的依赖项
+            var mainPresenter = serviceProvider.GetRequiredService<MainPresenter>();
+            var windowManager = serviceProvider.GetRequiredService<IWindowManager>();
+            
+            mainForm = new MainForm(mainPresenter, pdfReaderForm, windowManager);
+            // 新增功能：PDF生词本联动 - 将PDF Presenter传递给MainForm
+            mainForm.SetPdfPresenter(pdfPresenter);
             }
             catch (Exception ex)
             {

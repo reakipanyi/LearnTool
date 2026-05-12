@@ -37,7 +37,12 @@ namespace UnifiedLearningAssistant.Services.TTS
 
             try
             {
-                var audioBytes = await _client.SynthesizeAsync(text, _config.Model, _config.Voice, speed * _config.Speed, _config.Volume);
+                // 新增功能：朗读速度滑块 - 使用配置中的速度值
+                var finalSpeed = speed * _config.Speed;
+                // 确保速度在有效范围内 0.5-2.0
+                finalSpeed = Math.Max(0.5f, Math.Min(2.0f, finalSpeed));
+                
+                var audioBytes = await _client.SynthesizeAsync(text, _config.Model, _config.Voice, finalSpeed, _config.Volume);
                 if (audioBytes == null || audioBytes.Length == 0)
                     return;
 
