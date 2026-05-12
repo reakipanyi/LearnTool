@@ -258,8 +258,6 @@ namespace UnifiedLearningAssistant.Forms
             buttonSettings = new Button();
             buttonContinueLearning = new Button();
             buttonStartLearning = new Button();
-            // 新增功能：错题本导出 - 添加导出按钮
-            buttonExportErrorBook = new Button();
             groupBoxLearning = new GroupBox();
             groupBoxLanguage = new GroupBox();
             labelLanguage = new Label();
@@ -278,6 +276,7 @@ namespace UnifiedLearningAssistant.Forms
             groupBoxUser = new GroupBox();
             comboBoxUser = new ComboBox();
             labelUser = new Label();
+            buttonExportErrorBook = new Button();
             tabPagePdf = new TabPage();
             menuStrip1 = new MenuStrip();
             toolStripMenuItemFile = new ToolStripMenuItem();
@@ -332,7 +331,6 @@ namespace UnifiedLearningAssistant.Forms
             panelMain.Controls.Add(buttonStartLearning);
             panelMain.Controls.Add(groupBoxLearning);
             panelMain.Controls.Add(groupBoxUser);
-            // 新增功能：错题本导出 - 添加导出按钮到面板
             panelMain.Controls.Add(buttonExportErrorBook);
             panelMain.Dock = DockStyle.Fill;
             panelMain.Location = new Point(3, 3);
@@ -368,15 +366,6 @@ namespace UnifiedLearningAssistant.Forms
             buttonOpenStatistics.TabIndex = 13;
             buttonOpenStatistics.Text = "📊 学习统计";
             buttonOpenStatistics.Click += ButtonOpenStatistics_Click;
-            // 新增功能：错题本导出 - 设置导出按钮属性
-            buttonExportErrorBook = new Button();
-            buttonExportErrorBook.Location = new Point(620, 330);
-            buttonExportErrorBook.Name = "buttonExportErrorBook";
-            buttonExportErrorBook.Size = new Size(250, 40);
-            buttonExportErrorBook.TabIndex = 15;
-            buttonExportErrorBook.Text = "📝 导出错题本";
-            buttonExportErrorBook.UseVisualStyleBackColor = true;
-            buttonExportErrorBook.Click += ButtonExportErrorBook_Click;
             // 
             // buttonOpenPdfReader
             // 
@@ -601,6 +590,16 @@ namespace UnifiedLearningAssistant.Forms
             labelUser.TabIndex = 0;
             labelUser.Text = "玩家:";
             // 
+            // buttonExportErrorBook
+            // 
+            buttonExportErrorBook.Location = new Point(620, 330);
+            buttonExportErrorBook.Name = "buttonExportErrorBook";
+            buttonExportErrorBook.Size = new Size(250, 40);
+            buttonExportErrorBook.TabIndex = 15;
+            buttonExportErrorBook.Text = "📝 导出错题本";
+            buttonExportErrorBook.UseVisualStyleBackColor = true;
+            buttonExportErrorBook.Click += ButtonExportErrorBook_Click;
+            // 
             // tabPagePdf
             // 
             tabPagePdf.Location = new Point(4, 26);
@@ -819,5 +818,6 @@ namespace UnifiedLearningAssistant.Forms
             _isDisposed = true;
             base.Dispose(disposing);
         }
+
     }
 }

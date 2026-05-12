@@ -9,10 +9,14 @@ namespace UnifiedLearningAssistant.Services.Pdf
         private readonly OcrConfig _config;
         private bool _initialized = false;
         private string? _initErrorMessage;
+        private string _currentLanguage = "eng";
+        private string _tessDataPath = string.Empty;
+        private bool _enablePreprocessing = true;
 
         public TesseractOcrService(OcrConfig config)
         {
             _config = config;
+            _currentLanguage = string.IsNullOrWhiteSpace(_config.Language) ? "eng" : _config.Language;
             InitializeEngine();
         }
 
@@ -20,28 +24,27 @@ namespace UnifiedLearningAssistant.Services.Pdf
 
         public string? InitErrorMessage => _initErrorMessage;
 
-        private void InitializeEngine()
+        public string CurrentLanguage => _currentLanguage;
+
+        public bool EnablePreprocessing
         {
-            if (_initialized)
-                return;
+            get => _enablePreprocessing;
+            set => _enablePreprocessing = value;
+        }
 
-            _initialized = true;
-
+        private bool InitializeEngineInternal(string language)
+        {
             try
             {
                 string tessDataPath;
 
-                // 首先检查配置的路径
                 if (!string.IsNullOrWhiteSpace(_config.DataPath))
                 {
-                    // 如果是相对路径，转换为相对于应用程序目录的绝对路径
                     if (!Path.IsPathRooted(_config.DataPath))
                     {
-                        // 首先尝试相对于项目目录的 tessdata
                         var projectDir = AppDomain.CurrentDomain.BaseDirectory;
                         tessDataPath = Path.GetFullPath(Path.Combine(projectDir, _config.DataPath));
-                        
-                        // 如果项目目录下没有，尝试上一级目录（源码目录）
+
                         if (!Directory.Exists(tessDataPath))
                         {
                             var sourceDir = Path.GetFullPath(Path.Combine(projectDir, "..", "..", ".."));
@@ -55,34 +58,22 @@ namespace UnifiedLearningAssistant.Services.Pdf
                 }
                 else
                 {
-                    // 默认路径
                     tessDataPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tessdata");
                 }
 
-                // 规范化路径
                 tessDataPath = Path.GetFullPath(tessDataPath);
 
-                // 记录所有尝试的路径用于调试
-                var triedPaths = new List<string> { tessDataPath };
-
-                // 如果路径不存在，尝试其他可能的位置
                 if (!Directory.Exists(tessDataPath))
                 {
-                    // 尝试应用程序根目录下的 tessdata
                     var baseDirTessdata = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tessdata");
-                    triedPaths.Add(baseDirTessdata);
-                    
                     if (Directory.Exists(baseDirTessdata))
                     {
                         tessDataPath = baseDirTessdata;
                     }
                     else
                     {
-                        // 尝试源码目录
                         var sourceDir = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
                         var sourceTessdata = Path.Combine(sourceDir, "tessdata");
-                        triedPaths.Add(sourceTessdata);
-                        
                         if (Directory.Exists(sourceTessdata))
                         {
                             tessDataPath = sourceTessdata;
@@ -90,42 +81,72 @@ namespace UnifiedLearningAssistant.Services.Pdf
                     }
                 }
 
-                // 最终检查
                 if (!Directory.Exists(tessDataPath))
                 {
-                    // 尝试创建在应用程序根目录
                     tessDataPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tessdata");
                     Directory.CreateDirectory(tessDataPath);
-                    
-                    var triedList = string.Join("\n", triedPaths);
-                    _initErrorMessage = $"Tesseract数据目录不存在，已在 {tessDataPath} 创建目录。\n\n尝试过的路径:\n{triedList}\n\n请从 https://github.com/tesseract-ocr/tessdata 下载语言数据文件（如 chi_sim.traineddata、eng.traineddata）并放入该目录";
-                    return;
+                    _initErrorMessage = $"Tesseract数据目录不存在，已在 {tessDataPath} 创建目录。\n\n请从 https://github.com/tesseract-ocr/tessdata 下载语言数据文件（如 chi_sim.traineddata、eng.traineddata）并放入该目录";
+                    return false;
                 }
 
-                var language = string.IsNullOrWhiteSpace(_config.Language) ? "chi_sim" : _config.Language;
+                _tessDataPath = tessDataPath;
+
                 var langFiles = language.Split('+')
                     .Select(lang => Path.Combine(tessDataPath, $"{lang}.traineddata"))
                     .ToList();
-                
+
                 var missingFiles = langFiles.Where(f => !File.Exists(f)).ToList();
                 if (missingFiles.Any())
                 {
                     var missingList = string.Join("\n", missingFiles);
                     _initErrorMessage = $"缺少语言数据文件:\n{missingList}\n\n当前目录: {tessDataPath}\n\n请从 https://github.com/tesseract-ocr/tessdata 下载所需的语言数据文件";
-                    return;
+                    return false;
                 }
 
                 _engine = new TesseractEngine(tessDataPath, language, EngineMode.Default);
                 _engine.DefaultPageSegMode = PageSegMode.Auto;
+                _currentLanguage = language;
+                _initErrorMessage = null;
+                return true;
             }
             catch (DllNotFoundException ex)
             {
                 _initErrorMessage = $"无法加载Tesseract原生库: {ex.Message}\n请确保已安装Tesseract运行时或相关依赖";
+                return false;
             }
             catch (Exception ex)
             {
                 _initErrorMessage = $"OCR引擎初始化失败: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}";
+                return false;
             }
+        }
+
+        private void InitializeEngine()
+        {
+            if (_initialized)
+                return;
+
+            _initialized = true;
+            InitializeEngineInternal(_currentLanguage);
+        }
+
+        public bool SetLanguage(string language)
+        {
+            if (string.IsNullOrWhiteSpace(language))
+                return false;
+
+            if (_engine != null)
+            {
+                _engine.Dispose();
+                _engine = null;
+            }
+
+            return InitializeEngineInternal(language);
+        }
+
+        public void SetPageSegMode(PageSegMode mode)
+        {
+            _engine?.SetVariable("tessedit_pageseg_mode", ((int)mode).ToString());
         }
 
         public async Task<string> RecognizeTextAsync(Bitmap image)
@@ -135,26 +156,212 @@ namespace UnifiedLearningAssistant.Services.Pdf
 
         public async Task<string> RecognizeTextAsync(Bitmap image, Rectangle region)
         {
-            if (_engine == null)
+            if (_engine == null || image == null)
                 return string.Empty;
 
             return await Task.Run(() =>
             {
                 try
                 {
-                    using var ms = new MemoryStream();
-                    image.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-                    ms.Position = 0;
+                    bool needCrop = region.X > 0 || region.Y > 0 ||
+                                    region.Width < image.Width || region.Height < image.Height;
 
-                    using var pix = Pix.LoadFromMemory(ms.ToArray());
-                    using var page = _engine.Process(pix);
-                    return page.GetText()?.Trim() ?? string.Empty;
+                    Bitmap processedImage = null;
+                    Bitmap imageToProcess = null;
+                    Bitmap originalToProcess = null;
+
+                    try
+                    {
+                        processedImage = _enablePreprocessing ? PreprocessImage(image) : (Bitmap)image.Clone();
+                        imageToProcess = needCrop ? processedImage.Clone(region, processedImage.PixelFormat) : processedImage;
+
+                        using (var ms = new MemoryStream())
+                        {
+                            imageToProcess.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                            ms.Position = 0;
+
+                            using (var pix = Pix.LoadFromMemory(ms.ToArray()))
+                            using (var page = _engine.Process(pix))
+                            {
+                                var text = page.GetText()?.Trim() ?? string.Empty;
+                                if (!string.IsNullOrWhiteSpace(text))
+                                    return CleanAndNormalizeText(text);
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        if (imageToProcess != null && !object.ReferenceEquals(imageToProcess, processedImage))
+                            imageToProcess.Dispose();
+                        if (processedImage != null && _enablePreprocessing)
+                            processedImage.Dispose();
+                    }
+
+                    try
+                    {
+                        originalToProcess = needCrop ? image.Clone(region, image.PixelFormat) : image;
+
+                        using (var originalMs = new MemoryStream())
+                        {
+                            originalToProcess.Save(originalMs, System.Drawing.Imaging.ImageFormat.Png);
+                            originalMs.Position = 0;
+
+                            using (var originalPix = Pix.LoadFromMemory(originalMs.ToArray()))
+                            using (var originalPage = _engine.Process(originalPix))
+                            {
+                                var originalText = originalPage.GetText()?.Trim() ?? string.Empty;
+                                return CleanAndNormalizeText(originalText);
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        if (originalToProcess != null && !object.ReferenceEquals(originalToProcess, image))
+                            originalToProcess.Dispose();
+                    }
                 }
-                catch
+                catch (Exception ex)
                 {
+                    System.Diagnostics.Debug.WriteLine($"OCR识别异常: {ex.Message}");
                     return string.Empty;
                 }
             });
+        }
+
+        private string CleanAndNormalizeText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return string.Empty;
+
+            text = text.Replace("\r\n", "\n");
+            text = text.Replace("\r", "\n");
+
+            text = text.Replace("\n\n", "\n");
+
+            text = text.Replace("\n", " ");
+
+            text = text.Replace("  ", " ");
+            text = text.Replace("  ", " ");
+
+            text = text.Replace("。 ", "。");
+            text = text.Replace("！ ", "！");
+            text = text.Replace("？ ", "？");
+            text = text.Replace("； ", "；");
+            text = text.Replace("： ", "：");
+
+            text = text.Trim();
+
+            return text;
+        }
+
+        private Bitmap PreprocessImage(Bitmap image)
+        {
+            var grayImage = new Bitmap(image.Width, image.Height);
+            using (var g = Graphics.FromImage(grayImage))
+            {
+                var grayMatrix = new System.Drawing.Imaging.ColorMatrix(new float[][]
+                {
+                    new float[] { 0.299f, 0.299f, 0.299f, 0, 0 },
+                    new float[] { 0.587f, 0.587f, 0.587f, 0, 0 },
+                    new float[] { 0.114f, 0.114f, 0.114f, 0, 0 },
+                    new float[] { 0, 0, 0, 1, 0 },
+                    new float[] { 0, 0, 0, 0, 1 }
+                });
+                var attributes = new System.Drawing.Imaging.ImageAttributes();
+                attributes.SetColorMatrix(grayMatrix);
+                g.DrawImage(image, new Rectangle(0, 0, image.Width, image.Height),
+                    0, 0, image.Width, image.Height, GraphicsUnit.Pixel, attributes);
+            }
+
+            var binarizedImage = ApplyAdaptiveThreshold(grayImage);
+
+            grayImage.Dispose();
+            return binarizedImage;
+        }
+
+        private Bitmap ApplyAdaptiveThreshold(Bitmap grayImage)
+        {
+            var result = new Bitmap(grayImage.Width, grayImage.Height);
+
+            int threshold = CalculateGlobalThreshold(grayImage);
+            int margin = 15;
+            int lowerThreshold = Math.Max(0, threshold - margin);
+            int upperThreshold = Math.Min(255, threshold + margin);
+
+            for (int y = 0; y < grayImage.Height; y++)
+            {
+                for (int x = 0; x < grayImage.Width; x++)
+                {
+                    var pixel = grayImage.GetPixel(x, y);
+                    int brightness = (pixel.R + pixel.G + pixel.B) / 3;
+
+                    Color outputColor;
+                    if (brightness > upperThreshold)
+                    {
+                        outputColor = Color.White;
+                    }
+                    else if (brightness < lowerThreshold)
+                    {
+                        outputColor = Color.Black;
+                    }
+                    else
+                    {
+                        outputColor = pixel;
+                    }
+                    result.SetPixel(x, y, outputColor);
+                }
+            }
+
+            return result;
+        }
+
+        private int CalculateGlobalThreshold(Bitmap grayImage)
+        {
+            int[] histogram = new int[256];
+            long totalPixels = (long)grayImage.Width * grayImage.Height;
+
+            for (int y = 0; y < grayImage.Height; y++)
+            {
+                for (int x = 0; x < grayImage.Width; x++)
+                {
+                    var pixel = grayImage.GetPixel(x, y);
+                    int brightness = (pixel.R + pixel.G + pixel.B) / 3;
+                    histogram[brightness]++;
+                }
+            }
+
+            double sum = 0;
+            for (int i = 0; i < 256; i++)
+                sum += (long)i * histogram[i];
+
+            double sumB = 0;
+            long wB = 0;
+            long wF = 0;
+            double maxVariance = 0;
+            int threshold = 128;
+
+            for (int i = 0; i < 256; i++)
+            {
+                wB += histogram[i];
+                if (wB == 0) continue;
+
+                wF = totalPixels - wB;
+                if (wF == 0) break;
+
+                sumB += (long)i * histogram[i];
+                double mB = sumB / wB;
+                double mF = (sum - sumB) / wF;
+
+                double variance = wB * wF * (mB - mF) * (mB - mF);
+
+                if (variance > maxVariance)
+                {
+                    maxVariance = variance;
+                    threshold = i;
+                }
+            }
+
+            return threshold;
         }
 
         public void Dispose()

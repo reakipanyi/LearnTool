@@ -1,4 +1,7 @@
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+using System.Data;
 using UnifiedLearningAssistant.Common;
 using UnifiedLearningAssistant.Views;
 
@@ -22,7 +25,11 @@ namespace UnifiedLearningAssistant.Forms
         public string CurrentEditItemJson
         {
             get => textBoxJson.Text;
-            set => textBoxJson.Text = value;
+            set
+            {
+                textBoxJson.Text = value;
+                UpdateGridFromJson();
+            }
         }
 
         public string GenerateCount
@@ -37,6 +44,23 @@ namespace UnifiedLearningAssistant.Forms
             set => textBoxRange.Text = value;
         }
 
+        public object? GridDataSource
+        {
+            get => dataGridView.DataSource;
+            set => dataGridView.DataSource = value;
+        }
+
+        public int[] SelectedRowIndices
+        {
+            get
+            {
+                return dataGridView.SelectedRows.Cast<DataGridViewRow>()
+                    .Select(r => r.Index)
+                    .OrderBy(i => i)
+                    .ToArray();
+            }
+        }
+
         public event EventHandler? CategoryChanged;
         public event EventHandler? TemplateAddClicked;
         public event EventHandler? TemplateSaveClicked;
@@ -45,6 +69,8 @@ namespace UnifiedLearningAssistant.Forms
         public event EventHandler? ExportClicked;
         public event EventHandler? GenerateWithAIClicked;
         public event EventHandler? InsertTemplateClicked;
+        public event EventHandler? GridCellEndEdit;
+        public event EventHandler? GridRowsAdded;
 
         public void ShowMessage(string msg)
         {
@@ -54,6 +80,7 @@ namespace UnifiedLearningAssistant.Forms
         public void ClearEditForm()
         {
             textBoxJson.Text = "";
+            dataGridView.DataSource = null;
         }
 
         public void AppendJson(string json)
@@ -63,6 +90,60 @@ namespace UnifiedLearningAssistant.Forms
                 textBoxJson.Text += "," + Environment.NewLine;
             }
             textBoxJson.Text += json;
+            UpdateGridFromJson();
+        }
+
+        public void UpdateGridFromJson()
+        {
+            string json = textBoxJson.Text;
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                dataGridView.DataSource = null;
+                return;
+            }
+
+            try
+            {
+                if (json.TrimStart().StartsWith("["))
+                {
+                    var dataTable = JsonConvert.DeserializeObject<DataTable>(json);
+                    dataGridView.DataSource = dataTable;
+                }
+                else if (json.TrimStart().StartsWith("{"))
+                {
+                    var obj = JObject.Parse(json);
+                    var dataTable = new DataTable();
+                    foreach (var prop in obj.Properties())
+                    {
+                        dataTable.Columns.Add(prop.Name);
+                    }
+                    DataRow row = dataTable.NewRow();
+                    foreach (var prop in obj.Properties())
+                    {
+                        row[prop.Name] = prop.Value?.ToString() ?? "";
+                    }
+                    dataTable.Rows.Add(row);
+                    dataGridView.DataSource = dataTable;
+                }
+            }
+            catch
+            {
+                dataGridView.DataSource = null;
+            }
+        }
+
+        private void DataGridView_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
+        {
+            GridCellEndEdit?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void DataGridView_RowsAdded(object? sender, DataGridViewRowsAddedEventArgs e)
+        {
+            GridRowsAdded?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void DataGridView_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
+        {
         }
 
         private void ComboBoxCategory_SelectedIndexChanged(object? sender, EventArgs e)
@@ -122,7 +203,21 @@ namespace UnifiedLearningAssistant.Forms
             labelRange = new Label();
             textBoxCount = new TextBox();
             textBoxRange = new TextBox();
+            dataGridView = new DataGridView();
             SuspendLayout();
+
+            // dataGridView
+            dataGridView.AllowUserToAddRows = true;
+            dataGridView.AllowUserToDeleteRows = true;
+            dataGridView.AllowUserToOrderColumns = true;
+            dataGridView.Location = new Point(20, 110);
+            dataGridView.Name = "dataGridView";
+            dataGridView.Size = new Size(880, 300);
+            dataGridView.TabIndex = 1;
+            dataGridView.MultiSelect = true;
+            dataGridView.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dataGridView.CellEndEdit += DataGridView_CellEndEdit;
+            dataGridView.RowsAdded += DataGridView_RowsAdded;
 
             // comboBoxCategory
             comboBoxCategory.Items.AddRange(new object[] { 
@@ -141,67 +236,66 @@ namespace UnifiedLearningAssistant.Forms
             comboBoxCategory.TabIndex = 0;
             comboBoxCategory.SelectedIndexChanged += ComboBoxCategory_SelectedIndexChanged;
 
-            // textBoxJson
-            textBoxJson.Location = new Point(20, 80);
-            textBoxJson.Multiline = true;
+            // textBoxJson - 改为一行高度
+            textBoxJson.Location = new Point(100, 60);
             textBoxJson.Name = "textBoxJson";
-            textBoxJson.Size = new Size(740, 350);
-            textBoxJson.ScrollBars = ScrollBars.Vertical;
-            textBoxJson.TabIndex = 1;
+            textBoxJson.Size = new Size(800, 23);
+            textBoxJson.TabIndex = 2;
+            textBoxJson.ScrollBars = ScrollBars.Horizontal;
 
             // buttonAdd
-            buttonAdd.Location = new Point(20, 450);
+            buttonAdd.Location = new Point(20, 430);
             buttonAdd.Name = "buttonAdd";
             buttonAdd.Size = new Size(80, 35);
-            buttonAdd.TabIndex = 2;
+            buttonAdd.TabIndex = 3;
             buttonAdd.Text = "📝 新增";
             buttonAdd.Click += ButtonAdd_Click;
 
             // buttonSave
-            buttonSave.Location = new Point(110, 450);
+            buttonSave.Location = new Point(110, 430);
             buttonSave.Name = "buttonSave";
             buttonSave.Size = new Size(80, 35);
-            buttonSave.TabIndex = 3;
+            buttonSave.TabIndex = 4;
             buttonSave.Text = "💾 保存";
             buttonSave.Click += ButtonSave_Click;
 
             // buttonDelete
-            buttonDelete.Location = new Point(200, 450);
+            buttonDelete.Location = new Point(200, 430);
             buttonDelete.Name = "buttonDelete";
             buttonDelete.Size = new Size(80, 35);
-            buttonDelete.TabIndex = 4;
+            buttonDelete.TabIndex = 5;
             buttonDelete.Text = "🗑️ 删除";
             buttonDelete.Click += ButtonDelete_Click;
 
             // buttonImport
-            buttonImport.Location = new Point(290, 450);
+            buttonImport.Location = new Point(290, 430);
             buttonImport.Name = "buttonImport";
             buttonImport.Size = new Size(80, 35);
-            buttonImport.TabIndex = 5;
+            buttonImport.TabIndex = 6;
             buttonImport.Text = "📥 导入";
             buttonImport.Click += ButtonImport_Click;
 
             // buttonExport
-            buttonExport.Location = new Point(380, 450);
+            buttonExport.Location = new Point(380, 430);
             buttonExport.Name = "buttonExport";
             buttonExport.Size = new Size(80, 35);
-            buttonExport.TabIndex = 6;
+            buttonExport.TabIndex = 7;
             buttonExport.Text = "📤 导出";
             buttonExport.Click += ButtonExport_Click;
 
             // buttonInsertTemplate
-            buttonInsertTemplate.Location = new Point(470, 450);
+            buttonInsertTemplate.Location = new Point(470, 430);
             buttonInsertTemplate.Name = "buttonInsertTemplate";
             buttonInsertTemplate.Size = new Size(100, 35);
-            buttonInsertTemplate.TabIndex = 7;
+            buttonInsertTemplate.TabIndex = 8;
             buttonInsertTemplate.Text = "📋 插入模板";
             buttonInsertTemplate.Click += ButtonInsertTemplate_Click;
 
             // buttonGenerateAI
-            buttonGenerateAI.Location = new Point(580, 450);
+            buttonGenerateAI.Location = new Point(580, 430);
             buttonGenerateAI.Name = "buttonGenerateAI";
             buttonGenerateAI.Size = new Size(90, 35);
-            buttonGenerateAI.TabIndex = 8;
+            buttonGenerateAI.TabIndex = 9;
             buttonGenerateAI.Text = "🤖 AI生成";
             buttonGenerateAI.Click += ButtonGenerateAI_Click;
 
@@ -209,48 +303,49 @@ namespace UnifiedLearningAssistant.Forms
             labelCategory.Location = new Point(20, 23);
             labelCategory.Name = "labelCategory";
             labelCategory.Size = new Size(80, 20);
-            labelCategory.TabIndex = 9;
+            labelCategory.TabIndex = 10;
             labelCategory.Text = "学习品类:";
 
             // labelJson
-            labelJson.Location = new Point(20, 60);
+            labelJson.Location = new Point(20, 63);
             labelJson.Name = "labelJson";
             labelJson.Size = new Size(80, 20);
-            labelJson.TabIndex = 10;
-            labelJson.Text = "JSON内容:";
+            labelJson.TabIndex = 11;
+            labelJson.Text = "JSON预览:";
 
             // labelCount
             labelCount.Location = new Point(300, 23);
             labelCount.Name = "labelCount";
             labelCount.Size = new Size(60, 20);
-            labelCount.TabIndex = 11;
+            labelCount.TabIndex = 12;
             labelCount.Text = "生成数量:";
 
             // labelRange
             labelRange.Location = new Point(420, 23);
             labelRange.Name = "labelRange";
             labelRange.Size = new Size(60, 20);
-            labelRange.TabIndex = 12;
+            labelRange.TabIndex = 13;
             labelRange.Text = "关键词:";
 
             // textBoxCount
             textBoxCount.Location = new Point(360, 20);
             textBoxCount.Name = "textBoxCount";
             textBoxCount.Size = new Size(50, 23);
-            textBoxCount.TabIndex = 13;
+            textBoxCount.TabIndex = 14;
             textBoxCount.Text = "5";
 
             // textBoxRange
             textBoxRange.Location = new Point(480, 20);
             textBoxRange.Name = "textBoxRange";
-            textBoxRange.Size = new Size(280, 23);
-            textBoxRange.TabIndex = 14;
+            textBoxRange.Size = new Size(500, 23);
+            textBoxRange.TabIndex = 15;
             textBoxRange.Text = "请输入关键词或范围";
 
             // ContentEditorForm
-            ClientSize = new Size(780, 510);
+            ClientSize = new Size(920, 500);
             Controls.Add(comboBoxCategory);
             Controls.Add(textBoxJson);
+            Controls.Add(dataGridView);
             Controls.Add(buttonAdd);
             Controls.Add(buttonSave);
             Controls.Add(buttonDelete);
@@ -272,6 +367,7 @@ namespace UnifiedLearningAssistant.Forms
 
         private ComboBox comboBoxCategory;
         private TextBox textBoxJson;
+        private DataGridView dataGridView;
         private Button buttonAdd;
         private Button buttonSave;
         private Button buttonDelete;

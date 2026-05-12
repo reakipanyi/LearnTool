@@ -10,10 +10,11 @@ namespace UnifiedLearningAssistant.Services.TTS
         private WaveOutEvent? _waveOut;
         private bool _isSpeaking;
         private readonly object _lock = new object();
+        private bool _disposed = false;
 
         public QwenTtsService(TtsConfig config)
         {
-            _config = config;
+            _config = config ?? throw new ArgumentNullException(nameof(config));
             _client = new QwenTtsClient(config.ApiKey, config.BaseUrl);
         }
 
@@ -26,44 +27,63 @@ namespace UnifiedLearningAssistant.Services.TTS
             if (!Available)
                 return;
 
+            await StopAsync();
+
             lock (_lock)
             {
-                if (_isSpeaking)
-                {
-                    StopAsync().Wait();
-                }
                 _isSpeaking = true;
             }
 
             try
             {
-                // 新增功能：朗读速度滑块 - 使用配置中的速度值
                 var finalSpeed = speed * _config.Speed;
-                // 确保速度在有效范围内 0.5-2.0
                 finalSpeed = Math.Max(0.5f, Math.Min(2.0f, finalSpeed));
                 
                 var audioBytes = await _client.SynthesizeAsync(text, _config.Model, _config.Voice, finalSpeed, _config.Volume);
                 if (audioBytes == null || audioBytes.Length == 0)
-                    return;
-
-                using var memoryStream = new MemoryStream(audioBytes);
-                using var reader = new Mp3FileReader(memoryStream);
-                
-                _waveOut = new WaveOutEvent();
-                _waveOut.Init(reader);
-                _waveOut.PlaybackStopped += (s, e) =>
                 {
                     lock (_lock)
                     {
                         _isSpeaking = false;
                     }
-                    _waveOut?.Dispose();
-                    _waveOut = null;
+                    return;
+                }
+
+                using var memoryStream = new MemoryStream(audioBytes);
+                using var reader = new Mp3FileReader(memoryStream);
+                
+                WaveOutEvent? waveOut = new WaveOutEvent();
+                waveOut.Init(reader);
+                
+                bool playbackCompleted = false;
+                waveOut.PlaybackStopped += (s, e) =>
+                {
+                    lock (_lock)
+                    {
+                        _isSpeaking = false;
+                        playbackCompleted = true;
+                        if (_waveOut == waveOut)
+                        {
+                            _waveOut = null;
+                        }
+                    }
+                    try
+                    {
+                        waveOut.Dispose();
+                    }
+                    catch { }
                 };
-                _waveOut.Play();
+
+                lock (_lock)
+                {
+                    _waveOut = waveOut;
+                }
+
+                waveOut.Play();
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"TTS语音合成失败: {ex.Message}");
                 lock (_lock)
                 {
                     _isSpeaking = false;
@@ -71,25 +91,52 @@ namespace UnifiedLearningAssistant.Services.TTS
             }
         }
 
-        public Task StopAsync()
+        public async Task StopAsync()
         {
+            WaveOutEvent? waveOutToStop = null;
+            
             lock (_lock)
             {
                 if (_waveOut != null)
                 {
-                    _waveOut.Stop();
-                    _waveOut.Dispose();
+                    waveOutToStop = _waveOut;
                     _waveOut = null;
+                    _isSpeaking = false;
                 }
-                _isSpeaking = false;
             }
-            return Task.CompletedTask;
+
+            if (waveOutToStop != null)
+            {
+                try
+                {
+                    waveOutToStop.Stop();
+                    await Task.Delay(100);
+                }
+                finally
+                {
+                    waveOutToStop.Dispose();
+                }
+            }
         }
 
         public void Dispose()
         {
-            StopAsync().Wait();
-            _waveOut?.Dispose();
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed)
+                return;
+
+            if (disposing)
+            {
+                StopAsync().Wait(1000);
+                _waveOut?.Dispose();
+            }
+
+            _disposed = true;
         }
     }
 }

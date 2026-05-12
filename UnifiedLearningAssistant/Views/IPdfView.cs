@@ -24,12 +24,18 @@ namespace UnifiedLearningAssistant.Views
         void SetSearchPanelVisible(bool visible);
         // 新增功能：低优先级 - 夜间模式
         void NightMode();
+        // 新增功能：OCR语言切换
+        void SetCurrentLanguage(string language);
+        void UpdateLanguageButtonText(string text);
+        string GetCurrentLanguage();
 
         string GetSelectedFile();
         string GetPageText();
+        string GetQuestionText();
         Image? GetCurrentImage();
         Rectangle? GetSelectionRect();
         Rectangle GetDisplayRect();
+        Rectangle GetImageDisplayRect();
 
         event EventHandler? FileSelected;
         event EventHandler? PageChanged;
@@ -44,5 +50,6 @@ namespace UnifiedLearningAssistant.Views
         event EventHandler? SearchPrevious;
         event EventHandler? ToggleSearchPanel;
         event EventHandler? ToggleNightMode;
+        event EventHandler? LanguageChanged;
     }
 }

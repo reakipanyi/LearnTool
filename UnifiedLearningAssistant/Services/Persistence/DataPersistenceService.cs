@@ -64,7 +64,7 @@ namespace UnifiedLearningAssistant.Services.Persistence
             }
             if (config.TranslationConfig != null)
             {
-                config.TranslationConfig.AppKey = SecureConfigManager.Encrypt(config.TranslationConfig.AppKey);
+                config.TranslationConfig.BaiduAppId = SecureConfigManager.Encrypt(config.TranslationConfig.BaiduAppId);
             }
         }
 
@@ -81,8 +81,8 @@ namespace UnifiedLearningAssistant.Services.Persistence
             }
             if (config.TranslationConfig != null)
             {
-                config.TranslationConfig.AppKey = SecureConfigManager.Decrypt(config.TranslationConfig.AppKey);
-                config.TranslationConfig.AppSecret = SecureConfigManager.Decrypt(config.TranslationConfig.AppSecret);
+                config.TranslationConfig.BaiduAppId = SecureConfigManager.Decrypt(config.TranslationConfig.BaiduAppId);
+                config.TranslationConfig.BaiduSecret = SecureConfigManager.Decrypt(config.TranslationConfig.BaiduSecret);
             }
         }
 

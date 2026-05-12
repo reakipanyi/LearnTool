@@ -115,6 +115,8 @@ namespace UnifiedLearningAssistant.Presenters
             _view.ToggleSearchPanel += View_ToggleSearchPanel;
             // 新增功能：低优先级 - 夜间模式事件
             _view.ToggleNightMode += View_ToggleNightMode;
+            // 新增功能：OCR语言切换事件
+            _view.LanguageChanged += View_LanguageChanged;
         }
 
         private void UnsubscribeFromEvents()
@@ -137,6 +139,8 @@ namespace UnifiedLearningAssistant.Presenters
             _view.ToggleSearchPanel -= View_ToggleSearchPanel;
             // 新增功能：低优先级 - 夜间模式事件
             _view.ToggleNightMode -= View_ToggleNightMode;
+            // 新增功能：OCR语言切换事件
+            _view.LanguageChanged -= View_LanguageChanged;
         }
 
         private void SaveSession()
@@ -530,16 +534,24 @@ namespace UnifiedLearningAssistant.Presenters
             }
         }
 
+        private readonly object _pageTextsLock = new object();
+
         public async Task EnsurePageTextAsync(int pageIndex)
         {
-            if (_pageTexts.ContainsKey(pageIndex)) return;
+            lock (_pageTextsLock)
+            {
+                if (_pageTexts.ContainsKey(pageIndex)) return;
+            }
             try
             {
                 var text = _pdfService.GetPdfText(pageIndex);
                 if (!string.IsNullOrWhiteSpace(text))
                 {
-                    _pageTexts[pageIndex] = text;
-                    _view.SetPageText(pageIndex, text);
+                    lock (_pageTextsLock)
+                    {
+                        _pageTexts[pageIndex] = text;
+                    }
+                    _view?.SetPageText(pageIndex, text);
                     return;
                 }
 
@@ -547,8 +559,11 @@ namespace UnifiedLearningAssistant.Presenters
                 var ocrText = await OcrBitmapAsync(bmp);
                 if (!string.IsNullOrWhiteSpace(ocrText))
                 {
-                    _pageTexts[pageIndex] = ocrText;
-                    _view.SetPageText(pageIndex, ocrText);
+                    lock (_pageTextsLock)
+                    {
+                        _pageTexts[pageIndex] = ocrText;
+                    }
+                    _view?.SetPageText(pageIndex, ocrText);
                 }
             }
             catch (Exception ex)
@@ -582,18 +597,75 @@ namespace UnifiedLearningAssistant.Presenters
                 return;
             }
 
+            if (img == null || img.Width == 0 || img.Height == 0)
+            {
+                _view.ShowWarning("图像无效");
+                return;
+            }
+
+            if (selRect.Width <= 0 || selRect.Height <= 0)
+            {
+                _view.ShowWarning("请框选一个有效的区域");
+                return;
+            }
+
             try
             {
-                float scaleX = (float)img.Width / imgDisplayRect.Width;
-                float scaleY = (float)img.Height / imgDisplayRect.Height;
+                var imageDisplayRect = _view.GetImageDisplayRect();
 
-                var actualRect = new Rectangle(
-                    (int)(selRect.X * scaleX),
-                    (int)(selRect.Y * scaleY),
-                    (int)(selRect.Width * scaleX),
-                    (int)(selRect.Height * scaleY));
+                if (imageDisplayRect.Width == 0 || imageDisplayRect.Height == 0)
+                {
+                    _view.ShowWarning("图像显示区域无效");
+                    return;
+                }
 
-                using var cropped = img.Clone(actualRect, img.PixelFormat);
+                float scaleX = (float)img.Width / imageDisplayRect.Width;
+                float scaleY = (float)img.Height / imageDisplayRect.Height;
+
+                float actualX = (selRect.X - imageDisplayRect.X) * scaleX;
+                float actualY = (selRect.Y - imageDisplayRect.Y) * scaleY;
+                float actualWidth = selRect.Width * scaleX;
+                float actualHeight = selRect.Height * scaleY;
+
+                actualX = Math.Max(0, actualX);
+                actualY = Math.Max(0, actualY);
+
+                if (actualX >= img.Width || actualY >= img.Height)
+                {
+                    _view.ShowWarning("选择区域超出图像范围");
+                    return;
+                }
+
+                actualWidth = Math.Min(img.Width - actualX, actualWidth);
+                actualHeight = Math.Min(img.Height - actualY, actualHeight);
+
+                if (actualWidth <= 0 || actualHeight <= 0)
+                {
+                    _view.ShowWarning("选择区域无效，请重新选择");
+                    return;
+                }
+
+                if (actualWidth < 10 || actualHeight < 10)
+                {
+                    _view.ShowWarning("选择区域太小，请选择更大的区域");
+                    return;
+                }
+
+                var intRect = new Rectangle(
+                    (int)Math.Round(actualX),
+                    (int)Math.Round(actualY),
+                    (int)Math.Round(actualWidth),
+                    (int)Math.Round(actualHeight));
+
+                if (intRect.Width <= 0 || intRect.Height <= 0 ||
+                    intRect.X + intRect.Width > img.Width ||
+                    intRect.Y + intRect.Height > img.Height)
+                {
+                    _view.ShowWarning("裁剪区域无效，请重新选择");
+                    return;
+                }
+
+                using var cropped = img.Clone(intRect, img.PixelFormat);
                 var recognizedText = await _ocrService.RecognizeTextAsync(cropped);
 
                 if (!string.IsNullOrWhiteSpace(recognizedText))
@@ -601,11 +673,20 @@ namespace UnifiedLearningAssistant.Presenters
                     string translation = await _translationService.TranslateAsync(recognizedText) ?? "翻译失败";
                     _view.ShowTranslationDialog(recognizedText, translation, "");
                 }
+                else
+                {
+                    _view.ShowWarning("未识别到文字，请尝试调整选择区域");
+                }
+            }
+            catch (ArgumentOutOfRangeException ex)
+            {
+                _logger.LogError(ex, "OCR识别失败：裁剪区域超出范围");
+                _view.ShowError("裁剪区域超出范围，请重新选择");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "OCR识别失败");
-                _view.ShowError("OCR识别失败");
+                _view.ShowError("OCR识别失败：" + ex.Message);
             }
         }
 
@@ -781,7 +862,19 @@ namespace UnifiedLearningAssistant.Presenters
             {
                 _cts?.Token.ThrowIfCancellationRequested();
                 
-                var question = _view.GetPageText();
+                var question = _view.GetQuestionText();
+                if (string.IsNullOrWhiteSpace(question))
+                {
+                    question = _view.GetPageText();
+                }
+                
+                if (string.IsNullOrWhiteSpace(question))
+                {
+                    _view.ShowWarning("请输入要提问的内容");
+                    return;
+                }
+
+                _view.SetLoadingState(true);
                 var answer = await GetAiAnswerAsync(question, "", _cts?.Token ?? CancellationToken.None);
                 _view.UpdateAiAnswer(answer);
             }
@@ -792,22 +885,38 @@ namespace UnifiedLearningAssistant.Presenters
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in View_AiQuestionAsked");
+                _view.ShowError("AI提问失败: " + ex.Message);
+            }
+            finally
+            {
+                _view.SetLoadingState(false);
             }
         }
 
         private void View_AddWordToLearningList(object? sender, EventArgs e)
         {
-            // 新增功能：PDF生词本联动 - 获取当前选中的单词并添加到学习列表
-            var word = _view.GetPageText(); // 假设问题文本框中有要添加的单词
+            if (_view == null || _studyEngine == null)
+            {
+                _logger.LogWarning("View_AddWordToLearningList called with null view or study engine");
+                return;
+            }
+
+            var word = _view.GetPageText();
             if (!string.IsNullOrWhiteSpace(word))
             {
-                // 初始化StudyEngine（如果需要）
-                _studyEngine.Initialize(_currentUserId, _currentLanguage, _currentSubCategory, "", "", "");
-                // 添加到未掌握列表
-                _studyEngine.AddUnknownItem(word.Trim(), _currentSubCategory);
-                _view.ShowMessage($"已将 \"{word.Trim()}\" 添加到生词本");
+                try
+                {
+                    _studyEngine.Initialize(_currentUserId, _currentLanguage, _currentSubCategory, "", "", "");
+                    _studyEngine.AddUnknownItem(word.Trim(), _currentSubCategory);
+                    _view.ShowMessage($"已将 \"{word.Trim()}\" 添加到生词本");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to add word to learning list: {Word}", word);
+                    _view.ShowError("添加到生词本失败: " + ex.Message);
+                }
             }
-            OnAddWordToLearningList?.Invoke(this, new AddWordEventArgs { Word = word, Language = _currentLanguage });
+            OnAddWordToLearningList?.Invoke(this, new AddWordEventArgs { Word = word ?? string.Empty, Language = _currentLanguage });
         }
 
         private void View_SpeakTranslation(object? sender, EventArgs e)
@@ -862,6 +971,33 @@ namespace UnifiedLearningAssistant.Presenters
             _isNightMode = !_isNightMode;
             // 重新渲染当前页面以应用反色
             _ = RenderAndDisplayCurrentPageAsync();
+        }
+
+        private void View_LanguageChanged(object? sender, EventArgs e)
+        {
+            if (_view == null || _ocrService == null)
+            {
+                _logger.LogWarning("View_LanguageChanged called with null view or OCR service");
+                return;
+            }
+
+            var language = _view.GetCurrentLanguage();
+            if (!string.IsNullOrWhiteSpace(language))
+            {
+                try
+                {
+                    bool success = _ocrService.SetLanguage(language);
+                    if (!success)
+                    {
+                        _view.ShowWarning($"无法切换到语言: {language}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to change OCR language to {Language}", language);
+                    _view.ShowError("语言切换失败: " + ex.Message);
+                }
+            }
         }
 
         private async Task PerformSearchAsync(string searchText)
