@@ -19,6 +19,11 @@ namespace UnifiedLearningAssistant.Views
         void ClearThumbnails();
         void AddThumbnail(int pageIndex, Image thumbnail);
         void HighlightThumbnail(int pageIndex);
+        // 新增功能：低优先级 - PDF搜索和高亮
+        void UpdateSearchResultCount(int count);
+        void SetSearchPanelVisible(bool visible);
+        // 新增功能：低优先级 - 夜间模式
+        void ToggleNightMode();
 
         string GetSelectedFile();
         string GetPageText();
@@ -34,5 +39,10 @@ namespace UnifiedLearningAssistant.Views
         event EventHandler? SpeakTranslation;
         event EventHandler? SelectOcrClicked;
         event EventHandler? TranslateClicked;
+        event EventHandler<string>? SearchTextChanged;
+        event EventHandler? SearchNext;
+        event EventHandler? SearchPrevious;
+        event EventHandler? ToggleSearchPanel;
+        event EventHandler? ToggleNightMode;
     }
 }

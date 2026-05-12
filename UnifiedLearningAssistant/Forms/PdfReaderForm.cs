@@ -26,6 +26,18 @@ namespace UnifiedLearningAssistant.Forms
         private Point _navPanelStartPoint = Point.Empty;
         // 新增功能：中等级 - UI响应性改进，添加加载指示器
         private LoadingIndicator? _loadingIndicator;
+        // 新增功能：低优先级 - PDF搜索和高亮
+        private Panel? _searchPanel;
+        private TextBox? _searchTextBox;
+        private Label? _searchResultLabel;
+        private Button? _searchNextButton;
+        private Button? _searchPrevButton;
+        private string _currentSearchText = "";
+        private List<int> _searchResults = new List<int>();
+        private int _currentSearchIndex = -1;
+        // 新增功能：低优先级 - 夜间模式
+        private bool _isNightMode = false;
+        private Button? _nightModeButton;
 
         public PdfReaderForm(ILogger<PdfReaderForm> logger)
         {
@@ -33,13 +45,29 @@ namespace UnifiedLearningAssistant.Forms
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             Load += PdfReaderForm_Load;
             Resize += PdfReaderForm_Resize;
+            KeyDown += PdfReaderForm_KeyDown;
         }
 
         private void PdfReaderForm_Load(object? sender, EventArgs e)
         {
             AdjustPanelPdfSize();
+            // 新增功能：低优先级 - 初始化搜索面板
+            InitializeSearchPanel();
+            // 新增功能：低优先级 - 初始化夜间模式按钮
+            InitializeNightModeButton();
             // 加载完成后通知 presenter 加载上次会话
             _presenter?.LoadLastSessionAndRestore();
+        }
+
+        private void PdfReaderForm_KeyDown(object? sender, KeyEventArgs e)
+        {
+            // 新增功能：低优先级 - Ctrl+F 快捷键打开搜索面板
+            if (e.Control && e.KeyCode == Keys.F)
+            {
+                ToggleSearchPanel?.Invoke(this, EventArgs.Empty);
+                SetSearchPanelVisible(true);
+                e.Handled = true;
+            }
         }
 
         private void PdfReaderForm_Resize(object? sender, EventArgs e)
@@ -135,6 +163,176 @@ namespace UnifiedLearningAssistant.Forms
         public void ShowMessage(string message)
         {
             MessageBox.Show(message, "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        // 新增功能：低优先级 - PDF搜索和高亮
+        public void UpdateSearchResultCount(int count)
+        {
+            if (_searchResultLabel != null)
+            {
+                _searchResultLabel.Text = count > 0 ? $"找到 {count} 处" : "未找到";
+            }
+        }
+
+        public void SetSearchPanelVisible(bool visible)
+        {
+            if (_searchPanel != null)
+            {
+                _searchPanel.Visible = visible;
+                if (visible && _searchTextBox != null)
+                {
+                    _searchTextBox.Focus();
+                }
+            }
+        }
+
+        // 新增功能：低优先级 - 搜索面板初始化（在构造函数中调用）
+        private void InitializeSearchPanel()
+        {
+            _searchPanel = new Panel
+            {
+                Location = new Point(280, 70),
+                Size = new Size(480, 40),
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = Color.White,
+                Visible = false
+            };
+
+            _searchTextBox = new TextBox
+            {
+                Location = new Point(10, 8),
+                Size = new Size(250, 25),
+                Font = new Font("Microsoft YaHei UI", 9F),
+                PlaceholderText = "输入搜索内容（Ctrl+F）"
+            };
+            _searchTextBox.TextChanged += (s, e) =>
+            {
+                _currentSearchText = _searchTextBox.Text;
+                SearchTextChanged?.Invoke(this, _currentSearchText);
+            };
+            _searchTextBox.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Enter)
+                {
+                    if ((e.Modifiers & Keys.Shift) == Keys.Shift)
+                    {
+                        SearchPrevious?.Invoke(this, EventArgs.Empty);
+                    }
+                    else
+                    {
+                        SearchNext?.Invoke(this, EventArgs.Empty);
+                    }
+                    e.Handled = true;
+                }
+            };
+
+            _searchResultLabel = new Label
+            {
+                Location = new Point(270, 10),
+                Size = new Size(80, 20),
+                Font = new Font("Microsoft YaHei UI", 8F),
+                Text = "",
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            _searchPrevButton = new Button
+            {
+                Location = new Point(360, 5),
+                Size = new Size(50, 30),
+                Text = "上一页",
+                Font = new Font("Microsoft YaHei UI", 8F)
+            };
+            _searchPrevButton.Click += (s, e) => SearchPrevious?.Invoke(this, EventArgs.Empty);
+
+            _searchNextButton = new Button
+            {
+                Location = new Point(420, 5),
+                Size = new Size(50, 30),
+                Text = "下一页",
+                Font = new Font("Microsoft YaHei UI", 8F)
+            };
+            _searchNextButton.Click += (s, e) => SearchNext?.Invoke(this, EventArgs.Empty);
+
+            var closeButton = new Button
+            {
+                Location = new Point(455, 8),
+                Size = new Size(20, 20),
+                Text = "×",
+                Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.White
+            };
+            closeButton.Click += (s, e) => SetSearchPanelVisible(false);
+
+            _searchPanel.Controls.Add(_searchTextBox);
+            _searchPanel.Controls.Add(_searchResultLabel);
+            _searchPanel.Controls.Add(_searchPrevButton);
+            _searchPanel.Controls.Add(_searchNextButton);
+            _searchPanel.Controls.Add(closeButton);
+
+            this.Controls.Add(_searchPanel);
+        }
+
+        // 新增功能：低优先级 - 夜间模式切换
+        public void ToggleNightMode()
+        {
+            _isNightMode = !_isNightMode;
+            ApplyNightMode();
+            if (_nightModeButton != null)
+            {
+                _nightModeButton.Text = _isNightMode ? "☀️" : "🌙";
+            }
+        }
+
+        private void ApplyNightMode()
+        {
+            if (_isNightMode)
+            {
+                // 夜间模式 - 深色背景
+                this.BackColor = Color.FromArgb(30, 30, 30);
+                panelPdf.BackColor = Color.FromArgb(20, 20, 20);
+                panelNavigation.BackColor = Color.FromArgb(45, 45, 45);
+                treeViewFiles.BackColor = Color.FromArgb(40, 40, 40);
+                treeViewFiles.ForeColor = Color.White;
+                tabControlTools.BackColor = Color.FromArgb(40, 40, 40);
+            }
+            else
+            {
+                // 日间模式 - 浅色背景
+                this.BackColor = Color.FromArgb(240, 240, 240);
+                panelPdf.BackColor = Color.White;
+                panelNavigation.BackColor = Color.FromArgb(240, 240, 240);
+                treeViewFiles.BackColor = Color.White;
+                treeViewFiles.ForeColor = Color.Black;
+                tabControlTools.BackColor = Color.White;
+            }
+
+            // 重新渲染当前页面以应用反色（如果需要）
+            if (_presenter != null && !string.IsNullOrWhiteSpace(_currentPdfPath))
+            {
+                _ = _presenter.RenderAndDisplayCurrentPageAsync();
+            }
+        }
+
+        // 新增功能：低优先级 - 在导航面板中添加夜间模式按钮（在构造函数中调用）
+        private void InitializeNightModeButton()
+        {
+            _nightModeButton = new Button
+            {
+                Location = new Point(230, 10),
+                Size = new Size(40, 30),
+                Text = "🌙",
+                Font = new Font("Microsoft YaHei UI", 12F),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.White
+            };
+            _nightModeButton.Click += (s, e) =>
+            {
+                ToggleNightMode();
+                ToggleNightMode?.Invoke(this, EventArgs.Empty);
+            };
+
+            panelNavigation.Controls.Add(_nightModeButton);
         }
 
         // 新增功能：中等级 - PDF页面缩略图
@@ -257,6 +455,10 @@ namespace UnifiedLearningAssistant.Forms
         public event EventHandler? SpeakTranslation;
         public event EventHandler? SelectOcrClicked;
         public event EventHandler? TranslateClicked;
+        public event EventHandler<string>? SearchTextChanged;
+        public event EventHandler? SearchNext;
+        public event EventHandler? SearchPrevious;
+        public event EventHandler? ToggleSearchPanel;
 
         #endregion
 

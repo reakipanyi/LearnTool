@@ -37,6 +37,12 @@ namespace UnifiedLearningAssistant.Presenters
         // 新增功能：中等级 - PDF缩略图缓存
         private readonly Dictionary<int, Bitmap> _thumbnailCache = new Dictionary<int, Bitmap>();
         private bool _isGeneratingThumbnails = false;
+        // 新增功能：低优先级 - PDF搜索
+        private string _currentSearchText = "";
+        private List<int> _searchResultPages = new List<int>();
+        private int _currentSearchIndex = -1;
+        // 新增功能：低优先级 - 夜间模式
+        private bool _isNightMode = false;
         private readonly string _sessionPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "lastsession.json");
         private readonly SemaphoreSlim _renderSemaphore = new SemaphoreSlim(2, 5);
         private readonly HashSet<int> _preRenderingPages = new HashSet<int>();
@@ -102,6 +108,13 @@ namespace UnifiedLearningAssistant.Presenters
             _view.SpeakTranslation += View_SpeakTranslation;
             _view.SelectOcrClicked += View_SelectOcrClicked;
             _view.TranslateClicked += View_TranslateClicked;
+            // 新增功能：低优先级 - 搜索事件
+            _view.SearchTextChanged += View_SearchTextChanged;
+            _view.SearchNext += View_SearchNext;
+            _view.SearchPrevious += View_SearchPrevious;
+            _view.ToggleSearchPanel += View_ToggleSearchPanel;
+            // 新增功能：低优先级 - 夜间模式事件
+            _view.ToggleNightMode += View_ToggleNightMode;
         }
 
         private void UnsubscribeFromEvents()
@@ -117,6 +130,13 @@ namespace UnifiedLearningAssistant.Presenters
             _view.SpeakTranslation -= View_SpeakTranslation;
             _view.SelectOcrClicked -= View_SelectOcrClicked;
             _view.TranslateClicked -= View_TranslateClicked;
+            // 新增功能：低优先级 - 搜索事件
+            _view.SearchTextChanged -= View_SearchTextChanged;
+            _view.SearchNext -= View_SearchNext;
+            _view.SearchPrevious -= View_SearchPrevious;
+            _view.ToggleSearchPanel -= View_ToggleSearchPanel;
+            // 新增功能：低优先级 - 夜间模式事件
+            _view.ToggleNightMode -= View_ToggleNightMode;
         }
 
         private void SaveSession()
@@ -311,6 +331,11 @@ namespace UnifiedLearningAssistant.Presenters
                 var bitmap = await GetRenderedPageAsync(_currentPageIndex, renderWidth, renderHeight);
                 if (bitmap != null)
                 {
+                    // 新增功能：低优先级 - 夜间模式反色
+                    if (_isNightMode)
+                    {
+                        InvertColors(bitmap);
+                    }
                     _view.DisplayImage(bitmap);
                 }
                 
@@ -795,6 +820,130 @@ namespace UnifiedLearningAssistant.Presenters
 
         private void View_TranslateClicked(object? sender, EventArgs e)
         {
+        }
+
+        // 新增功能：低优先级 - 搜索事件处理程序
+        private void View_SearchTextChanged(object? sender, string searchText)
+        {
+            _currentSearchText = searchText;
+            _ = PerformSearchAsync(searchText);
+        }
+
+        private void View_SearchNext(object? sender, EventArgs e)
+        {
+            if (_searchResultPages.Count > 0)
+            {
+                _currentSearchIndex = (_currentSearchIndex + 1) % _searchResultPages.Count;
+                var nextPage = _searchResultPages[_currentSearchIndex];
+                RenderPage(nextPage);
+            }
+        }
+
+        private void View_SearchPrevious(object? sender, EventArgs e)
+        {
+            if (_searchResultPages.Count > 0)
+            {
+                _currentSearchIndex = _currentSearchIndex - 1;
+                if (_currentSearchIndex < 0)
+                    _currentSearchIndex = _searchResultPages.Count - 1;
+                var prevPage = _searchResultPages[_currentSearchIndex];
+                RenderPage(prevPage);
+            }
+        }
+
+        private void View_ToggleSearchPanel(object? sender, EventArgs e)
+        {
+        }
+
+        // 新增功能：低优先级 - 夜间模式切换
+        private void View_ToggleNightMode(object? sender, EventArgs e)
+        {
+            _isNightMode = !_isNightMode;
+            // 重新渲染当前页面以应用反色
+            _ = RenderAndDisplayCurrentPageAsync();
+        }
+
+        private async Task PerformSearchAsync(string searchText)
+        {
+            _searchResultPages.Clear();
+            _currentSearchIndex = -1;
+
+            if (string.IsNullOrWhiteSpace(searchText))
+            {
+                _view.UpdateSearchResultCount(0);
+                return;
+            }
+
+            try
+            {
+                var totalPages = _pdfService?.PageCount ?? 0;
+                for (int i = 0; i < totalPages; i++)
+                {
+                    // 确保我们有当前页面的文本
+                    await EnsurePageTextAsync(i);
+
+                    if (_pageTexts.TryGetValue(i, out string? pageText) &&
+                        !string.IsNullOrWhiteSpace(pageText) &&
+                        pageText.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        _searchResultPages.Add(i);
+                    }
+                }
+
+                _view.UpdateSearchResultCount(_searchResultPages.Count);
+
+                // 如果找到结果，跳转到第一个匹配页
+                if (_searchResultPages.Count > 0)
+                {
+                    _currentSearchIndex = 0;
+                    RenderPage(_searchResultPages[0]);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "搜索失败");
+            }
+        }
+
+        // 新增功能：低优先级 - 图像反色方法
+        private void InvertColors(Bitmap bitmap)
+        {
+            try
+            {
+                // 使用LockBits提高性能
+                var rect = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
+                var data = bitmap.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadWrite, bitmap.PixelFormat);
+                
+                // 计算像素字节大小
+                int bytesPerPixel = Image.GetPixelFormatSize(bitmap.PixelFormat) / 8;
+                
+                // 创建缓冲区
+                IntPtr ptr = data.Scan0;
+                int bytes = Math.Abs(data.Stride) * bitmap.Height;
+                byte[] rgbValues = new byte[bytes];
+                System.Runtime.InteropServices.Marshal.Copy(ptr, rgbValues, 0, bytes);
+                
+                // 反色处理
+                for (int i = 0; i < rgbValues.Length; i += bytesPerPixel)
+                {
+                    // 反色：255 - 原值
+                    if (bytesPerPixel >= 3)
+                    {
+                        rgbValues[i] = (byte)(255 - rgbValues[i]);     // Blue
+                        rgbValues[i + 1] = (byte)(255 - rgbValues[i + 1]); // Green
+                        rgbValues[i + 2] = (byte)(255 - rgbValues[i + 2]); // Red
+                    }
+                    // 如果有Alpha通道，不改变它
+                }
+                
+                // 复制回位图
+                System.Runtime.InteropServices.Marshal.Copy(rgbValues, 0, ptr, bytes);
+                bitmap.UnlockBits(data);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "反色渲染失败");
+            }
         }
 
         public void Dispose()
