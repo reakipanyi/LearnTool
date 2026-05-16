@@ -22,66 +22,11 @@ namespace UnifiedLearningAssistant.Forms
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             InitializeComponent();
-            Load += ContentEditorForm_Load;
-            Resize += ContentEditorForm_Resize;
         }
 
-        private void ContentEditorForm_Load(object? sender, EventArgs e)
-        {
-            UpdateControlLayout();
-        }
 
-        private void ContentEditorForm_Resize(object? sender, EventArgs e)
-        {
-            UpdateControlLayout();
-        }
 
-        private void UpdateControlLayout()
-        {
-            if (dataGridView == null || textBoxJson == null) return;
 
-            int clientWidth = ClientSize.Width;
-            int clientHeight = ClientSize.Height;
-
-            int contentWidth = Math.Max(880, clientWidth - 40);
-            int contentHeight = Math.Max(300, clientHeight - 250);
-
-            dataGridView.Size = new Size(contentWidth, contentHeight);
-            dataGridView.Location = new Point((clientWidth - contentWidth) / 2, 110);
-
-            textBoxJson.Size = new Size(contentWidth, 40);
-            textBoxJson.Location = new Point((clientWidth - contentWidth) / 2 + 80, 60);
-
-            labelJson.Location = new Point((clientWidth - contentWidth) / 2, 63);
-
-            textBoxRange.Size = new Size(contentWidth - 260, 23);
-            textBoxRange.Location = new Point((clientWidth - contentWidth) / 2 + 480, 20);
-
-            comboBoxSubCategory.Location = new Point((clientWidth - contentWidth) / 2 + 100, 19);
-
-            if (textBoxPrompt != null)
-            {
-                textBoxPrompt.Size = new Size(contentWidth, 60);
-                textBoxPrompt.Location = new Point((clientWidth - contentWidth) / 2 + 100, dataGridView.Location.Y + dataGridView.Height + 15);
-            }
-
-            if (labelPrompt != null)
-            {
-                labelPrompt.Location = new Point((clientWidth - contentWidth) / 2, textBoxPrompt.Location.Y + 5);
-            }
-
-            int buttonY = clientHeight - 80;
-            int buttonStartX = (clientWidth - 540) / 2;
-
-            buttonAdd.Location = new Point(buttonStartX, buttonY);
-            buttonSave.Location = new Point(buttonStartX + 90, buttonY);
-            buttonDelete.Location = new Point(buttonStartX + 180, buttonY);
-            buttonImport.Location = new Point(buttonStartX + 270, buttonY);
-            buttonExport.Location = new Point(buttonStartX + 360, buttonY);
-            buttonGenerateAI.Location = new Point(buttonStartX + 450, buttonY);
-
-            groupBoxLanguage.Location = new Point(clientWidth - 245, buttonY);
-        }
 
         public void SetPresenter(ContentEditorPresenter presenter)
         {
@@ -377,7 +322,6 @@ namespace UnifiedLearningAssistant.Forms
             buttonExport = new Button();
             buttonGenerateAI = new Button();
             labelCategory = new Label();
-            labelJson = new Label();
             labelCount = new Label();
             labelRange = new Label();
             textBoxCount = new TextBox();
@@ -396,87 +340,78 @@ namespace UnifiedLearningAssistant.Forms
             // textBoxJson
             // 
             textBoxJson.BackColor = SystemColors.HighlightText;
-            textBoxJson.Location = new Point(85, 112);
+            textBoxJson.Location = new Point(613, 194);
             textBoxJson.Multiline = true;
             textBoxJson.Name = "textBoxJson";
-            textBoxJson.ReadOnly = true;
             textBoxJson.ScrollBars = ScrollBars.Both;
-            textBoxJson.Size = new Size(800, 40);
+            textBoxJson.Size = new Size(591, 452);
             textBoxJson.TabIndex = 2;
             // 
             // buttonAdd
             // 
-            buttonAdd.Location = new Point(90, 660);
+            buttonAdd.Location = new Point(100, 681);
             buttonAdd.Name = "buttonAdd";
-            buttonAdd.Size = new Size(80, 35);
+            buttonAdd.Size = new Size(102, 44);
             buttonAdd.TabIndex = 3;
             buttonAdd.Text = "📝 新增";
             buttonAdd.Click += ButtonAdd_Click;
             // 
             // buttonSave
             // 
-            buttonSave.Location = new Point(180, 660);
+            buttonSave.Location = new Point(254, 681);
             buttonSave.Name = "buttonSave";
-            buttonSave.Size = new Size(80, 35);
+            buttonSave.Size = new Size(102, 44);
             buttonSave.TabIndex = 4;
             buttonSave.Text = "💾 保存";
             buttonSave.Click += ButtonSave_Click;
             // 
             // buttonDelete
             // 
-            buttonDelete.Location = new Point(270, 660);
+            buttonDelete.Location = new Point(408, 681);
             buttonDelete.Name = "buttonDelete";
-            buttonDelete.Size = new Size(80, 35);
+            buttonDelete.Size = new Size(102, 44);
             buttonDelete.TabIndex = 5;
             buttonDelete.Text = "🗑️ 删除";
             buttonDelete.Click += ButtonDelete_Click;
             // 
             // buttonImport
             // 
-            buttonImport.Location = new Point(360, 660);
+            buttonImport.Location = new Point(562, 681);
             buttonImport.Name = "buttonImport";
-            buttonImport.Size = new Size(80, 35);
+            buttonImport.Size = new Size(102, 44);
             buttonImport.TabIndex = 6;
             buttonImport.Text = "📥 导入";
             buttonImport.Click += ButtonImport_Click;
             // 
             // buttonExport
             // 
-            buttonExport.Location = new Point(450, 660);
+            buttonExport.Location = new Point(716, 681);
             buttonExport.Name = "buttonExport";
-            buttonExport.Size = new Size(80, 35);
+            buttonExport.Size = new Size(102, 44);
             buttonExport.TabIndex = 7;
             buttonExport.Text = "📤 导出";
             buttonExport.Click += ButtonExport_Click;
             // 
             // buttonGenerateAI
             // 
-            buttonGenerateAI.Location = new Point(536, 660);
+            buttonGenerateAI.Location = new Point(866, 681);
             buttonGenerateAI.Name = "buttonGenerateAI";
-            buttonGenerateAI.Size = new Size(90, 35);
+            buttonGenerateAI.Size = new Size(102, 44);
             buttonGenerateAI.TabIndex = 9;
             buttonGenerateAI.Text = "🤖 AI生成";
             buttonGenerateAI.Click += ButtonGenerateAI_Click;
             // 
             // labelCategory
             // 
-            labelCategory.Location = new Point(279, 34);
+            labelCategory.Location = new Point(279, 39);
             labelCategory.Name = "labelCategory";
             labelCategory.Size = new Size(80, 20);
             labelCategory.TabIndex = 10;
             labelCategory.Text = "学习品类:";
             // 
-            // labelJson
-            // 
-            labelJson.Location = new Point(5, 115);
-            labelJson.Name = "labelJson";
-            labelJson.Size = new Size(80, 20);
-            labelJson.TabIndex = 11;
-            labelJson.Text = "JSON预览:";
-            // 
             // labelCount
             // 
-            labelCount.Location = new Point(566, 34);
+            labelCount.Location = new Point(1000, 695);
             labelCount.Name = "labelCount";
             labelCount.Size = new Size(60, 20);
             labelCount.TabIndex = 12;
@@ -484,15 +419,15 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // labelRange
             // 
-            labelRange.Location = new Point(25, 67);
+            labelRange.Location = new Point(574, 37);
             labelRange.Name = "labelRange";
             labelRange.Size = new Size(60, 20);
             labelRange.TabIndex = 13;
-            labelRange.Text = "关键词:";
+            labelRange.Text = "关键词或范围:";
             // 
             // textBoxCount
             // 
-            textBoxCount.Location = new Point(626, 31);
+            textBoxCount.Location = new Point(1060, 692);
             textBoxCount.Name = "textBoxCount";
             textBoxCount.Size = new Size(50, 23);
             textBoxCount.TabIndex = 14;
@@ -500,19 +435,18 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // textBoxRange
             // 
-            textBoxRange.Location = new Point(85, 64);
+            textBoxRange.Location = new Point(640, 34);
             textBoxRange.Name = "textBoxRange";
-            textBoxRange.Size = new Size(800, 23);
+            textBoxRange.Size = new Size(546, 23);
             textBoxRange.TabIndex = 15;
-            textBoxRange.Text = "请输入关键词或范围";
             // 
             // dataGridView
             // 
             dataGridView.AllowUserToOrderColumns = true;
-            dataGridView.Location = new Point(5, 244);
+            dataGridView.Location = new Point(5, 194);
             dataGridView.Name = "dataGridView";
             dataGridView.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dataGridView.Size = new Size(880, 402);
+            dataGridView.Size = new Size(602, 452);
             dataGridView.TabIndex = 1;
             dataGridView.CellEndEdit += DataGridView_CellEndEdit;
             dataGridView.RowsAdded += DataGridView_RowsAdded;
@@ -541,7 +475,7 @@ namespace UnifiedLearningAssistant.Forms
             // comboBoxSubCategory
             // 
             comboBoxSubCategory.FormattingEnabled = true;
-            comboBoxSubCategory.Location = new Point(352, 29);
+            comboBoxSubCategory.Location = new Point(352, 34);
             comboBoxSubCategory.Name = "comboBoxSubCategory";
             comboBoxSubCategory.Size = new Size(180, 25);
             comboBoxSubCategory.TabIndex = 17;
@@ -550,18 +484,17 @@ namespace UnifiedLearningAssistant.Forms
             // textBoxPrompt
             // 
             textBoxPrompt.BackColor = Color.LightYellow;
-            textBoxPrompt.Location = new Point(85, 168);
+            textBoxPrompt.Location = new Point(85, 93);
             textBoxPrompt.Multiline = true;
             textBoxPrompt.Name = "textBoxPrompt";
-            textBoxPrompt.ReadOnly = true;
             textBoxPrompt.ScrollBars = ScrollBars.Both;
-            textBoxPrompt.Size = new Size(800, 60);
+            textBoxPrompt.Size = new Size(1119, 86);
             textBoxPrompt.TabIndex = 18;
             textBoxPrompt.Text = "AI生成提示词将显示在这里...";
             // 
             // labelPrompt
             // 
-            labelPrompt.Location = new Point(5, 171);
+            labelPrompt.Location = new Point(5, 96);
             labelPrompt.Name = "labelPrompt";
             labelPrompt.Size = new Size(80, 20);
             labelPrompt.TabIndex = 19;
@@ -571,7 +504,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             groupBoxLanguage.Controls.Add(radioEnglish);
             groupBoxLanguage.Controls.Add(radioChinese);
-            groupBoxLanguage.Location = new Point(25, 16);
+            groupBoxLanguage.Location = new Point(25, 21);
             groupBoxLanguage.Name = "groupBoxLanguage";
             groupBoxLanguage.Size = new Size(250, 42);
             groupBoxLanguage.TabIndex = 20;
@@ -580,7 +513,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // ContentEditorForm
             // 
-            ClientSize = new Size(920, 707);
+            ClientSize = new Size(1218, 766);
             Controls.Add(groupBoxLanguage);
             Controls.Add(comboBoxSubCategory);
             Controls.Add(textBoxJson);
@@ -592,7 +525,6 @@ namespace UnifiedLearningAssistant.Forms
             Controls.Add(buttonExport);
             Controls.Add(buttonGenerateAI);
             Controls.Add(labelCategory);
-            Controls.Add(labelJson);
             Controls.Add(labelCount);
             Controls.Add(labelRange);
             Controls.Add(textBoxCount);
@@ -638,9 +570,6 @@ namespace UnifiedLearningAssistant.Forms
             base.Dispose(disposing);
         }
 
-        private void groupBoxLanguage_Enter(object sender, EventArgs e)
-        {
 
-        }
     }
 }

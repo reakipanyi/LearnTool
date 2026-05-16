@@ -22,33 +22,10 @@ namespace UnifiedLearningAssistant.Forms
 
             this.EnableHighDpi();
             Load += MainForm_Load;
-            Resize += MainForm_Resize;
         }
 
-        private void MainForm_Resize(object? sender, EventArgs e)
-        {
-            UpdateControlLayout();
-        }
 
-        private void UpdateControlLayout()
-        {
-            if (panelMain == null) return;
-            
-            int panelWidth = panelMain.ClientSize.Width;
-            int panelHeight = panelMain.ClientSize.Height;
-            
-            groupBoxProgress.Location = new Point(panelWidth - 260, 17);
-            groupBoxProgress.Size = new Size(250, Math.Max(204, panelHeight - 380));
-            textBoxProgress.Size = new Size(220, groupBoxProgress.Height - 40);
-            
-            buttonExportErrorBook.Location = new Point(panelWidth - 260, groupBoxProgress.Location.Y + groupBoxProgress.Height + 15);
-            
-            groupBoxLearning.Size = new Size(Math.Min(560, panelWidth - 280), 210);
-            
-            int buttonY = groupBoxLearning.Location.Y + groupBoxLearning.Height + 20;
-            buttonStartLearning.Location = new Point((panelWidth - 330) / 2, buttonY);
-            buttonContinueLearning.Location = new Point(buttonStartLearning.Location.X + 150 + 30, buttonY);
-        }
+
 
         private void MainForm_Load(object? sender, EventArgs e)
         {
@@ -369,7 +346,7 @@ namespace UnifiedLearningAssistant.Forms
             groupBoxProgress.Controls.Add(textBoxProgress);
             groupBoxProgress.Location = new Point(620, 17);
             groupBoxProgress.Name = "groupBoxProgress";
-            groupBoxProgress.Size = new Size(250, 204);
+            groupBoxProgress.Size = new Size(250, 207);
             groupBoxProgress.TabIndex = 12;
             groupBoxProgress.TabStop = false;
             groupBoxProgress.Text = "学习统计摘要";
@@ -381,21 +358,21 @@ namespace UnifiedLearningAssistant.Forms
             textBoxProgress.Name = "textBoxProgress";
             textBoxProgress.ReadOnly = true;
             textBoxProgress.ScrollBars = ScrollBars.Vertical;
-            textBoxProgress.Size = new Size(220, 158);
+            textBoxProgress.Size = new Size(220, 147);
             textBoxProgress.TabIndex = 0;
             // 
             // buttonOpenStatistics
             // 
-            buttonOpenStatistics.Location = new Point(620, 275);
+            buttonOpenStatistics.Location = new Point(620, 307);
             buttonOpenStatistics.Name = "buttonOpenStatistics";
-            buttonOpenStatistics.Size = new Size(250, 40);
+            buttonOpenStatistics.Size = new Size(120, 40);
             buttonOpenStatistics.TabIndex = 13;
             buttonOpenStatistics.Text = "📊 学习统计";
             buttonOpenStatistics.Click += ButtonOpenStatistics_Click;
             // 
             // buttonOpenPdfReader
             // 
-            buttonOpenPdfReader.Location = new Point(750, 227);
+            buttonOpenPdfReader.Location = new Point(750, 253);
             buttonOpenPdfReader.Name = "buttonOpenPdfReader";
             buttonOpenPdfReader.Size = new Size(120, 40);
             buttonOpenPdfReader.TabIndex = 12;
@@ -404,7 +381,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonOpenEditor
             // 
-            buttonOpenEditor.Location = new Point(620, 227);
+            buttonOpenEditor.Location = new Point(620, 253);
             buttonOpenEditor.Name = "buttonOpenEditor";
             buttonOpenEditor.Size = new Size(120, 40);
             buttonOpenEditor.TabIndex = 11;
@@ -413,16 +390,17 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonSettings
             // 
-            buttonSettings.Location = new Point(620, 390);
+            buttonSettings.Location = new Point(345, 36);
             buttonSettings.Name = "buttonSettings";
             buttonSettings.Size = new Size(120, 40);
             buttonSettings.TabIndex = 16;
             buttonSettings.Text = "⚙️ 设置";
+            buttonSettings.Visible = false;
             buttonSettings.Click += ButtonSettings_Click;
             // 
             // buttonContinueLearning
             // 
-            buttonContinueLearning.Location = new Point(210, 348);
+            buttonContinueLearning.Location = new Point(288, 346);
             buttonContinueLearning.Name = "buttonContinueLearning";
             buttonContinueLearning.Size = new Size(150, 51);
             buttonContinueLearning.TabIndex = 10;
@@ -431,7 +409,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonStartLearning
             // 
-            buttonStartLearning.Location = new Point(30, 348);
+            buttonStartLearning.Location = new Point(108, 346);
             buttonStartLearning.Name = "buttonStartLearning";
             buttonStartLearning.Size = new Size(150, 51);
             buttonStartLearning.TabIndex = 9;
@@ -548,7 +526,7 @@ namespace UnifiedLearningAssistant.Forms
             comboBoxSubCategory.FormattingEnabled = true;
             comboBoxSubCategory.Location = new Point(120, 96);
             comboBoxSubCategory.Name = "comboBoxSubCategory";
-            comboBoxSubCategory.Size = new Size(172, 25);
+            comboBoxSubCategory.Size = new Size(150, 25);
             comboBoxSubCategory.TabIndex = 2;
             comboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
             // 
@@ -565,13 +543,13 @@ namespace UnifiedLearningAssistant.Forms
             comboBoxWordBank.FormattingEnabled = true;
             comboBoxWordBank.Location = new Point(120, 127);
             comboBoxWordBank.Name = "comboBoxWordBank";
-            comboBoxWordBank.Size = new Size(200, 25);
+            comboBoxWordBank.Size = new Size(150, 25);
             comboBoxWordBank.TabIndex = 5;
             comboBoxWordBank.SelectedIndexChanged += ComboBoxWordBank_SelectedIndexChanged;
             // 
             // labelSortOrder
             // 
-            labelSortOrder.Location = new Point(15, 165);
+            labelSortOrder.Location = new Point(15, 163);
             labelSortOrder.Name = "labelSortOrder";
             labelSortOrder.Size = new Size(100, 23);
             labelSortOrder.TabIndex = 6;
@@ -581,7 +559,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             comboBoxSortOrder.FormattingEnabled = true;
             comboBoxSortOrder.Items.AddRange(new object[] { "顺序", "Random" });
-            comboBoxSortOrder.Location = new Point(120, 162);
+            comboBoxSortOrder.Location = new Point(120, 160);
             comboBoxSortOrder.Name = "comboBoxSortOrder";
             comboBoxSortOrder.Size = new Size(150, 25);
             comboBoxSortOrder.TabIndex = 8;
@@ -594,7 +572,7 @@ namespace UnifiedLearningAssistant.Forms
             groupBoxUser.Controls.Add(labelUser);
             groupBoxUser.Location = new Point(30, 17);
             groupBoxUser.Name = "groupBoxUser";
-            groupBoxUser.Size = new Size(350, 79);
+            groupBoxUser.Size = new Size(250, 74);
             groupBoxUser.TabIndex = 0;
             groupBoxUser.TabStop = false;
             groupBoxUser.Text = "多玩家";
@@ -604,7 +582,7 @@ namespace UnifiedLearningAssistant.Forms
             comboBoxUser.FormattingEnabled = true;
             comboBoxUser.Location = new Point(80, 34);
             comboBoxUser.Name = "comboBoxUser";
-            comboBoxUser.Size = new Size(250, 25);
+            comboBoxUser.Size = new Size(150, 25);
             comboBoxUser.TabIndex = 1;
             comboBoxUser.SelectedIndexChanged += ComboBoxUser_SelectedIndexChanged;
             // 
@@ -618,9 +596,9 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonExportErrorBook
             // 
-            buttonExportErrorBook.Location = new Point(620, 330);
+            buttonExportErrorBook.Location = new Point(750, 308);
             buttonExportErrorBook.Name = "buttonExportErrorBook";
-            buttonExportErrorBook.Size = new Size(250, 40);
+            buttonExportErrorBook.Size = new Size(120, 40);
             buttonExportErrorBook.TabIndex = 15;
             buttonExportErrorBook.Text = "📝 导出错题本";
             buttonExportErrorBook.UseVisualStyleBackColor = true;

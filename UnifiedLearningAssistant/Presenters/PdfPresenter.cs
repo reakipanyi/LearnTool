@@ -101,6 +101,7 @@ namespace UnifiedLearningAssistant.Presenters
             _view.OcrSelectionComplete += View_OcrSelectionComplete;
             _view.AiQuestionAsked += View_AiQuestionAsked;
             _view.AddToLearningList += View_AddWordToLearningList;
+            _view.SpeakOriginal += View_SpeakOriginal;
             _view.SpeakTranslation += View_SpeakTranslation;
             _view.SpeakText += View_SpeakText;
             _view.AskAiWithText += View_AskAiWithText;
@@ -123,6 +124,7 @@ namespace UnifiedLearningAssistant.Presenters
             _view.OcrSelectionComplete -= View_OcrSelectionComplete;
             _view.AiQuestionAsked -= View_AiQuestionAsked;
             _view.AddToLearningList -= View_AddWordToLearningList;
+            _view.SpeakOriginal -= View_SpeakOriginal;
             _view.SpeakTranslation -= View_SpeakTranslation;
             _view.SpeakText -= View_SpeakText;
             _view.AskAiWithText -= View_AskAiWithText;
@@ -996,6 +998,25 @@ namespace UnifiedLearningAssistant.Presenters
                 _view.ShowWarning("请先输入要添加的单词");
             }
             OnAddWordToLearningList?.Invoke(this, new AddWordEventArgs { Word = word ?? string.Empty, Language = _currentLanguage });
+        }
+
+        private void View_SpeakOriginal(object? sender, EventArgs e)
+        {
+            try
+            {
+                var text = _view.GetOriginalText();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    // 简单检测文本语言，决定朗读的语音设置
+                    var isChinese = text.Any(c => c >= 0x4E00 && c <= 0x9FFF);
+                    var langCode = isChinese ? "zh" : "en";
+                    _ = SpeakTextAsync(text, langCode, 1.0f);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in View_SpeakOriginal");
+            }
         }
 
         private void View_SpeakTranslation(object? sender, EventArgs e)

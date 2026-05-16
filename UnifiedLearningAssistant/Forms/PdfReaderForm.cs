@@ -41,6 +41,15 @@ namespace UnifiedLearningAssistant.Forms
         // 新增功能：低优先级 - 夜间模式
         private bool _isNightMode = false;
         private SplitContainer splitContainer1;
+        private GroupBox groupBoxLanguage;
+        private Label labelQuestion;
+        private RichTextBox richTextBoxAiAnswer;
+        private Button buttonSpeakAnswer;
+        private TextBox textBoxQuestion;
+        private Button buttonAddToLearning;
+        private Button buttonAskAi;
+        private Button buttonSpeakOriginal;
+        private GroupBox groupBoxProgress;
 
         // 新增功能：OCR语言切换
         private string _currentLanguage = "eng";
@@ -53,6 +62,7 @@ namespace UnifiedLearningAssistant.Forms
             Resize += PdfReaderForm_Resize;
             KeyDown += PdfReaderForm_KeyDown;
         }
+
 
         private void PdfReaderForm_Load(object? sender, EventArgs e)
         {
@@ -466,7 +476,7 @@ namespace UnifiedLearningAssistant.Forms
 
         public void SetOcrResultText(string text)
         {
-            textBoxOcrResult.Text = text;
+            textBoxOriginal.Text = text;
         }
 
         public string GetAiAnswerText()
@@ -602,6 +612,7 @@ namespace UnifiedLearningAssistant.Forms
         public event EventHandler? ToggleNightMode;
         public event EventHandler? LanguageChanged;
         public event EventHandler? SpeakAnswer;
+        public event EventHandler? SpeakOriginal;
 
         #endregion
 
@@ -613,10 +624,6 @@ namespace UnifiedLearningAssistant.Forms
         private PictureBox pictureBoxPdf;
         private Panel panelThumbnails;
         private FlowLayoutPanel flowLayoutPanelThumbnails;
-        private TabPage tabPageOcr;
-        private Button buttonSelectOcr;
-        private TextBox textBoxOcrResult;
-        private Label labelOcr;
         private TabPage tabPageTranslate;
         private TextBox textBoxOriginal;
         private Label labelOriginal;
@@ -624,13 +631,6 @@ namespace UnifiedLearningAssistant.Forms
         private TextBox textBoxTranslation;
         private Button buttonTranslate;
         private Button buttonSpeakTranslation;
-        private TabPage tabPageAi;
-        private TextBox textBoxQuestion;
-        private Button buttonAskAi;
-        private RichTextBox richTextBoxAiAnswer;
-        private Button buttonAddToLearning;
-        private Button buttonSpeakAnswer;
-        private Label labelQuestion;
         private Panel panelNavigation;
         private Button buttonPrev;
         private TextBox textBoxPage;
@@ -664,31 +664,29 @@ namespace UnifiedLearningAssistant.Forms
             _ocrPanel = new Panel();
             _ocrPictureBox = new PictureBox();
             _ocrCloseButton = new Button();
-            tabPageOcr = new TabPage();
-            buttonSelectOcr = new Button();
-            labelOcr = new Label();
-            textBoxOcrResult = new TextBox();
-            tabPageTranslate = new TabPage();
-            labelOriginal = new Label();
-            textBoxOriginal = new TextBox();
-            labelTranslation = new Label();
-            buttonTranslate = new Button();
-            buttonSpeakTranslation = new Button();
-            textBoxTranslation = new TextBox();
-            tabPageAi = new TabPage();
-            labelQuestion = new Label();
-            textBoxQuestion = new TextBox();
-            buttonAskAi = new Button();
-            buttonAddToLearning = new Button();
-            buttonSpeakAnswer = new Button();
-            richTextBoxAiAnswer = new RichTextBox();
             panelLeftContainer = new Panel();
             tabControlLeft = new TabControl();
-            tabPageFiles = new TabPage();
-            treeViewFiles = new TreeView();
             tabPageThumbnails = new TabPage();
             panelThumbnails = new Panel();
             flowLayoutPanelThumbnails = new FlowLayoutPanel();
+            tabPageTranslate = new TabPage();
+            groupBoxProgress = new GroupBox();
+            textBoxTranslation = new TextBox();
+            textBoxOriginal = new TextBox();
+            buttonSpeakOriginal = new Button();
+            labelTranslation = new Label();
+            labelOriginal = new Label();
+            buttonSpeakTranslation = new Button();
+            buttonTranslate = new Button();
+            groupBoxLanguage = new GroupBox();
+            labelQuestion = new Label();
+            richTextBoxAiAnswer = new RichTextBox();
+            buttonSpeakAnswer = new Button();
+            textBoxQuestion = new TextBox();
+            buttonAddToLearning = new Button();
+            buttonAskAi = new Button();
+            tabPageFiles = new TabPage();
+            treeViewFiles = new TreeView();
             buttonOpenFolder = new Button();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
@@ -700,14 +698,14 @@ namespace UnifiedLearningAssistant.Forms
             ((System.ComponentModel.ISupportInitialize)pictureBoxPdf).BeginInit();
             _ocrPanel.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)_ocrPictureBox).BeginInit();
-            tabPageOcr.SuspendLayout();
-            tabPageTranslate.SuspendLayout();
-            tabPageAi.SuspendLayout();
             panelLeftContainer.SuspendLayout();
             tabControlLeft.SuspendLayout();
-            tabPageFiles.SuspendLayout();
             tabPageThumbnails.SuspendLayout();
             panelThumbnails.SuspendLayout();
+            tabPageTranslate.SuspendLayout();
+            groupBoxProgress.SuspendLayout();
+            groupBoxLanguage.SuspendLayout();
+            tabPageFiles.SuspendLayout();
             SuspendLayout();
             // 
             // splitContainer1
@@ -749,9 +747,9 @@ namespace UnifiedLearningAssistant.Forms
             panelNavigation.Controls.Add(labelPageCount);
             panelNavigation.Controls.Add(textBoxPage);
             panelNavigation.Controls.Add(buttonPrev);
-            panelNavigation.Location = new Point(0, 50);
+            panelNavigation.Location = new Point(9, 12);
             panelNavigation.Name = "panelNavigation";
-            panelNavigation.Size = new Size(546, 63);
+            panelNavigation.Size = new Size(488, 59);
             panelNavigation.TabIndex = 3;
             panelNavigation.MouseDown += PanelNavigation_MouseDown;
             panelNavigation.MouseMove += PanelNavigation_MouseMove;
@@ -759,7 +757,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // trackBarZoom
             // 
-            trackBarZoom.Location = new Point(165, 5);
+            trackBarZoom.Location = new Point(149, 6);
             trackBarZoom.Maximum = 200;
             trackBarZoom.Minimum = 50;
             trackBarZoom.Name = "trackBarZoom";
@@ -769,7 +767,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // labelZoom
             // 
-            labelZoom.Location = new Point(325, 17);
+            labelZoom.Location = new Point(309, 18);
             labelZoom.Name = "labelZoom";
             labelZoom.Size = new Size(45, 20);
             labelZoom.TabIndex = 7;
@@ -780,9 +778,9 @@ namespace UnifiedLearningAssistant.Forms
             _loadingIndicator.Anchor = AnchorStyles.None;
             _loadingIndicator.BackColor = SystemColors.MenuHighlight;
             _loadingIndicator.IsLoading = false;
-            _loadingIndicator.Location = new Point(467, 10);
+            _loadingIndicator.Location = new Point(447, 11);
             _loadingIndicator.Name = "_loadingIndicator";
-            _loadingIndicator.Size = new Size(58, 35);
+            _loadingIndicator.Size = new Size(38, 35);
             _loadingIndicator.TabIndex = 2;
             _loadingIndicator.Visible = false;
             // 
@@ -791,7 +789,7 @@ namespace UnifiedLearningAssistant.Forms
             buttonLanguage.BackColor = Color.White;
             buttonLanguage.FlatStyle = FlatStyle.Flat;
             buttonLanguage.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
-            buttonLanguage.Location = new Point(380, 10);
+            buttonLanguage.Location = new Point(364, 11);
             buttonLanguage.Name = "buttonLanguage";
             buttonLanguage.Size = new Size(45, 35);
             buttonLanguage.TabIndex = 9;
@@ -804,7 +802,7 @@ namespace UnifiedLearningAssistant.Forms
             buttonNightMode.BackColor = Color.White;
             buttonNightMode.FlatStyle = FlatStyle.Flat;
             buttonNightMode.Font = new Font("Microsoft YaHei UI", 12F);
-            buttonNightMode.Location = new Point(426, 10);
+            buttonNightMode.Location = new Point(410, 11);
             buttonNightMode.Name = "buttonNightMode";
             buttonNightMode.Size = new Size(35, 35);
             buttonNightMode.TabIndex = 6;
@@ -814,7 +812,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonNext
             // 
-            buttonNext.Location = new Point(124, 13);
+            buttonNext.Location = new Point(108, 14);
             buttonNext.Name = "buttonNext";
             buttonNext.Size = new Size(35, 28);
             buttonNext.TabIndex = 4;
@@ -823,7 +821,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // labelPageCount
             // 
-            labelPageCount.Location = new Point(89, 17);
+            labelPageCount.Location = new Point(73, 18);
             labelPageCount.Name = "labelPageCount";
             labelPageCount.Size = new Size(38, 20);
             labelPageCount.TabIndex = 3;
@@ -831,7 +829,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // textBoxPage
             // 
-            textBoxPage.Location = new Point(54, 16);
+            textBoxPage.Location = new Point(38, 16);
             textBoxPage.Name = "textBoxPage";
             textBoxPage.Size = new Size(30, 23);
             textBoxPage.TabIndex = 2;
@@ -840,7 +838,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonPrev
             // 
-            buttonPrev.Location = new Point(19, 13);
+            buttonPrev.Location = new Point(3, 14);
             buttonPrev.Name = "buttonPrev";
             buttonPrev.Size = new Size(30, 28);
             buttonPrev.TabIndex = 1;
@@ -857,10 +855,9 @@ namespace UnifiedLearningAssistant.Forms
             pictureBoxPdf.TabIndex = 1;
             pictureBoxPdf.TabStop = false;
             pictureBoxPdf.Paint += PictureBoxPdf_Paint;
-            //pictureBoxPdf.MouseDoubleClick += PictureBoxPdf_MouseDoubleClick;
+            pictureBoxPdf.MouseDown += PictureBoxPdf_MouseDown;
             pictureBoxPdf.MouseMove += PictureBoxPdf_MouseMove;
             pictureBoxPdf.MouseUp += PictureBoxPdf_MouseUp;
-            pictureBoxPdf.MouseDown += PictureBoxPdf_MouseDown;
             pictureBoxPdf.MouseWheel += PictureBoxPdf_MouseWheel;
             // 
             // _ocrPanel
@@ -897,183 +894,6 @@ namespace UnifiedLearningAssistant.Forms
             _ocrCloseButton.UseVisualStyleBackColor = true;
             _ocrCloseButton.Click += OcrCloseButton_Click;
             // 
-            // tabPageOcr
-            // 
-            tabPageOcr.Controls.Add(buttonSelectOcr);
-            tabPageOcr.Controls.Add(labelOcr);
-            tabPageOcr.Controls.Add(textBoxOcrResult);
-            tabPageOcr.Location = new Point(4, 26);
-            tabPageOcr.Name = "tabPageOcr";
-            tabPageOcr.Padding = new Padding(3);
-            tabPageOcr.Size = new Size(335, 822);
-            tabPageOcr.TabIndex = 0;
-            tabPageOcr.Text = "OCR划词";
-            // 
-            // buttonSelectOcr
-            // 
-            buttonSelectOcr.Location = new Point(15, 15);
-            buttonSelectOcr.Name = "buttonSelectOcr";
-            buttonSelectOcr.Size = new Size(260, 35);
-            buttonSelectOcr.TabIndex = 2;
-            buttonSelectOcr.Text = "框选区域开始识别";
-            buttonSelectOcr.Click += ButtonSelectOcr_Click;
-            // 
-            // labelOcr
-            // 
-            labelOcr.Location = new Point(15, 60);
-            labelOcr.Name = "labelOcr";
-            labelOcr.Size = new Size(260, 20);
-            labelOcr.TabIndex = 0;
-            labelOcr.Text = "识别结果:";
-            // 
-            // textBoxOcrResult
-            // 
-            textBoxOcrResult.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            textBoxOcrResult.Location = new Point(15, 85);
-            textBoxOcrResult.Multiline = true;
-            textBoxOcrResult.Name = "textBoxOcrResult";
-            textBoxOcrResult.ReadOnly = true;
-            textBoxOcrResult.ScrollBars = ScrollBars.Vertical;
-            textBoxOcrResult.Size = new Size(303, 721);
-            textBoxOcrResult.TabIndex = 1;
-            // 
-            // tabPageTranslate
-            // 
-            tabPageTranslate.Controls.Add(labelOriginal);
-            tabPageTranslate.Controls.Add(textBoxOriginal);
-            tabPageTranslate.Controls.Add(labelTranslation);
-            tabPageTranslate.Controls.Add(buttonTranslate);
-            tabPageTranslate.Controls.Add(buttonSpeakTranslation);
-            tabPageTranslate.Controls.Add(textBoxTranslation);
-            tabPageTranslate.Location = new Point(4, 26);
-            tabPageTranslate.Name = "tabPageTranslate";
-            tabPageTranslate.Padding = new Padding(3);
-            tabPageTranslate.Size = new Size(335, 822);
-            tabPageTranslate.TabIndex = 1;
-            tabPageTranslate.Text = "翻译结果";
-            // 
-            // labelOriginal
-            // 
-            labelOriginal.Location = new Point(15, 15);
-            labelOriginal.Name = "labelOriginal";
-            labelOriginal.Size = new Size(260, 20);
-            labelOriginal.TabIndex = 0;
-            labelOriginal.Text = "原文:";
-            // 
-            // textBoxOriginal
-            // 
-            textBoxOriginal.Location = new Point(15, 40);
-            textBoxOriginal.Multiline = true;
-            textBoxOriginal.Name = "textBoxOriginal";
-            textBoxOriginal.ScrollBars = ScrollBars.Vertical;
-            textBoxOriginal.Size = new Size(260, 70);
-            textBoxOriginal.TabIndex = 1;
-            // 
-            // labelTranslation
-            // 
-            labelTranslation.Location = new Point(15, 120);
-            labelTranslation.Name = "labelTranslation";
-            labelTranslation.Size = new Size(260, 20);
-            labelTranslation.TabIndex = 2;
-            labelTranslation.Text = "译文:";
-            // 
-            // buttonTranslate
-            // 
-            buttonTranslate.Location = new Point(15, 150);
-            buttonTranslate.Name = "buttonTranslate";
-            buttonTranslate.Size = new Size(120, 30);
-            buttonTranslate.TabIndex = 3;
-            buttonTranslate.Text = "翻译";
-            buttonTranslate.Click += ButtonTranslate_Click;
-            // 
-            // buttonSpeakTranslation
-            // 
-            buttonSpeakTranslation.Location = new Point(145, 150);
-            buttonSpeakTranslation.Name = "buttonSpeakTranslation";
-            buttonSpeakTranslation.Size = new Size(130, 30);
-            buttonSpeakTranslation.TabIndex = 4;
-            buttonSpeakTranslation.Text = "朗读译文";
-            buttonSpeakTranslation.Click += ButtonSpeakTranslation_Click;
-            // 
-            // textBoxTranslation
-            // 
-            textBoxTranslation.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            textBoxTranslation.Location = new Point(15, 190);
-            textBoxTranslation.Multiline = true;
-            textBoxTranslation.Name = "textBoxTranslation";
-            textBoxTranslation.ReadOnly = true;
-            textBoxTranslation.ScrollBars = ScrollBars.Vertical;
-            textBoxTranslation.Size = new Size(303, 616);
-            textBoxTranslation.TabIndex = 5;
-            // 
-            // tabPageAi
-            // 
-            tabPageAi.Controls.Add(labelQuestion);
-            tabPageAi.Controls.Add(textBoxQuestion);
-            tabPageAi.Controls.Add(buttonAskAi);
-            tabPageAi.Controls.Add(buttonAddToLearning);
-            tabPageAi.Controls.Add(buttonSpeakAnswer);
-            tabPageAi.Controls.Add(richTextBoxAiAnswer);
-            tabPageAi.Location = new Point(4, 26);
-            tabPageAi.Name = "tabPageAi";
-            tabPageAi.Padding = new Padding(3);
-            tabPageAi.Size = new Size(335, 822);
-            tabPageAi.TabIndex = 2;
-            tabPageAi.Text = "AI提问";
-            // 
-            // labelQuestion
-            // 
-            labelQuestion.Location = new Point(15, 15);
-            labelQuestion.Name = "labelQuestion";
-            labelQuestion.Size = new Size(260, 20);
-            labelQuestion.TabIndex = 0;
-            labelQuestion.Text = "问题:";
-            // 
-            // textBoxQuestion
-            // 
-            textBoxQuestion.Location = new Point(15, 40);
-            textBoxQuestion.Name = "textBoxQuestion";
-            textBoxQuestion.Size = new Size(260, 23);
-            textBoxQuestion.TabIndex = 1;
-            // 
-            // buttonAskAi
-            // 
-            buttonAskAi.Location = new Point(165, 70);
-            buttonAskAi.Name = "buttonAskAi";
-            buttonAskAi.Size = new Size(110, 30);
-            buttonAskAi.TabIndex = 2;
-            buttonAskAi.Text = "向AI提问";
-            buttonAskAi.Click += ButtonAskAi_Click;
-            // 
-            // buttonAddToLearning
-            // 
-            buttonAddToLearning.Location = new Point(15, 70);
-            buttonAddToLearning.Name = "buttonAddToLearning";
-            buttonAddToLearning.Size = new Size(135, 30);
-            buttonAddToLearning.TabIndex = 3;
-            buttonAddToLearning.Text = "📝 加生词本";
-            buttonAddToLearning.Click += ButtonAddToLearning_Click;
-            // 
-            // buttonSpeakAnswer
-            // 
-            buttonSpeakAnswer.Location = new Point(165, 105);
-            buttonSpeakAnswer.Name = "buttonSpeakAnswer";
-            buttonSpeakAnswer.Size = new Size(110, 30);
-            buttonSpeakAnswer.TabIndex = 4;
-            buttonSpeakAnswer.Text = "🔊 朗读原文";
-            buttonSpeakAnswer.Click += ButtonSpeakAnswer_Click;
-            // 
-            // richTextBoxAiAnswer
-            // 
-            richTextBoxAiAnswer.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            richTextBoxAiAnswer.Location = new Point(15, 145);
-            richTextBoxAiAnswer.Name = "richTextBoxAiAnswer";
-            richTextBoxAiAnswer.ReadOnly = true;
-            richTextBoxAiAnswer.ScrollBars = RichTextBoxScrollBars.Vertical;
-            richTextBoxAiAnswer.Size = new Size(303, 661);
-            richTextBoxAiAnswer.TabIndex = 5;
-            richTextBoxAiAnswer.Text = "";
-            // 
             // panelLeftContainer
             // 
             panelLeftContainer.Controls.Add(tabControlLeft);
@@ -1087,9 +907,7 @@ namespace UnifiedLearningAssistant.Forms
             // tabControlLeft
             // 
             tabControlLeft.Controls.Add(tabPageThumbnails);
-            tabControlLeft.Controls.Add(tabPageOcr);
             tabControlLeft.Controls.Add(tabPageTranslate);
-            tabControlLeft.Controls.Add(tabPageAi);
             tabControlLeft.Controls.Add(tabPageFiles);
             tabControlLeft.Dock = DockStyle.Fill;
             tabControlLeft.Location = new Point(0, 35);
@@ -1097,26 +915,6 @@ namespace UnifiedLearningAssistant.Forms
             tabControlLeft.SelectedIndex = 0;
             tabControlLeft.Size = new Size(343, 852);
             tabControlLeft.TabIndex = 1;
-            // 
-            // tabPageFiles
-            // 
-            tabPageFiles.Controls.Add(treeViewFiles);
-            tabPageFiles.Location = new Point(4, 26);
-            tabPageFiles.Name = "tabPageFiles";
-            tabPageFiles.Padding = new Padding(3);
-            tabPageFiles.Size = new Size(335, 822);
-            tabPageFiles.TabIndex = 0;
-            tabPageFiles.Text = "📁 目录";
-            tabPageFiles.UseVisualStyleBackColor = true;
-            // 
-            // treeViewFiles
-            // 
-            treeViewFiles.Dock = DockStyle.Fill;
-            treeViewFiles.Location = new Point(3, 3);
-            treeViewFiles.Name = "treeViewFiles";
-            treeViewFiles.Size = new Size(329, 816);
-            treeViewFiles.TabIndex = 0;
-            treeViewFiles.AfterSelect += TreeViewFiles_AfterSelect;
             // 
             // tabPageThumbnails
             // 
@@ -1152,6 +950,181 @@ namespace UnifiedLearningAssistant.Forms
             flowLayoutPanelThumbnails.TabIndex = 0;
             flowLayoutPanelThumbnails.WrapContents = false;
             // 
+            // tabPageTranslate
+            // 
+            tabPageTranslate.Controls.Add(groupBoxProgress);
+            tabPageTranslate.Controls.Add(groupBoxLanguage);
+            tabPageTranslate.Location = new Point(4, 26);
+            tabPageTranslate.Name = "tabPageTranslate";
+            tabPageTranslate.Padding = new Padding(3);
+            tabPageTranslate.Size = new Size(335, 822);
+            tabPageTranslate.TabIndex = 1;
+            tabPageTranslate.Text = "📚翻译结果";
+            // 
+            // groupBoxProgress
+            // 
+            groupBoxProgress.Controls.Add(textBoxTranslation);
+            groupBoxProgress.Controls.Add(textBoxOriginal);
+            groupBoxProgress.Controls.Add(buttonSpeakOriginal);
+            groupBoxProgress.Controls.Add(labelTranslation);
+            groupBoxProgress.Controls.Add(labelOriginal);
+            groupBoxProgress.Controls.Add(buttonSpeakTranslation);
+            groupBoxProgress.Controls.Add(buttonTranslate);
+            groupBoxProgress.Dock = DockStyle.Top;
+            groupBoxProgress.Location = new Point(3, 3);
+            groupBoxProgress.Name = "groupBoxProgress";
+            groupBoxProgress.Size = new Size(329, 523);
+            groupBoxProgress.TabIndex = 24;
+            groupBoxProgress.TabStop = false;
+            groupBoxProgress.Text = "学习统计摘要";
+            // 
+            // textBoxTranslation
+            // 
+            textBoxTranslation.Location = new Point(9, 325);
+            textBoxTranslation.Multiline = true;
+            textBoxTranslation.Name = "textBoxTranslation";
+            textBoxTranslation.ReadOnly = true;
+            textBoxTranslation.ScrollBars = ScrollBars.Vertical;
+            textBoxTranslation.Size = new Size(314, 181);
+            textBoxTranslation.TabIndex = 5;
+            // 
+            // textBoxOriginal
+            // 
+            textBoxOriginal.Location = new Point(9, 42);
+            textBoxOriginal.Multiline = true;
+            textBoxOriginal.Name = "textBoxOriginal";
+            textBoxOriginal.ScrollBars = ScrollBars.Vertical;
+            textBoxOriginal.Size = new Size(314, 195);
+            textBoxOriginal.TabIndex = 1;
+            // 
+            // buttonSpeakOriginal
+            // 
+            buttonSpeakOriginal.Location = new Point(122, 250);
+            buttonSpeakOriginal.Name = "buttonSpeakOriginal";
+            buttonSpeakOriginal.Size = new Size(85, 34);
+            buttonSpeakOriginal.TabIndex = 23;
+            buttonSpeakOriginal.Text = "🔊朗读原文";
+            buttonSpeakOriginal.Click += ButtonSpeakOriginal_Click;
+            // 
+            // labelTranslation
+            // 
+            labelTranslation.Location = new Point(9, 302);
+            labelTranslation.Name = "labelTranslation";
+            labelTranslation.Size = new Size(260, 20);
+            labelTranslation.TabIndex = 2;
+            labelTranslation.Text = "译文:";
+            // 
+            // labelOriginal
+            // 
+            labelOriginal.Location = new Point(9, 17);
+            labelOriginal.Name = "labelOriginal";
+            labelOriginal.Size = new Size(260, 20);
+            labelOriginal.TabIndex = 0;
+            labelOriginal.Text = "原文:";
+            // 
+            // buttonSpeakTranslation
+            // 
+            buttonSpeakTranslation.Location = new Point(229, 250);
+            buttonSpeakTranslation.Name = "buttonSpeakTranslation";
+            buttonSpeakTranslation.Size = new Size(85, 34);
+            buttonSpeakTranslation.TabIndex = 4;
+            buttonSpeakTranslation.Text = "🔊朗读译文";
+            buttonSpeakTranslation.Click += ButtonSpeakTranslation_Click;
+            // 
+            // buttonTranslate
+            // 
+            buttonTranslate.Location = new Point(9, 250);
+            buttonTranslate.Name = "buttonTranslate";
+            buttonTranslate.Size = new Size(85, 34);
+            buttonTranslate.TabIndex = 3;
+            buttonTranslate.Text = "📚翻译";
+            buttonTranslate.Click += ButtonTranslate_Click;
+            // 
+            // groupBoxLanguage
+            // 
+            groupBoxLanguage.Controls.Add(labelQuestion);
+            groupBoxLanguage.Controls.Add(richTextBoxAiAnswer);
+            groupBoxLanguage.Controls.Add(buttonSpeakAnswer);
+            groupBoxLanguage.Controls.Add(textBoxQuestion);
+            groupBoxLanguage.Controls.Add(buttonAddToLearning);
+            groupBoxLanguage.Controls.Add(buttonAskAi);
+            groupBoxLanguage.Dock = DockStyle.Bottom;
+            groupBoxLanguage.Location = new Point(3, 532);
+            groupBoxLanguage.Name = "groupBoxLanguage";
+            groupBoxLanguage.Size = new Size(329, 287);
+            groupBoxLanguage.TabIndex = 22;
+            groupBoxLanguage.TabStop = false;
+            groupBoxLanguage.Text = "🤖 AI提问";
+            // 
+            // labelQuestion
+            // 
+            labelQuestion.Location = new Point(9, 28);
+            labelQuestion.Name = "labelQuestion";
+            labelQuestion.Size = new Size(305, 20);
+            labelQuestion.TabIndex = 0;
+            labelQuestion.Text = "问题:";
+            // 
+            // richTextBoxAiAnswer
+            // 
+            richTextBoxAiAnswer.Location = new Point(9, 120);
+            richTextBoxAiAnswer.Name = "richTextBoxAiAnswer";
+            richTextBoxAiAnswer.ReadOnly = true;
+            richTextBoxAiAnswer.ScrollBars = RichTextBoxScrollBars.Vertical;
+            richTextBoxAiAnswer.Size = new Size(314, 161);
+            richTextBoxAiAnswer.TabIndex = 5;
+            richTextBoxAiAnswer.Text = "";
+            // 
+            // buttonSpeakAnswer
+            // 
+            buttonSpeakAnswer.Location = new Point(219, 81);
+            buttonSpeakAnswer.Name = "buttonSpeakAnswer";
+            buttonSpeakAnswer.Size = new Size(85, 34);
+            buttonSpeakAnswer.TabIndex = 4;
+            buttonSpeakAnswer.Text = "🔊 朗读原文";
+            // 
+            // textBoxQuestion
+            // 
+            textBoxQuestion.Location = new Point(9, 51);
+            textBoxQuestion.Name = "textBoxQuestion";
+            textBoxQuestion.Size = new Size(305, 23);
+            textBoxQuestion.TabIndex = 1;
+            // 
+            // buttonAddToLearning
+            // 
+            buttonAddToLearning.Location = new Point(9, 81);
+            buttonAddToLearning.Name = "buttonAddToLearning";
+            buttonAddToLearning.Size = new Size(85, 34);
+            buttonAddToLearning.TabIndex = 3;
+            buttonAddToLearning.Text = "📝 加生词本";
+            // 
+            // buttonAskAi
+            // 
+            buttonAskAi.Location = new Point(112, 81);
+            buttonAskAi.Name = "buttonAskAi";
+            buttonAskAi.Size = new Size(85, 34);
+            buttonAskAi.TabIndex = 2;
+            buttonAskAi.Text = "🤖 AI提问";
+            // 
+            // tabPageFiles
+            // 
+            tabPageFiles.Controls.Add(treeViewFiles);
+            tabPageFiles.Location = new Point(4, 26);
+            tabPageFiles.Name = "tabPageFiles";
+            tabPageFiles.Padding = new Padding(3);
+            tabPageFiles.Size = new Size(335, 822);
+            tabPageFiles.TabIndex = 0;
+            tabPageFiles.Text = "📁 目录";
+            tabPageFiles.UseVisualStyleBackColor = true;
+            // 
+            // treeViewFiles
+            // 
+            treeViewFiles.Dock = DockStyle.Fill;
+            treeViewFiles.Location = new Point(3, 3);
+            treeViewFiles.Name = "treeViewFiles";
+            treeViewFiles.Size = new Size(329, 816);
+            treeViewFiles.TabIndex = 0;
+            treeViewFiles.AfterSelect += TreeViewFiles_AfterSelect;
+            // 
             // buttonOpenFolder
             // 
             buttonOpenFolder.Dock = DockStyle.Top;
@@ -1178,17 +1151,16 @@ namespace UnifiedLearningAssistant.Forms
             ((System.ComponentModel.ISupportInitialize)pictureBoxPdf).EndInit();
             _ocrPanel.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)_ocrPictureBox).EndInit();
-            tabPageOcr.ResumeLayout(false);
-            tabPageOcr.PerformLayout();
-            tabPageTranslate.ResumeLayout(false);
-            tabPageTranslate.PerformLayout();
-            tabPageAi.ResumeLayout(false);
-            tabPageAi.PerformLayout();
             panelLeftContainer.ResumeLayout(false);
             tabControlLeft.ResumeLayout(false);
-            tabPageFiles.ResumeLayout(false);
             tabPageThumbnails.ResumeLayout(false);
             panelThumbnails.ResumeLayout(false);
+            tabPageTranslate.ResumeLayout(false);
+            groupBoxProgress.ResumeLayout(false);
+            groupBoxProgress.PerformLayout();
+            groupBoxLanguage.ResumeLayout(false);
+            groupBoxLanguage.PerformLayout();
+            tabPageFiles.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -1539,6 +1511,11 @@ namespace UnifiedLearningAssistant.Forms
         private void ButtonTranslate_Click(object? sender, EventArgs e)
         {
             TranslateClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ButtonSpeakOriginal_Click(object? sender, EventArgs e)
+        {
+            SpeakOriginal?.Invoke(this, EventArgs.Empty);
         }
 
         private void ButtonSpeakTranslation_Click(object? sender, EventArgs e)

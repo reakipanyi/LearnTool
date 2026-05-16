@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Data;
 using UnifiedLearningAssistant.Common;
+using UnifiedLearningAssistant.Models.Learning;
 using UnifiedLearningAssistant.Services.AI;
 using UnifiedLearningAssistant.Services.Learning;
 using UnifiedLearningAssistant.Views;
@@ -324,10 +325,34 @@ namespace UnifiedLearningAssistant.Presenters
                 return;
             }
             var itemsOld = _contentLoaderService.LoadItems(category);
-            itemsOld.AddRange(items);
+
+            foreach (var newItem in items)
+            {
+                if (newItem is LearningItem newLearningItem)
+                {
+                    var newMainContent = newLearningItem.GetMainContent().Trim().ToLower();
+                    var existingIndex = itemsOld.FindIndex(item =>
+                        item is LearningItem existingItem &&
+                        existingItem.GetMainContent().Trim().ToLower() == newMainContent);
+
+                    if (existingIndex >= 0)
+                    {
+                        itemsOld[existingIndex] = newItem;
+                        _logger.LogInformation("覆盖重复项: {MainContent}", newMainContent);
+                    }
+                    else
+                    {
+                        itemsOld.Add(newItem);
+                    }
+                }
+                else
+                {
+                    itemsOld.Add(newItem);
+                }
+            }
 
             _contentLoaderService.SaveItems(category, itemsOld);
-            _logger.LogInformation("Successfully saved {Count} items to category {Category}", items.Count, category);
+            _logger.LogInformation("Successfully saved {Count} items to category {Category}", itemsOld.Count, category);
         }
 
         /// <summary>
@@ -473,7 +498,34 @@ namespace UnifiedLearningAssistant.Presenters
 
                 if (importedItems?.Count > 0)
                 {
-                    _contentLoaderService.SaveItems(_view.SelectedSubCategory, importedItems);
+                    var existingItems = _contentLoaderService.LoadItems(_view.SelectedSubCategory);
+
+                    foreach (var newItem in importedItems)
+                    {
+                        if (newItem is LearningItem newLearningItem)
+                        {
+                            var newMainContent = newLearningItem.GetMainContent().Trim().ToLower();
+                            var existingIndex = existingItems.FindIndex(item =>
+                                item is LearningItem existingItem &&
+                                existingItem.GetMainContent().Trim().ToLower() == newMainContent);
+
+                            if (existingIndex >= 0)
+                            {
+                                existingItems[existingIndex] = newItem;
+                                _logger.LogInformation("导入时覆盖重复项: {MainContent}", newMainContent);
+                            }
+                            else
+                            {
+                                existingItems.Add(newItem);
+                            }
+                        }
+                        else
+                        {
+                            existingItems.Add(newItem);
+                        }
+                    }
+
+                    _contentLoaderService.SaveItems(_view.SelectedSubCategory, existingItems);
                     LoadItems();
                     _logger.LogInformation("Successfully imported {Count} items from {FilePath}", importedItems.Count, dialog.FileName);
                 }
@@ -548,10 +600,10 @@ namespace UnifiedLearningAssistant.Presenters
 
                 if (!string.IsNullOrEmpty(response))
                 {
-                    
+
 
                     _view.CurrentEditItemJson = response;
-                    OnTemplateSaveClicked();
+                    //OnTemplateSaveClicked();
                     _logger.LogInformation("Successfully generated {Count} {Category} items with AI", count, category);
                 }
                 else
@@ -651,20 +703,8 @@ namespace UnifiedLearningAssistant.Presenters
         private bool CheckAndSaveUnsavedChanges()
         {
             if (!_isDirty) return true;
-
-            var result = MessageBox.Show(
-                "当前有未保存的更改，是否保存？",
-                "保存提示",
-                MessageBoxButtons.YesNoCancel,
-                MessageBoxIcon.Question);
-
-            if (result == DialogResult.Yes)
-            {
-                OnTemplateSaveClicked();
-                return !_isDirty;
-            }
-
-            return result != DialogResult.Cancel;
+            OnTemplateSaveClicked();
+            return true;
         }
 
         /// <summary>
@@ -672,14 +712,9 @@ namespace UnifiedLearningAssistant.Presenters
         /// </summary>
         public void Dispose()
         {
-            if (_isDirty && MessageBox.Show(
-                "当前有未保存的更改，是否保存？",
-                "保存提示",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question) == DialogResult.Yes)
-            {
-                OnTemplateSaveClicked();
-            }
+
+            OnTemplateSaveClicked();
+
 
             _view.LanguageChanged -= (_, _) => OnLanguageChanged();
             _view.SubCategoryChanged -= (_, _) => OnSubCategoryChanged();

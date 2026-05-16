@@ -48,6 +48,7 @@ namespace UnifiedLearningAssistant.Views
         event EventHandler? OcrSelectionComplete;
         event EventHandler? AiQuestionAsked;
         event EventHandler? AddToLearningList;
+        event EventHandler? SpeakOriginal;
         event EventHandler? SpeakTranslation;
         event EventHandler<string>? SpeakText;
         event EventHandler<string>? AskAiWithText;
