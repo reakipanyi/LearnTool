@@ -123,6 +123,7 @@ namespace UnifiedLearningAssistant.Presenters
 
             _logger.LogInformation("Initializing MainPresenter");
             LoadSession();
+            LoadLearningConfig();
             RefreshUserList();
             RefreshSubCategories();
             RefreshWordBankFiles();
@@ -134,6 +135,34 @@ namespace UnifiedLearningAssistant.Presenters
         {
             _currentUserId = _sessionService.LoadSession();
             _view.SelectedUser = _currentUserId;
+        }
+
+        private void LoadLearningConfig()
+        {
+            var config = _sessionService.LoadLearningConfig();
+            if (!string.IsNullOrWhiteSpace(config.Language))
+            {
+                _currentLanguage = config.Language;
+                _view.SelectedLanguage = _currentLanguage;
+            }
+            if (!string.IsNullOrWhiteSpace(config.Mode))
+            {
+                _currentMode = config.Mode;
+                _view.SelectedMode = _currentMode;
+            }
+            if (!string.IsNullOrWhiteSpace(config.SortOrder))
+            {
+                _currentSortOrder = config.SortOrder;
+                _view.SelectedSortOrder = _currentSortOrder;
+            }
+            if (!string.IsNullOrWhiteSpace(config.SubCategory))
+            {
+                _currentSubCategory = config.SubCategory;
+            }
+            if (!string.IsNullOrWhiteSpace(config.WordBankFile))
+            {
+                _currentWordBankFile = config.WordBankFile;
+            }
         }
 
         private void RefreshUserList()
@@ -148,8 +177,15 @@ namespace UnifiedLearningAssistant.Presenters
             _view.RefreshSubCategories(subCats);
             if (subCats.Any())
             {
-                _currentSubCategory = subCats.First();
-                _view.SelectedSubCategory = _currentSubCategory;
+                if (!string.IsNullOrWhiteSpace(_currentSubCategory) && subCats.Contains(_currentSubCategory))
+                {
+                    _view.SelectedSubCategory = _currentSubCategory;
+                }
+                else
+                {
+                    _currentSubCategory = subCats.First();
+                    _view.SelectedSubCategory = _currentSubCategory;
+                }
             }
         }
 
@@ -157,11 +193,18 @@ namespace UnifiedLearningAssistant.Presenters
         {
             var files = _contentLoaderService.GetWordBankFiles(_currentSubCategory);
             _view.RefreshWordBankFiles(files);
-            var defaultFile = _contentLoaderService.GetDefaultWordBankFile(_currentSubCategory);
-            if (!string.IsNullOrWhiteSpace(defaultFile))
+            if (files.Any())
             {
-                _currentWordBankFile = defaultFile;
-                _view.SelectedWordBankFile = _currentWordBankFile;
+                if (!string.IsNullOrWhiteSpace(_currentWordBankFile) && files.Contains(_currentWordBankFile))
+                {
+                    _view.SelectedWordBankFile = _currentWordBankFile;
+                }
+                else
+                {
+                    var defaultFile = _contentLoaderService.GetDefaultWordBankFile(_currentSubCategory);
+                    _currentWordBankFile = !string.IsNullOrWhiteSpace(defaultFile) ? defaultFile : files.First();
+                    _view.SelectedWordBankFile = _currentWordBankFile;
+                }
             }
         }
 
@@ -192,6 +235,7 @@ namespace UnifiedLearningAssistant.Presenters
             RefreshSubCategories();
             UpdateProgressSummary();
             UpdatePdfPresenterConfig();
+            SaveLearningConfig();
         }
 
         private void View_SubCategoryChanged(object? sender, EventArgs e)
@@ -200,21 +244,25 @@ namespace UnifiedLearningAssistant.Presenters
             RefreshWordBankFiles();
             UpdateProgressSummary();
             UpdatePdfPresenterConfig();
+            SaveLearningConfig();
         }
 
         private void View_ModeChanged(object? sender, EventArgs e)
         {
             _currentMode = _view.SelectedMode;
+            SaveLearningConfig();
         }
 
         private void View_WordBankChanged(object? sender, EventArgs e)
         {
             _currentWordBankFile = _view.SelectedWordBankFile;
+            SaveLearningConfig();
         }
 
         private void View_SortOrderChanged(object? sender, EventArgs e)
         {
             _currentSortOrder = _view.SelectedSortOrder;
+            SaveLearningConfig();
         }
 
         private void View_StartLearningClicked(object? sender, EventArgs e)
@@ -297,6 +345,11 @@ namespace UnifiedLearningAssistant.Presenters
         private void SaveSession()
         {
             _sessionService.SaveSession(_currentUserId);
+        }
+
+        private void SaveLearningConfig()
+        {
+            _sessionService.SaveLearningConfig(_currentLanguage, _currentSubCategory, _currentMode, _currentWordBankFile, _currentSortOrder);
         }
 
         public void Dispose()

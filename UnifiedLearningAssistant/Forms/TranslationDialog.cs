@@ -1,5 +1,25 @@
 namespace UnifiedLearningAssistant.Forms
 {
+    /*
+    public void ShowTranslationDialog(string original, string translation, string grammar)
+    {
+        var dialog = new TranslationDialog(original, translation);
+        dialog.AddToLearningList += (s, e) =>
+        {
+            textBoxQuestion.Text = original;
+            AddToLearningList?.Invoke(this, EventArgs.Empty);
+        };
+        dialog.AskAi += (s, text) =>
+        {
+            textBoxQuestion.Text = text;
+            AskAiWithText?.Invoke(this, text);
+        };
+        dialog.SpeakText += (s, text) =>
+        {
+            SpeakText?.Invoke(this, text);
+        };
+        dialog.ShowDialog();
+    }*/
     public class TranslationDialog : Form
     {
         private readonly string _originalText;

@@ -1,3 +1,4 @@
+using System.Media;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -50,6 +51,14 @@ namespace UnifiedLearningAssistant.Services.TTS
                 var wav = await _client.SynthesizeAsync(text: text, voice: "Cherry", language: language ?? "English", speed: speed ?? 1.0f, format: "wav").ConfigureAwait(false);
 
                 await File.WriteAllBytesAsync(path, wav).ConfigureAwait(false);
+
+
+                using (var player = new SoundPlayer(path))
+                {
+                    player.PlaySync();
+                }
+
+
                 return path;
             }
             catch

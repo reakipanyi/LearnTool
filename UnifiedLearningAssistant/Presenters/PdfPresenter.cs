@@ -1,12 +1,11 @@
-using System.Text.Json;
-using System.Linq;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 using UnifiedLearningAssistant.Common;
 using UnifiedLearningAssistant.Models.Pdf;
 using UnifiedLearningAssistant.Services.AI;
+using UnifiedLearningAssistant.Services.Learning;
 using UnifiedLearningAssistant.Services.Pdf;
 using UnifiedLearningAssistant.Services.TTS;
-using UnifiedLearningAssistant.Services.Learning;
 using UnifiedLearningAssistant.Views;
 
 namespace UnifiedLearningAssistant.Presenters
@@ -52,8 +51,8 @@ namespace UnifiedLearningAssistant.Presenters
 
         // 会话数据记录
         private record SessionData(
-            string? Folder, 
-            string? FilePath, 
+            string? Folder,
+            string? FilePath,
             Dictionary<string, int> FilePageMap
         );
 
@@ -179,38 +178,38 @@ namespace UnifiedLearningAssistant.Presenters
                         _filePageMap[kvp.Key] = kvp.Value;
                     }
                 }
-                
+
                 if (!string.IsNullOrEmpty(folder) && Directory.Exists(folder))
+                {
+                    _lastFolderPath = folder;
+                    LoadFolder(folder);
+
+                    if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
                     {
-                        _lastFolderPath = folder;
-                        LoadFolder(folder);
-                        
-                        if (!string.IsNullOrEmpty(filePath) && File.Exists(filePath))
+                        var fileName = Path.GetFileName(filePath);
+                        _currentPdfPath = filePath;
+
+                        ClearRenderCache();
+                        ClearThumbnailCache();
+
+                        LoadPdfFile(filePath);
+
+                        // 恢复最后浏览的页数
+                        if (_filePageMap.TryGetValue(filePath, out int savedPage))
                         {
-                            var fileName = Path.GetFileName(filePath);
-                            _currentPdfPath = filePath;
-                            
-                            ClearRenderCache();
-                            ClearThumbnailCache();
-                            
-                            LoadPdfFile(filePath);
-                            
-                            // 恢复最后浏览的页数
-                            if (_filePageMap.TryGetValue(filePath, out int savedPage))
-                            {
-                                _currentPageIndex = savedPage;
-                            }
-                            else
-                            {
-                                _currentPageIndex = 0;
-                            }
-                            
-                            _view.SetCurrentPageIndex(_currentPageIndex);
-                            _ = RenderAndDisplayCurrentPageAsync();
-                            
-                            _ = GenerateThumbnailsAsync();
+                            _currentPageIndex = savedPage;
                         }
+                        else
+                        {
+                            _currentPageIndex = 0;
+                        }
+
+                        _view.SetCurrentPageIndex(_currentPageIndex);
+                        _ = RenderAndDisplayCurrentPageAsync();
+
+                        _ = GenerateThumbnailsAsync();
                     }
+                }
             }
             catch (Exception ex)
             {
@@ -266,13 +265,13 @@ namespace UnifiedLearningAssistant.Presenters
                 {
                     _filePageMap[_currentPdfPath] = _currentPageIndex;
                 }
-                
+
                 ClearRenderCache();
                 ClearThumbnailCache();
-                
+
                 _currentPdfPath = filePath;
                 LoadPdfFile(filePath);
-                
+
                 // 检查是否有保存的页数
                 if (_filePageMap.TryGetValue(filePath, out int savedPage))
                 {
@@ -282,13 +281,13 @@ namespace UnifiedLearningAssistant.Presenters
                 {
                     _currentPageIndex = 0;
                 }
-                
+
                 _view.SetCurrentPageIndex(_currentPageIndex);
                 await RenderAndDisplayCurrentPageAsync();
-                
+
                 // 新增功能：中等级 - 异步生成PDF缩略图
                 _ = GenerateThumbnailsAsync();
-                
+
                 SaveSession();
                 _logger.LogInformation("Loaded PDF: {Path}", filePath);
             }
@@ -347,10 +346,10 @@ namespace UnifiedLearningAssistant.Presenters
                     }
                     _view.DisplayImage(bitmap);
                 }
-                
+
                 // 新增功能：中等级 - 高亮当前页面对应的缩略图
                 _view.HighlightThumbnail(_currentPageIndex);
-                
+
                 // 保存当前页面进度
                 _filePageMap[_currentPdfPath] = _currentPageIndex;
                 SaveSession();
@@ -407,7 +406,7 @@ namespace UnifiedLearningAssistant.Presenters
                     }
                 }
 
-                var bmp = await Task.Run(() => RenderPageToBitmap(pageIndex, renderW, renderH), 
+                var bmp = await Task.Run(() => RenderPageToBitmap(pageIndex, renderW, renderH),
                     _cts?.Token ?? CancellationToken.None).ConfigureAwait(false);
                 if (bmp == null) return null;
 
@@ -418,7 +417,7 @@ namespace UnifiedLearningAssistant.Presenters
                         // 使用深拷贝存储到缓存
                         _renderCache[cacheKey] = CreateDeepCopy(bmp);
                         UpdateCacheAccessOrder(cacheKey);
-                        
+
                         // 如果超过缓存大小，移除最久未使用的
                         while (_renderCache.Count > RenderCacheSize && _cacheAccessOrder.Count > 0)
                         {
@@ -435,7 +434,7 @@ namespace UnifiedLearningAssistant.Presenters
                 }
 
                 // 新增功能：优化PDF渲染 - 智能预渲染
-                _ = Task.Run(() => SmartPreRenderAsync(pageIndex, renderW, renderH), 
+                _ = Task.Run(() => SmartPreRenderAsync(pageIndex, renderW, renderH),
                     _cts?.Token ?? CancellationToken.None);
 
                 return bmp;
@@ -453,10 +452,10 @@ namespace UnifiedLearningAssistant.Presenters
 
             // 只预渲染最可能需要的页面（当前页前后各1-2页，根据总页数调整）
             var pagesToRender = new List<int>();
-            
+
             if (currentPage - 1 >= 0) pagesToRender.Add(currentPage - 1);
             if (currentPage + 1 < PageCount) pagesToRender.Add(currentPage + 1);
-            
+
             // 如果文档很长，再增加更多预渲染
             if (PageCount > 50)
             {
@@ -494,7 +493,7 @@ namespace UnifiedLearningAssistant.Presenters
                         lock (_renderLock)
                         {
                             var key = GetRenderCacheKey(p);
-                            if (!_renderCache.ContainsKey(key)) 
+                            if (!_renderCache.ContainsKey(key))
                             {
                                 _renderCache[key] = (Bitmap)bmp.Clone();
                                 UpdateCacheAccessOrder(key);
@@ -518,7 +517,7 @@ namespace UnifiedLearningAssistant.Presenters
         {
             if (source == null)
                 return null;
-            
+
             // 使用MemoryStream创建完全独立的深拷贝
             using (var ms = new MemoryStream())
             {
@@ -678,16 +677,19 @@ namespace UnifiedLearningAssistant.Presenters
                 }
 
                 using var cropped = img.Clone(intRect, img.PixelFormat);
-                
+
                 // 调试模式：不显示截图面板
                 // _view.ShowOcrOverlay((Bitmap)cropped.Clone());
-                
+
                 var recognizedText = await _ocrService.RecognizeTextAsync(cropped);
 
                 if (!string.IsNullOrWhiteSpace(recognizedText))
                 {
                     string translation = await _translationService.TranslateAsync(recognizedText) ?? "翻译失败";
-                    _view.ShowTranslationDialog(recognizedText, translation, "");
+                    _view.SetOcrResultText(recognizedText);
+                    _view.SetOriginalText(recognizedText);
+                    _view.SetTranslationText(translation);
+
                 }
                 else
                 {
@@ -711,7 +713,7 @@ namespace UnifiedLearningAssistant.Presenters
             try
             {
                 _logger.LogInformation($"开始OCR识别整个图像，尺寸: {img.Width} x {img.Height}");
-                
+
                 var recognizedText = await _ocrService.RecognizeTextAsync(img);
 
                 _logger.LogInformation($"OCR识别结果: {(recognizedText == null ? "null" : (recognizedText.Length == 0 ? "空字符串" : $"成功，{recognizedText.Length}个字符"))}");
@@ -719,7 +721,9 @@ namespace UnifiedLearningAssistant.Presenters
                 if (!string.IsNullOrWhiteSpace(recognizedText))
                 {
                     string translation = await _translationService.TranslateAsync(recognizedText) ?? "翻译失败";
-                    _view.ShowTranslationDialog(recognizedText, translation, "");
+                    _view.SetOcrResultText(recognizedText);
+                    _view.SetOriginalText(recognizedText);
+                    _view.SetTranslationText(translation);
                 }
                 else
                 {
@@ -855,7 +859,7 @@ namespace UnifiedLearningAssistant.Presenters
         public void NextPage()
         {
             if (_pdfService == null) return;
-            
+
             var nextPage = _currentPageIndex + 1;
             if (nextPage < _pdfService.PageCount)
             {
@@ -866,7 +870,7 @@ namespace UnifiedLearningAssistant.Presenters
         public void PreviousPage()
         {
             if (_pdfService == null) return;
-            
+
             var prevPage = _currentPageIndex - 1;
             if (prevPage >= 0)
             {
@@ -902,7 +906,7 @@ namespace UnifiedLearningAssistant.Presenters
             try
             {
                 _cts?.Token.ThrowIfCancellationRequested();
-                
+
                 var img = _view.GetCurrentImage() as Bitmap;
                 var selection = _view.GetSelectionRect();
                 var displayRect = _view.GetDisplayRect();
@@ -926,13 +930,13 @@ namespace UnifiedLearningAssistant.Presenters
             try
             {
                 _cts?.Token.ThrowIfCancellationRequested();
-                
+
                 var question = _view.GetQuestionText();
                 if (string.IsNullOrWhiteSpace(question))
                 {
                     question = _view.GetPageText();
                 }
-                
+
                 if (string.IsNullOrWhiteSpace(question))
                 {
                     _view.ShowWarning("请输入要提问的内容");
@@ -971,7 +975,7 @@ namespace UnifiedLearningAssistant.Presenters
             {
                 word = _view.GetQuestionText();
             }
-            
+
             if (!string.IsNullOrWhiteSpace(word))
             {
                 try
@@ -1144,16 +1148,16 @@ namespace UnifiedLearningAssistant.Presenters
                 // 使用LockBits提高性能
                 var rect = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
                 var data = bitmap.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadWrite, bitmap.PixelFormat);
-                
+
                 // 计算像素字节大小
                 int bytesPerPixel = Image.GetPixelFormatSize(bitmap.PixelFormat) / 8;
-                
+
                 // 创建缓冲区
                 IntPtr ptr = data.Scan0;
                 int bytes = Math.Abs(data.Stride) * bitmap.Height;
                 byte[] rgbValues = new byte[bytes];
                 System.Runtime.InteropServices.Marshal.Copy(ptr, rgbValues, 0, bytes);
-                
+
                 // 反色处理
                 for (int i = 0; i < rgbValues.Length; i += bytesPerPixel)
                 {
@@ -1166,7 +1170,7 @@ namespace UnifiedLearningAssistant.Presenters
                     }
                     // 如果有Alpha通道，不改变它
                 }
-                
+
                 // 复制回位图
                 System.Runtime.InteropServices.Marshal.Copy(rgbValues, 0, ptr, bytes);
                 bitmap.UnlockBits(data);
@@ -1183,13 +1187,13 @@ namespace UnifiedLearningAssistant.Presenters
             {
                 // 最后保存一次会话
                 SaveSession();
-                
+
                 UnsubscribeFromEvents();
                 _cts?.Cancel();
-                
+
                 ClearRenderCache();
                 ClearThumbnailCache();
-                
+
                 _cts?.Dispose();
                 _renderSemaphore.Dispose();
                 _pdfService.Dispose();
@@ -1233,8 +1237,8 @@ namespace UnifiedLearningAssistant.Presenters
 
                 var totalPages = _pdfService.PageCount;
                 _logger.LogInformation($"GenerateThumbnailsAsync: Total pages = {totalPages}");
-                
-                if (totalPages == 0) 
+
+                if (totalPages == 0)
                 {
                     _logger.LogWarning("GenerateThumbnailsAsync: No pages to generate thumbnails for");
                     return;
@@ -1243,7 +1247,7 @@ namespace UnifiedLearningAssistant.Presenters
                 for (int i = 0; i < totalPages; i++)
                 {
                     if (_cts?.IsCancellationRequested ?? false) break;
-                    
+
                     try
                     {
                         var thumbnail = await GetThumbnailAsync(i);

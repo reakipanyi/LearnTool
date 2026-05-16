@@ -124,25 +124,6 @@ namespace UnifiedLearningAssistant.Forms
             MessageBox.Show(message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
-        public void ShowTranslationDialog(string original, string translation, string grammar)
-        {
-            var dialog = new TranslationDialog(original, translation);
-            dialog.AddToLearningList += (s, e) =>
-            {
-                textBoxQuestion.Text = original;
-                AddToLearningList?.Invoke(this, EventArgs.Empty);
-            };
-            dialog.AskAi += (s, text) =>
-            {
-                textBoxQuestion.Text = text;
-                AskAiWithText?.Invoke(this, text);
-            };
-            dialog.SpeakText += (s, text) =>
-            {
-                SpeakText?.Invoke(this, text);
-            };
-            dialog.ShowDialog();
-        }
 
         public void UpdateAiAnswer(string answer)
         {
@@ -476,6 +457,16 @@ namespace UnifiedLearningAssistant.Forms
         public void SetTranslationText(string text)
         {
             textBoxTranslation.Text = text;
+        }
+
+        public void SetOriginalText(string text)
+        {
+            textBoxOriginal.Text = text;
+        }
+
+        public void SetOcrResultText(string text)
+        {
+            textBoxOcrResult.Text = text;
         }
 
         public string GetAiAnswerText()
@@ -866,9 +857,10 @@ namespace UnifiedLearningAssistant.Forms
             pictureBoxPdf.TabIndex = 1;
             pictureBoxPdf.TabStop = false;
             pictureBoxPdf.Paint += PictureBoxPdf_Paint;
-            pictureBoxPdf.MouseDoubleClick += PictureBoxPdf_MouseDoubleClick;
+            //pictureBoxPdf.MouseDoubleClick += PictureBoxPdf_MouseDoubleClick;
             pictureBoxPdf.MouseMove += PictureBoxPdf_MouseMove;
             pictureBoxPdf.MouseUp += PictureBoxPdf_MouseUp;
+            pictureBoxPdf.MouseDown += PictureBoxPdf_MouseDown;
             pictureBoxPdf.MouseWheel += PictureBoxPdf_MouseWheel;
             // 
             // _ocrPanel
@@ -882,9 +874,6 @@ namespace UnifiedLearningAssistant.Forms
             _ocrPanel.Size = new Size(200, 150);
             _ocrPanel.TabIndex = 2;
             _ocrPanel.Visible = false;
-            _ocrPanel.MouseDown += OcrPanel_MouseDown;
-            _ocrPanel.MouseMove += OcrPanel_MouseMove;
-            _ocrPanel.MouseUp += OcrPanel_MouseUp;
             // 
             // _ocrPictureBox
             // 
@@ -1062,7 +1051,7 @@ namespace UnifiedLearningAssistant.Forms
             buttonAddToLearning.Name = "buttonAddToLearning";
             buttonAddToLearning.Size = new Size(135, 30);
             buttonAddToLearning.TabIndex = 3;
-            buttonAddToLearning.Text = "添加到生词本";
+            buttonAddToLearning.Text = "📝 加生词本";
             buttonAddToLearning.Click += ButtonAddToLearning_Click;
             // 
             // buttonSpeakAnswer
@@ -1071,7 +1060,7 @@ namespace UnifiedLearningAssistant.Forms
             buttonSpeakAnswer.Name = "buttonSpeakAnswer";
             buttonSpeakAnswer.Size = new Size(110, 30);
             buttonSpeakAnswer.TabIndex = 4;
-            buttonSpeakAnswer.Text = "朗读答案";
+            buttonSpeakAnswer.Text = "🔊 朗读原文";
             buttonSpeakAnswer.Click += ButtonSpeakAnswer_Click;
             // 
             // richTextBoxAiAnswer
@@ -1297,50 +1286,9 @@ namespace UnifiedLearningAssistant.Forms
 
         #region OCR Panel Drag
 
-        private void OcrPanel_MouseDown(object? sender, MouseEventArgs e)
-        {
-            if (e.Button == MouseButtons.Left && _ocrPanel != null)
-            {
-                _isOcrPanelDragging = true;
-                _ocrPanelStartPoint = PointToScreen(e.Location);
-                _ocrPanel.Cursor = Cursors.SizeAll;
-                _ocrPanel.Capture = true;
-            }
-        }
 
-        private void OcrPanel_MouseMove(object? sender, MouseEventArgs e)
-        {
-            if (_isOcrPanelDragging && _ocrPanel != null)
-            {
-                Point currentScreenPoint = PointToScreen(e.Location);
-                int deltaX = currentScreenPoint.X - _ocrPanelStartPoint.X;
-                int deltaY = currentScreenPoint.Y - _ocrPanelStartPoint.Y;
 
-                int newX = _ocrPanel.Left + deltaX;
-                int newY = _ocrPanel.Top + deltaY;
 
-                int leftBoundary = 0;
-                int rightBoundary = panelPdf.ClientSize.Width - _ocrPanel.Width;
-                int topBoundary = 0;
-                int bottomBoundary = panelPdf.ClientSize.Height - _ocrPanel.Height;
-
-                newX = Math.Max(leftBoundary, Math.Min(newX, rightBoundary));
-                newY = Math.Max(topBoundary, Math.Min(newY, bottomBoundary));
-
-                _ocrPanel.Location = new Point(newX, newY);
-                _ocrPanelStartPoint = currentScreenPoint;
-            }
-        }
-
-        private void OcrPanel_MouseUp(object? sender, MouseEventArgs e)
-        {
-            if (_isOcrPanelDragging && _ocrPanel != null)
-            {
-                _isOcrPanelDragging = false;
-                _ocrPanel.Cursor = Cursors.Default;
-                _ocrPanel.Capture = false;
-            }
-        }
 
         private void OcrCloseButton_Click(object? sender, EventArgs e)
         {
@@ -1376,7 +1324,10 @@ namespace UnifiedLearningAssistant.Forms
                 if (timeDiff < DoubleClickTime_ms && distance < DoubleClickDistance)
                 {
                     _isDoubleClickPending = true;
+                    _isSelecting = false;
+                    _isDrawing = false;
                     _lastClickTime = DateTime.MinValue;
+                    _lastClickLocation = Point.Empty;
                     return;
                 }
 
@@ -1431,110 +1382,12 @@ namespace UnifiedLearningAssistant.Forms
             }
         }
 
-        private async void PictureBoxPdf_MouseDoubleClick(object? sender, MouseEventArgs e)
-        {
-            try
-            {
-                if (_presenter == null)
-                {
-                    _logger.LogWarning("双击识别失败: _presenter 为 null");
-                    ShowWarning("演示器未初始化");
-                    return;
-                }
-
-                if (pictureBoxPdf.Image == null)
-                {
-                    _logger.LogWarning("双击识别失败: pictureBoxPdf.Image 为 null");
-                    ShowWarning("没有可识别的图像");
-                    return;
-                }
-
-                // 创建图像副本，避免OCR操作影响原始图像
-                Bitmap? imgCopy = null;
-                try
-                {
-                    var originalImg = pictureBoxPdf.Image as Bitmap;
-                    if (originalImg == null)
-                    {
-                        _logger.LogWarning("双击识别失败: 图像不是 Bitmap 类型");
-                        ShowWarning("图像格式不支持");
-                        return;
-                    }
-
-                    if (originalImg.Width == 0 || originalImg.Height == 0)
-                    {
-                        _logger.LogWarning("双击识别失败: 图像尺寸无效");
-                        ShowWarning("图像尺寸无效");
-                        return;
-                    }
-
-                    // 创建图像副本，防止OCR操作影响原始图像
-                    imgCopy = new Bitmap(originalImg);
-                    await OcrFullImageAsync(imgCopy);
-                }
-                finally
-                {
-                    // 确保副本被释放
-                    imgCopy?.Dispose();
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "双击识别失败");
-                ShowError("双击识别失败: " + ex.Message + "\n\n" + ex.StackTrace);
-            }
-        }
-
-        private async Task OcrFullImageAsync(Bitmap img)
-        {
-            if (_presenter == null)
-            {
-                _logger.LogWarning("OcrFullImageAsync: _presenter 为 null");
-                return;
-            }
-
-            try
-            {
-                _logger.LogInformation($"开始OCR识别，图像尺寸: {img.Width} x {img.Height}");
-
-                if (!_presenter.IsOcrAvailable())
-                {
-                    _logger.LogWarning("OCR服务不可用");
-                    ShowWarning("OCR服务未配置，请检查配置文件");
-                    return;
-                }
-
-                // 在后台线程中执行OCR，避免影响UI线程
-                var recognizedText = await Task.Run(() =>
-                {
-                    // 在后台线程中处理，避免影响UI
-                    return _presenter.OcrBitmapAsync(img).Result;
-                });
-
-                _logger.LogInformation($"OCR识别结果: {(recognizedText == null ? "null" : (recognizedText.Length == 0 ? "空字符串" : $"成功，{recognizedText.Length}个字符"))}");
-
-                if (!string.IsNullOrWhiteSpace(recognizedText))
-                {
-                    textBoxOcrResult.Text = recognizedText;
-                    textBoxOriginal.Text = recognizedText;
-                    tabControlLeft.SelectedTab = tabControlLeft.TabPages["tabPageOcr"];
-                }
-                else
-                {
-                    ShowWarning("未识别到文字，请尝试框选区域识别");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "OCR识别失败");
-                ShowError("OCR识别失败: " + ex.Message + "\n\n" + ex.StackTrace);
-            }
-        }
 
         private void PictureBoxPdf_MouseUp(object? sender, MouseEventArgs e)
         {
             if (_isDoubleClickPending)
             {
+                _isDoubleClickPending = false;
                 _isSelecting = false;
                 _isDrawing = false;
                 return;

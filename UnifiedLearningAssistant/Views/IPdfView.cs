@@ -9,7 +9,7 @@ namespace UnifiedLearningAssistant.Views
         void DisplayImage(Bitmap bmp);
         void ShowWarning(string message);
         void ShowError(string message);
-        void ShowTranslationDialog(string original, string translation, string grammar);
+        //void ShowTranslationDialog(string original, string translation, string grammar);
         void UpdateAiAnswer(string answer);
         void SetQuestionInput(string text);
         // 新增功能：中等级 - UI响应性改进，加载状态管理
@@ -33,6 +33,8 @@ namespace UnifiedLearningAssistant.Views
         string GetTranslationText();
         string GetOriginalText();
         void SetTranslationText(string text);
+        void SetOriginalText(string text);
+        void SetOcrResultText(string text);
         string GetAiAnswerText();
         Image? GetCurrentImage();
         Rectangle? GetSelectionRect();

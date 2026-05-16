@@ -53,5 +53,24 @@ namespace UnifiedLearningAssistant.Services.Learning
         {
             return _persistenceService.LoadUserProfile(userId);
         }
+
+        public void SaveLearningConfig(string language, string subCategory, string mode, string wordBankFile, string sortOrder)
+        {
+            var session = _persistenceService.LoadSession();
+            session.Language = language;
+            session.SubCategory = subCategory;
+            session.Mode = mode;
+            session.WordBankFile = wordBankFile;
+            session.SortOrder = sortOrder;
+            session.LastAccessTime = DateTime.Now;
+            _persistenceService.SaveSession(session);
+            _logger.LogInformation($"Learning config saved: Language={language}, SubCategory={subCategory}, Mode={mode}");
+        }
+
+        public (string Language, string SubCategory, string Mode, string WordBankFile, string SortOrder) LoadLearningConfig()
+        {
+            var session = _persistenceService.LoadSession();
+            return (session.Language, session.SubCategory, session.Mode, session.WordBankFile, session.SortOrder);
+        }
     }
 }

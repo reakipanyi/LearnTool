@@ -13,7 +13,6 @@ namespace UnifiedLearningAssistant.Forms
         private readonly ILogger<ContentEditorForm> _logger;
         private ContentEditorPresenter? _presenter;
         private GroupBox groupBoxLanguage;
-        private Label labelLanguage;
         private RadioButton radioChinese;
         private RadioButton radioEnglish;
         private ComboBox comboBoxSubCategory;
@@ -385,12 +384,13 @@ namespace UnifiedLearningAssistant.Forms
             textBoxRange = new TextBox();
             dataGridView = new DataGridView();
             radioChinese = new RadioButton();
-            labelLanguage = new Label();
             radioEnglish = new RadioButton();
             comboBoxSubCategory = new ComboBox();
             textBoxPrompt = new TextBox();
             labelPrompt = new Label();
+            groupBoxLanguage = new GroupBox();
             ((System.ComponentModel.ISupportInitialize)dataGridView).BeginInit();
+            groupBoxLanguage.SuspendLayout();
             SuspendLayout();
             // 
             // textBoxJson
@@ -406,7 +406,6 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonAdd
             // 
-            buttonAdd.Anchor = AnchorStyles.Bottom;
             buttonAdd.Location = new Point(90, 660);
             buttonAdd.Name = "buttonAdd";
             buttonAdd.Size = new Size(80, 35);
@@ -416,7 +415,6 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonSave
             // 
-            buttonSave.Anchor = AnchorStyles.Bottom;
             buttonSave.Location = new Point(180, 660);
             buttonSave.Name = "buttonSave";
             buttonSave.Size = new Size(80, 35);
@@ -426,7 +424,6 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonDelete
             // 
-            buttonDelete.Anchor = AnchorStyles.Bottom;
             buttonDelete.Location = new Point(270, 660);
             buttonDelete.Name = "buttonDelete";
             buttonDelete.Size = new Size(80, 35);
@@ -436,7 +433,6 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonImport
             // 
-            buttonImport.Anchor = AnchorStyles.Bottom;
             buttonImport.Location = new Point(360, 660);
             buttonImport.Name = "buttonImport";
             buttonImport.Size = new Size(80, 35);
@@ -446,7 +442,6 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonExport
             // 
-            buttonExport.Anchor = AnchorStyles.Bottom;
             buttonExport.Location = new Point(450, 660);
             buttonExport.Name = "buttonExport";
             buttonExport.Size = new Size(80, 35);
@@ -456,7 +451,6 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonGenerateAI
             // 
-            buttonGenerateAI.Anchor = AnchorStyles.Bottom;
             buttonGenerateAI.Location = new Point(536, 660);
             buttonGenerateAI.Name = "buttonGenerateAI";
             buttonGenerateAI.Size = new Size(90, 35);
@@ -527,7 +521,7 @@ namespace UnifiedLearningAssistant.Forms
             // radioChinese
             // 
             radioChinese.Checked = true;
-            radioChinese.Location = new Point(93, 27);
+            radioChinese.Location = new Point(36, 11);
             radioChinese.Name = "radioChinese";
             radioChinese.Size = new Size(80, 27);
             radioChinese.TabIndex = 1;
@@ -535,17 +529,9 @@ namespace UnifiedLearningAssistant.Forms
             radioChinese.Text = "中文";
             radioChinese.CheckedChanged += RadioChinese_CheckedChanged;
             // 
-            // labelLanguage
-            // 
-            labelLanguage.Location = new Point(25, 31);
-            labelLanguage.Name = "labelLanguage";
-            labelLanguage.Size = new Size(60, 23);
-            labelLanguage.TabIndex = 0;
-            labelLanguage.Text = "选择:";
-            // 
             // radioEnglish
             // 
-            radioEnglish.Location = new Point(183, 27);
+            radioEnglish.Location = new Point(126, 11);
             radioEnglish.Name = "radioEnglish";
             radioEnglish.Size = new Size(80, 27);
             radioEnglish.TabIndex = 2;
@@ -581,13 +567,22 @@ namespace UnifiedLearningAssistant.Forms
             labelPrompt.TabIndex = 19;
             labelPrompt.Text = "提示词:";
             // 
+            // groupBoxLanguage
+            // 
+            groupBoxLanguage.Controls.Add(radioEnglish);
+            groupBoxLanguage.Controls.Add(radioChinese);
+            groupBoxLanguage.Location = new Point(25, 16);
+            groupBoxLanguage.Name = "groupBoxLanguage";
+            groupBoxLanguage.Size = new Size(250, 42);
+            groupBoxLanguage.TabIndex = 20;
+            groupBoxLanguage.TabStop = false;
+            groupBoxLanguage.Text = "语言";
+            // 
             // ContentEditorForm
             // 
             ClientSize = new Size(920, 707);
-            Controls.Add(radioChinese);
-            Controls.Add(labelLanguage);
+            Controls.Add(groupBoxLanguage);
             Controls.Add(comboBoxSubCategory);
-            Controls.Add(radioEnglish);
             Controls.Add(textBoxJson);
             Controls.Add(dataGridView);
             Controls.Add(buttonAdd);
@@ -607,6 +602,7 @@ namespace UnifiedLearningAssistant.Forms
             Name = "ContentEditorForm";
             Text = "📝 内容编辑器";
             ((System.ComponentModel.ISupportInitialize)dataGridView).EndInit();
+            groupBoxLanguage.ResumeLayout(false);
             ResumeLayout(false);
             PerformLayout();
         }

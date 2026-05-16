@@ -422,7 +422,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonContinueLearning
             // 
-            buttonContinueLearning.Location = new Point(620, 527);
+            buttonContinueLearning.Location = new Point(210, 348);
             buttonContinueLearning.Name = "buttonContinueLearning";
             buttonContinueLearning.Size = new Size(150, 51);
             buttonContinueLearning.TabIndex = 10;
@@ -431,7 +431,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonStartLearning
             // 
-            buttonStartLearning.Location = new Point(620, 455);
+            buttonStartLearning.Location = new Point(30, 348);
             buttonStartLearning.Name = "buttonStartLearning";
             buttonStartLearning.Size = new Size(150, 51);
             buttonStartLearning.TabIndex = 9;
@@ -477,21 +477,21 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // radioChinese
             // 
-            radioChinese.Checked = true;
             radioChinese.Location = new Point(80, 20);
             radioChinese.Name = "radioChinese";
             radioChinese.Size = new Size(80, 27);
             radioChinese.TabIndex = 1;
-            radioChinese.TabStop = true;
             radioChinese.Text = "中文";
             radioChinese.CheckedChanged += RadioChinese_CheckedChanged;
             // 
             // radioEnglish
             // 
+            radioEnglish.Checked = true;
             radioEnglish.Location = new Point(170, 20);
             radioEnglish.Name = "radioEnglish";
             radioEnglish.Size = new Size(80, 27);
             radioEnglish.TabIndex = 2;
+            radioEnglish.TabStop = true;
             radioEnglish.Text = "英语";
             radioEnglish.CheckedChanged += RadioEnglish_CheckedChanged;
             // 
@@ -548,7 +548,7 @@ namespace UnifiedLearningAssistant.Forms
             comboBoxSubCategory.FormattingEnabled = true;
             comboBoxSubCategory.Location = new Point(120, 96);
             comboBoxSubCategory.Name = "comboBoxSubCategory";
-            comboBoxSubCategory.Size = new Size(200, 25);
+            comboBoxSubCategory.Size = new Size(172, 25);
             comboBoxSubCategory.TabIndex = 2;
             comboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
             // 

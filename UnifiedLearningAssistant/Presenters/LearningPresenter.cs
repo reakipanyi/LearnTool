@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using System.Media;
 using UnifiedLearningAssistant.Common;
 using UnifiedLearningAssistant.Models.Learning;
 using UnifiedLearningAssistant.Services.AI;
@@ -135,13 +134,8 @@ namespace UnifiedLearningAssistant.Presenters
 
             string text = item.GetMainContent();
             string lang = _currentLanguage == Constants.Language.Chinese ? "zh" : "en";
-            string filePath = await _ttsService.SpeakAsync(text, lang);
-            if (!File.Exists(filePath)) return;
+            await _ttsService.SpeakAsync(text, lang);
 
-            using (var player = new SoundPlayer(filePath))
-            {
-                player.PlaySync();
-            }
         }
 
         private void View_MarkAsKnownClicked(object? sender, EventArgs e)
