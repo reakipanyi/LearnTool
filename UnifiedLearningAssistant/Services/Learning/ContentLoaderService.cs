@@ -36,7 +36,7 @@ namespace UnifiedLearningAssistant.Services.Learning
             _logger = logger;
         }
 
-        public List<LearningItem> LoadItems(string subCategory, string wordBankFile = "")
+        public List<object> LoadItems(string subCategory, string wordBankFile = "")
         {
             try
             {
@@ -44,30 +44,37 @@ namespace UnifiedLearningAssistant.Services.Learning
                 if (!File.Exists(filePath))
                 {
                     _logger.LogWarning("File not found: {FilePath}", filePath);
-                    return new List<LearningItem>();
+                    return new List<object>();
                 }
 
                 var itemType = GetItemType(subCategory);
-                var items = JsonHelper.LoadFromFile<List<object>>(filePath);
+                var json = File.ReadAllText(filePath);
+
+                // 直接反序列化为具体类型列表，而不是 List<object>
+                var listType = typeof(List<>).MakeGenericType(itemType);
+                var items = System.Text.Json.JsonSerializer.Deserialize(json, listType,
+                    new System.Text.Json.JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                    });
 
                 if (items == null)
                 {
                     _logger.LogWarning("No items loaded from file: {FilePath}", filePath);
-                    return new List<LearningItem>();
+                    return new List<object>();
                 }
 
-                return items.Select(obj => ConvertToLearningItem(obj, itemType))
-                           .Where(item => item != null)
-                           .ToList();
+                return ((System.Collections.IList)items).Cast<object>().ToList();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load items for subCategory: {SubCategory}", subCategory);
-                return new List<LearningItem>();
+                return new List<object>();
             }
         }
 
-        public void SaveItems(string subCategory, List<LearningItem> items, string wordBankFile = "")
+        public void SaveItems(string subCategory, List<object> items, string wordBankFile = "")
         {
             try
             {
@@ -111,19 +118,19 @@ namespace UnifiedLearningAssistant.Services.Learning
             {
                 var dataDir = FileHelper.GetDataDirectory();
                 var defaultFile = _categoryFileMap.GetValueOrDefault(subCategory, "");
-                
+
                 var categoryPrefix = GetCategoryFilePrefix(subCategory);
-                
+
                 var files = Directory.EnumerateFiles(dataDir, "*.json")
                                    .Select(Path.GetFileName)
                                    .Where(file => file.StartsWith(categoryPrefix, StringComparison.OrdinalIgnoreCase))
                                    .ToList();
-                
+
                 if (!string.IsNullOrWhiteSpace(defaultFile) && !files.Contains(defaultFile))
                 {
                     files.Add(defaultFile);
                 }
-                
+
                 files.Sort();
                 return files;
             }
@@ -169,19 +176,5 @@ namespace UnifiedLearningAssistant.Services.Learning
             return Path.Combine(FileHelper.GetDataDirectory(), _categoryFileMap.GetValueOrDefault(subCategory, "data.json"));
         }
 
-        private LearningItem? ConvertToLearningItem(object obj, Type targetType)
-        {
-            try
-            {
-                var json = JsonHelper.Serialize(obj);
-                return (LearningItem?)System.Text.Json.JsonSerializer.Deserialize(json, targetType,
-                    new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to convert object to {TargetType}", targetType.Name);
-                return null;
-            }
-        }
     }
 }

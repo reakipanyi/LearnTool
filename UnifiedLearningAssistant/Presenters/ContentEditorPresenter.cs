@@ -2,57 +2,288 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Data;
-using UnifiedLearningAssistant.Models.Learning;
+using UnifiedLearningAssistant.Common;
 using UnifiedLearningAssistant.Services.AI;
 using UnifiedLearningAssistant.Services.Learning;
 using UnifiedLearningAssistant.Views;
 
 namespace UnifiedLearningAssistant.Presenters
 {
+    /// <summary>
+    /// 内容编辑器Presenter，负责管理学习内容的编辑、导入、导出和AI生成功能
+    /// </summary>
     public class ContentEditorPresenter : IDisposable
     {
+        /// <summary>
+        /// 日志记录器
+        /// </summary>
         private readonly ILogger<ContentEditorPresenter> _logger;
+
+        /// <summary>
+        /// 视图接口，用于与UI层交互
+        /// </summary>
         private readonly IContentEditorView _view;
+
+        /// <summary>
+        /// 内容加载服务，用于数据的持久化操作
+        /// </summary>
         private readonly IContentLoaderService _contentLoaderService;
+
+        /// <summary>
+        /// AI问答服务，用于生成学习内容
+        /// </summary>
         private readonly IAiQuestionService _aiQuestionService;
 
-        public ContentEditorPresenter(ILogger<ContentEditorPresenter> logger, IContentEditorView view,
-            IContentLoaderService contentLoaderService, IAiQuestionService aiQuestionService)
+        /// <summary>
+        /// 脏标记，标识当前数据是否有未保存的更改
+        /// </summary>
+        private bool _isDirty = false;
+
+        /// <summary>
+        /// 类别类型名称映射字典，将类别常量映射为中文显示名称
+        /// </summary>
+        private static readonly Dictionary<string, string> CategoryTypeNames = new()
+        {
+            { Constants.SubCategory.ChineseCharacter, "识字" },
+            { Constants.SubCategory.ChineseWordCombination, "组词" },
+            { Constants.SubCategory.ChineseIdiom, "成语" },
+            { Constants.SubCategory.ChinesePhrase, "短语" },
+            { Constants.SubCategory.ChinesePoem, "诗词" },
+            { Constants.SubCategory.EnglishWord, "英语单词" },
+            { Constants.SubCategory.EnglishPhrase, "英语短语" },
+            { Constants.SubCategory.EnglishSentence, "英语句子" }
+        };
+
+        /// <summary>
+        /// 类别模板字典，定义每个类别对应的字段结构
+        /// </summary>
+        private static readonly Dictionary<string, Dictionary<string, object>> CategoryTemplates = new()
+        {
+            {
+                Constants.SubCategory.ChineseCharacter, new Dictionary<string, object>
+                {
+                    { "Character", "" }, { "Pinyin", "" }, { "Meaning", "" }, { "StrokeCount", "" }, { "Radical", "" }
+                }
+            },
+            {
+                Constants.SubCategory.ChineseWordCombination, new Dictionary<string, object>
+                {
+                    { "Character", "" }, { "Pinyin", "" }, { "Words", new List<string> { "", "", "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.ChineseIdiom, new Dictionary<string, object>
+                {
+                    { "Idiom", "" }, { "Pinyin", "" }, { "Meaning", "" }, { "Origin", "" }, { "Example", "" }
+                }
+            },
+            {
+                Constants.SubCategory.ChinesePhrase, new Dictionary<string, object>
+                {
+                    { "Phrase", "" }, { "Pinyin", "" }, { "Meaning", "" }, { "Example", "" }
+                }
+            },
+            {
+                Constants.SubCategory.ChinesePoem, new Dictionary<string, object>
+                {
+                    { "Title", "" }, { "Author", "" }, { "Dynasty", "" }, { "Verses", new List<string> { "", "", "", "" } }, { "Annotation", "" }
+                }
+            },
+            {
+                Constants.SubCategory.EnglishWord, new Dictionary<string, object>
+                {
+                    { "Word", "" }, { "Phonetic", "" }, { "PartOfSpeech", "" }, { "Meaning", "" }, { "Example", "" }
+                }
+            },
+            {
+                Constants.SubCategory.EnglishPhrase, new Dictionary<string, object>
+                {
+                    { "Phrase", "" }, { "Meaning", "" }, { "Example", "" }
+                }
+            },
+            {
+                Constants.SubCategory.EnglishSentence, new Dictionary<string, object>
+                {
+                    { "Sentence", "" }, { "Translation", "" }, { "Grammar", "" }
+                }
+            }
+        };
+
+        /// <summary>
+        /// JSON格式提示字典，用于AI生成时指定输出格式
+        /// </summary>
+        private static readonly Dictionary<string, string> JsonFormatHints = new()
+        {
+            { Constants.SubCategory.ChineseCharacter, @"[  {""Character"":"""",""Pinyin"":"""",""Meaning"":"""",""StrokeCount"":"""",""Radical"":""""} ]" },
+            { Constants.SubCategory.ChineseWordCombination, @"[  {""Character"":"""",""Pinyin"":"""",""Words"":["""","""","""","""",""""]} ]" },
+            { Constants.SubCategory.ChineseIdiom, @"[  {""Idiom"":"""",""Pinyin"":"""",""Meaning"":"""",""Origin"":"""",""Example"":""""} ]" },
+            { Constants.SubCategory.ChinesePhrase, @"[  {""Phrase"":"""",""Pinyin"":"""",""Meaning"":"""",""Example"":""""} ]" },
+            { Constants.SubCategory.ChinesePoem, @"[  {""Title"":"""",""Author"":"""",""Dynasty"":"""",""Verses"":["""","""","""",""""],""Annotation"":""""} ]" },
+            { Constants.SubCategory.EnglishWord, @"[  {""Word"":"""",""Phonetic"":"""",""PartOfSpeech"":"""",""Meaning"":"""",""Example"":""""} ]" },
+            { Constants.SubCategory.EnglishPhrase, @"[  {""Phrase"":"""",""Meaning"":"""",""Example"":""""} ]" },
+            { Constants.SubCategory.EnglishSentence, @"[  {""Sentence"":"""",""Translation"":"""",""Grammar"":""""} ]" }
+        };
+
+        /// <summary>
+        /// 构造函数，初始化ContentEditorPresenter
+        /// </summary>
+        /// <param name="logger">日志记录器</param>
+        /// <param name="view">视图接口</param>
+        /// <param name="contentLoaderService">内容加载服务</param>
+        /// <param name="aiQuestionService">AI问答服务</param>
+        /// <exception cref="ArgumentNullException">当任一参数为null时抛出</exception>
+        public ContentEditorPresenter(
+            ILogger<ContentEditorPresenter> logger,
+            IContentEditorView view,
+            IContentLoaderService contentLoaderService,
+            IAiQuestionService aiQuestionService)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _view = view ?? throw new ArgumentNullException(nameof(view));
             _contentLoaderService = contentLoaderService ?? throw new ArgumentNullException(nameof(contentLoaderService));
             _aiQuestionService = aiQuestionService ?? throw new ArgumentNullException(nameof(aiQuestionService));
 
-            _view.CategoryChanged += OnCategoryChanged;
-            _view.TemplateAddClicked += OnTemplateAddClicked;
-            _view.TemplateSaveClicked += OnTemplateSaveClicked;
-            _view.TemplateDeleteClicked += OnTemplateDeleteClicked;
-            _view.ImportClicked += OnImportClicked;
-            _view.ExportClicked += OnExportClicked;
-            _view.InsertTemplateClicked += OnInsertTemplateClicked;
-            _view.GenerateWithAIClicked += OnGenerateWithAIClicked;
-            _view.GridCellEndEdit += OnGridCellEndEdit;
-            _view.GridRowsAdded += OnGridRowsAdded;
+            _view.LanguageChanged += (_, _) => OnLanguageChanged();
+            _view.SubCategoryChanged += (_, _) => OnSubCategoryChanged();
+            _view.TemplateAddClicked += (_, _) => OnTemplateAddClicked();
+            _view.TemplateSaveClicked += (_, _) => OnTemplateSaveClicked();
+            _view.TemplateDeleteClicked += (_, _) => OnTemplateDeleteClicked();
+            _view.ImportClicked += (_, _) => OnImportClicked();
+            _view.ExportClicked += (_, _) => OnExportClicked();
+            _view.GenerateWithAIClicked += (_, _) => OnGenerateWithAIClicked();
+            _view.GridCellEndEdit += (_, _) => OnGridValueChanged();
+            _view.GridRowsAdded += (_, _) => OnGridValueChanged();
+
             _logger.LogInformation("ContentEditorPresenter initialized");
         }
 
+        /// <summary>
+        /// 初始化Presenter，加载子类别和数据
+        /// </summary>
         public void Initialize()
         {
+            LoadSubCategories();
+            LoadItems();
+            _isDirty = false;
         }
 
-        private void OnCategoryChanged(object? sender, EventArgs e)
+        /// <summary>
+        /// 语言切换事件处理方法
+        /// </summary>
+        private void OnLanguageChanged()
         {
+            if (CheckAndSaveUnsavedChanges())
+            {
+                LoadSubCategories();
+                LoadItems();
+            }
         }
 
-        private void OnTemplateAddClicked(object? sender, EventArgs e)
+        /// <summary>
+        /// 子类别切换事件处理方法
+        /// </summary>
+        private void OnSubCategoryChanged()
         {
-            _view.ClearEditForm();
+            if (CheckAndSaveUnsavedChanges())
+            {
+                LoadItems();
+            }
         }
 
-        private void OnTemplateSaveClicked(object? sender, EventArgs e)
+        /// <summary>
+        /// 根据当前语言加载子类别列表
+        /// </summary>
+        private void LoadSubCategories()
         {
-            string json = _view.CurrentEditItemJson;
+            var language = _view.SelectedLanguage;
+            var subCategories = language == Constants.Language.Chinese
+                ? new List<string>
+                {
+                    Constants.SubCategory.ChineseCharacter,
+                    Constants.SubCategory.ChineseWordCombination,
+                    Constants.SubCategory.ChinesePhrase,
+                    Constants.SubCategory.ChineseIdiom,
+                    Constants.SubCategory.ChinesePoem
+                }
+                : new List<string>
+                {
+                    Constants.SubCategory.EnglishWord,
+                    Constants.SubCategory.EnglishPhrase,
+                    Constants.SubCategory.EnglishSentence
+                };
+            _view.RefreshSubCategories(subCategories);
+        }
+
+        /// <summary>
+        /// 加载当前类别的数据项
+        /// </summary>
+        private void LoadItems()
+        {
+            var category = _view.SelectedSubCategory;
+            var items = _contentLoaderService.LoadItems(category);
+            _view.ItemData = ConvertToDataTable(items, category);
+            _isDirty = false;
+        }
+
+        /// <summary>
+        /// 将对象列表转换为DataTable，所有列均为string类型以避免类型推断问题
+        /// </summary>
+        /// <param name="items">对象列表</param>
+        /// <param name="category">类别名称</param>
+        /// <returns>转换后的DataTable</returns>
+        private DataTable ConvertToDataTable(List<object> items, string category)
+        {
+            var table = new DataTable();
+
+            if (items.Count == 0)
+            {
+                if (CategoryTemplates.TryGetValue(category, out var template))
+                {
+                    foreach (var key in template.Keys)
+                        table.Columns.Add(key, typeof(string));
+                }
+                return table;
+            }
+
+            var properties = items[0].GetType().GetProperties();
+            foreach (var prop in properties)
+                table.Columns.Add(prop.Name, typeof(string));
+
+            foreach (var item in items)
+            {
+                var row = table.NewRow();
+                foreach (var prop in properties)
+                {
+                    var value = prop.GetValue(item);
+                    row[prop.Name] = value switch
+                    {
+                        List<string> list => list.Count > 0 ? string.Join(", ", list) : "",
+                        null => "",
+                        _ => value.ToString() ?? ""
+                    };
+                }
+                table.Rows.Add(row);
+            }
+
+            return table;
+        }
+
+        /// <summary>
+        /// 添加模板事件处理方法，显示当前类别的JSON模板
+        /// </summary>
+        private void OnTemplateAddClicked()
+        {
+            if (!CheckAndSaveUnsavedChanges()) return;
+            _view.CurrentEditItemJson = GetTemplateJson(_view.SelectedSubCategory);
+        }
+
+        /// <summary>
+        /// 保存事件处理方法，将JSON内容保存到当前类别
+        /// </summary>
+        private void OnTemplateSaveClicked()
+        {
+            var json = _view.CurrentEditItemJson;
+            var category = _view.SelectedSubCategory;
 
             if (string.IsNullOrEmpty(json))
             {
@@ -60,7 +291,6 @@ namespace UnifiedLearningAssistant.Presenters
                 return;
             }
 
-            string category = _view.SelectedSubCategory;
             if (string.IsNullOrEmpty(category))
             {
                 _view.ShowMessage("请选择一个类别！");
@@ -69,50 +299,9 @@ namespace UnifiedLearningAssistant.Presenters
 
             try
             {
-                if (json.TrimStart().StartsWith("["))
-                {
-                    var jsonArray = JArray.Parse(json);
-                    List<LearningItem> items = new List<LearningItem>();
-
-                    foreach (var jsonItem in jsonArray)
-                    {
-                        string typeName = jsonItem["_type"]?.ToString() ?? category;
-                        Type itemType = _contentLoaderService.GetItemType(typeName);
-                        LearningItem? item = jsonItem.ToObject(itemType) as LearningItem;
-                        if (item != null)
-                            items.Add(item);
-                    }
-                    if (items.Count > 0)
-                    {
-                        List<LearningItem> existingItems = _contentLoaderService.LoadItems(category);
-                        existingItems.AddRange(items);
-                        _contentLoaderService.SaveItems(category, existingItems);
-                        _view.ShowMessage($"成功添加 {items.Count} 条数据！");
-                        _view.ClearEditForm();
-                        _logger.LogInformation("Successfully added {Count} items to category {Category}", items.Count, category);
-                    }
-                    else
-                    {
-                        _view.ShowMessage("JSON数组为空！");
-                    }
-                }
-                else
-                {
-                    var jsonObj = JObject.Parse(json);
-                    string typeName = jsonObj["_type"]?.ToString() ?? category;
-                    Type itemType = _contentLoaderService.GetItemType(typeName);
-
-                    LearningItem? item = jsonObj.ToObject(itemType) as LearningItem;
-                    if (item != null)
-                    {
-                        List<LearningItem> existingItems = _contentLoaderService.LoadItems(category);
-                        existingItems.Add(item);
-                        _contentLoaderService.SaveItems(category, existingItems);
-                        _view.ShowMessage("保存成功！");
-                        _view.ClearEditForm();
-                        _logger.LogInformation("Successfully saved item to category {Category}", category);
-                    }
-                }
+                SaveFromJson(json, category);
+                _view.ClearEditForm();
+                LoadItems();
             }
             catch (Exception ex)
             {
@@ -121,187 +310,219 @@ namespace UnifiedLearningAssistant.Presenters
             }
         }
 
-        private void OnTemplateDeleteClicked(object? sender, EventArgs e)
+        /// <summary>
+        /// 从JSON字符串解析并保存数据项
+        /// </summary>
+        /// <param name="json">JSON字符串</param>
+        /// <param name="category">目标类别</param>
+        private void SaveFromJson(string json, string category)
         {
-            var dataTable = _view.GridDataSource as DataTable;
-            if (dataTable == null || dataTable.Rows.Count == 0)
+            var items = ParseJsonToItems(json, category);
+            if (items.Count == 0)
             {
-                _view.ShowMessage("请先导入或加载数据后再进行删除操作");
+                _view.ShowMessage("JSON为空或解析失败！");
                 return;
             }
+            var itemsOld = _contentLoaderService.LoadItems(category);
+            itemsOld.AddRange(items);
 
-            int[] selectedIndices = _view.SelectedRowIndices;
-            if (selectedIndices.Length == 0)
-            {
-                _view.ShowMessage("请选择要删除的行");
-                return;
-            }
+            _contentLoaderService.SaveItems(category, itemsOld);
+            _logger.LogInformation("Successfully saved {Count} items to category {Category}", items.Count, category);
+        }
 
-            if (MessageBox.Show($"确定要删除选中的 {selectedIndices.Length} 行数据吗？", "确认删除",
-                MessageBoxButtons.YesNo) == DialogResult.Yes)
-            {
-                for (int i = selectedIndices.Length - 1; i >= 0; i--)
+        /// <summary>
+        /// 将JSON字符串解析为对象列表
+        /// </summary>
+        /// <param name="json">JSON字符串</param>
+        /// <param name="category">类别名称，用于确定对象类型</param>
+        /// <returns>解析后的对象列表</returns>
+        private List<object> ParseJsonToItems(string json, string category)
+        {
+            var items = new List<object>();
+            var itemType = _contentLoaderService.GetItemType(category);
+
+            if (!json.TrimStart().StartsWith("[")) json = $"[{json}]";
+
+            var listType = typeof(List<>).MakeGenericType(itemType);
+            var data = System.Text.Json.JsonSerializer.Deserialize(json, listType,
+                new System.Text.Json.JsonSerializerOptions
                 {
-                    dataTable.Rows.RemoveAt(selectedIndices[i]);
+                    PropertyNameCaseInsensitive = true,
+                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                });
+            var importedItems = ((System.Collections.IList)data).Cast<object>().ToList();
+            foreach (var item in importedItems)
+            {
+                items.Add(item);
+            }
+
+            return items;
+        }
+
+        /// <summary>
+        /// 将DataTable转换为对象列表
+        /// </summary>
+        /// <param name="table">DataTable数据源</param>
+        /// <param name="category">类别名称，用于确定对象类型</param>
+        /// <returns>转换后的对象列表</returns>
+        private List<object> ConvertDataTableToItems(DataTable table, string category)
+        {
+            var itemType = _contentLoaderService.GetItemType(category);
+            return table.Rows.Cast<DataRow>().Select(row =>
+            {
+                var jsonObj = new JObject();
+                foreach (DataColumn col in table.Columns)
+                {
+                    var value = row[col]?.ToString();
+                    jsonObj[col.ColumnName] = TryParseAsList(value) ?? value ?? "";
                 }
-                UpdateJsonFromGrid();
-                _view.ShowMessage($"已删除 {selectedIndices.Length} 行数据");
+                return jsonObj.ToObject(itemType);
+            }).Where(item => item != null).Cast<object>().ToList();
+        }
+
+        /// <summary>
+        /// 尝试将逗号分隔的字符串解析为JSON数组
+        /// </summary>
+        /// <param name="value">待解析的字符串</param>
+        /// <returns>如果解析成功返回JArray，否则返回null</returns>
+        private JToken? TryParseAsList(string? value)
+        {
+            if (string.IsNullOrEmpty(value) || !value.Contains(',')) return null;
+            var parts = value.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                           .Select(p => p.Trim())
+                           .Where(p => !string.IsNullOrEmpty(p))
+                           .ToList();
+            return parts.Count > 1 ? JArray.FromObject(parts) : null;
+        }
+
+        /// <summary>
+        /// 删除选中条目事件处理方法
+        /// </summary>
+        private void OnTemplateDeleteClicked()
+        {
+            var selectedIndices = _view.SelectedRowIndices;
+            var category = _view.SelectedSubCategory;
+
+            if (selectedIndices == null || selectedIndices.Count == 0)
+            {
+                _view.ShowMessage("请在列表中选择要删除的条目");
+                return;
+            }
+
+            if (string.IsNullOrEmpty(category))
+            {
+                _view.ShowMessage("请选择一个类别！");
+                return;
+            }
+
+            try
+            {
+                var items = _contentLoaderService.LoadItems(category);
+                foreach (var index in selectedIndices.OrderByDescending(i => i).Where(i => i >= 0 && i < items.Count))
+                    items.RemoveAt(index);
+
+                _contentLoaderService.SaveItems(category, items);
+                _view.ClearEditForm();
+                LoadItems();
+            }
+            catch (Exception ex)
+            {
+                _view.ShowMessage($"删除失败：{ex.Message}");
             }
         }
 
-        private void OnGridCellEndEdit(object? sender, EventArgs e)
+        /// <summary>
+        /// 网格数据变更事件处理方法
+        /// </summary>
+        private void OnGridValueChanged()
         {
+            _isDirty = true;
             UpdateJsonFromGrid();
         }
 
-        private void OnGridRowsAdded(object? sender, EventArgs e)
-        {
-            UpdateJsonFromGrid();
-        }
-
+        /// <summary>
+        /// 从网格数据更新JSON内容
+        /// </summary>
         private void UpdateJsonFromGrid()
         {
-            var dataTable = _view.GridDataSource as DataTable;
-            if (dataTable != null)
+            if (_view.GridDataSource is DataTable dataTable)
             {
-                string json = JsonConvert.SerializeObject(dataTable, Formatting.None);
-                _view.CurrentEditItemJson = json;
+                var rows = dataTable.Rows.Cast<DataRow>()
+                    .Select(row => dataTable.Columns.Cast<DataColumn>()
+                        .ToDictionary(col => col.ColumnName, col => row[col]?.ToString() ?? ""))
+                    .ToList();
+                _view.CurrentEditItemJson = JsonConvert.SerializeObject(rows, Formatting.Indented);
             }
         }
 
-        private void OnImportClicked(object? sender, EventArgs e)
+        /// <summary>
+        /// 导入事件处理方法，从JSON文件导入数据
+        /// </summary>
+        private void OnImportClicked()
         {
-            using OpenFileDialog dialog = new OpenFileDialog();
-            dialog.Filter = "JSON文件 (*.json)|*.json";
-            if (dialog.ShowDialog() == DialogResult.OK)
-            {
-                try
-                {
-                    string content = File.ReadAllText(dialog.FileName);
-                    List<LearningItem>? importedItems = JsonConvert.DeserializeObject<List<LearningItem>>(content, new JsonSerializerSettings
-                    {
-                        TypeNameHandling = TypeNameHandling.Auto
-                    });
+            if (!CheckAndSaveUnsavedChanges()) return;
 
-                    if (importedItems != null)
-                    {
-                        _view.CurrentEditItemJson = JsonConvert.SerializeObject(importedItems, Formatting.Indented);
-                        _view.ShowMessage("导入成功，请点击保存按钮保存到词库");
-                        _logger.LogInformation("Successfully imported items from {FilePath}", dialog.FileName);
-                    }
-                }
-                catch (Exception ex)
+            using var dialog = new OpenFileDialog { Filter = "JSON文件 (*.json)|*.json" };
+            if (dialog.ShowDialog() != DialogResult.OK) return;
+
+            try
+            {
+                var content = File.ReadAllText(dialog.FileName);
+                var importedItems = JsonConvert.DeserializeObject<List<object>>(content,
+                    new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.Auto });
+
+                if (importedItems?.Count > 0)
                 {
-                    _logger.LogError(ex, "Failed to import items from {FilePath}", dialog.FileName);
-                    _view.ShowMessage("导入失败");
+                    _contentLoaderService.SaveItems(_view.SelectedSubCategory, importedItems);
+                    LoadItems();
+                    _logger.LogInformation("Successfully imported {Count} items from {FilePath}", importedItems.Count, dialog.FileName);
                 }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to import items from {FilePath}", dialog.FileName);
+                _view.ShowMessage("导入失败：" + ex.Message);
             }
         }
 
-        private void OnExportClicked(object? sender, EventArgs e)
+        /// <summary>
+        /// 导出事件处理方法，将数据导出为JSON文件
+        /// </summary>
+        private void OnExportClicked()
         {
-            using SaveFileDialog dialog = new SaveFileDialog();
-            dialog.Filter = "JSON文件 (*.json)|*.json";
-            if (dialog.ShowDialog() == DialogResult.OK)
+            using var dialog = new SaveFileDialog { Filter = "JSON文件 (*.json)|*.json" };
+            if (dialog.ShowDialog() != DialogResult.OK) return;
+
+            try
             {
-                try
+                var items = _contentLoaderService.LoadItems(_view.SelectedSubCategory);
+                var json = JsonConvert.SerializeObject(items, Formatting.Indented,
+                    new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.Auto });
+
+                if (!string.IsNullOrEmpty(json))
                 {
-                    string json = _view.CurrentEditItemJson;
-                    if (!string.IsNullOrEmpty(json))
-                    {
-                        File.WriteAllText(dialog.FileName, json);
-                        _view.ShowMessage("导出成功");
-                        _logger.LogInformation("Successfully exported items to {FilePath}", dialog.FileName);
-                    }
-                    else
-                    {
-                        _view.ShowMessage("没有可导出的内容");
-                    }
+                    File.WriteAllText(dialog.FileName, json);
+                    _view.ShowMessage("导出成功");
+                    _logger.LogInformation("Successfully exported {Count} items to {FilePath}", items.Count, dialog.FileName);
                 }
-                catch (Exception ex)
+                else
                 {
-                    _logger.LogError(ex, "Failed to export items to {FilePath}", dialog.FileName);
-                    _view.ShowMessage("导出失败");
+                    _view.ShowMessage("没有可导出的内容");
                 }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to export items to {FilePath}", dialog.FileName);
+                _view.ShowMessage("导出失败");
             }
         }
 
-        private void OnInsertTemplateClicked(object? sender, EventArgs e)
+        /// <summary>
+        /// AI生成内容事件处理方法
+        /// </summary>
+        private async void OnGenerateWithAIClicked()
         {
-            string template = GetTemplateForCategory(_view.SelectedSubCategory);
-            _view.CurrentEditItemJson = template;
-        }
-
-        private string GetTemplateForCategory(string category)
-        {
-            object template = category switch
-            {
-                "汉字" => new Dictionary<string, object>
-                {
-                    { "Character", "" },
-                    { "Pinyin", "" },
-                    { "Meaning", "" },
-                    { "StrokeCount", "" },
-                    { "Radical", "" }
-                },
-                "组词" => new Dictionary<string, object>
-                {
-                    { "Character", "" },
-                    { "Pinyin", "" },
-                    { "Words", new List<string> { "", "", "", "", "" } }
-                },
-                "成语" => new Dictionary<string, object>
-                {
-                    { "Idiom", "" },
-                    { "Pinyin", "" },
-                    { "Meaning", "" },
-                    { "Origin", "" },
-                    { "Example", "" }
-                },
-                "短语" => new Dictionary<string, object>
-                {
-                    { "Phrase", "" },
-                    { "Pinyin", "" },
-                    { "Meaning", "" },
-                    { "Example", "" }
-                },
-                "诗词" => new Dictionary<string, object>
-                {
-                    { "Title", "" },
-                    { "Author", "" },
-                    { "Dynasty", "" },
-                    { "Verses", new List<string> { "", "", "", "" } },
-                    { "Annotation", "" }
-                },
-                "英语单词" => new Dictionary<string, object>
-                {
-                    { "Word", "" },
-                    { "Phonetic", "" },
-                    { "PartOfSpeech", "" },
-                    { "Meaning", "" },
-                    { "Example", "" }
-                },
-                "英语短语" => new Dictionary<string, object>
-                {
-                    { "Phrase", "" },
-                    { "Meaning", "" },
-                    { "Example", "" }
-                },
-                "英语句子" => new Dictionary<string, object>
-                {
-                    { "Sentence", "" },
-                    { "Translation", "" },
-                    { "Grammar", "" }
-                },
-                _ => new Dictionary<string, object> { { "_type", "" } }
-            };
-
-            return JsonConvert.SerializeObject(template, Formatting.Indented);
-        }
-
-        private async void OnGenerateWithAIClicked(object? sender, EventArgs e)
-        {
-            string category = _view.SelectedSubCategory;
+            var category = _view.SelectedSubCategory;
 
             if (string.IsNullOrEmpty(category))
             {
@@ -309,29 +530,28 @@ namespace UnifiedLearningAssistant.Presenters
                 return;
             }
 
-            if (!int.TryParse(_view.GenerateCount, out int count))
+            if (!int.TryParse(_view.GenerateCount, out var count))
             {
                 _view.ShowMessage("请输入有效的生成数量！");
                 return;
             }
 
-            string range = _view.GenerateRange;
-            if (string.IsNullOrWhiteSpace(range) || range == "请输入关键词或范围")
-            {
-                range = "常用";
-            }
+            var range = string.IsNullOrWhiteSpace(_view.GenerateRange) || _view.GenerateRange == "请输入关键词或范围"
+                ? "常用" : _view.GenerateRange;
 
             try
             {
+                var prompt = GetAIPrompt(category, count, range);
+                _view.PromptText = prompt;
                 _logger.LogInformation("Generating {Count} {Range} {Category} items with AI", count, range, category);
-                string prompt = GetAIPrompt(category, count, range);
-                string response = await _aiQuestionService.AskAsync(prompt);
+                var response = await _aiQuestionService.AskAsync(prompt);
 
                 if (!string.IsNullOrEmpty(response))
                 {
-                    string jsonResult = CleanJsonResult(response);
-                    _view.CurrentEditItemJson = jsonResult;
-                    _view.ShowMessage($"AI已成功生成内容！");
+                    
+
+                    _view.CurrentEditItemJson = response;
+                    OnTemplateSaveClicked();
                     _logger.LogInformation("Successfully generated {Count} {Category} items with AI", count, category);
                 }
                 else
@@ -344,6 +564,11 @@ namespace UnifiedLearningAssistant.Presenters
                 _logger.LogDebug("OnGenerateWithAIClicked was cancelled");
                 _view.ShowMessage("操作已取消");
             }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError(ex, "AI API HTTP error for category {Category}", category);
+                _view.ShowMessage(GetFriendlyErrorMessage(ex.Message));
+            }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to generate items with AI for category {Category}", category);
@@ -351,73 +576,122 @@ namespace UnifiedLearningAssistant.Presenters
             }
         }
 
+        /// <summary>
+        /// 根据HTTP错误信息生成友好的中文错误提示
+        /// </summary>
+        /// <param name="errorMessage">原始错误信息</param>
+        /// <returns>友好的中文错误提示</returns>
+        private static string GetFriendlyErrorMessage(string errorMessage)
+        {
+            return errorMessage.Contains("401") ? "AI服务认证失败，请检查API密钥是否正确！" :
+                   errorMessage.Contains("403") ? "AI服务访问被拒绝，请检查API密钥权限！" :
+                   errorMessage.Contains("429") ? "AI服务请求过于频繁，请稍后再试！" :
+                   errorMessage.Contains("500") || errorMessage.Contains("502") || errorMessage.Contains("503")
+                       ? "AI服务暂时不可用，请稍后再试！" :
+                       $"AI生成失败：{errorMessage}";
+        }
+
+        /// <summary>
+        /// 生成AI请求提示词
+        /// </summary>
+        /// <param name="category">内容类别</param>
+        /// <param name="count">生成数量</param>
+        /// <param name="range">关键词或范围</param>
+        /// <returns>格式化后的AI提示词</returns>
         private string GetAIPrompt(string category, int count, string range)
         {
-            string typeName = category switch
-            {
-                "汉字" => "汉字",
-                "组词" => "组词",
-                "成语" => "成语",
-                "短语" => "短语",
-                "诗词" => "诗词",
-                "英语单词" => "英语单词",
-                "英语短语" => "英语短语",
-                "英语句子" => "英语句子",
-                _ => "内容"
-            };
+            var typeName = CategoryTypeNames.GetValueOrDefault(category, "内容");
+            var format = JsonFormatHints.GetValueOrDefault(category, "[]");
 
-            string format = GetJSONFormatHint(category);
-
-            return $@"请生成{count}个{range}的{typeName}，每个包含详细信息，输出JSON数组格式：
-{format}
-
-注意：
-1. 直接输出JSON数组，不要有其他解释文字
-2. 确保JSON格式正确
-3. 内容要丰富且实用";
+            return $"请生成{count}个{range}的{typeName}，每个包含详细信息，输出JSON数组格式：\n{format}\n\n注意：\n1. 直接输出JSON数组，不要有其他解释文字\n2. 确保JSON格式正确\n3. 内容要丰富且实用";
         }
 
-        private string GetJSONFormatHint(string category)
+        /// <summary>
+        /// 获取指定类别的JSON模板
+        /// </summary>
+        /// <param name="category">类别名称</param>
+        /// <returns>JSON格式的模板字符串</returns>
+        private static string GetTemplateJson(string category)
         {
-            return category switch
-            {
-                "汉字" => @"[  {""Character"":"""",""Pinyin"":"""",""Meaning"":"""",""StrokeCount"":"""",""Radical"":""""}]",
-                "组词" => @"[  {""Character"":"""",""Pinyin"":"""",""Words"":["""","""","""","""",""""]}]",
-                "成语" => @"[  {""Idiom"":"""",""Pinyin"":"""",""Meaning"":"""",""Origin"":"""",""Example"":""""}]",
-                "短语" => @"[  {""Phrase"":"""",""Pinyin"":"""",""Meaning"":"""",""Example"":""""}]",
-                "诗词" => @"[  {""Title"":"""",""Author"":"""",""Dynasty"":"""",""Verses"":["""","""","""",""""],""Annotation"":""""}]",
-                "英语单词" => @"[  {""Word"":"""",""Phonetic"":"""",""PartOfSpeech"":"""",""Meaning"":"""",""Example"":""""}]",
-                "英语短语" => @"[  {""Phrase"":"""",""Meaning"":"""",""Example"":""""}]",
-                "英语句子" => @"[  {""Sentence"":"""",""Translation"":"""",""Grammar"":""""}]",
-                _ => "[]"
-            };
+            return CategoryTemplates.TryGetValue(category, out var template)
+                ? JsonConvert.SerializeObject(template, Formatting.Indented)
+                : "{}";
         }
 
-        private string CleanJsonResult(string result)
+        /// <summary>
+        /// 清理AI返回的JSON结果，处理换行符和特殊字符
+        /// </summary>
+        /// <param name="result">AI返回的原始字符串</param>
+        /// <returns>清理后的JSON字符串</returns>
+        private static string CleanJsonResult(string result)
         {
-            int startIndex = result.IndexOf('[');
-            int endIndex = result.LastIndexOf(']');
+            var startIndex = result.IndexOf('[');
+            var endIndex = result.LastIndexOf(']');
 
-            if (startIndex >= 0 && endIndex >= startIndex)
+            if (startIndex < 0 || endIndex < startIndex)
             {
-                return result.Substring(startIndex, endIndex - startIndex + 1);
+                return result;
             }
 
-            return result;
+            var jsonContent = result.Substring(startIndex, endIndex - startIndex + 1);
+
+            jsonContent = jsonContent.Replace("\r\n", "\\n")
+                                     .Replace("\r", "\\n")
+                                     .Replace("\n", "\\n")
+                                     .Replace("\"", "\\\"")
+                                     .Replace("\t", "\\t");
+
+            return jsonContent;
         }
 
+        /// <summary>
+        /// 检查并保存未保存的更改
+        /// </summary>
+        /// <returns>如果允许继续操作返回true，否则返回false</returns>
+        private bool CheckAndSaveUnsavedChanges()
+        {
+            if (!_isDirty) return true;
+
+            var result = MessageBox.Show(
+                "当前有未保存的更改，是否保存？",
+                "保存提示",
+                MessageBoxButtons.YesNoCancel,
+                MessageBoxIcon.Question);
+
+            if (result == DialogResult.Yes)
+            {
+                OnTemplateSaveClicked();
+                return !_isDirty;
+            }
+
+            return result != DialogResult.Cancel;
+        }
+
+        /// <summary>
+        /// 释放Presenter资源，在窗口关闭时调用
+        /// </summary>
         public void Dispose()
         {
-            _view.CategoryChanged -= OnCategoryChanged;
-            _view.TemplateAddClicked -= OnTemplateAddClicked;
-            _view.TemplateSaveClicked -= OnTemplateSaveClicked;
-            _view.TemplateDeleteClicked -= OnTemplateDeleteClicked;
-            _view.ImportClicked -= OnImportClicked;
-            _view.ExportClicked -= OnExportClicked;
-            _view.InsertTemplateClicked -= OnInsertTemplateClicked;
-            _view.GenerateWithAIClicked -= OnGenerateWithAIClicked;
-            _view.GridCellEndEdit -= OnGridCellEndEdit;
-            _view.GridRowsAdded -= OnGridRowsAdded;
+            if (_isDirty && MessageBox.Show(
+                "当前有未保存的更改，是否保存？",
+                "保存提示",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question) == DialogResult.Yes)
+            {
+                OnTemplateSaveClicked();
+            }
+
+            _view.LanguageChanged -= (_, _) => OnLanguageChanged();
+            _view.SubCategoryChanged -= (_, _) => OnSubCategoryChanged();
+            _view.TemplateAddClicked -= (_, _) => OnTemplateAddClicked();
+            _view.TemplateSaveClicked -= (_, _) => OnTemplateSaveClicked();
+            _view.TemplateDeleteClicked -= (_, _) => OnTemplateDeleteClicked();
+            _view.ImportClicked -= (_, _) => OnImportClicked();
+            _view.ExportClicked -= (_, _) => OnExportClicked();
+            _view.GenerateWithAIClicked -= (_, _) => OnGenerateWithAIClicked();
+            _view.GridCellEndEdit -= (_, _) => OnGridValueChanged();
+            _view.GridRowsAdded -= (_, _) => OnGridValueChanged();
+
             _logger.LogInformation("ContentEditorPresenter disposed");
         }
     }

@@ -51,29 +51,26 @@ namespace UnifiedLearningAssistant.Services.TTS
 
             if (!Available)
                 throw new InvalidOperationException("QwenTtsClient 不可用: 未提供 API Key。请在环境变量中设置 DASHSCOPE_API_KEY 或通过构造函数传入。");
-
+            if (language == "zh") language = "Chinese";
+            if (language == "en") language = "English";
             // 1. 构建请求体 - 基于阿里云官方 DashScope API 格式 [citation:3]
             var requestBody = new
             {
-                model = "qwen3-tts-instruct-flash", // 使用快速版模型，如需要指令控制可使用 qwen3-tts-instruct-flash [citation:4]
+                model = "qwen3-tts-instruct-flash",
                 input = new
                 {
-                    //enable_subtitle = true,
                     text = text,
                     voice = voice,
-                    language_type = language, // 建议与文本语种一致 [citation:4]
-                    speed = speed, // 调低此值以减慢语速
-                    pitch = 1.1,   // 稍微调高音调，会让声音听起来更活泼、更像卡通角色
-                    instructions = "语气幽默，语调活泼多变，充满童趣和笑意，节奏轻快，发音清晰，带有欢快的笑意，语速偏慢，声音响亮一些。", // 使用自然语言描述你想要的语音效果
-                    volume = 2       // 新增此行，调大此值以增加音量
-                                     // 可选参数: pitch (音高), volume (音量), sample_rate 等，根据需求添加 [citation:1]
+                    language_type = language,
+                    speed = speed,
+                    pitch = 1.1,
+                    instructions = "语气幽默，语调活泼多变，充满童趣和笑意，节奏轻快，发音清晰，带有欢快的笑意，语速偏慢，声音响亮一些。",
                 },
                 parameters = new
                 {
-                    format = format // 输出音频格式
+                    format = format // 支持 wav / mp3 / ogg
                 }
             };
-
             string jsonPayload = JsonSerializer.Serialize(requestBody);
             using var content = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
 

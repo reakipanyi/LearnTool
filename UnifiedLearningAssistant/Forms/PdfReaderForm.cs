@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using System.Drawing.Drawing2D;
+using UnifiedLearningAssistant.Common;
 using UnifiedLearningAssistant.Presenters;
 using UnifiedLearningAssistant.Views;
 using UnifiedLearningAssistant.Views.UI;
@@ -22,21 +23,21 @@ namespace UnifiedLearningAssistant.Forms
         private List<PointF>? _currentStrokePoints;
         private bool _disposed = false;
 
+        private Panel? _ocrPanel;
+        private PictureBox? _ocrPictureBox;
+        private Button? _ocrCloseButton;
+        private bool _isOcrPanelDragging = false;
+        private Point _ocrPanelStartPoint = Point.Empty;
+        private bool _isDoubleClickPending = false;
+        private DateTime _lastClickTime = DateTime.MinValue;
+        private Point _lastClickLocation = Point.Empty;
+        private const int DoubleClickTime_ms = 200;
+        private const int DoubleClickDistance = 5;
+
         private bool _isNavPanelDragging = false;
         private Point _navPanelStartPoint = Point.Empty;
         // 新增功能：中等级 - UI响应性改进，添加加载指示器
         private LoadingIndicator? _loadingIndicator;
-        // 新增功能：低优先级 - PDF搜索和高亮
-        private Panel? _searchPanel;
-        private TextBox? _searchTextBox;
-        private Label? _searchResultLabel;
-        private Button? _searchNextButton;
-        private Button? _searchPrevButton;
-        private Button? _searchCloseButton;
-        private SplitContainer? _splitContainer;
-        private string _currentSearchText = "";
-        private List<int> _searchResults = new List<int>();
-        private int _currentSearchIndex = -1;
         // 新增功能：低优先级 - 夜间模式
         private bool _isNightMode = false;
         private SplitContainer splitContainer1;
@@ -63,13 +64,6 @@ namespace UnifiedLearningAssistant.Forms
 
         private void PdfReaderForm_KeyDown(object? sender, KeyEventArgs e)
         {
-            // 新增功能：低优先级 - Ctrl+F 快捷键打开搜索面板
-            if (e.Control && e.KeyCode == Keys.F)
-            {
-                ToggleSearchPanel?.Invoke(this, EventArgs.Empty);
-                SetSearchPanelVisible(true);
-                e.Handled = true;
-            }
         }
 
         private void PdfReaderForm_Resize(object? sender, EventArgs e)
@@ -136,23 +130,23 @@ namespace UnifiedLearningAssistant.Forms
             dialog.AddToLearningList += (s, e) =>
             {
                 textBoxQuestion.Text = original;
-                AddWordToLearningList?.Invoke(this, EventArgs.Empty);
+                AddToLearningList?.Invoke(this, EventArgs.Empty);
             };
             dialog.AskAi += (s, text) =>
             {
                 textBoxQuestion.Text = text;
-                AiQuestionAsked?.Invoke(this, EventArgs.Empty);
+                AskAiWithText?.Invoke(this, text);
             };
             dialog.SpeakText += (s, text) =>
             {
-                SpeakTranslation?.Invoke(this, EventArgs.Empty);
+                SpeakText?.Invoke(this, text);
             };
             dialog.ShowDialog();
         }
 
         public void UpdateAiAnswer(string answer)
         {
-            richTextBoxAiAnswer.Text = answer;
+            MarkdownParser.ParseMarkdownToRichTextBox(richTextBoxAiAnswer, answer);
         }
 
         public void SetQuestionInput(string text)
@@ -179,28 +173,6 @@ namespace UnifiedLearningAssistant.Forms
             MessageBox.Show(message, "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        // 新增功能：低优先级 - PDF搜索和高亮
-        public void UpdateSearchResultCount(int count)
-        {
-            if (_searchResultLabel != null)
-            {
-                _searchResultLabel.Text = count > 0 ? $"找到 {count} 处" : "未找到";
-            }
-        }
-
-        public void SetSearchPanelVisible(bool visible)
-        {
-            if (_searchPanel != null)
-            {
-                _searchPanel.Visible = visible;
-                if (visible && _searchTextBox != null)
-                {
-                    _searchTextBox.Focus();
-                }
-            }
-        }
-
-
         // 新增功能：低优先级 - 夜间模式切换
         public void NightMode()
         {
@@ -222,7 +194,7 @@ namespace UnifiedLearningAssistant.Forms
                 panelNavigation.BackColor = Color.FromArgb(45, 45, 45);
                 treeViewFiles.BackColor = Color.FromArgb(40, 40, 40);
                 treeViewFiles.ForeColor = Color.White;
-                tabControlTools.BackColor = Color.FromArgb(40, 40, 40);
+                tabControlLeft.BackColor = Color.FromArgb(40, 40, 40);
                 // 缩略图面板夜间模式
                 panelThumbnails.BackColor = Color.FromArgb(40, 40, 40);
                 flowLayoutPanelThumbnails.BackColor = Color.FromArgb(40, 40, 40);
@@ -246,7 +218,7 @@ namespace UnifiedLearningAssistant.Forms
                 panelNavigation.BackColor = Color.FromArgb(240, 240, 240);
                 treeViewFiles.BackColor = Color.White;
                 treeViewFiles.ForeColor = Color.Black;
-                tabControlTools.BackColor = Color.White;
+                tabControlLeft.BackColor = Color.White;
                 // 缩略图面板日间模式
                 panelThumbnails.BackColor = Color.FromArgb(240, 240, 240);
                 flowLayoutPanelThumbnails.BackColor = Color.FromArgb(240, 240, 240);
@@ -501,6 +473,16 @@ namespace UnifiedLearningAssistant.Forms
             return textBoxOriginal.Text;
         }
 
+        public void SetTranslationText(string text)
+        {
+            textBoxTranslation.Text = text;
+        }
+
+        public string GetAiAnswerText()
+        {
+            return richTextBoxAiAnswer.Text;
+        }
+
         public Image? GetCurrentImage()
         {
             return pictureBoxPdf.Image;
@@ -532,36 +514,103 @@ namespace UnifiedLearningAssistant.Forms
 
             if (imageAspect > controlAspect)
             {
+                // 图片更宽，水平填满，垂直居中
                 displayWidth = controlWidth;
                 displayHeight = (int)(controlWidth / imageAspect);
                 displayX = 0;
-                displayY = 0;
+                displayY = (controlHeight - displayHeight) / 2;
             }
             else
             {
+                // 图片更高，垂直填满，水平居中
                 displayHeight = controlHeight;
                 displayWidth = (int)(controlHeight * imageAspect);
                 displayY = 0;
-                displayX = 0;
+                displayX = (controlWidth - displayWidth) / 2;
             }
 
             return new Rectangle(displayX, displayY, displayWidth, displayHeight);
+        }
+
+        public void ShowOcrOverlay(Bitmap? image)
+        {
+            if (_ocrPanel != null && _ocrPictureBox != null && _ocrCloseButton != null)
+            {
+                if (_ocrPictureBox.Image != null)
+                {
+                    _ocrPictureBox.Image.Dispose();
+                }
+                _ocrPictureBox.Image = image;
+                _ocrPanel.Visible = image != null;
+                if (image != null)
+                {
+                    // 按图片实际尺寸调整面板大小，添加边框和关闭按钮空间
+                    int panelWidth = image.Width + 8;
+                    int panelHeight = image.Height + 32; // 26 for close button area
+
+                    // 限制最小宽度至少能放下关闭按钮
+                    if (panelWidth < 50)
+                    {
+                        panelWidth = 50;
+                    }
+
+                    // 限制最大尺寸，防止过大
+                    int maxWidth = panelPdf.ClientSize.Width - 100;
+                    int maxHeight = panelPdf.ClientSize.Height - 100;
+
+                    if (panelWidth > maxWidth)
+                    {
+                        // 等比例缩放
+                        double scale = (double)maxWidth / panelWidth;
+                        panelWidth = maxWidth;
+                        panelHeight = (int)(panelHeight * scale);
+                    }
+
+                    if (panelHeight > maxHeight)
+                    {
+                        // 等比例缩放
+                        double scale = (double)maxHeight / panelHeight;
+                        panelHeight = maxHeight;
+                        panelWidth = (int)(panelWidth * scale);
+                    }
+
+                    _ocrPanel.Size = new Size(panelWidth, panelHeight);
+                    // 重新定位关闭按钮和图片框
+                    _ocrCloseButton.Location = new Point(panelWidth - 28, 2);
+                    _ocrPictureBox.Location = new Point(2, 26);
+                    _ocrPictureBox.Size = new Size(panelWidth - 4, panelHeight - 28);
+                    _ocrPictureBox.SizeMode = PictureBoxSizeMode.Zoom;
+                    _ocrPanel.BringToFront();
+                }
+            }
+        }
+
+        public void HideOcrOverlay()
+        {
+            if (_ocrPanel != null && _ocrPictureBox != null)
+            {
+                if (_ocrPictureBox.Image != null)
+                {
+                    _ocrPictureBox.Image.Dispose();
+                    _ocrPictureBox.Image = null;
+                }
+                _ocrPanel.Visible = false;
+            }
         }
 
         public event EventHandler? FileSelected;
         public event EventHandler? PageChanged;
         public event EventHandler? OcrSelectionComplete;
         public event EventHandler? AiQuestionAsked;
-        public event EventHandler? AddWordToLearningList;
+        public event EventHandler? AddToLearningList;
         public event EventHandler? SpeakTranslation;
+        public event EventHandler<string>? SpeakText;
+        public event EventHandler<string>? AskAiWithText;
         public event EventHandler? SelectOcrClicked;
         public event EventHandler? TranslateClicked;
-        public event EventHandler<string>? SearchTextChanged;
-        public event EventHandler? SearchNext;
-        public event EventHandler? SearchPrevious;
-        public event EventHandler? ToggleSearchPanel;
         public event EventHandler? ToggleNightMode;
         public event EventHandler? LanguageChanged;
+        public event EventHandler? SpeakAnswer;
 
         #endregion
 
@@ -573,7 +622,6 @@ namespace UnifiedLearningAssistant.Forms
         private PictureBox pictureBoxPdf;
         private Panel panelThumbnails;
         private FlowLayoutPanel flowLayoutPanelThumbnails;
-        private TabControl tabControlTools;
         private TabPage tabPageOcr;
         private Button buttonSelectOcr;
         private TextBox textBoxOcrResult;
@@ -609,7 +657,6 @@ namespace UnifiedLearningAssistant.Forms
 
         private void InitializeComponent()
         {
-            _splitContainer = new SplitContainer();
             splitContainer1 = new SplitContainer();
             panelPdf = new Panel();
             panelNavigation = new Panel();
@@ -622,14 +669,10 @@ namespace UnifiedLearningAssistant.Forms
             labelPageCount = new Label();
             textBoxPage = new TextBox();
             buttonPrev = new Button();
-            _searchPanel = new Panel();
-            _searchCloseButton = new Button();
-            _searchNextButton = new Button();
-            _searchTextBox = new TextBox();
-            _searchPrevButton = new Button();
-            _searchResultLabel = new Label();
             pictureBoxPdf = new PictureBox();
-            tabControlTools = new TabControl();
+            _ocrPanel = new Panel();
+            _ocrPictureBox = new PictureBox();
+            _ocrCloseButton = new Button();
             tabPageOcr = new TabPage();
             buttonSelectOcr = new Button();
             labelOcr = new Label();
@@ -656,10 +699,6 @@ namespace UnifiedLearningAssistant.Forms
             panelThumbnails = new Panel();
             flowLayoutPanelThumbnails = new FlowLayoutPanel();
             buttonOpenFolder = new Button();
-            ((System.ComponentModel.ISupportInitialize)_splitContainer).BeginInit();
-            _splitContainer.Panel1.SuspendLayout();
-            _splitContainer.Panel2.SuspendLayout();
-            _splitContainer.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -667,9 +706,9 @@ namespace UnifiedLearningAssistant.Forms
             panelPdf.SuspendLayout();
             panelNavigation.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)trackBarZoom).BeginInit();
-            _searchPanel.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)pictureBoxPdf).BeginInit();
-            tabControlTools.SuspendLayout();
+            _ocrPanel.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)_ocrPictureBox).BeginInit();
             tabPageOcr.SuspendLayout();
             tabPageTranslate.SuspendLayout();
             tabPageAi.SuspendLayout();
@@ -679,23 +718,6 @@ namespace UnifiedLearningAssistant.Forms
             tabPageThumbnails.SuspendLayout();
             panelThumbnails.SuspendLayout();
             SuspendLayout();
-            // 
-            // _splitContainer
-            // 
-            _splitContainer.Dock = DockStyle.Fill;
-            _splitContainer.Location = new Point(0, 0);
-            _splitContainer.Name = "_splitContainer";
-            // 
-            // _splitContainer.Panel1
-            // 
-            _splitContainer.Panel1.Controls.Add(splitContainer1);
-            // 
-            // _splitContainer.Panel2
-            // 
-            _splitContainer.Panel2.Controls.Add(panelLeftContainer);
-            _splitContainer.Size = new Size(1396, 887);
-            _splitContainer.SplitterDistance = 1274;
-            _splitContainer.TabIndex = 5;
             // 
             // splitContainer1
             // 
@@ -709,20 +731,20 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // splitContainer1.Panel2
             // 
-            splitContainer1.Panel2.Controls.Add(tabControlTools);
-            splitContainer1.Size = new Size(1274, 887);
-            splitContainer1.SplitterDistance = 958;
+            splitContainer1.Panel2.Controls.Add(panelLeftContainer);
+            splitContainer1.Size = new Size(1396, 887);
+            splitContainer1.SplitterDistance = 1049;
             splitContainer1.TabIndex = 5;
             // 
             // panelPdf
             // 
             panelPdf.Controls.Add(panelNavigation);
-            panelPdf.Controls.Add(_searchPanel);
             panelPdf.Controls.Add(pictureBoxPdf);
+            panelPdf.Controls.Add(_ocrPanel);
             panelPdf.Dock = DockStyle.Fill;
             panelPdf.Location = new Point(0, 0);
             panelPdf.Name = "panelPdf";
-            panelPdf.Size = new Size(958, 887);
+            panelPdf.Size = new Size(1049, 887);
             panelPdf.TabIndex = 1;
             // 
             // panelNavigation
@@ -823,6 +845,7 @@ namespace UnifiedLearningAssistant.Forms
             textBoxPage.Size = new Size(30, 23);
             textBoxPage.TabIndex = 2;
             textBoxPage.Text = "1";
+            textBoxPage.KeyDown += TextBoxPage_KeyDown;
             // 
             // buttonPrev
             // 
@@ -833,100 +856,57 @@ namespace UnifiedLearningAssistant.Forms
             buttonPrev.Text = "◀";
             buttonPrev.Click += ButtonPrev_Click;
             // 
-            // _searchPanel
-            // 
-            _searchPanel.BackColor = Color.White;
-            _searchPanel.BorderStyle = BorderStyle.FixedSingle;
-            _searchPanel.Controls.Add(_searchCloseButton);
-            _searchPanel.Controls.Add(_searchNextButton);
-            _searchPanel.Controls.Add(_searchTextBox);
-            _searchPanel.Controls.Add(_searchPrevButton);
-            _searchPanel.Controls.Add(_searchResultLabel);
-            _searchPanel.Location = new Point(0, 0);
-            _searchPanel.Name = "_searchPanel";
-            _searchPanel.Size = new Size(608, 45);
-            _searchPanel.TabIndex = 0;
-            // 
-            // _searchCloseButton
-            // 
-            _searchCloseButton.BackColor = Color.White;
-            _searchCloseButton.FlatStyle = FlatStyle.Flat;
-            _searchCloseButton.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
-            _searchCloseButton.Location = new Point(552, 6);
-            _searchCloseButton.Name = "_searchCloseButton";
-            _searchCloseButton.Size = new Size(25, 28);
-            _searchCloseButton.TabIndex = 4;
-            _searchCloseButton.Text = "×";
-            _searchCloseButton.UseVisualStyleBackColor = false;
-            _searchCloseButton.Click += SearchCloseButton_Click;
-            // 
-            // _searchNextButton
-            // 
-            _searchNextButton.Font = new Font("Microsoft YaHei UI", 8F);
-            _searchNextButton.Location = new Point(466, 4);
-            _searchNextButton.Name = "_searchNextButton";
-            _searchNextButton.Size = new Size(80, 30);
-            _searchNextButton.TabIndex = 3;
-            _searchNextButton.Text = "下一页";
-            _searchNextButton.Click += SearchNextButton_Click;
-            // 
-            // _searchTextBox
-            // 
-            _searchTextBox.Font = new Font("Microsoft YaHei UI", 9F);
-            _searchTextBox.Location = new Point(13, 11);
-            _searchTextBox.Name = "_searchTextBox";
-            _searchTextBox.PlaceholderText = "输入搜索内容（Ctrl+F）";
-            _searchTextBox.Size = new Size(269, 23);
-            _searchTextBox.TabIndex = 0;
-            _searchTextBox.TextChanged += SearchTextBox_TextChanged;
-            _searchTextBox.KeyDown += SearchTextBox_KeyDown;
-            // 
-            // _searchPrevButton
-            // 
-            _searchPrevButton.Font = new Font("Microsoft YaHei UI", 8F);
-            _searchPrevButton.Location = new Point(376, 4);
-            _searchPrevButton.Name = "_searchPrevButton";
-            _searchPrevButton.Size = new Size(80, 30);
-            _searchPrevButton.TabIndex = 2;
-            _searchPrevButton.Text = "上一页";
-            _searchPrevButton.Click += SearchPrevButton_Click;
-            // 
-            // _searchResultLabel
-            // 
-            _searchResultLabel.Font = new Font("Microsoft YaHei UI", 8F);
-            _searchResultLabel.Location = new Point(288, 13);
-            _searchResultLabel.Name = "_searchResultLabel";
-            _searchResultLabel.Size = new Size(80, 20);
-            _searchResultLabel.TabIndex = 1;
-            _searchResultLabel.TextAlign = ContentAlignment.MiddleLeft;
-            // 
             // pictureBoxPdf
             // 
             pictureBoxPdf.Dock = DockStyle.Fill;
             pictureBoxPdf.Location = new Point(0, 0);
             pictureBoxPdf.Name = "pictureBoxPdf";
-            pictureBoxPdf.Size = new Size(958, 887);
+            pictureBoxPdf.Size = new Size(1049, 887);
             pictureBoxPdf.SizeMode = PictureBoxSizeMode.Zoom;
             pictureBoxPdf.TabIndex = 1;
             pictureBoxPdf.TabStop = false;
             pictureBoxPdf.Paint += PictureBoxPdf_Paint;
             pictureBoxPdf.MouseDoubleClick += PictureBoxPdf_MouseDoubleClick;
-            pictureBoxPdf.MouseDown += PictureBoxPdf_MouseDown;
             pictureBoxPdf.MouseMove += PictureBoxPdf_MouseMove;
             pictureBoxPdf.MouseUp += PictureBoxPdf_MouseUp;
             pictureBoxPdf.MouseWheel += PictureBoxPdf_MouseWheel;
             // 
-            // tabControlTools
+            // _ocrPanel
             // 
-            tabControlTools.Controls.Add(tabPageOcr);
-            tabControlTools.Controls.Add(tabPageTranslate);
-            tabControlTools.Controls.Add(tabPageAi);
-            tabControlTools.Dock = DockStyle.Fill;
-            tabControlTools.Location = new Point(0, 0);
-            tabControlTools.Name = "tabControlTools";
-            tabControlTools.SelectedIndex = 0;
-            tabControlTools.Size = new Size(312, 887);
-            tabControlTools.TabIndex = 4;
+            _ocrPanel.BackColor = Color.LightGray;
+            _ocrPanel.BorderStyle = BorderStyle.FixedSingle;
+            _ocrPanel.Controls.Add(_ocrPictureBox);
+            _ocrPanel.Controls.Add(_ocrCloseButton);
+            _ocrPanel.Location = new Point(100, 150);
+            _ocrPanel.Name = "_ocrPanel";
+            _ocrPanel.Size = new Size(200, 150);
+            _ocrPanel.TabIndex = 2;
+            _ocrPanel.Visible = false;
+            _ocrPanel.MouseDown += OcrPanel_MouseDown;
+            _ocrPanel.MouseMove += OcrPanel_MouseMove;
+            _ocrPanel.MouseUp += OcrPanel_MouseUp;
+            // 
+            // _ocrPictureBox
+            // 
+            _ocrPictureBox.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            _ocrPictureBox.Location = new Point(2, 24);
+            _ocrPictureBox.Name = "_ocrPictureBox";
+            _ocrPictureBox.Size = new Size(192, 170);
+            _ocrPictureBox.SizeMode = PictureBoxSizeMode.Zoom;
+            _ocrPictureBox.TabIndex = 0;
+            _ocrPictureBox.TabStop = false;
+            // 
+            // _ocrCloseButton
+            // 
+            _ocrCloseButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            _ocrCloseButton.Font = new Font("Microsoft YaHei UI", 8F, FontStyle.Bold);
+            _ocrCloseButton.Location = new Point(168, 2);
+            _ocrCloseButton.Name = "_ocrCloseButton";
+            _ocrCloseButton.Size = new Size(24, 20);
+            _ocrCloseButton.TabIndex = 1;
+            _ocrCloseButton.Text = "×";
+            _ocrCloseButton.UseVisualStyleBackColor = true;
+            _ocrCloseButton.Click += OcrCloseButton_Click;
             // 
             // tabPageOcr
             // 
@@ -936,7 +916,7 @@ namespace UnifiedLearningAssistant.Forms
             tabPageOcr.Location = new Point(4, 26);
             tabPageOcr.Name = "tabPageOcr";
             tabPageOcr.Padding = new Padding(3);
-            tabPageOcr.Size = new Size(304, 857);
+            tabPageOcr.Size = new Size(335, 822);
             tabPageOcr.TabIndex = 0;
             tabPageOcr.Text = "OCR划词";
             // 
@@ -965,7 +945,7 @@ namespace UnifiedLearningAssistant.Forms
             textBoxOcrResult.Name = "textBoxOcrResult";
             textBoxOcrResult.ReadOnly = true;
             textBoxOcrResult.ScrollBars = ScrollBars.Vertical;
-            textBoxOcrResult.Size = new Size(272, 756);
+            textBoxOcrResult.Size = new Size(303, 721);
             textBoxOcrResult.TabIndex = 1;
             // 
             // tabPageTranslate
@@ -979,7 +959,7 @@ namespace UnifiedLearningAssistant.Forms
             tabPageTranslate.Location = new Point(4, 26);
             tabPageTranslate.Name = "tabPageTranslate";
             tabPageTranslate.Padding = new Padding(3);
-            tabPageTranslate.Size = new Size(269, 857);
+            tabPageTranslate.Size = new Size(335, 822);
             tabPageTranslate.TabIndex = 1;
             tabPageTranslate.Text = "翻译结果";
             // 
@@ -1034,7 +1014,7 @@ namespace UnifiedLearningAssistant.Forms
             textBoxTranslation.Name = "textBoxTranslation";
             textBoxTranslation.ReadOnly = true;
             textBoxTranslation.ScrollBars = ScrollBars.Vertical;
-            textBoxTranslation.Size = new Size(237, 651);
+            textBoxTranslation.Size = new Size(303, 616);
             textBoxTranslation.TabIndex = 5;
             // 
             // tabPageAi
@@ -1048,7 +1028,7 @@ namespace UnifiedLearningAssistant.Forms
             tabPageAi.Location = new Point(4, 26);
             tabPageAi.Name = "tabPageAi";
             tabPageAi.Padding = new Padding(3);
-            tabPageAi.Size = new Size(269, 857);
+            tabPageAi.Size = new Size(335, 822);
             tabPageAi.TabIndex = 2;
             tabPageAi.Text = "AI提问";
             // 
@@ -1092,6 +1072,7 @@ namespace UnifiedLearningAssistant.Forms
             buttonSpeakAnswer.Size = new Size(110, 30);
             buttonSpeakAnswer.TabIndex = 4;
             buttonSpeakAnswer.Text = "朗读答案";
+            buttonSpeakAnswer.Click += ButtonSpeakAnswer_Click;
             // 
             // richTextBoxAiAnswer
             // 
@@ -1100,7 +1081,7 @@ namespace UnifiedLearningAssistant.Forms
             richTextBoxAiAnswer.Name = "richTextBoxAiAnswer";
             richTextBoxAiAnswer.ReadOnly = true;
             richTextBoxAiAnswer.ScrollBars = RichTextBoxScrollBars.Vertical;
-            richTextBoxAiAnswer.Size = new Size(237, 696);
+            richTextBoxAiAnswer.Size = new Size(303, 661);
             richTextBoxAiAnswer.TabIndex = 5;
             richTextBoxAiAnswer.Text = "";
             // 
@@ -1111,18 +1092,21 @@ namespace UnifiedLearningAssistant.Forms
             panelLeftContainer.Dock = DockStyle.Fill;
             panelLeftContainer.Location = new Point(0, 0);
             panelLeftContainer.Name = "panelLeftContainer";
-            panelLeftContainer.Size = new Size(118, 887);
+            panelLeftContainer.Size = new Size(343, 887);
             panelLeftContainer.TabIndex = 0;
             // 
             // tabControlLeft
             // 
-            tabControlLeft.Controls.Add(tabPageFiles);
             tabControlLeft.Controls.Add(tabPageThumbnails);
+            tabControlLeft.Controls.Add(tabPageOcr);
+            tabControlLeft.Controls.Add(tabPageTranslate);
+            tabControlLeft.Controls.Add(tabPageAi);
+            tabControlLeft.Controls.Add(tabPageFiles);
             tabControlLeft.Dock = DockStyle.Fill;
             tabControlLeft.Location = new Point(0, 35);
             tabControlLeft.Name = "tabControlLeft";
             tabControlLeft.SelectedIndex = 0;
-            tabControlLeft.Size = new Size(118, 852);
+            tabControlLeft.Size = new Size(343, 852);
             tabControlLeft.TabIndex = 1;
             // 
             // tabPageFiles
@@ -1131,7 +1115,7 @@ namespace UnifiedLearningAssistant.Forms
             tabPageFiles.Location = new Point(4, 26);
             tabPageFiles.Name = "tabPageFiles";
             tabPageFiles.Padding = new Padding(3);
-            tabPageFiles.Size = new Size(110, 822);
+            tabPageFiles.Size = new Size(335, 822);
             tabPageFiles.TabIndex = 0;
             tabPageFiles.Text = "📁 目录";
             tabPageFiles.UseVisualStyleBackColor = true;
@@ -1141,7 +1125,7 @@ namespace UnifiedLearningAssistant.Forms
             treeViewFiles.Dock = DockStyle.Fill;
             treeViewFiles.Location = new Point(3, 3);
             treeViewFiles.Name = "treeViewFiles";
-            treeViewFiles.Size = new Size(104, 816);
+            treeViewFiles.Size = new Size(329, 816);
             treeViewFiles.TabIndex = 0;
             treeViewFiles.AfterSelect += TreeViewFiles_AfterSelect;
             // 
@@ -1151,7 +1135,7 @@ namespace UnifiedLearningAssistant.Forms
             tabPageThumbnails.Location = new Point(4, 26);
             tabPageThumbnails.Name = "tabPageThumbnails";
             tabPageThumbnails.Padding = new Padding(3);
-            tabPageThumbnails.Size = new Size(249, 822);
+            tabPageThumbnails.Size = new Size(335, 822);
             tabPageThumbnails.TabIndex = 1;
             tabPageThumbnails.Text = "🖼️ 缩略图";
             tabPageThumbnails.UseVisualStyleBackColor = true;
@@ -1164,18 +1148,18 @@ namespace UnifiedLearningAssistant.Forms
             panelThumbnails.Dock = DockStyle.Fill;
             panelThumbnails.Location = new Point(3, 3);
             panelThumbnails.Name = "panelThumbnails";
-            panelThumbnails.Size = new Size(243, 816);
+            panelThumbnails.Size = new Size(329, 816);
             panelThumbnails.TabIndex = 0;
             // 
             // flowLayoutPanelThumbnails
             // 
-            flowLayoutPanelThumbnails.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
             flowLayoutPanelThumbnails.AutoScroll = true;
             flowLayoutPanelThumbnails.BackColor = Color.FromArgb(240, 240, 240);
+            flowLayoutPanelThumbnails.Dock = DockStyle.Fill;
             flowLayoutPanelThumbnails.FlowDirection = FlowDirection.TopDown;
             flowLayoutPanelThumbnails.Location = new Point(0, 0);
             flowLayoutPanelThumbnails.Name = "flowLayoutPanelThumbnails";
-            flowLayoutPanelThumbnails.Size = new Size(170, 783);
+            flowLayoutPanelThumbnails.Size = new Size(329, 816);
             flowLayoutPanelThumbnails.TabIndex = 0;
             flowLayoutPanelThumbnails.WrapContents = false;
             // 
@@ -1184,20 +1168,16 @@ namespace UnifiedLearningAssistant.Forms
             buttonOpenFolder.Dock = DockStyle.Top;
             buttonOpenFolder.Location = new Point(0, 0);
             buttonOpenFolder.Name = "buttonOpenFolder";
-            buttonOpenFolder.Size = new Size(118, 35);
+            buttonOpenFolder.Size = new Size(343, 35);
             buttonOpenFolder.TabIndex = 0;
             buttonOpenFolder.Text = "📁 选择文件夹";
             buttonOpenFolder.Click += ButtonOpenFolder_Click;
             // 
             // PdfReaderForm
             // 
-            Controls.Add(_splitContainer);
+            Controls.Add(splitContainer1);
             Name = "PdfReaderForm";
             Size = new Size(1396, 887);
-            _splitContainer.Panel1.ResumeLayout(false);
-            _splitContainer.Panel2.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)_splitContainer).EndInit();
-            _splitContainer.ResumeLayout(false);
             splitContainer1.Panel1.ResumeLayout(false);
             splitContainer1.Panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)splitContainer1).EndInit();
@@ -1206,10 +1186,9 @@ namespace UnifiedLearningAssistant.Forms
             panelNavigation.ResumeLayout(false);
             panelNavigation.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)trackBarZoom).EndInit();
-            _searchPanel.ResumeLayout(false);
-            _searchPanel.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)pictureBoxPdf).EndInit();
-            tabControlTools.ResumeLayout(false);
+            _ocrPanel.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)_ocrPictureBox).EndInit();
             tabPageOcr.ResumeLayout(false);
             tabPageOcr.PerformLayout();
             tabPageTranslate.ResumeLayout(false);
@@ -1289,7 +1268,7 @@ namespace UnifiedLearningAssistant.Forms
 
                 int leftBoundary = panelLeftContainer?.Width ?? 0;
                 int rightBoundary = ClientSize.Width - panelNavigation.Width;
-                int toolWidth = tabControlTools?.Width ?? 0;
+                int toolWidth = tabControlLeft?.Width ?? 0;
                 rightBoundary -= toolWidth;
 
                 rightBoundary = Math.Max(leftBoundary, rightBoundary);
@@ -1316,6 +1295,60 @@ namespace UnifiedLearningAssistant.Forms
 
         #endregion
 
+        #region OCR Panel Drag
+
+        private void OcrPanel_MouseDown(object? sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left && _ocrPanel != null)
+            {
+                _isOcrPanelDragging = true;
+                _ocrPanelStartPoint = PointToScreen(e.Location);
+                _ocrPanel.Cursor = Cursors.SizeAll;
+                _ocrPanel.Capture = true;
+            }
+        }
+
+        private void OcrPanel_MouseMove(object? sender, MouseEventArgs e)
+        {
+            if (_isOcrPanelDragging && _ocrPanel != null)
+            {
+                Point currentScreenPoint = PointToScreen(e.Location);
+                int deltaX = currentScreenPoint.X - _ocrPanelStartPoint.X;
+                int deltaY = currentScreenPoint.Y - _ocrPanelStartPoint.Y;
+
+                int newX = _ocrPanel.Left + deltaX;
+                int newY = _ocrPanel.Top + deltaY;
+
+                int leftBoundary = 0;
+                int rightBoundary = panelPdf.ClientSize.Width - _ocrPanel.Width;
+                int topBoundary = 0;
+                int bottomBoundary = panelPdf.ClientSize.Height - _ocrPanel.Height;
+
+                newX = Math.Max(leftBoundary, Math.Min(newX, rightBoundary));
+                newY = Math.Max(topBoundary, Math.Min(newY, bottomBoundary));
+
+                _ocrPanel.Location = new Point(newX, newY);
+                _ocrPanelStartPoint = currentScreenPoint;
+            }
+        }
+
+        private void OcrPanel_MouseUp(object? sender, MouseEventArgs e)
+        {
+            if (_isOcrPanelDragging && _ocrPanel != null)
+            {
+                _isOcrPanelDragging = false;
+                _ocrPanel.Cursor = Cursors.Default;
+                _ocrPanel.Capture = false;
+            }
+        }
+
+        private void OcrCloseButton_Click(object? sender, EventArgs e)
+        {
+            HideOcrOverlay();
+        }
+
+        #endregion
+
         #region Event Handlers
 
         private void ButtonOpenFolder_Click(object? sender, EventArgs e)
@@ -1336,6 +1369,21 @@ namespace UnifiedLearningAssistant.Forms
         {
             if (e.Button == MouseButtons.Left)
             {
+                var now = DateTime.Now;
+                var timeDiff = (now - _lastClickTime).TotalMilliseconds;
+                var distance = Math.Sqrt(Math.Pow(e.Location.X - _lastClickLocation.X, 2) + Math.Pow(e.Location.Y - _lastClickLocation.Y, 2));
+
+                if (timeDiff < DoubleClickTime_ms && distance < DoubleClickDistance)
+                {
+                    _isDoubleClickPending = true;
+                    _lastClickTime = DateTime.MinValue;
+                    return;
+                }
+
+                _isDoubleClickPending = false;
+                _lastClickTime = now;
+                _lastClickLocation = e.Location;
+
                 if (_isDrawing || (ModifierKeys & Keys.Control) == Keys.Control)
                 {
                     try
@@ -1357,6 +1405,7 @@ namespace UnifiedLearningAssistant.Forms
                     pictureBoxPdf.Invalidate();
                     return;
                 }
+
                 _isSelecting = true;
                 _selectStart = e.Location;
                 _selectEnd = e.Location;
@@ -1382,7 +1431,7 @@ namespace UnifiedLearningAssistant.Forms
             }
         }
 
-        private void PictureBoxPdf_MouseDoubleClick(object? sender, MouseEventArgs e)
+        private async void PictureBoxPdf_MouseDoubleClick(object? sender, MouseEventArgs e)
         {
             try
             {
@@ -1400,22 +1449,34 @@ namespace UnifiedLearningAssistant.Forms
                     return;
                 }
 
-                var img = pictureBoxPdf.Image as Bitmap;
-                if (img == null)
+                // 创建图像副本，避免OCR操作影响原始图像
+                Bitmap? imgCopy = null;
+                try
                 {
-                    _logger.LogWarning("双击识别失败: 图像不是 Bitmap 类型");
-                    ShowWarning("图像格式不支持");
-                    return;
-                }
+                    var originalImg = pictureBoxPdf.Image as Bitmap;
+                    if (originalImg == null)
+                    {
+                        _logger.LogWarning("双击识别失败: 图像不是 Bitmap 类型");
+                        ShowWarning("图像格式不支持");
+                        return;
+                    }
 
-                if (img.Width == 0 || img.Height == 0)
+                    if (originalImg.Width == 0 || originalImg.Height == 0)
+                    {
+                        _logger.LogWarning("双击识别失败: 图像尺寸无效");
+                        ShowWarning("图像尺寸无效");
+                        return;
+                    }
+
+                    // 创建图像副本，防止OCR操作影响原始图像
+                    imgCopy = new Bitmap(originalImg);
+                    await OcrFullImageAsync(imgCopy);
+                }
+                finally
                 {
-                    _logger.LogWarning("双击识别失败: 图像尺寸无效");
-                    ShowWarning("图像尺寸无效");
-                    return;
+                    // 确保副本被释放
+                    imgCopy?.Dispose();
                 }
-
-                // await OcrFullImageAsync(img);
             }
             catch (Exception ex)
             {
@@ -1443,7 +1504,12 @@ namespace UnifiedLearningAssistant.Forms
                     return;
                 }
 
-                var recognizedText = await _presenter.OcrBitmapAsync(img);
+                // 在后台线程中执行OCR，避免影响UI线程
+                var recognizedText = await Task.Run(() =>
+                {
+                    // 在后台线程中处理，避免影响UI
+                    return _presenter.OcrBitmapAsync(img).Result;
+                });
 
                 _logger.LogInformation($"OCR识别结果: {(recognizedText == null ? "null" : (recognizedText.Length == 0 ? "空字符串" : $"成功，{recognizedText.Length}个字符"))}");
 
@@ -1451,7 +1517,7 @@ namespace UnifiedLearningAssistant.Forms
                 {
                     textBoxOcrResult.Text = recognizedText;
                     textBoxOriginal.Text = recognizedText;
-                    tabControlTools.SelectedTab = tabControlTools.TabPages["tabPageOcr"];
+                    tabControlLeft.SelectedTab = tabControlLeft.TabPages["tabPageOcr"];
                 }
                 else
                 {
@@ -1467,6 +1533,13 @@ namespace UnifiedLearningAssistant.Forms
 
         private void PictureBoxPdf_MouseUp(object? sender, MouseEventArgs e)
         {
+            if (_isDoubleClickPending)
+            {
+                _isSelecting = false;
+                _isDrawing = false;
+                return;
+            }
+
             if (_isDrawing)
             {
                 _isDrawing = false;
@@ -1627,27 +1700,24 @@ namespace UnifiedLearningAssistant.Forms
 
         private void ButtonAddToLearning_Click(object? sender, EventArgs e)
         {
-            AddWordToLearningList?.Invoke(this, EventArgs.Empty);
+            AddToLearningList?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ButtonSpeakAnswer_Click(object? sender, EventArgs e)
+        {
+            SpeakAnswer?.Invoke(this, EventArgs.Empty);
         }
 
         private void ButtonPrev_Click(object? sender, EventArgs e)
         {
             if (_presenter == null) return;
-            var currentPage = int.TryParse(textBoxPage.Text, out var p) ? p : 1;
-            if (currentPage > 1)
-            {
-                _presenter.RenderPage(currentPage - 2);
-            }
+            _presenter.PreviousPage();
         }
 
         private void ButtonNext_Click(object? sender, EventArgs e)
         {
             if (_presenter == null) return;
-            var currentPage = int.TryParse(textBoxPage.Text, out var p) ? p : 1;
-            if (currentPage < _presenter.PageCount)
-            {
-                _presenter.RenderPage(currentPage);
-            }
+            _presenter.NextPage();
         }
 
         private void ButtonNightMode_Click(object? sender, EventArgs e)
@@ -1662,41 +1732,14 @@ namespace UnifiedLearningAssistant.Forms
             LanguageChanged?.Invoke(this, EventArgs.Empty);
         }
 
-        private void SearchTextBox_TextChanged(object? sender, EventArgs e)
-        {
-            _currentSearchText = _searchTextBox?.Text ?? "";
-            SearchTextChanged?.Invoke(this, _currentSearchText);
-        }
-
-        private void SearchTextBox_KeyDown(object? sender, KeyEventArgs e)
+        private void TextBoxPage_KeyDown(object? sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter)
             {
-                if ((e.Modifiers & Keys.Shift) == Keys.Shift)
-                {
-                    SearchPrevious?.Invoke(this, EventArgs.Empty);
-                }
-                else
-                {
-                    SearchNext?.Invoke(this, EventArgs.Empty);
-                }
+                PageChanged?.Invoke(this, EventArgs.Empty);
                 e.Handled = true;
+                e.SuppressKeyPress = true;
             }
-        }
-
-        private void SearchPrevButton_Click(object? sender, EventArgs e)
-        {
-            SearchPrevious?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void SearchNextButton_Click(object? sender, EventArgs e)
-        {
-            SearchNext?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void SearchCloseButton_Click(object? sender, EventArgs e)
-        {
-            SetSearchPanelVisible(false);
         }
 
         #endregion
@@ -1727,5 +1770,7 @@ namespace UnifiedLearningAssistant.Forms
             _disposed = true;
             base.Dispose(disposing);
         }
+
+
     }
 }

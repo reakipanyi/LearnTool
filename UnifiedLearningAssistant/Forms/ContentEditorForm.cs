@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Data;
 using UnifiedLearningAssistant.Common;
+using UnifiedLearningAssistant.Presenters;
 using UnifiedLearningAssistant.Views;
 
 namespace UnifiedLearningAssistant.Forms
@@ -10,17 +11,93 @@ namespace UnifiedLearningAssistant.Forms
     public partial class ContentEditorForm : Form, IContentEditorView
     {
         private readonly ILogger<ContentEditorForm> _logger;
+        private ContentEditorPresenter? _presenter;
+        private GroupBox groupBoxLanguage;
+        private Label labelLanguage;
+        private RadioButton radioChinese;
+        private RadioButton radioEnglish;
+        private ComboBox comboBoxSubCategory;
         private bool _disposed = false;
 
         public ContentEditorForm(ILogger<ContentEditorForm> logger)
         {
-            InitializeComponent();
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            InitializeComponent();
+            Load += ContentEditorForm_Load;
+            Resize += ContentEditorForm_Resize;
         }
 
-        public string SelectedCategory => "";
+        private void ContentEditorForm_Load(object? sender, EventArgs e)
+        {
+            UpdateControlLayout();
+        }
 
-        public string SelectedSubCategory => comboBoxCategory.SelectedItem?.ToString() ?? "";
+        private void ContentEditorForm_Resize(object? sender, EventArgs e)
+        {
+            UpdateControlLayout();
+        }
+
+        private void UpdateControlLayout()
+        {
+            if (dataGridView == null || textBoxJson == null) return;
+
+            int clientWidth = ClientSize.Width;
+            int clientHeight = ClientSize.Height;
+
+            int contentWidth = Math.Max(880, clientWidth - 40);
+            int contentHeight = Math.Max(300, clientHeight - 250);
+
+            dataGridView.Size = new Size(contentWidth, contentHeight);
+            dataGridView.Location = new Point((clientWidth - contentWidth) / 2, 110);
+
+            textBoxJson.Size = new Size(contentWidth, 40);
+            textBoxJson.Location = new Point((clientWidth - contentWidth) / 2 + 80, 60);
+
+            labelJson.Location = new Point((clientWidth - contentWidth) / 2, 63);
+
+            textBoxRange.Size = new Size(contentWidth - 260, 23);
+            textBoxRange.Location = new Point((clientWidth - contentWidth) / 2 + 480, 20);
+
+            comboBoxSubCategory.Location = new Point((clientWidth - contentWidth) / 2 + 100, 19);
+
+            if (textBoxPrompt != null)
+            {
+                textBoxPrompt.Size = new Size(contentWidth, 60);
+                textBoxPrompt.Location = new Point((clientWidth - contentWidth) / 2 + 100, dataGridView.Location.Y + dataGridView.Height + 15);
+            }
+
+            if (labelPrompt != null)
+            {
+                labelPrompt.Location = new Point((clientWidth - contentWidth) / 2, textBoxPrompt.Location.Y + 5);
+            }
+
+            int buttonY = clientHeight - 80;
+            int buttonStartX = (clientWidth - 540) / 2;
+
+            buttonAdd.Location = new Point(buttonStartX, buttonY);
+            buttonSave.Location = new Point(buttonStartX + 90, buttonY);
+            buttonDelete.Location = new Point(buttonStartX + 180, buttonY);
+            buttonImport.Location = new Point(buttonStartX + 270, buttonY);
+            buttonExport.Location = new Point(buttonStartX + 360, buttonY);
+            buttonGenerateAI.Location = new Point(buttonStartX + 450, buttonY);
+
+            groupBoxLanguage.Location = new Point(clientWidth - 245, buttonY);
+        }
+
+        public void SetPresenter(ContentEditorPresenter presenter)
+        {
+            _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
+            _presenter.Initialize();
+            _logger.LogInformation("ContentEditorPresenter 已设置并初始化");
+        }
+
+        public string SelectedLanguage => radioChinese.Checked ? Constants.Language.Chinese : Constants.Language.English;
+
+        public string SelectedSubCategory => comboBoxSubCategory.SelectedItem?.ToString() ?? "";
+        public DataTable ItemData
+        {
+            set => dataGridView.DataSource = value;
+        }
 
         public string CurrentEditItemJson
         {
@@ -28,7 +105,6 @@ namespace UnifiedLearningAssistant.Forms
             set
             {
                 textBoxJson.Text = value;
-                UpdateGridFromJson();
             }
         }
 
@@ -44,53 +120,55 @@ namespace UnifiedLearningAssistant.Forms
             set => textBoxRange.Text = value;
         }
 
+        public string PromptText
+        {
+            get => textBoxPrompt?.Text ?? "";
+            set
+            {
+                if (textBoxPrompt != null)
+                {
+                    textBoxPrompt.Text = value;
+                }
+            }
+        }
+
         public object? GridDataSource
         {
             get => dataGridView.DataSource;
             set => dataGridView.DataSource = value;
         }
 
-        public int[] SelectedRowIndices
-        {
-            get
-            {
-                return dataGridView.SelectedRows.Cast<DataGridViewRow>()
-                    .Select(r => r.Index)
-                    .OrderBy(i => i)
-                    .ToArray();
-            }
-        }
+        public List<int> SelectedRowIndices => dataGridView.SelectedRows.Cast<DataGridViewRow>().Select(row => row.Index).ToList();
 
-        public event EventHandler? CategoryChanged;
+
+        public event EventHandler? LanguageChanged;
+        public event EventHandler? SubCategoryChanged;
         public event EventHandler? TemplateAddClicked;
         public event EventHandler? TemplateSaveClicked;
         public event EventHandler? TemplateDeleteClicked;
         public event EventHandler? ImportClicked;
         public event EventHandler? ExportClicked;
         public event EventHandler? GenerateWithAIClicked;
-        public event EventHandler? InsertTemplateClicked;
         public event EventHandler? GridCellEndEdit;
         public event EventHandler? GridRowsAdded;
 
+        public event EventHandler? ItemSelected;
         public void ShowMessage(string msg)
         {
             MessageBox.Show(msg);
         }
 
-        public void ClearEditForm()
+        public void RefreshSubCategories(IEnumerable<string> subCategories)
         {
-            textBoxJson.Text = "";
-            dataGridView.DataSource = null;
-        }
-
-        public void AppendJson(string json)
-        {
-            if (!string.IsNullOrEmpty(textBoxJson.Text))
+            comboBoxSubCategory.Items.Clear();
+            foreach (string subCategory in subCategories)
             {
-                textBoxJson.Text += "," + Environment.NewLine;
+                comboBoxSubCategory.Items.Add(subCategory);
             }
-            textBoxJson.Text += json;
-            UpdateGridFromJson();
+            if (comboBoxSubCategory.Items.Count > 0)
+            {
+                comboBoxSubCategory.SelectedIndex = 0;
+            }
         }
 
         public void UpdateGridFromJson()
@@ -106,8 +184,40 @@ namespace UnifiedLearningAssistant.Forms
             {
                 if (json.TrimStart().StartsWith("["))
                 {
-                    var dataTable = JsonConvert.DeserializeObject<DataTable>(json);
-                    dataGridView.DataSource = dataTable;
+                    // 直接将 JSON 数组转换为 DataTable
+                    var jsonArray = JsonConvert.DeserializeObject<JArray>(json);
+                    if (jsonArray.Count > 0)
+                    {
+                        var dataTable = new DataTable();
+                        var firstItem = jsonArray[0] as JObject;
+                        if (firstItem != null)
+                        {
+                            // 从第一个对象添加列，所有列都使用 string 类型以避免类型不匹配
+                            foreach (var prop in firstItem.Properties())
+                            {
+                                dataTable.Columns.Add(prop.Name, typeof(string));
+                            }
+
+                            // 添加所有行
+                            foreach (var item in jsonArray)
+                            {
+                                var obj = item as JObject;
+                                if (obj != null)
+                                {
+                                    var row = dataTable.NewRow();
+                                    foreach (var prop in obj.Properties())
+                                    {
+                                        if (dataTable.Columns.Contains(prop.Name))
+                                        {
+                                            row[prop.Name] = ConvertJTokenToString(prop.Value);
+                                        }
+                                    }
+                                    dataTable.Rows.Add(row);
+                                }
+                            }
+                        }
+                        dataGridView.DataSource = dataTable;
+                    }
                 }
                 else if (json.TrimStart().StartsWith("{"))
                 {
@@ -115,23 +225,84 @@ namespace UnifiedLearningAssistant.Forms
                     var dataTable = new DataTable();
                     foreach (var prop in obj.Properties())
                     {
-                        dataTable.Columns.Add(prop.Name);
+                        dataTable.Columns.Add(prop.Name, typeof(string));
                     }
                     DataRow row = dataTable.NewRow();
                     foreach (var prop in obj.Properties())
                     {
-                        row[prop.Name] = prop.Value?.ToString() ?? "";
+                        row[prop.Name] = ConvertJTokenToString(prop.Value);
                     }
                     dataTable.Rows.Add(row);
                     dataGridView.DataSource = dataTable;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "Error updating grid from JSON");
                 dataGridView.DataSource = null;
             }
         }
 
+        /// <summary>
+        /// 将 JToken 转换为安全的字符串，特别处理数组和对象
+        /// </summary>
+        private string ConvertJTokenToString(JToken? token)
+        {
+            if (token == null)
+                return "";
+
+            try
+            {
+                if (token.Type == JTokenType.Array)
+                {
+                    // 将数组转换为逗号分隔的字符串
+                    var array = token as JArray;
+                    if (array != null)
+                    {
+                        var values = array.Select(x => x.ToString());
+                        return string.Join(", ", values);
+                    }
+                }
+                else if (token.Type == JTokenType.Object)
+                {
+                    // 将对象转换为 JSON 字符串
+                    return token.ToString(Formatting.None);
+                }
+            }
+            catch
+            {
+                // 如果转换失败，返回空字符串
+            }
+
+            return token?.ToString() ?? "";
+        }
+
+        public void AppendJson(string json)
+        {
+            if (!string.IsNullOrEmpty(textBoxJson.Text))
+            {
+                textBoxJson.Text += "," + Environment.NewLine;
+            }
+            textBoxJson.Text += json;
+            UpdateGridFromJson();
+        }
+
+        public void RefreshTreeView(TreeNodeCollection nodes)
+        {
+        }
+
+        public void LoadItemForEdit(dynamic item)
+        {
+        }
+
+        public void ClearEditForm()
+        {
+            textBoxJson.Text = "";
+            dataGridView.DataSource = null;
+        }
+        public void UpdateItemList()
+        {
+        }
         private void DataGridView_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
         {
             GridCellEndEdit?.Invoke(this, EventArgs.Empty);
@@ -146,9 +317,21 @@ namespace UnifiedLearningAssistant.Forms
         {
         }
 
-        private void ComboBoxCategory_SelectedIndexChanged(object? sender, EventArgs e)
+        private void RadioChinese_CheckedChanged(object? sender, EventArgs e)
         {
-            CategoryChanged?.Invoke(this, EventArgs.Empty);
+            if (radioChinese.Checked)
+                LanguageChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void RadioEnglish_CheckedChanged(object? sender, EventArgs e)
+        {
+            if (radioEnglish.Checked)
+                LanguageChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ComboBoxSubCategory_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            SubCategoryChanged?.Invoke(this, EventArgs.Empty);
         }
 
         private void ButtonAdd_Click(object? sender, EventArgs e)
@@ -176,26 +359,23 @@ namespace UnifiedLearningAssistant.Forms
             ExportClicked?.Invoke(this, EventArgs.Empty);
         }
 
+        private void DataGridView_SelectionChanged(object sender, EventArgs e)
+        {
+            ItemSelected?.Invoke(this, EventArgs.Empty);
+        }
         private void ButtonGenerateAI_Click(object? sender, EventArgs e)
         {
             GenerateWithAIClicked?.Invoke(this, EventArgs.Empty);
         }
 
-        private void ButtonInsertTemplate_Click(object? sender, EventArgs e)
-        {
-            InsertTemplateClicked?.Invoke(this, EventArgs.Empty);
-        }
-
         private void InitializeComponent()
         {
-            comboBoxCategory = new ComboBox();
             textBoxJson = new TextBox();
             buttonAdd = new Button();
             buttonSave = new Button();
             buttonDelete = new Button();
             buttonImport = new Button();
             buttonExport = new Button();
-            buttonInsertTemplate = new Button();
             buttonGenerateAI = new Button();
             labelCategory = new Label();
             labelJson = new Label();
@@ -204,146 +384,210 @@ namespace UnifiedLearningAssistant.Forms
             textBoxCount = new TextBox();
             textBoxRange = new TextBox();
             dataGridView = new DataGridView();
+            radioChinese = new RadioButton();
+            labelLanguage = new Label();
+            radioEnglish = new RadioButton();
+            comboBoxSubCategory = new ComboBox();
+            textBoxPrompt = new TextBox();
+            labelPrompt = new Label();
+            ((System.ComponentModel.ISupportInitialize)dataGridView).BeginInit();
             SuspendLayout();
-
-            // dataGridView
-            dataGridView.AllowUserToAddRows = true;
-            dataGridView.AllowUserToDeleteRows = true;
-            dataGridView.AllowUserToOrderColumns = true;
-            dataGridView.Location = new Point(20, 110);
-            dataGridView.Name = "dataGridView";
-            dataGridView.Size = new Size(880, 300);
-            dataGridView.TabIndex = 1;
-            dataGridView.MultiSelect = true;
-            dataGridView.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dataGridView.CellEndEdit += DataGridView_CellEndEdit;
-            dataGridView.RowsAdded += DataGridView_RowsAdded;
-
-            // comboBoxCategory
-            comboBoxCategory.Items.AddRange(new object[] { 
-                Constants.SubCategory.ChineseCharacter, 
-                Constants.SubCategory.ChineseWordCombination, 
-                Constants.SubCategory.ChineseIdiom, 
-                Constants.SubCategory.ChinesePhrase, 
-                Constants.SubCategory.ChinesePoem, 
-                Constants.SubCategory.EnglishWord, 
-                Constants.SubCategory.EnglishPhrase, 
-                Constants.SubCategory.EnglishSentence 
-            });
-            comboBoxCategory.Location = new Point(100, 20);
-            comboBoxCategory.Name = "comboBoxCategory";
-            comboBoxCategory.Size = new Size(180, 25);
-            comboBoxCategory.TabIndex = 0;
-            comboBoxCategory.SelectedIndexChanged += ComboBoxCategory_SelectedIndexChanged;
-
-            // textBoxJson - 改为一行高度
-            textBoxJson.Location = new Point(100, 60);
+            // 
+            // textBoxJson
+            // 
+            textBoxJson.BackColor = SystemColors.HighlightText;
+            textBoxJson.Location = new Point(85, 112);
+            textBoxJson.Multiline = true;
             textBoxJson.Name = "textBoxJson";
-            textBoxJson.Size = new Size(800, 23);
+            textBoxJson.ReadOnly = true;
+            textBoxJson.ScrollBars = ScrollBars.Both;
+            textBoxJson.Size = new Size(800, 40);
             textBoxJson.TabIndex = 2;
-            textBoxJson.ScrollBars = ScrollBars.Horizontal;
-
+            // 
             // buttonAdd
-            buttonAdd.Location = new Point(20, 430);
+            // 
+            buttonAdd.Anchor = AnchorStyles.Bottom;
+            buttonAdd.Location = new Point(90, 660);
             buttonAdd.Name = "buttonAdd";
             buttonAdd.Size = new Size(80, 35);
             buttonAdd.TabIndex = 3;
             buttonAdd.Text = "📝 新增";
             buttonAdd.Click += ButtonAdd_Click;
-
+            // 
             // buttonSave
-            buttonSave.Location = new Point(110, 430);
+            // 
+            buttonSave.Anchor = AnchorStyles.Bottom;
+            buttonSave.Location = new Point(180, 660);
             buttonSave.Name = "buttonSave";
             buttonSave.Size = new Size(80, 35);
             buttonSave.TabIndex = 4;
             buttonSave.Text = "💾 保存";
             buttonSave.Click += ButtonSave_Click;
-
+            // 
             // buttonDelete
-            buttonDelete.Location = new Point(200, 430);
+            // 
+            buttonDelete.Anchor = AnchorStyles.Bottom;
+            buttonDelete.Location = new Point(270, 660);
             buttonDelete.Name = "buttonDelete";
             buttonDelete.Size = new Size(80, 35);
             buttonDelete.TabIndex = 5;
             buttonDelete.Text = "🗑️ 删除";
             buttonDelete.Click += ButtonDelete_Click;
-
+            // 
             // buttonImport
-            buttonImport.Location = new Point(290, 430);
+            // 
+            buttonImport.Anchor = AnchorStyles.Bottom;
+            buttonImport.Location = new Point(360, 660);
             buttonImport.Name = "buttonImport";
             buttonImport.Size = new Size(80, 35);
             buttonImport.TabIndex = 6;
             buttonImport.Text = "📥 导入";
             buttonImport.Click += ButtonImport_Click;
-
+            // 
             // buttonExport
-            buttonExport.Location = new Point(380, 430);
+            // 
+            buttonExport.Anchor = AnchorStyles.Bottom;
+            buttonExport.Location = new Point(450, 660);
             buttonExport.Name = "buttonExport";
             buttonExport.Size = new Size(80, 35);
             buttonExport.TabIndex = 7;
             buttonExport.Text = "📤 导出";
             buttonExport.Click += ButtonExport_Click;
-
-            // buttonInsertTemplate
-            buttonInsertTemplate.Location = new Point(470, 430);
-            buttonInsertTemplate.Name = "buttonInsertTemplate";
-            buttonInsertTemplate.Size = new Size(100, 35);
-            buttonInsertTemplate.TabIndex = 8;
-            buttonInsertTemplate.Text = "📋 插入模板";
-            buttonInsertTemplate.Click += ButtonInsertTemplate_Click;
-
+            // 
             // buttonGenerateAI
-            buttonGenerateAI.Location = new Point(580, 430);
+            // 
+            buttonGenerateAI.Anchor = AnchorStyles.Bottom;
+            buttonGenerateAI.Location = new Point(536, 660);
             buttonGenerateAI.Name = "buttonGenerateAI";
             buttonGenerateAI.Size = new Size(90, 35);
             buttonGenerateAI.TabIndex = 9;
             buttonGenerateAI.Text = "🤖 AI生成";
             buttonGenerateAI.Click += ButtonGenerateAI_Click;
-
+            // 
             // labelCategory
-            labelCategory.Location = new Point(20, 23);
+            // 
+            labelCategory.Location = new Point(279, 34);
             labelCategory.Name = "labelCategory";
             labelCategory.Size = new Size(80, 20);
             labelCategory.TabIndex = 10;
             labelCategory.Text = "学习品类:";
-
+            // 
             // labelJson
-            labelJson.Location = new Point(20, 63);
+            // 
+            labelJson.Location = new Point(5, 115);
             labelJson.Name = "labelJson";
             labelJson.Size = new Size(80, 20);
             labelJson.TabIndex = 11;
             labelJson.Text = "JSON预览:";
-
+            // 
             // labelCount
-            labelCount.Location = new Point(300, 23);
+            // 
+            labelCount.Location = new Point(566, 34);
             labelCount.Name = "labelCount";
             labelCount.Size = new Size(60, 20);
             labelCount.TabIndex = 12;
             labelCount.Text = "生成数量:";
-
+            // 
             // labelRange
-            labelRange.Location = new Point(420, 23);
+            // 
+            labelRange.Location = new Point(25, 67);
             labelRange.Name = "labelRange";
             labelRange.Size = new Size(60, 20);
             labelRange.TabIndex = 13;
             labelRange.Text = "关键词:";
-
+            // 
             // textBoxCount
-            textBoxCount.Location = new Point(360, 20);
+            // 
+            textBoxCount.Location = new Point(626, 31);
             textBoxCount.Name = "textBoxCount";
             textBoxCount.Size = new Size(50, 23);
             textBoxCount.TabIndex = 14;
             textBoxCount.Text = "5";
-
+            // 
             // textBoxRange
-            textBoxRange.Location = new Point(480, 20);
+            // 
+            textBoxRange.Location = new Point(85, 64);
             textBoxRange.Name = "textBoxRange";
-            textBoxRange.Size = new Size(500, 23);
+            textBoxRange.Size = new Size(800, 23);
             textBoxRange.TabIndex = 15;
             textBoxRange.Text = "请输入关键词或范围";
-
+            // 
+            // dataGridView
+            // 
+            dataGridView.AllowUserToOrderColumns = true;
+            dataGridView.Location = new Point(5, 244);
+            dataGridView.Name = "dataGridView";
+            dataGridView.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dataGridView.Size = new Size(880, 402);
+            dataGridView.TabIndex = 1;
+            dataGridView.CellEndEdit += DataGridView_CellEndEdit;
+            dataGridView.RowsAdded += DataGridView_RowsAdded;
+            dataGridView.SelectionChanged += DataGridView_SelectionChanged;
+            // 
+            // radioChinese
+            // 
+            radioChinese.Checked = true;
+            radioChinese.Location = new Point(93, 27);
+            radioChinese.Name = "radioChinese";
+            radioChinese.Size = new Size(80, 27);
+            radioChinese.TabIndex = 1;
+            radioChinese.TabStop = true;
+            radioChinese.Text = "中文";
+            radioChinese.CheckedChanged += RadioChinese_CheckedChanged;
+            // 
+            // labelLanguage
+            // 
+            labelLanguage.Location = new Point(25, 31);
+            labelLanguage.Name = "labelLanguage";
+            labelLanguage.Size = new Size(60, 23);
+            labelLanguage.TabIndex = 0;
+            labelLanguage.Text = "选择:";
+            // 
+            // radioEnglish
+            // 
+            radioEnglish.Location = new Point(183, 27);
+            radioEnglish.Name = "radioEnglish";
+            radioEnglish.Size = new Size(80, 27);
+            radioEnglish.TabIndex = 2;
+            radioEnglish.Text = "英语";
+            radioEnglish.CheckedChanged += RadioEnglish_CheckedChanged;
+            // 
+            // comboBoxSubCategory
+            // 
+            comboBoxSubCategory.FormattingEnabled = true;
+            comboBoxSubCategory.Location = new Point(352, 29);
+            comboBoxSubCategory.Name = "comboBoxSubCategory";
+            comboBoxSubCategory.Size = new Size(180, 25);
+            comboBoxSubCategory.TabIndex = 17;
+            comboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
+            // 
+            // textBoxPrompt
+            // 
+            textBoxPrompt.BackColor = Color.LightYellow;
+            textBoxPrompt.Location = new Point(85, 168);
+            textBoxPrompt.Multiline = true;
+            textBoxPrompt.Name = "textBoxPrompt";
+            textBoxPrompt.ReadOnly = true;
+            textBoxPrompt.ScrollBars = ScrollBars.Both;
+            textBoxPrompt.Size = new Size(800, 60);
+            textBoxPrompt.TabIndex = 18;
+            textBoxPrompt.Text = "AI生成提示词将显示在这里...";
+            // 
+            // labelPrompt
+            // 
+            labelPrompt.Location = new Point(5, 171);
+            labelPrompt.Name = "labelPrompt";
+            labelPrompt.Size = new Size(80, 20);
+            labelPrompt.TabIndex = 19;
+            labelPrompt.Text = "提示词:";
+            // 
             // ContentEditorForm
-            ClientSize = new Size(920, 500);
-            Controls.Add(comboBoxCategory);
+            // 
+            ClientSize = new Size(920, 707);
+            Controls.Add(radioChinese);
+            Controls.Add(labelLanguage);
+            Controls.Add(comboBoxSubCategory);
+            Controls.Add(radioEnglish);
             Controls.Add(textBoxJson);
             Controls.Add(dataGridView);
             Controls.Add(buttonAdd);
@@ -351,7 +595,6 @@ namespace UnifiedLearningAssistant.Forms
             Controls.Add(buttonDelete);
             Controls.Add(buttonImport);
             Controls.Add(buttonExport);
-            Controls.Add(buttonInsertTemplate);
             Controls.Add(buttonGenerateAI);
             Controls.Add(labelCategory);
             Controls.Add(labelJson);
@@ -359,21 +602,22 @@ namespace UnifiedLearningAssistant.Forms
             Controls.Add(labelRange);
             Controls.Add(textBoxCount);
             Controls.Add(textBoxRange);
+            Controls.Add(textBoxPrompt);
+            Controls.Add(labelPrompt);
             Name = "ContentEditorForm";
             Text = "📝 内容编辑器";
+            ((System.ComponentModel.ISupportInitialize)dataGridView).EndInit();
             ResumeLayout(false);
             PerformLayout();
         }
-
-        private ComboBox comboBoxCategory;
-        private TextBox textBoxJson;
         private DataGridView dataGridView;
+
+        private TextBox textBoxJson;
         private Button buttonAdd;
         private Button buttonSave;
         private Button buttonDelete;
         private Button buttonImport;
         private Button buttonExport;
-        private Button buttonInsertTemplate;
         private Button buttonGenerateAI;
         private Label labelCategory;
         private Label labelJson;
@@ -381,6 +625,8 @@ namespace UnifiedLearningAssistant.Forms
         private Label labelRange;
         private TextBox textBoxCount;
         private TextBox textBoxRange;
+        private TextBox textBoxPrompt;
+        private Label labelPrompt;
 
         protected override void Dispose(bool disposing)
         {
@@ -394,6 +640,11 @@ namespace UnifiedLearningAssistant.Forms
 
             _disposed = true;
             base.Dispose(disposing);
+        }
+
+        private void groupBoxLanguage_Enter(object sender, EventArgs e)
+        {
+
         }
     }
 }

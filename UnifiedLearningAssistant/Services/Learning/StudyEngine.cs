@@ -47,8 +47,11 @@ namespace UnifiedLearningAssistant.Services.Learning
             _currentWordBankFile = wordBankFile;
             _currentMode = mode;
 
-            _allItems = _contentLoaderService.LoadItems(subCategory, wordBankFile);
-
+            List<object> list = _contentLoaderService.LoadItems(subCategory, wordBankFile);
+            foreach (var item in list)
+            {
+                _allItems.Add(item as LearningItem);
+            }
             LoadUserProgress();
 
             if (mode == "快速模式")
@@ -240,7 +243,7 @@ namespace UnifiedLearningAssistant.Services.Learning
             {
                 // 加载用户的完整资料
                 var profile = _persistenceService.LoadUserProfile(savedUserId);
-                
+
                 // 找到或创建对应的分类进度
                 if (!profile.LearningProgress.CategoryProgresses.TryGetValue(subCategory, out var catProgress))
                 {

@@ -1,28 +1,40 @@
+using System.Data;
+
 namespace UnifiedLearningAssistant.Views
 {
     public interface IContentEditorView
     {
-        string SelectedCategory { get; }
+        string SelectedLanguage { get; }
         string SelectedSubCategory { get; }
+
+        DataTable ItemData { set; }
         string CurrentEditItemJson { get; set; }
         string GenerateCount { get; set; }
         string GenerateRange { get; set; }
+        string PromptText { get; set; }
         object? GridDataSource { get; set; }
-        int[] SelectedRowIndices { get; }
+        List<int> SelectedRowIndices { get; }
 
-        event EventHandler? CategoryChanged;
+        event EventHandler? LanguageChanged;
+        event EventHandler? SubCategoryChanged;
         event EventHandler? TemplateAddClicked;
         event EventHandler? TemplateSaveClicked;
         event EventHandler? TemplateDeleteClicked;
         event EventHandler? ImportClicked;
         event EventHandler? ExportClicked;
         event EventHandler? GenerateWithAIClicked;
-        event EventHandler? InsertTemplateClicked;
         event EventHandler? GridCellEndEdit;
+        event EventHandler ItemSelected;
         event EventHandler? GridRowsAdded;
 
         void ShowMessage(string msg);
+
+        void RefreshSubCategories(IEnumerable<string> subCategories);
+        void RefreshTreeView(TreeNodeCollection nodes);
+        void LoadItemForEdit(dynamic item);
         void ClearEditForm();
+
+        void UpdateItemList();
         void AppendJson(string json);
         void UpdateGridFromJson();
     }

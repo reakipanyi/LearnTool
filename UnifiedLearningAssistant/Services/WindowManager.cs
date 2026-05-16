@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using UnifiedLearningAssistant.Forms;
 using UnifiedLearningAssistant.Presenters;
 using UnifiedLearningAssistant.Views;
 
@@ -89,20 +90,17 @@ namespace UnifiedLearningAssistant.Services
             try
             {
                 using var scope = _serviceProvider.CreateScope();
-                var presenter = scope.ServiceProvider.GetRequiredService<ContentEditorPresenter>();
-                presenter.Initialize();
-
-                var view = scope.ServiceProvider.GetRequiredService<IContentEditorView>();
-                if (view is Form form)
-                {
-                    form.StartPosition = FormStartPosition.CenterParent;
-                    form.ShowDialog();
-                }
-                else
-                {
-                    _logger.LogError("IContentEditorView is not implemented as Form");
-                    throw new InvalidOperationException("IContentEditorView 未实现为 Form 类型。");
-                }
+                var scopedProvider = scope.ServiceProvider;
+                
+                // 获取 ContentEditorForm 实例
+                var form = scopedProvider.GetRequiredService<ContentEditorForm>();
+                var presenter = scopedProvider.GetRequiredService<ContentEditorPresenter>();
+                
+                // 设置 Presenter
+                form.SetPresenter(presenter);
+                
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.ShowDialog();
             }
             catch (Exception ex)
             {

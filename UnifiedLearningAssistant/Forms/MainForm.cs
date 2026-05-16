@@ -22,6 +22,32 @@ namespace UnifiedLearningAssistant.Forms
 
             this.EnableHighDpi();
             Load += MainForm_Load;
+            Resize += MainForm_Resize;
+        }
+
+        private void MainForm_Resize(object? sender, EventArgs e)
+        {
+            UpdateControlLayout();
+        }
+
+        private void UpdateControlLayout()
+        {
+            if (panelMain == null) return;
+            
+            int panelWidth = panelMain.ClientSize.Width;
+            int panelHeight = panelMain.ClientSize.Height;
+            
+            groupBoxProgress.Location = new Point(panelWidth - 260, 17);
+            groupBoxProgress.Size = new Size(250, Math.Max(204, panelHeight - 380));
+            textBoxProgress.Size = new Size(220, groupBoxProgress.Height - 40);
+            
+            buttonExportErrorBook.Location = new Point(panelWidth - 260, groupBoxProgress.Location.Y + groupBoxProgress.Height + 15);
+            
+            groupBoxLearning.Size = new Size(Math.Min(560, panelWidth - 280), 210);
+            
+            int buttonY = groupBoxLearning.Location.Y + groupBoxLearning.Height + 20;
+            buttonStartLearning.Location = new Point((panelWidth - 330) / 2, buttonY);
+            buttonContinueLearning.Location = new Point(buttonStartLearning.Location.X + 150 + 30, buttonY);
         }
 
         private void MainForm_Load(object? sender, EventArgs e)
@@ -396,7 +422,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonContinueLearning
             // 
-            buttonContinueLearning.Location = new Point(315, 329);
+            buttonContinueLearning.Location = new Point(620, 527);
             buttonContinueLearning.Name = "buttonContinueLearning";
             buttonContinueLearning.Size = new Size(150, 51);
             buttonContinueLearning.TabIndex = 10;
@@ -405,7 +431,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonStartLearning
             // 
-            buttonStartLearning.Location = new Point(145, 329);
+            buttonStartLearning.Location = new Point(620, 455);
             buttonStartLearning.Name = "buttonStartLearning";
             buttonStartLearning.Size = new Size(150, 51);
             buttonStartLearning.TabIndex = 9;

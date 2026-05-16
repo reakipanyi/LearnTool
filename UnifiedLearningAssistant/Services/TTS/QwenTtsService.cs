@@ -47,7 +47,7 @@ namespace UnifiedLearningAssistant.Services.TTS
 
                 if (File.Exists(path)) return path;
 
-                var wav = await _client.SynthesizeAsync(text: text, voice: "Serena", language: language ?? "English", speed: speed ?? 1.0f, format: "wav").ConfigureAwait(false);
+                var wav = await _client.SynthesizeAsync(text: text, voice: "Cherry", language: language ?? "English", speed: speed ?? 1.0f, format: "wav").ConfigureAwait(false);
 
                 await File.WriteAllBytesAsync(path, wav).ConfigureAwait(false);
                 return path;

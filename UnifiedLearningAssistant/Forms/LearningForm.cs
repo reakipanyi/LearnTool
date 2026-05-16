@@ -25,6 +25,54 @@ namespace UnifiedLearningAssistant.Forms
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
             Load += LearningForm_Load;
+            Resize += LearningForm_Resize;
+        }
+
+        private void LearningForm_Resize(object? sender, EventArgs e)
+        {
+            UpdateControlLayout();
+        }
+
+        private void UpdateControlLayout()
+        {
+            if (panelContent == null || panelAI == null) return;
+            
+            int clientWidth = ClientSize.Width;
+            int clientHeight = ClientSize.Height;
+            
+            int contentWidth = Math.Max(860, clientWidth - 40);
+            int contentHeight = Math.Max(227, (clientHeight - 400) / 2);
+            
+            panelContent.Size = new Size(contentWidth, contentHeight);
+            panelContent.Location = new Point((clientWidth - contentWidth) / 2, 20);
+            
+            labelDisplay.Size = new Size(contentWidth, 69);
+            labelContent.Size = new Size(contentWidth, contentHeight);
+            
+            int aiHeight = Math.Max(204, (clientHeight - 400) / 2);
+            panelAI.Size = new Size(contentWidth, aiHeight);
+            panelAI.Location = new Point((clientWidth - contentWidth) / 2, panelContent.Location.Y + panelContent.Height + 15);
+            
+            labelAI.Size = new Size(contentWidth, 34);
+            richTextBoxAI.Size = new Size(contentWidth, aiHeight - 34);
+            richTextBoxAI.Location = new Point(0, 34);
+            
+            progressBar1.Size = new Size(contentWidth, 28);
+            progressBar1.Location = new Point((clientWidth - contentWidth) / 2, panelAI.Location.Y + panelAI.Height + 15);
+            
+            labelStatistics.Location = new Point((clientWidth - contentWidth) / 2, progressBar1.Location.Y + progressBar1.Height + 5);
+            
+            int buttonY = labelStatistics.Location.Y + labelStatistics.Height + 20;
+            int buttonXStart = (clientWidth - 660) / 2;
+            
+            buttonKnown.Location = new Point(buttonXStart, buttonY);
+            buttonUnknown.Location = new Point(buttonXStart + 150 + 20, buttonY);
+            buttonNext.Location = new Point(buttonXStart + 300 + 40, buttonY);
+            buttonAddToPdf.Location = new Point(buttonXStart + 450 + 60, buttonY);
+            
+            buttonPronounce.Location = new Point((clientWidth - contentWidth) / 2, buttonY + 65);
+            checkBoxVoice.Location = new Point(buttonPronounce.Location.X + 130, buttonY + 71);
+            buttonExit.Location = new Point((clientWidth - contentWidth) / 2 + contentWidth - 125, buttonY + 65);
         }
 
         private void LearningForm_Load(object? sender, EventArgs e)
@@ -206,7 +254,7 @@ namespace UnifiedLearningAssistant.Forms
             // buttonAddToPdf
             // 
             buttonAddToPdf.Font = new Font("微软雅黑", 12F);
-            buttonAddToPdf.Location = new Point(760, 555);
+            buttonAddToPdf.Location = new Point(705, 560);
             buttonAddToPdf.Name = "buttonAddToPdf";
             buttonAddToPdf.Size = new Size(120, 46);
             buttonAddToPdf.TabIndex = 10;
@@ -275,7 +323,7 @@ namespace UnifiedLearningAssistant.Forms
             // buttonExit
             // 
             buttonExit.Font = new Font("微软雅黑", 12F);
-            buttonExit.Location = new Point(760, 623);
+            buttonExit.Location = new Point(705, 623);
             buttonExit.Name = "buttonExit";
             buttonExit.Size = new Size(120, 40);
             buttonExit.TabIndex = 8;
