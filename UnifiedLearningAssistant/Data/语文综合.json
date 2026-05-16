@@ -1,0 +1,74 @@
+
+[
+  {
+    "itemType": "Character",
+    "character": "天",
+    "pinyin": "tiān",
+    "meaning": "天空；天然的；一天",
+    "strokeCount": "4",
+    "radical": "一",
+    "example": "今天天气真好！",
+    "difficultyLevel": 1
+  },
+  {
+    "itemType": "WordCombination",
+    "character": "学",
+    "pinyin": "xué",
+    "wordCombinations": ["学习", "学生", "学校", "学问", "数学"],
+    "meaning": "学习；模仿；学科",
+    "example": "我喜欢在学校学习。",
+    "difficultyLevel": 1
+  },
+  {
+    "itemType": "Phrase",
+    "phrase": "一心一意",
+    "pinyin": "yī xīn yī yì",
+    "meaning": "心思、意念专一，没有别的考虑",
+    "example": "我们学习要一心一意，不能三心二意。",
+    "difficultyLevel": 2
+  },
+  {
+    "itemType": "Idiom",
+    "phrase": "守株待兔",
+    "pinyin": "shǒu zhū dài tù",
+    "meaning": "比喻希望不经过努力而得到成功的侥幸心理",
+    "example": "我们不能守株待兔，要靠自己的努力才能成功。",
+    "difficultyLevel": 3
+  },
+  {
+    "itemType": "Sentence",
+    "sentence": "知识就是力量。",
+    "pinyin": "zhī shi jiù shì lì liàng",
+    "meaning": "这句话强调了知识的重要性",
+    "difficultyLevel": 2
+  },
+  {
+    "itemType": "Poem",
+    "poemTitle": "静夜思",
+    "poemAuthor": "李白",
+    "poemDynasty": "唐",
+    "poemLines": ["床前明月光", "疑是地上霜", "举头望明月", "低头思故乡"],
+    "meaning": "这首诗表达了诗人在寂静的月夜思念家乡的感受",
+    "difficultyLevel": 3
+  },
+  {
+    "itemType": "Character",
+    "character": "地",
+    "pinyin": "dì",
+    "meaning": "大地；地面；地方",
+    "strokeCount": "6",
+    "radical": "土",
+    "example": "地上落满了树叶。",
+    "difficultyLevel": 1
+  },
+  {
+    "itemType": "WordCombination",
+    "character": "乐",
+    "pinyin": "lè",
+    "wordCombinations": ["快乐", "乐观", "乐趣", "欢乐", "音乐"],
+    "meaning": "快乐；乐意；音乐",
+    "example": "我们每天都要快快乐乐的。",
+    "difficultyLevel": 1
+  }
+]
+

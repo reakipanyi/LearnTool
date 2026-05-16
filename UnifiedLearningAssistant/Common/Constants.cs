@@ -21,9 +21,11 @@ namespace UnifiedLearningAssistant.Common
             public const string ChinesePhrase = "短语";
             public const string ChineseIdiom = "成语";
             public const string ChinesePoem = "诗词";
+            public const string ChineseComprehensive = "语文综合";
             public const string EnglishWord = "英语单词";
             public const string EnglishPhrase = "英语短语";
             public const string EnglishSentence = "英语句子";
+            public const string EnglishComprehensive = "英语综合";
         }
 
         public static class SortOrder
@@ -39,9 +41,11 @@ namespace UnifiedLearningAssistant.Common
             public const string ChinesePhrase = "短语.json";
             public const string ChineseIdiom = "成语.json";
             public const string ChinesePoem = "诗词.json";
+            public const string ChineseComprehensive = "语文综合.json";
             public const string EnglishWord = "英语单词.json";
             public const string EnglishPhrase = "英语短语.json";
             public const string EnglishSentence = "英语句子.json";
+            public const string EnglishComprehensive = "英语综合.json";
         }
 
     }

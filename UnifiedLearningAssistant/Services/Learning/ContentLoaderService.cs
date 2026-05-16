@@ -1,3 +1,4 @@
+
 using Microsoft.Extensions.Logging;
 using UnifiedLearningAssistant.Common;
 using UnifiedLearningAssistant.Models.Learning;
@@ -6,37 +7,41 @@ namespace UnifiedLearningAssistant.Services.Learning
 {
     public class ContentLoaderService : IContentLoaderService
     {
-        private readonly ILogger<ContentLoaderService> _logger;
-        private readonly Dictionary<string, Type> _categoryTypeMap = new Dictionary<string, Type>
+        private readonly ILogger&lt;ContentLoaderService&gt; _logger;
+        private readonly Dictionary&lt;string, Type&gt; _categoryTypeMap = new Dictionary&lt;string, Type&gt;
         {
             { Constants.SubCategory.ChineseCharacter, typeof(ChineseCharacter) },
             { Constants.SubCategory.ChineseWordCombination, typeof(ChineseWordCombination) },
             { Constants.SubCategory.ChinesePhrase, typeof(ChinesePhrase) },
             { Constants.SubCategory.ChineseIdiom, typeof(ChineseIdiom) },
             { Constants.SubCategory.ChinesePoem, typeof(ChinesePoem) },
+            { Constants.SubCategory.ChineseComprehensive, typeof(ChineseComprehensive) },
             { Constants.SubCategory.EnglishWord, typeof(EnglishWord) },
             { Constants.SubCategory.EnglishPhrase, typeof(EnglishPhrase) },
-            { Constants.SubCategory.EnglishSentence, typeof(EnglishSentence) }
+            { Constants.SubCategory.EnglishSentence, typeof(EnglishSentence) },
+            { Constants.SubCategory.EnglishComprehensive, typeof(EnglishComprehensive) }
         };
 
-        private readonly Dictionary<string, string> _categoryFileMap = new Dictionary<string, string>
+        private readonly Dictionary&lt;string, string&gt; _categoryFileMap = new Dictionary&lt;string, string&gt;
         {
             { Constants.SubCategory.ChineseCharacter, Constants.FileName.ChineseCharacter },
             { Constants.SubCategory.ChineseWordCombination, Constants.FileName.ChineseWordCombination },
             { Constants.SubCategory.ChineseIdiom, Constants.FileName.ChineseIdiom },
             { Constants.SubCategory.ChinesePhrase, Constants.FileName.ChinesePhrase },
             { Constants.SubCategory.ChinesePoem, Constants.FileName.ChinesePoem },
+            { Constants.SubCategory.ChineseComprehensive, Constants.FileName.ChineseComprehensive },
             { Constants.SubCategory.EnglishWord, Constants.FileName.EnglishWord },
             { Constants.SubCategory.EnglishPhrase, Constants.FileName.EnglishPhrase },
-            { Constants.SubCategory.EnglishSentence, Constants.FileName.EnglishSentence }
+            { Constants.SubCategory.EnglishSentence, Constants.FileName.EnglishSentence },
+            { Constants.SubCategory.EnglishComprehensive, Constants.FileName.EnglishComprehensive }
         };
 
-        public ContentLoaderService(ILogger<ContentLoaderService> logger)
+        public ContentLoaderService(ILogger&lt;ContentLoaderService&gt; logger)
         {
             _logger = logger;
         }
 
-        public List<object> LoadItems(string subCategory, string wordBankFile = "")
+        public List&lt;object&gt; LoadItems(string subCategory, string wordBankFile = "")
         {
             try
             {
@@ -44,14 +49,14 @@ namespace UnifiedLearningAssistant.Services.Learning
                 if (!File.Exists(filePath))
                 {
                     _logger.LogWarning("File not found: {FilePath}", filePath);
-                    return new List<object>();
+                    return new List&lt;object&gt;();
                 }
 
                 var itemType = GetItemType(subCategory);
                 var json = File.ReadAllText(filePath);
 
-                // 直接反序列化为具体类型列表，而不是 List<object>
-                var listType = typeof(List<>).MakeGenericType(itemType);
+                // 直接反序列化为具体类型列表，而不是 List&lt;object&gt;
+                var listType = typeof(List&lt;&gt;).MakeGenericType(itemType);
                 var items = System.Text.Json.JsonSerializer.Deserialize(json, listType,
                     new System.Text.Json.JsonSerializerOptions
                     {
@@ -62,19 +67,19 @@ namespace UnifiedLearningAssistant.Services.Learning
                 if (items == null)
                 {
                     _logger.LogWarning("No items loaded from file: {FilePath}", filePath);
-                    return new List<object>();
+                    return new List&lt;object&gt;();
                 }
 
-                return ((System.Collections.IList)items).Cast<object>().ToList();
+                return ((System.Collections.IList)items).Cast&lt;object&gt;().ToList();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load items for subCategory: {SubCategory}", subCategory);
-                return new List<object>();
+                return new List&lt;object&gt;();
             }
         }
 
-        public void SaveItems(string subCategory, List<object> items, string wordBankFile = "")
+        public void SaveItems(string subCategory, List&lt;object&gt; items, string wordBankFile = "")
         {
             try
             {
@@ -88,31 +93,33 @@ namespace UnifiedLearningAssistant.Services.Learning
             }
         }
 
-        public List<string> GetSubCategories(string language)
+        public List&lt;string&gt; GetSubCategories(string language)
         {
             if (language == Constants.Language.Chinese)
             {
-                return new List<string>
+                return new List&lt;string&gt;
                 {
                     Constants.SubCategory.ChineseCharacter,
                     Constants.SubCategory.ChineseWordCombination,
                     Constants.SubCategory.ChineseIdiom,
                     Constants.SubCategory.ChinesePhrase,
-                    Constants.SubCategory.ChinesePoem
+                    Constants.SubCategory.ChinesePoem,
+                    Constants.SubCategory.ChineseComprehensive
                 };
             }
             else
             {
-                return new List<string>
+                return new List&lt;string&gt;
                 {
                     Constants.SubCategory.EnglishWord,
                     Constants.SubCategory.EnglishPhrase,
-                    Constants.SubCategory.EnglishSentence
+                    Constants.SubCategory.EnglishSentence,
+                    Constants.SubCategory.EnglishComprehensive
                 };
             }
         }
 
-        public List<string> GetWordBankFiles(string subCategory)
+        public List&lt;string&gt; GetWordBankFiles(string subCategory)
         {
             try
             {
@@ -123,10 +130,10 @@ namespace UnifiedLearningAssistant.Services.Learning
 
                 var files = Directory.EnumerateFiles(dataDir, "*.json")
                                    .Select(Path.GetFileName)
-                                   .Where(file => file.StartsWith(categoryPrefix, StringComparison.OrdinalIgnoreCase))
+                                   .Where(file =&gt; file.StartsWith(categoryPrefix, StringComparison.OrdinalIgnoreCase))
                                    .ToList();
 
-                if (!string.IsNullOrWhiteSpace(defaultFile) && !files.Contains(defaultFile))
+                if (!string.IsNullOrWhiteSpace(defaultFile) &amp;&amp; !files.Contains(defaultFile))
                 {
                     files.Add(defaultFile);
                 }
@@ -137,7 +144,7 @@ namespace UnifiedLearningAssistant.Services.Learning
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to get word bank files for subCategory: {SubCategory}", subCategory);
-                return new List<string>();
+                return new List&lt;string&gt;();
             }
         }
 
@@ -145,15 +152,17 @@ namespace UnifiedLearningAssistant.Services.Learning
         {
             return subCategory switch
             {
-                Constants.SubCategory.ChineseCharacter => "识字",
-                Constants.SubCategory.ChineseWordCombination => "组词",
-                Constants.SubCategory.ChinesePhrase => "短语",
-                Constants.SubCategory.ChineseIdiom => "成语",
-                Constants.SubCategory.ChinesePoem => "诗词",
-                Constants.SubCategory.EnglishWord => "英语单词",
-                Constants.SubCategory.EnglishPhrase => "英语短语",
-                Constants.SubCategory.EnglishSentence => "英语句子",
-                _ => ""
+                Constants.SubCategory.ChineseCharacter =&gt; "识字",
+                Constants.SubCategory.ChineseWordCombination =&gt; "组词",
+                Constants.SubCategory.ChinesePhrase =&gt; "短语",
+                Constants.SubCategory.ChineseIdiom =&gt; "成语",
+                Constants.SubCategory.ChinesePoem =&gt; "诗词",
+                Constants.SubCategory.ChineseComprehensive =&gt; "语文综合",
+                Constants.SubCategory.EnglishWord =&gt; "英语单词",
+                Constants.SubCategory.EnglishPhrase =&gt; "英语短语",
+                Constants.SubCategory.EnglishSentence =&gt; "英语句子",
+                Constants.SubCategory.EnglishComprehensive =&gt; "英语综合",
+                _ =&gt; ""
             };
         }
 
@@ -178,3 +187,4 @@ namespace UnifiedLearningAssistant.Services.Learning
 
     }
 }
+
