@@ -1,21 +1,63 @@
 
+using UnifiedLearningAssistant.Common.Events;
+using UnifiedLearningAssistant.Common.Themes;
+
 namespace UnifiedLearningAssistant.Common
 {
-    public static class ThemeManager
+    public class ThemeService : IThemeService
     {
-        private static ThemeMode _currentMode = ThemeMode.Light;
+        private readonly IEventBus _eventBus;
+        private readonly List&lt;IThemeable&gt; _themeables = new List&lt;IThemeable&gt;();
+        private ThemeMode _currentMode = ThemeMode.Light;
 
-        public static ThemeMode CurrentMode =&gt; _currentMode;
+        public ThemeMode CurrentTheme =&gt; _currentMode;
+        public ThemeColors CurrentColors =&gt; GetColors(_currentMode);
 
-        public static event EventHandler&lt;ThemeChangedEventArgs&gt;? ThemeChanged;
+        public ThemeService(IEventBus eventBus)
+        {
+            _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
+        }
 
-        public static void SetTheme(ThemeMode mode)
+        public void SetTheme(ThemeMode mode)
         {
             if (_currentMode != mode)
             {
+                var oldMode = _currentMode;
                 _currentMode = mode;
-                ThemeChanged?.Invoke(null, new ThemeChangedEventArgs(mode));
+                
+                var colors = CurrentColors;
+                foreach (var themeable in _themeables)
+                {
+                    try
+                    {
+                        themeable.ApplyTheme(colors);
+                    }
+                    catch
+                    {
+                        // 处理主题应用错误
+                    }
+                }
+
+                _eventBus.Publish(new ThemeChangedEvent
+                {
+                    NewTheme = mode,
+                    OldTheme = oldMode
+                });
             }
+        }
+
+        public void RegisterThemeable(IThemeable themeable)
+        {
+            if (!_themeables.Contains(themeable))
+            {
+                _themeables.Add(themeable);
+                themeable.ApplyTheme(CurrentColors);
+            }
+        }
+
+        public void UnregisterThemeable(IThemeable themeable)
+        {
+            _themeables.Remove(themeable);
         }
 
         public static ThemeColors GetColors(ThemeMode mode)
@@ -57,8 +99,6 @@ namespace UnifiedLearningAssistant.Common
                 _ =&gt; throw new ArgumentOutOfRangeException(nameof(mode))
             };
         }
-
-        public static ThemeColors CurrentColors =&gt; GetColors(_currentMode);
     }
 
     public enum ThemeMode
@@ -82,16 +122,6 @@ namespace UnifiedLearningAssistant.Common
         public Color Error { get; set; }
         public Color Warning { get; set; }
         public Color Info { get; set; }
-    }
-
-    public class ThemeChangedEventArgs : EventArgs
-    {
-        public ThemeMode NewTheme { get; }
-
-        public ThemeChangedEventArgs(ThemeMode newTheme)
-        {
-            NewTheme = newTheme;
-        }
     }
 }
 
