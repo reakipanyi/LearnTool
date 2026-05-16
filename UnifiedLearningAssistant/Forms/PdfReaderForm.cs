@@ -604,6 +604,7 @@ namespace UnifiedLearningAssistant.Forms
         public event EventHandler? OcrSelectionComplete;
         public event EventHandler? AiQuestionAsked;
         public event EventHandler? AddToLearningList;
+        public event EventHandler<Views.AddToEditorEventArgs>? AddToEditor;
         public event EventHandler? SpeakTranslation;
         public event EventHandler<string>? SpeakText;
         public event EventHandler<string>? AskAiWithText;

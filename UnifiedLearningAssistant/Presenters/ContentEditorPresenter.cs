@@ -50,9 +50,11 @@ namespace UnifiedLearningAssistant.Presenters
             { Constants.SubCategory.ChineseIdiom, "成语" },
             { Constants.SubCategory.ChinesePhrase, "短语" },
             { Constants.SubCategory.ChinesePoem, "诗词" },
+            { Constants.SubCategory.ChineseComprehensive, "语文综合" },
             { Constants.SubCategory.EnglishWord, "英语单词" },
             { Constants.SubCategory.EnglishPhrase, "英语短语" },
-            { Constants.SubCategory.EnglishSentence, "英语句子" }
+            { Constants.SubCategory.EnglishSentence, "英语句子" },
+            { Constants.SubCategory.EnglishComprehensive, "英语综合" }
         };
 
         /// <summary>
@@ -107,6 +109,18 @@ namespace UnifiedLearningAssistant.Presenters
                 {
                     { "Sentence", "" }, { "Translation", "" }, { "Grammar", "" }
                 }
+            },
+            {
+                Constants.SubCategory.ChineseComprehensive, new Dictionary<string, object>
+                {
+                    { "Title", "" }, { "Content", "" }, { "Questions", new List<object> { new Dictionary<string, object> { { "Question", "" }, { "Answer", "" } } } }, { "Analysis", "" }
+                }
+            },
+            {
+                Constants.SubCategory.EnglishComprehensive, new Dictionary<string, object>
+                {
+                    { "Title", "" }, { "Content", "" }, { "Questions", new List<object> { new Dictionary<string, object> { { "Question", "" }, { "Answer", "" } } } }, { "Analysis", "" }
+                }
             }
         };
 
@@ -120,9 +134,11 @@ namespace UnifiedLearningAssistant.Presenters
             { Constants.SubCategory.ChineseIdiom, @"[  {""Idiom"":"""",""Pinyin"":"""",""Meaning"":"""",""Origin"":"""",""Example"":""""} ]" },
             { Constants.SubCategory.ChinesePhrase, @"[  {""Phrase"":"""",""Pinyin"":"""",""Meaning"":"""",""Example"":""""} ]" },
             { Constants.SubCategory.ChinesePoem, @"[  {""Title"":"""",""Author"":"""",""Dynasty"":"""",""Verses"":["""","""","""",""""],""Annotation"":""""} ]" },
+            { Constants.SubCategory.ChineseComprehensive, @"[  {""Title"":"""",""Content"":"""",""Questions"":[{""Question"":"""",""Answer"":""""}],""Analysis"":""""} ]" },
             { Constants.SubCategory.EnglishWord, @"[  {""Word"":"""",""Phonetic"":"""",""PartOfSpeech"":"""",""Meaning"":"""",""Example"":""""} ]" },
             { Constants.SubCategory.EnglishPhrase, @"[  {""Phrase"":"""",""Meaning"":"""",""Example"":""""} ]" },
-            { Constants.SubCategory.EnglishSentence, @"[  {""Sentence"":"""",""Translation"":"""",""Grammar"":""""} ]" }
+            { Constants.SubCategory.EnglishSentence, @"[  {""Sentence"":"""",""Translation"":"""",""Grammar"":""""} ]" },
+            { Constants.SubCategory.EnglishComprehensive, @"[  {""Title"":"""",""Content"":"""",""Questions"":[{""Question"":"""",""Answer"":""""}],""Analysis"":""""} ]" }
         };
 
         /// <summary>
@@ -204,13 +220,15 @@ namespace UnifiedLearningAssistant.Presenters
                     Constants.SubCategory.ChineseWordCombination,
                     Constants.SubCategory.ChinesePhrase,
                     Constants.SubCategory.ChineseIdiom,
-                    Constants.SubCategory.ChinesePoem
+                    Constants.SubCategory.ChinesePoem,
+                    Constants.SubCategory.ChineseComprehensive
                 }
                 : new List<string>
                 {
                     Constants.SubCategory.EnglishWord,
                     Constants.SubCategory.EnglishPhrase,
-                    Constants.SubCategory.EnglishSentence
+                    Constants.SubCategory.EnglishSentence,
+                    Constants.SubCategory.EnglishComprehensive
                 };
             _view.RefreshSubCategories(subCategories);
         }
@@ -654,6 +672,15 @@ namespace UnifiedLearningAssistant.Presenters
         {
             var typeName = CategoryTypeNames.GetValueOrDefault(category, "内容");
             var format = JsonFormatHints.GetValueOrDefault(category, "[]");
+
+            if (category == Constants.SubCategory.ChineseComprehensive)
+            {
+                return $"请根据以下内容生成{count}个语文综合练习题：\n\n{range}\n\n要求：\n1. 每个包含标题、阅读内容、3-5道题目（含答案）和解析\n2. 题目类型多样（选择题、问答题等）\n3. 内容要适合语文学习\n4. 输出JSON数组格式：\n{format}\n\n注意：\n1. 直接输出JSON数组，不要有其他解释文字\n2. 确保JSON格式正确";
+            }
+            else if (category == Constants.SubCategory.EnglishComprehensive)
+            {
+                return $"请根据以下内容生成{count}个英语综合练习题：\n\n{range}\n\n要求：\n1. 每个包含标题、阅读内容、3-5道题目（含答案）和解析\n2. 题目类型多样（选择题、问答题等）\n3. 内容要适合英语学习\n4. 输出JSON数组格式：\n{format}\n\n注意：\n1. 直接输出JSON数组，不要有其他解释文字\n2. 确保JSON格式正确";
+            }
 
             return $"请生成{count}个{range}的{typeName}，每个包含详细信息，输出JSON数组格式：\n{format}\n\n注意：\n1. 直接输出JSON数组，不要有其他解释文字\n2. 确保JSON格式正确\n3. 内容要丰富且实用";
         }

@@ -102,6 +102,26 @@ namespace UnifiedLearningAssistant.Forms
             MessageBox.Show(msg);
         }
 
+        public void SetInitialLanguage(string language)
+        {
+            if (language == Constants.Language.Chinese)
+            {
+                radioChinese.Checked = true;
+            }
+            else if (language == Constants.Language.English)
+            {
+                radioEnglish.Checked = true;
+            }
+        }
+
+        public void SetInitialSubCategory(string subCategory)
+        {
+            if (comboBoxSubCategory.Items.Contains(subCategory))
+            {
+                comboBoxSubCategory.SelectedItem = subCategory;
+            }
+        }
+
         public void RefreshSubCategories(IEnumerable<string> subCategories)
         {
             comboBoxSubCategory.Items.Clear();

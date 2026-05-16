@@ -37,6 +37,9 @@ namespace UnifiedLearningAssistant.Forms
             _presenter.OnOpenEditor += Presenter_OnOpenEditor;
             _presenter.OnOpenStatistics += Presenter_OnOpenStatistics;
 
+            // 监听PDF的添加到编辑器事件
+            _pdfView.OnAddToEditor += PdfView_OnAddToEditor;
+
             if (_pdfView is UserControl uc)
             {
                 if (_pdfView is PdfReaderForm form)
@@ -51,6 +54,11 @@ namespace UnifiedLearningAssistant.Forms
             {
                 throw new InvalidOperationException("IPdfView 未实现为 UserControl 类型。");
             }
+        }
+
+        private void PdfView_OnAddToEditor(object? sender, Views.AddToEditorEventArgs e)
+        {
+            _windowManager.OpenEditorWindowWithContext(e.Text, e.Language, null);
         }
 
         // 新增功能：PDF生词本联动 - 设置PDF Presenter
