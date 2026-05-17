@@ -1,5 +1,8 @@
 using Microsoft.Extensions.Logging;
+using System.IO;
+using System.Text.Json;
 using UnifiedLearningAssistant.Common;
+using UnifiedLearningAssistant.Models.User;
 using UnifiedLearningAssistant.Models.Learning;
 using UnifiedLearningAssistant.Services.AI;
 using UnifiedLearningAssistant.Services.TTS;
@@ -16,6 +19,7 @@ namespace UnifiedLearningAssistant.Forms
         private readonly ILoggerFactory _loggerFactory;
         private AiQuestionDialog? _aiDialog;
         private bool _disposed = false;
+        private Settings _settings = new();
 
         public LearningForm(IAiQuestionService aiQuestionService, ITTSService ttsService, ILogger<LearningForm> logger, ILoggerFactory loggerFactory)
         {
@@ -25,6 +29,7 @@ namespace UnifiedLearningAssistant.Forms
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
             Load += LearningForm_Load;
+            FormClosing += LearningForm_FormClosing;
             Resize += LearningForm_Resize;
         }
 
@@ -72,16 +77,81 @@ namespace UnifiedLearningAssistant.Forms
             
             buttonPronounce.Location = new Point((clientWidth - contentWidth) / 2, buttonY + 65);
             checkBoxVoice.Location = new Point(buttonPronounce.Location.X + 130, buttonY + 71);
-            comboBoxPronunciationScope.Location = new Point(checkBoxVoice.Location.X + 160, buttonY + 71);
-            labelPronunciationScope.Location = new Point(comboBoxPronunciationScope.Location.X - 70, buttonY + 71);
+            
+            labelPronunciationScope.Location = new Point(checkBoxVoice.Location.X + 120, buttonY + 71);
+            radioOriginal.Location = new Point(labelPronunciationScope.Location.X + 80, buttonY + 71);
+            radioExplanation.Location = new Point(radioOriginal.Location.X + 70, buttonY + 71);
+            radioBoth.Location = new Point(radioExplanation.Location.X + 70, buttonY + 71);
+            
             buttonExit.Location = new Point((clientWidth - contentWidth) / 2 + contentWidth - 125, buttonY + 65);
         }
 
         private void LearningForm_Load(object? sender, EventArgs e)
         {
-            // 初始化发音范围选项
-            comboBoxPronunciationScope.Items.AddRange(new string[] { "原文", "释义", "原文+释义" });
-            comboBoxPronunciationScope.SelectedIndex = 0;
+            LoadSettings();
+            ApplySettings();
+        }
+
+        private void LearningForm_FormClosing(object? sender, FormClosingEventArgs e)
+        {
+            SaveSettings();
+        }
+
+        private void LoadSettings()
+        {
+            try
+            {
+                string settingsPath = Path.Combine(Paths.DataDirectory, Paths.SettingsFile);
+                if (File.Exists(settingsPath))
+                {
+                    string json = File.ReadAllText(settingsPath);
+                    var settings = JsonSerializer.Deserialize<Settings>(json);
+                    if (settings != null)
+                    {
+                        _settings = settings;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load settings");
+            }
+        }
+
+        private void SaveSettings()
+        {
+            try
+            {
+                _settings.IsVoiceEnabled = checkBoxVoice.Checked;
+                if (radioOriginal.Checked) _settings.PronunciationScope = 0;
+                else if (radioExplanation.Checked) _settings.PronunciationScope = 1;
+                else _settings.PronunciationScope = 2;
+
+                string settingsDir = Paths.DataDirectory;
+                if (!Directory.Exists(settingsDir))
+                {
+                    Directory.CreateDirectory(settingsDir);
+                }
+
+                string settingsPath = Path.Combine(settingsDir, Paths.SettingsFile);
+                string json = JsonSerializer.Serialize(_settings, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(settingsPath, json);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to save settings");
+            }
+        }
+
+        private void ApplySettings()
+        {
+            checkBoxVoice.Checked = _settings.IsVoiceEnabled;
+            switch (_settings.PronunciationScope)
+            {
+                case 0: radioOriginal.Checked = true; break;
+                case 1: radioExplanation.Checked = true; break;
+                case 2: radioBoth.Checked = true; break;
+            }
         }
 
         #region ILearningView Implementation
@@ -124,8 +194,27 @@ namespace UnifiedLearningAssistant.Forms
 
         public PronunciationScope PronunciationScope
         {
-            get => (PronunciationScope)comboBoxPronunciationScope.SelectedIndex;
-            set => comboBoxPronunciationScope.SelectedIndex = (int)value;
+            get
+            {
+                if (radioOriginal.Checked) return PronunciationScope.Original;
+                if (radioExplanation.Checked) return PronunciationScope.Explanation;
+                return PronunciationScope.Both;
+            }
+            set
+            {
+                switch (value)
+                {
+                    case PronunciationScope.Original:
+                        radioOriginal.Checked = true;
+                        break;
+                    case PronunciationScope.Explanation:
+                        radioExplanation.Checked = true;
+                        break;
+                    case PronunciationScope.Both:
+                        radioBoth.Checked = true;
+                        break;
+                }
+            }
         }
 
         public string CurrentMode => Constants.LearningMode.Study;
@@ -179,8 +268,10 @@ namespace UnifiedLearningAssistant.Forms
         private CheckBox checkBoxVoice;
         private Button buttonAddToPdf;
         private Label labelAI;
-        private ComboBox comboBoxPronunciationScope;
         private Label labelPronunciationScope;
+        private RadioButton radioOriginal;
+        private RadioButton radioExplanation;
+        private RadioButton radioBoth;
 
         private void InitializeComponent()
         {
@@ -199,8 +290,10 @@ namespace UnifiedLearningAssistant.Forms
             buttonPronounce = new Button();
             buttonExit = new Button();
             checkBoxVoice = new CheckBox();
-            comboBoxPronunciationScope = new ComboBox();
             labelPronunciationScope = new Label();
+            radioOriginal = new RadioButton();
+            radioExplanation = new RadioButton();
+            radioBoth = new RadioButton();
             panelContent.SuspendLayout();
             panelAI.SuspendLayout();
             SuspendLayout();
@@ -354,24 +447,47 @@ namespace UnifiedLearningAssistant.Forms
             checkBoxVoice.TabIndex = 9;
             checkBoxVoice.Text = "自动朗读";
             // 
-            // comboBoxPronunciationScope
-            // 
-            comboBoxPronunciationScope.DropDownStyle = ComboBoxStyle.DropDownList;
-            comboBoxPronunciationScope.FormattingEnabled = true;
-            comboBoxPronunciationScope.Location = new Point(380, 629);
-            comboBoxPronunciationScope.Name = "comboBoxPronunciationScope";
-            comboBoxPronunciationScope.Size = new Size(120, 25);
-            comboBoxPronunciationScope.TabIndex = 11;
-            // 
             // labelPronunciationScope
             // 
             labelPronunciationScope.Font = new Font("微软雅黑", 10F);
             labelPronunciationScope.Location = new Point(250, 629);
             labelPronunciationScope.Name = "labelPronunciationScope";
-            labelPronunciationScope.Size = new Size(120, 25);
+            labelPronunciationScope.Size = new Size(80, 25);
             labelPronunciationScope.TabIndex = 12;
             labelPronunciationScope.Text = "朗读范围:";
             labelPronunciationScope.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // radioOriginal
+            // 
+            radioOriginal.AutoSize = true;
+            radioOriginal.Checked = true;
+            radioOriginal.Font = new Font("微软雅黑", 10F);
+            radioOriginal.Location = new Point(340, 629);
+            radioOriginal.Name = "radioOriginal";
+            radioOriginal.Size = new Size(60, 24);
+            radioOriginal.TabIndex = 13;
+            radioOriginal.TabStop = true;
+            radioOriginal.Text = "原文";
+            // 
+            // radioExplanation
+            // 
+            radioExplanation.AutoSize = true;
+            radioExplanation.Font = new Font("微软雅黑", 10F);
+            radioExplanation.Location = new Point(410, 629);
+            radioExplanation.Name = "radioExplanation";
+            radioExplanation.Size = new Size(60, 24);
+            radioExplanation.TabIndex = 14;
+            radioExplanation.Text = "释义";
+            // 
+            // radioBoth
+            // 
+            radioBoth.AutoSize = true;
+            radioBoth.Font = new Font("微软雅黑", 10F);
+            radioBoth.Location = new Point(480, 629);
+            radioBoth.Name = "radioBoth";
+            radioBoth.Size = new Size(90, 24);
+            radioBoth.TabIndex = 15;
+            radioBoth.Text = "原文+释义";
             // 
             // LearningForm
             // 
@@ -379,8 +495,10 @@ namespace UnifiedLearningAssistant.Forms
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.FromArgb(255, 244, 230);
             ClientSize = new Size(900, 720);
+            Controls.Add(radioBoth);
+            Controls.Add(radioExplanation);
+            Controls.Add(radioOriginal);
             Controls.Add(labelPronunciationScope);
-            Controls.Add(comboBoxPronunciationScope);
             Controls.Add(buttonAddToPdf);
             Controls.Add(checkBoxVoice);
             Controls.Add(buttonExit);
@@ -398,6 +516,7 @@ namespace UnifiedLearningAssistant.Forms
             panelContent.ResumeLayout(false);
             panelAI.ResumeLayout(false);
             ResumeLayout(false);
+            PerformLayout();
         }
 
         #endregion
