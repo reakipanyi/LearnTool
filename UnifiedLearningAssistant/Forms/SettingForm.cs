@@ -10,14 +10,7 @@ namespace UnifiedLearningAssistant.Forms
         private CheckBox checkBoxNightMode;
         private Panel headerPanel;
 
-        private static readonly Color LightBackground = Color.FromArgb(255, 244, 230);
-        private static readonly Color LightSurface = Color.FromArgb(255, 250, 240);
-        private static readonly Color DarkBackground = Color.FromArgb(18, 18, 18);
-        private static readonly Color DarkSurface = Color.FromArgb(30, 30, 30);
-        private static readonly Color DarkTextPrimary = Color.FromArgb(250, 250, 250);
-        private static readonly Color DarkTextSecondary = Color.FromArgb(176, 176, 176);
-        private static readonly Color WarmOrange = Color.FromArgb(255, 152, 0);
-        private static readonly Color SuccessGreen = Color.FromArgb(76, 175, 80);
+
 
         private bool _isDarkMode = false;
 
@@ -570,81 +563,81 @@ namespace UnifiedLearningAssistant.Forms
         {
             if (isDark)
             {
-                BackColor = DarkBackground;
-                headerPanel.BackColor = Color.FromArgb(66, 66, 66);
+                BackColor = ThemeHelper.Colors.DarkBackground;
+                headerPanel.BackColor = ThemeHelper.Colors.DarkGray;
 
                 foreach (Control control in Controls)
                 {
                     if (control is GroupBox groupBox)
                     {
-                        groupBox.BackColor = DarkSurface;
-                        groupBox.ForeColor = DarkTextPrimary;
+                        groupBox.BackColor = ThemeHelper.Colors.DarkSurface;
+                        groupBox.ForeColor = ThemeHelper.Colors.DarkTextPrimary;
                         foreach (Control child in groupBox.Controls)
                         {
                             if (child is Label label)
-                                label.ForeColor = DarkTextPrimary;
+                                label.ForeColor = ThemeHelper.Colors.DarkTextPrimary;
                             else if (child is TextBox textBox)
                             {
-                                textBox.BackColor = DarkSurface;
-                                textBox.ForeColor = DarkTextPrimary;
+                                textBox.BackColor = ThemeHelper.Colors.DarkSurface;
+                                textBox.ForeColor = ThemeHelper.Colors.DarkTextPrimary;
                             }
                             else if (child is ComboBox comboBox)
                             {
-                                comboBox.BackColor = DarkSurface;
-                                comboBox.ForeColor = DarkTextPrimary;
+                                comboBox.BackColor = ThemeHelper.Colors.DarkSurface;
+                                comboBox.ForeColor = ThemeHelper.Colors.DarkTextPrimary;
                             }
                             else if (child is NumericUpDown numericUpDown)
                             {
-                                numericUpDown.BackColor = DarkSurface;
-                                numericUpDown.ForeColor = DarkTextPrimary;
+                                numericUpDown.BackColor = ThemeHelper.Colors.DarkSurface;
+                                numericUpDown.ForeColor = ThemeHelper.Colors.DarkTextPrimary;
                             }
                             else if (child is TrackBar trackBar)
                             {
-                                trackBar.BackColor = DarkSurface;
+                                trackBar.BackColor = ThemeHelper.Colors.DarkSurface;
                             }
                         }
                     }
                 }
 
                 checkBoxNightMode.Text = "☀️ 日间";
-                checkBoxNightMode.BackColor = Color.FromArgb(255, 193, 7);
+                checkBoxNightMode.BackColor = ThemeHelper.Colors.Gold;
             }
             else
             {
-                BackColor = LightBackground;
-                headerPanel.BackColor = WarmOrange;
+                BackColor = ThemeHelper.Colors.WarmBeige;
+                headerPanel.BackColor = ThemeHelper.Colors.Orange;
 
                 foreach (Control control in Controls)
                 {
                     if (control is GroupBox groupBox)
                     {
-                        groupBox.BackColor = LightSurface;
-                        groupBox.ForeColor = Color.FromArgb(33, 33, 33);
+                        groupBox.BackColor = ThemeHelper.Colors.WarmCream;
+                        groupBox.ForeColor = ThemeHelper.Colors.TextDark;
                         foreach (Control child in groupBox.Controls)
                         {
                             if (child is Label label)
-                                label.ForeColor = Color.FromArgb(33, 33, 33);
+                                label.ForeColor = ThemeHelper.Colors.TextDark;
                             else if (child is TextBox textBox)
                             {
                                 textBox.BackColor = Color.White;
-                                textBox.ForeColor = Color.FromArgb(33, 33, 33);
+                                textBox.ForeColor = ThemeHelper.Colors.TextDark;
                             }
                             else if (child is ComboBox comboBox)
                             {
                                 comboBox.BackColor = Color.White;
-                                comboBox.ForeColor = Color.FromArgb(33, 33, 33);
+                                comboBox.ForeColor = ThemeHelper.Colors.TextDark;
                             }
                             else if (child is NumericUpDown numericUpDown)
                             {
                                 numericUpDown.BackColor = Color.White;
-                                numericUpDown.ForeColor = Color.FromArgb(33, 33, 33);
+                                numericUpDown.ForeColor = ThemeHelper.Colors.TextDark;
                             }
                         }
                     }
                 }
 
                 checkBoxNightMode.Text = "🌙 夜间";
-                checkBoxNightMode.BackColor = DarkSurface;
+                checkBoxNightMode.BackColor = ThemeHelper.Colors.DarkSurface;
             }
         }
 
@@ -665,9 +658,9 @@ namespace UnifiedLearningAssistant.Forms
             if (sender is Button button)
             {
                 if (button.Name == "buttonSave")
-                    button.BackColor = SuccessGreen;
+                    button.BackColor = ThemeHelper.Colors.Success;
                 else if (button.Name == "buttonCancel")
-                    button.BackColor = Color.FromArgb(158, 158, 158);
+                    button.BackColor = ThemeHelper.Colors.GrayLight;
             }
         }
 

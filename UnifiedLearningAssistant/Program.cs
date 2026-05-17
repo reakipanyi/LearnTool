@@ -120,11 +120,18 @@ namespace UnifiedLearningAssistant
         }
 
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
             Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+
+            // 检查是否是预览模式
+            if (args.Length > 0 && args[0].ToLower() == "--preview")
+            {
+                Application.Run(new Forms.FormPreviewTool());
+                return;
+            }
 
             ILogger<MainForm> logger = null!;
 

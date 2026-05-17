@@ -21,9 +21,13 @@ namespace UnifiedLearningAssistant.Forms
             _windowManager = windowManager ?? throw new ArgumentNullException(nameof(windowManager));
 
             this.EnableHighDpi();
+            
+            // 应用主题样式
+            ApplyColorScheme();
+            AddButtonAnimations();
+            
             Load += MainForm_Load;
         }
-
 
 
 
@@ -54,9 +58,6 @@ namespace UnifiedLearningAssistant.Forms
             {
                 throw new InvalidOperationException("IPdfView 未实现为 UserControl 类型。");
             }
-
-            ApplyColorScheme();
-            AddButtonAnimations();
         }
 
         private void PdfView_OnAddToEditor(object? sender, Views.AddToEditorEventArgs e)
@@ -66,56 +67,27 @@ namespace UnifiedLearningAssistant.Forms
 
         private void ApplyColorScheme()
         {
-            BackColor = Color.FromArgb(250, 245, 235);
+            BackColor = ThemeHelper.Colors.WarmBackground;
 
-            ConfigureButton(buttonStartLearning, Color.FromArgb(76, 175, 80), "🚀 开始学习");
-            ConfigureButton(buttonContinueLearning, Color.FromArgb(33, 150, 243), "📚 继续学习");
-            ConfigureButton(buttonOpenEditor, Color.FromArgb(156, 39, 176), "📝 模板编辑");
-            ConfigureButton(buttonOpenPdfReader, Color.FromArgb(0, 188, 212), "📖 PDF阅读");
-            ConfigureButton(buttonOpenStatistics, Color.FromArgb(255, 152, 0), "📊 学习统计");
-            ConfigureButton(buttonExportErrorBook, Color.FromArgb(244, 67, 54), "❌ 导出错题本");
+            ThemeHelper.ConfigureButton(buttonStartLearning, ThemeHelper.Colors.Success, "🚀 开始学习");
+            ThemeHelper.ConfigureButton(buttonContinueLearning, ThemeHelper.Colors.Primary, "📚 继续学习");
+            ThemeHelper.ConfigureButton(buttonOpenEditor, ThemeHelper.Colors.Purple, "📝 模板编辑");
+            ThemeHelper.ConfigureButton(buttonOpenPdfReader, ThemeHelper.Colors.Cyan, "📖 PDF阅读");
+            ThemeHelper.ConfigureButton(buttonOpenStatistics, ThemeHelper.Colors.Orange, "📊 学习统计");
+            ThemeHelper.ConfigureButton(buttonExportErrorBook, ThemeHelper.Colors.Error, "❌ 导出错题本");
 
             tabPageLearning.Text = "📖 双语学习";
             tabPagePdf.Text = "📄 PDF阅读助手";
         }
 
-        private void ConfigureButton(Button button, Color backColor, string text)
-        {
-            button.BackColor = backColor;
-            button.ForeColor = Color.White;
-            button.Font = new Font(button.Font, FontStyle.Bold);
-            button.FlatStyle = FlatStyle.Flat;
-            button.FlatAppearance.BorderSize = 0;
-            button.Text = text;
-        }
-
         private void AddButtonAnimations()
         {
-            AddHoverEffect(buttonStartLearning, Color.FromArgb(76, 175, 80));
-            AddHoverEffect(buttonContinueLearning, Color.FromArgb(33, 150, 243));
-            AddHoverEffect(buttonOpenEditor, Color.FromArgb(156, 39, 176));
-            AddHoverEffect(buttonOpenPdfReader, Color.FromArgb(0, 188, 212));
-            AddHoverEffect(buttonOpenStatistics, Color.FromArgb(255, 152, 0));
-            AddHoverEffect(buttonExportErrorBook, Color.FromArgb(244, 67, 54));
-        }
-
-        private void AddHoverEffect(Button button, Color originalColor)
-        {
-            Color hoverColor = Color.FromArgb(
-                Math.Max(0, originalColor.R - 30),
-                Math.Max(0, originalColor.G - 30),
-                Math.Max(0, originalColor.B - 30)
-            );
-
-            button.MouseEnter += (s, e) =>
-            {
-                button.BackColor = hoverColor;
-            };
-
-            button.MouseLeave += (s, e) =>
-            {
-                button.BackColor = originalColor;
-            };
+            ThemeHelper.AddButtonHoverEffect(buttonStartLearning, ThemeHelper.Colors.Success);
+            ThemeHelper.AddButtonHoverEffect(buttonContinueLearning, ThemeHelper.Colors.Primary);
+            ThemeHelper.AddButtonHoverEffect(buttonOpenEditor, ThemeHelper.Colors.Purple);
+            ThemeHelper.AddButtonHoverEffect(buttonOpenPdfReader, ThemeHelper.Colors.Cyan);
+            ThemeHelper.AddButtonHoverEffect(buttonOpenStatistics, ThemeHelper.Colors.Orange);
+            ThemeHelper.AddButtonHoverEffect(buttonExportErrorBook, ThemeHelper.Colors.Error);
         }
 
         // 新增功能：PDF生词本联动 - 设置PDF Presenter

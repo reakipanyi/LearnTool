@@ -18,13 +18,6 @@ namespace UnifiedLearningAssistant.Forms
         private ComboBox comboBoxSubCategory;
         private bool _disposed = false;
 
-        private static readonly Color WarmBeige = Color.FromArgb(255, 244, 230);
-        private static readonly Color WarmCream = Color.FromArgb(255, 250, 240);
-        private static readonly Color WarmOrange = Color.FromArgb(255, 152, 0);
-        private static readonly Color SoftBlue = Color.FromArgb(100, 181, 246);
-        private static readonly Color SuccessGreen = Color.FromArgb(76, 175, 80);
-        private static readonly Color TextDark = Color.FromArgb(33, 33, 33);
-
         public ContentEditorForm(ILogger<ContentEditorForm> logger)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -657,12 +650,12 @@ namespace UnifiedLearningAssistant.Forms
             {
                 var originalColor = button.Name switch
                 {
-                    "buttonAdd" => WarmOrange,
-                    "buttonSave" => SuccessGreen,
-                    "buttonDelete" => Color.FromArgb(244, 67, 54),
-                    "buttonImport" => SoftBlue,
-                    "buttonExport" => Color.FromArgb(156, 39, 176),
-                    "buttonGenerateAI" => Color.FromArgb(103, 58, 183),
+                    "buttonAdd" => ThemeHelper.Colors.Orange,
+                    "buttonSave" => ThemeHelper.Colors.Success,
+                    "buttonDelete" => ThemeHelper.Colors.Error,
+                    "buttonImport" => ThemeHelper.Colors.SoftBlue,
+                    "buttonExport" => ThemeHelper.Colors.Purple,
+                    "buttonGenerateAI" => ThemeHelper.Colors.PurpleDark,
                     _ => SystemColors.Control
                 };
                 button.BackColor = originalColor;

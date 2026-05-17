@@ -18,11 +18,7 @@ namespace UnifiedLearningAssistant.Forms
         private Label labelMotivational;
         private ProgressBar animatedProgressBar;
 
-        private static readonly Color WarmBeige = Color.FromArgb(255, 244, 230);
-        private static readonly Color WarmOrange = Color.FromArgb(255, 152, 0);
-        private static readonly Color WarmGold = Color.FromArgb(255, 193, 7);
-        private static readonly Color SuccessGreen = Color.FromArgb(76, 175, 80);
-        private static readonly Color SoftBlue = Color.FromArgb(100, 181, 246);
+
 
         public ResultForm(ILogger<ResultForm> logger)
         {
@@ -396,22 +392,22 @@ namespace UnifiedLearningAssistant.Forms
             if (_accuracyRate >= 90)
             {
                 labelMotivational.Text = "🌟 太棒了！你是最优秀的！";
-                labelMotivational.ForeColor = WarmGold;
+                labelMotivational.ForeColor = ThemeHelper.Colors.Gold;
             }
             else if (_accuracyRate >= 70)
             {
                 labelMotivational.Text = "👏 做得很好！继续加油！";
-                labelMotivational.ForeColor = SuccessGreen;
+                labelMotivational.ForeColor = ThemeHelper.Colors.Success;
             }
             else if (_accuracyRate >= 50)
             {
                 labelMotivational.Text = "💪 再接再厉，你一定可以！";
-                labelMotivational.ForeColor = SoftBlue;
+                labelMotivational.ForeColor = ThemeHelper.Colors.SoftBlue;
             }
             else
             {
                 labelMotivational.Text = "📚 努力学习，进步就在眼前！";
-                labelMotivational.ForeColor = WarmOrange;
+                labelMotivational.ForeColor = ThemeHelper.Colors.Orange;
             }
         }
 
@@ -432,9 +428,9 @@ namespace UnifiedLearningAssistant.Forms
             if (sender is Button button)
             {
                 if (button.Name == "buttonReview")
-                    button.BackColor = WarmOrange;
+                    button.BackColor = ThemeHelper.Colors.Orange;
                 else if (button.Name == "buttonBack")
-                    button.BackColor = SuccessGreen;
+                    button.BackColor = ThemeHelper.Colors.Success;
             }
         }
 
