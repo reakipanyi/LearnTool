@@ -2,7 +2,7 @@ namespace UnifiedLearningAssistant.Views
 {
     public interface IPdfView
     {
-        void SetFileList(IEnumerable&lt;string&gt; files);
+        void SetFileList(IEnumerable<string> files);
         void SetPageCount(int count);
         void SetCurrentPageIndex(int pageIndex);
         void SetPageText(int pageIndex, string text);
@@ -48,11 +48,11 @@ namespace UnifiedLearningAssistant.Views
         event EventHandler? OcrSelectionComplete;
         event EventHandler? AiQuestionAsked;
         event EventHandler? AddToLearningList;
-        event EventHandler&lt;AddToEditorEventArgs&gt;? AddToEditor;
+        event EventHandler<AddToEditorEventArgs>? AddToEditor;
         event EventHandler? SpeakOriginal;
         event EventHandler? SpeakTranslation;
-        event EventHandler&lt;string&gt;? SpeakText;
-        event EventHandler&lt;string&gt;? AskAiWithText;
+        event EventHandler<string>? SpeakText;
+        event EventHandler<string>? AskAiWithText;
         event EventHandler? SelectOcrClicked;
         event EventHandler? TranslateClicked;
         event EventHandler? ToggleNightMode;

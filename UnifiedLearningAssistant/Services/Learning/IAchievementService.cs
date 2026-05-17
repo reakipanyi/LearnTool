@@ -7,10 +7,10 @@ namespace UnifiedLearningAssistant.Services.Learning
     {
         void LoadProgress(UserProfile profile);
         void CheckAndUnlockAchievements(UserProfile profile, LearningProgress progress);
-        List&lt;Achievement&gt; GetAllAchievements();
-        List&lt;Achievement&gt; GetUnlockedAchievements();
-        List&lt;Achievement&gt; GetLockedAchievements();
-        event EventHandler&lt;AchievementUnlockedEventArgs&gt;? AchievementUnlocked;
+        List<Achievement> GetAllAchievements();
+        List<Achievement> GetUnlockedAchievements();
+        List<Achievement> GetLockedAchievements();
+        event EventHandler<AchievementUnlockedEventArgs>? AchievementUnlocked;
     }
 }
 

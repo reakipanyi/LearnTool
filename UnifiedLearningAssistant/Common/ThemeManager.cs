@@ -7,7 +7,7 @@ namespace UnifiedLearningAssistant.Common
     public class ThemeService : IThemeService
     {
         private readonly IEventBus _eventBus;
-        private readonly List&lt;IThemeable&gt; _themeables = new List&lt;IThemeable&gt;();
+        private readonly List<IThemeable> _themeables = new List<IThemeable>();
         private ThemeMode _currentMode = ThemeMode.Light;
 
         public ThemeMode CurrentTheme => _currentMode;

@@ -1,88 +1,88 @@
 
 namespace UnifiedLearningAssistant.Models.Learning
 {
-    /// &lt;summary&gt;
+    /// <summary>
     /// 英语综合学习项
     /// 包含单词、短语和句子的组合学习
-    /// &lt;/summary&gt;
+    /// </summary>
     public class EnglishComprehensive : LearningItem
     {
-        /// &lt;summary&gt;
+        /// <summary>
         /// 学习项类型
-        /// &lt;/summary&gt;
+        /// </summary>
         public EnglishItemType ItemType { get; set; } = EnglishItemType.Word;
 
-        /// &lt;summary&gt;
+        /// <summary>
         /// 单词内容（适用于：单词）
-        /// &lt;/summary&gt;
+        /// </summary>
         public string Word { get; set; } = string.Empty;
 
-        /// &lt;summary&gt;
+        /// <summary>
         /// 音标（适用于：单词、短语）
-        /// &lt;/summary&gt;
+        /// </summary>
         public string Phonetic { get; set; } = string.Empty;
 
-        /// &lt;summary&gt;
+        /// <summary>
         /// 短语内容（适用于：短语）
-        /// &lt;/summary&gt;
+        /// </summary>
         public string Phrase { get; set; } = string.Empty;
 
-        /// &lt;summary&gt;
+        /// <summary>
         /// 句子内容（适用于：句子）
-        /// &lt;/summary&gt;
+        /// </summary>
         public string Sentence { get; set; } = string.Empty;
 
-        /// &lt;summary&gt;
+        /// <summary>
         /// 中文释义（适用于所有类型）
-        /// &lt;/summary&gt;
+        /// </summary>
         public string ChineseMeaning { get; set; } = string.Empty;
 
-        /// &lt;summary&gt;
+        /// <summary>
         /// 英文释义（适用于所有类型）
-        /// &lt;/summary&gt;
+        /// </summary>
         public string EnglishMeaning { get; set; } = string.Empty;
 
-        /// &lt;summary&gt;
+        /// <summary>
         /// 词性（适用于：单词、短语）
-        /// &lt;/summary&gt;
+        /// </summary>
         public string PartOfSpeech { get; set; } = string.Empty;
 
-        /// &lt;summary&gt;
+        /// <summary>
         /// 例句（适用于：单词、短语、句子）
-        /// &lt;/summary&gt;
+        /// </summary>
         public string Example { get; set; } = string.Empty;
 
-        /// &lt;summary&gt;
+        /// <summary>
         /// 例句中文翻译（适用于：单词、短语、句子）
-        /// &lt;/summary&gt;
+        /// </summary>
         public string ExampleTranslation { get; set; } = string.Empty;
 
-        /// &lt;summary&gt;
+        /// <summary>
         /// 同义词（适用于：单词）
-        /// &lt;/summary&gt;
-        public List&lt;string&gt; Synonyms { get; set; } = new List&lt;string&gt;();
+        /// </summary>
+        public List<string> Synonyms { get; set; } = new List<string>();
 
-        /// &lt;summary&gt;
+        /// <summary>
         /// 反义词（适用于：单词）
-        /// &lt;/summary&gt;
-        public List&lt;string&gt; Antonyms { get; set; } = new List&lt;string&gt;();
+        /// </summary>
+        public List<string> Antonyms { get; set; } = new List<string>();
 
-        /// &lt;summary&gt;
+        /// <summary>
         /// 相关词汇（适用于：所有类型）
-        /// &lt;/summary&gt;
-        public List&lt;string&gt; RelatedWords { get; set; } = new List&lt;string&gt;();
+        /// </summary>
+        public List<string> RelatedWords { get; set; } = new List<string>();
 
-        /// &lt;summary&gt;
+        /// <summary>
         /// 难度级别
-        /// &lt;/summary&gt;
+        /// </summary>
         public int DifficultyLevel { get; set; } = 1;
 
-        /// &lt;summary&gt;
+        /// <summary>
         /// 主题分类
-        /// &lt;/summary&gt;
+        /// </summary>
         public string Topic { get; set; } = string.Empty;
 
-        /// &lt;inheritdoc/&gt;
+        /// <inheritdoc/>
         public override string GetMainContent()
         {
             return ItemType switch
@@ -94,10 +94,10 @@ namespace UnifiedLearningAssistant.Models.Learning
             };
         }
 
-        /// &lt;inheritdoc/&gt;
+        /// <inheritdoc/>
         public override string GetDisplayText()
         {
-            var parts = new List&lt;string&gt;();
+            var parts = new List<string>();
 
             switch (ItemType)
             {
@@ -112,7 +112,7 @@ namespace UnifiedLearningAssistant.Models.Learning
                         parts.Add($"英文释义: {EnglishMeaning}");
                     if (!string.IsNullOrWhiteSpace(Example))
                         parts.Add($"例句: {Example}");
-                    if (Synonyms.Count &gt; 0)
+                    if (Synonyms.Count > 0)
                         parts.Add($"同义词: {string.Join(", ", Synonyms)}");
                     break;
 
@@ -138,13 +138,13 @@ namespace UnifiedLearningAssistant.Models.Learning
             return string.Join(" | ", parts);
         }
 
-        /// &lt;inheritdoc/&gt;
+        /// <inheritdoc/>
         public override string GetPronunciation() => Phonetic;
     }
 
-    /// &lt;summary&gt;
+    /// <summary>
     /// 英语学习项类型
-    /// &lt;/summary&gt;
+    /// </summary>
     public enum EnglishItemType
     {
         Word,     // 单词

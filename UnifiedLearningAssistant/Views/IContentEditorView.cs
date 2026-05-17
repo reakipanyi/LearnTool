@@ -13,7 +13,7 @@ namespace UnifiedLearningAssistant.Views
         string GenerateRange { get; set; }
         string PromptText { get; set; }
         object? GridDataSource { get; set; }
-        List&lt;int&gt; SelectedRowIndices { get; }
+        List<int> SelectedRowIndices { get; }
 
         event EventHandler? LanguageChanged;
         event EventHandler? SubCategoryChanged;
@@ -29,7 +29,7 @@ namespace UnifiedLearningAssistant.Views
 
         void ShowMessage(string msg);
 
-        void RefreshSubCategories(IEnumerable&lt;string&gt; subCategories);
+        void RefreshSubCategories(IEnumerable<string> subCategories);
         void RefreshTreeView(TreeNodeCollection nodes);
         void LoadItemForEdit(dynamic item);
         void ClearEditForm();

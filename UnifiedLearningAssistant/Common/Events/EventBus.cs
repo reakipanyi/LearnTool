@@ -5,12 +5,12 @@ namespace UnifiedLearningAssistant.Common.Events
 {
     public class EventBus : IEventBus
     {
-        private readonly ConcurrentDictionary&lt;Type, List&lt;Delegate&gt;&gt; _handlers = new ConcurrentDictionary&lt;Type, List&lt;Delegate&gt;&gt;();
+        private readonly ConcurrentDictionary<Type, List<Delegate>> _handlers = new ConcurrentDictionary<Type, List<Delegate>>();
 
-        public void Subscribe&lt;TEvent&gt;(Action&lt;TEvent&gt; handler) where TEvent : IApplicationEvent
+        public void Subscribe<TEvent>(Action<TEvent> handler) where TEvent : IApplicationEvent
         {
             var eventType = typeof(TEvent);
-            var handlers = _handlers.GetOrAdd(eventType, _ => new List&lt;Delegate&gt;());
+            var handlers = _handlers.GetOrAdd(eventType, _ => new List<Delegate>());
             lock (handlers)
             {
                 if (!handlers.Contains(handler))
@@ -20,7 +20,7 @@ namespace UnifiedLearningAssistant.Common.Events
             }
         }
 
-        public void Unsubscribe&lt;TEvent&gt;(Action&lt;TEvent&gt; handler) where TEvent : IApplicationEvent
+        public void Unsubscribe<TEvent>(Action<TEvent> handler) where TEvent : IApplicationEvent
         {
             var eventType = typeof(TEvent);
             if (_handlers.TryGetValue(eventType, out var handlers))
@@ -32,20 +32,20 @@ namespace UnifiedLearningAssistant.Common.Events
             }
         }
 
-        public void Publish&lt;TEvent&gt;(TEvent eventData) where TEvent : IApplicationEvent
+        public void Publish<TEvent>(TEvent eventData) where TEvent : IApplicationEvent
         {
             var eventType = typeof(TEvent);
             if (_handlers.TryGetValue(eventType, out var handlers))
             {
-                List&lt;Delegate&gt; currentHandlers;
+                List<Delegate> currentHandlers;
                 lock (handlers)
                 {
-                    currentHandlers = new List&lt;Delegate&gt;(handlers);
+                    currentHandlers = new List<Delegate>(handlers);
                 }
 
                 foreach (var handler in currentHandlers)
                 {
-                    if (handler is Action&lt;TEvent&gt; typedHandler)
+                    if (handler is Action<TEvent> typedHandler)
                     {
                         try
                         {

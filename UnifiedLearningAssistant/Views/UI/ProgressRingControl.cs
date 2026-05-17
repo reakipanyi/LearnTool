@@ -81,7 +81,7 @@ namespace UnifiedLearningAssistant.Views.UI
             const float animationSpeed = 0.05f;
             float diff = _targetProgress - _progress;
 
-            if (Math.Abs(diff) &lt; 0.001f)
+            if (Math.Abs(diff) < 0.001f)
             {
                 _progress = _targetProgress;
                 _animationTimer.Stop();

@@ -17,14 +17,14 @@ namespace UnifiedLearningAssistant.Services.Notifications
 
         private void SubscribeToEvents()
         {
-            _eventBus.Subscribe&lt;AchievementUnlockedEvent&gt;(OnAchievementUnlocked);
-            _eventBus.Subscribe&lt;LearningSessionCompletedEvent&gt;(OnLearningSessionCompleted);
+            _eventBus.Subscribe<AchievementUnlockedEvent>(OnAchievementUnlocked);
+            _eventBus.Subscribe<LearningSessionCompletedEvent>(OnLearningSessionCompleted);
         }
 
         private void UnsubscribeFromEvents()
         {
-            _eventBus.Unsubscribe&lt;AchievementUnlockedEvent&gt;(OnAchievementUnlocked);
-            _eventBus.Unsubscribe&lt;LearningSessionCompletedEvent&gt;(OnLearningSessionCompleted);
+            _eventBus.Unsubscribe<AchievementUnlockedEvent>(OnAchievementUnlocked);
+            _eventBus.Unsubscribe<LearningSessionCompletedEvent>(OnLearningSessionCompleted);
         }
 
         private void OnAchievementUnlocked(AchievementUnlockedEvent evt)
@@ -39,7 +39,7 @@ namespace UnifiedLearningAssistant.Services.Notifications
 
         private void OnLearningSessionCompleted(LearningSessionCompletedEvent evt)
         {
-            if (evt.Accuracy &gt;= 0.95)
+            if (evt.Accuracy >= 0.95)
             {
                 TriggerCelebration(CelebrationType.PerfectScore, new CelebrationContext
                 {

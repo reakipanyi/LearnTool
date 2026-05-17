@@ -6,13 +6,13 @@ namespace UnifiedLearningAssistant.Services.Learning
 {
     public class AchievementService : IAchievementService, IDisposable
     {
-        private List&lt;Achievement&gt; _achievements;
+        private List<Achievement> _achievements;
         private readonly object _lock = new object();
         private readonly IEventBus _eventBus;
         private string _currentUserId = string.Empty;
         private UserProfile? _currentUserProfile;
 
-        public event EventHandler&lt;AchievementUnlockedEventArgs&gt;? AchievementUnlocked;
+        public event EventHandler<AchievementUnlockedEventArgs>? AchievementUnlocked;
 
         public AchievementService(IEventBus eventBus)
         {
@@ -23,21 +23,21 @@ namespace UnifiedLearningAssistant.Services.Learning
 
         private void SubscribeToEvents()
         {
-            _eventBus.Subscribe&lt;LearningItemCompletedEvent&gt;(OnLearningItemCompleted);
-            _eventBus.Subscribe&lt;LearningSessionCompletedEvent&gt;(OnLearningSessionCompleted);
-            _eventBus.Subscribe&lt;UserProfileUpdatedEvent&gt;(OnUserProfileUpdated);
+            _eventBus.Subscribe<LearningItemCompletedEvent>(OnLearningItemCompleted);
+            _eventBus.Subscribe<LearningSessionCompletedEvent>(OnLearningSessionCompleted);
+            _eventBus.Subscribe<UserProfileUpdatedEvent>(OnUserProfileUpdated);
         }
 
         private void UnsubscribeFromEvents()
         {
-            _eventBus.Unsubscribe&lt;LearningItemCompletedEvent&gt;(OnLearningItemCompleted);
-            _eventBus.Unsubscribe&lt;LearningSessionCompletedEvent&gt;(OnLearningSessionCompleted);
-            _eventBus.Unsubscribe&lt;UserProfileUpdatedEvent&gt;(OnUserProfileUpdated);
+            _eventBus.Unsubscribe<LearningItemCompletedEvent>(OnLearningItemCompleted);
+            _eventBus.Unsubscribe<LearningSessionCompletedEvent>(OnLearningSessionCompleted);
+            _eventBus.Unsubscribe<UserProfileUpdatedEvent>(OnUserProfileUpdated);
         }
 
         private void OnLearningItemCompleted(LearningItemCompletedEvent evt)
         {
-            if (_currentUserProfile != null &amp;&amp; evt.UserId == _currentUserId)
+            if (_currentUserProfile != null && evt.UserId == _currentUserId)
             {
                 CheckAndUnlockAchievements(_currentUserProfile, _currentUserProfile.LearningProgress);
             }
@@ -45,7 +45,7 @@ namespace UnifiedLearningAssistant.Services.Learning
 
         private void OnLearningSessionCompleted(LearningSessionCompletedEvent evt)
         {
-            if (_currentUserProfile != null &amp;&amp; evt.UserId == _currentUserId)
+            if (_currentUserProfile != null && evt.UserId == _currentUserId)
             {
                 CheckAndUnlockAchievements(_currentUserProfile, _currentUserProfile.LearningProgress);
             }
@@ -77,7 +77,7 @@ namespace UnifiedLearningAssistant.Services.Learning
 
         public void CheckAndUnlockAchievements(UserProfile profile, LearningProgress progress)
         {
-            var newUnlocks = new List&lt;Achievement&gt;();
+            var newUnlocks = new List<Achievement>();
 
             lock (_lock)
             {
@@ -120,8 +120,8 @@ namespace UnifiedLearningAssistant.Services.Learning
         {
             return requirement.Type switch
             {
-                AchievementType.TotalItemsStudied => progress.TotalItemsStudied &gt;= requirement.TargetValue,
-                AchievementType.MasteredItems => progress.TotalItemsMastered &gt;= requirement.TargetValue,
+                AchievementType.TotalItemsStudied => progress.TotalItemsStudied >= requirement.TargetValue,
+                AchievementType.MasteredItems => progress.TotalItemsMastered >= requirement.TargetValue,
                 AchievementType.ConsecutiveDays => CheckConsecutiveDays(progress, requirement.TargetValue),
                 AchievementType.PerfectSession => CheckPerfectSession(progress),
                 _ => false
@@ -140,7 +140,7 @@ namespace UnifiedLearningAssistant.Services.Learning
             return false;
         }
 
-        public List&lt;Achievement&gt; GetAllAchievements()
+        public List<Achievement> GetAllAchievements()
         {
             lock (_lock)
             {
@@ -148,7 +148,7 @@ namespace UnifiedLearningAssistant.Services.Learning
             }
         }
 
-        public List&lt;Achievement&gt; GetUnlockedAchievements()
+        public List<Achievement> GetUnlockedAchievements()
         {
             lock (_lock)
             {
@@ -156,7 +156,7 @@ namespace UnifiedLearningAssistant.Services.Learning
             }
         }
 
-        public List&lt;Achievement&gt; GetLockedAchievements()
+        public List<Achievement> GetLockedAchievements()
         {
             lock (_lock)
             {

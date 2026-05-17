@@ -18,9 +18,9 @@ namespace UnifiedLearningAssistant.Services
     public class WindowManager : IWindowManager
     {
         private readonly IServiceProvider _serviceProvider;
-        private readonly ILogger&lt;WindowManager&gt; _logger;
+        private readonly ILogger<WindowManager> _logger;
 
-        public WindowManager(IServiceProvider serviceProvider, ILogger&lt;WindowManager&gt; logger)
+        public WindowManager(IServiceProvider serviceProvider, ILogger<WindowManager> logger)
         {
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -33,10 +33,10 @@ namespace UnifiedLearningAssistant.Services
             try
             {
                 using var scope = _serviceProvider.CreateScope();
-                var presenter = scope.ServiceProvider.GetRequiredService&lt;LearningPresenter&gt;();
+                var presenter = scope.ServiceProvider.GetRequiredService<LearningPresenter>();
                 await presenter.InitializeAsync(userId, language, subCategory, wordBankFile, mode, sortOrder);
 
-                var view = scope.ServiceProvider.GetRequiredService&lt;ILearningView&gt;();
+                var view = scope.ServiceProvider.GetRequiredService<ILearningView>();
                 if (view is Form form)
                 {
                     form.StartPosition = FormStartPosition.CenterParent;
@@ -62,10 +62,10 @@ namespace UnifiedLearningAssistant.Services
             try
             {
                 using var scope = _serviceProvider.CreateScope();
-                var presenter = scope.ServiceProvider.GetRequiredService&lt;SettingPresenter&gt;();
+                var presenter = scope.ServiceProvider.GetRequiredService<SettingPresenter>();
                 presenter.Initialize();
 
-                var view = scope.ServiceProvider.GetRequiredService&lt;ISettingView&gt;();
+                var view = scope.ServiceProvider.GetRequiredService<ISettingView>();
                 if (view is Form form)
                 {
                     form.StartPosition = FormStartPosition.CenterParent;
@@ -99,8 +99,8 @@ namespace UnifiedLearningAssistant.Services
                 var scopedProvider = scope.ServiceProvider;
 
                 // 获取 ContentEditorForm 实例
-                var form = scopedProvider.GetRequiredService&lt;ContentEditorForm&gt;();
-                var presenter = scopedProvider.GetRequiredService&lt;ContentEditorPresenter&gt;();
+                var form = scopedProvider.GetRequiredService<ContentEditorForm>();
+                var presenter = scopedProvider.GetRequiredService<ContentEditorPresenter>();
 
                 // 设置 Presenter
                 form.SetPresenter(presenter);
@@ -139,10 +139,10 @@ namespace UnifiedLearningAssistant.Services
             try
             {
                 using var scope = _serviceProvider.CreateScope();
-                var presenter = scope.ServiceProvider.GetRequiredService&lt;ResultPresenter&gt;();
+                var presenter = scope.ServiceProvider.GetRequiredService<ResultPresenter>();
                 presenter.Initialize();
 
-                var view = scope.ServiceProvider.GetRequiredService&lt;IResultView&gt;();
+                var view = scope.ServiceProvider.GetRequiredService<IResultView>();
                 if (view is Form form)
                 {
                     form.StartPosition = FormStartPosition.CenterParent;

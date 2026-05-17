@@ -7,8 +7,8 @@ namespace UnifiedLearningAssistant.Services.Learning
 {
     public class ContentLoaderService : IContentLoaderService
     {
-        private readonly ILogger&lt;ContentLoaderService&gt; _logger;
-        private readonly Dictionary&lt;string, Type&gt; _categoryTypeMap = new Dictionary&lt;string, Type&gt;
+        private readonly ILogger<ContentLoaderService> _logger;
+        private readonly Dictionary<string, Type> _categoryTypeMap = new Dictionary<string, Type>
         {
             { Constants.SubCategory.ChineseCharacter, typeof(ChineseCharacter) },
             { Constants.SubCategory.ChineseWordCombination, typeof(ChineseWordCombination) },
@@ -22,7 +22,7 @@ namespace UnifiedLearningAssistant.Services.Learning
             { Constants.SubCategory.EnglishComprehensive, typeof(EnglishComprehensive) }
         };
 
-        private readonly Dictionary&lt;string, string&gt; _categoryFileMap = new Dictionary&lt;string, string&gt;
+        private readonly Dictionary<string, string> _categoryFileMap = new Dictionary<string, string>
         {
             { Constants.SubCategory.ChineseCharacter, Constants.FileName.ChineseCharacter },
             { Constants.SubCategory.ChineseWordCombination, Constants.FileName.ChineseWordCombination },
@@ -36,12 +36,12 @@ namespace UnifiedLearningAssistant.Services.Learning
             { Constants.SubCategory.EnglishComprehensive, Constants.FileName.EnglishComprehensive }
         };
 
-        public ContentLoaderService(ILogger&lt;ContentLoaderService&gt; logger)
+        public ContentLoaderService(ILogger<ContentLoaderService> logger)
         {
             _logger = logger;
         }
 
-        public List&lt;object&gt; LoadItems(string subCategory, string wordBankFile = "")
+        public List<object> LoadItems(string subCategory, string wordBankFile = "")
         {
             try
             {
@@ -49,14 +49,14 @@ namespace UnifiedLearningAssistant.Services.Learning
                 if (!File.Exists(filePath))
                 {
                     _logger.LogWarning("File not found: {FilePath}", filePath);
-                    return new List&lt;object&gt;();
+                    return new List<object>();
                 }
 
                 var itemType = GetItemType(subCategory);
                 var json = File.ReadAllText(filePath);
 
-                // 直接反序列化为具体类型列表，而不是 List&lt;object&gt;
-                var listType = typeof(List&lt;&gt;).MakeGenericType(itemType);
+                // 直接反序列化为具体类型列表，而不是 List<object>
+                var listType = typeof(List<>).MakeGenericType(itemType);
                 var items = System.Text.Json.JsonSerializer.Deserialize(json, listType,
                     new System.Text.Json.JsonSerializerOptions
                     {
@@ -67,19 +67,19 @@ namespace UnifiedLearningAssistant.Services.Learning
                 if (items == null)
                 {
                     _logger.LogWarning("No items loaded from file: {FilePath}", filePath);
-                    return new List&lt;object&gt;();
+                    return new List<object>();
                 }
 
-                return ((System.Collections.IList)items).Cast&lt;object&gt;().ToList();
+                return ((System.Collections.IList)items).Cast<object>().ToList();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load items for subCategory: {SubCategory}", subCategory);
-                return new List&lt;object&gt;();
+                return new List<object>();
             }
         }
 
-        public void SaveItems(string subCategory, List&lt;object&gt; items, string wordBankFile = "")
+        public void SaveItems(string subCategory, List<object> items, string wordBankFile = "")
         {
             try
             {
@@ -93,11 +93,11 @@ namespace UnifiedLearningAssistant.Services.Learning
             }
         }
 
-        public List&lt;string&gt; GetSubCategories(string language)
+        public List<string> GetSubCategories(string language)
         {
             if (language == Constants.Language.Chinese)
             {
-                return new List&lt;string&gt;
+                return new List<string>
                 {
                     Constants.SubCategory.ChineseCharacter,
                     Constants.SubCategory.ChineseWordCombination,
@@ -109,7 +109,7 @@ namespace UnifiedLearningAssistant.Services.Learning
             }
             else
             {
-                return new List&lt;string&gt;
+                return new List<string>
                 {
                     Constants.SubCategory.EnglishWord,
                     Constants.SubCategory.EnglishPhrase,
@@ -119,7 +119,7 @@ namespace UnifiedLearningAssistant.Services.Learning
             }
         }
 
-        public List&lt;string&gt; GetWordBankFiles(string subCategory)
+        public List<string> GetWordBankFiles(string subCategory)
         {
             try
             {
@@ -133,7 +133,7 @@ namespace UnifiedLearningAssistant.Services.Learning
                                    .Where(file => file.StartsWith(categoryPrefix, StringComparison.OrdinalIgnoreCase))
                                    .ToList();
 
-                if (!string.IsNullOrWhiteSpace(defaultFile) &amp;&amp; !files.Contains(defaultFile))
+                if (!string.IsNullOrWhiteSpace(defaultFile) && !files.Contains(defaultFile))
                 {
                     files.Add(defaultFile);
                 }
@@ -144,7 +144,7 @@ namespace UnifiedLearningAssistant.Services.Learning
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to get word bank files for subCategory: {SubCategory}", subCategory);
-                return new List&lt;string&gt;();
+                return new List<string>();
             }
         }
 

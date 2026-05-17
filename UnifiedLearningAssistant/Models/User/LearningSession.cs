@@ -16,9 +16,9 @@ namespace UnifiedLearningAssistant.Models.User
         public int TotalItems { get; set; }
         public int KnownItems { get; set; }
         public int UnknownItems { get; set; }
-        public double Accuracy => TotalItems &gt; 0 ? (double)KnownItems / TotalItems : 0;
+        public double Accuracy => TotalItems > 0 ? (double)KnownItems / TotalItems : 0;
         
-        public List&lt;LearningItemRecord&gt; ItemRecords { get; set; } = new List&lt;LearningItemRecord&gt;();
+        public List<LearningItemRecord> ItemRecords { get; set; } = new List<LearningItemRecord>();
     }
 
     public class LearningItemRecord
@@ -34,8 +34,8 @@ namespace UnifiedLearningAssistant.Models.User
     {
         void SaveSession(LearningSession session);
         LearningSession? GetSession(string sessionId);
-        List&lt;LearningSession&gt; GetUserSessions(string userId, int limit = 50);
-        List&lt;LearningSession&gt; GetSessionsByDate(string userId, DateTime startDate, DateTime endDate);
+        List<LearningSession> GetUserSessions(string userId, int limit = 50);
+        List<LearningSession> GetSessionsByDate(string userId, DateTime startDate, DateTime endDate);
         void DeleteSession(string sessionId);
     }
 
@@ -45,7 +45,7 @@ namespace UnifiedLearningAssistant.Models.User
         DailyGoal? GetDailyGoal(string userId);
         int GetTodayProgress(string userId);
         bool IsDailyGoalCompleted(string userId);
-        List&lt;DailyGoal&gt; GetGoalHistory(string userId, int days = 30);
+        List<DailyGoal> GetGoalHistory(string userId, int days = 30);
     }
 
     public class DailyGoal
@@ -54,7 +54,7 @@ namespace UnifiedLearningAssistant.Models.User
         public DateTime Date { get; set; }
         public int TargetItems { get; set; }
         public int CompletedItems { get; set; }
-        public bool IsCompleted => CompletedItems &gt;= TargetItems;
+        public bool IsCompleted => CompletedItems >= TargetItems;
     }
 }
 

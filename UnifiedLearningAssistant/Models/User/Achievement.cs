@@ -42,9 +42,9 @@ namespace UnifiedLearningAssistant.Models.User
 
     public static class AchievementHelper
     {
-        public static List&lt;Achievement&gt; GetAllAchievements()
+        public static List<Achievement> GetAllAchievements()
         {
-            return new List&lt;Achievement&gt;
+            return new List<Achievement>
             {
                 // 学习类成就
                 new Achievement
