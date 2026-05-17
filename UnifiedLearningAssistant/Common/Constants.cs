@@ -58,5 +58,7 @@ namespace UnifiedLearningAssistant.Common
         public const string TranslationsDirectory = "Translations";
         public const string SessionFile = "session.json";
         public const string SettingsFile = "settings.json";
+        public const string BookmarksDirectory = "Bookmarks";
+        public const string HighlightsDirectory = "Highlights";
     }
 }

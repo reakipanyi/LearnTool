@@ -54,11 +54,68 @@ namespace UnifiedLearningAssistant.Forms
             {
                 throw new InvalidOperationException("IPdfView 未实现为 UserControl 类型。");
             }
+
+            ApplyColorScheme();
+            AddButtonAnimations();
         }
 
         private void PdfView_OnAddToEditor(object? sender, Views.AddToEditorEventArgs e)
         {
             _windowManager.OpenEditorWindowWithContext(e.Text, e.Language, null);
+        }
+
+        private void ApplyColorScheme()
+        {
+            BackColor = Color.FromArgb(250, 245, 235);
+
+            ConfigureButton(buttonStartLearning, Color.FromArgb(76, 175, 80), "🚀 开始学习");
+            ConfigureButton(buttonContinueLearning, Color.FromArgb(33, 150, 243), "📚 继续学习");
+            ConfigureButton(buttonOpenEditor, Color.FromArgb(156, 39, 176), "📝 模板编辑");
+            ConfigureButton(buttonOpenPdfReader, Color.FromArgb(0, 188, 212), "📖 PDF阅读");
+            ConfigureButton(buttonOpenStatistics, Color.FromArgb(255, 152, 0), "📊 学习统计");
+            ConfigureButton(buttonExportErrorBook, Color.FromArgb(244, 67, 54), "❌ 导出错题本");
+
+            tabPageLearning.Text = "📖 双语学习";
+            tabPagePdf.Text = "📄 PDF阅读助手";
+        }
+
+        private void ConfigureButton(Button button, Color backColor, string text)
+        {
+            button.BackColor = backColor;
+            button.ForeColor = Color.White;
+            button.Font = new Font(button.Font, FontStyle.Bold);
+            button.FlatStyle = FlatStyle.Flat;
+            button.FlatAppearance.BorderSize = 0;
+            button.Text = text;
+        }
+
+        private void AddButtonAnimations()
+        {
+            AddHoverEffect(buttonStartLearning, Color.FromArgb(76, 175, 80));
+            AddHoverEffect(buttonContinueLearning, Color.FromArgb(33, 150, 243));
+            AddHoverEffect(buttonOpenEditor, Color.FromArgb(156, 39, 176));
+            AddHoverEffect(buttonOpenPdfReader, Color.FromArgb(0, 188, 212));
+            AddHoverEffect(buttonOpenStatistics, Color.FromArgb(255, 152, 0));
+            AddHoverEffect(buttonExportErrorBook, Color.FromArgb(244, 67, 54));
+        }
+
+        private void AddHoverEffect(Button button, Color originalColor)
+        {
+            Color hoverColor = Color.FromArgb(
+                Math.Max(0, originalColor.R - 30),
+                Math.Max(0, originalColor.G - 30),
+                Math.Max(0, originalColor.B - 30)
+            );
+
+            button.MouseEnter += (s, e) =>
+            {
+                button.BackColor = hoverColor;
+            };
+
+            button.MouseLeave += (s, e) =>
+            {
+                button.BackColor = originalColor;
+            };
         }
 
         // 新增功能：PDF生词本联动 - 设置PDF Presenter
@@ -209,6 +266,32 @@ namespace UnifiedLearningAssistant.Forms
             StatusText = status;
         }
 
+        public void UpdateStreakInfo(int consecutiveDays, string studyTimeSummary)
+        {
+            if (labelStreakDays != null)
+            {
+                labelStreakDays.Text = $"连续 {consecutiveDays} 天";
+                if (consecutiveDays >= 7)
+                {
+                    labelStreakDays.Text = $"🔥 连续 {consecutiveDays} 天";
+                }
+            }
+
+            if (panelStreakInfo != null)
+            {
+                if (consecutiveDays >= 30)
+                {
+                    panelStreakInfo.BackColor = Color.FromArgb(255, 245, 230);
+                    panelStreakInfo.BorderStyle = BorderStyle.Fixed3D;
+                }
+                else if (consecutiveDays >= 7)
+                {
+                    panelStreakInfo.BackColor = Color.FromArgb(255, 248, 240);
+                    panelStreakInfo.BorderStyle = BorderStyle.FixedSingle;
+                }
+            }
+        }
+
         #endregion
 
         #region WinForms Designer Generated Code
@@ -255,6 +338,9 @@ namespace UnifiedLearningAssistant.Forms
         private ToolStripStatusLabel toolStripStatusLabel;
         private TabPage tabPagePdf;
         private StatusStrip statusStrip1;
+        private Panel panelStreakInfo;
+        private Label labelStreakDays;
+        private Label labelStreakIcon;
 
         private void InitializeComponent()
         {
@@ -307,7 +393,6 @@ namespace UnifiedLearningAssistant.Forms
             groupBoxUser.SuspendLayout();
             menuStrip1.SuspendLayout();
             statusStrip1.SuspendLayout();
-            SuspendLayout();
             // 
             // tabControl1
             // 
@@ -700,6 +785,39 @@ namespace UnifiedLearningAssistant.Forms
             menuStrip1.PerformLayout();
             statusStrip1.ResumeLayout(false);
             statusStrip1.PerformLayout();
+
+            panelStreakInfo = new Panel
+            {
+                Location = new Point(15, 25),
+                Size = new Size(180, 50),
+                BackColor = Color.FromArgb(255, 248, 240),
+                BorderStyle = BorderStyle.FixedSingle
+            };
+
+            labelStreakIcon = new Label
+            {
+                Location = new Point(10, 8),
+                Size = new Size(30, 35),
+                Text = "🔥",
+                Font = new Font("Microsoft YaHei UI", 20F),
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+
+            labelStreakDays = new Label
+            {
+                Location = new Point(45, 5),
+                Size = new Size(120, 40),
+                Text = "连续 0 天",
+                Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(220, 80, 0),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            panelStreakInfo.Controls.Add(labelStreakIcon);
+            panelStreakInfo.Controls.Add(labelStreakDays);
+            panelMain.Controls.Add(panelStreakInfo);
+            panelStreakInfo.BringToFront();
+
             ResumeLayout(false);
             PerformLayout();
         }

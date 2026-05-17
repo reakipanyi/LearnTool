@@ -18,6 +18,13 @@ namespace UnifiedLearningAssistant.Forms
         private ComboBox comboBoxSubCategory;
         private bool _disposed = false;
 
+        private static readonly Color WarmBeige = Color.FromArgb(255, 244, 230);
+        private static readonly Color WarmCream = Color.FromArgb(255, 250, 240);
+        private static readonly Color WarmOrange = Color.FromArgb(255, 152, 0);
+        private static readonly Color SoftBlue = Color.FromArgb(100, 181, 246);
+        private static readonly Color SuccessGreen = Color.FromArgb(76, 175, 80);
+        private static readonly Color TextDark = Color.FromArgb(33, 33, 33);
+
         public ContentEditorForm(ILogger<ContentEditorForm> logger)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -356,113 +363,154 @@ namespace UnifiedLearningAssistant.Forms
             ((System.ComponentModel.ISupportInitialize)dataGridView).BeginInit();
             groupBoxLanguage.SuspendLayout();
             SuspendLayout();
-            // 
-            // textBoxJson
-            // 
-            textBoxJson.BackColor = SystemColors.HighlightText;
+            
+            BackColor = WarmBeige;
+
+            textBoxJson.BackColor = Color.White;
+            textBoxJson.BorderStyle = BorderStyle.FixedSingle;
+            textBoxJson.Font = new Font("Microsoft YaHei", 10F);
             textBoxJson.Location = new Point(613, 194);
             textBoxJson.Multiline = true;
             textBoxJson.Name = "textBoxJson";
             textBoxJson.ScrollBars = ScrollBars.Both;
             textBoxJson.Size = new Size(591, 452);
             textBoxJson.TabIndex = 2;
-            // 
-            // buttonAdd
-            // 
+
+            buttonAdd.BackColor = WarmOrange;
+            buttonAdd.FlatAppearance.BorderSize = 0;
+            buttonAdd.FlatStyle = FlatStyle.Flat;
+            buttonAdd.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
+            buttonAdd.ForeColor = Color.White;
             buttonAdd.Location = new Point(100, 681);
             buttonAdd.Name = "buttonAdd";
             buttonAdd.Size = new Size(102, 44);
             buttonAdd.TabIndex = 3;
             buttonAdd.Text = "📝 新增";
+            buttonAdd.UseVisualStyleBackColor = false;
+            buttonAdd.MouseEnter += Button_HoverEnter;
+            buttonAdd.MouseLeave += Button_HoverLeave;
             buttonAdd.Click += ButtonAdd_Click;
-            // 
-            // buttonSave
-            // 
+
+            buttonSave.BackColor = SuccessGreen;
+            buttonSave.FlatAppearance.BorderSize = 0;
+            buttonSave.FlatStyle = FlatStyle.Flat;
+            buttonSave.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
+            buttonSave.ForeColor = Color.White;
             buttonSave.Location = new Point(254, 681);
             buttonSave.Name = "buttonSave";
             buttonSave.Size = new Size(102, 44);
             buttonSave.TabIndex = 4;
             buttonSave.Text = "💾 保存";
+            buttonSave.UseVisualStyleBackColor = false;
+            buttonSave.MouseEnter += Button_HoverEnter;
+            buttonSave.MouseLeave += Button_HoverLeave;
             buttonSave.Click += ButtonSave_Click;
-            // 
-            // buttonDelete
-            // 
+
+            buttonDelete.BackColor = Color.FromArgb(244, 67, 54);
+            buttonDelete.FlatAppearance.BorderSize = 0;
+            buttonDelete.FlatStyle = FlatStyle.Flat;
+            buttonDelete.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
+            buttonDelete.ForeColor = Color.White;
             buttonDelete.Location = new Point(408, 681);
             buttonDelete.Name = "buttonDelete";
             buttonDelete.Size = new Size(102, 44);
             buttonDelete.TabIndex = 5;
             buttonDelete.Text = "🗑️ 删除";
+            buttonDelete.UseVisualStyleBackColor = false;
+            buttonDelete.MouseEnter += Button_HoverEnter;
+            buttonDelete.MouseLeave += Button_HoverLeave;
             buttonDelete.Click += ButtonDelete_Click;
-            // 
-            // buttonImport
-            // 
+
+            buttonImport.BackColor = SoftBlue;
+            buttonImport.FlatAppearance.BorderSize = 0;
+            buttonImport.FlatStyle = FlatStyle.Flat;
+            buttonImport.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
+            buttonImport.ForeColor = Color.White;
             buttonImport.Location = new Point(562, 681);
             buttonImport.Name = "buttonImport";
             buttonImport.Size = new Size(102, 44);
             buttonImport.TabIndex = 6;
             buttonImport.Text = "📥 导入";
+            buttonImport.UseVisualStyleBackColor = false;
+            buttonImport.MouseEnter += Button_HoverEnter;
+            buttonImport.MouseLeave += Button_HoverLeave;
             buttonImport.Click += ButtonImport_Click;
-            // 
-            // buttonExport
-            // 
+
+            buttonExport.BackColor = Color.FromArgb(156, 39, 176);
+            buttonExport.FlatAppearance.BorderSize = 0;
+            buttonExport.FlatStyle = FlatStyle.Flat;
+            buttonExport.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
+            buttonExport.ForeColor = Color.White;
             buttonExport.Location = new Point(716, 681);
             buttonExport.Name = "buttonExport";
             buttonExport.Size = new Size(102, 44);
             buttonExport.TabIndex = 7;
             buttonExport.Text = "📤 导出";
+            buttonExport.UseVisualStyleBackColor = false;
+            buttonExport.MouseEnter += Button_HoverEnter;
+            buttonExport.MouseLeave += Button_HoverLeave;
             buttonExport.Click += ButtonExport_Click;
-            // 
-            // buttonGenerateAI
-            // 
+
+            buttonGenerateAI.BackColor = Color.FromArgb(103, 58, 183);
+            buttonGenerateAI.FlatAppearance.BorderSize = 0;
+            buttonGenerateAI.FlatStyle = FlatStyle.Flat;
+            buttonGenerateAI.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
+            buttonGenerateAI.ForeColor = Color.White;
             buttonGenerateAI.Location = new Point(866, 681);
             buttonGenerateAI.Name = "buttonGenerateAI";
             buttonGenerateAI.Size = new Size(102, 44);
             buttonGenerateAI.TabIndex = 9;
             buttonGenerateAI.Text = "🤖 AI生成";
+            buttonGenerateAI.UseVisualStyleBackColor = false;
+            buttonGenerateAI.MouseEnter += Button_HoverEnter;
+            buttonGenerateAI.MouseLeave += Button_HoverLeave;
             buttonGenerateAI.Click += ButtonGenerateAI_Click;
-            // 
-            // labelCategory
-            // 
+
+            labelCategory.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
+            labelCategory.ForeColor = TextDark;
             labelCategory.Location = new Point(279, 39);
             labelCategory.Name = "labelCategory";
             labelCategory.Size = new Size(80, 20);
             labelCategory.TabIndex = 10;
-            labelCategory.Text = "学习品类:";
-            // 
-            // labelCount
-            // 
+            labelCategory.Text = "📁 学习品类:";
+
+            labelCount.Font = new Font("Microsoft YaHei", 10F);
+            labelCount.ForeColor = TextDark;
             labelCount.Location = new Point(1000, 695);
             labelCount.Name = "labelCount";
             labelCount.Size = new Size(60, 20);
             labelCount.TabIndex = 12;
             labelCount.Text = "生成数量:";
-            // 
-            // labelRange
-            // 
+
+            labelRange.Font = new Font("Microsoft YaHei", 10F);
+            labelRange.ForeColor = TextDark;
             labelRange.Location = new Point(574, 37);
             labelRange.Name = "labelRange";
-            labelRange.Size = new Size(60, 20);
+            labelRange.Size = new Size(80, 20);
             labelRange.TabIndex = 13;
-            labelRange.Text = "关键词或范围:";
-            // 
-            // textBoxCount
-            // 
+            labelRange.Text = "🔍 关键词:";
+
+            textBoxCount.BackColor = Color.White;
+            textBoxCount.BorderStyle = BorderStyle.FixedSingle;
+            textBoxCount.Font = new Font("Microsoft YaHei", 10F);
             textBoxCount.Location = new Point(1060, 692);
             textBoxCount.Name = "textBoxCount";
             textBoxCount.Size = new Size(50, 23);
             textBoxCount.TabIndex = 14;
             textBoxCount.Text = "5";
-            // 
-            // textBoxRange
-            // 
+
+            textBoxRange.BackColor = Color.White;
+            textBoxRange.BorderStyle = BorderStyle.FixedSingle;
+            textBoxRange.Font = new Font("Microsoft YaHei", 10F);
             textBoxRange.Location = new Point(640, 34);
             textBoxRange.Name = "textBoxRange";
             textBoxRange.Size = new Size(546, 23);
             textBoxRange.TabIndex = 15;
-            // 
-            // dataGridView
-            // 
+
             dataGridView.AllowUserToOrderColumns = true;
+            dataGridView.BackgroundColor = WarmCream;
+            dataGridView.BorderStyle = BorderStyle.None;
+            dataGridView.GridColor = Color.FromArgb(224, 224, 224);
             dataGridView.Location = new Point(5, 194);
             dataGridView.Name = "dataGridView";
             dataGridView.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
@@ -471,68 +519,70 @@ namespace UnifiedLearningAssistant.Forms
             dataGridView.CellEndEdit += DataGridView_CellEndEdit;
             dataGridView.RowsAdded += DataGridView_RowsAdded;
             dataGridView.SelectionChanged += DataGridView_SelectionChanged;
-            // 
-            // radioChinese
-            // 
+
             radioChinese.Checked = true;
+            radioChinese.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
+            radioChinese.ForeColor = TextDark;
             radioChinese.Location = new Point(36, 11);
             radioChinese.Name = "radioChinese";
             radioChinese.Size = new Size(80, 27);
             radioChinese.TabIndex = 1;
             radioChinese.TabStop = true;
-            radioChinese.Text = "中文";
+            radioChinese.Text = "🇨🇳 中文";
             radioChinese.CheckedChanged += RadioChinese_CheckedChanged;
-            // 
-            // radioEnglish
-            // 
+
+            radioEnglish.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
+            radioEnglish.ForeColor = TextDark;
             radioEnglish.Location = new Point(126, 11);
             radioEnglish.Name = "radioEnglish";
             radioEnglish.Size = new Size(80, 27);
             radioEnglish.TabIndex = 2;
-            radioEnglish.Text = "英语";
+            radioEnglish.Text = "🇬🇧 英语";
             radioEnglish.CheckedChanged += RadioEnglish_CheckedChanged;
-            // 
-            // comboBoxSubCategory
-            // 
+
+            comboBoxSubCategory.BackColor = Color.White;
+            comboBoxSubCategory.FlatStyle = FlatStyle.Flat;
+            comboBoxSubCategory.Font = new Font("Microsoft YaHei", 10F);
             comboBoxSubCategory.FormattingEnabled = true;
             comboBoxSubCategory.Location = new Point(352, 34);
             comboBoxSubCategory.Name = "comboBoxSubCategory";
             comboBoxSubCategory.Size = new Size(180, 25);
             comboBoxSubCategory.TabIndex = 17;
             comboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
-            // 
-            // textBoxPrompt
-            // 
-            textBoxPrompt.BackColor = Color.LightYellow;
+
+            textBoxPrompt.BackColor = Color.White;
+            textBoxPrompt.BorderStyle = BorderStyle.FixedSingle;
+            textBoxPrompt.Font = new Font("Microsoft YaHei", 10F);
+            textBoxPrompt.ForeColor = TextDark;
             textBoxPrompt.Location = new Point(85, 93);
             textBoxPrompt.Multiline = true;
             textBoxPrompt.Name = "textBoxPrompt";
             textBoxPrompt.ScrollBars = ScrollBars.Both;
             textBoxPrompt.Size = new Size(1119, 86);
             textBoxPrompt.TabIndex = 18;
-            textBoxPrompt.Text = "AI生成提示词将显示在这里...";
-            // 
-            // labelPrompt
-            // 
+            textBoxPrompt.Text = "💡 AI生成提示词将显示在这里...";
+
+            labelPrompt.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
+            labelPrompt.ForeColor = TextDark;
             labelPrompt.Location = new Point(5, 96);
             labelPrompt.Name = "labelPrompt";
             labelPrompt.Size = new Size(80, 20);
             labelPrompt.TabIndex = 19;
-            labelPrompt.Text = "提示词:";
-            // 
-            // groupBoxLanguage
-            // 
+            labelPrompt.Text = "💬 提示词:";
+
+            groupBoxLanguage.BackColor = WarmCream;
             groupBoxLanguage.Controls.Add(radioEnglish);
             groupBoxLanguage.Controls.Add(radioChinese);
+            groupBoxLanguage.FlatStyle = FlatStyle.Flat;
+            groupBoxLanguage.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
+            groupBoxLanguage.ForeColor = TextDark;
             groupBoxLanguage.Location = new Point(25, 21);
             groupBoxLanguage.Name = "groupBoxLanguage";
-            groupBoxLanguage.Size = new Size(250, 42);
+            groupBoxLanguage.Size = new Size(250, 50);
             groupBoxLanguage.TabIndex = 20;
             groupBoxLanguage.TabStop = false;
-            groupBoxLanguage.Text = "语言";
-            // 
-            // ContentEditorForm
-            // 
+            groupBoxLanguage.Text = "🌐 语言选择";
+
             ClientSize = new Size(1218, 766);
             Controls.Add(groupBoxLanguage);
             Controls.Add(comboBoxSubCategory);
@@ -583,13 +633,40 @@ namespace UnifiedLearningAssistant.Forms
 
             if (disposing)
             {
-                // 组件已在 designer 生成的代码中处理
             }
 
             _disposed = true;
             base.Dispose(disposing);
         }
 
+        private void Button_HoverEnter(object? sender, EventArgs e)
+        {
+            if (sender is Button button)
+            {
+                button.BackColor = Color.FromArgb(
+                    Math.Min(255, button.BackColor.R + 25),
+                    Math.Min(255, button.BackColor.G + 25),
+                    Math.Min(255, button.BackColor.B + 25));
+                button.Cursor = Cursors.Hand;
+            }
+        }
 
+        private void Button_HoverLeave(object? sender, EventArgs e)
+        {
+            if (sender is Button button)
+            {
+                var originalColor = button.Name switch
+                {
+                    "buttonAdd" => WarmOrange,
+                    "buttonSave" => SuccessGreen,
+                    "buttonDelete" => Color.FromArgb(244, 67, 54),
+                    "buttonImport" => SoftBlue,
+                    "buttonExport" => Color.FromArgb(156, 39, 176),
+                    "buttonGenerateAI" => Color.FromArgb(103, 58, 183),
+                    _ => SystemColors.Control
+                };
+                button.BackColor = originalColor;
+            }
+        }
     }
 }

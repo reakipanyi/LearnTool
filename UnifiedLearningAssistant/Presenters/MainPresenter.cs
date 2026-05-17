@@ -4,7 +4,9 @@ using UnifiedLearningAssistant.Services;
 using UnifiedLearningAssistant.Services.Cache;
 using UnifiedLearningAssistant.Services.Learning;
 using UnifiedLearningAssistant.Services.TTS;
+using UnifiedLearningAssistant.Services.Persistence;
 using UnifiedLearningAssistant.Views;
+using UnifiedLearningAssistant.Models.User;
 
 namespace UnifiedLearningAssistant.Presenters
 {
@@ -18,7 +20,8 @@ namespace UnifiedLearningAssistant.Presenters
         private readonly ITTSService _ttsService;
         private readonly ICacheService _cacheService;
         private readonly IWindowManager _windowManager;
-        
+        private readonly IDataPersistenceService _persistenceService;
+
         private PdfPresenter? _pdfPresenter;
         private IMainView? _view;
 
@@ -28,6 +31,7 @@ namespace UnifiedLearningAssistant.Presenters
         private string _currentMode = Constants.LearningMode.Study;
         private string _currentWordBankFile = string.Empty;
         private string _currentSortOrder = Constants.SortOrder.Sequential;
+        private UserProfile? _currentUserProfile;
 
         public event EventHandler<LearningStartEventArgs>? OnStartLearning;
         public event EventHandler? OnOpenSettings;
@@ -42,7 +46,8 @@ namespace UnifiedLearningAssistant.Presenters
             IExportService exportService,
             ITTSService ttsService,
             ICacheService cacheService,
-            IWindowManager windowManager)
+            IWindowManager windowManager,
+            IDataPersistenceService persistenceService)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
@@ -52,6 +57,7 @@ namespace UnifiedLearningAssistant.Presenters
             _ttsService = ttsService ?? throw new ArgumentNullException(nameof(ttsService));
             _cacheService = cacheService ?? throw new ArgumentNullException(nameof(cacheService));
             _windowManager = windowManager ?? throw new ArgumentNullException(nameof(windowManager));
+            _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _logger.LogInformation("MainPresenter initialized");
         }
 
@@ -135,6 +141,33 @@ namespace UnifiedLearningAssistant.Presenters
         {
             _currentUserId = _sessionService.LoadSession();
             _view.SelectedUser = _currentUserId;
+            LoadUserProfile();
+        }
+
+        private void LoadUserProfile()
+        {
+            try
+            {
+                _currentUserProfile = _persistenceService.LoadUserProfile(_currentUserId);
+                if (_currentUserProfile != null)
+                {
+                    _currentUserProfile.ResetDailyStats();
+                    UpdateStreakInfo();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "加载用户资料失败");
+            }
+        }
+
+        private void UpdateStreakInfo()
+        {
+            if (_currentUserProfile != null && _view != null)
+            {
+                var summary = _currentUserProfile.GetStudyStatsSummary();
+                _view.UpdateStreakInfo(_currentUserProfile.ConsecutiveStudyDays, summary);
+            }
         }
 
         private void LoadLearningConfig()
@@ -224,6 +257,7 @@ namespace UnifiedLearningAssistant.Presenters
         private void View_UserChanged(object? sender, EventArgs e)
         {
             _currentUserId = _view.SelectedUser;
+            LoadUserProfile();
             UpdateProgressSummary();
             SaveSession();
             UpdatePdfPresenterConfig();

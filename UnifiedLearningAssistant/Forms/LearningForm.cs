@@ -6,6 +6,7 @@ using UnifiedLearningAssistant.Models.User;
 using UnifiedLearningAssistant.Models.Learning;
 using UnifiedLearningAssistant.Services.AI;
 using UnifiedLearningAssistant.Services.TTS;
+using UnifiedLearningAssistant.Services.Feedback;
 using UnifiedLearningAssistant.Views;
 
 namespace UnifiedLearningAssistant.Forms
@@ -17,6 +18,7 @@ namespace UnifiedLearningAssistant.Forms
         private readonly ITTSService _ttsService;
         private readonly ILogger<LearningForm> _logger;
         private readonly ILoggerFactory _loggerFactory;
+        private readonly ISoundService _soundService;
         private AiQuestionDialog? _aiDialog;
         private bool _disposed = false;
         private Settings _settings = new();
@@ -29,10 +31,13 @@ namespace UnifiedLearningAssistant.Forms
             _ttsService = ttsService ?? throw new ArgumentNullException(nameof(ttsService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+            _soundService = new SoundService();
             _panelDecorator = new PanelDecorator();
             Load += LearningForm_Load;
             FormClosing += LearningForm_FormClosing;
             Resize += LearningForm_Resize;
+            KeyPreview = true;
+            KeyDown += LearningForm_KeyDown;
         }
 
         private void LearningForm_Resize(object? sender, EventArgs e)
@@ -386,6 +391,7 @@ namespace UnifiedLearningAssistant.Forms
         private RadioButton radioOriginal;
         private RadioButton radioExplanation;
         private RadioButton radioBoth;
+        private Label labelShortcutHints;
 
         private void InitializeComponent()
         {
@@ -408,6 +414,7 @@ namespace UnifiedLearningAssistant.Forms
             radioOriginal = new RadioButton();
             radioExplanation = new RadioButton();
             radioBoth = new RadioButton();
+            labelShortcutHints = new Label();
             panelContent.SuspendLayout();
             panelAI.SuspendLayout();
             SuspendLayout();
@@ -604,11 +611,23 @@ namespace UnifiedLearningAssistant.Forms
             radioBoth.TabIndex = 15;
             radioBoth.Text = "原文+释义";
             // 
+            // labelShortcutHints
+            // 
+            labelShortcutHints.AutoSize = true;
+            labelShortcutHints.Font = new Font("Microsoft YaHei UI", 9F);
+            labelShortcutHints.ForeColor = Color.FromArgb(120, 120, 120);
+            labelShortcutHints.Location = new Point(20, 720);
+            labelShortcutHints.Name = "labelShortcutHints";
+            labelShortcutHints.Size = new Size(800, 17);
+            labelShortcutHints.TabIndex = 16;
+            labelShortcutHints.Text = "快捷键: 空格-发音 | 回车-下一个 | 1/K-会了 | 2/U-不会 | Esc-返回";
+            // 
             // LearningForm
             // 
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(900, 750);
+            Controls.Add(labelShortcutHints);
             Controls.Add(radioBoth);
             Controls.Add(radioExplanation);
             Controls.Add(radioOriginal);
@@ -647,16 +666,19 @@ namespace UnifiedLearningAssistant.Forms
 
         private void ButtonKnown_Click(object? sender, EventArgs e)
         {
+            _soundService?.PlaySuccess();
             MarkAsKnownClicked?.Invoke(this, EventArgs.Empty);
         }
 
         private void ButtonUnknown_Click(object? sender, EventArgs e)
         {
+            _soundService?.PlayError();
             MarkAsUnknownClicked?.Invoke(this, EventArgs.Empty);
         }
 
         private void ButtonNext_Click(object? sender, EventArgs e)
         {
+            _soundService?.PlayNavigation();
             NextClicked?.Invoke(this, EventArgs.Empty);
         }
 
@@ -686,6 +708,39 @@ namespace UnifiedLearningAssistant.Forms
 
             _aiDialog.Show();
             _aiDialog.BringToFront();
+        }
+
+        private void LearningForm_KeyDown(object? sender, KeyEventArgs e)
+        {
+            switch (e.KeyCode)
+            {
+                case Keys.Space:
+                    e.Handled = true;
+                    PronounceClicked?.Invoke(this, EventArgs.Empty);
+                    break;
+                case Keys.Enter:
+                    e.Handled = true;
+                    _soundService?.PlayNavigation();
+                    NextClicked?.Invoke(this, EventArgs.Empty);
+                    break;
+                case Keys.D1:
+                case Keys.K:
+                    e.Handled = true;
+                    _soundService?.PlaySuccess();
+                    MarkAsKnownClicked?.Invoke(this, EventArgs.Empty);
+                    break;
+                case Keys.D2:
+                case Keys.U:
+                    e.Handled = true;
+                    _soundService?.PlayError();
+                    MarkAsUnknownClicked?.Invoke(this, EventArgs.Empty);
+                    break;
+                case Keys.Escape:
+                    e.Handled = true;
+                    ExitClicked?.Invoke(this, EventArgs.Empty);
+                    Close();
+                    break;
+            }
         }
 
         #endregion

@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using System.Drawing.Drawing2D;
 using UnifiedLearningAssistant.Common;
 using UnifiedLearningAssistant.Presenters;
+using UnifiedLearningAssistant.Services.Pdf;
 using UnifiedLearningAssistant.Views;
 using UnifiedLearningAssistant.Views.UI;
 
@@ -11,6 +12,8 @@ namespace UnifiedLearningAssistant.Forms
     {
         private PdfPresenter? _presenter;
         private readonly ILogger<PdfReaderForm> _logger;
+        private readonly BookmarkService _bookmarkService;
+        private readonly HighlightService _highlightService;
         private int _zoomLevel = 100;
         private bool _isSelecting = false;
         private bool _isDrawing = false;
@@ -36,10 +39,32 @@ namespace UnifiedLearningAssistant.Forms
 
         private bool _isNavPanelDragging = false;
         private Point _navPanelStartPoint = Point.Empty;
-        // 新增功能：中等级 - UI响应性改进，添加加载指示器
         private LoadingIndicator? _loadingIndicator;
-        // 新增功能：低优先级 - 夜间模式
         private bool _isNightMode = false;
+
+        private Panel? _bookmarkPanel;
+        private ListBox? _listBoxBookmarks;
+        private Button? _buttonAddBookmark;
+        private Button? _buttonRemoveBookmark;
+        private TextBox? _textBoxBookmarkTitle;
+
+        private Panel? _highlightPanel;
+        private ListBox? _listBoxHighlights;
+        private Button? _buttonAddHighlight;
+        private Button? _buttonRemoveHighlight;
+        private ComboBox? _comboBoxHighlightColor;
+
+        private TabPage? _tabPageBookmarks;
+        private TabPage? _tabPageHighlights;
+        private HighlightColor _currentHighlightColor = HighlightColor.Yellow;
+
+        private string _currentPdfPath = string.Empty;
+        private int _currentPageIndex = 0;
+
+        private Panel? _pageTransitionOverlay;
+        private Timer? _pageTransitionTimer;
+        private bool _isAnimating = false;
+
         private SplitContainer splitContainer1;
         private GroupBox groupBoxLanguage;
         private Label labelQuestion;
@@ -51,16 +76,19 @@ namespace UnifiedLearningAssistant.Forms
         private Button buttonSpeakOriginal;
         private GroupBox groupBoxProgress;
 
-        // 新增功能：OCR语言切换
         private string _currentLanguage = "eng";
 
         public PdfReaderForm(ILogger<PdfReaderForm> logger)
         {
             InitializeComponent();
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _bookmarkService = new BookmarkService();
+            _highlightService = new HighlightService();
             Load += PdfReaderForm_Load;
             Resize += PdfReaderForm_Resize;
             KeyDown += PdfReaderForm_KeyDown;
+            InitializeBookmarkAndHighlightUI();
+            InitializePageTransition();
         }
 
 
@@ -84,6 +112,309 @@ namespace UnifiedLearningAssistant.Forms
         private void AdjustPanelPdfSize()
         {
             pictureBoxPdf.Invalidate();
+        }
+
+        private void InitializeBookmarkAndHighlightUI()
+        {
+            if (_tabPageBookmarks != null || tabControlLeft?.Contains(_tabPageBookmarks!) == true)
+            {
+                return;
+            }
+
+            _tabPageBookmarks = new TabPage();
+            _tabPageBookmarks.Name = "tabPageBookmarks";
+            _tabPageBookmarks.Text = "🔖 书签";
+            _tabPageBookmarks.Size = new Size(335, 822);
+
+            var bookmarkContainer = new Panel { Dock = DockStyle.Fill };
+            _listBoxBookmarks = new ListBox
+            {
+                Dock = DockStyle.Top,
+                Height = 300,
+                Font = new Font("Microsoft YaHei UI", 10F)
+            };
+            _listBoxBookmarks.DoubleClick += ListBoxBookmarks_DoubleClick;
+
+            _textBoxBookmarkTitle = new TextBox
+            {
+                Dock = DockStyle.Top,
+                Height = 30,
+                PlaceholderText = "输入书签名称...",
+                Margin = new Padding(5)
+            };
+
+            var buttonPanel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Height = 50,
+                FlowDirection = FlowDirection.LeftToRight
+            };
+
+            _buttonAddBookmark = new Button { Text = "➕ 添加书签", Width = 100, Margin = new Padding(5) };
+            _buttonAddBookmark.Click += ButtonAddBookmark_Click;
+
+            _buttonRemoveBookmark = new Button { Text = "🗑️ 删除书签", Width = 100, Margin = new Padding(5) };
+            _buttonRemoveBookmark.Click += ButtonRemoveBookmark_Click;
+
+            buttonPanel.Controls.Add(_buttonAddBookmark);
+            buttonPanel.Controls.Add(_buttonRemoveBookmark);
+
+            bookmarkContainer.Controls.Add(_listBoxBookmarks);
+            bookmarkContainer.Controls.Add(buttonPanel);
+            bookmarkContainer.Controls.Add(_textBoxBookmarkTitle!);
+
+            _tabPageBookmarks.Controls.Add(bookmarkContainer);
+
+            _tabPageHighlights = new TabPage();
+            _tabPageHighlights.Name = "tabPageHighlights";
+            _tabPageHighlights.Text = "🖍️ 高亮";
+            _tabPageHighlights.Size = new Size(335, 822);
+
+            var highlightContainer = new Panel { Dock = DockStyle.Fill };
+
+            var colorPanel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Height = 40,
+                FlowDirection = FlowDirection.LeftToRight
+            };
+
+            var colorLabel = new Label { Text = "颜色:", AutoSize = true, Margin = new Padding(5) };
+            _comboBoxHighlightColor = new ComboBox
+            {
+                Width = 100,
+                Margin = new Padding(5)
+            };
+            _comboBoxHighlightColor.Items.AddRange(new[] { "黄色", "绿色", "蓝色", "粉色", "橙色" });
+            _comboBoxHighlightColor.SelectedIndex = 0;
+            _comboBoxHighlightColor.SelectedIndexChanged += ComboBoxHighlightColor_SelectedIndexChanged;
+
+            colorPanel.Controls.Add(colorLabel);
+            colorPanel.Controls.Add(_comboBoxHighlightColor);
+
+            _listBoxHighlights = new ListBox
+            {
+                Dock = DockStyle.Top,
+                Height = 250,
+                Font = new Font("Microsoft YaHei UI", 10F)
+            };
+            _listBoxHighlights.DoubleClick += ListBoxHighlights_DoubleClick;
+
+            var highlightButtonPanel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Height = 50,
+                FlowDirection = FlowDirection.LeftToRight
+            };
+
+            _buttonAddHighlight = new Button { Text = "➕ 添加高亮", Width = 100, Margin = new Padding(5) };
+            _buttonAddHighlight.Click += ButtonAddHighlight_Click;
+
+            _buttonRemoveHighlight = new Button { Text = "🗑️ 删除高亮", Width = 100, Margin = new Padding(5) };
+            _buttonRemoveHighlight.Click += ButtonRemoveHighlight_Click;
+
+            highlightButtonPanel.Controls.Add(_buttonAddHighlight);
+            highlightButtonPanel.Controls.Add(_buttonRemoveHighlight);
+
+            highlightContainer.Controls.Add(_listBoxHighlights);
+            highlightContainer.Controls.Add(highlightButtonPanel);
+            highlightContainer.Controls.Add(colorPanel);
+
+            _tabPageHighlights!.Controls.Add(highlightContainer);
+
+            if (tabControlLeft != null)
+            {
+                tabControlLeft.Controls.Add(_tabPageBookmarks);
+                tabControlLeft.Controls.Add(_tabPageHighlights);
+            }
+        }
+
+        private void InitializePageTransition()
+        {
+            _pageTransitionOverlay = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.White,
+                Visible = false
+            };
+
+            var transitionLabel = new Label
+            {
+                Dock = DockStyle.Fill,
+                Text = "",
+                TextAlign = ContentAlignment.MiddleCenter,
+                Font = new Font("Microsoft YaHei UI", 24F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(200, 100, 100, 100)
+            };
+            _pageTransitionOverlay.Controls.Add(transitionLabel);
+
+            if (panelPdf != null)
+            {
+                panelPdf.Controls.Add(_pageTransitionOverlay);
+                _pageTransitionOverlay.BringToFront();
+            }
+
+            _pageTransitionTimer = new Timer { Interval = 50 };
+            _pageTransitionTimer.Tick += PageTransitionTimer_Tick;
+        }
+
+        private int _transitionStep = 0;
+        private bool _transitionFadeOut = false;
+
+        private void StartPageTransition(bool forward)
+        {
+            if (_isAnimating || _pageTransitionOverlay == null) return;
+
+            _isAnimating = true;
+            _transitionStep = 0;
+            _transitionFadeOut = true;
+            _pageTransitionOverlay.Visible = true;
+            _pageTransitionOverlay.BackColor = Color.White;
+            _pageTransitionOverlay.BackColor = Color.FromArgb(255, 255, 255);
+
+            if (_pageTransitionTimer != null)
+            {
+                _pageTransitionTimer.Start();
+            }
+        }
+
+        private void PageTransitionTimer_Tick(object? sender, EventArgs e)
+        {
+            if (_pageTransitionOverlay == null || !_isAnimating) return;
+
+            _transitionStep++;
+
+            if (_transitionFadeOut)
+            {
+                int alpha = 255 - (_transitionStep * 25);
+                if (alpha <= 0)
+                {
+                    alpha = 0;
+                    _transitionFadeOut = false;
+                    _transitionStep = 0;
+                }
+                _pageTransitionOverlay.BackColor = Color.FromArgb(alpha, 255, 255, 255);
+            }
+            else
+            {
+                int alpha = _transitionStep * 25;
+                if (alpha >= 255)
+                {
+                    alpha = 255;
+                    _pageTransitionTimer?.Stop();
+                    _isAnimating = false;
+                    _pageTransitionOverlay.Visible = false;
+                    return;
+                }
+                _pageTransitionOverlay.BackColor = Color.FromArgb(alpha, 255, 255, 255);
+            }
+        }
+
+        private void ComboBoxHighlightColor_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            if (_comboBoxHighlightColor == null) return;
+            _currentHighlightColor = (HighlightColor)_comboBoxHighlightColor.SelectedIndex;
+        }
+
+        private void ListBoxBookmarks_DoubleClick(object? sender, EventArgs e)
+        {
+            if (_listBoxBookmarks?.SelectedItem is PdfBookmark bookmark)
+            {
+                _presenter?.RenderPage(bookmark.PageIndex);
+            }
+        }
+
+        private void ButtonAddBookmark_Click(object? sender, EventArgs e)
+        {
+            if (string.IsNullOrEmpty(_currentPdfPath)) return;
+
+            var title = _textBoxBookmarkTitle?.Text ?? $"第 {_currentPageIndex + 1} 页";
+            _bookmarkService.AddBookmark(_currentPdfPath, _currentPageIndex, title);
+            RefreshBookmarkList();
+            _textBoxBookmarkTitle!.Text = string.Empty;
+        }
+
+        private void ButtonRemoveBookmark_Click(object? sender, EventArgs e)
+        {
+            if (_listBoxBookmarks?.SelectedItem is PdfBookmark bookmark)
+            {
+                _bookmarkService.RemoveBookmark(_currentPdfPath, bookmark.PageIndex, bookmark.Title);
+                RefreshBookmarkList();
+            }
+        }
+
+        private void ListBoxHighlights_DoubleClick(object? sender, EventArgs e)
+        {
+            if (_listBoxHighlights?.SelectedItem is PdfHighlight highlight)
+            {
+                _presenter?.RenderPage(highlight.PageIndex);
+            }
+        }
+
+        private void ButtonAddHighlight_Click(object? sender, EventArgs e)
+        {
+            if (string.IsNullOrEmpty(_currentPdfPath)) return;
+
+            var imgRect = GetImageDisplayRect();
+            float x = imgRect.X + imgRect.Width * 0.1f;
+            float y = imgRect.Y + imgRect.Height * 0.1f;
+            float width = imgRect.Width * 0.8f;
+            float height = imgRect.Height * 0.8f;
+
+            _highlightService.AddHighlight(_currentPdfPath, _currentPageIndex, x, y, width, height, "", _currentHighlightColor);
+            RefreshHighlightList();
+            pictureBoxPdf?.Invalidate();
+        }
+
+        private void ButtonRemoveHighlight_Click(object? sender, EventArgs e)
+        {
+            if (_listBoxHighlights?.SelectedItem is PdfHighlight highlight)
+            {
+                _highlightService.RemoveHighlight(_currentPdfPath, highlight.Id);
+                RefreshHighlightList();
+                pictureBoxPdf?.Invalidate();
+            }
+        }
+
+        private void RefreshBookmarkList()
+        {
+            if (_listBoxBookmarks == null || string.IsNullOrEmpty(_currentPdfPath)) return;
+
+            _listBoxBookmarks.Items.Clear();
+            var bookmarks = _bookmarkService.GetBookmarks(_currentPdfPath);
+            foreach (var bookmark in bookmarks)
+            {
+                _listBoxBookmarks.Items.Add(bookmark);
+            }
+        }
+
+        private void RefreshHighlightList()
+        {
+            if (_listBoxHighlights == null || string.IsNullOrEmpty(_currentPdfPath)) return;
+
+            _listBoxHighlights.Items.Clear();
+            var highlights = _highlightService.GetHighlights(_currentPdfPath);
+            foreach (var highlight in highlights)
+            {
+                _listBoxHighlights.Items.Add(highlight);
+            }
+        }
+
+        private void LoadHighlightsForCurrentPage()
+        {
+            if (string.IsNullOrEmpty(_currentPdfPath) || pictureBoxPdf?.Image == null) return;
+
+            var highlights = _highlightService.GetHighlightsForPage(_currentPdfPath, _currentPageIndex);
+            pictureBoxPdf.Invalidate();
+        }
+
+        public void SetCurrentPdfPath(string pdfPath)
+        {
+            _currentPdfPath = pdfPath;
+            _bookmarkService.ClearCache();
+            _highlightService.ClearCacheForPdf(pdfPath);
+            RefreshBookmarkList();
+            RefreshHighlightList();
         }
 
         public void SetPresenter(PdfPresenter presenter)
@@ -110,7 +441,11 @@ namespace UnifiedLearningAssistant.Forms
 
         public void SetCurrentPageIndex(int pageIndex)
         {
+            bool isForward = pageIndex > _currentPageIndex;
+            _currentPageIndex = pageIndex;
             textBoxPage.Text = (pageIndex + 1).ToString();
+            StartPageTransition(isForward);
+            LoadHighlightsForCurrentPage();
         }
 
         public void SetPageText(int pageIndex, string text)
@@ -1459,6 +1794,39 @@ namespace UnifiedLearningAssistant.Forms
             {
                 using var pen = new Pen(Color.Red, 4f);
                 e.Graphics.DrawLine(pen, _selectStart, _selectEnd);
+            }
+
+            if (!string.IsNullOrEmpty(_currentPdfPath) && pictureBoxPdf?.Image != null)
+            {
+                DrawHighlights(e.Graphics);
+            }
+        }
+
+        private void DrawHighlights(Graphics g)
+        {
+            if (string.IsNullOrEmpty(_currentPdfPath) || pictureBoxPdf?.Image == null) return;
+
+            var imgRect = GetImageDisplayRect();
+            var highlights = _highlightService.GetHighlightsForPage(_currentPdfPath, _currentPageIndex);
+
+            foreach (var highlight in highlights)
+            {
+                var color = HighlightService.GetHighlightColor(highlight.Color);
+                using var brush = new SolidBrush(color);
+                var rect = new RectangleF(
+                    imgRect.X + highlight.X * imgRect.Width / (imgRect.Width > 0 ? imgRect.Width : 1),
+                    imgRect.Y + highlight.Y * imgRect.Height / (imgRect.Height > 0 ? imgRect.Height : 1),
+                    highlight.Width,
+                    highlight.Height
+                );
+                g.FillRectangle(brush, rect);
+
+                if (!string.IsNullOrEmpty(highlight.Note))
+                {
+                    using var font = new Font("Microsoft YaHei UI", 10F);
+                    using var textBrush = new SolidBrush(Color.Black);
+                    g.DrawString("📝", font, textBrush, rect.Location);
+                }
             }
         }
 

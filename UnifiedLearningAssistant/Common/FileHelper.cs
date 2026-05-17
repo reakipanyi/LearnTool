@@ -42,6 +42,20 @@ namespace UnifiedLearningAssistant.Common
             return path;
         }
 
+        public static string GetBookmarksDirectory()
+        {
+            var path = Path.Combine(GetAppDirectory(), Paths.BookmarksDirectory);
+            EnsureDirectoryExists(path);
+            return path;
+        }
+
+        public static string GetHighlightsDirectory()
+        {
+            var path = Path.Combine(GetAppDirectory(), Paths.HighlightsDirectory);
+            EnsureDirectoryExists(path);
+            return path;
+        }
+
         public static void EnsureDirectoryExists(string path)
         {
             if (!Directory.Exists(path))

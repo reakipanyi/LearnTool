@@ -1,5 +1,6 @@
 
 using UnifiedLearningAssistant.Models.User;
+using UnifiedLearningAssistant.Services.Feedback;
 using UnifiedLearningAssistant.Views.UI;
 
 namespace UnifiedLearningAssistant.Forms
@@ -10,12 +11,22 @@ namespace UnifiedLearningAssistant.Forms
         private readonly Timer _fadeTimer = new Timer();
         private float _opacityValue = 0;
         private ConfettiControl? _confetti;
+        private readonly ISoundService _soundService;
 
         public AchievementNotificationForm(Achievement achievement)
         {
             InitializeComponent();
             SetAchievementData(achievement);
             SetupAnimations();
+            _soundService = new SoundService();
+        }
+
+        public AchievementNotificationForm(Achievement achievement, ISoundService soundService)
+        {
+            InitializeComponent();
+            SetAchievementData(achievement);
+            SetupAnimations();
+            _soundService = soundService ?? new SoundService();
         }
 
         private void SetAchievementData(Achievement achievement)
@@ -34,13 +45,13 @@ namespace UnifiedLearningAssistant.Forms
             _fadeTimer.Interval = 30;
             _fadeTimer.Tick += OnFadeTimerTick;
 
-            Load += (s, e) =&gt; _fadeTimer.Start();
+            Load += (s, e) => _fadeTimer.Start();
         }
 
         private void OnFadeTimerTick(object? sender, EventArgs e)
         {
             _opacityValue += 0.05f;
-            if (_opacityValue &gt;= 1)
+            if (_opacityValue >= 1)
             {
                 _opacityValue = 1;
                 _fadeTimer.Stop();
@@ -60,7 +71,7 @@ namespace UnifiedLearningAssistant.Forms
         private void OnFadeOutTimerTick(object? sender, EventArgs e)
         {
             _opacityValue -= 0.05f;
-            if (_opacityValue &lt;= 0)
+            if (_opacityValue <= 0)
             {
                 _opacityValue = 0;
                 _fadeTimer.Stop();
@@ -91,6 +102,8 @@ namespace UnifiedLearningAssistant.Forms
             Controls.Add(_confetti);
             _confetti.BringToFront();
             _confetti.StartCelebration();
+            
+            _soundService?.PlayAchievement();
         }
 
         protected override void Dispose(bool disposing)
@@ -200,4 +213,3 @@ namespace UnifiedLearningAssistant.Forms
         private Label lblDescription = null!;
     }
 }
-

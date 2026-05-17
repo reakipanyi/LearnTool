@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using UnifiedLearningAssistant.Views;
 using UnifiedLearningAssistant.Views.UI;
+using System.Drawing.Drawing2D;
 
 namespace UnifiedLearningAssistant.Forms
 {
@@ -8,11 +9,20 @@ namespace UnifiedLearningAssistant.Forms
     {
         private readonly ILogger<ResultForm> _logger;
         private bool _disposed = false;
-        // 新增功能：中等级 - 添加图表控件
         private ChartControl chartControl;
         private int _knownCount = 0;
         private int _unknownCount = 0;
         private double _accuracyRate = 0.0;
+        private Timer animationTimer;
+        private double animationProgress = 0;
+        private Label labelMotivational;
+        private ProgressBar animatedProgressBar;
+
+        private static readonly Color WarmBeige = Color.FromArgb(255, 244, 230);
+        private static readonly Color WarmOrange = Color.FromArgb(255, 152, 0);
+        private static readonly Color WarmGold = Color.FromArgb(255, 193, 7);
+        private static readonly Color SuccessGreen = Color.FromArgb(76, 175, 80);
+        private static readonly Color SoftBlue = Color.FromArgb(100, 181, 246);
 
         public ResultForm(ILogger<ResultForm> logger)
         {
@@ -31,7 +41,7 @@ namespace UnifiedLearningAssistant.Forms
                 if (double.TryParse(value.Split(':')[1].Trim('%', ' '), out var rate))
                 {
                     _accuracyRate = rate;
-                    progressBarAccuracy.Value = (int)Math.Round(rate);
+                    StartProgressAnimation((int)Math.Round(rate));
                 }
                 UpdateChart();
             }
@@ -55,6 +65,7 @@ namespace UnifiedLearningAssistant.Forms
                 }
                 labelKnown.Text = $"✅ 已掌握: {_knownCount}";
                 UpdateChart();
+                UpdateMotivationalMessage();
             }
         }
 
@@ -108,8 +119,10 @@ namespace UnifiedLearningAssistant.Forms
         private GroupBox groupBoxUnknown;
         private ProgressBar progressBarAccuracy;
         private Label labelTitle;
-        // 新增功能：中等级 - 统计图表区域
         private GroupBox groupBoxChart;
+        private Panel headerPanel;
+        private Label labelAccuracyValue;
+        private ProgressBar progressBarAccuracyGradient;
 
         private void InitializeComponent()
         {
@@ -129,90 +142,142 @@ namespace UnifiedLearningAssistant.Forms
             labelTitle = new Label();
             groupBoxChart = new GroupBox();
             chartControl = new ChartControl();
+            headerPanel = new Panel();
+            labelMotivational = new Label();
+            animatedProgressBar = new ProgressBar();
+            labelAccuracyValue = new Label();
+            progressBarAccuracyGradient = new ProgressBar();
+            animationTimer = new Timer(components);
+
+            animationTimer.Interval = 30;
+            animationTimer.Tick += AnimationTimer_Tick;
+
             groupBoxKnown.SuspendLayout();
             groupBoxUnknown.SuspendLayout();
             groupBoxChart.SuspendLayout();
+            headerPanel.SuspendLayout();
             SuspendLayout();
 
-            labelTitle.Font = new Font("Microsoft YaHei", 18F, FontStyle.Bold, GraphicsUnit.Point);
-            labelTitle.Location = new Point(300, 20);
+            headerPanel.BackColor = WarmOrange;
+            headerPanel.Dock = DockStyle.Top;
+            headerPanel.Location = new Point(0, 0);
+            headerPanel.Name = "headerPanel";
+            headerPanel.Size = new Size(860, 60);
+            headerPanel.TabIndex = 12;
+
+            labelTitle.Font = new Font("Microsoft YaHei", 20F, FontStyle.Bold, GraphicsUnit.Point);
+            labelTitle.ForeColor = Color.White;
+            labelTitle.Location = new Point(280, 10);
             labelTitle.Name = "labelTitle";
             labelTitle.Size = new Size(300, 40);
             labelTitle.TabIndex = 0;
             labelTitle.Text = "🎉 测试结果报告";
             labelTitle.TextAlign = ContentAlignment.MiddleCenter;
+            headerPanel.Controls.Add(labelTitle);
 
-            labelAccuracy.Font = new Font("Microsoft YaHei", 16F, FontStyle.Bold, GraphicsUnit.Point);
-            labelAccuracy.Location = new Point(30, 70);
+            labelAccuracy.Font = new Font("Microsoft YaHei", 14F, FontStyle.Bold, GraphicsUnit.Point);
+            labelAccuracy.ForeColor = Color.FromArgb(33, 33, 33);
+            labelAccuracy.Location = new Point(30, 80);
             labelAccuracy.Name = "labelAccuracy";
-            labelAccuracy.Size = new Size(200, 35);
+            labelAccuracy.Size = new Size(200, 30);
             labelAccuracy.TabIndex = 1;
-            labelAccuracy.Text = "正确率: 0%";
+            labelAccuracy.Text = "正确率";
 
-            progressBarAccuracy.Location = new Point(30, 110);
-            progressBarAccuracy.Name = "progressBarAccuracy";
-            progressBarAccuracy.Size = new Size(380, 25);
-            progressBarAccuracy.TabIndex = 2;
-            progressBarAccuracy.Maximum = 100;
+            labelAccuracyValue.Font = new Font("Microsoft YaHei", 28F, FontStyle.Bold, GraphicsUnit.Point);
+            labelAccuracyValue.ForeColor = WarmOrange;
+            labelAccuracyValue.Location = new Point(30, 105);
+            labelAccuracyValue.Name = "labelAccuracyValue";
+            labelAccuracyValue.Size = new Size(150, 50);
+            labelAccuracyValue.TabIndex = 13;
+            labelAccuracyValue.Text = "0%";
+
+            progressBarAccuracyGradient.Location = new Point(30, 160);
+            progressBarAccuracyGradient.Name = "progressBarAccuracyGradient";
+            progressBarAccuracyGradient.Size = new Size(380, 25);
+            progressBarAccuracyGradient.TabIndex = 14;
+            progressBarAccuracyGradient.Maximum = 100;
+            progressBarAccuracyGradient.Style = ProgressBarStyle.Continuous;
+
+            labelMotivational.Font = new Font("Microsoft YaHei", 11F, FontStyle.Italic, GraphicsUnit.Point);
+            labelMotivational.ForeColor = SuccessGreen;
+            labelMotivational.Location = new Point(30, 190);
+            labelMotivational.Name = "labelMotivational";
+            labelMotivational.Size = new Size(380, 25);
+            labelMotivational.TabIndex = 15;
+            labelMotivational.Text = "✨ 继续加油！";
 
             labelTotal.Font = new Font("Microsoft YaHei", 12F, FontStyle.Regular, GraphicsUnit.Point);
-            labelTotal.Location = new Point(30, 150);
+            labelTotal.Location = new Point(30, 230);
             labelTotal.Name = "labelTotal";
             labelTotal.Size = new Size(200, 25);
             labelTotal.TabIndex = 3;
             labelTotal.Text = "总题数: 0";
 
-            labelKnown.Font = new Font("Microsoft YaHei", 12F, FontStyle.Regular, GraphicsUnit.Point);
-            labelKnown.Location = new Point(30, 220);
+            labelKnown.Font = new Font("Microsoft YaHei", 12F, FontStyle.Bold, GraphicsUnit.Point);
+            labelKnown.ForeColor = SuccessGreen;
+            labelKnown.Location = new Point(30, 270);
             labelKnown.Name = "labelKnown";
-            labelKnown.Size = new Size(200, 25);
+            labelKnown.Size = new Size(250, 25);
             labelKnown.TabIndex = 4;
             labelKnown.Text = "✅ 已掌握: 0";
 
-            labelUnknown.Font = new Font("Microsoft YaHei", 12F, FontStyle.Regular, GraphicsUnit.Point);
-            labelUnknown.Location = new Point(30, 430);
-            labelUnknown.Name = "labelUnknown";
-            labelUnknown.Size = new Size(200, 25);
-            labelUnknown.TabIndex = 5;
-            labelUnknown.Text = "📘 未掌握: 0";
-
+            groupBoxKnown.BackColor = Color.FromArgb(255, 250, 240);
             groupBoxKnown.Controls.Add(listBoxKnown);
-            groupBoxKnown.Location = new Point(30, 250);
+            groupBoxKnown.Location = new Point(30, 300);
             groupBoxKnown.Name = "groupBoxKnown";
-            groupBoxKnown.Size = new Size(380, 170);
+            groupBoxKnown.Size = new Size(380, 150);
             groupBoxKnown.TabIndex = 7;
             groupBoxKnown.TabStop = false;
-            groupBoxKnown.Text = "已会列表";
+            groupBoxKnown.FlatStyle = FlatStyle.Flat;
+            groupBoxKnown.Padding = new Padding(5);
 
+            listBoxKnown.BackColor = Color.White;
             listBoxKnown.Dock = DockStyle.Fill;
             listBoxKnown.FormattingEnabled = true;
             listBoxKnown.Location = new Point(3, 22);
             listBoxKnown.Name = "listBoxKnown";
-            listBoxKnown.Size = new Size(374, 145);
+            listBoxKnown.Size = new Size(374, 125);
             listBoxKnown.TabIndex = 0;
+            listBoxKnown.BorderStyle = BorderStyle.None;
 
+            labelUnknown.Font = new Font("Microsoft YaHei", 12F, FontStyle.Bold, GraphicsUnit.Point);
+            labelUnknown.ForeColor = SoftBlue;
+            labelUnknown.Location = new Point(30, 460);
+            labelUnknown.Name = "labelUnknown";
+            labelUnknown.Size = new Size(250, 25);
+            labelUnknown.TabIndex = 5;
+            labelUnknown.Text = "📘 未掌握: 0";
+
+            groupBoxUnknown.BackColor = Color.FromArgb(245, 250, 255);
             groupBoxUnknown.Controls.Add(listBoxUnknown);
-            groupBoxUnknown.Location = new Point(30, 460);
+            groupBoxUnknown.Location = new Point(30, 490);
             groupBoxUnknown.Name = "groupBoxUnknown";
-            groupBoxUnknown.Size = new Size(380, 170);
+            groupBoxUnknown.Size = new Size(380, 150);
             groupBoxUnknown.TabIndex = 8;
             groupBoxUnknown.TabStop = false;
-            groupBoxUnknown.Text = "未掌握清单";
+            groupBoxUnknown.FlatStyle = FlatStyle.Flat;
+            groupBoxUnknown.Padding = new Padding(5);
 
+            listBoxUnknown.BackColor = Color.White;
             listBoxUnknown.Dock = DockStyle.Fill;
             listBoxUnknown.FormattingEnabled = true;
             listBoxUnknown.Location = new Point(3, 22);
             listBoxUnknown.Name = "listBoxUnknown";
-            listBoxUnknown.Size = new Size(374, 145);
+            listBoxUnknown.Size = new Size(374, 125);
             listBoxUnknown.TabIndex = 0;
+            listBoxUnknown.BorderStyle = BorderStyle.None;
 
+            groupBoxChart.BackColor = Color.White;
             groupBoxChart.Controls.Add(chartControl);
             groupBoxChart.Location = new Point(430, 70);
             groupBoxChart.Name = "groupBoxChart";
             groupBoxChart.Size = new Size(400, 380);
             groupBoxChart.TabIndex = 11;
             groupBoxChart.TabStop = false;
+            groupBoxChart.FlatStyle = FlatStyle.Flat;
+            groupBoxChart.Font = new Font("Microsoft YaHei", 10F, FontStyle.Regular, GraphicsUnit.Point);
             groupBoxChart.Text = "📊 学习统计图表";
+            groupBoxChart.Padding = new Padding(5);
 
             chartControl.Dock = DockStyle.Fill;
             chartControl.Location = new Point(3, 22);
@@ -220,42 +285,59 @@ namespace UnifiedLearningAssistant.Forms
             chartControl.Size = new Size(394, 355);
             chartControl.TabIndex = 0;
 
-            buttonReview.Font = new Font("Microsoft YaHei", 12F, FontStyle.Regular, GraphicsUnit.Point);
-            buttonReview.Location = new Point(430, 470);
+            buttonReview.FlatStyle = FlatStyle.Flat;
+            buttonReview.FlatAppearance.BorderSize = 0;
+            buttonReview.BackColor = WarmOrange;
+            buttonReview.ForeColor = Color.White;
+            buttonReview.Font = new Font("Microsoft YaHei", 11F, FontStyle.Bold, GraphicsUnit.Point);
+            buttonReview.Location = new Point(430, 650);
             buttonReview.Name = "buttonReview";
             buttonReview.Size = new Size(180, 45);
             buttonReview.TabIndex = 9;
-            buttonReview.Text = "复习未掌握内容";
+            buttonReview.Text = "🔄 复习未掌握内容";
+            buttonReview.UseVisualStyleBackColor = false;
+            buttonReview.MouseEnter += Button_HoverEnter;
+            buttonReview.MouseLeave += Button_HoverLeave;
             buttonReview.Click += ButtonReview_Click;
 
-            buttonBack.Font = new Font("Microsoft YaHei", 12F, FontStyle.Regular, GraphicsUnit.Point);
-            buttonBack.Location = new Point(650, 470);
+            buttonBack.FlatStyle = FlatStyle.Flat;
+            buttonBack.FlatAppearance.BorderSize = 0;
+            buttonBack.BackColor = SuccessGreen;
+            buttonBack.ForeColor = Color.White;
+            buttonBack.Font = new Font("Microsoft YaHei", 11F, FontStyle.Bold, GraphicsUnit.Point);
+            buttonBack.Location = new Point(630, 650);
             buttonBack.Name = "buttonBack";
             buttonBack.Size = new Size(180, 45);
             buttonBack.TabIndex = 10;
-            buttonBack.Text = "返回主界面";
+            buttonBack.Text = "🏠 返回主界面";
+            buttonBack.UseVisualStyleBackColor = false;
+            buttonBack.MouseEnter += Button_HoverEnter;
+            buttonBack.MouseLeave += Button_HoverLeave;
             buttonBack.Click += ButtonBack_Click;
 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            BackColor = Color.FromArgb(255, 244, 230);
-            ClientSize = new Size(860, 540);
-            Controls.Add(labelTitle);
+            BackColor = WarmBeige;
+            ClientSize = new Size(860, 710);
+            Controls.Add(buttonReview);
+            Controls.Add(buttonBack);
+            Controls.Add(labelMotivational);
+            Controls.Add(labelAccuracyValue);
+            Controls.Add(progressBarAccuracyGradient);
+            Controls.Add(headerPanel);
             Controls.Add(labelAccuracy);
-            Controls.Add(progressBarAccuracy);
             Controls.Add(labelTotal);
             Controls.Add(labelKnown);
             Controls.Add(labelUnknown);
             Controls.Add(groupBoxKnown);
             Controls.Add(groupBoxUnknown);
             Controls.Add(groupBoxChart);
-            Controls.Add(buttonReview);
-            Controls.Add(buttonBack);
             Name = "ResultForm";
             Text = "测试结果报告";
             groupBoxKnown.ResumeLayout(false);
             groupBoxUnknown.ResumeLayout(false);
             groupBoxChart.ResumeLayout(false);
+            headerPanel.ResumeLayout(false);
             ResumeLayout(false);
             PerformLayout();
         }
@@ -275,14 +357,94 @@ namespace UnifiedLearningAssistant.Forms
             Close();
         }
 
-        // 新增功能：中等级 - 更新图表
+        private void StartProgressAnimation(int targetValue)
+        {
+            animationProgress = 0;
+            animationTimer.Start();
+
+            var timer = new Timer();
+            timer.Interval = 50;
+            int currentValue = 0;
+            timer.Tick += (s, e) =>
+            {
+                currentValue += 2;
+                if (currentValue >= targetValue)
+                {
+                    currentValue = targetValue;
+                    timer.Stop();
+                    timer.Dispose();
+                }
+                progressBarAccuracyGradient.Value = currentValue;
+                labelAccuracyValue.Text = $"{currentValue}%";
+            };
+            timer.Start();
+        }
+
+        private void AnimationTimer_Tick(object? sender, EventArgs e)
+        {
+            animationProgress += 0.05;
+            if (animationProgress >= 1)
+            {
+                animationProgress = 1;
+                animationTimer.Stop();
+            }
+            Invalidate();
+        }
+
+        private void UpdateMotivationalMessage()
+        {
+            if (_accuracyRate >= 90)
+            {
+                labelMotivational.Text = "🌟 太棒了！你是最优秀的！";
+                labelMotivational.ForeColor = WarmGold;
+            }
+            else if (_accuracyRate >= 70)
+            {
+                labelMotivational.Text = "👏 做得很好！继续加油！";
+                labelMotivational.ForeColor = SuccessGreen;
+            }
+            else if (_accuracyRate >= 50)
+            {
+                labelMotivational.Text = "💪 再接再厉，你一定可以！";
+                labelMotivational.ForeColor = SoftBlue;
+            }
+            else
+            {
+                labelMotivational.Text = "📚 努力学习，进步就在眼前！";
+                labelMotivational.ForeColor = WarmOrange;
+            }
+        }
+
+        private void Button_HoverEnter(object? sender, EventArgs e)
+        {
+            if (sender is Button button)
+            {
+                button.BackColor = Color.FromArgb(
+                    Math.Min(255, button.BackColor.R + 30),
+                    Math.Min(255, button.BackColor.G + 30),
+                    Math.Min(255, button.BackColor.B + 30));
+                button.Cursor = Cursors.Hand;
+            }
+        }
+
+        private void Button_HoverLeave(object? sender, EventArgs e)
+        {
+            if (sender is Button button)
+            {
+                if (button.Name == "buttonReview")
+                    button.BackColor = WarmOrange;
+                else if (button.Name == "buttonBack")
+                    button.BackColor = SuccessGreen;
+            }
+        }
+
         private void UpdateChart()
         {
             try
             {
                 var values = new[] { (double)_knownCount, (double)_unknownCount };
                 var labels = new[] { "已掌握", "未掌握" };
-                var colors = new[] { Color.FromArgb(76, 175, 80), Color.FromArgb(244, 67, 54) };
+                var colors = new[] { SuccessGreen, SoftBlue };
                 chartControl.SetData(values, labels, colors);
             }
             catch (Exception ex)

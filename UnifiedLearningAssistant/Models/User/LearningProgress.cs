@@ -7,6 +7,7 @@ namespace UnifiedLearningAssistant.Models.User
         public int TotalStudyMinutes { get; set; } = 0;
         public int TotalItemsStudied { get; set; } = 0;
         public int TotalItemsMastered { get; set; } = 0;
+        public int PerfectSessions { get; set; } = 0;
     }
 
     public class CategoryProgress
