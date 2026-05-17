@@ -1,5 +1,3 @@
-using System.Drawing;
-
 namespace UnifiedLearningAssistant.Common
 {
     /// <summary>
@@ -32,13 +30,18 @@ namespace UnifiedLearningAssistant.Common
             public static Color Progress => Color.FromArgb(255, 140, 0);
             public static Color SoftBlue => Color.FromArgb(100, 181, 246);
             public static Color LightGrayBackground => Color.FromArgb(240, 240, 240);
-            
+
             // 深色主题
             public static Color DarkBackground => Color.FromArgb(18, 18, 18);
             public static Color DarkSurface => Color.FromArgb(30, 30, 30);
             public static Color DarkTextPrimary => Color.FromArgb(250, 250, 250);
             public static Color DarkTextSecondary => Color.FromArgb(176, 176, 176);
             public static Color DarkGray => Color.FromArgb(66, 66, 66);
+
+            public static Color LightBackground => Color.FromArgb(240, 240, 240);
+            public static Color WarmOrange => Color.FromArgb(255, 152, 0);
+            public static Color SuccessGreen => Color.FromArgb(76, 175, 80);
+            public static Color LightSurface => Color.FromArgb(30, 30, 30);
         }
 
         // 字体配置
@@ -94,10 +97,10 @@ namespace UnifiedLearningAssistant.Common
             button.ForeColor = Color.White;
             button.FlatStyle = FlatStyle.Flat;
             button.FlatAppearance.BorderSize = 0;
-            
+
             if (font != null)
                 button.Font = font;
-            
+
             if (!string.IsNullOrEmpty(text))
                 button.Text = text;
         }

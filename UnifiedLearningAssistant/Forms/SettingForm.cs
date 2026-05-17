@@ -224,7 +224,7 @@ namespace UnifiedLearningAssistant.Forms
             headerPanel.Controls.Add(labelTitle);
 
             checkBoxNightMode.Appearance = Appearance.Button;
-            checkBoxNightMode.BackColor = DarkSurface;
+            checkBoxNightMode.BackColor = ThemeHelper.Colors.DarkSurface;
             checkBoxNightMode.FlatAppearance.BorderSize = 0;
             checkBoxNightMode.FlatStyle = FlatStyle.Flat;
             checkBoxNightMode.Font = new Font("Microsoft YaHei", 9F, FontStyle.Bold);
@@ -288,7 +288,7 @@ namespace UnifiedLearningAssistant.Forms
             textBoxApiKey.Size = new Size(400, 23);
             textBoxApiKey.TabIndex = 0;
 
-            groupBoxTts.BackColor = LightSurface;
+            groupBoxTts.BackColor = ThemeHelper.Colors.LightSurface;
             groupBoxTts.FlatStyle = FlatStyle.Flat;
             groupBoxTts.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
             groupBoxTts.ForeColor = Color.FromArgb(33, 33, 33);
@@ -389,7 +389,7 @@ namespace UnifiedLearningAssistant.Forms
             checkBoxTtsEnabled.TabIndex = 0;
             checkBoxTtsEnabled.Text = "启用TTS";
 
-            groupBoxInterface.BackColor = LightSurface;
+            groupBoxInterface.BackColor = ThemeHelper.Colors.LightSurface;
             groupBoxInterface.FlatStyle = FlatStyle.Flat;
             groupBoxInterface.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
             groupBoxInterface.ForeColor = Color.FromArgb(33, 33, 33);
@@ -438,7 +438,7 @@ namespace UnifiedLearningAssistant.Forms
             textBoxTtsApiKey.Location = new Point(120, 50);
             textBoxTtsApiKey.PasswordChar = '*';
 
-            groupBoxTranslation.BackColor = LightSurface;
+            groupBoxTranslation.BackColor = ThemeHelper.Colors.LightSurface;
             groupBoxTranslation.FlatStyle = FlatStyle.Flat;
             groupBoxTranslation.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
             groupBoxTranslation.ForeColor = Color.FromArgb(33, 33, 33);
@@ -477,7 +477,7 @@ namespace UnifiedLearningAssistant.Forms
 
             buttonSave.FlatStyle = FlatStyle.Flat;
             buttonSave.FlatAppearance.BorderSize = 0;
-            buttonSave.BackColor = SuccessGreen;
+            buttonSave.BackColor = ThemeHelper.Colors.SuccessGreen;
             buttonSave.ForeColor = Color.White;
             buttonSave.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
             buttonSave.Location = new Point(300, 550);

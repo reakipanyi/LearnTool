@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Data;
@@ -36,7 +36,7 @@ namespace UnifiedLearningAssistant.Forms
         {
             _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
             _presenter.Initialize();
-            _logger.LogInformation("ContentEditorPresenter 已设置并初始�)";
+            _logger.LogInformation("ContentEditorPresenter 已设置并初始化");
         }
 
         private void ApplyFontSize()
@@ -197,6 +197,7 @@ namespace UnifiedLearningAssistant.Forms
             { "Analysis", "解析" }
         };
 
+
         private static string GetChineseColumnName(string columnName)
         {
             return ColumnHeaderNames.TryGetValue(columnName, out var chineseName) ? chineseName : columnName;
@@ -215,6 +216,7 @@ namespace UnifiedLearningAssistant.Forms
             {
                 if (json.TrimStart().StartsWith("["))
                 {
+                    // 直接将 JSON 数组转换为 DataTable
                     var jsonArray = JsonConvert.DeserializeObject<JArray>(json);
                     if (jsonArray.Count > 0)
                     {
@@ -222,12 +224,14 @@ namespace UnifiedLearningAssistant.Forms
                         var firstItem = jsonArray[0] as JObject;
                         if (firstItem != null)
                         {
+                            // 从第一个对象添加列，所有列都使用 string 类型以避免类型不匹配
                             foreach (var prop in firstItem.Properties())
                             {
                                 var column = dataTable.Columns.Add(prop.Name, typeof(string));
                                 column.Caption = GetChineseColumnName(prop.Name);
                             }
 
+                            // 添加所有行
                             foreach (var item in jsonArray)
                             {
                                 var obj = item as JObject;
@@ -288,9 +292,8 @@ namespace UnifiedLearningAssistant.Forms
                 }
             }
         }
-
         /// <summary>
-        /// �JToken 转换为安全的字符串，特别处理数组和对�
+        /// 将 JToken 转换为安全的字符串，特别处理数组和对象
         /// </summary>
         private string ConvertJTokenToString(JToken? token)
         {
@@ -311,13 +314,13 @@ namespace UnifiedLearningAssistant.Forms
                 }
                 else if (token.Type == JTokenType.Object)
                 {
-                    // 将对象转换为 JSON 字符�
+                    // 将对象转换为 JSON 字符串
                     return token.ToString(Formatting.None);
                 }
             }
             catch
             {
-                // 如果转换失败，返回空字符�
+                // 如果转换失败，返回空字符串
             }
 
             return token?.ToString() ?? "";
@@ -438,25 +441,23 @@ namespace UnifiedLearningAssistant.Forms
             ((System.ComponentModel.ISupportInitialize)dataGridView).BeginInit();
             groupBoxLanguage.SuspendLayout();
             SuspendLayout();
-            // 
-            // textBoxJson
-            // 
+
+            BackColor = ThemeHelper.Colors.WarmBeige;
+
             textBoxJson.BackColor = Color.White;
             textBoxJson.BorderStyle = BorderStyle.FixedSingle;
-            textBoxJson.Font = new Font("微软雅黑", 10F);
+            textBoxJson.Font = new Font("Microsoft YaHei", 10F);
             textBoxJson.Location = new Point(613, 194);
             textBoxJson.Multiline = true;
             textBoxJson.Name = "textBoxJson";
             textBoxJson.ScrollBars = ScrollBars.Both;
             textBoxJson.Size = new Size(591, 452);
             textBoxJson.TabIndex = 2;
-            // 
-            // buttonAdd
-            // 
-            buttonAdd.BackColor = SystemColors.MenuHighlight;
+
+            buttonAdd.BackColor = ThemeHelper.Colors.WarmOrange;
             buttonAdd.FlatAppearance.BorderSize = 0;
             buttonAdd.FlatStyle = FlatStyle.Flat;
-            buttonAdd.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            buttonAdd.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
             buttonAdd.ForeColor = Color.White;
             buttonAdd.Location = new Point(100, 681);
             buttonAdd.Name = "buttonAdd";
@@ -464,16 +465,14 @@ namespace UnifiedLearningAssistant.Forms
             buttonAdd.TabIndex = 3;
             buttonAdd.Text = "📝 新增";
             buttonAdd.UseVisualStyleBackColor = false;
-            buttonAdd.Click += ButtonAdd_Click;
             buttonAdd.MouseEnter += Button_HoverEnter;
             buttonAdd.MouseLeave += Button_HoverLeave;
-            // 
-            // buttonSave
-            // 
-            buttonSave.BackColor = SystemColors.MenuHighlight;
+            buttonAdd.Click += ButtonAdd_Click;
+
+            buttonSave.BackColor = ThemeHelper.Colors.SuccessGreen;
             buttonSave.FlatAppearance.BorderSize = 0;
             buttonSave.FlatStyle = FlatStyle.Flat;
-            buttonSave.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            buttonSave.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
             buttonSave.ForeColor = Color.White;
             buttonSave.Location = new Point(254, 681);
             buttonSave.Name = "buttonSave";
@@ -481,33 +480,29 @@ namespace UnifiedLearningAssistant.Forms
             buttonSave.TabIndex = 4;
             buttonSave.Text = "💾 保存";
             buttonSave.UseVisualStyleBackColor = false;
-            buttonSave.Click += ButtonSave_Click;
             buttonSave.MouseEnter += Button_HoverEnter;
             buttonSave.MouseLeave += Button_HoverLeave;
-            // 
-            // buttonDelete
-            // 
+            buttonSave.Click += ButtonSave_Click;
+
             buttonDelete.BackColor = Color.FromArgb(244, 67, 54);
             buttonDelete.FlatAppearance.BorderSize = 0;
             buttonDelete.FlatStyle = FlatStyle.Flat;
-            buttonDelete.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            buttonDelete.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
             buttonDelete.ForeColor = Color.White;
             buttonDelete.Location = new Point(408, 681);
             buttonDelete.Name = "buttonDelete";
             buttonDelete.Size = new Size(102, 44);
             buttonDelete.TabIndex = 5;
-            buttonDelete.Text = "🗑�删除";
+            buttonDelete.Text = "🗑️ 删除";
             buttonDelete.UseVisualStyleBackColor = false;
-            buttonDelete.Click += ButtonDelete_Click;
             buttonDelete.MouseEnter += Button_HoverEnter;
             buttonDelete.MouseLeave += Button_HoverLeave;
-            // 
-            // buttonImport
-            // 
-            buttonImport.BackColor = SystemColors.MenuHighlight;
+            buttonDelete.Click += ButtonDelete_Click;
+
+            buttonImport.BackColor = ThemeHelper.Colors.SoftBlue;
             buttonImport.FlatAppearance.BorderSize = 0;
             buttonImport.FlatStyle = FlatStyle.Flat;
-            buttonImport.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            buttonImport.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
             buttonImport.ForeColor = Color.White;
             buttonImport.Location = new Point(562, 681);
             buttonImport.Name = "buttonImport";
@@ -515,16 +510,14 @@ namespace UnifiedLearningAssistant.Forms
             buttonImport.TabIndex = 6;
             buttonImport.Text = "📥 导入";
             buttonImport.UseVisualStyleBackColor = false;
-            buttonImport.Click += ButtonImport_Click;
             buttonImport.MouseEnter += Button_HoverEnter;
             buttonImport.MouseLeave += Button_HoverLeave;
-            // 
-            // buttonExport
-            // 
+            buttonImport.Click += ButtonImport_Click;
+
             buttonExport.BackColor = Color.FromArgb(156, 39, 176);
             buttonExport.FlatAppearance.BorderSize = 0;
             buttonExport.FlatStyle = FlatStyle.Flat;
-            buttonExport.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            buttonExport.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
             buttonExport.ForeColor = Color.White;
             buttonExport.Location = new Point(716, 681);
             buttonExport.Name = "buttonExport";
@@ -532,16 +525,14 @@ namespace UnifiedLearningAssistant.Forms
             buttonExport.TabIndex = 7;
             buttonExport.Text = "📤 导出";
             buttonExport.UseVisualStyleBackColor = false;
-            buttonExport.Click += ButtonExport_Click;
             buttonExport.MouseEnter += Button_HoverEnter;
             buttonExport.MouseLeave += Button_HoverLeave;
-            // 
-            // buttonGenerateAI
-            // 
+            buttonExport.Click += ButtonExport_Click;
+
             buttonGenerateAI.BackColor = Color.FromArgb(103, 58, 183);
             buttonGenerateAI.FlatAppearance.BorderSize = 0;
             buttonGenerateAI.FlatStyle = FlatStyle.Flat;
-            buttonGenerateAI.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            buttonGenerateAI.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
             buttonGenerateAI.ForeColor = Color.White;
             buttonGenerateAI.Location = new Point(866, 681);
             buttonGenerateAI.Name = "buttonGenerateAI";
@@ -549,56 +540,49 @@ namespace UnifiedLearningAssistant.Forms
             buttonGenerateAI.TabIndex = 9;
             buttonGenerateAI.Text = "🤖 AI生成";
             buttonGenerateAI.UseVisualStyleBackColor = false;
-            buttonGenerateAI.Click += ButtonGenerateAI_Click;
             buttonGenerateAI.MouseEnter += Button_HoverEnter;
             buttonGenerateAI.MouseLeave += Button_HoverLeave;
-            // 
-            // labelCategory
-            // 
-            labelCategory.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            labelCategory.Location = new Point(280, 42);
+            buttonGenerateAI.Click += ButtonGenerateAI_Click;
+
+            labelCategory.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
+            labelCategory.ForeColor = ThemeHelper.Colors.TextDark;
+            labelCategory.Location = new Point(279, 39);
             labelCategory.Name = "labelCategory";
             labelCategory.Size = new Size(80, 20);
             labelCategory.TabIndex = 10;
             labelCategory.Text = "📁 学习品类:";
-            // 
-            // labelCount
-            // 
-            labelCount.Font = new Font("微软雅黑", 10F);
+
+            labelCount.Font = new Font("Microsoft YaHei", 10F);
+            labelCount.ForeColor = ThemeHelper.Colors.TextDark;
             labelCount.Location = new Point(1000, 695);
             labelCount.Name = "labelCount";
             labelCount.Size = new Size(60, 20);
             labelCount.TabIndex = 12;
             labelCount.Text = "生成数量:";
-            // 
-            // labelRange
-            // 
-            labelRange.Font = new Font("微软雅黑", 10F);
-            labelRange.Location = new Point(548, 39);
+
+            labelRange.Font = new Font("Microsoft YaHei", 10F);
+            labelRange.ForeColor = ThemeHelper.Colors.TextDark;
+            labelRange.Location = new Point(574, 37);
             labelRange.Name = "labelRange";
             labelRange.Size = new Size(80, 20);
             labelRange.TabIndex = 13;
-            labelRange.Text = "🔍 关键�";
-            // 
-            // textBoxCount
-            // 
+            labelRange.Text = "🔍 关键词:";
+
             textBoxCount.BackColor = Color.White;
             textBoxCount.BorderStyle = BorderStyle.FixedSingle;
-            textBoxCount.Font = new Font("微软雅黑", 10F);
+            textBoxCount.Font = new Font("Microsoft YaHei", 10F);
             textBoxCount.Location = new Point(1060, 692);
             textBoxCount.Name = "textBoxCount";
-            textBoxCount.Size = new Size(50, 25);
+            textBoxCount.Size = new Size(50, 23);
             textBoxCount.TabIndex = 14;
             textBoxCount.Text = "5";
-            // 
-            // textBoxRange
-            // 
+
             textBoxRange.BackColor = Color.White;
             textBoxRange.BorderStyle = BorderStyle.FixedSingle;
-            textBoxRange.Font = new Font("微软雅黑", 10F);
-            textBoxRange.Location = new Point(632, 37);
+            textBoxRange.Font = new Font("Microsoft YaHei", 10F);
+            textBoxRange.Location = new Point(640, 34);
             textBoxRange.Name = "textBoxRange";
-            textBoxRange.Size = new Size(546, 25);
+            textBoxRange.Size = new Size(546, 23);
             textBoxRange.TabIndex = 15;
             // 
             // dataGridView
@@ -614,79 +598,72 @@ namespace UnifiedLearningAssistant.Forms
             dataGridView.CellEndEdit += DataGridView_CellEndEdit;
             dataGridView.RowsAdded += DataGridView_RowsAdded;
             dataGridView.SelectionChanged += DataGridView_SelectionChanged;
-            // 
-            // radioChinese
-            // 
+
             radioChinese.Checked = true;
-            radioChinese.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            radioChinese.Location = new Point(36, 22);
+            radioChinese.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
+            radioChinese.ForeColor = ThemeHelper.Colors.TextDark;
+            radioChinese.Location = new Point(36, 11);
             radioChinese.Name = "radioChinese";
             radioChinese.Size = new Size(80, 27);
             radioChinese.TabIndex = 1;
             radioChinese.TabStop = true;
             radioChinese.Text = "🇨🇳 中文";
             radioChinese.CheckedChanged += RadioChinese_CheckedChanged;
-            // 
-            // radioEnglish
-            // 
-            radioEnglish.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            radioEnglish.Location = new Point(126, 22);
+
+            radioEnglish.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
+            radioEnglish.ForeColor = ThemeHelper.Colors.TextDark;
+            radioEnglish.Location = new Point(126, 11);
             radioEnglish.Name = "radioEnglish";
             radioEnglish.Size = new Size(80, 27);
             radioEnglish.TabIndex = 2;
             radioEnglish.Text = "🇬🇧 英语";
             radioEnglish.CheckedChanged += RadioEnglish_CheckedChanged;
-            // 
-            // comboBoxSubCategory
-            // 
+
             comboBoxSubCategory.BackColor = Color.White;
             comboBoxSubCategory.FlatStyle = FlatStyle.Flat;
-            comboBoxSubCategory.Font = new Font("微软雅黑", 10F);
+            comboBoxSubCategory.Font = new Font("Microsoft YaHei", 10F);
             comboBoxSubCategory.FormattingEnabled = true;
-            comboBoxSubCategory.Location = new Point(364, 35);
+            comboBoxSubCategory.Location = new Point(352, 34);
             comboBoxSubCategory.Name = "comboBoxSubCategory";
-            comboBoxSubCategory.Size = new Size(180, 27);
+            comboBoxSubCategory.Size = new Size(180, 25);
             comboBoxSubCategory.TabIndex = 17;
             comboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
-            // 
-            // textBoxPrompt
-            // 
+
             textBoxPrompt.BackColor = Color.White;
             textBoxPrompt.BorderStyle = BorderStyle.FixedSingle;
-            textBoxPrompt.Font = new Font("微软雅黑", 10F);
+            textBoxPrompt.Font = new Font("Microsoft YaHei", 10F);
+            textBoxPrompt.ForeColor = ThemeHelper.Colors.TextDark;
             textBoxPrompt.Location = new Point(85, 93);
             textBoxPrompt.Multiline = true;
             textBoxPrompt.Name = "textBoxPrompt";
             textBoxPrompt.ScrollBars = ScrollBars.Both;
             textBoxPrompt.Size = new Size(1119, 86);
             textBoxPrompt.TabIndex = 18;
-            textBoxPrompt.Text = "💡 AI生成提示词将显示在这�..";
-            // 
-            // labelPrompt
-            // 
-            labelPrompt.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            textBoxPrompt.Text = "💡 AI生成提示词将显示在这里...";
+
+            labelPrompt.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
+            labelPrompt.ForeColor = ThemeHelper.Colors.TextDark;
             labelPrompt.Location = new Point(5, 96);
             labelPrompt.Name = "labelPrompt";
             labelPrompt.Size = new Size(80, 20);
             labelPrompt.TabIndex = 19;
-            labelPrompt.Text = "💬 提示�";
-            // 
-            // groupBoxLanguage
-            // 
+            labelPrompt.Text = "💬 提示词:";
+
+            groupBoxLanguage.BackColor = ThemeHelper.Colors.WarmCream;
             groupBoxLanguage.Controls.Add(radioEnglish);
             groupBoxLanguage.Controls.Add(radioChinese);
             groupBoxLanguage.FlatStyle = FlatStyle.Flat;
-            groupBoxLanguage.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            groupBoxLanguage.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold);
+            groupBoxLanguage.ForeColor = ThemeHelper.Colors.TextDark;
             groupBoxLanguage.Location = new Point(25, 21);
             groupBoxLanguage.Name = "groupBoxLanguage";
-            groupBoxLanguage.Size = new Size(212, 55);
+            groupBoxLanguage.Size = new Size(250, 50);
             groupBoxLanguage.TabIndex = 20;
             groupBoxLanguage.TabStop = false;
             groupBoxLanguage.Text = "🌐 语言选择";
-            // 
-            // ContentEditorForm
-            // 
+
             ClientSize = new Size(1218, 766);
+            Controls.Add(groupBoxLanguage);
             Controls.Add(comboBoxSubCategory);
             Controls.Add(textBoxJson);
             Controls.Add(dataGridView);
@@ -705,7 +682,7 @@ namespace UnifiedLearningAssistant.Forms
             Controls.Add(labelPrompt);
             Controls.Add(groupBoxLanguage);
             Name = "ContentEditorForm";
-            Text = "📝 内容编辑�;
+            Text = "📝 内容编辑器";
             ((System.ComponentModel.ISupportInitialize)dataGridView).EndInit();
             groupBoxLanguage.ResumeLayout(false);
             ResumeLayout(false);
