@@ -1002,11 +1002,7 @@ namespace UnifiedLearningAssistant.Presenters
             if (!string.IsNullOrWhiteSpace(word))
             {
                 string cleanWord = word.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ").Trim();
-                _view.AddToEditor?.Invoke(this, new AddToEditorEventArgs 
-                { 
-                    Text = cleanWord, 
-                    Language = _currentLanguage 
-                });
+                _view.RaiseAddToEditor(cleanWord, _currentLanguage);
             }
             
             OnAddWordToLearningList?.Invoke(this, new AddWordEventArgs { Word = word ?? string.Empty, Language = _currentLanguage });

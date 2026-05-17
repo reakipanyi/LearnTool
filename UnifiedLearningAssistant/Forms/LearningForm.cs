@@ -1,12 +1,11 @@
 using Microsoft.Extensions.Logging;
-using System.IO;
 using System.Text.Json;
 using UnifiedLearningAssistant.Common;
-using UnifiedLearningAssistant.Models.User;
 using UnifiedLearningAssistant.Models.Learning;
+using UnifiedLearningAssistant.Models.User;
 using UnifiedLearningAssistant.Services.AI;
-using UnifiedLearningAssistant.Services.TTS;
 using UnifiedLearningAssistant.Services.Feedback;
+using UnifiedLearningAssistant.Services.TTS;
 using UnifiedLearningAssistant.Views;
 
 namespace UnifiedLearningAssistant.Forms
@@ -48,48 +47,48 @@ namespace UnifiedLearningAssistant.Forms
         private void UpdateControlLayout()
         {
             if (panelContent == null || panelAI == null) return;
-            
+
             int clientWidth = ClientSize.Width;
             int clientHeight = ClientSize.Height;
-            
+
             int contentWidth = Math.Max(860, clientWidth - 40);
             int contentHeight = Math.Max(240, (clientHeight - 500) / 2);
-            
+
             panelContent.Size = new Size(contentWidth, contentHeight);
             panelContent.Location = new Point((clientWidth - contentWidth) / 2, 25);
-            
+
             labelDisplay.Size = new Size(contentWidth, 69);
             labelContent.Size = new Size(contentWidth, contentHeight);
-            
+
             int aiHeight = Math.Max(220, (clientHeight - 500) / 2);
             panelAI.Size = new Size(contentWidth, aiHeight);
             panelAI.Location = new Point((clientWidth - contentWidth) / 2, panelContent.Location.Y + panelContent.Height + 20);
-            
+
             labelAI.Size = new Size(contentWidth, 40);
             richTextBoxAI.Size = new Size(contentWidth, aiHeight - 40);
             richTextBoxAI.Location = new Point(0, 40);
-            
+
             progressBar1.Size = new Size(contentWidth, 32);
             progressBar1.Location = new Point((clientWidth - contentWidth) / 2, panelAI.Location.Y + panelAI.Height + 20);
-            
+
             labelStatistics.Location = new Point((clientWidth - contentWidth) / 2, progressBar1.Location.Y + progressBar1.Height + 10);
-            
+
             int buttonY = labelStatistics.Location.Y + labelStatistics.Height + 25;
             int buttonXStart = (clientWidth - 660) / 2;
-            
+
             buttonKnown.Location = new Point(buttonXStart, buttonY);
             buttonUnknown.Location = new Point(buttonXStart + 150 + 25, buttonY);
             buttonNext.Location = new Point(buttonXStart + 300 + 50, buttonY);
             buttonAddToPdf.Location = new Point(buttonXStart + 450 + 75, buttonY);
-            
+
             buttonPronounce.Location = new Point((clientWidth - contentWidth) / 2, buttonY + 70);
             checkBoxVoice.Location = new Point(buttonPronounce.Location.X + 130, buttonY + 76);
-            
+
             labelPronunciationScope.Location = new Point(checkBoxVoice.Location.X + 120, buttonY + 76);
             radioOriginal.Location = new Point(labelPronunciationScope.Location.X + 80, buttonY + 76);
             radioExplanation.Location = new Point(radioOriginal.Location.X + 75, buttonY + 76);
             radioBoth.Location = new Point(radioExplanation.Location.X + 75, buttonY + 76);
-            
+
             buttonExit.Location = new Point((clientWidth - contentWidth) / 2 + contentWidth - 125, buttonY + 70);
         }
 
@@ -105,77 +104,77 @@ namespace UnifiedLearningAssistant.Forms
         {
             BackColor = Color.FromArgb(250, 245, 235);
             TransparencyKey = Color.FromArgb(255, 0, 255);
-            
+
             panelContent.BackColor = Color.FromArgb(255, 255, 255);
             panelAI.BackColor = Color.FromArgb(252, 248, 240);
-            
+
             labelDisplay.ForeColor = Color.FromArgb(100, 150, 180);
             labelContent.ForeColor = Color.FromArgb(70, 90, 110);
             labelAI.ForeColor = Color.FromArgb(140, 100, 80);
             labelStatistics.ForeColor = Color.FromArgb(80, 100, 120);
-            
+
             progressBar1.ForeColor = Color.FromArgb(255, 140, 0);
             progressBar1.BackColor = Color.FromArgb(240, 240, 240);
             progressBar1.Style = ProgressBarStyle.Continuous;
-            
+
             buttonKnown.BackColor = Color.FromArgb(76, 175, 80);
             buttonKnown.ForeColor = Color.White;
             buttonKnown.FlatStyle = FlatStyle.Flat;
             buttonKnown.FlatAppearance.BorderSize = 0;
-            
+
             buttonUnknown.BackColor = Color.FromArgb(244, 67, 54);
             buttonUnknown.ForeColor = Color.White;
             buttonUnknown.FlatStyle = FlatStyle.Flat;
             buttonUnknown.FlatAppearance.BorderSize = 0;
-            
+
             buttonNext.BackColor = Color.FromArgb(33, 150, 243);
             buttonNext.ForeColor = Color.White;
             buttonNext.FlatStyle = FlatStyle.Flat;
             buttonNext.FlatAppearance.BorderSize = 0;
-            
+
             buttonAddToPdf.BackColor = Color.FromArgb(156, 39, 176);
             buttonAddToPdf.ForeColor = Color.White;
             buttonAddToPdf.FlatStyle = FlatStyle.Flat;
             buttonAddToPdf.FlatAppearance.BorderSize = 0;
-            
+
             buttonPronounce.BackColor = Color.FromArgb(0, 188, 212);
             buttonPronounce.ForeColor = Color.White;
             buttonPronounce.FlatStyle = FlatStyle.Flat;
             buttonPronounce.FlatAppearance.BorderSize = 0;
-            
+
             buttonExit.BackColor = Color.FromArgb(108, 117, 125);
             buttonExit.ForeColor = Color.White;
             buttonExit.FlatStyle = FlatStyle.Flat;
             buttonExit.FlatAppearance.BorderSize = 0;
-            
+
             checkBoxVoice.ForeColor = Color.FromArgb(70, 90, 110);
             labelPronunciationScope.ForeColor = Color.FromArgb(70, 90, 110);
-            
+
             radioOriginal.ForeColor = Color.FromArgb(70, 90, 110);
             radioExplanation.ForeColor = Color.FromArgb(70, 90, 110);
             radioBoth.ForeColor = Color.FromArgb(70, 90, 110);
-            
+
             richTextBoxAI.BackColor = Color.FromArgb(250, 250, 250);
             richTextBoxAI.ForeColor = Color.FromArgb(60, 80, 100);
-            
+
             panelContent.BorderStyle = BorderStyle.None;
             panelAI.BorderStyle = BorderStyle.None;
-            
+
             buttonKnown.MouseEnter += (s, e) => buttonKnown.BackColor = Color.FromArgb(67, 160, 71);
             buttonKnown.MouseLeave += (s, e) => buttonKnown.BackColor = Color.FromArgb(76, 175, 80);
-            
+
             buttonUnknown.MouseEnter += (s, e) => buttonUnknown.BackColor = Color.FromArgb(229, 57, 53);
             buttonUnknown.MouseLeave += (s, e) => buttonUnknown.BackColor = Color.FromArgb(244, 67, 54);
-            
+
             buttonNext.MouseEnter += (s, e) => buttonNext.BackColor = Color.FromArgb(30, 136, 229);
             buttonNext.MouseLeave += (s, e) => buttonNext.BackColor = Color.FromArgb(33, 150, 243);
-            
+
             buttonAddToPdf.MouseEnter += (s, e) => buttonAddToPdf.BackColor = Color.FromArgb(142, 36, 170);
             buttonAddToPdf.MouseLeave += (s, e) => buttonAddToPdf.BackColor = Color.FromArgb(156, 39, 176);
-            
+
             buttonPronounce.MouseEnter += (s, e) => buttonPronounce.BackColor = Color.FromArgb(0, 172, 193);
             buttonPronounce.MouseLeave += (s, e) => buttonPronounce.BackColor = Color.FromArgb(0, 188, 212);
-            
+
             buttonExit.MouseEnter += (s, e) => buttonExit.BackColor = Color.FromArgb(96, 125, 139);
             buttonExit.MouseLeave += (s, e) => buttonExit.BackColor = Color.FromArgb(108, 117, 125);
         }
@@ -191,7 +190,7 @@ namespace UnifiedLearningAssistant.Forms
                     Color.FromArgb(245, 250, 248)
                 );
                 e.Graphics.FillRectangle(gradient, panelContent.ClientRectangle);
-                
+
                 using var pen = new Pen(Color.FromArgb(200, 210, 220), 2);
                 e.Graphics.DrawRectangle(pen, 1, 1, panelContent.Width - 2, panelContent.Height - 2);
             };
@@ -205,7 +204,7 @@ namespace UnifiedLearningAssistant.Forms
                     Color.FromArgb(248, 244, 235)
                 );
                 e.Graphics.FillRectangle(gradient, panelAI.ClientRectangle);
-                
+
                 using var pen = new Pen(Color.FromArgb(210, 200, 190), 2);
                 e.Graphics.DrawRectangle(pen, 1, 1, panelAI.Width - 2, panelAI.Height - 2);
             };
@@ -437,6 +436,8 @@ namespace UnifiedLearningAssistant.Forms
             labelDisplay.Size = new Size(860, 69);
             labelDisplay.TabIndex = 1;
             labelDisplay.TextAlign = ContentAlignment.TopCenter;
+            labelDisplay.AutoSize = false;
+
             // 
             // labelContent
             // 
@@ -448,6 +449,8 @@ namespace UnifiedLearningAssistant.Forms
             labelContent.TabIndex = 0;
             labelContent.TextAlign = ContentAlignment.MiddleCenter;
             labelContent.Click += LabelContent_Click;
+            labelContent.AutoSize = false;
+
             // 
             // panelAI
             // 

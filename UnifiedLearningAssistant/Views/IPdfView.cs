@@ -49,6 +49,7 @@ namespace UnifiedLearningAssistant.Views
         event EventHandler? AiQuestionAsked;
         event EventHandler? AddToLearningList;
         event EventHandler<AddToEditorEventArgs>? AddToEditor;
+        void RaiseAddToEditor(string text, string language);
         event EventHandler? SpeakOriginal;
         event EventHandler? SpeakTranslation;
         event EventHandler<string>? SpeakText;

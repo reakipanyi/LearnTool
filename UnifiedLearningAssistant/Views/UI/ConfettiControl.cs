@@ -4,11 +4,11 @@ namespace UnifiedLearningAssistant.Views.UI
     public class ConfettiControl : Control
     {
         private readonly List<ConfettiParticle> _particles = new List<ConfettiParticle>();
-        private readonly Timer _animationTimer = new Timer();
+        private readonly System.Windows.Forms.Timer _animationTimer = new System.Windows.Forms.Timer();
         private readonly Random _random = new Random();
         private bool _isAnimating;
         private bool _enableBurstEffect = true;
-        
+
         private readonly Color[] _celebrationColors = new[]
         {
             Color.FromArgb(255, 59, 48),
@@ -32,7 +32,7 @@ namespace UnifiedLearningAssistant.Views.UI
                 true);
             DoubleBuffered = true;
             BackColor = Color.Transparent;
-            
+
             _animationTimer.Interval = 16;
             _animationTimer.Tick += OnAnimationTick;
         }
@@ -44,15 +44,15 @@ namespace UnifiedLearningAssistant.Views.UI
             _isAnimating = true;
             _particles.Clear();
             GenerateParticles(100);
-            
+
             if (_enableBurstEffect)
             {
                 GenerateBurstParticles(50);
             }
-            
+
             _animationTimer.Start();
         }
-        
+
         private void GenerateParticles(int count)
         {
             for (int i = 0; i < count; i++)
@@ -60,7 +60,7 @@ namespace UnifiedLearningAssistant.Views.UI
                 _particles.Add(CreateParticle());
             }
         }
-        
+
         private void GenerateBurstParticles(int count)
         {
             for (int i = 0; i < count; i++)
@@ -74,7 +74,7 @@ namespace UnifiedLearningAssistant.Views.UI
                 _particles.Add(particle);
             }
         }
-        
+
         private ConfettiParticle CreateParticle()
         {
             var shapes = new[] { ParticleShape.Rectangle, ParticleShape.Circle, ParticleShape.Triangle, ParticleShape.Star };
@@ -118,7 +118,7 @@ namespace UnifiedLearningAssistant.Views.UI
                 particle.Y += particle.VelocityY;
                 particle.VelocityY += 0.08f;
                 particle.Rotation += particle.RotationSpeed;
-                
+
                 if (particle.Y > Height * 0.7)
                 {
                     particle.Opacity -= particle.FadeSpeed;
@@ -150,7 +150,7 @@ namespace UnifiedLearningAssistant.Views.UI
                 if (particle.Y > Height + 50 || particle.Opacity <= 0) continue;
 
                 using var brush = new SolidBrush(Color.FromArgb((int)(particle.Opacity * 255), particle.Color));
-                
+
                 g.TranslateTransform(particle.X, particle.Y);
                 g.RotateTransform(particle.Rotation);
 
@@ -173,7 +173,7 @@ namespace UnifiedLearningAssistant.Views.UI
                 g.ResetTransform();
             }
         }
-        
+
         private void DrawTriangle(Graphics g, Brush brush, float size)
         {
             var points = new PointF[]
@@ -184,7 +184,7 @@ namespace UnifiedLearningAssistant.Views.UI
             };
             g.FillPolygon(brush, points);
         }
-        
+
         private void DrawStar(Graphics g, Brush brush, float size)
         {
             var points = new PointF[10];

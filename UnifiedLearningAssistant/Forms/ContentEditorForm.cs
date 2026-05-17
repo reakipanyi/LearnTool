@@ -3,6 +3,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Data;
 using UnifiedLearningAssistant.Common;
+using UnifiedLearningAssistant.Models.Config;
 using UnifiedLearningAssistant.Presenters;
 using UnifiedLearningAssistant.Views;
 
@@ -11,6 +12,7 @@ namespace UnifiedLearningAssistant.Forms
     public partial class ContentEditorForm : Form, IContentEditorView
     {
         private readonly ILogger<ContentEditorForm> _logger;
+        private readonly AppConfig _appConfig;
         private ContentEditorPresenter? _presenter;
         private GroupBox groupBoxLanguage;
         private RadioButton radioChinese;
@@ -25,10 +27,12 @@ namespace UnifiedLearningAssistant.Forms
         private static readonly Color SuccessGreen = Color.FromArgb(76, 175, 80);
         private static readonly Color TextDark = Color.FromArgb(33, 33, 33);
 
-        public ContentEditorForm(ILogger<ContentEditorForm> logger)
+        public ContentEditorForm(ILogger<ContentEditorForm> logger, AppConfig appConfig)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _appConfig = appConfig ?? throw new ArgumentNullException(nameof(appConfig));
             InitializeComponent();
+            ApplyFontSize();
         }
 
 
@@ -42,12 +46,40 @@ namespace UnifiedLearningAssistant.Forms
             _logger.LogInformation("ContentEditorPresenter 已设置并初始化");
         }
 
+        private void ApplyFontSize()
+        {
+            int fontSize = _appConfig.AppSettings.DefaultFontSize;
+            var defaultFont = new Font("Microsoft YaHei UI", fontSize);
+            
+            foreach (Control control in Controls)
+            {
+                ApplyFontToControl(control, defaultFont);
+            }
+            
+            dataGridView.Font = defaultFont;
+            dataGridView.ColumnHeadersDefaultCellStyle.Font = new Font("Microsoft YaHei UI", fontSize, FontStyle.Bold);
+        }
+
+        private void ApplyFontToControl(Control control, Font font)
+        {
+            control.Font = font;
+            
+            foreach (Control child in control.Controls)
+            {
+                ApplyFontToControl(child, font);
+            }
+        }
+
         public string SelectedLanguage => radioChinese.Checked ? Constants.Language.Chinese : Constants.Language.English;
 
         public string SelectedSubCategory => comboBoxSubCategory.SelectedItem?.ToString() ?? "";
         public DataTable ItemData
         {
-            set => dataGridView.DataSource = value;
+            set
+            {
+                dataGridView.DataSource = value;
+                ApplyChineseColumnHeaders();
+            }
         }
 
         public string CurrentEditItemJson
@@ -142,6 +174,41 @@ namespace UnifiedLearningAssistant.Forms
             }
         }
 
+        private static readonly Dictionary<string, string> ColumnHeaderNames = new()
+        {
+            { "Character", "汉字" },
+            { "Pinyin", "拼音" },
+            { "Meaning", "释义" },
+            { "StrokeCount", "笔画数" },
+            { "Radical", "部首" },
+            { "Words", "组词" },
+            { "Idiom", "成语" },
+            { "Origin", "出处" },
+            { "Example", "例句" },
+            { "Phrase", "短语" },
+            { "Title", "标题" },
+            { "Author", "作者" },
+            { "Dynasty", "朝代" },
+            { "Verses", "诗句" },
+            { "Annotation", "注释" },
+            { "Word", "单词" },
+            { "Phonetic", "音标" },
+            { "PartOfSpeech", "词性" },
+            { "Sentence", "句子" },
+            { "Translation", "翻译" },
+            { "Grammar", "语法" },
+            { "Content", "内容" },
+            { "Questions", "题目" },
+            { "Question", "问题" },
+            { "Answer", "答案" },
+            { "Analysis", "解析" }
+        };
+
+        private static string GetChineseColumnName(string columnName)
+        {
+            return ColumnHeaderNames.TryGetValue(columnName, out var chineseName) ? chineseName : columnName;
+        }
+
         public void UpdateGridFromJson()
         {
             string json = textBoxJson.Text;
@@ -155,7 +222,6 @@ namespace UnifiedLearningAssistant.Forms
             {
                 if (json.TrimStart().StartsWith("["))
                 {
-                    // 直接将 JSON 数组转换为 DataTable
                     var jsonArray = JsonConvert.DeserializeObject<JArray>(json);
                     if (jsonArray.Count > 0)
                     {
@@ -163,13 +229,12 @@ namespace UnifiedLearningAssistant.Forms
                         var firstItem = jsonArray[0] as JObject;
                         if (firstItem != null)
                         {
-                            // 从第一个对象添加列，所有列都使用 string 类型以避免类型不匹配
                             foreach (var prop in firstItem.Properties())
                             {
-                                dataTable.Columns.Add(prop.Name, typeof(string));
+                                var column = dataTable.Columns.Add(prop.Name, typeof(string));
+                                column.Caption = GetChineseColumnName(prop.Name);
                             }
 
-                            // 添加所有行
                             foreach (var item in jsonArray)
                             {
                                 var obj = item as JObject;
@@ -188,6 +253,7 @@ namespace UnifiedLearningAssistant.Forms
                             }
                         }
                         dataGridView.DataSource = dataTable;
+                        ApplyChineseColumnHeaders();
                     }
                 }
                 else if (json.TrimStart().StartsWith("{"))
@@ -196,7 +262,8 @@ namespace UnifiedLearningAssistant.Forms
                     var dataTable = new DataTable();
                     foreach (var prop in obj.Properties())
                     {
-                        dataTable.Columns.Add(prop.Name, typeof(string));
+                        var column = dataTable.Columns.Add(prop.Name, typeof(string));
+                        column.Caption = GetChineseColumnName(prop.Name);
                     }
                     DataRow row = dataTable.NewRow();
                     foreach (var prop in obj.Properties())
@@ -205,12 +272,27 @@ namespace UnifiedLearningAssistant.Forms
                     }
                     dataTable.Rows.Add(row);
                     dataGridView.DataSource = dataTable;
+                    ApplyChineseColumnHeaders();
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error updating grid from JSON");
                 dataGridView.DataSource = null;
+            }
+        }
+
+        private void ApplyChineseColumnHeaders()
+        {
+            if (dataGridView.DataSource is DataTable dataTable)
+            {
+                foreach (DataGridViewColumn column in dataGridView.Columns)
+                {
+                    if (ColumnHeaderNames.TryGetValue(column.Name, out var chineseName))
+                    {
+                        column.HeaderText = chineseName;
+                    }
+                }
             }
         }
 

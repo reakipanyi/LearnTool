@@ -58,6 +58,39 @@ namespace UnifiedLearningAssistant.Presenters
         };
 
         /// <summary>
+        /// 表头中英文映射字典
+        /// </summary>
+        private static readonly Dictionary<string, string> ColumnHeaderNames = new()
+        {
+            { "Character", "汉字" },
+            { "Pinyin", "拼音" },
+            { "Meaning", "释义" },
+            { "StrokeCount", "笔画数" },
+            { "Radical", "部首" },
+            { "Words", "组词" },
+            { "Idiom", "成语" },
+            { "Origin", "出处" },
+            { "Example", "例句" },
+            { "Phrase", "短语" },
+            { "Title", "标题" },
+            { "Author", "作者" },
+            { "Dynasty", "朝代" },
+            { "Verses", "诗句" },
+            { "Annotation", "注释" },
+            { "Word", "单词" },
+            { "Phonetic", "音标" },
+            { "PartOfSpeech", "词性" },
+            { "Sentence", "句子" },
+            { "Translation", "翻译" },
+            { "Grammar", "语法" },
+            { "Content", "内容" },
+            { "Questions", "题目" },
+            { "Question", "问题" },
+            { "Answer", "答案" },
+            { "Analysis", "解析" }
+        };
+
+        /// <summary>
         /// 类别模板字典，定义每个类别对应的字段结构
         /// </summary>
         private static readonly Dictionary<string, Dictionary<string, object>> CategoryTemplates = new()
@@ -245,6 +278,16 @@ namespace UnifiedLearningAssistant.Presenters
         }
 
         /// <summary>
+        /// 获取列的中文名称
+        /// </summary>
+        /// <param name="columnName">英文列名</param>
+        /// <returns>中文列名，如果没有映射则返回原名称</returns>
+        private static string GetChineseColumnName(string columnName)
+        {
+            return ColumnHeaderNames.TryGetValue(columnName, out var chineseName) ? chineseName : columnName;
+        }
+
+        /// <summary>
         /// 将对象列表转换为DataTable，所有列均为string类型以避免类型推断问题
         /// </summary>
         /// <param name="items">对象列表</param>
@@ -259,14 +302,20 @@ namespace UnifiedLearningAssistant.Presenters
                 if (CategoryTemplates.TryGetValue(category, out var template))
                 {
                     foreach (var key in template.Keys)
-                        table.Columns.Add(key, typeof(string));
+                    {
+                        var column = table.Columns.Add(key, typeof(string));
+                        column.Caption = GetChineseColumnName(key);
+                    }
                 }
                 return table;
             }
 
             var properties = items[0].GetType().GetProperties();
             foreach (var prop in properties)
-                table.Columns.Add(prop.Name, typeof(string));
+            {
+                var column = table.Columns.Add(prop.Name, typeof(string));
+                column.Caption = GetChineseColumnName(prop.Name);
+            }
 
             foreach (var item in items)
             {

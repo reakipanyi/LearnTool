@@ -7,8 +7,8 @@ namespace UnifiedLearningAssistant.Forms
 {
     public partial class AchievementNotificationForm : Form
     {
-        private readonly Timer _displayTimer = new Timer();
-        private readonly Timer _fadeTimer = new Timer();
+        private readonly System.Windows.Forms.Timer _displayTimer = new System.Windows.Forms.Timer();
+        private readonly System.Windows.Forms.Timer _fadeTimer = new System.Windows.Forms.Timer();
         private float _opacityValue = 0;
         private ConfettiControl? _confetti;
         private readonly ISoundService _soundService;
@@ -102,7 +102,7 @@ namespace UnifiedLearningAssistant.Forms
             Controls.Add(_confetti);
             _confetti.BringToFront();
             _confetti.StartCelebration();
-            
+
             _soundService?.PlayAchievement();
         }
 

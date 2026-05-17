@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using System.Drawing.Drawing2D;
 using UnifiedLearningAssistant.Common;
+using UnifiedLearningAssistant.Models.Pdf;
 using UnifiedLearningAssistant.Presenters;
 using UnifiedLearningAssistant.Services.Pdf;
 using UnifiedLearningAssistant.Views;
@@ -52,7 +53,7 @@ namespace UnifiedLearningAssistant.Forms
         private ListBox? _listBoxHighlights;
         private Button? _buttonAddHighlight;
         private Button? _buttonRemoveHighlight;
-        private ComboBox? _comboBoxHighlightColor;
+        private RadioButton?[] _radioHighlightColors;
 
         private TabPage? _tabPageBookmarks;
         private TabPage? _tabPageHighlights;
@@ -62,7 +63,7 @@ namespace UnifiedLearningAssistant.Forms
         private int _currentPageIndex = 0;
 
         private Panel? _pageTransitionOverlay;
-        private Timer? _pageTransitionTimer;
+        private System.Windows.Forms.Timer? _pageTransitionTimer;
         private bool _isAnimating = false;
 
         private SplitContainer splitContainer1;
@@ -175,22 +176,29 @@ namespace UnifiedLearningAssistant.Forms
             var colorPanel = new FlowLayoutPanel
             {
                 Dock = DockStyle.Top,
-                Height = 40,
+                Height = 50,
                 FlowDirection = FlowDirection.LeftToRight
             };
 
             var colorLabel = new Label { Text = "颜色:", AutoSize = true, Margin = new Padding(5) };
-            _comboBoxHighlightColor = new ComboBox
-            {
-                Width = 100,
-                Margin = new Padding(5)
-            };
-            _comboBoxHighlightColor.Items.AddRange(new[] { "黄色", "绿色", "蓝色", "粉色", "橙色" });
-            _comboBoxHighlightColor.SelectedIndex = 0;
-            _comboBoxHighlightColor.SelectedIndexChanged += ComboBoxHighlightColor_SelectedIndexChanged;
-
             colorPanel.Controls.Add(colorLabel);
-            colorPanel.Controls.Add(_comboBoxHighlightColor);
+
+            _radioHighlightColors = new RadioButton?[5];
+            string[] colorNames = { "黄色", "绿色", "蓝色", "粉色", "橙色" };
+            for (int i = 0; i < 5; i++)
+            {
+                var radio = new RadioButton
+                {
+                    Text = colorNames[i],
+                    AutoSize = true,
+                    Margin = new Padding(5),
+                    Tag = i
+                };
+                radio.CheckedChanged += RadioHighlightColor_CheckedChanged;
+                if (i == 0) radio.Checked = true;
+                _radioHighlightColors[i] = radio;
+                colorPanel.Controls.Add(radio);
+            }
 
             _listBoxHighlights = new ListBox
             {
@@ -254,7 +262,7 @@ namespace UnifiedLearningAssistant.Forms
                 _pageTransitionOverlay.BringToFront();
             }
 
-            _pageTransitionTimer = new Timer { Interval = 50 };
+            _pageTransitionTimer = new System.Windows.Forms.Timer { Interval = 50 };
             _pageTransitionTimer.Tick += PageTransitionTimer_Tick;
         }
 
@@ -310,10 +318,12 @@ namespace UnifiedLearningAssistant.Forms
             }
         }
 
-        private void ComboBoxHighlightColor_SelectedIndexChanged(object? sender, EventArgs e)
+        private void RadioHighlightColor_CheckedChanged(object? sender, EventArgs e)
         {
-            if (_comboBoxHighlightColor == null) return;
-            _currentHighlightColor = (HighlightColor)_comboBoxHighlightColor.SelectedIndex;
+            if (sender is RadioButton radio && radio.Checked && radio.Tag is int colorIndex)
+            {
+                _currentHighlightColor = (HighlightColor)colorIndex;
+            }
         }
 
         private void ListBoxBookmarks_DoubleClick(object? sender, EventArgs e)
@@ -356,8 +366,8 @@ namespace UnifiedLearningAssistant.Forms
             if (string.IsNullOrEmpty(_currentPdfPath)) return;
 
             var imgRect = GetImageDisplayRect();
-            float x = imgRect.X + imgRect.Width * 0.1f;
-            float y = imgRect.Y + imgRect.Height * 0.1f;
+            float x = imgRect.Width * 0.1f;
+            float y = imgRect.Height * 0.1f;
             float width = imgRect.Width * 0.8f;
             float height = imgRect.Height * 0.8f;
 
@@ -940,6 +950,10 @@ namespace UnifiedLearningAssistant.Forms
         public event EventHandler? AiQuestionAsked;
         public event EventHandler? AddToLearningList;
         public event EventHandler<Views.AddToEditorEventArgs>? AddToEditor;
+        public void RaiseAddToEditor(string text, string language)
+        {
+            AddToEditor?.Invoke(this, new Views.AddToEditorEventArgs { Text = text, Language = language });
+        }
         public event EventHandler? SpeakTranslation;
         public event EventHandler<string>? SpeakText;
         public event EventHandler<string>? AskAiWithText;

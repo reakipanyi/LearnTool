@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Logging;
 using UnifiedLearningAssistant.Views;
 using UnifiedLearningAssistant.Views.UI;
-using System.Drawing.Drawing2D;
 
 namespace UnifiedLearningAssistant.Forms
 {
@@ -13,7 +12,7 @@ namespace UnifiedLearningAssistant.Forms
         private int _knownCount = 0;
         private int _unknownCount = 0;
         private double _accuracyRate = 0.0;
-        private Timer animationTimer;
+        private System.Windows.Forms.Timer animationTimer;
         private double animationProgress = 0;
         private Label labelMotivational;
         private ProgressBar animatedProgressBar;
@@ -147,7 +146,7 @@ namespace UnifiedLearningAssistant.Forms
             animatedProgressBar = new ProgressBar();
             labelAccuracyValue = new Label();
             progressBarAccuracyGradient = new ProgressBar();
-            animationTimer = new Timer(components);
+            animationTimer = new System.Windows.Forms.Timer(components);
 
             animationTimer.Interval = 30;
             animationTimer.Tick += AnimationTimer_Tick;
@@ -362,7 +361,7 @@ namespace UnifiedLearningAssistant.Forms
             animationProgress = 0;
             animationTimer.Start();
 
-            var timer = new Timer();
+            var timer = new System.Windows.Forms.Timer();
             timer.Interval = 50;
             int currentValue = 0;
             timer.Tick += (s, e) =>

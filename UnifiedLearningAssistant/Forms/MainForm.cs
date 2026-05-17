@@ -1,4 +1,5 @@
 using UnifiedLearningAssistant.Common;
+using UnifiedLearningAssistant.Models.Config;
 using UnifiedLearningAssistant.Presenters;
 using UnifiedLearningAssistant.Services;
 using UnifiedLearningAssistant.Views;
@@ -10,15 +11,16 @@ namespace UnifiedLearningAssistant.Forms
         private readonly MainPresenter _presenter;
         private readonly IPdfView _pdfView;
         private readonly IWindowManager _windowManager;
+        private readonly AppConfig _appConfig;
         private bool _isDisposed = false;
 
-        public MainForm(MainPresenter presenter, IPdfView pdfView, IWindowManager windowManager)
+        public MainForm(MainPresenter presenter, IPdfView pdfView, IWindowManager windowManager, AppConfig appConfig)
         {
             InitializeComponent();
             _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
-
             _pdfView = pdfView ?? throw new ArgumentNullException(nameof(pdfView));
             _windowManager = windowManager ?? throw new ArgumentNullException(nameof(windowManager));
+            _appConfig = appConfig ?? throw new ArgumentNullException(nameof(appConfig));
 
             this.EnableHighDpi();
             Load += MainForm_Load;
@@ -38,7 +40,7 @@ namespace UnifiedLearningAssistant.Forms
             _presenter.OnOpenStatistics += Presenter_OnOpenStatistics;
 
             // 监听PDF的添加到编辑器事件
-            _pdfView.OnAddToEditor += PdfView_OnAddToEditor;
+            _pdfView.AddToEditor += PdfView_OnAddToEditor;
 
             if (_pdfView is UserControl uc)
             {
@@ -57,6 +59,31 @@ namespace UnifiedLearningAssistant.Forms
 
             ApplyColorScheme();
             AddButtonAnimations();
+            ApplyFontSize();
+        }
+
+        private void ApplyFontSize()
+        {
+            int fontSize = _appConfig.AppSettings.DefaultFontSize;
+            var defaultFont = new Font("Microsoft YaHei UI", fontSize);
+            
+            foreach (Control control in panelMain.Controls)
+            {
+                ApplyFontToControl(control, defaultFont);
+            }
+            
+            labelStreakDays.Font = new Font("Microsoft YaHei UI", fontSize, FontStyle.Bold);
+            toolStripStatusLabel.Font = defaultFont;
+        }
+
+        private void ApplyFontToControl(Control control, Font font)
+        {
+            control.Font = font;
+            
+            foreach (Control child in control.Controls)
+            {
+                ApplyFontToControl(child, font);
+            }
         }
 
         private void PdfView_OnAddToEditor(object? sender, Views.AddToEditorEventArgs e)
@@ -788,7 +815,7 @@ namespace UnifiedLearningAssistant.Forms
 
             panelStreakInfo = new Panel
             {
-                Location = new Point(15, 25),
+                Location = new Point(300, 17),
                 Size = new Size(180, 50),
                 BackColor = Color.FromArgb(255, 248, 240),
                 BorderStyle = BorderStyle.FixedSingle

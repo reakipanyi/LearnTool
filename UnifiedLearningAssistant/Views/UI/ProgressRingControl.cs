@@ -5,7 +5,7 @@ namespace UnifiedLearningAssistant.Views.UI
     {
         private float _progress = 0.5f;
         private float _targetProgress = 0.5f;
-        private readonly Timer _animationTimer = new Timer();
+        private readonly System.Windows.Forms.Timer _animationTimer = new System.Windows.Forms.Timer();
         private Color _progressColor = Color.FromArgb(52, 199, 89);
         private Color _trackColor = Color.FromArgb(240, 240, 240);
         private Color _textColor = Color.FromArgb(33, 33, 33);

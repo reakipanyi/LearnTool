@@ -66,7 +66,8 @@ namespace UnifiedLearningAssistant
             services.AddSingleton<Services.Learning.IUserSessionService, Services.Learning.UserSessionService>();
             services.AddSingleton<Services.Learning.IProgressService, Services.Learning.ProgressService>();
             services.AddSingleton<Services.Learning.IExportService, Services.Learning.ExportService>();
-            services.AddSingleton<Services.AI.IAIService, Services.AI.SiliconFlowAIService>();
+            services.AddSingleton<Services.AI.IAIServiceFactory, Services.AI.AIServiceFactory>();
+            services.AddSingleton<Services.AI.IAIService, Services.AI.AIServiceProvider>();
             services.AddSingleton<Services.Pdf.IPdfService, Services.Pdf.PdfiumPdfService>();
             services.AddSingleton<Services.Pdf.IOcrService, Services.Pdf.TesseractOcrService>();
             services.AddSingleton<Services.Pdf.ITranslationService, Services.Pdf.BaiduTranslationService>();
