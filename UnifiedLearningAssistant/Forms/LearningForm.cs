@@ -20,6 +20,7 @@ namespace UnifiedLearningAssistant.Forms
         private AiQuestionDialog? _aiDialog;
         private bool _disposed = false;
         private Settings _settings = new();
+        private PanelDecorator _panelDecorator;
 
         public LearningForm(IAiQuestionService aiQuestionService, ITTSService ttsService, ILogger<LearningForm> logger, ILoggerFactory loggerFactory)
         {
@@ -28,6 +29,7 @@ namespace UnifiedLearningAssistant.Forms
             _ttsService = ttsService ?? throw new ArgumentNullException(nameof(ttsService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
+            _panelDecorator = new PanelDecorator();
             Load += LearningForm_Load;
             FormClosing += LearningForm_FormClosing;
             Resize += LearningForm_Resize;
@@ -46,50 +48,162 @@ namespace UnifiedLearningAssistant.Forms
             int clientHeight = ClientSize.Height;
             
             int contentWidth = Math.Max(860, clientWidth - 40);
-            int contentHeight = Math.Max(227, (clientHeight - 450) / 2);
+            int contentHeight = Math.Max(240, (clientHeight - 500) / 2);
             
             panelContent.Size = new Size(contentWidth, contentHeight);
-            panelContent.Location = new Point((clientWidth - contentWidth) / 2, 20);
+            panelContent.Location = new Point((clientWidth - contentWidth) / 2, 25);
             
             labelDisplay.Size = new Size(contentWidth, 69);
             labelContent.Size = new Size(contentWidth, contentHeight);
             
-            int aiHeight = Math.Max(204, (clientHeight - 450) / 2);
+            int aiHeight = Math.Max(220, (clientHeight - 500) / 2);
             panelAI.Size = new Size(contentWidth, aiHeight);
-            panelAI.Location = new Point((clientWidth - contentWidth) / 2, panelContent.Location.Y + panelContent.Height + 15);
+            panelAI.Location = new Point((clientWidth - contentWidth) / 2, panelContent.Location.Y + panelContent.Height + 20);
             
-            labelAI.Size = new Size(contentWidth, 34);
-            richTextBoxAI.Size = new Size(contentWidth, aiHeight - 34);
-            richTextBoxAI.Location = new Point(0, 34);
+            labelAI.Size = new Size(contentWidth, 40);
+            richTextBoxAI.Size = new Size(contentWidth, aiHeight - 40);
+            richTextBoxAI.Location = new Point(0, 40);
             
-            progressBar1.Size = new Size(contentWidth, 28);
-            progressBar1.Location = new Point((clientWidth - contentWidth) / 2, panelAI.Location.Y + panelAI.Height + 15);
+            progressBar1.Size = new Size(contentWidth, 32);
+            progressBar1.Location = new Point((clientWidth - contentWidth) / 2, panelAI.Location.Y + panelAI.Height + 20);
             
-            labelStatistics.Location = new Point((clientWidth - contentWidth) / 2, progressBar1.Location.Y + progressBar1.Height + 5);
+            labelStatistics.Location = new Point((clientWidth - contentWidth) / 2, progressBar1.Location.Y + progressBar1.Height + 10);
             
-            int buttonY = labelStatistics.Location.Y + labelStatistics.Height + 20;
+            int buttonY = labelStatistics.Location.Y + labelStatistics.Height + 25;
             int buttonXStart = (clientWidth - 660) / 2;
             
             buttonKnown.Location = new Point(buttonXStart, buttonY);
-            buttonUnknown.Location = new Point(buttonXStart + 150 + 20, buttonY);
-            buttonNext.Location = new Point(buttonXStart + 300 + 40, buttonY);
-            buttonAddToPdf.Location = new Point(buttonXStart + 450 + 60, buttonY);
+            buttonUnknown.Location = new Point(buttonXStart + 150 + 25, buttonY);
+            buttonNext.Location = new Point(buttonXStart + 300 + 50, buttonY);
+            buttonAddToPdf.Location = new Point(buttonXStart + 450 + 75, buttonY);
             
-            buttonPronounce.Location = new Point((clientWidth - contentWidth) / 2, buttonY + 65);
-            checkBoxVoice.Location = new Point(buttonPronounce.Location.X + 130, buttonY + 71);
+            buttonPronounce.Location = new Point((clientWidth - contentWidth) / 2, buttonY + 70);
+            checkBoxVoice.Location = new Point(buttonPronounce.Location.X + 130, buttonY + 76);
             
-            labelPronunciationScope.Location = new Point(checkBoxVoice.Location.X + 120, buttonY + 71);
-            radioOriginal.Location = new Point(labelPronunciationScope.Location.X + 80, buttonY + 71);
-            radioExplanation.Location = new Point(radioOriginal.Location.X + 70, buttonY + 71);
-            radioBoth.Location = new Point(radioExplanation.Location.X + 70, buttonY + 71);
+            labelPronunciationScope.Location = new Point(checkBoxVoice.Location.X + 120, buttonY + 76);
+            radioOriginal.Location = new Point(labelPronunciationScope.Location.X + 80, buttonY + 76);
+            radioExplanation.Location = new Point(radioOriginal.Location.X + 75, buttonY + 76);
+            radioBoth.Location = new Point(radioExplanation.Location.X + 75, buttonY + 76);
             
-            buttonExit.Location = new Point((clientWidth - contentWidth) / 2 + contentWidth - 125, buttonY + 65);
+            buttonExit.Location = new Point((clientWidth - contentWidth) / 2 + contentWidth - 125, buttonY + 70);
         }
 
         private void LearningForm_Load(object? sender, EventArgs e)
         {
+            ApplyColorScheme();
+            AddAnimation();
             LoadSettings();
             ApplySettings();
+        }
+
+        private void ApplyColorScheme()
+        {
+            BackColor = Color.FromArgb(250, 245, 235);
+            TransparencyKey = Color.FromArgb(255, 0, 255);
+            
+            panelContent.BackColor = Color.FromArgb(255, 255, 255);
+            panelAI.BackColor = Color.FromArgb(252, 248, 240);
+            
+            labelDisplay.ForeColor = Color.FromArgb(100, 150, 180);
+            labelContent.ForeColor = Color.FromArgb(70, 90, 110);
+            labelAI.ForeColor = Color.FromArgb(140, 100, 80);
+            labelStatistics.ForeColor = Color.FromArgb(80, 100, 120);
+            
+            progressBar1.ForeColor = Color.FromArgb(255, 140, 0);
+            progressBar1.BackColor = Color.FromArgb(240, 240, 240);
+            progressBar1.Style = ProgressBarStyle.Continuous;
+            
+            buttonKnown.BackColor = Color.FromArgb(76, 175, 80);
+            buttonKnown.ForeColor = Color.White;
+            buttonKnown.FlatStyle = FlatStyle.Flat;
+            buttonKnown.FlatAppearance.BorderSize = 0;
+            
+            buttonUnknown.BackColor = Color.FromArgb(244, 67, 54);
+            buttonUnknown.ForeColor = Color.White;
+            buttonUnknown.FlatStyle = FlatStyle.Flat;
+            buttonUnknown.FlatAppearance.BorderSize = 0;
+            
+            buttonNext.BackColor = Color.FromArgb(33, 150, 243);
+            buttonNext.ForeColor = Color.White;
+            buttonNext.FlatStyle = FlatStyle.Flat;
+            buttonNext.FlatAppearance.BorderSize = 0;
+            
+            buttonAddToPdf.BackColor = Color.FromArgb(156, 39, 176);
+            buttonAddToPdf.ForeColor = Color.White;
+            buttonAddToPdf.FlatStyle = FlatStyle.Flat;
+            buttonAddToPdf.FlatAppearance.BorderSize = 0;
+            
+            buttonPronounce.BackColor = Color.FromArgb(0, 188, 212);
+            buttonPronounce.ForeColor = Color.White;
+            buttonPronounce.FlatStyle = FlatStyle.Flat;
+            buttonPronounce.FlatAppearance.BorderSize = 0;
+            
+            buttonExit.BackColor = Color.FromArgb(108, 117, 125);
+            buttonExit.ForeColor = Color.White;
+            buttonExit.FlatStyle = FlatStyle.Flat;
+            buttonExit.FlatAppearance.BorderSize = 0;
+            
+            checkBoxVoice.ForeColor = Color.FromArgb(70, 90, 110);
+            labelPronunciationScope.ForeColor = Color.FromArgb(70, 90, 110);
+            
+            radioOriginal.ForeColor = Color.FromArgb(70, 90, 110);
+            radioExplanation.ForeColor = Color.FromArgb(70, 90, 110);
+            radioBoth.ForeColor = Color.FromArgb(70, 90, 110);
+            
+            richTextBoxAI.BackColor = Color.FromArgb(250, 250, 250);
+            richTextBoxAI.ForeColor = Color.FromArgb(60, 80, 100);
+            
+            panelContent.BorderStyle = BorderStyle.None;
+            panelAI.BorderStyle = BorderStyle.None;
+            
+            buttonKnown.MouseEnter += (s, e) => buttonKnown.BackColor = Color.FromArgb(67, 160, 71);
+            buttonKnown.MouseLeave += (s, e) => buttonKnown.BackColor = Color.FromArgb(76, 175, 80);
+            
+            buttonUnknown.MouseEnter += (s, e) => buttonUnknown.BackColor = Color.FromArgb(229, 57, 53);
+            buttonUnknown.MouseLeave += (s, e) => buttonUnknown.BackColor = Color.FromArgb(244, 67, 54);
+            
+            buttonNext.MouseEnter += (s, e) => buttonNext.BackColor = Color.FromArgb(30, 136, 229);
+            buttonNext.MouseLeave += (s, e) => buttonNext.BackColor = Color.FromArgb(33, 150, 243);
+            
+            buttonAddToPdf.MouseEnter += (s, e) => buttonAddToPdf.BackColor = Color.FromArgb(142, 36, 170);
+            buttonAddToPdf.MouseLeave += (s, e) => buttonAddToPdf.BackColor = Color.FromArgb(156, 39, 176);
+            
+            buttonPronounce.MouseEnter += (s, e) => buttonPronounce.BackColor = Color.FromArgb(0, 172, 193);
+            buttonPronounce.MouseLeave += (s, e) => buttonPronounce.BackColor = Color.FromArgb(0, 188, 212);
+            
+            buttonExit.MouseEnter += (s, e) => buttonExit.BackColor = Color.FromArgb(96, 125, 139);
+            buttonExit.MouseLeave += (s, e) => buttonExit.BackColor = Color.FromArgb(108, 117, 125);
+        }
+
+        private void AddAnimation()
+        {
+            panelContent.Paint += (s, e) =>
+            {
+                using var gradient = new System.Drawing.Drawing2D.LinearGradientBrush(
+                    new Point(0, 0),
+                    new Point(panelContent.Width, panelContent.Height),
+                    Color.FromArgb(255, 255, 255),
+                    Color.FromArgb(245, 250, 248)
+                );
+                e.Graphics.FillRectangle(gradient, panelContent.ClientRectangle);
+                
+                using var pen = new Pen(Color.FromArgb(200, 210, 220), 2);
+                e.Graphics.DrawRectangle(pen, 1, 1, panelContent.Width - 2, panelContent.Height - 2);
+            };
+
+            panelAI.Paint += (s, e) =>
+            {
+                using var gradient = new System.Drawing.Drawing2D.LinearGradientBrush(
+                    new Point(0, 0),
+                    new Point(0, panelAI.Height),
+                    Color.FromArgb(252, 248, 240),
+                    Color.FromArgb(248, 244, 235)
+                );
+                e.Graphics.FillRectangle(gradient, panelAI.ClientRectangle);
+                
+                using var pen = new Pen(Color.FromArgb(210, 200, 190), 2);
+                e.Graphics.DrawRectangle(pen, 1, 1, panelAI.Width - 2, panelAI.Height - 2);
+            };
         }
 
         private void LearningForm_FormClosing(object? sender, FormClosingEventArgs e)
@@ -302,15 +416,15 @@ namespace UnifiedLearningAssistant.Forms
             // 
             panelContent.Controls.Add(labelDisplay);
             panelContent.Controls.Add(labelContent);
-            panelContent.Location = new Point(20, 23);
+            panelContent.Location = new Point(20, 25);
             panelContent.Name = "panelContent";
-            panelContent.Size = new Size(860, 227);
+            panelContent.Size = new Size(860, 240);
             panelContent.TabIndex = 0;
             // 
             // labelDisplay
             // 
             labelDisplay.Dock = DockStyle.Top;
-            labelDisplay.Font = new Font("微软雅黑", 24F);
+            labelDisplay.Font = new Font("微软雅黑", 22F, FontStyle.Bold);
             labelDisplay.Location = new Point(0, 0);
             labelDisplay.Name = "labelDisplay";
             labelDisplay.Size = new Size(860, 69);
@@ -323,7 +437,7 @@ namespace UnifiedLearningAssistant.Forms
             labelContent.Font = new Font("微软雅黑", 72F, FontStyle.Bold);
             labelContent.Location = new Point(0, 0);
             labelContent.Name = "labelContent";
-            labelContent.Size = new Size(860, 227);
+            labelContent.Size = new Size(860, 240);
             labelContent.TabIndex = 0;
             labelContent.TextAlign = ContentAlignment.MiddleCenter;
             labelContent.Click += LabelContent_Click;
@@ -332,64 +446,65 @@ namespace UnifiedLearningAssistant.Forms
             // 
             panelAI.Controls.Add(richTextBoxAI);
             panelAI.Controls.Add(labelAI);
-            panelAI.Location = new Point(20, 261);
+            panelAI.Location = new Point(20, 280);
             panelAI.Name = "panelAI";
-            panelAI.Size = new Size(860, 204);
+            panelAI.Size = new Size(860, 220);
             panelAI.TabIndex = 1;
             // 
             // richTextBoxAI
             // 
             richTextBoxAI.Dock = DockStyle.Fill;
-            richTextBoxAI.Location = new Point(0, 34);
+            richTextBoxAI.Font = new Font("微软雅黑", 11F);
+            richTextBoxAI.Location = new Point(0, 40);
             richTextBoxAI.Name = "richTextBoxAI";
             richTextBoxAI.ReadOnly = true;
-            richTextBoxAI.Size = new Size(860, 170);
+            richTextBoxAI.Size = new Size(860, 180);
             richTextBoxAI.TabIndex = 1;
             richTextBoxAI.Text = "";
             // 
             // labelAI
             // 
             labelAI.Dock = DockStyle.Top;
-            labelAI.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
+            labelAI.Font = new Font("微软雅黑", 13F, FontStyle.Bold);
             labelAI.Location = new Point(0, 0);
             labelAI.Name = "labelAI";
-            labelAI.Size = new Size(860, 34);
+            labelAI.Padding = new Padding(15, 0, 0, 0);
+            labelAI.Size = new Size(860, 40);
             labelAI.TabIndex = 0;
             labelAI.Text = "📖 AI 释义面板";
             labelAI.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // buttonAddToPdf
             // 
-            buttonAddToPdf.Font = new Font("微软雅黑", 12F);
-            buttonAddToPdf.Location = new Point(705, 560);
+            buttonAddToPdf.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
+            buttonAddToPdf.Location = new Point(705, 565);
             buttonAddToPdf.Name = "buttonAddToPdf";
-            buttonAddToPdf.Size = new Size(120, 46);
+            buttonAddToPdf.Size = new Size(130, 52);
             buttonAddToPdf.TabIndex = 10;
-            buttonAddToPdf.Text = "AI提问";
+            buttonAddToPdf.Text = "💡 AI提问";
             buttonAddToPdf.Click += ButtonAddToPdf_Click;
             // 
             // progressBar1
             // 
-            progressBar1.Location = new Point(20, 476);
+            progressBar1.Location = new Point(20, 520);
             progressBar1.Name = "progressBar1";
-            progressBar1.Size = new Size(860, 28);
+            progressBar1.Size = new Size(860, 32);
             progressBar1.TabIndex = 2;
             // 
             // labelStatistics
             // 
             labelStatistics.Font = new Font("微软雅黑", 12F);
-            labelStatistics.Location = new Point(20, 510);
+            labelStatistics.Location = new Point(20, 560);
             labelStatistics.Name = "labelStatistics";
-            labelStatistics.Size = new Size(400, 28);
+            labelStatistics.Size = new Size(500, 32);
             labelStatistics.TabIndex = 3;
             // 
             // buttonKnown
             // 
-            buttonKnown.BackColor = Color.LightGreen;
             buttonKnown.Font = new Font("微软雅黑", 14F, FontStyle.Bold);
-            buttonKnown.Location = new Point(120, 555);
+            buttonKnown.Location = new Point(120, 590);
             buttonKnown.Name = "buttonKnown";
-            buttonKnown.Size = new Size(150, 57);
+            buttonKnown.Size = new Size(150, 62);
             buttonKnown.TabIndex = 4;
             buttonKnown.Text = "✅ 会了";
             buttonKnown.UseVisualStyleBackColor = false;
@@ -397,11 +512,10 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonUnknown
             // 
-            buttonUnknown.BackColor = Color.LightPink;
             buttonUnknown.Font = new Font("微软雅黑", 14F, FontStyle.Bold);
-            buttonUnknown.Location = new Point(320, 555);
+            buttonUnknown.Location = new Point(320, 590);
             buttonUnknown.Name = "buttonUnknown";
-            buttonUnknown.Size = new Size(150, 57);
+            buttonUnknown.Size = new Size(150, 62);
             buttonUnknown.TabIndex = 5;
             buttonUnknown.Text = "❌ 不会";
             buttonUnknown.UseVisualStyleBackColor = false;
@@ -410,49 +524,50 @@ namespace UnifiedLearningAssistant.Forms
             // buttonNext
             // 
             buttonNext.Font = new Font("微软雅黑", 14F, FontStyle.Bold);
-            buttonNext.Location = new Point(520, 555);
+            buttonNext.Location = new Point(520, 590);
             buttonNext.Name = "buttonNext";
-            buttonNext.Size = new Size(150, 57);
+            buttonNext.Size = new Size(150, 62);
             buttonNext.TabIndex = 6;
             buttonNext.Text = "➡ 下一个";
             buttonNext.Click += ButtonNext_Click;
             // 
             // buttonPronounce
             // 
-            buttonPronounce.Font = new Font("微软雅黑", 12F);
-            buttonPronounce.Location = new Point(20, 623);
+            buttonPronounce.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
+            buttonPronounce.Location = new Point(20, 665);
             buttonPronounce.Name = "buttonPronounce";
-            buttonPronounce.Size = new Size(120, 40);
+            buttonPronounce.Size = new Size(130, 45);
             buttonPronounce.TabIndex = 7;
             buttonPronounce.Text = "🔊 发音";
             buttonPronounce.Click += ButtonPronounce_Click;
             // 
             // buttonExit
             // 
-            buttonExit.Font = new Font("微软雅黑", 12F);
-            buttonExit.Location = new Point(705, 623);
+            buttonExit.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
+            buttonExit.Location = new Point(705, 665);
             buttonExit.Name = "buttonExit";
-            buttonExit.Size = new Size(120, 40);
+            buttonExit.Size = new Size(130, 45);
             buttonExit.TabIndex = 8;
-            buttonExit.Text = "返回主界面";
+            buttonExit.Text = "🏠 返回";
             buttonExit.Click += ButtonExit_Click;
             // 
             // checkBoxVoice
             // 
             checkBoxVoice.Checked = true;
             checkBoxVoice.CheckState = CheckState.Checked;
-            checkBoxVoice.Location = new Point(150, 629);
+            checkBoxVoice.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            checkBoxVoice.Location = new Point(160, 671);
             checkBoxVoice.Name = "checkBoxVoice";
-            checkBoxVoice.Size = new Size(90, 28);
+            checkBoxVoice.Size = new Size(100, 30);
             checkBoxVoice.TabIndex = 9;
             checkBoxVoice.Text = "自动朗读";
             // 
             // labelPronunciationScope
             // 
-            labelPronunciationScope.Font = new Font("微软雅黑", 10F);
-            labelPronunciationScope.Location = new Point(250, 629);
+            labelPronunciationScope.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            labelPronunciationScope.Location = new Point(270, 671);
             labelPronunciationScope.Name = "labelPronunciationScope";
-            labelPronunciationScope.Size = new Size(80, 25);
+            labelPronunciationScope.Size = new Size(90, 30);
             labelPronunciationScope.TabIndex = 12;
             labelPronunciationScope.Text = "朗读范围:";
             labelPronunciationScope.TextAlign = ContentAlignment.MiddleLeft;
@@ -461,10 +576,10 @@ namespace UnifiedLearningAssistant.Forms
             // 
             radioOriginal.AutoSize = true;
             radioOriginal.Checked = true;
-            radioOriginal.Font = new Font("微软雅黑", 10F);
-            radioOriginal.Location = new Point(340, 629);
+            radioOriginal.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            radioOriginal.Location = new Point(370, 671);
             radioOriginal.Name = "radioOriginal";
-            radioOriginal.Size = new Size(60, 24);
+            radioOriginal.Size = new Size(65, 26);
             radioOriginal.TabIndex = 13;
             radioOriginal.TabStop = true;
             radioOriginal.Text = "原文";
@@ -472,20 +587,20 @@ namespace UnifiedLearningAssistant.Forms
             // radioExplanation
             // 
             radioExplanation.AutoSize = true;
-            radioExplanation.Font = new Font("微软雅黑", 10F);
-            radioExplanation.Location = new Point(410, 629);
+            radioExplanation.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            radioExplanation.Location = new Point(455, 671);
             radioExplanation.Name = "radioExplanation";
-            radioExplanation.Size = new Size(60, 24);
+            radioExplanation.Size = new Size(65, 26);
             radioExplanation.TabIndex = 14;
             radioExplanation.Text = "释义";
             // 
             // radioBoth
             // 
             radioBoth.AutoSize = true;
-            radioBoth.Font = new Font("微软雅黑", 10F);
-            radioBoth.Location = new Point(480, 629);
+            radioBoth.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            radioBoth.Location = new Point(540, 671);
             radioBoth.Name = "radioBoth";
-            radioBoth.Size = new Size(90, 24);
+            radioBoth.Size = new Size(100, 26);
             radioBoth.TabIndex = 15;
             radioBoth.Text = "原文+释义";
             // 
@@ -493,8 +608,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
-            BackColor = Color.FromArgb(255, 244, 230);
-            ClientSize = new Size(900, 720);
+            ClientSize = new Size(900, 750);
             Controls.Add(radioBoth);
             Controls.Add(radioExplanation);
             Controls.Add(radioOriginal);
@@ -510,8 +624,11 @@ namespace UnifiedLearningAssistant.Forms
             Controls.Add(progressBar1);
             Controls.Add(panelAI);
             Controls.Add(panelContent);
+            DoubleBuffered = true;
+            FormBorderStyle = FormBorderStyle.FixedSingle;
+            MaximizeBox = false;
             Name = "LearningForm";
-            Text = "学习模式";
+            Text = "✨ 学习模式 ✨";
             Load += LearningForm_Load;
             panelContent.ResumeLayout(false);
             panelAI.ResumeLayout(false);
@@ -590,6 +707,8 @@ namespace UnifiedLearningAssistant.Forms
             base.Dispose(disposing);
         }
 
-
+        private class PanelDecorator
+        {
+        }
     }
 }
