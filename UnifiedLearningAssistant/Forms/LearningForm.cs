@@ -41,7 +41,7 @@ namespace UnifiedLearningAssistant.Forms
             int clientHeight = ClientSize.Height;
             
             int contentWidth = Math.Max(860, clientWidth - 40);
-            int contentHeight = Math.Max(227, (clientHeight - 400) / 2);
+            int contentHeight = Math.Max(227, (clientHeight - 450) / 2);
             
             panelContent.Size = new Size(contentWidth, contentHeight);
             panelContent.Location = new Point((clientWidth - contentWidth) / 2, 20);
@@ -49,7 +49,7 @@ namespace UnifiedLearningAssistant.Forms
             labelDisplay.Size = new Size(contentWidth, 69);
             labelContent.Size = new Size(contentWidth, contentHeight);
             
-            int aiHeight = Math.Max(204, (clientHeight - 400) / 2);
+            int aiHeight = Math.Max(204, (clientHeight - 450) / 2);
             panelAI.Size = new Size(contentWidth, aiHeight);
             panelAI.Location = new Point((clientWidth - contentWidth) / 2, panelContent.Location.Y + panelContent.Height + 15);
             
@@ -72,12 +72,16 @@ namespace UnifiedLearningAssistant.Forms
             
             buttonPronounce.Location = new Point((clientWidth - contentWidth) / 2, buttonY + 65);
             checkBoxVoice.Location = new Point(buttonPronounce.Location.X + 130, buttonY + 71);
+            comboBoxPronunciationScope.Location = new Point(checkBoxVoice.Location.X + 160, buttonY + 71);
+            labelPronunciationScope.Location = new Point(comboBoxPronunciationScope.Location.X - 70, buttonY + 71);
             buttonExit.Location = new Point((clientWidth - contentWidth) / 2 + contentWidth - 125, buttonY + 65);
         }
 
         private void LearningForm_Load(object? sender, EventArgs e)
         {
-            // 依赖项已通过构造函数注入
+            // 初始化发音范围选项
+            comboBoxPronunciationScope.Items.AddRange(new string[] { "原文", "释义", "原文+释义" });
+            comboBoxPronunciationScope.SelectedIndex = 0;
         }
 
         #region ILearningView Implementation
@@ -116,6 +120,12 @@ namespace UnifiedLearningAssistant.Forms
         {
             get => checkBoxVoice.Checked;
             set => checkBoxVoice.Checked = value;
+        }
+
+        public PronunciationScope PronunciationScope
+        {
+            get => (PronunciationScope)comboBoxPronunciationScope.SelectedIndex;
+            set => comboBoxPronunciationScope.SelectedIndex = (int)value;
         }
 
         public string CurrentMode => Constants.LearningMode.Study;
@@ -169,6 +179,8 @@ namespace UnifiedLearningAssistant.Forms
         private CheckBox checkBoxVoice;
         private Button buttonAddToPdf;
         private Label labelAI;
+        private ComboBox comboBoxPronunciationScope;
+        private Label labelPronunciationScope;
 
         private void InitializeComponent()
         {
@@ -187,6 +199,8 @@ namespace UnifiedLearningAssistant.Forms
             buttonPronounce = new Button();
             buttonExit = new Button();
             checkBoxVoice = new CheckBox();
+            comboBoxPronunciationScope = new ComboBox();
+            labelPronunciationScope = new Label();
             panelContent.SuspendLayout();
             panelAI.SuspendLayout();
             SuspendLayout();
@@ -336,16 +350,37 @@ namespace UnifiedLearningAssistant.Forms
             checkBoxVoice.CheckState = CheckState.Checked;
             checkBoxVoice.Location = new Point(150, 629);
             checkBoxVoice.Name = "checkBoxVoice";
-            checkBoxVoice.Size = new Size(150, 28);
+            checkBoxVoice.Size = new Size(90, 28);
             checkBoxVoice.TabIndex = 9;
             checkBoxVoice.Text = "自动朗读";
+            // 
+            // comboBoxPronunciationScope
+            // 
+            comboBoxPronunciationScope.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboBoxPronunciationScope.FormattingEnabled = true;
+            comboBoxPronunciationScope.Location = new Point(380, 629);
+            comboBoxPronunciationScope.Name = "comboBoxPronunciationScope";
+            comboBoxPronunciationScope.Size = new Size(120, 25);
+            comboBoxPronunciationScope.TabIndex = 11;
+            // 
+            // labelPronunciationScope
+            // 
+            labelPronunciationScope.Font = new Font("微软雅黑", 10F);
+            labelPronunciationScope.Location = new Point(250, 629);
+            labelPronunciationScope.Name = "labelPronunciationScope";
+            labelPronunciationScope.Size = new Size(120, 25);
+            labelPronunciationScope.TabIndex = 12;
+            labelPronunciationScope.Text = "朗读范围:";
+            labelPronunciationScope.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // LearningForm
             // 
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.FromArgb(255, 244, 230);
-            ClientSize = new Size(900, 680);
+            ClientSize = new Size(900, 720);
+            Controls.Add(labelPronunciationScope);
+            Controls.Add(comboBoxPronunciationScope);
             Controls.Add(buttonAddToPdf);
             Controls.Add(checkBoxVoice);
             Controls.Add(buttonExit);

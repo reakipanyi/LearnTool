@@ -16,6 +16,7 @@ namespace UnifiedLearningAssistant.Presenters
         private readonly IAIService _aiService;
         private readonly ITTSService _ttsService;
         private CancellationTokenSource? _cts;
+        private string _currentExplanation = "";
 
         private string _currentUserId = "";
         private string _currentLanguage = "";
@@ -67,6 +68,7 @@ namespace UnifiedLearningAssistant.Presenters
 
         private async Task DisplayCurrentItemAsync()
         {
+            _currentExplanation = "";
             var item = _studyEngine.GetCurrentItem();
             if (item == null)
             {
@@ -96,7 +98,7 @@ namespace UnifiedLearningAssistant.Presenters
 
             if (_view.IsVoiceEnabled)
             {
-                await PlayPronunciationAsync(item, _cts.Token);
+                await PlayPronunciationAsync(item, _currentExplanation, _cts.Token);
             }
         }
 
@@ -106,6 +108,7 @@ namespace UnifiedLearningAssistant.Presenters
             {
                 _logger.LogDebug("Loading AI explanation for '{Text}'", text);
                 var explanation = await _aiService.GetExplanationAsync(text, _currentLanguage, _currentSubCategory);
+                _currentExplanation = explanation;
                 _view.AIExplanation = explanation;
             }
             catch (OperationCanceledException)
@@ -127,15 +130,24 @@ namespace UnifiedLearningAssistant.Presenters
                 $"正确率: {stats.AccuracyRate:F1}%";
         }
 
-        private async Task PlayPronunciationAsync(LearningItem item, CancellationToken cancellationToken)
+        private async Task PlayPronunciationAsync(LearningItem item, string explanation, CancellationToken cancellationToken)
         {
             if (!_ttsService.Available) return;
 
-
-            string text = item.GetMainContent();
+            var scope = _view.PronunciationScope;
             string lang = _currentLanguage == Constants.Language.Chinese ? "zh" : "en";
-            await _ttsService.SpeakAsync(text, lang);
 
+            if (scope == PronunciationScope.Original || scope == PronunciationScope.Both)
+            {
+                string text = item.GetMainContent();
+                await _ttsService.SpeakAsync(text, lang);
+                await Task.Delay(500, cancellationToken);
+            }
+
+            if ((scope == PronunciationScope.Explanation || scope == PronunciationScope.Both) && !string.IsNullOrWhiteSpace(explanation))
+            {
+                await _ttsService.SpeakAsync(explanation, lang);
+            }
         }
 
         private void View_MarkAsKnownClicked(object? sender, EventArgs e)
@@ -157,7 +169,7 @@ namespace UnifiedLearningAssistant.Presenters
                 var item = _studyEngine.GetCurrentItem();
                 if (item != null)
                 {
-                    await PlayPronunciationAsync(item, _cts.Token);
+                    await PlayPronunciationAsync(item, _currentExplanation, _cts.Token);
                 }
             }
             catch (OperationCanceledException)

@@ -2,6 +2,13 @@ using UnifiedLearningAssistant.Models.Learning;
 
 namespace UnifiedLearningAssistant.Views
 {
+    public enum PronunciationScope
+    {
+        Original,
+        Explanation,
+        Both
+    }
+
     public interface ILearningView
     {
         string CurrentContent { set; }
@@ -11,6 +18,7 @@ namespace UnifiedLearningAssistant.Views
         int ProgressValue { set; }
         int ProgressMax { set; }
         bool IsVoiceEnabled { get; set; }
+        PronunciationScope PronunciationScope { get; set; }
         string CurrentMode { get; }
 
         event EventHandler? MarkAsKnownClicked;
