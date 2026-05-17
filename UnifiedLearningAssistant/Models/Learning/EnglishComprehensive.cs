@@ -87,10 +87,10 @@ namespace UnifiedLearningAssistant.Models.Learning
         {
             return ItemType switch
             {
-                EnglishItemType.Word =&gt; Word,
-                EnglishItemType.Phrase =&gt; Phrase,
-                EnglishItemType.Sentence =&gt; Sentence,
-                _ =&gt; Word
+                EnglishItemType.Word => Word,
+                EnglishItemType.Phrase => Phrase,
+                EnglishItemType.Sentence => Sentence,
+                _ => Word
             };
         }
 
@@ -139,7 +139,7 @@ namespace UnifiedLearningAssistant.Models.Learning
         }
 
         /// &lt;inheritdoc/&gt;
-        public override string GetPronunciation() =&gt; Phonetic;
+        public override string GetPronunciation() => Phonetic;
     }
 
     /// &lt;summary&gt;

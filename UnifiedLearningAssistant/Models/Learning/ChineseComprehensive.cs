@@ -87,13 +87,13 @@ namespace UnifiedLearningAssistant.Models.Learning
         {
             return ItemType switch
             {
-                ChineseItemType.Character =&gt; Character,
-                ChineseItemType.WordCombination =&gt; WordCombinations.FirstOrDefault() ?? Phrase,
-                ChineseItemType.Phrase =&gt; Phrase,
-                ChineseItemType.Idiom =&gt; Phrase,
-                ChineseItemType.Sentence =&gt; Sentence,
-                ChineseItemType.Poem =&gt; PoemTitle,
-                _ =&gt; Character
+                ChineseItemType.Character => Character,
+                ChineseItemType.WordCombination => WordCombinations.FirstOrDefault() ?? Phrase,
+                ChineseItemType.Phrase => Phrase,
+                ChineseItemType.Idiom => Phrase,
+                ChineseItemType.Sentence => Sentence,
+                ChineseItemType.Poem => PoemTitle,
+                _ => Character
             };
         }
 
@@ -157,7 +157,7 @@ namespace UnifiedLearningAssistant.Models.Learning
         }
 
         /// &lt;inheritdoc/&gt;
-        public override string GetPronunciation() =&gt; Pinyin;
+        public override string GetPronunciation() => Pinyin;
     }
 
     /// &lt;summary&gt;

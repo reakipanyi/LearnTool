@@ -10,7 +10,7 @@ namespace UnifiedLearningAssistant.Common.Events
         public void Subscribe&lt;TEvent&gt;(Action&lt;TEvent&gt; handler) where TEvent : IApplicationEvent
         {
             var eventType = typeof(TEvent);
-            var handlers = _handlers.GetOrAdd(eventType, _ =&gt; new List&lt;Delegate&gt;());
+            var handlers = _handlers.GetOrAdd(eventType, _ => new List&lt;Delegate&gt;());
             lock (handlers)
             {
                 if (!handlers.Contains(handler))

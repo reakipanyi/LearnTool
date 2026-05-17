@@ -7,7 +7,7 @@ namespace UnifiedLearningAssistant.Models.User
         public string UserId { get; set; } = string.Empty;
         public DateTime StartTime { get; set; }
         public DateTime? EndTime { get; set; }
-        public TimeSpan Duration =&gt; EndTime.HasValue ? EndTime.Value - StartTime : TimeSpan.Zero;
+        public TimeSpan Duration => EndTime.HasValue ? EndTime.Value - StartTime : TimeSpan.Zero;
         
         public string Language { get; set; } = string.Empty;
         public string SubCategory { get; set; } = string.Empty;
@@ -16,7 +16,7 @@ namespace UnifiedLearningAssistant.Models.User
         public int TotalItems { get; set; }
         public int KnownItems { get; set; }
         public int UnknownItems { get; set; }
-        public double Accuracy =&gt; TotalItems &gt; 0 ? (double)KnownItems / TotalItems : 0;
+        public double Accuracy => TotalItems &gt; 0 ? (double)KnownItems / TotalItems : 0;
         
         public List&lt;LearningItemRecord&gt; ItemRecords { get; set; } = new List&lt;LearningItemRecord&gt;();
     }
@@ -54,7 +54,7 @@ namespace UnifiedLearningAssistant.Models.User
         public DateTime Date { get; set; }
         public int TargetItems { get; set; }
         public int CompletedItems { get; set; }
-        public bool IsCompleted =&gt; CompletedItems &gt;= TargetItems;
+        public bool IsCompleted => CompletedItems &gt;= TargetItems;
     }
 }
 

@@ -13,7 +13,7 @@ namespace UnifiedLearningAssistant.Views.UI
 
         public float Progress
         {
-            get =&gt; _targetProgress;
+            get => _targetProgress;
             set
             {
                 _targetProgress = Math.Clamp(value, 0, 1);
@@ -23,7 +23,7 @@ namespace UnifiedLearningAssistant.Views.UI
 
         public Color ProgressColor
         {
-            get =&gt; _progressColor;
+            get => _progressColor;
             set
             {
                 _progressColor = value;
@@ -33,7 +33,7 @@ namespace UnifiedLearningAssistant.Views.UI
 
         public Color TrackColor
         {
-            get =&gt; _trackColor;
+            get => _trackColor;
             set
             {
                 _trackColor = value;
@@ -43,7 +43,7 @@ namespace UnifiedLearningAssistant.Views.UI
 
         public Color TextColor
         {
-            get =&gt; _textColor;
+            get => _textColor;
             set
             {
                 _textColor = value;
@@ -53,7 +53,7 @@ namespace UnifiedLearningAssistant.Views.UI
 
         public string CenterText
         {
-            get =&gt; _centerText;
+            get => _centerText;
             set
             {
                 _centerText = value;

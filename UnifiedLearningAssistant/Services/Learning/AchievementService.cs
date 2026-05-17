@@ -65,7 +65,7 @@ namespace UnifiedLearningAssistant.Services.Learning
             {
                 foreach (var achievement in _achievements)
                 {
-                    var unlockedAchievement = profile.UnlockedAchievements.FirstOrDefault(a =&gt; a.Id == achievement.Id);
+                    var unlockedAchievement = profile.UnlockedAchievements.FirstOrDefault(a => a.Id == achievement.Id);
                     if (unlockedAchievement != null)
                     {
                         achievement.IsUnlocked = true;
@@ -81,7 +81,7 @@ namespace UnifiedLearningAssistant.Services.Learning
 
             lock (_lock)
             {
-                foreach (var achievement in _achievements.Where(a =&gt; !a.IsUnlocked))
+                foreach (var achievement in _achievements.Where(a => !a.IsUnlocked))
                 {
                     bool shouldUnlock = CheckRequirement(achievement.Requirement, progress);
                     if (shouldUnlock)
@@ -90,7 +90,7 @@ namespace UnifiedLearningAssistant.Services.Learning
                         achievement.UnlockedAt = DateTime.Now;
                         newUnlocks.Add(achievement);
 
-                        if (!profile.UnlockedAchievements.Any(a =&gt; a.Id == achievement.Id))
+                        if (!profile.UnlockedAchievements.Any(a => a.Id == achievement.Id))
                         {
                             profile.UnlockedAchievements.Add(new UnlockedAchievement
                             {
@@ -120,11 +120,11 @@ namespace UnifiedLearningAssistant.Services.Learning
         {
             return requirement.Type switch
             {
-                AchievementType.TotalItemsStudied =&gt; progress.TotalItemsStudied &gt;= requirement.TargetValue,
-                AchievementType.MasteredItems =&gt; progress.TotalItemsMastered &gt;= requirement.TargetValue,
-                AchievementType.ConsecutiveDays =&gt; CheckConsecutiveDays(progress, requirement.TargetValue),
-                AchievementType.PerfectSession =&gt; CheckPerfectSession(progress),
-                _ =&gt; false
+                AchievementType.TotalItemsStudied => progress.TotalItemsStudied &gt;= requirement.TargetValue,
+                AchievementType.MasteredItems => progress.TotalItemsMastered &gt;= requirement.TargetValue,
+                AchievementType.ConsecutiveDays => CheckConsecutiveDays(progress, requirement.TargetValue),
+                AchievementType.PerfectSession => CheckPerfectSession(progress),
+                _ => false
             };
         }
 
@@ -144,7 +144,7 @@ namespace UnifiedLearningAssistant.Services.Learning
         {
             lock (_lock)
             {
-                return _achievements.OrderBy(a =&gt; a.DisplayOrder).ToList();
+                return _achievements.OrderBy(a => a.DisplayOrder).ToList();
             }
         }
 
@@ -152,7 +152,7 @@ namespace UnifiedLearningAssistant.Services.Learning
         {
             lock (_lock)
             {
-                return _achievements.Where(a =&gt; a.IsUnlocked).OrderBy(a =&gt; a.DisplayOrder).ToList();
+                return _achievements.Where(a => a.IsUnlocked).OrderBy(a => a.DisplayOrder).ToList();
             }
         }
 
@@ -160,7 +160,7 @@ namespace UnifiedLearningAssistant.Services.Learning
         {
             lock (_lock)
             {
-                return _achievements.Where(a =&gt; !a.IsUnlocked).OrderBy(a =&gt; a.DisplayOrder).ToList();
+                return _achievements.Where(a => !a.IsUnlocked).OrderBy(a => a.DisplayOrder).ToList();
             }
         }
 

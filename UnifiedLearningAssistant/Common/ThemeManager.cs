@@ -10,8 +10,8 @@ namespace UnifiedLearningAssistant.Common
         private readonly List&lt;IThemeable&gt; _themeables = new List&lt;IThemeable&gt;();
         private ThemeMode _currentMode = ThemeMode.Light;
 
-        public ThemeMode CurrentTheme =&gt; _currentMode;
-        public ThemeColors CurrentColors =&gt; GetColors(_currentMode);
+        public ThemeMode CurrentTheme => _currentMode;
+        public ThemeColors CurrentColors => GetColors(_currentMode);
 
         public ThemeService(IEventBus eventBus)
         {
@@ -64,7 +64,7 @@ namespace UnifiedLearningAssistant.Common
         {
             return mode switch
             {
-                ThemeMode.Light =&gt; new ThemeColors
+                ThemeMode.Light => new ThemeColors
                 {
                     Primary = Color.FromArgb(25, 118, 210),
                     PrimaryLight = Color.FromArgb(66, 165, 245),
@@ -80,7 +80,7 @@ namespace UnifiedLearningAssistant.Common
                     Warning = Color.FromArgb(255, 152, 0),
                     Info = Color.FromArgb(33, 150, 243)
                 },
-                ThemeMode.Dark =&gt; new ThemeColors
+                ThemeMode.Dark => new ThemeColors
                 {
                     Primary = Color.FromArgb(100, 181, 246),
                     PrimaryLight = Color.FromArgb(144, 202, 249),
@@ -96,7 +96,7 @@ namespace UnifiedLearningAssistant.Common
                     Warning = Color.FromArgb(255, 167, 38),
                     Info = Color.FromArgb(66, 165, 245)
                 },
-                _ =&gt; throw new ArgumentOutOfRangeException(nameof(mode))
+                _ => throw new ArgumentOutOfRangeException(nameof(mode))
             };
         }
     }

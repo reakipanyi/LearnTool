@@ -39,9 +39,9 @@ namespace UnifiedLearningAssistant.Common
         {
             return language switch
             {
-                LanguageType.Chinese =&gt; "中文",
-                LanguageType.English =&gt; "英语",
-                _ =&gt; language.ToString()
+                LanguageType.Chinese => "中文",
+                LanguageType.English => "英语",
+                _ => language.ToString()
             };
         }
 
@@ -49,9 +49,9 @@ namespace UnifiedLearningAssistant.Common
         {
             return mode switch
             {
-                LearningModeType.Study =&gt; "学习模式",
-                LearningModeType.Quick =&gt; "快速模式",
-                _ =&gt; mode.ToString()
+                LearningModeType.Study => "学习模式",
+                LearningModeType.Quick => "快速模式",
+                _ => mode.ToString()
             };
         }
 
@@ -59,17 +59,17 @@ namespace UnifiedLearningAssistant.Common
         {
             return category switch
             {
-                SubCategoryType.ChineseCharacter =&gt; "识字",
-                SubCategoryType.ChineseWordCombination =&gt; "组词",
-                SubCategoryType.ChinesePhrase =&gt; "短语",
-                SubCategoryType.ChineseIdiom =&gt; "成语",
-                SubCategoryType.ChinesePoem =&gt; "诗词",
-                SubCategoryType.ChineseComprehensive =&gt; "语文综合",
-                SubCategoryType.EnglishWord =&gt; "英语单词",
-                SubCategoryType.EnglishPhrase =&gt; "英语短语",
-                SubCategoryType.EnglishSentence =&gt; "英语句子",
-                SubCategoryType.EnglishComprehensive =&gt; "英语综合",
-                _ =&gt; category.ToString()
+                SubCategoryType.ChineseCharacter => "识字",
+                SubCategoryType.ChineseWordCombination => "组词",
+                SubCategoryType.ChinesePhrase => "短语",
+                SubCategoryType.ChineseIdiom => "成语",
+                SubCategoryType.ChinesePoem => "诗词",
+                SubCategoryType.ChineseComprehensive => "语文综合",
+                SubCategoryType.EnglishWord => "英语单词",
+                SubCategoryType.EnglishPhrase => "英语短语",
+                SubCategoryType.EnglishSentence => "英语句子",
+                SubCategoryType.EnglishComprehensive => "英语综合",
+                _ => category.ToString()
             };
         }
 
@@ -77,9 +77,9 @@ namespace UnifiedLearningAssistant.Common
         {
             return sortOrder switch
             {
-                SortOrderType.Sequential =&gt; "顺序",
-                SortOrderType.Random =&gt; "Random",
-                _ =&gt; sortOrder.ToString()
+                SortOrderType.Sequential => "顺序",
+                SortOrderType.Random => "Random",
+                _ => sortOrder.ToString()
             };
         }
 
@@ -87,9 +87,9 @@ namespace UnifiedLearningAssistant.Common
         {
             return displayString switch
             {
-                "中文" =&gt; LanguageType.Chinese,
-                "英语" =&gt; LanguageType.English,
-                _ =&gt; throw new ArgumentOutOfRangeException(nameof(displayString))
+                "中文" => LanguageType.Chinese,
+                "英语" => LanguageType.English,
+                _ => throw new ArgumentOutOfRangeException(nameof(displayString))
             };
         }
 
@@ -97,9 +97,9 @@ namespace UnifiedLearningAssistant.Common
         {
             return displayString switch
             {
-                "学习模式" =&gt; LearningModeType.Study,
-                "快速模式" =&gt; LearningModeType.Quick,
-                _ =&gt; throw new ArgumentOutOfRangeException(nameof(displayString))
+                "学习模式" => LearningModeType.Study,
+                "快速模式" => LearningModeType.Quick,
+                _ => throw new ArgumentOutOfRangeException(nameof(displayString))
             };
         }
 
@@ -107,17 +107,17 @@ namespace UnifiedLearningAssistant.Common
         {
             return displayString switch
             {
-                "识字" =&gt; SubCategoryType.ChineseCharacter,
-                "组词" =&gt; SubCategoryType.ChineseWordCombination,
-                "短语" =&gt; SubCategoryType.ChinesePhrase,
-                "成语" =&gt; SubCategoryType.ChineseIdiom,
-                "诗词" =&gt; SubCategoryType.ChinesePoem,
-                "语文综合" =&gt; SubCategoryType.ChineseComprehensive,
-                "英语单词" =&gt; SubCategoryType.EnglishWord,
-                "英语短语" =&gt; SubCategoryType.EnglishPhrase,
-                "英语句子" =&gt; SubCategoryType.EnglishSentence,
-                "英语综合" =&gt; SubCategoryType.EnglishComprehensive,
-                _ =&gt; throw new ArgumentOutOfRangeException(nameof(displayString))
+                "识字" => SubCategoryType.ChineseCharacter,
+                "组词" => SubCategoryType.ChineseWordCombination,
+                "短语" => SubCategoryType.ChinesePhrase,
+                "成语" => SubCategoryType.ChineseIdiom,
+                "诗词" => SubCategoryType.ChinesePoem,
+                "语文综合" => SubCategoryType.ChineseComprehensive,
+                "英语单词" => SubCategoryType.EnglishWord,
+                "英语短语" => SubCategoryType.EnglishPhrase,
+                "英语句子" => SubCategoryType.EnglishSentence,
+                "英语综合" => SubCategoryType.EnglishComprehensive,
+                _ => throw new ArgumentOutOfRangeException(nameof(displayString))
             };
         }
 
@@ -125,9 +125,9 @@ namespace UnifiedLearningAssistant.Common
         {
             return displayString switch
             {
-                "顺序" =&gt; SortOrderType.Sequential,
-                "Random" =&gt; SortOrderType.Random,
-                _ =&gt; throw new ArgumentOutOfRangeException(nameof(displayString))
+                "顺序" => SortOrderType.Sequential,
+                "Random" => SortOrderType.Random,
+                _ => throw new ArgumentOutOfRangeException(nameof(displayString))
             };
         }
     }

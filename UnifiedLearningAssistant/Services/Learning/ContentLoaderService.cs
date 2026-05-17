@@ -130,7 +130,7 @@ namespace UnifiedLearningAssistant.Services.Learning
 
                 var files = Directory.EnumerateFiles(dataDir, "*.json")
                                    .Select(Path.GetFileName)
-                                   .Where(file =&gt; file.StartsWith(categoryPrefix, StringComparison.OrdinalIgnoreCase))
+                                   .Where(file => file.StartsWith(categoryPrefix, StringComparison.OrdinalIgnoreCase))
                                    .ToList();
 
                 if (!string.IsNullOrWhiteSpace(defaultFile) &amp;&amp; !files.Contains(defaultFile))
@@ -152,17 +152,17 @@ namespace UnifiedLearningAssistant.Services.Learning
         {
             return subCategory switch
             {
-                Constants.SubCategory.ChineseCharacter =&gt; "识字",
-                Constants.SubCategory.ChineseWordCombination =&gt; "组词",
-                Constants.SubCategory.ChinesePhrase =&gt; "短语",
-                Constants.SubCategory.ChineseIdiom =&gt; "成语",
-                Constants.SubCategory.ChinesePoem =&gt; "诗词",
-                Constants.SubCategory.ChineseComprehensive =&gt; "语文综合",
-                Constants.SubCategory.EnglishWord =&gt; "英语单词",
-                Constants.SubCategory.EnglishPhrase =&gt; "英语短语",
-                Constants.SubCategory.EnglishSentence =&gt; "英语句子",
-                Constants.SubCategory.EnglishComprehensive =&gt; "英语综合",
-                _ =&gt; ""
+                Constants.SubCategory.ChineseCharacter => "识字",
+                Constants.SubCategory.ChineseWordCombination => "组词",
+                Constants.SubCategory.ChinesePhrase => "短语",
+                Constants.SubCategory.ChineseIdiom => "成语",
+                Constants.SubCategory.ChinesePoem => "诗词",
+                Constants.SubCategory.ChineseComprehensive => "语文综合",
+                Constants.SubCategory.EnglishWord => "英语单词",
+                Constants.SubCategory.EnglishPhrase => "英语短语",
+                Constants.SubCategory.EnglishSentence => "英语句子",
+                Constants.SubCategory.EnglishComprehensive => "英语综合",
+                _ => ""
             };
         }
 

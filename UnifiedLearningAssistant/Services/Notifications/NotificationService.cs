@@ -55,7 +55,7 @@ namespace UnifiedLearningAssistant.Services.Notifications
             // 例如使用 Toast 通知或者自定义窗体
             if (_mainForm.InvokeRequired)
             {
-                _mainForm.Invoke(new Action(() =&gt; ShowNotificationInternal(notification)));
+                _mainForm.Invoke(new Action(() => ShowNotificationInternal(notification)));
             }
             else
             {
@@ -140,11 +140,11 @@ namespace UnifiedLearningAssistant.Services.Notifications
         {
             return type switch
             {
-                NotificationType.Success =&gt; MessageBoxIcon.Information,
-                NotificationType.Warning =&gt; MessageBoxIcon.Warning,
-                NotificationType.Error =&gt; MessageBoxIcon.Error,
-                NotificationType.Achievement =&gt; MessageBoxIcon.Asterisk,
-                _ =&gt; MessageBoxIcon.Information
+                NotificationType.Success => MessageBoxIcon.Information,
+                NotificationType.Warning => MessageBoxIcon.Warning,
+                NotificationType.Error => MessageBoxIcon.Error,
+                NotificationType.Achievement => MessageBoxIcon.Asterisk,
+                _ => MessageBoxIcon.Information
             };
         }
 
