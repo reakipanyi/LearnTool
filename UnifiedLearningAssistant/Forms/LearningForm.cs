@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using UnifiedLearningAssistant.Common;
 using UnifiedLearningAssistant.Models.Learning;
@@ -32,6 +32,11 @@ namespace UnifiedLearningAssistant.Forms
             _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
             _soundService = new SoundService();
             _panelDecorator = new PanelDecorator();
+
+            // 应用主题样式
+            ApplyColorScheme();
+            AddAnimation();
+
             Load += LearningForm_Load;
             FormClosing += LearningForm_FormClosing;
             Resize += LearningForm_Resize;
@@ -94,65 +99,41 @@ namespace UnifiedLearningAssistant.Forms
 
         private void LearningForm_Load(object? sender, EventArgs e)
         {
-            ApplyColorScheme();
-            AddAnimation();
             LoadSettings();
             ApplySettings();
         }
 
         private void ApplyColorScheme()
         {
-            BackColor = Color.FromArgb(250, 245, 235);
+            BackColor = ThemeHelper.Colors.WarmBackground;
             TransparencyKey = Color.FromArgb(255, 0, 255);
 
-            panelContent.BackColor = Color.FromArgb(255, 255, 255);
-            panelAI.BackColor = Color.FromArgb(252, 248, 240);
+            panelContent.BackColor = ThemeHelper.Colors.PanelLight;
+            panelAI.BackColor = ThemeHelper.Colors.PanelWarm;
 
-            labelDisplay.ForeColor = Color.FromArgb(100, 150, 180);
-            labelContent.ForeColor = Color.FromArgb(70, 90, 110);
+            labelDisplay.ForeColor = ThemeHelper.Colors.TextSecondary;
+            labelContent.ForeColor = ThemeHelper.Colors.TextPrimary;
             labelAI.ForeColor = Color.FromArgb(140, 100, 80);
             labelStatistics.ForeColor = Color.FromArgb(80, 100, 120);
 
-            progressBar1.ForeColor = Color.FromArgb(255, 140, 0);
+            progressBar1.ForeColor = ThemeHelper.Colors.Progress;
             progressBar1.BackColor = Color.FromArgb(240, 240, 240);
             progressBar1.Style = ProgressBarStyle.Continuous;
 
-            buttonKnown.BackColor = Color.FromArgb(76, 175, 80);
-            buttonKnown.ForeColor = Color.White;
-            buttonKnown.FlatStyle = FlatStyle.Flat;
-            buttonKnown.FlatAppearance.BorderSize = 0;
+            // 配置按钮样式
+            ThemeHelper.ConfigureButton(buttonKnown, ThemeHelper.Colors.Success);
+            ThemeHelper.ConfigureButton(buttonUnknown, ThemeHelper.Colors.Error);
+            ThemeHelper.ConfigureButton(buttonNext, ThemeHelper.Colors.Primary);
+            ThemeHelper.ConfigureButton(buttonAddToPdf, ThemeHelper.Colors.Purple);
+            ThemeHelper.ConfigureButton(buttonPronounce, ThemeHelper.Colors.Cyan);
+            ThemeHelper.ConfigureButton(buttonExit, ThemeHelper.Colors.Gray);
 
-            buttonUnknown.BackColor = Color.FromArgb(244, 67, 54);
-            buttonUnknown.ForeColor = Color.White;
-            buttonUnknown.FlatStyle = FlatStyle.Flat;
-            buttonUnknown.FlatAppearance.BorderSize = 0;
+            checkBoxVoice.ForeColor = ThemeHelper.Colors.TextPrimary;
+            labelPronunciationScope.ForeColor = ThemeHelper.Colors.TextPrimary;
 
-            buttonNext.BackColor = Color.FromArgb(33, 150, 243);
-            buttonNext.ForeColor = Color.White;
-            buttonNext.FlatStyle = FlatStyle.Flat;
-            buttonNext.FlatAppearance.BorderSize = 0;
-
-            buttonAddToPdf.BackColor = Color.FromArgb(156, 39, 176);
-            buttonAddToPdf.ForeColor = Color.White;
-            buttonAddToPdf.FlatStyle = FlatStyle.Flat;
-            buttonAddToPdf.FlatAppearance.BorderSize = 0;
-
-            buttonPronounce.BackColor = Color.FromArgb(0, 188, 212);
-            buttonPronounce.ForeColor = Color.White;
-            buttonPronounce.FlatStyle = FlatStyle.Flat;
-            buttonPronounce.FlatAppearance.BorderSize = 0;
-
-            buttonExit.BackColor = Color.FromArgb(108, 117, 125);
-            buttonExit.ForeColor = Color.White;
-            buttonExit.FlatStyle = FlatStyle.Flat;
-            buttonExit.FlatAppearance.BorderSize = 0;
-
-            checkBoxVoice.ForeColor = Color.FromArgb(70, 90, 110);
-            labelPronunciationScope.ForeColor = Color.FromArgb(70, 90, 110);
-
-            radioOriginal.ForeColor = Color.FromArgb(70, 90, 110);
-            radioExplanation.ForeColor = Color.FromArgb(70, 90, 110);
-            radioBoth.ForeColor = Color.FromArgb(70, 90, 110);
+            radioOriginal.ForeColor = ThemeHelper.Colors.TextPrimary;
+            radioExplanation.ForeColor = ThemeHelper.Colors.TextPrimary;
+            radioBoth.ForeColor = ThemeHelper.Colors.TextPrimary;
 
             richTextBoxAI.BackColor = Color.FromArgb(250, 250, 250);
             richTextBoxAI.ForeColor = Color.FromArgb(60, 80, 100);
@@ -160,23 +141,13 @@ namespace UnifiedLearningAssistant.Forms
             panelContent.BorderStyle = BorderStyle.None;
             panelAI.BorderStyle = BorderStyle.None;
 
-            buttonKnown.MouseEnter += (s, e) => buttonKnown.BackColor = Color.FromArgb(67, 160, 71);
-            buttonKnown.MouseLeave += (s, e) => buttonKnown.BackColor = Color.FromArgb(76, 175, 80);
-
-            buttonUnknown.MouseEnter += (s, e) => buttonUnknown.BackColor = Color.FromArgb(229, 57, 53);
-            buttonUnknown.MouseLeave += (s, e) => buttonUnknown.BackColor = Color.FromArgb(244, 67, 54);
-
-            buttonNext.MouseEnter += (s, e) => buttonNext.BackColor = Color.FromArgb(30, 136, 229);
-            buttonNext.MouseLeave += (s, e) => buttonNext.BackColor = Color.FromArgb(33, 150, 243);
-
-            buttonAddToPdf.MouseEnter += (s, e) => buttonAddToPdf.BackColor = Color.FromArgb(142, 36, 170);
-            buttonAddToPdf.MouseLeave += (s, e) => buttonAddToPdf.BackColor = Color.FromArgb(156, 39, 176);
-
-            buttonPronounce.MouseEnter += (s, e) => buttonPronounce.BackColor = Color.FromArgb(0, 172, 193);
-            buttonPronounce.MouseLeave += (s, e) => buttonPronounce.BackColor = Color.FromArgb(0, 188, 212);
-
-            buttonExit.MouseEnter += (s, e) => buttonExit.BackColor = Color.FromArgb(96, 125, 139);
-            buttonExit.MouseLeave += (s, e) => buttonExit.BackColor = Color.FromArgb(108, 117, 125);
+            // 添加按钮悬停效果
+            ThemeHelper.AddButtonHoverEffect(buttonKnown, ThemeHelper.Colors.Success);
+            ThemeHelper.AddButtonHoverEffect(buttonUnknown, ThemeHelper.Colors.Error);
+            ThemeHelper.AddButtonHoverEffect(buttonNext, ThemeHelper.Colors.Primary);
+            ThemeHelper.AddButtonHoverEffect(buttonAddToPdf, ThemeHelper.Colors.Purple);
+            ThemeHelper.AddButtonHoverEffect(buttonPronounce, ThemeHelper.Colors.Cyan);
+            ThemeHelper.AddButtonHoverEffect(buttonExit, ThemeHelper.Colors.Gray);
         }
 
         private void AddAnimation()
@@ -436,8 +407,6 @@ namespace UnifiedLearningAssistant.Forms
             labelDisplay.Size = new Size(860, 69);
             labelDisplay.TabIndex = 1;
             labelDisplay.TextAlign = ContentAlignment.TopCenter;
-            labelDisplay.AutoSize = false;
-
             // 
             // labelContent
             // 
@@ -449,8 +418,6 @@ namespace UnifiedLearningAssistant.Forms
             labelContent.TabIndex = 0;
             labelContent.TextAlign = ContentAlignment.MiddleCenter;
             labelContent.Click += LabelContent_Click;
-            labelContent.AutoSize = false;
-
             // 
             // panelAI
             // 

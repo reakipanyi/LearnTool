@@ -20,13 +20,6 @@ namespace UnifiedLearningAssistant.Forms
         private ComboBox comboBoxSubCategory;
         private bool _disposed = false;
 
-        private static readonly Color WarmBeige = Color.FromArgb(255, 244, 230);
-        private static readonly Color WarmCream = Color.FromArgb(255, 250, 240);
-        private static readonly Color WarmOrange = Color.FromArgb(255, 152, 0);
-        private static readonly Color SoftBlue = Color.FromArgb(100, 181, 246);
-        private static readonly Color SuccessGreen = Color.FromArgb(76, 175, 80);
-        private static readonly Color TextDark = Color.FromArgb(33, 33, 33);
-
         public ContentEditorForm(ILogger<ContentEditorForm> logger, AppConfig appConfig)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -43,7 +36,7 @@ namespace UnifiedLearningAssistant.Forms
         {
             _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
             _presenter.Initialize();
-            _logger.LogInformation("ContentEditorPresenter 已设置并初始化");
+            _logger.LogInformation("ContentEditorPresenter 已设置并初始�)";
         }
 
         private void ApplyFontSize()
@@ -297,7 +290,7 @@ namespace UnifiedLearningAssistant.Forms
         }
 
         /// <summary>
-        /// 将 JToken 转换为安全的字符串，特别处理数组和对象
+        /// �JToken 转换为安全的字符串，特别处理数组和对�
         /// </summary>
         private string ConvertJTokenToString(JToken? token)
         {
@@ -318,13 +311,13 @@ namespace UnifiedLearningAssistant.Forms
                 }
                 else if (token.Type == JTokenType.Object)
                 {
-                    // 将对象转换为 JSON 字符串
+                    // 将对象转换为 JSON 字符�
                     return token.ToString(Formatting.None);
                 }
             }
             catch
             {
-                // 如果转换失败，返回空字符串
+                // 如果转换失败，返回空字符�
             }
 
             return token?.ToString() ?? "";
@@ -503,7 +496,7 @@ namespace UnifiedLearningAssistant.Forms
             buttonDelete.Name = "buttonDelete";
             buttonDelete.Size = new Size(102, 44);
             buttonDelete.TabIndex = 5;
-            buttonDelete.Text = "🗑️ 删除";
+            buttonDelete.Text = "🗑�删除";
             buttonDelete.UseVisualStyleBackColor = false;
             buttonDelete.Click += ButtonDelete_Click;
             buttonDelete.MouseEnter += Button_HoverEnter;
@@ -585,7 +578,7 @@ namespace UnifiedLearningAssistant.Forms
             labelRange.Name = "labelRange";
             labelRange.Size = new Size(80, 20);
             labelRange.TabIndex = 13;
-            labelRange.Text = "🔍 关键词:";
+            labelRange.Text = "🔍 关键�";
             // 
             // textBoxCount
             // 
@@ -667,7 +660,7 @@ namespace UnifiedLearningAssistant.Forms
             textBoxPrompt.ScrollBars = ScrollBars.Both;
             textBoxPrompt.Size = new Size(1119, 86);
             textBoxPrompt.TabIndex = 18;
-            textBoxPrompt.Text = "💡 AI生成提示词将显示在这里...";
+            textBoxPrompt.Text = "💡 AI生成提示词将显示在这�..";
             // 
             // labelPrompt
             // 
@@ -676,7 +669,7 @@ namespace UnifiedLearningAssistant.Forms
             labelPrompt.Name = "labelPrompt";
             labelPrompt.Size = new Size(80, 20);
             labelPrompt.TabIndex = 19;
-            labelPrompt.Text = "💬 提示词:";
+            labelPrompt.Text = "💬 提示�";
             // 
             // groupBoxLanguage
             // 
@@ -712,7 +705,7 @@ namespace UnifiedLearningAssistant.Forms
             Controls.Add(labelPrompt);
             Controls.Add(groupBoxLanguage);
             Name = "ContentEditorForm";
-            Text = "📝 内容编辑器";
+            Text = "📝 内容编辑�;
             ((System.ComponentModel.ISupportInitialize)dataGridView).EndInit();
             groupBoxLanguage.ResumeLayout(false);
             ResumeLayout(false);
@@ -767,12 +760,12 @@ namespace UnifiedLearningAssistant.Forms
             {
                 var originalColor = button.Name switch
                 {
-                    "buttonAdd" => WarmOrange,
-                    "buttonSave" => SuccessGreen,
-                    "buttonDelete" => Color.FromArgb(244, 67, 54),
-                    "buttonImport" => SoftBlue,
-                    "buttonExport" => Color.FromArgb(156, 39, 176),
-                    "buttonGenerateAI" => Color.FromArgb(103, 58, 183),
+                    "buttonAdd" => ThemeHelper.Colors.Orange,
+                    "buttonSave" => ThemeHelper.Colors.Success,
+                    "buttonDelete" => ThemeHelper.Colors.Error,
+                    "buttonImport" => ThemeHelper.Colors.SoftBlue,
+                    "buttonExport" => ThemeHelper.Colors.Purple,
+                    "buttonGenerateAI" => ThemeHelper.Colors.PurpleDark,
                     _ => SystemColors.Control
                 };
                 button.BackColor = originalColor;
