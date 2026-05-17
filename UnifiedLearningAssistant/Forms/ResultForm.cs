@@ -147,177 +147,246 @@ namespace UnifiedLearningAssistant.Forms
             labelAccuracyValue = new Label();
             progressBarAccuracyGradient = new ProgressBar();
             animationTimer = new System.Windows.Forms.Timer(components);
-
-            animationTimer.Interval = 30;
-            animationTimer.Tick += AnimationTimer_Tick;
-
             groupBoxKnown.SuspendLayout();
             groupBoxUnknown.SuspendLayout();
             groupBoxChart.SuspendLayout();
             headerPanel.SuspendLayout();
             SuspendLayout();
-
-            headerPanel.BackColor = WarmOrange;
-            headerPanel.Dock = DockStyle.Top;
-            headerPanel.Location = new Point(0, 0);
-            headerPanel.Name = "headerPanel";
-            headerPanel.Size = new Size(860, 60);
-            headerPanel.TabIndex = 12;
-
-            labelTitle.Font = new Font("Microsoft YaHei", 20F, FontStyle.Bold, GraphicsUnit.Point);
-            labelTitle.ForeColor = Color.White;
-            labelTitle.Location = new Point(280, 10);
-            labelTitle.Name = "labelTitle";
-            labelTitle.Size = new Size(300, 40);
-            labelTitle.TabIndex = 0;
-            labelTitle.Text = "🎉 测试结果报告";
-            labelTitle.TextAlign = ContentAlignment.MiddleCenter;
-            headerPanel.Controls.Add(labelTitle);
-
-            labelAccuracy.Font = new Font("Microsoft YaHei", 14F, FontStyle.Bold, GraphicsUnit.Point);
+            // 
+            // labelAccuracy
+            // 
+            labelAccuracy.Font = new Font("微软雅黑", 14F, FontStyle.Bold);
             labelAccuracy.ForeColor = Color.FromArgb(33, 33, 33);
-            labelAccuracy.Location = new Point(30, 80);
+            labelAccuracy.Location = new Point(43, 112);
+            labelAccuracy.Margin = new Padding(4, 0, 4, 0);
             labelAccuracy.Name = "labelAccuracy";
-            labelAccuracy.Size = new Size(200, 30);
+            labelAccuracy.Size = new Size(286, 42);
             labelAccuracy.TabIndex = 1;
             labelAccuracy.Text = "正确率";
-
-            labelAccuracyValue.Font = new Font("Microsoft YaHei", 28F, FontStyle.Bold, GraphicsUnit.Point);
-            labelAccuracyValue.ForeColor = WarmOrange;
-            labelAccuracyValue.Location = new Point(30, 105);
-            labelAccuracyValue.Name = "labelAccuracyValue";
-            labelAccuracyValue.Size = new Size(150, 50);
-            labelAccuracyValue.TabIndex = 13;
-            labelAccuracyValue.Text = "0%";
-
-            progressBarAccuracyGradient.Location = new Point(30, 160);
-            progressBarAccuracyGradient.Name = "progressBarAccuracyGradient";
-            progressBarAccuracyGradient.Size = new Size(380, 25);
-            progressBarAccuracyGradient.TabIndex = 14;
-            progressBarAccuracyGradient.Maximum = 100;
-            progressBarAccuracyGradient.Style = ProgressBarStyle.Continuous;
-
-            labelMotivational.Font = new Font("Microsoft YaHei", 11F, FontStyle.Italic, GraphicsUnit.Point);
-            labelMotivational.ForeColor = SuccessGreen;
-            labelMotivational.Location = new Point(30, 190);
-            labelMotivational.Name = "labelMotivational";
-            labelMotivational.Size = new Size(380, 25);
-            labelMotivational.TabIndex = 15;
-            labelMotivational.Text = "✨ 继续加油！";
-
-            labelTotal.Font = new Font("Microsoft YaHei", 12F, FontStyle.Regular, GraphicsUnit.Point);
-            labelTotal.Location = new Point(30, 230);
+            // 
+            // labelTotal
+            // 
+            labelTotal.Font = new Font("微软雅黑", 12F);
+            labelTotal.Location = new Point(43, 322);
+            labelTotal.Margin = new Padding(4, 0, 4, 0);
             labelTotal.Name = "labelTotal";
-            labelTotal.Size = new Size(200, 25);
+            labelTotal.Size = new Size(286, 35);
             labelTotal.TabIndex = 3;
             labelTotal.Text = "总题数: 0";
-
-            labelKnown.Font = new Font("Microsoft YaHei", 12F, FontStyle.Bold, GraphicsUnit.Point);
-            labelKnown.ForeColor = SuccessGreen;
-            labelKnown.Location = new Point(30, 270);
+            // 
+            // labelKnown
+            // 
+            labelKnown.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
+            labelKnown.Location = new Point(43, 378);
+            labelKnown.Margin = new Padding(4, 0, 4, 0);
             labelKnown.Name = "labelKnown";
-            labelKnown.Size = new Size(250, 25);
+            labelKnown.Size = new Size(357, 35);
             labelKnown.TabIndex = 4;
             labelKnown.Text = "✅ 已掌握: 0";
-
-            groupBoxKnown.BackColor = Color.FromArgb(255, 250, 240);
-            groupBoxKnown.Controls.Add(listBoxKnown);
-            groupBoxKnown.Location = new Point(30, 300);
-            groupBoxKnown.Name = "groupBoxKnown";
-            groupBoxKnown.Size = new Size(380, 150);
-            groupBoxKnown.TabIndex = 7;
-            groupBoxKnown.TabStop = false;
-            groupBoxKnown.FlatStyle = FlatStyle.Flat;
-            groupBoxKnown.Padding = new Padding(5);
-
-            listBoxKnown.BackColor = Color.White;
-            listBoxKnown.Dock = DockStyle.Fill;
-            listBoxKnown.FormattingEnabled = true;
-            listBoxKnown.Location = new Point(3, 22);
-            listBoxKnown.Name = "listBoxKnown";
-            listBoxKnown.Size = new Size(374, 125);
-            listBoxKnown.TabIndex = 0;
-            listBoxKnown.BorderStyle = BorderStyle.None;
-
-            labelUnknown.Font = new Font("Microsoft YaHei", 12F, FontStyle.Bold, GraphicsUnit.Point);
-            labelUnknown.ForeColor = SoftBlue;
-            labelUnknown.Location = new Point(30, 460);
+            // 
+            // labelUnknown
+            // 
+            labelUnknown.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
+            labelUnknown.Location = new Point(43, 644);
+            labelUnknown.Margin = new Padding(4, 0, 4, 0);
             labelUnknown.Name = "labelUnknown";
-            labelUnknown.Size = new Size(250, 25);
+            labelUnknown.Size = new Size(357, 35);
             labelUnknown.TabIndex = 5;
             labelUnknown.Text = "📘 未掌握: 0";
-
-            groupBoxUnknown.BackColor = Color.FromArgb(245, 250, 255);
-            groupBoxUnknown.Controls.Add(listBoxUnknown);
-            groupBoxUnknown.Location = new Point(30, 490);
-            groupBoxUnknown.Name = "groupBoxUnknown";
-            groupBoxUnknown.Size = new Size(380, 150);
-            groupBoxUnknown.TabIndex = 8;
-            groupBoxUnknown.TabStop = false;
-            groupBoxUnknown.FlatStyle = FlatStyle.Flat;
-            groupBoxUnknown.Padding = new Padding(5);
-
+            // 
+            // labelTime
+            // 
+            labelTime.Location = new Point(0, 0);
+            labelTime.Name = "labelTime";
+            labelTime.Size = new Size(100, 23);
+            labelTime.TabIndex = 0;
+            // 
+            // listBoxKnown
+            // 
+            listBoxKnown.BackColor = Color.White;
+            listBoxKnown.BorderStyle = BorderStyle.None;
+            listBoxKnown.Dock = DockStyle.Fill;
+            listBoxKnown.FormattingEnabled = true;
+            listBoxKnown.ItemHeight = 21;
+            listBoxKnown.Location = new Point(7, 28);
+            listBoxKnown.Margin = new Padding(4, 4, 4, 4);
+            listBoxKnown.Name = "listBoxKnown";
+            listBoxKnown.Size = new Size(529, 175);
+            listBoxKnown.TabIndex = 0;
+            // 
+            // listBoxUnknown
+            // 
             listBoxUnknown.BackColor = Color.White;
+            listBoxUnknown.BorderStyle = BorderStyle.None;
             listBoxUnknown.Dock = DockStyle.Fill;
             listBoxUnknown.FormattingEnabled = true;
-            listBoxUnknown.Location = new Point(3, 22);
+            listBoxUnknown.ItemHeight = 21;
+            listBoxUnknown.Location = new Point(7, 28);
+            listBoxUnknown.Margin = new Padding(4, 4, 4, 4);
             listBoxUnknown.Name = "listBoxUnknown";
-            listBoxUnknown.Size = new Size(374, 125);
+            listBoxUnknown.Size = new Size(529, 175);
             listBoxUnknown.TabIndex = 0;
-            listBoxUnknown.BorderStyle = BorderStyle.None;
-
-            groupBoxChart.BackColor = Color.White;
-            groupBoxChart.Controls.Add(chartControl);
-            groupBoxChart.Location = new Point(430, 70);
-            groupBoxChart.Name = "groupBoxChart";
-            groupBoxChart.Size = new Size(400, 380);
-            groupBoxChart.TabIndex = 11;
-            groupBoxChart.TabStop = false;
-            groupBoxChart.FlatStyle = FlatStyle.Flat;
-            groupBoxChart.Font = new Font("Microsoft YaHei", 10F, FontStyle.Regular, GraphicsUnit.Point);
-            groupBoxChart.Text = "📊 学习统计图表";
-            groupBoxChart.Padding = new Padding(5);
-
-            chartControl.Dock = DockStyle.Fill;
-            chartControl.Location = new Point(3, 22);
-            chartControl.Name = "chartControl";
-            chartControl.Size = new Size(394, 355);
-            chartControl.TabIndex = 0;
-
-            buttonReview.FlatStyle = FlatStyle.Flat;
+            // 
+            // buttonReview
+            // 
             buttonReview.FlatAppearance.BorderSize = 0;
-            buttonReview.BackColor = WarmOrange;
+            buttonReview.FlatStyle = FlatStyle.Flat;
+            buttonReview.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             buttonReview.ForeColor = Color.White;
-            buttonReview.Font = new Font("Microsoft YaHei", 11F, FontStyle.Bold, GraphicsUnit.Point);
-            buttonReview.Location = new Point(430, 650);
+            buttonReview.Location = new Point(614, 910);
+            buttonReview.Margin = new Padding(4, 4, 4, 4);
             buttonReview.Name = "buttonReview";
-            buttonReview.Size = new Size(180, 45);
+            buttonReview.Size = new Size(257, 63);
             buttonReview.TabIndex = 9;
             buttonReview.Text = "🔄 复习未掌握内容";
             buttonReview.UseVisualStyleBackColor = false;
+            buttonReview.Click += ButtonReview_Click;
             buttonReview.MouseEnter += Button_HoverEnter;
             buttonReview.MouseLeave += Button_HoverLeave;
-            buttonReview.Click += ButtonReview_Click;
-
-            buttonBack.FlatStyle = FlatStyle.Flat;
+            // 
+            // buttonBack
+            // 
             buttonBack.FlatAppearance.BorderSize = 0;
-            buttonBack.BackColor = SuccessGreen;
+            buttonBack.FlatStyle = FlatStyle.Flat;
+            buttonBack.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             buttonBack.ForeColor = Color.White;
-            buttonBack.Font = new Font("Microsoft YaHei", 11F, FontStyle.Bold, GraphicsUnit.Point);
-            buttonBack.Location = new Point(630, 650);
+            buttonBack.Location = new Point(900, 910);
+            buttonBack.Margin = new Padding(4, 4, 4, 4);
             buttonBack.Name = "buttonBack";
-            buttonBack.Size = new Size(180, 45);
+            buttonBack.Size = new Size(257, 63);
             buttonBack.TabIndex = 10;
             buttonBack.Text = "🏠 返回主界面";
             buttonBack.UseVisualStyleBackColor = false;
+            buttonBack.Click += ButtonBack_Click;
             buttonBack.MouseEnter += Button_HoverEnter;
             buttonBack.MouseLeave += Button_HoverLeave;
-            buttonBack.Click += ButtonBack_Click;
-
-            AutoScaleDimensions = new SizeF(7F, 15F);
+            // 
+            // groupBoxKnown
+            // 
+            groupBoxKnown.BackColor = Color.FromArgb(255, 250, 240);
+            groupBoxKnown.Controls.Add(listBoxKnown);
+            groupBoxKnown.FlatStyle = FlatStyle.Flat;
+            groupBoxKnown.Location = new Point(43, 420);
+            groupBoxKnown.Margin = new Padding(4, 4, 4, 4);
+            groupBoxKnown.Name = "groupBoxKnown";
+            groupBoxKnown.Padding = new Padding(7, 7, 7, 7);
+            groupBoxKnown.Size = new Size(543, 210);
+            groupBoxKnown.TabIndex = 7;
+            groupBoxKnown.TabStop = false;
+            // 
+            // groupBoxUnknown
+            // 
+            groupBoxUnknown.BackColor = Color.FromArgb(245, 250, 255);
+            groupBoxUnknown.Controls.Add(listBoxUnknown);
+            groupBoxUnknown.FlatStyle = FlatStyle.Flat;
+            groupBoxUnknown.Location = new Point(43, 686);
+            groupBoxUnknown.Margin = new Padding(4, 4, 4, 4);
+            groupBoxUnknown.Name = "groupBoxUnknown";
+            groupBoxUnknown.Padding = new Padding(7, 7, 7, 7);
+            groupBoxUnknown.Size = new Size(543, 210);
+            groupBoxUnknown.TabIndex = 8;
+            groupBoxUnknown.TabStop = false;
+            // 
+            // progressBarAccuracy
+            // 
+            progressBarAccuracy.Location = new Point(0, 0);
+            progressBarAccuracy.Name = "progressBarAccuracy";
+            progressBarAccuracy.Size = new Size(100, 23);
+            progressBarAccuracy.TabIndex = 0;
+            // 
+            // labelTitle
+            // 
+            labelTitle.Font = new Font("微软雅黑", 20F, FontStyle.Bold);
+            labelTitle.ForeColor = Color.White;
+            labelTitle.Location = new Point(400, 14);
+            labelTitle.Margin = new Padding(4, 0, 4, 0);
+            labelTitle.Name = "labelTitle";
+            labelTitle.Size = new Size(429, 56);
+            labelTitle.TabIndex = 0;
+            labelTitle.Text = "🎉 测试结果报告";
+            labelTitle.TextAlign = ContentAlignment.MiddleCenter;
+            // 
+            // groupBoxChart
+            // 
+            groupBoxChart.BackColor = Color.White;
+            groupBoxChart.Controls.Add(chartControl);
+            groupBoxChart.FlatStyle = FlatStyle.Flat;
+            groupBoxChart.Font = new Font("微软雅黑", 10F);
+            groupBoxChart.Location = new Point(614, 98);
+            groupBoxChart.Margin = new Padding(4, 4, 4, 4);
+            groupBoxChart.Name = "groupBoxChart";
+            groupBoxChart.Padding = new Padding(7, 7, 7, 7);
+            groupBoxChart.Size = new Size(571, 532);
+            groupBoxChart.TabIndex = 11;
+            groupBoxChart.TabStop = false;
+            groupBoxChart.Text = "📊 学习统计图表";
+            // 
+            // chartControl
+            // 
+            chartControl.BackColor = Color.White;
+            chartControl.Dock = DockStyle.Fill;
+            chartControl.Location = new Point(7, 30);
+            chartControl.Margin = new Padding(4, 4, 4, 4);
+            chartControl.Name = "chartControl";
+            chartControl.Size = new Size(557, 495);
+            chartControl.TabIndex = 0;
+            // 
+            // headerPanel
+            // 
+            headerPanel.Controls.Add(labelTitle);
+            headerPanel.Dock = DockStyle.Top;
+            headerPanel.Location = new Point(0, 0);
+            headerPanel.Margin = new Padding(4, 4, 4, 4);
+            headerPanel.Name = "headerPanel";
+            headerPanel.Size = new Size(1229, 84);
+            headerPanel.TabIndex = 12;
+            // 
+            // labelMotivational
+            // 
+            labelMotivational.Font = new Font("微软雅黑", 11F, FontStyle.Italic);
+            labelMotivational.Location = new Point(43, 266);
+            labelMotivational.Margin = new Padding(4, 0, 4, 0);
+            labelMotivational.Name = "labelMotivational";
+            labelMotivational.Size = new Size(543, 35);
+            labelMotivational.TabIndex = 15;
+            labelMotivational.Text = "✨ 继续加油！";
+            // 
+            // animatedProgressBar
+            // 
+            animatedProgressBar.Location = new Point(0, 0);
+            animatedProgressBar.Name = "animatedProgressBar";
+            animatedProgressBar.Size = new Size(100, 23);
+            animatedProgressBar.TabIndex = 0;
+            // 
+            // labelAccuracyValue
+            // 
+            labelAccuracyValue.Font = new Font("微软雅黑", 28F, FontStyle.Bold);
+            labelAccuracyValue.Location = new Point(43, 147);
+            labelAccuracyValue.Margin = new Padding(4, 0, 4, 0);
+            labelAccuracyValue.Name = "labelAccuracyValue";
+            labelAccuracyValue.Size = new Size(214, 70);
+            labelAccuracyValue.TabIndex = 13;
+            labelAccuracyValue.Text = "0%";
+            // 
+            // progressBarAccuracyGradient
+            // 
+            progressBarAccuracyGradient.Location = new Point(43, 224);
+            progressBarAccuracyGradient.Margin = new Padding(4, 4, 4, 4);
+            progressBarAccuracyGradient.Name = "progressBarAccuracyGradient";
+            progressBarAccuracyGradient.Size = new Size(543, 35);
+            progressBarAccuracyGradient.Style = ProgressBarStyle.Continuous;
+            progressBarAccuracyGradient.TabIndex = 14;
+            // 
+            // animationTimer
+            // 
+            animationTimer.Interval = 30;
+            animationTimer.Tick += AnimationTimer_Tick;
+            // 
+            // ResultForm
+            // 
+            AutoScaleDimensions = new SizeF(10F, 21F);
             AutoScaleMode = AutoScaleMode.Font;
-            BackColor = WarmBeige;
-            ClientSize = new Size(860, 710);
+            ClientSize = new Size(1229, 994);
             Controls.Add(buttonReview);
             Controls.Add(buttonBack);
             Controls.Add(labelMotivational);
@@ -331,6 +400,8 @@ namespace UnifiedLearningAssistant.Forms
             Controls.Add(groupBoxKnown);
             Controls.Add(groupBoxUnknown);
             Controls.Add(groupBoxChart);
+            Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
+            Margin = new Padding(4, 4, 4, 4);
             Name = "ResultForm";
             Text = "测试结果报告";
             groupBoxKnown.ResumeLayout(false);
@@ -338,7 +409,6 @@ namespace UnifiedLearningAssistant.Forms
             groupBoxChart.ResumeLayout(false);
             headerPanel.ResumeLayout(false);
             ResumeLayout(false);
-            PerformLayout();
         }
 
         #endregion

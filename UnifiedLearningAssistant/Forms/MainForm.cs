@@ -66,12 +66,12 @@ namespace UnifiedLearningAssistant.Forms
         {
             int fontSize = _appConfig.AppSettings.DefaultFontSize;
             var defaultFont = new Font("Microsoft YaHei UI", fontSize);
-            
+
             foreach (Control control in panelMain.Controls)
             {
                 ApplyFontToControl(control, defaultFont);
             }
-            
+
             labelStreakDays.Font = new Font("Microsoft YaHei UI", fontSize, FontStyle.Bold);
             toolStripStatusLabel.Font = defaultFont;
         }
@@ -79,7 +79,7 @@ namespace UnifiedLearningAssistant.Forms
         private void ApplyFontToControl(Control control, Font font)
         {
             control.Font = font;
-            
+
             foreach (Control child in control.Controls)
             {
                 ApplyFontToControl(child, font);
@@ -401,6 +401,9 @@ namespace UnifiedLearningAssistant.Forms
             comboBoxUser = new ComboBox();
             labelUser = new Label();
             buttonExportErrorBook = new Button();
+            panelStreakInfo = new Panel();
+            labelStreakIcon = new Label();
+            labelStreakDays = new Label();
             tabPagePdf = new TabPage();
             menuStrip1 = new MenuStrip();
             toolStripMenuItemFile = new ToolStripMenuItem();
@@ -418,8 +421,10 @@ namespace UnifiedLearningAssistant.Forms
             groupBoxLanguage.SuspendLayout();
             groupBoxMode.SuspendLayout();
             groupBoxUser.SuspendLayout();
+            panelStreakInfo.SuspendLayout();
             menuStrip1.SuspendLayout();
             statusStrip1.SuspendLayout();
+            SuspendLayout();
             // 
             // tabControl1
             // 
@@ -427,19 +432,21 @@ namespace UnifiedLearningAssistant.Forms
             tabControl1.Controls.Add(tabPagePdf);
             tabControl1.Dock = DockStyle.Fill;
             tabControl1.Location = new Point(0, 25);
+            tabControl1.Margin = new Padding(4, 4, 4, 4);
             tabControl1.Name = "tabControl1";
             tabControl1.SelectedIndex = 0;
-            tabControl1.Size = new Size(900, 707);
+            tabControl1.Size = new Size(1441, 879);
             tabControl1.TabIndex = 0;
             tabControl1.SelectedIndexChanged += TabControl1_SelectedIndexChanged;
             // 
             // tabPageLearning
             // 
             tabPageLearning.Controls.Add(panelMain);
-            tabPageLearning.Location = new Point(4, 26);
+            tabPageLearning.Location = new Point(4, 30);
+            tabPageLearning.Margin = new Padding(4, 4, 4, 4);
             tabPageLearning.Name = "tabPageLearning";
-            tabPageLearning.Padding = new Padding(3);
-            tabPageLearning.Size = new Size(892, 677);
+            tabPageLearning.Padding = new Padding(4, 4, 4, 4);
+            tabPageLearning.Size = new Size(1433, 845);
             tabPageLearning.TabIndex = 0;
             tabPageLearning.Text = "双语学习";
             // 
@@ -449,70 +456,78 @@ namespace UnifiedLearningAssistant.Forms
             panelMain.Controls.Add(buttonOpenStatistics);
             panelMain.Controls.Add(buttonOpenPdfReader);
             panelMain.Controls.Add(buttonOpenEditor);
-            panelMain.Controls.Add(buttonSettings);
             panelMain.Controls.Add(buttonContinueLearning);
             panelMain.Controls.Add(buttonStartLearning);
             panelMain.Controls.Add(groupBoxLearning);
             panelMain.Controls.Add(groupBoxUser);
             panelMain.Controls.Add(buttonExportErrorBook);
+            panelMain.Controls.Add(panelStreakInfo);
             panelMain.Dock = DockStyle.Fill;
-            panelMain.Location = new Point(3, 3);
+            panelMain.Location = new Point(4, 4);
+            panelMain.Margin = new Padding(4, 4, 4, 4);
             panelMain.Name = "panelMain";
-            panelMain.Size = new Size(886, 671);
+            panelMain.Size = new Size(1425, 837);
             panelMain.TabIndex = 0;
             // 
             // groupBoxProgress
             // 
             groupBoxProgress.Controls.Add(textBoxProgress);
-            groupBoxProgress.Location = new Point(620, 17);
+            groupBoxProgress.Location = new Point(886, 21);
+            groupBoxProgress.Margin = new Padding(4, 4, 4, 4);
             groupBoxProgress.Name = "groupBoxProgress";
-            groupBoxProgress.Size = new Size(250, 207);
+            groupBoxProgress.Padding = new Padding(4, 4, 4, 4);
+            groupBoxProgress.Size = new Size(437, 256);
             groupBoxProgress.TabIndex = 12;
             groupBoxProgress.TabStop = false;
             groupBoxProgress.Text = "学习统计摘要";
             // 
             // textBoxProgress
             // 
-            textBoxProgress.Location = new Point(15, 34);
+            textBoxProgress.Location = new Point(21, 42);
+            textBoxProgress.Margin = new Padding(4, 4, 4, 4);
             textBoxProgress.Multiline = true;
             textBoxProgress.Name = "textBoxProgress";
             textBoxProgress.ReadOnly = true;
             textBoxProgress.ScrollBars = ScrollBars.Vertical;
-            textBoxProgress.Size = new Size(220, 147);
+            textBoxProgress.Size = new Size(390, 181);
             textBoxProgress.TabIndex = 0;
             // 
             // buttonOpenStatistics
             // 
-            buttonOpenStatistics.Location = new Point(620, 307);
+            buttonOpenStatistics.Location = new Point(886, 379);
+            buttonOpenStatistics.Margin = new Padding(4, 4, 4, 4);
             buttonOpenStatistics.Name = "buttonOpenStatistics";
-            buttonOpenStatistics.Size = new Size(120, 40);
+            buttonOpenStatistics.Size = new Size(214, 63);
             buttonOpenStatistics.TabIndex = 13;
             buttonOpenStatistics.Text = "📊 学习统计";
             buttonOpenStatistics.Click += ButtonOpenStatistics_Click;
             // 
             // buttonOpenPdfReader
             // 
-            buttonOpenPdfReader.Location = new Point(750, 253);
+            buttonOpenPdfReader.Location = new Point(1109, 313);
+            buttonOpenPdfReader.Margin = new Padding(4, 4, 4, 4);
             buttonOpenPdfReader.Name = "buttonOpenPdfReader";
-            buttonOpenPdfReader.Size = new Size(120, 40);
+            buttonOpenPdfReader.Size = new Size(214, 63);
             buttonOpenPdfReader.TabIndex = 12;
             buttonOpenPdfReader.Text = "📖 PDF阅读";
             buttonOpenPdfReader.Click += ButtonOpenPdfReader_Click;
             // 
             // buttonOpenEditor
             // 
-            buttonOpenEditor.Location = new Point(620, 253);
+            buttonOpenEditor.Location = new Point(886, 313);
+            buttonOpenEditor.Margin = new Padding(4, 4, 4, 4);
             buttonOpenEditor.Name = "buttonOpenEditor";
-            buttonOpenEditor.Size = new Size(120, 40);
+            buttonOpenEditor.Size = new Size(214, 63);
             buttonOpenEditor.TabIndex = 11;
             buttonOpenEditor.Text = "📝 模板编辑";
             buttonOpenEditor.Click += ButtonOpenEditor_Click;
             // 
             // buttonSettings
             // 
-            buttonSettings.Location = new Point(345, 36);
+            buttonSettings.Location = new Point(450, 161);
+            buttonSettings.Margin = new Padding(4, 4, 4, 4);
             buttonSettings.Name = "buttonSettings";
-            buttonSettings.Size = new Size(120, 40);
+            buttonSettings.Size = new Size(171, 49);
             buttonSettings.TabIndex = 16;
             buttonSettings.Text = "⚙️ 设置";
             buttonSettings.Visible = false;
@@ -520,18 +535,20 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonContinueLearning
             // 
-            buttonContinueLearning.Location = new Point(288, 346);
+            buttonContinueLearning.Location = new Point(411, 427);
+            buttonContinueLearning.Margin = new Padding(4, 4, 4, 4);
             buttonContinueLearning.Name = "buttonContinueLearning";
-            buttonContinueLearning.Size = new Size(150, 51);
+            buttonContinueLearning.Size = new Size(214, 63);
             buttonContinueLearning.TabIndex = 10;
             buttonContinueLearning.Text = "继续学习";
             buttonContinueLearning.Click += ButtonContinueLearning_Click;
             // 
             // buttonStartLearning
             // 
-            buttonStartLearning.Location = new Point(108, 346);
+            buttonStartLearning.Location = new Point(154, 427);
+            buttonStartLearning.Margin = new Padding(4, 4, 4, 4);
             buttonStartLearning.Name = "buttonStartLearning";
-            buttonStartLearning.Size = new Size(150, 51);
+            buttonStartLearning.Size = new Size(214, 63);
             buttonStartLearning.TabIndex = 9;
             buttonStartLearning.Text = "开始学习";
             buttonStartLearning.Click += ButtonStartLearning_Click;
@@ -542,13 +559,16 @@ namespace UnifiedLearningAssistant.Forms
             groupBoxLearning.Controls.Add(groupBoxMode);
             groupBoxLearning.Controls.Add(labelSubCategory);
             groupBoxLearning.Controls.Add(comboBoxSubCategory);
+            groupBoxLearning.Controls.Add(buttonSettings);
             groupBoxLearning.Controls.Add(labelWordBank);
             groupBoxLearning.Controls.Add(comboBoxWordBank);
             groupBoxLearning.Controls.Add(labelSortOrder);
             groupBoxLearning.Controls.Add(comboBoxSortOrder);
-            groupBoxLearning.Location = new Point(30, 113);
+            groupBoxLearning.Location = new Point(43, 140);
+            groupBoxLearning.Margin = new Padding(4, 4, 4, 4);
             groupBoxLearning.Name = "groupBoxLearning";
-            groupBoxLearning.Size = new Size(560, 210);
+            groupBoxLearning.Padding = new Padding(4, 4, 4, 4);
+            groupBoxLearning.Size = new Size(800, 259);
             groupBoxLearning.TabIndex = 1;
             groupBoxLearning.TabStop = false;
             groupBoxLearning.Text = "快速开始";
@@ -558,26 +578,30 @@ namespace UnifiedLearningAssistant.Forms
             groupBoxLanguage.Controls.Add(labelLanguage);
             groupBoxLanguage.Controls.Add(radioChinese);
             groupBoxLanguage.Controls.Add(radioEnglish);
-            groupBoxLanguage.Location = new Point(15, 25);
+            groupBoxLanguage.Location = new Point(21, 31);
+            groupBoxLanguage.Margin = new Padding(4, 4, 4, 4);
             groupBoxLanguage.Name = "groupBoxLanguage";
-            groupBoxLanguage.Size = new Size(250, 60);
+            groupBoxLanguage.Padding = new Padding(4, 4, 4, 4);
+            groupBoxLanguage.Size = new Size(357, 74);
             groupBoxLanguage.TabIndex = 0;
             groupBoxLanguage.TabStop = false;
             groupBoxLanguage.Text = "语言";
             // 
             // labelLanguage
             // 
-            labelLanguage.Location = new Point(10, 22);
+            labelLanguage.Location = new Point(14, 27);
+            labelLanguage.Margin = new Padding(4, 0, 4, 0);
             labelLanguage.Name = "labelLanguage";
-            labelLanguage.Size = new Size(60, 23);
+            labelLanguage.Size = new Size(86, 28);
             labelLanguage.TabIndex = 0;
             labelLanguage.Text = "选择:";
             // 
             // radioChinese
             // 
-            radioChinese.Location = new Point(80, 20);
+            radioChinese.Location = new Point(114, 25);
+            radioChinese.Margin = new Padding(4, 4, 4, 4);
             radioChinese.Name = "radioChinese";
-            radioChinese.Size = new Size(80, 27);
+            radioChinese.Size = new Size(114, 33);
             radioChinese.TabIndex = 1;
             radioChinese.Text = "中文";
             radioChinese.CheckedChanged += RadioChinese_CheckedChanged;
@@ -585,9 +609,10 @@ namespace UnifiedLearningAssistant.Forms
             // radioEnglish
             // 
             radioEnglish.Checked = true;
-            radioEnglish.Location = new Point(170, 20);
+            radioEnglish.Location = new Point(243, 25);
+            radioEnglish.Margin = new Padding(4, 4, 4, 4);
             radioEnglish.Name = "radioEnglish";
-            radioEnglish.Size = new Size(80, 27);
+            radioEnglish.Size = new Size(114, 33);
             radioEnglish.TabIndex = 2;
             radioEnglish.TabStop = true;
             radioEnglish.Text = "英语";
@@ -598,27 +623,31 @@ namespace UnifiedLearningAssistant.Forms
             groupBoxMode.Controls.Add(labelMode);
             groupBoxMode.Controls.Add(radioStudyMode);
             groupBoxMode.Controls.Add(radioQuickMode);
-            groupBoxMode.Location = new Point(275, 25);
+            groupBoxMode.Location = new Point(393, 31);
+            groupBoxMode.Margin = new Padding(4, 4, 4, 4);
             groupBoxMode.Name = "groupBoxMode";
-            groupBoxMode.Size = new Size(250, 60);
+            groupBoxMode.Padding = new Padding(4, 4, 4, 4);
+            groupBoxMode.Size = new Size(357, 74);
             groupBoxMode.TabIndex = 1;
             groupBoxMode.TabStop = false;
             groupBoxMode.Text = "模式";
             // 
             // labelMode
             // 
-            labelMode.Location = new Point(10, 22);
+            labelMode.Location = new Point(14, 27);
+            labelMode.Margin = new Padding(4, 0, 4, 0);
             labelMode.Name = "labelMode";
-            labelMode.Size = new Size(60, 23);
+            labelMode.Size = new Size(86, 28);
             labelMode.TabIndex = 0;
             labelMode.Text = "选择:";
             // 
             // radioStudyMode
             // 
             radioStudyMode.Checked = true;
-            radioStudyMode.Location = new Point(80, 20);
+            radioStudyMode.Location = new Point(114, 25);
+            radioStudyMode.Margin = new Padding(4, 4, 4, 4);
             radioStudyMode.Name = "radioStudyMode";
-            radioStudyMode.Size = new Size(80, 27);
+            radioStudyMode.Size = new Size(114, 33);
             radioStudyMode.TabIndex = 1;
             radioStudyMode.TabStop = true;
             radioStudyMode.Text = "学习模式";
@@ -626,52 +655,58 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // radioQuickMode
             // 
-            radioQuickMode.Location = new Point(170, 20);
+            radioQuickMode.Location = new Point(243, 25);
+            radioQuickMode.Margin = new Padding(4, 4, 4, 4);
             radioQuickMode.Name = "radioQuickMode";
-            radioQuickMode.Size = new Size(80, 27);
+            radioQuickMode.Size = new Size(114, 33);
             radioQuickMode.TabIndex = 2;
             radioQuickMode.Text = "快速模式";
             radioQuickMode.CheckedChanged += RadioQuickMode_CheckedChanged;
             // 
             // labelSubCategory
             // 
-            labelSubCategory.Location = new Point(15, 98);
+            labelSubCategory.Location = new Point(21, 121);
+            labelSubCategory.Margin = new Padding(4, 0, 4, 0);
             labelSubCategory.Name = "labelSubCategory";
-            labelSubCategory.Size = new Size(100, 23);
+            labelSubCategory.Size = new Size(143, 28);
             labelSubCategory.TabIndex = 2;
             labelSubCategory.Text = "学习类型:";
             // 
             // comboBoxSubCategory
             // 
             comboBoxSubCategory.FormattingEnabled = true;
-            comboBoxSubCategory.Location = new Point(120, 96);
+            comboBoxSubCategory.Location = new Point(171, 119);
+            comboBoxSubCategory.Margin = new Padding(4, 4, 4, 4);
             comboBoxSubCategory.Name = "comboBoxSubCategory";
-            comboBoxSubCategory.Size = new Size(150, 25);
+            comboBoxSubCategory.Size = new Size(213, 29);
             comboBoxSubCategory.TabIndex = 2;
             comboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
             // 
             // labelWordBank
             // 
-            labelWordBank.Location = new Point(15, 130);
+            labelWordBank.Location = new Point(21, 161);
+            labelWordBank.Margin = new Padding(4, 0, 4, 0);
             labelWordBank.Name = "labelWordBank";
-            labelWordBank.Size = new Size(100, 23);
+            labelWordBank.Size = new Size(143, 28);
             labelWordBank.TabIndex = 4;
             labelWordBank.Text = "词库文件:";
             // 
             // comboBoxWordBank
             // 
             comboBoxWordBank.FormattingEnabled = true;
-            comboBoxWordBank.Location = new Point(120, 127);
+            comboBoxWordBank.Location = new Point(171, 157);
+            comboBoxWordBank.Margin = new Padding(4, 4, 4, 4);
             comboBoxWordBank.Name = "comboBoxWordBank";
-            comboBoxWordBank.Size = new Size(150, 25);
+            comboBoxWordBank.Size = new Size(213, 29);
             comboBoxWordBank.TabIndex = 5;
             comboBoxWordBank.SelectedIndexChanged += ComboBoxWordBank_SelectedIndexChanged;
             // 
             // labelSortOrder
             // 
-            labelSortOrder.Location = new Point(15, 163);
+            labelSortOrder.Location = new Point(21, 201);
+            labelSortOrder.Margin = new Padding(4, 0, 4, 0);
             labelSortOrder.Name = "labelSortOrder";
-            labelSortOrder.Size = new Size(100, 23);
+            labelSortOrder.Size = new Size(143, 28);
             labelSortOrder.TabIndex = 6;
             labelSortOrder.Text = "排序方式:";
             // 
@@ -679,9 +714,10 @@ namespace UnifiedLearningAssistant.Forms
             // 
             comboBoxSortOrder.FormattingEnabled = true;
             comboBoxSortOrder.Items.AddRange(new object[] { "顺序", "Random" });
-            comboBoxSortOrder.Location = new Point(120, 160);
+            comboBoxSortOrder.Location = new Point(171, 198);
+            comboBoxSortOrder.Margin = new Padding(4, 4, 4, 4);
             comboBoxSortOrder.Name = "comboBoxSortOrder";
-            comboBoxSortOrder.Size = new Size(150, 25);
+            comboBoxSortOrder.Size = new Size(213, 29);
             comboBoxSortOrder.TabIndex = 8;
             comboBoxSortOrder.Text = "顺序";
             comboBoxSortOrder.SelectedIndexChanged += ComboBoxSortOrder_SelectedIndexChanged;
@@ -690,9 +726,11 @@ namespace UnifiedLearningAssistant.Forms
             // 
             groupBoxUser.Controls.Add(comboBoxUser);
             groupBoxUser.Controls.Add(labelUser);
-            groupBoxUser.Location = new Point(30, 17);
+            groupBoxUser.Location = new Point(43, 21);
+            groupBoxUser.Margin = new Padding(4, 4, 4, 4);
             groupBoxUser.Name = "groupBoxUser";
-            groupBoxUser.Size = new Size(250, 74);
+            groupBoxUser.Padding = new Padding(4, 4, 4, 4);
+            groupBoxUser.Size = new Size(357, 91);
             groupBoxUser.TabIndex = 0;
             groupBoxUser.TabStop = false;
             groupBoxUser.Text = "多玩家";
@@ -700,36 +738,66 @@ namespace UnifiedLearningAssistant.Forms
             // comboBoxUser
             // 
             comboBoxUser.FormattingEnabled = true;
-            comboBoxUser.Location = new Point(80, 34);
+            comboBoxUser.Location = new Point(114, 42);
+            comboBoxUser.Margin = new Padding(4, 4, 4, 4);
             comboBoxUser.Name = "comboBoxUser";
-            comboBoxUser.Size = new Size(150, 25);
+            comboBoxUser.Size = new Size(213, 29);
             comboBoxUser.TabIndex = 1;
             comboBoxUser.SelectedIndexChanged += ComboBoxUser_SelectedIndexChanged;
             // 
             // labelUser
             // 
-            labelUser.Location = new Point(20, 37);
+            labelUser.Location = new Point(29, 46);
+            labelUser.Margin = new Padding(4, 0, 4, 0);
             labelUser.Name = "labelUser";
-            labelUser.Size = new Size(50, 23);
+            labelUser.Size = new Size(71, 28);
             labelUser.TabIndex = 0;
             labelUser.Text = "玩家:";
             // 
             // buttonExportErrorBook
             // 
-            buttonExportErrorBook.Location = new Point(750, 308);
+            buttonExportErrorBook.Location = new Point(1109, 380);
+            buttonExportErrorBook.Margin = new Padding(4, 4, 4, 4);
             buttonExportErrorBook.Name = "buttonExportErrorBook";
-            buttonExportErrorBook.Size = new Size(120, 40);
+            buttonExportErrorBook.Size = new Size(214, 63);
             buttonExportErrorBook.TabIndex = 15;
             buttonExportErrorBook.Text = "📝 导出错题本";
             buttonExportErrorBook.UseVisualStyleBackColor = true;
             buttonExportErrorBook.Click += ButtonExportErrorBook_Click;
             // 
+            // panelStreakInfo
+            // 
+            panelStreakInfo.Controls.Add(labelStreakIcon);
+            panelStreakInfo.Controls.Add(labelStreakDays);
+            panelStreakInfo.Location = new Point(473, 21);
+            panelStreakInfo.Margin = new Padding(4, 4, 4, 4);
+            panelStreakInfo.Name = "panelStreakInfo";
+            panelStreakInfo.Size = new Size(361, 111);
+            panelStreakInfo.TabIndex = 17;
+            // 
+            // labelStreakIcon
+            // 
+            labelStreakIcon.Location = new Point(141, 17);
+            labelStreakIcon.Margin = new Padding(4, 0, 4, 0);
+            labelStreakIcon.Name = "labelStreakIcon";
+            labelStreakIcon.Size = new Size(143, 28);
+            labelStreakIcon.TabIndex = 0;
+            // 
+            // labelStreakDays
+            // 
+            labelStreakDays.Location = new Point(6, 17);
+            labelStreakDays.Margin = new Padding(4, 0, 4, 0);
+            labelStreakDays.Name = "labelStreakDays";
+            labelStreakDays.Size = new Size(143, 28);
+            labelStreakDays.TabIndex = 1;
+            // 
             // tabPagePdf
             // 
-            tabPagePdf.Location = new Point(4, 26);
+            tabPagePdf.Location = new Point(4, 30);
+            tabPagePdf.Margin = new Padding(4, 4, 4, 4);
             tabPagePdf.Name = "tabPagePdf";
-            tabPagePdf.Padding = new Padding(3);
-            tabPagePdf.Size = new Size(892, 677);
+            tabPagePdf.Padding = new Padding(4, 4, 4, 4);
+            tabPagePdf.Size = new Size(1433, 845);
             tabPagePdf.TabIndex = 1;
             tabPagePdf.Text = "PDF阅读助手";
             // 
@@ -738,7 +806,8 @@ namespace UnifiedLearningAssistant.Forms
             menuStrip1.Items.AddRange(new ToolStripItem[] { toolStripMenuItemFile, toolStripMenuItemSettings, toolStripMenuItemHelp });
             menuStrip1.Location = new Point(0, 0);
             menuStrip1.Name = "menuStrip1";
-            menuStrip1.Size = new Size(900, 25);
+            menuStrip1.Padding = new Padding(9, 2, 0, 2);
+            menuStrip1.Size = new Size(1441, 25);
             menuStrip1.TabIndex = 1;
             // 
             // toolStripMenuItemFile
@@ -777,9 +846,10 @@ namespace UnifiedLearningAssistant.Forms
             // statusStrip1
             // 
             statusStrip1.Items.AddRange(new ToolStripItem[] { toolStripStatusLabel });
-            statusStrip1.Location = new Point(0, 710);
+            statusStrip1.Location = new Point(0, 882);
             statusStrip1.Name = "statusStrip1";
-            statusStrip1.Size = new Size(900, 22);
+            statusStrip1.Padding = new Padding(1, 0, 20, 0);
+            statusStrip1.Size = new Size(1441, 22);
             statusStrip1.TabIndex = 2;
             // 
             // toolStripStatusLabel
@@ -790,13 +860,15 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // MainForm
             // 
-            AutoScaleDimensions = new SizeF(7F, 17F);
+            AutoScaleDimensions = new SizeF(10F, 21F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(900, 732);
+            ClientSize = new Size(1441, 904);
             Controls.Add(statusStrip1);
             Controls.Add(tabControl1);
             Controls.Add(menuStrip1);
+            Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
             MainMenuStrip = menuStrip1;
+            Margin = new Padding(4, 4, 4, 4);
             Name = "MainForm";
             Text = "统一学习助手";
             tabControl1.ResumeLayout(false);
@@ -808,43 +880,11 @@ namespace UnifiedLearningAssistant.Forms
             groupBoxLanguage.ResumeLayout(false);
             groupBoxMode.ResumeLayout(false);
             groupBoxUser.ResumeLayout(false);
+            panelStreakInfo.ResumeLayout(false);
             menuStrip1.ResumeLayout(false);
             menuStrip1.PerformLayout();
             statusStrip1.ResumeLayout(false);
             statusStrip1.PerformLayout();
-
-            panelStreakInfo = new Panel
-            {
-                Location = new Point(300, 17),
-                Size = new Size(180, 50),
-                BackColor = Color.FromArgb(255, 248, 240),
-                BorderStyle = BorderStyle.FixedSingle
-            };
-
-            labelStreakIcon = new Label
-            {
-                Location = new Point(10, 8),
-                Size = new Size(30, 35),
-                Text = "🔥",
-                Font = new Font("Microsoft YaHei UI", 20F),
-                TextAlign = ContentAlignment.MiddleCenter
-            };
-
-            labelStreakDays = new Label
-            {
-                Location = new Point(45, 5),
-                Size = new Size(120, 40),
-                Text = "连续 0 天",
-                Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(220, 80, 0),
-                TextAlign = ContentAlignment.MiddleLeft
-            };
-
-            panelStreakInfo.Controls.Add(labelStreakIcon);
-            panelStreakInfo.Controls.Add(labelStreakDays);
-            panelMain.Controls.Add(panelStreakInfo);
-            panelStreakInfo.BringToFront();
-
             ResumeLayout(false);
             PerformLayout();
         }

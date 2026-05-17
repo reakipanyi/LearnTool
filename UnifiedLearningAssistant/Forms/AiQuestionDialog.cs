@@ -91,7 +91,6 @@ namespace UnifiedLearningAssistant.Forms
 
         private void InitializeComponent()
         {
-            components = new System.ComponentModel.Container();
             textBoxQuestion = new TextBox();
             buttonAskAi = new Button();
             richTextBoxAnswer = new RichTextBox();
@@ -101,57 +100,99 @@ namespace UnifiedLearningAssistant.Forms
             labelQuestion = new Label();
             labelAnswer = new Label();
             labelStatus = new Label();
-
-            textBoxQuestion.Location = new Point(15, 40);
-            textBoxQuestion.Size = new Size(450, 25);
+            SuspendLayout();
+            // 
+            // textBoxQuestion
+            // 
+            textBoxQuestion.Location = new Point(21, 56);
+            textBoxQuestion.Margin = new Padding(4, 4, 4, 4);
+            textBoxQuestion.Name = "textBoxQuestion";
+            textBoxQuestion.Size = new Size(641, 28);
             textBoxQuestion.TabIndex = 0;
-
-            buttonAskAi.Location = new Point(470, 38);
-            buttonAskAi.Size = new Size(100, 29);
+            // 
+            // buttonAskAi
+            // 
+            buttonAskAi.Location = new Point(671, 53);
+            buttonAskAi.Margin = new Padding(4, 4, 4, 4);
+            buttonAskAi.Name = "buttonAskAi";
+            buttonAskAi.Size = new Size(143, 41);
             buttonAskAi.TabIndex = 1;
             buttonAskAi.Text = "向AI提问";
             buttonAskAi.Click += ButtonAskAi_Click;
-
-            richTextBoxAnswer.Location = new Point(15, 100);
-            richTextBoxAnswer.Size = new Size(555, 300);
+            // 
+            // richTextBoxAnswer
+            // 
+            richTextBoxAnswer.Location = new Point(21, 140);
+            richTextBoxAnswer.Margin = new Padding(4, 4, 4, 4);
+            richTextBoxAnswer.Name = "richTextBoxAnswer";
             richTextBoxAnswer.ReadOnly = true;
             richTextBoxAnswer.ScrollBars = RichTextBoxScrollBars.Vertical;
+            richTextBoxAnswer.Size = new Size(791, 418);
             richTextBoxAnswer.TabIndex = 2;
-
-            buttonSpeak.Location = new Point(15, 410);
-            buttonSpeak.Size = new Size(120, 35);
+            richTextBoxAnswer.Text = "";
+            // 
+            // buttonSpeak
+            // 
+            buttonSpeak.Location = new Point(21, 574);
+            buttonSpeak.Margin = new Padding(4, 4, 4, 4);
+            buttonSpeak.Name = "buttonSpeak";
+            buttonSpeak.Size = new Size(171, 49);
             buttonSpeak.TabIndex = 3;
             buttonSpeak.Text = "🔊 朗读答案";
             buttonSpeak.Click += ButtonSpeak_Click;
-
-            buttonCopy.Location = new Point(145, 410);
-            buttonCopy.Size = new Size(120, 35);
+            // 
+            // buttonCopy
+            // 
+            buttonCopy.Location = new Point(207, 574);
+            buttonCopy.Margin = new Padding(4, 4, 4, 4);
+            buttonCopy.Name = "buttonCopy";
+            buttonCopy.Size = new Size(171, 49);
             buttonCopy.TabIndex = 4;
             buttonCopy.Text = "📋 复制答案";
             buttonCopy.Click += ButtonCopy_Click;
-
-            buttonClear.Location = new Point(275, 410);
-            buttonClear.Size = new Size(120, 35);
+            // 
+            // buttonClear
+            // 
+            buttonClear.Location = new Point(393, 574);
+            buttonClear.Margin = new Padding(4, 4, 4, 4);
+            buttonClear.Name = "buttonClear";
+            buttonClear.Size = new Size(171, 49);
             buttonClear.TabIndex = 5;
             buttonClear.Text = "🗑️ 清空";
             buttonClear.Click += ButtonClear_Click;
-
-            labelQuestion.Location = new Point(15, 15);
-            labelQuestion.Size = new Size(100, 20);
+            // 
+            // labelQuestion
+            // 
+            labelQuestion.Location = new Point(21, 21);
+            labelQuestion.Margin = new Padding(4, 0, 4, 0);
+            labelQuestion.Name = "labelQuestion";
+            labelQuestion.Size = new Size(143, 28);
+            labelQuestion.TabIndex = 0;
             labelQuestion.Text = "问题:";
-
-            labelAnswer.Location = new Point(15, 80);
-            labelAnswer.Size = new Size(100, 20);
+            // 
+            // labelAnswer
+            // 
+            labelAnswer.Location = new Point(21, 112);
+            labelAnswer.Margin = new Padding(4, 0, 4, 0);
+            labelAnswer.Name = "labelAnswer";
+            labelAnswer.Size = new Size(143, 28);
+            labelAnswer.TabIndex = 1;
             labelAnswer.Text = "AI回答:";
-
-            labelStatus.Location = new Point(400, 415);
-            labelStatus.Size = new Size(170, 25);
-            labelStatus.Text = "";
+            // 
+            // labelStatus
+            // 
             labelStatus.ForeColor = Color.Green;
-
-            AutoScaleDimensions = new SizeF(7F, 15F);
+            labelStatus.Location = new Point(571, 581);
+            labelStatus.Margin = new Padding(4, 0, 4, 0);
+            labelStatus.Name = "labelStatus";
+            labelStatus.Size = new Size(243, 35);
+            labelStatus.TabIndex = 6;
+            // 
+            // AiQuestionDialog
+            // 
+            AutoScaleDimensions = new SizeF(10F, 21F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(585, 460);
+            ClientSize = new Size(836, 644);
             Controls.Add(labelQuestion);
             Controls.Add(labelAnswer);
             Controls.Add(textBoxQuestion);
@@ -161,9 +202,13 @@ namespace UnifiedLearningAssistant.Forms
             Controls.Add(buttonCopy);
             Controls.Add(buttonClear);
             Controls.Add(labelStatus);
+            Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
+            Margin = new Padding(4, 4, 4, 4);
             Name = "AiQuestionDialog";
-            Text = "🤖 AI智能提问";
             StartPosition = FormStartPosition.CenterScreen;
+            Text = "🤖 AI智能提问";
+            ResumeLayout(false);
+            PerformLayout();
         }
 
         #endregion
