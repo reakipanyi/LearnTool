@@ -7,6 +7,7 @@ using UnifiedLearningAssistant.Services.TTS;
 using UnifiedLearningAssistant.Services.Feedback;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using UnifiedLearningAssistant.Services.Learning;
 
 namespace UnifiedLearningAssistant.Forms
 {

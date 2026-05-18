@@ -89,10 +89,10 @@ namespace UnifiedLearningAssistant.Forms
 
         private void PopulateFormList()
         {
-            var forms = FormPreviewer.GetPreviewableForms();
-            listBoxForms.Items.AddRange(forms);
-            if (forms.Length > 0)
-                listBoxForms.SelectedIndex = 0;
+            // var forms = FormPreviewer.GetPreviewableForms();
+            // listBoxForms.Items.AddRange(forms);
+            // if (forms.Length > 0)
+            //     listBoxForms.SelectedIndex = 0;
         }
 
         private void ListBoxForms_DoubleClick(object? sender, EventArgs e)
@@ -106,24 +106,24 @@ namespace UnifiedLearningAssistant.Forms
         }
 
         private void ShowSelectedForm()
-        {
-            if (listBoxForms.SelectedItem is string formName)
-            {
-                try
-                {
-                    var form = FormPreviewer.CreatePreviewForm(formName);
-                    form.Show();
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(
-                        $"无法预览窗体: {ex.Message}\n\n{ex.StackTrace}",
-                        "预览错误",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error
-                    );
-                }
-            }
+        {//
+         // if (listBoxForms.SelectedItem is string formName)
+         // {
+         //     try
+         //     {
+         //         var form = FormPreviewer.CreatePreviewForm(formName);
+         //         form.Show();
+         //     }
+         //     catch (Exception ex)
+         //     {
+         //         MessageBox.Show(
+         //             $"无法预览窗体: {ex.Message}\n\n{ex.StackTrace}",
+         //             "预览错误",
+         //             MessageBoxButtons.OK,
+         //             MessageBoxIcon.Error
+         //         );
+         //     }
+         // }
         }
     }
 }
