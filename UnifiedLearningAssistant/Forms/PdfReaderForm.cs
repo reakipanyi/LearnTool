@@ -455,55 +455,102 @@ namespace UnifiedLearningAssistant.Forms
 
         private void UpdateHighlightLayer()
         {
-            if (pictureBoxPdf?.Image == null)
+            try
             {
-                CleanupHighlightLayer();
-                return;
-            }
-
-            var imgWidth = pictureBoxPdf.Image.Width;
-            var imgHeight = pictureBoxPdf.Image.Height;
-
-            if (_highlightBitmap != null)
-            {
-                if (_highlightBitmap.Width != imgWidth || _highlightBitmap.Height != imgHeight)
+                if (pictureBoxPdf?.Image == null)
                 {
                     CleanupHighlightLayer();
+                    return;
                 }
-            }
 
-            if (_highlightBitmap == null)
-            {
-                _highlightBitmap = new Bitmap(imgWidth, imgHeight);
-                _highlightGraphics = Graphics.FromImage(_highlightBitmap);
-                _highlightGraphics.Clear(Color.Transparent);
-            }
-
-            _highlightGraphics!.Clear(Color.Transparent);
-
-            var highlights = _highlightService.GetHighlightsForPage(_currentPdfPath, _currentPageIndex);
-            foreach (var highlight in highlights)
-            {
-                var color = HighlightService.GetHighlightColor(highlight.Color);
-                using var brush = new SolidBrush(color);
-                var rect = new RectangleF(highlight.X, highlight.Y, highlight.Width, highlight.Height);
-                _highlightGraphics.FillRectangle(brush, rect);
-
-                if (!string.IsNullOrEmpty(highlight.Note))
+                int imgWidth, imgHeight;
+                try
                 {
-                    using var font = new Font("Microsoft YaHei UI", 10F);
-                    using var textBrush = new SolidBrush(Color.Black);
-                    _highlightGraphics.DrawString("📝", font, textBrush, rect.Location);
+                    imgWidth = pictureBoxPdf.Image.Width;
+                    imgHeight = pictureBoxPdf.Image.Height;
                 }
+                catch (ObjectDisposedException)
+                {
+                    _logger.LogWarning("Image was disposed in UpdateHighlightLayer");
+                    CleanupHighlightLayer();
+                    return;
+                }
+
+                if (_highlightBitmap != null)
+                {
+                    try
+                    {
+                        if (_highlightBitmap.Width != imgWidth || _highlightBitmap.Height != imgHeight)
+                        {
+                            CleanupHighlightLayer();
+                        }
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        CleanupHighlightLayer();
+                    }
+                }
+
+                if (_highlightBitmap == null)
+                {
+                    _highlightBitmap = new Bitmap(imgWidth, imgHeight);
+                    _highlightGraphics = Graphics.FromImage(_highlightBitmap);
+                    _highlightGraphics.Clear(Color.Transparent);
+                }
+
+                _highlightGraphics!.Clear(Color.Transparent);
+
+                var highlights = _highlightService.GetHighlightsForPage(_currentPdfPath, _currentPageIndex);
+                foreach (var highlight in highlights)
+                {
+                    var color = HighlightService.GetHighlightColor(highlight.Color);
+                    using var brush = new SolidBrush(color);
+                    var rect = new RectangleF(highlight.X, highlight.Y, highlight.Width, highlight.Height);
+                    _highlightGraphics.FillRectangle(brush, rect);
+
+                    if (!string.IsNullOrEmpty(highlight.Note))
+                    {
+                        using var font = new Font("Microsoft YaHei UI", 10F);
+                        using var textBrush = new SolidBrush(Color.Black);
+                        _highlightGraphics.DrawString("📝", font, textBrush, rect.Location);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in UpdateHighlightLayer");
+                CleanupHighlightLayer();
             }
         }
 
         private void CleanupHighlightLayer()
         {
-            _highlightGraphics?.Dispose();
-            _highlightBitmap?.Dispose();
-            _highlightGraphics = null;
-            _highlightBitmap = null;
+            try
+            {
+                _highlightGraphics?.Dispose();
+                _highlightBitmap?.Dispose();
+                _highlightGraphics = null;
+                _highlightBitmap = null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error cleaning up highlight layer");
+            }
+        }
+
+        private void CleanupAnnotationBitmap()
+        {
+            try
+            {
+                _annotationGraphics?.Dispose();
+                _annotationBitmap?.Dispose();
+                _annotationGraphics = null;
+                _annotationBitmap = null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error cleaning up annotation bitmap");
+            }
         }
 
         public void SetCurrentPdfPath(string pdfPath)
@@ -553,9 +600,36 @@ namespace UnifiedLearningAssistant.Forms
 
         public void DisplayImage(Bitmap bmp)
         {
-            var old = pictureBoxPdf.Image;
-            pictureBoxPdf.Image = bmp;
-            old?.Dispose();
+            try
+            {
+                // 首先清理相关的注释位图，因为它们依赖于原图像尺寸
+                CleanupAnnotationBitmap();
+                CleanupHighlightLayer();
+                
+                var old = pictureBoxPdf.Image;
+                pictureBoxPdf.Image = bmp;
+                
+                // 延迟释放旧图像，避免竞态条件
+                if (old != null && old != bmp)
+                {
+                    Task.Delay(100).ContinueWith(_ => 
+                    {
+                        try
+                        {
+                            old.Dispose();
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to dispose old image");
+                        }
+                    }, TaskScheduler.Default);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in DisplayImage");
+                pictureBoxPdf.Image = bmp;
+            }
         }
 
         public void ShowWarning(string message)
@@ -935,36 +1009,56 @@ namespace UnifiedLearningAssistant.Forms
 
         public Rectangle GetImageDisplayRect()
         {
-            if (pictureBoxPdf.Image == null)
-                return pictureBoxPdf.ClientRectangle;
-
-            var image = pictureBoxPdf.Image;
-            var controlWidth = pictureBoxPdf.ClientSize.Width;
-            var controlHeight = pictureBoxPdf.ClientSize.Height;
-
-            float imageAspect = (float)image.Width / image.Height;
-            float controlAspect = (float)controlWidth / controlHeight;
-
-            int displayWidth, displayHeight, displayX, displayY;
-
-            if (imageAspect > controlAspect)
+            try
             {
-                // 图片更宽，水平填满，垂直居中
-                displayWidth = controlWidth;
-                displayHeight = (int)(controlWidth / imageAspect);
-                displayX = 0;
-                displayY = (controlHeight - displayHeight) / 2;
-            }
-            else
-            {
-                // 图片更高，垂直填满，水平居中
-                displayHeight = controlHeight;
-                displayWidth = (int)(controlHeight * imageAspect);
-                displayY = 0;
-                displayX = (controlWidth - displayWidth) / 2;
-            }
+                if (pictureBoxPdf?.Image == null)
+                    return pictureBoxPdf?.ClientRectangle ?? Rectangle.Empty;
 
-            return new Rectangle(displayX, displayY, displayWidth, displayHeight);
+                var image = pictureBoxPdf.Image;
+                int imgWidth, imgHeight;
+                try
+                {
+                    imgWidth = image.Width;
+                    imgHeight = image.Height;
+                }
+                catch (ObjectDisposedException)
+                {
+                    _logger.LogWarning("Image disposed in GetImageDisplayRect");
+                    return pictureBoxPdf.ClientRectangle;
+                }
+
+                var controlWidth = pictureBoxPdf.ClientSize.Width;
+                var controlHeight = pictureBoxPdf.ClientSize.Height;
+
+                float imageAspect = (float)imgWidth / imgHeight;
+                float controlAspect = (float)controlWidth / controlHeight;
+
+                int displayWidth, displayHeight, displayX, displayY;
+
+                if (imageAspect > controlAspect)
+                {
+                    // 图片更宽，水平填满，垂直居中
+                    displayWidth = controlWidth;
+                    displayHeight = (int)(controlWidth / imageAspect);
+                    displayX = 0;
+                    displayY = (controlHeight - displayHeight) / 2;
+                }
+                else
+                {
+                    // 图片更高，垂直填满，水平居中
+                    displayHeight = controlHeight;
+                    displayWidth = (int)(controlHeight * imageAspect);
+                    displayY = 0;
+                    displayX = (controlWidth - displayWidth) / 2;
+                }
+
+                return new Rectangle(displayX, displayY, displayWidth, displayHeight);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in GetImageDisplayRect");
+                return pictureBoxPdf?.ClientRectangle ?? Rectangle.Empty;
+            }
         }
 
         public void ShowOcrOverlay(Bitmap? image)
@@ -1726,226 +1820,356 @@ namespace UnifiedLearningAssistant.Forms
 
         private void PictureBoxPdf_MouseDown(object? sender, MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Left)
+            try
             {
-                var now = DateTime.Now;
-                var timeDiff = (now - _lastClickTime).TotalMilliseconds;
-                var distance = Math.Sqrt(Math.Pow(e.Location.X - _lastClickLocation.X, 2) + Math.Pow(e.Location.Y - _lastClickLocation.Y, 2));
-
-                if (timeDiff < DoubleClickTime_ms && distance < DoubleClickDistance)
+                if (e.Button == MouseButtons.Left)
                 {
-                    _isDoubleClickPending = true;
-                    _isSelecting = false;
-                    _isDrawing = false;
-                    _lastClickTime = DateTime.MinValue;
-                    _lastClickLocation = Point.Empty;
-                    return;
-                }
+                    var now = DateTime.Now;
+                    var timeDiff = (now - _lastClickTime).TotalMilliseconds;
+                    var distance = Math.Sqrt(Math.Pow(e.Location.X - _lastClickLocation.X, 2) + Math.Pow(e.Location.Y - _lastClickLocation.Y, 2));
 
-                _isDoubleClickPending = false;
-                _lastClickTime = now;
-                _lastClickLocation = e.Location;
+                    if (timeDiff < DoubleClickTime_ms && distance < DoubleClickDistance)
+                    {
+                        _isDoubleClickPending = true;
+                        _isSelecting = false;
+                        _isDrawing = false;
+                        _lastClickTime = DateTime.MinValue;
+                        _lastClickLocation = Point.Empty;
+                        return;
+                    }
 
-                if (_isDrawing || (ModifierKeys & Keys.Control) == Keys.Control)
-                {
+                    _isDoubleClickPending = false;
+                    _lastClickTime = now;
+                    _lastClickLocation = e.Location;
+
+                    if (_isDrawing || (ModifierKeys & Keys.Control) == Keys.Control)
+                    {
+                        try
+                        {
+                            _pen.Color = Color.Red;
+                            _pen.Width = 4f;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Error initializing drawing pen");
+                        }
+
+                        _isDrawing = true;
+                        EnsureAnnotationBitmap();
+                        _selectStart = e.Location;
+                        _selectEnd = e.Location;
+                        var imgPt = ClientToImage(e.Location);
+                        _currentStrokePoints = new List<PointF>() { imgPt };
+                        try
+                        {
+                            pictureBoxPdf.Invalidate();
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Error invalidating pictureBox on MouseDown");
+                        }
+                        return;
+                    }
+
+                    _isSelecting = true;
+                    _selectStart = e.Location;
+                    _selectEnd = e.Location;
                     try
                     {
-                        _pen.Color = Color.Red;
-                        _pen.Width = 4f;
+                        pictureBoxPdf.Invalidate();
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Error initializing drawing pen");
+                        _logger.LogWarning(ex, "Error invalidating pictureBox on MouseDown (selecting)");
                     }
-
-                    _isDrawing = true;
-                    EnsureAnnotationBitmap();
-                    _selectStart = e.Location;
-                    _selectEnd = e.Location;
-                    var imgPt = ClientToImage(e.Location);
-                    _currentStrokePoints = new List<PointF>() { imgPt };
-                    pictureBoxPdf.Invalidate();
-                    return;
                 }
-
-                _isSelecting = true;
-                _selectStart = e.Location;
-                _selectEnd = e.Location;
-                pictureBoxPdf.Invalidate();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in PictureBoxPdf_MouseDown");
+                // 重置状态，避免死锁
+                _isSelecting = false;
+                _isDrawing = false;
             }
         }
 
         private void PictureBoxPdf_MouseMove(object? sender, MouseEventArgs e)
         {
-            var ctrlDown = (ModifierKeys & Keys.Control) == Keys.Control;
-            var leftDown = (Control.MouseButtons & MouseButtons.Left) == MouseButtons.Left;
-            if (_isDrawing || (ctrlDown && leftDown))
+            try
             {
-                _selectEnd = e.Location;
-                pictureBoxPdf.Invalidate();
-                return;
-            }
+                var ctrlDown = (ModifierKeys & Keys.Control) == Keys.Control;
+                var leftDown = (Control.MouseButtons & MouseButtons.Left) == MouseButtons.Left;
+                if (_isDrawing || (ctrlDown && leftDown))
+                {
+                    _selectEnd = e.Location;
+                    pictureBoxPdf.Invalidate();
+                    return;
+                }
 
-            if (_isSelecting)
+                if (_isSelecting)
+                {
+                    _selectEnd = e.Location;
+                    pictureBoxPdf.Invalidate();
+                }
+            }
+            catch (Exception ex)
             {
-                _selectEnd = e.Location;
-                pictureBoxPdf.Invalidate();
+                _logger.LogError(ex, "Error in PictureBoxPdf_MouseMove");
             }
         }
 
 
         private void PictureBoxPdf_MouseUp(object? sender, MouseEventArgs e)
         {
-            if (_isDoubleClickPending)
+            try
             {
-                _isDoubleClickPending = false;
-                _isSelecting = false;
-                _isDrawing = false;
-                return;
-            }
+                if (_isDoubleClickPending)
+                {
+                    _isDoubleClickPending = false;
+                    _isSelecting = false;
+                    _isDrawing = false;
+                    return;
+                }
 
-            if (_isDrawing)
-            {
-                _isDrawing = false;
-                try
+                if (_isDrawing)
                 {
-                    if (_annotationBitmap != null)
+                    _isDrawing = false;
+                    try
                     {
-                        var ip1 = ClientToImage(_selectStart);
-                        var ip2 = ClientToImage(_selectEnd);
-                        _annotationGraphics!.SmoothingMode = SmoothingMode.AntiAlias;
-                        _annotationGraphics.DrawLine(_pen, ip1, ip2);
-                        _presenter.SaveAnnotationForCurrentPage((Bitmap)_annotationBitmap.Clone());
-                        var imgW = _annotationBitmap.Width;
-                        var imgH = _annotationBitmap.Height;
-                        var pts = new List<float>() { ip1.X / imgW, ip1.Y / imgH, ip2.X / imgW, ip2.Y / imgH };
-                        _presenter.AddAnnotationStroke(pts.ToArray(), _pen.Color.ToArgb(), _pen.Width, imgW, imgH);
+                        if (_annotationBitmap != null)
+                        {
+                            var ip1 = ClientToImage(_selectStart);
+                            var ip2 = ClientToImage(_selectEnd);
+                            _annotationGraphics!.SmoothingMode = SmoothingMode.AntiAlias;
+                            _annotationGraphics.DrawLine(_pen, ip1, ip2);
+                            _presenter.SaveAnnotationForCurrentPage((Bitmap)_annotationBitmap.Clone());
+                            var imgW = _annotationBitmap.Width;
+                            var imgH = _annotationBitmap.Height;
+                            var pts = new List<float>() { ip1.X / imgW, ip1.Y / imgH, ip2.X / imgW, ip2.Y / imgH };
+                            _presenter.AddAnnotationStroke(pts.ToArray(), _pen.Color.ToArgb(), _pen.Width, imgW, imgH);
+                        }
                     }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error saving annotation");
+                    }
+                    finally { _currentStrokePoints = null; }
+                    try
+                    {
+                        pictureBoxPdf.Invalidate();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Error invalidating after drawing");
+                    }
+                    return;
                 }
-                catch (Exception ex)
+                if (_isSelecting)
                 {
-                    _logger.LogError(ex, "Error saving annotation");
+                    _isSelecting = false;
+                    _selectEnd = e.Location;
+                    _lastSelectionRect = GetSelectionRectangle(_selectStart, _selectEnd);
+                    try
+                    {
+                        pictureBoxPdf.Invalidate();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Error invalidating after selection");
+                    }
+                    SelectOcrClicked?.Invoke(this, EventArgs.Empty);
                 }
-                finally { _currentStrokePoints = null; }
-                pictureBoxPdf.Invalidate();
-                return;
             }
-            if (_isSelecting)
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "Error in PictureBoxPdf_MouseUp");
                 _isSelecting = false;
-                _selectEnd = e.Location;
-                _lastSelectionRect = GetSelectionRectangle(_selectStart, _selectEnd);
-                pictureBoxPdf.Invalidate();
-                SelectOcrClicked?.Invoke(this, EventArgs.Empty);
+                _isDrawing = false;
             }
         }
 
         private void PictureBoxPdf_MouseWheel(object? sender, MouseEventArgs e)
         {
-            if (ModifierKeys == Keys.Control)
+            try
             {
-                if (e.Delta > 0) _zoomLevel = Math.Min(400, _zoomLevel + 10);
-                else _zoomLevel = Math.Max(10, _zoomLevel - 10);
-                if (_presenter != null)
+                if (ModifierKeys == Keys.Control)
                 {
-                    var page = int.TryParse(textBoxPage.Text, out var p) ? p - 1 : 0;
-                    int targetW = (int)(pictureBoxPdf.ClientSize.Width * _zoomLevel / 100.0);
-                    int targetH = (int)(pictureBoxPdf.ClientSize.Height * _zoomLevel / 100.0);
-                    try
+                    if (e.Delta > 0) _zoomLevel = Math.Min(400, _zoomLevel + 10);
+                    else _zoomLevel = Math.Max(10, _zoomLevel - 10);
+                    if (_presenter != null)
                     {
-                        var bmp = _presenter.RenderPageToBitmap(page, Math.Max(1, targetW), Math.Max(1, targetH));
-                        if (bmp != null)
+                        var page = int.TryParse(textBoxPage.Text, out var p) ? p - 1 : 0;
+                        int targetW = (int)(pictureBoxPdf.ClientSize.Width * _zoomLevel / 100.0);
+                        int targetH = (int)(pictureBoxPdf.ClientSize.Height * _zoomLevel / 100.0);
+                        try
                         {
-                            var old = pictureBoxPdf.Image;
-                            pictureBoxPdf.Image = bmp;
-                            old?.Dispose();
+                            var bmp = _presenter.RenderPageToBitmap(page, Math.Max(1, targetW), Math.Max(1, targetH));
+                            if (bmp != null)
+                            {
+                                DisplayImage(bmp);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Error rendering page during zoom");
                         }
                     }
-                    catch (Exception ex)
+                }
+                else
+                {
+                    if (_presenter != null)
                     {
-                        _logger.LogError(ex, "Error rendering page during zoom");
+                        if (e.Delta < 0)
+                        {
+                            _presenter.NextPage();
+                        }
+                        else
+                        {
+                            _presenter.PreviousPage();
+                        }
                     }
                 }
             }
-            else
+            catch (Exception ex)
             {
-                if (_presenter != null)
-                {
-                    if (e.Delta < 0)
-                    {
-                        _presenter.NextPage();
-                    }
-                    else
-                    {
-                        _presenter.PreviousPage();
-                    }
-                }
+                _logger.LogError(ex, "Error in PictureBoxPdf_MouseWheel");
             }
         }
 
         private void PictureBoxPdf_Paint(object? sender, PaintEventArgs e)
         {
-            if (_isSelecting)
+            try
             {
-                var rect = GetSelectionRectangle(_selectStart, _selectEnd);
-                using var brush = new SolidBrush(Color.FromArgb(80, Color.Yellow));
-                e.Graphics.FillRectangle(brush, rect);
-                using var pen = new Pen(Color.Orange, 2);
-                e.Graphics.DrawRectangle(pen, rect);
-            }
-            else if (_isDrawing)
-            {
-                using var pen = new Pen(Color.Red, 4f);
-                e.Graphics.DrawLine(pen, _selectStart, _selectEnd);
-            }
+                if (_isSelecting)
+                {
+                    var rect = GetSelectionRectangle(_selectStart, _selectEnd);
+                    using var brush = new SolidBrush(Color.FromArgb(80, Color.Yellow));
+                    e.Graphics.FillRectangle(brush, rect);
+                    using var pen = new Pen(Color.Orange, 2);
+                    e.Graphics.DrawRectangle(pen, rect);
+                }
+                else if (_isDrawing)
+                {
+                    using var pen = new Pen(Color.Red, 4f);
+                    e.Graphics.DrawLine(pen, _selectStart, _selectEnd);
+                }
 
-            if (!string.IsNullOrEmpty(_currentPdfPath) && pictureBoxPdf?.Image != null)
+                if (!string.IsNullOrEmpty(_currentPdfPath) && pictureBoxPdf?.Image != null)
+                {
+                    DrawHighlightsFromLayer(e.Graphics);
+                }
+            }
+            catch (ObjectDisposedException ex)
             {
-                DrawHighlightsFromLayer(e.Graphics);
+                _logger.LogWarning(ex, "Object disposed during Paint event");
+                // 不显示红叉的方法是不抛出异常，让控件继续
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in PictureBoxPdf_Paint");
+                // 捕获所有异常，防止红叉出现
             }
         }
 
         private void DrawHighlightsFromLayer(Graphics g)
         {
-            if (_highlightBitmap == null || pictureBoxPdf?.Image == null) return;
+            try
+            {
+                if (_highlightBitmap == null || pictureBoxPdf?.Image == null) 
+                    return;
 
-            var imgRect = GetImageDisplayRect();
+                var imgRect = GetImageDisplayRect();
 
-            g.DrawImage(_highlightBitmap, imgRect,
-                new Rectangle(0, 0, _highlightBitmap.Width, _highlightBitmap.Height),
-                GraphicsUnit.Pixel);
+                g.DrawImage(_highlightBitmap, imgRect,
+                    new Rectangle(0, 0, _highlightBitmap.Width, _highlightBitmap.Height),
+                    GraphicsUnit.Pixel);
+            }
+            catch (ObjectDisposedException ex)
+            {
+                _logger.LogWarning(ex, "Object disposed in DrawHighlightsFromLayer");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in DrawHighlightsFromLayer");
+            }
         }
 
         private void EnsureAnnotationBitmap()
         {
-            if (pictureBoxPdf.Image == null)
-                return;
-
-            if (_annotationBitmap != null)
+            try
             {
-                if (_annotationBitmap.Width != pictureBoxPdf.Image.Width ||
-                    _annotationBitmap.Height != pictureBoxPdf.Image.Height)
+                if (pictureBoxPdf?.Image == null)
+                    return;
+
+                // 安全地获取图像尺寸
+                int imgWidth, imgHeight;
+                try
                 {
-                    _annotationGraphics?.Dispose();
-                    _annotationBitmap?.Dispose();
-                    _annotationGraphics = null;
-                    _annotationBitmap = null;
+                    imgWidth = pictureBoxPdf.Image.Width;
+                    imgHeight = pictureBoxPdf.Image.Height;
+                }
+                catch (ObjectDisposedException)
+                {
+                    _logger.LogWarning("Image was disposed, cannot create annotation bitmap");
+                    return;
+                }
+
+                if (_annotationBitmap != null)
+                {
+                    try
+                    {
+                        if (_annotationBitmap.Width != imgWidth ||
+                            _annotationBitmap.Height != imgHeight)
+                        {
+                            CleanupAnnotationBitmap();
+                        }
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        CleanupAnnotationBitmap();
+                    }
+                }
+
+                if (_annotationBitmap == null)
+                {
+                    _annotationBitmap = new Bitmap(imgWidth, imgHeight);
+                    _annotationGraphics = Graphics.FromImage(_annotationBitmap);
                 }
             }
-
-            if (_annotationBitmap == null)
+            catch (Exception ex)
             {
-                _annotationBitmap = new Bitmap(pictureBoxPdf.Image.Width, pictureBoxPdf.Image.Height);
-                _annotationGraphics = Graphics.FromImage(_annotationBitmap);
+                _logger.LogError(ex, "Error in EnsureAnnotationBitmap");
+                CleanupAnnotationBitmap();
             }
         }
 
         private PointF ClientToImage(Point clientPt)
         {
-            if (pictureBoxPdf.Image == null) return new PointF(clientPt.X, clientPt.Y);
-            var scaleX = (float)pictureBoxPdf.Image.Width / pictureBoxPdf.ClientSize.Width;
-            var scaleY = (float)pictureBoxPdf.Image.Height / pictureBoxPdf.ClientSize.Height;
-            return new PointF(clientPt.X * scaleX, clientPt.Y * scaleY);
+            try
+            {
+                if (pictureBoxPdf?.Image == null) 
+                    return new PointF(clientPt.X, clientPt.Y);
+                
+                int imgWidth, imgHeight;
+                try
+                {
+                    imgWidth = pictureBoxPdf.Image.Width;
+                    imgHeight = pictureBoxPdf.Image.Height;
+                }
+                catch (ObjectDisposedException)
+                {
+                    return new PointF(clientPt.X, clientPt.Y);
+                }
+                
+                var scaleX = (float)imgWidth / pictureBoxPdf.ClientSize.Width;
+                var scaleY = (float)imgHeight / pictureBoxPdf.ClientSize.Height;
+                return new PointF(clientPt.X * scaleX, clientPt.Y * scaleY);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in ClientToImage");
+                return new PointF(clientPt.X, clientPt.Y);
+            }
         }
 
         private Rectangle GetSelectionRectangle(Point start, Point end)
@@ -2036,20 +2260,56 @@ namespace UnifiedLearningAssistant.Forms
 
             if (disposing)
             {
-                _pen?.Dispose();
-                _annotationGraphics?.Dispose();
-                _annotationBitmap?.Dispose();
-                CleanupHighlightLayer();
-
-                if (pictureBoxPdf.Image != null)
+                try
                 {
-                    pictureBoxPdf.Image.Dispose();
-                    pictureBoxPdf.Image = null;
+                    _pen?.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error disposing pen");
+                }
+                
+                try
+                {
+                    CleanupAnnotationBitmap();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error cleaning up annotation bitmap");
+                }
+                
+                try
+                {
+                    CleanupHighlightLayer();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error cleaning up highlight layer");
                 }
 
-                if (components != null)
+                try
                 {
-                    components.Dispose();
+                    if (pictureBoxPdf?.Image != null)
+                    {
+                        pictureBoxPdf.Image.Dispose();
+                        pictureBoxPdf.Image = null;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error disposing main image");
+                }
+
+                try
+                {
+                    if (components != null)
+                    {
+                        components.Dispose();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error disposing components");
                 }
             }
 
