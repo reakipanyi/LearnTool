@@ -190,6 +190,8 @@ namespace UnifiedLearningAssistant.Presenters
                     {
                         var fileName = Path.GetFileName(filePath);
                         _currentPdfPath = filePath;
+                        // 重要：通知 View 更新当前 PDF 路径
+                        _view.SetCurrentPdfPath(filePath);
 
                         ClearRenderCache();
                         ClearThumbnailCache();
@@ -272,6 +274,8 @@ namespace UnifiedLearningAssistant.Presenters
                 ClearThumbnailCache();
 
                 _currentPdfPath = filePath;
+                // 重要：通知 View 更新当前 PDF 路径
+                _view.SetCurrentPdfPath(filePath);
                 LoadPdfFile(filePath);
 
                 // 检查是否有保存的页数

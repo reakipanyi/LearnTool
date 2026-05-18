@@ -120,7 +120,44 @@ namespace UnifiedLearningAssistant.Forms
 
         private void InitializeBookmarkAndHighlightUI()
         {
-            if (_tabPageBookmarks != null || tabControlLeft?.Contains(_tabPageBookmarks!) == true)
+            // 修复：检查 tabPageBookmarks 是否已正确添加到 tabControlLeft
+            bool needInitialize = false;
+
+            if (_tabPageBookmarks == null)
+            {
+                needInitialize = true;
+            }
+            else if (tabControlLeft != null && !tabControlLeft.TabPages.Contains(_tabPageBookmarks))
+            {
+                // _tabPageBookmarks 存在但没有添加到 tabControlLeft，需要重新初始化
+                needInitialize = true;
+                // 先清理旧的
+                try
+                {
+                    CleanupOldTabPages();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error cleaning up old tab pages");
+                }
+            }
+
+            if (!needInitialize && _tabPageHighlights != null && tabControlLeft != null && 
+                !tabControlLeft.TabPages.Contains(_tabPageHighlights))
+            {
+                // 有书签标签页但没有高亮标签页，也需要重新初始化
+                needInitialize = true;
+                try
+                {
+                    CleanupOldTabPages();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error cleaning up old tab pages");
+                }
+            }
+
+            if (!needInitialize)
             {
                 return;
             }
@@ -239,8 +276,51 @@ namespace UnifiedLearningAssistant.Forms
 
             if (tabControlLeft != null)
             {
-                tabControlLeft.Controls.Add(_tabPageBookmarks);
-                tabControlLeft.Controls.Add(_tabPageHighlights);
+                // 修复：添加到 TabPages 集合而不是 Controls 集合
+                tabControlLeft.TabPages.Add(_tabPageBookmarks);
+                tabControlLeft.TabPages.Add(_tabPageHighlights);
+            }
+        }
+
+        private void CleanupOldTabPages()
+        {
+            try
+            {
+                // 移除旧的书签和高亮标签页
+                if (tabControlLeft != null)
+                {
+                    if (_tabPageBookmarks != null && tabControlLeft.TabPages.Contains(_tabPageBookmarks))
+                    {
+                        tabControlLeft.TabPages.Remove(_tabPageBookmarks);
+                    }
+                    if (_tabPageHighlights != null && tabControlLeft.TabPages.Contains(_tabPageHighlights))
+                    {
+                        tabControlLeft.TabPages.Remove(_tabPageHighlights);
+                    }
+                }
+
+                // 清理旧的控件引用
+                _listBoxBookmarks?.Dispose();
+                _buttonAddBookmark?.Dispose();
+                _buttonRemoveBookmark?.Dispose();
+                _textBoxBookmarkTitle?.Dispose();
+                _listBoxHighlights?.Dispose();
+                _buttonAddHighlight?.Dispose();
+                _buttonRemoveHighlight?.Dispose();
+
+                _listBoxBookmarks = null;
+                _buttonAddBookmark = null;
+                _buttonRemoveBookmark = null;
+                _textBoxBookmarkTitle = null;
+                _listBoxHighlights = null;
+                _buttonAddHighlight = null;
+                _buttonRemoveHighlight = null;
+                _tabPageBookmarks = null;
+                _tabPageHighlights = null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error in CleanupOldTabPages");
             }
         }
 
@@ -559,6 +639,10 @@ namespace UnifiedLearningAssistant.Forms
             _currentPdfPath = pdfPath;
             _bookmarkService.ClearCache();
             _highlightService.ClearCacheForPdf(pdfPath);
+            
+            // 确保书签和高亮 UI 已初始化
+            InitializeBookmarkAndHighlightUI();
+            
             RefreshBookmarkList();
             RefreshHighlightList();
         }
