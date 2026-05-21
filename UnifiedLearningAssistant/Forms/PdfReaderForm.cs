@@ -56,7 +56,6 @@ namespace UnifiedLearningAssistant.Forms
         private ListBox? _listBoxHighlights;
         private Button? _buttonAddHighlight;
         private Button? _buttonRemoveHighlight;
-        private RadioButton?[] _radioHighlightColors;
 
         private TabPage? _tabPageBookmarks;
         private TabPage? _tabPageHighlights;
@@ -92,7 +91,13 @@ namespace UnifiedLearningAssistant.Forms
             Resize += PdfReaderForm_Resize;
             KeyDown += PdfReaderForm_KeyDown;
             InitializeBookmarkAndHighlightUI();
-            InitializePageTransition();
+
+            if (panelPdf != null)
+            {
+                panelPdf.Controls.Add(_pageTransitionOverlay);
+                _pageTransitionOverlay.BringToFront();
+            }
+
         }
 
 
@@ -142,8 +147,7 @@ namespace UnifiedLearningAssistant.Forms
                 }
             }
 
-            if (!needInitialize && _tabPageHighlights != null && tabControlLeft != null && 
-                !tabControlLeft.TabPages.Contains(_tabPageHighlights))
+            if (!needInitialize && _tabPageHighlights != null && tabControlLeft != null && !tabControlLeft.TabPages.Contains(_tabPageHighlights))
             {
                 // 有书签标签页但没有高亮标签页，也需要重新初始化
                 needInitialize = true;
@@ -162,125 +166,12 @@ namespace UnifiedLearningAssistant.Forms
                 return;
             }
 
-            _tabPageBookmarks = new TabPage();
-            _tabPageBookmarks.Name = "tabPageBookmarks";
-            _tabPageBookmarks.Text = "🔖 书签";
-            _tabPageBookmarks.Size = new Size(335, 822);
 
-            var bookmarkContainer = new Panel { Dock = DockStyle.Fill };
-            _listBoxBookmarks = new ListBox
-            {
-                Dock = DockStyle.Top,
-                Height = 300,
-                Font = new Font("Microsoft YaHei UI", 10F)
-            };
-            _listBoxBookmarks.DoubleClick += ListBoxBookmarks_DoubleClick;
 
-            _textBoxBookmarkTitle = new TextBox
-            {
-                Dock = DockStyle.Top,
-                Height = 30,
-                PlaceholderText = "输入书签名称...",
-                Margin = new Padding(5)
-            };
 
-            var buttonPanel = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                Height = 50,
-                FlowDirection = FlowDirection.LeftToRight
-            };
 
-            _buttonAddBookmark = new Button { Text = "➕ 添加书签", Width = 100, Margin = new Padding(5) };
-            _buttonAddBookmark.Click += ButtonAddBookmark_Click;
-
-            _buttonRemoveBookmark = new Button { Text = "🗑️ 删除书签", Width = 100, Margin = new Padding(5) };
-            _buttonRemoveBookmark.Click += ButtonRemoveBookmark_Click;
-
-            buttonPanel.Controls.Add(_buttonAddBookmark);
-            buttonPanel.Controls.Add(_buttonRemoveBookmark);
-
-            bookmarkContainer.Controls.Add(_listBoxBookmarks);
-            bookmarkContainer.Controls.Add(buttonPanel);
-            bookmarkContainer.Controls.Add(_textBoxBookmarkTitle!);
-
-            _tabPageBookmarks.Controls.Add(bookmarkContainer);
-
-            _tabPageHighlights = new TabPage();
-            _tabPageHighlights.Name = "tabPageHighlights";
-            _tabPageHighlights.Text = "🖍️ 高亮";
-            _tabPageHighlights.Size = new Size(335, 822);
-
-            var highlightContainer = new Panel { Dock = DockStyle.Fill };
-
-            var colorPanel = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                Height = 50,
-                FlowDirection = FlowDirection.LeftToRight
-            };
-
-            var colorLabel = new Label { Text = "颜色:", AutoSize = true, Margin = new Padding(5) };
-            colorPanel.Controls.Add(colorLabel);
-
-            _radioHighlightColors = new RadioButton?[5];
-            string[] colorNames = { "黄色", "绿色", "蓝色", "粉色", "橙色" };
-            for (int i = 0; i < 5; i++)
-            {
-                var radio = new RadioButton
-                {
-                    Text = colorNames[i],
-                    AutoSize = true,
-                    Margin = new Padding(5),
-                    Tag = i
-                };
-                radio.CheckedChanged += RadioHighlightColor_CheckedChanged;
-                if (i == 0) radio.Checked = true;
-                _radioHighlightColors[i] = radio;
-                colorPanel.Controls.Add(radio);
-            }
-
-            _listBoxHighlights = new ListBox
-            {
-                Dock = DockStyle.Top,
-                Height = 250,
-                Font = new Font("Microsoft YaHei UI", 10F)
-            };
-            _listBoxHighlights.DoubleClick += ListBoxHighlights_DoubleClick;
-
-            var highlightButtonPanel = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                Height = 50,
-                FlowDirection = FlowDirection.LeftToRight
-            };
-
-            _buttonAddHighlight = new Button { Text = "➕ 添加高亮", Width = 100, Margin = new Padding(5) };
-            _buttonAddHighlight.Click += ButtonAddHighlight_Click;
-
-            _buttonRemoveHighlight = new Button { Text = "🗑️ 删除高亮", Width = 100, Margin = new Padding(5) };
-            _buttonRemoveHighlight.Click += ButtonRemoveHighlight_Click;
-
-            var buttonUndoHighlight = new Button { Text = "↩️ 撤销", Width = 80, Margin = new Padding(5) };
-            buttonUndoHighlight.Click += ButtonUndoHighlight_Click;
-
-            highlightButtonPanel.Controls.Add(_buttonAddHighlight);
-            highlightButtonPanel.Controls.Add(_buttonRemoveHighlight);
-            highlightButtonPanel.Controls.Add(buttonUndoHighlight);
-
-            highlightContainer.Controls.Add(_listBoxHighlights);
-            highlightContainer.Controls.Add(highlightButtonPanel);
-            highlightContainer.Controls.Add(colorPanel);
-
-            _tabPageHighlights!.Controls.Add(highlightContainer);
-
-            if (tabControlLeft != null)
-            {
-                // 修复：添加到 TabPages 集合而不是 Controls 集合
-                tabControlLeft.TabPages.Add(_tabPageBookmarks);
-                tabControlLeft.TabPages.Add(_tabPageHighlights);
-            }
         }
+
 
         private void CleanupOldTabPages()
         {
@@ -323,36 +214,6 @@ namespace UnifiedLearningAssistant.Forms
                 _logger.LogWarning(ex, "Error in CleanupOldTabPages");
             }
         }
-
-        private void InitializePageTransition()
-        {
-            _pageTransitionOverlay = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = Color.White,
-                Visible = false
-            };
-
-            var transitionLabel = new Label
-            {
-                Dock = DockStyle.Fill,
-                Text = "",
-                TextAlign = ContentAlignment.MiddleCenter,
-                Font = new Font("Microsoft YaHei UI", 24F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(200, 100, 100, 100)
-            };
-            _pageTransitionOverlay.Controls.Add(transitionLabel);
-
-            if (panelPdf != null)
-            {
-                panelPdf.Controls.Add(_pageTransitionOverlay);
-                _pageTransitionOverlay.BringToFront();
-            }
-
-            _pageTransitionTimer = new System.Windows.Forms.Timer { Interval = 50 };
-            _pageTransitionTimer.Tick += PageTransitionTimer_Tick;
-        }
-
         private int _transitionStep = 0;
         private bool _transitionFadeOut = false;
 
@@ -639,10 +500,10 @@ namespace UnifiedLearningAssistant.Forms
             _currentPdfPath = pdfPath;
             _bookmarkService.ClearCache();
             _highlightService.ClearCacheForPdf(pdfPath);
-            
+
             // 确保书签和高亮 UI 已初始化
             InitializeBookmarkAndHighlightUI();
-            
+
             RefreshBookmarkList();
             RefreshHighlightList();
         }
@@ -689,14 +550,14 @@ namespace UnifiedLearningAssistant.Forms
                 // 首先清理相关的注释位图，因为它们依赖于原图像尺寸
                 CleanupAnnotationBitmap();
                 CleanupHighlightLayer();
-                
+
                 var old = pictureBoxPdf.Image;
                 pictureBoxPdf.Image = bmp;
-                
+
                 // 延迟释放旧图像，避免竞态条件
                 if (old != null && old != bmp)
                 {
-                    Task.Delay(100).ContinueWith(_ => 
+                    Task.Delay(100).ContinueWith(_ =>
                     {
                         try
                         {
@@ -1263,8 +1124,21 @@ namespace UnifiedLearningAssistant.Forms
         private TabPage tabPageThumbnails;
         private Panel panelLeftContainer;
 
+
+
+        private Panel bookmarkContainer;
+        private FlowLayoutPanel buttonPanel;
+        private Panel highlightContainer;
+        private FlowLayoutPanel highlightButtonPanel;
+        private Button buttonUndoHighlight;
+
+
+        private Label transitionLabel;
+
+
         private void InitializeComponent()
         {
+            components = new System.ComponentModel.Container();
             splitContainer1 = new SplitContainer();
             panelPdf = new Panel();
             panelNavigation = new Panel();
@@ -1304,7 +1178,24 @@ namespace UnifiedLearningAssistant.Forms
             buttonAskAi = new Button();
             tabPageFiles = new TabPage();
             treeViewFiles = new TreeView();
+            _tabPageBookmarks = new TabPage();
+            bookmarkContainer = new Panel();
+            _listBoxBookmarks = new ListBox();
+            _textBoxBookmarkTitle = new TextBox();
+            buttonPanel = new FlowLayoutPanel();
+            _buttonAddBookmark = new Button();
+            _buttonRemoveBookmark = new Button();
+            _tabPageHighlights = new TabPage();
+            highlightContainer = new Panel();
+            _listBoxHighlights = new ListBox();
+            highlightButtonPanel = new FlowLayoutPanel();
+            _buttonAddHighlight = new Button();
+            _buttonRemoveHighlight = new Button();
+            buttonUndoHighlight = new Button();
             buttonOpenFolder = new Button();
+            transitionLabel = new Label();
+            _pageTransitionOverlay = new Panel();
+            _pageTransitionTimer = new System.Windows.Forms.Timer(components);
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
@@ -1323,6 +1214,13 @@ namespace UnifiedLearningAssistant.Forms
             groupBoxProgress.SuspendLayout();
             groupBoxLanguage.SuspendLayout();
             tabPageFiles.SuspendLayout();
+            _tabPageBookmarks.SuspendLayout();
+            bookmarkContainer.SuspendLayout();
+            buttonPanel.SuspendLayout();
+            _tabPageHighlights.SuspendLayout();
+            highlightContainer.SuspendLayout();
+            highlightButtonPanel.SuspendLayout();
+            _pageTransitionOverlay.SuspendLayout();
             SuspendLayout();
             // 
             // splitContainer1
@@ -1526,6 +1424,8 @@ namespace UnifiedLearningAssistant.Forms
             tabControlLeft.Controls.Add(tabPageThumbnails);
             tabControlLeft.Controls.Add(tabPageTranslate);
             tabControlLeft.Controls.Add(tabPageFiles);
+            tabControlLeft.Controls.Add(_tabPageBookmarks);
+            tabControlLeft.Controls.Add(_tabPageHighlights);
             tabControlLeft.Dock = DockStyle.Fill;
             tabControlLeft.Location = new Point(0, 35);
             tabControlLeft.Name = "tabControlLeft";
@@ -1742,6 +1642,148 @@ namespace UnifiedLearningAssistant.Forms
             treeViewFiles.TabIndex = 0;
             treeViewFiles.AfterSelect += TreeViewFiles_AfterSelect;
             // 
+            // _tabPageBookmarks
+            // 
+            _tabPageBookmarks.Controls.Add(bookmarkContainer);
+            _tabPageBookmarks.Location = new Point(4, 26);
+            _tabPageBookmarks.Name = "_tabPageBookmarks";
+            _tabPageBookmarks.Size = new Size(335, 822);
+            _tabPageBookmarks.TabIndex = 2;
+            _tabPageBookmarks.Text = "🔖 书签";
+            // 
+            // bookmarkContainer
+            // 
+            bookmarkContainer.Controls.Add(_listBoxBookmarks);
+            bookmarkContainer.Controls.Add(_textBoxBookmarkTitle);
+            bookmarkContainer.Controls.Add(buttonPanel);
+            bookmarkContainer.Dock = DockStyle.Fill;
+            bookmarkContainer.Location = new Point(0, 0);
+            bookmarkContainer.Name = "bookmarkContainer";
+            bookmarkContainer.Size = new Size(335, 822);
+            bookmarkContainer.TabIndex = 0;
+            // 
+            // _listBoxBookmarks
+            // 
+            _listBoxBookmarks.Dock = DockStyle.Top;
+            _listBoxBookmarks.Font = new Font("Microsoft YaHei UI", 10F);
+            _listBoxBookmarks.ItemHeight = 19;
+            _listBoxBookmarks.Location = new Point(0, 83);
+            _listBoxBookmarks.Name = "_listBoxBookmarks";
+            _listBoxBookmarks.Size = new Size(335, 289);
+            _listBoxBookmarks.TabIndex = 0;
+            _listBoxBookmarks.DoubleClick += ListBoxBookmarks_DoubleClick;
+            // 
+            // _textBoxBookmarkTitle
+            // 
+            _textBoxBookmarkTitle.Dock = DockStyle.Top;
+            _textBoxBookmarkTitle.Location = new Point(0, 60);
+            _textBoxBookmarkTitle.Margin = new Padding(5);
+            _textBoxBookmarkTitle.Name = "_textBoxBookmarkTitle";
+            _textBoxBookmarkTitle.PlaceholderText = "输入书签名称...";
+            _textBoxBookmarkTitle.Size = new Size(335, 23);
+            _textBoxBookmarkTitle.TabIndex = 1;
+            // 
+            // buttonPanel
+            // 
+            buttonPanel.Controls.Add(_buttonAddBookmark);
+            buttonPanel.Controls.Add(_buttonRemoveBookmark);
+            buttonPanel.Dock = DockStyle.Top;
+            buttonPanel.Location = new Point(0, 0);
+            buttonPanel.Name = "buttonPanel";
+            buttonPanel.Size = new Size(335, 60);
+            buttonPanel.TabIndex = 2;
+            // 
+            // _buttonAddBookmark
+            // 
+            _buttonAddBookmark.Location = new Point(5, 5);
+            _buttonAddBookmark.Margin = new Padding(5);
+            _buttonAddBookmark.Name = "_buttonAddBookmark";
+            _buttonAddBookmark.Size = new Size(100, 36);
+            _buttonAddBookmark.TabIndex = 0;
+            _buttonAddBookmark.Text = "➕ 添加书签";
+            _buttonAddBookmark.Click += ButtonAddBookmark_Click;
+            // 
+            // _buttonRemoveBookmark
+            // 
+            _buttonRemoveBookmark.Location = new Point(115, 5);
+            _buttonRemoveBookmark.Margin = new Padding(5);
+            _buttonRemoveBookmark.Name = "_buttonRemoveBookmark";
+            _buttonRemoveBookmark.Size = new Size(100, 36);
+            _buttonRemoveBookmark.TabIndex = 1;
+            _buttonRemoveBookmark.Text = "🗑️ 删除书签";
+            _buttonRemoveBookmark.Click += ButtonRemoveBookmark_Click;
+            // 
+            // _tabPageHighlights
+            // 
+            _tabPageHighlights.Controls.Add(highlightContainer);
+            _tabPageHighlights.Location = new Point(4, 26);
+            _tabPageHighlights.Name = "_tabPageHighlights";
+            _tabPageHighlights.Size = new Size(335, 822);
+            _tabPageHighlights.TabIndex = 3;
+            _tabPageHighlights.Text = "🖍️ 高亮";
+            // 
+            // highlightContainer
+            // 
+            highlightContainer.Controls.Add(_listBoxHighlights);
+            highlightContainer.Controls.Add(highlightButtonPanel);
+            highlightContainer.Dock = DockStyle.Fill;
+            highlightContainer.Location = new Point(0, 0);
+            highlightContainer.Name = "highlightContainer";
+            highlightContainer.Size = new Size(335, 822);
+            highlightContainer.TabIndex = 0;
+            // 
+            // _listBoxHighlights
+            // 
+            _listBoxHighlights.Dock = DockStyle.Top;
+            _listBoxHighlights.Font = new Font("Microsoft YaHei UI", 10F);
+            _listBoxHighlights.ItemHeight = 19;
+            _listBoxHighlights.Location = new Point(0, 60);
+            _listBoxHighlights.Name = "_listBoxHighlights";
+            _listBoxHighlights.Size = new Size(335, 232);
+            _listBoxHighlights.TabIndex = 0;
+            _listBoxHighlights.DoubleClick += ListBoxHighlights_DoubleClick;
+            // 
+            // highlightButtonPanel
+            // 
+            highlightButtonPanel.Controls.Add(_buttonAddHighlight);
+            highlightButtonPanel.Controls.Add(_buttonRemoveHighlight);
+            highlightButtonPanel.Controls.Add(buttonUndoHighlight);
+            highlightButtonPanel.Dock = DockStyle.Top;
+            highlightButtonPanel.Location = new Point(0, 0);
+            highlightButtonPanel.Name = "highlightButtonPanel";
+            highlightButtonPanel.Size = new Size(335, 60);
+            highlightButtonPanel.TabIndex = 1;
+            // 
+            // _buttonAddHighlight
+            // 
+            _buttonAddHighlight.Location = new Point(5, 5);
+            _buttonAddHighlight.Margin = new Padding(5);
+            _buttonAddHighlight.Name = "_buttonAddHighlight";
+            _buttonAddHighlight.Size = new Size(100, 35);
+            _buttonAddHighlight.TabIndex = 0;
+            _buttonAddHighlight.Text = "➕ 添加高亮";
+            _buttonAddHighlight.Click += ButtonAddHighlight_Click;
+            // 
+            // _buttonRemoveHighlight
+            // 
+            _buttonRemoveHighlight.Location = new Point(115, 5);
+            _buttonRemoveHighlight.Margin = new Padding(5);
+            _buttonRemoveHighlight.Name = "_buttonRemoveHighlight";
+            _buttonRemoveHighlight.Size = new Size(100, 35);
+            _buttonRemoveHighlight.TabIndex = 1;
+            _buttonRemoveHighlight.Text = "🗑️ 删除高亮";
+            _buttonRemoveHighlight.Click += ButtonRemoveHighlight_Click;
+            // 
+            // buttonUndoHighlight
+            // 
+            buttonUndoHighlight.Location = new Point(225, 5);
+            buttonUndoHighlight.Margin = new Padding(5);
+            buttonUndoHighlight.Name = "buttonUndoHighlight";
+            buttonUndoHighlight.Size = new Size(80, 35);
+            buttonUndoHighlight.TabIndex = 2;
+            buttonUndoHighlight.Text = "↩️ 撤销";
+            buttonUndoHighlight.Click += ButtonUndoHighlight_Click;
+            // 
             // buttonOpenFolder
             // 
             buttonOpenFolder.Dock = DockStyle.Top;
@@ -1751,6 +1793,33 @@ namespace UnifiedLearningAssistant.Forms
             buttonOpenFolder.TabIndex = 0;
             buttonOpenFolder.Text = "📁 选择文件夹";
             buttonOpenFolder.Click += ButtonOpenFolder_Click;
+            // 
+            // transitionLabel
+            // 
+            transitionLabel.Dock = DockStyle.Fill;
+            transitionLabel.Font = new Font("Microsoft YaHei UI", 24F, FontStyle.Bold);
+            transitionLabel.ForeColor = Color.FromArgb(200, 100, 100, 100);
+            transitionLabel.Location = new Point(0, 0);
+            transitionLabel.Name = "transitionLabel";
+            transitionLabel.Size = new Size(200, 100);
+            transitionLabel.TabIndex = 0;
+            transitionLabel.TextAlign = ContentAlignment.MiddleCenter;
+            // 
+            // _pageTransitionOverlay
+            // 
+            _pageTransitionOverlay.BackColor = Color.White;
+            _pageTransitionOverlay.Controls.Add(transitionLabel);
+            _pageTransitionOverlay.Dock = DockStyle.Fill;
+            _pageTransitionOverlay.Location = new Point(0, 0);
+            _pageTransitionOverlay.Name = "_pageTransitionOverlay";
+            _pageTransitionOverlay.Size = new Size(200, 100);
+            _pageTransitionOverlay.TabIndex = 0;
+            _pageTransitionOverlay.Visible = false;
+            // 
+            // _pageTransitionTimer
+            // 
+            _pageTransitionTimer.Interval = 50;
+            _pageTransitionTimer.Tick += PageTransitionTimer_Tick;
             // 
             // PdfReaderForm
             // 
@@ -1778,6 +1847,14 @@ namespace UnifiedLearningAssistant.Forms
             groupBoxLanguage.ResumeLayout(false);
             groupBoxLanguage.PerformLayout();
             tabPageFiles.ResumeLayout(false);
+            _tabPageBookmarks.ResumeLayout(false);
+            bookmarkContainer.ResumeLayout(false);
+            bookmarkContainer.PerformLayout();
+            buttonPanel.ResumeLayout(false);
+            _tabPageHighlights.ResumeLayout(false);
+            highlightContainer.ResumeLayout(false);
+            highlightButtonPanel.ResumeLayout(false);
+            _pageTransitionOverlay.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -1906,7 +1983,7 @@ namespace UnifiedLearningAssistant.Forms
         {
             try
             {
-                if (e.Button == MouseButtons.Left)
+                if (e.Button == MouseButtons.Right)
                 {
                     var now = DateTime.Now;
                     var timeDiff = (now - _lastClickTime).TotalMilliseconds;
@@ -2159,7 +2236,7 @@ namespace UnifiedLearningAssistant.Forms
         {
             try
             {
-                if (_highlightBitmap == null || pictureBoxPdf?.Image == null) 
+                if (_highlightBitmap == null || pictureBoxPdf?.Image == null)
                     return;
 
                 var imgRect = GetImageDisplayRect();
@@ -2231,9 +2308,9 @@ namespace UnifiedLearningAssistant.Forms
         {
             try
             {
-                if (pictureBoxPdf?.Image == null) 
+                if (pictureBoxPdf?.Image == null)
                     return new PointF(clientPt.X, clientPt.Y);
-                
+
                 int imgWidth, imgHeight;
                 try
                 {
@@ -2244,7 +2321,7 @@ namespace UnifiedLearningAssistant.Forms
                 {
                     return new PointF(clientPt.X, clientPt.Y);
                 }
-                
+
                 var scaleX = (float)imgWidth / pictureBoxPdf.ClientSize.Width;
                 var scaleY = (float)imgHeight / pictureBoxPdf.ClientSize.Height;
                 return new PointF(clientPt.X * scaleX, clientPt.Y * scaleY);
@@ -2352,7 +2429,7 @@ namespace UnifiedLearningAssistant.Forms
                 {
                     _logger.LogWarning(ex, "Error disposing pen");
                 }
-                
+
                 try
                 {
                     CleanupAnnotationBitmap();
@@ -2361,7 +2438,7 @@ namespace UnifiedLearningAssistant.Forms
                 {
                     _logger.LogWarning(ex, "Error cleaning up annotation bitmap");
                 }
-                
+
                 try
                 {
                     CleanupHighlightLayer();

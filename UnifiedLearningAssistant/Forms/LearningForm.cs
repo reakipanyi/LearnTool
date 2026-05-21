@@ -33,8 +33,6 @@ namespace UnifiedLearningAssistant.Forms
             _soundService = new SoundService();
             _panelDecorator = new PanelDecorator();
 
-            // 应用主题样式
-            ApplyColorScheme();
             AddAnimation();
 
             Load += LearningForm_Load;
@@ -103,52 +101,7 @@ namespace UnifiedLearningAssistant.Forms
             ApplySettings();
         }
 
-        private void ApplyColorScheme()
-        {
-            BackColor = ThemeHelper.Colors.WarmBackground;
-            TransparencyKey = Color.FromArgb(255, 0, 255);
 
-            panelContent.BackColor = ThemeHelper.Colors.PanelLight;
-            panelAI.BackColor = ThemeHelper.Colors.PanelWarm;
-
-            labelDisplay.ForeColor = ThemeHelper.Colors.TextSecondary;
-            labelContent.ForeColor = ThemeHelper.Colors.TextPrimary;
-            labelAI.ForeColor = Color.FromArgb(140, 100, 80);
-            labelStatistics.ForeColor = Color.FromArgb(80, 100, 120);
-
-            progressBar1.ForeColor = ThemeHelper.Colors.Progress;
-            progressBar1.BackColor = Color.FromArgb(240, 240, 240);
-            progressBar1.Style = ProgressBarStyle.Continuous;
-
-            // 配置按钮样式
-            ThemeHelper.ConfigureButton(buttonKnown, ThemeHelper.Colors.Success);
-            ThemeHelper.ConfigureButton(buttonUnknown, ThemeHelper.Colors.Error);
-            ThemeHelper.ConfigureButton(buttonNext, ThemeHelper.Colors.Primary);
-            ThemeHelper.ConfigureButton(buttonAddToPdf, ThemeHelper.Colors.Purple);
-            ThemeHelper.ConfigureButton(buttonPronounce, ThemeHelper.Colors.Cyan);
-            ThemeHelper.ConfigureButton(buttonExit, ThemeHelper.Colors.Gray);
-
-            checkBoxVoice.ForeColor = ThemeHelper.Colors.TextPrimary;
-            labelPronunciationScope.ForeColor = ThemeHelper.Colors.TextPrimary;
-
-            radioOriginal.ForeColor = ThemeHelper.Colors.TextPrimary;
-            radioExplanation.ForeColor = ThemeHelper.Colors.TextPrimary;
-            radioBoth.ForeColor = ThemeHelper.Colors.TextPrimary;
-
-            richTextBoxAI.BackColor = Color.FromArgb(250, 250, 250);
-            richTextBoxAI.ForeColor = Color.FromArgb(60, 80, 100);
-
-            panelContent.BorderStyle = BorderStyle.None;
-            panelAI.BorderStyle = BorderStyle.None;
-
-            // 添加按钮悬停效果
-            ThemeHelper.AddButtonHoverEffect(buttonKnown, ThemeHelper.Colors.Success);
-            ThemeHelper.AddButtonHoverEffect(buttonUnknown, ThemeHelper.Colors.Error);
-            ThemeHelper.AddButtonHoverEffect(buttonNext, ThemeHelper.Colors.Primary);
-            ThemeHelper.AddButtonHoverEffect(buttonAddToPdf, ThemeHelper.Colors.Purple);
-            ThemeHelper.AddButtonHoverEffect(buttonPronounce, ThemeHelper.Colors.Cyan);
-            ThemeHelper.AddButtonHoverEffect(buttonExit, ThemeHelper.Colors.Gray);
-        }
 
         private void AddAnimation()
         {
@@ -591,6 +544,78 @@ namespace UnifiedLearningAssistant.Forms
             labelShortcutHints.Size = new Size(800, 17);
             labelShortcutHints.TabIndex = 16;
             labelShortcutHints.Text = "快捷键: 空格-发音 | 回车-下一个 | 1/K-会了 | 2/U-不会 | Esc-返回";
+
+
+            BackColor = ThemeHelper.Colors.WarmBackground;
+            TransparencyKey = Color.FromArgb(255, 0, 255);
+
+            panelContent.BackColor = ThemeHelper.Colors.PanelLight;
+            panelAI.BackColor = ThemeHelper.Colors.PanelWarm;
+
+            labelDisplay.ForeColor = ThemeHelper.Colors.TextSecondary;
+            labelContent.ForeColor = ThemeHelper.Colors.TextPrimary;
+            labelAI.ForeColor = Color.FromArgb(140, 100, 80);
+            labelStatistics.ForeColor = Color.FromArgb(80, 100, 120);
+
+            progressBar1.ForeColor = ThemeHelper.Colors.Progress;
+            progressBar1.BackColor = Color.FromArgb(240, 240, 240);
+            progressBar1.Style = ProgressBarStyle.Continuous;
+            // 认识
+            buttonKnown.BackColor = ThemeHelper.Colors.Success;
+            buttonKnown.ForeColor = Color.White;
+            buttonKnown.FlatStyle = FlatStyle.Flat;
+            buttonKnown.FlatAppearance.BorderSize = 0;
+
+            // 不认识
+            buttonUnknown.BackColor = ThemeHelper.Colors.Error;
+            buttonUnknown.ForeColor = Color.White;
+            buttonUnknown.FlatStyle = FlatStyle.Flat;
+            buttonUnknown.FlatAppearance.BorderSize = 0;
+
+            // 下一个
+            buttonNext.BackColor = ThemeHelper.Colors.Primary;
+            buttonNext.ForeColor = Color.White;
+            buttonNext.FlatStyle = FlatStyle.Flat;
+            buttonNext.FlatAppearance.BorderSize = 0;
+
+            // 添加到PDF
+            buttonAddToPdf.BackColor = ThemeHelper.Colors.Purple;
+            buttonAddToPdf.ForeColor = Color.White;
+            buttonAddToPdf.FlatStyle = FlatStyle.Flat;
+            buttonAddToPdf.FlatAppearance.BorderSize = 0;
+
+            // 发音
+            buttonPronounce.BackColor = ThemeHelper.Colors.Cyan;
+            buttonPronounce.ForeColor = Color.White;
+            buttonPronounce.FlatStyle = FlatStyle.Flat;
+            buttonPronounce.FlatAppearance.BorderSize = 0;
+
+            // 退出
+            buttonExit.BackColor = ThemeHelper.Colors.Gray;
+            buttonExit.ForeColor = Color.White;
+            buttonExit.FlatStyle = FlatStyle.Flat;
+            buttonExit.FlatAppearance.BorderSize = 0;
+            checkBoxVoice.ForeColor = ThemeHelper.Colors.TextPrimary;
+            labelPronunciationScope.ForeColor = ThemeHelper.Colors.TextPrimary;
+
+            radioOriginal.ForeColor = ThemeHelper.Colors.TextPrimary;
+            radioExplanation.ForeColor = ThemeHelper.Colors.TextPrimary;
+            radioBoth.ForeColor = ThemeHelper.Colors.TextPrimary;
+
+            richTextBoxAI.BackColor = Color.FromArgb(250, 250, 250);
+            richTextBoxAI.ForeColor = Color.FromArgb(60, 80, 100);
+
+            panelContent.BorderStyle = BorderStyle.None;
+            panelAI.BorderStyle = BorderStyle.None;
+
+            // 添加按钮悬停效果
+            ThemeHelper.AddButtonHoverEffect(buttonKnown, ThemeHelper.Colors.Success);
+            ThemeHelper.AddButtonHoverEffect(buttonUnknown, ThemeHelper.Colors.Error);
+            ThemeHelper.AddButtonHoverEffect(buttonNext, ThemeHelper.Colors.Primary);
+            ThemeHelper.AddButtonHoverEffect(buttonAddToPdf, ThemeHelper.Colors.Purple);
+            ThemeHelper.AddButtonHoverEffect(buttonPronounce, ThemeHelper.Colors.Cyan);
+            ThemeHelper.AddButtonHoverEffect(buttonExit, ThemeHelper.Colors.Gray);
+
             // 
             // LearningForm
             // 

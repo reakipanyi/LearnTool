@@ -80,11 +80,7 @@ namespace UnifiedLearningAssistant.Common
                 (parent.Height - control.Height) / 2);
         }
 
-        public static void EnableHighDpi(this Form form)
-        {
-            form.AutoScaleMode = AutoScaleMode.Dpi;
-            //form.DoubleBuffered = true;
-        }
+
 
         public static void SetChildFonts(this Control parent, Font font)
         {

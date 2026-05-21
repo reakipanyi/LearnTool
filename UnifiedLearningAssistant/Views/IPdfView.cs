@@ -5,6 +5,7 @@ namespace UnifiedLearningAssistant.Views
         void SetFileList(IEnumerable<string> files);
         void SetPageCount(int count);
         void SetCurrentPageIndex(int pageIndex);
+        void SetCurrentPdfPath(string filePath);
         void SetPageText(int pageIndex, string text);
         void DisplayImage(Bitmap bmp);
         void ShowWarning(string message);
