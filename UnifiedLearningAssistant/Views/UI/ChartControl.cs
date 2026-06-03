@@ -14,7 +14,9 @@ namespace UnifiedLearningAssistant.Views.UI
         Line
     }
 
-    // 新增功能：中等级 - 学习统计可视化增强版
+    /// <summary>
+    /// 图表控件，支持饼图、柱状图和折线图
+    /// </summary>
     public class ChartControl : Control
     {
         private double[]? _values;
@@ -22,7 +24,6 @@ namespace UnifiedLearningAssistant.Views.UI
         private Color[]? _colors;
         private ChartType _chartType = ChartType.Pie;
         private string _title = string.Empty;
-        private readonly Random _random = new Random();
 
         public ChartControl()
         {
