@@ -156,6 +156,14 @@ namespace UnifiedLearningAssistant
                 ServiceProvider = BuildServiceProvider();
                 logger = ServiceProvider.GetRequiredService<ILogger<MainForm>>();
                 logger.LogInformation("服务容器初始化成功");
+                
+                // 启动提醒服务
+                var reminderService = ServiceProvider.GetService<ILearningReminderService>();
+                if (reminderService != null)
+                {
+                    reminderService.Start();
+                    logger.LogInformation("提醒服务已启动");
+                }
             }
             catch (Exception ex)
             {
@@ -209,12 +217,24 @@ namespace UnifiedLearningAssistant
 
         private static void Application_ApplicationExit(object? sender, EventArgs e)
         {
+            try
+            {
+                // 停止提醒服务
+                var reminderService = ServiceProvider?.GetService<ILearningReminderService>();
+                if (reminderService is IDisposable disposableReminder)
+                {
+                    disposableReminder.Dispose();
+                }
+            }
+            catch
+            {
+            }
 
             try
             {
                 ThemeHelper.DisposeFonts();
             }
-            catch (Exception ex)
+            catch
             {
             }
 
@@ -226,10 +246,9 @@ namespace UnifiedLearningAssistant
                 }
                 ServiceProvider = null!;
             }
-            catch (Exception ex)
+            catch
             {
             }
-
         }
 
         // 新增功能：全局服务访问辅助方法

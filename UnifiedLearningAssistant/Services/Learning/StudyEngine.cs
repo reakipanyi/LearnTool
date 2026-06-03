@@ -12,6 +12,7 @@ namespace UnifiedLearningAssistant.Services.Learning
 
         private readonly IDataPersistenceService _persistenceService;
         private readonly IContentLoaderService _contentLoaderService;
+        private readonly ILearningAnalyticsService? _analyticsService;
 
         private string _currentUserId = "";
         private string _currentLanguage = "";
@@ -33,10 +34,14 @@ namespace UnifiedLearningAssistant.Services.Learning
         public IReadOnlyList<string> UnknownItems => _unknownItems.AsReadOnly();
         public string CurrentMode => _currentMode;
 
-        public StudyEngine(IDataPersistenceService persistenceService, IContentLoaderService contentLoaderService)
+        public StudyEngine(
+            IDataPersistenceService persistenceService, 
+            IContentLoaderService contentLoaderService,
+            ILearningAnalyticsService? analyticsService = null)
         {
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _contentLoaderService = contentLoaderService ?? throw new ArgumentNullException(nameof(contentLoaderService));
+            _analyticsService = analyticsService;
         }
 
         public void Initialize(string userId, string language, string subCategory, string wordBankFile, string mode, string sortOrder)
@@ -121,6 +126,10 @@ namespace UnifiedLearningAssistant.Services.Learning
                 _totalCount++;
             }
             SaveProgress();
+            
+            // 记录学习活动
+            _analyticsService?.RecordActivity(_currentUserId, "Learn", _currentSubCategory);
+            _analyticsService?.RecordActivity(_currentUserId, "Correct", _currentSubCategory);
         }
 
         public void MarkCurrentAsUnknown()
@@ -139,6 +148,10 @@ namespace UnifiedLearningAssistant.Services.Learning
                 _totalCount++;
             }
             SaveProgress();
+            
+            // 记录学习活动
+            _analyticsService?.RecordActivity(_currentUserId, "Learn", _currentSubCategory);
+            _analyticsService?.RecordActivity(_currentUserId, "Wrong", _currentSubCategory);
         }
 
         public StudyStatistics GetStatistics()
