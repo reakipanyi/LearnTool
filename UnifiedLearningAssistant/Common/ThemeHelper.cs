@@ -41,7 +41,8 @@ namespace UnifiedLearningAssistant.Common
             public static Color LightBackground => Color.FromArgb(240, 240, 240);
             public static Color WarmOrange => Color.FromArgb(255, 152, 0);
             public static Color SuccessGreen => Color.FromArgb(76, 175, 80);
-            public static Color LightSurface => Color.FromArgb(30, 30, 30);
+            // LightSurface 与 WarmCream 颜色值相同，使用 WarmCream 替代
+            public static Color LightSurface => WarmCream;
         }
 
         // 字体配置 - 使用延迟初始化并支持释放

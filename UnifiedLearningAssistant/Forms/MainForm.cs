@@ -55,17 +55,7 @@ namespace UnifiedLearningAssistant.Forms
                 throw new InvalidOperationException("IPdfView 未实现为 UserControl 类型。");
             }
         }
-
-        private void ApplyFontToControl(Control control, Font font)
-        {
-            control.Font = font;
-
-            foreach (Control child in control.Controls)
-            {
-                ApplyFontToControl(child, font);
-            }
-        }
-
+ 
         private void PdfView_OnAddToEditor(object? sender, Views.AddToEditorEventArgs e)
         {
             _windowManager.OpenEditorWindowWithContext(e.Text, e.Language, null);
@@ -398,6 +388,7 @@ namespace UnifiedLearningAssistant.Forms
             // groupBoxProgress
             // 
             groupBoxProgress.Controls.Add(textBoxProgress);
+            groupBoxProgress.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             groupBoxProgress.Location = new Point(620, 17);
             groupBoxProgress.Name = "groupBoxProgress";
             groupBoxProgress.Size = new Size(250, 207);
@@ -407,6 +398,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // textBoxProgress
             // 
+            textBoxProgress.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             textBoxProgress.Location = new Point(15, 34);
             textBoxProgress.Multiline = true;
             textBoxProgress.Name = "textBoxProgress";
@@ -417,6 +409,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonOpenStatistics
             // 
+            buttonOpenStatistics.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             buttonOpenStatistics.BackColor = Color.FromArgb(255, 152, 0);
             buttonOpenStatistics.FlatAppearance.BorderSize = 0;
             buttonOpenStatistics.FlatStyle = FlatStyle.Flat;
@@ -431,6 +424,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonOpenPdfReader
             // 
+            buttonOpenPdfReader.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             buttonOpenPdfReader.BackColor = Color.FromArgb(0, 188, 212);
             buttonOpenPdfReader.FlatAppearance.BorderSize = 0;
             buttonOpenPdfReader.FlatStyle = FlatStyle.Flat;
@@ -445,6 +439,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonOpenEditor
             // 
+            buttonOpenEditor.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             buttonOpenEditor.BackColor = Color.FromArgb(156, 39, 176);
             buttonOpenEditor.FlatAppearance.BorderSize = 0;
             buttonOpenEditor.FlatStyle = FlatStyle.Flat;
@@ -469,6 +464,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonContinueLearning
             // 
+            buttonContinueLearning.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             buttonContinueLearning.BackColor = Color.FromArgb(33, 150, 243);
             buttonContinueLearning.FlatAppearance.BorderSize = 0;
             buttonContinueLearning.FlatStyle = FlatStyle.Flat;
@@ -483,6 +479,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonStartLearning
             // 
+            buttonStartLearning.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             buttonStartLearning.BackColor = Color.FromArgb(76, 175, 80);
             buttonStartLearning.FlatAppearance.BorderSize = 0;
             buttonStartLearning.FlatStyle = FlatStyle.Flat;
@@ -505,6 +502,7 @@ namespace UnifiedLearningAssistant.Forms
             groupBoxLearning.Controls.Add(comboBoxWordBank);
             groupBoxLearning.Controls.Add(labelSortOrder);
             groupBoxLearning.Controls.Add(comboBoxSortOrder);
+            groupBoxLearning.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             groupBoxLearning.Location = new Point(30, 113);
             groupBoxLearning.Name = "groupBoxLearning";
             groupBoxLearning.Size = new Size(560, 210);
@@ -546,7 +544,7 @@ namespace UnifiedLearningAssistant.Forms
             radioEnglish.Checked = true;
             radioEnglish.Location = new Point(170, 20);
             radioEnglish.Name = "radioEnglish";
-            radioEnglish.Size = new Size(80, 27);
+            radioEnglish.Size = new Size(65, 27);
             radioEnglish.TabIndex = 2;
             radioEnglish.TabStop = true;
             radioEnglish.Text = "英语";
@@ -649,6 +647,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             groupBoxUser.Controls.Add(comboBoxUser);
             groupBoxUser.Controls.Add(labelUser);
+            groupBoxUser.Anchor = AnchorStyles.Top | AnchorStyles.Left;
             groupBoxUser.Location = new Point(30, 17);
             groupBoxUser.Name = "groupBoxUser";
             groupBoxUser.Size = new Size(250, 74);
@@ -659,6 +658,7 @@ namespace UnifiedLearningAssistant.Forms
             // comboBoxUser
             // 
             comboBoxUser.FormattingEnabled = true;
+            comboBoxUser.DropDownStyle = ComboBoxStyle.DropDown;
             comboBoxUser.Location = new Point(80, 34);
             comboBoxUser.Name = "comboBoxUser";
             comboBoxUser.Size = new Size(150, 29);
@@ -675,6 +675,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonExportErrorBook
             // 
+            buttonExportErrorBook.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             buttonExportErrorBook.BackColor = Color.FromArgb(244, 67, 54);
             buttonExportErrorBook.FlatAppearance.BorderSize = 0;
             buttonExportErrorBook.FlatStyle = FlatStyle.Flat;
@@ -691,6 +692,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             panelStreakInfo.Controls.Add(labelStreakIcon);
             panelStreakInfo.Controls.Add(labelStreakDays);
+            panelStreakInfo.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             panelStreakInfo.Location = new Point(400, 431);
             panelStreakInfo.Margin = new Padding(4);
             panelStreakInfo.Name = "panelStreakInfo";
@@ -765,6 +767,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // statusStrip1
             // 
+            statusStrip1.Dock = DockStyle.Bottom;
             statusStrip1.Items.AddRange(new ToolStripItem[] { toolStripStatusLabel });
             statusStrip1.Location = new Point(0, 710);
             statusStrip1.Name = "statusStrip1";
@@ -807,20 +810,6 @@ namespace UnifiedLearningAssistant.Forms
             statusStrip1.PerformLayout();
             ResumeLayout(false);
             PerformLayout();
-            ThemeHelper.AddButtonHoverEffect(buttonStartLearning, ThemeHelper.Colors.Success);
-            ThemeHelper.AddButtonHoverEffect(buttonContinueLearning, ThemeHelper.Colors.Primary);
-            ThemeHelper.AddButtonHoverEffect(buttonOpenEditor, ThemeHelper.Colors.Purple);
-            ThemeHelper.AddButtonHoverEffect(buttonOpenPdfReader, ThemeHelper.Colors.Cyan);
-            ThemeHelper.AddButtonHoverEffect(buttonOpenStatistics, ThemeHelper.Colors.Orange);
-            ThemeHelper.AddButtonHoverEffect(buttonExportErrorBook, ThemeHelper.Colors.Error);
-            int fontSize = 14;
-            var defaultFont = new Font("Microsoft YaHei UI", fontSize);
-            foreach (Control control in panelMain.Controls)
-            {
-                ApplyFontToControl(control, defaultFont);
-            }
-            labelStreakDays.Font = new Font("Microsoft YaHei UI", fontSize, FontStyle.Bold);
-            toolStripStatusLabel.Font = defaultFont;
         }
 
         #endregion

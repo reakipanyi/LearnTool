@@ -1,4 +1,4 @@
-﻿﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using UnifiedLearningAssistant.Common;
 using UnifiedLearningAssistant.Models.Learning;
@@ -310,17 +310,21 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // panelContent
             // 
+            panelContent.BackColor = Color.FromArgb(224, 224, 224);
             panelContent.Controls.Add(labelDisplay);
             panelContent.Controls.Add(labelContent);
             panelContent.Location = new Point(20, 25);
             panelContent.Name = "panelContent";
             panelContent.Size = new Size(860, 240);
             panelContent.TabIndex = 0;
+            panelContent.Paint += PanelContent_Paint;
             // 
             // labelDisplay
             // 
+            labelDisplay.BackColor = Color.FromArgb(192, 255, 192);
             labelDisplay.Dock = DockStyle.Top;
             labelDisplay.Font = new Font("微软雅黑", 22F, FontStyle.Bold);
+            labelDisplay.ForeColor = Color.FromArgb(100, 150, 180);
             labelDisplay.Location = new Point(0, 0);
             labelDisplay.Name = "labelDisplay";
             labelDisplay.Size = new Size(860, 69);
@@ -329,28 +333,33 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // labelContent
             // 
-            labelContent.Dock = DockStyle.Fill;
+            labelContent.BackColor = Color.FromArgb(255, 255, 192);
             labelContent.Font = new Font("微软雅黑", 72F, FontStyle.Bold);
-            labelContent.Location = new Point(0, 0);
+            labelContent.ForeColor = Color.FromArgb(70, 90, 110);
+            labelContent.Location = new Point(0, 69);
             labelContent.Name = "labelContent";
-            labelContent.Size = new Size(860, 240);
+            labelContent.Size = new Size(860, 171);
             labelContent.TabIndex = 0;
             labelContent.TextAlign = ContentAlignment.MiddleCenter;
             labelContent.Click += LabelContent_Click;
             // 
             // panelAI
             // 
+            panelAI.BackColor = Color.FromArgb(252, 248, 240);
             panelAI.Controls.Add(richTextBoxAI);
             panelAI.Controls.Add(labelAI);
             panelAI.Location = new Point(20, 280);
             panelAI.Name = "panelAI";
             panelAI.Size = new Size(860, 220);
             panelAI.TabIndex = 1;
+            panelAI.Paint += PanelAI_Paint;
             // 
             // richTextBoxAI
             // 
+            richTextBoxAI.BackColor = Color.FromArgb(250, 250, 250);
             richTextBoxAI.Dock = DockStyle.Fill;
             richTextBoxAI.Font = new Font("微软雅黑", 11F);
+            richTextBoxAI.ForeColor = Color.FromArgb(60, 80, 100);
             richTextBoxAI.Location = new Point(0, 40);
             richTextBoxAI.Name = "richTextBoxAI";
             richTextBoxAI.ReadOnly = true;
@@ -362,6 +371,7 @@ namespace UnifiedLearningAssistant.Forms
             // 
             labelAI.Dock = DockStyle.Top;
             labelAI.Font = new Font("微软雅黑", 13F, FontStyle.Bold);
+            labelAI.ForeColor = Color.FromArgb(140, 100, 80);
             labelAI.Location = new Point(0, 0);
             labelAI.Name = "labelAI";
             labelAI.Padding = new Padding(15, 0, 0, 0);
@@ -372,24 +382,33 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonAddToPdf
             // 
+            buttonAddToPdf.BackColor = Color.FromArgb(156, 39, 176);
+            buttonAddToPdf.FlatAppearance.BorderSize = 0;
+            buttonAddToPdf.FlatStyle = FlatStyle.Flat;
             buttonAddToPdf.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
+            buttonAddToPdf.ForeColor = Color.White;
             buttonAddToPdf.Location = new Point(705, 565);
             buttonAddToPdf.Name = "buttonAddToPdf";
             buttonAddToPdf.Size = new Size(130, 52);
             buttonAddToPdf.TabIndex = 10;
             buttonAddToPdf.Text = "💡 AI提问";
+            buttonAddToPdf.UseVisualStyleBackColor = false;
             buttonAddToPdf.Click += ButtonAddToPdf_Click;
             // 
             // progressBar1
             // 
+            progressBar1.BackColor = Color.FromArgb(240, 240, 240);
+            progressBar1.ForeColor = Color.FromArgb(255, 140, 0);
             progressBar1.Location = new Point(20, 520);
             progressBar1.Name = "progressBar1";
             progressBar1.Size = new Size(860, 32);
+            progressBar1.Style = ProgressBarStyle.Continuous;
             progressBar1.TabIndex = 2;
             // 
             // labelStatistics
             // 
             labelStatistics.Font = new Font("微软雅黑", 12F);
+            labelStatistics.ForeColor = Color.FromArgb(80, 100, 120);
             labelStatistics.Location = new Point(20, 560);
             labelStatistics.Name = "labelStatistics";
             labelStatistics.Size = new Size(500, 32);
@@ -397,7 +416,11 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonKnown
             // 
+            buttonKnown.BackColor = Color.FromArgb(76, 175, 80);
+            buttonKnown.FlatAppearance.BorderSize = 0;
+            buttonKnown.FlatStyle = FlatStyle.Flat;
             buttonKnown.Font = new Font("微软雅黑", 14F, FontStyle.Bold);
+            buttonKnown.ForeColor = Color.White;
             buttonKnown.Location = new Point(120, 590);
             buttonKnown.Name = "buttonKnown";
             buttonKnown.Size = new Size(150, 62);
@@ -408,7 +431,11 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonUnknown
             // 
+            buttonUnknown.BackColor = Color.FromArgb(244, 67, 54);
+            buttonUnknown.FlatAppearance.BorderSize = 0;
+            buttonUnknown.FlatStyle = FlatStyle.Flat;
             buttonUnknown.Font = new Font("微软雅黑", 14F, FontStyle.Bold);
+            buttonUnknown.ForeColor = Color.White;
             buttonUnknown.Location = new Point(320, 590);
             buttonUnknown.Name = "buttonUnknown";
             buttonUnknown.Size = new Size(150, 62);
@@ -419,32 +446,47 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonNext
             // 
+            buttonNext.BackColor = Color.FromArgb(33, 150, 243);
+            buttonNext.FlatAppearance.BorderSize = 0;
+            buttonNext.FlatStyle = FlatStyle.Flat;
             buttonNext.Font = new Font("微软雅黑", 14F, FontStyle.Bold);
+            buttonNext.ForeColor = Color.White;
             buttonNext.Location = new Point(520, 590);
             buttonNext.Name = "buttonNext";
             buttonNext.Size = new Size(150, 62);
             buttonNext.TabIndex = 6;
             buttonNext.Text = "➡ 下一个";
+            buttonNext.UseVisualStyleBackColor = false;
             buttonNext.Click += ButtonNext_Click;
             // 
             // buttonPronounce
             // 
+            buttonPronounce.BackColor = Color.FromArgb(0, 188, 212);
+            buttonPronounce.FlatAppearance.BorderSize = 0;
+            buttonPronounce.FlatStyle = FlatStyle.Flat;
             buttonPronounce.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
+            buttonPronounce.ForeColor = Color.White;
             buttonPronounce.Location = new Point(20, 665);
             buttonPronounce.Name = "buttonPronounce";
             buttonPronounce.Size = new Size(130, 45);
             buttonPronounce.TabIndex = 7;
             buttonPronounce.Text = "🔊 发音";
+            buttonPronounce.UseVisualStyleBackColor = false;
             buttonPronounce.Click += ButtonPronounce_Click;
             // 
             // buttonExit
             // 
+            buttonExit.BackColor = Color.FromArgb(108, 117, 125);
+            buttonExit.FlatAppearance.BorderSize = 0;
+            buttonExit.FlatStyle = FlatStyle.Flat;
             buttonExit.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
+            buttonExit.ForeColor = Color.White;
             buttonExit.Location = new Point(705, 665);
             buttonExit.Name = "buttonExit";
             buttonExit.Size = new Size(130, 45);
             buttonExit.TabIndex = 8;
             buttonExit.Text = "🏠 返回";
+            buttonExit.UseVisualStyleBackColor = false;
             buttonExit.Click += ButtonExit_Click;
             // 
             // checkBoxVoice
@@ -452,6 +494,7 @@ namespace UnifiedLearningAssistant.Forms
             checkBoxVoice.Checked = true;
             checkBoxVoice.CheckState = CheckState.Checked;
             checkBoxVoice.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            checkBoxVoice.ForeColor = Color.FromArgb(70, 90, 110);
             checkBoxVoice.Location = new Point(160, 671);
             checkBoxVoice.Name = "checkBoxVoice";
             checkBoxVoice.Size = new Size(100, 30);
@@ -461,6 +504,7 @@ namespace UnifiedLearningAssistant.Forms
             // labelPronunciationScope
             // 
             labelPronunciationScope.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            labelPronunciationScope.ForeColor = Color.FromArgb(70, 90, 110);
             labelPronunciationScope.Location = new Point(270, 671);
             labelPronunciationScope.Name = "labelPronunciationScope";
             labelPronunciationScope.Size = new Size(90, 30);
@@ -473,9 +517,10 @@ namespace UnifiedLearningAssistant.Forms
             radioOriginal.AutoSize = true;
             radioOriginal.Checked = true;
             radioOriginal.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            radioOriginal.ForeColor = Color.FromArgb(70, 90, 110);
             radioOriginal.Location = new Point(370, 671);
             radioOriginal.Name = "radioOriginal";
-            radioOriginal.Size = new Size(65, 26);
+            radioOriginal.Size = new Size(55, 23);
             radioOriginal.TabIndex = 13;
             radioOriginal.TabStop = true;
             radioOriginal.Text = "原文";
@@ -484,9 +529,10 @@ namespace UnifiedLearningAssistant.Forms
             // 
             radioExplanation.AutoSize = true;
             radioExplanation.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            radioExplanation.ForeColor = Color.FromArgb(70, 90, 110);
             radioExplanation.Location = new Point(455, 671);
             radioExplanation.Name = "radioExplanation";
-            radioExplanation.Size = new Size(65, 26);
+            radioExplanation.Size = new Size(55, 23);
             radioExplanation.TabIndex = 14;
             radioExplanation.Text = "释义";
             // 
@@ -494,9 +540,10 @@ namespace UnifiedLearningAssistant.Forms
             // 
             radioBoth.AutoSize = true;
             radioBoth.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            radioBoth.ForeColor = Color.FromArgb(70, 90, 110);
             radioBoth.Location = new Point(540, 671);
             radioBoth.Name = "radioBoth";
-            radioBoth.Size = new Size(100, 26);
+            radioBoth.Size = new Size(94, 23);
             radioBoth.TabIndex = 15;
             radioBoth.Text = "原文+释义";
             // 
@@ -507,86 +554,15 @@ namespace UnifiedLearningAssistant.Forms
             labelShortcutHints.ForeColor = Color.FromArgb(120, 120, 120);
             labelShortcutHints.Location = new Point(20, 720);
             labelShortcutHints.Name = "labelShortcutHints";
-            labelShortcutHints.Size = new Size(800, 17);
+            labelShortcutHints.Size = new Size(360, 17);
             labelShortcutHints.TabIndex = 16;
             labelShortcutHints.Text = "快捷键: 空格-发音 | 回车-下一个 | 1/K-会了 | 2/U-不会 | Esc-返回";
-
-
-            BackColor = ThemeHelper.Colors.WarmBackground;
-            TransparencyKey = Color.FromArgb(255, 0, 255);
-
-            panelContent.BackColor = ThemeHelper.Colors.PanelLight;
-            panelAI.BackColor = ThemeHelper.Colors.PanelWarm;
-
-            labelDisplay.ForeColor = ThemeHelper.Colors.TextSecondary;
-            labelContent.ForeColor = ThemeHelper.Colors.TextPrimary;
-            labelAI.ForeColor = Color.FromArgb(140, 100, 80);
-            labelStatistics.ForeColor = Color.FromArgb(80, 100, 120);
-
-            progressBar1.ForeColor = ThemeHelper.Colors.Progress;
-            progressBar1.BackColor = Color.FromArgb(240, 240, 240);
-            progressBar1.Style = ProgressBarStyle.Continuous;
-            // 认识
-            buttonKnown.BackColor = ThemeHelper.Colors.Success;
-            buttonKnown.ForeColor = Color.White;
-            buttonKnown.FlatStyle = FlatStyle.Flat;
-            buttonKnown.FlatAppearance.BorderSize = 0;
-
-            // 不认识
-            buttonUnknown.BackColor = ThemeHelper.Colors.Error;
-            buttonUnknown.ForeColor = Color.White;
-            buttonUnknown.FlatStyle = FlatStyle.Flat;
-            buttonUnknown.FlatAppearance.BorderSize = 0;
-
-            // 下一个
-            buttonNext.BackColor = ThemeHelper.Colors.Primary;
-            buttonNext.ForeColor = Color.White;
-            buttonNext.FlatStyle = FlatStyle.Flat;
-            buttonNext.FlatAppearance.BorderSize = 0;
-
-            // 添加到PDF
-            buttonAddToPdf.BackColor = ThemeHelper.Colors.Purple;
-            buttonAddToPdf.ForeColor = Color.White;
-            buttonAddToPdf.FlatStyle = FlatStyle.Flat;
-            buttonAddToPdf.FlatAppearance.BorderSize = 0;
-
-            // 发音
-            buttonPronounce.BackColor = ThemeHelper.Colors.Cyan;
-            buttonPronounce.ForeColor = Color.White;
-            buttonPronounce.FlatStyle = FlatStyle.Flat;
-            buttonPronounce.FlatAppearance.BorderSize = 0;
-
-            // 退出
-            buttonExit.BackColor = ThemeHelper.Colors.Gray;
-            buttonExit.ForeColor = Color.White;
-            buttonExit.FlatStyle = FlatStyle.Flat;
-            buttonExit.FlatAppearance.BorderSize = 0;
-            checkBoxVoice.ForeColor = ThemeHelper.Colors.TextPrimary;
-            labelPronunciationScope.ForeColor = ThemeHelper.Colors.TextPrimary;
-
-            radioOriginal.ForeColor = ThemeHelper.Colors.TextPrimary;
-            radioExplanation.ForeColor = ThemeHelper.Colors.TextPrimary;
-            radioBoth.ForeColor = ThemeHelper.Colors.TextPrimary;
-
-            richTextBoxAI.BackColor = Color.FromArgb(250, 250, 250);
-            richTextBoxAI.ForeColor = Color.FromArgb(60, 80, 100);
-
-            panelContent.BorderStyle = BorderStyle.None;
-            panelAI.BorderStyle = BorderStyle.None;
-
-            // 添加按钮悬停效果
-            ThemeHelper.AddButtonHoverEffect(buttonKnown, ThemeHelper.Colors.Success);
-            ThemeHelper.AddButtonHoverEffect(buttonUnknown, ThemeHelper.Colors.Error);
-            ThemeHelper.AddButtonHoverEffect(buttonNext, ThemeHelper.Colors.Primary);
-            ThemeHelper.AddButtonHoverEffect(buttonAddToPdf, ThemeHelper.Colors.Purple);
-            ThemeHelper.AddButtonHoverEffect(buttonPronounce, ThemeHelper.Colors.Cyan);
-            ThemeHelper.AddButtonHoverEffect(buttonExit, ThemeHelper.Colors.Gray);
-
             // 
             // LearningForm
             // 
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
+            BackColor = Color.FromArgb(250, 245, 235);
             ClientSize = new Size(900, 750);
             Controls.Add(labelShortcutHints);
             Controls.Add(radioBoth);
@@ -609,38 +585,64 @@ namespace UnifiedLearningAssistant.Forms
             MaximizeBox = false;
             Name = "LearningForm";
             Text = "✨ 学习模式 ✨";
+            TransparencyKey = Color.FromArgb(255, 0, 255);
             Load += LearningForm_Load;
             panelContent.ResumeLayout(false);
             panelAI.ResumeLayout(false);
             ResumeLayout(false);
             PerformLayout();
-            panelContent.Paint += (s, e) =>
+        }
+
+        #endregion
+
+        #region Paint Event Handlers
+
+        private void PanelContent_Paint(object? sender, PaintEventArgs e)
+        {
+            if (DesignMode) return;
+            if (sender is not Panel panel) return;
+
+            try
             {
                 using var gradient = new System.Drawing.Drawing2D.LinearGradientBrush(
                     new Point(0, 0),
-                    new Point(panelContent.Width, panelContent.Height),
+                    new Point(panel.Width, panel.Height),
                     Color.FromArgb(255, 255, 255),
                     Color.FromArgb(245, 250, 248)
                 );
-                e.Graphics.FillRectangle(gradient, panelContent.ClientRectangle);
+                e.Graphics.FillRectangle(gradient, panel.ClientRectangle);
 
                 using var pen = new Pen(Color.FromArgb(200, 210, 220), 2);
-                e.Graphics.DrawRectangle(pen, 1, 1, panelContent.Width - 2, panelContent.Height - 2);
-            };
+                e.Graphics.DrawRectangle(pen, 1, 1, panel.Width - 3, panel.Height - 3);
+            }
+            catch
+            {
+                e.Graphics.Clear(Color.White);
+            }
+        }
 
-            panelAI.Paint += (s, e) =>
+        private void PanelAI_Paint(object? sender, PaintEventArgs e)
+        {
+            if (DesignMode) return;
+            if (sender is not Panel panel) return;
+
+            try
             {
                 using var gradient = new System.Drawing.Drawing2D.LinearGradientBrush(
                     new Point(0, 0),
-                    new Point(0, panelAI.Height),
+                    new Point(0, panel.Height),
                     Color.FromArgb(252, 248, 240),
                     Color.FromArgb(248, 244, 235)
                 );
-                e.Graphics.FillRectangle(gradient, panelAI.ClientRectangle);
+                e.Graphics.FillRectangle(gradient, panel.ClientRectangle);
 
                 using var pen = new Pen(Color.FromArgb(210, 200, 190), 2);
-                e.Graphics.DrawRectangle(pen, 1, 1, panelAI.Width - 2, panelAI.Height - 2);
-            };
+                e.Graphics.DrawRectangle(pen, 1, 1, panel.Width - 3, panel.Height - 3);
+            }
+            catch
+            {
+                e.Graphics.Clear(Color.LightYellow);
+            }
         }
 
         #endregion

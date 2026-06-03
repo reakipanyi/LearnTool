@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
 using System.Text;
 using UnifiedLearningAssistant.Services.Cache;
@@ -8,11 +9,13 @@ namespace UnifiedLearningAssistant.Services.AI
     {
         private readonly IAIService _aiService;
         private readonly ICacheService _cacheService;
+        private readonly ILogger<AiQuestionService> _logger;
 
-        public AiQuestionService(IAIService aiService, ICacheService cacheService)
+        public AiQuestionService(IAIService aiService, ICacheService cacheService, ILogger<AiQuestionService> logger)
         {
             _aiService = aiService ?? throw new ArgumentNullException(nameof(aiService));
             _cacheService = cacheService ?? throw new ArgumentNullException(nameof(cacheService));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public async Task<string> AskAsync(string text, string context = "")
@@ -26,7 +29,7 @@ namespace UnifiedLearningAssistant.Services.AI
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"AI提问失败: {ex.Message}");
+                _logger.LogError(ex, "AI提问失败");
                 return "获取答案失败";
             }
         }
@@ -61,7 +64,7 @@ namespace UnifiedLearningAssistant.Services.AI
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"生成练习题失败: {ex.Message}");
+                _logger.LogError(ex, "生成练习题失败");
                 return "生成练习题失败";
             }
         }
@@ -92,7 +95,7 @@ namespace UnifiedLearningAssistant.Services.AI
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"文本总结失败: {ex.Message}");
+                _logger.LogError(ex, "文本总结失败");
                 return "总结失败";
             }
         }

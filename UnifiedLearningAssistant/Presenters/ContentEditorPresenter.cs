@@ -724,14 +724,14 @@ namespace UnifiedLearningAssistant.Presenters
 
             if (category == Constants.SubCategory.ChineseComprehensive)
             {
-                return $"请根据以下内容生成{count}个语文综合练习题：\n\n{range}\n\n要求：\n1. 每个包含标题、阅读内容、3-5道题目（含答案）和解析\n2. 题目类型多样（选择题、问答题等）\n3. 内容要适合语文学习\n4. 输出JSON数组格式：\n{format}\n\n注意：\n1. 直接输出JSON数组，不要有其他解释文字\n2. 确保JSON格式正确";
+                return $"生成{count}个语文综合练习题（{range}），包含标题、内容、3-5道题目及答案、解析。格式：{format}";
             }
             else if (category == Constants.SubCategory.EnglishComprehensive)
             {
-                return $"请根据以下内容生成{count}个英语综合练习题：\n\n{range}\n\n要求：\n1. 每个包含标题、阅读内容、3-5道题目（含答案）和解析\n2. 题目类型多样（选择题、问答题等）\n3. 内容要适合英语学习\n4. 输出JSON数组格式：\n{format}\n\n注意：\n1. 直接输出JSON数组，不要有其他解释文字\n2. 确保JSON格式正确";
+                return $"Generate {count} English exercises ({range}) with title, content, 3-5 questions and answers, analysis. Format: {format}";
             }
 
-            return $"请生成{count}个{range}的{typeName}，每个包含详细信息，输出JSON数组格式：\n{format}\n\n注意：\n1. 直接输出JSON数组，不要有其他解释文字\n2. 确保JSON格式正确\n3. 内容要丰富且实用";
+            return $"生成{count}个{range}的{typeName}。格式：{format}";
         }
 
         /// <summary>

@@ -15,71 +15,63 @@ namespace UnifiedLearningAssistant.Forms
 
         private void InitializeComponent()
         {
-            this.SuspendLayout();
-
-            // 窗体属性
-            this.Text = "窗体预览工具";
-            this.Size = new Size(500, 400);
-            this.StartPosition = FormStartPosition.CenterScreen;
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
-
-            // 标签
-            var label = new Label
-            {
-                Text = "选择要预览的窗体：",
-                Location = new Point(20, 20),
-                Size = new Size(200, 25),
-                Font = ThemeHelper.Fonts.LargeBold
-            };
-
-            // 列表框
-            listBoxForms = new ListBox
-            {
-                Location = new Point(20, 50),
-                Size = new Size(440, 200),
-                Font = ThemeHelper.Fonts.Default
-            };
+            label = new Label();
+            listBoxForms = new ListBox();
+            buttonPreview = new Button();
+            buttonClose = new Button();
+            SuspendLayout();
+            // 
+            // label
+            // 
+            label.Location = new Point(0, 0);
+            label.Name = "label";
+            label.Size = new Size(100, 23);
+            label.TabIndex = 0;
+            // 
+            // listBoxForms
+            // 
+            listBoxForms.ItemHeight = 17;
+            listBoxForms.Location = new Point(0, 0);
+            listBoxForms.Name = "listBoxForms";
+            listBoxForms.Size = new Size(120, 89);
+            listBoxForms.TabIndex = 1;
             listBoxForms.DoubleClick += ListBoxForms_DoubleClick;
-
-            // 预览按钮
-            var buttonPreview = new Button
-            {
-                Text = "预览窗体",
-                Location = new Point(20, 270),
-                Size = new Size(210, 40),
-                BackColor = ThemeHelper.Colors.Primary,
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                FlatAppearance = { BorderSize = 0 },
-                Font = ThemeHelper.Fonts.LargeBold
-            };
+            // 
+            // buttonPreview
+            // 
+            buttonPreview.Location = new Point(0, 0);
+            buttonPreview.Name = "buttonPreview";
+            buttonPreview.Size = new Size(75, 23);
+            buttonPreview.TabIndex = 2;
             buttonPreview.Click += ButtonPreview_Click;
-            ThemeHelper.AddButtonHoverEffect(buttonPreview, ThemeHelper.Colors.Primary);
-
-            // 关闭按钮
-            var buttonClose = new Button
-            {
-                Text = "关闭",
-                Location = new Point(250, 270),
-                Size = new Size(210, 40),
-                BackColor = ThemeHelper.Colors.Gray,
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                FlatAppearance = { BorderSize = 0 },
-                Font = ThemeHelper.Fonts.LargeBold
-            };
-            buttonClose.Click += (s, e) => Close();
-            ThemeHelper.AddButtonHoverEffect(buttonClose, ThemeHelper.Colors.Gray);
-
-            // 添加控件
-            this.Controls.AddRange(new Control[] { label, listBoxForms, buttonPreview, buttonClose });
-
-            this.ResumeLayout(false);
-            ApplyTheme();
+            // 
+            // buttonClose
+            // 
+            buttonClose.Location = new Point(0, 0);
+            buttonClose.Name = "buttonClose";
+            buttonClose.Size = new Size(75, 23);
+            buttonClose.TabIndex = 3;
+            buttonClose.Click += ButtonClose_Click;
+            // 
+            // FormPreviewTool
+            // 
+            ClientSize = new Size(484, 361);
+            Controls.Add(label);
+            Controls.Add(listBoxForms);
+            Controls.Add(buttonPreview);
+            Controls.Add(buttonClose);
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            Name = "FormPreviewTool";
+            StartPosition = FormStartPosition.CenterScreen;
+            Text = "窗体预览工具";
+            ResumeLayout(false);
         }
 
+        private Label label;
+        private Button buttonPreview;
+        private Button buttonClose;
         private ListBox listBoxForms = null!;
 
         private void ApplyTheme()
@@ -104,7 +96,10 @@ namespace UnifiedLearningAssistant.Forms
         {
             ShowSelectedForm();
         }
-
+        private void ButtonClose_Click(object? sender, EventArgs e)
+        {
+            Close();
+        }
         private void ShowSelectedForm()
         {//
          // if (listBoxForms.SelectedItem is string formName)
