@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 using UnifiedLearningAssistant.Common;
+using UnifiedLearningAssistant.Data.Database;
 using UnifiedLearningAssistant.Forms;
 using UnifiedLearningAssistant.Models.Config;
 using UnifiedLearningAssistant.Presenters;
@@ -75,6 +77,11 @@ namespace UnifiedLearningAssistant
             services.AddSingleton<Services.Pdf.IAnnotationService, Services.Pdf.FileAnnotationService>();
             services.AddSingleton<Services.Learning.IStudyEngine, Services.Learning.StudyEngine>();
             services.AddSingleton<Services.Learning.ILearningAnalyticsService, Services.Learning.LearningAnalyticsService>();
+            
+            // 数据库相关服务
+            services.AddDbContextFactory<AppDbContext>();
+            // 可选：如果你想使用 SQLite 版本的提醒服务，可以取消下面这行注释，并注释掉上面的原始提醒服务
+            // services.AddSingleton<Services.Learning.ILearningReminderService, Services.Learning.SqliteLearningReminderService>();
             services.AddSingleton<Services.Learning.ILearningReminderService, Services.Learning.LearningReminderService>();
 
             // 4. 窗体与 Presenter

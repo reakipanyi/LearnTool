@@ -26,6 +26,9 @@
 		<PackageReference Include="SkiaSharp" Version="2.88.6" />
 		<PackageReference Include="PdfiumViewer.Native.x86_64.v8-xfa" Version="2018.4.8.256" />
 		<PackageReference Include="PdfiumViewerCore" Version="1.0.0" />
+		<!-- SQLite & Entity Framework Core -->
+		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Update="appsettings.json">
