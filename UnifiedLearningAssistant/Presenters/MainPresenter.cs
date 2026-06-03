@@ -219,6 +219,9 @@ namespace UnifiedLearningAssistant.Presenters
                     _currentSubCategory = subCats.First();
                     _view.SelectedSubCategory = _currentSubCategory;
                 }
+                RefreshWordBankFiles();
+                UpdateProgressSummary();
+                UpdatePdfPresenterConfig();
             }
         }
 

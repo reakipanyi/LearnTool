@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Data;
@@ -25,11 +25,7 @@ namespace UnifiedLearningAssistant.Forms
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _appConfig = appConfig ?? throw new ArgumentNullException(nameof(appConfig));
             InitializeComponent();
-            ApplyFontSize();
         }
-
-
-
 
 
         public void SetPresenter(ContentEditorPresenter presenter)
@@ -37,20 +33,6 @@ namespace UnifiedLearningAssistant.Forms
             _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
             _presenter.Initialize();
             _logger.LogInformation("ContentEditorPresenter 已设置并初始化");
-        }
-
-        private void ApplyFontSize()
-        {
-            int fontSize = _appConfig.AppSettings.DefaultFontSize;
-            var defaultFont = new Font("Microsoft YaHei UI", fontSize);
-
-            foreach (Control control in Controls)
-            {
-                ApplyFontToControl(control, defaultFont);
-            }
-
-            dataGridView.Font = defaultFont;
-            dataGridView.ColumnHeadersDefaultCellStyle.Font = new Font("Microsoft YaHei UI", fontSize, FontStyle.Bold);
         }
 
         private void ApplyFontToControl(Control control, Font font)
@@ -687,6 +669,15 @@ namespace UnifiedLearningAssistant.Forms
             groupBoxLanguage.ResumeLayout(false);
             ResumeLayout(false);
             PerformLayout();
+            // 字体设置放在 PerformLayout() 之后，确保所有控件已添加到 Controls 集合
+            int fontSize = _appConfig.AppSettings.DefaultFontSize;
+            var defaultFont = new Font("Microsoft YaHei UI", fontSize);
+            foreach (Control control in Controls)
+            {
+                ApplyFontToControl(control, defaultFont);
+            }
+            dataGridView.Font = defaultFont;
+            dataGridView.ColumnHeadersDefaultCellStyle.Font = new Font("Microsoft YaHei UI", fontSize, FontStyle.Bold);
         }
         private DataGridView dataGridView;
 
@@ -713,6 +704,7 @@ namespace UnifiedLearningAssistant.Forms
 
             if (disposing)
             {
+                this.Dispose();
             }
 
             _disposed = true;

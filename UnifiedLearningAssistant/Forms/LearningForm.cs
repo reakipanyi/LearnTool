@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Logging;
+﻿﻿using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using UnifiedLearningAssistant.Common;
 using UnifiedLearningAssistant.Models.Learning;
@@ -32,8 +32,6 @@ namespace UnifiedLearningAssistant.Forms
             _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
             _soundService = new SoundService();
             _panelDecorator = new PanelDecorator();
-
-            AddAnimation();
 
             Load += LearningForm_Load;
             FormClosing += LearningForm_FormClosing;
@@ -101,38 +99,6 @@ namespace UnifiedLearningAssistant.Forms
             ApplySettings();
         }
 
-
-
-        private void AddAnimation()
-        {
-            panelContent.Paint += (s, e) =>
-            {
-                using var gradient = new System.Drawing.Drawing2D.LinearGradientBrush(
-                    new Point(0, 0),
-                    new Point(panelContent.Width, panelContent.Height),
-                    Color.FromArgb(255, 255, 255),
-                    Color.FromArgb(245, 250, 248)
-                );
-                e.Graphics.FillRectangle(gradient, panelContent.ClientRectangle);
-
-                using var pen = new Pen(Color.FromArgb(200, 210, 220), 2);
-                e.Graphics.DrawRectangle(pen, 1, 1, panelContent.Width - 2, panelContent.Height - 2);
-            };
-
-            panelAI.Paint += (s, e) =>
-            {
-                using var gradient = new System.Drawing.Drawing2D.LinearGradientBrush(
-                    new Point(0, 0),
-                    new Point(0, panelAI.Height),
-                    Color.FromArgb(252, 248, 240),
-                    Color.FromArgb(248, 244, 235)
-                );
-                e.Graphics.FillRectangle(gradient, panelAI.ClientRectangle);
-
-                using var pen = new Pen(Color.FromArgb(210, 200, 190), 2);
-                e.Graphics.DrawRectangle(pen, 1, 1, panelAI.Width - 2, panelAI.Height - 2);
-            };
-        }
 
         private void LearningForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
@@ -648,6 +614,33 @@ namespace UnifiedLearningAssistant.Forms
             panelAI.ResumeLayout(false);
             ResumeLayout(false);
             PerformLayout();
+            panelContent.Paint += (s, e) =>
+            {
+                using var gradient = new System.Drawing.Drawing2D.LinearGradientBrush(
+                    new Point(0, 0),
+                    new Point(panelContent.Width, panelContent.Height),
+                    Color.FromArgb(255, 255, 255),
+                    Color.FromArgb(245, 250, 248)
+                );
+                e.Graphics.FillRectangle(gradient, panelContent.ClientRectangle);
+
+                using var pen = new Pen(Color.FromArgb(200, 210, 220), 2);
+                e.Graphics.DrawRectangle(pen, 1, 1, panelContent.Width - 2, panelContent.Height - 2);
+            };
+
+            panelAI.Paint += (s, e) =>
+            {
+                using var gradient = new System.Drawing.Drawing2D.LinearGradientBrush(
+                    new Point(0, 0),
+                    new Point(0, panelAI.Height),
+                    Color.FromArgb(252, 248, 240),
+                    Color.FromArgb(248, 244, 235)
+                );
+                e.Graphics.FillRectangle(gradient, panelAI.ClientRectangle);
+
+                using var pen = new Pen(Color.FromArgb(210, 200, 190), 2);
+                e.Graphics.DrawRectangle(pen, 1, 1, panelAI.Width - 2, panelAI.Height - 2);
+            };
         }
 
         #endregion

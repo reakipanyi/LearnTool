@@ -44,40 +44,158 @@ namespace UnifiedLearningAssistant.Common
             public static Color LightSurface => Color.FromArgb(30, 30, 30);
         }
 
-        // 字体配置
+        // 字体配置 - 使用延迟初始化并支持释放
         public static class Fonts
         {
+            private static readonly List<Font> _createdFonts = new();
+
+            private static Font CreateFont(string familyName, float emSize, FontStyle style = FontStyle.Regular)
+            {
+                var font = new Font(familyName, emSize, style);
+                _createdFonts.Add(font);
+                return font;
+            }
+
+            private static Font _defaultBold;
             public static Font Default => SystemFonts.DefaultFont;
-            public static Font DefaultBold => new(SystemFonts.DefaultFont.FontFamily, SystemFonts.DefaultFont.Size, FontStyle.Bold);
-            public static Font MicrosoftYaHei => new("Microsoft YaHei", 9f);
-            public static Font MicrosoftYaHeiBold => new("Microsoft YaHei", 9f, FontStyle.Bold);
-            public static Font MicrosoftYaHei10 => new("Microsoft YaHei", 10f);
-            public static Font MicrosoftYaHei10Bold => new("Microsoft YaHei", 10f, FontStyle.Bold);
-            public static Font MicrosoftYaHei11 => new("Microsoft YaHei", 11f);
-            public static Font MicrosoftYaHei11Bold => new("Microsoft YaHei", 11f, FontStyle.Bold);
-            public static Font MicrosoftYaHei12 => new("Microsoft YaHei", 12f);
-            public static Font MicrosoftYaHei12Bold => new("Microsoft YaHei", 12f, FontStyle.Bold);
-            public static Font MicrosoftYaHei13 => new("Microsoft YaHei", 13f);
-            public static Font MicrosoftYaHei13Bold => new("Microsoft YaHei", 13f, FontStyle.Bold);
-            public static Font MicrosoftYaHei14 => new("Microsoft YaHei", 14f);
-            public static Font MicrosoftYaHei14Bold => new("Microsoft YaHei", 14f, FontStyle.Bold);
-            public static Font MicrosoftYaHei16 => new("Microsoft YaHei", 16f);
-            public static Font MicrosoftYaHei16Bold => new("Microsoft YaHei", 16f, FontStyle.Bold);
-            public static Font MicrosoftYaHei20 => new("Microsoft YaHei", 20f);
-            public static Font MicrosoftYaHei20Bold => new("Microsoft YaHei", 20f, FontStyle.Bold);
-            public static Font MicrosoftYaHei22 => new("Microsoft YaHei", 22f);
-            public static Font MicrosoftYaHei22Bold => new("Microsoft YaHei", 22f, FontStyle.Bold);
-            public static Font MicrosoftYaHei28 => new("Microsoft YaHei", 28f);
-            public static Font MicrosoftYaHei28Bold => new("Microsoft YaHei", 28f, FontStyle.Bold);
-            public static Font MicrosoftYaHei32 => new("Microsoft YaHei", 32f);
-            public static Font MicrosoftYaHei32Bold => new("Microsoft YaHei", 32f, FontStyle.Bold);
-            public static Font MicrosoftYaHeiUI => new("Microsoft YaHei UI", 9f);
-            public static Font MicrosoftYaHeiUI10 => new("Microsoft YaHei UI", 10f);
-            public static Font MicrosoftYaHeiUI20 => new("Microsoft YaHei UI", 20f);
-            public static Font SegoeUIEmoji => new("Segoe UI Emoji", 32f);
-            public static Font Large => new("Microsoft YaHei", 12f);
-            public static Font LargeBold => new("Microsoft YaHei", 12f, FontStyle.Bold);
-            public static Font ExtraLarge => new("Microsoft YaHei", 28f, FontStyle.Bold);
+            public static Font DefaultBold => _defaultBold ??= CreateFont(SystemFonts.DefaultFont.FontFamily.Name, SystemFonts.DefaultFont.Size, FontStyle.Bold);
+            
+            private static Font _microsoftYaHei;
+            public static Font MicrosoftYaHei => _microsoftYaHei ??= CreateFont("Microsoft YaHei", 9f);
+            
+            private static Font _microsoftYaHeiBold;
+            public static Font MicrosoftYaHeiBold => _microsoftYaHeiBold ??= CreateFont("Microsoft YaHei", 9f, FontStyle.Bold);
+            
+            private static Font _microsoftYaHei10;
+            public static Font MicrosoftYaHei10 => _microsoftYaHei10 ??= CreateFont("Microsoft YaHei", 10f);
+            
+            private static Font _microsoftYaHei10Bold;
+            public static Font MicrosoftYaHei10Bold => _microsoftYaHei10Bold ??= CreateFont("Microsoft YaHei", 10f, FontStyle.Bold);
+            
+            private static Font _microsoftYaHei11;
+            public static Font MicrosoftYaHei11 => _microsoftYaHei11 ??= CreateFont("Microsoft YaHei", 11f);
+            
+            private static Font _microsoftYaHei11Bold;
+            public static Font MicrosoftYaHei11Bold => _microsoftYaHei11Bold ??= CreateFont("Microsoft YaHei", 11f, FontStyle.Bold);
+            
+            private static Font _microsoftYaHei12;
+            public static Font MicrosoftYaHei12 => _microsoftYaHei12 ??= CreateFont("Microsoft YaHei", 12f);
+            
+            private static Font _microsoftYaHei12Bold;
+            public static Font MicrosoftYaHei12Bold => _microsoftYaHei12Bold ??= CreateFont("Microsoft YaHei", 12f, FontStyle.Bold);
+            
+            private static Font _microsoftYaHei13;
+            public static Font MicrosoftYaHei13 => _microsoftYaHei13 ??= CreateFont("Microsoft YaHei", 13f);
+            
+            private static Font _microsoftYaHei13Bold;
+            public static Font MicrosoftYaHei13Bold => _microsoftYaHei13Bold ??= CreateFont("Microsoft YaHei", 13f, FontStyle.Bold);
+            
+            private static Font _microsoftYaHei14;
+            public static Font MicrosoftYaHei14 => _microsoftYaHei14 ??= CreateFont("Microsoft YaHei", 14f);
+            
+            private static Font _microsoftYaHei14Bold;
+            public static Font MicrosoftYaHei14Bold => _microsoftYaHei14Bold ??= CreateFont("Microsoft YaHei", 14f, FontStyle.Bold);
+            
+            private static Font _microsoftYaHei16;
+            public static Font MicrosoftYaHei16 => _microsoftYaHei16 ??= CreateFont("Microsoft YaHei", 16f);
+            
+            private static Font _microsoftYaHei16Bold;
+            public static Font MicrosoftYaHei16Bold => _microsoftYaHei16Bold ??= CreateFont("Microsoft YaHei", 16f, FontStyle.Bold);
+            
+            private static Font _microsoftYaHei20;
+            public static Font MicrosoftYaHei20 => _microsoftYaHei20 ??= CreateFont("Microsoft YaHei", 20f);
+            
+            private static Font _microsoftYaHei20Bold;
+            public static Font MicrosoftYaHei20Bold => _microsoftYaHei20Bold ??= CreateFont("Microsoft YaHei", 20f, FontStyle.Bold);
+            
+            private static Font _microsoftYaHei22;
+            public static Font MicrosoftYaHei22 => _microsoftYaHei22 ??= CreateFont("Microsoft YaHei", 22f);
+            
+            private static Font _microsoftYaHei22Bold;
+            public static Font MicrosoftYaHei22Bold => _microsoftYaHei22Bold ??= CreateFont("Microsoft YaHei", 22f, FontStyle.Bold);
+            
+            private static Font _microsoftYaHei28;
+            public static Font MicrosoftYaHei28 => _microsoftYaHei28 ??= CreateFont("Microsoft YaHei", 28f);
+            
+            private static Font _microsoftYaHei28Bold;
+            public static Font MicrosoftYaHei28Bold => _microsoftYaHei28Bold ??= CreateFont("Microsoft YaHei", 28f, FontStyle.Bold);
+            
+            private static Font _microsoftYaHei32;
+            public static Font MicrosoftYaHei32 => _microsoftYaHei32 ??= CreateFont("Microsoft YaHei", 32f);
+            
+            private static Font _microsoftYaHei32Bold;
+            public static Font MicrosoftYaHei32Bold => _microsoftYaHei32Bold ??= CreateFont("Microsoft YaHei", 32f, FontStyle.Bold);
+            
+            private static Font _microsoftYaHeiUI;
+            public static Font MicrosoftYaHeiUI => _microsoftYaHeiUI ??= CreateFont("Microsoft YaHei UI", 9f);
+            
+            private static Font _microsoftYaHeiUI10;
+            public static Font MicrosoftYaHeiUI10 => _microsoftYaHeiUI10 ??= CreateFont("Microsoft YaHei UI", 10f);
+            
+            private static Font _microsoftYaHeiUI20;
+            public static Font MicrosoftYaHeiUI20 => _microsoftYaHeiUI20 ??= CreateFont("Microsoft YaHei UI", 20f);
+            
+            private static Font _segoeUIEmoji;
+            public static Font SegoeUIEmoji => _segoeUIEmoji ??= CreateFont("Segoe UI Emoji", 32f);
+            
+            private static Font _large;
+            public static Font Large => _large ??= CreateFont("Microsoft YaHei", 12f);
+            
+            private static Font _largeBold;
+            public static Font LargeBold => _largeBold ??= CreateFont("Microsoft YaHei", 12f, FontStyle.Bold);
+            
+            private static Font _extraLarge;
+            public static Font ExtraLarge => _extraLarge ??= CreateFont("Microsoft YaHei", 28f, FontStyle.Bold);
+
+            internal static void DisposeAll()
+            {
+                foreach (var font in _createdFonts)
+                {
+                    try
+                    {
+                        font.Dispose();
+                    }
+                    catch
+                    {
+                    }
+                }
+                _createdFonts.Clear();
+                _defaultBold = null;
+                _microsoftYaHei = null;
+                _microsoftYaHeiBold = null;
+                _microsoftYaHei10 = null;
+                _microsoftYaHei10Bold = null;
+                _microsoftYaHei11 = null;
+                _microsoftYaHei11Bold = null;
+                _microsoftYaHei12 = null;
+                _microsoftYaHei12Bold = null;
+                _microsoftYaHei13 = null;
+                _microsoftYaHei13Bold = null;
+                _microsoftYaHei14 = null;
+                _microsoftYaHei14Bold = null;
+                _microsoftYaHei16 = null;
+                _microsoftYaHei16Bold = null;
+                _microsoftYaHei20 = null;
+                _microsoftYaHei20Bold = null;
+                _microsoftYaHei22 = null;
+                _microsoftYaHei22Bold = null;
+                _microsoftYaHei28 = null;
+                _microsoftYaHei28Bold = null;
+                _microsoftYaHei32 = null;
+                _microsoftYaHei32Bold = null;
+                _microsoftYaHeiUI = null;
+                _microsoftYaHeiUI10 = null;
+                _microsoftYaHeiUI20 = null;
+                _segoeUIEmoji = null;
+                _large = null;
+                _largeBold = null;
+                _extraLarge = null;
+            }
+        }
+
+        public static void DisposeFonts()
+        {
+            Fonts.DisposeAll();
         }
 
         /// <summary>

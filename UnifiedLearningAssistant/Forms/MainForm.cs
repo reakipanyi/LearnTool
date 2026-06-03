@@ -1,4 +1,4 @@
-﻿using UnifiedLearningAssistant.Common;
+using UnifiedLearningAssistant.Common;
 using UnifiedLearningAssistant.Models.Config;
 using UnifiedLearningAssistant.Presenters;
 using UnifiedLearningAssistant.Services;
@@ -22,15 +22,6 @@ namespace UnifiedLearningAssistant.Forms
             _windowManager = windowManager ?? throw new ArgumentNullException(nameof(windowManager));
             _appConfig = appConfig ?? throw new ArgumentNullException(nameof(appConfig));
 
-
-
-            ThemeHelper.AddButtonHoverEffect(buttonStartLearning, ThemeHelper.Colors.Success);
-            ThemeHelper.AddButtonHoverEffect(buttonContinueLearning, ThemeHelper.Colors.Primary);
-            ThemeHelper.AddButtonHoverEffect(buttonOpenEditor, ThemeHelper.Colors.Purple);
-            ThemeHelper.AddButtonHoverEffect(buttonOpenPdfReader, ThemeHelper.Colors.Cyan);
-            ThemeHelper.AddButtonHoverEffect(buttonOpenStatistics, ThemeHelper.Colors.Orange);
-            ThemeHelper.AddButtonHoverEffect(buttonExportErrorBook, ThemeHelper.Colors.Error);
-
             Load += MainForm_Load;
         }
 
@@ -38,8 +29,8 @@ namespace UnifiedLearningAssistant.Forms
 
         private void MainForm_Load(object? sender, EventArgs e)
         {
-            _presenter.SetView(this);
-            _presenter.Initialize();
+            _presenter?.SetView(this);
+            _presenter?.Initialize();
 
             _presenter.OnStartLearning += Presenter_OnStartLearning;
             _presenter.OnOpenSettings += Presenter_OnOpenSettings;
@@ -47,7 +38,6 @@ namespace UnifiedLearningAssistant.Forms
             _presenter.OnOpenStatistics += Presenter_OnOpenStatistics;
 
             // 监听PDF的添加到编辑器事件
-
             _pdfView.AddToEditor += PdfView_OnAddToEditor;
 
             if (_pdfView is UserControl uc)
@@ -64,21 +54,6 @@ namespace UnifiedLearningAssistant.Forms
             {
                 throw new InvalidOperationException("IPdfView 未实现为 UserControl 类型。");
             }
-            ApplyFontSize();
-        }
-
-        private void ApplyFontSize()
-        {
-            int fontSize = _appConfig.AppSettings.DefaultFontSize;
-            var defaultFont = new Font("Microsoft YaHei UI", fontSize);
-
-            foreach (Control control in panelMain.Controls)
-            {
-                ApplyFontToControl(control, defaultFont);
-            }
-
-            labelStreakDays.Font = new Font("Microsoft YaHei UI", fontSize, FontStyle.Bold);
-            toolStripStatusLabel.Font = defaultFont;
         }
 
         private void ApplyFontToControl(Control control, Font font)
@@ -95,9 +70,6 @@ namespace UnifiedLearningAssistant.Forms
         {
             _windowManager.OpenEditorWindowWithContext(e.Text, e.Language, null);
         }
-
-
-
 
 
         // 新增功能：PDF生词本联动 - 设置PDF Presenter
@@ -835,6 +807,20 @@ namespace UnifiedLearningAssistant.Forms
             statusStrip1.PerformLayout();
             ResumeLayout(false);
             PerformLayout();
+            ThemeHelper.AddButtonHoverEffect(buttonStartLearning, ThemeHelper.Colors.Success);
+            ThemeHelper.AddButtonHoverEffect(buttonContinueLearning, ThemeHelper.Colors.Primary);
+            ThemeHelper.AddButtonHoverEffect(buttonOpenEditor, ThemeHelper.Colors.Purple);
+            ThemeHelper.AddButtonHoverEffect(buttonOpenPdfReader, ThemeHelper.Colors.Cyan);
+            ThemeHelper.AddButtonHoverEffect(buttonOpenStatistics, ThemeHelper.Colors.Orange);
+            ThemeHelper.AddButtonHoverEffect(buttonExportErrorBook, ThemeHelper.Colors.Error);
+            int fontSize = 14;
+            var defaultFont = new Font("Microsoft YaHei UI", fontSize);
+            foreach (Control control in panelMain.Controls)
+            {
+                ApplyFontToControl(control, defaultFont);
+            }
+            labelStreakDays.Font = new Font("Microsoft YaHei UI", fontSize, FontStyle.Bold);
+            toolStripStatusLabel.Font = defaultFont;
         }
 
         #endregion

@@ -10,7 +10,6 @@ namespace UnifiedLearningAssistant.Forms
         public FormPreviewTool()
         {
             InitializeComponent();
-            ApplyTheme();
             PopulateFormList();
         }
 
@@ -78,6 +77,7 @@ namespace UnifiedLearningAssistant.Forms
             this.Controls.AddRange(new Control[] { label, listBoxForms, buttonPreview, buttonClose });
 
             this.ResumeLayout(false);
+            ApplyTheme();
         }
 
         private ListBox listBoxForms = null!;

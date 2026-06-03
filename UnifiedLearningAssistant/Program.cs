@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using UnifiedLearningAssistant.Common;
 using UnifiedLearningAssistant.Forms;
 using UnifiedLearningAssistant.Models.Config;
 using UnifiedLearningAssistant.Presenters;
@@ -83,12 +84,24 @@ namespace UnifiedLearningAssistant
             services.AddScoped<ContentEditorPresenter>();
             services.AddScoped<PdfPresenter>();
 
-            services.AddScoped<MainForm>();
+            services.AddScoped<MainForm>(sp =>
+            {
+                var presenter = sp.GetRequiredService<MainPresenter>();
+                var pdfView = sp.GetRequiredService<IPdfView>();
+                var windowManager = sp.GetRequiredService<IWindowManager>();
+                var appConfig = sp.GetRequiredService<AppConfig>();
+                return new MainForm(presenter, pdfView, windowManager, appConfig);
+            });
             services.AddScoped<SettingForm>();
             services.AddScoped<LearningForm>();
             services.AddScoped<PdfReaderForm>();
             services.AddScoped<ResultForm>();
-            services.AddScoped<ContentEditorForm>();
+            services.AddScoped<ContentEditorForm>(sp =>
+            {
+                var logger = sp.GetRequiredService<ILogger<ContentEditorForm>>();
+                var appConfig = sp.GetRequiredService<AppConfig>();
+                return new ContentEditorForm(logger, appConfig);
+            });
 
             // 视图接口映射
             services.AddScoped<ISettingView>(sp => sp.GetRequiredService<SettingForm>());
@@ -179,6 +192,7 @@ namespace UnifiedLearningAssistant
                 mainForm.SetPdfPresenter(pdfPresenter);
 
                 logger.LogInformation("主窗体创建成功，启动应用程序");
+                Application.ApplicationExit += Application_ApplicationExit;
                 Application.Run(mainForm);
                 // 在 Application.Run 返回后，appScope.Dispose() 会自动释放 Scoped 服务
             }
@@ -189,6 +203,31 @@ namespace UnifiedLearningAssistant
                 logger?.LogError(ex, "无法创建主窗体");
                 MessageBox.Show($"无法启动主窗体: {ex.Message}\n{ex.StackTrace}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private static void Application_ApplicationExit(object? sender, EventArgs e)
+        {
+
+            try
+            {
+                ThemeHelper.DisposeFonts();
+            }
+            catch (Exception ex)
+            {
+            }
+
+            try
+            {
+                if (ServiceProvider is IDisposable disposable)
+                {
+                    disposable.Dispose();
+                }
+                ServiceProvider = null!;
+            }
+            catch (Exception ex)
+            {
+            }
+
         }
 
         // 新增功能：全局服务访问辅助方法

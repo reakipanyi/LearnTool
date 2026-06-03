@@ -9,6 +9,18 @@ using UnifiedLearningAssistant.Views.UI;
 
 namespace UnifiedLearningAssistant.Forms
 {
+    public enum HighlightActionType
+    {
+        Add,
+        Remove
+    }
+
+    public class HighlightUndoAction
+    {
+        public HighlightActionType ActionType { get; set; }
+        public PdfHighlight Highlight { get; set; }
+    }
+
     public partial class PdfReaderForm : UserControl, IPdfView
     {
         private PdfPresenter? _presenter;
@@ -18,8 +30,11 @@ namespace UnifiedLearningAssistant.Forms
         private int _zoomLevel = 100;
         private bool _isSelecting = false;
         private bool _isDrawing = false;
+        private bool _isDragging = false;
         private Point _selectStart = Point.Empty;
         private Point _selectEnd = Point.Empty;
+        private Point _dragStart = Point.Empty;
+        private Point _imageOffset = Point.Empty;
         private Rectangle? _lastSelectionRect = null;
         private readonly Pen _pen = new Pen(Color.Red, 4f);
         private Bitmap? _annotationBitmap;
@@ -27,7 +42,7 @@ namespace UnifiedLearningAssistant.Forms
         private List<PointF>? _currentStrokePoints;
         private Bitmap? _highlightBitmap;
         private Graphics? _highlightGraphics;
-        private readonly Stack<PdfHighlight> _highlightUndoStack = new Stack<PdfHighlight>();
+        private readonly Stack<HighlightUndoAction> _highlightUndoStack = new Stack<HighlightUndoAction>();
         private bool _disposed = false;
 
         private Panel? _ocrPanel;
@@ -60,6 +75,9 @@ namespace UnifiedLearningAssistant.Forms
         private TabPage? _tabPageBookmarks;
         private TabPage? _tabPageHighlights;
         private HighlightColor _currentHighlightColor = HighlightColor.Yellow;
+        private bool _isHighlightMode = false;
+        private Button? _buttonToggleHighlightMode;
+        private Button? _buttonUndoHighlight;
 
         private string _currentPdfPath = string.Empty;
         private int _currentPageIndex = 0;
@@ -90,14 +108,6 @@ namespace UnifiedLearningAssistant.Forms
             Load += PdfReaderForm_Load;
             Resize += PdfReaderForm_Resize;
             KeyDown += PdfReaderForm_KeyDown;
-            InitializeBookmarkAndHighlightUI();
-
-            if (panelPdf != null)
-            {
-                panelPdf.Controls.Add(_pageTransitionOverlay);
-                _pageTransitionOverlay.BringToFront();
-            }
-
         }
 
 
@@ -311,37 +321,23 @@ namespace UnifiedLearningAssistant.Forms
 
         private void ButtonAddHighlight_Click(object? sender, EventArgs e)
         {
-            if (string.IsNullOrEmpty(_currentPdfPath)) return;
-
-            var imgRect = GetImageDisplayRect();
-            float x = imgRect.Width * 0.1f;
-            float y = imgRect.Height * 0.1f;
-            float width = imgRect.Width * 0.8f;
-            float height = imgRect.Height * 0.8f;
-
-            var highlight = new PdfHighlight
+            _isHighlightMode = !_isHighlightMode;
+            if (_buttonAddHighlight != null)
             {
-                PdfPath = _currentPdfPath,
-                PageIndex = _currentPageIndex,
-                X = x,
-                Y = y,
-                Width = width,
-                Height = height,
-                Color = _currentHighlightColor,
-                CreatedAt = DateTime.Now
-            };
-
-            _highlightUndoStack.Push(highlight);
-            _highlightService.AddHighlight(_currentPdfPath, _currentPageIndex, x, y, width, height, "", _currentHighlightColor);
-            RefreshHighlightList();
-            UpdateHighlightLayer();
-            pictureBoxPdf?.Invalidate();
+                _buttonAddHighlight.BackColor = _isHighlightMode ? Color.LightGreen : SystemColors.Control;
+                _buttonAddHighlight.Text = _isHighlightMode ? "高亮模式: 开启" : "开启高亮模式";
+            }
         }
 
         private void ButtonRemoveHighlight_Click(object? sender, EventArgs e)
         {
             if (_listBoxHighlights?.SelectedItem is PdfHighlight highlight)
             {
+                _highlightUndoStack.Push(new HighlightUndoAction
+                {
+                    ActionType = HighlightActionType.Remove,
+                    Highlight = highlight
+                });
                 _highlightService.RemoveHighlight(_currentPdfPath, highlight.Id);
                 RefreshHighlightList();
                 UpdateHighlightLayer();
@@ -353,8 +349,24 @@ namespace UnifiedLearningAssistant.Forms
         {
             if (_highlightUndoStack.Count > 0)
             {
-                var lastHighlight = _highlightUndoStack.Pop();
-                _highlightService.RemoveHighlight(_currentPdfPath, lastHighlight.Id);
+                var lastAction = _highlightUndoStack.Pop();
+                if (lastAction.ActionType == HighlightActionType.Add)
+                {
+                    _highlightService.RemoveHighlight(_currentPdfPath, lastAction.Highlight.Id);
+                }
+                else if (lastAction.ActionType == HighlightActionType.Remove)
+                {
+                    _highlightService.AddHighlight(
+                        _currentPdfPath,
+                        lastAction.Highlight.PageIndex,
+                        lastAction.Highlight.NormalizedX > 0 ? lastAction.Highlight.NormalizedX : lastAction.Highlight.X,
+                        lastAction.Highlight.NormalizedY > 0 ? lastAction.Highlight.NormalizedY : lastAction.Highlight.Y,
+                        lastAction.Highlight.NormalizedWidth > 0 ? lastAction.Highlight.NormalizedWidth : lastAction.Highlight.Width,
+                        lastAction.Highlight.NormalizedHeight > 0 ? lastAction.Highlight.NormalizedHeight : lastAction.Highlight.Height,
+                        lastAction.Highlight.Text,
+                        lastAction.Highlight.Color
+                    );
+                }
                 RefreshHighlightList();
                 UpdateHighlightLayer();
                 pictureBoxPdf?.Invalidate();
@@ -445,9 +457,38 @@ namespace UnifiedLearningAssistant.Forms
                 foreach (var highlight in highlights)
                 {
                     var color = HighlightService.GetHighlightColor(highlight.Color);
-                    using var brush = new SolidBrush(color);
-                    var rect = new RectangleF(highlight.X, highlight.Y, highlight.Width, highlight.Height);
-                    _highlightGraphics.FillRectangle(brush, rect);
+                    
+                    // 使用归一化坐标，兼容旧格式
+                    float x, y, width, height;
+                    if (highlight.NormalizedWidth > 0)
+                    {
+                        x = highlight.NormalizedX * imgWidth;
+                        y = highlight.NormalizedY * imgHeight;
+                        width = highlight.NormalizedWidth * imgWidth;
+                        height = highlight.NormalizedHeight * imgHeight;
+                    }
+                    else
+                    {
+                        x = highlight.X;
+                        y = highlight.Y;
+                        width = highlight.Width;
+                        height = highlight.Height;
+                    }
+                    
+                    var rect = new RectangleF(x, y, width, height);
+                    
+                    // 使用渐变画笔，更美观
+                    using var gradientBrush = new LinearGradientBrush(
+                        rect, 
+                        Color.FromArgb(color.A, color.R, color.G, color.B),
+                        Color.FromArgb(color.A - 30, color.R, color.G, color.B),
+                        LinearGradientMode.ForwardDiagonal);
+                    
+                    _highlightGraphics.FillRectangle(gradientBrush, rect);
+                    
+                    // 绘制边界
+                    using var pen = new Pen(Color.FromArgb(color.A + 50, color.R, color.G, color.B), 1.5f);
+                    _highlightGraphics.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
 
                     if (!string.IsNullOrEmpty(highlight.Note))
                     {
@@ -1856,6 +1897,12 @@ namespace UnifiedLearningAssistant.Forms
             highlightButtonPanel.ResumeLayout(false);
             _pageTransitionOverlay.ResumeLayout(false);
             ResumeLayout(false);
+            InitializeBookmarkAndHighlightUI();
+            if (panelPdf != null)
+            {
+                panelPdf.Controls.Add(_pageTransitionOverlay);
+                _pageTransitionOverlay.BringToFront();
+            }
         }
 
         private void SetupNavigationPanelChildEvents()
@@ -1983,6 +2030,30 @@ namespace UnifiedLearningAssistant.Forms
         {
             try
             {
+                if (e.Button == MouseButtons.Left && _isHighlightMode)
+                {
+                    _isSelecting = true;
+                    _selectStart = e.Location;
+                    _selectEnd = e.Location;
+                    try
+                    {
+                        pictureBoxPdf.Invalidate();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Error invalidating pictureBox on highlight start");
+                    }
+                    return;
+                }
+
+                if (e.Button == MouseButtons.Left && _zoomLevel > 100)
+                {
+                    _isDragging = true;
+                    _dragStart = e.Location;
+                    pictureBoxPdf.Cursor = Cursors.Hand;
+                    return;
+                }
+
                 if (e.Button == MouseButtons.Right)
                 {
                     var now = DateTime.Now;
@@ -2071,6 +2142,16 @@ namespace UnifiedLearningAssistant.Forms
                 {
                     _selectEnd = e.Location;
                     pictureBoxPdf.Invalidate();
+                    return;
+                }
+
+                if (_isDragging)
+                {
+                    var deltaX = e.Location.X - _dragStart.X;
+                    var deltaY = e.Location.Y - _dragStart.Y;
+                    _imageOffset = new Point(_imageOffset.X + deltaX, _imageOffset.Y + deltaY);
+                    _dragStart = e.Location;
+                    pictureBoxPdf.Invalidate();
                 }
             }
             catch (Exception ex)
@@ -2130,15 +2211,29 @@ namespace UnifiedLearningAssistant.Forms
                     _isSelecting = false;
                     _selectEnd = e.Location;
                     _lastSelectionRect = GetSelectionRectangle(_selectStart, _selectEnd);
-                    try
+                    
+                    if (_isHighlightMode && _lastSelectionRect.HasValue)
                     {
-                        pictureBoxPdf.Invalidate();
+                        AddHighlightFromSelection(_lastSelectionRect.Value);
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        _logger.LogWarning(ex, "Error invalidating after selection");
+                        try
+                        {
+                            pictureBoxPdf.Invalidate();
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Error invalidating after selection");
+                        }
+                        SelectOcrClicked?.Invoke(this, EventArgs.Empty);
                     }
-                    SelectOcrClicked?.Invoke(this, EventArgs.Empty);
+                }
+
+                if (_isDragging)
+                {
+                    _isDragging = false;
+                    pictureBoxPdf.Cursor = Cursors.Default;
                 }
             }
             catch (Exception ex)
@@ -2146,6 +2241,72 @@ namespace UnifiedLearningAssistant.Forms
                 _logger.LogError(ex, "Error in PictureBoxPdf_MouseUp");
                 _isSelecting = false;
                 _isDrawing = false;
+                _isDragging = false;
+            }
+        }
+
+        private void AddHighlightFromSelection(Rectangle selectionRect)
+        {
+            try
+            {
+                if (pictureBoxPdf.Image == null || string.IsNullOrEmpty(_currentPdfPath)) return;
+
+                var imgRect = GetImageDisplayRect();
+                if (imgRect.Width <= 0 || imgRect.Height <= 0) return;
+
+                // 计算选择区域在图片中的相对位置
+                float x = Math.Max(0, selectionRect.X - imgRect.X);
+                float y = Math.Max(0, selectionRect.Y - imgRect.Y);
+                float width = Math.Min(selectionRect.Width, imgRect.Right - selectionRect.X);
+                float height = Math.Min(selectionRect.Height, imgRect.Bottom - selectionRect.Y);
+
+                // 转换为归一化坐标（0-1）
+                var normalizedRect = new RectangleF(
+                    x / imgRect.Width,
+                    y / imgRect.Height,
+                    width / imgRect.Width,
+                    height / imgRect.Height
+                );
+
+                // 确保矩形有效
+                if (normalizedRect.Width < 0.01f || normalizedRect.Height < 0.01f) return;
+
+                // 添加高亮
+                var highlight = new PdfHighlight
+                {
+                    PdfPath = _currentPdfPath,
+                    PageIndex = _currentPageIndex,
+                    NormalizedX = normalizedRect.X,
+                    NormalizedY = normalizedRect.Y,
+                    NormalizedWidth = normalizedRect.Width,
+                    NormalizedHeight = normalizedRect.Height,
+                    Color = _currentHighlightColor,
+                    CreatedAt = DateTime.Now
+                };
+
+                _highlightUndoStack.Push(new HighlightUndoAction
+                {
+                    ActionType = HighlightActionType.Add,
+                    Highlight = highlight
+                });
+                _highlightService.AddHighlight(
+                    _currentPdfPath,
+                    _currentPageIndex,
+                    normalizedRect.X,
+                    normalizedRect.Y,
+                    normalizedRect.Width,
+                    normalizedRect.Height,
+                    "",
+                    _currentHighlightColor
+                );
+
+                RefreshHighlightList();
+                UpdateHighlightLayer();
+                pictureBoxPdf.Invalidate();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error adding highlight from selection");
             }
         }
 
@@ -2153,7 +2314,7 @@ namespace UnifiedLearningAssistant.Forms
         {
             try
             {
-                if (ModifierKeys == Keys.Control)
+                if (e.Delta != 0)
                 {
                     if (e.Delta > 0) _zoomLevel = Math.Min(400, _zoomLevel + 10);
                     else _zoomLevel = Math.Max(10, _zoomLevel - 10);
@@ -2176,20 +2337,6 @@ namespace UnifiedLearningAssistant.Forms
                         }
                     }
                 }
-                else
-                {
-                    if (_presenter != null)
-                    {
-                        if (e.Delta < 0)
-                        {
-                            _presenter.NextPage();
-                        }
-                        else
-                        {
-                            _presenter.PreviousPage();
-                        }
-                    }
-                }
             }
             catch (Exception ex)
             {
@@ -2197,17 +2344,64 @@ namespace UnifiedLearningAssistant.Forms
             }
         }
 
+        public void ResetZoom()
+        {
+            _zoomLevel = 100;
+            _imageOffset = Point.Empty;
+            if (_presenter != null)
+            {
+                var page = int.TryParse(textBoxPage.Text, out var p) ? p - 1 : 0;
+                try
+                {
+                    var bmp = _presenter.RenderPageToBitmap(page, pictureBoxPdf.ClientSize.Width, pictureBoxPdf.ClientSize.Height);
+                    if (bmp != null)
+                    {
+                        DisplayImage(bmp);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error resetting zoom");
+                }
+            }
+            pictureBoxPdf.Invalidate();
+        }
+
         private void PictureBoxPdf_Paint(object? sender, PaintEventArgs e)
         {
             try
             {
+                if (_imageOffset != Point.Empty && pictureBoxPdf?.Image != null)
+                {
+                    var imgRect = GetImageDisplayRect();
+                    var offsetRect = new Rectangle(
+                        imgRect.X + _imageOffset.X,
+                        imgRect.Y + _imageOffset.Y,
+                        imgRect.Width,
+                        imgRect.Height
+                    );
+                    e.Graphics.DrawImage(pictureBoxPdf.Image, offsetRect);
+                }
+
                 if (_isSelecting)
                 {
                     var rect = GetSelectionRectangle(_selectStart, _selectEnd);
-                    using var brush = new SolidBrush(Color.FromArgb(80, Color.Yellow));
-                    e.Graphics.FillRectangle(brush, rect);
-                    using var pen = new Pen(Color.Orange, 2);
-                    e.Graphics.DrawRectangle(pen, rect);
+                    
+                    if (_isHighlightMode)
+                    {
+                        var color = HighlightService.GetHighlightColor(_currentHighlightColor);
+                        using var brush = new SolidBrush(Color.FromArgb(color.A, color.R, color.G, color.B));
+                        e.Graphics.FillRectangle(brush, rect);
+                        using var pen = new Pen(Color.FromArgb(color.A + 50, color.R, color.G, color.B), 2);
+                        e.Graphics.DrawRectangle(pen, rect);
+                    }
+                    else
+                    {
+                        using var brush = new SolidBrush(Color.FromArgb(80, Color.Yellow));
+                        e.Graphics.FillRectangle(brush, rect);
+                        using var pen = new Pen(Color.Orange, 2);
+                        e.Graphics.DrawRectangle(pen, rect);
+                    }
                 }
                 else if (_isDrawing)
                 {
@@ -2240,8 +2434,15 @@ namespace UnifiedLearningAssistant.Forms
                     return;
 
                 var imgRect = GetImageDisplayRect();
+                
+                var offsetRect = new Rectangle(
+                    imgRect.X + _imageOffset.X,
+                    imgRect.Y + _imageOffset.Y,
+                    imgRect.Width,
+                    imgRect.Height
+                );
 
-                g.DrawImage(_highlightBitmap, imgRect,
+                g.DrawImage(_highlightBitmap, offsetRect,
                     new Rectangle(0, 0, _highlightBitmap.Width, _highlightBitmap.Height),
                     GraphicsUnit.Pixel);
             }
