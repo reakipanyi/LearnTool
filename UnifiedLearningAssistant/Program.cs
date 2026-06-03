@@ -83,6 +83,12 @@ namespace UnifiedLearningAssistant
             // 可选：如果你想使用 SQLite 版本的提醒服务，可以取消下面这行注释，并注释掉上面的原始提醒服务
             // services.AddSingleton<Services.Learning.ILearningReminderService, Services.Learning.SqliteLearningReminderService>();
             services.AddSingleton<Services.Learning.ILearningReminderService, Services.Learning.LearningReminderService>();
+            
+            // 新增：数据迁移服务
+            services.AddSingleton<Services.Migration.DataMigrationService>();
+            
+            // 新增：云存储服务（占位符实现）
+            services.AddSingleton<Services.Cloud.ICloudStorageService, Services.Cloud.PlaceholderCloudStorageService>();
 
             // 4. 窗体与 Presenter
             services.AddSingleton<IWindowManager, WindowManager>();
