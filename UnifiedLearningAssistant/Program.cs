@@ -74,6 +74,8 @@ namespace UnifiedLearningAssistant
             services.AddSingleton<Services.Pdf.ITranslationService, Services.Pdf.BaiduTranslationService>();
             services.AddSingleton<Services.Pdf.IAnnotationService, Services.Pdf.FileAnnotationService>();
             services.AddSingleton<Services.Learning.IStudyEngine, Services.Learning.StudyEngine>();
+            services.AddSingleton<Services.Learning.ILearningAnalyticsService, Services.Learning.LearningAnalyticsService>();
+            services.AddSingleton<Services.Learning.ILearningReminderService, Services.Learning.LearningReminderService>();
 
             // 4. 窗体与 Presenter
             services.AddSingleton<IWindowManager, WindowManager>();
