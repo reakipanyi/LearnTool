@@ -103,16 +103,9 @@ namespace UnifiedLearningAssistant.Services.AI
         private string GenerateCacheKey(params string[] parts)
         {
             var combined = string.Join("_", parts);
-            using (var md5 = MD5.Create())
-            {
-                var bytes = md5.ComputeHash(Encoding.UTF8.GetBytes(combined));
-                var sb = new StringBuilder();
-                foreach (var b in bytes)
-                {
-                    sb.Append(b.ToString("x2"));
-                }
-                return sb.ToString();
-            }
+            using var md5 = MD5.Create();
+            var bytes = md5.ComputeHash(Encoding.UTF8.GetBytes(combined));
+            return BitConverter.ToString(bytes).Replace("-", string.Empty).ToLowerInvariant();
         }
     }
 }

@@ -8,9 +8,16 @@ namespace UnifiedLearningAssistant.Services.TTS
     /// </summary>
     public class QwenTtsClient : IDisposable
     {
+        private static readonly HttpClient _sharedHttpClient = new HttpClient 
+        { 
+            Timeout = TimeSpan.FromSeconds(60),
+            DefaultRequestHeaders = { { "User-Agent", "UnifiedLearningAssistant/1.0" } }
+        };
+        
         private readonly HttpClient _httpClient;
         private readonly string _apiKey;
         private readonly string _endpoint;
+        private bool _disposed = false;
 
         /// <summary>
         /// 客户端是否可用（检查 API Key 是否配置）
@@ -23,11 +30,21 @@ namespace UnifiedLearningAssistant.Services.TTS
         /// <param name="apiKey">从阿里云 Model Studio 获取的 API Key。可以从环境变量 "DASHSCOPE_API_KEY" 获取 [citation:3]</param>
         /// <param name="endpoint">API 端点，默认为国际站地址，使用中国大陆 region 需修改 [citation:4]</param>
         public QwenTtsClient(string? apiKey, string? endpoint)
+            : this(apiKey, endpoint, useSharedClient: true)
+        {
+        }
+
+        /// <summary>
+        /// 初始化 Qwen3-TTS 客户端
+        /// </summary>
+        /// <param name="apiKey">API Key</param>
+        /// <param name="endpoint">API端点</param>
+        /// <param name="useSharedClient">是否使用共享HttpClient</param>
+        public QwenTtsClient(string? apiKey, string? endpoint, bool useSharedClient)
         {
             _apiKey = apiKey ?? Environment.GetEnvironmentVariable("QWEN_TTS_KEY");
-            // 默认使用国际站（新加坡）Endpoint。如果你使用中国大陆资源，请替换为：https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation [citation:3]
             _endpoint = endpoint ?? "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
-            _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(60) }; // 合成任务可能稍长
+            _httpClient = useSharedClient ? _sharedHttpClient : new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
         }
 
         /// <summary>
@@ -114,7 +131,24 @@ namespace UnifiedLearningAssistant.Services.TTS
 
         public void Dispose()
         {
-            try { _httpClient?.Dispose(); } catch { }
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed) return;
+            
+            if (disposing)
+            {
+                // 只释放自己创建的 HttpClient，不释放共享的
+                if (_httpClient != _sharedHttpClient)
+                {
+                    _httpClient?.Dispose();
+                }
+            }
+            
+            _disposed = true;
         }
     }
 }

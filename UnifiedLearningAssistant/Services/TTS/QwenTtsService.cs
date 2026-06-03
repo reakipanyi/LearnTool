@@ -7,12 +7,15 @@ namespace UnifiedLearningAssistant.Services.TTS
     public class QwenTtsService : ITTSService
     {
         private readonly QwenTtsClient? _client;
+        private const long MaxCacheSizeBytes = 100 * 1024 * 1024; // 100MB 缓存上限
+        private static readonly string CacheDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TTSTemp");
 
         public QwenTtsService(string? apiKey, string? endpoint)
         {
             try
             {
                 _client = new QwenTtsClient(apiKey, endpoint);
+                CleanupOldCache();
             }
             catch
             {
@@ -22,7 +25,7 @@ namespace UnifiedLearningAssistant.Services.TTS
 
         public bool Available => _client != null && _client.Available;
 
-        public bool IsSpeaking => throw new NotImplementedException();
+        public bool IsSpeaking => false;
 
 
 
@@ -33,20 +36,16 @@ namespace UnifiedLearningAssistant.Services.TTS
 
             try
             {
-                // create temp dir
-                var dir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TTSTemp");
-                Directory.CreateDirectory(dir);
+                Directory.CreateDirectory(CacheDirectory);
 
                 // create deterministic filename based on SHA1 of text + language + speed
-                using var sha1 = SHA1.Create();
-                var meta = (text ?? string.Empty) + "|" + (language ?? string.Empty) + "|" + (speed?.ToString() ?? string.Empty);
-                var hash = sha1.ComputeHash(Encoding.UTF8.GetBytes(meta));
-                var sb = new StringBuilder();
-                foreach (var b in hash) sb.Append(b.ToString("x2"));
-                var fname = sb.ToString() + ".wav";
-                var path = Path.Combine(dir, fname);
+                string path = GetCacheFilePath(text, language, speed);
 
-                if (File.Exists(path)) return path;
+                if (File.Exists(path))
+                {
+                    File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
+                    return path;
+                }
 
                 // 转换语言代码为完整语言名称
                 string lang = language switch
@@ -107,7 +106,48 @@ namespace UnifiedLearningAssistant.Services.TTS
 
         public Task StopAsync()
         {
-            throw new NotImplementedException();
+            return Task.CompletedTask;
+        }
+
+        private string GetCacheFilePath(string text, string? language, float? speed)
+        {
+            using var sha1 = SHA1.Create();
+            var meta = (text ?? string.Empty) + "|" + (language ?? string.Empty) + "|" + (speed?.ToString() ?? string.Empty);
+            var hash = sha1.ComputeHash(Encoding.UTF8.GetBytes(meta));
+            var sb = new StringBuilder();
+            foreach (var b in hash) sb.Append(b.ToString("x2"));
+            return Path.Combine(CacheDirectory, sb.ToString() + ".wav");
+        }
+
+        private void CleanupOldCache()
+        {
+            try
+            {
+                if (!Directory.Exists(CacheDirectory)) return;
+
+                var files = new DirectoryInfo(CacheDirectory)
+                    .GetFiles("*.wav")
+                    .OrderByDescending(f => f.LastWriteTimeUtc)
+                    .ToList();
+
+                long totalSize = files.Sum(f => f.Length);
+
+                if (totalSize > MaxCacheSizeBytes)
+                {
+                    foreach (var file in files)
+                    {
+                        try
+                        {
+                            file.Delete();
+                            totalSize -= file.Length;
+                            if (totalSize <= MaxCacheSizeBytes * 0.8)
+                                break;
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch { }
         }
 
 
