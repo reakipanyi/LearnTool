@@ -105,6 +105,86 @@ namespace UnifiedLearningAssistant.Tests
             result1.Should().BeNull();
             result2.Should().BeNull();
         }
+
+        // 边缘情况测试
+
+        [Fact]
+        public void Set_WithNullKey_ShouldThrow()
+        {
+            // Act
+            Action act = () => _cacheService.Set(null!, "value");
+
+            // Assert
+            act.Should().Throw<ArgumentNullException>();
+        }
+
+        [Fact]
+        public void Set_WithEmptyKey_ShouldThrow()
+        {
+            // Act
+            Action act = () => _cacheService.Set("", "value");
+
+            // Assert
+            act.Should().Throw<ArgumentException>();
+        }
+
+        [Fact]
+        public void Set_WithNullValue_ShouldStoreNull()
+        {
+            // Arrange
+            var key = "null_value_key";
+
+            // Act
+            _cacheService.Set<object?>(key, null);
+            var result = _cacheService.Get<object?>(key);
+
+            // Assert
+            result.Should().BeNull();
+        }
+
+        [Fact]
+        public void Get_WithNullKey_ShouldThrow()
+        {
+            // Act
+            Action act = () => _cacheService.Get<string>(null!);
+
+            // Assert
+            act.Should().Throw<ArgumentNullException>();
+        }
+
+        [Fact]
+        public void Remove_WithNonExistentKey_ShouldNotThrow()
+        {
+            // Act
+            Action act = () => _cacheService.Remove("non_existent_key");
+
+            // Assert
+            act.Should().NotThrow();
+        }
+
+        [Fact]
+        public void Set_MultipleValues_ShouldAllBeRetrievable()
+        {
+            // Arrange
+            var values = new Dictionary<string, string>
+            {
+                { "key1", "value1" },
+                { "key2", "value2" },
+                { "key3", "value3" }
+            };
+
+            // Act
+            foreach (var kvp in values)
+            {
+                _cacheService.Set(kvp.Key, kvp.Value);
+            }
+
+            // Assert
+            foreach (var kvp in values)
+            {
+                _cacheService.Get<string>(kvp.Key).Should().Be(kvp.Value);
+            }
+        }
     }
 
     public class TestObject

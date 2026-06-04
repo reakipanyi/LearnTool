@@ -161,6 +161,107 @@ namespace UnifiedLearningAssistant.Tests
             // Assert
             stats.AccuracyRate.Should().BeGreaterThan(0);
         }
+
+        // 边缘情况测试
+
+        [Fact]
+        public void Initialize_WithEmptyItemsList_ShouldNotThrow()
+        {
+            // Arrange
+            _mockContentLoaderService
+                .Setup(x => x.LoadItems(It.IsAny<string>(), It.IsAny<string>()))
+                .Returns(new List<object>());
+
+            // Act
+            Action act = () => _studyEngine.Initialize("test_user", "English", "Words", "", "学习模式", "Sequential");
+
+            // Assert
+            act.Should().NotThrow();
+            _studyEngine.TotalCount.Should().Be(0);
+        }
+
+        [Fact]
+        public void GetCurrentItem_BeforeInitialize_ShouldThrow()
+        {
+            // Act
+            Action act = () => _studyEngine.GetCurrentItem();
+
+            // Assert
+            act.Should().Throw<InvalidOperationException>();
+        }
+
+        [Fact]
+        public void MoveNext_AtEndOfList_ShouldNotAdvance()
+        {
+            // Arrange
+            var testItems = new List<object>
+            {
+                new TestLearningItem("Apple", "苹果", "/ˈæp.l/")
+            };
+
+            _mockContentLoaderService
+                .Setup(x => x.LoadItems(It.IsAny<string>(), It.IsAny<string>()))
+                .Returns(testItems);
+
+            _studyEngine.Initialize("test_user", "English", "Words", "", "学习模式", "Sequential");
+
+            // Act
+            _studyEngine.MoveNext(); // 第一次移动到第一个
+            var hasNextAfterFirst = _studyEngine.HasNext();
+            
+            _studyEngine.MoveNext(); // 尝试再移动
+            var currentItem = _studyEngine.GetCurrentItem();
+
+            // Assert
+            hasNextAfterFirst.Should().BeFalse();
+            currentItem.Should().NotBeNull();
+            currentItem!.GetMainContent().Should().Be("Apple");
+        }
+
+        [Fact]
+        public void MarkCurrentAsKnown_DuplicateItem_ShouldOnlyAddOnce()
+        {
+            // Arrange
+            var testItems = new List<object>
+            {
+                new TestLearningItem("Apple", "苹果", "/ˈæp.l/")
+            };
+
+            _mockContentLoaderService
+                .Setup(x => x.LoadItems(It.IsAny<string>(), It.IsAny<string>()))
+                .Returns(testItems);
+
+            _studyEngine.Initialize("test_user", "English", "Words", "", "学习模式", "Sequential");
+
+            // Act
+            _studyEngine.MarkCurrentAsKnown();
+            _studyEngine.MarkCurrentAsKnown(); // 重复标记
+
+            // Assert
+            _studyEngine.KnownItems.Should().HaveCount(1);
+        }
+
+        [Fact]
+        public void MarkCurrentAsUnknown_ShouldAddToUnknownList()
+        {
+            // Arrange
+            var testItems = new List<object>
+            {
+                new TestLearningItem("Apple", "苹果", "/ˈæp.l/")
+            };
+
+            _mockContentLoaderService
+                .Setup(x => x.LoadItems(It.IsAny<string>(), It.IsAny<string>()))
+                .Returns(testItems);
+
+            _studyEngine.Initialize("test_user", "English", "Words", "", "学习模式", "Sequential");
+
+            // Act
+            _studyEngine.MarkCurrentAsUnknown();
+
+            // Assert
+            _studyEngine.UnknownItems.Should().Contain("Apple");
+        }
     }
 
     /// <summary>
