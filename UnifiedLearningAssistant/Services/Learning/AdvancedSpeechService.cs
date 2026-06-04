@@ -4,6 +4,7 @@ using System.Linq;
 using System.Speech.Recognition;
 using System.Speech.Synthesis;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace UnifiedLearningAssistant.Services.Learning
@@ -258,7 +259,6 @@ namespace UnifiedLearningAssistant.Services.Learning
                 return new DictationScore(false, 0, string.Empty, "语音识别引擎未初始化");
             }
 
-            var tcs = new TaskCompletionSource<DictationScore>();
             string? recognizedText = null;
 
             EventHandler<SpeechRecognizedEventArgs> recognizedHandler = (sender, e) =>

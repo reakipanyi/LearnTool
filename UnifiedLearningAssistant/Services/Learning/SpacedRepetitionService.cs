@@ -142,7 +142,8 @@ namespace UnifiedLearningAssistant.Services.Learning
                 CreatedAt = DateTime.Now,
                 UpdatedAt = DateTime.Now
             };
-            _logger?.LogInformation("创建新复习项: {Content}", content.Substring(0, Math.Min(30, content.Length)));
+            var logContent = content.Length > 30 ? content.Substring(0, 30) + "..." : content;
+            _logger?.LogInformation("创建新复习项: {Content}", logContent);
             return item;
         }
 

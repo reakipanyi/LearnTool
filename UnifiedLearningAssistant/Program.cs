@@ -289,6 +289,34 @@ namespace UnifiedLearningAssistant
 
             try
             {
+                // 释放高级语音服务
+                var advancedSpeechService = ServiceProvider?.GetService<Services.Learning.IAdvancedSpeechService>();
+                if (advancedSpeechService is IDisposable disposableAdvancedSpeech)
+                {
+                    disposableAdvancedSpeech.Dispose();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"释放高级语音服务失败: {ex.Message}");
+            }
+
+            try
+            {
+                // 释放增强提醒服务
+                var enhancedReminderService = ServiceProvider?.GetService<Services.Learning.IEnhancedReminderService>();
+                if (enhancedReminderService is IDisposable disposableEnhancedReminder)
+                {
+                    disposableEnhancedReminder.Dispose();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"释放增强提醒服务失败: {ex.Message}");
+            }
+
+            try
+            {
                 // 释放百度网盘服务
                 var baiduService = ServiceProvider?.GetService<Services.Cloud.BaiduNetdiskService>();
                 if (baiduService is IDisposable disposableBaidu)

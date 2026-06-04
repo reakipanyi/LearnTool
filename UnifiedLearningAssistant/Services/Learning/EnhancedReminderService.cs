@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Timers;
 using Microsoft.Extensions.Logging;
@@ -96,16 +97,40 @@ namespace UnifiedLearningAssistant.Services.Learning
 
         public void UpdateReminder(Guid reminderId, Action<Reminder> updateAction)
         {
-            var reminders = _reminderService.GetUserReminders("");
-            var reminder = reminders.FirstOrDefault(r => r.Id == reminderId);
-            
-            if (reminder != null)
+            try
             {
-                updateAction(reminder);
-                reminder.UpdatedAt = DateTime.Now;
-                _reminderService.UpdateReminder(reminder);
+                var allReminders = new List<Reminder>();
                 
-                _logger?.LogInformation("更新提醒: {Id}", reminderId);
+                foreach (var userId in new[] { "current_user", Environment.UserName })
+                {
+                    try
+                    {
+                        allReminders.AddRange(_reminderService.GetUserReminders(userId));
+                    }
+                    catch
+                    {
+                        continue;
+                    }
+                }
+                
+                var reminder = allReminders.FirstOrDefault(r => r.Id == reminderId);
+                
+                if (reminder != null)
+                {
+                    updateAction(reminder);
+                    reminder.UpdatedAt = DateTime.Now;
+                    _reminderService.UpdateReminder(reminder);
+                    
+                    _logger?.LogInformation("更新提醒: {Id}", reminderId);
+                }
+                else
+                {
+                    _logger?.LogWarning("未找到提醒: {Id}", reminderId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "更新提醒失败: {Id}", reminderId);
             }
         }
 
@@ -285,17 +310,24 @@ namespace UnifiedLearningAssistant.Services.Learning
 
         private TimeSpan GetSuggestedReminderTime(string userId)
         {
-            var stats = _analyticsService.GetDailyStats(userId, DateTime.Today);
-            var streak = _analyticsService.GetLearningStreak(userId);
-
-            if (streak > 0)
+            try
             {
-                return TimeSpan.FromHours(20);
+                var stats = _analyticsService.GetDailyStatistics(userId, DateTime.Today);
+                var streak = _analyticsService.GetStudyStreak(userId);
+
+                if (streak > 0)
+                {
+                    return TimeSpan.FromHours(20);
+                }
+
+                if (stats.TotalMinutes < 30)
+                {
+                    return TimeSpan.FromHours(15);
+                }
             }
-
-            if (stats.TotalTimeMinutes < 30)
+            catch (Exception ex)
             {
-                return TimeSpan.FromHours(15);
+                _logger?.LogWarning(ex, "获取建议提醒时间失败，使用默认时间");
             }
 
             return TimeSpan.FromHours(20);

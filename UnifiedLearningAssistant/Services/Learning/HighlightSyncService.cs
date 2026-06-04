@@ -30,6 +30,7 @@ namespace UnifiedLearningAssistant.Services.Learning
     public class HighlightSyncService : IHighlightSyncService
     {
         private readonly IHighlightService _highlightService;
+        private readonly IBookmarkService _bookmarkService;
         private readonly ILogger<HighlightSyncService>? _logger;
         private readonly List<HighlightTag> _defaultTags = new List<HighlightTag>
         {
@@ -40,9 +41,10 @@ namespace UnifiedLearningAssistant.Services.Learning
             new HighlightTag { Name = "例子", Color = "#FFC0CB", Count = 0 }
         };
 
-        public HighlightSyncService(IHighlightService highlightService, ILogger<HighlightSyncService>? logger = null)
+        public HighlightSyncService(IHighlightService highlightService, IBookmarkService bookmarkService, ILogger<HighlightSyncService>? logger = null)
         {
             _highlightService = highlightService;
+            _bookmarkService = bookmarkService;
             _logger = logger;
         }
 
@@ -51,8 +53,7 @@ namespace UnifiedLearningAssistant.Services.Learning
             try
             {
                 var highlights = _highlightService.GetHighlights(pdfPath);
-                var bookmarkService = new BookmarkService();
-                var bookmarks = bookmarkService.GetBookmarks(pdfPath);
+                var bookmarks = _bookmarkService.GetBookmarks(pdfPath);
 
                 var markdown = new System.Text.StringBuilder();
                 markdown.AppendLine($"# {Path.GetFileName(pdfPath)}");
