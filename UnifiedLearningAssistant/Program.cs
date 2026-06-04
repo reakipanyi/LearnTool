@@ -125,6 +125,13 @@ namespace UnifiedLearningAssistant
                 var appConfig = sp.GetRequiredService<AppConfig>();
                 return new ContentEditorForm(logger, appConfig);
             });
+            
+            services.AddSingleton<ISpacedRepetitionService, SpacedRepetitionService>();
+            services.AddSingleton<IHighlightSyncService, HighlightSyncService>();
+            services.AddSingleton<ILearningChartService, LearningChartService>();
+            services.AddSingleton<IAdvancedSpeechService, AdvancedSpeechService>();
+            services.AddSingleton<IEnhancedReminderService, EnhancedReminderService>();
+            
             services.AddScoped<LearningManagementForm>(sp =>
             {
                 var analyticsService = sp.GetRequiredService<ILearningAnalyticsService>();
