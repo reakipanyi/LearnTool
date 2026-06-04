@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using UnifiedLearningAssistant.Models.Pdf;
 using UnifiedLearningAssistant.Services.Pdf;
@@ -21,13 +22,13 @@ namespace UnifiedLearningAssistant.Services.Learning
     public class ExtractedContent
     {
         public Guid Id { get; set; } = Guid.NewGuid();
-        public string Type { get; set; }
-        public string Content { get; set; }
-        public string PageLabel { get; set; }
+        public string Type { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+        public string PageLabel { get; set; } = string.Empty;
         public int PageNumber { get; set; }
         public float PositionX { get; set; }
         public float PositionY { get; set; }
-        public string Color { get; set; }
+        public string Color { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public bool IsSelected { get; set; } = false;
     }
@@ -35,9 +36,9 @@ namespace UnifiedLearningAssistant.Services.Learning
     public class StudyMaterial
     {
         public Guid Id { get; set; } = Guid.NewGuid();
-        public string Title { get; set; }
-        public string Content { get; set; }
-        public string Type { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+        public string Type { get; set; } = string.Empty;
         public List<string> Tags { get; set; } = new List<string>();
         public DateTime GeneratedAt { get; set; } = DateTime.Now;
         public int RelevanceScore { get; set; }
@@ -71,16 +72,16 @@ namespace UnifiedLearningAssistant.Services.Learning
 
         public List<ExtractedContent> ExtractHighlights(string pdfPath)
         {
-            var highlights = _highlightService.GetAllHighlights(pdfPath);
+            var highlights = _highlightService.GetHighlights(pdfPath);
             return highlights.Select(h => new ExtractedContent
             {
                 Type = "Highlight",
                 Content = h.Text,
-                PageNumber = h.PageNumber,
-                PageLabel = $"第 {h.PageNumber} 页",
-                PositionX = h.Rect.Left,
-                PositionY = h.Rect.Top,
-                Color = h.Color.ToHexString(),
+                PageNumber = h.PageIndex + 1,
+                PageLabel = $"第 {h.PageIndex + 1} 页",
+                PositionX = h.NormalizedX,
+                PositionY = h.NormalizedY,
+                Color = GetColorHexString(h.Color),
                 CreatedAt = h.CreatedAt
             }).ToList();
         }
@@ -92,9 +93,9 @@ namespace UnifiedLearningAssistant.Services.Learning
             {
                 Type = "Bookmark",
                 Content = b.Title,
-                PageNumber = b.PageNumber,
-                PageLabel = $"第 {b.PageNumber} 页",
-                CreatedAt = DateTime.Now
+                PageNumber = b.PageIndex + 1,
+                PageLabel = $"第 {b.PageIndex + 1} 页",
+                CreatedAt = b.CreatedAt
             }).ToList();
         }
 
@@ -200,6 +201,19 @@ namespace UnifiedLearningAssistant.Services.Learning
 
         public void ExportToLearningLibrary(List<ExtractedContent> contents, string userId)
         {
+        }
+
+        private string GetColorHexString(HighlightColor color)
+        {
+            return color switch
+            {
+                HighlightColor.Yellow => "#FFFF00",
+                HighlightColor.Green => "#00FF00",
+                HighlightColor.Blue => "#00BFFF",
+                HighlightColor.Pink => "#FFC0CB",
+                HighlightColor.Orange => "#FFA500",
+                _ => "#FFFF00"
+            };
         }
     }
 }

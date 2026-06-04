@@ -75,8 +75,16 @@ namespace UnifiedLearningAssistant
             services.AddSingleton<Services.Pdf.IOcrService, Services.Pdf.TesseractOcrService>();
             services.AddSingleton<Services.Pdf.ITranslationService, Services.Pdf.BaiduTranslationService>();
             services.AddSingleton<Services.Pdf.IAnnotationService, Services.Pdf.FileAnnotationService>();
+            services.AddSingleton<Services.Pdf.IHighlightService, Services.Pdf.HighlightService>();
+            services.AddSingleton<Services.Pdf.IBookmarkService, Services.Pdf.BookmarkService>();
             services.AddSingleton<Services.Learning.IStudyEngine, Services.Learning.StudyEngine>();
             services.AddSingleton<Services.Learning.ILearningAnalyticsService, Services.Learning.LearningAnalyticsService>();
+            services.AddSingleton<Services.Learning.QuoteService>();
+            services.AddSingleton<Services.Learning.SubjectLearningService>();
+            services.AddSingleton<Services.Learning.SpeechService>();
+            services.AddSingleton<Services.Learning.LearningReportService>();
+            services.AddSingleton<Services.Learning.IPdfContentLinkService, Services.Learning.PdfContentLinkService>();
+            services.AddSingleton<Services.Cloud.BaiduNetdiskService>();
             
             // 数据库相关服务
             services.AddDbContextFactory<AppDbContext>();
@@ -116,6 +124,19 @@ namespace UnifiedLearningAssistant
                 var logger = sp.GetRequiredService<ILogger<ContentEditorForm>>();
                 var appConfig = sp.GetRequiredService<AppConfig>();
                 return new ContentEditorForm(logger, appConfig);
+            });
+            services.AddScoped<LearningManagementForm>(sp =>
+            {
+                var analyticsService = sp.GetRequiredService<ILearningAnalyticsService>();
+                var reminderService = sp.GetRequiredService<ILearningReminderService>();
+                var reportService = sp.GetRequiredService<LearningReportService>();
+                var quoteService = sp.GetRequiredService<QuoteService>();
+                return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService);
+            });
+            services.AddScoped<BrowserForm>(sp =>
+            {
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                return new BrowserForm(contentLoaderService);
             });
 
             // 视图接口映射

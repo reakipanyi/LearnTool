@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using UnifiedLearningAssistant.Common;
@@ -5,7 +8,7 @@ using UnifiedLearningAssistant.Models.Pdf;
 
 namespace UnifiedLearningAssistant.Services.Pdf
 {
-    public class HighlightService
+    public class HighlightService : IHighlightService
     {
         private readonly Dictionary<string, PdfHighlightCollection> _highlightsCache = new();
 
@@ -20,6 +23,11 @@ namespace UnifiedLearningAssistant.Services.Pdf
             var collection = LoadHighlightsFromFile(pdfPath);
             _highlightsCache[key] = collection;
             return collection.Highlights;
+        }
+
+        public List<PdfHighlight> GetAllHighlights(string pdfPath)
+        {
+            return GetHighlights(pdfPath);
         }
 
         public List<PdfHighlight> GetHighlightsForPage(string pdfPath, int pageIndex)

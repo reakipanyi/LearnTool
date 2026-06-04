@@ -1,8 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
-using LiveCharts;
-using LiveCharts.Wpf;
+using System.Globalization;
 using UnifiedLearningAssistant.Services.Learning;
 
 namespace UnifiedLearningAssistant.Forms
@@ -35,7 +34,6 @@ namespace UnifiedLearningAssistant.Forms
             LoadTodayStats();
             LoadWeeklyStats();
             LoadReminders();
-            LoadLearningTrend();
         }
 
         private void LoadTodayQuote()
@@ -77,24 +75,6 @@ namespace UnifiedLearningAssistant.Forms
             }
         }
 
-        private void LoadLearningTrend()
-        {
-            var endDate = DateTime.Today;
-            var startDate = endDate.AddDays(-6);
-            var trend = _analyticsService.GetLearningTrend(_userId, startDate, endDate);
-
-            var chartValues = new ChartValues<int>();
-            var labels = new List<string>();
-
-            foreach (var stat in trend)
-            {
-                chartValues.Add(stat.TotalMinutes);
-                labels.Add(stat.Date.Day.ToString());
-            }
-
-            // 简化的图表绑定（实际项目中需要正确绑定）
-        }
-
         private void btnAddReminder_Click(object sender, EventArgs e)
         {
             var reminder = new Reminder
@@ -110,7 +90,7 @@ namespace UnifiedLearningAssistant.Forms
             
             _reminderService.AddReminder(reminder);
             LoadReminders();
-            MessageBox.Show("提醒已添加");
+            MessageBox.Show("提醒已添加", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void btnGenerateReport_Click(object sender, EventArgs e)

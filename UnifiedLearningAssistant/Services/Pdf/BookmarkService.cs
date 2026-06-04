@@ -1,9 +1,11 @@
+using System.Collections.Generic;
+using System.Linq;
 using UnifiedLearningAssistant.Common;
 using UnifiedLearningAssistant.Models.Pdf;
 
 namespace UnifiedLearningAssistant.Services.Pdf
 {
-    public class BookmarkService
+    public class BookmarkService : IBookmarkService
     {
         private readonly Dictionary<string, List<PdfBookmark>> _bookmarksCache = new();
 
