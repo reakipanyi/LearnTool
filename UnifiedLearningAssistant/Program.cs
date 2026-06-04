@@ -1,13 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.EntityFrameworkCore;
 using UnifiedLearningAssistant.Common;
-using UnifiedLearningAssistant.Data.Database;
-using UnifiedLearningAssistant.Forms;
-using UnifiedLearningAssistant.Models.Config;
-using UnifiedLearningAssistant.Presenters;
-using UnifiedLearningAssistant.Services;
 using UnifiedLearningAssistant.Views;
 
 namespace UnifiedLearningAssistant
@@ -21,160 +15,25 @@ namespace UnifiedLearningAssistant
         {
             var services = new ServiceCollection();
 
-            // 1. 配置加载 + 默认值防护
             var configuration = new ConfigurationBuilder()
                 .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-                .AddJsonFile("appsettings.Development.json", optional: true, reloadOnChange: true) // 新增：开发环境配置
+                .AddJsonFile("appsettings.Development.json", optional: true, reloadOnChange: true)
                 .Build();
 
             services.AddSingleton<IConfiguration>(configuration);
 
-            // 加载配置，若缺失则使用空对象（避免后续注册 null）
-            var appConfig = configuration.Get<AppConfig>() ?? new AppConfig();
-            appConfig.TtsConfig ??= new TtsConfig();
-            appConfig.AiConfig ??= new AiConfig();
-            appConfig.TranslationConfig ??= new TranslationConfig();
-            appConfig.OcrConfig ??= new OcrConfig();
-
-            services.AddSingleton(appConfig);
-            services.AddSingleton(appConfig.TtsConfig);
-            services.AddSingleton(appConfig.AiConfig);
-            services.AddSingleton(appConfig.TranslationConfig);
-            services.AddSingleton(appConfig.OcrConfig);
-
-            // 2. 日志
-            services.AddLogging(builder =>
-            {
-                builder.AddConsole();
-                builder.SetMinimumLevel(LogLevel.Information);
-                // Note: Debug logger provider can be added via Microsoft.Extensions.Logging.Debug package if desired
-            });
-
-            // 3. 核心服务（统一生命周期管理）
-            services.AddSingleton<Services.Persistence.IDataPersistenceService, Services.Persistence.DataPersistenceService>();
-            services.AddSingleton<Services.Cache.ICacheService>(sp =>
-            {
-                var cacheDir = GetCacheDirectorySafely();
-                var cachePath = Path.Combine(cacheDir, "cache.json");
-                return new Services.Cache.CacheService(cachePath);
-            });
-            services.AddTransient<Services.TTS.ITTSService>(sp =>
-            {
-                var ttsConfig = sp.GetRequiredService<TtsConfig>();
-                return new Services.TTS.QwenTtsService(ttsConfig.ApiKey, ttsConfig.BaseUrl);
-            });
-            services.AddTransient<Services.AI.IAiQuestionService, Services.AI.AiQuestionService>();
-            services.AddSingleton<Services.Learning.IContentLoaderService, Services.Learning.ContentLoaderService>();
-            services.AddSingleton<Services.Learning.IUserSessionService, Services.Learning.UserSessionService>();
-            services.AddSingleton<Services.Learning.IProgressService, Services.Learning.ProgressService>();
-            services.AddSingleton<Services.Learning.IExportService, Services.Learning.ExportService>();
-            services.AddSingleton<Services.AI.IAIServiceFactory, Services.AI.AIServiceFactory>();
-            services.AddSingleton<Services.AI.IAIService, Services.AI.AIServiceProvider>();
-            services.AddSingleton<Services.Pdf.IPdfService, Services.Pdf.PdfiumPdfService>();
-            services.AddSingleton<Services.Pdf.IOcrService, Services.Pdf.TesseractOcrService>();
-            services.AddSingleton<Services.Pdf.ITranslationService, Services.Pdf.BaiduTranslationService>();
-            services.AddSingleton<Services.Pdf.IAnnotationService, Services.Pdf.FileAnnotationService>();
-            services.AddSingleton<Services.Pdf.IHighlightService, Services.Pdf.HighlightService>();
-            services.AddSingleton<Services.Pdf.IBookmarkService, Services.Pdf.BookmarkService>();
-            services.AddSingleton<Services.Learning.IStudyEngine, Services.Learning.StudyEngine>();
-            services.AddSingleton<Services.Learning.ILearningAnalyticsService, Services.Learning.LearningAnalyticsService>();
-            services.AddSingleton<Services.Learning.QuoteService>();
-            services.AddSingleton<Services.Learning.SubjectLearningService>();
-            services.AddSingleton<Services.Learning.SpeechService>();
-            services.AddSingleton<Services.Learning.LearningReportService>();
-            services.AddSingleton<Services.Learning.IPdfContentLinkService, Services.Learning.PdfContentLinkService>();
-            services.AddSingleton<Services.Cloud.BaiduNetdiskService>();
-            
-            // 数据库相关服务
-            services.AddDbContextFactory<AppDbContext>();
-            // 可选：如果你想使用 SQLite 版本的提醒服务，可以取消下面这行注释，并注释掉上面的原始提醒服务
-            // services.AddSingleton<Services.Learning.ILearningReminderService, Services.Learning.SqliteLearningReminderService>();
-            services.AddSingleton<Services.Learning.ILearningReminderService, Services.Learning.LearningReminderService>();
-            
-            // 新增：数据迁移服务
-            services.AddSingleton<Services.Migration.DataMigrationService>();
-            
-            // 新增：云存储服务（占位符实现）
-            services.AddSingleton<Services.Cloud.ICloudStorageService, Services.Cloud.PlaceholderCloudStorageService>();
-
-            // 4. 窗体与 Presenter
-            services.AddSingleton<IWindowManager, WindowManager>();
-            services.AddScoped<MainPresenter>();
-            services.AddScoped<SettingPresenter>();
-            services.AddScoped<LearningPresenter>();
-            services.AddScoped<ResultPresenter>();
-            services.AddScoped<ContentEditorPresenter>();
-            services.AddScoped<PdfPresenter>();
-
-            services.AddScoped<MainForm>(sp =>
-            {
-                var presenter = sp.GetRequiredService<MainPresenter>();
-                var pdfView = sp.GetRequiredService<IPdfView>();
-                var windowManager = sp.GetRequiredService<IWindowManager>();
-                var appConfig = sp.GetRequiredService<AppConfig>();
-                return new MainForm(presenter, pdfView, windowManager, appConfig);
-            });
-            services.AddScoped<SettingForm>();
-            services.AddScoped<LearningForm>();
-            services.AddScoped<PdfReaderForm>();
-            services.AddScoped<ResultForm>();
-            services.AddScoped<ContentEditorForm>(sp =>
-            {
-                var logger = sp.GetRequiredService<ILogger<ContentEditorForm>>();
-                var appConfig = sp.GetRequiredService<AppConfig>();
-                return new ContentEditorForm(logger, appConfig);
-            });
-            
-            services.AddSingleton<ISpacedRepetitionService, SpacedRepetitionService>();
-            services.AddSingleton<IHighlightSyncService, HighlightSyncService>();
-            services.AddSingleton<ILearningChartService, LearningChartService>();
-            services.AddSingleton<IAdvancedSpeechService, AdvancedSpeechService>();
-            services.AddSingleton<IEnhancedReminderService, EnhancedReminderService>();
-            
-            services.AddScoped<LearningManagementForm>(sp =>
-            {
-                var analyticsService = sp.GetRequiredService<ILearningAnalyticsService>();
-                var reminderService = sp.GetRequiredService<ILearningReminderService>();
-                var reportService = sp.GetRequiredService<LearningReportService>();
-                var quoteService = sp.GetRequiredService<QuoteService>();
-                var logger = sp.GetService<ILogger<LearningManagementForm>>();
-                return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService, logger);
-            });
-            services.AddScoped<BrowserForm>(sp =>
-            {
-                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
-                return new BrowserForm(contentLoaderService);
-            });
-
-            // 视图接口映射
-            services.AddScoped<ISettingView>(sp => sp.GetRequiredService<SettingForm>());
-            services.AddScoped<ILearningView>(sp => sp.GetRequiredService<LearningForm>());
-            services.AddScoped<IPdfView>(sp => sp.GetRequiredService<PdfReaderForm>());
-            services.AddScoped<IMainView>(sp => sp.GetRequiredService<MainForm>());
-            services.AddScoped<IResultView>(sp => sp.GetRequiredService<ResultForm>());
-            services.AddScoped<IContentEditorView>(sp => sp.GetRequiredService<ContentEditorForm>());
+            services
+                .AddConfigurationServices(configuration)
+                .AddLoggingServices()
+                .AddCoreServices(configuration)
+                .AddAIServices()
+                .AddPdfServices()
+                .AddLearningServices()
+                .AddDatabaseServices()
+                .AddFormServices();
 
             return services.BuildServiceProvider();
-        }
-
-        // 安全获取缓存目录，确保目录存在
-        private static string GetCacheDirectorySafely()
-        {
-            string cacheDir;
-            try
-            {
-                cacheDir = Common.FileHelper.GetCacheDirectory();
-            }
-            catch
-            {
-                cacheDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache");
-            }
-
-            if (!Directory.Exists(cacheDir))
-                Directory.CreateDirectory(cacheDir);
-
-            return cacheDir;
         }
 
         [STAThread]
