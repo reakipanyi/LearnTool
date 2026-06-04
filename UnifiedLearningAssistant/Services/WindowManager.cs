@@ -13,6 +13,8 @@ namespace UnifiedLearningAssistant.Services
         void OpenEditorWindow();
         void OpenEditorWindowWithContext(string? text, string? language, string? subCategory);
         void OpenStatisticsWindow();
+        void OpenLearningManagementWindow();
+        void OpenBrowserWindow();
     }
 
     public class WindowManager : IWindowManager
@@ -157,6 +159,42 @@ namespace UnifiedLearningAssistant.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to open statistics window");
+                throw;
+            }
+        }
+
+        public void OpenLearningManagementWindow()
+        {
+            _logger.LogInformation("Opening learning management window");
+
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var form = scope.ServiceProvider.GetRequiredService<LearningManagementForm>();
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to open learning management window");
+                throw;
+            }
+        }
+
+        public void OpenBrowserWindow()
+        {
+            _logger.LogInformation("Opening browser window");
+
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var form = scope.ServiceProvider.GetRequiredService<BrowserForm>();
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to open browser window");
                 throw;
             }
         }

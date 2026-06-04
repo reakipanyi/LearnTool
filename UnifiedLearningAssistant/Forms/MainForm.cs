@@ -1,3 +1,5 @@
+using System;
+using System.Windows.Forms;
 using UnifiedLearningAssistant.Common;
 using UnifiedLearningAssistant.Models.Config;
 using UnifiedLearningAssistant.Presenters;
@@ -273,6 +275,10 @@ namespace UnifiedLearningAssistant.Forms
         private TextBox textBoxProgress;
         private Label labelSortOrder;
         private ComboBox comboBoxSortOrder;
+        private Button buttonLearningManagement;
+        private Button buttonBrowser;
+        private Button buttonSubjectLearning;
+        private Button buttonBaiduNetdisk;
         private MenuStrip menuStrip1;
         private ToolStripMenuItem toolStripMenuItemFile;
         private ToolStripMenuItem toolStripMenuItemNewUser;
@@ -318,6 +324,10 @@ namespace UnifiedLearningAssistant.Forms
             comboBoxUser = new ComboBox();
             labelUser = new Label();
             buttonExportErrorBook = new Button();
+            buttonLearningManagement = new Button();
+            buttonBrowser = new Button();
+            buttonSubjectLearning = new Button();
+            buttonBaiduNetdisk = new Button();
             panelStreakInfo = new Panel();
             labelStreakIcon = new Label();
             labelStreakDays = new Label();
@@ -378,6 +388,10 @@ namespace UnifiedLearningAssistant.Forms
             panelMain.Controls.Add(groupBoxUser);
             panelMain.Controls.Add(buttonExportErrorBook);
             panelMain.Controls.Add(panelStreakInfo);
+            panelMain.Controls.Add(buttonLearningManagement);
+            panelMain.Controls.Add(buttonBrowser);
+            panelMain.Controls.Add(buttonSubjectLearning);
+            panelMain.Controls.Add(buttonBaiduNetdisk);
             panelMain.Dock = DockStyle.Fill;
             panelMain.Location = new Point(3, 3);
             panelMain.Margin = new Padding(4);
@@ -688,6 +702,66 @@ namespace UnifiedLearningAssistant.Forms
             buttonExportErrorBook.UseVisualStyleBackColor = false;
             buttonExportErrorBook.Click += ButtonExportErrorBook_Click;
             // 
+            // buttonLearningManagement
+            // 
+            buttonLearningManagement.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            buttonLearningManagement.BackColor = Color.FromArgb(103, 58, 183);
+            buttonLearningManagement.FlatAppearance.BorderSize = 0;
+            buttonLearningManagement.FlatStyle = FlatStyle.Flat;
+            buttonLearningManagement.ForeColor = Color.White;
+            buttonLearningManagement.Location = new Point(620, 360);
+            buttonLearningManagement.Name = "buttonLearningManagement";
+            buttonLearningManagement.Size = new Size(120, 44);
+            buttonLearningManagement.TabIndex = 18;
+            buttonLearningManagement.Text = "📋 学习管理";
+            buttonLearningManagement.UseVisualStyleBackColor = false;
+            buttonLearningManagement.Click += ButtonLearningManagement_Click;
+            // 
+            // buttonBrowser
+            // 
+            buttonBrowser.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            buttonBrowser.BackColor = Color.FromArgb(255, 87, 34);
+            buttonBrowser.FlatAppearance.BorderSize = 0;
+            buttonBrowser.FlatStyle = FlatStyle.Flat;
+            buttonBrowser.ForeColor = Color.White;
+            buttonBrowser.Location = new Point(750, 360);
+            buttonBrowser.Name = "buttonBrowser";
+            buttonBrowser.Size = new Size(120, 44);
+            buttonBrowser.TabIndex = 19;
+            buttonBrowser.Text = "🌐 学习浏览器";
+            buttonBrowser.UseVisualStyleBackColor = false;
+            buttonBrowser.Click += ButtonBrowser_Click;
+            // 
+            // buttonSubjectLearning
+            // 
+            buttonSubjectLearning.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            buttonSubjectLearning.BackColor = Color.FromArgb(76, 175, 80);
+            buttonSubjectLearning.FlatAppearance.BorderSize = 0;
+            buttonSubjectLearning.FlatStyle = FlatStyle.Flat;
+            buttonSubjectLearning.ForeColor = Color.White;
+            buttonSubjectLearning.Location = new Point(620, 410);
+            buttonSubjectLearning.Name = "buttonSubjectLearning";
+            buttonSubjectLearning.Size = new Size(120, 44);
+            buttonSubjectLearning.TabIndex = 20;
+            buttonSubjectLearning.Text = "📚 学科学习";
+            buttonSubjectLearning.UseVisualStyleBackColor = false;
+            buttonSubjectLearning.Click += ButtonSubjectLearning_Click;
+            // 
+            // buttonBaiduNetdisk
+            // 
+            buttonBaiduNetdisk.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            buttonBaiduNetdisk.BackColor = Color.FromArgb(33, 150, 243);
+            buttonBaiduNetdisk.FlatAppearance.BorderSize = 0;
+            buttonBaiduNetdisk.FlatStyle = FlatStyle.Flat;
+            buttonBaiduNetdisk.ForeColor = Color.White;
+            buttonBaiduNetdisk.Location = new Point(750, 410);
+            buttonBaiduNetdisk.Name = "buttonBaiduNetdisk";
+            buttonBaiduNetdisk.Size = new Size(120, 44);
+            buttonBaiduNetdisk.TabIndex = 21;
+            buttonBaiduNetdisk.Text = "☁️ 百度网盘";
+            buttonBaiduNetdisk.UseVisualStyleBackColor = false;
+            buttonBaiduNetdisk.Click += ButtonBaiduNetdisk_Click;
+            // 
             // panelStreakInfo
             // 
             panelStreakInfo.Controls.Add(labelStreakIcon);
@@ -894,6 +968,26 @@ namespace UnifiedLearningAssistant.Forms
         private void ButtonExportErrorBook_Click(object? sender, EventArgs e)
         {
             ExportErrorBookClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ButtonLearningManagement_Click(object? sender, EventArgs e)
+        {
+            _windowManager.OpenLearningManagementWindow();
+        }
+
+        private void ButtonBrowser_Click(object? sender, EventArgs e)
+        {
+            _windowManager.OpenBrowserWindow();
+        }
+
+        private void ButtonSubjectLearning_Click(object? sender, EventArgs e)
+        {
+            MessageBox.Show("学科学习功能正在开发中，敬请期待！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void ButtonBaiduNetdisk_Click(object? sender, EventArgs e)
+        {
+            MessageBox.Show("百度网盘功能需要配置 API 密钥才能使用。请在设置中配置相关信息。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void ToolStripMenuItemSettings_Click(object? sender, EventArgs e)
