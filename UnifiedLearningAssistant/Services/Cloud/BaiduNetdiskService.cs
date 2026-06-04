@@ -13,7 +13,7 @@ namespace UnifiedLearningAssistant.Services.Cloud
     /// <summary>
     /// 百度网盘服务实现
     /// </summary>
-    public class BaiduNetdiskService : ICloudStorageService
+    public class BaiduNetdiskService : ICloudStorageService, IDisposable
     {
         private const string AuthorizeUrl = "https://openapi.baidu.com/oauth/2.0/authorize";
         private const string TokenUrl = "https://openapi.baidu.com/oauth/2.0/token";
@@ -22,50 +22,121 @@ namespace UnifiedLearningAssistant.Services.Cloud
         
         private readonly HttpClient _httpClient;
         private readonly ILogger<BaiduNetdiskService>? _logger;
+        private string? _clientId;
+        private string? _clientSecret;
         private string? _accessToken;
         private DateTime _tokenExpireTime;
+        private bool _disposed = false;
 
         public string ServiceName => "百度网盘";
         public bool IsAuthenticated => !string.IsNullOrEmpty(_accessToken) && DateTime.Now < _tokenExpireTime;
+        public bool IsConfigured => !string.IsNullOrWhiteSpace(_clientId) && !string.IsNullOrWhiteSpace(_clientSecret);
 
-        public BaiduNetdiskService(ILogger<BaiduNetdiskService>? logger = null)
+        public BaiduNetdiskService(ILogger<BaiduNetdiskService>? logger = null, string? clientId = null, string? clientSecret = null)
         {
             _logger = logger;
-            _httpClient = new HttpClient();
-            _httpClient.Timeout = TimeSpan.FromSeconds(30);
+            _clientId = string.IsNullOrWhiteSpace(clientId) ? Environment.GetEnvironmentVariable("BAIDU_CLIENT_ID") : clientId;
+            _clientSecret = string.IsNullOrWhiteSpace(clientSecret) ? Environment.GetEnvironmentVariable("BAIDU_CLIENT_SECRET") : clientSecret;
+            
+            _httpClient = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(30)
+            };
+        }
+
+        public void Configure(string clientId, string clientSecret)
+        {
+            if (string.IsNullOrWhiteSpace(clientId))
+                throw new ArgumentException("Client ID cannot be null or empty", nameof(clientId));
+            if (string.IsNullOrWhiteSpace(clientSecret))
+                throw new ArgumentException("Client Secret cannot be null or empty", nameof(clientSecret));
+                
+            _clientId = clientId;
+            _clientSecret = clientSecret;
+            _logger?.LogInformation("百度网盘服务配置已更新");
+        }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed) return;
+
+            if (disposing)
+            {
+                _httpClient?.Dispose();
+                _logger?.LogInformation("BaiduNetdiskService disposed");
+            }
+
+            _disposed = true;
+        }
+
+        private void CheckDisposed()
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(BaiduNetdiskService));
         }
 
         public async Task<string> GetAuthorizationUrlAsync()
         {
+            CheckDisposed();
+            
+            if (!IsConfigured)
+            {
+                _logger?.LogWarning("尝试获取授权 URL 但服务未配置");
+                throw new InvalidOperationException("百度网盘服务未配置，请先配置 Client ID 和 Client Secret");
+            }
+
             var query = new Dictionary<string, string>
             {
                 { "response_type", "code" },
-                { "client_id", "your_client_id" },
+                { "client_id", _clientId! },
                 { "redirect_uri", "oob" },
                 { "scope", "basic,netdisk" },
                 { "display", "popup" }
             };
 
-            var queryString = string.Join("&", query.Select(kv => $"{kv.Key}={Uri.EscapeDataString(kv.Value)}"));
+            var queryString = BuildQueryString(query);
+            _logger?.LogInformation("生成百度网盘授权 URL");
             return $"{AuthorizeUrl}?{queryString}";
         }
 
         public async Task<bool> AuthenticateAsync(string authCode)
         {
+            CheckDisposed();
+            
+            if (!IsConfigured)
+            {
+                _logger?.LogWarning("尝试授权但服务未配置");
+                return false;
+            }
+
             try
             {
+                _logger?.LogInformation("开始百度网盘授权流程");
+                
                 var formData = new Dictionary<string, string>
                 {
                     { "grant_type", "authorization_code" },
                     { "code", authCode },
-                    { "client_id", "your_client_id" },
-                    { "client_secret", "your_client_secret" },
+                    { "client_id", _clientId! },
+                    { "client_secret", _clientSecret! },
                     { "redirect_uri", "oob" }
                 };
 
                 var content = new FormUrlEncodedContent(formData);
                 var response = await _httpClient.PostAsync(TokenUrl, content);
-                response.EnsureSuccessStatusCode();
+                
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger?.LogError("百度网盘授权请求失败: {StatusCode} - {Error}", response.StatusCode, errorContent);
+                    return false;
+                }
 
                 var json = await response.Content.ReadAsStringAsync();
                 var tokenResult = JsonSerializer.Deserialize<TokenResponse>(json);
@@ -74,9 +145,11 @@ namespace UnifiedLearningAssistant.Services.Cloud
                 {
                     _accessToken = tokenResult.AccessToken;
                     _tokenExpireTime = DateTime.Now.AddSeconds(tokenResult.ExpiresIn);
-                    _logger?.LogInformation("百度网盘授权成功");
+                    _logger?.LogInformation("百度网盘授权成功，令牌有效期: {ExpiresIn} 秒", tokenResult.ExpiresIn);
                     return true;
                 }
+
+                _logger?.LogWarning("百度网盘授权响应无效: {Json}", json);
             }
             catch (Exception ex)
             {
@@ -88,10 +161,14 @@ namespace UnifiedLearningAssistant.Services.Cloud
 
         public async Task<bool> DownloadFileAsync(string cloudPath, string localPath, Action<int>? progress = null)
         {
+            CheckDisposed();
+            
             try
             {
                 EnsureAuthenticated();
 
+                _logger?.LogInformation("开始下载文件: {CloudPath} -> {LocalPath}", cloudPath, localPath);
+                
                 var query = new Dictionary<string, string>
                 {
                     { "method", "download" },
@@ -130,9 +207,19 @@ namespace UnifiedLearningAssistant.Services.Cloud
 
         public async Task<bool> UploadFileAsync(string localPath, string cloudPath, Action<int>? progress = null)
         {
+            CheckDisposed();
+            
             try
             {
                 EnsureAuthenticated();
+
+                if (!File.Exists(localPath))
+                {
+                    _logger?.LogError("本地文件不存在: {Path}", localPath);
+                    return false;
+                }
+
+                _logger?.LogInformation("开始上传文件: {LocalPath} -> {CloudPath}", localPath, cloudPath);
 
                 var uploadUrl = await GetUploadUrlAsync();
                 if (string.IsNullOrEmpty(uploadUrl))
@@ -161,11 +248,15 @@ namespace UnifiedLearningAssistant.Services.Cloud
 
         public async Task<List<CloudFileInfo>> ListFilesAsync(string cloudFolder)
         {
+            CheckDisposed();
+            
             var result = new List<CloudFileInfo>();
 
             try
             {
                 EnsureAuthenticated();
+
+                _logger?.LogInformation("获取文件列表: {Folder}", cloudFolder);
 
                 var query = new Dictionary<string, string>
                 {
@@ -197,6 +288,7 @@ namespace UnifiedLearningAssistant.Services.Cloud
                             IsFolder = item.IsDir == 1
                         });
                     }
+                    _logger?.LogInformation("获取到 {Count} 个文件/文件夹", result.Count);
                 }
             }
             catch (Exception ex)
@@ -209,6 +301,8 @@ namespace UnifiedLearningAssistant.Services.Cloud
 
         public async Task<bool> FileExistsAsync(string cloudPath)
         {
+            CheckDisposed();
+            
             try
             {
                 EnsureAuthenticated();
@@ -233,9 +327,13 @@ namespace UnifiedLearningAssistant.Services.Cloud
 
         public async Task<bool> DeleteFileAsync(string cloudPath)
         {
+            CheckDisposed();
+            
             try
             {
                 EnsureAuthenticated();
+
+                _logger?.LogInformation("删除文件: {Path}", cloudPath);
 
                 var query = new Dictionary<string, string>
                 {
@@ -260,9 +358,13 @@ namespace UnifiedLearningAssistant.Services.Cloud
 
         public async Task<bool> CreateFolderAsync(string cloudFolderPath)
         {
+            CheckDisposed();
+            
             try
             {
                 EnsureAuthenticated();
+
+                _logger?.LogInformation("创建文件夹: {Path}", cloudFolderPath);
 
                 var query = new Dictionary<string, string>
                 {
@@ -287,9 +389,14 @@ namespace UnifiedLearningAssistant.Services.Cloud
 
         private void EnsureAuthenticated()
         {
+            if (!IsConfigured)
+            {
+                throw new InvalidOperationException("百度网盘服务未配置，请先配置 Client ID 和 Client Secret");
+            }
+            
             if (!IsAuthenticated)
             {
-                throw new InvalidOperationException("尚未进行百度网盘授权");
+                throw new InvalidOperationException("尚未进行百度网盘授权或授权已过期");
             }
         }
 

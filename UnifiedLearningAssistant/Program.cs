@@ -260,16 +260,46 @@ namespace UnifiedLearningAssistant
                     disposableReminder.Dispose();
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"释放提醒服务失败: {ex.Message}");
+            }
+
+            try
+            {
+                // 释放语音服务
+                var speechService = ServiceProvider?.GetService<Services.Learning.SpeechService>();
+                if (speechService is IDisposable disposableSpeech)
+                {
+                    disposableSpeech.Dispose();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"释放语音服务失败: {ex.Message}");
+            }
+
+            try
+            {
+                // 释放百度网盘服务
+                var baiduService = ServiceProvider?.GetService<Services.Cloud.BaiduNetdiskService>();
+                if (baiduService is IDisposable disposableBaidu)
+                {
+                    disposableBaidu.Dispose();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"释放百度网盘服务失败: {ex.Message}");
             }
 
             try
             {
                 ThemeHelper.DisposeFonts();
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"释放字体资源失败: {ex.Message}");
             }
 
             try
@@ -280,8 +310,9 @@ namespace UnifiedLearningAssistant
                 }
                 ServiceProvider = null!;
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"释放服务容器失败: {ex.Message}");
             }
         }
 

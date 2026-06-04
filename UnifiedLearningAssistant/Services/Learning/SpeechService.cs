@@ -18,6 +18,7 @@ namespace UnifiedLearningAssistant.Services.Learning
         private SpeechRecognitionEngine? _recognizer;
         private SpeechSynthesizer? _synthesizer;
         private bool _disposed = false;
+        private bool _isInitialized = false;
 
         public event EventHandler<DictationResultEventArgs>? DictationCompleted;
         public event EventHandler<string>? DictationError;
@@ -25,7 +26,26 @@ namespace UnifiedLearningAssistant.Services.Learning
         public SpeechService(ILogger<SpeechService>? logger = null)
         {
             _logger = logger;
-            InitializeSpeechComponents();
+        }
+
+        /// <summary>
+        /// 延迟初始化语音组件，仅在首次使用时加载
+        /// </summary>
+        private void EnsureInitialized()
+        {
+            if (_isInitialized || _disposed) return;
+            
+            try
+            {
+                InitializeSpeechComponents();
+                _isInitialized = true;
+                _logger?.LogInformation("Speech components initialized successfully");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to initialize speech components");
+                throw new InvalidOperationException("语音组件初始化失败，请检查系统语音功能是否正常", ex);
+            }
         }
 
         #region 拼写检查
@@ -123,6 +143,8 @@ namespace UnifiedLearningAssistant.Services.Learning
         {
             try
             {
+                EnsureInitialized();
+                
                 if (_recognizer == null)
                 {
                     _logger?.LogError("语音识别引擎未初始化");
@@ -144,6 +166,8 @@ namespace UnifiedLearningAssistant.Services.Learning
         {
             try
             {
+                EnsureInitialized();
+                
                 if (_recognizer != null)
                 {
                     _recognizer.RecognizeAsyncStop();
@@ -174,6 +198,8 @@ namespace UnifiedLearningAssistant.Services.Learning
 
             try
             {
+                EnsureInitialized();
+                
                 if (_recognizer == null)
                 {
                     return new DictationScore(false, 0, string.Empty, "语音识别引擎未初始化");
@@ -255,6 +281,8 @@ namespace UnifiedLearningAssistant.Services.Learning
         {
             try
             {
+                EnsureInitialized();
+                
                 if (_synthesizer == null)
                 {
                     _logger?.LogError("语音合成引擎未初始化");
@@ -287,14 +315,24 @@ namespace UnifiedLearningAssistant.Services.Learning
 
         public List<string> GetAvailableVoices()
         {
-            if (_synthesizer == null)
+            try
             {
+                EnsureInitialized();
+                
+                if (_synthesizer == null)
+                {
+                    return new List<string>();
+                }
+
+                return _synthesizer.GetInstalledVoices()
+                    .Select(v => v.VoiceInfo.Name)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "获取可用语音列表失败");
                 return new List<string>();
             }
-
-            return _synthesizer.GetInstalledVoices()
-                .Select(v => v.VoiceInfo.Name)
-                .ToList();
         }
 
         #endregion
@@ -303,39 +341,29 @@ namespace UnifiedLearningAssistant.Services.Learning
 
         private void InitializeSpeechComponents()
         {
-            try
+            // 初始化语音识别
+            var culture = System.Globalization.CultureInfo.CurrentCulture;
+            _recognizer = new SpeechRecognitionEngine(culture);
+
+            // 创建语法
+            var dictationGrammar = new DictationGrammar();
+            _recognizer.LoadGrammar(dictationGrammar);
+
+            _recognizer.SpeechRecognized += (sender, e) =>
             {
-                // 初始化语音识别
-                var culture = System.Globalization.CultureInfo.CurrentCulture;
-                _recognizer = new SpeechRecognitionEngine(culture);
+                OnDictationCompleted(e.Result.Text, true);
+            };
 
-                // 创建语法
-                var dictationGrammar = new DictationGrammar();
-                _recognizer.LoadGrammar(dictationGrammar);
-
-                _recognizer.SpeechRecognized += (sender, e) =>
-                {
-                    OnDictationCompleted(e.Result.Text, true);
-                };
-
-                _recognizer.SpeechRecognitionRejected += (sender, e) =>
-                {
-                    OnDictationCompleted(string.Empty, false);
-                };
-
-                _recognizer.SetInputToDefaultAudioDevice();
-
-                // 初始化语音合成
-                _synthesizer = new SpeechSynthesizer();
-                _synthesizer.SetOutputToDefaultAudioDevice();
-
-                _logger?.LogInformation("语音服务初始化成功");
-            }
-            catch (Exception ex)
+            _recognizer.SpeechRecognitionRejected += (sender, e) =>
             {
-                _logger?.LogWarning(ex, "语音服务初始化失败，可能缺少语音组件");
-                // 不抛出异常，允许应用继续运行
-            }
+                OnDictationCompleted(string.Empty, false);
+            };
+
+            _recognizer.SetInputToDefaultAudioDevice();
+
+            // 初始化语音合成
+            _synthesizer = new SpeechSynthesizer();
+            _synthesizer.SetOutputToDefaultAudioDevice();
         }
 
         public void Dispose()
@@ -350,8 +378,16 @@ namespace UnifiedLearningAssistant.Services.Learning
 
             if (disposing)
             {
-                _recognizer?.Dispose();
-                _synthesizer?.Dispose();
+                try
+                {
+                    _recognizer?.Dispose();
+                    _synthesizer?.Dispose();
+                    _logger?.LogInformation("Speech components disposed successfully");
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Error disposing speech components");
+                }
             }
 
             _disposed = true;
@@ -363,12 +399,26 @@ namespace UnifiedLearningAssistant.Services.Learning
 
         private void OnDictationCompleted(string text, bool success)
         {
-            DictationCompleted?.Invoke(this, new DictationResultEventArgs(text, success));
+            try
+            {
+                DictationCompleted?.Invoke(this, new DictationResultEventArgs(text, success));
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error invoking DictationCompleted event");
+            }
         }
 
         private void OnDictationError(string message)
         {
-            DictationError?.Invoke(this, message);
+            try
+            {
+                DictationError?.Invoke(this, message);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Error invoking DictationError event");
+            }
         }
 
         #endregion
