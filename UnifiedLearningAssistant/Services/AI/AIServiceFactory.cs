@@ -52,6 +52,8 @@ namespace UnifiedLearningAssistant.Services.AI
 
     public class AIServiceProvider : IAIService
     {
+        private static readonly string[] FallbackProviders = { "deepseek", "doubao", "siliconflow" };
+        
         private readonly IAIService _currentService;
         private readonly AiConfig _config;
         private readonly IAIServiceFactory _factory;
@@ -76,7 +78,8 @@ namespace UnifiedLearningAssistant.Services.AI
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "AI服务调用失败，尝试切换到备用服务");
-                return await TryFallbackService(text, language, subType);
+                return await TryFallbackAsync(provider => 
+                    _currentService.GetExplanationAsync(text, language, subType));
             }
         }
 
@@ -89,16 +92,16 @@ namespace UnifiedLearningAssistant.Services.AI
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "AI服务调用失败，尝试切换到备用服务");
-                return await TryFallbackQuestion(question, context);
+                return await TryFallbackAsync(provider => 
+                    _currentService.AskQuestionAsync(question, context));
             }
         }
 
-        private async Task<string> TryFallbackService(string text, string language, string subType)
+        private async Task<string> TryFallbackAsync(Func<IAIService, Task<string>> callServiceMethod)
         {
-            var providers = new[] { "deepseek", "doubao", "siliconflow" };
             var currentProvider = _config.Provider.ToLower();
 
-            foreach (var provider in providers)
+            foreach (var provider in FallbackProviders)
             {
                 if (provider == currentProvider) continue;
 
@@ -106,33 +109,7 @@ namespace UnifiedLearningAssistant.Services.AI
                 {
                     _logger.LogInformation("尝试切换到: {Provider}", provider);
                     var service = _factory.CreateService(provider);
-                    var result = await service.GetExplanationAsync(text, language, subType);
-                    _logger.LogInformation("切换成功: {Provider}", provider);
-                    return result;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "{Provider} 也不可用", provider);
-                }
-            }
-
-            throw new Exception("所有AI服务都不可用");
-        }
-
-        private async Task<string> TryFallbackQuestion(string question, string context)
-        {
-            var providers = new[] { "deepseek", "doubao", "siliconflow" };
-            var currentProvider = _config.Provider.ToLower();
-
-            foreach (var provider in providers)
-            {
-                if (provider == currentProvider) continue;
-
-                try
-                {
-                    _logger.LogInformation("尝试切换到: {Provider}", provider);
-                    var service = _factory.CreateService(provider);
-                    var result = await service.AskQuestionAsync(question, context);
+                    var result = await callServiceMethod(service);
                     _logger.LogInformation("切换成功: {Provider}", provider);
                     return result;
                 }

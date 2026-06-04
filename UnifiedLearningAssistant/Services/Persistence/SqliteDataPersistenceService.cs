@@ -53,8 +53,7 @@ namespace UnifiedLearningAssistant.Services.Persistence
         {
             try
             {
-                var json = Common.JsonHelper.Serialize(config);
-                var configToSave = Common.JsonHelper.Deserialize<AppConfig>(json) ?? new AppConfig();
+                var configToSave = config; // 直接使用原对象，无需序列化/反序列化
                 EncryptSensitiveConfig(configToSave);
 
                 var path = Path.Combine(Common.FileHelper.GetAppDirectory(), "appsettings.json");
@@ -117,14 +116,7 @@ namespace UnifiedLearningAssistant.Services.Persistence
                 else
                 {
                     // 更新用户信息
-                    existingUser.UserName = profile.UserName;
-                    existingUser.LastLoginTime = profile.LastLoginTime;
-                    existingUser.AvatarPath = profile.AvatarPath;
-                    existingUser.ConsecutiveStudyDays = profile.ConsecutiveStudyDays;
-                    existingUser.LastStudyDate = profile.LastStudyDate;
-                    existingUser.TotalStudyTimeMinutes = profile.TotalStudyTimeMinutes;
-                    existingUser.TodayStudyTimeMinutes = profile.TodayStudyTimeMinutes;
-                    existingUser.TodayItemsStudied = profile.TodayItemsStudied;
+                    existingUser.UpdateEntity(profile);
 
                     // 删除不再存在的分类进度
                     var categoryNamesInProfile = new HashSet<string>(profile.LearningProgress.CategoryProgresses.Keys);

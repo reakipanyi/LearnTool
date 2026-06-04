@@ -35,6 +35,24 @@ namespace UnifiedLearningAssistant.Data.Database
         }
 
         /// <summary>
+        /// 更新已存在的 UserProfileEntity
+        /// </summary>
+        public static void UpdateEntity(this UserProfileEntity entity, UserProfile profile)
+        {
+            if (entity == null) throw new ArgumentNullException(nameof(entity));
+            if (profile == null) throw new ArgumentNullException(nameof(profile));
+
+            entity.UserName = profile.UserName;
+            entity.LastLoginTime = profile.LastLoginTime;
+            entity.AvatarPath = profile.AvatarPath;
+            entity.ConsecutiveStudyDays = profile.ConsecutiveStudyDays;
+            entity.LastStudyDate = profile.LastStudyDate;
+            entity.TotalStudyTimeMinutes = profile.TotalStudyTimeMinutes;
+            entity.TodayStudyTimeMinutes = profile.TodayStudyTimeMinutes;
+            entity.TodayItemsStudied = profile.TodayItemsStudied;
+        }
+
+        /// <summary>
         /// 将 UserProfileEntity 转换为 UserProfile
         /// </summary>
         public static UserProfile ToModel(this UserProfileEntity entity)

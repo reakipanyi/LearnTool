@@ -61,71 +61,62 @@ namespace UnifiedLearningAssistant.Services.AI
 
             response = response.Trim();
 
-            int jsonStart = response.IndexOf('[');
-            int jsonStartObj = response.IndexOf('{');
-
-            if (jsonStart == -1 && jsonStartObj == -1)
-                return response;
-
-            int start = jsonStart >= 0 && (jsonStartObj == -1 || jsonStart < jsonStartObj) ? jsonStart : jsonStartObj;
-
-            string jsonContent = response.Substring(start);
-
-            var invalidChars = Regex.Matches(jsonContent, @"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]");
-            foreach (Match match in invalidChars)
+            int jsonStart = response.IndexOfAny(new[] { '[', '{' });
+            if (jsonStart >= 0)
             {
-                jsonContent = jsonContent.Replace(match.Value, "");
+                response = response.Substring(jsonStart);
             }
 
             try
             {
-                var obj = Newtonsoft.Json.JsonConvert.DeserializeObject(jsonContent);
-                if (obj != null)
-                {
-                    return Newtonsoft.Json.JsonConvert.SerializeObject(obj, Newtonsoft.Json.Formatting.Indented);
-                }
+                var obj = JsonConvert.DeserializeObject(response);
+                return obj != null ? JsonConvert.SerializeObject(obj, Formatting.Indented) : response;
             }
             catch
             {
-                StringBuilder cleaned = new StringBuilder();
-                bool inString = false;
-                bool escapeNext = false;
+                // 如果JSON解析失败，手动清理
+                return CleanInvalidChars(response);
+            }
+        }
 
-                foreach (char c in jsonContent)
+        private static string CleanInvalidChars(string jsonContent)
+        {
+            StringBuilder cleaned = new StringBuilder();
+            bool inString = false;
+            bool escapeNext = false;
+
+            foreach (char c in jsonContent)
+            {
+                if (escapeNext)
                 {
-                    if (escapeNext)
-                    {
-                        cleaned.Append(c);
-                        escapeNext = false;
-                        continue;
-                    }
-
-                    if (c == '\\')
-                    {
-                        escapeNext = true;
-                        cleaned.Append(c);
-                        continue;
-                    }
-
-                    if (c == '"')
-                    {
-                        inString = !inString;
-                        cleaned.Append(c);
-                        continue;
-                    }
-
-                    if (!inString && (c < 32 || c >= 127))
-                    {
-                        continue;
-                    }
-
                     cleaned.Append(c);
+                    escapeNext = false;
+                    continue;
                 }
 
-                return cleaned.ToString();
+                if (c == '\\')
+                {
+                    escapeNext = true;
+                    cleaned.Append(c);
+                    continue;
+                }
+
+                if (c == '"')
+                {
+                    inString = !inString;
+                    cleaned.Append(c);
+                    continue;
+                }
+
+                if (!inString && (c < 32 || c >= 127))
+                {
+                    continue;
+                }
+
+                cleaned.Append(c);
             }
 
-            return jsonContent;
+            return cleaned.ToString();
         }
     }
 }
