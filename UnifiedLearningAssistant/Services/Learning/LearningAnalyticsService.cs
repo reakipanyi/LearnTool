@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Globalization;
+using Microsoft.Extensions.Logging;
 using UnifiedLearningAssistant.Common;
 
 namespace UnifiedLearningAssistant.Services.Learning
@@ -14,18 +15,27 @@ namespace UnifiedLearningAssistant.Services.Learning
     {
         private Dictionary<string, UserAnalyticsData> _userAnalytics = new Dictionary<string, UserAnalyticsData>();
         private readonly string _analyticsFilePath;
+        private readonly ILogger<LearningAnalyticsService>? _logger;
 
-        public LearningAnalyticsService()
+        public LearningAnalyticsService(ILogger<LearningAnalyticsService>? logger = null)
         {
+            _logger = logger;
             _analyticsFilePath = Path.Combine(FileHelper.GetAppDirectory(), "learning_analytics.json");
             LoadAnalytics();
         }
 
         public void RecordActivity(string userId, string activityType, string subCategory, int count = 1)
         {
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                _logger?.LogWarning("尝试记录活动但用户ID为空");
+                return;
+            }
+
             if (!_userAnalytics.ContainsKey(userId))
             {
                 _userAnalytics[userId] = new UserAnalyticsData { UserId = userId };
+                _logger?.LogInformation("创建新用户分析数据: {UserId}", userId);
             }
 
             var today = DateTime.Today;
@@ -66,6 +76,7 @@ namespace UnifiedLearningAssistant.Services.Learning
             userData.LastLearningDate = today;
 
             SaveAnalytics();
+            _logger?.LogDebug("记录活动: {UserId}, 类型: {ActivityType}, 分类: {Category}, 数量: {Count}", userId, activityType, subCategory, count);
         }
 
         public DailyLearningStats GetDailyStats(string userId, DateTime date)
@@ -170,10 +181,11 @@ namespace UnifiedLearningAssistant.Services.Learning
             try
             {
                 JsonHelper.SaveToFile(_analyticsFilePath, _userAnalytics);
+                _logger?.LogDebug("保存分析数据成功，用户数: {Count}", _userAnalytics.Count);
             }
-            catch
+            catch (Exception ex)
             {
-                // 静默处理保存错误
+                _logger?.LogError(ex, "保存分析数据失败: {Path}", _analyticsFilePath);
             }
         }
 
@@ -187,12 +199,18 @@ namespace UnifiedLearningAssistant.Services.Learning
                     if (loaded != null)
                     {
                         _userAnalytics = loaded;
+                        _logger?.LogInformation("加载分析数据成功，用户数: {Count}", _userAnalytics.Count);
                     }
                 }
+                else
+                {
+                    _logger?.LogDebug("分析数据文件不存在，将创建新数据");
+                }
             }
-            catch
+            catch (Exception ex)
             {
-                // 静默处理加载错误
+                _logger?.LogError(ex, "加载分析数据失败: {Path}", _analyticsFilePath);
+                _userAnalytics = new Dictionary<string, UserAnalyticsData>();
             }
         }
         

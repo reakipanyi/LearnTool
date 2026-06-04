@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Extensions.Logging;
 using UnifiedLearningAssistant.Common;
 using UnifiedLearningAssistant.Models.Pdf;
 
@@ -8,24 +9,34 @@ namespace UnifiedLearningAssistant.Services.Pdf
     public class BookmarkService : IBookmarkService
     {
         private readonly Dictionary<string, List<PdfBookmark>> _bookmarksCache = new();
+        private readonly ILogger<BookmarkService>? _logger;
+
+        public BookmarkService(ILogger<BookmarkService>? logger = null)
+        {
+            _logger = logger;
+        }
 
         public List<PdfBookmark> GetBookmarks(string pdfPath)
         {
             if (_bookmarksCache.TryGetValue(pdfPath, out var cached))
             {
-                return cached;
+                _logger?.LogDebug("从缓存获取书签: {Path}, 数量: {Count}", pdfPath, cached.Count);
+                return cached.ToList();
             }
 
             var bookmarks = LoadBookmarksFromFile(pdfPath);
             _bookmarksCache[pdfPath] = bookmarks;
-            return bookmarks;
+            _logger?.LogDebug("加载书签: {Path}, 数量: {Count}", pdfPath, bookmarks.Count);
+            return bookmarks.ToList();
         }
 
         public void AddBookmark(string pdfPath, int pageIndex, string title)
         {
-            var bookmarks = GetBookmarks(pdfPath);
+            var bookmarks = _bookmarksCache.TryGetValue(pdfPath, out var cached) ? cached : LoadBookmarksFromFile(pdfPath);
+            
             if (bookmarks.Any(b => b.PageIndex == pageIndex && b.Title == title))
             {
+                _logger?.LogWarning("书签已存在: {Path} - {Title}", pdfPath, title);
                 return;
             }
 
@@ -40,27 +51,50 @@ namespace UnifiedLearningAssistant.Services.Pdf
             bookmarks.Add(bookmark);
             bookmarks.Sort((a, b) => a.PageIndex.CompareTo(b.PageIndex));
             SaveBookmarksToFile(pdfPath, bookmarks);
+            _bookmarksCache[pdfPath] = bookmarks;
+            
+            _logger?.LogInformation("添加书签成功: {Path} - {Title}, 页码: {Page}", pdfPath, bookmark.Title, pageIndex);
         }
 
         public void RemoveBookmark(string pdfPath, int pageIndex, string title)
         {
-            var bookmarks = GetBookmarks(pdfPath);
+            if (!_bookmarksCache.TryGetValue(pdfPath, out var bookmarks))
+            {
+                bookmarks = LoadBookmarksFromFile(pdfPath);
+                _bookmarksCache[pdfPath] = bookmarks;
+            }
+            
             var bookmark = bookmarks.FirstOrDefault(b => b.PageIndex == pageIndex && b.Title == title);
             if (bookmark != null)
             {
                 bookmarks.Remove(bookmark);
                 SaveBookmarksToFile(pdfPath, bookmarks);
+                _logger?.LogInformation("删除书签成功: {Path} - {Title}", pdfPath, title);
+            }
+            else
+            {
+                _logger?.LogWarning("未找到要删除的书签: {Path} - {Title}", pdfPath, title);
             }
         }
 
         public void RemoveBookmarkByIndex(string pdfPath, int pageIndex)
         {
-            var bookmarks = GetBookmarks(pdfPath);
+            if (!_bookmarksCache.TryGetValue(pdfPath, out var bookmarks))
+            {
+                bookmarks = LoadBookmarksFromFile(pdfPath);
+                _bookmarksCache[pdfPath] = bookmarks;
+            }
+            
             var bookmark = bookmarks.FirstOrDefault(b => b.PageIndex == pageIndex);
             if (bookmark != null)
             {
                 bookmarks.Remove(bookmark);
                 SaveBookmarksToFile(pdfPath, bookmarks);
+                _logger?.LogInformation("删除书签成功: {Path}, 页码: {Page}", pdfPath, pageIndex);
+            }
+            else
+            {
+                _logger?.LogWarning("未找到要删除的书签: {Path}, 页码: {Page}", pdfPath, pageIndex);
             }
         }
 
@@ -82,11 +116,14 @@ namespace UnifiedLearningAssistant.Services.Pdf
                 var path = GetBookmarkPath(pdfPath);
                 if (File.Exists(path))
                 {
-                    return JsonHelper.LoadFromFile<List<PdfBookmark>>(path) ?? new List<PdfBookmark>();
+                    var bookmarks = JsonHelper.LoadFromFile<List<PdfBookmark>>(path);
+                    _logger?.LogDebug("从文件加载书签: {Path}", path);
+                    return bookmarks ?? new List<PdfBookmark>();
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "加载书签文件失败: {Path}", pdfPath);
             }
             return new List<PdfBookmark>();
         }
@@ -97,9 +134,11 @@ namespace UnifiedLearningAssistant.Services.Pdf
             {
                 var path = GetBookmarkPath(pdfPath);
                 JsonHelper.SaveToFile(path, bookmarks);
+                _logger?.LogDebug("保存书签到文件: {Path}, 数量: {Count}", path, bookmarks.Count);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "保存书签文件失败: {Path}", pdfPath);
             }
         }
 

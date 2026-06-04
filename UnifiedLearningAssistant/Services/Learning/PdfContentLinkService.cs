@@ -49,14 +49,18 @@ namespace UnifiedLearningAssistant.Services.Learning
         private readonly IPdfService _pdfService;
         private readonly IHighlightService _highlightService;
         private readonly IBookmarkService _bookmarkService;
+        private readonly IContentLoaderService? _contentLoaderService;
+        private readonly List<ExtractedContent> _editedContents = new List<ExtractedContent>();
 
         public PdfContentLinkService(IPdfService pdfService, 
             IHighlightService highlightService, 
-            IBookmarkService bookmarkService)
+            IBookmarkService bookmarkService,
+            IContentLoaderService? contentLoaderService = null)
         {
             _pdfService = pdfService;
             _highlightService = highlightService;
             _bookmarkService = bookmarkService;
+            _contentLoaderService = contentLoaderService;
         }
 
         public List<ExtractedContent> ExtractAllContent(string pdfPath)
@@ -143,10 +147,38 @@ namespace UnifiedLearningAssistant.Services.Learning
 
         public void EditContent(ExtractedContent content)
         {
+            var existingIndex = _editedContents.FindIndex(c => c.Id == content.Id);
+            if (existingIndex >= 0)
+            {
+                _editedContents[existingIndex] = content;
+            }
+            else
+            {
+                _editedContents.Add(content);
+            }
+            
+            System.Diagnostics.Debug.WriteLine($"内容已编辑: {content.Type} - {content.Content.Substring(0, Math.Min(50, content.Content.Length))}...");
         }
 
         public void DeleteContent(ExtractedContent content)
         {
+            _editedContents.RemoveAll(c => c.Id == content.Id);
+            
+            if (content.Type == "Highlight")
+            {
+                var highlights = _highlightService.GetHighlights(content.PageLabel);
+                var highlightToRemove = highlights.FirstOrDefault(h => h.Text.Contains(content.Content.Substring(0, Math.Min(20, content.Content.Length))));
+                if (highlightToRemove != null)
+                {
+                    _highlightService.RemoveHighlight(highlightToRemove.PdfPath, highlightToRemove.Id);
+                }
+            }
+            else if (content.Type == "Bookmark")
+            {
+                _bookmarkService.RemoveBookmark(content.PageLabel, content.PageNumber - 1, content.Content);
+            }
+            
+            System.Diagnostics.Debug.WriteLine($"内容已删除: {content.Type} - {content.PageLabel}");
         }
 
         public List<StudyMaterial> GenerateStudyMaterials(List<ExtractedContent> contents)
@@ -201,6 +233,42 @@ namespace UnifiedLearningAssistant.Services.Learning
 
         public void ExportToLearningLibrary(List<ExtractedContent> contents, string userId)
         {
+            if (contents == null || contents.Count == 0)
+            {
+                System.Diagnostics.Debug.WriteLine("没有内容可导出到学习库");
+                return;
+            }
+
+            var materials = GenerateStudyMaterials(contents);
+            
+            if (_contentLoaderService != null)
+            {
+                foreach (var material in materials)
+                {
+                    try
+                    {
+                        _contentLoaderService.SaveUserContent(new UserContent
+                        {
+                            UserId = userId,
+                            Title = material.Title,
+                            Content = material.Content,
+                            Category = material.Type,
+                            Tags = string.Join(",", material.Tags),
+                            CreatedAt = DateTime.Now,
+                            UpdatedAt = DateTime.Now
+                        });
+                        System.Diagnostics.Debug.WriteLine($"已导出学习素材: {material.Title}");
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"导出学习素材失败: {material.Title} - {ex.Message}");
+                    }
+                }
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"生成了 {materials.Count} 个学习素材，但无法保存到学习库（ContentLoaderService 未注入）");
+            }
         }
 
         private string GetColorHexString(HighlightColor color)

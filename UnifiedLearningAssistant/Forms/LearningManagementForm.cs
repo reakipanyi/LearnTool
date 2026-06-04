@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
 using System.Globalization;
+using Microsoft.Extensions.Logging;
 using UnifiedLearningAssistant.Services.Learning;
 
 namespace UnifiedLearningAssistant.Forms
@@ -12,28 +13,44 @@ namespace UnifiedLearningAssistant.Forms
         private readonly ILearningReminderService _reminderService;
         private readonly LearningReportService _reportService;
         private readonly QuoteService _quoteService;
-        private readonly string _userId = "current_user";
+        private readonly ILogger<LearningManagementForm>? _logger;
+        private readonly string _userId;
 
         public LearningManagementForm(
             ILearningAnalyticsService analyticsService,
             ILearningReminderService reminderService,
             LearningReportService reportService,
-            QuoteService quoteService)
+            QuoteService quoteService,
+            ILogger<LearningManagementForm>? logger = null,
+            string? userId = null)
         {
             InitializeComponent();
             _analyticsService = analyticsService;
             _reminderService = reminderService;
             _reportService = reportService;
             _quoteService = quoteService;
+            _logger = logger;
+            _userId = userId ?? Environment.UserName;
+            
+            _logger?.LogInformation("学习管理窗口初始化，用户ID: {UserId}", _userId);
             LoadData();
         }
 
         private void LoadData()
         {
-            LoadTodayQuote();
-            LoadTodayStats();
-            LoadWeeklyStats();
-            LoadReminders();
+            try
+            {
+                LoadTodayQuote();
+                LoadTodayStats();
+                LoadWeeklyStats();
+                LoadReminders();
+                _logger?.LogDebug("学习数据加载完成");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "加载学习数据失败");
+                MessageBox.Show($"加载数据失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void LoadTodayQuote()
@@ -77,30 +94,48 @@ namespace UnifiedLearningAssistant.Forms
 
         private void btnAddReminder_Click(object sender, EventArgs e)
         {
-            var reminder = new Reminder
+            try
             {
-                Id = Guid.NewGuid(),
-                UserId = _userId,
-                Title = "学习提醒",
-                Time = DateTime.Now.TimeOfDay,
-                RepeatType = ReminderRepeatType.Daily,
-                Enabled = true,
-                CreatedAt = DateTime.Now
-            };
-            
-            _reminderService.AddReminder(reminder);
-            LoadReminders();
-            MessageBox.Show("提醒已添加", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                var reminder = new Reminder
+                {
+                    Id = Guid.NewGuid(),
+                    UserId = _userId,
+                    Title = "学习提醒",
+                    Time = TimeSpan.FromHours(9),
+                    RepeatType = ReminderRepeatType.Daily,
+                    Enabled = true,
+                    CreatedAt = DateTime.Now
+                };
+                
+                _reminderService.AddReminder(reminder);
+                LoadReminders();
+                MessageBox.Show("提醒已添加", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                _logger?.LogInformation("添加提醒: {Title}", reminder.Title);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "添加提醒失败");
+                MessageBox.Show($"添加提醒失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void btnGenerateReport_Click(object sender, EventArgs e)
         {
-            var report = _reportService.GenerateDailyReport(_userId, DateTime.Today);
-            var reportText = _reportService.GenerateReportText(report);
-            
-            var resultForm = new ResultForm();
-            resultForm.ShowReport(reportText);
-            resultForm.Show();
+            try
+            {
+                var report = _reportService.GenerateDailyReport(_userId, DateTime.Today);
+                var reportText = _reportService.GenerateReportText(report);
+                
+                var resultForm = new ResultForm();
+                resultForm.ShowReport(reportText);
+                resultForm.Show();
+                _logger?.LogInformation("生成学习报告");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "生成学习报告失败");
+                MessageBox.Show($"生成报告失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void btnRefresh_Click(object sender, EventArgs e)
@@ -110,7 +145,7 @@ namespace UnifiedLearningAssistant.Forms
 
         private void LearningManagementForm_Load(object sender, EventArgs e)
         {
-            LoadData();
+            _logger?.LogDebug("学习管理窗口加载完成");
         }
 
         #region Windows Form Designer generated code

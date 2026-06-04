@@ -131,7 +131,8 @@ namespace UnifiedLearningAssistant
                 var reminderService = sp.GetRequiredService<ILearningReminderService>();
                 var reportService = sp.GetRequiredService<LearningReportService>();
                 var quoteService = sp.GetRequiredService<QuoteService>();
-                return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService);
+                var logger = sp.GetService<ILogger<LearningManagementForm>>();
+                return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService, logger);
             });
             services.AddScoped<BrowserForm>(sp =>
             {
