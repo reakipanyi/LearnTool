@@ -46,9 +46,15 @@ namespace UnifiedLearningAssistant.Models.ValueObjects
 
         public override int GetHashCode()
         {
-            return GetEqualityComponents()
-                .Select(x => x?.GetHashCode() ?? 0)
-                .Aggregate((x, y) => x ^ y);
+            unchecked
+            {
+                var hash = 17;
+                foreach (var component in GetEqualityComponents())
+                {
+                    hash = hash * 23 + (component?.GetHashCode() ?? 0);
+                }
+                return hash;
+            }
         }
     }
 }

@@ -13,6 +13,9 @@ namespace UnifiedLearningAssistant.Services.Learning
     /// </summary>
     public class SqliteLearningReminderService : ILearningReminderService, IDisposable
     {
+        private const int CheckIntervalMinutes = 1;
+        private const int MinTriggerIntervalMinutes = 5;
+        
         private readonly IDbContextFactory<AppDbContext> _dbFactory;
         private readonly ILogger<SqliteLearningReminderService>? _logger;
         private Timer? _checkTimer;
@@ -43,6 +46,8 @@ namespace UnifiedLearningAssistant.Services.Learning
 
         public void AddReminder(Reminder reminder)
         {
+            ArgumentNullException.ThrowIfNull(reminder, nameof(reminder));
+            
             try
             {
                 _logger?.LogDebug("添加提醒: {Title}", reminder.Title);
@@ -187,9 +192,8 @@ namespace UnifiedLearningAssistant.Services.Learning
             {
                 if (_checkTimer == null)
                 {
-                    _logger?.LogInformation("启动提醒检查定时器（每分钟检查一次）");
-                    // 每分钟检查一次
-                    _checkTimer = new Timer(CheckReminders, null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
+                    _logger?.LogInformation("启动提醒检查定时器（每 {Interval} 分钟检查一次）", CheckIntervalMinutes);
+                    _checkTimer = new Timer(CheckReminders, null, TimeSpan.Zero, TimeSpan.FromMinutes(CheckIntervalMinutes));
                 }
                 else
                 {
@@ -235,12 +239,12 @@ namespace UnifiedLearningAssistant.Services.Learning
                 foreach (var entity in enabledReminders)
                 {
                     var reminder = entity.ToModel();
-                    if (ShouldTriggerReminder(reminder, now, TimeSpan.FromMinutes(1)))
+                    if (ShouldTriggerReminder(reminder, now, TimeSpan.FromMinutes(CheckIntervalMinutes)))
                     {
                         // 检查是否今天已经触发过
                         if (!reminder.LastTriggered.HasValue || 
                             reminder.LastTriggered.Value.Date < now.Date ||
-                            (now - reminder.LastTriggered.Value).TotalMinutes > 5)
+                            (now - reminder.LastTriggered.Value).TotalMinutes > MinTriggerIntervalMinutes)
                         {
                             // 更新最后触发时间
                             entity.LastTriggered = now;

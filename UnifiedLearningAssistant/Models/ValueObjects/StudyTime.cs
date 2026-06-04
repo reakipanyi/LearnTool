@@ -20,7 +20,13 @@ namespace UnifiedLearningAssistant.Models.ValueObjects
 
         public StudyTime AddMinutes(int minutesToAdd)
         {
-            return new StudyTime(Minutes + minutesToAdd);
+            var newMinutes = Minutes + minutesToAdd;
+            if (newMinutes < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(minutesToAdd), 
+                    $"添加 {minutesToAdd} 分钟后结果为负数，这是不允许的");
+            }
+            return new StudyTime(newMinutes);
         }
 
         public override IEnumerable<object?> GetEqualityComponents()

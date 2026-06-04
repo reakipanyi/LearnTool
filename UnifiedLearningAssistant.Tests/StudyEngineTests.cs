@@ -23,22 +23,40 @@ namespace UnifiedLearningAssistant.Tests
             _studyEngine = new StudyEngine(_mockPersistenceService.Object, _mockContentLoaderService.Object);
         }
 
-        [Fact]
-        public void Initialize_WithValidData_ShouldLoadItems()
+        private List<object> CreateTestItems()
         {
-            // Arrange
-            var testItems = new List<object>
+            return new List<object>
             {
                 new TestLearningItem("Apple", "苹果", "/ˈæp.l/"),
                 new TestLearningItem("Banana", "香蕉", "/bəˈnæn.ə/")
             };
+        }
 
+        private List<object> CreateSingleTestItem()
+        {
+            return new List<object>
+            {
+                new TestLearningItem("Apple", "苹果", "/ˈæp.l/")
+            };
+        }
+
+        private void SetupAndInitializeWithItems(List<object> items, string mode = "学习模式")
+        {
             _mockContentLoaderService
                 .Setup(x => x.LoadItems(It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(testItems);
+                .Returns(items);
+
+            _studyEngine.Initialize("test_user", "English", "Words", "", mode, "Sequential");
+        }
+
+        [Fact]
+        public void Initialize_WithValidData_ShouldLoadItems()
+        {
+            // Arrange
+            var testItems = CreateTestItems();
 
             // Act
-            _studyEngine.Initialize("test_user", "English", "Words", "", "学习模式", "Sequential");
+            SetupAndInitializeWithItems(testItems);
 
             // Assert
             _studyEngine.TotalCount.Should().Be(2);
@@ -49,17 +67,9 @@ namespace UnifiedLearningAssistant.Tests
         public void GetCurrentItem_AfterInitialize_ShouldReturnFirstItem()
         {
             // Arrange
-            var testItems = new List<object>
-            {
-                new TestLearningItem("Apple", "苹果", "/ˈæp.l/"),
-                new TestLearningItem("Banana", "香蕉", "/bəˈnæn.ə/")
-            };
+            var testItems = CreateTestItems();
 
-            _mockContentLoaderService
-                .Setup(x => x.LoadItems(It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(testItems);
-
-            _studyEngine.Initialize("test_user", "English", "Words", "", "学习模式", "Sequential");
+            SetupAndInitializeWithItems(testItems);
 
             // Act
             var currentItem = _studyEngine.GetCurrentItem();
@@ -73,17 +83,9 @@ namespace UnifiedLearningAssistant.Tests
         public void HasNext_WithMultipleItems_ShouldReturnTrue()
         {
             // Arrange
-            var testItems = new List<object>
-            {
-                new TestLearningItem("Apple", "苹果", "/ˈæp.l/"),
-                new TestLearningItem("Banana", "香蕉", "/bəˈnæn.ə/")
-            };
+            var testItems = CreateTestItems();
 
-            _mockContentLoaderService
-                .Setup(x => x.LoadItems(It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(testItems);
-
-            _studyEngine.Initialize("test_user", "English", "Words", "", "学习模式", "Sequential");
+            SetupAndInitializeWithItems(testItems);
 
             // Act
             var hasNext = _studyEngine.HasNext();
@@ -96,17 +98,9 @@ namespace UnifiedLearningAssistant.Tests
         public void MoveNext_ShouldAdvanceToNextItem()
         {
             // Arrange
-            var testItems = new List<object>
-            {
-                new TestLearningItem("Apple", "苹果", "/ˈæp.l/"),
-                new TestLearningItem("Banana", "香蕉", "/bəˈnæn.ə/")
-            };
+            var testItems = CreateTestItems();
 
-            _mockContentLoaderService
-                .Setup(x => x.LoadItems(It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(testItems);
-
-            _studyEngine.Initialize("test_user", "English", "Words", "", "学习模式", "Sequential");
+            SetupAndInitializeWithItems(testItems);
 
             // Act
             _studyEngine.MoveNext();
@@ -121,16 +115,9 @@ namespace UnifiedLearningAssistant.Tests
         public void MarkCurrentAsKnown_ShouldAddToKnownList()
         {
             // Arrange
-            var testItems = new List<object>
-            {
-                new TestLearningItem("Apple", "苹果", "/ˈæp.l/")
-            };
+            var testItems = CreateSingleTestItem();
 
-            _mockContentLoaderService
-                .Setup(x => x.LoadItems(It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(testItems);
-
-            _studyEngine.Initialize("test_user", "English", "Words", "", "学习模式", "Sequential");
+            SetupAndInitializeWithItems(testItems);
 
             // Act
             _studyEngine.MarkCurrentAsKnown();
@@ -143,16 +130,9 @@ namespace UnifiedLearningAssistant.Tests
         public void GetStatistics_WithCorrectAnswers_ShouldCalculateAccuracy()
         {
             // Arrange
-            var testItems = new List<object>
-            {
-                new TestLearningItem("Apple", "苹果", "/ˈæp.l/")
-            };
+            var testItems = CreateSingleTestItem();
 
-            _mockContentLoaderService
-                .Setup(x => x.LoadItems(It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(testItems);
-
-            _studyEngine.Initialize("test_user", "English", "Words", "", "快速模式", "Sequential");
+            SetupAndInitializeWithItems(testItems, "快速模式");
             _studyEngine.MarkCurrentAsKnown();
 
             // Act
@@ -194,16 +174,9 @@ namespace UnifiedLearningAssistant.Tests
         public void MoveNext_AtEndOfList_ShouldNotAdvance()
         {
             // Arrange
-            var testItems = new List<object>
-            {
-                new TestLearningItem("Apple", "苹果", "/ˈæp.l/")
-            };
+            var testItems = CreateSingleTestItem();
 
-            _mockContentLoaderService
-                .Setup(x => x.LoadItems(It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(testItems);
-
-            _studyEngine.Initialize("test_user", "English", "Words", "", "学习模式", "Sequential");
+            SetupAndInitializeWithItems(testItems);
 
             // Act
             _studyEngine.MoveNext(); // 第一次移动到第一个
@@ -222,16 +195,9 @@ namespace UnifiedLearningAssistant.Tests
         public void MarkCurrentAsKnown_DuplicateItem_ShouldOnlyAddOnce()
         {
             // Arrange
-            var testItems = new List<object>
-            {
-                new TestLearningItem("Apple", "苹果", "/ˈæp.l/")
-            };
+            var testItems = CreateSingleTestItem();
 
-            _mockContentLoaderService
-                .Setup(x => x.LoadItems(It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(testItems);
-
-            _studyEngine.Initialize("test_user", "English", "Words", "", "学习模式", "Sequential");
+            SetupAndInitializeWithItems(testItems);
 
             // Act
             _studyEngine.MarkCurrentAsKnown();
@@ -245,16 +211,9 @@ namespace UnifiedLearningAssistant.Tests
         public void MarkCurrentAsUnknown_ShouldAddToUnknownList()
         {
             // Arrange
-            var testItems = new List<object>
-            {
-                new TestLearningItem("Apple", "苹果", "/ˈæp.l/")
-            };
+            var testItems = CreateSingleTestItem();
 
-            _mockContentLoaderService
-                .Setup(x => x.LoadItems(It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(testItems);
-
-            _studyEngine.Initialize("test_user", "English", "Words", "", "学习模式", "Sequential");
+            SetupAndInitializeWithItems(testItems);
 
             // Act
             _studyEngine.MarkCurrentAsUnknown();
