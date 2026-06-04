@@ -8,6 +8,7 @@ namespace UnifiedLearningAssistant.Services.Cloud
     public class PlaceholderCloudStorageService : ICloudStorageService
     {
         private readonly ILogger<PlaceholderCloudStorageService>? _logger;
+        private const string NotImplMessage = "云存储服务尚未集成，请等待具体实现（如百度网盘）";
 
         public string ServiceName => "占位符云存储服务";
         public bool IsAuthenticated => false;
@@ -19,50 +20,54 @@ namespace UnifiedLearningAssistant.Services.Cloud
 
         public Task<string> GetAuthorizationUrlAsync()
         {
-            _logger?.LogWarning("PlaceholderCloudStorageService: 此服务尚未实现具体的云存储集成");
-            throw new NotImplementedException("云存储服务尚未集成，请等待具体实现（如百度网盘）");
+            return ThrowNotImplemented();
         }
 
         public Task<bool> AuthenticateAsync(string authCode)
         {
-            _logger?.LogWarning("PlaceholderCloudStorageService: 此服务尚未实现具体的云存储集成");
-            throw new NotImplementedException("云存储服务尚未集成，请等待具体实现（如百度网盘）");
+            return ThrowNotImplemented<bool>();
         }
 
         public Task<bool> DownloadFileAsync(string cloudPath, string localPath, Action<int>? progress = null)
         {
-            _logger?.LogWarning("PlaceholderCloudStorageService: 此服务尚未实现具体的云存储集成");
-            throw new NotImplementedException("云存储服务尚未集成，请等待具体实现（如百度网盘）");
+            return ThrowNotImplemented<bool>();
         }
 
         public Task<bool> UploadFileAsync(string localPath, string cloudPath, Action<int>? progress = null)
         {
-            _logger?.LogWarning("PlaceholderCloudStorageService: 此服务尚未实现具体的云存储集成");
-            throw new NotImplementedException("云存储服务尚未集成，请等待具体实现（如百度网盘）");
+            return ThrowNotImplemented<bool>();
         }
 
         public Task<List<CloudFileInfo>> ListFilesAsync(string cloudFolder)
         {
-            _logger?.LogWarning("PlaceholderCloudStorageService: 此服务尚未实现具体的云存储集成");
-            throw new NotImplementedException("云存储服务尚未集成，请等待具体实现（如百度网盘）");
+            return ThrowNotImplemented<List<CloudFileInfo>>();
         }
 
         public Task<bool> FileExistsAsync(string cloudPath)
         {
-            _logger?.LogWarning("PlaceholderCloudStorageService: 此服务尚未实现具体的云存储集成");
-            throw new NotImplementedException("云存储服务尚未集成，请等待具体实现（如百度网盘）");
+            return ThrowNotImplemented<bool>();
         }
 
         public Task<bool> DeleteFileAsync(string cloudPath)
         {
-            _logger?.LogWarning("PlaceholderCloudStorageService: 此服务尚未实现具体的云存储集成");
-            throw new NotImplementedException("云存储服务尚未集成，请等待具体实现（如百度网盘）");
+            return ThrowNotImplemented<bool>();
         }
 
         public Task<bool> CreateFolderAsync(string cloudFolderPath)
         {
+            return ThrowNotImplemented<bool>();
+        }
+
+        private Task<T> ThrowNotImplemented<T>()
+        {
             _logger?.LogWarning("PlaceholderCloudStorageService: 此服务尚未实现具体的云存储集成");
-            throw new NotImplementedException("云存储服务尚未集成，请等待具体实现（如百度网盘）");
+            throw new NotImplementedException(NotImplMessage);
+        }
+
+        private Task ThrowNotImplemented()
+        {
+            _logger?.LogWarning("PlaceholderCloudStorageService: 此服务尚未实现具体的云存储集成");
+            throw new NotImplementedException(NotImplMessage);
         }
     }
 }

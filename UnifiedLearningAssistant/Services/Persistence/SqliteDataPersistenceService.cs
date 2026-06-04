@@ -68,6 +68,8 @@ namespace UnifiedLearningAssistant.Services.Persistence
 
         public UserProfile LoadUserProfile(string userId)
         {
+            ArgumentException.ThrowIfNullOrWhiteSpace(userId, nameof(userId));
+            
             try
             {
                 using var db = _dbContextFactory.CreateDbContext();
@@ -90,6 +92,9 @@ namespace UnifiedLearningAssistant.Services.Persistence
 
         public void SaveUserProfile(UserProfile profile)
         {
+            ArgumentNullException.ThrowIfNull(profile, nameof(profile));
+            ArgumentException.ThrowIfNullOrWhiteSpace(profile.UserId, nameof(profile.UserId));
+            
             try
             {
                 using var db = _dbContextFactory.CreateDbContext();
@@ -121,7 +126,18 @@ namespace UnifiedLearningAssistant.Services.Persistence
                     existingUser.TodayStudyTimeMinutes = profile.TodayStudyTimeMinutes;
                     existingUser.TodayItemsStudied = profile.TodayItemsStudied;
 
-                    // 更新分类进度
+                    // 删除不再存在的分类进度
+                    var categoryNamesInProfile = new HashSet<string>(profile.LearningProgress.CategoryProgresses.Keys);
+                    var categoriesToRemove = existingUser.CategoryProgresses
+                        .Where(c => !categoryNamesInProfile.Contains(c.CategoryName))
+                        .ToList();
+                    
+                    foreach (var categoryToRemove in categoriesToRemove)
+                    {
+                        db.CategoryProgresses.Remove(categoryToRemove);
+                    }
+
+                    // 更新或添加分类进度
                     foreach (var categoryProgress in profile.LearningProgress.CategoryProgresses.Values)
                     {
                         var existingCategory = existingUser.CategoryProgresses
@@ -153,6 +169,7 @@ namespace UnifiedLearningAssistant.Services.Persistence
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Failed to save user profile for {UserId}", profile.UserId);
+                throw; // 可选：重新抛出或静默处理，取决于业务需求
             }
         }
 

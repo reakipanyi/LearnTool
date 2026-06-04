@@ -39,12 +39,21 @@ namespace UnifiedLearningAssistant.Services.Migration
                 if (userIds.Count == 0)
                     return false;
 
-                // 检查是否已存在 SQLite 用户数据
+                // 检查是否有未迁移的用户
                 using var db = _dbContextFactory.CreateDbContext();
-                var sqliteUsers = db.UserProfiles.Count();
+                var existingUserIds = new HashSet<string>(db.UserProfiles.Select(u => u.UserId));
                 
-                // 如果 JSON 用户数大于 SQLite 用户数，则需要迁移
-                return userIds.Count > sqliteUsers;
+                // 检查是否有任何 JSON 用户不在 SQLite 中
+                foreach (var userId in userIds)
+                {
+                    if (!existingUserIds.Contains(userId))
+                    {
+                        _logger?.LogInformation("Found user {UserId} not in SQLite, migration needed", userId);
+                        return true;
+                    }
+                }
+                
+                return false;
             }
             catch (Exception ex)
             {
@@ -70,7 +79,9 @@ namespace UnifiedLearningAssistant.Services.Migration
                 for (int i = 0; i < userIds.Count; i++)
                 {
                     var userId = userIds[i];
-                    ReportProgress((i + 1) * 100 / result.TotalUsers, $"正在迁移用户: {userId}");
+                    // 安全计算进度百分比，避免除以零
+                    var progress = result.TotalUsers > 0 ? (i + 1) * 100 / result.TotalUsers : 100;
+                    ReportProgress(progress, $"正在迁移用户: {userId}");
                     
                     try
                     {
@@ -111,6 +122,8 @@ namespace UnifiedLearningAssistant.Services.Migration
         /// </summary>
         private bool MigrateUser(string userId)
         {
+            ArgumentException.ThrowIfNullOrWhiteSpace(userId, nameof(userId));
+            
             using var db = _dbContextFactory.CreateDbContext();
             
             // 检查用户是否已存在
