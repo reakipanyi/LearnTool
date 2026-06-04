@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Globalization;
 using UnifiedLearningAssistant.Common;
 
 namespace UnifiedLearningAssistant.Services.Learning
@@ -194,6 +195,133 @@ namespace UnifiedLearningAssistant.Services.Learning
                 // 静默处理加载错误
             }
         }
+        
+        #region 为报告服务添加的方法
+        
+        public DailyStatistics GetDailyStatistics(string userId, DateTime date)
+        {
+            var stats = new DailyStatistics { Date = date, UserId = userId };
+
+            if (_userAnalytics.TryGetValue(userId, out var userData) && 
+                userData.DailyRecords.TryGetValue(date, out var record))
+            {
+                stats.TotalItems = record.ItemsLearned;
+                stats.TotalMinutes = record.TimeSpentMinutes;
+                stats.CorrectRate = record.CorrectCount + record.WrongCount > 0 
+                    ? (double)record.CorrectCount / (record.CorrectCount + record.WrongCount) 
+                    : 0;
+                stats.CategoryBreakdown = new Dictionary<string, int>(userData.CategoryStats);
+            }
+
+            return stats;
+        }
+
+        public WeeklyStatistics GetWeeklyStatistics(string userId, int year, int weekNumber)
+        {
+            var weeklyStats = new WeeklyStatistics { Year = year, WeekNumber = weekNumber, UserId = userId };
+
+            if (_userAnalytics.TryGetValue(userId, out var userData))
+            {
+                var startDate = GetFirstDateOfWeek(year, weekNumber);
+                for (int i = 0; i < 7; i++)
+                {
+                    var date = startDate.AddDays(i);
+                    var dailyStats = GetDailyStatistics(userId, date);
+                    weeklyStats.TotalItems += dailyStats.TotalItems;
+                    weeklyStats.TotalMinutes += dailyStats.TotalMinutes;
+                }
+                
+                // 计算平均正确率
+                var correctCount = 0;
+                var totalCount = 0;
+                for (int i = 0; i < 7; i++)
+                {
+                    var date = startDate.AddDays(i);
+                    if (userData.DailyRecords.TryGetValue(date, out var record))
+                    {
+                        correctCount += record.CorrectCount;
+                        totalCount += record.CorrectCount + record.WrongCount;
+                    }
+                }
+                weeklyStats.CorrectRate = totalCount > 0 ? (double)correctCount / totalCount : 0;
+                weeklyStats.CategoryBreakdown = new Dictionary<string, int>(userData.CategoryStats);
+            }
+
+            return weeklyStats;
+        }
+
+        public MonthlyStatistics GetMonthlyStatistics(string userId, int year, int month)
+        {
+            var monthlyStats = new MonthlyStatistics { Year = year, Month = month, UserId = userId };
+
+            if (_userAnalytics.TryGetValue(userId, out var userData))
+            {
+                var startDate = new DateTime(year, month, 1);
+                var daysInMonth = DateTime.DaysInMonth(year, month);
+                
+                for (int i = 0; i < daysInMonth; i++)
+                {
+                    var date = startDate.AddDays(i);
+                    var dailyStats = GetDailyStatistics(userId, date);
+                    monthlyStats.TotalItems += dailyStats.TotalItems;
+                    monthlyStats.TotalMinutes += dailyStats.TotalMinutes;
+                }
+                
+                // 计算平均正确率
+                var correctCount = 0;
+                var totalCount = 0;
+                for (int i = 0; i < daysInMonth; i++)
+                {
+                    var date = startDate.AddDays(i);
+                    if (userData.DailyRecords.TryGetValue(date, out var record))
+                    {
+                        correctCount += record.CorrectCount;
+                        totalCount += record.CorrectCount + record.WrongCount;
+                    }
+                }
+                monthlyStats.CorrectRate = totalCount > 0 ? (double)correctCount / totalCount : 0;
+                monthlyStats.CategoryBreakdown = new Dictionary<string, int>(userData.CategoryStats);
+            }
+
+            return monthlyStats;
+        }
+
+        public List<DailyStatistics> GetLearningTrend(string userId, DateTime startDate, DateTime endDate)
+        {
+            var trend = new List<DailyStatistics>();
+
+            if (_userAnalytics.TryGetValue(userId, out var userData))
+            {
+                for (var date = startDate; date <= endDate; date = date.AddDays(1))
+                {
+                    trend.Add(GetDailyStatistics(userId, date));
+                }
+            }
+
+            return trend;
+        }
+
+        public int GetStudyStreak(string userId)
+        {
+            return GetLearningStreak(userId);
+        }
+        
+        private DateTime GetFirstDateOfWeek(int year, int weekNumber)
+        {
+            var jan1 = new DateTime(year, 1, 1);
+            var daysOffset = DayOfWeek.Monday - jan1.DayOfWeek;
+            var firstMonday = jan1.AddDays(daysOffset);
+            
+            var firstWeek = ISOWeek.GetWeekOfYear(jan1);
+            if (firstWeek <= 1)
+            {
+                weekNumber -= 1;
+            }
+            
+            return firstMonday.AddDays(weekNumber * 7);
+        }
+        
+        #endregion
     }
 
     /// <summary>
