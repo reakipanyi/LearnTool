@@ -1,5 +1,5 @@
 
-namespace UnifiedLearningAssistant.Common
+namespace LearningAssistant.Common
 {
     public enum LanguageType
     {
@@ -16,7 +16,6 @@ namespace UnifiedLearningAssistant.Common
     public enum SubCategoryType
     {
         ChineseCharacter,
-        ChineseWordCombination,
         ChinesePhrase,
         ChineseIdiom,
         ChinesePoem,
@@ -60,7 +59,6 @@ namespace UnifiedLearningAssistant.Common
             return category switch
             {
                 SubCategoryType.ChineseCharacter => "识字",
-                SubCategoryType.ChineseWordCombination => "组词",
                 SubCategoryType.ChinesePhrase => "短语",
                 SubCategoryType.ChineseIdiom => "成语",
                 SubCategoryType.ChinesePoem => "诗词",
@@ -108,7 +106,6 @@ namespace UnifiedLearningAssistant.Common
             return displayString switch
             {
                 "识字" => SubCategoryType.ChineseCharacter,
-                "组词" => SubCategoryType.ChineseWordCombination,
                 "短语" => SubCategoryType.ChinesePhrase,
                 "成语" => SubCategoryType.ChineseIdiom,
                 "诗词" => SubCategoryType.ChinesePoem,

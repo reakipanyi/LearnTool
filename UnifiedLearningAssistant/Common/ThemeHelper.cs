@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Common
+namespace LearningAssistant.Common
 {
     /// <summary>
     /// 主题帮助类 - 提供统一的样式配置

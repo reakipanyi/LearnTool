@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Logging;
-using UnifiedLearningAssistant.Services.Learning;
-using UnifiedLearningAssistant.Views;
+using LearningAssistant.Services.Learning;
+using LearningAssistant.Views;
 
-namespace UnifiedLearningAssistant.Presenters
+namespace LearningAssistant.Presenters
 {
     public class ResultPresenter : IDisposable
     {

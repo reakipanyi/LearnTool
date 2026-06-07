@@ -1,6 +1,6 @@
 using System.Drawing.Drawing2D;
 
-namespace UnifiedLearningAssistant.Common
+namespace LearningAssistant.Common
 {
     public static class WinFormsExtensions
     {

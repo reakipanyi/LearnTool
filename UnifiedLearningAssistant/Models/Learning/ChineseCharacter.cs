@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Models.Learning
+namespace LearningAssistant.Models.Learning
 {
     /// <summary>
     /// 汉字学习项
@@ -30,6 +30,11 @@ namespace UnifiedLearningAssistant.Models.Learning
         /// </summary>
         public string Radical { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 组成的词语列表
+        /// </summary>
+        public List<string> Words { get; set; } = new List<string>();
+
 
         /// <inheritdoc/>
         public override string GetMainContent() => Character;
@@ -46,6 +51,8 @@ namespace UnifiedLearningAssistant.Models.Learning
                 parts.Add($"笔画: {StrokeCount}画");
             if (!string.IsNullOrWhiteSpace(Radical))
                 parts.Add($"部首: {Radical}");
+            if (Words != null && Words.Any())
+                parts.Add($"组词: {string.Join(", ", Words.Take(5))}");
             return string.Join(" | ", parts);
         }
         

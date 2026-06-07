@@ -1,6 +1,6 @@
-using UnifiedLearningAssistant.Services.Learning;
+using LearningAssistant.Services.Learning;
 
-namespace UnifiedLearningAssistant.Models.User
+namespace LearningAssistant.Models.User
 {
     public class UserProfile
     {

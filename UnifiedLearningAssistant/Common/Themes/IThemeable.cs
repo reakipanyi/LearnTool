@@ -1,5 +1,5 @@
 
-namespace UnifiedLearningAssistant.Common.Themes
+namespace LearningAssistant.Common.Themes
 {
     public interface IThemeable
     {

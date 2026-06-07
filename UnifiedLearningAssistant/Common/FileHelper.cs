@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Common
+namespace LearningAssistant.Common
 {
     public static class FileHelper
     {

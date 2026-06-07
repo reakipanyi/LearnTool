@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Models.Learning
+namespace LearningAssistant.Models.Learning
 {
     /// <summary>
     /// 成语学习项

@@ -203,7 +203,7 @@ namespace UnifiedLearningAssistant.Forms
 
     internal class MockWindowManager : IWindowManager
     {
-        public Task OpenLearningWindowAsync(string userId, string language, string subCategory, string wordBankFile, string mode, string sortOrder) => Task.CompletedTask;
+        public Task OpenLearningWindowAsync(string userId, string language, string subCategory, string wordBankFile, bool continueMode) => Task.CompletedTask;
         public void OpenSettingsWindow() { }
         public void OpenEditorWindow() { }
         public void OpenEditorWindowWithContext(string text, string language, string? subCategory) { }

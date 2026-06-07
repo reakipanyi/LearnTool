@@ -1,49 +1,590 @@
 [
   {
-    "Word": "apple",
-    "Phonetic": "/ˈæpl/",
-    "Meaning": "苹果",
-    "Example": "I eat an apple every day.",
+    "Word": "train",
+    "Phonetic": "/treɪn/",
+    "Meaning": "火车",
+    "Example": "This is a train.",
     "PartOfSpeech": "n."
   },
   {
-    "Word": "book",
-    "Phonetic": "/bʊk/",
-    "Meaning": "书，书本",
-    "Example": "This is a good book.",
-    "PartOfSpeech": "n.",
-    "Id": "2",
-    "CreatedAt": "2024-01-01T00:00:00",
-    "UpdatedAt": "2024-01-01T00:00:00"
+    "Word": "car",
+    "Phonetic": "/kɑː(r)/",
+    "Meaning": "小轿车",
+    "Example": "I have a toy car.",
+    "PartOfSpeech": "n."
   },
   {
-    "Word": "cat",
-    "Phonetic": "/kæt/",
-    "Meaning": "猫",
-    "Example": "The cat is sleeping.",
-    "PartOfSpeech": "n.",
-    "Id": "3",
-    "CreatedAt": "2024-01-01T00:00:00",
-    "UpdatedAt": "2024-01-01T00:00:00"
+    "Word": "boat",
+    "Phonetic": "/bəʊt/",
+    "Meaning": "小船",
+    "Example": "The boat is small.",
+    "PartOfSpeech": "n."
   },
   {
-    "Word": "dog",
-    "Phonetic": "/dɒɡ/",
-    "Meaning": "狗",
-    "Example": "I have a pet dog.",
-    "PartOfSpeech": "n.",
-    "Id": "4",
-    "CreatedAt": "2024-01-01T00:00:00",
-    "UpdatedAt": "2024-01-01T00:00:00"
+    "Word": "panda",
+    "Phonetic": "/ˈpændə/",
+    "Meaning": "熊猫",
+    "Example": "The panda is black and white.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "monkey",
+    "Phonetic": "/ˈmʌŋki/",
+    "Meaning": "猴子",
+    "Example": "The monkey can jump.",
+    "PartOfSpeech": "n."
   },
   {
     "Word": "elephant",
     "Phonetic": "/ˈelɪfənt/",
     "Meaning": "大象",
-    "Example": "The elephant is very big.",
-    "PartOfSpeech": "n.",
-    "Id": "5",
-    "CreatedAt": "2024-01-01T00:00:00",
-    "UpdatedAt": "2024-01-01T00:00:00"
+    "Example": "An elephant has big ears.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "tiger",
+    "Phonetic": "/ˈtaɪɡə(r)/",
+    "Meaning": "老虎",
+    "Example": "The tiger is strong.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "zebra",
+    "Phonetic": "/ˈzebrə/",
+    "Meaning": "斑马",
+    "Example": "The zebra is black and white.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "cat",
+    "Phonetic": "/kæt/",
+    "Meaning": "猫",
+    "Example": "My pet is a cat.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "dog",
+    "Phonetic": "/dɒɡ/",
+    "Meaning": "狗",
+    "Example": "I like my dog.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "bird",
+    "Phonetic": "/bɜːd/",
+    "Meaning": "鸟",
+    "Example": "The bird can fly.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "ball",
+    "Phonetic": "/bɔːl/",
+    "Meaning": "球",
+    "Example": "Play with the ball.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "kite",
+    "Phonetic": "/kaɪt/",
+    "Meaning": "风筝",
+    "Example": "Fly a kite in spring.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "doll",
+    "Phonetic": "/dɒl/",
+    "Meaning": "洋娃娃",
+    "Example": "This doll is nice.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "toy panda",
+    "Phonetic": "/tɔɪ ˈpændə/",
+    "Meaning": "玩具熊猫",
+    "Example": "I get a toy panda.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "toy train",
+    "Phonetic": "/tɔɪ treɪn/",
+    "Meaning": "玩具火车",
+    "Example": "He has a toy train.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "toy boat",
+    "Phonetic": "/tɔɪ bəʊt/",
+    "Meaning": "玩具小船",
+    "Example": "The toy boat is on water.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "come",
+    "Phonetic": "/kʌm/",
+    "Meaning": "来",
+    "Example": "Come here please.",
+    "PartOfSpeech": "v."
+  },
+  {
+    "Word": "go",
+    "Phonetic": "/ɡəʊ/",
+    "Meaning": "去",
+    "Example": "Let us go to school.",
+    "PartOfSpeech": "v."
+  },
+  {
+    "Word": "wait",
+    "Phonetic": "/weɪt/",
+    "Meaning": "等一等",
+    "Example": "Wait for me.",
+    "PartOfSpeech": "v."
+  },
+  {
+    "Word": "stop",
+    "Phonetic": "/stɒp/",
+    "Meaning": "停",
+    "Example": "Stop running.",
+    "PartOfSpeech": "v."
+  },
+  {
+    "Word": "cross",
+    "Phonetic": "/krɒs/",
+    "Meaning": "穿过",
+    "Example": "Cross the road carefully.",
+    "PartOfSpeech": "v."
+  },
+  {
+    "Word": "skip",
+    "Phonetic": "/skɪp/",
+    "Meaning": "跳（绳）",
+    "Example": "I can skip rope.",
+    "PartOfSpeech": "v."
+  },
+  {
+    "Word": "throw",
+    "Phonetic": "/θrəʊ/",
+    "Meaning": "扔",
+    "Example": "Throw the ball away.",
+    "PartOfSpeech": "v."
+  },
+  {
+    "Word": "play",
+    "Phonetic": "/pleɪ/",
+    "Meaning": "玩",
+    "Example": "Play with friends.",
+    "PartOfSpeech": "v."
+  },
+  {
+    "Word": "join",
+    "Phonetic": "/dʒɔɪn/",
+    "Meaning": "加入",
+    "Example": "Join our game.",
+    "PartOfSpeech": "v."
+  },
+  {
+    "Word": "am",
+    "Phonetic": "/æm/",
+    "Meaning": "是",
+    "Example": "I am a pupil.",
+    "PartOfSpeech": "v."
+  },
+  {
+    "Word": "is",
+    "Phonetic": "/ɪz/",
+    "Meaning": "是",
+    "Example": "It is a dog.",
+    "PartOfSpeech": "v."
+  },
+  {
+    "Word": "are",
+    "Phonetic": "/ɑː(r)/",
+    "Meaning": "是",
+    "Example": "They are cats.",
+    "PartOfSpeech": "v."
+  },
+  {
+    "Word": "sleepy",
+    "Phonetic": "/ˈsliːpi/",
+    "Meaning": "困倦的",
+    "Example": "I feel sleepy.",
+    "PartOfSpeech": "adj."
+  },
+  {
+    "Word": "busy",
+    "Phonetic": "/ˈbɪzi/",
+    "Meaning": "忙碌的",
+    "Example": "Mum is busy.",
+    "PartOfSpeech": "adj."
+  },
+  {
+    "Word": "tired",
+    "Phonetic": "/ˈtaɪəd/",
+    "Meaning": "累的",
+    "Example": "I am tired after running.",
+    "PartOfSpeech": "adj."
+  },
+  {
+    "Word": "happy",
+    "Phonetic": "/ˈhæpi/",
+    "Meaning": "开心的",
+    "Example": "She is happy.",
+    "PartOfSpeech": "adj."
+  },
+  {
+    "Word": "fine",
+    "Phonetic": "/faɪn/",
+    "Meaning": "好的",
+    "Example": "I am fine.",
+    "PartOfSpeech": "adj."
+  },
+  {
+    "Word": "windy",
+    "Phonetic": "/ˈwɪndi/",
+    "Meaning": "刮风的",
+    "Example": "It is windy today.",
+    "PartOfSpeech": "adj."
+  },
+  {
+    "Word": "sunny",
+    "Phonetic": "/ˈsʌni/",
+    "Meaning": "晴朗的",
+    "Example": "The day is sunny.",
+    "PartOfSpeech": "adj."
+  },
+  {
+    "Word": "cloudy",
+    "Phonetic": "/ˈklaʊdi/",
+    "Meaning": "多云的",
+    "Example": "It is cloudy outside.",
+    "PartOfSpeech": "adj."
+  },
+  {
+    "Word": "rainy",
+    "Phonetic": "/ˈreɪni/",
+    "Meaning": "下雨的",
+    "Example": "A rainy day is cool.",
+    "PartOfSpeech": "adj."
+  },
+  {
+    "Word": "snowy",
+    "Phonetic": "/ˈsnəʊi/",
+    "Meaning": "下雪的",
+    "Example": "Winter is snowy.",
+    "PartOfSpeech": "adj."
+  },
+  {
+    "Word": "who",
+    "Phonetic": "/huː/",
+    "Meaning": "谁",
+    "Example": "Who is that girl?",
+    "PartOfSpeech": "pron."
+  },
+  {
+    "Word": "how",
+    "Phonetic": "/haʊ/",
+    "Meaning": "怎么样",
+    "Example": "How are you?",
+    "PartOfSpeech": "adv."
+  },
+  {
+    "Word": "where",
+    "Phonetic": "/weə(r)/",
+    "Meaning": "在哪里",
+    "Example": "Where is my pen?",
+    "PartOfSpeech": "adv."
+  },
+  {
+    "Word": "which",
+    "Phonetic": "/wɪtʃ/",
+    "Meaning": "哪一个",
+    "Example": "Which one do you like?",
+    "PartOfSpeech": "pron."
+  },
+  {
+    "Word": "whose",
+    "Phonetic": "/huːz/",
+    "Meaning": "谁的",
+    "Example": "Whose bag is this?",
+    "PartOfSpeech": "pron."
+  },
+  {
+    "Word": "what",
+    "Phonetic": "/wɒt/",
+    "Meaning": "什么",
+    "Example": "What is this?",
+    "PartOfSpeech": "pron."
+  },
+  {
+    "Word": "what colour",
+    "Phonetic": "/wɒt ˈkʌlə(r)/",
+    "Meaning": "什么颜色",
+    "Example": "What colour is your coat?",
+    "PartOfSpeech": "phrase"
+  },
+  {
+    "Word": "what animal",
+    "Phonetic": "/wɒt ˈænɪml/",
+    "Meaning": "什么动物",
+    "Example": "What animal do you love?",
+    "PartOfSpeech": "phrase"
+  },
+  {
+    "Word": "what weather",
+    "Phonetic": "/wɒt ˈweðə(r)/",
+    "Meaning": "什么天气",
+    "Example": "What weather is it today?",
+    "PartOfSpeech": "phrase"
+  },
+  {
+    "Word": "weather",
+    "Phonetic": "/ˈweðə(r)/",
+    "Meaning": "天气",
+    "Example": "The weather is nice.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "colour",
+    "Phonetic": "/ˈkʌlə(r)/",
+    "Meaning": "颜色",
+    "Example": "Red is a colour.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "animal",
+    "Phonetic": "/ˈænɪml/",
+    "Meaning": "动物",
+    "Example": "I love small animals.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "toy",
+    "Phonetic": "/tɔɪ/",
+    "Meaning": "玩具",
+    "Example": "Toys are children’s favourite.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "clothes",
+    "Phonetic": "/kləʊðz/",
+    "Meaning": "衣服",
+    "Example": "Put on your clothes.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "food",
+    "Phonetic": "/fuːd/",
+    "Meaning": "食物",
+    "Example": "We need healthy food.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "fruit",
+    "Phonetic": "/fruːt/",
+    "Meaning": "水果",
+    "Example": "Apples are fruit.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "skirt",
+    "Phonetic": "/skɜːt/",
+    "Meaning": "短裙",
+    "Example": "She wears a pink skirt.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "shirt",
+    "Phonetic": "/ʃɜːt/",
+    "Meaning": "男衬衫",
+    "Example": "His white shirt is clean.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "five",
+    "Phonetic": "/faɪv/",
+    "Meaning": "五",
+    "Example": "I have five pens.",
+    "PartOfSpeech": "num."
+  },
+  {
+    "Word": "four",
+    "Phonetic": "/fɔː(r)/",
+    "Meaning": "四",
+    "Example": "Four birds fly away.",
+    "PartOfSpeech": "num."
+  },
+  {
+    "Word": "head",
+    "Phonetic": "/hed/",
+    "Meaning": "头",
+    "Example": "Touch your head.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "hand",
+    "Phonetic": "/hænd/",
+    "Meaning": "手",
+    "Example": "Wash your hands.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "socks",
+    "Phonetic": "/sɒks/",
+    "Meaning": "袜子",
+    "Example": "These socks are warm.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "shoes",
+    "Phonetic": "/ʃuːz/",
+    "Meaning": "鞋子",
+    "Example": "My new shoes are black.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "old",
+    "Phonetic": "/əʊld/",
+    "Meaning": "旧的",
+    "Example": "This bag is old.",
+    "PartOfSpeech": "adj."
+  },
+  {
+    "Word": "hold",
+    "Phonetic": "/həʊld/",
+    "Meaning": "抓住",
+    "Example": "Hold my hand tight.",
+    "PartOfSpeech": "v."
+  },
+  {
+    "Word": "new",
+    "Phonetic": "/njuː/",
+    "Meaning": "新的",
+    "Example": "I get a new book.",
+    "PartOfSpeech": "adj."
+  },
+  {
+    "Word": "now",
+    "Phonetic": "/naʊ/",
+    "Meaning": "现在",
+    "Example": "Let’s go now.",
+    "PartOfSpeech": "adv."
+  },
+  {
+    "Word": "can",
+    "Phonetic": "/kæn/",
+    "Meaning": "能/可以/会",
+    "Example": "I can swim.",
+    "PartOfSpeech": "modal v."
+  },
+  {
+    "Word": "can’t",
+    "Phonetic": "/kænt/",
+    "Meaning": "不能/不可以/不会",
+    "Example": "I can’t fly.",
+    "PartOfSpeech": "modal v."
+  },
+  {
+    "Word": "swim",
+    "Phonetic": "/swɪm/",
+    "Meaning": "游泳",
+    "Example": "I swim in summer.",
+    "PartOfSpeech": "v."
+  },
+  {
+    "Word": "swing",
+    "Phonetic": "/swɪŋ/",
+    "Meaning": "秋千",
+    "Example": "Play on the swing.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "slide",
+    "Phonetic": "/slaɪd/",
+    "Meaning": "滑滑梯",
+    "Example": "Kids love the slide.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "house",
+    "Phonetic": "/haʊs/",
+    "Meaning": "房子",
+    "Example": "We live in a house.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "horse",
+    "Phonetic": "/hɔːs/",
+    "Meaning": "马",
+    "Example": "The horse runs fast.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "green",
+    "Phonetic": "/ɡriːn/",
+    "Meaning": "绿色；绿色的",
+    "Example": "Grass is green.",
+    "PartOfSpeech": "adj./n."
+  },
+  {
+    "Word": "great",
+    "Phonetic": "/ɡreɪt/",
+    "Meaning": "心情愉悦的；极好的",
+    "Example": "I feel great today.",
+    "PartOfSpeech": "adj."
+  },
+  {
+    "Word": "meatball",
+    "Phonetic": "/ˈmiːtbɔːl/",
+    "Meaning": "肉丸",
+    "Example": "I like meatball soup.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "pack",
+    "Phonetic": "/pæk/",
+    "Meaning": "整理",
+    "Example": "Pack your schoolbag.",
+    "PartOfSpeech": "v."
+  },
+  {
+    "Word": "park",
+    "Phonetic": "/pɑːk/",
+    "Meaning": "公园",
+    "Example": "We play in the park.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "apple",
+    "Phonetic": "/ˈæpl/",
+    "Meaning": "苹果",
+    "Example": "An apple a day keeps doctors away.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "orange",
+    "Phonetic": "/ˈɒrɪndʒ/",
+    "Meaning": "橘子",
+    "Example": "An orange is sweet.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "eye",
+    "Phonetic": "/aɪ/",
+    "Meaning": "眼睛",
+    "Example": "She has big eyes.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "ear",
+    "Phonetic": "/ɪə(r)/",
+    "Meaning": "耳朵",
+    "Example": "Touch your left ear.",
+    "PartOfSpeech": "n."
+  },
+  {
+    "Word": "arm",
+    "Phonetic": "/ɑːm/",
+    "Meaning": "手臂",
+    "Example": "His arm is long.",
+    "PartOfSpeech": "n."
   }
 ]

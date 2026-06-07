@@ -1,22 +1,34 @@
+using LearningAssistant.Common;
+using LearningAssistant.Models.Config;
+using LearningAssistant.Presenters;
+using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Data;
-using UnifiedLearningAssistant.Common;
-using UnifiedLearningAssistant.Models.Config;
-using UnifiedLearningAssistant.Presenters;
-using UnifiedLearningAssistant.Views;
 
-namespace UnifiedLearningAssistant.Forms
+namespace LearningAssistant.Forms
 {
     public partial class ContentEditorForm : Form, IContentEditorView
     {
         private readonly ILogger<ContentEditorForm> _logger;
         private readonly AppConfig _appConfig;
         private ContentEditorPresenter? _presenter;
+        private TableLayoutPanel mainPanel;
+        private Panel topPanel;
+        private Panel promptPanel;
+        private TextBox textBoxPrompt;
+        private Panel gridPanel;
+        private Panel jsonPanel;
+        private FlowLayoutPanel buttonPanel;
+        private FlowLayoutPanel rightBottomPanel;
+
         private GroupBox groupBoxLanguage;
-        private RadioButton radioChinese;
         private RadioButton radioEnglish;
+        private RadioButton radioChinese;
+        private TextBox textBoxRange;
+        private Label labelRange;
+        private Label labelCategory;
         private ComboBox comboBoxSubCategory;
         private bool _disposed = false;
 
@@ -148,7 +160,6 @@ namespace UnifiedLearningAssistant.Forms
             { "Meaning", "释义" },
             { "StrokeCount", "笔画数" },
             { "Radical", "部首" },
-            { "Words", "组词" },
             { "Idiom", "成语" },
             { "Origin", "出处" },
             { "Example", "例句" },
@@ -292,9 +303,9 @@ namespace UnifiedLearningAssistant.Forms
                     return token.ToString(Formatting.None);
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 如果转换失败，返回空字符串
+                _logger.LogError(ex, "Error converting JToken to string");
             }
 
             return token?.ToString() ?? "";
@@ -310,10 +321,12 @@ namespace UnifiedLearningAssistant.Forms
             UpdateGridFromJson();
         }
 
+        // TODO: 实现树形视图刷新逻辑
         public void RefreshTreeView(TreeNodeCollection nodes)
         {
         }
 
+        // TODO: 实现加载项目编辑逻辑
         public void LoadItemForEdit(dynamic item)
         {
         }
@@ -323,9 +336,12 @@ namespace UnifiedLearningAssistant.Forms
             textBoxJson.Text = "";
             dataGridView.DataSource = null;
         }
+
+        // TODO: 实现项目列表更新逻辑
         public void UpdateItemList()
         {
         }
+
         private void DataGridView_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
         {
             GridCellEndEdit?.Invoke(this, EventArgs.Empty);
@@ -336,6 +352,7 @@ namespace UnifiedLearningAssistant.Forms
             GridRowsAdded?.Invoke(this, EventArgs.Empty);
         }
 
+        // TODO: 实现单元格双击逻辑
         private void DataGridView_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
         {
         }
@@ -400,32 +417,46 @@ namespace UnifiedLearningAssistant.Forms
             buttonImport = new Button();
             buttonExport = new Button();
             buttonGenerateAI = new Button();
-            labelCategory = new Label();
             labelCount = new Label();
-            labelRange = new Label();
             textBoxCount = new TextBox();
-            textBoxRange = new TextBox();
             dataGridView = new DataGridView();
-            radioChinese = new RadioButton();
-            radioEnglish = new RadioButton();
-            comboBoxSubCategory = new ComboBox();
-            textBoxPrompt = new TextBox();
-            labelPrompt = new Label();
+            mainPanel = new TableLayoutPanel();
+            topPanel = new Panel();
             groupBoxLanguage = new GroupBox();
+            radioEnglish = new RadioButton();
+            radioChinese = new RadioButton();
+            textBoxRange = new TextBox();
+            labelRange = new Label();
+            labelCategory = new Label();
+            comboBoxSubCategory = new ComboBox();
+            promptPanel = new Panel();
+            textBoxPrompt = new TextBox();
+            gridPanel = new Panel();
+            jsonPanel = new Panel();
+            buttonPanel = new FlowLayoutPanel();
+            rightBottomPanel = new FlowLayoutPanel();
             ((System.ComponentModel.ISupportInitialize)dataGridView).BeginInit();
+            mainPanel.SuspendLayout();
+            topPanel.SuspendLayout();
             groupBoxLanguage.SuspendLayout();
+            promptPanel.SuspendLayout();
+            gridPanel.SuspendLayout();
+            jsonPanel.SuspendLayout();
+            buttonPanel.SuspendLayout();
+            rightBottomPanel.SuspendLayout();
             SuspendLayout();
             // 
             // textBoxJson
             // 
             textBoxJson.BackColor = Color.White;
             textBoxJson.BorderStyle = BorderStyle.FixedSingle;
+            textBoxJson.Dock = DockStyle.Fill;
             textBoxJson.Font = new Font("微软雅黑", 10F);
-            textBoxJson.Location = new Point(613, 194);
+            textBoxJson.Location = new Point(0, 0);
             textBoxJson.Multiline = true;
             textBoxJson.Name = "textBoxJson";
             textBoxJson.ScrollBars = ScrollBars.Both;
-            textBoxJson.Size = new Size(591, 452);
+            textBoxJson.Size = new Size(601, 530);
             textBoxJson.TabIndex = 2;
             // 
             // buttonAdd
@@ -435,11 +466,11 @@ namespace UnifiedLearningAssistant.Forms
             buttonAdd.FlatStyle = FlatStyle.Flat;
             buttonAdd.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             buttonAdd.ForeColor = Color.White;
-            buttonAdd.Location = new Point(100, 681);
+            buttonAdd.Location = new Point(3, 3);
             buttonAdd.Name = "buttonAdd";
-            buttonAdd.Size = new Size(102, 44);
-            buttonAdd.TabIndex = 3;
-            buttonAdd.Text = "📝 新增";
+            buttonAdd.Size = new Size(93, 42);
+            buttonAdd.TabIndex = 0;
+            buttonAdd.Text = "➕ 新增";
             buttonAdd.UseVisualStyleBackColor = false;
             buttonAdd.Click += ButtonAdd_Click;
             buttonAdd.MouseEnter += Button_HoverEnter;
@@ -452,10 +483,10 @@ namespace UnifiedLearningAssistant.Forms
             buttonSave.FlatStyle = FlatStyle.Flat;
             buttonSave.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             buttonSave.ForeColor = Color.White;
-            buttonSave.Location = new Point(254, 681);
+            buttonSave.Location = new Point(102, 3);
             buttonSave.Name = "buttonSave";
-            buttonSave.Size = new Size(102, 44);
-            buttonSave.TabIndex = 4;
+            buttonSave.Size = new Size(93, 42);
+            buttonSave.TabIndex = 1;
             buttonSave.Text = "💾 保存";
             buttonSave.UseVisualStyleBackColor = false;
             buttonSave.Click += ButtonSave_Click;
@@ -469,11 +500,11 @@ namespace UnifiedLearningAssistant.Forms
             buttonDelete.FlatStyle = FlatStyle.Flat;
             buttonDelete.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             buttonDelete.ForeColor = Color.White;
-            buttonDelete.Location = new Point(408, 681);
+            buttonDelete.Location = new Point(201, 3);
             buttonDelete.Name = "buttonDelete";
-            buttonDelete.Size = new Size(102, 44);
-            buttonDelete.TabIndex = 5;
-            buttonDelete.Text = "🗑️ 删除";
+            buttonDelete.Size = new Size(93, 42);
+            buttonDelete.TabIndex = 2;
+            buttonDelete.Text = "🗑 删除";
             buttonDelete.UseVisualStyleBackColor = false;
             buttonDelete.Click += ButtonDelete_Click;
             buttonDelete.MouseEnter += Button_HoverEnter;
@@ -486,10 +517,10 @@ namespace UnifiedLearningAssistant.Forms
             buttonImport.FlatStyle = FlatStyle.Flat;
             buttonImport.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             buttonImport.ForeColor = Color.White;
-            buttonImport.Location = new Point(562, 681);
+            buttonImport.Location = new Point(300, 3);
             buttonImport.Name = "buttonImport";
-            buttonImport.Size = new Size(102, 44);
-            buttonImport.TabIndex = 6;
+            buttonImport.Size = new Size(93, 42);
+            buttonImport.TabIndex = 3;
             buttonImport.Text = "📥 导入";
             buttonImport.UseVisualStyleBackColor = false;
             buttonImport.Click += ButtonImport_Click;
@@ -503,10 +534,10 @@ namespace UnifiedLearningAssistant.Forms
             buttonExport.FlatStyle = FlatStyle.Flat;
             buttonExport.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             buttonExport.ForeColor = Color.White;
-            buttonExport.Location = new Point(716, 681);
+            buttonExport.Location = new Point(399, 3);
             buttonExport.Name = "buttonExport";
-            buttonExport.Size = new Size(102, 44);
-            buttonExport.TabIndex = 7;
+            buttonExport.Size = new Size(93, 42);
+            buttonExport.TabIndex = 4;
             buttonExport.Text = "📤 导出";
             buttonExport.UseVisualStyleBackColor = false;
             buttonExport.Click += ButtonExport_Click;
@@ -520,140 +551,89 @@ namespace UnifiedLearningAssistant.Forms
             buttonGenerateAI.FlatStyle = FlatStyle.Flat;
             buttonGenerateAI.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             buttonGenerateAI.ForeColor = Color.White;
-            buttonGenerateAI.Location = new Point(866, 681);
+            buttonGenerateAI.Location = new Point(498, 3);
             buttonGenerateAI.Name = "buttonGenerateAI";
-            buttonGenerateAI.Size = new Size(102, 44);
-            buttonGenerateAI.TabIndex = 9;
+            buttonGenerateAI.Size = new Size(93, 42);
+            buttonGenerateAI.TabIndex = 5;
             buttonGenerateAI.Text = "🤖 AI生成";
             buttonGenerateAI.UseVisualStyleBackColor = false;
             buttonGenerateAI.Click += ButtonGenerateAI_Click;
             buttonGenerateAI.MouseEnter += Button_HoverEnter;
             buttonGenerateAI.MouseLeave += Button_HoverLeave;
             // 
-            // labelCategory
-            // 
-            labelCategory.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            labelCategory.ForeColor = Color.FromArgb(33, 33, 33);
-            labelCategory.Location = new Point(279, 39);
-            labelCategory.Name = "labelCategory";
-            labelCategory.Size = new Size(80, 20);
-            labelCategory.TabIndex = 10;
-            labelCategory.Text = "📁 学习品类:";
-            // 
             // labelCount
             // 
             labelCount.Font = new Font("微软雅黑", 10F);
             labelCount.ForeColor = Color.FromArgb(33, 33, 33);
-            labelCount.Location = new Point(1000, 695);
+            labelCount.Location = new Point(462, 0);
             labelCount.Name = "labelCount";
-            labelCount.Size = new Size(60, 20);
+            labelCount.Size = new Size(80, 28);
             labelCount.TabIndex = 12;
             labelCount.Text = "生成数量:";
-            // 
-            // labelRange
-            // 
-            labelRange.Font = new Font("微软雅黑", 10F);
-            labelRange.ForeColor = Color.FromArgb(33, 33, 33);
-            labelRange.Location = new Point(574, 37);
-            labelRange.Name = "labelRange";
-            labelRange.Size = new Size(80, 20);
-            labelRange.TabIndex = 13;
-            labelRange.Text = "🔍 关键词:";
+            labelCount.TextAlign = ContentAlignment.MiddleCenter;
             // 
             // textBoxCount
             // 
             textBoxCount.BackColor = Color.White;
             textBoxCount.BorderStyle = BorderStyle.FixedSingle;
             textBoxCount.Font = new Font("微软雅黑", 10F);
-            textBoxCount.Location = new Point(1060, 692);
+            textBoxCount.Location = new Point(548, 3);
             textBoxCount.Name = "textBoxCount";
             textBoxCount.Size = new Size(50, 25);
             textBoxCount.TabIndex = 14;
             textBoxCount.Text = "5";
             // 
-            // textBoxRange
-            // 
-            textBoxRange.BackColor = Color.White;
-            textBoxRange.BorderStyle = BorderStyle.FixedSingle;
-            textBoxRange.Font = new Font("微软雅黑", 10F);
-            textBoxRange.Location = new Point(660, 34);
-            textBoxRange.Name = "textBoxRange";
-            textBoxRange.Size = new Size(526, 25);
-            textBoxRange.TabIndex = 15;
-            // 
             // dataGridView
             // 
             dataGridView.AllowUserToOrderColumns = true;
             dataGridView.BorderStyle = BorderStyle.None;
+            dataGridView.Dock = DockStyle.Fill;
             dataGridView.GridColor = Color.FromArgb(224, 224, 224);
-            dataGridView.Location = new Point(5, 194);
+            dataGridView.Location = new Point(0, 0);
             dataGridView.Name = "dataGridView";
             dataGridView.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dataGridView.Size = new Size(602, 452);
+            dataGridView.Size = new Size(600, 530);
             dataGridView.TabIndex = 1;
             dataGridView.CellEndEdit += DataGridView_CellEndEdit;
             dataGridView.RowsAdded += DataGridView_RowsAdded;
             dataGridView.SelectionChanged += DataGridView_SelectionChanged;
             // 
-            // radioChinese
+            // mainPanel
             // 
-            radioChinese.Checked = true;
-            radioChinese.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            radioChinese.ForeColor = Color.FromArgb(33, 33, 33);
-            radioChinese.Location = new Point(36, 20);
-            radioChinese.Name = "radioChinese";
-            radioChinese.Size = new Size(80, 27);
-            radioChinese.TabIndex = 1;
-            radioChinese.TabStop = true;
-            radioChinese.Text = "🇨🇳 中文";
-            radioChinese.CheckedChanged += RadioChinese_CheckedChanged;
+            mainPanel.ColumnCount = 3;
+            mainPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            mainPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 5F));
+            mainPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            mainPanel.Controls.Add(topPanel, 0, 0);
+            mainPanel.Controls.Add(promptPanel, 0, 1);
+            mainPanel.Controls.Add(gridPanel, 0, 2);
+            mainPanel.Controls.Add(jsonPanel, 2, 2);
+            mainPanel.Controls.Add(buttonPanel, 0, 3);
+            mainPanel.Controls.Add(rightBottomPanel, 2, 3);
+            mainPanel.Dock = DockStyle.Fill;
+            mainPanel.Location = new Point(0, 0);
+            mainPanel.Name = "mainPanel";
+            mainPanel.RowCount = 4;
+            mainPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
+            mainPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 111F));
+            mainPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            mainPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 73F));
+            mainPanel.Size = new Size(1218, 766);
+            mainPanel.TabIndex = 0;
             // 
-            // radioEnglish
+            // topPanel
             // 
-            radioEnglish.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            radioEnglish.ForeColor = Color.FromArgb(33, 33, 33);
-            radioEnglish.Location = new Point(126, 20);
-            radioEnglish.Name = "radioEnglish";
-            radioEnglish.Size = new Size(80, 27);
-            radioEnglish.TabIndex = 2;
-            radioEnglish.Text = "🇬🇧 英语";
-            radioEnglish.CheckedChanged += RadioEnglish_CheckedChanged;
-            // 
-            // comboBoxSubCategory
-            // 
-            comboBoxSubCategory.BackColor = Color.White;
-            comboBoxSubCategory.FlatStyle = FlatStyle.Flat;
-            comboBoxSubCategory.Font = new Font("微软雅黑", 10F);
-            comboBoxSubCategory.FormattingEnabled = true;
-            comboBoxSubCategory.Location = new Point(365, 34);
-            comboBoxSubCategory.Name = "comboBoxSubCategory";
-            comboBoxSubCategory.Size = new Size(167, 27);
-            comboBoxSubCategory.TabIndex = 17;
-            comboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
-            // 
-            // textBoxPrompt
-            // 
-            textBoxPrompt.BackColor = Color.White;
-            textBoxPrompt.BorderStyle = BorderStyle.FixedSingle;
-            textBoxPrompt.Font = new Font("微软雅黑", 10F);
-            textBoxPrompt.ForeColor = Color.FromArgb(33, 33, 33);
-            textBoxPrompt.Location = new Point(85, 93);
-            textBoxPrompt.Multiline = true;
-            textBoxPrompt.Name = "textBoxPrompt";
-            textBoxPrompt.ScrollBars = ScrollBars.Both;
-            textBoxPrompt.Size = new Size(1119, 86);
-            textBoxPrompt.TabIndex = 18;
-            textBoxPrompt.Text = "💡 AI生成提示词将显示在这里...";
-            // 
-            // labelPrompt
-            // 
-            labelPrompt.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            labelPrompt.ForeColor = Color.FromArgb(33, 33, 33);
-            labelPrompt.Location = new Point(5, 96);
-            labelPrompt.Name = "labelPrompt";
-            labelPrompt.Size = new Size(80, 20);
-            labelPrompt.TabIndex = 19;
-            labelPrompt.Text = "💬 提示词:";
+            mainPanel.SetColumnSpan(topPanel, 3);
+            topPanel.Controls.Add(groupBoxLanguage);
+            topPanel.Controls.Add(textBoxRange);
+            topPanel.Controls.Add(labelRange);
+            topPanel.Controls.Add(labelCategory);
+            topPanel.Controls.Add(comboBoxSubCategory);
+            topPanel.Dock = DockStyle.Fill;
+            topPanel.Location = new Point(3, 3);
+            topPanel.Name = "topPanel";
+            topPanel.Size = new Size(1212, 40);
+            topPanel.TabIndex = 0;
             // 
             // groupBoxLanguage
             // 
@@ -663,41 +643,175 @@ namespace UnifiedLearningAssistant.Forms
             groupBoxLanguage.FlatStyle = FlatStyle.Flat;
             groupBoxLanguage.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             groupBoxLanguage.ForeColor = Color.FromArgb(33, 33, 33);
-            groupBoxLanguage.Location = new Point(25, 21);
+            groupBoxLanguage.Location = new Point(7, 2);
             groupBoxLanguage.Name = "groupBoxLanguage";
-            groupBoxLanguage.Size = new Size(250, 53);
-            groupBoxLanguage.TabIndex = 20;
+            groupBoxLanguage.Size = new Size(295, 42);
+            groupBoxLanguage.TabIndex = 21;
             groupBoxLanguage.TabStop = false;
             groupBoxLanguage.Text = "🌐 语言选择";
+            // 
+            // radioEnglish
+            // 
+            radioEnglish.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            radioEnglish.ForeColor = Color.FromArgb(33, 33, 33);
+            radioEnglish.Location = new Point(217, 11);
+            radioEnglish.Name = "radioEnglish";
+            radioEnglish.Size = new Size(80, 27);
+            radioEnglish.TabIndex = 2;
+            radioEnglish.Text = "🇬🇧 英语";
+            radioEnglish.CheckedChanged += RadioEnglish_CheckedChanged;
+            // 
+            // radioChinese
+            // 
+            radioChinese.Checked = true;
+            radioChinese.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            radioChinese.ForeColor = Color.FromArgb(33, 33, 33);
+            radioChinese.Location = new Point(99, 11);
+            radioChinese.Name = "radioChinese";
+            radioChinese.Size = new Size(80, 27);
+            radioChinese.TabIndex = 1;
+            radioChinese.TabStop = true;
+            radioChinese.Text = "🇨🇳 中文";
+            radioChinese.CheckedChanged += RadioChinese_CheckedChanged;
+            // 
+            // textBoxRange
+            // 
+            textBoxRange.BackColor = Color.White;
+            textBoxRange.BorderStyle = BorderStyle.FixedSingle;
+            textBoxRange.Font = new Font("微软雅黑", 10F);
+            textBoxRange.Location = new Point(747, 9);
+            textBoxRange.Name = "textBoxRange";
+            textBoxRange.Size = new Size(200, 25);
+            textBoxRange.TabIndex = 15;
+            // 
+            // labelRange
+            // 
+            labelRange.AutoSize = true;
+            labelRange.Font = new Font("微软雅黑", 10F);
+            labelRange.ForeColor = Color.FromArgb(33, 33, 33);
+            labelRange.Location = new Point(657, 11);
+            labelRange.Name = "labelRange";
+            labelRange.Size = new Size(77, 20);
+            labelRange.TabIndex = 13;
+            labelRange.Text = "🔍 关键词:";
+            // 
+            // labelCategory
+            // 
+            labelCategory.AutoSize = true;
+            labelCategory.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            labelCategory.ForeColor = Color.FromArgb(33, 33, 33);
+            labelCategory.Location = new Point(337, 12);
+            labelCategory.Name = "labelCategory";
+            labelCategory.Size = new Size(93, 19);
+            labelCategory.TabIndex = 10;
+            labelCategory.Text = "📁 学习品类:";
+            // 
+            // comboBoxSubCategory
+            // 
+            comboBoxSubCategory.BackColor = Color.White;
+            comboBoxSubCategory.FlatStyle = FlatStyle.Flat;
+            comboBoxSubCategory.Font = new Font("微软雅黑", 10F);
+            comboBoxSubCategory.FormattingEnabled = true;
+            comboBoxSubCategory.Location = new Point(433, 8);
+            comboBoxSubCategory.Name = "comboBoxSubCategory";
+            comboBoxSubCategory.Size = new Size(167, 27);
+            comboBoxSubCategory.TabIndex = 17;
+            comboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
+            // 
+            // promptPanel
+            // 
+            mainPanel.SetColumnSpan(promptPanel, 3);
+            promptPanel.Controls.Add(textBoxPrompt);
+            promptPanel.Dock = DockStyle.Fill;
+            promptPanel.Location = new Point(3, 49);
+            promptPanel.Name = "promptPanel";
+            promptPanel.Size = new Size(1212, 105);
+            promptPanel.TabIndex = 1;
+            // 
+            // textBoxPrompt
+            // 
+            textBoxPrompt.BackColor = Color.White;
+            textBoxPrompt.BorderStyle = BorderStyle.FixedSingle;
+            textBoxPrompt.Dock = DockStyle.Fill;
+            textBoxPrompt.Font = new Font("微软雅黑", 10F);
+            textBoxPrompt.ForeColor = Color.FromArgb(33, 33, 33);
+            textBoxPrompt.Location = new Point(0, 0);
+            textBoxPrompt.Multiline = true;
+            textBoxPrompt.Name = "textBoxPrompt";
+            textBoxPrompt.ScrollBars = ScrollBars.Both;
+            textBoxPrompt.Size = new Size(1212, 105);
+            textBoxPrompt.TabIndex = 18;
+            textBoxPrompt.Text = "💡 AI生成提示词将显示在这里...";
+            // 
+            // gridPanel
+            // 
+            gridPanel.Controls.Add(dataGridView);
+            gridPanel.Dock = DockStyle.Fill;
+            gridPanel.Location = new Point(3, 160);
+            gridPanel.Name = "gridPanel";
+            gridPanel.Size = new Size(600, 530);
+            gridPanel.TabIndex = 2;
+            // 
+            // jsonPanel
+            // 
+            jsonPanel.Controls.Add(textBoxJson);
+            jsonPanel.Dock = DockStyle.Fill;
+            jsonPanel.Location = new Point(614, 160);
+            jsonPanel.Name = "jsonPanel";
+            jsonPanel.Size = new Size(601, 530);
+            jsonPanel.TabIndex = 3;
+            // 
+            // buttonPanel
+            // 
+            buttonPanel.Controls.Add(buttonAdd);
+            buttonPanel.Controls.Add(buttonSave);
+            buttonPanel.Controls.Add(buttonDelete);
+            buttonPanel.Controls.Add(buttonImport);
+            buttonPanel.Controls.Add(buttonExport);
+            buttonPanel.Controls.Add(buttonGenerateAI);
+            buttonPanel.Dock = DockStyle.Fill;
+            buttonPanel.Location = new Point(3, 696);
+            buttonPanel.Name = "buttonPanel";
+            buttonPanel.Size = new Size(600, 67);
+            buttonPanel.TabIndex = 4;
+            buttonPanel.WrapContents = false;
+            // 
+            // rightBottomPanel
+            // 
+            rightBottomPanel.Controls.Add(textBoxCount);
+            rightBottomPanel.Controls.Add(labelCount);
+            rightBottomPanel.Dock = DockStyle.Fill;
+            rightBottomPanel.FlowDirection = FlowDirection.RightToLeft;
+            rightBottomPanel.Location = new Point(614, 696);
+            rightBottomPanel.Name = "rightBottomPanel";
+            rightBottomPanel.Size = new Size(601, 67);
+            rightBottomPanel.TabIndex = 5;
+            rightBottomPanel.WrapContents = false;
             // 
             // ContentEditorForm
             // 
             BackColor = Color.FromArgb(255, 244, 230);
             ClientSize = new Size(1218, 766);
-            Controls.Add(comboBoxSubCategory);
-            Controls.Add(textBoxJson);
-            Controls.Add(dataGridView);
-            Controls.Add(buttonAdd);
-            Controls.Add(buttonSave);
-            Controls.Add(buttonDelete);
-            Controls.Add(buttonImport);
-            Controls.Add(buttonExport);
-            Controls.Add(buttonGenerateAI);
-            Controls.Add(labelCategory);
-            Controls.Add(labelCount);
-            Controls.Add(labelRange);
-            Controls.Add(textBoxCount);
-            Controls.Add(textBoxRange);
-            Controls.Add(textBoxPrompt);
-            Controls.Add(labelPrompt);
-            Controls.Add(groupBoxLanguage);
+            Controls.Add(mainPanel);
             Name = "ContentEditorForm";
             Text = "📝 内容编辑器";
             ((System.ComponentModel.ISupportInitialize)dataGridView).EndInit();
+            mainPanel.ResumeLayout(false);
+            topPanel.ResumeLayout(false);
+            topPanel.PerformLayout();
             groupBoxLanguage.ResumeLayout(false);
+            promptPanel.ResumeLayout(false);
+            promptPanel.PerformLayout();
+            gridPanel.ResumeLayout(false);
+            jsonPanel.ResumeLayout(false);
+            jsonPanel.PerformLayout();
+            buttonPanel.ResumeLayout(false);
+            rightBottomPanel.ResumeLayout(false);
+            rightBottomPanel.PerformLayout();
             ResumeLayout(false);
-            PerformLayout();
         }
+
+
         private DataGridView dataGridView;
 
         private TextBox textBoxJson;
@@ -707,14 +821,8 @@ namespace UnifiedLearningAssistant.Forms
         private Button buttonImport;
         private Button buttonExport;
         private Button buttonGenerateAI;
-        private Label labelCategory;
-        private Label labelJson;
         private Label labelCount;
-        private Label labelRange;
         private TextBox textBoxCount;
-        private TextBox textBoxRange;
-        private TextBox textBoxPrompt;
-        private Label labelPrompt;
 
         protected override void Dispose(bool disposing)
         {

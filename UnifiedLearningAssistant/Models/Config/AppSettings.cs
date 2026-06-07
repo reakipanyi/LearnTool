@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Models.Config
+namespace LearningAssistant.Models.Config
 {
     public class AppSettings
     {
@@ -9,5 +9,8 @@ namespace UnifiedLearningAssistant.Models.Config
         public int CacheExpirationDays { get; set; } = 7;
         public bool AutoPlayPronunciation { get; set; } = true;
         public bool ShowAiPanel { get; set; } = true;
+        public bool IsVoiceEnabled { get; set; } = false;
+        public int PronunciationScope { get; set; } = 1;
+        public bool IsAIExplanationEnabled { get; set; } = false;
     }
 }

@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace UnifiedLearningAssistant.Common
+namespace LearningAssistant.Common
 {
     public static class JsonHelper
     {

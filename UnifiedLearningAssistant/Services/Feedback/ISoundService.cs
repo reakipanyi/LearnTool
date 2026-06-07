@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Services.Feedback
+namespace LearningAssistant.Services.Feedback
 {
     public interface ISoundService
     {

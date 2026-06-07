@@ -1,7 +1,7 @@
 using Tesseract;
-using UnifiedLearningAssistant.Models.Config;
+using LearningAssistant.Models.Config;
 
-namespace UnifiedLearningAssistant.Services.Pdf
+namespace LearningAssistant.Services.Pdf
 {
     public class TesseractOcrService : IOcrService, IDisposable
     {

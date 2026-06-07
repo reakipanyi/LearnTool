@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
 using System.Text;
-using UnifiedLearningAssistant.Services.Cache;
+using LearningAssistant.Services.Cache;
 
-namespace UnifiedLearningAssistant.Services.AI
+namespace LearningAssistant.Services.AI
 {
     public class AiQuestionService : IAiQuestionService
     {

@@ -1,125 +1,104 @@
+using LearningAssistant.Models.Config;
+using LearningAssistant.Services.Cache;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Headers;
 using System.Text;
-using UnifiedLearningAssistant.Models.Config;
-using UnifiedLearningAssistant.Services.Cache;
+using System.Text.RegularExpressions;
 
-namespace UnifiedLearningAssistant.Services.AI
+namespace LearningAssistant.Services.AI
 {
-    public class SiliconFlowAIService : IAIService
+    public class SiliconFlowAIService : AbstractAIService
     {
-        private readonly HttpClient _httpClient;
-        private readonly AiConfig _config;
-        private readonly ICacheService _cacheService;
-        private readonly ILogger<SiliconFlowAIService> _logger;
-
-        public SiliconFlowAIService(AiConfig config, ICacheService cacheService, ILogger<SiliconFlowAIService> logger)
+        public SiliconFlowAIService(AiConfig config, ICacheService cacheService, ILogger<SiliconFlowAIService> logger, HttpClient httpClient)
+            : base(config, cacheService, logger, httpClient)
         {
-            _config = config ?? throw new ArgumentNullException(nameof(config));
-            _cacheService = cacheService ?? throw new ArgumentNullException(nameof(cacheService));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-
-            // 只初始化HttpClient，不在构造函数设置Header（避免配置未加载完成）
-            _httpClient = new HttpClient();
-            _httpClient.Timeout = TimeSpan.FromSeconds(config.TimeoutSeconds);
         }
 
-        public async Task<string> GetExplanationAsync(string text, string language, string subType)
+        public override string ModelName => "SiliconFlow";
+
+        protected override string BuildExplanationPrompt(string text, string language, string subType)
         {
-            var cacheKey = $"exp_{text}_{language}_{subType}";
-            if (_cacheService.TryGet(cacheKey, out string cached))
-            {
-                return cached;
-            }
+            // 1. 输入清理：移除有害控制字符，保留换行/制表符
+            if (string.IsNullOrWhiteSpace(text))
+                return string.Empty;
 
-            var prompt = BuildExplanationPrompt(text, language, subType);
-            var response = await CallApi(prompt);
+            // 移除零宽字符等特殊不可见字符
+            text = Regex.Replace(text, @"[\u200B-\u200D\uFEFF]", "");
+            // 保留 \n \r \t，移除其他控制字符
+            text = new string(text.Where(c => !char.IsControl(c) || c == '\n' || c == '\r' || c == '\t').ToArray());
+            text = text.Trim();
 
-            if (!string.IsNullOrWhiteSpace(response))
-            {
-                _cacheService.Set(cacheKey, response, 60 * 24 * 7);
-            }
-
-            return response;
-        }
-
-        public async Task<string> AskQuestionAsync(string question, string context = "")
-        {
-            var cacheKey = $"q_{question}_{context.GetHashCode()}";
-            if (_cacheService.TryGet(cacheKey, out string cached))
-            {
-                return cached;
-            }
-
-            var prompt = context != ""
-                ? $"基于以下上下文回答问题：\n{context}\n\n问题：{question}"
-                : question;
-
-            var response = await CallApi(prompt);
-
-            if (!string.IsNullOrWhiteSpace(response))
-            {
-                _cacheService.Set(cacheKey, response, 60 * 60);
-            }
-
-            return response;
-        }
-
-        private string BuildExplanationPrompt(string text, string language, string subType)
-        {
+            // 2. 类型映射（统一称呼）
             var typeName = subType switch
             {
                 "识字" => "汉字",
-                "组词" => "组词",
                 "成语" => "成语",
                 "短语" => "短语",
                 "诗词" => "诗词",
-                "语文综合" => "语文综合内容",
-                "英语单词" => "英语单词",
-                "英语短语" => "英语短语",
-                "英语句子" => "英语句子",
-                "英语综合" => "英语综合内容",
-                _ => "词语"
+                "语文综合" => "语文内容",
+                "英语单词" => "单词",
+                "英语短语" => "短语",
+                "英语句子" => "句子",
+                "英语综合" => "英语内容",
+                _ => "内容"
             };
 
+            // 3. 结构化提示词（强制指定输出格式）
             if (language == "中文")
             {
                 if (subType == "语文综合")
                 {
-                    return $"请详细解析这段语文综合内容：{text}\n\n包括：\n1. 内容概要\n2. 重点难点解析\n3. 相关考点\n4. 学习建议";
+                    return $"""
+你是专业语文助手。
+请解析内容：{text}
+要求：300字内，简洁易懂，只输出解析，不要有任何开场白或额外解释。
+直接输出结果：
+""";
                 }
-                return $"请详细解释这个{typeName}：{text}\n\n包括：\n1. 读音/拼音\n2. 含义解释\n3. 用法示例\n4. 相关知识点";
+
+                return $"""
+你是专业语文助手，必须严格按以下格式输出，不要有任何额外内容（如“好的”、“以下是”等）：
+【读音】{typeName}的拼音
+【含义】简明解释（20字内）
+【例句】一个简单例句
+
+现在请解释【{text}】：
+""";
             }
-            else
+            else // 英文
             {
                 if (subType == "英语综合")
                 {
-                    return $"请详细解析这段英语综合内容：{text}\n\n包括：\n1. 内容概要\n2. 重点难点解析\n3. 词汇和语法点\n4. 学习建议";
+                    return $"""
+You are a professional English teacher.
+Explain the content: {text}
+Rule: Within 300 words, output only explanation, no extra text.
+Direct answer:
+""";
                 }
-                return $"请详细解释这个{typeName}：{text}\n\n包括：\n1. 音标\n2. 中文释义\n3. 例句（中英对照）\n4. 用法搭配";
+
+                return $"""
+You are an English teacher. Output exactly in this format (no extra words, no markdown):
+IPA: /pronunciation/
+Meaning: Chinese translation (simplified)
+Example: one simple sentence
+
+Explain this {typeName}: {text}
+""";
             }
         }
 
-        private async Task<string> CallApi(string prompt)
+        protected override async Task<string> CallApiAsync(string prompt)
         {
             try
             {
-                // ====================== 修复 403 核心代码 ======================
-                // 每次请求前 正确设置请求头（和你原版正常代码保持一致）
-                _httpClient.DefaultRequestHeaders.Clear();
-                if (!string.IsNullOrEmpty(_config.ApiKey))
-                {
-                    _httpClient.DefaultRequestHeaders.Authorization =
-                        new AuthenticationHeaderValue("Bearer", _config.ApiKey);
-                }
-                // =============================================================
-
+                // 每个请求独立构建 HttpRequestMessage，避免 DefaultRequestHeaders 被修改
                 var requestBody = new
                 {
                     model = _config.Model,
                     messages = new[]
                     {
-                        new { role = "system", content = "你是一个专业的语言学习助手，请用简洁明了的方式解释词语和回答问题。" },
+                        new { role = "system", content = "你是一个专业的语言学习助手，请用简洁明了的方式解释词语和回答问题。只输出结果，不要输出任何格式说明或额外话语。" },
                         new { role = "user", content = prompt }
                     },
                     max_tokens = 500
@@ -128,15 +107,24 @@ namespace UnifiedLearningAssistant.Services.AI
                 var json = Newtonsoft.Json.JsonConvert.SerializeObject(requestBody);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                // 使用完整接口地址（原版正常逻辑）
-                var response = await _httpClient.PostAsync(_config.BaseUrl, content);
+                using var request = new HttpRequestMessage(HttpMethod.Post, _config.BaseUrl);
+                request.Content = content;
+                // 设置 Authorization 头
+                string apiKey = DecryptedApiKey;
+                if (!string.IsNullOrEmpty(apiKey))
+                {
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+                }
 
-                var responseJson = await response.Content.ReadAsStringAsync();
+                var response = await _httpClient.SendAsync(request);
+
+                // 强制以 UTF-8 读取响应，避免乱码
+                var responseBytes = await response.Content.ReadAsByteArrayAsync();
+                var responseJson = Encoding.UTF8.GetString(responseBytes);
 
                 if (!response.IsSuccessStatusCode)
                 {
                     string errorDetail = $"API错误 ({response.StatusCode})";
-
                     try
                     {
                         var errorObj = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(responseJson);
@@ -153,13 +141,16 @@ namespace UnifiedLearningAssistant.Services.AI
                         if (responseJson.Length > 0 && responseJson.Length < 500)
                             errorDetail += $": {responseJson}";
                     }
-
                     _logger.LogError("AI API调用失败: {Error}", errorDetail);
                     throw new HttpRequestException(errorDetail);
                 }
 
                 var result = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(responseJson);
-                return result?.choices?[0]?.message?.content?.ToString() ?? string.Empty;
+                var rawContent = result?.choices?[0]?.message?.content?.ToString() ?? string.Empty;
+
+                // 后处理清洗：去除乱码、Markdown 标记、多余前缀
+                rawContent = CleanAiResponse(rawContent);
+                return rawContent;
             }
             catch (OperationCanceledException)
             {
@@ -176,6 +167,28 @@ namespace UnifiedLearningAssistant.Services.AI
                 _logger.LogError(ex, "Failed to call AI API");
                 throw new HttpRequestException($"AI服务调用失败: {ex.Message}", ex);
             }
+        }
+
+        private string CleanAiResponse(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return string.Empty;
+
+            // 1. 移除所有非法控制字符（保留换行和制表符，但最终结果通常不需要内部换行）
+            text = new string(text.Where(c => !char.IsControl(c) || c == '\n' || c == '\r' || c == '\t').ToArray());
+
+            // 2. 移除常见的 Markdown 标记（粗体、斜体、代码块标记）
+            text = Regex.Replace(text, @"(\*|_|`){1,3}", "");
+
+            // 3. 移除模型常添加的多余前缀（中文/英文）
+            text = Regex.Replace(text, @"^(当然|好的|以下是|解释：|Answer:|Explanation:|Here is|直接输出：|结果：)\s*", "", RegexOptions.IgnoreCase);
+
+            // 4. 移除零宽字符再次确保
+            text = Regex.Replace(text, @"[\u200B-\u200D\uFEFF]", "");
+
+            // 5. 合并多余空白行
+            text = Regex.Replace(text, @"\n{3,}", "\n\n");
+            return text.Trim();
         }
     }
 }

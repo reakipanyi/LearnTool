@@ -2,13 +2,13 @@ using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Data;
-using UnifiedLearningAssistant.Common;
-using UnifiedLearningAssistant.Models.Learning;
-using UnifiedLearningAssistant.Services.AI;
-using UnifiedLearningAssistant.Services.Learning;
-using UnifiedLearningAssistant.Views;
+using LearningAssistant.Common;
+using LearningAssistant.Models.Learning;
+using LearningAssistant.Services.AI;
+using LearningAssistant.Services.Learning;
+using LearningAssistant.Views;
 
-namespace UnifiedLearningAssistant.Presenters
+namespace LearningAssistant.Presenters
 {
     /// <summary>
     /// 内容编辑器Presenter，负责管理学习内容的编辑、导入、导出和AI生成功能
@@ -46,7 +46,6 @@ namespace UnifiedLearningAssistant.Presenters
         private static readonly Dictionary<string, string> CategoryTypeNames = new()
         {
             { Constants.SubCategory.ChineseCharacter, "识字" },
-            { Constants.SubCategory.ChineseWordCombination, "组词" },
             { Constants.SubCategory.ChineseIdiom, "成语" },
             { Constants.SubCategory.ChinesePhrase, "短语" },
             { Constants.SubCategory.ChinesePoem, "诗词" },
@@ -98,13 +97,7 @@ namespace UnifiedLearningAssistant.Presenters
             {
                 Constants.SubCategory.ChineseCharacter, new Dictionary<string, object>
                 {
-                    { "Character", "" }, { "Pinyin", "" }, { "Meaning", "" }, { "StrokeCount", "" }, { "Radical", "" }
-                }
-            },
-            {
-                Constants.SubCategory.ChineseWordCombination, new Dictionary<string, object>
-                {
-                    { "Character", "" }, { "Pinyin", "" }, { "Words", new List<string> { "", "", "", "", "" } }
+                    { "Character", "" }, { "Pinyin", "" }, { "Meaning", "" }, { "StrokeCount", "" }, { "Radical", "" }, { "Words", new List<string> { "", "", "", "", "" } }
                 }
             },
             {
@@ -162,8 +155,7 @@ namespace UnifiedLearningAssistant.Presenters
         /// </summary>
         private static readonly Dictionary<string, string> JsonFormatHints = new()
         {
-            { Constants.SubCategory.ChineseCharacter, @"[  {""Character"":"""",""Pinyin"":"""",""Meaning"":"""",""StrokeCount"":"""",""Radical"":""""} ]" },
-            { Constants.SubCategory.ChineseWordCombination, @"[  {""Character"":"""",""Pinyin"":"""",""Words"":["""","""","""","""",""""]} ]" },
+            { Constants.SubCategory.ChineseCharacter, @"[  {""Character"":"""",""Pinyin"":"""",""Meaning"":"""",""StrokeCount"":"""",""Radical"":"""",""Words"":["""","""","""","""",""""]} ]" },
             { Constants.SubCategory.ChineseIdiom, @"[  {""Idiom"":"""",""Pinyin"":"""",""Meaning"":"""",""Origin"":"""",""Example"":""""} ]" },
             { Constants.SubCategory.ChinesePhrase, @"[  {""Phrase"":"""",""Pinyin"":"""",""Meaning"":"""",""Example"":""""} ]" },
             { Constants.SubCategory.ChinesePoem, @"[  {""Title"":"""",""Author"":"""",""Dynasty"":"""",""Verses"":["""","""","""",""""],""Annotation"":""""} ]" },
@@ -250,7 +242,6 @@ namespace UnifiedLearningAssistant.Presenters
                 ? new List<string>
                 {
                     Constants.SubCategory.ChineseCharacter,
-                    Constants.SubCategory.ChineseWordCombination,
                     Constants.SubCategory.ChinesePhrase,
                     Constants.SubCategory.ChineseIdiom,
                     Constants.SubCategory.ChinesePoem,

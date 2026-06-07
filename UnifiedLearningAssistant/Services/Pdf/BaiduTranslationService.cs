@@ -2,9 +2,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using UnifiedLearningAssistant.Models.Config;
+using LearningAssistant.Models.Config;
 
-namespace UnifiedLearningAssistant.Services.Pdf
+namespace LearningAssistant.Services.Pdf
 {
     /// <summary>
     /// 百度翻译服务（整合优化版）
@@ -16,6 +16,8 @@ namespace UnifiedLearningAssistant.Services.Pdf
         private readonly HttpClient _httpClient;
         private const int MaxTextLength = 6000;
         private bool _disposed;
+        private string? _decryptedAppId;
+        private string? _decryptedSecret;
         #endregion
 
         #region 构造函数
@@ -52,8 +54,11 @@ namespace UnifiedLearningAssistant.Services.Pdf
         /// 服务是否可用（配置是否完整）
         /// </summary>
         public bool IsAvailable =>
-            !string.IsNullOrWhiteSpace(_config.BaiduAppId) &&
-            !string.IsNullOrWhiteSpace(_config.BaiduSecret);
+            !string.IsNullOrWhiteSpace(DecryptedAppId) &&
+            !string.IsNullOrWhiteSpace(DecryptedSecret);
+
+        private string DecryptedAppId => _decryptedAppId ??= Services.Utils.SecureConfigManager.Decrypt(_config.BaiduAppId);
+        private string DecryptedSecret => _decryptedSecret ??= Services.Utils.SecureConfigManager.Decrypt(_config.BaiduSecret);
         #endregion
 
         #region 核心翻译方法
@@ -99,7 +104,7 @@ namespace UnifiedLearningAssistant.Services.Pdf
                     { "q", text },
                     { "from", from },
                     { "to", to },
-                    { "appid", _config.BaiduAppId },
+                    { "appid", DecryptedAppId },
                     { "salt", salt },
                     { "sign", sign }
                 };
@@ -204,7 +209,7 @@ namespace UnifiedLearningAssistant.Services.Pdf
         /// </summary>
         private string CalculateSign(string text, string salt)
         {
-            var signStr = $"{_config.BaiduAppId}{text}{salt}{_config.BaiduSecret}";
+            var signStr = $"{DecryptedAppId}{text}{salt}{DecryptedSecret}";
             using var md5 = MD5.Create();
             var bytes = md5.ComputeHash(Encoding.UTF8.GetBytes(signStr));
 

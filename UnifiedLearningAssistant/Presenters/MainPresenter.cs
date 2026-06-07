@@ -1,14 +1,14 @@
 using Microsoft.Extensions.Logging;
-using UnifiedLearningAssistant.Common;
-using UnifiedLearningAssistant.Services;
-using UnifiedLearningAssistant.Services.Cache;
-using UnifiedLearningAssistant.Services.Learning;
-using UnifiedLearningAssistant.Services.TTS;
-using UnifiedLearningAssistant.Services.Persistence;
-using UnifiedLearningAssistant.Views;
-using UnifiedLearningAssistant.Models.User;
+using LearningAssistant.Common;
+using LearningAssistant.Services;
+using LearningAssistant.Services.Cache;
+using LearningAssistant.Services.Learning;
+using LearningAssistant.Services.TTS;
+using LearningAssistant.Services.Persistence;
+using LearningAssistant.Views;
+using LearningAssistant.Models.User;
 
-namespace UnifiedLearningAssistant.Presenters
+namespace LearningAssistant.Presenters
 {
     public class MainPresenter : IDisposable
     {
@@ -26,17 +26,10 @@ namespace UnifiedLearningAssistant.Presenters
         private IMainView? _view;
 
         private string _currentUserId = "Guest";
-        private string _currentLanguage = Constants.Language.Chinese;
-        private string _currentSubCategory = Constants.SubCategory.ChineseCharacter;
-        private string _currentMode = Constants.LearningMode.Study;
-        private string _currentWordBankFile = string.Empty;
-        private string _currentSortOrder = Constants.SortOrder.Sequential;
         private UserProfile? _currentUserProfile;
 
-        public event EventHandler<LearningStartEventArgs>? OnStartLearning;
         public event EventHandler? OnOpenSettings;
         public event EventHandler? OnOpenEditor;
-        public event EventHandler? OnOpenStatistics;
 
         public MainPresenter(
             ILogger<MainPresenter> logger,
@@ -64,12 +57,6 @@ namespace UnifiedLearningAssistant.Presenters
         public void SetPdfPresenter(PdfPresenter pdfPresenter)
         {
             _pdfPresenter = pdfPresenter;
-            UpdatePdfPresenterConfig();
-        }
-
-        private void UpdatePdfPresenterConfig()
-        {
-            _pdfPresenter?.SetCurrentUserAndConfig(_currentUserId, _currentLanguage, _currentSubCategory);
         }
 
         public void SetView(IMainView view)
@@ -88,18 +75,11 @@ namespace UnifiedLearningAssistant.Presenters
                 return;
 
             _view.UserChanged += View_UserChanged;
-            _view.LanguageChanged += View_LanguageChanged;
-            _view.SubCategoryChanged += View_SubCategoryChanged;
-            _view.ModeChanged += View_ModeChanged;
-            _view.WordBankChanged += View_WordBankChanged;
-            _view.SortOrderChanged += View_SortOrderChanged;
-            _view.StartLearningClicked += View_StartLearningClicked;
-            _view.ContinueLearningClicked += View_ContinueLearningClicked;
+            _view.OpenLearningWindowClicked += View_OpenLearningWindowClicked;
             _view.OpenSettingsClicked += View_OpenSettingsClicked;
             _view.OpenEditorClicked += View_OpenEditorClicked;
-            _view.OpenStatisticsClicked += View_OpenStatisticsClicked;
-            _view.ExportErrorBookClicked += View_ExportErrorBookClicked;
             _view.TabChanged += View_TabChanged;
+            _view.NewUserClicked += View_NewUserClicked;
         }
 
         private void UnsubscribeFromEvents()
@@ -108,18 +88,11 @@ namespace UnifiedLearningAssistant.Presenters
                 return;
 
             _view.UserChanged -= View_UserChanged;
-            _view.LanguageChanged -= View_LanguageChanged;
-            _view.SubCategoryChanged -= View_SubCategoryChanged;
-            _view.ModeChanged -= View_ModeChanged;
-            _view.WordBankChanged -= View_WordBankChanged;
-            _view.SortOrderChanged -= View_SortOrderChanged;
-            _view.StartLearningClicked -= View_StartLearningClicked;
-            _view.ContinueLearningClicked -= View_ContinueLearningClicked;
+            _view.OpenLearningWindowClicked -= View_OpenLearningWindowClicked;
             _view.OpenSettingsClicked -= View_OpenSettingsClicked;
             _view.OpenEditorClicked -= View_OpenEditorClicked;
-            _view.OpenStatisticsClicked -= View_OpenStatisticsClicked;
-            _view.ExportErrorBookClicked -= View_ExportErrorBookClicked;
             _view.TabChanged -= View_TabChanged;
+            _view.NewUserClicked -= View_NewUserClicked;
         }
 
         public void Initialize()
@@ -129,11 +102,8 @@ namespace UnifiedLearningAssistant.Presenters
 
             _logger.LogInformation("Initializing MainPresenter");
             LoadSession();
-            LoadLearningConfig();
+            LoadUserProfile();
             RefreshUserList();
-            RefreshSubCategories();
-            RefreshWordBankFiles();
-            UpdateProgressSummary();
             UpdateStatus();
         }
 
@@ -167,34 +137,20 @@ namespace UnifiedLearningAssistant.Presenters
             {
                 var summary = _currentUserProfile.GetStudyStatsSummary();
                 _view.UpdateStreakInfo(_currentUserProfile.ConsecutiveStudyDays, summary);
-            }
-        }
 
-        private void LoadLearningConfig()
-        {
-            var config = _sessionService.LoadLearningConfig();
-            if (!string.IsNullOrWhiteSpace(config.Language))
-            {
-                _currentLanguage = config.Language;
-                _view.SelectedLanguage = _currentLanguage;
-            }
-            if (!string.IsNullOrWhiteSpace(config.Mode))
-            {
-                _currentMode = config.Mode;
-                _view.SelectedMode = _currentMode;
-            }
-            if (!string.IsNullOrWhiteSpace(config.SortOrder))
-            {
-                _currentSortOrder = config.SortOrder;
-                _view.SelectedSortOrder = _currentSortOrder;
-            }
-            if (!string.IsNullOrWhiteSpace(config.SubCategory))
-            {
-                _currentSubCategory = config.SubCategory;
-            }
-            if (!string.IsNullOrWhiteSpace(config.WordBankFile))
-            {
-                _currentWordBankFile = config.WordBankFile;
+                // 更新学习摘要
+                var progress = _currentUserProfile.LearningProgress;
+                var totalKnown = progress.CategoryProgresses.Values.Sum(cp => cp.KnownItems.Count);
+                var totalUnknown = progress.CategoryProgresses.Values.Sum(cp => cp.UnknownItems.Count);
+                var totalCorrect = progress.CategoryProgresses.Values.Sum(cp => cp.CorrectCount);
+                var totalTest = progress.CategoryProgresses.Values.Sum(cp => cp.TotalTestCount);
+
+                var accuracy = totalTest > 0 ? (double)totalCorrect / totalTest * 100 : 0;
+
+                var progressSummary = $"已掌握 {totalKnown} 个项目\n" +
+                                     $"待学习 {totalUnknown} 个项目\n" +
+                                     $"正确率 {accuracy:F1}%";
+                _view.ProgressSummary = progressSummary;
             }
         }
 
@@ -202,51 +158,6 @@ namespace UnifiedLearningAssistant.Presenters
         {
             var users = _sessionService.GetUserList();
             _view.RefreshUserList(users);
-        }
-
-        private void RefreshSubCategories()
-        {
-            var subCats = _contentLoaderService.GetSubCategories(_currentLanguage);
-            _view.RefreshSubCategories(subCats);
-            if (subCats.Any())
-            {
-                if (!string.IsNullOrWhiteSpace(_currentSubCategory) && subCats.Contains(_currentSubCategory))
-                {
-                    _view.SelectedSubCategory = _currentSubCategory;
-                }
-                else
-                {
-                    _currentSubCategory = subCats.First();
-                    _view.SelectedSubCategory = _currentSubCategory;
-                }
-                RefreshWordBankFiles();
-                UpdateProgressSummary();
-                UpdatePdfPresenterConfig();
-            }
-        }
-
-        private void RefreshWordBankFiles()
-        {
-            var files = _contentLoaderService.GetWordBankFiles(_currentSubCategory);
-            _view.RefreshWordBankFiles(files);
-            if (files.Any())
-            {
-                if (!string.IsNullOrWhiteSpace(_currentWordBankFile) && files.Contains(_currentWordBankFile))
-                {
-                    _view.SelectedWordBankFile = _currentWordBankFile;
-                }
-                else
-                {
-                    var defaultFile = _contentLoaderService.GetDefaultWordBankFile(_currentSubCategory);
-                    _currentWordBankFile = !string.IsNullOrWhiteSpace(defaultFile) ? defaultFile : files.First();
-                    _view.SelectedWordBankFile = _currentWordBankFile;
-                }
-            }
-        }
-
-        private void UpdateProgressSummary()
-        {
-            _view.ProgressSummary = _progressService.GetProgressSummary(_currentUserId, _currentLanguage, _currentSubCategory);
         }
 
         private void UpdateStatus()
@@ -261,72 +172,44 @@ namespace UnifiedLearningAssistant.Presenters
         {
             _currentUserId = _view.SelectedUser;
             LoadUserProfile();
-            UpdateProgressSummary();
             SaveSession();
-            UpdatePdfPresenterConfig();
         }
 
-        private void View_LanguageChanged(object? sender, EventArgs e)
+        private void View_OpenLearningWindowClicked(object? sender, EventArgs e)
         {
-            _currentLanguage = _view.SelectedLanguage;
-            RefreshSubCategories();
-            UpdateProgressSummary();
-            UpdatePdfPresenterConfig();
-            SaveLearningConfig();
-        }
-
-        private void View_SubCategoryChanged(object? sender, EventArgs e)
-        {
-            _currentSubCategory = _view.SelectedSubCategory;
-            RefreshWordBankFiles();
-            UpdateProgressSummary();
-            UpdatePdfPresenterConfig();
-            SaveLearningConfig();
-        }
-
-        private void View_ModeChanged(object? sender, EventArgs e)
-        {
-            _currentMode = _view.SelectedMode;
-            SaveLearningConfig();
-        }
-
-        private void View_WordBankChanged(object? sender, EventArgs e)
-        {
-            _currentWordBankFile = _view.SelectedWordBankFile;
-            SaveLearningConfig();
-        }
-
-        private void View_SortOrderChanged(object? sender, EventArgs e)
-        {
-            _currentSortOrder = _view.SelectedSortOrder;
-            SaveLearningConfig();
-        }
-
-        private void View_StartLearningClicked(object? sender, EventArgs e)
-        {
-            _logger.LogInformation("Start learning clicked");
-            StartLearning(false);
-        }
-
-        private void View_ContinueLearningClicked(object? sender, EventArgs e)
-        {
-            _logger.LogInformation("Continue learning clicked");
-            StartLearning(true);
-        }
-
-        private void StartLearning(bool continueMode)
-        {
+            _logger.LogInformation("Open learning window clicked");
             SaveSession();
-            OnStartLearning?.Invoke(this, new LearningStartEventArgs
+            
+            string language = Constants.Language.Chinese;
+            string subCategory = Constants.SubCategory.ChineseCharacter;
+            
+            if (_currentUserProfile != null)
             {
-                UserId = _currentUserId,
-                Language = _currentLanguage,
-                SubCategory = _currentSubCategory,
-                WordBankFile = _currentWordBankFile,
-                Mode = _currentMode,
-                SortOrder = _currentSortOrder,
-                ContinueMode = continueMode
-            });
+                var progress = _currentUserProfile.LearningProgress;
+                
+                if (progress.CategoryProgresses.Any())
+                {
+                    var lastCategory = progress.CategoryProgresses.Values
+                        .OrderByDescending(cp => cp.LastTestDate)
+                        .FirstOrDefault();
+                    
+                    if (lastCategory != null)
+                    {
+                        subCategory = lastCategory.CategoryName;
+                        language = GetLanguageFromCategory(subCategory);
+                        _logger.LogInformation("Resuming learning from last session: Language={Language}, Category={Category}", language, subCategory);
+                    }
+                }
+            }
+            
+            _windowManager.OpenLearningWindowAsync(_currentUserId, language, subCategory, string.Empty, true).ConfigureAwait(false);
+        }
+        
+        private string GetLanguageFromCategory(string category)
+        {
+            if (category.Contains("English", StringComparison.OrdinalIgnoreCase))
+                return Constants.Language.English;
+            return Constants.Language.Chinese;
         }
 
         private void View_OpenSettingsClicked(object? sender, EventArgs e)
@@ -339,44 +222,42 @@ namespace UnifiedLearningAssistant.Presenters
             OnOpenEditor?.Invoke(this, EventArgs.Empty);
         }
 
-        private void View_OpenStatisticsClicked(object? sender, EventArgs e)
-        {
-            OnOpenStatistics?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void View_ExportErrorBookClicked(object? sender, EventArgs e)
-        {
-            try
-            {
-                var errorBookItems = _exportService.GetErrorBookItems(_currentUserId);
-                
-                if (errorBookItems.Count == 0)
-                {
-                    _view?.ShowMessage("错题本为空，没有可导出的内容！");
-                    return;
-                }
-
-                using var saveFileDialog = new SaveFileDialog();
-                saveFileDialog.Filter = "文本文件 (*.txt)|*.txt|CSV文件 (*.csv)|*.csv";
-                saveFileDialog.Title = "保存错题本";
-                saveFileDialog.FileName = $"错题本_{_currentUserId}_{DateTime.Now:yyyyMMdd_HHmmss}";
-
-                if (saveFileDialog.ShowDialog() == DialogResult.OK)
-                {
-                    var result = _exportService.ExportErrorBook(_currentUserId, saveFileDialog.FileName);
-                    _view?.ShowMessage(result);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "导出错题本失败");
-                _view?.ShowMessage($"导出错题本失败：{ex.Message}");
-            }
-        }
-
         private void View_TabChanged(object? sender, EventArgs e)
         {
             SaveSession();
+        }
+
+        private void View_NewUserClicked(object? sender, EventArgs e)
+        {
+            CreateNewUser();
+        }
+
+        private void CreateNewUser()
+        {
+            try
+            {
+                var input = Microsoft.VisualBasic.Interaction.InputBox("请输入新玩家名称:", "新建玩家", "");
+                if (string.IsNullOrWhiteSpace(input))
+                    return;
+
+                var userId = input.Trim();
+                
+                if (_sessionService.GetUserList().Contains(userId))
+                {
+                    _view?.ShowMessage("该玩家名称已存在，请使用其他名称！");
+                    return;
+                }
+
+                _persistenceService.CreateUserProfile(userId, userId);
+                RefreshUserList();
+                _view.SelectedUser = userId;
+                _view?.ShowMessage($"玩家 \"{userId}\" 创建成功！");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "创建新玩家失败");
+                _view?.ShowMessage($"创建玩家失败：{ex.Message}");
+            }
         }
 
         private void SaveSession()
@@ -384,26 +265,10 @@ namespace UnifiedLearningAssistant.Presenters
             _sessionService.SaveSession(_currentUserId);
         }
 
-        private void SaveLearningConfig()
-        {
-            _sessionService.SaveLearningConfig(_currentLanguage, _currentSubCategory, _currentMode, _currentWordBankFile, _currentSortOrder);
-        }
-
         public void Dispose()
         {
             UnsubscribeFromEvents();
             _logger.LogInformation("MainPresenter disposed");
         }
-    }
-
-    public class LearningStartEventArgs : EventArgs
-    {
-        public string UserId { get; set; } = string.Empty;
-        public string Language { get; set; } = string.Empty;
-        public string SubCategory { get; set; } = string.Empty;
-        public string WordBankFile { get; set; } = string.Empty;
-        public string Mode { get; set; } = string.Empty;
-        public string SortOrder { get; set; } = string.Empty;
-        public bool ContinueMode { get; set; }
     }
 }

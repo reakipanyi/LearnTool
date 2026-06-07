@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Services
+namespace LearningAssistant.Services
 {
     public interface IAudioService : IDisposable
     {

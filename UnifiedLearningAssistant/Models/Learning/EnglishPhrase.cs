@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Models.Learning
+namespace LearningAssistant.Models.Learning
 {
     /// <summary>
     /// 英语短语学习项

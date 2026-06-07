@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Services.Pdf
+namespace LearningAssistant.Services.Pdf
 {
     public interface IPdfService : IDisposable
     {
@@ -7,5 +7,8 @@ namespace UnifiedLearningAssistant.Services.Pdf
         Bitmap RenderPage(int pageIndex, int width, int height);
         SizeF GetPageSize(int pageIndex);
         string GetPdfText(int pageIndex);
+        
+        int GetPageCount(string pdfPath);
+        string ExtractText(string pdfPath, int pageNumber);
     }
 }

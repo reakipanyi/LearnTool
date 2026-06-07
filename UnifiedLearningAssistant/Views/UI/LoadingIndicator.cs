@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Views.UI
+namespace LearningAssistant.Views.UI
 {
     // 新增功能：中等级 - UI响应性改进，加载指示器
     public class LoadingIndicator : Control

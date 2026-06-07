@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Models.Config
+namespace LearningAssistant.Models.Config
 {
     public class TranslationConfig
     {

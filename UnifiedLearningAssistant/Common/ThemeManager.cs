@@ -1,8 +1,8 @@
 
-using UnifiedLearningAssistant.Common.Events;
-using UnifiedLearningAssistant.Common.Themes;
+using LearningAssistant.Common.Events;
+using LearningAssistant.Common.Themes;
 
-namespace UnifiedLearningAssistant.Common
+namespace LearningAssistant.Common
 {
     public class ThemeService : IThemeService
     {

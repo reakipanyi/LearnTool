@@ -1,11 +1,11 @@
+using LearningAssistant.Models.Config;
+using LearningAssistant.Services.Cache;
 using Microsoft.Extensions.Logging;
-using System.Net.Http.Headers;
+using Newtonsoft.Json;
+using System.Net.Http;
 using System.Text;
-using System.Text.RegularExpressions;
-using UnifiedLearningAssistant.Models.Config;
-using UnifiedLearningAssistant.Services.Cache;
 
-namespace UnifiedLearningAssistant.Services.AI
+namespace LearningAssistant.Services.AI
 {
     public abstract class AbstractAIService : IAIService
     {
@@ -13,20 +13,62 @@ namespace UnifiedLearningAssistant.Services.AI
         protected readonly AiConfig _config;
         protected readonly ICacheService _cacheService;
         protected readonly ILogger _logger;
+        private string? _decryptedApiKey;
 
-        protected AbstractAIService(AiConfig config, ICacheService cacheService, ILogger logger)
+        protected AbstractAIService(AiConfig config, ICacheService cacheService, ILogger logger, HttpClient httpClient)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _cacheService = cacheService ?? throw new ArgumentNullException(nameof(cacheService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-
-            _httpClient = new HttpClient();
-            _httpClient.Timeout = TimeSpan.FromSeconds(config.TimeoutSeconds);
+            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         }
 
-        public abstract Task<string> GetExplanationAsync(string text, string language, string subType);
-        public abstract Task<string> AskQuestionAsync(string question, string context = "");
+        protected string DecryptedApiKey => _decryptedApiKey ??= Services.Utils.SecureConfigManager.Decrypt(_config.ApiKey);
 
+        public virtual async Task<string> GetExplanationAsync(string text, string language, string subType)
+        {
+            var cacheKey = $"exp_{text.GetHashCode()}_{language}_{subType}";
+            if (_cacheService.TryGet(cacheKey, out string cached))
+            {
+                return cached;
+            }
+
+            var prompt = BuildExplanationPrompt(text, language, subType);
+            var response = await CallApiWithRetryAsync(prompt);
+
+            if (!string.IsNullOrWhiteSpace(response))
+            {
+                _cacheService.Set(cacheKey, response, 60 * 24 * 7);
+            }
+
+            return response;
+        }
+
+        public virtual async Task<string> AskQuestionAsync(string question, string context = "")
+        {
+            var cacheKey = $"q_{question.GetHashCode()}";
+            if (_cacheService.TryGet(cacheKey, out string cached))
+            {
+                return cached;
+            }
+
+            var prompt = context != ""
+                ? $"基于以下上下文回答问题：\n{context}\n\n问题：{question}"
+                : question;
+
+            var response = await CallApiWithRetryAsync(prompt);
+
+            if (!string.IsNullOrWhiteSpace(response))
+            {
+                _cacheService.Set(cacheKey, response, 60 * 60);
+            }
+
+            return response;
+        }
+
+        public abstract string ModelName { get; }
+
+        protected abstract string BuildExplanationPrompt(string text, string language, string subType);
         protected abstract Task<string> CallApiAsync(string prompt);
 
         protected async Task<string> CallApiWithRetryAsync(string prompt, int maxRetries = 3)
@@ -61,71 +103,109 @@ namespace UnifiedLearningAssistant.Services.AI
 
             response = response.Trim();
 
-            int jsonStart = response.IndexOf('[');
-            int jsonStartObj = response.IndexOf('{');
-
-            if (jsonStart == -1 && jsonStartObj == -1)
-                return response;
-
-            int start = jsonStart >= 0 && (jsonStartObj == -1 || jsonStart < jsonStartObj) ? jsonStart : jsonStartObj;
-
-            string jsonContent = response.Substring(start);
-
-            var invalidChars = Regex.Matches(jsonContent, @"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]");
-            foreach (Match match in invalidChars)
+            // 移除可能的前缀（如 "```json" 或其他markdown标记）
+            if (response.StartsWith("```json"))
             {
-                jsonContent = jsonContent.Replace(match.Value, "");
+                response = response.Substring(7);
+            }
+            if (response.StartsWith("```"))
+            {
+                response = response.Substring(3);
+            }
+            if (response.EndsWith("```"))
+            {
+                response = response.Substring(0, response.Length - 3);
             }
 
-            try
+            response = response.Trim();
+
+            // 检查是否是以 { 或 [ 开头的JSON
+            int jsonStart = response.IndexOfAny(new[] { '[', '{' });
+            if (jsonStart >= 0)
             {
-                var obj = Newtonsoft.Json.JsonConvert.DeserializeObject(jsonContent);
-                if (obj != null)
+                string potentialJson = response.Substring(jsonStart);
+                
+                // 尝试解析JSON
+                try
                 {
-                    return Newtonsoft.Json.JsonConvert.SerializeObject(obj, Newtonsoft.Json.Formatting.Indented);
+                    var obj = JsonConvert.DeserializeObject(potentialJson);
+                    if (obj != null)
+                    {
+                        // 如果是包含 content 或 explanation 字段的对象，提取纯文本
+                        if (obj is Newtonsoft.Json.Linq.JObject jObj)
+                        {
+                            // 尝试常见的文本字段
+                            if (jObj["content"] != null)
+                                return jObj["content"]!.ToString().Trim();
+                            if (jObj["explanation"] != null)
+                                return jObj["explanation"]!.ToString().Trim();
+                            if (jObj["text"] != null)
+                                return jObj["text"]!.ToString().Trim();
+                        }
+                        
+                        // 如果是字符串数组，提取第一项或拼接
+                        if (obj is Newtonsoft.Json.Linq.JArray jArr && jArr.Count > 0)
+                        {
+                            return jArr[0]!.ToString().Trim();
+                        }
+                        
+                        // 其他情况尝试序列化为格式化JSON
+                        var settings = new JsonSerializerSettings
+                        {
+                            Formatting = Formatting.Indented,
+                            StringEscapeHandling = StringEscapeHandling.Default
+                        };
+                        return JsonConvert.SerializeObject(obj, settings);
+                    }
+                }
+                catch
+                {
+                    // JSON解析失败，继续处理原始文本
                 }
             }
-            catch
+
+            // 如果不是JSON或解析失败，返回清理后的纯文本
+            return CleanInvalidChars(response);
+        }
+
+        private static string CleanInvalidChars(string jsonContent)
+        {
+            StringBuilder cleaned = new StringBuilder();
+            bool inString = false;
+            bool escapeNext = false;
+
+            foreach (char c in jsonContent)
             {
-                StringBuilder cleaned = new StringBuilder();
-                bool inString = false;
-                bool escapeNext = false;
-
-                foreach (char c in jsonContent)
+                if (escapeNext)
                 {
-                    if (escapeNext)
-                    {
-                        cleaned.Append(c);
-                        escapeNext = false;
-                        continue;
-                    }
-
-                    if (c == '\\')
-                    {
-                        escapeNext = true;
-                        cleaned.Append(c);
-                        continue;
-                    }
-
-                    if (c == '"')
-                    {
-                        inString = !inString;
-                        cleaned.Append(c);
-                        continue;
-                    }
-
-                    if (!inString && (c < 32 || c >= 127))
-                    {
-                        continue;
-                    }
-
                     cleaned.Append(c);
+                    escapeNext = false;
+                    continue;
                 }
 
-                return cleaned.ToString();
+                if (c == '\\')
+                {
+                    escapeNext = true;
+                    cleaned.Append(c);
+                    continue;
+                }
+
+                if (c == '"')
+                {
+                    inString = !inString;
+                    cleaned.Append(c);
+                    continue;
+                }
+
+                if (!inString && (c < 32 || c >= 127))
+                {
+                    continue;
+                }
+
+                cleaned.Append(c);
             }
 
-            return jsonContent;
+            return cleaned.ToString();
         }
     }
 }

@@ -2,7 +2,7 @@ using System;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace UnifiedLearningAssistant.Services.Utils
+namespace LearningAssistant.Services.Utils
 {
     // 新增功能：配置安全优化 - API密钥加密存储
     public static class SecureConfigManager

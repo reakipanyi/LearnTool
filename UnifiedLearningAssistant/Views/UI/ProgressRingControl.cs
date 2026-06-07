@@ -1,5 +1,5 @@
 
-namespace UnifiedLearningAssistant.Views.UI
+namespace LearningAssistant.Views.UI
 {
     public class ProgressRingControl : Control
     {

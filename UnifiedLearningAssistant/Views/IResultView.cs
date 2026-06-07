@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Views
+namespace LearningAssistant.Views
 {
     public interface IResultView
     {

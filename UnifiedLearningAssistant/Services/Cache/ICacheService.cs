@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Services.Cache
+namespace LearningAssistant.Services.Cache
 {
     public interface ICacheService
     {

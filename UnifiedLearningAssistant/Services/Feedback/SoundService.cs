@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Media;
 
-namespace UnifiedLearningAssistant.Services.Feedback
+namespace LearningAssistant.Services.Feedback
 {
     public class SoundService : ISoundService
     {

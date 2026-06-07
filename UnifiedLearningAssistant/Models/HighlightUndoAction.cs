@@ -1,6 +1,6 @@
-using UnifiedLearningAssistant.Models.Pdf;
+using LearningAssistant.Models.Pdf;
 
-namespace UnifiedLearningAssistant.Forms
+namespace LearningAssistant.Models
 {
     public class HighlightUndoAction
     {

@@ -1,8 +1,8 @@
 
-using UnifiedLearningAssistant.Common.Events;
-using UnifiedLearningAssistant.Models.User;
+using LearningAssistant.Common.Events;
+using LearningAssistant.Models.User;
 
-namespace UnifiedLearningAssistant.Services.Learning
+namespace LearningAssistant.Services.Learning
 {
     public class AchievementService : IAchievementService, IDisposable
     {

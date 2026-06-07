@@ -1,14 +1,14 @@
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
-using UnifiedLearningAssistant.Common;
-using UnifiedLearningAssistant.Models.Pdf;
-using UnifiedLearningAssistant.Services.AI;
-using UnifiedLearningAssistant.Services.Learning;
-using UnifiedLearningAssistant.Services.Pdf;
-using UnifiedLearningAssistant.Services.TTS;
-using UnifiedLearningAssistant.Views;
+using LearningAssistant.Common;
+using LearningAssistant.Models.Pdf;
+using LearningAssistant.Services.AI;
+using LearningAssistant.Services.Learning;
+using LearningAssistant.Services.Pdf;
+using LearningAssistant.Services.TTS;
+using LearningAssistant.Views;
 
-namespace UnifiedLearningAssistant.Presenters
+namespace LearningAssistant.Presenters
 {
     public class PdfPresenter : IDisposable
     {

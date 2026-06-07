@@ -1,6 +1,6 @@
-using UnifiedLearningAssistant.Services;
+using LearningAssistant.Services;
 
-namespace UnifiedLearningAssistant.Presenters
+namespace LearningAssistant.Presenters
 {
     public class AudioPresenter : IDisposable
     {
@@ -19,7 +19,7 @@ namespace UnifiedLearningAssistant.Presenters
             {
                 _service.Initialize(vlcLibPath);
             }
-            catch (Exception ex)
+            catch
             {
                 //_view.ShowAudioError(ex.Message);
             }
@@ -39,7 +39,7 @@ namespace UnifiedLearningAssistant.Presenters
                 //_view.SetCurrentFileLabel(System.IO.Path.GetFileName(filePath));
                 //_view.SetPlayButtonText("暂停");
             }
-            catch (Exception ex)
+            catch
             {
                 //_view.ShowAudioError(ex.Message);
             }

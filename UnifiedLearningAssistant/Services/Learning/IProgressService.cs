@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Services.Learning
+namespace LearningAssistant.Services.Learning
 {
     public interface IProgressService
     {

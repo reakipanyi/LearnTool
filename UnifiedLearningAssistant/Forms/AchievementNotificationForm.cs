@@ -1,9 +1,9 @@
 
-using UnifiedLearningAssistant.Models.User;
-using UnifiedLearningAssistant.Services.Feedback;
-using UnifiedLearningAssistant.Views.UI;
+using LearningAssistant.Models.User;
+using LearningAssistant.Services.Feedback;
+using LearningAssistant.Views.UI;
 
-namespace UnifiedLearningAssistant.Forms
+namespace LearningAssistant.Forms
 {
     public partial class AchievementNotificationForm : Form
     {

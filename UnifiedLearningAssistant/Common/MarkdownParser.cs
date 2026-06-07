@@ -2,7 +2,7 @@ using System;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
-namespace UnifiedLearningAssistant.Common
+namespace LearningAssistant.Common
 {
     public static class MarkdownParser
     {

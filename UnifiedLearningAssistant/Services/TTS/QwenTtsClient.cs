@@ -1,7 +1,7 @@
 using System.Text;
 using System.Text.Json;
 
-namespace UnifiedLearningAssistant.Services.TTS
+namespace LearningAssistant.Services.TTS
 {
     /// <summary>
     /// 用于调用 Qwen3-TTS 在线 API 的客户端 (基于 Alibaba Cloud Model Studio)
@@ -11,7 +11,7 @@ namespace UnifiedLearningAssistant.Services.TTS
         private static readonly HttpClient _sharedHttpClient = new HttpClient 
         { 
             Timeout = TimeSpan.FromSeconds(60),
-            DefaultRequestHeaders = { { "User-Agent", "UnifiedLearningAssistant/1.0" } }
+            DefaultRequestHeaders = { { "User-Agent", "LearningAssistant/1.0" } }
         };
         
         private readonly HttpClient _httpClient;

@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Forms
+namespace LearningAssistant.Forms
 {
     /*
     public void ShowTranslationDialog(string original, string translation, string grammar)

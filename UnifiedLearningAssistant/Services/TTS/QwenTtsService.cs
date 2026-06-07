@@ -2,13 +2,16 @@ using System.Media;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace UnifiedLearningAssistant.Services.TTS
+namespace LearningAssistant.Services.TTS
 {
     public class QwenTtsService : ITTSService
     {
         private readonly QwenTtsClient? _client;
         private const long MaxCacheSizeBytes = 100 * 1024 * 1024; // 100MB 缓存上限
         private static readonly string CacheDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TTSTemp");
+        private SoundPlayer? _currentPlayer;
+        private bool _stopRequested = false;
+        private readonly object _playerLock = new object();
 
         public QwenTtsService(string? apiKey, string? endpoint)
         {
@@ -25,7 +28,16 @@ namespace UnifiedLearningAssistant.Services.TTS
 
         public bool Available => _client != null && _client.Available;
 
-        public bool IsSpeaking => false;
+        public bool IsSpeaking 
+        {
+            get
+            {
+                lock (_playerLock)
+                {
+                    return _currentPlayer != null && !_stopRequested;
+                }
+            }
+        }
 
 
 
@@ -33,6 +45,9 @@ namespace UnifiedLearningAssistant.Services.TTS
         {
             if (string.IsNullOrWhiteSpace(text)) return null;
             if (_client == null || !_client.Available) return null;
+
+            // 先停止之前的播放
+            StopPlayback();
 
             try
             {
@@ -44,33 +59,80 @@ namespace UnifiedLearningAssistant.Services.TTS
                 if (File.Exists(path))
                 {
                     File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
-                    return path;
+                }
+                else
+                {
+                    // 转换语言代码为完整语言名称
+                    string lang = language switch
+                    {
+                        "zh" => "Chinese",
+                        "en" => "English",
+                        _ => language ?? "English"
+                    };
+
+                    var wav = await _client.SynthesizeAsync(text: text, voice: "Cherry", language: lang, speed: speed ?? 1.0f, format: "wav").ConfigureAwait(false);
+
+                    await File.WriteAllBytesAsync(path, wav).ConfigureAwait(false);
                 }
 
-                // 转换语言代码为完整语言名称
-                string lang = language switch
-                {
-                    "zh" => "Chinese",
-                    "en" => "English",
-                    _ => language ?? "English"
-                };
-
-                var wav = await _client.SynthesizeAsync(text: text, voice: "Cherry", language: lang, speed: speed ?? 1.0f, format: "wav").ConfigureAwait(false);
-
-                await File.WriteAllBytesAsync(path, wav).ConfigureAwait(false);
-
-
-                using (var player = new SoundPlayer(path))
-                {
-                    player.PlaySync();
-                }
-
+                // 使用异步播放，支持停止
+                await PlayAudioAsync(path);
 
                 return path;
             }
             catch
             {
+                StopPlayback();
                 return null;
+            }
+        }
+
+        private async Task PlayAudioAsync(string filePath)
+        {
+            _stopRequested = false;
+            
+            lock (_playerLock)
+            {
+                _currentPlayer?.Dispose();
+                _currentPlayer = new SoundPlayer(filePath);
+                _currentPlayer.Load();
+            }
+
+            // 使用异步方式播放，定期检查停止请求
+            await Task.Run(() =>
+            {
+                lock (_playerLock)
+                {
+                    if (_currentPlayer != null && !_stopRequested)
+                    {
+                        try
+                        {
+                            _currentPlayer.PlaySync();
+                        }
+                        catch
+                        {
+                            // 播放被中断
+                        }
+                    }
+                }
+            });
+        }
+
+        private void StopPlayback()
+        {
+            lock (_playerLock)
+            {
+                _stopRequested = true;
+                if (_currentPlayer != null)
+                {
+                    try
+                    {
+                        _currentPlayer.Stop();
+                        _currentPlayer.Dispose();
+                    }
+                    catch { }
+                    _currentPlayer = null;
+                }
             }
         }
 
@@ -101,11 +163,13 @@ namespace UnifiedLearningAssistant.Services.TTS
 
         public void Dispose()
         {
+            StopPlayback();
             try { _client?.Dispose(); } catch { }
         }
 
         public Task StopAsync()
         {
+            StopPlayback();
             return Task.CompletedTask;
         }
 

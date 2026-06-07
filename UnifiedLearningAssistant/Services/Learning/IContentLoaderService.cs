@@ -1,4 +1,6 @@
-namespace UnifiedLearningAssistant.Services.Learning
+using LearningAssistant.Models.Learning;
+
+namespace LearningAssistant.Services.Learning
 {
     public interface IContentLoaderService
     {
@@ -8,5 +10,6 @@ namespace UnifiedLearningAssistant.Services.Learning
         List<string> GetWordBankFiles(string subCategory);
         string GetDefaultWordBankFile(string subCategory);
         Type GetItemType(string subCategory);
+        void SaveUserContent(UserContent content);
     }
 }

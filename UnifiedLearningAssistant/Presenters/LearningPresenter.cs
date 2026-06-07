@@ -1,12 +1,15 @@
+using LearningAssistant.Common;
+using LearningAssistant.Forms;
+using LearningAssistant.Models.Learning;
+using LearningAssistant.Services;
+using LearningAssistant.Services.AI;
+using LearningAssistant.Services.Learning;
+using LearningAssistant.Services.Persistence;
+using LearningAssistant.Services.TTS;
+using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
-using UnifiedLearningAssistant.Common;
-using UnifiedLearningAssistant.Models.Learning;
-using UnifiedLearningAssistant.Services.AI;
-using UnifiedLearningAssistant.Services.Learning;
-using UnifiedLearningAssistant.Services.TTS;
-using UnifiedLearningAssistant.Views;
 
-namespace UnifiedLearningAssistant.Presenters
+namespace LearningAssistant.Presenters
 {
     public class LearningPresenter : IDisposable
     {
@@ -15,24 +18,65 @@ namespace UnifiedLearningAssistant.Presenters
         private readonly IStudyEngine _studyEngine;
         private readonly IAIService _aiService;
         private readonly ITTSService _ttsService;
+        private readonly IDataPersistenceService? _persistenceService;
+        private readonly IContentLoaderService _contentLoaderService;
+        private readonly IExportService _exportService;
+        private readonly IWindowManager _windowManager;
         private CancellationTokenSource? _cts;
         private string _currentExplanation = "";
+        private bool _isLoading = false;
+        private bool _settingsSaved = false;  // 防止重复保存设置
 
         private string _currentUserId = "";
         private string _currentLanguage = "";
         private string _currentSubCategory = "";
+        private int _autoPronunciationCount = 0;
+        private const int MaxAutoPronunciationCount = 5;
 
-        public LearningPresenter(ILogger<LearningPresenter> logger, ILearningView view, IStudyEngine studyEngine, IAIService aiService, ITTSService ttsService)
+        public LearningPresenter(ILogger<LearningPresenter> logger, ILearningView view, IStudyEngine studyEngine, IAIService aiService, ITTSService ttsService, IContentLoaderService contentLoaderService, IDataPersistenceService? persistenceService = null, IExportService? exportService = null, IWindowManager? windowManager = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _view = view ?? throw new ArgumentNullException(nameof(view));
             _studyEngine = studyEngine ?? throw new ArgumentNullException(nameof(studyEngine));
             _aiService = aiService ?? throw new ArgumentNullException(nameof(aiService));
             _ttsService = ttsService ?? throw new ArgumentNullException(nameof(ttsService));
+            _contentLoaderService = contentLoaderService ?? throw new ArgumentNullException(nameof(contentLoaderService));
+            _persistenceService = persistenceService;
+            _exportService = exportService ?? throw new ArgumentNullException(nameof(exportService));
+            _windowManager = windowManager ?? throw new ArgumentNullException(nameof(windowManager));
             _cts = new CancellationTokenSource();
 
             SubscribeToEvents();
+            LoadInitialSettings();
             _logger.LogInformation("LearningPresenter initialized");
+        }
+
+        private void LoadInitialSettings()
+        {
+            if (_persistenceService != null)
+            {
+                try
+                {
+                    var config = _persistenceService.LoadConfig();
+                    _view.IsVoiceEnabled = config.AppSettings.IsVoiceEnabled;
+                    _view.IsAIExplanationEnabled = config.AppSettings.IsAIExplanationEnabled;
+
+                    // PronunciationScope: 0=原文, 1=释义, 2=两者
+                    // 配置中的 PronunciationScope: 1 表示释义
+                    // 需要转换：配置值 1 -> PronunciationScope.Explanation
+                    var scope = config.AppSettings.PronunciationScope;
+                    _view.PronunciationScope = scope == 0 ? PronunciationScope.Original
+                                              : scope == 1 ? PronunciationScope.Explanation
+                                              : PronunciationScope.Both;
+
+                    _logger.LogInformation("Initial settings loaded from config: Voice={Voice}, AI={AI}, Scope={Scope}",
+                        config.AppSettings.IsVoiceEnabled, config.AppSettings.IsAIExplanationEnabled, scope);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to load initial settings from config, using defaults");
+                }
+            }
         }
 
         private void SubscribeToEvents()
@@ -43,6 +87,9 @@ namespace UnifiedLearningAssistant.Presenters
             _view.NextClicked += View_NextClicked;
             _view.ExitClicked += View_ExitClicked;
             _view.AddToPdfQuestionClicked += View_AddToPdfQuestionClicked;
+            _view.SettingsChanged += View_SettingsChanged;
+            _view.OpenStatisticsClicked += View_OpenStatisticsClicked;
+            _view.ExportErrorBookClicked += View_ExportErrorBookClicked;
         }
 
         private void UnsubscribeFromEvents()
@@ -53,52 +100,242 @@ namespace UnifiedLearningAssistant.Presenters
             _view.NextClicked -= View_NextClicked;
             _view.ExitClicked -= View_ExitClicked;
             _view.AddToPdfQuestionClicked -= View_AddToPdfQuestionClicked;
+            _view.SettingsChanged -= View_SettingsChanged;
+            _view.OpenStatisticsClicked -= View_OpenStatisticsClicked;
+            _view.ExportErrorBookClicked -= View_ExportErrorBookClicked;
         }
 
-        public async Task InitializeAsync(string userId, string language, string subCategory, string wordBankFile, string mode, string sortOrder)
+        public void Initialize(string userId, string language, string subCategory, string wordBankFile, bool continueMode = true)
         {
-            _logger.LogInformation("Initializing learning session for user {UserId}, category {SubCategory}", userId, subCategory);
+            _logger.LogInformation("Initializing learning session for user {UserId}, category {SubCategory}, continueMode={ContinueMode}", userId, subCategory, continueMode);
+
             _currentUserId = userId;
             _currentLanguage = language;
+
+            // 加载子分类列表
+            if (_view is LearningForm learningForm)
+            {
+                try
+                {
+                    var subCategories = _contentLoaderService.GetSubCategories(language);
+                    learningForm.RefreshSubCategories(subCategories);
+
+                    // 如果传入的subCategory为空或不在列表中，使用视图自动选择的第一个子分类
+                    if (string.IsNullOrEmpty(subCategory) || !subCategories.Contains(subCategory))
+                    {
+                        subCategory = learningForm.SubCategory;
+                    }
+                    else
+                    {
+                        learningForm.SubCategory = subCategory;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to load subcategories");
+                }
+            }
+
             _currentSubCategory = subCategory;
 
-            _studyEngine.Initialize(userId, language, subCategory, wordBankFile, mode, sortOrder);
-            await DisplayCurrentItemAsync();
+            // 从视图读取设置
+            string mode = _view.LearningMode;
+            string sortOrder = _view.SortOrder;
+
+            _studyEngine.Initialize(userId, language, subCategory, wordBankFile, mode, sortOrder, continueMode);
+            UpdateLearningList();
+            DisplayCurrentItemAsync().ConfigureAwait(false);
+        }
+
+        public async Task InitializeAsync(string userId, string language, string subCategory, string wordBankFile, bool continueMode = true)
+        {
+            _logger.LogInformation("Async initializing learning session for user {UserId}, category {SubCategory}, continueMode={ContinueMode}", userId, subCategory, continueMode);
+            _view.SetLoadingState(true, "正在加载学习内容...");
+
+            try
+            {
+                _currentUserId = userId;
+                _currentLanguage = language;
+
+                // 加载子分类列表
+                if (_view is LearningForm learningForm)
+                {
+                    try
+                    {
+                        var subCategories = _contentLoaderService.GetSubCategories(language);
+                        learningForm.RefreshSubCategories(subCategories);
+
+                        // 如果传入的subCategory为空或不在列表中，使用视图自动选择的第一个子分类
+                        if (string.IsNullOrEmpty(subCategory) || !subCategories.Contains(subCategory))
+                        {
+                            subCategory = learningForm.SubCategory;
+                        }
+                        else
+                        {
+                            learningForm.SubCategory = subCategory;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to load subcategories");
+                    }
+                }
+
+                _currentSubCategory = subCategory;
+
+                // 从视图读取设置
+                string mode = _view.LearningMode;
+                string sortOrder = _view.SortOrder;
+
+                _studyEngine.Initialize(userId, language, subCategory, wordBankFile, mode, sortOrder, continueMode);
+                UpdateLearningList();
+                await DisplayCurrentItemAsync();
+            }
+            finally
+            {
+                _view.SetLoadingState(false);
+            }
+        }
+
+        private void SaveProgress()
+        {
+            try
+            {
+                _studyEngine.SaveProgress();
+                _logger.LogInformation("Learning progress saved for user {UserId}, category {SubCategory}", _currentUserId, _currentSubCategory);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to save learning progress");
+            }
+        }
+
+        private void UpdateLearningList()
+        {
+            try
+            {
+                var items = _studyEngine.GetAllItems();
+                var itemTexts = items.Select(item => item.GetMainContent()).ToList();
+                var currentIndex = _studyEngine.CurrentIndex;
+
+                if (_view is LearningForm learningForm)
+                {
+                    learningForm.UpdateLearningList(itemTexts, currentIndex);
+                    learningForm.ItemSelectedFromList += LearningForm_ItemSelectedFromList;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to update learning list");
+            }
+        }
+
+        private void LearningForm_ItemSelectedFromList(object? sender, LearningForm.ItemSelectedEventArgs e)
+        {
+            try
+            {
+                _logger.LogInformation("Item selected from list: {Index}", e.Index);
+                // 跳转到选中的项，保持进度不变
+                var currentIndex = _studyEngine.CurrentIndex;
+                if (e.Index > currentIndex)
+                {
+                    for (int i = currentIndex; i < e.Index; i++)
+                    {
+                        if (_studyEngine.HasNext())
+                        {
+                            _studyEngine.MoveNext();
+                        }
+                    }
+                }
+                else if (e.Index < currentIndex)
+                {
+                    // 直接设置索引，不重置进度
+                    _studyEngine.SetCurrentIndex(e.Index);
+                }
+                DisplayCurrentItemAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to navigate to selected item");
+            }
         }
 
         private async Task DisplayCurrentItemAsync()
         {
-            _currentExplanation = "";
-            var item = _studyEngine.GetCurrentItem();
-            if (item == null)
+            // 防止重复加载
+            if (_isLoading)
             {
-                _view.CurrentContent = "学习已完成!";
-                _view.Statistics = "恭喜完成所有内容！";
-                _view.EnableButtons(false);
-                _logger.LogInformation("Learning session completed");
+                _logger.LogDebug("DisplayCurrentItemAsync already running, skipping");
                 return;
             }
 
-            _view.SetCurrentItem(item);
-            _view.CurrentContent = item.GetMainContent();
-            _view.CurrentDisplayText = item.GetDisplayText();
-            _view.ProgressValue = _studyEngine.CurrentIndex + 1;
-            _view.ProgressMax = _studyEngine.TotalCount;
+            _isLoading = true;
 
-            UpdateStatistics();
+            try
+            {
+                // 取消之前的异步操作（AI释义、朗读等）
+                _cts?.Cancel();
+                _cts = new CancellationTokenSource();
 
-            if (_studyEngine.CurrentMode == Constants.LearningMode.Study)
-            {
-                await LoadAIExplanationAsync(item.GetMainContent(), _cts.Token);
-            }
-            else
-            {
+                _currentExplanation = "";
+                // 先清空AI释义，避免显示旧内容
                 _view.AIExplanation = "";
-            }
 
-            if (_view.IsVoiceEnabled)
+                var item = _studyEngine.GetCurrentItem();
+                if (item == null)
+                {
+                    _view.CurrentContent = "学习已完成!";
+                    _view.Statistics = "恭喜完成所有内容！";
+                    _view.EnableButtons(false);
+                    _logger.LogInformation("Learning session completed");
+                    return;
+                }
+
+                _view.SetCurrentItem(item);
+                _view.CurrentContent = item.GetMainContent();
+                _view.CurrentDisplayText = item.GetDisplayText();
+                // 先设置 ProgressMax，再设置 ProgressValue，确保值在有效范围内
+                _view.ProgressMax = _studyEngine.TotalCount;
+                _view.ProgressValue = _studyEngine.CurrentIndex + 1;
+
+                UpdateStatistics();
+                UpdateListSelection();
+
+                if (_studyEngine.CurrentMode == Constants.LearningMode.Study && _view.IsAIExplanationEnabled)
+                {
+                    await LoadAIExplanationAsync(item.GetMainContent(), _cts.Token);
+                }
+                else
+                {
+                    _view.AIExplanation = "";
+                }
+
+                // 自动朗读：最多重复5次
+                if (_view.IsVoiceEnabled && _autoPronunciationCount < MaxAutoPronunciationCount)
+                {
+                    await PlayPronunciationAsync(item, _currentExplanation, _cts.Token);
+                    _autoPronunciationCount++;
+                }
+            }
+            finally
             {
-                await PlayPronunciationAsync(item, _currentExplanation, _cts.Token);
+                _isLoading = false;
+            }
+        }
+
+        private void UpdateListSelection()
+        {
+            try
+            {
+                if (_view is LearningForm learningForm)
+                {
+                    var currentIndex = _studyEngine.CurrentIndex;
+                    learningForm.UpdateLearningListSelection(currentIndex);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to update list selection");
             }
         }
 
@@ -109,7 +346,10 @@ namespace UnifiedLearningAssistant.Presenters
                 _logger.LogDebug("Loading AI explanation for '{Text}'", text);
                 var explanation = await _aiService.GetExplanationAsync(text, _currentLanguage, _currentSubCategory);
                 _currentExplanation = explanation;
-                _view.AIExplanation = explanation;
+
+                // 在释义前显示模型名称
+                var modelName = _aiService.ModelName;
+                _view.AIExplanation = $"【{modelName}】\n{explanation}";
             }
             catch (OperationCanceledException)
             {
@@ -150,22 +390,31 @@ namespace UnifiedLearningAssistant.Presenters
             }
         }
 
-        private void View_MarkAsKnownClicked(object? sender, EventArgs e)
+        private async void View_MarkAsKnownClicked(object? sender, EventArgs e)
         {
             _studyEngine.MarkCurrentAsKnown();
-            MoveToNext();
+            SaveProgress();  // 保存学习统计
+            await MoveToNextAsync();
         }
 
-        private void View_MarkAsUnknownClicked(object? sender, EventArgs e)
+        private async void View_MarkAsUnknownClicked(object? sender, EventArgs e)
         {
             _studyEngine.MarkCurrentAsUnknown();
-            MoveToNext();
+            SaveProgress();  // 保存学习统计
+            await MoveToNextAsync();
         }
 
         private async void View_PronounceClicked(object? sender, EventArgs e)
         {
+            await HandlePronounceAsync();
+        }
+
+        private async Task HandlePronounceAsync()
+        {
             try
             {
+                _autoPronunciationCount = 0;
+
                 var item = _studyEngine.GetCurrentItem();
                 if (item != null)
                 {
@@ -174,24 +423,26 @@ namespace UnifiedLearningAssistant.Presenters
             }
             catch (OperationCanceledException)
             {
-                _logger.LogDebug("View_PronounceClicked was cancelled");
+                _logger.LogDebug("HandlePronounceAsync was cancelled");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in View_PronounceClicked");
+                _logger.LogError(ex, "Error in HandlePronounceAsync");
             }
         }
 
-        private void View_NextClicked(object? sender, EventArgs e)
+        private async void View_NextClicked(object? sender, EventArgs e)
         {
-            MoveToNext();
+            await MoveToNextAsync();
         }
 
-        private async void MoveToNext()
+        private async Task MoveToNextAsync()
         {
             try
             {
                 _cts?.Token.ThrowIfCancellationRequested();
+
+                _autoPronunciationCount = 0;
 
                 if (_studyEngine.HasNext())
                 {
@@ -218,6 +469,7 @@ namespace UnifiedLearningAssistant.Presenters
         private void View_ExitClicked(object? sender, EventArgs e)
         {
             _studyEngine.SaveProgress();
+            SaveSettingsToConfig();  // 在返回时保存设置
             OnExit?.Invoke(this, EventArgs.Empty);
         }
 
@@ -234,11 +486,156 @@ namespace UnifiedLearningAssistant.Presenters
             }
         }
 
+        private async void View_SettingsChanged(object? sender, EventArgs e)
+        {
+            await HandleSettingsChangedAsync();
+        }
+
+        private async Task HandleSettingsChangedAsync()
+        {
+            try
+            {
+                _logger.LogInformation("Settings changed");
+
+                string newLanguage = _view.Language;
+                string newSubCategory = _view.SubCategory;
+                string newMode = _view.LearningMode;
+                string newSortOrder = _view.SortOrder;
+
+                bool languageChanged = newLanguage != _currentLanguage;
+                bool subCategoryChanged = newSubCategory != _currentSubCategory;
+                bool modeChanged = newMode != _studyEngine.CurrentMode;
+                bool sortChanged = newSortOrder != _studyEngine.CurrentSortOrder;
+
+                if (languageChanged)
+                {
+                    _currentLanguage = newLanguage;
+
+                    if (_view is LearningForm learningForm)
+                    {
+                        var subCategories = _contentLoaderService.GetSubCategories(newLanguage);
+                        learningForm.RefreshSubCategories(subCategories);
+
+                        if (subCategories.Count > 0)
+                        {
+                            newSubCategory = subCategories[0];
+                            _currentSubCategory = newSubCategory;
+                        }
+                    }
+                }
+                else if (subCategoryChanged)
+                {
+                    _currentSubCategory = newSubCategory;
+                }
+
+                if (languageChanged || subCategoryChanged)
+                {
+                    // 语言或分类改变时需要重新初始化
+                    // 确保 userId 不为空
+                    string userId = string.IsNullOrWhiteSpace(_currentUserId) ? "default" : _currentUserId;
+                    _studyEngine.Initialize(userId, _currentLanguage, _currentSubCategory, "", newMode, newSortOrder, true);
+                }
+                else if (modeChanged || sortChanged)
+                {
+                    // 仅模式或排序改变时保持进度，只应用设置
+                    _studyEngine.ApplySettings(newMode, newSortOrder);
+                }
+
+                UpdateLearningList();
+                await DisplayCurrentItemAsync();
+
+                // 重新启用按钮（之前可能因为学习完成而被禁用）
+                _view.EnableButtons(true);
+
+                //SaveSettingsToConfig();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to reload learning content after settings changed");
+                _view.ShowMessage($"重新加载学习内容失败：{ex.Message}");
+            }
+        }
+
+        private void SaveSettingsToConfig()
+        {
+            // 防止重复保存
+            if (_settingsSaved)
+            {
+                _logger.LogDebug("Settings already saved, skipping");
+                return;
+            }
+            
+            try
+            {
+                if (_persistenceService != null)
+                {
+                    var config = _persistenceService.LoadConfig();
+                    config.AppSettings.IsVoiceEnabled = _view.IsVoiceEnabled;
+                    config.AppSettings.IsAIExplanationEnabled = _view.IsAIExplanationEnabled;
+                    config.AppSettings.PronunciationScope = (int)_view.PronunciationScope;
+                    _persistenceService.SaveConfig(config);
+                    _settingsSaved = true;  // 标记为已保存
+                    _logger.LogInformation("Settings saved to config file");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to save settings to config");
+            }
+        }
+
+        private void View_OpenStatisticsClicked(object? sender, EventArgs e)
+        {
+            try
+            {
+                _windowManager.OpenStatisticsWindow();
+                _logger.LogInformation("Opened statistics window");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to open statistics window");
+                _view.ShowMessage($"打开统计窗口失败：{ex.Message}");
+            }
+        }
+
+        private void View_ExportErrorBookClicked(object? sender, EventArgs e)
+        {
+            try
+            {
+                var errorBookItems = _exportService.GetErrorBookItems(_currentUserId);
+
+                if (errorBookItems.Count == 0)
+                {
+                    _view.ShowMessage("错题本为空，没有可导出的内容！");
+                    return;
+                }
+
+                using var saveFileDialog = new SaveFileDialog();
+                saveFileDialog.Filter = "文本文件 (*.txt)|*.txt|CSV文件 (*.csv)|*.csv";
+                saveFileDialog.Title = "保存错题本";
+                saveFileDialog.FileName = $"错题本_{_currentUserId}_{DateTime.Now:yyyyMMdd_HHmmss}";
+
+                if (saveFileDialog.ShowDialog() == DialogResult.OK)
+                {
+                    var result = _exportService.ExportErrorBook(_currentUserId, saveFileDialog.FileName);
+                    _view.ShowMessage(result);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to export error book");
+                _view.ShowMessage($"导出错题本失败：{ex.Message}");
+            }
+        }
+
         public void Dispose()
         {
+            SaveSettingsToConfig();  // 在窗体关闭时保存设置
             UnsubscribeFromEvents();
             _cts?.Cancel();
             _cts?.Dispose();
+            // 停止语音播放
+            _ttsService.StopAsync().ConfigureAwait(false);
             _logger.LogInformation("LearningPresenter disposed");
         }
 

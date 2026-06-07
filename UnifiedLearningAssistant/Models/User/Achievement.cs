@@ -1,5 +1,5 @@
 
-namespace UnifiedLearningAssistant.Models.User
+namespace LearningAssistant.Models.User
 {
     public class Achievement
     {

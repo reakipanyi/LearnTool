@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Models.Pdf
+namespace LearningAssistant.Models.Pdf
 {
     public class PdfHighlight
     {
@@ -43,6 +43,7 @@ namespace UnifiedLearningAssistant.Models.Pdf
         {
             return color switch
             {
+                HighlightColor.Red => "红色",
                 HighlightColor.Yellow => "黄色",
                 HighlightColor.Green => "绿色",
                 HighlightColor.Blue => "蓝色",
@@ -55,6 +56,7 @@ namespace UnifiedLearningAssistant.Models.Pdf
 
     public enum HighlightColor
     {
+        Red,
         Yellow,
         Green,
         Blue,

@@ -1,7 +1,8 @@
-namespace UnifiedLearningAssistant.Views
+namespace LearningAssistant.Views
 {
     public interface ISettingView
     {
+        string Provider { get; set; }
         string ApiKey { get; set; }
         string ApiEndpoint { get; set; }
         string Model { get; set; }
@@ -16,6 +17,11 @@ namespace UnifiedLearningAssistant.Views
         string Theme { get; set; }
         string BaiduAppId { get; set; }
         string BaiduSecret { get; set; }
+        string BaiduNetdiskClientId { get; set; }
+        string BaiduNetdiskClientSecret { get; set; }
+        bool IsVoiceEnabled { get; set; }
+        int PronunciationScope { get; set; }
+        bool IsAIExplanationEnabled { get; set; }
 
         event EventHandler? SaveClicked;
         event EventHandler? CancelClicked;

@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Common
+namespace LearningAssistant.Common
 {
     public static class Constants
     {
@@ -17,7 +17,6 @@ namespace UnifiedLearningAssistant.Common
         public static class SubCategory
         {
             public const string ChineseCharacter = "识字";
-            public const string ChineseWordCombination = "组词";
             public const string ChinesePhrase = "短语";
             public const string ChineseIdiom = "成语";
             public const string ChinesePoem = "诗词";
@@ -37,7 +36,6 @@ namespace UnifiedLearningAssistant.Common
         public static class FileName
         {
             public const string ChineseCharacter = "识字.json";
-            public const string ChineseWordCombination = "组词.json";
             public const string ChinesePhrase = "短语.json";
             public const string ChineseIdiom = "成语.json";
             public const string ChinesePoem = "诗词.json";

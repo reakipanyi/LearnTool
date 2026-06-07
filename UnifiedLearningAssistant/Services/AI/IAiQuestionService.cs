@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Services.AI
+namespace LearningAssistant.Services.AI
 {
     public interface IAiQuestionService
     {

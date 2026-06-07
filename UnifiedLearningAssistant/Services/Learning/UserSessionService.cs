@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Logging;
-using UnifiedLearningAssistant.Models.User;
-using UnifiedLearningAssistant.Services.Persistence;
+using LearningAssistant.Models.User;
+using LearningAssistant.Services.Persistence;
 
-namespace UnifiedLearningAssistant.Services.Learning
+namespace LearningAssistant.Services.Learning
 {
     public class UserSessionService : IUserSessionService
     {

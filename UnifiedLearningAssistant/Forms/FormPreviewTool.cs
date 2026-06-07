@@ -1,6 +1,6 @@
-using UnifiedLearningAssistant.Common;
+using LearningAssistant.Common;
 
-namespace UnifiedLearningAssistant.Forms
+namespace LearningAssistant.Forms
 {
     /// <summary>
     /// 窗体预览工具 - 启动界面

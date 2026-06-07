@@ -1,9 +1,9 @@
 
 using Microsoft.Extensions.Logging;
-using UnifiedLearningAssistant.Common;
-using UnifiedLearningAssistant.Models.Learning;
+using LearningAssistant.Common;
+using LearningAssistant.Models.Learning;
 
-namespace UnifiedLearningAssistant.Services.Learning
+namespace LearningAssistant.Services.Learning
 {
     public class ContentLoaderService : IContentLoaderService
     {
@@ -11,7 +11,6 @@ namespace UnifiedLearningAssistant.Services.Learning
         private readonly Dictionary<string, Type> _categoryTypeMap = new Dictionary<string, Type>
         {
             { Constants.SubCategory.ChineseCharacter, typeof(ChineseCharacter) },
-            { Constants.SubCategory.ChineseWordCombination, typeof(ChineseWordCombination) },
             { Constants.SubCategory.ChinesePhrase, typeof(ChinesePhrase) },
             { Constants.SubCategory.ChineseIdiom, typeof(ChineseIdiom) },
             { Constants.SubCategory.ChinesePoem, typeof(ChinesePoem) },
@@ -25,7 +24,6 @@ namespace UnifiedLearningAssistant.Services.Learning
         private readonly Dictionary<string, string> _categoryFileMap = new Dictionary<string, string>
         {
             { Constants.SubCategory.ChineseCharacter, Constants.FileName.ChineseCharacter },
-            { Constants.SubCategory.ChineseWordCombination, Constants.FileName.ChineseWordCombination },
             { Constants.SubCategory.ChineseIdiom, Constants.FileName.ChineseIdiom },
             { Constants.SubCategory.ChinesePhrase, Constants.FileName.ChinesePhrase },
             { Constants.SubCategory.ChinesePoem, Constants.FileName.ChinesePoem },
@@ -100,7 +98,6 @@ namespace UnifiedLearningAssistant.Services.Learning
                 return new List<string>
                 {
                     Constants.SubCategory.ChineseCharacter,
-                    Constants.SubCategory.ChineseWordCombination,
                     Constants.SubCategory.ChineseIdiom,
                     Constants.SubCategory.ChinesePhrase,
                     Constants.SubCategory.ChinesePoem,
@@ -153,7 +150,6 @@ namespace UnifiedLearningAssistant.Services.Learning
             return subCategory switch
             {
                 Constants.SubCategory.ChineseCharacter => "识字",
-                Constants.SubCategory.ChineseWordCombination => "组词",
                 Constants.SubCategory.ChinesePhrase => "短语",
                 Constants.SubCategory.ChineseIdiom => "成语",
                 Constants.SubCategory.ChinesePoem => "诗词",
@@ -174,6 +170,23 @@ namespace UnifiedLearningAssistant.Services.Learning
         public Type GetItemType(string subCategory)
         {
             return _categoryTypeMap.GetValueOrDefault(subCategory, typeof(LearningItem));
+        }
+
+        public void SaveUserContent(UserContent content)
+        {
+            try
+            {
+                var userContentDir = Path.Combine(FileHelper.GetDataDirectory(), "UserContent");
+                Directory.CreateDirectory(userContentDir);
+                
+                var filePath = Path.Combine(userContentDir, $"{content.UserId}_{content.Id}.json");
+                JsonHelper.SaveToFile(filePath, content);
+                _logger.LogInformation("Saved user content: {Title}", content.Title);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to save user content");
+            }
         }
 
         private string GetFilePath(string subCategory, string wordBankFile)

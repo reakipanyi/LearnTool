@@ -1,7 +1,7 @@
 
-using UnifiedLearningAssistant.Common.Events;
+using LearningAssistant.Common.Events;
 
-namespace UnifiedLearningAssistant.Services.Notifications
+namespace LearningAssistant.Services.Notifications
 {
     public class NotificationService : INotificationService, ICelebrationService, IDisposable
     {

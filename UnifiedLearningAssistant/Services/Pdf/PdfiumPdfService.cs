@@ -1,7 +1,6 @@
 using PdfiumViewer;
-using System.IO;
 
-namespace UnifiedLearningAssistant.Services.Pdf
+namespace LearningAssistant.Services.Pdf
 {
     public class PdfiumPdfService : IPdfService
     {
@@ -44,7 +43,7 @@ namespace UnifiedLearningAssistant.Services.Pdf
             }
         }
 
-        public Bitmap? RenderPage(int pageIndex, int width, int height)
+        public Bitmap RenderPage(int pageIndex, int width, int height)
         {
             if (pageIndex < 0)
                 throw new ArgumentOutOfRangeException(nameof(pageIndex), "Page index cannot be negative.");
@@ -101,6 +100,42 @@ namespace UnifiedLearningAssistant.Services.Pdf
             lock (_lockObj)
             {
                 return _pdf?.GetPdfText(pageIndex) ?? string.Empty;
+            }
+        }
+
+        public int GetPageCount(string pdfPath)
+        {
+            if (string.IsNullOrWhiteSpace(pdfPath))
+                throw new ArgumentException("PDF path cannot be null or empty.", nameof(pdfPath));
+
+            try
+            {
+                using var doc = PdfDocument.Load(pdfPath);
+                return doc.PageCount;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
+        public string ExtractText(string pdfPath, int pageNumber)
+        {
+            if (string.IsNullOrWhiteSpace(pdfPath))
+                throw new ArgumentException("PDF path cannot be null or empty.", nameof(pdfPath));
+            if (pageNumber < 1)
+                throw new ArgumentOutOfRangeException(nameof(pageNumber), "Page number must be greater than 0.");
+
+            try
+            {
+                using var doc = PdfDocument.Load(pdfPath);
+                if (pageNumber > doc.PageCount)
+                    return string.Empty;
+                return doc.GetPdfText(pageNumber - 1) ?? string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
             }
         }
 

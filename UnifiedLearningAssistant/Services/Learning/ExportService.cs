@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
-using UnifiedLearningAssistant.Services.Learning;
+using LearningAssistant.Services.Learning;
 
-namespace UnifiedLearningAssistant.Services.Learning
+namespace LearningAssistant.Services.Learning
 {
     public class ExportService : IExportService
     {

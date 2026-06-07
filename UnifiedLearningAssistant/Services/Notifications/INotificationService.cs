@@ -1,5 +1,5 @@
 
-namespace UnifiedLearningAssistant.Services.Notifications
+namespace LearningAssistant.Services.Notifications
 {
     public interface INotificationService
     {

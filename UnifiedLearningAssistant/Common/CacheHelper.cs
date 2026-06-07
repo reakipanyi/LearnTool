@@ -1,6 +1,6 @@
 using System.Collections.Concurrent;
 
-namespace UnifiedLearningAssistant.Common
+namespace LearningAssistant.Common
 {
     public static class CacheHelper
     {

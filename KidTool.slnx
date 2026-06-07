@@ -3,9 +3,5 @@
     <Platform Name="Any CPU" />
     <Platform Name="x64" />
   </Configurations>
-  <Project Path="BilingualLearningTool/BilingualLearningTool.csproj" />
-  <Project Path="KidWinApp/KidWinApp.csproj">
-    <Platform Solution="*|x64" Project="x64" />
-  </Project>
-  <Project Path="UnifiedLearningAssistant/UnifiedLearningAssistant.csproj" />
+  <Project Path="UnifiedLearningAssistant/LearningAssistant.csproj" />
 </Solution>

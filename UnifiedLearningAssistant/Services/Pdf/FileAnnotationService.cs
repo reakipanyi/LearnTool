@@ -1,7 +1,7 @@
-using UnifiedLearningAssistant.Common;
-using UnifiedLearningAssistant.Models.Pdf;
+using LearningAssistant.Common;
+using LearningAssistant.Models.Pdf;
 
-namespace UnifiedLearningAssistant.Services.Pdf
+namespace LearningAssistant.Services.Pdf
 {
     public class FileAnnotationService : IAnnotationService
     {

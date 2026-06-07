@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Services.TTS
+namespace LearningAssistant.Services.TTS
 {
     public interface ITTSService
     {

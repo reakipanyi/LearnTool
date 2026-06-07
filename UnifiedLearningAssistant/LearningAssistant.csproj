@@ -7,9 +7,15 @@
 		<ApplicationIcon>icon.ico</ApplicationIcon>
 		<OutputType>WinExe</OutputType>
 		<Platforms>AnyCPU;x64</Platforms>
+		<PlatformTarget>x64</PlatformTarget>
 	</PropertyGroup>
 	<ItemGroup>
+	  <Compile Remove="Forms\BrowserForm.cs" />
 	  <Compile Remove="Forms\FormPreviewer.cs" />
+	  <Compile Remove="Services\Cloud\BaiduPanFileManager.cs" />
+	</ItemGroup>
+	<ItemGroup>
+	  <EmbeddedResource Remove="Forms\BrowserForm.resx" />
 	</ItemGroup>
 	<ItemGroup>
 		<Content Include="icon.ico" />
@@ -19,6 +25,7 @@
 		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
+		<PackageReference Include="System.Speech" Version="10.0.8" />
 		<PackageReference Include="System.Text.Json" Version="8.0.3" />
 		<PackageReference Include="Tesseract" Version="5.2.0" />
 		<PackageReference Include="NAudio" Version="2.2.1" />
@@ -26,6 +33,9 @@
 		<PackageReference Include="SkiaSharp" Version="2.88.6" />
 		<PackageReference Include="PdfiumViewer.Native.x86_64.v8-xfa" Version="2018.4.8.256" />
 		<PackageReference Include="PdfiumViewerCore" Version="1.0.0" />
+		<!-- SQLite & Entity Framework Core -->
+		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Update="appsettings.json">

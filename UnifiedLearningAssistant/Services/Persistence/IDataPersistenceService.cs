@@ -1,7 +1,7 @@
-using UnifiedLearningAssistant.Models.Config;
-using UnifiedLearningAssistant.Models.User;
+using LearningAssistant.Models.Config;
+using LearningAssistant.Models.User;
 
-namespace UnifiedLearningAssistant.Services.Persistence
+namespace LearningAssistant.Services.Persistence
 {
     public interface IDataPersistenceService
     {

@@ -1,8 +1,8 @@
 using Microsoft.Extensions.Logging;
-using UnifiedLearningAssistant.Services.AI;
-using UnifiedLearningAssistant.Services.TTS;
+using LearningAssistant.Services.AI;
+using LearningAssistant.Services.TTS;
 
-namespace UnifiedLearningAssistant.Forms
+namespace LearningAssistant.Forms
 {
     public partial class AiQuestionDialog : Form
     {

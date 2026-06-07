@@ -1,30 +1,50 @@
+using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using UnifiedLearningAssistant.Common;
-using UnifiedLearningAssistant.Models.Pdf;
+using Microsoft.Extensions.Logging;
+using LearningAssistant.Common;
+using LearningAssistant.Models.Pdf;
 
-namespace UnifiedLearningAssistant.Services.Pdf
+namespace LearningAssistant.Services.Pdf
 {
-    public class HighlightService
+    public class HighlightService : IHighlightService
     {
         private readonly Dictionary<string, PdfHighlightCollection> _highlightsCache = new();
+        private readonly ILogger<HighlightService>? _logger;
+
+        public HighlightService(ILogger<HighlightService>? logger = null)
+        {
+            _logger = logger;
+        }
 
         public List<PdfHighlight> GetHighlights(string pdfPath)
         {
             var key = GetCacheKey(pdfPath);
             if (_highlightsCache.TryGetValue(key, out var cached))
             {
-                return cached.Highlights;
+                _logger?.LogDebug("从缓存获取高亮: {Path}, 数量: {Count}", pdfPath, cached.Highlights.Count);
+                return cached.Highlights.ToList();
             }
 
             var collection = LoadHighlightsFromFile(pdfPath);
             _highlightsCache[key] = collection;
-            return collection.Highlights;
+            _logger?.LogDebug("加载高亮: {Path}, 数量: {Count}", pdfPath, collection.Highlights.Count);
+            return collection.Highlights.ToList();
+        }
+
+        public List<PdfHighlight> GetAllHighlights(string pdfPath)
+        {
+            _logger?.LogDebug("获取所有高亮: {Path}", pdfPath);
+            return GetHighlights(pdfPath);
         }
 
         public List<PdfHighlight> GetHighlightsForPage(string pdfPath, int pageIndex)
         {
-            return GetHighlights(pdfPath).Where(h => h.PageIndex == pageIndex).ToList();
+            var highlights = GetHighlights(pdfPath).Where(h => h.PageIndex == pageIndex).ToList();
+            _logger?.LogDebug("获取页面高亮: {Path}, 页码: {Page}, 数量: {Count}", pdfPath, pageIndex, highlights.Count);
+            return highlights;
         }
 
         public void AddHighlight(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text = "", HighlightColor color = HighlightColor.Yellow)
@@ -46,6 +66,7 @@ namespace UnifiedLearningAssistant.Services.Pdf
 
             collection.Highlights.Add(highlight);
             SaveHighlightsToFile(pdfPath, collection);
+            _logger?.LogInformation("添加高亮成功: {Path}, 页码: {Page}, 颜色: {Color}", pdfPath, pageIndex, color);
         }
 
         public void AddHighlightWithNote(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text, string note, HighlightColor color = HighlightColor.Yellow)
@@ -68,6 +89,7 @@ namespace UnifiedLearningAssistant.Services.Pdf
 
             collection.Highlights.Add(highlight);
             SaveHighlightsToFile(pdfPath, collection);
+            _logger?.LogInformation("添加带注释的高亮成功: {Path}, 页码: {Page}, 注释长度: {Length}", pdfPath, pageIndex, note?.Length ?? 0);
         }
 
         public void UpdateHighlightNote(string pdfPath, string highlightId, string note)
@@ -78,6 +100,11 @@ namespace UnifiedLearningAssistant.Services.Pdf
             {
                 highlight.Note = note;
                 SaveHighlightsToFile(pdfPath, collection);
+                _logger?.LogInformation("更新高亮注释: {HighlightId}", highlightId);
+            }
+            else
+            {
+                _logger?.LogWarning("未找到要高亮注释: {HighlightId}", highlightId);
             }
         }
 
@@ -89,19 +116,27 @@ namespace UnifiedLearningAssistant.Services.Pdf
             {
                 collection.Highlights.Remove(highlight);
                 SaveHighlightsToFile(pdfPath, collection);
+                _logger?.LogInformation("删除高亮: {HighlightId}", highlightId);
+            }
+            else
+            {
+                _logger?.LogWarning("未找到要删除的高亮: {HighlightId}", highlightId);
             }
         }
 
         public void RemoveHighlightsForPage(string pdfPath, int pageIndex)
         {
             var collection = GetOrCreateCollection(pdfPath);
+            var count = collection.Highlights.Count(h => h.PageIndex == pageIndex);
             collection.Highlights.RemoveAll(h => h.PageIndex == pageIndex);
             SaveHighlightsToFile(pdfPath, collection);
+            _logger?.LogInformation("删除页面高亮: {Path}, 页码: {Page}, 数量: {Count}", pdfPath, pageIndex, count);
         }
 
         public void ClearCache()
         {
             _highlightsCache.Clear();
+            _logger?.LogDebug("清除所有高亮缓存");
         }
 
         public void ClearCacheForPdf(string pdfPath)
@@ -110,6 +145,7 @@ namespace UnifiedLearningAssistant.Services.Pdf
             if (_highlightsCache.ContainsKey(key))
             {
                 _highlightsCache.Remove(key);
+                _logger?.LogDebug("清除PDF高亮缓存: {Path}", pdfPath);
             }
         }
 
@@ -133,11 +169,13 @@ namespace UnifiedLearningAssistant.Services.Pdf
                 {
                     var collection = JsonHelper.LoadFromFile<PdfHighlightCollection>(path) ?? new PdfHighlightCollection { PdfPath = pdfPath };
                     MigrateOldHighlights(collection, pdfPath);
+                    _logger?.LogDebug("从文件加载高亮: {Path}, 数量: {Count}", path, collection.Highlights.Count);
                     return collection;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "加载高亮文件失败: {Path}", pdfPath);
             }
             return new PdfHighlightCollection { PdfPath = pdfPath };
         }
@@ -168,9 +206,11 @@ namespace UnifiedLearningAssistant.Services.Pdf
                 collection.UpdatedAt = DateTime.Now;
                 var path = GetHighlightPath(pdfPath);
                 JsonHelper.SaveToFile(path, collection);
+                _logger?.LogDebug("保存高亮到文件: {Path}, 数量: {Count}", path, collection.Highlights.Count);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "保存高亮文件失败: {Path}", pdfPath);
             }
         }
 

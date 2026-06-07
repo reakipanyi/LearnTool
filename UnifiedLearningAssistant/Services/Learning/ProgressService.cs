@@ -1,6 +1,6 @@
-using UnifiedLearningAssistant.Services.Persistence;
+using LearningAssistant.Services.Persistence;
 
-namespace UnifiedLearningAssistant.Services.Learning
+namespace LearningAssistant.Services.Learning
 {
     public class ProgressService : IProgressService
     {

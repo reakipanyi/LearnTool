@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Models.Pdf
+namespace LearningAssistant.Models.Pdf
 {
     public class PdfUserSession
     {

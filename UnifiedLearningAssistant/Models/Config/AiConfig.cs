@@ -1,8 +1,25 @@
-namespace UnifiedLearningAssistant.Models.Config
+namespace LearningAssistant.Models.Config
 {
     public class AiConfig
     {
-        public string Provider { get; set; } = "siliconflow";
+        private string _provider = "siliconflow";
+        
+        public string Provider 
+        { 
+            get => _provider;
+            set
+            {
+                if (string.IsNullOrEmpty(value) || !Providers.ContainsKey(value))
+                {
+                    _provider = "siliconflow";
+                }
+                else
+                {
+                    _provider = value;
+                }
+            }
+        }
+        
         public string ApiKey { get; set; } = string.Empty;
         public string Model { get; set; } = string.Empty;
         public string BaseUrl { get; set; } = string.Empty;

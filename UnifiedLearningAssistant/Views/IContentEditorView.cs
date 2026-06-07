@@ -1,6 +1,6 @@
 using System.Data;
 
-namespace UnifiedLearningAssistant.Views
+namespace LearningAssistant.Views
 {
     public interface IContentEditorView
     {

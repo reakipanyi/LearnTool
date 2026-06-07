@@ -1,9 +1,9 @@
 using Microsoft.Extensions.Logging;
-using UnifiedLearningAssistant.Models.Config;
-using UnifiedLearningAssistant.Services.Persistence;
-using UnifiedLearningAssistant.Views;
+using LearningAssistant.Models.Config;
+using LearningAssistant.Services.Persistence;
+using LearningAssistant.Views;
 
-namespace UnifiedLearningAssistant.Presenters
+namespace LearningAssistant.Presenters
 {
     public class SettingPresenter : IDisposable
     {
@@ -32,6 +32,7 @@ namespace UnifiedLearningAssistant.Presenters
 
         private void LoadConfigToView()
         {
+            _view.Provider = _config.AiConfig.Provider;
             _view.ApiKey = _config.AiConfig.ApiKey;
             _view.ApiEndpoint = _config.AiConfig.BaseUrl;
             _view.Model = _config.AiConfig.Model;
@@ -44,6 +45,11 @@ namespace UnifiedLearningAssistant.Presenters
             _view.Theme = _config.AppSettings.Theme;
             _view.BaiduAppId = _config.TranslationConfig.BaiduAppId;
             _view.BaiduSecret = _config.TranslationConfig.BaiduSecret;
+            _view.BaiduNetdiskClientId = _config.CloudStorageConfig.BaiduClientId;
+            _view.BaiduNetdiskClientSecret = _config.CloudStorageConfig.BaiduClientSecret;
+            _view.IsVoiceEnabled = _config.AppSettings.IsVoiceEnabled;
+            _view.PronunciationScope = _config.AppSettings.PronunciationScope;
+            _view.IsAIExplanationEnabled = _config.AppSettings.IsAIExplanationEnabled;
         }
 
         private void View_SaveClicked(object? sender, EventArgs e)
@@ -51,6 +57,16 @@ namespace UnifiedLearningAssistant.Presenters
             try
             {
                 _logger.LogInformation("Saving settings");
+                
+                // 验证 Provider
+                var provider = _view.Provider;
+                if (string.IsNullOrEmpty(provider) || !AiConfig.Providers.ContainsKey(provider))
+                {
+                    _view.ShowMessage("请选择有效的 AI 服务商");
+                    return;
+                }
+                
+                _config.AiConfig.Provider = provider;
                 _config.AiConfig.ApiKey = _view.ApiKey;
                 _config.AiConfig.BaseUrl = _view.ApiEndpoint;
                 _config.AiConfig.Model = _view.Model;
@@ -62,6 +78,11 @@ namespace UnifiedLearningAssistant.Presenters
                 _config.AppSettings.Theme = _view.Theme;
                 _config.TranslationConfig.BaiduAppId = _view.BaiduAppId;
                 _config.TranslationConfig.BaiduSecret = _view.BaiduSecret;
+                _config.CloudStorageConfig.BaiduClientId = _view.BaiduNetdiskClientId;
+                _config.CloudStorageConfig.BaiduClientSecret = _view.BaiduNetdiskClientSecret;
+                _config.AppSettings.IsVoiceEnabled = _view.IsVoiceEnabled;
+                _config.AppSettings.PronunciationScope = _view.PronunciationScope;
+                _config.AppSettings.IsAIExplanationEnabled = _view.IsAIExplanationEnabled;
 
                 _persistenceService.SaveConfig(_config);
                 _persistenceService.PersistCache();

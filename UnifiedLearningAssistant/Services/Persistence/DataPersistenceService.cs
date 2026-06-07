@@ -1,21 +1,24 @@
 using Microsoft.Extensions.Configuration;
-using UnifiedLearningAssistant.Common;
-using UnifiedLearningAssistant.Models.Config;
-using UnifiedLearningAssistant.Models.User;
-using UnifiedLearningAssistant.Services.Cache;
-using UnifiedLearningAssistant.Services.Utils;
+using Microsoft.Extensions.Logging;
+using LearningAssistant.Common;
+using LearningAssistant.Models.Config;
+using LearningAssistant.Models.User;
+using LearningAssistant.Services.Cache;
+using LearningAssistant.Services.Utils;
 
-namespace UnifiedLearningAssistant.Services.Persistence
+namespace LearningAssistant.Services.Persistence
 {
     public class DataPersistenceService : IDataPersistenceService
     {
         private readonly IConfiguration _configuration;
         private readonly ICacheService _cacheService;
+        private readonly ILogger<DataPersistenceService> _logger;
 
-        public DataPersistenceService(IConfiguration configuration, ICacheService cacheService)
+        public DataPersistenceService(IConfiguration configuration, ICacheService cacheService, ILogger<DataPersistenceService> logger)
         {
             _configuration = configuration;
             _cacheService = cacheService;
+            _logger = logger;
         }
 
         public AppConfig LoadConfig()
@@ -23,12 +26,12 @@ namespace UnifiedLearningAssistant.Services.Persistence
             try
             {
                 var config = _configuration.Get<AppConfig>() ?? new AppConfig();
-                // 新增功能：配置安全优化 - 解密敏感信息
                 DecryptSensitiveConfig(config);
                 return config;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "加载配置失败，使用默认配置");
                 return new AppConfig();
             }
         }
@@ -37,8 +40,6 @@ namespace UnifiedLearningAssistant.Services.Persistence
         {
             try
             {
-                // 新增功能：配置安全优化 - 保存时加密敏感信息
-                // MemberwiseClone is protected; perform a deep clone via JSON serialization
                 var json = Common.JsonHelper.Serialize(config);
                 var configToSave = Common.JsonHelper.Deserialize<AppConfig>(json) ?? new AppConfig();
                 EncryptSensitiveConfig(configToSave);
@@ -46,8 +47,9 @@ namespace UnifiedLearningAssistant.Services.Persistence
                 var path = Path.Combine(FileHelper.GetAppDirectory(), "appsettings.json");
                 JsonHelper.SaveToFile(path, configToSave);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "保存配置失败");
             }
         }
 
@@ -65,6 +67,14 @@ namespace UnifiedLearningAssistant.Services.Persistence
             if (config.TranslationConfig != null)
             {
                 config.TranslationConfig.BaiduAppId = SecureConfigManager.Encrypt(config.TranslationConfig.BaiduAppId);
+                config.TranslationConfig.BaiduSecret = SecureConfigManager.Encrypt(config.TranslationConfig.BaiduSecret);
+            }
+            if (config.CloudStorageConfig != null)
+            {
+                config.CloudStorageConfig.BaiduClientId = SecureConfigManager.Encrypt(config.CloudStorageConfig.BaiduClientId);
+                config.CloudStorageConfig.BaiduClientSecret = SecureConfigManager.Encrypt(config.CloudStorageConfig.BaiduClientSecret);
+                config.CloudStorageConfig.BaiduAccessToken = SecureConfigManager.Encrypt(config.CloudStorageConfig.BaiduAccessToken);
+                config.CloudStorageConfig.BaiduRefreshToken = SecureConfigManager.Encrypt(config.CloudStorageConfig.BaiduRefreshToken);
             }
         }
 
@@ -95,8 +105,9 @@ namespace UnifiedLearningAssistant.Services.Persistence
                 if (profile != null)
                     return profile;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "加载用户 {UserId} 的进度失败，创建默认进度", userId);
             }
             return CreateDefaultProfile(userId);
         }
@@ -108,8 +119,9 @@ namespace UnifiedLearningAssistant.Services.Persistence
                 var path = FileHelper.GetUserProgressPath(profile.UserId);
                 JsonHelper.SaveToFile(path, profile);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "保存用户 {UserId} 的进度失败", profile.UserId);
             }
         }
 
@@ -122,8 +134,9 @@ namespace UnifiedLearningAssistant.Services.Persistence
                                .Select(f => Path.GetFileNameWithoutExtension(f))
                                .ToList();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "获取用户列表失败");
                 return new List<string>();
             }
         }
@@ -154,8 +167,9 @@ namespace UnifiedLearningAssistant.Services.Persistence
                 var path = FileHelper.GetSessionPath();
                 JsonHelper.SaveToFile(path, session);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "保存会话数据失败");
             }
         }
 
@@ -166,8 +180,9 @@ namespace UnifiedLearningAssistant.Services.Persistence
                 var path = FileHelper.GetSessionPath();
                 return JsonHelper.LoadFromFile<SessionData>(path) ?? new SessionData();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "加载会话数据失败，使用默认会话");
                 return new SessionData();
             }
         }
@@ -188,8 +203,9 @@ namespace UnifiedLearningAssistant.Services.Persistence
             {
                 _cacheService.Persist();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogError(ex, "持久化缓存失败");
             }
         }
     }

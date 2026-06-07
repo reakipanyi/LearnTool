@@ -1,5 +1,5 @@
 
-namespace UnifiedLearningAssistant.Models.Learning
+namespace LearningAssistant.Models.Learning
 {
     /// <summary>
     /// 语文综合学习项
@@ -88,7 +88,6 @@ namespace UnifiedLearningAssistant.Models.Learning
             return ItemType switch
             {
                 ChineseItemType.Character => Character,
-                ChineseItemType.WordCombination => WordCombinations.FirstOrDefault() ?? Phrase,
                 ChineseItemType.Phrase => Phrase,
                 ChineseItemType.Idiom => Phrase,
                 ChineseItemType.Sentence => Sentence,
@@ -101,7 +100,7 @@ namespace UnifiedLearningAssistant.Models.Learning
         public override string GetDisplayText()
         {
             var parts = new List<string>();
-            
+
             switch (ItemType)
             {
                 case ChineseItemType.Character:
@@ -109,6 +108,8 @@ namespace UnifiedLearningAssistant.Models.Learning
                         parts.Add($"拼音: {Pinyin}");
                     if (!string.IsNullOrWhiteSpace(Meaning))
                         parts.Add($"释义: {Meaning}");
+                    if (WordCombinations.Count > 0)
+                        parts.Add($"组词: {string.Join("、", WordCombinations)}");
                     if (!string.IsNullOrWhiteSpace(StrokeCount))
                         parts.Add($"笔画: {StrokeCount}画");
                     if (!string.IsNullOrWhiteSpace(Radical))
@@ -117,14 +118,7 @@ namespace UnifiedLearningAssistant.Models.Learning
                         parts.Add($"示例: {Example}");
                     break;
 
-                case ChineseItemType.WordCombination:
-                    if (WordCombinations.Count > 0)
-                        parts.Add($"组词: {string.Join("、", WordCombinations)}");
-                    if (!string.IsNullOrWhiteSpace(Meaning))
-                        parts.Add($"释义: {Meaning}");
-                    if (!string.IsNullOrWhiteSpace(Example))
-                        parts.Add($"示例: {Example}");
-                    break;
+
 
                 case ChineseItemType.Phrase:
                 case ChineseItemType.Idiom:
@@ -165,8 +159,7 @@ namespace UnifiedLearningAssistant.Models.Learning
     /// </summary>
     public enum ChineseItemType
     {
-        Character,      // 生字
-        WordCombination,// 组词
+        Character,      // 生字 
         Phrase,         // 短语
         Idiom,          // 成语
         Sentence,       // 句子

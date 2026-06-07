@@ -1,7 +1,7 @@
 
-using UnifiedLearningAssistant.Models.User;
+using LearningAssistant.Models.User;
 
-namespace UnifiedLearningAssistant.Services.Learning
+namespace LearningAssistant.Services.Learning
 {
     public interface IAchievementService
     {

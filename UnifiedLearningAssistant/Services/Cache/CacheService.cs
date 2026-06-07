@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
-using UnifiedLearningAssistant.Common;
+using LearningAssistant.Common;
 
-namespace UnifiedLearningAssistant.Services.Cache
+namespace LearningAssistant.Services.Cache
 {
     public class CacheService : ICacheService
     {

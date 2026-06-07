@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Models.Config
+namespace LearningAssistant.Models.Config
 {
     public class AppConfig
     {
@@ -8,5 +8,6 @@ namespace UnifiedLearningAssistant.Models.Config
         public OcrConfig OcrConfig { get; set; } = new OcrConfig();
         public AppSettings AppSettings { get; set; } = new AppSettings();
         public VlcConfig VlcConfig { get; set; } = new VlcConfig();
+        public CloudStorageConfig CloudStorageConfig { get; set; } = new CloudStorageConfig();
     }
 }

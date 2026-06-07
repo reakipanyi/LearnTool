@@ -1,5 +1,5 @@
 
-namespace UnifiedLearningAssistant.Models.Learning
+namespace LearningAssistant.Models.Learning
 {
     /// <summary>
     /// 英语综合学习项

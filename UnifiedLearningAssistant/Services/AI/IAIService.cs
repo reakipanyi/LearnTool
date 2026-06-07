@@ -1,9 +1,11 @@
-namespace UnifiedLearningAssistant.Services.AI
+namespace LearningAssistant.Services.AI
 {
     public interface IAIService
     {
         Task<string> GetExplanationAsync(string text, string language, string subType);
         Task<string> AskQuestionAsync(string question, string context = "");
+        
+        string ModelName { get; }
     }
 
     public class AIResponse

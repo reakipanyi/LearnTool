@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Services.Pdf
+namespace LearningAssistant.Services.Pdf
 {
     public interface ITranslationService
     {

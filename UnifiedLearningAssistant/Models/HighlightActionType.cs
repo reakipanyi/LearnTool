@@ -1,4 +1,4 @@
-namespace UnifiedLearningAssistant.Forms
+namespace LearningAssistant.Models
 {
     public enum HighlightActionType
     {

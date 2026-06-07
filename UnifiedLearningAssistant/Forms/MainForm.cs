@@ -1,26 +1,26 @@
-using UnifiedLearningAssistant.Common;
-using UnifiedLearningAssistant.Models.Config;
-using UnifiedLearningAssistant.Presenters;
-using UnifiedLearningAssistant.Services;
-using UnifiedLearningAssistant.Views;
+using LearningAssistant.Models.Config;
+using LearningAssistant.Presenters;
+using LearningAssistant.Services;
+using LearningAssistant.Services.Cloud;
+using LearningAssistant.Views;
 
-namespace UnifiedLearningAssistant.Forms
+namespace LearningAssistant.Forms
 {
     public partial class MainForm : Form, IMainView
     {
         private readonly MainPresenter _presenter;
-        private readonly IPdfView _pdfView;
         private readonly IWindowManager _windowManager;
         private readonly AppConfig _appConfig;
+        private readonly ICloudStorageService _cloudStorageService;
         private bool _isDisposed = false;
 
-        public MainForm(MainPresenter presenter, IPdfView pdfView, IWindowManager windowManager, AppConfig appConfig)
+        public MainForm(MainPresenter presenter, IWindowManager windowManager, AppConfig appConfig, ICloudStorageService cloudStorageService)
         {
             InitializeComponent();
             _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
-            _pdfView = pdfView ?? throw new ArgumentNullException(nameof(pdfView));
             _windowManager = windowManager ?? throw new ArgumentNullException(nameof(windowManager));
             _appConfig = appConfig ?? throw new ArgumentNullException(nameof(appConfig));
+            _cloudStorageService = cloudStorageService ?? throw new ArgumentNullException(nameof(cloudStorageService));
 
             Load += MainForm_Load;
         }
@@ -32,45 +32,8 @@ namespace UnifiedLearningAssistant.Forms
             _presenter?.SetView(this);
             _presenter?.Initialize();
 
-            _presenter.OnStartLearning += Presenter_OnStartLearning;
             _presenter.OnOpenSettings += Presenter_OnOpenSettings;
             _presenter.OnOpenEditor += Presenter_OnOpenEditor;
-            _presenter.OnOpenStatistics += Presenter_OnOpenStatistics;
-
-            // 监听PDF的添加到编辑器事件
-            _pdfView.AddToEditor += PdfView_OnAddToEditor;
-
-            if (_pdfView is UserControl uc)
-            {
-                if (_pdfView is PdfReaderForm form)
-                {
-                    pdfReaderForm = form;
-                }
-                uc.Dock = DockStyle.Fill;
-                tabPagePdf.Controls.Add(uc);
-                uc.Show();
-            }
-            else
-            {
-                throw new InvalidOperationException("IPdfView 未实现为 UserControl 类型。");
-            }
-        }
- 
-        private void PdfView_OnAddToEditor(object? sender, Views.AddToEditorEventArgs e)
-        {
-            _windowManager.OpenEditorWindowWithContext(e.Text, e.Language, null);
-        }
-
-
-        // 新增功能：PDF生词本联动 - 设置PDF Presenter
-        public void SetPdfPresenter(PdfPresenter pdfPresenter)
-        {
-            _presenter.SetPdfPresenter(pdfPresenter);
-        }
-
-        private async void Presenter_OnStartLearning(object? sender, Presenters.LearningStartEventArgs e)
-        {
-            await _windowManager.OpenLearningWindowAsync(e.UserId, e.Language, e.SubCategory, e.WordBankFile, e.Mode, e.SortOrder);
         }
 
         private void Presenter_OnOpenSettings(object? sender, EventArgs e)
@@ -83,11 +46,6 @@ namespace UnifiedLearningAssistant.Forms
             _windowManager.OpenEditorWindow();
         }
 
-        private void Presenter_OnOpenStatistics(object? sender, EventArgs e)
-        {
-            _windowManager.OpenStatisticsWindow();
-        }
-
         #region IMainView Implementation
 
         public string SelectedUser
@@ -96,48 +54,10 @@ namespace UnifiedLearningAssistant.Forms
             set => comboBoxUser.Text = value;
         }
 
-        public string SelectedLanguage
-        {
-            get => radioChinese.Checked ? Constants.Language.Chinese : Constants.Language.English;
-            set
-            {
-                radioChinese.Checked = value == Constants.Language.Chinese;
-                radioEnglish.Checked = value == Constants.Language.English;
-            }
-        }
-
-        public string SelectedSubCategory
-        {
-            get => comboBoxSubCategory.Text;
-            set => comboBoxSubCategory.Text = value;
-        }
-
-        public string SelectedMode
-        {
-            get => radioStudyMode.Checked ? Constants.LearningMode.Study : Constants.LearningMode.Quick;
-            set
-            {
-                radioStudyMode.Checked = value == Constants.LearningMode.Study;
-                radioQuickMode.Checked = value == Constants.LearningMode.Quick;
-            }
-        }
-
-        public string SelectedWordBankFile
-        {
-            get => comboBoxWordBank.Text;
-            set => comboBoxWordBank.Text = value;
-        }
-
         public string ProgressSummary
         {
             get => textBoxProgress.Text;
             set => textBoxProgress.Text = value;
-        }
-
-        public string SelectedSortOrder
-        {
-            get => comboBoxSortOrder.Text;
-            set => comboBoxSortOrder.Text = value;
         }
 
         public string StatusText
@@ -147,19 +67,11 @@ namespace UnifiedLearningAssistant.Forms
         }
 
         public event EventHandler? UserChanged;
-        public event EventHandler? LanguageChanged;
-        public event EventHandler? SubCategoryChanged;
-        public event EventHandler? ModeChanged;
-        public event EventHandler? WordBankChanged;
-        public event EventHandler? StartLearningClicked;
-        public event EventHandler? ContinueLearningClicked;
+        public event EventHandler? OpenLearningWindowClicked;
         public event EventHandler? OpenSettingsClicked;
         public event EventHandler? OpenEditorClicked;
-        public event EventHandler? OpenStatisticsClicked;
-        // 新增功能：错题本导出 - 导出事件
-        public event EventHandler? ExportErrorBookClicked;
-        public event EventHandler? SortOrderChanged;
         public event EventHandler? TabChanged;
+        public event EventHandler? NewUserClicked;
 
         public void ShowMessage(string msg)
         {
@@ -175,33 +87,11 @@ namespace UnifiedLearningAssistant.Forms
             }
         }
 
-        public void RefreshSubCategories(IEnumerable<string> subCats)
-        {
-            comboBoxSubCategory.Items.Clear();
-            foreach (var cat in subCats)
-            {
-                comboBoxSubCategory.Items.Add(cat);
-            }
-        }
-
-        public void RefreshWordBankFiles(IEnumerable<string> files)
-        {
-            comboBoxWordBank.Items.Clear();
-            foreach (var file in files)
-            {
-                comboBoxWordBank.Items.Add(file);
-            }
-        }
-
         public void SetTabPage(string tabName)
         {
             if (tabName == tabPageLearning.Text || tabName == "双语学习")
             {
                 tabControl1.SelectedTab = tabPageLearning;
-            }
-            else if (tabName == tabPagePdf.Text || tabName == "PDF" || tabName == "PDF阅读助手")
-            {
-                tabControl1.SelectedTab = tabPagePdf;
             }
         }
 
@@ -247,32 +137,18 @@ namespace UnifiedLearningAssistant.Forms
         private GroupBox groupBoxUser;
         private ComboBox comboBoxUser;
         private Label labelUser;
-        private GroupBox groupBoxLearning;
-        private GroupBox groupBoxLanguage;
-        private RadioButton radioChinese;
-        private RadioButton radioEnglish;
-        private Label labelLanguage;
-        private GroupBox groupBoxMode;
-        private Label labelMode;
-        private RadioButton radioStudyMode;
-        private RadioButton radioQuickMode;
-        private Label labelSubCategory;
-        private ComboBox comboBoxSubCategory;
-        private Label labelWordBank;
-        private ComboBox comboBoxWordBank;
-        private Button buttonStartLearning;
-        private Button buttonContinueLearning;
+        private Button buttonLearning;
         private Button buttonSettings;
         private Button buttonOpenEditor;
         private Button buttonOpenPdfReader;
         private Button buttonOpenStatistics;
-        // 新增功能：错题本导出 - 导出按钮
         private Button buttonExportErrorBook;
-        private PdfReaderForm? pdfReaderForm;
         private GroupBox groupBoxProgress;
         private TextBox textBoxProgress;
-        private Label labelSortOrder;
-        private ComboBox comboBoxSortOrder;
+        private Button buttonLearningManagement;
+        private Button buttonBrowser;
+        private Button buttonSubjectLearning;
+        private Button buttonBaiduNetdisk;
         private MenuStrip menuStrip1;
         private ToolStripMenuItem toolStripMenuItemFile;
         private ToolStripMenuItem toolStripMenuItemNewUser;
@@ -280,7 +156,6 @@ namespace UnifiedLearningAssistant.Forms
         private ToolStripMenuItem toolStripMenuItemSettings;
         private ToolStripMenuItem toolStripMenuItemHelp;
         private ToolStripStatusLabel toolStripStatusLabel;
-        private TabPage tabPagePdf;
         private StatusStrip statusStrip1;
         private Panel panelStreakInfo;
         private Label labelStreakDays;
@@ -293,35 +168,20 @@ namespace UnifiedLearningAssistant.Forms
             panelMain = new Panel();
             groupBoxProgress = new GroupBox();
             textBoxProgress = new TextBox();
-            buttonOpenStatistics = new Button();
             buttonOpenPdfReader = new Button();
             buttonOpenEditor = new Button();
             buttonSettings = new Button();
-            buttonContinueLearning = new Button();
-            buttonStartLearning = new Button();
-            groupBoxLearning = new GroupBox();
-            groupBoxLanguage = new GroupBox();
-            labelLanguage = new Label();
-            radioChinese = new RadioButton();
-            radioEnglish = new RadioButton();
-            groupBoxMode = new GroupBox();
-            labelMode = new Label();
-            radioStudyMode = new RadioButton();
-            radioQuickMode = new RadioButton();
-            labelSubCategory = new Label();
-            comboBoxSubCategory = new ComboBox();
-            labelWordBank = new Label();
-            comboBoxWordBank = new ComboBox();
-            labelSortOrder = new Label();
-            comboBoxSortOrder = new ComboBox();
+            buttonLearning = new Button();
             groupBoxUser = new GroupBox();
             comboBoxUser = new ComboBox();
             labelUser = new Label();
-            buttonExportErrorBook = new Button();
             panelStreakInfo = new Panel();
             labelStreakIcon = new Label();
             labelStreakDays = new Label();
-            tabPagePdf = new TabPage();
+            buttonLearningManagement = new Button();
+            buttonBrowser = new Button();
+            buttonSubjectLearning = new Button();
+            buttonBaiduNetdisk = new Button();
             menuStrip1 = new MenuStrip();
             toolStripMenuItemFile = new ToolStripMenuItem();
             toolStripMenuItemNewUser = new ToolStripMenuItem();
@@ -334,9 +194,6 @@ namespace UnifiedLearningAssistant.Forms
             tabPageLearning.SuspendLayout();
             panelMain.SuspendLayout();
             groupBoxProgress.SuspendLayout();
-            groupBoxLearning.SuspendLayout();
-            groupBoxLanguage.SuspendLayout();
-            groupBoxMode.SuspendLayout();
             groupBoxUser.SuspendLayout();
             panelStreakInfo.SuspendLayout();
             menuStrip1.SuspendLayout();
@@ -346,7 +203,6 @@ namespace UnifiedLearningAssistant.Forms
             // tabControl1
             // 
             tabControl1.Controls.Add(tabPageLearning);
-            tabControl1.Controls.Add(tabPagePdf);
             tabControl1.Dock = DockStyle.Fill;
             tabControl1.Location = new Point(0, 25);
             tabControl1.Name = "tabControl1";
@@ -368,16 +224,16 @@ namespace UnifiedLearningAssistant.Forms
             // panelMain
             // 
             panelMain.Controls.Add(groupBoxProgress);
-            panelMain.Controls.Add(buttonOpenStatistics);
             panelMain.Controls.Add(buttonOpenPdfReader);
             panelMain.Controls.Add(buttonOpenEditor);
             panelMain.Controls.Add(buttonSettings);
-            panelMain.Controls.Add(buttonContinueLearning);
-            panelMain.Controls.Add(buttonStartLearning);
-            panelMain.Controls.Add(groupBoxLearning);
+            panelMain.Controls.Add(buttonLearning);
             panelMain.Controls.Add(groupBoxUser);
-            panelMain.Controls.Add(buttonExportErrorBook);
             panelMain.Controls.Add(panelStreakInfo);
+            panelMain.Controls.Add(buttonLearningManagement);
+            panelMain.Controls.Add(buttonBrowser);
+            panelMain.Controls.Add(buttonSubjectLearning);
+            panelMain.Controls.Add(buttonBaiduNetdisk);
             panelMain.Dock = DockStyle.Fill;
             panelMain.Location = new Point(3, 3);
             panelMain.Margin = new Padding(4);
@@ -387,8 +243,8 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // groupBoxProgress
             // 
-            groupBoxProgress.Controls.Add(textBoxProgress);
             groupBoxProgress.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            groupBoxProgress.Controls.Add(textBoxProgress);
             groupBoxProgress.Location = new Point(620, 17);
             groupBoxProgress.Name = "groupBoxProgress";
             groupBoxProgress.Size = new Size(250, 207);
@@ -407,31 +263,15 @@ namespace UnifiedLearningAssistant.Forms
             textBoxProgress.Size = new Size(220, 147);
             textBoxProgress.TabIndex = 0;
             // 
-            // buttonOpenStatistics
-            // 
-            buttonOpenStatistics.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            buttonOpenStatistics.BackColor = Color.FromArgb(255, 152, 0);
-            buttonOpenStatistics.FlatAppearance.BorderSize = 0;
-            buttonOpenStatistics.FlatStyle = FlatStyle.Flat;
-            buttonOpenStatistics.ForeColor = Color.White;
-            buttonOpenStatistics.Location = new Point(620, 307);
-            buttonOpenStatistics.Name = "buttonOpenStatistics";
-            buttonOpenStatistics.Size = new Size(120, 44);
-            buttonOpenStatistics.TabIndex = 13;
-            buttonOpenStatistics.Text = "📊 学习统计";
-            buttonOpenStatistics.UseVisualStyleBackColor = false;
-            buttonOpenStatistics.Click += ButtonOpenStatistics_Click;
-            // 
             // buttonOpenPdfReader
             // 
-            buttonOpenPdfReader.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             buttonOpenPdfReader.BackColor = Color.FromArgb(0, 188, 212);
             buttonOpenPdfReader.FlatAppearance.BorderSize = 0;
             buttonOpenPdfReader.FlatStyle = FlatStyle.Flat;
             buttonOpenPdfReader.ForeColor = Color.White;
-            buttonOpenPdfReader.Location = new Point(750, 253);
+            buttonOpenPdfReader.Location = new Point(216, 226);
             buttonOpenPdfReader.Name = "buttonOpenPdfReader";
-            buttonOpenPdfReader.Size = new Size(120, 44);
+            buttonOpenPdfReader.Size = new Size(150, 51);
             buttonOpenPdfReader.TabIndex = 12;
             buttonOpenPdfReader.Text = "📖 PDF阅读";
             buttonOpenPdfReader.UseVisualStyleBackColor = false;
@@ -439,14 +279,13 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonOpenEditor
             // 
-            buttonOpenEditor.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             buttonOpenEditor.BackColor = Color.FromArgb(156, 39, 176);
             buttonOpenEditor.FlatAppearance.BorderSize = 0;
             buttonOpenEditor.FlatStyle = FlatStyle.Flat;
             buttonOpenEditor.ForeColor = Color.White;
-            buttonOpenEditor.Location = new Point(620, 253);
+            buttonOpenEditor.Location = new Point(36, 226);
             buttonOpenEditor.Name = "buttonOpenEditor";
-            buttonOpenEditor.Size = new Size(120, 44);
+            buttonOpenEditor.Size = new Size(150, 51);
             buttonOpenEditor.TabIndex = 11;
             buttonOpenEditor.Text = "📝 模板编辑";
             buttonOpenEditor.UseVisualStyleBackColor = false;
@@ -454,200 +293,34 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // buttonSettings
             // 
-            buttonSettings.Location = new Point(345, 36);
+            buttonSettings.BackColor = Color.FromArgb(255, 128, 0);
+            buttonSettings.Location = new Point(389, 127);
             buttonSettings.Name = "buttonSettings";
-            buttonSettings.Size = new Size(120, 40);
+            buttonSettings.Size = new Size(150, 51);
             buttonSettings.TabIndex = 16;
             buttonSettings.Text = "⚙️ 设置";
+            buttonSettings.UseVisualStyleBackColor = false;
             buttonSettings.Visible = false;
             buttonSettings.Click += ButtonSettings_Click;
             // 
-            // buttonContinueLearning
+            // buttonLearning
             // 
-            buttonContinueLearning.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            buttonContinueLearning.BackColor = Color.FromArgb(33, 150, 243);
-            buttonContinueLearning.FlatAppearance.BorderSize = 0;
-            buttonContinueLearning.FlatStyle = FlatStyle.Flat;
-            buttonContinueLearning.ForeColor = Color.White;
-            buttonContinueLearning.Location = new Point(288, 346);
-            buttonContinueLearning.Name = "buttonContinueLearning";
-            buttonContinueLearning.Size = new Size(150, 51);
-            buttonContinueLearning.TabIndex = 10;
-            buttonContinueLearning.Text = "📚 继续学习";
-            buttonContinueLearning.UseVisualStyleBackColor = false;
-            buttonContinueLearning.Click += ButtonContinueLearning_Click;
-            // 
-            // buttonStartLearning
-            // 
-            buttonStartLearning.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            buttonStartLearning.BackColor = Color.FromArgb(76, 175, 80);
-            buttonStartLearning.FlatAppearance.BorderSize = 0;
-            buttonStartLearning.FlatStyle = FlatStyle.Flat;
-            buttonStartLearning.ForeColor = Color.White;
-            buttonStartLearning.Location = new Point(108, 346);
-            buttonStartLearning.Name = "buttonStartLearning";
-            buttonStartLearning.Size = new Size(150, 51);
-            buttonStartLearning.TabIndex = 9;
-            buttonStartLearning.Text = "🚀 开始学习";
-            buttonStartLearning.UseVisualStyleBackColor = false;
-            buttonStartLearning.Click += ButtonStartLearning_Click;
-            // 
-            // groupBoxLearning
-            // 
-            groupBoxLearning.Controls.Add(groupBoxLanguage);
-            groupBoxLearning.Controls.Add(groupBoxMode);
-            groupBoxLearning.Controls.Add(labelSubCategory);
-            groupBoxLearning.Controls.Add(comboBoxSubCategory);
-            groupBoxLearning.Controls.Add(labelWordBank);
-            groupBoxLearning.Controls.Add(comboBoxWordBank);
-            groupBoxLearning.Controls.Add(labelSortOrder);
-            groupBoxLearning.Controls.Add(comboBoxSortOrder);
-            groupBoxLearning.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            groupBoxLearning.Location = new Point(30, 113);
-            groupBoxLearning.Name = "groupBoxLearning";
-            groupBoxLearning.Size = new Size(560, 210);
-            groupBoxLearning.TabIndex = 1;
-            groupBoxLearning.TabStop = false;
-            groupBoxLearning.Text = "快速开始";
-            // 
-            // groupBoxLanguage
-            // 
-            groupBoxLanguage.Controls.Add(labelLanguage);
-            groupBoxLanguage.Controls.Add(radioChinese);
-            groupBoxLanguage.Controls.Add(radioEnglish);
-            groupBoxLanguage.Location = new Point(15, 25);
-            groupBoxLanguage.Name = "groupBoxLanguage";
-            groupBoxLanguage.Size = new Size(250, 60);
-            groupBoxLanguage.TabIndex = 0;
-            groupBoxLanguage.TabStop = false;
-            groupBoxLanguage.Text = "语言";
-            // 
-            // labelLanguage
-            // 
-            labelLanguage.Location = new Point(10, 22);
-            labelLanguage.Name = "labelLanguage";
-            labelLanguage.Size = new Size(60, 23);
-            labelLanguage.TabIndex = 0;
-            labelLanguage.Text = "选择:";
-            // 
-            // radioChinese
-            // 
-            radioChinese.Location = new Point(80, 20);
-            radioChinese.Name = "radioChinese";
-            radioChinese.Size = new Size(80, 27);
-            radioChinese.TabIndex = 1;
-            radioChinese.Text = "中文";
-            radioChinese.CheckedChanged += RadioChinese_CheckedChanged;
-            // 
-            // radioEnglish
-            // 
-            radioEnglish.Checked = true;
-            radioEnglish.Location = new Point(170, 20);
-            radioEnglish.Name = "radioEnglish";
-            radioEnglish.Size = new Size(65, 27);
-            radioEnglish.TabIndex = 2;
-            radioEnglish.TabStop = true;
-            radioEnglish.Text = "英语";
-            radioEnglish.CheckedChanged += RadioEnglish_CheckedChanged;
-            // 
-            // groupBoxMode
-            // 
-            groupBoxMode.Controls.Add(labelMode);
-            groupBoxMode.Controls.Add(radioStudyMode);
-            groupBoxMode.Controls.Add(radioQuickMode);
-            groupBoxMode.Location = new Point(275, 25);
-            groupBoxMode.Name = "groupBoxMode";
-            groupBoxMode.Size = new Size(250, 60);
-            groupBoxMode.TabIndex = 1;
-            groupBoxMode.TabStop = false;
-            groupBoxMode.Text = "模式";
-            // 
-            // labelMode
-            // 
-            labelMode.Location = new Point(10, 22);
-            labelMode.Name = "labelMode";
-            labelMode.Size = new Size(60, 23);
-            labelMode.TabIndex = 0;
-            labelMode.Text = "选择:";
-            // 
-            // radioStudyMode
-            // 
-            radioStudyMode.Checked = true;
-            radioStudyMode.Location = new Point(80, 20);
-            radioStudyMode.Name = "radioStudyMode";
-            radioStudyMode.Size = new Size(80, 27);
-            radioStudyMode.TabIndex = 1;
-            radioStudyMode.TabStop = true;
-            radioStudyMode.Text = "学习模式";
-            radioStudyMode.CheckedChanged += RadioStudyMode_CheckedChanged;
-            // 
-            // radioQuickMode
-            // 
-            radioQuickMode.Location = new Point(170, 20);
-            radioQuickMode.Name = "radioQuickMode";
-            radioQuickMode.Size = new Size(80, 27);
-            radioQuickMode.TabIndex = 2;
-            radioQuickMode.Text = "快速模式";
-            radioQuickMode.CheckedChanged += RadioQuickMode_CheckedChanged;
-            // 
-            // labelSubCategory
-            // 
-            labelSubCategory.Location = new Point(15, 98);
-            labelSubCategory.Name = "labelSubCategory";
-            labelSubCategory.Size = new Size(100, 23);
-            labelSubCategory.TabIndex = 2;
-            labelSubCategory.Text = "学习类型:";
-            // 
-            // comboBoxSubCategory
-            // 
-            comboBoxSubCategory.FormattingEnabled = true;
-            comboBoxSubCategory.Location = new Point(178, 96);
-            comboBoxSubCategory.Name = "comboBoxSubCategory";
-            comboBoxSubCategory.Size = new Size(201, 29);
-            comboBoxSubCategory.TabIndex = 2;
-            comboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
-            // 
-            // labelWordBank
-            // 
-            labelWordBank.Location = new Point(15, 130);
-            labelWordBank.Name = "labelWordBank";
-            labelWordBank.Size = new Size(100, 23);
-            labelWordBank.TabIndex = 4;
-            labelWordBank.Text = "词库文件:";
-            // 
-            // comboBoxWordBank
-            // 
-            comboBoxWordBank.FormattingEnabled = true;
-            comboBoxWordBank.Location = new Point(178, 127);
-            comboBoxWordBank.Name = "comboBoxWordBank";
-            comboBoxWordBank.Size = new Size(201, 29);
-            comboBoxWordBank.TabIndex = 5;
-            comboBoxWordBank.SelectedIndexChanged += ComboBoxWordBank_SelectedIndexChanged;
-            // 
-            // labelSortOrder
-            // 
-            labelSortOrder.Location = new Point(15, 163);
-            labelSortOrder.Name = "labelSortOrder";
-            labelSortOrder.Size = new Size(100, 23);
-            labelSortOrder.TabIndex = 6;
-            labelSortOrder.Text = "排序方式:";
-            // 
-            // comboBoxSortOrder
-            // 
-            comboBoxSortOrder.FormattingEnabled = true;
-            comboBoxSortOrder.Items.AddRange(new object[] { "顺序", "Random" });
-            comboBoxSortOrder.Location = new Point(178, 160);
-            comboBoxSortOrder.Name = "comboBoxSortOrder";
-            comboBoxSortOrder.Size = new Size(201, 29);
-            comboBoxSortOrder.TabIndex = 8;
-            comboBoxSortOrder.Text = "顺序";
-            comboBoxSortOrder.SelectedIndexChanged += ComboBoxSortOrder_SelectedIndexChanged;
+            buttonLearning.BackColor = Color.FromArgb(33, 150, 243);
+            buttonLearning.FlatAppearance.BorderSize = 0;
+            buttonLearning.FlatStyle = FlatStyle.Flat;
+            buttonLearning.ForeColor = Color.White;
+            buttonLearning.Location = new Point(100, 127);
+            buttonLearning.Name = "buttonLearning";
+            buttonLearning.Size = new Size(200, 51);
+            buttonLearning.TabIndex = 9;
+            buttonLearning.Text = "📖 学习";
+            buttonLearning.UseVisualStyleBackColor = false;
+            buttonLearning.Click += ButtonLearning_Click;
             // 
             // groupBoxUser
             // 
             groupBoxUser.Controls.Add(comboBoxUser);
             groupBoxUser.Controls.Add(labelUser);
-            groupBoxUser.Anchor = AnchorStyles.Top | AnchorStyles.Left;
             groupBoxUser.Location = new Point(30, 17);
             groupBoxUser.Name = "groupBoxUser";
             groupBoxUser.Size = new Size(250, 74);
@@ -658,7 +331,6 @@ namespace UnifiedLearningAssistant.Forms
             // comboBoxUser
             // 
             comboBoxUser.FormattingEnabled = true;
-            comboBoxUser.DropDownStyle = ComboBoxStyle.DropDown;
             comboBoxUser.Location = new Point(80, 34);
             comboBoxUser.Name = "comboBoxUser";
             comboBoxUser.Size = new Size(150, 29);
@@ -673,30 +345,15 @@ namespace UnifiedLearningAssistant.Forms
             labelUser.TabIndex = 0;
             labelUser.Text = "玩家:";
             // 
-            // buttonExportErrorBook
-            // 
-            buttonExportErrorBook.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            buttonExportErrorBook.BackColor = Color.FromArgb(244, 67, 54);
-            buttonExportErrorBook.FlatAppearance.BorderSize = 0;
-            buttonExportErrorBook.FlatStyle = FlatStyle.Flat;
-            buttonExportErrorBook.ForeColor = Color.White;
-            buttonExportErrorBook.Location = new Point(750, 308);
-            buttonExportErrorBook.Name = "buttonExportErrorBook";
-            buttonExportErrorBook.Size = new Size(120, 44);
-            buttonExportErrorBook.TabIndex = 15;
-            buttonExportErrorBook.Text = "❌ 导出错题本";
-            buttonExportErrorBook.UseVisualStyleBackColor = false;
-            buttonExportErrorBook.Click += ButtonExportErrorBook_Click;
-            // 
             // panelStreakInfo
             // 
+            panelStreakInfo.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             panelStreakInfo.Controls.Add(labelStreakIcon);
             panelStreakInfo.Controls.Add(labelStreakDays);
-            panelStreakInfo.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            panelStreakInfo.Location = new Point(400, 431);
+            panelStreakInfo.Location = new Point(30, 399);
             panelStreakInfo.Margin = new Padding(4);
             panelStreakInfo.Name = "panelStreakInfo";
-            panelStreakInfo.Size = new Size(306, 110);
+            panelStreakInfo.Size = new Size(365, 110);
             panelStreakInfo.TabIndex = 17;
             // 
             // labelStreakIcon
@@ -715,14 +372,65 @@ namespace UnifiedLearningAssistant.Forms
             labelStreakDays.Size = new Size(143, 28);
             labelStreakDays.TabIndex = 1;
             // 
-            // tabPagePdf
+            // buttonLearningManagement
             // 
-            tabPagePdf.Location = new Point(4, 26);
-            tabPagePdf.Name = "tabPagePdf";
-            tabPagePdf.Padding = new Padding(3);
-            tabPagePdf.Size = new Size(892, 677);
-            tabPagePdf.TabIndex = 1;
-            tabPagePdf.Text = "📄 PDF阅读助手";
+            buttonLearningManagement.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            buttonLearningManagement.BackColor = Color.FromArgb(103, 58, 183);
+            buttonLearningManagement.FlatAppearance.BorderSize = 0;
+            buttonLearningManagement.FlatStyle = FlatStyle.Flat;
+            buttonLearningManagement.ForeColor = Color.White;
+            buttonLearningManagement.Location = new Point(620, 302);
+            buttonLearningManagement.Name = "buttonLearningManagement";
+            buttonLearningManagement.Size = new Size(120, 44);
+            buttonLearningManagement.TabIndex = 18;
+            buttonLearningManagement.Text = "📋 学习管理";
+            buttonLearningManagement.UseVisualStyleBackColor = false;
+            buttonLearningManagement.Click += ButtonLearningManagement_Click;
+            // 
+            // buttonBrowser
+            // 
+            buttonBrowser.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            buttonBrowser.BackColor = Color.FromArgb(255, 87, 34);
+            buttonBrowser.FlatAppearance.BorderSize = 0;
+            buttonBrowser.FlatStyle = FlatStyle.Flat;
+            buttonBrowser.ForeColor = Color.White;
+            buttonBrowser.Location = new Point(750, 302);
+            buttonBrowser.Name = "buttonBrowser";
+            buttonBrowser.Size = new Size(120, 44);
+            buttonBrowser.TabIndex = 19;
+            buttonBrowser.Text = "🌐 学习浏览器";
+            buttonBrowser.UseVisualStyleBackColor = false;
+            buttonBrowser.Click += ButtonBrowser_Click;
+            // 
+            // buttonSubjectLearning
+            // 
+            buttonSubjectLearning.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            buttonSubjectLearning.BackColor = Color.FromArgb(76, 175, 80);
+            buttonSubjectLearning.FlatAppearance.BorderSize = 0;
+            buttonSubjectLearning.FlatStyle = FlatStyle.Flat;
+            buttonSubjectLearning.ForeColor = Color.White;
+            buttonSubjectLearning.Location = new Point(750, 242);
+            buttonSubjectLearning.Name = "buttonSubjectLearning";
+            buttonSubjectLearning.Size = new Size(120, 44);
+            buttonSubjectLearning.TabIndex = 20;
+            buttonSubjectLearning.Text = "📚 学科学习";
+            buttonSubjectLearning.UseVisualStyleBackColor = false;
+            buttonSubjectLearning.Click += ButtonSubjectLearning_Click;
+            // 
+            // buttonBaiduNetdisk
+            // 
+            buttonBaiduNetdisk.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            buttonBaiduNetdisk.BackColor = Color.FromArgb(33, 150, 243);
+            buttonBaiduNetdisk.FlatAppearance.BorderSize = 0;
+            buttonBaiduNetdisk.FlatStyle = FlatStyle.Flat;
+            buttonBaiduNetdisk.ForeColor = Color.White;
+            buttonBaiduNetdisk.Location = new Point(620, 242);
+            buttonBaiduNetdisk.Name = "buttonBaiduNetdisk";
+            buttonBaiduNetdisk.Size = new Size(120, 44);
+            buttonBaiduNetdisk.TabIndex = 21;
+            buttonBaiduNetdisk.Text = "☁️ 百度网盘";
+            buttonBaiduNetdisk.UseVisualStyleBackColor = false;
+            buttonBaiduNetdisk.Click += ButtonBaiduNetdisk_Click;
             // 
             // menuStrip1
             // 
@@ -744,6 +452,7 @@ namespace UnifiedLearningAssistant.Forms
             toolStripMenuItemNewUser.Name = "toolStripMenuItemNewUser";
             toolStripMenuItemNewUser.Size = new Size(124, 22);
             toolStripMenuItemNewUser.Text = "新建玩家";
+            toolStripMenuItemNewUser.Click += ToolStripMenuItemNewUser_Click;
             // 
             // toolStripMenuItemExit
             // 
@@ -767,7 +476,6 @@ namespace UnifiedLearningAssistant.Forms
             // 
             // statusStrip1
             // 
-            statusStrip1.Dock = DockStyle.Bottom;
             statusStrip1.Items.AddRange(new ToolStripItem[] { toolStripStatusLabel });
             statusStrip1.Location = new Point(0, 710);
             statusStrip1.Name = "statusStrip1";
@@ -799,9 +507,6 @@ namespace UnifiedLearningAssistant.Forms
             panelMain.ResumeLayout(false);
             groupBoxProgress.ResumeLayout(false);
             groupBoxProgress.PerformLayout();
-            groupBoxLearning.ResumeLayout(false);
-            groupBoxLanguage.ResumeLayout(false);
-            groupBoxMode.ResumeLayout(false);
             groupBoxUser.ResumeLayout(false);
             panelStreakInfo.ResumeLayout(false);
             menuStrip1.ResumeLayout(false);
@@ -821,53 +526,9 @@ namespace UnifiedLearningAssistant.Forms
             UserChanged?.Invoke(this, EventArgs.Empty);
         }
 
-        private void RadioChinese_CheckedChanged(object? sender, EventArgs e)
+        private void ButtonLearning_Click(object? sender, EventArgs e)
         {
-            if (radioChinese.Checked)
-                LanguageChanged?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void RadioEnglish_CheckedChanged(object? sender, EventArgs e)
-        {
-            if (radioEnglish.Checked)
-                LanguageChanged?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void ComboBoxSubCategory_SelectedIndexChanged(object? sender, EventArgs e)
-        {
-            SubCategoryChanged?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void RadioStudyMode_CheckedChanged(object? sender, EventArgs e)
-        {
-            if (radioStudyMode.Checked)
-                ModeChanged?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void RadioQuickMode_CheckedChanged(object? sender, EventArgs e)
-        {
-            if (radioQuickMode.Checked)
-                ModeChanged?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void ComboBoxWordBank_SelectedIndexChanged(object? sender, EventArgs e)
-        {
-            WordBankChanged?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void ComboBoxSortOrder_SelectedIndexChanged(object? sender, EventArgs e)
-        {
-            SortOrderChanged?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void ButtonStartLearning_Click(object? sender, EventArgs e)
-        {
-            StartLearningClicked?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void ButtonContinueLearning_Click(object? sender, EventArgs e)
-        {
-            ContinueLearningClicked?.Invoke(this, EventArgs.Empty);
+            OpenLearningWindowClicked?.Invoke(this, EventArgs.Empty);
         }
 
         private void ButtonSettings_Click(object? sender, EventArgs e)
@@ -882,18 +543,82 @@ namespace UnifiedLearningAssistant.Forms
 
         private void ButtonOpenPdfReader_Click(object? sender, EventArgs e)
         {
-            SetTabPage("PDF闃呰鍔╂墜");
+            _windowManager.OpenPdfReaderWindow();
         }
 
-        private void ButtonOpenStatistics_Click(object? sender, EventArgs e)
+        private void ButtonLearningManagement_Click(object? sender, EventArgs e)
         {
-            OpenStatisticsClicked?.Invoke(this, EventArgs.Empty);
+            _windowManager.OpenLearningManagementWindow();
         }
 
-        // 鏂板鍔熻兘锛氶敊棰樻湰瀵煎嚭 - 瀵煎嚭鎸夐挳鐐瑰嚮浜嬩欢
-        private void ButtonExportErrorBook_Click(object? sender, EventArgs e)
+        private void ButtonBrowser_Click(object? sender, EventArgs e)
         {
-            ExportErrorBookClicked?.Invoke(this, EventArgs.Empty);
+            _windowManager.OpenBrowserWindow();
+        }
+
+        private void ButtonSubjectLearning_Click(object? sender, EventArgs e)
+        {
+            MessageBox.Show("学科学习功能正在开发中，敬请期待！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void ButtonBaiduNetdisk_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (!_cloudStorageService.IsConfigured)
+                {
+                    MessageBox.Show("百度网盘未配置，请先在系统设置中配置 Client ID 和 Client Secret。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                if (!_cloudStorageService.IsAuthenticated)
+                {
+                    using var authForm = new BaiduNetdiskAuthForm(_cloudStorageService, OnBaiduNetdiskAuthCompleted);
+                    authForm.ShowDialog();
+                }
+                else
+                {
+                    ShowBaiduNetdiskFiles();
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"百度网盘操作失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void OnBaiduNetdiskAuthCompleted(bool success)
+        {
+            if (success)
+            {
+                ShowBaiduNetdiskFiles();
+            }
+        }
+
+        private async void ShowBaiduNetdiskFiles()
+        {
+            try
+            {
+                var files = await _cloudStorageService.ListFilesAsync("/");
+                if (files != null && files.Count > 0)
+                {
+                    var fileList = string.Join("\n", files.Select(f => $"{(f.IsFolder ? "[文件夹]" : "[文件]")} {f.Name}"));
+                    MessageBox.Show($"百度网盘根目录文件列表:\n\n{fileList}", "百度网盘文件", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    MessageBox.Show("百度网盘根目录为空或获取文件列表失败", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"获取文件列表失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ToolStripMenuItemNewUser_Click(object? sender, EventArgs e)
+        {
+            NewUserClicked?.Invoke(this, EventArgs.Empty);
         }
 
         private void ToolStripMenuItemSettings_Click(object? sender, EventArgs e)
@@ -922,10 +647,8 @@ namespace UnifiedLearningAssistant.Forms
             {
                 if (_presenter != null)
                 {
-                    _presenter.OnStartLearning -= Presenter_OnStartLearning;
                     _presenter.OnOpenSettings -= Presenter_OnOpenSettings;
                     _presenter.OnOpenEditor -= Presenter_OnOpenEditor;
-                    _presenter.OnOpenStatistics -= Presenter_OnOpenStatistics;
                     (_presenter as IDisposable)?.Dispose();
                 }
 

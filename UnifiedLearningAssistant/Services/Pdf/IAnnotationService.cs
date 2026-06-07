@@ -1,6 +1,6 @@
-using UnifiedLearningAssistant.Models.Pdf;
+using LearningAssistant.Models.Pdf;
 
-namespace UnifiedLearningAssistant.Services.Pdf
+namespace LearningAssistant.Services.Pdf
 {
     public interface IAnnotationService
     {

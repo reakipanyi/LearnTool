@@ -1,7 +1,7 @@
 
 using System.Collections.Concurrent;
 
-namespace UnifiedLearningAssistant.Common.Events
+namespace LearningAssistant.Common.Events
 {
     public class EventBus : IEventBus
     {

@@ -1,5 +1,5 @@
 
-namespace UnifiedLearningAssistant.Common.Events
+namespace LearningAssistant.Common.Events
 {
     public interface IEventBus
     {
