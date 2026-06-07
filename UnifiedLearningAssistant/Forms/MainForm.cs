@@ -207,7 +207,7 @@ namespace LearningAssistant.Forms
             tabControl1.Location = new Point(0, 25);
             tabControl1.Name = "tabControl1";
             tabControl1.SelectedIndex = 0;
-            tabControl1.Size = new Size(900, 707);
+            tabControl1.Size = new Size(1184, 707);
             tabControl1.TabIndex = 0;
             tabControl1.SelectedIndexChanged += TabControl1_SelectedIndexChanged;
             // 
@@ -217,7 +217,7 @@ namespace LearningAssistant.Forms
             tabPageLearning.Location = new Point(4, 30);
             tabPageLearning.Name = "tabPageLearning";
             tabPageLearning.Padding = new Padding(3);
-            tabPageLearning.Size = new Size(892, 673);
+            tabPageLearning.Size = new Size(1176, 673);
             tabPageLearning.TabIndex = 0;
             tabPageLearning.Text = "📖 双语学习";
             // 
@@ -238,16 +238,16 @@ namespace LearningAssistant.Forms
             panelMain.Location = new Point(3, 3);
             panelMain.Margin = new Padding(4);
             panelMain.Name = "panelMain";
-            panelMain.Size = new Size(886, 667);
+            panelMain.Size = new Size(1170, 667);
             panelMain.TabIndex = 0;
             // 
             // groupBoxProgress
             // 
             groupBoxProgress.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             groupBoxProgress.Controls.Add(textBoxProgress);
-            groupBoxProgress.Location = new Point(620, 17);
+            groupBoxProgress.Location = new Point(848, 17);
             groupBoxProgress.Name = "groupBoxProgress";
-            groupBoxProgress.Size = new Size(250, 207);
+            groupBoxProgress.Size = new Size(306, 207);
             groupBoxProgress.TabIndex = 12;
             groupBoxProgress.TabStop = false;
             groupBoxProgress.Text = "学习统计摘要";
@@ -260,7 +260,7 @@ namespace LearningAssistant.Forms
             textBoxProgress.Name = "textBoxProgress";
             textBoxProgress.ReadOnly = true;
             textBoxProgress.ScrollBars = ScrollBars.Vertical;
-            textBoxProgress.Size = new Size(220, 147);
+            textBoxProgress.Size = new Size(285, 167);
             textBoxProgress.TabIndex = 0;
             // 
             // buttonOpenPdfReader
@@ -269,7 +269,7 @@ namespace LearningAssistant.Forms
             buttonOpenPdfReader.FlatAppearance.BorderSize = 0;
             buttonOpenPdfReader.FlatStyle = FlatStyle.Flat;
             buttonOpenPdfReader.ForeColor = Color.White;
-            buttonOpenPdfReader.Location = new Point(216, 226);
+            buttonOpenPdfReader.Location = new Point(216, 193);
             buttonOpenPdfReader.Name = "buttonOpenPdfReader";
             buttonOpenPdfReader.Size = new Size(150, 51);
             buttonOpenPdfReader.TabIndex = 12;
@@ -283,7 +283,7 @@ namespace LearningAssistant.Forms
             buttonOpenEditor.FlatAppearance.BorderSize = 0;
             buttonOpenEditor.FlatStyle = FlatStyle.Flat;
             buttonOpenEditor.ForeColor = Color.White;
-            buttonOpenEditor.Location = new Point(36, 226);
+            buttonOpenEditor.Location = new Point(36, 193);
             buttonOpenEditor.Name = "buttonOpenEditor";
             buttonOpenEditor.Size = new Size(150, 51);
             buttonOpenEditor.TabIndex = 11;
@@ -294,13 +294,16 @@ namespace LearningAssistant.Forms
             // buttonSettings
             // 
             buttonSettings.BackColor = Color.FromArgb(255, 128, 0);
-            buttonSettings.Location = new Point(389, 127);
+            buttonSettings.FlatAppearance.BorderSize = 0;
+            buttonSettings.FlatStyle = FlatStyle.Flat;
+            buttonSettings.ForeColor = Color.White;
+            buttonSettings.Location = new Point(216, 127);
             buttonSettings.Name = "buttonSettings";
             buttonSettings.Size = new Size(150, 51);
             buttonSettings.TabIndex = 16;
             buttonSettings.Text = "⚙️ 设置";
             buttonSettings.UseVisualStyleBackColor = false;
-            buttonSettings.Visible = false;
+            buttonSettings.Visible = true;
             buttonSettings.Click += ButtonSettings_Click;
             // 
             // buttonLearning
@@ -309,9 +312,9 @@ namespace LearningAssistant.Forms
             buttonLearning.FlatAppearance.BorderSize = 0;
             buttonLearning.FlatStyle = FlatStyle.Flat;
             buttonLearning.ForeColor = Color.White;
-            buttonLearning.Location = new Point(100, 127);
+            buttonLearning.Location = new Point(36, 127);
             buttonLearning.Name = "buttonLearning";
-            buttonLearning.Size = new Size(200, 51);
+            buttonLearning.Size = new Size(150, 51);
             buttonLearning.TabIndex = 9;
             buttonLearning.Text = "📖 学习";
             buttonLearning.UseVisualStyleBackColor = false;
@@ -379,9 +382,9 @@ namespace LearningAssistant.Forms
             buttonLearningManagement.FlatAppearance.BorderSize = 0;
             buttonLearningManagement.FlatStyle = FlatStyle.Flat;
             buttonLearningManagement.ForeColor = Color.White;
-            buttonLearningManagement.Location = new Point(620, 302);
+            buttonLearningManagement.Location = new Point(873, 263);
             buttonLearningManagement.Name = "buttonLearningManagement";
-            buttonLearningManagement.Size = new Size(120, 44);
+            buttonLearningManagement.Size = new Size(136, 53);
             buttonLearningManagement.TabIndex = 18;
             buttonLearningManagement.Text = "📋 学习管理";
             buttonLearningManagement.UseVisualStyleBackColor = false;
@@ -394,9 +397,9 @@ namespace LearningAssistant.Forms
             buttonBrowser.FlatAppearance.BorderSize = 0;
             buttonBrowser.FlatStyle = FlatStyle.Flat;
             buttonBrowser.ForeColor = Color.White;
-            buttonBrowser.Location = new Point(750, 302);
+            buttonBrowser.Location = new Point(1018, 341);
             buttonBrowser.Name = "buttonBrowser";
-            buttonBrowser.Size = new Size(120, 44);
+            buttonBrowser.Size = new Size(136, 53);
             buttonBrowser.TabIndex = 19;
             buttonBrowser.Text = "🌐 学习浏览器";
             buttonBrowser.UseVisualStyleBackColor = false;
@@ -409,9 +412,9 @@ namespace LearningAssistant.Forms
             buttonSubjectLearning.FlatAppearance.BorderSize = 0;
             buttonSubjectLearning.FlatStyle = FlatStyle.Flat;
             buttonSubjectLearning.ForeColor = Color.White;
-            buttonSubjectLearning.Location = new Point(750, 242);
+            buttonSubjectLearning.Location = new Point(1018, 263);
             buttonSubjectLearning.Name = "buttonSubjectLearning";
-            buttonSubjectLearning.Size = new Size(120, 44);
+            buttonSubjectLearning.Size = new Size(136, 53);
             buttonSubjectLearning.TabIndex = 20;
             buttonSubjectLearning.Text = "📚 学科学习";
             buttonSubjectLearning.UseVisualStyleBackColor = false;
@@ -424,9 +427,9 @@ namespace LearningAssistant.Forms
             buttonBaiduNetdisk.FlatAppearance.BorderSize = 0;
             buttonBaiduNetdisk.FlatStyle = FlatStyle.Flat;
             buttonBaiduNetdisk.ForeColor = Color.White;
-            buttonBaiduNetdisk.Location = new Point(620, 242);
+            buttonBaiduNetdisk.Location = new Point(873, 341);
             buttonBaiduNetdisk.Name = "buttonBaiduNetdisk";
-            buttonBaiduNetdisk.Size = new Size(120, 44);
+            buttonBaiduNetdisk.Size = new Size(136, 53);
             buttonBaiduNetdisk.TabIndex = 21;
             buttonBaiduNetdisk.Text = "☁️ 百度网盘";
             buttonBaiduNetdisk.UseVisualStyleBackColor = false;
@@ -437,7 +440,7 @@ namespace LearningAssistant.Forms
             menuStrip1.Items.AddRange(new ToolStripItem[] { toolStripMenuItemFile, toolStripMenuItemSettings, toolStripMenuItemHelp });
             menuStrip1.Location = new Point(0, 0);
             menuStrip1.Name = "menuStrip1";
-            menuStrip1.Size = new Size(900, 25);
+            menuStrip1.Size = new Size(1184, 25);
             menuStrip1.TabIndex = 1;
             // 
             // toolStripMenuItemFile
@@ -479,7 +482,7 @@ namespace LearningAssistant.Forms
             statusStrip1.Items.AddRange(new ToolStripItem[] { toolStripStatusLabel });
             statusStrip1.Location = new Point(0, 710);
             statusStrip1.Name = "statusStrip1";
-            statusStrip1.Size = new Size(900, 22);
+            statusStrip1.Size = new Size(1184, 22);
             statusStrip1.TabIndex = 2;
             // 
             // toolStripStatusLabel
@@ -493,7 +496,7 @@ namespace LearningAssistant.Forms
             AutoScaleDimensions = new SizeF(10F, 21F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.FromArgb(250, 245, 235);
-            ClientSize = new Size(900, 732);
+            ClientSize = new Size(1184, 732);
             Controls.Add(statusStrip1);
             Controls.Add(tabControl1);
             Controls.Add(menuStrip1);

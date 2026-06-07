@@ -207,11 +207,13 @@ namespace LearningAssistant.Services
         public void OpenBrowserWindow()
         {
             _logger.LogInformation("Opening browser window");
-            /*
+
             try
             {
                 using var scope = _serviceProvider.CreateScope();
-                var form = scope.ServiceProvider.GetRequiredService<BrowserForm>();
+                var scopedProvider = scope.ServiceProvider;
+
+                var form = scopedProvider.GetRequiredService<BrowserForm>();
                 form.StartPosition = FormStartPosition.CenterParent;
                 form.ShowDialog();
             }
@@ -220,7 +222,6 @@ namespace LearningAssistant.Services
                 _logger.LogError(ex, "Failed to open browser window");
                 throw;
             }
-            */
         }
 
         public void OpenPdfReaderWindow()

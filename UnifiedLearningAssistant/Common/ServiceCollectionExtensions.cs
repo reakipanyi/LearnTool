@@ -6,12 +6,12 @@ using LearningAssistant.Services;
 using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Cache;
 using LearningAssistant.Services.Cloud;
+using LearningAssistant.Services.Feedback;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Migration;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Services.Persistence;
 using LearningAssistant.Services.TTS;
-using LearningAssistant.Services.Feedback;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -195,13 +195,15 @@ namespace LearningAssistant.Common
                 var logger = sp.GetService<ILogger<LearningManagementForm>>();
                 return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService, logger);
             });
-            /*
+
             services.AddScoped<BrowserForm>(sp =>
             {
                 var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
-                return new BrowserForm(contentLoaderService);
+                var cloudStorageService = sp.GetService<ICloudStorageService>();
+                var logger = sp.GetService<ILogger<BrowserForm>>();
+                return new BrowserForm(contentLoaderService, cloudStorageService, logger);
             });
-            */
+
             services.AddScoped<ISettingView>(sp => sp.GetRequiredService<SettingForm>());
             services.AddScoped<ILearningView>(sp => sp.GetRequiredService<LearningForm>());
             services.AddScoped<IPdfView>(sp => sp.GetRequiredService<PdfReaderForm>());

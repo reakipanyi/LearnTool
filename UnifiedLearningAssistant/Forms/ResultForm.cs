@@ -1,7 +1,7 @@
-using Microsoft.Extensions.Logging;
 using LearningAssistant.Common;
 using LearningAssistant.Views;
 using LearningAssistant.Views.UI;
+using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Forms
 {
@@ -25,90 +25,9 @@ namespace LearningAssistant.Forms
             InitializeComponent();
             _logger = logger;
             MinimumSize = new Size(900, 600);
-            Resize += ResultForm_Resize;
-            Load += (s, e) => UpdateLayout();
         }
 
-        private void ResultForm_Resize(object? sender, EventArgs e)
-        {
-            UpdateLayout();
-        }
 
-        private void UpdateLayout()
-        {
-            int clientWidth = ClientSize.Width;
-            int clientHeight = ClientSize.Height;
-
-            if (clientWidth <= 0 || clientHeight <= 0) return;
-
-            const int minWidth = 900;
-            const int minHeight = 600;
-            int effectiveWidth = Math.Max(clientWidth, minWidth);
-            int effectiveHeight = Math.Max(clientHeight, minHeight);
-
-            int headerHeight = 84;
-            int bottomButtonHeight = 63;
-            int bottomMargin = 20;
-            int leftMargin = 30;
-            int rightMargin = 30;
-            int middleGap = 20;
-
-            int contentAreaWidth = effectiveWidth - leftMargin - rightMargin;
-            int leftColumnWidth = (int)(contentAreaWidth * 0.45);
-            int rightColumnWidth = effectiveWidth - leftMargin - leftColumnWidth - middleGap - rightMargin;
-
-            int statsTop = headerHeight + 30;
-            int buttonY = effectiveHeight - bottomButtonHeight - bottomMargin;
-
-            headerPanel.Size = new Size(effectiveWidth, headerHeight);
-            headerPanel.Location = new Point(0, 0);
-            labelTitle.Location = new Point(effectiveWidth / 2 - labelTitle.Width / 2, 14);
-
-            labelAccuracy.Location = new Point(leftMargin, statsTop);
-            labelAccuracy.Size = new Size(leftColumnWidth, 42);
-            labelAccuracyValue.Location = new Point(leftMargin, statsTop + 45);
-            labelAccuracyValue.Size = new Size(leftColumnWidth, 70);
-            progressBarAccuracyGradient.Location = new Point(leftMargin, statsTop + 120);
-            progressBarAccuracyGradient.Size = new Size(leftColumnWidth, 35);
-
-            labelMotivational.Location = new Point(leftMargin, statsTop + 165);
-            labelMotivational.Size = new Size(leftColumnWidth, 35);
-
-            int labelTotalY = statsTop + 200;
-            labelTotal.Location = new Point(leftMargin, labelTotalY);
-            labelTotal.Size = new Size(leftColumnWidth, 35);
-
-            int knownGroupY = labelTotalY + 60;
-            int knownGroupHeight = Math.Min(200, (buttonY - knownGroupY - middleGap) / 2 - middleGap / 2);
-            groupBoxKnown.Location = new Point(leftMargin, knownGroupY);
-            groupBoxKnown.Size = new Size(leftColumnWidth, knownGroupHeight);
-
-            int unknownGroupY = knownGroupY + knownGroupHeight + middleGap;
-            int unknownGroupHeight = buttonY - unknownGroupY - middleGap;
-            groupBoxUnknown.Location = new Point(leftMargin, unknownGroupY);
-            groupBoxUnknown.Size = new Size(leftColumnWidth, Math.Max(unknownGroupHeight, 100));
-
-            labelKnown.Location = new Point(leftMargin, knownGroupY - 35);
-            labelKnown.Size = new Size(leftColumnWidth, 35);
-            labelUnknown.Location = new Point(leftMargin, unknownGroupY - 35);
-            labelUnknown.Size = new Size(leftColumnWidth, 35);
-
-            int chartX = leftMargin + leftColumnWidth + middleGap;
-            int chartY = statsTop;
-            int chartHeight = buttonY - chartY - middleGap;
-            groupBoxChart.Location = new Point(chartX, chartY);
-            groupBoxChart.Size = new Size(rightColumnWidth, Math.Max(chartHeight, 300));
-
-            int buttonWidth = 150;
-            int buttonGap = 30;
-            int totalButtonsWidth = buttonWidth * 2 + buttonGap;
-            int buttonStartX = (effectiveWidth - totalButtonsWidth) / 2;
-
-            buttonReview.Location = new Point(buttonStartX, buttonY);
-            buttonReview.Size = new Size(buttonWidth, bottomButtonHeight);
-            buttonBack.Location = new Point(buttonStartX + buttonWidth + buttonGap, buttonY);
-            buttonBack.Size = new Size(buttonWidth, bottomButtonHeight);
-        }
 
         #region IResultView Implementation
 
