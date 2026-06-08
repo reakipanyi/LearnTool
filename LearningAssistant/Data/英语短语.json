@@ -1,0 +1,132 @@
+[
+  {
+    "Phrase": "---How are you?\n---I'm fine/busy/tired/great/happy/...",
+    "Meaning": "---你好吗?\n---我很好/忙碌的/累的/心情愉悦的/开心的/……",
+    "Example": "---How are you?\n---I'm happy."
+  },
+  {
+    "Phrase": "---How about you?\n--- I'm fine/busy/tired/great/happy/...",
+    "Meaning": "---你呢?\n---我很好/忙碌的/累的/心情愉悦的/开心的/……",
+    "Example": "---How about you?\n---I'm tired."
+  },
+  {
+    "Phrase": "---What do you have for lunch?\n---I have meatballs and vegetables/...",
+    "Meaning": "---你午餐吃什么？\n---我吃肉丸和蔬菜/……",
+    "Example": "---What do you have for lunch?\n---I have meatballs and vegetables."
+  },
+  {
+    "Phrase": "---What do you like?\n---I like meatballs/blue/swings/tigers/kites/....",
+    "Meaning": "---你喜欢什么？\n---我喜欢肉丸/蓝色/秋千/老虎/风筝/……",
+    "Example": "---What do you like?\n---I like tigers."
+  },
+  {
+    "Phrase": "---Whose lunch?\n---…’s lunch.",
+    "Meaning": "---谁的午饭？\n---……的午饭。",
+    "Example": "---Whose lunch?\n---Tom’s lunch."
+  },
+  {
+    "Phrase": "---Where is my apple?\n---On the floor/desk/...",
+    "Meaning": "---我的苹果在哪里？\n---在地板/桌子/……上。",
+    "Example": "---Where is my apple?\n---On the desk."
+  },
+  {
+    "Phrase": "---What is green?\n---What is blue?\n---The hill is green.\n---The sky is blue.",
+    "Meaning": "---什么是绿色的？\n---什么是蓝色的？\n---小山丘是绿色的。\n---天空是蓝色的。",
+    "Example": "---What is green?\n---The hill is green."
+  },
+  {
+    "Phrase": "---What is yellow/red?\n---The flower/...is yellow/red.",
+    "Meaning": "---什么是黄/红色的？\n---花/……是黄/红色的。",
+    "Example": "---What is red?\n---The flower is red."
+  },
+  {
+    "Phrase": "---Can you find me?\n---Yes, I can.\n---No, I can’t.",
+    "Meaning": "---你能找到我吗？\n---是的，我能。\n---不，我不能。",
+    "Example": "---Can you find me?\n---Yes, I can."
+  },
+  {
+    "Phrase": "---What colour am I now?\n---You are red/yellow/...",
+    "Meaning": "---我现在是什么颜色？\n---你是红/黄/……色的。",
+    "Example": "---What colour am I now?\n---You are yellow."
+  },
+  {
+    "Phrase": "---Which do you like best?\n---I like the slide/seesaw/swing/...best.",
+    "Meaning": "---你最喜欢哪个？\n---我最喜欢滑梯/跷跷板/秋千/……",
+    "Example": "---Which do you like best?\n---I like the swing best."
+  },
+  {
+    "Phrase": "---Who is right?\n---... is right.",
+    "Meaning": "---谁是对的？\n---……是对的。",
+    "Example": "---Who is right?\n---Lily is right."
+  },
+  {
+    "Phrase": "---How’s the weather in Shanghai/London/Sydney?\n---It’s sunny/rainy/cloudy/snowy/windy.",
+    "Meaning": "---上海/伦敦/悉尼的天气怎么样？\n---是晴朗/下雨/多云/下雪/刮风的。",
+    "Example": "---How’s the weather in Shanghai?\n---It’s sunny."
+  },
+  {
+    "Phrase": "---How’s the weather (today)?\n---It’s sunny/rainy/cloudy/snowy/windy(today).",
+    "Meaning": "---(今天)天气怎么样？\n---(今天)是晴朗/下雨/多云/下雪/刮风的。",
+    "Example": "---How’s the weather today?\n---It’s windy today."
+  },
+  {
+    "Phrase": "---What weather do you like?\n---I like sunny/rainy/cloudy/snowy/windy days.",
+    "Meaning": "---你喜欢什么天气？\n---我喜欢晴朗/下雨/多云/下雪/刮风的天气。",
+    "Example": "---What weather do you like?\n---I like sunny days."
+  },
+  {
+    "Phrase": "---Where are Mum’s old trousers?\n---On the desk/sofa/...",
+    "Meaning": "---妈妈的旧长裤在哪里？\n---在桌子/沙发/……上。",
+    "Example": "---Where are Mum’s old trousers?\n---On the sofa."
+  },
+  {
+    "Phrase": "---Are you ready?\n---Yes, I’m/we’re ready.\n---No, I’m/we’re not ready.",
+    "Meaning": "---你/你们准备好了吗？\n---是的，我/我们准备好了。\n---不，我/我们没准备好。",
+    "Example": "---Are you ready?\n---Yes, I'm ready."
+  },
+  {
+    "Phrase": "--Look！Green light. / The light is green.\n--Let’s go./ Let’s walk across the zebra crossing.",
+    "Meaning": "--看！绿灯了。\n--让我们走。/让我们过斑马线吧。",
+    "Example": "--Look! The light is green.\n--Let’s go."
+  },
+  {
+    "Phrase": "--Look！Yellow /Red light. / The light is yellow/red.\n--Let’s wait/stop.",
+    "Meaning": "--看！黄灯/红灯了。\n--让我们等待/停下。",
+    "Example": "--Look! Red light.\n--Let’s stop."
+  },
+  {
+    "Phrase": "--Can we go (now)?\n--Yes, we can.\n--No, we can’t.",
+    "Meaning": "--（现在）我们能走了吗？\n--是的，我们可以。\n--不，我们不能。",
+    "Example": "--Can we go now?\n--No, we can’t."
+  },
+  {
+    "Phrase": "--What do you see?\n--I see a panda/monkey/tiger/an elephant/...",
+    "Meaning": "--你看到了什么？\n--我看到一只熊猫/猴子/老虎/大象……。",
+    "Example": "--What do you see?\n--I see an elephant."
+  },
+  {
+    "Phrase": "--What can you see?\n--I can see a...",
+    "Meaning": "--你能看到什么？\n--我能看到……",
+    "Example": "--What can you see?\n--I can see a monkey."
+  },
+  {
+    "Phrase": "--Are you sleepy/good at sports?\n--Yes, I am.\n--No, I’m not sleepy/good at sports.",
+    "Meaning": "--你困了吗/你擅长体育吗？\n--是的。\n--不，我不困/不擅长体育。",
+    "Example": "--Are you sleepy?\n--No, I'm not sleepy."
+  },
+  {
+    "Phrase": "--Which animal do you like?\n--I like the panda/monkey/...",
+    "Meaning": "--你喜欢哪个动物？\n--我喜欢这只熊猫/猴子/……。",
+    "Example": "--Which animal do you like?\n--I like the panda."
+  },
+  {
+    "Phrase": "---Which toy do you like?\n---I like the toy train/toy boat/toy car/kite/ball.\n---I like them all.",
+    "Meaning": "---你喜欢哪一个玩具？\n---我喜欢这个玩具火车/船/汽车/风筝/球。\n---我全喜欢。（all表示3个或3个以上的“都”/both表示2个的“都”）",
+    "Example": "---Which toy do you like?\n---I like them all."
+  },
+  {
+    "Phrase": "---Which toy do I like?\n---You like the toy train/toy boat/toy car/kite/ball..",
+    "Meaning": "---我喜欢哪一个玩具？\n---你喜欢这个玩具火车/船/汽车/风筝/球/……。",
+    "Example": "---Which toy do I like?\n---You like the toy car."
+  }
+]

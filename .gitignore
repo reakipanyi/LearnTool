@@ -375,9 +375,7 @@ $RECYCLE.BIN/
 
 # Wechat App
 miniprogram_npm/
-BilingualLearningTool/
-KidWinApp/
-LiteracyTest/
 appsettings.json
 bak/
+docs/
 /LearningAssistant/appsettings.json
