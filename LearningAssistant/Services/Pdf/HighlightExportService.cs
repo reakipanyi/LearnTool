@@ -1,9 +1,7 @@
-using System.Drawing.Imaging;
-using OfficeOpenXml;
-using OfficeOpenXml.Drawing;
 using LearningAssistant.Models.Pdf;
-using LearningAssistant.Services.Pdf;
 using Microsoft.Extensions.Logging;
+using OfficeOpenXml;
+using System.Drawing.Imaging;
 
 namespace LearningAssistant.Services.Pdf
 {
@@ -14,8 +12,7 @@ namespace LearningAssistant.Services.Pdf
         public HighlightExportService(ILogger<HighlightExportService> logger)
         {
             _logger = logger;
-            // 设置 EPPlus 许可证
-            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
+            ExcelPackage.License.SetNonCommercialPersonal("PolyForm NonCommercial 1.0.0.txt");
         }
 
         /// <summary>
@@ -121,7 +118,7 @@ namespace LearningAssistant.Services.Pdf
                             {
                                 image.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
                                 ms.Position = 0;
-                                
+
                                 var picture = worksheet.Drawings.AddPicture($"highlight_{i}", ms);
                                 picture.SetPosition(row - 1, 5, 4, 0);
                                 picture.SetSize(450, 130);
@@ -173,7 +170,7 @@ namespace LearningAssistant.Services.Pdf
                 var renderWidth = (int)(pageSize.Width * 2);
                 var renderHeight = (int)(pageSize.Height * 2);
                 var pageBitmap = pdfService.RenderPage(highlight.PageIndex, renderWidth, renderHeight);
-                
+
                 if (pageBitmap == null)
                 {
                     _logger.LogWarning($"Failed to render page {highlight.PageIndex}");
@@ -201,12 +198,12 @@ namespace LearningAssistant.Services.Pdf
                     {
                         g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
                         g.DrawImage(
-                            pageBitmap, 
+                            pageBitmap,
                             new Rectangle(0, 0, cropWidth, cropHeight),
                             new Rectangle(cropX, cropY, cropWidth, cropHeight),
                             GraphicsUnit.Pixel);
                     }
-                    
+
                     return croppedImage;
                 }
             }

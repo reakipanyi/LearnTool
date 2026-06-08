@@ -39,8 +39,7 @@ namespace LearningAssistant
         [STAThread]
         static void Main(string[] args)
         {
-            // 设置 EPPlus 8+ 许可证
-            //ExcelPackage.License.SetNonCommercialPersonal("");
+
 
             Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
             Application.EnableVisualStyles();
