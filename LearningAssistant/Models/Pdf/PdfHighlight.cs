@@ -27,16 +27,18 @@ namespace LearningAssistant.Models.Pdf
         {
             var pageNum = PageIndex + 1;
             var colorName = GetColorName(Color);
+            var fileName = Path.GetFileName(PdfPath);
+
             if (!string.IsNullOrEmpty(Note))
             {
-                return $"P{pageNum} - {colorName} ({Note})";
+                return $"{fileName} P{pageNum} - {colorName} ({Note})";
             }
             if (!string.IsNullOrEmpty(Text))
             {
                 var displayText = Text.Length > 20 ? Text.Substring(0, 20) + "..." : Text;
-                return $"P{pageNum} - {colorName} ({displayText})";
+                return $"{fileName} P{pageNum} - {colorName} ({displayText})";
             }
-            return $"P{pageNum} - {colorName}";
+            return $"{fileName} P{pageNum} - {colorName}";
         }
 
         private string GetColorName(HighlightColor color)
@@ -66,7 +68,7 @@ namespace LearningAssistant.Models.Pdf
 
     public class PdfHighlightCollection
     {
-        public string PdfPath { get; set; } = string.Empty;
+        public string FolderPath { get; set; } = string.Empty;
         public List<PdfHighlight> Highlights { get; set; } = new List<PdfHighlight>();
         public DateTime UpdatedAt { get; set; } = DateTime.Now;
     }

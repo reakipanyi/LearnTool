@@ -21,17 +21,13 @@ namespace LearningAssistant.Services.Pdf
 
         public List<PdfHighlight> GetHighlights(string pdfPath)
         {
-            var key = GetCacheKey(pdfPath);
-            if (_highlightsCache.TryGetValue(key, out var cached))
-            {
-                _logger?.LogDebug("从缓存获取高亮: {Path}, 数量: {Count}", pdfPath, cached.Highlights.Count);
-                return cached.Highlights.ToList();
-            }
+            // 获取目录路径
+            var folderPath = Path.GetDirectoryName(pdfPath) ?? "";
+            var collection = GetOrCreateFolderCollection(folderPath);
 
-            var collection = LoadHighlightsFromFile(pdfPath);
-            _highlightsCache[key] = collection;
-            _logger?.LogDebug("加载高亮: {Path}, 数量: {Count}", pdfPath, collection.Highlights.Count);
-            return collection.Highlights.ToList();
+            // 返回属于该文件的高亮
+            var fileName = Path.GetFileName(pdfPath);
+            return collection.Highlights.Where(h => Path.GetFileName(h.PdfPath) == fileName).ToList();
         }
 
         public List<PdfHighlight> GetAllHighlights(string pdfPath)
@@ -47,9 +43,21 @@ namespace LearningAssistant.Services.Pdf
             return highlights;
         }
 
+        /// <summary>
+        /// 按目录获取所有高亮
+        /// </summary>
+        public List<PdfHighlight> GetHighlightsForFolder(string folderPath)
+        {
+            var collection = GetOrCreateFolderCollection(folderPath);
+            _logger?.LogDebug("获取目录高亮: {Path}, 数量: {Count}", folderPath, collection.Highlights.Count);
+            return collection.Highlights.ToList();
+        }
+
         public void AddHighlight(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text = "", HighlightColor color = HighlightColor.Yellow)
         {
-            var collection = GetOrCreateCollection(pdfPath);
+            var folderPath = Path.GetDirectoryName(pdfPath) ?? "";
+            var collection = GetOrCreateFolderCollection(folderPath);
+
             var highlight = new PdfHighlight
             {
                 PdfPath = pdfPath,
@@ -65,13 +73,15 @@ namespace LearningAssistant.Services.Pdf
             };
 
             collection.Highlights.Add(highlight);
-            SaveHighlightsToFile(pdfPath, collection);
+            SaveHighlightsToFolder(folderPath, collection);
             _logger?.LogInformation("添加高亮成功: {Path}, 页码: {Page}, 颜色: {Color}", pdfPath, pageIndex, color);
         }
 
         public void AddHighlightWithNote(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text, string note, HighlightColor color = HighlightColor.Yellow)
         {
-            var collection = GetOrCreateCollection(pdfPath);
+            var folderPath = Path.GetDirectoryName(pdfPath) ?? "";
+            var collection = GetOrCreateFolderCollection(folderPath);
+
             var highlight = new PdfHighlight
             {
                 PdfPath = pdfPath,
@@ -88,18 +98,19 @@ namespace LearningAssistant.Services.Pdf
             };
 
             collection.Highlights.Add(highlight);
-            SaveHighlightsToFile(pdfPath, collection);
+            SaveHighlightsToFolder(folderPath, collection);
             _logger?.LogInformation("添加带注释的高亮成功: {Path}, 页码: {Page}, 注释长度: {Length}", pdfPath, pageIndex, note?.Length ?? 0);
         }
 
         public void UpdateHighlightNote(string pdfPath, string highlightId, string note)
         {
-            var collection = GetOrCreateCollection(pdfPath);
+            var folderPath = Path.GetDirectoryName(pdfPath) ?? "";
+            var collection = GetOrCreateFolderCollection(folderPath);
             var highlight = collection.Highlights.FirstOrDefault(h => h.Id == highlightId);
             if (highlight != null)
             {
                 highlight.Note = note;
-                SaveHighlightsToFile(pdfPath, collection);
+                SaveHighlightsToFolder(folderPath, collection);
                 _logger?.LogInformation("更新高亮注释: {HighlightId}", highlightId);
             }
             else
@@ -110,12 +121,13 @@ namespace LearningAssistant.Services.Pdf
 
         public void RemoveHighlight(string pdfPath, string highlightId)
         {
-            var collection = GetOrCreateCollection(pdfPath);
+            var folderPath = Path.GetDirectoryName(pdfPath) ?? "";
+            var collection = GetOrCreateFolderCollection(folderPath);
             var highlight = collection.Highlights.FirstOrDefault(h => h.Id == highlightId);
             if (highlight != null)
             {
                 collection.Highlights.Remove(highlight);
-                SaveHighlightsToFile(pdfPath, collection);
+                SaveHighlightsToFolder(folderPath, collection);
                 _logger?.LogInformation("删除高亮: {HighlightId}", highlightId);
             }
             else
@@ -126,10 +138,11 @@ namespace LearningAssistant.Services.Pdf
 
         public void RemoveHighlightsForPage(string pdfPath, int pageIndex)
         {
-            var collection = GetOrCreateCollection(pdfPath);
-            var count = collection.Highlights.Count(h => h.PageIndex == pageIndex);
-            collection.Highlights.RemoveAll(h => h.PageIndex == pageIndex);
-            SaveHighlightsToFile(pdfPath, collection);
+            var folderPath = Path.GetDirectoryName(pdfPath) ?? "";
+            var collection = GetOrCreateFolderCollection(folderPath);
+            var count = collection.Highlights.Count(h => h.PageIndex == pageIndex && Path.GetFileName(h.PdfPath) == Path.GetFileName(pdfPath));
+            collection.Highlights.RemoveAll(h => h.PageIndex == pageIndex && Path.GetFileName(h.PdfPath) == Path.GetFileName(pdfPath));
+            SaveHighlightsToFolder(folderPath, collection);
             _logger?.LogInformation("删除页面高亮: {Path}, 页码: {Page}, 数量: {Count}", pdfPath, pageIndex, count);
         }
 
@@ -141,53 +154,53 @@ namespace LearningAssistant.Services.Pdf
 
         public void ClearCacheForPdf(string pdfPath)
         {
-            var key = GetCacheKey(pdfPath);
+            var folderPath = Path.GetDirectoryName(pdfPath) ?? "";
+            var key = GetFolderCacheKey(folderPath);
             if (_highlightsCache.ContainsKey(key))
             {
                 _highlightsCache.Remove(key);
-                _logger?.LogDebug("清除PDF高亮缓存: {Path}", pdfPath);
+                _logger?.LogDebug("清除目录高亮缓存: {Path}", folderPath);
             }
         }
 
-        private PdfHighlightCollection GetOrCreateCollection(string pdfPath)
+        private PdfHighlightCollection GetOrCreateFolderCollection(string folderPath)
         {
-            var key = GetCacheKey(pdfPath);
+            var key = GetFolderCacheKey(folderPath);
             if (!_highlightsCache.TryGetValue(key, out var collection))
             {
-                collection = LoadHighlightsFromFile(pdfPath);
+                collection = LoadHighlightsFromFolder(folderPath);
                 _highlightsCache[key] = collection;
             }
             return collection;
         }
 
-        private PdfHighlightCollection LoadHighlightsFromFile(string pdfPath)
+        private PdfHighlightCollection LoadHighlightsFromFolder(string folderPath)
         {
             try
             {
-                var path = GetHighlightPath(pdfPath);
+                var path = GetFolderHighlightPath(folderPath);
                 if (File.Exists(path))
                 {
-                    var collection = JsonHelper.LoadFromFile<PdfHighlightCollection>(path) ?? new PdfHighlightCollection { PdfPath = pdfPath };
-                    MigrateOldHighlights(collection, pdfPath);
-                    _logger?.LogDebug("从文件加载高亮: {Path}, 数量: {Count}", path, collection.Highlights.Count);
+                    var collection = JsonHelper.LoadFromFile<PdfHighlightCollection>(path) ?? new PdfHighlightCollection { FolderPath = folderPath };
+                    MigrateOldHighlights(collection);
+                    _logger?.LogDebug("从文件加载目录高亮: {Path}, 数量: {Count}", path, collection.Highlights.Count);
                     return collection;
                 }
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "加载高亮文件失败: {Path}", pdfPath);
+                _logger?.LogError(ex, "加载目录高亮文件失败: {Path}", folderPath);
             }
-            return new PdfHighlightCollection { PdfPath = pdfPath };
+            return new PdfHighlightCollection { FolderPath = folderPath };
         }
 
-        private void MigrateOldHighlights(PdfHighlightCollection collection, string pdfPath)
+        private void MigrateOldHighlights(PdfHighlightCollection collection)
         {
-            var hash = ComputeFileHash(pdfPath);
             foreach (var highlight in collection.Highlights)
             {
-                if (string.IsNullOrEmpty(highlight.PdfHash))
+                if (string.IsNullOrEmpty(highlight.PdfHash) && !string.IsNullOrEmpty(highlight.PdfPath))
                 {
-                    highlight.PdfHash = hash;
+                    highlight.PdfHash = ComputeFileHash(highlight.PdfPath) ?? "";
                 }
                 if (highlight.NormalizedWidth <= 0 && highlight.Width > 0)
                 {
@@ -199,35 +212,62 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
-        private void SaveHighlightsToFile(string pdfPath, PdfHighlightCollection collection)
+        private void SaveHighlightsToFolder(string folderPath, PdfHighlightCollection collection)
         {
             try
             {
                 collection.UpdatedAt = DateTime.Now;
-                var path = GetHighlightPath(pdfPath);
+                var path = GetFolderHighlightPath(folderPath);
                 JsonHelper.SaveToFile(path, collection);
-                _logger?.LogDebug("保存高亮到文件: {Path}, 数量: {Count}", path, collection.Highlights.Count);
+                _logger?.LogDebug("保存目录高亮到文件: {Path}, 数量: {Count}", path, collection.Highlights.Count);
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "保存高亮文件失败: {Path}", pdfPath);
+                _logger?.LogError(ex, "保存目录高亮文件失败: {Path}", folderPath);
             }
         }
 
-        private string GetCacheKey(string pdfPath)
+        private string GetFolderCacheKey(string folderPath)
         {
-            return ComputeFileHash(pdfPath) ?? pdfPath;
+            return ComputeFolderHash(folderPath) ?? folderPath;
         }
 
-        private string GetHighlightPath(string pdfPath)
+        private string GetFolderHighlightPath(string folderPath)
         {
-            var fileName = Path.GetFileNameWithoutExtension(pdfPath);
-            var hash = ComputeFileHash(pdfPath);
+            var folderName = Path.GetFileName(folderPath);
+            if (string.IsNullOrEmpty(folderName))
+            {
+                folderName = "root";
+            }
+            var hash = ComputeFolderHash(folderPath);
             if (!string.IsNullOrEmpty(hash))
             {
-                fileName = $"{fileName}_{hash.Substring(0, Math.Min(8, hash.Length))}";
+                folderName = $"{folderName}_{hash.Substring(0, Math.Min(8, hash.Length))}";
             }
-            return Path.Combine(FileHelper.GetHighlightsDirectory(), $"{fileName}_highlights.json");
+            return Path.Combine(FileHelper.GetHighlightsDirectory(), $"{folderName}_highlights.json");
+        }
+
+        private string? ComputeFolderHash(string folderPath)
+        {
+            try
+            {
+                if (!Directory.Exists(folderPath)) return null;
+
+                // 使用文件夹路径作为哈希输入，确保同一文件夹生成相同哈希
+                using var sha256 = SHA256.Create();
+                var bytes = Encoding.UTF8.GetBytes(folderPath.ToLower());
+                var hashBytes = sha256.ComputeHash(bytes);
+                var sb = new StringBuilder();
+                foreach (var b in hashBytes)
+                {
+                    sb.Append(b.ToString("x2"));
+                }
+                return sb.ToString();
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private string? ComputeFileHash(string filePath)
@@ -235,7 +275,7 @@ namespace LearningAssistant.Services.Pdf
             try
             {
                 if (!File.Exists(filePath)) return null;
-                
+
                 using var sha256 = SHA256.Create();
                 using var stream = File.OpenRead(filePath);
                 var hashBytes = sha256.ComputeHash(stream);

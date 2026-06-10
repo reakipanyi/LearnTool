@@ -338,7 +338,7 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        private void LoadImageFolder(string firstImagePath)
+        public void LoadImageFolder(string firstImagePath)
         {
             string folder = Path.GetDirectoryName(firstImagePath);
             if (string.IsNullOrEmpty(folder)) return;
@@ -364,6 +364,17 @@ namespace LearningAssistant.Presenters
             else
             {
                 _currentPageIndex = 0;
+            }
+
+            // 确保集合不为空才访问
+            if (_imageFiles.Count > 0)
+            {
+                _currentPdfPath = _imageFiles[_currentPageIndex];
+            }
+            else
+            {
+                _currentPdfPath = string.Empty;
+                _logger.LogWarning("No image files found in folder: {Folder}", folder);
             }
 
             _view.SetPageCount(_imageFiles.Count);
@@ -1525,6 +1536,7 @@ namespace LearningAssistant.Presenters
 
         /// <summary>
         /// 导出高亮到 Excel（弹出保存对话框）
+        /// 图片模式按目录导出，PDF模式按文件导出
         /// </summary>
         public async void ExportHighlightsToExcel()
         {
@@ -1535,28 +1547,46 @@ namespace LearningAssistant.Presenters
                 return;
             }
 
-            if (_isImageMode && _imageFiles.Count == 0)
+            var folderPath = Path.GetDirectoryName(_currentPdfPath) ?? "";
+            if (string.IsNullOrEmpty(folderPath))
             {
-                _logger.LogWarning("No images loaded in image mode, cannot export highlights");
-                _view?.ShowMessage("图片模式下没有加载图片，无法导出高亮", "提示");
+                _view?.ShowMessage("无法获取目录路径", "提示");
                 return;
             }
 
-            var highlights = _highlightService.GetHighlights(_currentPdfPath);
-            if (highlights == null || highlights.Count == 0)
+            // 根据模式获取不同范围的高亮
+            List<PdfHighlight> highlightsToExport;
+            string saveFileName;
+
+            if (_isImageMode)
             {
-                _logger.LogWarning("No highlights to export");
-                _view?.ShowMessage("当前PDF没有高亮标记", "提示");
-                return;
+                // 图片模式：按目录导出
+                highlightsToExport = _highlightService.GetHighlightsForFolder(folderPath);
+                if (highlightsToExport == null || highlightsToExport.Count == 0)
+                {
+                    _view?.ShowMessage("当前目录没有高亮标记", "提示");
+                    return;
+                }
+                var folderName = Path.GetFileName(folderPath);
+                saveFileName = $"高亮导出_{folderName}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+            }
+            else
+            {
+                // PDF模式：按文件导出
+                highlightsToExport = _highlightService.GetHighlights(_currentPdfPath);
+                if (highlightsToExport == null || highlightsToExport.Count == 0)
+                {
+                    _view?.ShowMessage("当前PDF没有高亮标记", "提示");
+                    return;
+                }
+                var fileName = Path.GetFileNameWithoutExtension(_currentPdfPath);
+                saveFileName = $"高亮导出_{fileName}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
             }
 
-            // 弹出保存对话框
-            var fileName = Path.GetFileNameWithoutExtension(_currentPdfPath);
-            var savePath = _view?.ShowSaveFileDialog($"高亮导出_{fileName}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx", "Excel文件 (*.xlsx)|*.xlsx");
-            
+            var savePath = _view?.ShowSaveFileDialog(saveFileName, "Excel文件 (*.xlsx)|*.xlsx");
             if (string.IsNullOrEmpty(savePath))
             {
-                return; // 用户取消保存
+                return;
             }
 
             _view?.ShowLoading("正在导出高亮...");
@@ -1564,31 +1594,29 @@ namespace LearningAssistant.Presenters
             try
             {
                 var exportLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<HighlightExportService>.Instance;
-                    var exportService = new HighlightExportService(exportLogger);
-                    
-                    // 根据模式调用不同的导出方法
-                    bool success;
-                    if (_isImageMode)
-                    {
-                        success = await exportService.ExportHighlightsToExcelAsync(highlights, _currentPdfPath, savePath, null, _imageFiles.ToList());
-                    }
-                    else
-                    {
-                        success = await exportService.ExportHighlightsToExcelAsync(highlights, _currentPdfPath, savePath, _pdfService);
-                    }
+                var exportService = new HighlightExportService(exportLogger);
+
+                bool success;
+                if (_isImageMode)
+                {
+                    success = await exportService.ExportHighlightsToExcelAsync(highlightsToExport, folderPath, savePath, null, _imageFiles.ToList());
+                }
+                else
+                {
+                    success = await exportService.ExportHighlightsToExcelAsync(highlightsToExport, _currentPdfPath, savePath, _pdfService);
+                }
 
                 if (success)
                 {
-                    _logger.LogInformation($"Successfully exported {highlights.Count} highlights to {savePath}");
-                    _view?.ShowMessage($"成功导出 {highlights.Count} 个高亮到\n{savePath}", "导出成功");
-                    
-                    // 询问是否打开文件夹
+                    _logger?.LogInformation($"Successfully exported {highlightsToExport.Count} highlights to {savePath}");
+                    _view?.ShowMessage($"成功导出 {highlightsToExport.Count} 个高亮到\n{savePath}", "导出成功");
+
                     if (_view?.ShowConfirm("是否打开导出目录？", "导出成功") ?? false)
                     {
-                        var folderPath = Path.GetDirectoryName(savePath);
-                        if (!string.IsNullOrEmpty(folderPath))
+                        var exportFolderPath = Path.GetDirectoryName(savePath);
+                        if (!string.IsNullOrEmpty(exportFolderPath))
                         {
-                            System.Diagnostics.Process.Start("explorer.exe", folderPath);
+                            System.Diagnostics.Process.Start("explorer.exe", exportFolderPath);
                         }
                     }
                 }
@@ -1599,7 +1627,7 @@ namespace LearningAssistant.Presenters
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to export highlights");
+                _logger?.LogError(ex, "Failed to export highlights");
                 _view?.ShowMessage($"导出失败: {ex.Message}", "错误");
             }
             finally
@@ -1610,6 +1638,7 @@ namespace LearningAssistant.Presenters
 
         /// <summary>
         /// 导出高亮到 Excel（指定路径）
+        /// 图片模式按目录导出，PDF模式按文件导出
         /// </summary>
         public async Task<bool> ExportHighlightsToExcelAsync(string outputPath, List<PdfHighlight>? highlights = null)
         {
@@ -1619,16 +1648,19 @@ namespace LearningAssistant.Presenters
                 return false;
             }
 
-            if (_isImageMode && _imageFiles.Count == 0)
-            {
-                _logger.LogWarning("No images loaded in image mode, cannot export highlights");
-                return false;
-            }
+            var folderPath = Path.GetDirectoryName(_currentPdfPath) ?? "";
 
-            // 如果没有指定高亮列表，获取当前 PDF 的所有高亮
+            // 如果没有指定高亮列表，根据模式获取
             if (highlights == null || highlights.Count == 0)
             {
-                highlights = _highlightService.GetHighlights(_currentPdfPath);
+                if (_isImageMode)
+                {
+                    highlights = _highlightService.GetHighlightsForFolder(folderPath);
+                }
+                else
+                {
+                    highlights = _highlightService.GetHighlights(_currentPdfPath);
+                }
             }
 
             if (highlights.Count == 0)
@@ -1639,10 +1671,17 @@ namespace LearningAssistant.Presenters
 
             _logger.LogInformation($"Exporting {highlights.Count} highlights to Excel");
 
-            // 直接创建导出服务实例
             var exportLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<HighlightExportService>.Instance;
             var exportService = new HighlightExportService(exportLogger);
-            return await exportService.ExportHighlightsToExcelAsync(highlights, _currentPdfPath, outputPath, _pdfService);
+
+            if (_isImageMode)
+            {
+                return await exportService.ExportHighlightsToExcelAsync(highlights, folderPath, outputPath, null, _imageFiles.ToList());
+            }
+            else
+            {
+                return await exportService.ExportHighlightsToExcelAsync(highlights, _currentPdfPath, outputPath, _pdfService);
+            }
         }
 
         public event EventHandler<AddWordEventArgs>? OnAddWordToLearningList;

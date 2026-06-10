@@ -63,13 +63,14 @@ namespace LearningAssistant.Services.Pdf
 
                 // 调整列宽
                 worksheet.Column(1).Width = 8;  // 序号
-                worksheet.Column(2).Width = 10;  // 页码
-                worksheet.Column(3).Width = 40;  // 高亮文本
-                worksheet.Column(4).Width = 25;  // 备注
-                worksheet.Column(5).Width = 50;  // 图片
+                worksheet.Column(2).Width = 15;  // 文件名
+                worksheet.Column(3).Width = 8;  // 页码
+                worksheet.Column(4).Width = 40;  // 高亮文本
+                worksheet.Column(5).Width = 25;  // 备注
+                worksheet.Column(6).Width = 50;  // 图片
 
-                // 按页码排序
-                var sortedHighlights = highlights.OrderBy(h => h.PageIndex).ToList();
+                // 按文件名和页码排序，确保多文件时按文件分组
+                var sortedHighlights = highlights.OrderBy(h => h.PdfPath).ThenBy(h => h.PageIndex).ToList();
 
                 // 检测是否为图片模式
                 bool isImageMode = imageFiles != null && imageFiles.Count > 0 && pdfService == null;
@@ -82,19 +83,19 @@ namespace LearningAssistant.Services.Pdf
                     // 序号
                     worksheet.Cells[row, 1].Value = i + 1;
 
+                    // 文件名
+                    worksheet.Cells[row, 2].Value = Path.GetFileName(highlight.PdfPath);
+
                     // 页码
-                    worksheet.Cells[row, 2].Value = highlight.PageIndex + 1;
+                    worksheet.Cells[row, 3].Value = highlight.PageIndex + 1;
 
                     // 高亮文本
-                    worksheet.Cells[row, 3].Value = highlight.Text;
-                    worksheet.Cells[row, 3].Style.WrapText = true;
-
-                    // 备注
-                    worksheet.Cells[row, 4].Value = highlight.Note;
+                    worksheet.Cells[row, 4].Value = highlight.Text;
                     worksheet.Cells[row, 4].Style.WrapText = true;
 
-                    // 调整行高
-                    worksheet.Row(row).Height = 150;
+                    // 备注
+                    worksheet.Cells[row, 5].Value = highlight.Note;
+                    worksheet.Cells[row, 5].Style.WrapText = true;
 
                     // 截取高亮区域图片并插入到 Excel
                     try
@@ -113,7 +114,7 @@ namespace LearningAssistant.Services.Pdf
 
                         if (image != null)
                         {
-                            // 添加图片到 Excel - 使用内存流方式
+                            // 添加图片到 Excel - 使用内存流方式，保持原始宽高比
                             using (var ms = new MemoryStream())
                             {
                                 image.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
@@ -121,7 +122,13 @@ namespace LearningAssistant.Services.Pdf
 
                                 var picture = worksheet.Drawings.AddPicture($"highlight_{i}", ms);
                                 picture.SetPosition(row - 1, 5, 4, 0);
-                                picture.SetSize(450, 130);
+
+                                // 使用图片原始尺寸，不缩放
+                                picture.SetSize(image.Width, image.Height);
+
+                                // 根据图片高度调整行高（Excel行高单位约为1/12 pt）
+                                int rowHeight = Math.Max(image.Height + 20, 100);
+                                worksheet.Row(row).Height = rowHeight;
                             }
 
                             // 释放图片资源
@@ -158,7 +165,7 @@ namespace LearningAssistant.Services.Pdf
         {
             try
             {
-                // 渲染页面
+                // 获取PDF页面实际尺寸
                 var pageSize = pdfService.GetPageSize(highlight.PageIndex);
                 if (pageSize.Width <= 0 || pageSize.Height <= 0)
                 {
@@ -166,9 +173,9 @@ namespace LearningAssistant.Services.Pdf
                     return null;
                 }
 
-                // 渲染完整页面 (高分辨率)
-                var renderWidth = (int)(pageSize.Width * 2);
-                var renderHeight = (int)(pageSize.Height * 2);
+                // 使用合理像素尺寸渲染（与显示时一致），确保归一化坐标基准一致
+                var renderWidth = 1000;
+                var renderHeight = (int)(renderWidth * pageSize.Height / pageSize.Width);
                 var pageBitmap = pdfService.RenderPage(highlight.PageIndex, renderWidth, renderHeight);
 
                 if (pageBitmap == null)
@@ -183,14 +190,13 @@ namespace LearningAssistant.Services.Pdf
                 var cropWidth = (int)(highlight.NormalizedWidth * renderWidth);
                 var cropHeight = (int)(highlight.NormalizedHeight * renderHeight);
 
-                // 添加边距
-                var margin = 50;
-                cropX = Math.Max(0, cropX - margin);
-                cropY = Math.Max(0, cropY - margin);
-                cropWidth = Math.Min(pageBitmap.Width - cropX, cropWidth + margin * 2);
-                cropHeight = Math.Min(pageBitmap.Height - cropY, cropHeight + margin * 2);
+                // 确保裁剪区域在图片范围内
+                cropX = Math.Max(0, cropX);
+                cropY = Math.Max(0, cropY);
+                cropWidth = Math.Min(renderWidth - cropX, Math.Max(1, cropWidth));
+                cropHeight = Math.Min(renderHeight - cropY, Math.Max(1, cropHeight));
 
-                // 截取高亮区域
+                // 截取高亮区域，不缩放，不加边距
                 using (pageBitmap)
                 {
                     var croppedImage = new Bitmap(cropWidth, cropHeight, PixelFormat.Format24bppRgb);
@@ -250,12 +256,11 @@ namespace LearningAssistant.Services.Pdf
                         var cropWidth = (int)(highlight.NormalizedWidth * renderWidth);
                         var cropHeight = (int)(highlight.NormalizedHeight * renderHeight);
 
-                        // 添加边距
-                        var margin = 50;
-                        cropX = Math.Max(0, cropX - margin);
-                        cropY = Math.Max(0, cropY - margin);
-                        cropWidth = Math.Min(originalImage.Width - cropX, cropWidth + margin * 2);
-                        cropHeight = Math.Min(originalImage.Height - cropY, cropHeight + margin * 2);
+                        // 确保裁剪区域在图片范围内
+                        cropX = Math.Max(0, cropX);
+                        cropY = Math.Max(0, cropY);
+                        cropWidth = Math.Min(renderWidth - cropX, Math.Max(1, cropWidth));
+                        cropHeight = Math.Min(renderHeight - cropY, Math.Max(1, cropHeight));
 
                         // 截取高亮区域
                         var croppedImage = new Bitmap(cropWidth, cropHeight, PixelFormat.Format24bppRgb);

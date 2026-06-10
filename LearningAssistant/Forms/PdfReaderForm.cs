@@ -75,8 +75,6 @@ namespace LearningAssistant.Forms
         private TabPage? _tabPageBookmarksAndHighlights;
         private HighlightColor _currentHighlightColor = HighlightColor.Yellow;
         private bool _isHighlightMode = true;
-        private Button? _buttonToggleHighlightMode;
-        private Button? _buttonUndoHighlight;
 
         private string _currentPdfPath = string.Empty;
         private int _currentPageIndex = 0;
@@ -302,9 +300,27 @@ namespace LearningAssistant.Forms
         {
             if (_listBoxHighlights?.SelectedItem is PdfHighlight highlight)
             {
-                _presenter?.RenderPage(highlight.PageIndex);
+                // 如果高亮属于其他文件，先切换到那个文件
+                if (highlight.PdfPath != _currentPdfPath)
+                {
+                    if (_presenter != null)
+                    {
 
-                // 确保页面切换后高亮被正确加载和显示
+                        string extension = Path.GetExtension(highlight.PdfPath).ToLower();
+                        if (extension == ".pdf")
+                            _presenter.LoadPdf(highlight.PdfPath);
+                        else
+                            _presenter.LoadImageFolder(highlight.PdfPath);
+                        // 切换到高亮对应的文件（LoadImageFolder会渲染页面）
+                    }
+                }
+                else
+                {
+                    // 同一文件内切换页面
+                    _presenter?.RenderPage(highlight.PageIndex);
+                }
+
+                // 确保高亮被正确显示
                 LoadHighlightsForCurrentPage();
             }
         }
@@ -427,7 +443,9 @@ namespace LearningAssistant.Forms
             if (_listBoxHighlights == null || string.IsNullOrEmpty(_currentPdfPath)) return;
 
             _listBoxHighlights.Items.Clear();
-            var highlights = _highlightService.GetHighlights(_currentPdfPath);
+            // 获取整个目录的高亮
+            var folderPath = Path.GetDirectoryName(_currentPdfPath) ?? "";
+            var highlights = _highlightService.GetHighlightsForFolder(folderPath);
             foreach (var highlight in highlights)
             {
                 _listBoxHighlights.Items.Add(highlight);
@@ -453,18 +471,11 @@ namespace LearningAssistant.Forms
                     return;
                 }
 
-                int imgWidth, imgHeight;
-                try
-                {
-                    imgWidth = _currentPageImage.Width;
-                    imgHeight = _currentPageImage.Height;
-                }
-                catch (ObjectDisposedException)
-                {
-                    _logger.LogWarning("Image was disposed in UpdateHighlightLayer");
-                    CleanupHighlightLayer();
-                    return;
-                }
+                var imgRect = GetImageDisplayRect();
+                if (imgRect.Width <= 0 || imgRect.Height <= 0) return;
+
+                int imgWidth = imgRect.Width;
+                int imgHeight = imgRect.Height;
 
                 bool needsRecreate = false;
                 if (_highlightBitmap != null)
@@ -748,7 +759,7 @@ namespace LearningAssistant.Forms
                 saveFileDialog.FileName = defaultFileName;
                 saveFileDialog.Filter = filter;
                 saveFileDialog.Title = "保存文件";
-                
+
                 if (saveFileDialog.ShowDialog(this) == DialogResult.OK)
                 {
                     return saveFileDialog.FileName;
@@ -2598,13 +2609,13 @@ namespace LearningAssistant.Forms
                 var imgRect = GetImageDisplayRect();
                 if (imgRect.Width <= 0 || imgRect.Height <= 0) return;
 
-                // 计算选择区域在图片中的相对位置
+                // 计算选择区域在显示矩形中的相对位置
                 float x = Math.Max(0, selectionRect.X - imgRect.X);
                 float y = Math.Max(0, selectionRect.Y - imgRect.Y);
                 float width = Math.Min(selectionRect.Width, imgRect.Right - selectionRect.X);
                 float height = Math.Min(selectionRect.Height, imgRect.Bottom - selectionRect.Y);
 
-                // 转换为归一化坐标（0-1）
+                // 直接使用显示矩形尺寸进行归一化，与UpdateHighlightLayer保持一致
                 var normalizedRect = new RectangleF(
                     x / imgRect.Width,
                     y / imgRect.Height,
@@ -2859,9 +2870,8 @@ namespace LearningAssistant.Forms
 
                 var imgRect = GetImageDisplayRect();
 
-                g.DrawImage(_highlightBitmap, imgRect,
-                    new Rectangle(0, 0, _highlightBitmap.Width, _highlightBitmap.Height),
-                    GraphicsUnit.Pixel);
+                // _highlightBitmap已经是imgRect尺寸，直接绘制到imgRect位置
+                g.DrawImage(_highlightBitmap, imgRect.Location);
             }
             catch (ObjectDisposedException ex)
             {
