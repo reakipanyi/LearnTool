@@ -123,6 +123,15 @@ namespace LearningAssistant.Common
             services.AddSingleton<IHighlightService, HighlightService>();
             services.AddSingleton<IBookmarkService, BookmarkService>();
 
+            services.AddScoped<IPdfRenderer, PdfRenderer>();
+            services.AddScoped<IPdfFileManager, PdfFileManager>();
+            services.AddScoped<IPdfOcrService, PdfOcrService>();
+            services.AddScoped<IPdfTranslationService, PdfTranslationService>();
+            services.AddScoped<IPdfAiService, PdfAiService>();
+            services.AddScoped<IPdfTtsService, PdfTtsService>();
+            services.AddScoped<IPdfStudyIntegration, PdfStudyIntegration>();
+            services.AddScoped<IPdfExportService, PdfExportService>();
+
             return services;
         }
 
@@ -141,6 +150,9 @@ namespace LearningAssistant.Common
             services.AddSingleton<ISoundService, SoundService>();
             services.AddSingleton<IAdvancedSpeechService, AdvancedSpeechService>();
             services.AddSingleton<IEnhancedReminderService, EnhancedReminderService>();
+            
+            services.AddScoped<ILearningSettingsManager, LearningSettingsManager>();
+            services.AddScoped<ILearningExportService, LearningExportService>();
 
             return services;
         }
@@ -169,16 +181,20 @@ namespace LearningAssistant.Common
             services.AddScoped<PdfPresenter>(sp =>
             {
                 var logger = sp.GetRequiredService<ILogger<PdfPresenter>>();
-                var pdfService = sp.GetRequiredService<IPdfService>();
-                var ocrService = sp.GetRequiredService<IOcrService>();
-                var translationService = sp.GetRequiredService<ITranslationService>();
+                var pdfRenderer = sp.GetRequiredService<IPdfRenderer>();
+                var pdfFileManager = sp.GetRequiredService<IPdfFileManager>();
+                var pdfOcrService = sp.GetRequiredService<IPdfOcrService>();
+                var pdfTranslationService = sp.GetRequiredService<IPdfTranslationService>();
+                var pdfAiService = sp.GetRequiredService<IPdfAiService>();
+                var pdfTtsService = sp.GetRequiredService<IPdfTtsService>();
+                var pdfStudyIntegration = sp.GetRequiredService<IPdfStudyIntegration>();
+                var pdfExportService = sp.GetRequiredService<IPdfExportService>();
                 var annotationService = sp.GetRequiredService<IAnnotationService>();
-                var aiQuestionService = sp.GetRequiredService<IAiQuestionService>();
-                var ttsService = sp.GetRequiredService<ITTSService>();
-                var studyEngine = sp.GetRequiredService<IStudyEngine>();
                 var highlightService = sp.GetRequiredService<IHighlightService>();
-                return new PdfPresenter(logger, pdfService, ocrService, translationService, 
-                    annotationService, aiQuestionService, ttsService, studyEngine, highlightService);
+                var pdfService = sp.GetRequiredService<IPdfService>();
+                return new PdfPresenter(logger, pdfRenderer, pdfFileManager, pdfOcrService, pdfTranslationService,
+                    pdfAiService, pdfTtsService, pdfStudyIntegration, pdfExportService,
+                    annotationService, highlightService, pdfService);
             });
 
             services.AddScoped<MainForm>(sp =>

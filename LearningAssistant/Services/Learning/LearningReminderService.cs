@@ -155,7 +155,7 @@ namespace LearningAssistant.Services.Learning
             _checkTimer = null;
         }
 
-        private void CheckReminders(object? state)
+        private void CheckReminders(object? sender, System.Timers.ElapsedEventArgs e)
         {
             if (_disposed) return;
 

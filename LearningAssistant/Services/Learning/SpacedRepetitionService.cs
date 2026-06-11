@@ -10,7 +10,7 @@ namespace LearningAssistant.Services.Learning
     public interface ISpacedRepetitionService
     {
         ReviewResult CalculateNextReview(ReviewItem item, int quality);
-        ReviewItem CreateNewItem(string content, string answer = "");
+        ReviewItem CreateNewItem(string userId, string content, string answer = "");
         List<ReviewItem> GetItemsDueForReview(string userId, DateTime? date = null);
         void UpdateItem(ReviewItem item);
         List<ReviewItem> GetAllItems(string userId);

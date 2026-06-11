@@ -23,6 +23,7 @@ namespace LearningAssistant.Forms
         private bool _isDragging = false;
         private bool _isLocked = false;
         private Button? _buttonLockView;
+        private Button? _buttonResetView;
         private Point _selectStart = Point.Empty;
         private Point _selectEnd = Point.Empty;
         private Point _dragStart = Point.Empty;
@@ -300,28 +301,23 @@ namespace LearningAssistant.Forms
         {
             if (_listBoxHighlights?.SelectedItem is PdfHighlight highlight)
             {
-                // 如果高亮属于其他文件，先切换到那个文件
                 if (highlight.PdfPath != _currentPdfPath)
                 {
                     if (_presenter != null)
                     {
-
                         string extension = Path.GetExtension(highlight.PdfPath).ToLower();
                         if (extension == ".pdf")
                             _presenter.LoadPdf(highlight.PdfPath);
                         else
-                            _presenter.LoadImageFolder(highlight.PdfPath);
-                        // 切换到高亮对应的文件（LoadImageFolder会渲染页面）
+                        {
+                            _presenter.LoadPdf(Path.GetFileName(highlight.PdfPath));
+                        }
                     }
                 }
                 else
                 {
-                    // 同一文件内切换页面
                     _presenter?.RenderPage(highlight.PageIndex);
                 }
-
-                // 确保高亮被正确显示
-                LoadHighlightsForCurrentPage();
             }
         }
 
@@ -342,6 +338,15 @@ namespace LearningAssistant.Forms
             {
                 trackBarZoom.Enabled = true;
             }
+        }
+
+        private void ButtonResetView_Click(object? sender, EventArgs e)
+        {
+            _zoomLevel = 100;
+            _imageOffset = Point.Empty;
+            trackBarZoom.Value = 100;
+            labelZoom.Text = "100%";
+            ResetZoom();
         }
 
         private void ButtonRemoveHighlight_Click(object? sender, EventArgs e)
@@ -597,6 +602,7 @@ namespace LearningAssistant.Forms
         public void SetCurrentPdfPath(string pdfPath)
         {
             CleanupHighlightLayer();
+            ClearThumbnails();
             _currentPdfPath = pdfPath;
             _bookmarkService.ClearCache();
             _highlightService.ClearCacheForPdf(pdfPath);
@@ -1346,6 +1352,7 @@ namespace LearningAssistant.Forms
             buttonLanguage = new Button();
             buttonNightMode = new Button();
             _buttonLockView = new Button();
+            _buttonResetView = new Button();
             buttonNext = new Button();
             labelPageCount = new Label();
             textBoxPage = new TextBox();
@@ -1466,6 +1473,7 @@ namespace LearningAssistant.Forms
             panelNavigation.Controls.Add(buttonLanguage);
             panelNavigation.Controls.Add(buttonNightMode);
             panelNavigation.Controls.Add(_buttonLockView);
+            panelNavigation.Controls.Add(_buttonResetView);
             panelNavigation.Controls.Add(buttonNext);
             panelNavigation.Controls.Add(labelPageCount);
             panelNavigation.Controls.Add(textBoxPage);
@@ -1543,6 +1551,19 @@ namespace LearningAssistant.Forms
             _buttonLockView.Text = "🔓";
             _buttonLockView.UseVisualStyleBackColor = false;
             _buttonLockView.Click += ButtonLockView_Click;
+            // 
+            // _buttonResetView
+            // 
+            _buttonResetView.BackColor = Color.White;
+            _buttonResetView.FlatStyle = FlatStyle.Flat;
+            _buttonResetView.Font = new Font("Microsoft YaHei UI", 10F);
+            _buttonResetView.Location = new Point(495, 11);
+            _buttonResetView.Name = "_buttonResetView";
+            _buttonResetView.Size = new Size(35, 35);
+            _buttonResetView.TabIndex = 11;
+            _buttonResetView.Text = "↺";
+            _buttonResetView.UseVisualStyleBackColor = false;
+            _buttonResetView.Click += ButtonResetView_Click;
             // 
             // buttonNext
             // 
@@ -2253,14 +2274,8 @@ namespace LearningAssistant.Forms
                 int newX = panelNavigation.Left + deltaX;
                 int newY = panelNavigation.Top + deltaY;
 
-                int leftBoundary = panelLeftContainer?.Width ?? 0;
+                int leftBoundary = 0;
                 int rightBoundary = ClientSize.Width - panelNavigation.Width;
-                int toolWidth = tabControlLeft?.Width ?? 0;
-                rightBoundary -= toolWidth;
-
-                rightBoundary = Math.Max(leftBoundary, rightBoundary);
-
-                _logger.LogInformation($"拖动调试 - LeftBoundary:{leftBoundary}, RightBoundary:{rightBoundary}, ToolWidth:{toolWidth}, ClientWidth:{ClientSize.Width}, PanelWidth:{panelNavigation.Width}");
 
                 newX = Math.Max(leftBoundary, Math.Min(newX, rightBoundary));
                 newY = Math.Max(0, Math.Min(newY, ClientSize.Height - panelNavigation.Height));
@@ -2738,24 +2753,26 @@ namespace LearningAssistant.Forms
                         // Ctrl + 滚轮：缩放
                         if (e.Delta > 0) _zoomLevel = Math.Min(400, _zoomLevel + 10);
                         else _zoomLevel = Math.Max(10, _zoomLevel - 10);
-                        if (_presenter != null)
+                        
+                        // 异步渲染，避免阻塞 UI 线程
+                        Task.Run(async () =>
                         {
-                            var page = int.TryParse(textBoxPage.Text, out var p) ? p - 1 : 0;
-                            int targetW = (int)(pictureBoxPdf.ClientSize.Width * _zoomLevel / 100.0);
-                            int targetH = (int)(pictureBoxPdf.ClientSize.Height * _zoomLevel / 100.0);
                             try
                             {
-                                var bmp = _presenter.RenderPageToBitmap(page, Math.Max(1, targetW), Math.Max(1, targetH));
+                                var page = int.TryParse(textBoxPage.Text, out var p) ? p - 1 : 0;
+                                int targetW = (int)(pictureBoxPdf.ClientSize.Width * _zoomLevel / 100.0);
+                                int targetH = (int)(pictureBoxPdf.ClientSize.Height * _zoomLevel / 100.0);
+                                var bmp = await _presenter!.RenderPageAsync(page, Math.Max(1, targetW), Math.Max(1, targetH));
                                 if (bmp != null)
                                 {
-                                    DisplayImage(bmp);
+                                    BeginInvoke(() => DisplayImage(bmp));
                                 }
                             }
                             catch (Exception ex)
                             {
                                 _logger.LogError(ex, "Error rendering page during zoom");
                             }
-                        }
+                        });
                     }
                     else
                     {
@@ -2780,7 +2797,7 @@ namespace LearningAssistant.Forms
             }
         }
 
-        public void ResetZoom()
+        public async void ResetZoom()
         {
             _zoomLevel = 100;
             _imageOffset = Point.Empty;
@@ -2789,7 +2806,7 @@ namespace LearningAssistant.Forms
                 var page = int.TryParse(textBoxPage.Text, out var p) ? p - 1 : 0;
                 try
                 {
-                    var bmp = _presenter.RenderPageToBitmap(page, pictureBoxPdf.ClientSize.Width, pictureBoxPdf.ClientSize.Height);
+                    var bmp = await _presenter.RenderPageAsync(page, pictureBoxPdf.ClientSize.Width, pictureBoxPdf.ClientSize.Height);
                     if (bmp != null)
                     {
                         DisplayImage(bmp);
