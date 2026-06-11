@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.Logging;
 using LearningAssistant.Models;
+using LearningAssistant.Common;
 
 namespace LearningAssistant.Services.Learning
 {
@@ -51,10 +52,13 @@ namespace LearningAssistant.Services.Learning
     {
         private readonly Dictionary<string, List<ReviewItem>> _userItems = new Dictionary<string, List<ReviewItem>>();
         private readonly ILogger<SpacedRepetitionService>? _logger;
+        private readonly string _storagePath;
 
         public SpacedRepetitionService(ILogger<SpacedRepetitionService>? logger = null)
         {
             _logger = logger;
+            _storagePath = Path.Combine(FileHelper.GetDataDirectory(), "spaced_repetition.json");
+            LoadItems();
         }
 
         public ReviewResult CalculateNextReview(ReviewItem item, int quality)
@@ -129,10 +133,14 @@ namespace LearningAssistant.Services.Learning
             return result;
         }
 
-        public ReviewItem CreateNewItem(string content, string answer = "")
+        public ReviewItem CreateNewItem(string userId, string content, string answer = "")
         {
+            if (string.IsNullOrWhiteSpace(userId))
+                throw new ArgumentException("userId cannot be null or empty", nameof(userId));
+            
             var item = new ReviewItem
             {
+                UserId = userId,
                 Content = content,
                 Answer = answer,
                 Interval = 0,
@@ -143,7 +151,7 @@ namespace LearningAssistant.Services.Learning
                 UpdatedAt = DateTime.Now
             };
             var logContent = content.Length > 30 ? content.Substring(0, 30) + "..." : content;
-            _logger?.LogInformation("创建新复习项: {Content}", logContent);
+            _logger?.LogInformation("创建新复习项: 用户 {UserId}, 内容 {Content}", userId, logContent);
             return item;
         }
 
@@ -184,6 +192,7 @@ namespace LearningAssistant.Services.Learning
             }
             
             _logger?.LogDebug("更新复习项: {Id}", item.Id);
+            SaveItems();
         }
 
         public List<ReviewItem> GetAllItems(string userId)
@@ -247,6 +256,40 @@ namespace LearningAssistant.Services.Learning
             
             _logger?.LogDebug("计算保持率: 用户 {UserId}, 保持率 {Rate}%", userId, retentionRate);
             return retentionRate;
+        }
+
+        private void LoadItems()
+        {
+            try
+            {
+                var loaded = JsonHelper.LoadFromFile<Dictionary<string, List<ReviewItem>>>(_storagePath);
+                if (loaded != null)
+                {
+                    _userItems.Clear();
+                    foreach (var kvp in loaded)
+                    {
+                        _userItems[kvp.Key] = kvp.Value;
+                    }
+                    _logger?.LogInformation("加载间隔重复数据成功，用户数: {Count}", _userItems.Count);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "加载间隔重复数据失败");
+            }
+        }
+
+        private void SaveItems()
+        {
+            try
+            {
+                JsonHelper.SaveToFile(_storagePath, _userItems);
+                _logger?.LogDebug("保存间隔重复数据成功");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "保存间隔重复数据失败");
+            }
         }
     }
 }

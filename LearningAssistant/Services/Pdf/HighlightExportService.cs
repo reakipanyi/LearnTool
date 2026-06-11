@@ -47,13 +47,14 @@ namespace LearningAssistant.Services.Pdf
 
                 // 设置标题
                 worksheet.Cells[1, 1].Value = "序号";
-                worksheet.Cells[1, 2].Value = "页码";
-                worksheet.Cells[1, 3].Value = "高亮文本";
-                worksheet.Cells[1, 4].Value = "备注";
-                worksheet.Cells[1, 5].Value = "图片";
+                worksheet.Cells[1, 2].Value = "文件名";
+                worksheet.Cells[1, 3].Value = "页码";
+                worksheet.Cells[1, 4].Value = "高亮文本";
+                worksheet.Cells[1, 5].Value = "备注";
+                worksheet.Cells[1, 6].Value = "图片";
 
                 // 设置标题样式
-                using (var range = worksheet.Cells[1, 1, 1, 5])
+                using (var range = worksheet.Cells[1, 1, 1, 6])
                 {
                     range.Style.Font.Bold = true;
                     range.Style.HorizontalAlignment = OfficeOpenXml.Style.ExcelHorizontalAlignment.Center;
@@ -138,7 +139,7 @@ namespace LearningAssistant.Services.Pdf
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, $"Failed to capture highlight image for index {i}, page {highlight.PageIndex}");
-                        worksheet.Cells[row, 5].Value = $"截图失败: {ex.Message}";
+                        worksheet.Cells[row, 6].Value = $"截图失败: {ex.Message}";
                     }
                 }
 

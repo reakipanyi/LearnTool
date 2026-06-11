@@ -180,7 +180,7 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        public async Task<DictationScore> StartDictationSession(string expectedText, int timeoutSeconds = 30)
+        public async Task<DictationScore> StartDictationSession(string expectedText, int timeoutSeconds = 30, CancellationToken cancellationToken = default)
         {
             var tcs = new TaskCompletionSource<DictationScore>();
             string? recognizedText = null;
@@ -189,11 +189,13 @@ namespace LearningAssistant.Services.Learning
             {
                 recognizedText = e.Result.Text;
                 _logger?.LogInformation("识别结果: {Text}", recognizedText);
+                tcs.TrySetResult(ScoreDictation(expectedText, recognizedText ?? string.Empty));
             };
 
             EventHandler<SpeechRecognitionRejectedEventArgs> rejectedHandler = (sender, e) =>
             {
                 _logger?.LogWarning("语音识别被拒绝");
+                tcs.TrySetResult(ScoreDictation(expectedText, string.Empty));
             };
 
             try
@@ -208,20 +210,31 @@ namespace LearningAssistant.Services.Learning
                 _recognizer.SpeechRecognized += recognizedHandler;
                 _recognizer.SpeechRecognitionRejected += rejectedHandler;
 
-                _recognizer.RecognizeAsync(RecognizeMode.Single);
-
-                // 等待识别完成或超时
-                var delayTask = Task.Delay(timeoutSeconds * 1000);
-                var completedTask = await Task.WhenAny(delayTask);
-
-                _recognizer.RecognizeAsyncStop();
-
-                if (completedTask == delayTask)
+                using (cancellationToken.Register(() => 
                 {
-                    return new DictationScore(false, 0, string.Empty, "超时");
-                }
+                    _recognizer?.RecognizeAsyncStop();
+                    tcs.TrySetResult(new DictationScore(false, 0, string.Empty, "操作已取消"));
+                }))
+                {
+                    _recognizer.RecognizeAsync(RecognizeMode.Single);
 
-                return ScoreDictation(expectedText, recognizedText ?? string.Empty);
+                    var delayTask = Task.Delay(timeoutSeconds * 1000, cancellationToken);
+                    var completedTask = await Task.WhenAny(tcs.Task, delayTask);
+
+                    _recognizer.RecognizeAsyncStop();
+
+                    if (completedTask == delayTask)
+                    {
+                        return new DictationScore(false, 0, string.Empty, "超时");
+                    }
+
+                    return await tcs.Task;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                _logger?.LogInformation("听写会话已取消");
+                return new DictationScore(false, 0, string.Empty, "操作已取消");
             }
             catch (Exception ex)
             {

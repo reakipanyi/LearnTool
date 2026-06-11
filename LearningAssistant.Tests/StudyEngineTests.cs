@@ -1,11 +1,11 @@
 using Moq;
 using Xunit;
 using FluentAssertions;
-using UnifiedLearningAssistant.Services.Learning;
-using UnifiedLearningAssistant.Services.Persistence;
-using UnifiedLearningAssistant.Models.Learning;
+using LearningAssistant.Services.Learning;
+using LearningAssistant.Services.Persistence;
+using LearningAssistant.Models.Learning;
 
-namespace UnifiedLearningAssistant.Tests
+namespace LearningAssistant.Tests
 {
     /// <summary>
     /// 测试 StudyEngine 服务
@@ -161,13 +161,13 @@ namespace UnifiedLearningAssistant.Tests
         }
 
         [Fact]
-        public void GetCurrentItem_BeforeInitialize_ShouldThrow()
+        public void GetCurrentItem_BeforeInitialize_ShouldReturnNull()
         {
             // Act
-            Action act = () => _studyEngine.GetCurrentItem();
+            var currentItem = _studyEngine.GetCurrentItem();
 
             // Assert
-            act.Should().Throw<InvalidOperationException>();
+            currentItem.Should().BeNull();
         }
 
         [Fact]

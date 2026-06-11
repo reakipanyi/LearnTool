@@ -140,6 +140,12 @@ namespace LearningAssistant.Services.Learning
             {
                 // 每分钟检查一次
                 _checkTimer = new System.Timers.Timer(TimeSpan.FromMinutes(1).TotalMilliseconds);
+                _checkTimer.Elapsed += CheckReminders;
+            }
+            
+            if (!_checkTimer.Enabled)
+            {
+                _checkTimer.Start();
             }
         }
 

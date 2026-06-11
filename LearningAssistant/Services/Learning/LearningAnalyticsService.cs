@@ -327,16 +327,11 @@ namespace LearningAssistant.Services.Learning
         private DateTime GetFirstDateOfWeek(int year, int weekNumber)
         {
             var jan1 = new DateTime(year, 1, 1);
-            var daysOffset = DayOfWeek.Monday - jan1.DayOfWeek;
-            var firstMonday = jan1.AddDays(daysOffset);
+            var firstDayOfYear = ISOWeek.GetYear(jan1) == year 
+                ? ISOWeek.ToDateTime(year, 1, DayOfWeek.Monday)
+                : ISOWeek.ToDateTime(year - 1, ISOWeek.GetWeeksInYear(year - 1), DayOfWeek.Monday).AddDays(7);
             
-            var firstWeek = ISOWeek.GetWeekOfYear(jan1);
-            if (firstWeek <= 1)
-            {
-                weekNumber -= 1;
-            }
-            
-            return firstMonday.AddDays(weekNumber * 7);
+            return firstDayOfYear.AddDays((weekNumber - 1) * 7);
         }
         
         #endregion

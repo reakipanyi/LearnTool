@@ -43,7 +43,7 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
-        public Bitmap RenderPage(int pageIndex, int width, int height)
+        public Bitmap? RenderPage(int pageIndex, int width, int height)
         {
             if (pageIndex < 0)
                 throw new ArgumentOutOfRangeException(nameof(pageIndex), "Page index cannot be negative.");

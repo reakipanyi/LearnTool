@@ -529,8 +529,7 @@ namespace LearningAssistant.Presenters
                             if (_renderCache.TryGetValue(oldestKey, out var oldBmp))
                             {
                                 _renderCache.Remove(oldestKey);
-                                // 不要直接释放位图，避免影响可能正在使用的图像
-                                // 让垃圾收集器处理
+                                oldBmp?.Dispose();
                             }
                             _cacheAccessOrder.RemoveFirst();
                         }
@@ -591,7 +590,7 @@ namespace LearningAssistant.Presenters
                 {
                     try
                     {
-                        var bmp = RenderPageToBitmap(p, renderW, renderH);
+                        using var bmp = RenderPageToBitmap(p, renderW, renderH);
                         if (bmp == null) continue;
 
                         lock (_renderLock)
@@ -635,8 +634,10 @@ namespace LearningAssistant.Presenters
         {
             lock (_renderLock)
             {
-                // 不要直接释放位图，避免影响正在显示的图像
-                // 让垃圾收集器处理这些位图
+                foreach (var kvp in _renderCache)
+                {
+                    kvp.Value?.Dispose();
+                }
                 _renderCache.Clear();
                 _cacheAccessOrder.Clear();
                 _preRenderingPages.Clear();
@@ -664,7 +665,7 @@ namespace LearningAssistant.Presenters
                     return;
                 }
 
-                var bmp = _pdfService.RenderPage(pageIndex, 1200, 1600);
+                using var bmp = _pdfService.RenderPage(pageIndex, 1200, 1600);
                 var ocrText = await OcrBitmapAsync(bmp);
                 if (!string.IsNullOrWhiteSpace(ocrText))
                 {

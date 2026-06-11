@@ -54,16 +54,16 @@ namespace LearningAssistant.Services.AI
         }
     }
 
-    public class AIServiceProvider : IAIService
+    public class FallbackAIService : IAIService
     {
         private static readonly string[] FallbackProviders = { "deepseek", "doubao", "siliconflow" };
         
         private readonly IAIService _currentService;
         private readonly AiConfig _config;
         private readonly IAIServiceFactory _factory;
-        private readonly ILogger<AIServiceProvider> _logger;
+        private readonly ILogger<FallbackAIService> _logger;
 
-        public AIServiceProvider(AiConfig config, IAIServiceFactory factory, ILogger<AIServiceProvider> logger)
+        public FallbackAIService(AiConfig config, IAIServiceFactory factory, ILogger<FallbackAIService> logger)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _factory = factory ?? throw new ArgumentNullException(nameof(factory));
@@ -82,8 +82,8 @@ namespace LearningAssistant.Services.AI
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "AI服务调用失败，尝试切换到备用服务");
-                return await TryFallbackAsync(provider => 
-                    _currentService.GetExplanationAsync(text, language, subType));
+                return await TryFallbackAsync(service => 
+                    service.GetExplanationAsync(text, language, subType));
             }
         }
 
@@ -96,8 +96,8 @@ namespace LearningAssistant.Services.AI
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "AI服务调用失败，尝试切换到备用服务");
-                return await TryFallbackAsync(provider => 
-                    _currentService.AskQuestionAsync(question, context));
+                return await TryFallbackAsync(service => 
+                    service.AskQuestionAsync(question, context));
             }
         }
 

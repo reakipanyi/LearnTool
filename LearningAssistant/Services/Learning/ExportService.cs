@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using LearningAssistant.Services.Learning;
 
 namespace LearningAssistant.Services.Learning
 {

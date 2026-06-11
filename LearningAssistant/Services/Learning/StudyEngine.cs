@@ -153,6 +153,9 @@ namespace LearningAssistant.Services.Learning
         {
             lock (_stateLock)
             {
+                if (string.IsNullOrWhiteSpace(_currentUserId))
+                    return null;
+                
                 int index = CurrentIndex;
                 if (index >= 0 && index < _studyItems.Count)
                     return _studyItems[index];
@@ -164,6 +167,9 @@ namespace LearningAssistant.Services.Learning
         {
             lock (_stateLock)
             {
+                if (string.IsNullOrWhiteSpace(_currentUserId))
+                    return false;
+                
                 int index = CurrentIndex;
                 return index < _studyItems.Count - 1;
             }
@@ -173,6 +179,9 @@ namespace LearningAssistant.Services.Learning
         {
             lock (_stateLock)
             {
+                if (string.IsNullOrWhiteSpace(_currentUserId))
+                    return;
+                
                 int index = CurrentIndex;
                 if (index < _studyItems.Count - 1)
                 {
@@ -188,6 +197,9 @@ namespace LearningAssistant.Services.Learning
         {
             lock (_stateLock)
             {
+                if (string.IsNullOrWhiteSpace(_currentUserId))
+                    return;
+                
                 if (index >= 0 && index < _studyItems.Count)
                 {
                     if (_currentMode == Constants.LearningMode.Quick)
@@ -200,6 +212,9 @@ namespace LearningAssistant.Services.Learning
 
         public void MarkCurrentAsKnown()
         {
+            if (string.IsNullOrWhiteSpace(_currentUserId))
+                return;
+
             string content;
             lock (_stateLock)
             {
@@ -226,6 +241,9 @@ namespace LearningAssistant.Services.Learning
 
         public void MarkCurrentAsUnknown()
         {
+            if (string.IsNullOrWhiteSpace(_currentUserId))
+                return;
+
             string content;
             lock (_stateLock)
             {

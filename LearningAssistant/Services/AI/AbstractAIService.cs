@@ -126,42 +126,44 @@ namespace LearningAssistant.Services.AI
                 string potentialJson = response.Substring(jsonStart);
                 
                 // 尝试解析JSON
-                try
-                {
-                    var obj = JsonConvert.DeserializeObject(potentialJson);
-                    if (obj != null)
-                    {
-                        // 如果是包含 content 或 explanation 字段的对象，提取纯文本
-                        if (obj is Newtonsoft.Json.Linq.JObject jObj)
-                        {
-                            // 尝试常见的文本字段
-                            if (jObj["content"] != null)
-                                return jObj["content"]!.ToString().Trim();
-                            if (jObj["explanation"] != null)
-                                return jObj["explanation"]!.ToString().Trim();
-                            if (jObj["text"] != null)
-                                return jObj["text"]!.ToString().Trim();
-                        }
-                        
-                        // 如果是字符串数组，提取第一项或拼接
-                        if (obj is Newtonsoft.Json.Linq.JArray jArr && jArr.Count > 0)
-                        {
-                            return jArr[0]!.ToString().Trim();
-                        }
-                        
-                        // 其他情况尝试序列化为格式化JSON
-                        var settings = new JsonSerializerSettings
-                        {
-                            Formatting = Formatting.Indented,
-                            StringEscapeHandling = StringEscapeHandling.Default
-                        };
-                        return JsonConvert.SerializeObject(obj, settings);
-                    }
-                }
-                catch
-                {
-                    // JSON解析失败，继续处理原始文本
-                }
+                                try
+                                {
+                                    var obj = JsonConvert.DeserializeObject(potentialJson);
+                                    if (obj != null)
+                                    {
+                                        // 如果是包含 content 或 explanation 字段的对象，提取纯文本
+                                        if (obj is Newtonsoft.Json.Linq.JObject jObj)
+                                        {
+                                            // 尝试常见的文本字段
+                                            if (jObj["content"] != null)
+                                                return jObj["content"]!.ToString().Trim();
+                                            if (jObj["explanation"] != null)
+                                                return jObj["explanation"]!.ToString().Trim();
+                                            if (jObj["text"] != null)
+                                                return jObj["text"]!.ToString().Trim();
+                                        }
+                                        
+                                        // 如果是字符串数组，提取第一项或拼接
+                                        if (obj is Newtonsoft.Json.Linq.JArray jArr && jArr.Count > 0)
+                                        {
+                                            return jArr[0]!.ToString().Trim();
+                                        }
+                                        
+                                        // 其他情况尝试序列化为格式化JSON
+                                        var settings = new JsonSerializerSettings
+                                        {
+                                            Formatting = Formatting.Indented,
+                                            StringEscapeHandling = StringEscapeHandling.Default
+                                        };
+                                        return JsonConvert.SerializeObject(obj, settings);
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    // JSON解析失败，记录日志并继续处理原始文本
+                                    _logger.LogWarning(ex, "JSON解析失败，响应内容: {Content}", 
+                                        potentialJson.Length > 200 ? potentialJson.Substring(0, 200) + "..." : potentialJson);
+                                }
             }
 
             // 如果不是JSON或解析失败，返回清理后的纯文本

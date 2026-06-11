@@ -127,9 +127,10 @@ namespace LearningAssistant.Data.Database
             {
                 Database.EnsureCreated();
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // 静默处理数据库创建错误
+                Console.WriteLine($"数据库创建失败: {ex.Message}");
+                throw;
             }
         }
     }

@@ -106,7 +106,7 @@ namespace LearningAssistant.Common
         public static IServiceCollection AddAIServices(this IServiceCollection services)
         {
             services.AddSingleton<IAIServiceFactory, AIServiceFactory>();
-            services.AddSingleton<IAIService, AIServiceProvider>();
+            services.AddSingleton<IAIService, FallbackAIService>();
 
             return services;
         }

@@ -44,6 +44,13 @@ namespace LearningAssistant.Services.Learning
             try
             {
                 string filePath = GetFilePath(subCategory, wordBankFile);
+                
+                if (!IsPathSafe(filePath))
+                {
+                    _logger.LogWarning("Path traversal detected: {FilePath}", filePath);
+                    return new List<object>();
+                }
+                
                 if (!File.Exists(filePath))
                 {
                     _logger.LogWarning("File not found: {FilePath}", filePath);
@@ -196,6 +203,20 @@ namespace LearningAssistant.Services.Learning
                 return Path.Combine(FileHelper.GetDataDirectory(), wordBankFile);
             }
             return Path.Combine(FileHelper.GetDataDirectory(), _categoryFileMap.GetValueOrDefault(subCategory, "data.json"));
+        }
+
+        private bool IsPathSafe(string filePath)
+        {
+            try
+            {
+                var dataDir = new DirectoryInfo(FileHelper.GetDataDirectory()).FullName;
+                var fullPath = new FileInfo(filePath).FullName;
+                return fullPath.StartsWith(dataDir, StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
     }

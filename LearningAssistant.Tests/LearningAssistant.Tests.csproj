@@ -25,7 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\UnifiedLearningAssistant\UnifiedLearningAssistant.csproj" />
+    <ProjectReference Include="..\LearningAssistant\LearningAssistant.csproj" />
   </ItemGroup>
 
 </Project>

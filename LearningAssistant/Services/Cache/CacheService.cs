@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using LearningAssistant.Common;
 
 namespace LearningAssistant.Services.Cache
@@ -15,6 +16,26 @@ namespace LearningAssistant.Services.Cache
             public bool IsExpired => DateTime.Now > ExpirationTime;
         }
 
+        private class AsyncLazy<T>
+        {
+            private readonly Lazy<Task<T>> _lazy;
+
+            public AsyncLazy(Func<Task<T>> factory)
+            {
+                _lazy = new Lazy<Task<T>>(() => Task.Run(factory), LazyThreadSafetyMode.ExecutionAndPublication);
+            }
+
+            public TaskAwaiter<T> GetAwaiter()
+            {
+                return _lazy.Value.GetAwaiter();
+            }
+
+            public Task<T> GetValueAsync()
+            {
+                return _lazy.Value;
+            }
+        }
+
         public CacheService(string cacheFilePath)
         {
             _cacheFilePath = cacheFilePath;
@@ -29,7 +50,15 @@ namespace LearningAssistant.Services.Cache
             {
                 if (!item.IsExpired)
                 {
-                    value = (T)item.Value;
+                    if (item.Value is AsyncLazy<T> lazy)
+                    {
+                        value = lazy.GetValueAsync().Result;
+                        item.Value = value;
+                    }
+                    else
+                    {
+                        value = (T)item.Value;
+                    }
                     return true;
                 }
                 _cache.TryRemove(key, out _);
@@ -52,21 +81,25 @@ namespace LearningAssistant.Services.Cache
             if (TryGet(key, out T value))
                 return value;
 
-            var lazyValue = _cache.GetOrAdd(key, k => new CacheItem 
-            { 
-                Value = Task.Run(async () => 
-                {
-                    var result = await factory();
-                    return result;
-                }),
-                ExpirationTime = expirationMinutes.HasValue 
-                    ? DateTime.Now.AddMinutes(expirationMinutes.Value) 
-                    : DateTime.MaxValue
+            var expiration = expirationMinutes.HasValue 
+                ? DateTime.Now.AddMinutes(expirationMinutes.Value) 
+                : DateTime.MaxValue;
+
+            var lazyFactory = new Func<Task<T>>(async () =>
+            {
+                var result = await factory().ConfigureAwait(false);
+                return result;
             });
 
-            if (lazyValue.Value is Task<T> task)
+            var lazyValue = _cache.GetOrAdd(key, k => new CacheItem
             {
-                value = await task;
+                Value = new AsyncLazy<T>(lazyFactory),
+                ExpirationTime = expiration
+            });
+
+            if (lazyValue.Value is AsyncLazy<T> lazy)
+            {
+                value = await lazy.GetValueAsync().ConfigureAwait(false);
                 lazyValue.Value = value;
                 lazyValue.ExpirationTime = expirationMinutes.HasValue 
                     ? DateTime.Now.AddMinutes(expirationMinutes.Value) 
@@ -90,13 +123,19 @@ namespace LearningAssistant.Services.Cache
             _cache.Clear();
         }
 
+        private class CachedItemData
+        {
+            public object Value { get; set; } = null!;
+            public DateTime ExpirationTime { get; set; }
+        }
+
         public void Persist()
         {
             try
             {
                 var cacheData = _cache.ToDictionary(
                     kvp => kvp.Key,
-                    kvp => new { Value = kvp.Value.Value, Expiration = kvp.Value.ExpirationTime });
+                    kvp => new CachedItemData { Value = kvp.Value.Value, ExpirationTime = kvp.Value.ExpirationTime });
                 
                 JsonHelper.SaveToFile(_cacheFilePath, cacheData);
             }
@@ -109,12 +148,16 @@ namespace LearningAssistant.Services.Cache
         {
             try
             {
-                var cacheData = JsonHelper.LoadFromFile<Dictionary<string, object>>(_cacheFilePath);
+                var cacheData = JsonHelper.LoadFromFile<Dictionary<string, CachedItemData>>(_cacheFilePath);
                 if (cacheData != null)
                 {
                     foreach (var kvp in cacheData)
                     {
-                        _cache.TryAdd(kvp.Key, new CacheItem { Value = kvp.Value, ExpirationTime = DateTime.MaxValue });
+                        var cachedItem = kvp.Value;
+                        if (cachedItem.ExpirationTime > DateTime.Now)
+                        {
+                            _cache.TryAdd(kvp.Key, new CacheItem { Value = cachedItem.Value, ExpirationTime = cachedItem.ExpirationTime });
+                        }
                     }
                 }
             }
