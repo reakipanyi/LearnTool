@@ -55,29 +55,15 @@ namespace LearningAssistant.Services.Pdf
 
         public void AddHighlight(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text = "", HighlightColor color = HighlightColor.Yellow)
         {
-            var folderPath = Path.GetDirectoryName(pdfPath) ?? "";
-            var collection = GetOrCreateFolderCollection(folderPath);
-
-            var highlight = new PdfHighlight
-            {
-                PdfPath = pdfPath,
-                PdfHash = ComputeFileHash(pdfPath),
-                PageIndex = pageIndex,
-                NormalizedX = normalizedX,
-                NormalizedY = normalizedY,
-                NormalizedWidth = normalizedWidth,
-                NormalizedHeight = normalizedHeight,
-                Text = text,
-                Color = color,
-                CreatedAt = DateTime.Now
-            };
-
-            collection.Highlights.Add(highlight);
-            SaveHighlightsToFolder(folderPath, collection);
-            _logger?.LogInformation("添加高亮成功: {Path}, 页码: {Page}, 颜色: {Color}", pdfPath, pageIndex, color);
+            AddHighlightInternal(pdfPath, pageIndex, normalizedX, normalizedY, normalizedWidth, normalizedHeight, text, null, color);
         }
 
         public void AddHighlightWithNote(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text, string note, HighlightColor color = HighlightColor.Yellow)
+        {
+            AddHighlightInternal(pdfPath, pageIndex, normalizedX, normalizedY, normalizedWidth, normalizedHeight, text, note, color);
+        }
+
+        private void AddHighlightInternal(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text, string? note, HighlightColor color)
         {
             var folderPath = Path.GetDirectoryName(pdfPath) ?? "";
             var collection = GetOrCreateFolderCollection(folderPath);
@@ -92,14 +78,14 @@ namespace LearningAssistant.Services.Pdf
                 NormalizedWidth = normalizedWidth,
                 NormalizedHeight = normalizedHeight,
                 Text = text,
-                Note = note,
+                Note = note ?? "",
                 Color = color,
                 CreatedAt = DateTime.Now
             };
 
             collection.Highlights.Add(highlight);
             SaveHighlightsToFolder(folderPath, collection);
-            _logger?.LogInformation("添加带注释的高亮成功: {Path}, 页码: {Page}, 注释长度: {Length}", pdfPath, pageIndex, note?.Length ?? 0);
+            _logger?.LogInformation("添加高亮成功: {Path}, 页码: {Page}, 颜色: {Color}", pdfPath, pageIndex, color);
         }
 
         public void UpdateHighlightNote(string pdfPath, string highlightId, string note)
@@ -305,6 +291,13 @@ namespace LearningAssistant.Services.Pdf
             };
         }
 
+        /// <summary>
+        /// 将归一化坐标转换为屏幕坐标
+        /// </summary>
+        /// <param name="normalizedRect">归一化矩形（0-1范围）</param>
+        /// <param name="screenWidth">屏幕宽度</param>
+        /// <param name="screenHeight">屏幕高度</param>
+        /// <returns>屏幕坐标矩形</returns>
         public static (float x, float y, float width, float height) NormalizeToScreen(RectangleF normalizedRect, float screenWidth, float screenHeight)
         {
             return (
@@ -315,6 +308,13 @@ namespace LearningAssistant.Services.Pdf
             );
         }
 
+        /// <summary>
+        /// 将屏幕坐标转换为归一化坐标
+        /// </summary>
+        /// <param name="screenRect">屏幕坐标矩形</param>
+        /// <param name="screenWidth">屏幕宽度</param>
+        /// <param name="screenHeight">屏幕高度</param>
+        /// <returns>归一化矩形（0-1范围）</returns>
         public static (float x, float y, float width, float height) NormalizeFromScreen(RectangleF screenRect, float screenWidth, float screenHeight)
         {
             return (

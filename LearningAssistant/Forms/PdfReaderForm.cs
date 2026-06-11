@@ -528,6 +528,12 @@ namespace LearningAssistant.Forms
 
                     var rect = new RectangleF(x, y, width, height);
 
+                    // 确保矩形有效
+                    if (rect.Width <= 0 || rect.Height <= 0 || rect.X < 0 || rect.Y < 0)
+                    {
+                        continue;
+                    }
+
                     // 使用渐变画笔，更美观
                     using var gradientBrush = new LinearGradientBrush(
                         rect,

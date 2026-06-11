@@ -27,7 +27,7 @@ namespace LearningAssistant.Services.Pdf
         {
             try
             {
-                if (highlights.Count == 0)
+                if (highlights == null || highlights.Count == 0)
                 {
                     _logger.LogWarning("No highlights to export");
                     return false;
@@ -137,8 +137,8 @@ namespace LearningAssistant.Services.Pdf
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, $"Failed to capture highlight image for index {i}");
-                        worksheet.Cells[row, 5].Value = "截图失败";
+                        _logger.LogError(ex, $"Failed to capture highlight image for index {i}, page {highlight.PageIndex}");
+                        worksheet.Cells[row, 5].Value = $"截图失败: {ex.Message}";
                     }
                 }
 
@@ -229,13 +229,17 @@ namespace LearningAssistant.Services.Pdf
         {
             try
             {
-                if (highlight.PageIndex < 0 || highlight.PageIndex >= imageFiles.Count)
+                // 根据PdfPath查找对应的图片文件（处理可能的索引不匹配问题）
+                string? imagePath = imageFiles.FirstOrDefault(f => 
+                    string.Equals(Path.GetFileName(f), Path.GetFileName(highlight.PdfPath), 
+                    StringComparison.OrdinalIgnoreCase));
+
+                if (imagePath == null)
                 {
-                    _logger.LogWarning($"Invalid page index {highlight.PageIndex} for image files count {imageFiles.Count}");
+                    _logger.LogWarning($"Image file not found for {highlight.PdfPath}");
                     return null;
                 }
 
-                string imagePath = imageFiles[highlight.PageIndex];
                 if (!File.Exists(imagePath))
                 {
                     _logger.LogWarning($"Image file not found: {imagePath}");
