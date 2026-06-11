@@ -8,12 +8,12 @@ namespace LearningAssistant.Services.TTS
     /// </summary>
     public class QwenTtsClient : IDisposable
     {
-        private static readonly HttpClient _sharedHttpClient = new HttpClient 
-        { 
+        private static readonly HttpClient _sharedHttpClient = new HttpClient
+        {
             Timeout = TimeSpan.FromSeconds(60),
             DefaultRequestHeaders = { { "User-Agent", "LearningAssistant/1.0" } }
         };
-        
+
         private readonly HttpClient _httpClient;
         private readonly string _apiKey;
         private readonly string _endpoint;
@@ -81,7 +81,8 @@ namespace LearningAssistant.Services.TTS
                     language_type = language,
                     speed = speed,
                     pitch = 1.1,
-                    instructions = "语气幽默，语调活泼多变，充满童趣和笑意，节奏轻快，发音清晰，带有欢快的笑意，语速偏慢，声音响亮一些。",
+                    //instructions = "语气幽默，语调活泼多变，充满童趣和笑意，节奏轻快，发音清晰，带有欢快的笑意，语速偏慢，声音响亮一些。",
+                    instructions = "请用耐心、清晰的老师语气，语速稍慢，适合学生跟读",
                 },
                 parameters = new
                 {
@@ -138,7 +139,7 @@ namespace LearningAssistant.Services.TTS
         protected virtual void Dispose(bool disposing)
         {
             if (_disposed) return;
-            
+
             if (disposing)
             {
                 // 只释放自己创建的 HttpClient，不释放共享的
@@ -147,7 +148,7 @@ namespace LearningAssistant.Services.TTS
                     _httpClient?.Dispose();
                 }
             }
-            
+
             _disposed = true;
         }
     }

@@ -816,6 +816,10 @@ namespace LearningAssistant.Forms
                     buttonLanguage.BackColor = Color.FromArgb(45, 45, 45);
                     buttonLanguage.ForeColor = Color.White;
                 }
+                // 右侧tab页夜间模式 - 翻译结果页面
+                ApplyNightModeToTabPageTranslate(true);
+                // 右侧tab页夜间模式 - 书签和高亮页面
+                ApplyNightModeToBookmarksAndHighlights(true);
             }
             else
             {
@@ -840,6 +844,10 @@ namespace LearningAssistant.Forms
                     buttonLanguage.BackColor = Color.White;
                     buttonLanguage.ForeColor = Color.Black;
                 }
+                // 右侧tab页日间模式 - 翻译结果页面
+                ApplyNightModeToTabPageTranslate(false);
+                // 右侧tab页日间模式 - 书签和高亮页面
+                ApplyNightModeToBookmarksAndHighlights(false);
             }
 
             // 更新缩略图背景色
@@ -883,6 +891,288 @@ namespace LearningAssistant.Forms
                             }
                         }
                     }
+                }
+            }
+        }
+
+        private void ApplyNightModeToTabPageTranslate(bool isNightMode)
+        {
+            // 翻译结果页面的控件
+            if (tabPageTranslate != null)
+            {
+                tabPageTranslate.BackColor = isNightMode ? Color.FromArgb(40, 40, 40) : Color.White;
+            }
+
+            // groupBoxProgress - 学习统计摘要
+            if (groupBoxProgress != null)
+            {
+                groupBoxProgress.BackColor = isNightMode ? Color.FromArgb(40, 40, 40) : Color.White;
+                groupBoxProgress.ForeColor = isNightMode ? Color.White : Color.Black;
+            }
+
+            // textBoxOriginal - 原文文本框
+            if (textBoxOriginal != null)
+            {
+                textBoxOriginal.BackColor = isNightMode ? Color.FromArgb(30, 30, 30) : Color.White;
+                textBoxOriginal.ForeColor = isNightMode ? Color.White : Color.Black;
+            }
+
+            // textBoxTranslation - 译文文本框
+            if (textBoxTranslation != null)
+            {
+                textBoxTranslation.BackColor = isNightMode ? Color.FromArgb(30, 30, 30) : Color.White;
+                textBoxTranslation.ForeColor = isNightMode ? Color.White : Color.Black;
+            }
+
+            // labelOriginal, labelTranslation - 标签
+            if (labelOriginal != null)
+            {
+                labelOriginal.ForeColor = isNightMode ? Color.White : Color.Black;
+            }
+            if (labelTranslation != null)
+            {
+                labelTranslation.ForeColor = isNightMode ? Color.White : Color.Black;
+            }
+
+            // 翻译相关按钮 - 夜间模式设置深色背景，日间模式恢复默认颜色
+            if (buttonTranslate != null)
+            {
+                if (isNightMode)
+                {
+                    buttonTranslate.BackColor = Color.FromArgb(45, 45, 45);
+                    buttonTranslate.ForeColor = Color.White;
+                }
+                else
+                {
+                    buttonTranslate.BackColor = SystemColors.Control;
+                    buttonTranslate.ForeColor = SystemColors.ControlText;
+                }
+            }
+            if (buttonSpeakOriginal != null)
+            {
+                if (isNightMode)
+                {
+                    buttonSpeakOriginal.BackColor = Color.FromArgb(45, 45, 45);
+                    buttonSpeakOriginal.ForeColor = Color.White;
+                }
+                else
+                {
+                    buttonSpeakOriginal.BackColor = SystemColors.Control;
+                    buttonSpeakOriginal.ForeColor = SystemColors.ControlText;
+                }
+            }
+            if (buttonSpeakTranslation != null)
+            {
+                if (isNightMode)
+                {
+                    buttonSpeakTranslation.BackColor = Color.FromArgb(45, 45, 45);
+                    buttonSpeakTranslation.ForeColor = Color.White;
+                }
+                else
+                {
+                    buttonSpeakTranslation.BackColor = SystemColors.Control;
+                    buttonSpeakTranslation.ForeColor = SystemColors.ControlText;
+                }
+            }
+
+            // groupBoxLanguage - AI提问区域
+            if (groupBoxLanguage != null)
+            {
+                groupBoxLanguage.BackColor = isNightMode ? Color.FromArgb(40, 40, 40) : Color.White;
+                groupBoxLanguage.ForeColor = isNightMode ? Color.White : Color.Black;
+            }
+
+            // textBoxQuestion - 问题输入框
+            if (textBoxQuestion != null)
+            {
+                textBoxQuestion.BackColor = isNightMode ? Color.FromArgb(30, 30, 30) : Color.White;
+                textBoxQuestion.ForeColor = isNightMode ? Color.White : Color.Black;
+            }
+
+            // richTextBoxAiAnswer - AI回答框
+            if (richTextBoxAiAnswer != null)
+            {
+                richTextBoxAiAnswer.BackColor = isNightMode ? Color.FromArgb(30, 30, 30) : Color.White;
+                richTextBoxAiAnswer.ForeColor = isNightMode ? Color.White : Color.Black;
+            }
+
+            // labelQuestion - 问题标签
+            if (labelQuestion != null)
+            {
+                labelQuestion.ForeColor = isNightMode ? Color.White : Color.Black;
+            }
+
+            // AI相关按钮 - 夜间模式设置深色背景，日间模式恢复默认颜色
+            if (buttonAskAi != null)
+            {
+                if (isNightMode)
+                {
+                    buttonAskAi.BackColor = Color.FromArgb(45, 45, 45);
+                    buttonAskAi.ForeColor = Color.White;
+                }
+                else
+                {
+                    buttonAskAi.BackColor = SystemColors.Control;
+                    buttonAskAi.ForeColor = SystemColors.ControlText;
+                }
+            }
+            if (buttonAddToLearning != null)
+            {
+                if (isNightMode)
+                {
+                    buttonAddToLearning.BackColor = Color.FromArgb(45, 45, 45);
+                    buttonAddToLearning.ForeColor = Color.White;
+                }
+                else
+                {
+                    buttonAddToLearning.BackColor = SystemColors.Control;
+                    buttonAddToLearning.ForeColor = SystemColors.ControlText;
+                }
+            }
+            if (buttonSpeakAnswer != null)
+            {
+                if (isNightMode)
+                {
+                    buttonSpeakAnswer.BackColor = Color.FromArgb(45, 45, 45);
+                    buttonSpeakAnswer.ForeColor = Color.White;
+                }
+                else
+                {
+                    buttonSpeakAnswer.BackColor = SystemColors.Control;
+                    buttonSpeakAnswer.ForeColor = SystemColors.ControlText;
+                }
+            }
+        }
+
+        private void ApplyNightModeToBookmarksAndHighlights(bool isNightMode)
+        {
+            // 书签和高亮页面
+            if (_tabPageBookmarksAndHighlights != null)
+            {
+                _tabPageBookmarksAndHighlights.BackColor = isNightMode ? Color.FromArgb(40, 40, 40) : Color.White;
+            }
+
+            // 书签区域
+            if (_groupBoxBookmarks != null)
+            {
+                _groupBoxBookmarks.BackColor = isNightMode ? Color.FromArgb(40, 40, 40) : Color.White;
+                _groupBoxBookmarks.ForeColor = isNightMode ? Color.White : Color.Black;
+            }
+
+            // 书签列表
+            if (_listBoxBookmarks != null)
+            {
+                _listBoxBookmarks.BackColor = isNightMode ? Color.FromArgb(30, 30, 30) : Color.White;
+                _listBoxBookmarks.ForeColor = isNightMode ? Color.White : Color.Black;
+            }
+
+            // 书签标题输入框
+            if (_textBoxBookmarkTitle != null)
+            {
+                _textBoxBookmarkTitle.BackColor = isNightMode ? Color.FromArgb(30, 30, 30) : Color.White;
+                _textBoxBookmarkTitle.ForeColor = isNightMode ? Color.White : Color.Black;
+            }
+
+            // 书签按钮 - 夜间模式设置深色背景，日间模式恢复默认颜色
+            if (_buttonAddBookmark != null)
+            {
+                if (isNightMode)
+                {
+                    _buttonAddBookmark.BackColor = Color.FromArgb(45, 45, 45);
+                    _buttonAddBookmark.ForeColor = Color.White;
+                }
+                else
+                {
+                    _buttonAddBookmark.BackColor = SystemColors.Control;
+                    _buttonAddBookmark.ForeColor = SystemColors.ControlText;
+                }
+            }
+            if (_buttonRemoveBookmark != null)
+            {
+                if (isNightMode)
+                {
+                    _buttonRemoveBookmark.BackColor = Color.FromArgb(45, 45, 45);
+                    _buttonRemoveBookmark.ForeColor = Color.White;
+                }
+                else
+                {
+                    _buttonRemoveBookmark.BackColor = SystemColors.Control;
+                    _buttonRemoveBookmark.ForeColor = SystemColors.ControlText;
+                }
+            }
+
+            // 高亮区域
+            if (_groupBoxHighlights != null)
+            {
+                _groupBoxHighlights.BackColor = isNightMode ? Color.FromArgb(40, 40, 40) : Color.White;
+                _groupBoxHighlights.ForeColor = isNightMode ? Color.White : Color.Black;
+            }
+
+            // 高亮列表
+            if (_listBoxHighlights != null)
+            {
+                _listBoxHighlights.BackColor = isNightMode ? Color.FromArgb(30, 30, 30) : Color.White;
+                _listBoxHighlights.ForeColor = isNightMode ? Color.White : Color.Black;
+            }
+
+            // 高亮颜色选择区域
+            if (groupBoxHighlightColor != null)
+            {
+                groupBoxHighlightColor.BackColor = isNightMode ? Color.FromArgb(40, 40, 40) : Color.White;
+                groupBoxHighlightColor.ForeColor = isNightMode ? Color.White : Color.Black;
+            }
+
+            // 高亮按钮 - 夜间模式设置深色背景，日间模式恢复默认颜色
+            if (_buttonRemoveHighlight != null)
+            {
+                if (isNightMode)
+                {
+                    _buttonRemoveHighlight.BackColor = Color.FromArgb(45, 45, 45);
+                    _buttonRemoveHighlight.ForeColor = Color.White;
+                }
+                else
+                {
+                    _buttonRemoveHighlight.BackColor = SystemColors.Control;
+                    _buttonRemoveHighlight.ForeColor = SystemColors.ControlText;
+                }
+            }
+            if (_buttonBatchRemoveHighlight != null)
+            {
+                if (isNightMode)
+                {
+                    _buttonBatchRemoveHighlight.BackColor = Color.FromArgb(45, 45, 45);
+                    _buttonBatchRemoveHighlight.ForeColor = Color.White;
+                }
+                else
+                {
+                    _buttonBatchRemoveHighlight.BackColor = SystemColors.Control;
+                    _buttonBatchRemoveHighlight.ForeColor = SystemColors.ControlText;
+                }
+            }
+            if (_buttonExportHighlights != null)
+            {
+                if (isNightMode)
+                {
+                    _buttonExportHighlights.BackColor = Color.FromArgb(45, 45, 45);
+                    _buttonExportHighlights.ForeColor = Color.White;
+                }
+                else
+                {
+                    _buttonExportHighlights.BackColor = SystemColors.Control;
+                    _buttonExportHighlights.ForeColor = SystemColors.ControlText;
+                }
+            }
+            if (buttonUndoHighlight != null)
+            {
+                if (isNightMode)
+                {
+                    buttonUndoHighlight.BackColor = Color.FromArgb(45, 45, 45);
+                    buttonUndoHighlight.ForeColor = Color.White;
+                }
+                else
+                {
+                    buttonUndoHighlight.BackColor = SystemColors.Control;
+                    buttonUndoHighlight.ForeColor = SystemColors.ControlText;
                 }
             }
         }

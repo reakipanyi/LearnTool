@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Common.Themes;
 using LearningAssistant.Models.Learning;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services.AI;
@@ -7,12 +8,13 @@ using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel;
+using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Text.Json;
 
 namespace LearningAssistant.Forms
 {
-    public partial class LearningForm : Form, ILearningView
+    public partial class LearningForm : Form, ILearningView, IThemeable
     {
         private LearningItem? _currentItem;
         private readonly IAiQuestionService _aiQuestionService;
@@ -20,6 +22,7 @@ namespace LearningAssistant.Forms
         private readonly ILogger<LearningForm> _logger;
         private readonly ILoggerFactory _loggerFactory;
         private readonly ISoundService _soundService;
+        private readonly IThemeService _themeService;
         private AiQuestionDialog? _aiDialog;
         private bool _disposed = false;
         private Settings _settings = new();
@@ -68,7 +71,7 @@ namespace LearningAssistant.Forms
             Color.FromArgb(100, 200, 220)
         };
 
-        public LearningForm(IAiQuestionService aiQuestionService, ITTSService ttsService, ILogger<LearningForm> logger, ILoggerFactory loggerFactory, ISoundService soundService)
+        public LearningForm(IAiQuestionService aiQuestionService, ITTSService ttsService, ILogger<LearningForm> logger, ILoggerFactory loggerFactory, ISoundService soundService, IThemeService themeService)
         {
             InitializeComponent();
             _aiQuestionService = aiQuestionService ?? throw new ArgumentNullException(nameof(aiQuestionService));
@@ -76,7 +79,7 @@ namespace LearningAssistant.Forms
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
             _soundService = soundService ?? throw new ArgumentNullException(nameof(soundService));
-
+            _themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
 
 
             Load += LearningForm_Load;
@@ -87,6 +90,99 @@ namespace LearningAssistant.Forms
 
             _confettiTimer.Interval = 16;
             _confettiTimer.Tick += ConfettiTimer_Tick;
+
+            _themeService.RegisterThemeable(this);
+        }
+
+        private void LearningForm_Paint(object? sender, PaintEventArgs e)
+        {
+            // 空方法保留，避免编译错误
+        }
+
+        public void ApplyTheme(ThemeColors colors)
+        {
+            BackColor = colors.Background;
+            
+            if (panelContent != null)
+            {
+                panelContent.BackColor = colors.Surface;
+            }
+            
+            if (panelAI != null)
+            {
+                panelAI.BackColor = colors.Surface;
+            }
+            
+            if (panelConfig != null)
+            {
+                panelConfig.BackColor = colors.Surface;
+            }
+            
+            if (labelDisplay != null)
+            {
+                labelDisplay.ForeColor = colors.TextPrimary;
+            }
+            
+            if (labelContent != null)
+            {
+                labelContent.ForeColor = colors.TextPrimary;
+            }
+            
+            if (richTextBoxAI != null)
+            {
+                richTextBoxAI.BackColor = colors.Surface;
+                richTextBoxAI.ForeColor = colors.TextPrimary;
+            }
+            
+            if (buttonKnown != null)
+            {
+                buttonKnown.ForeColor = Color.White;
+            }
+            
+            if (buttonUnknown != null)
+            {
+                buttonUnknown.ForeColor = Color.White;
+            }
+            
+            foreach (Control control in Controls)
+            {
+                ApplyThemeToControl(control, colors);
+            }
+        }
+
+        private void ApplyThemeToControl(Control control, ThemeColors colors)
+        {
+            if (control is Label label)
+            {
+                label.ForeColor = colors.TextPrimary;
+            }
+            else if (control is Panel panel)
+            {
+                panel.BackColor = colors.Surface;
+            }
+            else if (control is GroupBox groupBox)
+            {
+                groupBox.BackColor = colors.Surface;
+                groupBox.ForeColor = colors.TextPrimary;
+            }
+            else if (control is CheckBox checkBox)
+            {
+                checkBox.ForeColor = colors.TextPrimary;
+            }
+            else if (control is RadioButton radioButton)
+            {
+                radioButton.ForeColor = colors.TextPrimary;
+            }
+            else if (control is ComboBox comboBox)
+            {
+                comboBox.BackColor = colors.Surface;
+                comboBox.ForeColor = colors.TextPrimary;
+            }
+            
+            foreach (Control child in control.Controls)
+            {
+                ApplyThemeToControl(child, colors);
+            }
         }
 
 
@@ -1281,6 +1377,7 @@ namespace LearningAssistant.Forms
 
         private void mainTableLayoutPanel_Paint(object? sender, PaintEventArgs e)
         {
+            DrawConfetti(e.Graphics);
         }
 
         #endregion
@@ -1447,11 +1544,10 @@ namespace LearningAssistant.Forms
             Invalidate();
         }
 
-        private void LearningForm_Paint(object? sender, PaintEventArgs e)
+        private void DrawConfetti(Graphics g)
         {
             if (!_isConfettiActive || _confettiParticles.Count == 0) return;
 
-            var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
             foreach (var particle in _confettiParticles)

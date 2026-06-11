@@ -1,28 +1,96 @@
+using LearningAssistant.Common;
+using LearningAssistant.Common.Themes;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
 using LearningAssistant.Services.Cloud;
+using LearningAssistant.Services.Learning;
 using LearningAssistant.Views;
 
 namespace LearningAssistant.Forms
 {
-    public partial class MainForm : Form, IMainView
+    public partial class MainForm : Form, IMainView, IThemeable
     {
         private readonly MainPresenter _presenter;
         private readonly IWindowManager _windowManager;
         private readonly AppConfig _appConfig;
         private readonly ICloudStorageService _cloudStorageService;
+        private readonly IThemeService _themeService;
         private bool _isDisposed = false;
 
-        public MainForm(MainPresenter presenter, IWindowManager windowManager, AppConfig appConfig, ICloudStorageService cloudStorageService)
+        public MainForm(MainPresenter presenter, IWindowManager windowManager, AppConfig appConfig, ICloudStorageService cloudStorageService, IThemeService themeService)
         {
             InitializeComponent();
             _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
             _windowManager = windowManager ?? throw new ArgumentNullException(nameof(windowManager));
             _appConfig = appConfig ?? throw new ArgumentNullException(nameof(appConfig));
             _cloudStorageService = cloudStorageService ?? throw new ArgumentNullException(nameof(cloudStorageService));
+            _themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
 
             Load += MainForm_Load;
+
+            _themeService.RegisterThemeable(this);
+        }
+
+        public void ApplyTheme(ThemeColors colors)
+        {
+            BackColor = colors.Background;
+
+            if (panelMain != null)
+            {
+                panelMain.BackColor = colors.Surface;
+            }
+
+            if (comboBoxUser != null)
+            {
+                comboBoxUser.BackColor = colors.Surface;
+                comboBoxUser.ForeColor = colors.TextPrimary;
+            }
+
+            if (textBoxProgress != null)
+            {
+                textBoxProgress.BackColor = colors.Surface;
+                textBoxProgress.ForeColor = colors.TextPrimary;
+            }
+
+            if (panelMain != null)
+            {
+                panelMain.BackColor = colors.Surface;
+            }
+
+            foreach (Control control in Controls)
+            {
+                ApplyThemeToControl(control, colors);
+            }
+        }
+
+        private void ApplyThemeToControl(Control control, ThemeColors colors)
+        {
+            /*
+            if (control is Button button)
+            {
+                button.BackColor = colors.Primary;
+                button.ForeColor = Color.White;
+            }
+            else*/
+            if (control is Label label)
+            {
+                label.ForeColor = colors.TextPrimary;
+            }
+            else if (control is Panel panel)
+            {
+                panel.BackColor = colors.Surface;
+            }
+            else if (control is GroupBox groupBox)
+            {
+                groupBox.BackColor = colors.Surface;
+                groupBox.ForeColor = colors.TextPrimary;
+            }
+
+            foreach (Control child in control.Controls)
+            {
+                ApplyThemeToControl(child, colors);
+            }
         }
 
 
@@ -48,18 +116,21 @@ namespace LearningAssistant.Forms
 
         #region IMainView Implementation
 
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public string SelectedUser
         {
             get => comboBoxUser.Text;
             set => comboBoxUser.Text = value;
         }
 
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public string ProgressSummary
         {
             get => textBoxProgress.Text;
             set => textBoxProgress.Text = value;
         }
 
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public string StatusText
         {
             get => toolStripStatusLabel.Text;
@@ -87,13 +158,6 @@ namespace LearningAssistant.Forms
             }
         }
 
-        public void SetTabPage(string tabName)
-        {
-            if (tabName == tabPageLearning.Text || tabName == "双语学习")
-            {
-                tabControl1.SelectedTab = tabPageLearning;
-            }
-        }
 
         public void UpdateStatus(string status)
         {
@@ -131,8 +195,6 @@ namespace LearningAssistant.Forms
         #region WinForms Designer Generated Code
 
         private System.ComponentModel.IContainer components = null;
-        private TabControl tabControl1;
-        private TabPage tabPageLearning;
         private Panel panelMain;
         private GroupBox groupBoxUser;
         private ComboBox comboBoxUser;
@@ -149,6 +211,7 @@ namespace LearningAssistant.Forms
         private Button buttonBrowser;
         private Button buttonSubjectLearning;
         private Button buttonBaiduNetdisk;
+        private Button buttonDictation;
         private MenuStrip menuStrip1;
         private ToolStripMenuItem toolStripMenuItemFile;
         private ToolStripMenuItem toolStripMenuItemNewUser;
@@ -163,8 +226,6 @@ namespace LearningAssistant.Forms
 
         private void InitializeComponent()
         {
-            tabControl1 = new TabControl();
-            tabPageLearning = new TabPage();
             panelMain = new Panel();
             groupBoxProgress = new GroupBox();
             textBoxProgress = new TextBox();
@@ -182,6 +243,7 @@ namespace LearningAssistant.Forms
             buttonBrowser = new Button();
             buttonSubjectLearning = new Button();
             buttonBaiduNetdisk = new Button();
+            buttonDictation = new Button();
             menuStrip1 = new MenuStrip();
             toolStripMenuItemFile = new ToolStripMenuItem();
             toolStripMenuItemNewUser = new ToolStripMenuItem();
@@ -190,8 +252,6 @@ namespace LearningAssistant.Forms
             toolStripMenuItemHelp = new ToolStripMenuItem();
             statusStrip1 = new StatusStrip();
             toolStripStatusLabel = new ToolStripStatusLabel();
-            tabControl1.SuspendLayout();
-            tabPageLearning.SuspendLayout();
             panelMain.SuspendLayout();
             groupBoxProgress.SuspendLayout();
             groupBoxUser.SuspendLayout();
@@ -199,27 +259,6 @@ namespace LearningAssistant.Forms
             menuStrip1.SuspendLayout();
             statusStrip1.SuspendLayout();
             SuspendLayout();
-            // 
-            // tabControl1
-            // 
-            tabControl1.Controls.Add(tabPageLearning);
-            tabControl1.Dock = DockStyle.Fill;
-            tabControl1.Location = new Point(0, 25);
-            tabControl1.Name = "tabControl1";
-            tabControl1.SelectedIndex = 0;
-            tabControl1.Size = new Size(1184, 707);
-            tabControl1.TabIndex = 0;
-            tabControl1.SelectedIndexChanged += TabControl1_SelectedIndexChanged;
-            // 
-            // tabPageLearning
-            // 
-            tabPageLearning.Controls.Add(panelMain);
-            tabPageLearning.Location = new Point(4, 30);
-            tabPageLearning.Name = "tabPageLearning";
-            tabPageLearning.Padding = new Padding(3);
-            tabPageLearning.Size = new Size(1176, 673);
-            tabPageLearning.TabIndex = 0;
-            tabPageLearning.Text = "📖 双语学习";
             // 
             // panelMain
             // 
@@ -229,25 +268,24 @@ namespace LearningAssistant.Forms
             panelMain.Controls.Add(buttonSettings);
             panelMain.Controls.Add(buttonLearning);
             panelMain.Controls.Add(groupBoxUser);
-            panelMain.Controls.Add(panelStreakInfo);
             panelMain.Controls.Add(buttonLearningManagement);
             panelMain.Controls.Add(buttonBrowser);
             panelMain.Controls.Add(buttonSubjectLearning);
             panelMain.Controls.Add(buttonBaiduNetdisk);
+            panelMain.Controls.Add(buttonDictation);
             panelMain.Dock = DockStyle.Fill;
-            panelMain.Location = new Point(3, 3);
+            panelMain.Location = new Point(0, 25);
             panelMain.Margin = new Padding(4);
             panelMain.Name = "panelMain";
-            panelMain.Size = new Size(1170, 667);
+            panelMain.Size = new Size(632, 593);
             panelMain.TabIndex = 0;
             // 
             // groupBoxProgress
             // 
-            groupBoxProgress.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             groupBoxProgress.Controls.Add(textBoxProgress);
-            groupBoxProgress.Location = new Point(848, 17);
+            groupBoxProgress.Location = new Point(30, 107);
             groupBoxProgress.Name = "groupBoxProgress";
-            groupBoxProgress.Size = new Size(306, 207);
+            groupBoxProgress.Size = new Size(558, 178);
             groupBoxProgress.TabIndex = 12;
             groupBoxProgress.TabStop = false;
             groupBoxProgress.Text = "学习统计摘要";
@@ -255,12 +293,12 @@ namespace LearningAssistant.Forms
             // textBoxProgress
             // 
             textBoxProgress.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            textBoxProgress.Location = new Point(15, 34);
+            textBoxProgress.Location = new Point(0, 27);
             textBoxProgress.Multiline = true;
             textBoxProgress.Name = "textBoxProgress";
             textBoxProgress.ReadOnly = true;
             textBoxProgress.ScrollBars = ScrollBars.Vertical;
-            textBoxProgress.Size = new Size(285, 167);
+            textBoxProgress.Size = new Size(558, 145);
             textBoxProgress.TabIndex = 0;
             // 
             // buttonOpenPdfReader
@@ -269,7 +307,7 @@ namespace LearningAssistant.Forms
             buttonOpenPdfReader.FlatAppearance.BorderSize = 0;
             buttonOpenPdfReader.FlatStyle = FlatStyle.Flat;
             buttonOpenPdfReader.ForeColor = Color.White;
-            buttonOpenPdfReader.Location = new Point(216, 193);
+            buttonOpenPdfReader.Location = new Point(232, 316);
             buttonOpenPdfReader.Name = "buttonOpenPdfReader";
             buttonOpenPdfReader.Size = new Size(150, 51);
             buttonOpenPdfReader.TabIndex = 12;
@@ -283,7 +321,7 @@ namespace LearningAssistant.Forms
             buttonOpenEditor.FlatAppearance.BorderSize = 0;
             buttonOpenEditor.FlatStyle = FlatStyle.Flat;
             buttonOpenEditor.ForeColor = Color.White;
-            buttonOpenEditor.Location = new Point(36, 193);
+            buttonOpenEditor.Location = new Point(31, 398);
             buttonOpenEditor.Name = "buttonOpenEditor";
             buttonOpenEditor.Size = new Size(150, 51);
             buttonOpenEditor.TabIndex = 11;
@@ -293,17 +331,16 @@ namespace LearningAssistant.Forms
             // 
             // buttonSettings
             // 
-            buttonSettings.BackColor = Color.FromArgb(255, 128, 0);
+            buttonSettings.BackColor = Color.FromArgb(33, 150, 243);
             buttonSettings.FlatAppearance.BorderSize = 0;
             buttonSettings.FlatStyle = FlatStyle.Flat;
             buttonSettings.ForeColor = Color.White;
-            buttonSettings.Location = new Point(216, 127);
+            buttonSettings.Location = new Point(433, 316);
             buttonSettings.Name = "buttonSettings";
             buttonSettings.Size = new Size(150, 51);
             buttonSettings.TabIndex = 16;
             buttonSettings.Text = "⚙️ 设置";
             buttonSettings.UseVisualStyleBackColor = false;
-            buttonSettings.Visible = true;
             buttonSettings.Click += ButtonSettings_Click;
             // 
             // buttonLearning
@@ -312,7 +349,7 @@ namespace LearningAssistant.Forms
             buttonLearning.FlatAppearance.BorderSize = 0;
             buttonLearning.FlatStyle = FlatStyle.Flat;
             buttonLearning.ForeColor = Color.White;
-            buttonLearning.Location = new Point(36, 127);
+            buttonLearning.Location = new Point(31, 316);
             buttonLearning.Name = "buttonLearning";
             buttonLearning.Size = new Size(150, 51);
             buttonLearning.TabIndex = 9;
@@ -324,9 +361,10 @@ namespace LearningAssistant.Forms
             // 
             groupBoxUser.Controls.Add(comboBoxUser);
             groupBoxUser.Controls.Add(labelUser);
+            groupBoxUser.Controls.Add(panelStreakInfo);
             groupBoxUser.Location = new Point(30, 17);
             groupBoxUser.Name = "groupBoxUser";
-            groupBoxUser.Size = new Size(250, 74);
+            groupBoxUser.Size = new Size(558, 74);
             groupBoxUser.TabIndex = 0;
             groupBoxUser.TabStop = false;
             groupBoxUser.Text = "多玩家";
@@ -350,41 +388,39 @@ namespace LearningAssistant.Forms
             // 
             // panelStreakInfo
             // 
-            panelStreakInfo.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             panelStreakInfo.Controls.Add(labelStreakIcon);
             panelStreakInfo.Controls.Add(labelStreakDays);
-            panelStreakInfo.Location = new Point(30, 399);
+            panelStreakInfo.Location = new Point(259, 26);
             panelStreakInfo.Margin = new Padding(4);
             panelStreakInfo.Name = "panelStreakInfo";
-            panelStreakInfo.Size = new Size(365, 110);
+            panelStreakInfo.Size = new Size(248, 41);
             panelStreakInfo.TabIndex = 17;
             // 
             // labelStreakIcon
             // 
-            labelStreakIcon.Location = new Point(141, 17);
+            labelStreakIcon.Location = new Point(118, 9);
             labelStreakIcon.Margin = new Padding(4, 0, 4, 0);
             labelStreakIcon.Name = "labelStreakIcon";
-            labelStreakIcon.Size = new Size(143, 28);
+            labelStreakIcon.Size = new Size(105, 28);
             labelStreakIcon.TabIndex = 0;
             // 
             // labelStreakDays
             // 
-            labelStreakDays.Location = new Point(6, 17);
+            labelStreakDays.Location = new Point(7, 9);
             labelStreakDays.Margin = new Padding(4, 0, 4, 0);
             labelStreakDays.Name = "labelStreakDays";
-            labelStreakDays.Size = new Size(143, 28);
+            labelStreakDays.Size = new Size(105, 28);
             labelStreakDays.TabIndex = 1;
             // 
             // buttonLearningManagement
             // 
-            buttonLearningManagement.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             buttonLearningManagement.BackColor = Color.FromArgb(103, 58, 183);
             buttonLearningManagement.FlatAppearance.BorderSize = 0;
             buttonLearningManagement.FlatStyle = FlatStyle.Flat;
             buttonLearningManagement.ForeColor = Color.White;
-            buttonLearningManagement.Location = new Point(873, 263);
+            buttonLearningManagement.Location = new Point(31, 476);
             buttonLearningManagement.Name = "buttonLearningManagement";
-            buttonLearningManagement.Size = new Size(136, 53);
+            buttonLearningManagement.Size = new Size(150, 51);
             buttonLearningManagement.TabIndex = 18;
             buttonLearningManagement.Text = "📋 学习管理";
             buttonLearningManagement.UseVisualStyleBackColor = false;
@@ -392,14 +428,13 @@ namespace LearningAssistant.Forms
             // 
             // buttonBrowser
             // 
-            buttonBrowser.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            buttonBrowser.BackColor = Color.FromArgb(255, 87, 34);
+            buttonBrowser.BackColor = Color.FromArgb(103, 58, 183);
             buttonBrowser.FlatAppearance.BorderSize = 0;
             buttonBrowser.FlatStyle = FlatStyle.Flat;
             buttonBrowser.ForeColor = Color.White;
-            buttonBrowser.Location = new Point(1018, 341);
+            buttonBrowser.Location = new Point(232, 398);
             buttonBrowser.Name = "buttonBrowser";
-            buttonBrowser.Size = new Size(136, 53);
+            buttonBrowser.Size = new Size(150, 51);
             buttonBrowser.TabIndex = 19;
             buttonBrowser.Text = "🌐 学习浏览器";
             buttonBrowser.UseVisualStyleBackColor = false;
@@ -407,14 +442,13 @@ namespace LearningAssistant.Forms
             // 
             // buttonSubjectLearning
             // 
-            buttonSubjectLearning.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             buttonSubjectLearning.BackColor = Color.FromArgb(76, 175, 80);
             buttonSubjectLearning.FlatAppearance.BorderSize = 0;
             buttonSubjectLearning.FlatStyle = FlatStyle.Flat;
             buttonSubjectLearning.ForeColor = Color.White;
-            buttonSubjectLearning.Location = new Point(1018, 263);
+            buttonSubjectLearning.Location = new Point(433, 476);
             buttonSubjectLearning.Name = "buttonSubjectLearning";
-            buttonSubjectLearning.Size = new Size(136, 53);
+            buttonSubjectLearning.Size = new Size(150, 51);
             buttonSubjectLearning.TabIndex = 20;
             buttonSubjectLearning.Text = "📚 学科学习";
             buttonSubjectLearning.UseVisualStyleBackColor = false;
@@ -422,25 +456,38 @@ namespace LearningAssistant.Forms
             // 
             // buttonBaiduNetdisk
             // 
-            buttonBaiduNetdisk.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             buttonBaiduNetdisk.BackColor = Color.FromArgb(33, 150, 243);
             buttonBaiduNetdisk.FlatAppearance.BorderSize = 0;
             buttonBaiduNetdisk.FlatStyle = FlatStyle.Flat;
             buttonBaiduNetdisk.ForeColor = Color.White;
-            buttonBaiduNetdisk.Location = new Point(873, 341);
+            buttonBaiduNetdisk.Location = new Point(232, 476);
             buttonBaiduNetdisk.Name = "buttonBaiduNetdisk";
-            buttonBaiduNetdisk.Size = new Size(136, 53);
+            buttonBaiduNetdisk.Size = new Size(150, 51);
             buttonBaiduNetdisk.TabIndex = 21;
             buttonBaiduNetdisk.Text = "☁️ 百度网盘";
             buttonBaiduNetdisk.UseVisualStyleBackColor = false;
             buttonBaiduNetdisk.Click += ButtonBaiduNetdisk_Click;
+            // 
+            // buttonDictation
+            // 
+            buttonDictation.BackColor = Color.FromArgb(76, 175, 80);
+            buttonDictation.FlatAppearance.BorderSize = 0;
+            buttonDictation.FlatStyle = FlatStyle.Flat;
+            buttonDictation.ForeColor = Color.White;
+            buttonDictation.Location = new Point(433, 398);
+            buttonDictation.Name = "buttonDictation";
+            buttonDictation.Size = new Size(150, 51);
+            buttonDictation.TabIndex = 22;
+            buttonDictation.Text = "🎤 听写练习";
+            buttonDictation.UseVisualStyleBackColor = false;
+            buttonDictation.Click += ButtonDictation_Click;
             // 
             // menuStrip1
             // 
             menuStrip1.Items.AddRange(new ToolStripItem[] { toolStripMenuItemFile, toolStripMenuItemSettings, toolStripMenuItemHelp });
             menuStrip1.Location = new Point(0, 0);
             menuStrip1.Name = "menuStrip1";
-            menuStrip1.Size = new Size(1184, 25);
+            menuStrip1.Size = new Size(632, 25);
             menuStrip1.TabIndex = 1;
             // 
             // toolStripMenuItemFile
@@ -480,9 +527,9 @@ namespace LearningAssistant.Forms
             // statusStrip1
             // 
             statusStrip1.Items.AddRange(new ToolStripItem[] { toolStripStatusLabel });
-            statusStrip1.Location = new Point(0, 710);
+            statusStrip1.Location = new Point(0, 618);
             statusStrip1.Name = "statusStrip1";
-            statusStrip1.Size = new Size(1184, 22);
+            statusStrip1.Size = new Size(632, 22);
             statusStrip1.TabIndex = 2;
             // 
             // toolStripStatusLabel
@@ -496,17 +543,15 @@ namespace LearningAssistant.Forms
             AutoScaleDimensions = new SizeF(10F, 21F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.FromArgb(250, 245, 235);
-            ClientSize = new Size(1184, 732);
+            ClientSize = new Size(632, 640);
+            Controls.Add(panelMain);
             Controls.Add(statusStrip1);
-            Controls.Add(tabControl1);
             Controls.Add(menuStrip1);
             Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
             MainMenuStrip = menuStrip1;
             Margin = new Padding(4);
             Name = "MainForm";
             Text = "统一学习助手";
-            tabControl1.ResumeLayout(false);
-            tabPageLearning.ResumeLayout(false);
             panelMain.ResumeLayout(false);
             groupBoxProgress.ResumeLayout(false);
             groupBoxProgress.PerformLayout();
@@ -595,6 +640,26 @@ namespace LearningAssistant.Forms
             if (success)
             {
                 ShowBaiduNetdiskFiles();
+            }
+        }
+
+        private void ButtonDictation_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                var speechService = Program.GetService<IAdvancedSpeechService>();
+                if (speechService == null)
+                {
+                    MessageBox.Show("听写服务未初始化", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                using var dictationForm = new DictationForm(speechService);
+                dictationForm.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"打开听写窗口失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 

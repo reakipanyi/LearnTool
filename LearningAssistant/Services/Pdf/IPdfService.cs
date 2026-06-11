@@ -1,14 +1,58 @@
 namespace LearningAssistant.Services.Pdf
 {
+    /// <summary>
+    /// PDF服务接口 - 提供PDF文档的加载、渲染、文本提取等功能
+    /// 实现类需要继承IDisposable以确保资源正确释放
+    /// </summary>
     public interface IPdfService : IDisposable
     {
+        /// <summary>
+        /// 加载PDF文件
+        /// </summary>
+        /// <param name="path">PDF文件的完整路径</param>
         void Load(string path);
+
+        /// <summary>
+        /// PDF总页数
+        /// </summary>
         int PageCount { get; }
+
+        /// <summary>
+        /// 渲染指定页面为Bitmap图像
+        /// </summary>
+        /// <param name="pageIndex">页码索引（从0开始）</param>
+        /// <param name="width">渲染宽度（像素）</param>
+        /// <param name="height">渲染高度（像素）</param>
+        /// <returns>渲染后的Bitmap图像对象</returns>
         Bitmap RenderPage(int pageIndex, int width, int height);
+
+        /// <summary>
+        /// 获取指定页面的原始尺寸
+        /// </summary>
+        /// <param name="pageIndex">页码索引（从0开始）</param>
+        /// <returns>页面的宽高尺寸（单位：点/pt）</returns>
         SizeF GetPageSize(int pageIndex);
+
+        /// <summary>
+        /// 提取指定页面的文本内容
+        /// </summary>
+        /// <param name="pageIndex">页码索引（从0开始）</param>
+        /// <returns>页面文本内容</returns>
         string GetPdfText(int pageIndex);
-        
+
+        /// <summary>
+        /// 获取PDF文件的总页数（无需加载整个文件）
+        /// </summary>
+        /// <param name="pdfPath">PDF文件的完整路径</param>
+        /// <returns>页数</returns>
         int GetPageCount(string pdfPath);
+
+        /// <summary>
+        /// 提取指定页面的文本内容（静态方法，无需Load）
+        /// </summary>
+        /// <param name="pdfPath">PDF文件的完整路径</param>
+        /// <param name="pageNumber">页码（从1开始）</param>
+        /// <returns>页面文本内容</returns>
         string ExtractText(string pdfPath, int pageNumber);
     }
 }

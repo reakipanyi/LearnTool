@@ -1,13 +1,15 @@
 using LearningAssistant.Common;
+using LearningAssistant.Common.Themes;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Forms
 {
-    public partial class SettingForm : Form, ISettingView
+    public partial class SettingForm : Form, ISettingView, IThemeable
     {
         private readonly ILogger<SettingForm> _logger;
+        private readonly IThemeService _themeService;
         private bool _disposed = false;
         private CheckBox checkBoxNightMode;
         private Panel headerPanel;
@@ -15,10 +17,69 @@ namespace LearningAssistant.Forms
         private bool _isDarkMode = false;
         private bool _isProgrammaticChange = false;
 
-        public SettingForm(ILogger<SettingForm> logger)
+        public SettingForm(ILogger<SettingForm> logger, IThemeService themeService)
         {
             InitializeComponent();
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
+            
+            _themeService.RegisterThemeable(this);
+        }
+
+        public void ApplyTheme(ThemeColors colors)
+        {
+            BackColor = colors.Background;
+            
+            if (headerPanel != null)
+            {
+                headerPanel.BackColor = colors.Primary;
+            }
+            
+            foreach (Control control in Controls)
+            {
+                ApplyThemeToControl(control, colors);
+            }
+        }
+
+        private void ApplyThemeToControl(Control control, ThemeColors colors)
+        {
+            if (control is GroupBox groupBox)
+            {
+                groupBox.BackColor = colors.Surface;
+                groupBox.ForeColor = colors.TextPrimary;
+            }
+            else if (control is Label label)
+            {
+                label.ForeColor = colors.TextPrimary;
+            }
+            else if (control is TextBox textBox)
+            {
+                textBox.BackColor = colors.Surface;
+                textBox.ForeColor = colors.TextPrimary;
+            }
+            else if (control is ComboBox comboBox)
+            {
+                comboBox.BackColor = colors.Surface;
+                comboBox.ForeColor = colors.TextPrimary;
+            }
+            else if (control is NumericUpDown numericUpDown)
+            {
+                numericUpDown.BackColor = colors.Surface;
+                numericUpDown.ForeColor = colors.TextPrimary;
+            }
+            else if (control is CheckBox checkBox)
+            {
+                checkBox.ForeColor = colors.TextPrimary;
+            }
+            else if (control is TrackBar trackBar)
+            {
+                trackBar.BackColor = colors.Surface;
+            }
+            
+            foreach (Control child in control.Controls)
+            {
+                ApplyThemeToControl(child, colors);
+            }
         }
 
         #region ISettingView Implementation
@@ -226,6 +287,8 @@ namespace LearningAssistant.Forms
 
         private void InitializeComponent()
         {
+            components = new System.ComponentModel.Container();
+            AiProviderInfo aiProviderInfo1 = new AiProviderInfo();
             groupBoxAi = new GroupBox();
             labelModel = new Label();
             textBoxModel = new TextBox();
@@ -267,6 +330,11 @@ namespace LearningAssistant.Forms
             buttonCancel = new Button();
             headerPanel = new Panel();
             labelTitle = new Label();
+            groupBoxLearningSettings = new GroupBox();
+            checkBoxIsVoiceEnabled = new CheckBox();
+            labelPronunciationScope = new Label();
+            numericUpDownPronunciationScope = new NumericUpDown();
+            checkBoxIsAIExplanationEnabled = new CheckBox();
             groupBoxAi.SuspendLayout();
             groupBoxTts.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)trackBarVolume).BeginInit();
@@ -276,6 +344,8 @@ namespace LearningAssistant.Forms
             groupBoxTranslation.SuspendLayout();
             groupBoxCloudStorage.SuspendLayout();
             headerPanel.SuspendLayout();
+            groupBoxLearningSettings.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)numericUpDownPronunciationScope).BeginInit();
             SuspendLayout();
             // 
             // groupBoxAi
@@ -358,14 +428,17 @@ namespace LearningAssistant.Forms
             // 
             // comboBoxProvider
             // 
-            comboBoxProvider.FormattingEnabled = true;
             comboBoxProvider.DisplayMember = "Value.Name";
-            comboBoxProvider.ValueMember = "Key";
-            comboBoxProvider.DataSource = new BindingSource(AiConfig.Providers, null);
+            comboBoxProvider.FormattingEnabled = true;
+            aiProviderInfo1.BaseUrl = "https://api.siliconflow.cn/v1/chat/completions";
+            aiProviderInfo1.DefaultModel = "qwen/qwen-2.5-7b-instruct";
+            aiProviderInfo1.Name = "千问 (SiliconFlow)";
+            comboBoxProvider.Items.AddRange(new object[] { aiProviderInfo1 });
             comboBoxProvider.Location = new Point(120, 17);
             comboBoxProvider.Name = "comboBoxProvider";
             comboBoxProvider.Size = new Size(200, 27);
             comboBoxProvider.TabIndex = 0;
+            comboBoxProvider.ValueMember = "Key";
             comboBoxProvider.SelectedIndexChanged += ComboBoxProvider_SelectedIndexChanged;
             // 
             // groupBoxTts
@@ -626,72 +699,10 @@ namespace LearningAssistant.Forms
             groupBoxCloudStorage.ForeColor = Color.FromArgb(33, 33, 33);
             groupBoxCloudStorage.Location = new Point(15, 756);
             groupBoxCloudStorage.Name = "groupBoxCloudStorage";
-            groupBoxCloudStorage.Size = new Size(550, 91);
+            groupBoxCloudStorage.Size = new Size(550, 65);
             groupBoxCloudStorage.TabIndex = 4;
             groupBoxCloudStorage.TabStop = false;
             groupBoxCloudStorage.Text = "☁️ 百度网盘配置";
-            // 
-            // groupBoxLearningSettings
-            // 
-            groupBoxLearningSettings = new GroupBox();
-            groupBoxLearningSettings.BackColor = Color.FromArgb(255, 250, 240);
-            groupBoxLearningSettings.FlatStyle = FlatStyle.Flat;
-            groupBoxLearningSettings.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            groupBoxLearningSettings.ForeColor = Color.FromArgb(33, 33, 33);
-            groupBoxLearningSettings.Location = new Point(15, 652);
-            groupBoxLearningSettings.Name = "groupBoxLearningSettings";
-            groupBoxLearningSettings.Size = new Size(550, 91);
-            groupBoxLearningSettings.TabIndex = 5;
-            groupBoxLearningSettings.TabStop = false;
-            groupBoxLearningSettings.Text = "📚 学习设置";
-            // 
-            // checkBoxIsVoiceEnabled
-            // 
-            checkBoxIsVoiceEnabled = new CheckBox();
-            checkBoxIsVoiceEnabled.ForeColor = Color.FromArgb(33, 33, 33);
-            checkBoxIsVoiceEnabled.Location = new Point(15, 32);
-            checkBoxIsVoiceEnabled.Name = "checkBoxIsVoiceEnabled";
-            checkBoxIsVoiceEnabled.Size = new Size(100, 23);
-            checkBoxIsVoiceEnabled.TabIndex = 0;
-            checkBoxIsVoiceEnabled.Text = "启用语音";
-            // 
-            // labelPronunciationScope
-            // 
-            labelPronunciationScope = new Label();
-            labelPronunciationScope.ForeColor = Color.FromArgb(33, 33, 33);
-            labelPronunciationScope.Location = new Point(130, 36);
-            labelPronunciationScope.Name = "labelPronunciationScope";
-            labelPronunciationScope.Size = new Size(70, 23);
-            labelPronunciationScope.TabIndex = 1;
-            labelPronunciationScope.Text = "发音范围:";
-            // 
-            // numericUpDownPronunciationScope
-            // 
-            numericUpDownPronunciationScope = new NumericUpDown();
-            numericUpDownPronunciationScope.Location = new Point(210, 32);
-            numericUpDownPronunciationScope.Maximum = new decimal(new int[] { 2, 0, 0, 0 });
-            numericUpDownPronunciationScope.Minimum = new decimal(new int[] { 0, 0, 0, 0 });
-            numericUpDownPronunciationScope.Name = "numericUpDownPronunciationScope";
-            numericUpDownPronunciationScope.Size = new Size(60, 25);
-            numericUpDownPronunciationScope.TabIndex = 2;
-            numericUpDownPronunciationScope.Value = new decimal(new int[] { 1, 0, 0, 0 });
-            // 
-            // checkBoxIsAIExplanationEnabled
-            // 
-            checkBoxIsAIExplanationEnabled = new CheckBox();
-            checkBoxIsAIExplanationEnabled.ForeColor = Color.FromArgb(33, 33, 33);
-            checkBoxIsAIExplanationEnabled.Location = new Point(300, 32);
-            checkBoxIsAIExplanationEnabled.Name = "checkBoxIsAIExplanationEnabled";
-            checkBoxIsAIExplanationEnabled.Size = new Size(120, 23);
-            checkBoxIsAIExplanationEnabled.TabIndex = 3;
-            checkBoxIsAIExplanationEnabled.Text = "启用AI讲解";
-            // 
-            // 添加控件到 groupBoxLearningSettings
-            // 
-            groupBoxLearningSettings.Controls.Add(checkBoxIsVoiceEnabled);
-            groupBoxLearningSettings.Controls.Add(labelPronunciationScope);
-            groupBoxLearningSettings.Controls.Add(numericUpDownPronunciationScope);
-            groupBoxLearningSettings.Controls.Add(checkBoxIsAIExplanationEnabled);
             // 
             // textBoxBaiduNetdiskClientSecret
             // 
@@ -734,7 +745,7 @@ namespace LearningAssistant.Forms
             buttonSave.FlatStyle = FlatStyle.Flat;
             buttonSave.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             buttonSave.ForeColor = Color.White;
-            buttonSave.Location = new Point(300, 818);
+            buttonSave.Location = new Point(300, 838);
             buttonSave.Name = "buttonSave";
             buttonSave.Size = new Size(120, 45);
             buttonSave.TabIndex = 6;
@@ -751,7 +762,7 @@ namespace LearningAssistant.Forms
             buttonCancel.FlatStyle = FlatStyle.Flat;
             buttonCancel.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             buttonCancel.ForeColor = Color.White;
-            buttonCancel.Location = new Point(430, 818);
+            buttonCancel.Location = new Point(430, 838);
             buttonCancel.Name = "buttonCancel";
             buttonCancel.Size = new Size(120, 45);
             buttonCancel.TabIndex = 7;
@@ -782,12 +793,65 @@ namespace LearningAssistant.Forms
             labelTitle.Text = "⚙️ 系统设置";
             labelTitle.TextAlign = ContentAlignment.MiddleCenter;
             // 
+            // groupBoxLearningSettings
+            // 
+            groupBoxLearningSettings.BackColor = Color.FromArgb(255, 250, 240);
+            groupBoxLearningSettings.Controls.Add(checkBoxIsVoiceEnabled);
+            groupBoxLearningSettings.Controls.Add(labelPronunciationScope);
+            groupBoxLearningSettings.Controls.Add(numericUpDownPronunciationScope);
+            groupBoxLearningSettings.Controls.Add(checkBoxIsAIExplanationEnabled);
+            groupBoxLearningSettings.FlatStyle = FlatStyle.Flat;
+            groupBoxLearningSettings.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            groupBoxLearningSettings.ForeColor = Color.FromArgb(33, 33, 33);
+            groupBoxLearningSettings.Location = new Point(15, 652);
+            groupBoxLearningSettings.Name = "groupBoxLearningSettings";
+            groupBoxLearningSettings.Size = new Size(550, 91);
+            groupBoxLearningSettings.TabIndex = 5;
+            groupBoxLearningSettings.TabStop = false;
+            groupBoxLearningSettings.Text = "📚 学习设置";
+            // 
+            // checkBoxIsVoiceEnabled
+            // 
+            checkBoxIsVoiceEnabled.ForeColor = Color.FromArgb(33, 33, 33);
+            checkBoxIsVoiceEnabled.Location = new Point(15, 32);
+            checkBoxIsVoiceEnabled.Name = "checkBoxIsVoiceEnabled";
+            checkBoxIsVoiceEnabled.Size = new Size(100, 23);
+            checkBoxIsVoiceEnabled.TabIndex = 0;
+            checkBoxIsVoiceEnabled.Text = "启用语音";
+            // 
+            // labelPronunciationScope
+            // 
+            labelPronunciationScope.ForeColor = Color.FromArgb(33, 33, 33);
+            labelPronunciationScope.Location = new Point(130, 36);
+            labelPronunciationScope.Name = "labelPronunciationScope";
+            labelPronunciationScope.Size = new Size(70, 23);
+            labelPronunciationScope.TabIndex = 1;
+            labelPronunciationScope.Text = "发音范围:";
+            // 
+            // numericUpDownPronunciationScope
+            // 
+            numericUpDownPronunciationScope.Location = new Point(210, 32);
+            numericUpDownPronunciationScope.Maximum = new decimal(new int[] { 2, 0, 0, 0 });
+            numericUpDownPronunciationScope.Name = "numericUpDownPronunciationScope";
+            numericUpDownPronunciationScope.Size = new Size(60, 25);
+            numericUpDownPronunciationScope.TabIndex = 2;
+            numericUpDownPronunciationScope.Value = new decimal(new int[] { 1, 0, 0, 0 });
+            // 
+            // checkBoxIsAIExplanationEnabled
+            // 
+            checkBoxIsAIExplanationEnabled.ForeColor = Color.FromArgb(33, 33, 33);
+            checkBoxIsAIExplanationEnabled.Location = new Point(300, 32);
+            checkBoxIsAIExplanationEnabled.Name = "checkBoxIsAIExplanationEnabled";
+            checkBoxIsAIExplanationEnabled.Size = new Size(120, 23);
+            checkBoxIsAIExplanationEnabled.TabIndex = 3;
+            checkBoxIsAIExplanationEnabled.Text = "启用AI讲解";
+            // 
             // SettingForm
             // 
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.FromArgb(240, 240, 240);
-            ClientSize = new Size(580, 886);
+            ClientSize = new Size(580, 896);
             Controls.Add(buttonCancel);
             Controls.Add(buttonSave);
             Controls.Add(groupBoxCloudStorage);
@@ -811,9 +875,9 @@ namespace LearningAssistant.Forms
             groupBoxTranslation.PerformLayout();
             groupBoxCloudStorage.ResumeLayout(false);
             groupBoxCloudStorage.PerformLayout();
+            headerPanel.ResumeLayout(false);
             groupBoxLearningSettings.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)numericUpDownPronunciationScope).EndInit();
-            headerPanel.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -875,7 +939,8 @@ namespace LearningAssistant.Forms
         {
             _isDarkMode = checkBoxNightMode.Checked;
             comboBoxTheme.Text = _isDarkMode ? "Dark" : "Light";
-            ApplyTheme(_isDarkMode);
+            
+            _themeService.SetTheme(_isDarkMode ? ThemeMode.Dark : ThemeMode.Light);
         }
 
         private void ApplyTheme(bool isDark)

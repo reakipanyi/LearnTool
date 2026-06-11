@@ -1,3 +1,5 @@
+using LearningAssistant.Common.Events;
+using LearningAssistant.Common.Themes;
 using LearningAssistant.Data.Database;
 using LearningAssistant.Forms;
 using LearningAssistant.Models.Config;
@@ -65,6 +67,8 @@ namespace LearningAssistant.Common
         /// </summary>
         public static IServiceCollection AddCoreServices(this IServiceCollection services, IConfiguration configuration)
         {
+            services.AddSingleton<IEventBus, EventBus>();
+            services.AddSingleton<IThemeService, ThemeService>();
             services.AddSingleton<IDataPersistenceService, DataPersistenceService>();
             services.AddSingleton<ICacheService>(sp =>
             {
@@ -150,7 +154,7 @@ namespace LearningAssistant.Common
             services.AddSingleton<ISoundService>(sp => new SoundService(sp.GetService<ITTSService>()));
             services.AddSingleton<IAdvancedSpeechService, AdvancedSpeechService>();
             services.AddSingleton<IEnhancedReminderService, EnhancedReminderService>();
-            
+
             services.AddScoped<ILearningSettingsManager, LearningSettingsManager>();
             services.AddScoped<ILearningExportService, LearningExportService>();
 
@@ -203,7 +207,8 @@ namespace LearningAssistant.Common
                 var windowManager = sp.GetRequiredService<IWindowManager>();
                 var appConfig = sp.GetRequiredService<AppConfig>();
                 var cloudStorageService = sp.GetRequiredService<ICloudStorageService>();
-                return new MainForm(presenter, windowManager, appConfig, cloudStorageService);
+                var themeService = sp.GetRequiredService<IThemeService>();
+                return new MainForm(presenter, windowManager, appConfig, cloudStorageService, themeService);
             });
             services.AddScoped<SettingForm>();
             services.AddScoped<LearningForm>();

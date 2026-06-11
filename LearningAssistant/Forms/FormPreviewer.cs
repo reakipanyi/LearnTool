@@ -55,12 +55,13 @@ namespace UnifiedLearningAssistant.Forms
 
         private static Form CreateMainFormPreview()
         {
-            // 使用 Mock 服务创建预览
             var mockPresenter = CreateMockMainPresenter();
-            var mockPdfView = CreateMockPdfView();
             var mockWindowManager = CreateMockWindowManager();
+            var mockAppConfig = new Models.Config.AppConfig();
+            var mockCloudStorageService = CreateMockCloudStorageService();
+            var mockThemeService = CreateMockThemeService();
             
-            return new MainForm(mockPresenter, mockPdfView, mockWindowManager);
+            return new MainForm(mockPresenter, mockWindowManager, mockAppConfig, mockCloudStorageService, mockThemeService);
         }
 
         private static Form CreateLearningFormPreview()
@@ -173,6 +174,17 @@ namespace UnifiedLearningAssistant.Forms
             return new MockSiliconFlowAiService();
         }
 
+        private static ICloudStorageService CreateMockCloudStorageService()
+        {
+            return new MockCloudStorageService();
+        }
+
+        private static IThemeService CreateMockThemeService()
+        {
+            var mockEventBus = new MockEventBus();
+            return new Common.ThemeService(mockEventBus);
+        }
+
         #endregion
     }
 
@@ -237,6 +249,24 @@ namespace UnifiedLearningAssistant.Forms
         public Task<string> GenerateExplanationAsync(string word, string? example = null, string? language = null) => Task.FromResult("");
         public Task<string> GenerateQuestionAsync(string word, string? example = null, string? language = null) => Task.FromResult("");
         public Task<string> GenerateComprehensiveContentAsync(string content, string type, string language) => Task.FromResult("");
+    }
+
+    internal class MockCloudStorageService : ICloudStorageService
+    {
+        public Task<bool> AuthenticateAsync() => Task.FromResult(false);
+        public Task<List<string>> ListFilesAsync(string path) => Task.FromResult(new List<string>());
+        public Task DownloadFileAsync(string remotePath, string localPath) => Task.CompletedTask;
+        public Task UploadFileAsync(string localPath, string remotePath) => Task.CompletedTask;
+        public Task DeleteFileAsync(string remotePath) => Task.CompletedTask;
+        public Task<string> GetShareUrlAsync(string remotePath) => Task.FromResult("");
+        public bool IsAuthenticated => false;
+    }
+
+    internal class MockEventBus : Common.Events.IEventBus
+    {
+        public void Subscribe<TEvent>(Action<TEvent> handler) where TEvent : Common.Events.IApplicationEvent { }
+        public void Unsubscribe<TEvent>(Action<TEvent> handler) where TEvent : Common.Events.IApplicationEvent { }
+        public void Publish<TEvent>(TEvent @event) where TEvent : Common.Events.IApplicationEvent { }
     }
 
     #endregion
