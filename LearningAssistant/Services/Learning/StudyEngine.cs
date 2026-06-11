@@ -300,6 +300,10 @@ namespace LearningAssistant.Services.Learning
             progress.TotalItemsStudied = progress.CategoryProgresses.Values.Sum(c => c.TotalTestCount);
             progress.TotalItemsMastered = progress.CategoryProgresses.Values.Sum(c => c.CorrectCount);
 
+            // 更新用户学习记录（连续天数、今日学习项数等）
+            profile.UpdateStudyRecord();
+            profile.IncrementTodayItems();
+
             _persistenceService.SaveUserProfile(profile);
         }
 

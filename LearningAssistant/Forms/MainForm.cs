@@ -292,13 +292,13 @@ namespace LearningAssistant.Forms
             // 
             // textBoxProgress
             // 
-            textBoxProgress.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            textBoxProgress.Location = new Point(0, 27);
+            textBoxProgress.Dock = DockStyle.Fill;
+            textBoxProgress.Location = new Point(3, 24);
             textBoxProgress.Multiline = true;
             textBoxProgress.Name = "textBoxProgress";
             textBoxProgress.ReadOnly = true;
             textBoxProgress.ScrollBars = ScrollBars.Vertical;
-            textBoxProgress.Size = new Size(558, 145);
+            textBoxProgress.Size = new Size(552, 151);
             textBoxProgress.TabIndex = 0;
             // 
             // buttonOpenPdfReader
