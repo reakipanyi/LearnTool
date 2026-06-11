@@ -1,7 +1,7 @@
 
 namespace LearningAssistant.Views.UI
 {
-    public class ConfettiControl : Control
+    public class ConfettiControl : Panel
     {
         private readonly List<ConfettiParticle> _particles = new List<ConfettiParticle>();
         private readonly System.Windows.Forms.Timer _animationTimer = new System.Windows.Forms.Timer();
@@ -28,13 +28,20 @@ namespace LearningAssistant.Views.UI
             SetStyle(
                 ControlStyles.UserPaint |
                 ControlStyles.AllPaintingInWmPaint |
-                ControlStyles.OptimizedDoubleBuffer,
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.SupportsTransparentBackColor,
                 true);
             DoubleBuffered = true;
             BackColor = Color.Transparent;
+            BackgroundImageLayout = ImageLayout.None;
 
             _animationTimer.Interval = 16;
             _animationTimer.Tick += OnAnimationTick;
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            base.OnPaintBackground(e);
         }
 
         public void StartCelebration()

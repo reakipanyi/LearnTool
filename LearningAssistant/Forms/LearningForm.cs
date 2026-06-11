@@ -6,6 +6,8 @@ using LearningAssistant.Services.Feedback;
 using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
+using System.ComponentModel;
+using System.Drawing.Drawing2D;
 using System.Text.Json;
 
 namespace LearningAssistant.Forms
@@ -22,6 +24,50 @@ namespace LearningAssistant.Forms
         private bool _disposed = false;
         private Settings _settings = new();
 
+        private readonly List<ConfettiParticle> _confettiParticles = new List<ConfettiParticle>();
+        private readonly System.Windows.Forms.Timer _confettiTimer = new System.Windows.Forms.Timer();
+        private readonly Random _random = new Random();
+        private bool _isConfettiActive;
+
+        private enum ParticleShape
+        {
+            Rectangle,
+            Circle,
+            Triangle,
+            Star
+        }
+
+        private class ConfettiParticle
+        {
+            public float X { get; set; }
+            public float Y { get; set; }
+            public float Size { get; set; }
+            public Color Color { get; set; }
+            public float VelocityX { get; set; }
+            public float VelocityY { get; set; }
+            public float Rotation { get; set; }
+            public float RotationSpeed { get; set; }
+            public ParticleShape Shape { get; set; }
+            public float Opacity { get; set; } = 1.0f;
+            public float FadeSpeed { get; set; }
+            public double WobbleOffset { get; set; }
+            public float WobbleSpeed { get; set; }
+        }
+
+        private readonly Color[] _celebrationColors = new[]
+        {
+            Color.FromArgb(255, 59, 48),
+            Color.FromArgb(255, 149, 0),
+            Color.FromArgb(255, 204, 0),
+            Color.FromArgb(52, 199, 89),
+            Color.FromArgb(0, 122, 255),
+            Color.FromArgb(88, 86, 214),
+            Color.FromArgb(175, 82, 222),
+            Color.FromArgb(255, 69, 58),
+            Color.FromArgb(245, 90, 140),
+            Color.FromArgb(100, 200, 220)
+        };
+
         public LearningForm(IAiQuestionService aiQuestionService, ITTSService ttsService, ILogger<LearningForm> logger, ILoggerFactory loggerFactory, ISoundService soundService)
         {
             InitializeComponent();
@@ -37,6 +83,10 @@ namespace LearningAssistant.Forms
             FormClosing += LearningForm_FormClosing;
             KeyPreview = true;
             KeyDown += LearningForm_KeyDown;
+            Paint += LearningForm_Paint;
+
+            _confettiTimer.Interval = 16;
+            _confettiTimer.Tick += ConfettiTimer_Tick;
         }
 
 
@@ -187,48 +237,57 @@ namespace LearningAssistant.Forms
 
         #region ILearningView Implementation
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string CurrentContent
         {
             set => labelContent.Text = value;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string CurrentDisplayText
         {
             set => labelDisplay.Text = value;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string AIExplanation
         {
             set => richTextBoxAI.Text = value;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string Statistics
         {
             set => labelStatistics.Text = value;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int ProgressValue
         {
             set => progressBar1.Value = value;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int ProgressMax
         {
             set => progressBar1.Maximum = value;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool IsVoiceEnabled
         {
             get => checkBoxVoice.Checked;
             set => checkBoxVoice.Checked = value;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool IsAIExplanationEnabled
         {
             get => checkBoxAIExplanation.Checked;
             set => checkBoxAIExplanation.Checked = value;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public PronunciationScope PronunciationScope
         {
             get
@@ -262,6 +321,7 @@ namespace LearningAssistant.Forms
 
         public string Language => radioChinese.Checked ? Constants.Language.Chinese : Constants.Language.English;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string SubCategory
         {
             get => comboBoxSubCategory.Text;
@@ -1283,12 +1343,14 @@ namespace LearningAssistant.Forms
         private void ButtonKnown_Click(object? sender, EventArgs e)
         {
             _soundService?.PlaySuccess();
+            StartConfetti();
             MarkAsKnownClicked?.Invoke(this, EventArgs.Empty);
         }
 
         private void ButtonUnknown_Click(object? sender, EventArgs e)
         {
             _soundService?.PlayError();
+            ShakeWindow();
             MarkAsUnknownClicked?.Invoke(this, EventArgs.Empty);
         }
 
@@ -1301,6 +1363,163 @@ namespace LearningAssistant.Forms
         private void ButtonPronounce_Click(object? sender, EventArgs e)
         {
             PronounceClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void StartConfetti()
+        {
+            if (_isConfettiActive) return;
+
+            _isConfettiActive = true;
+            _confettiParticles.Clear();
+
+            for (int i = 0; i < 100; i++)
+            {
+                _confettiParticles.Add(CreateConfettiParticle());
+            }
+
+            for (int i = 0; i < 50; i++)
+            {
+                var particle = CreateConfettiParticle();
+                particle.X = _random.Next(Width);
+                particle.Y = -_random.Next(100);
+                particle.VelocityY = (float)(_random.NextDouble() * 4 + 3);
+                particle.Size = _random.Next(6, 15);
+                particle.RotationSpeed = (float)(_random.NextDouble() * 15 - 7.5);
+                _confettiParticles.Add(particle);
+            }
+
+            _confettiTimer.Start();
+        }
+
+        private ConfettiParticle CreateConfettiParticle()
+        {
+            var shapes = new[] { ParticleShape.Rectangle, ParticleShape.Circle, ParticleShape.Triangle, ParticleShape.Star };
+            return new ConfettiParticle
+            {
+                X = _random.Next(Width),
+                Y = -_random.Next(200),
+                Size = _random.Next(8, 20),
+                Color = _celebrationColors[_random.Next(_celebrationColors.Length)],
+                VelocityX = (float)(_random.NextDouble() * 6 - 3),
+                VelocityY = (float)(_random.NextDouble() * 3 + 2),
+                Rotation = _random.Next(360),
+                RotationSpeed = (float)(_random.NextDouble() * 12 - 6),
+                Shape = shapes[_random.Next(shapes.Length)],
+                Opacity = 1.0f,
+                FadeSpeed = (float)(_random.NextDouble() * 0.01 + 0.005),
+                WobbleOffset = (float)(_random.NextDouble() * Math.PI * 2),
+                WobbleSpeed = (float)(_random.NextDouble() * 0.1 + 0.05)
+            };
+        }
+
+        private void ConfettiTimer_Tick(object? sender, EventArgs e)
+        {
+            if (!_isConfettiActive) return;
+
+            bool hasActiveParticles = false;
+
+            foreach (var particle in _confettiParticles)
+            {
+                particle.WobbleOffset += particle.WobbleSpeed;
+                particle.X += particle.VelocityX + (float)Math.Sin(particle.WobbleOffset) * 0.5f;
+                particle.Y += particle.VelocityY;
+                particle.VelocityY += 0.08f;
+                particle.Rotation += particle.RotationSpeed;
+
+                if (particle.Y > Height * 0.7)
+                {
+                    particle.Opacity -= particle.FadeSpeed;
+                }
+
+                if (particle.Y < Height + 50 && particle.Opacity > 0)
+                {
+                    hasActiveParticles = true;
+                }
+            }
+
+            if (!hasActiveParticles)
+            {
+                _isConfettiActive = false;
+                _confettiTimer.Stop();
+                _confettiParticles.Clear();
+            }
+
+            Invalidate();
+        }
+
+        private void LearningForm_Paint(object? sender, PaintEventArgs e)
+        {
+            if (!_isConfettiActive || _confettiParticles.Count == 0) return;
+
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            foreach (var particle in _confettiParticles)
+            {
+                if (particle.Y > Height + 50 || particle.Opacity <= 0) continue;
+
+                using var brush = new SolidBrush(Color.FromArgb((int)(particle.Opacity * 255), particle.Color));
+
+                g.TranslateTransform(particle.X, particle.Y);
+                g.RotateTransform(particle.Rotation);
+
+                switch (particle.Shape)
+                {
+                    case ParticleShape.Rectangle:
+                        g.FillRectangle(brush, -particle.Size / 2, -particle.Size / 2, particle.Size, particle.Size * 0.6f);
+                        break;
+                    case ParticleShape.Circle:
+                        g.FillEllipse(brush, -particle.Size / 2, -particle.Size / 2, particle.Size, particle.Size);
+                        break;
+                    case ParticleShape.Triangle:
+                        var trianglePoints = new PointF[]
+                        {
+                            new PointF(0, -particle.Size / 2),
+                            new PointF(-particle.Size / 2, particle.Size / 2),
+                            new PointF(particle.Size / 2, particle.Size / 2)
+                        };
+                        g.FillPolygon(brush, trianglePoints);
+                        break;
+                    case ParticleShape.Star:
+                        var starPoints = new PointF[10];
+                        for (int i = 0; i < 10; i++)
+                        {
+                            float radius = (i % 2 == 0) ? particle.Size / 2 : particle.Size / 4;
+                            float angle = (float)(i * Math.PI / 5 - Math.PI / 2);
+                            starPoints[i] = new PointF(
+                                (float)Math.Cos(angle) * radius,
+                                (float)Math.Sin(angle) * radius
+                            );
+                        }
+                        g.FillPolygon(brush, starPoints);
+                        break;
+                }
+
+                g.ResetTransform();
+            }
+        }
+
+        private void ShakeWindow()
+        {
+            var originalLocation = Location;
+            var shakeAmount = 15;
+            var shakeSteps = 8;
+            var stepDelay = 15;
+            var random = new Random();
+
+            for (int i = 0; i < shakeSteps; i++)
+            {
+                int currentShakeAmount = (int)(shakeAmount * (1 - (i / (float)shakeSteps)));
+
+                int dx = (random.Next(3) - 1) * currentShakeAmount;
+                int dy = (random.Next(3) - 1) * currentShakeAmount;
+
+                Location = new Point(originalLocation.X + dx, originalLocation.Y + dy);
+                System.Windows.Forms.Application.DoEvents();
+                System.Threading.Thread.Sleep(stepDelay);
+            }
+
+            Location = originalLocation;
         }
 
         private void ButtonExit_Click(object? sender, EventArgs e)

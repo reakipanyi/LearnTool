@@ -24,15 +24,6 @@ namespace LearningAssistant.Data.Database
         }
 
         /// <summary>
-        /// 自定义数据库路径构造函数
-        /// </summary>
-        /// <param name="dbPath">数据库文件路径</param>
-        public AppDbContext(string dbPath)
-        {
-            _dbPath = dbPath ?? throw new ArgumentNullException(nameof(dbPath));
-        }
-
-        /// <summary>
         /// 获取默认数据库路径
         /// </summary>
         private string GetDefaultDbPath()

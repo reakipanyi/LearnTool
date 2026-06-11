@@ -1,6 +1,7 @@
 using LearningAssistant.Common;
 using LearningAssistant.Forms;
 using LearningAssistant.Services.Learning;
+using LearningAssistant.Services.Migration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -58,6 +59,23 @@ namespace LearningAssistant
                 ServiceProvider = BuildServiceProvider();
                 logger = ServiceProvider.GetRequiredService<ILogger<MainForm>>();
                 logger.LogInformation("服务容器初始化成功");
+
+                // 执行数据迁移（从 JSON 到 SQLite）
+                var migrationService = ServiceProvider.GetService<DataMigrationService>();
+                if (migrationService != null && migrationService.NeedsMigration())
+                {
+                    logger.LogInformation("检测到需要迁移的数据，开始迁移...");
+                    var result = migrationService.PerformMigration();
+                    if (result.Success)
+                    {
+                        logger.LogInformation("数据迁移成功: {Count} 个用户", result.SuccessfulMigrations);
+                    }
+                    else
+                    {
+                        logger.LogWarning("数据迁移部分失败: 成功 {Success}, 失败 {Failed}", 
+                            result.SuccessfulMigrations, result.FailedMigrations);
+                    }
+                }
 
                 var reminderService = ServiceProvider.GetService<ILearningReminderService>();
                 if (reminderService != null)

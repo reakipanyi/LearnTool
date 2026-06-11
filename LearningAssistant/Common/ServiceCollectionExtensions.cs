@@ -147,7 +147,7 @@ namespace LearningAssistant.Common
             services.AddSingleton<ISpacedRepetitionService, SpacedRepetitionService>();
             services.AddSingleton<IHighlightSyncService, HighlightSyncService>();
             services.AddSingleton<ILearningChartService, LearningChartService>();
-            services.AddSingleton<ISoundService, SoundService>();
+            services.AddSingleton<ISoundService>(sp => new SoundService(sp.GetService<ITTSService>()));
             services.AddSingleton<IAdvancedSpeechService, AdvancedSpeechService>();
             services.AddSingleton<IEnhancedReminderService, EnhancedReminderService>();
             
