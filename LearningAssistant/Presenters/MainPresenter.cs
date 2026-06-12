@@ -80,6 +80,7 @@ namespace LearningAssistant.Presenters
             _view.OpenEditorClicked += View_OpenEditorClicked;
             _view.TabChanged += View_TabChanged;
             _view.NewUserClicked += View_NewUserClicked;
+            _view.OpenUserComparisonClicked += View_OpenUserComparisonClicked;
         }
 
         private void UnsubscribeFromEvents()
@@ -93,6 +94,7 @@ namespace LearningAssistant.Presenters
             _view.OpenEditorClicked -= View_OpenEditorClicked;
             _view.TabChanged -= View_TabChanged;
             _view.NewUserClicked -= View_NewUserClicked;
+            _view.OpenUserComparisonClicked -= View_OpenUserComparisonClicked;
         }
 
         public void Initialize()
@@ -230,6 +232,63 @@ namespace LearningAssistant.Presenters
         private void View_NewUserClicked(object? sender, EventArgs e)
         {
             CreateNewUser();
+        }
+
+        private void View_OpenUserComparisonClicked(object? sender, EventArgs e)
+        {
+            LoadUserComparison();
+        }
+
+        private void LoadUserComparison()
+        {
+            try
+            {
+                var users = _sessionService.GetUserList();
+                if (users.Count < 2)
+                {
+                    _view?.ShowMessage("对比功能需要至少2个用户");
+                    return;
+                }
+
+                var comparisonData = new List<Views.UserComparisonData>();
+                foreach (var userId in users)
+                {
+                    var profile = _persistenceService.LoadUserProfile(userId);
+                    if (profile == null) continue;
+
+                    profile.ResetDailyStats();
+
+                    var progress = profile.LearningProgress;
+                    var totalKnown = progress.CategoryProgresses.Values.Sum(cp => cp.KnownItems.Count);
+                    var totalCorrect = progress.CategoryProgresses.Values.Sum(cp => cp.CorrectCount);
+                    var totalTest = progress.CategoryProgresses.Values.Sum(cp => cp.TotalTestCount);
+                    var accuracy = totalTest > 0 ? (double)totalCorrect / totalTest * 100 : 0;
+
+                    // 获取总词汇量
+                    var totalItems = _contentLoaderService.LoadItems(
+                        progress.CategoryProgresses.Keys.FirstOrDefault() ?? "中文", "").Count;
+
+                    comparisonData.Add(new Views.UserComparisonData
+                    {
+                        UserId = userId,
+                        ConsecutiveStudyDays = profile.ConsecutiveStudyDays,
+                        TodayStudyTimeMinutes = profile.TodayStudyTimeMinutes,
+                        AccuracyRate = accuracy,
+                        KnownItemsCount = totalKnown,
+                        TotalStudyTimeMinutes = profile.TotalStudyTimeMinutes,
+                        TotalItems = totalItems,
+                        AchievementCount = profile.UnlockedAchievements?.Count ?? 0
+                    });
+                }
+
+                _view?.UpdateUserComparison(comparisonData);
+                _logger.LogInformation("Loaded user comparison data for {UserCount} users", comparisonData.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load user comparison data");
+                _view?.ShowMessage($"加载对比数据失败：{ex.Message}");
+            }
         }
 
         private void CreateNewUser()

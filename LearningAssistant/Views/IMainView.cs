@@ -51,6 +51,11 @@ namespace LearningAssistant.Views
         event EventHandler? NewUserClicked;
 
         /// <summary>
+        /// 用户对比(PK)点击事件
+        /// </summary>
+        event EventHandler? OpenUserComparisonClicked;
+
+        /// <summary>
         /// 显示消息对话框
         /// </summary>
         /// <param name="msg">消息内容</param>
@@ -74,5 +79,57 @@ namespace LearningAssistant.Views
         /// <param name="consecutiveDays">连续学习天数</param>
         /// <param name="studyTimeSummary">学习时间摘要</param>
         void UpdateStreakInfo(int consecutiveDays, string studyTimeSummary);
+
+        /// <summary>
+        /// 更新用户对比(PK)数据
+        /// </summary>
+        /// <param name="comparisonData">用户对比数据列表</param>
+        void UpdateUserComparison(List<UserComparisonData> comparisonData);
+    }
+
+    /// <summary>
+    /// 用户对比数据 - 用于PK界面展示
+    /// </summary>
+    public class UserComparisonData
+    {
+        /// <summary>
+        /// 用户ID
+        /// </summary>
+        public string UserId { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 连续学习天数
+        /// </summary>
+        public int ConsecutiveStudyDays { get; set; }
+
+        /// <summary>
+        /// 今日学习时长（分钟）
+        /// </summary>
+        public int TodayStudyTimeMinutes { get; set; }
+
+        /// <summary>
+        /// 正确率（百分比）
+        /// </summary>
+        public double AccuracyRate { get; set; }
+
+        /// <summary>
+        /// 已掌握词汇数
+        /// </summary>
+        public int KnownItemsCount { get; set; }
+
+        /// <summary>
+        /// 累计学习时长（分钟）
+        /// </summary>
+        public int TotalStudyTimeMinutes { get; set; }
+
+        /// <summary>
+        /// 总词汇量
+        /// </summary>
+        public int TotalItems { get; set; }
+
+        /// <summary>
+        /// 成就徽章数
+        /// </summary>
+        public int AchievementCount { get; set; }
     }
 }

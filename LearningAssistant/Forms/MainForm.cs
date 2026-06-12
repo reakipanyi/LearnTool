@@ -6,6 +6,7 @@ using LearningAssistant.Services;
 using LearningAssistant.Services.Cloud;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Views;
+using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Forms
 {
@@ -102,6 +103,11 @@ namespace LearningAssistant.Forms
 
             _presenter.OnOpenSettings += Presenter_OnOpenSettings;
             _presenter.OnOpenEditor += Presenter_OnOpenEditor;
+
+            // 添加用户对比菜单项
+            var userComparisonMenuItem = new ToolStripMenuItem("👥 用户对比");
+            userComparisonMenuItem.Click += (s, args) => OpenUserComparisonClicked?.Invoke(this, EventArgs.Empty);
+            toolStripMenuItemFile.DropDownItems.Add(userComparisonMenuItem);
         }
 
         private void Presenter_OnOpenSettings(object? sender, EventArgs e)
@@ -143,6 +149,7 @@ namespace LearningAssistant.Forms
         public event EventHandler? OpenEditorClicked;
         public event EventHandler? TabChanged;
         public event EventHandler? NewUserClicked;
+        public event EventHandler? OpenUserComparisonClicked;
 
         public void ShowMessage(string msg)
         {
@@ -190,6 +197,12 @@ namespace LearningAssistant.Forms
             }
         }
 
+        public void UpdateUserComparison(List<UserComparisonData> comparisonData)
+        {
+            var form = new UserComparisonForm(comparisonData);
+            form.ShowDialog();
+        }
+
         #endregion
 
         #region WinForms Designer Generated Code
@@ -209,6 +222,7 @@ namespace LearningAssistant.Forms
         private TextBox textBoxProgress;
         private Button buttonLearningManagement;
         private Button buttonBrowser;
+        private Button buttonWebView2Browser;
         private Button buttonSubjectLearning;
         private Button buttonBaiduNetdisk;
         private Button buttonDictation;
@@ -241,6 +255,7 @@ namespace LearningAssistant.Forms
             labelStreakDays = new Label();
             buttonLearningManagement = new Button();
             buttonBrowser = new Button();
+            buttonWebView2Browser = new Button();
             buttonSubjectLearning = new Button();
             buttonBaiduNetdisk = new Button();
             buttonDictation = new Button();
@@ -270,6 +285,7 @@ namespace LearningAssistant.Forms
             panelMain.Controls.Add(groupBoxUser);
             panelMain.Controls.Add(buttonLearningManagement);
             panelMain.Controls.Add(buttonBrowser);
+            panelMain.Controls.Add(buttonWebView2Browser);
             panelMain.Controls.Add(buttonSubjectLearning);
             panelMain.Controls.Add(buttonBaiduNetdisk);
             panelMain.Controls.Add(buttonDictation);
@@ -436,9 +452,23 @@ namespace LearningAssistant.Forms
             buttonBrowser.Name = "buttonBrowser";
             buttonBrowser.Size = new Size(150, 51);
             buttonBrowser.TabIndex = 19;
-            buttonBrowser.Text = "🌐 学习浏览器";
+            buttonBrowser.Text = "🌐 学习浏览器(CefSharp)";
             buttonBrowser.UseVisualStyleBackColor = false;
             buttonBrowser.Click += ButtonBrowser_Click;
+            // 
+            // buttonWebView2Browser
+            // 
+            buttonWebView2Browser.BackColor = Color.FromArgb(255, 152, 0);
+            buttonWebView2Browser.FlatAppearance.BorderSize = 0;
+            buttonWebView2Browser.FlatStyle = FlatStyle.Flat;
+            buttonWebView2Browser.ForeColor = Color.White;
+            buttonWebView2Browser.Location = new Point(31, 554);
+            buttonWebView2Browser.Name = "buttonWebView2Browser";
+            buttonWebView2Browser.Size = new Size(150, 51);
+            buttonWebView2Browser.TabIndex = 23;
+            buttonWebView2Browser.Text = "🌐 WebView2浏览器";
+            buttonWebView2Browser.UseVisualStyleBackColor = false;
+            buttonWebView2Browser.Click += ButtonWebView2Browser_Click;
             // 
             // buttonSubjectLearning
             // 
@@ -602,6 +632,21 @@ namespace LearningAssistant.Forms
         private void ButtonBrowser_Click(object? sender, EventArgs e)
         {
             _windowManager.OpenBrowserWindow();
+        }
+
+        private void ButtonWebView2Browser_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                var cloudStorageService = Program.GetService<ICloudStorageService>();
+                var logger = Program.GetService<ILogger<WebView2BrowserForm>>();
+                var form = new WebView2BrowserForm(cloudStorageService, logger);
+                form.Show();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"打开 WebView2 浏览器失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void ButtonSubjectLearning_Click(object? sender, EventArgs e)

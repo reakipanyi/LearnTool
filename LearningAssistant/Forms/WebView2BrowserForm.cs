@@ -1,161 +1,130 @@
-using CefSharp;
-using CefSharp.WinForms;
-using LearningAssistant.Common;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
 using LearningAssistant.Services.Cloud;
-using LearningAssistant.Services.Learning;
 using Microsoft.Extensions.Logging;
+using System;
+using System.IO;
+using System.Threading.Tasks;
+using System.Windows.Forms;
 
 namespace LearningAssistant.Forms
 {
-    public partial class BrowserForm : Form
+    public partial class WebView2BrowserForm : Form
     {
-        private readonly IContentLoaderService _contentLoaderService;
         private readonly ICloudStorageService? _cloudStorageService;
-        private readonly ILogger<BrowserForm>? _logger;
-        private ChromiumWebBrowser? _browser;
+        private readonly ILogger<WebView2BrowserForm>? _logger;
+        private WebView2? _webView;
         private const string BaiduNetdiskUrl = "https://pan.baidu.com";
-        private const string CookieFileName = "browser_cookies.dat";
+        private bool _isWebViewReady = false;
 
-        public BrowserForm(IContentLoaderService contentLoaderService,
-                          ICloudStorageService? cloudStorageService = null,
-                          ILogger<BrowserForm>? logger = null)
+        public WebView2BrowserForm(ICloudStorageService? cloudStorageService = null,
+                                   ILogger<WebView2BrowserForm>? logger = null)
         {
-            _contentLoaderService = contentLoaderService;
             _cloudStorageService = cloudStorageService;
             _logger = logger;
             InitializeComponent();
-            InitializeBrowser();
-            LoadCookies();
-
+            Load += WebView2BrowserForm_Load;
         }
 
-        private void InitializeBrowser()
+        private async void WebView2BrowserForm_Load(object? sender, EventArgs e)
         {
-            try
+            await InitializeWebViewAsync();
+        }
+
+        private async Task InitializeWebViewAsync()
+        {
+            const int maxRetryCount = 3;
+            int retryCount = 0;
+            bool success = false;
+
+            while (!success && retryCount < maxRetryCount)
             {
-                var appDataDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                var cacheDir = Path.Combine(appDataDir, "LearningAssistant", "browser_cache");
-                if (!Directory.Exists(cacheDir))
+                try
                 {
-                    Directory.CreateDirectory(cacheDir);
+                    var appDataDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                    var cacheDir = Path.Combine(appDataDir, "LearningAssistant", "webview2_cache");
+                    if (!Directory.Exists(cacheDir))
+                    {
+                        Directory.CreateDirectory(cacheDir);
+                    }
+
+                    var environment = await CoreWebView2Environment.CreateAsync(null, cacheDir);
+
+                    _webView = new WebView2
+                    {
+                        Dock = DockStyle.Fill
+                    };
+
+                    await _webView.EnsureCoreWebView2Async(environment);
+
+                    if (_webView.CoreWebView2 != null)
+                    {
+                        _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+                        _webView.CoreWebView2.Settings.IsWebMessageEnabled = true;
+                        _webView.CoreWebView2.Settings.IsScriptEnabled = true;
+                        _webView.CoreWebView2.Settings.AreDevToolsEnabled = true;
+
+                        _webView.Source = new Uri("https://www.baidu.com");
+
+                        _webView.NavigationCompleted += OnNavigationCompleted;
+                        _webView.CoreWebView2.TitleChanged += OnTitleChanged;
+
+                        panelBrowser.Controls.Add(_webView);
+                        _isWebViewReady = true;
+                        success = true;
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException("CoreWebView2 初始化失败");
+                    }
                 }
-                var settings = new CefSharp.WinForms.CefSettings
+                catch (Exception ex)
                 {
-                    CachePath = cacheDir,
-                    PersistSessionCookies = true,
-                    LogSeverity = LogSeverity.Error,
-                    LogFile = Path.Combine(cacheDir, "cef.log")
-                };
-
-                // 添加音视频播放支持参数
-                settings.CefCommandLineArgs.Add("enable-features", " MoraMSE, MoraMSEAudio");
-                settings.CefCommandLineArgs.Add("disable-features", "HardwareVideoEncode,HardwareDecodeAcceleration");
-                settings.CefCommandLineArgs.Add("enable-gpu", "1");
-                settings.CefCommandLineArgs.Add("enable-gpu-rasterization", "1");
-                settings.CefCommandLineArgs.Add("enable-zero-copy", "1");
-                settings.CefCommandLineArgs.Add("ignore-certificate-errors", "1");
-                settings.CefCommandLineArgs.Add("allow-running-insecure-content", "1");
-                settings.CefCommandLineArgs.Add("enable-media-stream", "1");
-                settings.CefCommandLineArgs.Add("enable-mse", "1");
-
-                if (Cef.IsInitialized != true && !Cef.Initialize(settings))
-                {
-                    MessageBox.Show("无法初始化 CefSharp 浏览器引擎", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-                _browser = new ChromiumWebBrowser("https://www.baidu.com")
-                {
-                    Dock = DockStyle.Fill
-                };
-
-                // 注册事件处理器
-                _browser.LoadingStateChanged += OnLoadingStateChanged;
-                _browser.TitleChanged += OnTitleChanged;
-                _browser.FrameLoadEnd += OnFrameLoadEnd;
-
-                panelBrowser.Controls.Add(_browser);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"初始化浏览器失败: {ex.Message}\n\n详细信息: {ex.StackTrace}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        private void LoadCookies()
-        {
-            try
-            {
-                var cookiePath = GetCookieFilePath();
-                if (File.Exists(cookiePath))
-                {
-                    _logger?.LogInformation("已加载保存的Cookie（自动由CefSharp管理）");
+                    retryCount++;
+                    _logger?.LogError(ex, $"WebView2 初始化失败 (尝试 {retryCount}/{maxRetryCount})");
+                    
+                    if (retryCount >= maxRetryCount)
+                    {
+                        MessageBox.Show($"初始化 WebView2 失败: {ex.Message}\n\n可能需要安装 WebView2 Runtime。", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        _logger?.LogError(ex, "WebView2 初始化最终失败");
+                    }
+                    else
+                    {
+                        await Task.Delay(1000);
+                    }
                 }
             }
-            catch (Exception ex)
-            {
-                _logger?.LogWarning(ex, "加载Cookie失败，将使用新会话");
-            }
         }
 
-        private void SaveCookies()
-        {
-            try
-            {
-                // 让CefSharp自动保存Cookie到CachePath
-                _logger?.LogInformation("Cookie将由CefSharp自动保存到缓存目录");
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "保存Cookie失败");
-            }
-        }
-
-        private string GetCookieFilePath()
-        {
-            return Path.Combine(Paths.DataDirectory, CookieFileName);
-        }
-
-        private void OnLoadingStateChanged(object sender, LoadingStateChangedEventArgs e)
+        private void OnNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
         {
             if (IsDisposed || !IsHandleCreated) return;
 
             BeginInvoke(new Action(() =>
             {
-                if (_browser != null)
+                if (_webView != null)
                 {
-                    btnBack.Enabled = _browser.CanGoBack;
-                    btnForward.Enabled = _browser.CanGoForward;
-                    btnRefresh.Enabled = !e.IsLoading;
+                    txtUrl.Text = _webView.Source?.ToString() ?? string.Empty;
+                    btnBack.Enabled = _webView.CanGoBack;
+                    btnForward.Enabled = _webView.CanGoForward;
 
-                    if (!e.IsLoading)
-                    {
-                        txtUrl.Text = _browser.Address;
-
-                        // 检测是否在百度网盘页面
-                        bool isNetdiskPage = _browser.Address.StartsWith("https://pan.baidu.com");
-                        btnOpenNetdisk.Visible = !isNetdiskPage;
-                        btnDownloadNetdisk.Visible = isNetdiskPage && _cloudStorageService != null && _cloudStorageService.IsAuthenticated;
-                    }
+                    bool isNetdiskPage = _webView.Source?.ToString()?.StartsWith("https://pan.baidu.com") ?? false;
+                    btnOpenNetdisk.Visible = !isNetdiskPage;
+                    btnDownloadNetdisk.Visible = isNetdiskPage && _cloudStorageService != null && _cloudStorageService.IsAuthenticated;
                 }
             }));
         }
 
-        private void OnFrameLoadEnd(object sender, FrameLoadEndEventArgs e)
-        {
-            // 页面加载完成后保存Cookie（特别是百度网盘登录后）
-            if (e.Url.StartsWith("https://pan.baidu.com"))
-            {
-                SaveCookies();
-            }
-        }
-
-        private void OnTitleChanged(object sender, TitleChangedEventArgs e)
+        private void OnTitleChanged(object? sender, object e)
         {
             if (IsDisposed || !IsHandleCreated) return;
 
             BeginInvoke(new Action(() =>
             {
-                Text = $"学习浏览器 - {e.Title}";
+                if (_webView?.CoreWebView2 != null)
+                {
+                    Text = $"WebView2 浏览器 - {_webView.CoreWebView2.Title ?? "未知"}";
+                }
             }));
         }
 
@@ -166,23 +135,23 @@ namespace LearningAssistant.Forms
 
         private void btnBack_Click(object sender, EventArgs e)
         {
-            if (_browser?.CanGoBack == true)
+            if (_webView?.CanGoBack == true)
             {
-                _browser.Back();
+                _webView.GoBack();
             }
         }
 
         private void btnForward_Click(object sender, EventArgs e)
         {
-            if (_browser?.CanGoForward == true)
+            if (_webView?.CanGoForward == true)
             {
-                _browser.Forward();
+                _webView.GoForward();
             }
         }
 
         private void btnRefresh_Click(object sender, EventArgs e)
         {
-            _browser?.Reload();
+            _webView?.Reload();
         }
 
         private void txtUrl_KeyDown(object sender, KeyEventArgs e)
@@ -203,40 +172,18 @@ namespace LearningAssistant.Forms
                     url = "https://" + url;
                 }
 
-                if (_browser != null)
+                if (_webView != null)
                 {
-                    _browser.Load(url);
+                    _webView.Source = new Uri(url);
                 }
-            }
-        }
-
-        private void btnExtract_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                if (_browser != null)
-                {
-                    MessageBox.Show("内容提取功能开发中...", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"提取内容失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         private void btnOpenNetdisk_Click(object sender, EventArgs e)
         {
-            try
+            if (_webView != null)
             {
-                if (_browser != null)
-                {
-                    _browser.Load(BaiduNetdiskUrl);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"打开百度网盘失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _webView.Source = new Uri(BaiduNetdiskUrl);
             }
         }
 
@@ -256,15 +203,13 @@ namespace LearningAssistant.Forms
                     return;
                 }
 
-                // 获取当前页面URL中的文件路径信息
-                var currentUrl = _browser?.Address;
+                var currentUrl = _webView?.Source?.ToString();
                 if (string.IsNullOrEmpty(currentUrl) || !currentUrl.StartsWith("https://pan.baidu.com"))
                 {
                     MessageBox.Show("请先浏览到百度网盘文件页面", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
-                // 解析URL获取文件路径
                 var fileInfo = ParseNetdiskUrl(currentUrl);
                 if (!fileInfo.HasValue)
                 {
@@ -283,9 +228,8 @@ namespace LearningAssistant.Forms
 
                 if (saveDialog.ShowDialog() == DialogResult.OK)
                 {
-                    // 显示进度对话框
                     using var progressForm = new ProgressForm();
-                    progressForm.Show();
+                    progressForm.ShowDialog(this);
 
                     bool success = await _cloudStorageService.DownloadFileAsync(
                         cloudPath,
@@ -294,8 +238,6 @@ namespace LearningAssistant.Forms
                         {
                             progressForm.UpdateProgress(progress);
                         });
-
-                    progressForm.Close();
 
                     if (success)
                     {
@@ -321,27 +263,22 @@ namespace LearningAssistant.Forms
                 var uri = new Uri(url);
                 var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
 
-                // 尝试从URL参数获取文件路径
                 var path = query["path"];
                 if (!string.IsNullOrEmpty(path))
                 {
                     return (path, Path.GetFileName(path));
                 }
 
-                // 尝试从URL路径获取
                 var segments = uri.Segments;
                 if (segments.Length >= 3)
                 {
-                    // 格式: /s/xxxx 或 /share/xxxx
                     if (segments[1].Equals("s/", StringComparison.OrdinalIgnoreCase))
                     {
-                        // 分享链接，需要特殊处理
                         var shareId = segments[2].TrimEnd('/');
                         return ($"/share/{shareId}", shareId);
                     }
                 }
 
-                // 默认返回根目录
                 return ("/", "root");
             }
             catch
@@ -350,66 +287,19 @@ namespace LearningAssistant.Forms
             }
         }
 
-        private async void btnSaveAsPdf_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                if (_browser != null)
-                {
-                    var saveDialog = new SaveFileDialog
-                    {
-                        Filter = "PDF 文件 (*.pdf)|*.pdf",
-                        DefaultExt = "pdf",
-                        Title = "保存为 PDF"
-                    };
-
-                    if (saveDialog.ShowDialog() == DialogResult.OK)
-                    {
-                        var success = await _browser.PrintToPdfAsync(saveDialog.FileName);
-                        if (success)
-                        {
-                            MessageBox.Show("PDF 保存成功！", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        }
-                        else
-                        {
-                            MessageBox.Show("PDF 保存失败", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"保存 PDF 失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
-                // 关闭前保存Cookie
-                SaveCookies();
-                try
+                if (_webView != null)
                 {
-                    if (Cef.IsInitialized == true)
+                    _webView.NavigationCompleted -= OnNavigationCompleted;
+                    if (_webView.CoreWebView2 != null)
                     {
-                        Cef.Shutdown();
+                        _webView.CoreWebView2.TitleChanged -= OnTitleChanged;
                     }
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"关闭 CefSharp 失败: {ex.Message}");
-                }
-                if (_browser != null)
-                {
-                    try
-                    {
-                        _browser.LoadingStateChanged -= OnLoadingStateChanged;
-                        _browser.TitleChanged -= OnTitleChanged;
-                        _browser.FrameLoadEnd -= OnFrameLoadEnd;
-                        _browser.Dispose();
-                    }
-                    catch { }
+                    _webView.Dispose();
+                    _webView = null;
                 }
                 components?.Dispose();
             }
@@ -426,11 +316,9 @@ namespace LearningAssistant.Forms
         private ToolStripTextBox txtUrl;
         private ToolStripButton btnGo;
         private ToolStripSeparator toolStripSeparator;
-        private ToolStripButton btnExtract;
-        private ToolStripButton btnSaveAsPdf;
-        private Panel panelBrowser;
         private ToolStripButton btnOpenNetdisk;
         private ToolStripButton btnDownloadNetdisk;
+        private Panel panelBrowser;
 
         private void InitializeComponent()
         {
@@ -441,8 +329,6 @@ namespace LearningAssistant.Forms
             this.txtUrl = new System.Windows.Forms.ToolStripTextBox();
             this.btnGo = new System.Windows.Forms.ToolStripButton();
             this.toolStripSeparator = new System.Windows.Forms.ToolStripSeparator();
-            this.btnExtract = new System.Windows.Forms.ToolStripButton();
-            this.btnSaveAsPdf = new System.Windows.Forms.ToolStripButton();
             this.btnOpenNetdisk = new System.Windows.Forms.ToolStripButton();
             this.btnDownloadNetdisk = new System.Windows.Forms.ToolStripButton();
             this.panelBrowser = new System.Windows.Forms.Panel();
@@ -458,8 +344,6 @@ namespace LearningAssistant.Forms
             this.txtUrl,
             this.btnGo,
             this.toolStripSeparator,
-            this.btnExtract,
-            this.btnSaveAsPdf,
             this.btnOpenNetdisk,
             this.btnDownloadNetdisk});
             this.toolStrip.Location = new System.Drawing.Point(0, 0);
@@ -518,24 +402,6 @@ namespace LearningAssistant.Forms
             this.toolStripSeparator.Name = "toolStripSeparator";
             this.toolStripSeparator.Size = new System.Drawing.Size(6, 25);
             // 
-            // btnExtract
-            // 
-            this.btnExtract.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
-            this.btnExtract.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.btnExtract.Name = "btnExtract";
-            this.btnExtract.Size = new System.Drawing.Size(60, 22);
-            this.btnExtract.Text = "提取内容";
-            this.btnExtract.Click += new System.EventHandler(this.btnExtract_Click);
-            // 
-            // btnSaveAsPdf
-            // 
-            this.btnSaveAsPdf.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
-            this.btnSaveAsPdf.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.btnSaveAsPdf.Name = "btnSaveAsPdf";
-            this.btnSaveAsPdf.Size = new System.Drawing.Size(60, 22);
-            this.btnSaveAsPdf.Text = "保存PDF";
-            this.btnSaveAsPdf.Click += new System.EventHandler(this.btnSaveAsPdf_Click);
-            // 
             // btnOpenNetdisk
             // 
             this.btnOpenNetdisk.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
@@ -563,15 +429,15 @@ namespace LearningAssistant.Forms
             this.panelBrowser.Size = new System.Drawing.Size(800, 425);
             this.panelBrowser.TabIndex = 1;
             // 
-            // BrowserForm
+            // WebView2BrowserForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(800, 450);
             this.Controls.Add(this.panelBrowser);
             this.Controls.Add(this.toolStrip);
-            this.Name = "BrowserForm";
-            this.Text = "学习浏览器";
+            this.Name = "WebView2BrowserForm";
+            this.Text = "WebView2 浏览器";
             this.toolStrip.ResumeLayout(false);
             this.toolStrip.PerformLayout();
             this.ResumeLayout(false);
@@ -579,9 +445,5 @@ namespace LearningAssistant.Forms
         }
 
         #endregion
-
-        private void panelBrowser_Paint(object sender, PaintEventArgs e)
-        {
-        }
     }
 }
