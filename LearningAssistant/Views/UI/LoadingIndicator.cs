@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace LearningAssistant.Views.UI
 {
     // 新增功能：中等级 - UI响应性改进，加载指示器
@@ -23,6 +25,7 @@ namespace LearningAssistant.Views.UI
             _timer.Tick += Timer_Tick;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool IsLoading
         {
             get => _isLoading;

@@ -223,6 +223,7 @@ namespace LearningAssistant.Forms
         private Button buttonLearningManagement;
         private Button buttonBrowser;
         private Button buttonWebView2Browser;
+        private Button buttonAIWebView;
         private Button buttonSubjectLearning;
         private Button buttonBaiduNetdisk;
         private Button buttonDictation;
@@ -256,6 +257,7 @@ namespace LearningAssistant.Forms
             buttonLearningManagement = new Button();
             buttonBrowser = new Button();
             buttonWebView2Browser = new Button();
+            buttonAIWebView = new Button();
             buttonSubjectLearning = new Button();
             buttonBaiduNetdisk = new Button();
             buttonDictation = new Button();
@@ -286,6 +288,7 @@ namespace LearningAssistant.Forms
             panelMain.Controls.Add(buttonLearningManagement);
             panelMain.Controls.Add(buttonBrowser);
             panelMain.Controls.Add(buttonWebView2Browser);
+            panelMain.Controls.Add(buttonAIWebView);
             panelMain.Controls.Add(buttonSubjectLearning);
             panelMain.Controls.Add(buttonBaiduNetdisk);
             panelMain.Controls.Add(buttonDictation);
@@ -470,6 +473,20 @@ namespace LearningAssistant.Forms
             buttonWebView2Browser.UseVisualStyleBackColor = false;
             buttonWebView2Browser.Click += ButtonWebView2Browser_Click;
             // 
+            // buttonAIWebView
+            // 
+            buttonAIWebView.BackColor = Color.FromArgb(233, 30, 99);
+            buttonAIWebView.FlatAppearance.BorderSize = 0;
+            buttonAIWebView.FlatStyle = FlatStyle.Flat;
+            buttonAIWebView.ForeColor = Color.White;
+            buttonAIWebView.Location = new Point(232, 554);
+            buttonAIWebView.Name = "buttonAIWebView";
+            buttonAIWebView.Size = new Size(150, 51);
+            buttonAIWebView.TabIndex = 24;
+            buttonAIWebView.Text = "🤖 AI助手(豆包/DeepSeek)";
+            buttonAIWebView.UseVisualStyleBackColor = false;
+            buttonAIWebView.Click += ButtonAIWebView_Click;
+            // 
             // buttonSubjectLearning
             // 
             buttonSubjectLearning.BackColor = Color.FromArgb(76, 175, 80);
@@ -647,6 +664,11 @@ namespace LearningAssistant.Forms
             {
                 MessageBox.Show($"打开 WebView2 浏览器失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void ButtonAIWebView_Click(object? sender, EventArgs e)
+        {
+            _windowManager.OpenAIWebViewWindow();
         }
 
         private void ButtonSubjectLearning_Click(object? sender, EventArgs e)

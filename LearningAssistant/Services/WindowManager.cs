@@ -16,6 +16,7 @@ namespace LearningAssistant.Services
         void OpenLearningManagementWindow();
         void OpenBrowserWindow();
         void OpenPdfReaderWindow();
+        void OpenAIWebViewWindow();
     }
 
     public class WindowManager : IWindowManager
@@ -243,6 +244,26 @@ namespace LearningAssistant.Services
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to open PDF reader window");
+                throw;
+            }
+        }
+
+        public void OpenAIWebViewWindow()
+        {
+            _logger.LogInformation("Opening AI WebView window");
+
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var scopedProvider = scope.ServiceProvider;
+
+                var form = scopedProvider.GetRequiredService<AIWebViewForm>();
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to open AI WebView window");
                 throw;
             }
         }

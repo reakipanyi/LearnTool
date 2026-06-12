@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 
 namespace LearningAssistant.Views.UI
 {
@@ -11,6 +13,7 @@ namespace LearningAssistant.Views.UI
         private Color _textColor = Color.FromArgb(33, 33, 33);
         private string _centerText = string.Empty;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public float Progress
         {
             get => _targetProgress;
@@ -21,6 +24,7 @@ namespace LearningAssistant.Views.UI
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Color ProgressColor
         {
             get => _progressColor;
@@ -31,6 +35,7 @@ namespace LearningAssistant.Views.UI
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Color TrackColor
         {
             get => _trackColor;
@@ -41,6 +46,7 @@ namespace LearningAssistant.Views.UI
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Color TextColor
         {
             get => _textColor;
@@ -51,6 +57,7 @@ namespace LearningAssistant.Views.UI
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string CenterText
         {
             get => _centerText;

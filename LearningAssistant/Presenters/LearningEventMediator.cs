@@ -33,6 +33,12 @@ namespace LearningAssistant.Presenters
     {
     }
 
+    public class SendToPdfEventArgs : EventArgs
+    {
+        public string? Text { get; set; }
+        public string? Language { get; set; }
+    }
+
     public class LearningEventMediator : ILearningEventMediator
     {
         public event EventHandler<MarkAsKnownEventArgs>? MarkAsKnown;

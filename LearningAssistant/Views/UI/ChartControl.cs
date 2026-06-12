@@ -1,3 +1,5 @@
+using System.ComponentModel;
+
 namespace LearningAssistant.Views.UI
 {
     /// <summary>
@@ -32,6 +34,7 @@ namespace LearningAssistant.Views.UI
             BackColor = Color.White;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public ChartType ChartType
         {
             get => _chartType;
@@ -42,6 +45,7 @@ namespace LearningAssistant.Views.UI
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string Title
         {
             get => _title;

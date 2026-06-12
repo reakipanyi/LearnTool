@@ -1,6 +1,5 @@
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
-using LearningAssistant.Services.Cloud;
 using Microsoft.Extensions.Logging;
 using System;
 using System.IO;
@@ -9,24 +8,23 @@ using System.Windows.Forms;
 
 namespace LearningAssistant.Forms
 {
-    public partial class WebView2BrowserForm : Form
+    public partial class AIWebViewForm : Form
     {
-        private readonly ICloudStorageService? _cloudStorageService;
-        private readonly ILogger<WebView2BrowserForm>? _logger;
+        private readonly ILogger<AIWebViewForm>? _logger;
         private WebView2? _webView;
-        private const string BaiduNetdiskUrl = "https://pan.baidu.com";
         private bool _isWebViewReady = false;
 
-        public WebView2BrowserForm(ICloudStorageService? cloudStorageService = null,
-                                   ILogger<WebView2BrowserForm>? logger = null)
+        private const string DoubaoUrl = "https://www.doubao.com/chat";
+        private const string DeepseekUrl = "https://chat.deepseek.com/";
+
+        public AIWebViewForm(ILogger<AIWebViewForm>? logger = null)
         {
-            _cloudStorageService = cloudStorageService;
             _logger = logger;
             InitializeComponent();
-            Load += WebView2BrowserForm_Load;
+            Load += AIWebViewForm_Load;
         }
 
-        private async void WebView2BrowserForm_Load(object? sender, EventArgs e)
+        private async void AIWebViewForm_Load(object? sender, EventArgs e)
         {
             await InitializeWebViewAsync();
         }
@@ -42,7 +40,7 @@ namespace LearningAssistant.Forms
                 try
                 {
                     var appDataDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                    var cacheDir = Path.Combine(appDataDir, "LearningAssistant", "webview2_cache");
+                    var cacheDir = Path.Combine(appDataDir, "LearningAssistant", "ai_webview_cache");
                     if (!Directory.Exists(cacheDir))
                     {
                         Directory.CreateDirectory(cacheDir);
@@ -63,12 +61,12 @@ namespace LearningAssistant.Forms
                         _webView.CoreWebView2.Settings.IsWebMessageEnabled = true;
                         _webView.CoreWebView2.Settings.IsScriptEnabled = true;
                         _webView.CoreWebView2.Settings.AreDevToolsEnabled = true;
+                        _webView.CoreWebView2.Settings.IsZoomControlEnabled = true;
+                        _webView.CoreWebView2.Settings.DefaultZoomFactor = 1.0;
 
-                        _webView.Source = new Uri("https://www.baidu.com");
+                        _webView.Source = new Uri(DoubaoUrl);
 
                         _webView.NavigationCompleted += OnNavigationCompleted;
-                        // 使用 NavigationCompleted 事件替代 TitleChanged（兼容旧版本 WebView2）
-                        // _webView.CoreWebView2.TitleChanged += OnTitleChanged;
 
                         panelBrowser.Controls.Add(_webView);
                         _isWebViewReady = true;
@@ -83,7 +81,7 @@ namespace LearningAssistant.Forms
                 {
                     retryCount++;
                     _logger?.LogError(ex, $"WebView2 初始化失败 (尝试 {retryCount}/{maxRetryCount})");
-                    
+
                     if (retryCount >= maxRetryCount)
                     {
                         MessageBox.Show($"初始化 WebView2 失败: {ex.Message}\n\n可能需要安装 WebView2 Runtime。", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -109,22 +107,31 @@ namespace LearningAssistant.Forms
                     btnBack.Enabled = _webView.CanGoBack;
                     btnForward.Enabled = _webView.CanGoForward;
 
-                    bool isNetdiskPage = _webView.Source?.ToString()?.StartsWith("https://pan.baidu.com") ?? false;
-                    btnOpenNetdisk.Visible = !isNetdiskPage;
-                    btnDownloadNetdisk.Visible = isNetdiskPage && _cloudStorageService != null && _cloudStorageService.IsAuthenticated;
+                    bool isDoubao = _webView.Source?.ToString()?.StartsWith("https://www.doubao.com") ?? false;
+                    bool isDeepseek = _webView.Source?.ToString()?.StartsWith("https://chat.deepseek.com") ?? false;
+
+                    btnDoubao.Enabled = !isDoubao;
+                    btnDeepseek.Enabled = !isDeepseek;
+
+                    if (isDoubao)
+                    {
+                        Text = "🤖 豆包 AI";
+                        btnDoubao.BackColor = Color.LightBlue;
+                        btnDeepseek.BackColor = SystemColors.Control;
+                    }
+                    else if (isDeepseek)
+                    {
+                        Text = "🤖 DeepSeek AI";
+                        btnDeepseek.BackColor = Color.LightBlue;
+                        btnDoubao.BackColor = SystemColors.Control;
+                    }
+                    else
+                    {
+                        Text = "AI 助手";
+                        btnDoubao.BackColor = SystemColors.Control;
+                        btnDeepseek.BackColor = SystemColors.Control;
+                    }
                 }
-            }));
-        }
-
-        private void OnTitleChanged(object? sender, object e)
-        {
-            if (IsDisposed || !IsHandleCreated) return;
-
-            BeginInvoke(new Action(() =>
-            {
-                // 使用页面标题的替代方式（通过 JavaScript 获取或使用文档标题）
-                // Text = $"WebView2 浏览器 - {_webView.CoreWebView2.Title ?? "未知"}";
-                Text = "WebView2 浏览器";
             }));
         }
 
@@ -179,111 +186,19 @@ namespace LearningAssistant.Forms
             }
         }
 
-        private void btnOpenNetdisk_Click(object sender, EventArgs e)
+        private void btnDoubao_Click(object sender, EventArgs e)
         {
             if (_webView != null)
             {
-                _webView.Source = new Uri(BaiduNetdiskUrl);
+                _webView.Source = new Uri(DoubaoUrl);
             }
         }
 
-        private async void btnDownloadNetdisk_Click(object sender, EventArgs e)
+        private void btnDeepseek_Click(object sender, EventArgs e)
         {
-            try
+            if (_webView != null)
             {
-                if (_cloudStorageService == null)
-                {
-                    MessageBox.Show("百度网盘服务未配置或未授权", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-
-                if (!_cloudStorageService.IsAuthenticated)
-                {
-                    MessageBox.Show("请先完成百度网盘授权", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
-
-                var currentUrl = _webView?.Source?.ToString();
-                if (string.IsNullOrEmpty(currentUrl) || !currentUrl.StartsWith("https://pan.baidu.com"))
-                {
-                    MessageBox.Show("请先浏览到百度网盘文件页面", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
-
-                var fileInfo = ParseNetdiskUrl(currentUrl);
-                if (!fileInfo.HasValue)
-                {
-                    MessageBox.Show("无法解析网盘文件路径", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-
-                var (cloudPath, fileName) = fileInfo.Value;
-
-                using var saveDialog = new SaveFileDialog
-                {
-                    Filter = "所有文件 (*.*)|*.*",
-                    FileName = fileName,
-                    Title = "保存网盘文件"
-                };
-
-                if (saveDialog.ShowDialog() == DialogResult.OK)
-                {
-                    using var progressForm = new ProgressForm();
-                    progressForm.ShowDialog(this);
-
-                    bool success = await _cloudStorageService.DownloadFileAsync(
-                        cloudPath,
-                        saveDialog.FileName,
-                        (progress) =>
-                        {
-                            progressForm.UpdateProgress(progress);
-                        });
-
-                    if (success)
-                    {
-                        MessageBox.Show($"文件下载成功！\n\n保存位置: {saveDialog.FileName}", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    }
-                    else
-                    {
-                        MessageBox.Show("文件下载失败", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "下载网盘文件失败");
-                MessageBox.Show($"下载失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        private (string CloudPath, string FileName)? ParseNetdiskUrl(string url)
-        {
-            try
-            {
-                var uri = new Uri(url);
-                var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
-
-                var path = query["path"];
-                if (!string.IsNullOrEmpty(path))
-                {
-                    return (path, Path.GetFileName(path));
-                }
-
-                var segments = uri.Segments;
-                if (segments.Length >= 3)
-                {
-                    if (segments[1].Equals("s/", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var shareId = segments[2].TrimEnd('/');
-                        return ($"/share/{shareId}", shareId);
-                    }
-                }
-
-                return ("/", "root");
-            }
-            catch
-            {
-                return null;
+                _webView.Source = new Uri(DeepseekUrl);
             }
         }
 
@@ -294,11 +209,6 @@ namespace LearningAssistant.Forms
                 if (_webView != null)
                 {
                     _webView.NavigationCompleted -= OnNavigationCompleted;
-                    // 对应注释掉的 TitleChanged 事件
-                    // if (_webView.CoreWebView2 != null)
-                    // {
-                    //     _webView.CoreWebView2.TitleChanged -= OnTitleChanged;
-                    // }
                     _webView.Dispose();
                     _webView = null;
                 }
@@ -316,9 +226,9 @@ namespace LearningAssistant.Forms
         private ToolStripButton btnRefresh;
         private ToolStripTextBox txtUrl;
         private ToolStripButton btnGo;
-        private ToolStripSeparator toolStripSeparator;
-        private ToolStripButton btnOpenNetdisk;
-        private ToolStripButton btnDownloadNetdisk;
+        private ToolStripSeparator toolStripSeparator1;
+        private ToolStripButton btnDoubao;
+        private ToolStripButton btnDeepseek;
         private Panel panelBrowser;
 
         private void InitializeComponent()
@@ -329,9 +239,9 @@ namespace LearningAssistant.Forms
             this.btnRefresh = new System.Windows.Forms.ToolStripButton();
             this.txtUrl = new System.Windows.Forms.ToolStripTextBox();
             this.btnGo = new System.Windows.Forms.ToolStripButton();
-            this.toolStripSeparator = new System.Windows.Forms.ToolStripSeparator();
-            this.btnOpenNetdisk = new System.Windows.Forms.ToolStripButton();
-            this.btnDownloadNetdisk = new System.Windows.Forms.ToolStripButton();
+            this.toolStripSeparator1 = new System.Windows.Forms.ToolStripSeparator();
+            this.btnDoubao = new System.Windows.Forms.ToolStripButton();
+            this.btnDeepseek = new System.Windows.Forms.ToolStripButton();
             this.panelBrowser = new System.Windows.Forms.Panel();
             this.toolStrip.SuspendLayout();
             this.SuspendLayout();
@@ -344,12 +254,12 @@ namespace LearningAssistant.Forms
             this.btnRefresh,
             this.txtUrl,
             this.btnGo,
-            this.toolStripSeparator,
-            this.btnOpenNetdisk,
-            this.btnDownloadNetdisk});
+            this.toolStripSeparator1,
+            this.btnDoubao,
+            this.btnDeepseek});
             this.toolStrip.Location = new System.Drawing.Point(0, 0);
             this.toolStrip.Name = "toolStrip";
-            this.toolStrip.Size = new System.Drawing.Size(800, 25);
+            this.toolStrip.Size = new System.Drawing.Size(1024, 25);
             this.toolStrip.TabIndex = 0;
             this.toolStrip.Text = "toolStrip1";
             // 
@@ -385,8 +295,8 @@ namespace LearningAssistant.Forms
             // txtUrl
             // 
             this.txtUrl.Name = "txtUrl";
-            this.txtUrl.Size = new System.Drawing.Size(400, 25);
-            this.txtUrl.Text = "https://www.baidu.com";
+            this.txtUrl.Size = new System.Drawing.Size(500, 25);
+            this.txtUrl.Text = "https://www.doubao.com/chat";
             this.txtUrl.KeyDown += new System.Windows.Forms.KeyEventHandler(this.txtUrl_KeyDown);
             // 
             // btnGo
@@ -398,47 +308,48 @@ namespace LearningAssistant.Forms
             this.btnGo.Text = "跳转";
             this.btnGo.Click += new System.EventHandler(this.btnGo_Click);
             // 
-            // toolStripSeparator
+            // toolStripSeparator1
             // 
-            this.toolStripSeparator.Name = "toolStripSeparator";
-            this.toolStripSeparator.Size = new System.Drawing.Size(6, 25);
+            this.toolStripSeparator1.Name = "toolStripSeparator1";
+            this.toolStripSeparator1.Size = new System.Drawing.Size(6, 25);
             // 
-            // btnOpenNetdisk
+            // btnDoubao
             // 
-            this.btnOpenNetdisk.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
-            this.btnOpenNetdisk.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.btnOpenNetdisk.Name = "btnOpenNetdisk";
-            this.btnOpenNetdisk.Size = new System.Drawing.Size(60, 22);
-            this.btnOpenNetdisk.Text = "百度网盘";
-            this.btnOpenNetdisk.Click += new System.EventHandler(this.btnOpenNetdisk_Click);
+            this.btnDoubao.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
+            this.btnDoubao.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.btnDoubao.Name = "btnDoubao";
+            this.btnDoubao.Size = new System.Drawing.Size(60, 22);
+            this.btnDoubao.Text = "豆包";
+            this.btnDoubao.Click += new System.EventHandler(this.btnDoubao_Click);
             // 
-            // btnDownloadNetdisk
+            // btnDeepseek
             // 
-            this.btnDownloadNetdisk.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
-            this.btnDownloadNetdisk.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.btnDownloadNetdisk.Name = "btnDownloadNetdisk";
-            this.btnDownloadNetdisk.Size = new System.Drawing.Size(60, 22);
-            this.btnDownloadNetdisk.Text = "下载文件";
-            this.btnDownloadNetdisk.Visible = false;
-            this.btnDownloadNetdisk.Click += new System.EventHandler(this.btnDownloadNetdisk_Click);
+            this.btnDeepseek.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
+            this.btnDeepseek.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.btnDeepseek.Name = "btnDeepseek";
+            this.btnDeepseek.Size = new System.Drawing.Size(72, 22);
+            this.btnDeepseek.Text = "DeepSeek";
+            this.btnDeepseek.Click += new System.EventHandler(this.btnDeepseek_Click);
             // 
             // panelBrowser
             // 
             this.panelBrowser.Dock = System.Windows.Forms.DockStyle.Fill;
             this.panelBrowser.Location = new System.Drawing.Point(0, 25);
             this.panelBrowser.Name = "panelBrowser";
-            this.panelBrowser.Size = new System.Drawing.Size(800, 425);
+            this.panelBrowser.Size = new System.Drawing.Size(1024, 675);
             this.panelBrowser.TabIndex = 1;
             // 
-            // WebView2BrowserForm
+            // AIWebViewForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(800, 450);
+            this.ClientSize = new System.Drawing.Size(1024, 700);
             this.Controls.Add(this.panelBrowser);
             this.Controls.Add(this.toolStrip);
-            this.Name = "WebView2BrowserForm";
-            this.Text = "WebView2 浏览器";
+            this.Name = "AIWebViewForm";
+            this.StartPosition = FormStartPosition.CenterScreen;
+            this.Text = "🤖 豆包 AI";
+            this.WindowState = FormWindowState.Maximized;
             this.toolStrip.ResumeLayout(false);
             this.toolStrip.PerformLayout();
             this.ResumeLayout(false);

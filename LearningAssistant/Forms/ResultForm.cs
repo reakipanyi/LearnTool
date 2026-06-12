@@ -2,6 +2,7 @@ using LearningAssistant.Common;
 using LearningAssistant.Views;
 using LearningAssistant.Views.UI;
 using Microsoft.Extensions.Logging;
+using System.ComponentModel;
 
 namespace LearningAssistant.Forms
 {
@@ -31,6 +32,7 @@ namespace LearningAssistant.Forms
 
         #region IResultView Implementation
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string AccuracyRate
         {
             get => labelAccuracy.Text;
@@ -46,8 +48,10 @@ namespace LearningAssistant.Forms
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string Statistics { get; set; } = string.Empty;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string KnownItems
         {
             set
@@ -68,6 +72,7 @@ namespace LearningAssistant.Forms
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string UnknownItems
         {
             set

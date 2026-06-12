@@ -249,4 +249,5 @@ namespace LearningAssistant.Services.Persistence
                 LearningProgress = new LearningProgress()
             };
         }
+    }
 }

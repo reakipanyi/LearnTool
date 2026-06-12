@@ -3,6 +3,7 @@ using LearningAssistant.Common.Themes;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
+using System.ComponentModel;
 
 namespace LearningAssistant.Forms
 {
@@ -22,19 +23,19 @@ namespace LearningAssistant.Forms
             InitializeComponent();
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
-            
+
             _themeService.RegisterThemeable(this);
         }
 
         public void ApplyTheme(ThemeColors colors)
         {
             BackColor = colors.Background;
-            
+
             if (headerPanel != null)
             {
                 headerPanel.BackColor = colors.Primary;
             }
-            
+
             foreach (Control control in Controls)
             {
                 ApplyThemeToControl(control, colors);
@@ -75,7 +76,7 @@ namespace LearningAssistant.Forms
             {
                 trackBar.BackColor = colors.Surface;
             }
-            
+
             foreach (Control child in control.Controls)
             {
                 ApplyThemeToControl(child, colors);
@@ -84,6 +85,8 @@ namespace LearningAssistant.Forms
 
         #region ISettingView Implementation
 
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string Provider
         {
             get
@@ -112,35 +115,47 @@ namespace LearningAssistant.Forms
             }
         }
 
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string ApiKey
         {
             get => textBoxApiKey.Text;
             set => textBoxApiKey.Text = value;
         }
 
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string ApiEndpoint
         {
             get => textBoxApiEndpoint.Text;
             set => textBoxApiEndpoint.Text = value;
         }
 
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string Model
         {
             get => textBoxModel.Text;
             set => textBoxModel.Text = value;
         }
 
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool TTSEnabled
         {
             get => checkBoxTtsEnabled.Checked;
             set => checkBoxTtsEnabled.Checked = value;
         }
 
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string TtsApiKey
         {
             get => textBoxTtsApiKey.Text;
             set => textBoxTtsApiKey.Text = value;
         }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
 
         public string TtsVoice
         {
@@ -148,23 +163,30 @@ namespace LearningAssistant.Forms
             set => comboBoxVoice.Text = value;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int TTSSpeed
         {
             get => trackBarSpeed.Value;
             set => trackBarSpeed.Value = value;
         }
 
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int TTSVolume
         {
             get => trackBarVolume.Value;
             set => trackBarVolume.Value = value;
         }
 
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int FontSize
         {
             get => (int)numericUpDownFontSize.Value;
             set => numericUpDownFontSize.Value = value;
         }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
 
         public string Theme
         {
@@ -181,17 +203,23 @@ namespace LearningAssistant.Forms
             }
         }
 
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string BaiduAppId
         {
             get => textBoxBaiduAppId.Text;
             set => textBoxBaiduAppId.Text = value;
         }
 
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string BaiduSecret
         {
             get => textBoxBaiduSecret.Text;
             set => textBoxBaiduSecret.Text = value;
         }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
 
         public string BaiduNetdiskClientId
         {
@@ -199,11 +227,15 @@ namespace LearningAssistant.Forms
             set => textBoxBaiduNetdiskClientId.Text = value;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+
         public string BaiduNetdiskClientSecret
         {
             get => textBoxBaiduNetdiskClientSecret.Text;
             set => textBoxBaiduNetdiskClientSecret.Text = value;
         }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
 
         public bool IsVoiceEnabled
         {
@@ -211,12 +243,16 @@ namespace LearningAssistant.Forms
             set => checkBoxIsVoiceEnabled.Checked = value;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+
         public int PronunciationScope
         {
             get => (int)numericUpDownPronunciationScope.Value;
             set => numericUpDownPronunciationScope.Value = value;
         }
 
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool IsAIExplanationEnabled
         {
             get => checkBoxIsAIExplanationEnabled.Checked;
@@ -898,23 +934,23 @@ namespace LearningAssistant.Forms
             var selectedItem = comboBoxProvider.SelectedItem as KeyValuePair<string, AiProviderInfo>?;
             if (selectedItem.HasValue && AiConfig.Providers.TryGetValue(selectedItem.Value.Key, out var providerInfo))
             {
-                var hasCustomConfig = !string.IsNullOrWhiteSpace(textBoxApiEndpoint.Text) || 
+                var hasCustomConfig = !string.IsNullOrWhiteSpace(textBoxApiEndpoint.Text) ||
                                      !string.IsNullOrWhiteSpace(textBoxModel.Text);
-                
+
                 if (hasCustomConfig)
                 {
                     var result = MessageBox.Show(
-                        "切换服务商将覆盖您自定义的 API 端点和模型配置，是否继续？", 
-                        "确认切换", 
-                        MessageBoxButtons.YesNo, 
+                        "切换服务商将覆盖您自定义的 API 端点和模型配置，是否继续？",
+                        "确认切换",
+                        MessageBoxButtons.YesNo,
                         MessageBoxIcon.Question);
-                    
+
                     if (result != DialogResult.Yes)
                     {
                         return;
                     }
                 }
-                
+
                 textBoxApiEndpoint.Text = providerInfo.BaseUrl;
                 textBoxModel.Text = providerInfo.DefaultModel;
             }
@@ -939,7 +975,7 @@ namespace LearningAssistant.Forms
         {
             _isDarkMode = checkBoxNightMode.Checked;
             comboBoxTheme.Text = _isDarkMode ? "Dark" : "Light";
-            
+
             _themeService.SetTheme(_isDarkMode ? ThemeMode.Dark : ThemeMode.Light);
         }
 

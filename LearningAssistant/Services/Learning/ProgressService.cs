@@ -1,3 +1,4 @@
+using LearningAssistant.Models.User;
 using LearningAssistant.Services.Persistence;
 
 namespace LearningAssistant.Services.Learning

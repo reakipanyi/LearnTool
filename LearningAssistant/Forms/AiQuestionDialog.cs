@@ -1,6 +1,7 @@
-using Microsoft.Extensions.Logging;
 using LearningAssistant.Services.AI;
 using LearningAssistant.Services.TTS;
+using Microsoft.Extensions.Logging;
+using System.ComponentModel;
 
 namespace LearningAssistant.Forms
 {
@@ -19,6 +20,7 @@ namespace LearningAssistant.Forms
             InitializeComponent();
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string QuestionText
         {
             get => textBoxQuestion.Text;

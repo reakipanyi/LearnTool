@@ -1,18 +1,19 @@
-using System;
-using System.Drawing;
-using System.Windows.Forms;
+using System.ComponentModel;
 
 namespace LearningAssistant.Forms
 {
     public partial class ReminderNotificationForm : Form
     {
-        private readonly Timer _fadeInTimer;
-        private readonly Timer _fadeOutTimer;
+        private readonly System.Windows.Forms.Timer _fadeInTimer;
+        private readonly System.Windows.Forms.Timer _fadeOutTimer;
         private readonly int _displayDuration = 5000;
         private int _currentOpacity = 0;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string ReminderTitle { get; set; } = "学习提醒";
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string ReminderMessage { get; set; } = string.Empty;
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string ReminderTime { get; set; } = string.Empty;
 
         public event EventHandler? OpenLearningClicked;
@@ -22,11 +23,11 @@ namespace LearningAssistant.Forms
         public ReminderNotificationForm()
         {
             InitializeComponent();
-            
-            _fadeInTimer = new Timer { Interval = 20 };
+
+            _fadeInTimer = new System.Windows.Forms.Timer { Interval = 20 };
             _fadeInTimer.Tick += FadeInTimer_Tick;
-            
-            _fadeOutTimer = new Timer { Interval = 20 };
+
+            _fadeOutTimer = new System.Windows.Forms.Timer { Interval = 20 };
             _fadeOutTimer.Tick += FadeOutTimer_Tick;
 
             Load += ReminderNotificationForm_Load;
@@ -37,7 +38,7 @@ namespace LearningAssistant.Forms
             labelTitle.Text = ReminderTitle;
             labelMessage.Text = ReminderMessage;
             labelTime.Text = ReminderTime;
-            
+
             ShowFadeIn();
         }
 
@@ -52,7 +53,7 @@ namespace LearningAssistant.Forms
         {
             _currentOpacity += 5;
             Opacity = _currentOpacity / 100.0;
-            
+
             if (_currentOpacity >= 100)
             {
                 _fadeInTimer.Stop();
@@ -62,7 +63,7 @@ namespace LearningAssistant.Forms
 
         private void StartAutoCloseTimer()
         {
-            var autoCloseTimer = new Timer { Interval = _displayDuration };
+            var autoCloseTimer = new System.Windows.Forms.Timer { Interval = _displayDuration };
             autoCloseTimer.Tick += (s, e) =>
             {
                 autoCloseTimer.Stop();
@@ -81,7 +82,7 @@ namespace LearningAssistant.Forms
         {
             _currentOpacity -= 5;
             Opacity = _currentOpacity / 100.0;
-            
+
             if (_currentOpacity <= 0)
             {
                 _fadeOutTimer.Stop();

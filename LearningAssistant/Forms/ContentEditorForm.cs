@@ -5,6 +5,7 @@ using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.ComponentModel;
 using System.Data;
 
 namespace LearningAssistant.Forms
@@ -52,6 +53,7 @@ namespace LearningAssistant.Forms
         public string SelectedLanguage => radioChinese.Checked ? Constants.Language.Chinese : Constants.Language.English;
 
         public string SelectedSubCategory => comboBoxSubCategory.SelectedItem?.ToString() ?? "";
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public DataTable ItemData
         {
             set
@@ -60,6 +62,7 @@ namespace LearningAssistant.Forms
                 ApplyChineseColumnHeaders();
             }
         }
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
 
         public string CurrentEditItemJson
         {
@@ -70,18 +73,21 @@ namespace LearningAssistant.Forms
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string GenerateCount
         {
             get => textBoxCount.Text;
             set => textBoxCount.Text = value;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string GenerateRange
         {
             get => textBoxRange.Text;
             set => textBoxRange.Text = value;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string PromptText
         {
             get => textBoxPrompt?.Text ?? "";
@@ -93,6 +99,7 @@ namespace LearningAssistant.Forms
                 }
             }
         }
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
 
         public object? GridDataSource
         {

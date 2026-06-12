@@ -145,11 +145,11 @@ namespace LearningAssistant.Common
         /// </summary>
         public static IServiceCollection AddLearningServices(this IServiceCollection services)
         {
-            services.AddSingleton<SortStrategies.SortStrategyFactory>();
+            services.AddSingleton<Services.Learning.SortStrategies.SortStrategyFactory>();
             services.AddSingleton<IStudyListProcessor, StudyListProcessor>();
             services.AddSingleton<IProgressManager, ProgressManager>();
-            
-            services.AddSingleton<IStudyEngine>(sp => 
+
+            services.AddSingleton<IStudyEngine>(sp =>
             {
                 var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
                 var progressManager = sp.GetRequiredService<IProgressManager>();
@@ -157,7 +157,7 @@ namespace LearningAssistant.Common
                 var analyticsService = sp.GetService<ILearningAnalyticsService>();
                 return new StudyEngine(contentLoaderService, progressManager, studyListProcessor, analyticsService);
             });
-            
+
             services.AddSingleton<ILearningAnalyticsService, LearningAnalyticsService>();
             services.AddSingleton<ILearningReminderService, LearningReminderService>();
             services.AddSingleton<DataMigrationService>();
@@ -273,6 +273,12 @@ namespace LearningAssistant.Common
                 var cloudStorageService = sp.GetService<ICloudStorageService>();
                 var logger = sp.GetService<ILogger<BrowserForm>>();
                 return new BrowserForm(contentLoaderService, cloudStorageService, logger);
+            });
+
+            services.AddScoped<AIWebViewForm>(sp =>
+            {
+                var logger = sp.GetService<ILogger<AIWebViewForm>>();
+                return new AIWebViewForm(logger);
             });
 
             services.AddScoped<ISettingView>(sp => sp.GetRequiredService<SettingForm>());

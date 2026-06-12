@@ -81,7 +81,7 @@ namespace LearningAssistant.Forms
                 var valuesPanel = new FlowLayoutPanel
                 {
                     FlowDirection = FlowDirection.LeftToRight,
-                    Wrap = false,
+                    WrapContents = false,
                     Dock = DockStyle.Top,
                     Height = 50,
                     Margin = new Padding(0)
@@ -204,7 +204,7 @@ namespace LearningAssistant.Forms
             panelUserHeaders = new FlowLayoutPanel
             {
                 FlowDirection = FlowDirection.LeftToRight,
-                Wrap = false,
+                WrapContents = false,
                 Dock = DockStyle.Top,
                 Height = 50,
                 Margin = new Padding(0),

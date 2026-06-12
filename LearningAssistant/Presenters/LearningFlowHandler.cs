@@ -21,6 +21,8 @@ namespace LearningAssistant.Presenters
         void ExportErrorBook();
         void OpenStatistics();
         void SendToPdfQuestion();
+        
+        event EventHandler<SendToPdfEventArgs>? OnSendToPdfQuestion;
     }
 
     public class LearningFlowHandler : ILearningFlowHandler
@@ -89,7 +91,7 @@ namespace LearningAssistant.Presenters
             _currentUserId = userId;
             _currentLanguage = language;
 
-            await LoadSubCategoriesAsync(language, ref subCategory);
+            subCategory = await LoadSubCategoriesAsync(language, subCategory);
             _currentSubCategory = subCategory;
 
             _studyEngine.Initialize(userId, language, subCategory, wordBankFile, _view.LearningMode, _view.SortOrder, continueMode);
@@ -97,7 +99,7 @@ namespace LearningAssistant.Presenters
             await DisplayCurrentItemAsync();
         }
 
-        private async Task LoadSubCategoriesAsync(string language, ref string subCategory)
+        private async Task<string> LoadSubCategoriesAsync(string language, string subCategory)
         {
             try
             {
@@ -106,18 +108,19 @@ namespace LearningAssistant.Presenters
 
                 if (string.IsNullOrEmpty(subCategory) || !subCategories.Contains(subCategory))
                 {
-                    subCategory = _view.SubCategory;
+                    return _view.SubCategory;
                 }
                 else
                 {
                     _view.SubCategory = subCategory;
+                    return subCategory;
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load subcategories");
+                return subCategory;
             }
-            await Task.CompletedTask;
         }
 
         private void UpdateLearningList()

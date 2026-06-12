@@ -8,7 +8,6 @@ using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel;
-using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Text.Json;
 
@@ -31,6 +30,126 @@ namespace LearningAssistant.Forms
         private readonly System.Windows.Forms.Timer _confettiTimer = new System.Windows.Forms.Timer();
         private readonly Random _random = new Random();
         private bool _isConfettiActive;
+
+        private readonly System.Windows.Forms.Timer _studyTimer = new System.Windows.Forms.Timer();
+        private TimeSpan _studyDuration = TimeSpan.Zero;
+        private int _todayLearnedCount = 0;
+        private int _streakDays = 0;
+        private int _score = 0;
+        private bool _isQuizMode = false;
+        private bool _answerRevealed = false;
+
+        private readonly string[] _encouragements = {
+            "太棒了！继续保持！💪",
+            "你做得很好！🌟",
+            "学习使我快乐！📚",
+            "坚持就是胜利！✨",
+            "知识就是力量！💡",
+            "每天进步一点点！🌱",
+            "加油，你可以的！🚀",
+            "聪明的选择！🎯",
+            "继续努力！🔥",
+            "你真了不起！👏"
+        };
+
+        private readonly string[] _correctMessages = {
+            "回答正确！🎉",
+            "完美！🌟",
+            "太棒了！👏",
+            "正确！✅",
+            "你真聪明！💡"
+        };
+
+        private readonly string[] _wrongMessages = {
+            "再想想！💭",
+            "加油！💪",
+            "别灰心！🌈",
+            "继续尝试！🔥",
+            "下次会更好！🌟"
+        };
+
+        private readonly Dictionary<string, Badge> _badges = new Dictionary<string, Badge>
+        {
+            {"first_blood", new Badge("first_blood", "首战告捷", "完成第一次学习", "🏆", 1)},
+            {"streak_3", new Badge("streak_3", "三日坚持", "连续学习3天", "🔥", 3)},
+            {"streak_7", new Badge("streak_7", "一周达人", "连续学习7天", "⭐", 7)},
+            {"streak_30", new Badge("streak_30", "月度冠军", "连续学习30天", "👑", 30)},
+            {"learn_100", new Badge("learn_100", "百题斩", "累计学习100项", "💯", 100)},
+            {"learn_500", new Badge("learn_500", "五百勇士", "累计学习500项", "⚔️", 500)},
+            {"learn_1000", new Badge("learn_1000", "千题大师", "累计学习1000项", "🏅", 1000)},
+            {"perfect_day", new Badge("perfect_day", "完美一天", "单日学习50项", "🌟", 50)},
+            {"quiz_master", new Badge("quiz_master", "答题高手", "答题模式答对20题", "🎯", 20)},
+            {"favorite_collector", new Badge("favorite_collector", "收藏达人", "收藏20个内容", "❤️", 20)},
+            {"note_taker", new Badge("note_taker", "笔记达人", "记录10条笔记", "📝", 10)},
+            {"speed_learner", new Badge("speed_learner", "神速学习", "5分钟内完成10项", "⚡", 10)}
+        };
+
+        private readonly List<string> _levelTitles = new List<string>
+        {
+            "小白", "学徒", "学者", "秀才", "举人", "进士", "翰林", "大师", "宗师", "圣人"
+        };
+
+        private List<string> _unlockedBadges = new List<string>();
+        private int _totalLearnedCount = 0;
+        private int _quizCorrectCount = 0;
+        private int _favoriteCount = 0;
+        private int _noteCount = 0;
+        private int _currentLevel = 0;
+        private string _levelTitle = "小白";
+        private int _xp = 0;
+        private int _xpToNextLevel = 100;
+
+        private class Badge
+        {
+            public string Id { get; }
+            public string Name { get; }
+            public string Description { get; }
+            public string Emoji { get; }
+            public int RequiredCount { get; }
+            public bool Unlocked { get; set; }
+
+            public Badge(string id, string name, string description, string emoji, int requiredCount)
+            {
+                Id = id;
+                Name = name;
+                Description = description;
+                Emoji = emoji;
+                RequiredCount = requiredCount;
+                Unlocked = false;
+            }
+        }
+
+        private class Challenge
+        {
+            public string Id { get; set; }
+            public string Name { get; set; }
+            public string Description { get; set; }
+            public string Emoji { get; set; }
+            public int Target { get; set; }
+            public int Current { get; set; }
+            public int Reward { get; set; }
+            public bool Completed { get; set; }
+            public bool Claimed { get; set; }
+
+            public Challenge() { }
+
+            public Challenge(string id, string name, string description, string emoji, int target, int reward)
+            {
+                Id = id;
+                Name = name;
+                Description = description;
+                Emoji = emoji;
+                Target = target;
+                Current = 0;
+                Reward = reward;
+                Completed = false;
+                Claimed = false;
+            }
+        }
+
+        private List<Challenge> _dailyChallenges = new List<Challenge>();
+        private bool _badgesEventBound = false;
+        private ToolTip _toolTip = new ToolTip();
 
         private enum ParticleShape
         {
@@ -102,48 +221,95 @@ namespace LearningAssistant.Forms
         public void ApplyTheme(ThemeColors colors)
         {
             BackColor = colors.Background;
-            
+
             if (panelContent != null)
             {
                 panelContent.BackColor = colors.Surface;
             }
-            
+
             if (panelAI != null)
             {
                 panelAI.BackColor = colors.Surface;
             }
-            
+
             if (panelConfig != null)
             {
                 panelConfig.BackColor = colors.Surface;
             }
-            
+
+            if (panelStats != null)
+            {
+                panelStats.BackColor = colors.Surface;
+            }
+
+            if (panelQuizMode != null)
+            {
+                panelQuizMode.BackColor = colors.Background;
+            }
+
             if (labelDisplay != null)
             {
                 labelDisplay.ForeColor = colors.TextPrimary;
+                labelDisplay.BackColor = colors.Surface;
             }
-            
+
             if (labelContent != null)
             {
                 labelContent.ForeColor = colors.TextPrimary;
+                labelContent.BackColor = colors.Surface;
             }
-            
+
             if (richTextBoxAI != null)
             {
                 richTextBoxAI.BackColor = colors.Surface;
                 richTextBoxAI.ForeColor = colors.TextPrimary;
             }
-            
+
             if (buttonKnown != null)
             {
                 buttonKnown.ForeColor = Color.White;
             }
-            
+
             if (buttonUnknown != null)
             {
                 buttonUnknown.ForeColor = Color.White;
             }
-            
+
+            if (labelStudyTime != null)
+            {
+                labelStudyTime.ForeColor = colors.TextPrimary;
+            }
+
+            if (labelScore != null)
+            {
+                labelScore.ForeColor = colors.TextPrimary;
+            }
+
+            if (labelTodayCount != null)
+            {
+                labelTodayCount.ForeColor = colors.TextPrimary;
+            }
+
+            if (labelStreak != null)
+            {
+                labelStreak.ForeColor = colors.TextPrimary;
+            }
+
+            if (labelEncouragement != null)
+            {
+                labelEncouragement.ForeColor = colors.TextSecondary;
+            }
+
+            if (labelDailyGoal != null)
+            {
+                labelDailyGoal.ForeColor = colors.TextSecondary;
+            }
+
+            if (labelQuizHint != null)
+            {
+                labelQuizHint.ForeColor = colors.TextSecondary;
+            }
+
             foreach (Control control in Controls)
             {
                 ApplyThemeToControl(control, colors);
@@ -178,7 +344,7 @@ namespace LearningAssistant.Forms
                 comboBox.BackColor = colors.Surface;
                 comboBox.ForeColor = colors.TextPrimary;
             }
-            
+
             foreach (Control child in control.Controls)
             {
                 ApplyThemeToControl(child, colors);
@@ -192,6 +358,7 @@ namespace LearningAssistant.Forms
             LoadSettings();
             ApplySettings();
             EnableListHighlighting(true);
+            InitializeEnhancedFeatures();
         }
 
 
@@ -562,6 +729,48 @@ namespace LearningAssistant.Forms
         private Button buttonOpenStatistics;
         private Button buttonExportErrorBook;
 
+        private Panel panelStats;
+        private Label labelStudyTime;
+        private Label labelScore;
+        private Label labelTodayCount;
+        private Label labelStreak;
+        private Label labelEncouragement;
+        private ProgressBar progressDailyGoal;
+        private Label labelDailyGoal;
+        private Button buttonRevealAnswer;
+        private Panel panelQuizMode;
+        private Button buttonQuizMode;
+        private Label labelQuizHint;
+        private Button buttonThemeToggle;
+        private Button buttonFavorite;
+        private Button buttonNote;
+        private Panel panelNotes;
+        private RichTextBox richTextBoxNotes;
+        private Label labelNotesTitle;
+        private Panel panelExamples;
+        private ListBox listBoxExamples;
+        private Label labelExamplesTitle;
+
+        private Panel panelBadges;
+        private Label labelBadgesTitle;
+        private FlowLayoutPanel flowLayoutPanelBadges;
+        private Label labelLevel;
+        private ProgressBar progressXP;
+        private Label labelXP;
+        private Panel panelChallenges;
+        private Label labelChallengesTitle;
+        private FlowLayoutPanel flowLayoutPanelChallenges;
+        private Button buttonMiniGame;
+        private Panel panelGame;
+        private Label labelGameTitle;
+        private Label labelGameQuestion;
+        private TextBox textBoxGameAnswer;
+        private Button buttonGameSubmit;
+        private Label labelGameResult;
+        private System.Windows.Forms.Timer _gameTimer;
+        private int _gameScore = 0;
+        private bool _isGameActive = false;
+
         private void InitializeComponent()
         {
             panelContent = new Panel();
@@ -610,7 +819,21 @@ namespace LearningAssistant.Forms
             settingsFlowLayoutPanel = new FlowLayoutPanel();
             pronunciationFlowLayoutPanel = new FlowLayoutPanel();
             groupBoxPronunciationScope = new GroupBox();
+            panelStats = new Panel();
+            labelStudyTime = new Label();
+            labelScore = new Label();
+            labelTodayCount = new Label();
+            labelStreak = new Label();
+            labelEncouragement = new Label();
+            progressDailyGoal = new ProgressBar();
+            labelDailyGoal = new Label();
+            buttonRevealAnswer = new Button();
+            panelQuizMode = new Panel();
+            buttonQuizMode = new Button();
+            labelQuizHint = new Label();
             panelContent.SuspendLayout();
+            panelStats.SuspendLayout();
+            panelQuizMode.SuspendLayout();
             panelAI.SuspendLayout();
             panelList.SuspendLayout();
             panelConfig.SuspendLayout();
@@ -954,6 +1177,9 @@ namespace LearningAssistant.Forms
             panelConfig.Controls.Add(comboBoxSubCategory);
             panelConfig.Controls.Add(buttonOpenStatistics);
             panelConfig.Controls.Add(buttonExportErrorBook);
+            panelConfig.Controls.Add(panelStats);
+            panelConfig.Controls.Add(panelQuizMode);
+            panelConfig.Controls.Add(buttonThemeToggle);
             panelConfig.Dock = DockStyle.Fill;
             panelConfig.Location = new Point(1370, 3);
             panelConfig.Name = "panelConfig";
@@ -1142,6 +1368,274 @@ namespace LearningAssistant.Forms
             buttonExportErrorBook.UseVisualStyleBackColor = false;
             buttonExportErrorBook.Click += ButtonExportErrorBook_Click;
             // 
+            // panelStats
+            // 
+            panelStats.BackColor = Color.FromArgb(248, 249, 251);
+            panelStats.BorderStyle = BorderStyle.FixedSingle;
+            panelStats.Controls.Add(labelStudyTime);
+            panelStats.Controls.Add(labelScore);
+            panelStats.Controls.Add(labelTodayCount);
+            panelStats.Controls.Add(labelStreak);
+            panelStats.Controls.Add(labelEncouragement);
+            panelStats.Controls.Add(progressDailyGoal);
+            panelStats.Controls.Add(labelDailyGoal);
+            panelStats.Dock = DockStyle.Fill;
+            panelStats.Location = new Point(10, 445);
+            panelStats.Name = "panelStats";
+            panelStats.Size = new Size(180, 200);
+            panelStats.TabIndex = 8;
+            // 
+            // labelStudyTime
+            // 
+            labelStudyTime.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            labelStudyTime.ForeColor = Color.FromArgb(66, 133, 244);
+            labelStudyTime.Location = new Point(10, 10);
+            labelStudyTime.Name = "labelStudyTime";
+            labelStudyTime.Size = new Size(160, 25);
+            labelStudyTime.TabIndex = 0;
+            labelStudyTime.Text = "⏱️ 学习时长: 00:00";
+            // 
+            // labelScore
+            // 
+            labelScore.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            labelScore.ForeColor = Color.FromArgb(255, 152, 0);
+            labelScore.Location = new Point(10, 35);
+            labelScore.Name = "labelScore";
+            labelScore.Size = new Size(160, 25);
+            labelScore.TabIndex = 1;
+            labelScore.Text = "🏆 得分: 0";
+            // 
+            // labelTodayCount
+            // 
+            labelTodayCount.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            labelTodayCount.ForeColor = Color.FromArgb(76, 175, 80);
+            labelTodayCount.Location = new Point(10, 60);
+            labelTodayCount.Name = "labelTodayCount";
+            labelTodayCount.Size = new Size(160, 25);
+            labelTodayCount.TabIndex = 2;
+            labelTodayCount.Text = "📚 今日学习: 0 项";
+            // 
+            // labelStreak
+            // 
+            labelStreak.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            labelStreak.ForeColor = Color.FromArgb(156, 39, 176);
+            labelStreak.Location = new Point(10, 85);
+            labelStreak.Name = "labelStreak";
+            labelStreak.Size = new Size(160, 25);
+            labelStreak.TabIndex = 3;
+            labelStreak.Text = "🔥 连续学习: 0 天";
+            // 
+            // labelEncouragement
+            // 
+            labelEncouragement.Font = new Font("微软雅黑", 10F);
+            labelEncouragement.ForeColor = Color.FromArgb(100, 100, 100);
+            labelEncouragement.Location = new Point(10, 110);
+            labelEncouragement.Name = "labelEncouragement";
+            labelEncouragement.Size = new Size(160, 25);
+            labelEncouragement.TabIndex = 4;
+            labelEncouragement.Text = "💪 加油！";
+            // 
+            // progressDailyGoal
+            // 
+            progressDailyGoal.Location = new Point(10, 145);
+            progressDailyGoal.Maximum = 50;
+            progressDailyGoal.Name = "progressDailyGoal";
+            progressDailyGoal.Size = new Size(160, 15);
+            progressDailyGoal.TabIndex = 5;
+            progressDailyGoal.Value = 0;
+            // 
+            // labelDailyGoal
+            // 
+            labelDailyGoal.Font = new Font("微软雅黑", 8F);
+            labelDailyGoal.ForeColor = Color.FromArgb(120, 120, 120);
+            labelDailyGoal.Location = new Point(10, 165);
+            labelDailyGoal.Name = "labelDailyGoal";
+            labelDailyGoal.Size = new Size(160, 20);
+            labelDailyGoal.TabIndex = 6;
+            labelDailyGoal.Text = "今日目标: 0/50";
+            // 
+            // buttonRevealAnswer
+            // 
+            buttonRevealAnswer.BackColor = Color.FromArgb(66, 133, 244);
+            buttonRevealAnswer.FlatAppearance.BorderSize = 0;
+            buttonRevealAnswer.FlatStyle = FlatStyle.Flat;
+            buttonRevealAnswer.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            buttonRevealAnswer.ForeColor = Color.White;
+            buttonRevealAnswer.Location = new Point(655, 10);
+            buttonRevealAnswer.Margin = new Padding(5);
+            buttonRevealAnswer.Name = "buttonRevealAnswer";
+            buttonRevealAnswer.Size = new Size(130, 45);
+            buttonRevealAnswer.TabIndex = 11;
+            buttonRevealAnswer.Text = "👁️ 显示答案";
+            buttonRevealAnswer.UseVisualStyleBackColor = false;
+            buttonRevealAnswer.Click += ButtonRevealAnswer_Click;
+            buttonRevealAnswer.Visible = false;
+            // 
+            // panelQuizMode
+            // 
+            panelQuizMode.BackColor = Color.FromArgb(255, 248, 220);
+            panelQuizMode.BorderStyle = BorderStyle.FixedSingle;
+            panelQuizMode.Controls.Add(buttonQuizMode);
+            panelQuizMode.Controls.Add(labelQuizHint);
+            panelQuizMode.Location = new Point(10, 660);
+            panelQuizMode.Name = "panelQuizMode";
+            panelQuizMode.Size = new Size(180, 80);
+            panelQuizMode.TabIndex = 9;
+            // 
+            // buttonQuizMode
+            // 
+            buttonQuizMode.BackColor = Color.FromArgb(255, 193, 7);
+            buttonQuizMode.FlatAppearance.BorderSize = 0;
+            buttonQuizMode.FlatStyle = FlatStyle.Flat;
+            buttonQuizMode.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            buttonQuizMode.ForeColor = Color.White;
+            buttonQuizMode.Location = new Point(10, 10);
+            buttonQuizMode.Name = "buttonQuizMode";
+            buttonQuizMode.Size = new Size(160, 35);
+            buttonQuizMode.TabIndex = 0;
+            buttonQuizMode.Text = "🎮 答题模式";
+            buttonQuizMode.UseVisualStyleBackColor = false;
+            buttonQuizMode.Click += ButtonQuizMode_Click;
+            // 
+            // labelQuizHint
+            // 
+            labelQuizHint.Font = new Font("微软雅黑", 8F);
+            labelQuizHint.ForeColor = Color.FromArgb(139, 119, 101);
+            labelQuizHint.Location = new Point(10, 50);
+            labelQuizHint.Name = "labelQuizHint";
+            labelQuizHint.Size = new Size(160, 25);
+            labelQuizHint.TabIndex = 1;
+            labelQuizHint.Text = "先隐藏答案，测试自己";
+            // 
+            // buttonThemeToggle
+            // 
+            buttonThemeToggle = new Button();
+            buttonThemeToggle.BackColor = Color.FromArgb(103, 58, 183);
+            buttonThemeToggle.FlatAppearance.BorderSize = 0;
+            buttonThemeToggle.FlatStyle = FlatStyle.Flat;
+            buttonThemeToggle.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            buttonThemeToggle.ForeColor = Color.White;
+            buttonThemeToggle.Location = new Point(10, 760);
+            buttonThemeToggle.Name = "buttonThemeToggle";
+            buttonThemeToggle.Size = new Size(180, 40);
+            buttonThemeToggle.TabIndex = 10;
+            buttonThemeToggle.Text = "🌙 深色模式";
+            buttonThemeToggle.UseVisualStyleBackColor = false;
+            buttonThemeToggle.Click += ButtonThemeToggle_Click;
+            // 
+            // buttonFavorite
+            // 
+            buttonFavorite = new Button();
+            buttonFavorite.BackColor = Color.FromArgb(255, 193, 7);
+            buttonFavorite.FlatAppearance.BorderSize = 0;
+            buttonFavorite.FlatStyle = FlatStyle.Flat;
+            buttonFavorite.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            buttonFavorite.ForeColor = Color.White;
+            buttonFavorite.Location = new Point(855, 10);
+            buttonFavorite.Margin = new Padding(5);
+            buttonFavorite.Name = "buttonFavorite";
+            buttonFavorite.Size = new Size(100, 45);
+            buttonFavorite.TabIndex = 12;
+            buttonFavorite.Text = "⭐ 收藏";
+            buttonFavorite.UseVisualStyleBackColor = false;
+            buttonFavorite.Click += ButtonFavorite_Click;
+            // 
+            // buttonNote
+            // 
+            buttonNote = new Button();
+            buttonNote.BackColor = Color.FromArgb(76, 175, 80);
+            buttonNote.FlatAppearance.BorderSize = 0;
+            buttonNote.FlatStyle = FlatStyle.Flat;
+            buttonNote.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            buttonNote.ForeColor = Color.White;
+            buttonNote.Location = new Point(965, 10);
+            buttonNote.Margin = new Padding(5);
+            buttonNote.Name = "buttonNote";
+            buttonNote.Size = new Size(100, 45);
+            buttonNote.TabIndex = 13;
+            buttonNote.Text = "📝 笔记";
+            buttonNote.UseVisualStyleBackColor = false;
+            buttonNote.Click += ButtonNote_Click;
+            // 
+            // panelNotes
+            // 
+            panelNotes = new Panel();
+            panelNotes.BackColor = Color.FromArgb(255, 253, 238);
+            panelNotes.BorderStyle = BorderStyle.FixedSingle;
+            panelNotes.Controls.Add(richTextBoxNotes);
+            panelNotes.Controls.Add(labelNotesTitle);
+            panelNotes.Dock = DockStyle.Fill;
+            panelNotes.Location = new Point(3, 3);
+            panelNotes.Name = "panelNotes";
+            panelNotes.Size = new Size(1155, 150);
+            panelNotes.TabIndex = 7;
+            panelNotes.Visible = false;
+            // 
+            // richTextBoxNotes
+            // 
+            richTextBoxNotes.BackColor = Color.FromArgb(255, 253, 238);
+            richTextBoxNotes.Dock = DockStyle.Fill;
+            richTextBoxNotes.Font = new Font("微软雅黑", 11F);
+            richTextBoxNotes.ForeColor = Color.FromArgb(60, 80, 100);
+            richTextBoxNotes.Location = new Point(0, 30);
+            richTextBoxNotes.Name = "richTextBoxNotes";
+            richTextBoxNotes.Size = new Size(1153, 118);
+            richTextBoxNotes.TabIndex = 1;
+            richTextBoxNotes.Text = "";
+            richTextBoxNotes.TextChanged += RichTextBoxNotes_TextChanged;
+            // 
+            // labelNotesTitle
+            // 
+            labelNotesTitle.Dock = DockStyle.Top;
+            labelNotesTitle.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            labelNotesTitle.ForeColor = Color.FromArgb(139, 119, 101);
+            labelNotesTitle.Location = new Point(0, 0);
+            labelNotesTitle.Name = "labelNotesTitle";
+            labelNotesTitle.Padding = new Padding(10, 0, 0, 0);
+            labelNotesTitle.Size = new Size(1155, 30);
+            labelNotesTitle.TabIndex = 0;
+            labelNotesTitle.Text = "📝 我的笔记";
+            labelNotesTitle.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // panelExamples
+            // 
+            panelExamples = new Panel();
+            panelExamples.BackColor = Color.FromArgb(248, 250, 252);
+            panelExamples.BorderStyle = BorderStyle.FixedSingle;
+            panelExamples.Controls.Add(listBoxExamples);
+            panelExamples.Controls.Add(labelExamplesTitle);
+            panelExamples.Dock = DockStyle.Fill;
+            panelExamples.Location = new Point(3, 3);
+            panelExamples.Name = "panelExamples";
+            panelExamples.Size = new Size(1155, 120);
+            panelExamples.TabIndex = 8;
+            panelExamples.Visible = false;
+            // 
+            // listBoxExamples
+            // 
+            listBoxExamples.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            listBoxExamples.BackColor = Color.FromArgb(248, 250, 252);
+            listBoxExamples.Font = new Font("微软雅黑", 10F);
+            listBoxExamples.FormattingEnabled = true;
+            listBoxExamples.ItemHeight = 22;
+            listBoxExamples.Location = new Point(0, 30);
+            listBoxExamples.Name = "listBoxExamples";
+            listBoxExamples.Size = new Size(1153, 88);
+            listBoxExamples.TabIndex = 1;
+            // 
+            // labelExamplesTitle
+            // 
+            labelExamplesTitle.Dock = DockStyle.Top;
+            labelExamplesTitle.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            labelExamplesTitle.ForeColor = Color.FromArgb(66, 133, 244);
+            labelExamplesTitle.Location = new Point(0, 0);
+            labelExamplesTitle.Name = "labelExamplesTitle";
+            labelExamplesTitle.Padding = new Padding(10, 0, 0, 0);
+            labelExamplesTitle.Size = new Size(1155, 30);
+            labelExamplesTitle.TabIndex = 0;
+            labelExamplesTitle.Text = "📚 例句参考";
+            labelExamplesTitle.TextAlign = ContentAlignment.MiddleLeft;
+            // 
             // mainTableLayoutPanel
             // 
             mainTableLayoutPanel.ColumnCount = 3;
@@ -1202,6 +1696,9 @@ namespace LearningAssistant.Forms
             buttonsFlowLayoutPanel.Controls.Add(buttonNext);
             buttonsFlowLayoutPanel.Controls.Add(buttonPronounce);
             buttonsFlowLayoutPanel.Controls.Add(buttonAddToPdf);
+            buttonsFlowLayoutPanel.Controls.Add(buttonRevealAnswer);
+            buttonsFlowLayoutPanel.Controls.Add(buttonFavorite);
+            buttonsFlowLayoutPanel.Controls.Add(buttonNote);
             buttonsFlowLayoutPanel.Controls.Add(buttonExit);
             buttonsFlowLayoutPanel.Dock = DockStyle.Fill;
             buttonsFlowLayoutPanel.Location = new Point(3, 702);
@@ -1273,8 +1770,606 @@ namespace LearningAssistant.Forms
             settingsFlowLayoutPanel.ResumeLayout(false);
             pronunciationFlowLayoutPanel.ResumeLayout(false);
             pronunciationFlowLayoutPanel.PerformLayout();
+            panelStats.ResumeLayout(false);
+            panelStats.PerformLayout();
+            panelQuizMode.ResumeLayout(false);
+            panelQuizMode.PerformLayout();
             ResumeLayout(false);
         }
+        #endregion
+
+        #region Enhanced Features Initialization
+
+        private void InitializeEnhancedFeatures()
+        {
+            _studyTimer.Interval = 1000;
+            _studyTimer.Tick += StudyTimer_Tick;
+            _studyTimer.Start();
+
+            _gameTimer = new System.Windows.Forms.Timer();
+            _gameTimer.Interval = 1000;
+            _gameTimer.Tick += GameTimer_Tick;
+
+            LoadStudyStats();
+            LoadBadges();
+            LoadChallenges();
+            UpdateEncouragement();
+            UpdateLevelDisplay();
+            UpdateBadgesDisplay();
+            UpdateChallengesDisplay();
+        }
+
+        /// <summary>
+        /// 加载学习统计数据
+        /// </summary>
+        private void LoadStudyStats()
+        {
+            try
+            {
+                string statsPath = Path.Combine(Paths.DataDirectory, "study_stats.json");
+                if (File.Exists(statsPath))
+                {
+                    string json = File.ReadAllText(statsPath);
+                    var stats = JsonSerializer.Deserialize<StudyStats>(json);
+                    if (stats != null)
+                    {
+                        _todayLearnedCount = stats.TodayLearnedCount;
+                        _streakDays = stats.StreakDays;
+                        _score = stats.TotalScore;
+                        _totalLearnedCount = stats.TotalLearnedCount;
+                        _quizCorrectCount = stats.QuizCorrectCount;
+                        _favoriteCount = stats.FavoriteCount;
+                        _noteCount = stats.NoteCount;
+                        _xp = stats.XP;
+                        _currentLevel = stats.CurrentLevel;
+                        _levelTitle = _currentLevel < _levelTitles.Count ? _levelTitles[_currentLevel] : "圣人";
+                        _xpToNextLevel = (_currentLevel + 1) * 100;
+
+                        if (stats.LastStudyDate != DateTime.Today.Date)
+                        {
+                            _todayLearnedCount = 0;
+                            if (stats.LastStudyDate == DateTime.Today.Date.AddDays(-1))
+                            {
+                                _streakDays++;
+                            }
+                            else if (stats.LastStudyDate < DateTime.Today.Date.AddDays(-1))
+                            {
+                                _streakDays = 1;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    _streakDays = 1;
+                }
+            }
+            catch
+            {
+                _streakDays = 1;
+            }
+
+            UpdateStatsDisplay();
+        }
+
+        /// <summary>
+        /// 保存学习统计数据到文件
+        /// </summary>
+        private void SaveStudyStats()
+        {
+            try
+            {
+                var stats = new StudyStats
+                {
+                    TodayLearnedCount = _todayLearnedCount,
+                    StreakDays = _streakDays,
+                    TotalScore = _score,
+                    LastStudyDate = DateTime.Today.Date,
+                    TotalLearnedCount = _totalLearnedCount,
+                    QuizCorrectCount = _quizCorrectCount,
+                    FavoriteCount = _favoriteCount,
+                    NoteCount = _noteCount,
+                    XP = _xp,
+                    CurrentLevel = _currentLevel
+                };
+
+                string statsPath = Path.Combine(Paths.DataDirectory, "study_stats.json");
+                string json = JsonSerializer.Serialize(stats, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(statsPath, json);
+            }
+            catch
+            {
+            }
+        }
+
+        /// <summary>
+        /// 从文件加载已解锁的徽章
+        /// </summary>
+        private void LoadBadges()
+        {
+            try
+            {
+                string badgesPath = Path.Combine(Paths.DataDirectory, "badges.json");
+                if (File.Exists(badgesPath))
+                {
+                    string json = File.ReadAllText(badgesPath);
+                    _unlockedBadges = JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
+                    foreach (var badgeId in _unlockedBadges)
+                    {
+                        if (_badges.TryGetValue(badgeId, out var badge))
+                        {
+                            badge.Unlocked = true;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        /// <summary>
+        /// 保存已解锁的徽章到文件
+        /// </summary>
+        private void SaveBadges()
+        {
+            try
+            {
+                string badgesPath = Path.Combine(Paths.DataDirectory, "badges.json");
+                string json = JsonSerializer.Serialize(_unlockedBadges, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(badgesPath, json);
+            }
+            catch
+            {
+            }
+        }
+
+        /// <summary>
+        /// 检查并解锁达成的徽章
+        /// </summary>
+        private void CheckBadgeUnlock()
+        {
+            List<string> newlyUnlocked = new List<string>();
+
+            TryUnlockBadge("first_blood", _totalLearnedCount >= 1, newlyUnlocked);
+            TryUnlockBadge("streak_3", _streakDays >= 3, newlyUnlocked);
+            TryUnlockBadge("streak_7", _streakDays >= 7, newlyUnlocked);
+            TryUnlockBadge("streak_30", _streakDays >= 30, newlyUnlocked);
+            TryUnlockBadge("learn_100", _totalLearnedCount >= 100, newlyUnlocked);
+            TryUnlockBadge("learn_500", _totalLearnedCount >= 500, newlyUnlocked);
+            TryUnlockBadge("learn_1000", _totalLearnedCount >= 1000, newlyUnlocked);
+            TryUnlockBadge("perfect_day", _todayLearnedCount >= 50, newlyUnlocked);
+            TryUnlockBadge("quiz_master", _quizCorrectCount >= 20, newlyUnlocked);
+            TryUnlockBadge("favorite_collector", _favoriteCount >= 20, newlyUnlocked);
+            TryUnlockBadge("note_taker", _noteCount >= 10, newlyUnlocked);
+
+            if (newlyUnlocked.Count > 0)
+            {
+                SaveBadges();
+                UpdateBadgesDisplay();
+                ShowBadgeNotification(newlyUnlocked);
+            }
+        }
+
+        /// <summary>
+        /// 尝试解锁徽章的安全方法
+        /// </summary>
+        /// <param name="badgeId">徽章ID</param>
+        /// <param name="condition">解锁条件</param>
+        /// <param name="newlyUnlocked">新解锁的徽章列表</param>
+        private void TryUnlockBadge(string badgeId, bool condition, List<string> newlyUnlocked)
+        {
+            if (condition && _badges.TryGetValue(badgeId, out var badge) && !badge.Unlocked)
+            {
+                UnlockBadge(badgeId, newlyUnlocked);
+            }
+        }
+
+        /// <summary>
+        /// 解锁指定徽章并记录
+        /// </summary>
+        /// <param name="badgeId">徽章ID</param>
+        /// <param name="newlyUnlocked">新解锁的徽章列表</param>
+        private void UnlockBadge(string badgeId, List<string> newlyUnlocked)
+        {
+            if (_badges.TryGetValue(badgeId, out var badge))
+            {
+                badge.Unlocked = true;
+                _unlockedBadges.Add(badgeId);
+                newlyUnlocked.Add(badgeId);
+                _score += 50;
+                _xp += 50;
+                CheckLevelUp();
+            }
+        }
+
+        /// <summary>
+        /// 显示徽章解锁通知
+        /// </summary>
+        /// <param name="badges">已解锁的徽章ID列表</param>
+        private void ShowBadgeNotification(List<string> badges)
+        {
+            string message = "🎉 解锁成就！\n\n";
+            foreach (var badgeId in badges)
+            {
+                if (_badges.TryGetValue(badgeId, out var badge))
+                {
+                    message += $"{badge.Emoji} {badge.Name}\n{badge.Description}\n\n";
+                }
+            }
+            message += "获得 50 积分奖励！";
+            MessageBox.Show(message, "成就解锁", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        /// <summary>
+        /// 更新徽章显示面板
+        /// </summary>
+        private void UpdateBadgesDisplay()
+        {
+            if (flowLayoutPanelBadges != null)
+            {
+                flowLayoutPanelBadges.Controls.Clear();
+
+                foreach (var badge in _badges.Values)
+                {
+                    Label label = new Label();
+                    label.Font = new Font("微软雅黑", 14F);
+                    label.Text = badge.Unlocked ? badge.Emoji : "🔒";
+                    label.Size = new Size(40, 40);
+                    label.TextAlign = ContentAlignment.MiddleCenter;
+                    label.Cursor = Cursors.Hand;
+                    label.Tag = badge;
+                    label.Click += Badge_Click;
+                    _toolTip.SetToolTip(label, badge.Unlocked ? $"{badge.Name}: {badge.Description}" : "未解锁");
+                    flowLayoutPanelBadges.Controls.Add(label);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 徽章点击事件处理器
+        /// </summary>
+        private void Badge_Click(object? sender, EventArgs e)
+        {
+            if (sender is Label label && label.Tag is Badge badge)
+            {
+                MessageBox.Show($"{badge.Emoji} {badge.Name}\n\n{badge.Description}",
+                    badge.Unlocked ? "成就详情" : "锁定的成就",
+                    MessageBoxButtons.OK,
+                    badge.Unlocked ? MessageBoxIcon.Information : MessageBoxIcon.Question);
+            }
+        }
+
+        /// <summary>
+        /// 加载每日挑战任务
+        /// </summary>
+        private void LoadChallenges()
+        {
+            try
+            {
+                string challengesPath = Path.Combine(Paths.DataDirectory, "challenges.json");
+
+                if (File.Exists(challengesPath))
+                {
+                    string json = File.ReadAllText(challengesPath);
+                    var saved = JsonSerializer.Deserialize<List<Challenge>>(json);
+
+                    if (saved != null && saved.Any() && saved[0].Current != 0)
+                    {
+                        DateTime lastDate = File.GetLastWriteTime(challengesPath);
+                        if (lastDate.Date == DateTime.Today.Date)
+                        {
+                            _dailyChallenges = saved;
+                            return;
+                        }
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            _dailyChallenges = new List<Challenge>
+            {
+                new Challenge("daily_learn", "每日学习", "学习10个内容", "📚", 10, 30),
+                new Challenge("daily_quiz", "答题挑战", "答题模式答对5题", "🎯", 5, 50),
+                new Challenge("daily_streak", "连续打卡", "今天完成学习", "🔥", 1, 20),
+                new Challenge("daily_favorite", "收藏达人", "收藏3个内容", "❤️", 3, 25)
+            };
+        }
+
+        /// <summary>
+        /// 保存每日挑战进度
+        /// </summary>
+        private void SaveChallenges()
+        {
+            try
+            {
+                string challengesPath = Path.Combine(Paths.DataDirectory, "challenges.json");
+                string json = JsonSerializer.Serialize(_dailyChallenges, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(challengesPath, json);
+            }
+            catch
+            {
+            }
+        }
+
+        /// <summary>
+        /// 更新挑战任务显示面板
+        /// </summary>
+        private void UpdateChallengesDisplay()
+        {
+            if (flowLayoutPanelChallenges != null)
+            {
+                flowLayoutPanelChallenges.Controls.Clear();
+
+                foreach (var challenge in _dailyChallenges)
+                {
+                    Panel panel = new Panel();
+                    panel.Size = new Size(160, 70);
+                    panel.BackColor = challenge.Completed ? Color.FromArgb(200, 255, 200) : Color.FromArgb(240, 240, 240);
+                    panel.BorderStyle = BorderStyle.FixedSingle;
+
+                    Label labelName = new Label();
+                    labelName.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+                    labelName.Text = $"{challenge.Emoji} {challenge.Name}";
+                    labelName.Size = new Size(150, 20);
+                    labelName.Location = new Point(5, 5);
+
+                    Label labelProgress = new Label();
+                    labelProgress.Font = new Font("微软雅黑", 9F);
+                    labelProgress.Text = challenge.Completed ? $"已完成 ✓ +{challenge.Reward}分" : $"{challenge.Current}/{challenge.Target}";
+                    labelProgress.Size = new Size(150, 20);
+                    labelProgress.Location = new Point(5, 30);
+
+                    ProgressBar progress = new ProgressBar();
+                    progress.Size = new Size(150, 12);
+                    progress.Location = new Point(5, 50);
+                    progress.Maximum = challenge.Target;
+                    progress.Value = Math.Min(challenge.Current, challenge.Target);
+
+                    panel.Controls.Add(labelName);
+                    panel.Controls.Add(labelProgress);
+                    panel.Controls.Add(progress);
+
+                    if (challenge.Completed && !challenge.Claimed)
+                    {
+                        Button claimBtn = new Button();
+                        claimBtn.Text = "领取";
+                        claimBtn.Size = new Size(50, 20);
+                        claimBtn.Location = new Point(100, 45);
+                        claimBtn.Click += (s, e) => ClaimChallenge(challenge);
+                        panel.Controls.Add(claimBtn);
+                    }
+
+                    flowLayoutPanelChallenges.Controls.Add(panel);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 领取挑战奖励
+        /// </summary>
+        /// <param name="challenge">要领取奖励的挑战</param>
+        private void ClaimChallenge(Challenge challenge)
+        {
+            if (!challenge.Claimed)
+            {
+                challenge.Claimed = true;
+                _score += challenge.Reward;
+                _xp += challenge.Reward;
+                CheckLevelUp();
+                UpdateStatsDisplay();
+                UpdateChallengesDisplay();
+                SaveChallenges();
+                SaveStudyStats();
+                _soundService?.PlaySuccess();
+                MessageBox.Show($"🎁 领取成功！获得 {challenge.Reward} 积分！", "挑战奖励", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+
+        /// <summary>
+        /// 更新所有挑战任务的进度
+        /// </summary>
+        private void UpdateChallengesProgress()
+        {
+            foreach (var challenge in _dailyChallenges)
+            {
+                switch (challenge.Id)
+                {
+                    case "daily_learn":
+                        challenge.Current = _todayLearnedCount;
+                        break;
+                    case "daily_quiz":
+                        challenge.Current = _quizCorrectCount;
+                        break;
+                    case "daily_streak":
+                        challenge.Current = _todayLearnedCount > 0 ? 1 : 0;
+                        break;
+                    case "daily_favorite":
+                        challenge.Current = _favoriteCount;
+                        break;
+                }
+
+                if (challenge.Current >= challenge.Target && !challenge.Completed)
+                {
+                    challenge.Completed = true;
+                }
+            }
+
+            SaveChallenges();
+            UpdateChallengesDisplay();
+        }
+
+        /// <summary>
+        /// 检查是否满足升级条件并进行升级
+        /// </summary>
+        private void CheckLevelUp()
+        {
+            while (_xp >= _xpToNextLevel && _currentLevel < _levelTitles.Count - 1)
+            {
+                _xp -= _xpToNextLevel;
+                _currentLevel++;
+                _levelTitle = _levelTitles[_currentLevel];
+                _xpToNextLevel = (_currentLevel + 1) * 100;
+
+                _soundService?.PlaySuccess();
+                StartConfetti();
+
+                if (InvokeRequired)
+                {
+                    Invoke(new Action(() =>
+                        MessageBox.Show($"🎉 恭喜升级！\n\n你现在是「{_levelTitle}」级别！", "升级成功", MessageBoxButtons.OK, MessageBoxIcon.Information)));
+                }
+                else
+                {
+                    MessageBox.Show($"🎉 恭喜升级！\n\n你现在是「{_levelTitle}」级别！", "升级成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+
+            UpdateLevelDisplay();
+        }
+
+        /// <summary>
+        /// 更新等级显示信息
+        /// </summary>
+        private void UpdateLevelDisplay()
+        {
+            if (labelLevel != null)
+            {
+                labelLevel.Text = $"🏅 {_levelTitle} Lv.{_currentLevel + 1}";
+            }
+
+            if (progressXP != null)
+            {
+                progressXP.Maximum = _xpToNextLevel;
+                progressXP.Value = _xp;
+            }
+
+            if (labelXP != null)
+            {
+                labelXP.Text = $"经验值: {_xp}/{_xpToNextLevel}";
+            }
+        }
+
+        /// <summary>
+        /// 启动猜词小游戏
+        /// </summary>
+        private void StartMiniGame()
+        {
+            _isGameActive = true;
+            _gameScore = 0;
+            panelGame.Visible = true;
+            _gameTimer.Start();
+            NextGameQuestion();
+        }
+
+        /// <summary>
+        /// 生成下一道游戏题目
+        /// </summary>
+        private void NextGameQuestion()
+        {
+            if (_currentItem == null) return;
+
+            labelGameQuestion.Text = $"❓ {_currentItem.GetMainContent()} 的意思是？";
+            textBoxGameAnswer.Text = "";
+            labelGameResult.Text = "";
+        }
+
+        /// <summary>
+        /// 处理游戏提交答案
+        /// </summary>
+        private void ButtonGameSubmit_Click(object? sender, EventArgs e)
+        {
+            if (_currentItem == null) return;
+
+            string userAnswer = textBoxGameAnswer.Text.Trim().ToLower();
+            string correctAnswer = _currentItem.GetDisplayText().ToLower();
+
+            if (correctAnswer.Contains(userAnswer) || userAnswer.Contains(correctAnswer))
+            {
+                _gameScore += 10;
+                _score += 10;
+                _xp += 10;
+                CheckLevelUp();
+                labelGameResult.Text = $"✅ 正确！得分: {_gameScore}";
+                _soundService?.PlaySuccess();
+            }
+            else
+            {
+                labelGameResult.Text = $"❌ 错误！正确答案: {_currentItem.GetDisplayText()}";
+                _soundService?.PlayError();
+            }
+
+            UpdateStatsDisplay();
+            NextGameQuestion();
+        }
+
+        /// <summary>
+        /// 游戏计时器回调（预留）
+        /// </summary>
+        private void GameTimer_Tick(object? sender, EventArgs e)
+        {
+        }
+
+        /// <summary>
+        /// 更新统计信息显示
+        /// </summary>
+        private void UpdateStatsDisplay()
+        {
+            if (labelStudyTime != null)
+                labelStudyTime.Text = $"⏱️ 学习时长: {_studyDuration.ToString(@"hh\:mm")}";
+
+            if (labelScore != null)
+                labelScore.Text = $"🏆 得分: {_score}";
+
+            if (labelTodayCount != null)
+                labelTodayCount.Text = $"📚 今日学习: {_todayLearnedCount} 项";
+
+            if (labelStreak != null)
+                labelStreak.Text = $"🔥 连续学习: {_streakDays} 天";
+
+            if (progressDailyGoal != null)
+            {
+                progressDailyGoal.Value = Math.Min(_todayLearnedCount, 50);
+            }
+
+            if (labelDailyGoal != null)
+                labelDailyGoal.Text = $"今日目标: {_todayLearnedCount}/50";
+        }
+
+        /// <summary>
+        /// 更新鼓励语显示
+        /// </summary>
+        private void UpdateEncouragement()
+        {
+            if (labelEncouragement != null)
+            {
+                labelEncouragement.Text = _encouragements[_random.Next(_encouragements.Length)];
+            }
+        }
+
+        /// <summary>
+        /// 学习计时器回调
+        /// </summary>
+        private void StudyTimer_Tick(object? sender, EventArgs e)
+        {
+            _studyDuration = _studyDuration.Add(TimeSpan.FromSeconds(1));
+            UpdateStatsDisplay();
+        }
+
+        /// <summary>
+        /// 增加分数并保存
+        /// </summary>
+        /// <param name="points">要增加的分数</param>
+        private void IncrementScore(int points)
+        {
+            _score += points;
+            _todayLearnedCount++;
+            UpdateStatsDisplay();
+            SaveStudyStats();
+        }
+
         #endregion
 
         #region List Management
@@ -1324,7 +2419,7 @@ namespace LearningAssistant.Forms
         public void EnableListHighlighting(bool enable)
         {
             if (listBoxItems == null) return;
-            
+
             listBoxItems.DrawMode = enable ? DrawMode.OwnerDrawFixed : DrawMode.Normal;
             if (enable)
             {
@@ -1344,14 +2439,14 @@ namespace LearningAssistant.Forms
             e.DrawBackground();
 
             bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-            
+
             using (var brush = new SolidBrush(isSelected ? Color.FromArgb(76, 175, 80) : listBox.BackColor))
             {
                 e.Graphics.FillRectangle(brush, e.Bounds);
             }
 
             string text = listBox.Items[e.Index].ToString() ?? string.Empty;
-            
+
             using (var foreBrush = new SolidBrush(isSelected ? Color.White : Color.Black))
             {
                 e.Graphics.DrawString(text, e.Font, foreBrush, e.Bounds, StringFormat.GenericDefault);
@@ -1500,6 +2595,21 @@ namespace LearningAssistant.Forms
         {
             _soundService?.PlaySuccess();
             StartConfetti();
+
+            int points = _isQuizMode && !_answerRevealed ? 20 : 10;
+            IncrementScore(points);
+
+            _totalLearnedCount++;
+            if (_isQuizMode && !_answerRevealed)
+            {
+                _quizCorrectCount++;
+                labelDisplay.Text = _correctMessages[_random.Next(_correctMessages.Length)];
+            }
+
+            UpdateEncouragement();
+            CheckBadgeUnlock();
+            UpdateChallengesProgress();
+
             MarkAsKnownClicked?.Invoke(this, EventArgs.Empty);
         }
 
@@ -1507,6 +2617,12 @@ namespace LearningAssistant.Forms
         {
             _soundService?.PlayError();
             ShakeWindow();
+
+            if (_isQuizMode && !_answerRevealed)
+            {
+                labelDisplay.Text = _wrongMessages[_random.Next(_wrongMessages.Length)];
+            }
+
             MarkAsUnknownClicked?.Invoke(this, EventArgs.Empty);
         }
 
@@ -1710,6 +2826,267 @@ namespace LearningAssistant.Forms
             ExportErrorBookClicked?.Invoke(this, EventArgs.Empty);
         }
 
+        private void ButtonRevealAnswer_Click(object? sender, EventArgs e)
+        {
+            _answerRevealed = true;
+            buttonRevealAnswer.Visible = false;
+            labelDisplay.Visible = true;
+
+            if (_currentItem != null)
+            {
+                labelDisplay.Text = _currentItem.GetDisplayText();
+            }
+        }
+
+        private void ButtonQuizMode_Click(object? sender, EventArgs e)
+        {
+            _isQuizMode = !_isQuizMode;
+
+            if (_isQuizMode)
+            {
+                buttonQuizMode.BackColor = Color.FromArgb(76, 175, 80);
+                buttonQuizMode.Text = "📖 学习模式";
+                labelQuizHint.Text = "答案已隐藏";
+                HideAnswer();
+            }
+            else
+            {
+                buttonQuizMode.BackColor = Color.FromArgb(255, 193, 7);
+                buttonQuizMode.Text = "🎮 答题模式";
+                labelQuizHint.Text = "先隐藏答案，测试自己";
+                ShowAnswer();
+            }
+        }
+
+        private void HideAnswer()
+        {
+            if (labelDisplay != null)
+            {
+                labelDisplay.Text = "❓ 请猜测答案";
+            }
+            _answerRevealed = false;
+            buttonRevealAnswer.Visible = true;
+        }
+
+        private void ShowAnswer()
+        {
+            if (labelDisplay != null && _currentItem != null)
+            {
+                labelDisplay.Text = _currentItem.GetDisplayText();
+            }
+            _answerRevealed = true;
+            buttonRevealAnswer.Visible = false;
+        }
+
+        private void ButtonThemeToggle_Click(object? sender, EventArgs e)
+        {
+            if (_themeService.CurrentTheme == ThemeMode.Light)
+            {
+                _themeService.SetTheme(ThemeMode.Dark);
+                buttonThemeToggle.Text = "☀️ 浅色模式";
+            }
+            else
+            {
+                _themeService.SetTheme(ThemeMode.Light);
+                buttonThemeToggle.Text = "🌙 深色模式";
+            }
+        }
+
+        private bool _isFavorite = false;
+
+        private void ButtonFavorite_Click(object? sender, EventArgs e)
+        {
+            _isFavorite = !_isFavorite;
+
+            if (_isFavorite)
+            {
+                buttonFavorite.BackColor = Color.FromArgb(255, 152, 0);
+                buttonFavorite.Text = "❤️ 已收藏";
+                _soundService?.PlaySuccess();
+                _favoriteCount++;
+                SaveFavorite();
+                CheckBadgeUnlock();
+                UpdateChallengesProgress();
+            }
+            else
+            {
+                buttonFavorite.BackColor = Color.FromArgb(255, 193, 7);
+                buttonFavorite.Text = "⭐ 收藏";
+                _favoriteCount = Math.Max(0, _favoriteCount - 1);
+                RemoveFavorite();
+            }
+        }
+
+        private void SaveFavorite()
+        {
+            if (_currentItem == null) return;
+
+            try
+            {
+                string favoritesPath = Path.Combine(Paths.DataDirectory, "favorites.json");
+                List<string> favorites = new List<string>();
+
+                if (File.Exists(favoritesPath))
+                {
+                    string json = File.ReadAllText(favoritesPath);
+                    favorites = JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
+                }
+
+                string content = _currentItem.GetMainContent();
+                if (!favorites.Contains(content))
+                {
+                    favorites.Add(content);
+                    string json = JsonSerializer.Serialize(favorites, new JsonSerializerOptions { WriteIndented = true });
+                    File.WriteAllText(favoritesPath, json);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private void RemoveFavorite()
+        {
+            if (_currentItem == null) return;
+
+            try
+            {
+                string favoritesPath = Path.Combine(Paths.DataDirectory, "favorites.json");
+
+                if (File.Exists(favoritesPath))
+                {
+                    string json = File.ReadAllText(favoritesPath);
+                    List<string> favorites = JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
+
+                    string content = _currentItem.GetMainContent();
+                    favorites.Remove(content);
+
+                    string newJson = JsonSerializer.Serialize(favorites, new JsonSerializerOptions { WriteIndented = true });
+                    File.WriteAllText(favoritesPath, newJson);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private void ButtonNote_Click(object? sender, EventArgs e)
+        {
+            panelNotes.Visible = !panelNotes.Visible;
+
+            if (panelNotes.Visible)
+            {
+                buttonNote.BackColor = Color.FromArgb(156, 39, 176);
+                buttonNote.Text = "📝 笔记 (开)";
+                LoadNotes();
+            }
+            else
+            {
+                buttonNote.BackColor = Color.FromArgb(76, 175, 80);
+                buttonNote.Text = "📝 笔记";
+            }
+        }
+
+        private void LoadNotes()
+        {
+            if (_currentItem == null || richTextBoxNotes == null) return;
+
+            try
+            {
+                string notesPath = Path.Combine(Paths.DataDirectory, "notes.json");
+
+                if (File.Exists(notesPath))
+                {
+                    string json = File.ReadAllText(notesPath);
+                    var notesDict = JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
+
+                    string key = _currentItem.GetMainContent();
+                    if (notesDict.TryGetValue(key, out string note))
+                    {
+                        richTextBoxNotes.Text = note;
+                    }
+                    else
+                    {
+                        richTextBoxNotes.Text = "";
+                    }
+                }
+                else
+                {
+                    richTextBoxNotes.Text = "";
+                }
+            }
+            catch
+            {
+                richTextBoxNotes.Text = "";
+            }
+        }
+
+        private void SaveNotes()
+        {
+            if (_currentItem == null || richTextBoxNotes == null) return;
+
+            try
+            {
+                string notesPath = Path.Combine(Paths.DataDirectory, "notes.json");
+                Dictionary<string, string> notesDict = new Dictionary<string, string>();
+
+                if (File.Exists(notesPath))
+                {
+                    string json = File.ReadAllText(notesPath);
+                    notesDict = JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
+                }
+
+                string key = _currentItem.GetMainContent();
+                notesDict[key] = richTextBoxNotes.Text;
+
+                string jsonOutput = JsonSerializer.Serialize(notesDict, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(notesPath, jsonOutput);
+            }
+            catch
+            {
+            }
+        }
+
+        private void RichTextBoxNotes_TextChanged(object? sender, EventArgs e)
+        {
+            SaveNotes();
+
+            if (richTextBoxNotes != null && !string.IsNullOrWhiteSpace(richTextBoxNotes.Text))
+            {
+                _noteCount++;
+                CheckBadgeUnlock();
+            }
+        }
+
+        private void LoadExamples()
+        {
+            if (_currentItem == null || listBoxExamples == null) return;
+
+            listBoxExamples.Items.Clear();
+
+            var examples = GetExamplesForItem(_currentItem.GetMainContent());
+            foreach (var example in examples)
+            {
+                listBoxExamples.Items.Add(example);
+            }
+
+            panelExamples.Visible = examples.Count > 0;
+        }
+
+        private List<string> GetExamplesForItem(string content)
+        {
+            var examples = new List<string>();
+
+            if (content.Length >= 2)
+            {
+                examples.Add($"这个词可以这样用：{content}是一个常用词。");
+                examples.Add($"例如：我今天学到了'{content}'这个词。");
+                examples.Add($"在句子中使用：学习'{content}'让我受益匪浅。");
+            }
+
+            return examples;
+        }
+
         private void LearningForm_KeyDown(object? sender, KeyEventArgs e)
         {
             switch (e.KeyCode)
@@ -1756,6 +3133,15 @@ namespace LearningAssistant.Forms
                 {
                     components.Dispose();
                 }
+
+                _studyTimer?.Stop();
+                _studyTimer?.Dispose();
+
+                _gameTimer?.Stop();
+                _gameTimer?.Dispose();
+
+                _confettiTimer?.Stop();
+                _confettiTimer?.Dispose();
             }
 
             _disposed = true;
@@ -1774,6 +3160,20 @@ namespace LearningAssistant.Forms
             {
                 Index = index;
             }
+        }
+
+        public class StudyStats
+        {
+            public int TodayLearnedCount { get; set; }
+            public int StreakDays { get; set; }
+            public int TotalScore { get; set; }
+            public DateTime LastStudyDate { get; set; }
+            public int TotalLearnedCount { get; set; }
+            public int QuizCorrectCount { get; set; }
+            public int FavoriteCount { get; set; }
+            public int NoteCount { get; set; }
+            public int XP { get; set; }
+            public int CurrentLevel { get; set; }
         }
 
     }

@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using LearningAssistant.Models.User;
 
 namespace LearningAssistant.Data.Database
 {
@@ -34,7 +33,7 @@ namespace LearningAssistant.Data.Database
                 var appFolder = Path.Combine(appDataPath, "LearningAssistant");
                 if (!Directory.Exists(appFolder))
                     Directory.CreateDirectory(appFolder);
-                
+
                 return Path.Combine(appFolder, "learning_assistant.db");
             }
             catch (Exception)
@@ -54,8 +53,8 @@ namespace LearningAssistant.Data.Database
             optionsBuilder.UseSqlite(connectionString);
 
 #if DEBUG
-            // 仅在调试模式下输出 SQL 日志，便于排查问题
-            optionsBuilder.LogTo(Console.WriteLine, Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.CommandExecuted);
+            // 仅在调试模式下输出 SQL 日志，便于排查问题 
+            optionsBuilder.LogTo(Console.WriteLine, Microsoft.Extensions.Logging.LogLevel.Debug);
             optionsBuilder.EnableSensitiveDataLogging();
 #endif
         }
@@ -65,7 +64,7 @@ namespace LearningAssistant.Data.Database
             // 用户配置
             modelBuilder.Entity<UserProfileEntity>()
                 .HasKey(u => u.UserId);
-            
+
             // 添加索引
             modelBuilder.Entity<UserProfileEntity>()
                 .HasIndex(u => u.UserName);
@@ -79,7 +78,7 @@ namespace LearningAssistant.Data.Database
             // 分类进度配置
             modelBuilder.Entity<CategoryProgressEntity>()
                 .HasKey(c => new { c.UserId, c.CategoryName });
-            
+
             // 添加索引
             modelBuilder.Entity<CategoryProgressEntity>()
                 .HasIndex(c => c.UserId);
@@ -89,7 +88,7 @@ namespace LearningAssistant.Data.Database
             // 学习记录配置
             modelBuilder.Entity<LearningRecordEntity>()
                 .HasKey(l => l.Id);
-            
+
             // 添加索引
             modelBuilder.Entity<LearningRecordEntity>()
                 .HasIndex(l => l.UserId);
@@ -105,7 +104,7 @@ namespace LearningAssistant.Data.Database
             // 提醒配置
             modelBuilder.Entity<ReminderEntity>()
                 .HasKey(r => r.Id);
-            
+
             // 添加索引
             modelBuilder.Entity<ReminderEntity>()
                 .HasIndex(r => r.UserId);
