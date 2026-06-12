@@ -87,8 +87,8 @@ namespace LearningAssistant.Data.Database
             }
 
             // 计算总进度
-            profile.LearningProgress.TotalItemsStudied = entity.CategoryProgresses?.Sum(c => c.TotalTestCount) ?? 0;
-            profile.LearningProgress.TotalItemsMastered = entity.CategoryProgresses?.Sum(c => c.CorrectCount) ?? 0;
+            // TotalItemsStudied / TotalItemsMastered 已改为计算属性，自动从 CategoryProgresses 聚合
+            // 无需手动赋值
 
             return profile;
         }

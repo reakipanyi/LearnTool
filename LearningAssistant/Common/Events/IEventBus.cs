@@ -22,12 +22,20 @@ namespace LearningAssistant.Common.Events
         void Unsubscribe<TEvent>(Action<TEvent> handler) where TEvent : IApplicationEvent;
 
         /// <summary>
-        /// 发布事件
-        /// 所有订阅了该事件类型的处理器都会被调用
+        /// 同步发布事件
+        /// 所有订阅了该事件类型的处理器都会被依次调用
         /// </summary>
         /// <typeparam name="TEvent">事件类型</typeparam>
         /// <param name="eventData">事件数据</param>
         void Publish<TEvent>(TEvent eventData) where TEvent : IApplicationEvent;
+
+        /// <summary>
+        /// 异步发布事件 - 不会阻塞调用线程
+        /// 处理器在后台线程上依次执行
+        /// </summary>
+        /// <typeparam name="TEvent">事件类型</typeparam>
+        /// <param name="eventData">事件数据</param>
+        Task PublishAsync<TEvent>(TEvent eventData) where TEvent : IApplicationEvent;
     }
 
     /// <summary>

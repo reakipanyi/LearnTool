@@ -78,8 +78,7 @@ namespace LearningAssistant.Services.Learning
             categoryProgress.LastTestDate = DateTime.Now;
 
             progress.LastStudyTime = DateTime.Now;
-            progress.TotalItemsStudied = progress.CategoryProgresses.Values.Sum(c => c.TotalTestCount);
-            progress.TotalItemsMastered = progress.CategoryProgresses.Values.Sum(c => c.CorrectCount);
+            // TotalItemsStudied / TotalItemsMastered 改为计算属性，无需手动同步
 
             profile.UpdateStudyRecord();
             profile.IncrementTodayItems();

@@ -70,14 +70,24 @@ namespace LearningAssistant.Services.Cache
         public void CleanupExpiredItems()
         {
             int removedCount = 0;
-            
-            foreach (var key in _cache.Keys.ToList())
+
+            // 一次性快照 keys，避免在遍历过程中 _cache 发生变化
+            foreach (var key in _cache.Keys)
             {
                 if (_cache.TryGetValue(key, out var item) && item.IsExpired)
                 {
-                    if (_cache.TryRemove(key, out _))
+                    if (_cache.TryRemove(key, out var removedItem))
                     {
                         removedCount++;
+                        // 释放 IDisposable 资源（如果有）
+                        if (removedItem.Value is IDisposable disposable)
+                        {
+                            try { disposable.Dispose(); }
+                            catch (Exception ex)
+                            {
+                                _logger?.LogWarning(ex, "释放缓存资源失败: {Key}", key);
+                            }
+                        }
                     }
                 }
             }
@@ -164,10 +174,7 @@ namespace LearningAssistant.Services.Cache
             if (TryGet(key, out T value))
                 return value;
 
-            var expiration = expirationMinutes.HasValue 
-                ? DateTime.Now.AddMinutes(expirationMinutes.Value) 
-                : DateTime.MaxValue;
-
+            // 先尝试原子插入一个 AsyncLazy 占位，避免并发场景下重复调用 factory
             var lazyFactory = new Func<Task<T>>(async () =>
             {
                 var result = await factory().ConfigureAwait(false);
@@ -177,19 +184,25 @@ namespace LearningAssistant.Services.Cache
             var lazyValue = _cache.GetOrAdd(key, k => new CacheItem
             {
                 Value = new AsyncLazy<T>(lazyFactory),
-                ExpirationTime = expiration
+                ExpirationTime = DateTime.MaxValue
             });
 
+            // 如果当前项是 AsyncLazy，等待工厂完成
             if (lazyValue.Value is AsyncLazy<T> lazy)
             {
                 value = await lazy.GetValueAsync().ConfigureAwait(false);
-                lazyValue.Value = value;
-                lazyValue.ExpirationTime = expirationMinutes.HasValue 
-                    ? DateTime.Now.AddMinutes(expirationMinutes.Value) 
-                    : DateTime.MaxValue;
+                lock (lazyValue)
+                {
+                    // 用实际值替换占位，并设置真正的过期时间
+                    lazyValue.Value = value;
+                    lazyValue.ExpirationTime = expirationMinutes.HasValue
+                        ? DateTime.Now.AddMinutes(expirationMinutes.Value)
+                        : DateTime.MaxValue;
+                }
             }
             else
             {
+                // 已有实际值且未过期，复用
                 value = (T)lazyValue.Value;
             }
 
@@ -216,11 +229,15 @@ namespace LearningAssistant.Services.Cache
         {
             try
             {
-                var cacheData = _cache.ToDictionary(
-                    kvp => kvp.Key,
-                    kvp => new CachedItemData { Value = kvp.Value.Value, ExpirationTime = kvp.Value.ExpirationTime });
-                
+                // 仅持久化未过期的项，避免下次启动时再加载无效数据
+                var cacheData = _cache
+                    .Where(kvp => !kvp.Value.IsExpired)
+                    .ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => new CachedItemData { Value = kvp.Value.Value, ExpirationTime = kvp.Value.ExpirationTime });
+
                 JsonHelper.SaveToFile(_cacheFilePath, cacheData);
+                _logger?.LogDebug("已持久化 {Count} 个缓存项到 {Path}", cacheData.Count, _cacheFilePath);
             }
             catch (Exception ex)
             {

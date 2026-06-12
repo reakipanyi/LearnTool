@@ -121,7 +121,7 @@ namespace LearningAssistant.Models.User
             {
                 BadgeType.ConsecutiveDays => profile.ConsecutiveStudyDays >= badge.Requirement.TargetValue,
                 BadgeType.TotalStudyTime => profile.TotalStudyTimeMinutes >= badge.Requirement.TargetValue,
-                BadgeType.TotalItemsLearned => profile.LearningProgress.TotalItemsStudied >= badge.Requirement.TargetValue,
+                BadgeType.TotalItemsLearned => profile.LearningProgress.ComputedTotalItemsStudied >= badge.Requirement.TargetValue,
                 BadgeType.PerfectSession => profile.LearningProgress.PerfectSessions >= badge.Requirement.TargetValue,
                 _ => false
             };

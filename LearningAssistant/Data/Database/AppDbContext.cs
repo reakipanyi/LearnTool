@@ -47,7 +47,17 @@ namespace LearningAssistant.Data.Database
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            optionsBuilder.UseSqlite($"Data Source={_dbPath}");
+            // SQLite 默认就启用了连接池，这里显式启用以确保配置生效
+            // Cache=Shared 用于多进程访问同一数据库文件时的兼容性
+            // Pooling=True 启用连接池，减少频繁创建连接的开销
+            var connectionString = $"Data Source={_dbPath};Cache=Shared;Pooling=True;";
+            optionsBuilder.UseSqlite(connectionString);
+
+#if DEBUG
+            // 仅在调试模式下输出 SQL 日志，便于排查问题
+            optionsBuilder.LogTo(Console.WriteLine, Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.CommandExecuted);
+            optionsBuilder.EnableSensitiveDataLogging();
+#endif
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

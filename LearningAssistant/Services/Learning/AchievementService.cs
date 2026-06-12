@@ -120,8 +120,8 @@ namespace LearningAssistant.Services.Learning
         {
             return requirement.Type switch
             {
-                AchievementType.TotalItemsStudied => progress.TotalItemsStudied >= requirement.TargetValue,
-                AchievementType.MasteredItems => progress.TotalItemsMastered >= requirement.TargetValue,
+                AchievementType.TotalItemsStudied => progress.ComputedTotalItemsStudied >= requirement.TargetValue,
+                AchievementType.MasteredItems => progress.ComputedTotalItemsMastered >= requirement.TargetValue,
                 AchievementType.ConsecutiveDays => CheckConsecutiveDays(progress, requirement.TargetValue),
                 AchievementType.PerfectSession => CheckPerfectSession(progress),
                 _ => false

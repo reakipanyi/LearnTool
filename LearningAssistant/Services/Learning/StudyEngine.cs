@@ -257,6 +257,65 @@ namespace LearningAssistant.Services.Learning
             RecordActivity("Wrong");
         }
 
+        public int MarkItemsAsKnown(IEnumerable<string> contents)
+        {
+            if (string.IsNullOrWhiteSpace(_state.UserId) || contents == null)
+                return 0;
+
+            int count = 0;
+            foreach (var content in contents)
+            {
+                if (string.IsNullOrWhiteSpace(content))
+                    continue;
+
+                if (!_state.KnownItems.Contains(content))
+                {
+                    _state.KnownItems.Add(content);
+                    count++;
+                }
+                _state.UnknownItems.Remove(content);
+            }
+
+            if (count > 0)
+            {
+                _state.CorrectCount += count;
+                _state.TotalCount += count;
+                // 批量操作只持久化一次
+                SaveProgress();
+                RecordActivity("Learn");
+                RecordActivity("Correct");
+            }
+            return count;
+        }
+
+        public int MarkItemsAsUnknown(IEnumerable<string> contents)
+        {
+            if (string.IsNullOrWhiteSpace(_state.UserId) || contents == null)
+                return 0;
+
+            int count = 0;
+            foreach (var content in contents)
+            {
+                if (string.IsNullOrWhiteSpace(content))
+                    continue;
+
+                if (!_state.UnknownItems.Contains(content))
+                {
+                    _state.UnknownItems.Add(content);
+                    count++;
+                }
+            }
+
+            if (count > 0)
+            {
+                _state.TotalCount += count;
+                SaveProgress();
+                RecordActivity("Learn");
+                RecordActivity("Wrong");
+            }
+            return count;
+        }
+
         private void RecordActivity(string activityType)
         {
             _analyticsService?.RecordActivity(_state.UserId, activityType, _state.SubCategory);

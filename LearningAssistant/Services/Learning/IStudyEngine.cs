@@ -56,6 +56,21 @@ namespace LearningAssistant.Services.Learning
         void MarkCurrentAsUnknown();
 
         /// <summary>
+        /// 批量标记多个内容为已掌握
+        /// 一次性处理多个学习项，减少持久化IO次数
+        /// </summary>
+        /// <param name="contents">要标记为已掌握的学习项内容集合</param>
+        /// <returns>实际标记的项数量</returns>
+        int MarkItemsAsKnown(IEnumerable<string> contents);
+
+        /// <summary>
+        /// 批量标记多个内容为未掌握
+        /// </summary>
+        /// <param name="contents">要标记为未掌握的学习项内容集合</param>
+        /// <returns>实际标记的项数量</returns>
+        int MarkItemsAsUnknown(IEnumerable<string> contents);
+
+        /// <summary>
         /// 获取学习统计数据
         /// </summary>
         /// <returns>包含测试次数、正确次数、准确率等统计信息</returns>
