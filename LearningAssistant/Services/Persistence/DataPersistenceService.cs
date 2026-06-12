@@ -4,7 +4,6 @@ using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services.Cache;
-using LearningAssistant.Services.Utils;
 
 namespace LearningAssistant.Services.Persistence
 {
@@ -26,7 +25,7 @@ namespace LearningAssistant.Services.Persistence
             try
             {
                 var config = _configuration.Get<AppConfig>() ?? new AppConfig();
-                DecryptSensitiveConfig(config);
+                ConfigEncryptionHelper.DecryptSensitiveConfig(config);
                 return config;
             }
             catch (Exception ex)
@@ -42,7 +41,7 @@ namespace LearningAssistant.Services.Persistence
             {
                 var json = Common.JsonHelper.Serialize(config);
                 var configToSave = Common.JsonHelper.Deserialize<AppConfig>(json) ?? new AppConfig();
-                EncryptSensitiveConfig(configToSave);
+                ConfigEncryptionHelper.EncryptSensitiveConfig(configToSave);
 
                 var path = Path.Combine(FileHelper.GetAppDirectory(), "appsettings.json");
                 JsonHelper.SaveToFile(path, configToSave);
@@ -50,49 +49,6 @@ namespace LearningAssistant.Services.Persistence
             catch (Exception ex)
             {
                 _logger.LogError(ex, "保存配置失败");
-            }
-        }
-
-        // 新增功能：配置安全优化 - 加密敏感配置
-        private void EncryptSensitiveConfig(AppConfig config)
-        {
-            if (config.TtsConfig != null)
-            {
-                config.TtsConfig.ApiKey = SecureConfigManager.Encrypt(config.TtsConfig.ApiKey);
-            }
-            if (config.AiConfig != null)
-            {
-                config.AiConfig.ApiKey = SecureConfigManager.Encrypt(config.AiConfig.ApiKey);
-            }
-            if (config.TranslationConfig != null)
-            {
-                config.TranslationConfig.BaiduAppId = SecureConfigManager.Encrypt(config.TranslationConfig.BaiduAppId);
-                config.TranslationConfig.BaiduSecret = SecureConfigManager.Encrypt(config.TranslationConfig.BaiduSecret);
-            }
-            if (config.CloudStorageConfig != null)
-            {
-                config.CloudStorageConfig.BaiduClientId = SecureConfigManager.Encrypt(config.CloudStorageConfig.BaiduClientId);
-                config.CloudStorageConfig.BaiduClientSecret = SecureConfigManager.Encrypt(config.CloudStorageConfig.BaiduClientSecret);
-                config.CloudStorageConfig.BaiduAccessToken = SecureConfigManager.Encrypt(config.CloudStorageConfig.BaiduAccessToken);
-                config.CloudStorageConfig.BaiduRefreshToken = SecureConfigManager.Encrypt(config.CloudStorageConfig.BaiduRefreshToken);
-            }
-        }
-
-        // 新增功能：配置安全优化 - 解密敏感配置
-        private void DecryptSensitiveConfig(AppConfig config)
-        {
-            if (config.TtsConfig != null)
-            {
-                config.TtsConfig.ApiKey = SecureConfigManager.Decrypt(config.TtsConfig.ApiKey);
-            }
-            if (config.AiConfig != null)
-            {
-                config.AiConfig.ApiKey = SecureConfigManager.Decrypt(config.AiConfig.ApiKey);
-            }
-            if (config.TranslationConfig != null)
-            {
-                config.TranslationConfig.BaiduAppId = SecureConfigManager.Decrypt(config.TranslationConfig.BaiduAppId);
-                config.TranslationConfig.BaiduSecret = SecureConfigManager.Decrypt(config.TranslationConfig.BaiduSecret);
             }
         }
 

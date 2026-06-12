@@ -1,19 +1,10 @@
 namespace LearningAssistant.Services.Cache
 {
-    /// <summary>
-    /// 缓存服务接口 - 提供内存缓存和持久化功能
-    /// 支持泛型类型安全的缓存存取操作
-    /// </summary>
     public interface ICacheService
     {
-        /// <summary>
-        /// 尝试获取缓存值
-        /// </summary>
-        /// <typeparam name="T">缓存对象类型</typeparam>
-        /// <param name="key">缓存键</param>
-        /// <param name="value">输出缓存值（若存在）</param>
-        /// <returns>缓存是否存在</returns>
         bool TryGet<T>(string key, out T value);
+
+        Task<T?> TryGetAsync<T>(string key);
 
         /// <summary>
         /// 设置缓存值

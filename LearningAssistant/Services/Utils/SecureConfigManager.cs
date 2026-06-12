@@ -4,11 +4,29 @@ using System.Text;
 
 namespace LearningAssistant.Services.Utils
 {
-    // 新增功能：配置安全优化 - API密钥加密存储
     public static class SecureConfigManager
     {
-        private static readonly byte[] Entropy = Encoding.UTF8.GetBytes("UnifiedLearningAssistant_2025");
-        private static readonly object LockObj = new object();
+        private static readonly Lazy<byte[]> _entropy = new Lazy<byte[]>(LoadEntropyFromSecureSource, true);
+        private static byte[] Entropy => _entropy.Value;
+
+        private static byte[] LoadEntropyFromSecureSource()
+        {
+            var envEntropy = Environment.GetEnvironmentVariable("LEARNING_ASSISTANT_ENTROPY");
+            if (!string.IsNullOrEmpty(envEntropy))
+            {
+                try
+                {
+                    return Convert.FromBase64String(envEntropy);
+                }
+                catch
+                {
+                }
+            }
+
+            var machineId = System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value ?? 
+                           Environment.MachineName;
+            return SHA256.HashData(Encoding.UTF8.GetBytes(machineId));
+        }
 
         public static string? Encrypt(string? plainText)
         {
@@ -24,7 +42,6 @@ namespace LearningAssistant.Services.Utils
             }
             catch (Exception)
             {
-                // 如果加密失败，返回原始文本（降级处理）
                 return plainText;
             }
         }
@@ -43,14 +60,12 @@ namespace LearningAssistant.Services.Utils
             }
             catch (Exception)
             {
-                // 如果解密失败，尝试直接返回原始文本（可能未加密）
                 return encryptedText;
             }
         }
 
         public static void EnsureEncryption()
         {
-            // 检查是否需要迁移旧配置
         }
     }
 }

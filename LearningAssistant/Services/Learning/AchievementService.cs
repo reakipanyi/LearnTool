@@ -130,14 +130,24 @@ namespace LearningAssistant.Services.Learning
 
         private bool CheckConsecutiveDays(LearningProgress progress, int targetDays)
         {
-            // 这里可以实现根据学习记录计算连续学习天数
+            if (_currentUserProfile != null)
+            {
+                return _currentUserProfile.ConsecutiveStudyDays >= targetDays;
+            }
             return false;
         }
 
         private bool CheckPerfectSession(LearningProgress progress)
         {
-            // 检查是否有完美的学习会话
-            return false;
+            foreach (var categoryProgress in progress.CategoryProgresses.Values)
+            {
+                if (categoryProgress.TotalTestCount >= 10 && 
+                    categoryProgress.CorrectCount == categoryProgress.TotalTestCount)
+                {
+                    return true;
+                }
+            }
+            return progress.PerfectSessions > 0;
         }
 
         public List<Achievement> GetAllAchievements()

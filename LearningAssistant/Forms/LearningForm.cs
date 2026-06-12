@@ -191,7 +191,7 @@ namespace LearningAssistant.Forms
         {
             LoadSettings();
             ApplySettings();
-            //UpdateControlLayout();
+            EnableListHighlighting(true);
         }
 
 
@@ -763,7 +763,7 @@ namespace LearningAssistant.Forms
             buttonKnown.Name = "buttonKnown";
             buttonKnown.Size = new Size(130, 52);
             buttonKnown.TabIndex = 4;
-            buttonKnown.Text = "✅ 会了";
+            buttonKnown.Text = "✅ 会了 [K/1]";
             buttonKnown.UseVisualStyleBackColor = false;
             buttonKnown.Click += ButtonKnown_Click;
             // 
@@ -779,7 +779,7 @@ namespace LearningAssistant.Forms
             buttonUnknown.Name = "buttonUnknown";
             buttonUnknown.Size = new Size(130, 52);
             buttonUnknown.TabIndex = 5;
-            buttonUnknown.Text = "❌ 不会";
+            buttonUnknown.Text = "❌ 不会 [U/2]";
             buttonUnknown.UseVisualStyleBackColor = false;
             buttonUnknown.Click += ButtonUnknown_Click;
             // 
@@ -795,7 +795,7 @@ namespace LearningAssistant.Forms
             buttonNext.Name = "buttonNext";
             buttonNext.Size = new Size(130, 52);
             buttonNext.TabIndex = 6;
-            buttonNext.Text = "➡ 下一个";
+            buttonNext.Text = "➡ 下一个 [Enter]";
             buttonNext.UseVisualStyleBackColor = false;
             buttonNext.Click += ButtonNext_Click;
             // 
@@ -811,7 +811,7 @@ namespace LearningAssistant.Forms
             buttonPronounce.Name = "buttonPronounce";
             buttonPronounce.Size = new Size(130, 45);
             buttonPronounce.TabIndex = 7;
-            buttonPronounce.Text = "🔊 发音";
+            buttonPronounce.Text = "🔊 发音 [Space]";
             buttonPronounce.UseVisualStyleBackColor = false;
             buttonPronounce.Click += ButtonPronounce_Click;
             // 
@@ -1289,13 +1289,25 @@ namespace LearningAssistant.Forms
                 listBoxItems.Items.Add($"{i + 1}. {items[i]}");
             }
 
-            labelListStatus.Text = $"共 {items.Count} 项";
+            UpdateListStatus(items.Count, currentIndex);
 
             if (currentIndex >= 0 && currentIndex < items.Count)
             {
                 listBoxItems.SelectedIndex = currentIndex;
                 listBoxItems.TopIndex = Math.Max(0, currentIndex - 5);
             }
+        }
+
+        private void UpdateListStatus(int totalItems, int currentIndex)
+        {
+            if (totalItems == 0)
+            {
+                labelListStatus.Text = "暂无学习内容";
+                return;
+            }
+
+            int progressPercent = totalItems > 0 ? (int)((currentIndex + 1) * 100.0 / totalItems) : 0;
+            labelListStatus.Text = $"共 {totalItems} 项 | 当前 {currentIndex + 1} | 进度 {progressPercent}%";
         }
 
         public void UpdateLearningListSelection(int currentIndex)
@@ -1307,6 +1319,53 @@ namespace LearningAssistant.Forms
                 listBoxItems.SelectedIndex = currentIndex;
                 listBoxItems.TopIndex = Math.Max(0, currentIndex - 5);
             }
+        }
+
+        public void EnableListHighlighting(bool enable)
+        {
+            if (listBoxItems == null) return;
+            
+            listBoxItems.DrawMode = enable ? DrawMode.OwnerDrawFixed : DrawMode.Normal;
+            if (enable)
+            {
+                listBoxItems.DrawItem += ListBoxItems_DrawItem;
+            }
+            else
+            {
+                listBoxItems.DrawItem -= ListBoxItems_DrawItem;
+            }
+        }
+
+        private void ListBoxItems_DrawItem(object? sender, DrawItemEventArgs e)
+        {
+            if (sender is not ListBox listBox) return;
+            if (e.Index < 0) return;
+
+            e.DrawBackground();
+
+            bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            
+            using (var brush = new SolidBrush(isSelected ? Color.FromArgb(76, 175, 80) : listBox.BackColor))
+            {
+                e.Graphics.FillRectangle(brush, e.Bounds);
+            }
+
+            string text = listBox.Items[e.Index].ToString() ?? string.Empty;
+            
+            using (var foreBrush = new SolidBrush(isSelected ? Color.White : Color.Black))
+            {
+                e.Graphics.DrawString(text, e.Font, foreBrush, e.Bounds, StringFormat.GenericDefault);
+            }
+
+            if (isSelected)
+            {
+                using (var pen = new Pen(Color.White, 2))
+                {
+                    e.Graphics.DrawRectangle(pen, e.Bounds.X, e.Bounds.Y, e.Bounds.Width - 1, e.Bounds.Height - 1);
+                }
+            }
+
+            e.DrawFocusRectangle();
         }
 
         private void ListBoxItems_SelectedIndexChanged(object? sender, EventArgs e)

@@ -175,14 +175,15 @@ namespace LearningAssistant.Services.Pdf
                         UpdateCacheAccessOrder(cacheKey);
 
                         while (_renderCache.Count > RenderCacheSize && _cacheAccessOrder.Count > 0)
-                        {
-                            var oldestKey = _cacheAccessOrder.First.Value;
-                            if (_renderCache.TryGetValue(oldestKey, out var oldBmp))
                             {
-                                _renderCache.Remove(oldestKey);
+                                var oldestKey = _cacheAccessOrder.First.Value;
+                                if (_renderCache.TryGetValue(oldestKey, out var oldBmp))
+                                {
+                                    _renderCache.Remove(oldestKey);
+                                    oldBmp?.Dispose();
+                                }
+                                _cacheAccessOrder.RemoveFirst();
                             }
-                            _cacheAccessOrder.RemoveFirst();
-                        }
                     }
                 }
 

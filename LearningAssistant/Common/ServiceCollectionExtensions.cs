@@ -74,7 +74,8 @@ namespace LearningAssistant.Common
             {
                 var cacheDir = GetCacheDirectorySafely();
                 var cachePath = Path.Combine(cacheDir, "cache.json");
-                return new CacheService(cachePath);
+                var logger = sp.GetService<ILogger<CacheService>>();
+                return new CacheService(cachePath, logger);
             });
             services.AddTransient<ITTSService>(sp =>
             {
@@ -144,7 +145,19 @@ namespace LearningAssistant.Common
         /// </summary>
         public static IServiceCollection AddLearningServices(this IServiceCollection services)
         {
-            services.AddSingleton<IStudyEngine, StudyEngine>();
+            services.AddSingleton<SortStrategies.SortStrategyFactory>();
+            services.AddSingleton<IStudyListProcessor, StudyListProcessor>();
+            services.AddSingleton<IProgressManager, ProgressManager>();
+            
+            services.AddSingleton<IStudyEngine>(sp => 
+            {
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var progressManager = sp.GetRequiredService<IProgressManager>();
+                var studyListProcessor = sp.GetRequiredService<IStudyListProcessor>();
+                var analyticsService = sp.GetService<ILearningAnalyticsService>();
+                return new StudyEngine(contentLoaderService, progressManager, studyListProcessor, analyticsService);
+            });
+            
             services.AddSingleton<ILearningAnalyticsService, LearningAnalyticsService>();
             services.AddSingleton<ILearningReminderService, LearningReminderService>();
             services.AddSingleton<DataMigrationService>();
@@ -157,6 +170,22 @@ namespace LearningAssistant.Common
 
             services.AddScoped<ILearningSettingsManager, LearningSettingsManager>();
             services.AddScoped<ILearningExportService, LearningExportService>();
+            services.AddScoped<ILearningEventMediator, LearningEventMediator>();
+            services.AddScoped<ILearningFlowHandler>(sp =>
+            {
+                var logger = sp.GetRequiredService<ILogger<LearningFlowHandler>>();
+                var studyEngine = sp.GetRequiredService<IStudyEngine>();
+                var aiService = sp.GetRequiredService<IAIService>();
+                var ttsService = sp.GetRequiredService<ITTSService>();
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var exportService = sp.GetRequiredService<IExportService>();
+                var windowManager = sp.GetRequiredService<IWindowManager>();
+                var settingsManager = sp.GetRequiredService<ILearningSettingsManager>();
+                var exportHelper = sp.GetRequiredService<ILearningExportService>();
+                var view = sp.GetRequiredService<ILearningView>();
+                return new LearningFlowHandler(logger, studyEngine, aiService, ttsService, contentLoaderService,
+                    exportService, windowManager, settingsManager, exportHelper, view);
+            });
 
             return services;
         }
@@ -179,7 +208,15 @@ namespace LearningAssistant.Common
             services.AddSingleton<IWindowManager, WindowManager>();
             services.AddScoped<MainPresenter>();
             services.AddScoped<SettingPresenter>();
-            services.AddScoped<LearningPresenter>();
+            services.AddScoped<LearningPresenter>(sp =>
+            {
+                var logger = sp.GetRequiredService<ILogger<LearningPresenter>>();
+                var view = sp.GetRequiredService<ILearningView>();
+                var flowHandler = sp.GetRequiredService<ILearningFlowHandler>();
+                var eventMediator = sp.GetRequiredService<ILearningEventMediator>();
+                var settingsManager = sp.GetRequiredService<ILearningSettingsManager>();
+                return new LearningPresenter(logger, view, flowHandler, eventMediator, settingsManager);
+            });
             services.AddScoped<ResultPresenter>();
             services.AddScoped<ContentEditorPresenter>();
             services.AddScoped<PdfPresenter>(sp =>

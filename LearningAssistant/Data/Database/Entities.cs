@@ -63,7 +63,6 @@ namespace LearningAssistant.Data.Database
         [MaxLength(100, ErrorMessage = "分类名称长度不能超过 100 个字符")]
         public string CategoryName { get; set; } = string.Empty;
         
-        // 存储为 JSON 字符串
         [Required]
         public string KnownItemsJson { get; set; } = "[]";
         
@@ -87,8 +86,22 @@ namespace LearningAssistant.Data.Database
         [MaxLength(50, ErrorMessage = "上次学习模式长度不能超过 50 个字符")]
         public string LastStudyMode { get; set; } = string.Empty;
         
-        // 导航属性
         public UserProfileEntity? UserProfile { get; set; }
+
+        public void UpdateEntity(CategoryProgress progress)
+        {
+            if (progress == null) throw new ArgumentNullException(nameof(progress));
+            
+            var updatedEntity = progress.ToEntity(this.UserId);
+            this.KnownItemsJson = updatedEntity.KnownItemsJson;
+            this.UnknownItemsJson = updatedEntity.UnknownItemsJson;
+            this.TotalTestCount = updatedEntity.TotalTestCount;
+            this.CorrectCount = updatedEntity.CorrectCount;
+            this.LastTestDate = updatedEntity.LastTestDate;
+            this.LastResumeIndex = updatedEntity.LastResumeIndex;
+            this.QuickTestResumeIndex = updatedEntity.QuickTestResumeIndex;
+            this.LastStudyMode = updatedEntity.LastStudyMode;
+        }
     }
 
     /// <summary>

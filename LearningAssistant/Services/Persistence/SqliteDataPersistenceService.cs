@@ -28,19 +28,28 @@ namespace LearningAssistant.Services.Persistence
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             _cacheService = cacheService ?? throw new ArgumentNullException(nameof(cacheService));
             _logger = logger;
+        }
 
-            // 确保数据库已创建
-            using var db = _dbContextFactory.CreateDbContext();
-            db.EnsureDatabaseCreated();
+        public void Initialize()
+        {
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                db.EnsureDatabaseCreated();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to initialize database");
+                throw;
+            }
         }
 
         public AppConfig LoadConfig()
         {
             try
             {
-                // 配置仍然从 JSON 文件加载，保持原样
                 var config = _configuration.Get<AppConfig>() ?? new AppConfig();
-                DecryptSensitiveConfig(config);
+                ConfigEncryptionHelper.DecryptSensitiveConfig(config);
                 return config;
             }
             catch (Exception ex)
@@ -54,8 +63,8 @@ namespace LearningAssistant.Services.Persistence
         {
             try
             {
-                var configToSave = config; // 直接使用原对象，无需序列化/反序列化
-                EncryptSensitiveConfig(configToSave);
+                var configToSave = config;
+                ConfigEncryptionHelper.EncryptSensitiveConfig(configToSave);
 
                 var path = Path.Combine(Common.FileHelper.GetAppDirectory(), "appsettings.json");
                 Common.JsonHelper.SaveToFile(path, configToSave);
@@ -138,20 +147,10 @@ namespace LearningAssistant.Services.Persistence
 
                         if (existingCategory != null)
                         {
-                            // 更新现有分类
-                            var updatedEntity = categoryProgress.ToEntity(profile.UserId);
-                            existingCategory.KnownItemsJson = updatedEntity.KnownItemsJson;
-                            existingCategory.UnknownItemsJson = updatedEntity.UnknownItemsJson;
-                            existingCategory.TotalTestCount = updatedEntity.TotalTestCount;
-                            existingCategory.CorrectCount = updatedEntity.CorrectCount;
-                            existingCategory.LastTestDate = updatedEntity.LastTestDate;
-                            existingCategory.LastResumeIndex = updatedEntity.LastResumeIndex;
-                            existingCategory.QuickTestResumeIndex = updatedEntity.QuickTestResumeIndex;
-                            existingCategory.LastStudyMode = updatedEntity.LastStudyMode;
+                            existingCategory.UpdateEntity(categoryProgress);
                         }
                         else
                         {
-                            // 添加新分类
                             existingUser.CategoryProgresses.Add(categoryProgress.ToEntity(profile.UserId));
                         }
                     }
@@ -250,50 +249,4 @@ namespace LearningAssistant.Services.Persistence
                 LearningProgress = new LearningProgress()
             };
         }
-
-        private void EncryptSensitiveConfig(AppConfig config)
-        {
-            if (config.TtsConfig != null)
-            {
-                config.TtsConfig.ApiKey = Utils.SecureConfigManager.Encrypt(config.TtsConfig.ApiKey);
-            }
-            if (config.AiConfig != null)
-            {
-                config.AiConfig.ApiKey = Utils.SecureConfigManager.Encrypt(config.AiConfig.ApiKey);
-            }
-            if (config.TranslationConfig != null)
-            {
-                config.TranslationConfig.BaiduAppId = Utils.SecureConfigManager.Encrypt(config.TranslationConfig.BaiduAppId);
-            }
-            if (config.CloudStorageConfig != null)
-            {
-                config.CloudStorageConfig.BaiduClientId = Utils.SecureConfigManager.Encrypt(config.CloudStorageConfig.BaiduClientId);
-                config.CloudStorageConfig.BaiduClientSecret = Utils.SecureConfigManager.Encrypt(config.CloudStorageConfig.BaiduClientSecret);
-                config.CloudStorageConfig.BaiduRefreshToken = Utils.SecureConfigManager.Encrypt(config.CloudStorageConfig.BaiduRefreshToken);
-            }
-        }
-
-        private void DecryptSensitiveConfig(AppConfig config)
-        {
-            if (config.TtsConfig != null)
-            {
-                config.TtsConfig.ApiKey = Utils.SecureConfigManager.Decrypt(config.TtsConfig.ApiKey);
-            }
-            if (config.AiConfig != null)
-            {
-                config.AiConfig.ApiKey = Utils.SecureConfigManager.Decrypt(config.AiConfig.ApiKey);
-            }
-            if (config.TranslationConfig != null)
-            {
-                config.TranslationConfig.BaiduAppId = Utils.SecureConfigManager.Decrypt(config.TranslationConfig.BaiduAppId);
-                config.TranslationConfig.BaiduSecret = Utils.SecureConfigManager.Decrypt(config.TranslationConfig.BaiduSecret);
-            }
-            if (config.CloudStorageConfig != null)
-            {
-                config.CloudStorageConfig.BaiduClientId = Utils.SecureConfigManager.Decrypt(config.CloudStorageConfig.BaiduClientId);
-                config.CloudStorageConfig.BaiduClientSecret = Utils.SecureConfigManager.Decrypt(config.CloudStorageConfig.BaiduClientSecret);
-                config.CloudStorageConfig.BaiduRefreshToken = Utils.SecureConfigManager.Decrypt(config.CloudStorageConfig.BaiduRefreshToken);
-            }
-        }
-    }
 }
