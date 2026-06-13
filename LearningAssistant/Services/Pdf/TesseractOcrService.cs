@@ -265,6 +265,13 @@ namespace LearningAssistant.Services.Pdf
 
             text = text.Replace("\n\n", "\n");
 
+            // 在换行前后添加空格，避免文字连在一起
+            // 使用正则表达式在换行前后添加空格，但避免重复空格
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"(\S)\n(\S)", "$1 $2");
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"\n(\S)", " $1");
+            text = System.Text.RegularExpressions.Regex.Replace(text, @"(\S)\n", "$1 ");
+            
+            // 最后将剩余的换行符替换为空格
             text = text.Replace("\n", " ");
 
             text = text.Replace("  ", " ");

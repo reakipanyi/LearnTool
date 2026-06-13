@@ -1,6 +1,7 @@
 using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
+using LearningAssistant.Services;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -14,29 +15,29 @@ namespace LearningAssistant.Forms
     {
         private readonly ILogger<ContentEditorForm> _logger;
         private readonly AppConfig _appConfig;
+        private readonly IAIPanelPopupService _aiPanelPopupService;
         private ContentEditorPresenter? _presenter;
         private TableLayoutPanel mainPanel;
         private Panel topPanel;
-        private Panel promptPanel;
-        private TextBox textBoxPrompt;
         private Panel gridPanel;
-        private Panel jsonPanel;
         private FlowLayoutPanel buttonPanel;
-        private FlowLayoutPanel rightBottomPanel;
 
-        private GroupBox groupBoxLanguage;
+        private Panel groupBoxLanguage;
         private RadioButton radioEnglish;
         private RadioButton radioChinese;
-        private TextBox textBoxRange;
-        private Label labelRange;
         private Label labelCategory;
         private ComboBox comboBoxSubCategory;
+        private TabControl tabControl1;
+        private TabPage tabPage1;
+        private TabPage tabPage2;
+        private TabPage tabPage3;
         private bool _disposed = false;
 
-        public ContentEditorForm(ILogger<ContentEditorForm> logger, AppConfig appConfig)
+        public ContentEditorForm(ILogger<ContentEditorForm> logger, AppConfig appConfig, IAIPanelPopupService aiPanelPopupService)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _appConfig = appConfig ?? throw new ArgumentNullException(nameof(appConfig));
+            _aiPanelPopupService = aiPanelPopupService ?? throw new ArgumentNullException(nameof(aiPanelPopupService));
             InitializeComponent();
         }
 
@@ -73,32 +74,7 @@ namespace LearningAssistant.Forms
             }
         }
 
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public string GenerateCount
-        {
-            get => textBoxCount.Text;
-            set => textBoxCount.Text = value;
-        }
 
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public string GenerateRange
-        {
-            get => textBoxRange.Text;
-            set => textBoxRange.Text = value;
-        }
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public string PromptText
-        {
-            get => textBoxPrompt?.Text ?? "";
-            set
-            {
-                if (textBoxPrompt != null)
-                {
-                    textBoxPrompt.Text = value;
-                }
-            }
-        }
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
 
         public object? GridDataSource
@@ -108,7 +84,6 @@ namespace LearningAssistant.Forms
         }
 
         public List<int> SelectedRowIndices => dataGridView.SelectedRows.Cast<DataGridViewRow>().Select(row => row.Index).ToList();
-
 
         public event EventHandler? LanguageChanged;
         public event EventHandler? SubCategoryChanged;
@@ -414,7 +389,16 @@ namespace LearningAssistant.Forms
         private void ButtonGenerateAI_Click(object? sender, EventArgs e)
         {
             GenerateWithAIClicked?.Invoke(this, EventArgs.Empty);
+            
+            string prompt = textBoxJson.Text.Trim();
+            if (string.IsNullOrEmpty(prompt))
+            {
+                prompt = "请帮我生成学习内容";
+            }
+            
+            _aiPanelPopupService.ShowAIAbilityPanel(this, prompt);
         }
+
 
         private void InitializeComponent()
         {
@@ -424,34 +408,29 @@ namespace LearningAssistant.Forms
             buttonDelete = new Button();
             buttonImport = new Button();
             buttonExport = new Button();
-            buttonGenerateAI = new Button();
-            labelCount = new Label();
-            textBoxCount = new TextBox();
             dataGridView = new DataGridView();
             mainPanel = new TableLayoutPanel();
             topPanel = new Panel();
-            groupBoxLanguage = new GroupBox();
+            groupBoxLanguage = new Panel();
             radioEnglish = new RadioButton();
             radioChinese = new RadioButton();
-            textBoxRange = new TextBox();
-            labelRange = new Label();
             labelCategory = new Label();
             comboBoxSubCategory = new ComboBox();
-            promptPanel = new Panel();
-            textBoxPrompt = new TextBox();
             gridPanel = new Panel();
-            jsonPanel = new Panel();
+            tabControl1 = new TabControl();
+            tabPage1 = new TabPage();
+            tabPage2 = new TabPage();
             buttonPanel = new FlowLayoutPanel();
-            rightBottomPanel = new FlowLayoutPanel();
-            ((System.ComponentModel.ISupportInitialize)dataGridView).BeginInit();
+            tabPage3 = new TabPage();
+            ((ISupportInitialize)dataGridView).BeginInit();
             mainPanel.SuspendLayout();
             topPanel.SuspendLayout();
             groupBoxLanguage.SuspendLayout();
-            promptPanel.SuspendLayout();
             gridPanel.SuspendLayout();
-            jsonPanel.SuspendLayout();
+            tabControl1.SuspendLayout();
+            tabPage1.SuspendLayout();
+            tabPage2.SuspendLayout();
             buttonPanel.SuspendLayout();
-            rightBottomPanel.SuspendLayout();
             SuspendLayout();
             // 
             // textBoxJson
@@ -460,11 +439,11 @@ namespace LearningAssistant.Forms
             textBoxJson.BorderStyle = BorderStyle.FixedSingle;
             textBoxJson.Dock = DockStyle.Fill;
             textBoxJson.Font = new Font("微软雅黑", 10F);
-            textBoxJson.Location = new Point(0, 0);
+            textBoxJson.Location = new Point(3, 3);
             textBoxJson.Multiline = true;
             textBoxJson.Name = "textBoxJson";
             textBoxJson.ScrollBars = ScrollBars.Both;
-            textBoxJson.Size = new Size(601, 530);
+            textBoxJson.Size = new Size(1198, 605);
             textBoxJson.TabIndex = 2;
             // 
             // buttonAdd
@@ -554,14 +533,15 @@ namespace LearningAssistant.Forms
             // 
             // buttonGenerateAI
             // 
-            buttonGenerateAI.BackColor = Color.FromArgb(103, 58, 183);
+            buttonGenerateAI = new Button();
+            buttonGenerateAI.BackColor = Color.FromArgb(96, 125, 139);
             buttonGenerateAI.FlatAppearance.BorderSize = 0;
             buttonGenerateAI.FlatStyle = FlatStyle.Flat;
             buttonGenerateAI.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             buttonGenerateAI.ForeColor = Color.White;
             buttonGenerateAI.Location = new Point(498, 3);
             buttonGenerateAI.Name = "buttonGenerateAI";
-            buttonGenerateAI.Size = new Size(93, 42);
+            buttonGenerateAI.Size = new Size(110, 42);
             buttonGenerateAI.TabIndex = 5;
             buttonGenerateAI.Text = "🤖 AI生成";
             buttonGenerateAI.UseVisualStyleBackColor = false;
@@ -569,38 +549,16 @@ namespace LearningAssistant.Forms
             buttonGenerateAI.MouseEnter += Button_HoverEnter;
             buttonGenerateAI.MouseLeave += Button_HoverLeave;
             // 
-            // labelCount
-            // 
-            labelCount.Font = new Font("微软雅黑", 10F);
-            labelCount.ForeColor = Color.FromArgb(33, 33, 33);
-            labelCount.Location = new Point(462, 0);
-            labelCount.Name = "labelCount";
-            labelCount.Size = new Size(80, 28);
-            labelCount.TabIndex = 12;
-            labelCount.Text = "生成数量:";
-            labelCount.TextAlign = ContentAlignment.MiddleCenter;
-            // 
-            // textBoxCount
-            // 
-            textBoxCount.BackColor = Color.White;
-            textBoxCount.BorderStyle = BorderStyle.FixedSingle;
-            textBoxCount.Font = new Font("微软雅黑", 10F);
-            textBoxCount.Location = new Point(548, 3);
-            textBoxCount.Name = "textBoxCount";
-            textBoxCount.Size = new Size(50, 25);
-            textBoxCount.TabIndex = 14;
-            textBoxCount.Text = "5";
-            // 
             // dataGridView
             // 
             dataGridView.AllowUserToOrderColumns = true;
             dataGridView.BorderStyle = BorderStyle.None;
             dataGridView.Dock = DockStyle.Fill;
             dataGridView.GridColor = Color.FromArgb(224, 224, 224);
-            dataGridView.Location = new Point(0, 0);
+            dataGridView.Location = new Point(3, 3);
             dataGridView.Name = "dataGridView";
             dataGridView.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-            dataGridView.Size = new Size(600, 530);
+            dataGridView.Size = new Size(1198, 605);
             dataGridView.TabIndex = 1;
             dataGridView.CellEndEdit += DataGridView_CellEndEdit;
             dataGridView.RowsAdded += DataGridView_RowsAdded;
@@ -608,22 +566,17 @@ namespace LearningAssistant.Forms
             // 
             // mainPanel
             // 
-            mainPanel.ColumnCount = 3;
+            mainPanel.ColumnCount = 1;
             mainPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-            mainPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 5F));
-            mainPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            mainPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 20F));
             mainPanel.Controls.Add(topPanel, 0, 0);
-            mainPanel.Controls.Add(promptPanel, 0, 1);
-            mainPanel.Controls.Add(gridPanel, 0, 2);
-            mainPanel.Controls.Add(jsonPanel, 2, 2);
-            mainPanel.Controls.Add(buttonPanel, 0, 3);
-            mainPanel.Controls.Add(rightBottomPanel, 2, 3);
+            mainPanel.Controls.Add(gridPanel, 0, 1);
+            mainPanel.Controls.Add(buttonPanel, 0, 2);
             mainPanel.Dock = DockStyle.Fill;
             mainPanel.Location = new Point(0, 0);
             mainPanel.Name = "mainPanel";
-            mainPanel.RowCount = 4;
+            mainPanel.RowCount = 3;
             mainPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
-            mainPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 111F));
             mainPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             mainPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 73F));
             mainPanel.Size = new Size(1218, 766);
@@ -631,13 +584,9 @@ namespace LearningAssistant.Forms
             // 
             // topPanel
             // 
-            mainPanel.SetColumnSpan(topPanel, 3);
             topPanel.Controls.Add(groupBoxLanguage);
-            topPanel.Controls.Add(textBoxRange);
-            topPanel.Controls.Add(labelRange);
             topPanel.Controls.Add(labelCategory);
             topPanel.Controls.Add(comboBoxSubCategory);
-            topPanel.Dock = DockStyle.Fill;
             topPanel.Location = new Point(3, 3);
             topPanel.Name = "topPanel";
             topPanel.Size = new Size(1212, 40);
@@ -648,21 +597,19 @@ namespace LearningAssistant.Forms
             groupBoxLanguage.BackColor = Color.FromArgb(255, 250, 240);
             groupBoxLanguage.Controls.Add(radioEnglish);
             groupBoxLanguage.Controls.Add(radioChinese);
-            groupBoxLanguage.FlatStyle = FlatStyle.Flat;
+            groupBoxLanguage.Dock = DockStyle.Left;
             groupBoxLanguage.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             groupBoxLanguage.ForeColor = Color.FromArgb(33, 33, 33);
-            groupBoxLanguage.Location = new Point(7, 2);
+            groupBoxLanguage.Location = new Point(0, 0);
             groupBoxLanguage.Name = "groupBoxLanguage";
-            groupBoxLanguage.Size = new Size(295, 42);
+            groupBoxLanguage.Size = new Size(328, 40);
             groupBoxLanguage.TabIndex = 21;
-            groupBoxLanguage.TabStop = false;
-            groupBoxLanguage.Text = "🌐 语言选择";
             // 
             // radioEnglish
             // 
             radioEnglish.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             radioEnglish.ForeColor = Color.FromArgb(33, 33, 33);
-            radioEnglish.Location = new Point(217, 11);
+            radioEnglish.Location = new Point(151, 8);
             radioEnglish.Name = "radioEnglish";
             radioEnglish.Size = new Size(80, 27);
             radioEnglish.TabIndex = 2;
@@ -674,34 +621,13 @@ namespace LearningAssistant.Forms
             radioChinese.Checked = true;
             radioChinese.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             radioChinese.ForeColor = Color.FromArgb(33, 33, 33);
-            radioChinese.Location = new Point(99, 11);
+            radioChinese.Location = new Point(33, 8);
             radioChinese.Name = "radioChinese";
             radioChinese.Size = new Size(80, 27);
             radioChinese.TabIndex = 1;
             radioChinese.TabStop = true;
             radioChinese.Text = "🇨🇳 中文";
             radioChinese.CheckedChanged += RadioChinese_CheckedChanged;
-            // 
-            // textBoxRange
-            // 
-            textBoxRange.BackColor = Color.White;
-            textBoxRange.BorderStyle = BorderStyle.FixedSingle;
-            textBoxRange.Font = new Font("微软雅黑", 10F);
-            textBoxRange.Location = new Point(747, 9);
-            textBoxRange.Name = "textBoxRange";
-            textBoxRange.Size = new Size(200, 25);
-            textBoxRange.TabIndex = 15;
-            // 
-            // labelRange
-            // 
-            labelRange.AutoSize = true;
-            labelRange.Font = new Font("微软雅黑", 10F);
-            labelRange.ForeColor = Color.FromArgb(33, 33, 33);
-            labelRange.Location = new Point(657, 11);
-            labelRange.Name = "labelRange";
-            labelRange.Size = new Size(77, 20);
-            labelRange.TabIndex = 13;
-            labelRange.Text = "🔍 关键词:";
             // 
             // labelCategory
             // 
@@ -720,54 +646,54 @@ namespace LearningAssistant.Forms
             comboBoxSubCategory.FlatStyle = FlatStyle.Flat;
             comboBoxSubCategory.Font = new Font("微软雅黑", 10F);
             comboBoxSubCategory.FormattingEnabled = true;
-            comboBoxSubCategory.Location = new Point(433, 8);
+            comboBoxSubCategory.Location = new Point(427, 9);
             comboBoxSubCategory.Name = "comboBoxSubCategory";
             comboBoxSubCategory.Size = new Size(167, 27);
             comboBoxSubCategory.TabIndex = 17;
             comboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
             // 
-            // promptPanel
-            // 
-            mainPanel.SetColumnSpan(promptPanel, 3);
-            promptPanel.Controls.Add(textBoxPrompt);
-            promptPanel.Dock = DockStyle.Fill;
-            promptPanel.Location = new Point(3, 49);
-            promptPanel.Name = "promptPanel";
-            promptPanel.Size = new Size(1212, 105);
-            promptPanel.TabIndex = 1;
-            // 
-            // textBoxPrompt
-            // 
-            textBoxPrompt.BackColor = Color.White;
-            textBoxPrompt.BorderStyle = BorderStyle.FixedSingle;
-            textBoxPrompt.Dock = DockStyle.Fill;
-            textBoxPrompt.Font = new Font("微软雅黑", 10F);
-            textBoxPrompt.ForeColor = Color.FromArgb(33, 33, 33);
-            textBoxPrompt.Location = new Point(0, 0);
-            textBoxPrompt.Multiline = true;
-            textBoxPrompt.Name = "textBoxPrompt";
-            textBoxPrompt.ScrollBars = ScrollBars.Both;
-            textBoxPrompt.Size = new Size(1212, 105);
-            textBoxPrompt.TabIndex = 18;
-            textBoxPrompt.Text = "💡 AI生成提示词将显示在这里...";
-            // 
             // gridPanel
             // 
-            gridPanel.Controls.Add(dataGridView);
+            gridPanel.Controls.Add(tabControl1);
             gridPanel.Dock = DockStyle.Fill;
-            gridPanel.Location = new Point(3, 160);
+            gridPanel.Location = new Point(3, 49);
             gridPanel.Name = "gridPanel";
-            gridPanel.Size = new Size(600, 530);
+            gridPanel.Size = new Size(1212, 641);
             gridPanel.TabIndex = 2;
             // 
-            // jsonPanel
+            // tabControl1
             // 
-            jsonPanel.Controls.Add(textBoxJson);
-            jsonPanel.Dock = DockStyle.Fill;
-            jsonPanel.Location = new Point(614, 160);
-            jsonPanel.Name = "jsonPanel";
-            jsonPanel.Size = new Size(601, 530);
-            jsonPanel.TabIndex = 3;
+            tabControl1.Controls.Add(tabPage1);
+            tabControl1.Controls.Add(tabPage2);
+            tabControl1.Controls.Add(tabPage3);
+            tabControl1.Dock = DockStyle.Fill;
+            tabControl1.Location = new Point(0, 0);
+            tabControl1.Name = "tabControl1";
+            tabControl1.SelectedIndex = 0;
+            tabControl1.Size = new Size(1212, 641);
+            tabControl1.TabIndex = 1;
+            // 
+            // tabPage1
+            // 
+            tabPage1.Controls.Add(dataGridView);
+            tabPage1.Location = new Point(4, 26);
+            tabPage1.Name = "tabPage1";
+            tabPage1.Padding = new Padding(3);
+            tabPage1.Size = new Size(1204, 611);
+            tabPage1.TabIndex = 0;
+            tabPage1.Text = "表格";
+            tabPage1.UseVisualStyleBackColor = true;
+            // 
+            // tabPage2
+            // 
+            tabPage2.Controls.Add(textBoxJson);
+            tabPage2.Location = new Point(4, 26);
+            tabPage2.Name = "tabPage2";
+            tabPage2.Padding = new Padding(3);
+            tabPage2.Size = new Size(1204, 611);
+            tabPage2.TabIndex = 1;
+            tabPage2.Text = "Json";
+            tabPage2.UseVisualStyleBackColor = true;
             // 
             // buttonPanel
             // 
@@ -780,21 +706,19 @@ namespace LearningAssistant.Forms
             buttonPanel.Dock = DockStyle.Fill;
             buttonPanel.Location = new Point(3, 696);
             buttonPanel.Name = "buttonPanel";
-            buttonPanel.Size = new Size(600, 67);
+            buttonPanel.Size = new Size(1212, 67);
             buttonPanel.TabIndex = 4;
             buttonPanel.WrapContents = false;
             // 
-            // rightBottomPanel
+            // tabPage3
             // 
-            rightBottomPanel.Controls.Add(textBoxCount);
-            rightBottomPanel.Controls.Add(labelCount);
-            rightBottomPanel.Dock = DockStyle.Fill;
-            rightBottomPanel.FlowDirection = FlowDirection.RightToLeft;
-            rightBottomPanel.Location = new Point(614, 696);
-            rightBottomPanel.Name = "rightBottomPanel";
-            rightBottomPanel.Size = new Size(601, 67);
-            rightBottomPanel.TabIndex = 5;
-            rightBottomPanel.WrapContents = false;
+            tabPage3.Location = new Point(4, 26);
+            tabPage3.Name = "tabPage3";
+            tabPage3.Padding = new Padding(3);
+            tabPage3.Size = new Size(1204, 611);
+            tabPage3.TabIndex = 2;
+            tabPage3.Text = "AIWebView";
+            tabPage3.UseVisualStyleBackColor = true;
             // 
             // ContentEditorForm
             // 
@@ -803,19 +727,17 @@ namespace LearningAssistant.Forms
             Controls.Add(mainPanel);
             Name = "ContentEditorForm";
             Text = "📝 内容编辑器";
-            ((System.ComponentModel.ISupportInitialize)dataGridView).EndInit();
+            ((ISupportInitialize)dataGridView).EndInit();
             mainPanel.ResumeLayout(false);
             topPanel.ResumeLayout(false);
             topPanel.PerformLayout();
             groupBoxLanguage.ResumeLayout(false);
-            promptPanel.ResumeLayout(false);
-            promptPanel.PerformLayout();
             gridPanel.ResumeLayout(false);
-            jsonPanel.ResumeLayout(false);
-            jsonPanel.PerformLayout();
+            tabControl1.ResumeLayout(false);
+            tabPage1.ResumeLayout(false);
+            tabPage2.ResumeLayout(false);
+            tabPage2.PerformLayout();
             buttonPanel.ResumeLayout(false);
-            rightBottomPanel.ResumeLayout(false);
-            rightBottomPanel.PerformLayout();
             ResumeLayout(false);
         }
 
@@ -829,8 +751,6 @@ namespace LearningAssistant.Forms
         private Button buttonImport;
         private Button buttonExport;
         private Button buttonGenerateAI;
-        private Label labelCount;
-        private TextBox textBoxCount;
 
         protected override void Dispose(bool disposing)
         {
@@ -871,7 +791,7 @@ namespace LearningAssistant.Forms
                     "buttonDelete" => ThemeHelper.Colors.Error,
                     "buttonImport" => ThemeHelper.Colors.SoftBlue,
                     "buttonExport" => ThemeHelper.Colors.Purple,
-                    "buttonGenerateAI" => ThemeHelper.Colors.PurpleDark,
+                    "buttonGenerateAI" => Color.FromArgb(96, 125, 139),
                     _ => SystemColors.Control
                 };
                 button.BackColor = originalColor;

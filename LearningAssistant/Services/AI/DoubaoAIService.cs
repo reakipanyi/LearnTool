@@ -50,7 +50,7 @@ namespace LearningAssistant.Services.AI
             }
         }
 
-        protected override async Task<string> CallApiAsync(string prompt)
+        protected override async Task<string> CallApiAsync(string prompt, CancellationToken cancellationToken = default)
         {
             try
             {
@@ -76,7 +76,7 @@ namespace LearningAssistant.Services.AI
                     content.Headers.Add("Authorization", $"Bearer {apiKey}");
                 }
 
-                var response = await _httpClient.PostAsync(_config.BaseUrl, content);
+                var response = await _httpClient.PostAsync(_config.BaseUrl, content, cancellationToken);
                 var responseJson = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)

@@ -106,6 +106,11 @@ namespace LearningAssistant.Views
         event EventHandler? CancelClicked;
 
         /// <summary>
+        /// 打开网页版AI按钮点击事件
+        /// </summary>
+        event EventHandler? OpenWebViewClicked;
+
+        /// <summary>
         /// 显示消息
         /// </summary>
         /// <param name="msg">消息内容</param>

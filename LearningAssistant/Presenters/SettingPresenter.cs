@@ -1,4 +1,6 @@
 using Microsoft.Extensions.Logging;
+using LearningAssistant.Common;
+using LearningAssistant.Forms;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Services.Persistence;
 using LearningAssistant.Views;
@@ -20,6 +22,7 @@ namespace LearningAssistant.Presenters
 
             _view.SaveClicked += View_SaveClicked;
             _view.CancelClicked += View_CancelClicked;
+            _view.OpenWebViewClicked += View_OpenWebViewClicked;
             _logger.LogInformation("SettingPresenter initialized");
         }
 
@@ -102,10 +105,37 @@ namespace LearningAssistant.Presenters
             _view.CloseView();
         }
 
+        private void View_OpenWebViewClicked(object? sender, EventArgs e)
+        {
+            try
+            {
+                var provider = _view.Provider;
+                if (!string.IsNullOrEmpty(provider) && AiConfig.Providers.TryGetValue(provider, out var providerInfo))
+                {
+                    var webviewUrl = providerInfo.WebViewUrl;
+                    if (!string.IsNullOrEmpty(webviewUrl))
+                    {
+                        var webViewForm = new AIWebViewForm(initialUrl: webviewUrl);
+                        webViewForm.Show();
+                    }
+                    else
+                    {
+                        _view.ShowMessage("该服务商暂不支持网页版");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to open WebView");
+                _view.ShowMessage($"打开网页版失败: {ex.Message}");
+            }
+        }
+
         public void Dispose()
         {
             _view.SaveClicked -= View_SaveClicked;
             _view.CancelClicked -= View_CancelClicked;
+            _view.OpenWebViewClicked -= View_OpenWebViewClicked;
             _logger.LogInformation("SettingPresenter disposed");
         }
     }

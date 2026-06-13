@@ -35,10 +35,11 @@ namespace LearningAssistant.Models.Pdf
             }
             if (!string.IsNullOrEmpty(Text))
             {
-                var displayText = Text.Length > 20 ? Text.Substring(0, 20) + "..." : Text;
-                return $"{fileName} P{pageNum} - {colorName} ({displayText})";
+                // 显示更长的OCR文本（最多50个字符）
+                var displayText = Text.Length > 50 ? Text.Substring(0, 50) + "..." : Text;
+                return $"{fileName} P{pageNum} - {colorName}: {displayText}";
             }
-            return $"{fileName} P{pageNum} - {colorName}";
+            return $"{fileName} P{pageNum} - {colorName} (无OCR文本)";
         }
 
         private string GetColorName(HighlightColor color)

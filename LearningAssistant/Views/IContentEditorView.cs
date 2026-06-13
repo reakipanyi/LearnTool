@@ -28,20 +28,6 @@ namespace LearningAssistant.Views
         /// </summary>
         string CurrentEditItemJson { get; set; }
 
-        /// <summary>
-        /// AI生成项数量
-        /// </summary>
-        string GenerateCount { get; set; }
-
-        /// <summary>
-        /// AI生成范围
-        /// </summary>
-        string GenerateRange { get; set; }
-
-        /// <summary>
-        /// AI生成提示词
-        /// </summary>
-        string PromptText { get; set; }
 
         /// <summary>
         /// 网格数据源
@@ -88,10 +74,6 @@ namespace LearningAssistant.Views
         /// </summary>
         event EventHandler? ExportClicked;
 
-        /// <summary>
-        /// AI生成点击事件
-        /// </summary>
-        event EventHandler? GenerateWithAIClicked;
 
         /// <summary>
         /// 网格单元格编辑完成事件

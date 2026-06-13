@@ -1,7 +1,7 @@
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Services.Cache;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Services.AI
 {
@@ -32,23 +32,11 @@ namespace LearningAssistant.Services.AI
                     _serviceProvider.GetRequiredService<ICacheService>(),
                     _serviceProvider.GetRequiredService<ILogger<DeepseekAIService>>(),
                     _serviceProvider.GetRequiredService<HttpClient>()),
-                    
+
                 "doubao" or "豆包" => new DoubaoAIService(
                     _serviceProvider.GetRequiredService<AiConfig>(),
                     _serviceProvider.GetRequiredService<ICacheService>(),
                     _serviceProvider.GetRequiredService<ILogger<DoubaoAIService>>(),
-                    _serviceProvider.GetRequiredService<HttpClient>()),
-                    
-                "siliconflow" or "千问" => new SiliconFlowAIService(
-                    _serviceProvider.GetRequiredService<AiConfig>(),
-                    _serviceProvider.GetRequiredService<ICacheService>(),
-                    _serviceProvider.GetRequiredService<ILogger<SiliconFlowAIService>>(),
-                    _serviceProvider.GetRequiredService<HttpClient>()),
-                    
-                _ => new SiliconFlowAIService(
-                    _serviceProvider.GetRequiredService<AiConfig>(),
-                    _serviceProvider.GetRequiredService<ICacheService>(),
-                    _serviceProvider.GetRequiredService<ILogger<SiliconFlowAIService>>(),
                     _serviceProvider.GetRequiredService<HttpClient>())
             };
         }
@@ -56,8 +44,8 @@ namespace LearningAssistant.Services.AI
 
     public class FallbackAIService : IAIService
     {
-        private static readonly string[] FallbackProviders = { "deepseek", "doubao", "siliconflow" };
-        
+        private static readonly string[] FallbackProviders = { "deepseek", "doubao" };
+
         private readonly IAIService _currentService;
         private readonly AiConfig _config;
         private readonly IAIServiceFactory _factory;
@@ -73,37 +61,37 @@ namespace LearningAssistant.Services.AI
             _logger.LogInformation("当前AI服务提供商: {Provider}, 模型: {Model}", config.Provider, config.Model);
         }
 
-        public async Task<string> GetExplanationAsync(string text, string language, string subType)
+        public async Task<string> GetExplanationAsync(string text, string language, string subType, CancellationToken cancellationToken = default)
         {
             try
             {
-                return await _currentService.GetExplanationAsync(text, language, subType);
+                return await _currentService.GetExplanationAsync(text, language, subType, cancellationToken);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "AI服务调用失败，尝试切换到备用服务");
-                return await TryFallbackAsync(service => 
-                    service.GetExplanationAsync(text, language, subType));
+                return await TryFallbackAsync(service =>
+                    service.GetExplanationAsync(text, language, subType, cancellationToken), cancellationToken);
             }
         }
 
-        public async Task<string> AskQuestionAsync(string question, string context = "")
+        public async Task<string> AskQuestionAsync(string question, string context = "", CancellationToken cancellationToken = default)
         {
             try
             {
-                return await _currentService.AskQuestionAsync(question, context);
+                return await _currentService.AskQuestionAsync(question, context, cancellationToken);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "AI服务调用失败，尝试切换到备用服务");
-                return await TryFallbackAsync(service => 
-                    service.AskQuestionAsync(question, context));
+                return await TryFallbackAsync(service =>
+                    service.AskQuestionAsync(question, context, cancellationToken), cancellationToken);
             }
         }
 
         public string ModelName => _currentService.ModelName;
 
-        private async Task<string> TryFallbackAsync(Func<IAIService, Task<string>> callServiceMethod)
+        private async Task<string> TryFallbackAsync(Func<IAIService, Task<string>> callServiceMethod, CancellationToken cancellationToken = default)
         {
             var currentProvider = _config.Provider.ToLower();
 
@@ -113,6 +101,7 @@ namespace LearningAssistant.Services.AI
 
                 try
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     _logger.LogInformation("尝试切换到: {Provider}", provider);
                     var service = _factory.CreateService(provider);
                     var result = await callServiceMethod(service);

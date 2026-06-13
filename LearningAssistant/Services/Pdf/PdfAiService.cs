@@ -19,7 +19,7 @@ namespace LearningAssistant.Services.Pdf
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                return await _aiQuestionService.AskAsync(question, context);
+                return await _aiQuestionService.AskAsync(question, context, cancellationToken);
             }
             catch (OperationCanceledException)
             {

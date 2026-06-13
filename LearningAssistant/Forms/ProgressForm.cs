@@ -24,8 +24,8 @@ namespace LearningAssistant.Forms
 
         private void InitializeComponent()
         {
-            this.progressBar1 = new System.Windows.Forms.ProgressBar();
-            this.labelProgress = new System.Windows.Forms.Label();
+            this.progressBar1 = new ProgressBar();
+            this.labelProgress = new Label();
             this.SuspendLayout();
             // 
             // progressBar1
@@ -61,7 +61,7 @@ namespace LearningAssistant.Forms
             this.ResumeLayout(false);
         }
 
-        private System.Windows.Forms.ProgressBar progressBar1;
-        private System.Windows.Forms.Label labelProgress;
+        private ProgressBar progressBar1;
+        private Label labelProgress;
     }
 }

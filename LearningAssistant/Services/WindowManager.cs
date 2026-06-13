@@ -14,9 +14,8 @@ namespace LearningAssistant.Services
         void OpenEditorWindowWithContext(string? text, string? language, string? subCategory);
         void OpenStatisticsWindow();
         void OpenLearningManagementWindow();
-        void OpenBrowserWindow();
         void OpenPdfReaderWindow();
-        void OpenAIWebViewWindow();
+        void OpenAIWebViewWindow(string? initialPrompt = null);
     }
 
     public class WindowManager : IWindowManager
@@ -131,11 +130,6 @@ namespace LearningAssistant.Services
                 // 设置 Presenter
                 form.SetPresenter(presenter);
 
-                // 如果有上下文信息，设置到窗体
-                if (!string.IsNullOrEmpty(text))
-                {
-                    form.GenerateRange = text;
-                }
 
                 if (!string.IsNullOrEmpty(language))
                 {
@@ -205,26 +199,6 @@ namespace LearningAssistant.Services
             }
         }
 
-        public void OpenBrowserWindow()
-        {
-            _logger.LogInformation("Opening browser window");
-
-            try
-            {
-                using var scope = _serviceProvider.CreateScope();
-                var scopedProvider = scope.ServiceProvider;
-
-                var form = scopedProvider.GetRequiredService<BrowserForm>();
-                form.StartPosition = FormStartPosition.CenterParent;
-                form.ShowDialog();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to open browser window");
-                throw;
-            }
-        }
-
         public void OpenPdfReaderWindow()
         {
             _logger.LogInformation("Opening PDF reader window");
@@ -248,7 +222,7 @@ namespace LearningAssistant.Services
             }
         }
 
-        public void OpenAIWebViewWindow()
+        public void OpenAIWebViewWindow(string? initialPrompt = null)
         {
             _logger.LogInformation("Opening AI WebView window");
 
@@ -258,6 +232,7 @@ namespace LearningAssistant.Services
                 var scopedProvider = scope.ServiceProvider;
 
                 var form = scopedProvider.GetRequiredService<AIWebViewForm>();
+                form.InitialPrompt = initialPrompt;
                 form.StartPosition = FormStartPosition.CenterParent;
                 form.ShowDialog();
             }

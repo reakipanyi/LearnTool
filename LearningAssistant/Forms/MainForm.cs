@@ -4,7 +4,7 @@ using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
 using LearningAssistant.Services.Cloud;
-using LearningAssistant.Services.Learning;
+using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 
@@ -255,12 +255,12 @@ namespace LearningAssistant.Forms
             labelStreakIcon = new Label();
             labelStreakDays = new Label();
             buttonLearningManagement = new Button();
-            buttonBrowser = new Button();
             buttonWebView2Browser = new Button();
             buttonAIWebView = new Button();
             buttonSubjectLearning = new Button();
-            buttonBaiduNetdisk = new Button();
             buttonDictation = new Button();
+            buttonBrowser = new Button();
+            buttonBaiduNetdisk = new Button();
             menuStrip1 = new MenuStrip();
             toolStripMenuItemFile = new ToolStripMenuItem();
             toolStripMenuItemNewUser = new ToolStripMenuItem();
@@ -286,11 +286,9 @@ namespace LearningAssistant.Forms
             panelMain.Controls.Add(buttonLearning);
             panelMain.Controls.Add(groupBoxUser);
             panelMain.Controls.Add(buttonLearningManagement);
-            panelMain.Controls.Add(buttonBrowser);
             panelMain.Controls.Add(buttonWebView2Browser);
             panelMain.Controls.Add(buttonAIWebView);
             panelMain.Controls.Add(buttonSubjectLearning);
-            panelMain.Controls.Add(buttonBaiduNetdisk);
             panelMain.Controls.Add(buttonDictation);
             panelMain.Dock = DockStyle.Fill;
             panelMain.Location = new Point(0, 25);
@@ -445,27 +443,13 @@ namespace LearningAssistant.Forms
             buttonLearningManagement.UseVisualStyleBackColor = false;
             buttonLearningManagement.Click += ButtonLearningManagement_Click;
             // 
-            // buttonBrowser
-            // 
-            buttonBrowser.BackColor = Color.FromArgb(103, 58, 183);
-            buttonBrowser.FlatAppearance.BorderSize = 0;
-            buttonBrowser.FlatStyle = FlatStyle.Flat;
-            buttonBrowser.ForeColor = Color.White;
-            buttonBrowser.Location = new Point(232, 398);
-            buttonBrowser.Name = "buttonBrowser";
-            buttonBrowser.Size = new Size(150, 51);
-            buttonBrowser.TabIndex = 19;
-            buttonBrowser.Text = "🌐 学习浏览器(CefSharp)";
-            buttonBrowser.UseVisualStyleBackColor = false;
-            buttonBrowser.Click += ButtonBrowser_Click;
-            // 
             // buttonWebView2Browser
             // 
             buttonWebView2Browser.BackColor = Color.FromArgb(255, 152, 0);
             buttonWebView2Browser.FlatAppearance.BorderSize = 0;
             buttonWebView2Browser.FlatStyle = FlatStyle.Flat;
             buttonWebView2Browser.ForeColor = Color.White;
-            buttonWebView2Browser.Location = new Point(31, 554);
+            buttonWebView2Browser.Location = new Point(232, 398);
             buttonWebView2Browser.Name = "buttonWebView2Browser";
             buttonWebView2Browser.Size = new Size(150, 51);
             buttonWebView2Browser.TabIndex = 23;
@@ -479,11 +463,11 @@ namespace LearningAssistant.Forms
             buttonAIWebView.FlatAppearance.BorderSize = 0;
             buttonAIWebView.FlatStyle = FlatStyle.Flat;
             buttonAIWebView.ForeColor = Color.White;
-            buttonAIWebView.Location = new Point(232, 554);
+            buttonAIWebView.Location = new Point(232, 476);
             buttonAIWebView.Name = "buttonAIWebView";
             buttonAIWebView.Size = new Size(150, 51);
             buttonAIWebView.TabIndex = 24;
-            buttonAIWebView.Text = "🤖 AI助手(豆包/DeepSeek)";
+            buttonAIWebView.Text = "🤖 AI助手";
             buttonAIWebView.UseVisualStyleBackColor = false;
             buttonAIWebView.Click += ButtonAIWebView_Click;
             // 
@@ -501,20 +485,6 @@ namespace LearningAssistant.Forms
             buttonSubjectLearning.UseVisualStyleBackColor = false;
             buttonSubjectLearning.Click += ButtonSubjectLearning_Click;
             // 
-            // buttonBaiduNetdisk
-            // 
-            buttonBaiduNetdisk.BackColor = Color.FromArgb(33, 150, 243);
-            buttonBaiduNetdisk.FlatAppearance.BorderSize = 0;
-            buttonBaiduNetdisk.FlatStyle = FlatStyle.Flat;
-            buttonBaiduNetdisk.ForeColor = Color.White;
-            buttonBaiduNetdisk.Location = new Point(232, 476);
-            buttonBaiduNetdisk.Name = "buttonBaiduNetdisk";
-            buttonBaiduNetdisk.Size = new Size(150, 51);
-            buttonBaiduNetdisk.TabIndex = 21;
-            buttonBaiduNetdisk.Text = "☁️ 百度网盘";
-            buttonBaiduNetdisk.UseVisualStyleBackColor = false;
-            buttonBaiduNetdisk.Click += ButtonBaiduNetdisk_Click;
-            // 
             // buttonDictation
             // 
             buttonDictation.BackColor = Color.FromArgb(76, 175, 80);
@@ -528,6 +498,27 @@ namespace LearningAssistant.Forms
             buttonDictation.Text = "🎤 听写练习";
             buttonDictation.UseVisualStyleBackColor = false;
             buttonDictation.Click += ButtonDictation_Click;
+            // 
+            // buttonBrowser
+            // 
+            buttonBrowser.Location = new Point(0, 0);
+            buttonBrowser.Name = "buttonBrowser";
+            buttonBrowser.Size = new Size(75, 23);
+            buttonBrowser.TabIndex = 0;
+            // 
+            // buttonBaiduNetdisk
+            // 
+            buttonBaiduNetdisk.BackColor = Color.FromArgb(33, 150, 243);
+            buttonBaiduNetdisk.FlatAppearance.BorderSize = 0;
+            buttonBaiduNetdisk.FlatStyle = FlatStyle.Flat;
+            buttonBaiduNetdisk.ForeColor = Color.White;
+            buttonBaiduNetdisk.Location = new Point(232, 476);
+            buttonBaiduNetdisk.Name = "buttonBaiduNetdisk";
+            buttonBaiduNetdisk.Size = new Size(150, 51);
+            buttonBaiduNetdisk.TabIndex = 21;
+            buttonBaiduNetdisk.Text = "☁️ 百度网盘";
+            buttonBaiduNetdisk.UseVisualStyleBackColor = false;
+            buttonBaiduNetdisk.Click += ButtonBaiduNetdisk_Click;
             // 
             // menuStrip1
             // 
@@ -646,11 +637,6 @@ namespace LearningAssistant.Forms
             _windowManager.OpenLearningManagementWindow();
         }
 
-        private void ButtonBrowser_Click(object? sender, EventArgs e)
-        {
-            _windowManager.OpenBrowserWindow();
-        }
-
         private void ButtonWebView2Browser_Click(object? sender, EventArgs e)
         {
             try
@@ -714,14 +700,14 @@ namespace LearningAssistant.Forms
         {
             try
             {
-                var speechService = Program.GetService<IAdvancedSpeechService>();
-                if (speechService == null)
+                var ttsService = Program.GetService<ITTSService>();
+                if (ttsService == null)
                 {
-                    MessageBox.Show("听写服务未初始化", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("TTS服务未初始化", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
-                using var dictationForm = new DictationForm(speechService);
+                using var dictationForm = new DictationForm(ttsService);
                 dictationForm.ShowDialog();
             }
             catch (Exception ex)

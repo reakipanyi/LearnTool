@@ -57,8 +57,45 @@ namespace LearningAssistant.Services.Pdf
             !string.IsNullOrWhiteSpace(DecryptedAppId) &&
             !string.IsNullOrWhiteSpace(DecryptedSecret);
 
-        private string DecryptedAppId => _decryptedAppId ??= Services.Utils.SecureConfigManager.Decrypt(_config.BaiduAppId);
-        private string DecryptedSecret => _decryptedSecret ??= Services.Utils.SecureConfigManager.Decrypt(_config.BaiduSecret);
+        private string DecryptedAppId 
+        { 
+            get 
+            { 
+                if (_decryptedAppId != null) return _decryptedAppId;
+                
+                try
+                {
+                    _decryptedAppId = Services.Utils.SecureConfigManager.Decrypt(_config.BaiduAppId);
+                }
+                catch
+                {
+                    // 解密失败，直接使用原始值（可能是未加密的）
+                    _decryptedAppId = _config.BaiduAppId;
+                }
+                
+                return _decryptedAppId;
+            } 
+        }
+        
+        private string DecryptedSecret 
+        { 
+            get 
+            { 
+                if (_decryptedSecret != null) return _decryptedSecret;
+                
+                try
+                {
+                    _decryptedSecret = Services.Utils.SecureConfigManager.Decrypt(_config.BaiduSecret);
+                }
+                catch
+                {
+                    // 解密失败，直接使用原始值（可能是未加密的）
+                    _decryptedSecret = _config.BaiduSecret;
+                }
+                
+                return _decryptedSecret;
+            } 
+        }
         #endregion
 
         #region 核心翻译方法

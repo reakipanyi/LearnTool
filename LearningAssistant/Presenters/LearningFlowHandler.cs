@@ -21,7 +21,7 @@ namespace LearningAssistant.Presenters
         void ExportErrorBook();
         void OpenStatistics();
         void SendToPdfQuestion();
-        
+
         event EventHandler<SendToPdfEventArgs>? OnSendToPdfQuestion;
     }
 
@@ -153,7 +153,6 @@ namespace LearningAssistant.Presenters
                 _cts = new CancellationTokenSource();
 
                 _currentExplanation = "";
-                _view.AIExplanation = "";
 
                 var item = _studyEngine.GetCurrentItem();
                 if (item == null)
@@ -165,7 +164,6 @@ namespace LearningAssistant.Presenters
                     return;
                 }
 
-                _view.SetCurrentItem(item);
                 _view.CurrentContent = item.GetMainContent();
                 _view.CurrentDisplayText = item.GetDisplayText();
                 _view.ProgressMax = _studyEngine.TotalCount;
@@ -174,10 +172,7 @@ namespace LearningAssistant.Presenters
                 UpdateStatistics();
                 UpdateListSelection();
 
-                if (_studyEngine.CurrentMode == Constants.LearningMode.Study && _view.IsAIExplanationEnabled)
-                {
-                    await LoadAIExplanationAsync(item.GetMainContent(), _cts.Token);
-                }
+
 
                 if (_view.IsVoiceEnabled && _autoPronunciationCount < MaxAutoPronunciationCount)
                 {
@@ -200,25 +195,6 @@ namespace LearningAssistant.Presenters
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to update list selection");
-            }
-        }
-
-        private async Task LoadAIExplanationAsync(string text, CancellationToken cancellationToken)
-        {
-            try
-            {
-                var explanation = await _aiService.GetExplanationAsync(text, _currentLanguage, _currentSubCategory);
-                _currentExplanation = explanation;
-                _view.AIExplanation = $"【{_aiService.ModelName}】\n{explanation}";
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.LogDebug("LoadAIExplanationAsync was cancelled");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to load AI explanation");
-                _view.AIExplanation = "无法获取解释";
             }
         }
 

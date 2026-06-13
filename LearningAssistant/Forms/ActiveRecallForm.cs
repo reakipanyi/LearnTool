@@ -62,6 +62,10 @@ namespace LearningAssistant.Forms
         private Label labelProgress;
         private Label labelCorrect;
         private Label labelAccuracy;
+        private Label labelTitle;
+        private Label labelQuestionTitle;
+        private Label labelHint;
+        private Label labelAnswerTitle;
         private Panel panelStats;
 
         #endregion
@@ -128,163 +132,200 @@ namespace LearningAssistant.Forms
         /// </summary>
         private void InitializeComponent()
         {
-            // 窗体基本设置
-            this.Text = "🧠 主动回忆训练";
-            this.Size = new Size(600, 450);
-            this.StartPosition = FormStartPosition.CenterParent;
-            this.BackColor = Color.FromArgb(250, 248, 245);
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
-
-            // 主面板
-            panelMain = new Panel { Dock = DockStyle.Fill };
-            this.Controls.Add(panelMain);
-
-            // 标题
-            Label labelTitle = new Label
-            {
-                Text = "💪 主动回忆 - 比看答案更有效！",
-                Font = new Font("微软雅黑", 14F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(66, 133, 244),
-                Dock = DockStyle.Top,
-                Height = 45,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(20, 0, 0, 0)
-            };
+            panelMain = new Panel();
+            labelTitle = new Label();
+            progressBar = new ProgressBar();
+            labelProgress = new Label();
+            labelQuestionTitle = new Label();
+            labelQuestion = new Label();
+            labelHint = new Label();
+            labelAnswerTitle = new Label();
+            textBoxAnswer = new TextBox();
+            buttonCheck = new Button();
+            labelResult = new Label();
+            panelStats = new Panel();
+            labelCorrect = new Label();
+            labelAccuracy = new Label();
+            panelMain.SuspendLayout();
+            panelStats.SuspendLayout();
+            SuspendLayout();
+            // 
+            // panelMain
+            // 
             panelMain.Controls.Add(labelTitle);
-
-            // 进度条
-            progressBar = new ProgressBar
-            {
-                Dock = DockStyle.Top,
-                Height = 25,
-                BackColor = Color.FromArgb(230, 230, 230),
-                ForeColor = Color.FromArgb(76, 175, 80)
-            };
             panelMain.Controls.Add(progressBar);
-
-            // 进度标签
-            labelProgress = new Label
-            {
-                Dock = DockStyle.Top,
-                Height = 25,
-                Font = new Font("微软雅黑", 9F),
-                ForeColor = Color.FromArgb(100, 100, 100),
-                TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(20, 0, 0, 0)
-            };
             panelMain.Controls.Add(labelProgress);
-
-            // 问题区域标题
-            Label labelQuestionTitle = new Label
-            {
-                Text = "🎯 回忆任务：",
-                Location = new Point(30, 100),
-                Font = new Font("微软雅黑", 11F, FontStyle.Bold),
-                AutoSize = true
-            };
             panelMain.Controls.Add(labelQuestionTitle);
-
-            // 问题显示
-            labelQuestion = new Label
-            {
-                Location = new Point(30, 130),
-                Size = new Size(540, 80),
-                Font = new Font("微软雅黑", 20F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(50, 50, 50),
-                TextAlign = ContentAlignment.TopLeft
-            };
             panelMain.Controls.Add(labelQuestion);
-
-            // 提示标签
-            Label labelHint = new Label
-            {
-                Text = "💡 不要看答案！先自己回忆...",
-                Location = new Point(30, 215),
-                Size = new Size(540, 20),
-                Font = new Font("微软雅黑", 9F),
-                ForeColor = Color.FromArgb(150, 150, 150),
-                TextAlign = ContentAlignment.MiddleLeft
-            };
             panelMain.Controls.Add(labelHint);
-
-            // 答案输入区域标题
-            Label labelAnswerTitle = new Label
-            {
-                Text = "✏️ 你的答案：",
-                Location = new Point(30, 245),
-                Font = new Font("微软雅黑", 11F, FontStyle.Bold),
-                AutoSize = true
-            };
             panelMain.Controls.Add(labelAnswerTitle);
-
-            // 答案输入框
-            textBoxAnswer = new TextBox
-            {
-                Location = new Point(30, 275),
-                Size = new Size(540, 35),
-                Font = new Font("微软雅黑", 14F),
-                PlaceholderText = "在这里写下你的答案..."
-            };
-            textBoxAnswer.KeyDown += TextBoxAnswer_KeyDown;
             panelMain.Controls.Add(textBoxAnswer);
-
-            // 检查按钮
-            buttonCheck = new Button
-            {
-                Text = "✅ 检查答案",
-                Location = new Point(30, 320),
-                Size = new Size(540, 40),
-                BackColor = Color.FromArgb(66, 133, 244),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("微软雅黑", 11F, FontStyle.Bold)
-            };
-            buttonCheck.Click += ButtonCheck_Click;
             panelMain.Controls.Add(buttonCheck);
-
-            // 结果显示
-            labelResult = new Label
-            {
-                Location = new Point(30, 365),
-                Size = new Size(540, 40),
-                Font = new Font("微软雅黑", 11F),
-                TextAlign = ContentAlignment.MiddleLeft
-            };
             panelMain.Controls.Add(labelResult);
-
-            // 统计面板
-            panelStats = new Panel
-            {
-                Dock = DockStyle.Bottom,
-                Height = 45,
-                BackColor = Color.FromArgb(248, 250, 252),
-                Padding = new Padding(15, 0, 0, 0)
-            };
             panelMain.Controls.Add(panelStats);
-
-            // 正确数标签
-            labelCorrect = new Label
-            {
-                Dock = DockStyle.Left,
-                Text = "✓ 正确: 0",
-                Font = new Font("微软雅黑", 10F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(76, 175, 80),
-                TextAlign = ContentAlignment.MiddleLeft,
-                Width = 150
-            };
+            panelMain.Dock = DockStyle.Fill;
+            panelMain.Location = new Point(0, 0);
+            panelMain.Name = "panelMain";
+            panelMain.Size = new Size(584, 484);
+            panelMain.TabIndex = 0;
+            // 
+            // labelTitle
+            // 
+            labelTitle.Dock = DockStyle.Top;
+            labelTitle.Font = new Font("微软雅黑", 14F, FontStyle.Bold);
+            labelTitle.ForeColor = Color.FromArgb(66, 133, 244);
+            labelTitle.Location = new Point(0, 50);
+            labelTitle.Name = "labelTitle";
+            labelTitle.Padding = new Padding(20, 0, 0, 0);
+            labelTitle.Size = new Size(584, 45);
+            labelTitle.TabIndex = 0;
+            labelTitle.Text = "💪 主动回忆 - 比看答案更有效！";
+            labelTitle.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // progressBar
+            // 
+            progressBar.BackColor = Color.FromArgb(230, 230, 230);
+            progressBar.Dock = DockStyle.Top;
+            progressBar.ForeColor = Color.FromArgb(76, 175, 80);
+            progressBar.Location = new Point(0, 25);
+            progressBar.Name = "progressBar";
+            progressBar.Size = new Size(584, 25);
+            progressBar.TabIndex = 1;
+            // 
+            // labelProgress
+            // 
+            labelProgress.Dock = DockStyle.Top;
+            labelProgress.Font = new Font("微软雅黑", 9F);
+            labelProgress.ForeColor = Color.FromArgb(100, 100, 100);
+            labelProgress.Location = new Point(0, 0);
+            labelProgress.Name = "labelProgress";
+            labelProgress.Padding = new Padding(20, 0, 0, 0);
+            labelProgress.Size = new Size(584, 25);
+            labelProgress.TabIndex = 2;
+            labelProgress.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // labelQuestionTitle
+            // 
+            labelQuestionTitle.AutoSize = true;
+            labelQuestionTitle.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            labelQuestionTitle.Location = new Point(30, 100);
+            labelQuestionTitle.Name = "labelQuestionTitle";
+            labelQuestionTitle.Size = new Size(104, 19);
+            labelQuestionTitle.TabIndex = 3;
+            labelQuestionTitle.Text = "🎯 回忆任务：";
+            // 
+            // labelQuestion
+            // 
+            labelQuestion.Font = new Font("微软雅黑", 20F, FontStyle.Bold);
+            labelQuestion.ForeColor = Color.FromArgb(50, 50, 50);
+            labelQuestion.Location = new Point(30, 130);
+            labelQuestion.Name = "labelQuestion";
+            labelQuestion.Size = new Size(540, 80);
+            labelQuestion.TabIndex = 4;
+            // 
+            // labelHint
+            // 
+            labelHint.Font = new Font("微软雅黑", 9F);
+            labelHint.ForeColor = Color.FromArgb(150, 150, 150);
+            labelHint.Location = new Point(30, 215);
+            labelHint.Name = "labelHint";
+            labelHint.Size = new Size(540, 20);
+            labelHint.TabIndex = 5;
+            labelHint.Text = "💡 不要看答案！先自己回忆...";
+            labelHint.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // labelAnswerTitle
+            // 
+            labelAnswerTitle.AutoSize = true;
+            labelAnswerTitle.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            labelAnswerTitle.Location = new Point(30, 245);
+            labelAnswerTitle.Name = "labelAnswerTitle";
+            labelAnswerTitle.Size = new Size(104, 19);
+            labelAnswerTitle.TabIndex = 6;
+            labelAnswerTitle.Text = "✏️ 你的答案：";
+            // 
+            // textBoxAnswer
+            // 
+            textBoxAnswer.Font = new Font("微软雅黑", 14F);
+            textBoxAnswer.Location = new Point(30, 275);
+            textBoxAnswer.Name = "textBoxAnswer";
+            textBoxAnswer.PlaceholderText = "在这里写下你的答案...";
+            textBoxAnswer.Size = new Size(540, 32);
+            textBoxAnswer.TabIndex = 7;
+            textBoxAnswer.KeyDown += TextBoxAnswer_KeyDown;
+            // 
+            // buttonCheck
+            // 
+            buttonCheck.BackColor = Color.FromArgb(66, 133, 244);
+            buttonCheck.FlatStyle = FlatStyle.Flat;
+            buttonCheck.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            buttonCheck.ForeColor = Color.White;
+            buttonCheck.Location = new Point(30, 320);
+            buttonCheck.Name = "buttonCheck";
+            buttonCheck.Size = new Size(540, 40);
+            buttonCheck.TabIndex = 8;
+            buttonCheck.Text = "✅ 检查答案";
+            buttonCheck.UseVisualStyleBackColor = false;
+            buttonCheck.Click += ButtonCheck_Click;
+            // 
+            // labelResult
+            // 
+            labelResult.Font = new Font("微软雅黑", 11F);
+            labelResult.Location = new Point(30, 365);
+            labelResult.Name = "labelResult";
+            labelResult.Size = new Size(540, 40);
+            labelResult.TabIndex = 9;
+            labelResult.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // panelStats
+            // 
+            panelStats.BackColor = Color.FromArgb(248, 250, 252);
             panelStats.Controls.Add(labelCorrect);
-
-            // 正确率标签
-            labelAccuracy = new Label
-            {
-                Dock = DockStyle.Left,
-                Text = "📊 正确率: 0%",
-                Font = new Font("微软雅黑", 10F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(255, 152, 0),
-                TextAlign = ContentAlignment.MiddleLeft,
-                Width = 150
-            };
             panelStats.Controls.Add(labelAccuracy);
+            panelStats.Dock = DockStyle.Bottom;
+            panelStats.Location = new Point(0, 443);
+            panelStats.Name = "panelStats";
+            panelStats.Padding = new Padding(15, 0, 0, 0);
+            panelStats.Size = new Size(584, 41);
+            panelStats.TabIndex = 10;
+            // 
+            // labelCorrect
+            // 
+            labelCorrect.Dock = DockStyle.Left;
+            labelCorrect.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            labelCorrect.ForeColor = Color.FromArgb(76, 175, 80);
+            labelCorrect.Location = new Point(165, 0);
+            labelCorrect.Name = "labelCorrect";
+            labelCorrect.Size = new Size(150, 41);
+            labelCorrect.TabIndex = 0;
+            labelCorrect.Text = "✓ 正确: 0";
+            labelCorrect.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // labelAccuracy
+            // 
+            labelAccuracy.Dock = DockStyle.Left;
+            labelAccuracy.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            labelAccuracy.ForeColor = Color.FromArgb(255, 152, 0);
+            labelAccuracy.Location = new Point(15, 0);
+            labelAccuracy.Name = "labelAccuracy";
+            labelAccuracy.Size = new Size(150, 41);
+            labelAccuracy.TabIndex = 1;
+            labelAccuracy.Text = "📊 正确率: 0%";
+            labelAccuracy.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // ActiveRecallForm
+            // 
+            BackColor = Color.FromArgb(250, 248, 245);
+            ClientSize = new Size(584, 484);
+            Controls.Add(panelMain);
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            Name = "ActiveRecallForm";
+            StartPosition = FormStartPosition.CenterParent;
+            Text = "\U0001f9e0 主动回忆训练";
+            panelMain.ResumeLayout(false);
+            panelMain.PerformLayout();
+            panelStats.ResumeLayout(false);
+            ResumeLayout(false);
         }
 
         #endregion

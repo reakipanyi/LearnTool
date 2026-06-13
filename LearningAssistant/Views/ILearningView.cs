@@ -1,5 +1,3 @@
-using LearningAssistant.Models.Learning;
-
 namespace LearningAssistant.Views
 {
     /// <summary>
@@ -38,10 +36,6 @@ namespace LearningAssistant.Views
         /// </summary>
         string CurrentDisplayText { set; }
 
-        /// <summary>
-        /// AI解释文本
-        /// </summary>
-        string AIExplanation { set; }
 
         /// <summary>
         /// 统计信息文本
@@ -63,10 +57,6 @@ namespace LearningAssistant.Views
         /// </summary>
         bool IsVoiceEnabled { get; set; }
 
-        /// <summary>
-        /// 是否启用AI解释
-        /// </summary>
-        bool IsAIExplanationEnabled { get; set; }
 
         /// <summary>
         /// 发音范围
@@ -162,11 +152,6 @@ namespace LearningAssistant.Views
         /// <param name="language">语言代码</param>
         void PlayPronunciation(string text, string language);
 
-        /// <summary>
-        /// 设置当前学习项
-        /// </summary>
-        /// <param name="item">学习项</param>
-        void SetCurrentItem(LearningItem item);
 
         /// <summary>
         /// 更新学习列表显示

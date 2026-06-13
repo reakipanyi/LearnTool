@@ -1,404 +1,395 @@
-using LearningAssistant.Services.Learning;
+using LearningAssistant.Services.TTS;
 using Microsoft.Extensions.Logging;
 using System;
+using System.ComponentModel;
 using System.Drawing;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace LearningAssistant.Forms
 {
+    /// <summary>
+    /// 听写练习窗体 - 播放文字让用户手写，然后对比结果
+    /// </summary>
     public partial class DictationForm : Form
     {
-        private readonly IAdvancedSpeechService _speechService;
+        private readonly ITTSService _ttsService;
         private readonly ILogger<DictationForm>? _logger;
-        private bool _isListening = false;
-        private CancellationTokenSource? _cts;
+        private bool _isPlaying = false;
+        private int _playCount = 0;
+        private const int MaxPlayCount = 3;
 
-        public DictationForm(IAdvancedSpeechService speechService, ILogger<DictationForm>? logger = null)
+        public DictationForm(ITTSService ttsService, ILogger<DictationForm>? logger = null)
         {
             InitializeComponent();
-            _speechService = speechService ?? throw new ArgumentNullException(nameof(speechService));
+            _ttsService = ttsService ?? throw new ArgumentNullException(nameof(ttsService));
             _logger = logger;
         }
 
-        private async void buttonStartDictation_Click(object sender, EventArgs e)
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public string ExpectedText
         {
-            if (_isListening)
-            {
-                StopDictation();
-            }
-            else
-            {
-                await StartDictationAsync();
-            }
+            get => textBoxExpected.Text;
+            set => textBoxExpected.Text = value ?? string.Empty;
         }
 
-        private async Task StartDictationAsync()
+        private async void buttonPlay_Click(object sender, EventArgs e)
         {
+            var text = textBoxExpected.Text.Trim();
+            if (string.IsNullOrEmpty(text))
+            {
+                MessageBox.Show("请先输入要听写的文本", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (_isPlaying) return;
+
             try
             {
-                _isListening = true;
-                buttonStartDictation.Text = "⏹ 停止听写";
-                buttonStartDictation.BackColor = Color.Red;
-                labelStatus.Text = "🎤 正在听...请说话";
-                labelStatus.ForeColor = Color.Green;
-                textBoxResult.Text = string.Empty;
-                panelWave.Visible = true;
+                _isPlaying = true;
+                _playCount++;
+                buttonPlay.Text = "🔊 播放中...";
+                buttonPlay.BackColor = Color.Orange;
+                labelStatus.Text = $"🔊 正在播放 (第{_playCount}次，最多{MaxPlayCount}次)";
+                labelStatus.ForeColor = Color.Blue;
 
-                var expectedText = textBoxExpected.Text.Trim();
-                
-                if (!string.IsNullOrEmpty(expectedText))
+                // 清空手写输入区域，让用户重新听写
+                if (_playCount == 1)
                 {
-                    _cts = new CancellationTokenSource();
-                    var score = await Task.Run(() => 
-                        _speechService.StartDictationSessionWithScore(expectedText, 30), 
-                        _cts.Token);
-                    
-                    UpdateResult(score.RecognizedText, score.Score, score.Passed);
+                    textBoxUserInput.Text = string.Empty;
+                    labelResult.Text = string.Empty;
                 }
-                else
-                {
-                    _speechService.StartDictationWithFeedback((text, confidence) =>
-                    {
-                        UpdatePartialResult(text, confidence);
-                    });
-                }
+
+                await _ttsService.SpeakAsync(text, DetectLanguage(text));
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "听写启动失败");
-                labelStatus.Text = $"❌ 启动失败: {ex.Message}";
+                _logger?.LogError(ex, "TTS播放失败");
+                labelStatus.Text = $"❌ 播放失败: {ex.Message}";
                 labelStatus.ForeColor = Color.Red;
-                StopDictation();
-            }
-        }
-
-        private void StopDictation()
-        {
-            try
-            {
-                _cts?.Cancel();
-                _speechService.StopDictation();
             }
             finally
             {
-                _isListening = false;
-                buttonStartDictation.Text = "🎤 开始听写";
-                buttonStartDictation.BackColor = Color.Green;
-                labelStatus.Text = "📝 准备就绪";
-                labelStatus.ForeColor = Color.Black;
-                panelWave.Visible = false;
+                _isPlaying = false;
+                buttonPlay.Text = _playCount >= MaxPlayCount ? "已达上限" : "🔊 再听一次";
+                buttonPlay.BackColor = _playCount >= MaxPlayCount ? Color.Gray : Color.FromArgb(33, 150, 243);
+                if (_playCount >= MaxPlayCount)
+                {
+                    buttonPlay.Enabled = false;
+                    labelStatus.Text = "📝 请在下方输入你听到的内容";
+                    labelStatus.ForeColor = Color.Black;
+                }
+                else
+                {
+                    labelStatus.Text = "📝 请在下方输入你听到的内容（可再听）";
+                    labelStatus.ForeColor = Color.Black;
+                }
             }
         }
 
-        private void UpdatePartialResult(string text, double confidence)
+        private void buttonCheck_Click(object sender, EventArgs e)
         {
-            if (InvokeRequired)
+            var expected = textBoxExpected.Text.Trim();
+            var userInput = textBoxUserInput.Text.Trim();
+
+            if (string.IsNullOrEmpty(expected))
             {
-                Invoke(new Action<string, double>(UpdatePartialResult), text, confidence);
+                MessageBox.Show("请先输入要听写的文本", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
-            textBoxResult.Text = text;
-            
-            if (confidence >= 0.8)
+            if (string.IsNullOrEmpty(userInput))
             {
-                labelConfidence.Text = $"置信度: {confidence:P0} ✓";
-                labelConfidence.ForeColor = Color.Green;
-            }
-            else if (confidence >= 0.5)
-            {
-                labelConfidence.Text = $"置信度: {confidence:P0} ~";
-                labelConfidence.ForeColor = Color.Orange;
-            }
-            else
-            {
-                labelConfidence.Text = $"置信度: {confidence:P0} ✗";
-                labelConfidence.ForeColor = Color.Red;
-            }
-        }
-
-        private void UpdateResult(string recognizedText, int score, bool passed)
-        {
-            if (InvokeRequired)
-            {
-                Invoke(new Action<string, int, bool>(UpdateResult), recognizedText, score, passed);
+                MessageBox.Show("请先输入你听写的内容", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
-            textBoxResult.Text = recognizedText;
-            
-            if (score >= 80)
+            // 计算相似度
+            int score = CalculateSimilarity(expected, userInput);
+
+            if (score >= 90)
             {
-                labelScore.Text = $"得分: {score}分 🎉";
-                labelScore.ForeColor = Color.Green;
+                labelResult.Text = $"得分: {score}分 🎉 太棒了！";
+                labelResult.ForeColor = Color.Green;
             }
-            else if (score >= 60)
+            else if (score >= 70)
             {
-                labelScore.Text = $"得分: {score}分 💪";
-                labelScore.ForeColor = Color.Orange;
+                labelResult.Text = $"得分: {score}分 💪 不错！";
+                labelResult.ForeColor = Color.FromArgb(255, 165, 0);
+            }
+            else if (score >= 50)
+            {
+                labelResult.Text = $"得分: {score}分 📝 继续努力";
+                labelResult.ForeColor = Color.Orange;
             }
             else
             {
-                labelScore.Text = $"得分: {score}分 😢";
-                labelScore.ForeColor = Color.Red;
+                labelResult.Text = $"得分: {score}分 😢 需要多练习";
+                labelResult.ForeColor = Color.Red;
             }
 
-            StopDictation();
+            // 显示差异
+            ShowDifferences(expected, userInput);
         }
 
-        private void buttonClear_Click(object sender, EventArgs e)
+        private void ShowDifferences(string expected, string userInput)
         {
-            textBoxExpected.Text = string.Empty;
-            textBoxResult.Text = string.Empty;
-            labelScore.Text = string.Empty;
-            labelConfidence.Text = string.Empty;
+            // 简单的差异对比：逐字标记
+            textBoxDiff.Text = string.Empty;
+            textBoxDiff.AppendText("正确: " + expected + "\n");
+            textBoxDiff.AppendText("你的: " + userInput + "\n");
+
+            if (expected != userInput)
+            {
+                textBoxDiff.AppendText("\n差异:\n");
+                int maxLen = Math.Max(expected.Length, userInput.Length);
+                for (int i = 0; i < maxLen; i++)
+                {
+                    char eChar = i < expected.Length ? expected[i] : '\0';
+                    char uChar = i < userInput.Length ? userInput[i] : '\0';
+                    if (eChar != uChar)
+                    {
+                        textBoxDiff.SelectionColor = Color.Red;
+                        textBoxDiff.AppendText($"[{i + 1}] 期望'{eChar}' 你的'{uChar}'\n");
+                    }
+                }
+            }
+            else
+            {
+                textBoxDiff.AppendText("完全正确！");
+            }
+            textBoxDiff.SelectionColor = Color.Black;
+        }
+
+        private int CalculateSimilarity(string expected, string input)
+        {
+            if (string.IsNullOrEmpty(expected) && string.IsNullOrEmpty(input))
+                return 100;
+            if (string.IsNullOrEmpty(expected) || string.IsNullOrEmpty(input))
+                return 0;
+
+            // 去除空格和标点后比较
+            var cleanExpected = System.Text.RegularExpressions.Regex.Replace(expected, @"[\s\p{P}]", "");
+            var cleanInput = System.Text.RegularExpressions.Regex.Replace(input, @"[\s\p{P}]", "");
+
+            if (cleanExpected.Length == 0 && cleanInput.Length == 0) return 100;
+            if (cleanExpected.Length == 0 || cleanInput.Length == 0) return 0;
+
+            int matchCount = 0;
+            int minLen = Math.Min(cleanExpected.Length, cleanInput.Length);
+            for (int i = 0; i < minLen; i++)
+            {
+                if (cleanExpected[i] == cleanInput[i])
+                    matchCount++;
+            }
+
+            return (int)((double)matchCount / Math.Max(cleanExpected.Length, cleanInput.Length) * 100);
+        }
+
+        private string DetectLanguage(string text)
+        {
+            foreach (char c in text)
+            {
+                if (c >= 0x4E00 && c <= 0x9FFF)
+                    return "zh";
+            }
+            return "en";
+        }
+
+        private void buttonReset_Click(object sender, EventArgs e)
+        {
+            _playCount = 0;
+            _isPlaying = false;
+            buttonPlay.Text = "🔊 播放听写";
+            buttonPlay.BackColor = Color.FromArgb(33, 150, 243);
+            buttonPlay.Enabled = true;
+            textBoxUserInput.Text = string.Empty;
+            textBoxDiff.Text = string.Empty;
+            labelResult.Text = string.Empty;
+            labelStatus.Text = "📝 准备就绪，点击播放开始听写";
+            labelStatus.ForeColor = Color.Black;
         }
 
         private void buttonExit_Click(object sender, EventArgs e)
         {
-            StopDictation();
             Close();
-        }
-
-        private void DictationForm_FormClosing(object sender, FormClosingEventArgs e)
-        {
-            StopDictation();
         }
 
         #region WinForms Designer Generated Code
 
         private System.ComponentModel.IContainer components = null;
-        private Button buttonStartDictation;
         private TextBox textBoxExpected;
-        private TextBox textBoxResult;
+        private TextBox textBoxUserInput;
+        private RichTextBox textBoxDiff;
         private Label labelExpected;
-        private Label labelResult;
+        private Label labelUserInput;
+        private Label labelDiff;
         private Label labelStatus;
-        private Label labelScore;
-        private Label labelConfidence;
-        private Button buttonClear;
+        private Label labelResult;
+        private Button buttonPlay;
+        private Button buttonCheck;
+        private Button buttonReset;
         private Button buttonExit;
-        private Panel panelWave;
-        private Label labelWave1;
-        private Label labelWave2;
-        private Label labelWave3;
-        private Label labelWave4;
-        private Label labelWave5;
 
         private void InitializeComponent()
         {
-            components = new System.ComponentModel.Container();
-            buttonStartDictation = new Button();
             textBoxExpected = new TextBox();
-            textBoxResult = new TextBox();
+            textBoxUserInput = new TextBox();
+            textBoxDiff = new RichTextBox();
             labelExpected = new Label();
-            labelResult = new Label();
+            labelUserInput = new Label();
+            labelDiff = new Label();
             labelStatus = new Label();
-            labelScore = new Label();
-            labelConfidence = new Label();
-            buttonClear = new Button();
+            labelResult = new Label();
+            buttonPlay = new Button();
+            buttonCheck = new Button();
+            buttonReset = new Button();
             buttonExit = new Button();
-            panelWave = new Panel();
-            labelWave5 = new Label();
-            labelWave4 = new Label();
-            labelWave3 = new Label();
-            labelWave2 = new Label();
-            labelWave1 = new Label();
-            panelWave.SuspendLayout();
             SuspendLayout();
-            // 
-            // buttonStartDictation
-            // 
-            buttonStartDictation.BackColor = Color.Green;
-            buttonStartDictation.FlatAppearance.BorderSize = 0;
-            buttonStartDictation.FlatStyle = FlatStyle.Flat;
-            buttonStartDictation.Font = new Font("微软雅黑", 16F, FontStyle.Bold);
-            buttonStartDictation.ForeColor = Color.White;
-            buttonStartDictation.Location = new Point(360, 250);
-            buttonStartDictation.Name = "buttonStartDictation";
-            buttonStartDictation.Size = new Size(200, 70);
-            buttonStartDictation.TabIndex = 0;
-            buttonStartDictation.Text = "🎤 开始听写";
-            buttonStartDictation.UseVisualStyleBackColor = false;
-            buttonStartDictation.Click += buttonStartDictation_Click;
-            // 
-            // textBoxExpected
-            // 
-            textBoxExpected.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            textBoxExpected.Font = new Font("微软雅黑", 12F);
-            textBoxExpected.Location = new Point(150, 40);
-            textBoxExpected.Name = "textBoxExpected";
-            textBoxExpected.Size = new Size(650, 33);
-            textBoxExpected.TabIndex = 1;
-            // 
-            // textBoxResult
-            // 
-            textBoxResult.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            textBoxResult.Font = new Font("微软雅黑", 14F, FontStyle.Bold);
-            textBoxResult.Location = new Point(150, 120);
-            textBoxResult.Multiline = true;
-            textBoxResult.Name = "textBoxResult";
-            textBoxResult.ReadOnly = true;
-            textBoxResult.Size = new Size(650, 100);
-            textBoxResult.TabIndex = 2;
-            textBoxResult.TextAlign = HorizontalAlignment.Center;
             // 
             // labelExpected
             // 
-            labelExpected.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
-            labelExpected.Location = new Point(30, 40);
+            labelExpected.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            labelExpected.Location = new Point(20, 15);
             labelExpected.Name = "labelExpected";
-            labelExpected.Size = new Size(110, 33);
-            labelExpected.TabIndex = 3;
-            labelExpected.Text = "预期文本:";
+            labelExpected.Size = new Size(100, 25);
+            labelExpected.Text = "听写内容:";
             labelExpected.TextAlign = ContentAlignment.MiddleRight;
             // 
-            // labelResult
+            // textBoxExpected
             // 
-            labelResult.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
-            labelResult.Location = new Point(30, 120);
-            labelResult.Name = "labelResult";
-            labelResult.Size = new Size(110, 33);
-            labelResult.TabIndex = 4;
-            labelResult.Text = "识别结果:";
-            labelResult.TextAlign = ContentAlignment.MiddleRight;
+            textBoxExpected.Font = new Font("微软雅黑", 14F);
+            textBoxExpected.Location = new Point(130, 12);
+            textBoxExpected.Name = "textBoxExpected";
+            textBoxExpected.Size = new Size(720, 33);
+            // 
+            // buttonPlay
+            // 
+            buttonPlay.BackColor = Color.FromArgb(33, 150, 243);
+            buttonPlay.FlatAppearance.BorderSize = 0;
+            buttonPlay.FlatStyle = FlatStyle.Flat;
+            buttonPlay.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
+            buttonPlay.ForeColor = Color.White;
+            buttonPlay.Location = new Point(130, 55);
+            buttonPlay.Name = "buttonPlay";
+            buttonPlay.Size = new Size(150, 40);
+            buttonPlay.Text = "🔊 播放听写";
+            buttonPlay.UseVisualStyleBackColor = false;
+            buttonPlay.Click += buttonPlay_Click;
             // 
             // labelStatus
             // 
-            labelStatus.Font = new Font("微软雅黑", 14F, FontStyle.Bold);
-            labelStatus.Location = new Point(30, 250);
+            labelStatus.Font = new Font("微软雅黑", 11F);
+            labelStatus.Location = new Point(290, 60);
             labelStatus.Name = "labelStatus";
-            labelStatus.Size = new Size(320, 35);
-            labelStatus.TabIndex = 5;
-            labelStatus.Text = "📝 准备就绪";
-            labelStatus.TextAlign = ContentAlignment.MiddleLeft;
+            labelStatus.Size = new Size(560, 30);
+            labelStatus.Text = "📝 准备就绪，点击播放开始听写";
             // 
-            // labelScore
+            // labelUserInput
             // 
-            labelScore.Font = new Font("微软雅黑", 16F, FontStyle.Bold);
-            labelScore.Location = new Point(600, 250);
-            labelScore.Name = "labelScore";
-            labelScore.Size = new Size(200, 35);
-            labelScore.TabIndex = 6;
-            labelScore.TextAlign = ContentAlignment.MiddleLeft;
+            labelUserInput.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            labelUserInput.Location = new Point(20, 105);
+            labelUserInput.Name = "labelUserInput";
+            labelUserInput.Size = new Size(100, 25);
+            labelUserInput.Text = "你的听写:";
+            labelUserInput.TextAlign = ContentAlignment.MiddleRight;
             // 
-            // labelConfidence
+            // textBoxUserInput
             // 
-            labelConfidence.Font = new Font("微软雅黑", 12F);
-            labelConfidence.Location = new Point(600, 290);
-            labelConfidence.Name = "labelConfidence";
-            labelConfidence.Size = new Size(200, 30);
-            labelConfidence.TabIndex = 7;
-            labelConfidence.TextAlign = ContentAlignment.MiddleLeft;
+            textBoxUserInput.Font = new Font("微软雅黑", 14F);
+            textBoxUserInput.Location = new Point(130, 102);
+            textBoxUserInput.Name = "textBoxUserInput";
+            textBoxUserInput.Size = new Size(720, 33);
             // 
-            // buttonClear
+            // buttonCheck
             // 
-            buttonClear.BackColor = Color.Gray;
-            buttonClear.FlatAppearance.BorderSize = 0;
-            buttonClear.FlatStyle = FlatStyle.Flat;
-            buttonClear.Font = new Font("微软雅黑", 12F);
-            buttonClear.ForeColor = Color.White;
-            buttonClear.Location = new Point(30, 350);
-            buttonClear.Name = "buttonClear";
-            buttonClear.Size = new Size(120, 40);
-            buttonClear.TabIndex = 8;
-            buttonClear.Text = "🗑 清空";
-            buttonClear.UseVisualStyleBackColor = false;
-            buttonClear.Click += buttonClear_Click;
+            buttonCheck.BackColor = Color.FromArgb(76, 175, 80);
+            buttonCheck.FlatAppearance.BorderSize = 0;
+            buttonCheck.FlatStyle = FlatStyle.Flat;
+            buttonCheck.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
+            buttonCheck.ForeColor = Color.White;
+            buttonCheck.Location = new Point(130, 145);
+            buttonCheck.Name = "buttonCheck";
+            buttonCheck.Size = new Size(150, 40);
+            buttonCheck.Text = "✅ 提交对比";
+            buttonCheck.UseVisualStyleBackColor = false;
+            buttonCheck.Click += buttonCheck_Click;
+            // 
+            // labelResult
+            // 
+            labelResult.Font = new Font("微软雅黑", 14F, FontStyle.Bold);
+            labelResult.Location = new Point(290, 150);
+            labelResult.Name = "labelResult";
+            labelResult.Size = new Size(560, 30);
+            // 
+            // labelDiff
+            // 
+            labelDiff.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            labelDiff.Location = new Point(20, 195);
+            labelDiff.Name = "labelDiff";
+            labelDiff.Size = new Size(100, 25);
+            labelDiff.Text = "对比详情:";
+            labelDiff.TextAlign = ContentAlignment.MiddleRight;
+            // 
+            // textBoxDiff
+            // 
+            textBoxDiff.Font = new Font("微软雅黑", 11F);
+            textBoxDiff.Location = new Point(130, 192);
+            textBoxDiff.Multiline = true;
+            textBoxDiff.Name = "textBoxDiff";
+            textBoxDiff.ReadOnly = true;
+            textBoxDiff.ScrollBars = RichTextBoxScrollBars.Vertical;
+            textBoxDiff.Size = new Size(720, 150);
+            // 
+            // buttonReset
+            // 
+            buttonReset.BackColor = Color.Gray;
+            buttonReset.FlatAppearance.BorderSize = 0;
+            buttonReset.FlatStyle = FlatStyle.Flat;
+            buttonReset.Font = new Font("微软雅黑", 11F);
+            buttonReset.ForeColor = Color.White;
+            buttonReset.Location = new Point(350, 360);
+            buttonReset.Name = "buttonReset";
+            buttonReset.Size = new Size(120, 40);
+            buttonReset.Text = "🔄 重新开始";
+            buttonReset.UseVisualStyleBackColor = false;
+            buttonReset.Click += buttonReset_Click;
             // 
             // buttonExit
             // 
-            buttonExit.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             buttonExit.BackColor = Color.DarkGray;
             buttonExit.FlatAppearance.BorderSize = 0;
             buttonExit.FlatStyle = FlatStyle.Flat;
-            buttonExit.Font = new Font("微软雅黑", 12F);
+            buttonExit.Font = new Font("微软雅黑", 11F);
             buttonExit.ForeColor = Color.White;
-            buttonExit.Location = new Point(730, 350);
+            buttonExit.Location = new Point(730, 360);
             buttonExit.Name = "buttonExit";
             buttonExit.Size = new Size(120, 40);
-            buttonExit.TabIndex = 9;
             buttonExit.Text = "🏠 返回";
             buttonExit.UseVisualStyleBackColor = false;
             buttonExit.Click += buttonExit_Click;
             // 
-            // panelWave
-            // 
-            panelWave.Controls.Add(labelWave5);
-            panelWave.Controls.Add(labelWave4);
-            panelWave.Controls.Add(labelWave3);
-            panelWave.Controls.Add(labelWave2);
-            panelWave.Controls.Add(labelWave1);
-            panelWave.Location = new Point(360, 200);
-            panelWave.Name = "panelWave";
-            panelWave.Size = new Size(200, 40);
-            panelWave.TabIndex = 10;
-            panelWave.Visible = false;
-            // 
-            // labelWave1
-            // 
-            labelWave1.BackColor = Color.Green;
-            labelWave1.Location = new Point(10, 10);
-            labelWave1.Name = "labelWave1";
-            labelWave1.Size = new Size(20, 25);
-            labelWave1.TabIndex = 0;
-            // 
-            // labelWave2
-            // 
-            labelWave2.BackColor = Color.Green;
-            labelWave2.Location = new Point(50, 5);
-            labelWave2.Name = "labelWave2";
-            labelWave2.Size = new Size(20, 35);
-            labelWave2.TabIndex = 1;
-            // 
-            // labelWave3
-            // 
-            labelWave3.BackColor = Color.Green;
-            labelWave3.Location = new Point(90, 15);
-            labelWave3.Name = "labelWave3";
-            labelWave3.Size = new Size(20, 20);
-            labelWave3.TabIndex = 2;
-            // 
-            // labelWave4
-            // 
-            labelWave4.BackColor = Color.Green;
-            labelWave4.Location = new Point(130, 8);
-            labelWave4.Name = "labelWave4";
-            labelWave4.Size = new Size(20, 30);
-            labelWave4.TabIndex = 3;
-            // 
-            // labelWave5
-            // 
-            labelWave5.BackColor = Color.Green;
-            labelWave5.Location = new Point(170, 12);
-            labelWave5.Name = "labelWave5";
-            labelWave5.Size = new Size(20, 25);
-            labelWave5.TabIndex = 4;
-            // 
             // DictationForm
             // 
-            AutoScaleDimensions = new SizeF(10F, 21F);
+            AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.FromArgb(250, 245, 235);
             ClientSize = new Size(880, 420);
-            Controls.Add(panelWave);
-            Controls.Add(buttonExit);
-            Controls.Add(buttonClear);
-            Controls.Add(labelConfidence);
-            Controls.Add(labelScore);
-            Controls.Add(labelStatus);
+            Controls.Add(textBoxDiff);
+            Controls.Add(labelDiff);
             Controls.Add(labelResult);
-            Controls.Add(labelExpected);
-            Controls.Add(textBoxResult);
+            Controls.Add(buttonCheck);
+            Controls.Add(textBoxUserInput);
+            Controls.Add(labelUserInput);
+            Controls.Add(labelStatus);
+            Controls.Add(buttonPlay);
             Controls.Add(textBoxExpected);
-            Controls.Add(buttonStartDictation);
-            Font = new Font("微软雅黑", 12F);
+            Controls.Add(labelExpected);
+            Controls.Add(buttonExit);
+            Controls.Add(buttonReset);
+            Font = new Font("微软雅黑", 9F);
             Name = "DictationForm";
-            Text = "🎤 听写练习";
-            FormClosing += DictationForm_FormClosing;
-            panelWave.ResumeLayout(false);
+            StartPosition = FormStartPosition.CenterScreen;
+            Text = "📝 听写练习";
             ResumeLayout(false);
             PerformLayout();
         }

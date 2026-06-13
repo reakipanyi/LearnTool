@@ -2,6 +2,7 @@ using LearningAssistant.Common.Events;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Data.Database;
 using LearningAssistant.Forms;
+using LearningAssistant.Forms;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
@@ -205,6 +206,7 @@ namespace LearningAssistant.Common
         /// </summary>
         public static IServiceCollection AddFormServices(this IServiceCollection services)
         {
+            services.AddSingleton<IAIPanelPopupService, AIPanelPopupService>();
             services.AddSingleton<IWindowManager, WindowManager>();
             services.AddScoped<MainPresenter>();
             services.AddScoped<SettingPresenter>();
@@ -255,7 +257,8 @@ namespace LearningAssistant.Common
             {
                 var logger = sp.GetRequiredService<ILogger<ContentEditorForm>>();
                 var appConfig = sp.GetRequiredService<AppConfig>();
-                return new ContentEditorForm(logger, appConfig);
+                var aiPanelPopupService = sp.GetRequiredService<IAIPanelPopupService>();
+                return new ContentEditorForm(logger, appConfig, aiPanelPopupService);
             });
             services.AddScoped<LearningManagementForm>(sp =>
             {
@@ -265,14 +268,6 @@ namespace LearningAssistant.Common
                 var quoteService = sp.GetRequiredService<QuoteService>();
                 var logger = sp.GetService<ILogger<LearningManagementForm>>();
                 return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService, logger);
-            });
-
-            services.AddScoped<BrowserForm>(sp =>
-            {
-                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
-                var cloudStorageService = sp.GetService<ICloudStorageService>();
-                var logger = sp.GetService<ILogger<BrowserForm>>();
-                return new BrowserForm(contentLoaderService, cloudStorageService, logger);
             });
 
             services.AddScoped<AIWebViewForm>(sp =>

@@ -1,4 +1,3 @@
-using LearningAssistant.Models.Config;
 using LearningAssistant.Services.Persistence;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
@@ -32,7 +31,6 @@ namespace LearningAssistant.Services.Learning
             {
                 var config = _persistenceService.LoadConfig();
                 view.IsVoiceEnabled = config.AppSettings.IsVoiceEnabled;
-                view.IsAIExplanationEnabled = config.AppSettings.IsAIExplanationEnabled;
 
                 var scope = config.AppSettings.PronunciationScope;
                 view.PronunciationScope = scope == 0 ? PronunciationScope.Original
@@ -62,7 +60,6 @@ namespace LearningAssistant.Services.Learning
                 {
                     var config = _persistenceService.LoadConfig();
                     config.AppSettings.IsVoiceEnabled = view.IsVoiceEnabled;
-                    config.AppSettings.IsAIExplanationEnabled = view.IsAIExplanationEnabled;
                     config.AppSettings.PronunciationScope = (int)view.PronunciationScope;
                     _persistenceService.SaveConfig(config);
                     _settingsSaved = true;

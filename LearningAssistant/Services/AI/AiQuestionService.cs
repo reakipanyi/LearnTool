@@ -18,14 +18,14 @@ namespace LearningAssistant.Services.AI
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task<string> AskAsync(string text, string context = "")
+        public async Task<string> AskAsync(string text, string context = "", CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(text))
                 return string.Empty;
 
             try
             {
-                return await _aiService.AskQuestionAsync(text, context);
+                return await _aiService.AskQuestionAsync(text, context, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -34,7 +34,7 @@ namespace LearningAssistant.Services.AI
             }
         }
 
-        public async Task<string> GenerateExerciseAsync(string text, string language)
+        public async Task<string> GenerateExerciseAsync(string text, string language, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(text))
                 return string.Empty;
@@ -53,7 +53,7 @@ namespace LearningAssistant.Services.AI
 
             try
             {
-                var response = await _aiService.AskQuestionAsync(prompt);
+                var response = await _aiService.AskQuestionAsync(prompt, "", cancellationToken);
                 
                 if (!string.IsNullOrWhiteSpace(response))
                 {
@@ -69,7 +69,7 @@ namespace LearningAssistant.Services.AI
             }
         }
 
-        public async Task<string> SummarizeTextAsync(string text)
+        public async Task<string> SummarizeTextAsync(string text, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(text))
                 return string.Empty;
@@ -84,7 +84,7 @@ namespace LearningAssistant.Services.AI
 
             try
             {
-                var response = await _aiService.AskQuestionAsync(prompt);
+                var response = await _aiService.AskQuestionAsync(prompt, "", cancellationToken);
                 
                 if (!string.IsNullOrWhiteSpace(response))
                 {

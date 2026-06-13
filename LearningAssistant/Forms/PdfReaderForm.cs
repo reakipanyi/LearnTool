@@ -2,6 +2,7 @@ using LearningAssistant.Common;
 using LearningAssistant.Models;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Presenters;
+using LearningAssistant.Services;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Views;
 using LearningAssistant.Views.UI;
@@ -17,6 +18,7 @@ namespace LearningAssistant.Forms
         private readonly ILogger<PdfReaderForm> _logger;
         private readonly BookmarkService _bookmarkService;
         private readonly HighlightService _highlightService;
+        private readonly IAIPanelPopupService? _aiPanelPopupService;
         private int _zoomLevel = 100;
         private bool _isSelecting = false;
         private bool _isDrawing = false;
@@ -60,6 +62,7 @@ namespace LearningAssistant.Forms
         private Point _navPanelStartPoint = Point.Empty;
         private LoadingIndicator? _loadingIndicator;
         private bool _isNightMode = false;
+        private bool _isTranslationEnabled = false;
 
         private GroupBox? _groupBoxBookmarks;
         private ListBox? _listBoxBookmarks;
@@ -87,25 +90,19 @@ namespace LearningAssistant.Forms
         private Bitmap? _currentPageImage; // 保存当前页面图像，避免 PictureBox 自动绘制
 
         private SplitContainer splitContainer1;
-        private GroupBox groupBoxLanguage;
-        private Label labelQuestion;
-        private RichTextBox richTextBoxAiAnswer;
-        private Button buttonSpeakAnswer;
-        private TextBox textBoxQuestion;
-        private Button buttonAddToLearning;
-        private Button buttonAskAi;
         private Button buttonSpeakOriginal;
         private GroupBox groupBoxProgress;
         private GroupBox groupBox1;
         private GroupBox groupBox2;
         private string _currentLanguage = "eng";
 
-        public PdfReaderForm(ILogger<PdfReaderForm> logger)
+        public PdfReaderForm(ILogger<PdfReaderForm> logger, IAIPanelPopupService? aiPanelPopupService = null)
         {
             InitializeComponent();
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _bookmarkService = new BookmarkService();
             _highlightService = new HighlightService();
+            _aiPanelPopupService = aiPanelPopupService;
             Load += PdfReaderForm_Load;
             Resize += PdfReaderForm_Resize;
             KeyDown += PdfReaderForm_KeyDown;
@@ -714,15 +711,7 @@ namespace LearningAssistant.Forms
         }
 
 
-        public void UpdateAiAnswer(string answer)
-        {
-            MarkdownParser.ParseMarkdownToRichTextBox(richTextBoxAiAnswer, answer);
-        }
 
-        public void SetQuestionInput(string text)
-        {
-            textBoxQuestion.Text = text;
-        }
 
         // 新增功能：中等级 - UI响应性改进，加载状态管理
         public void SetLoadingState(bool isLoading)
@@ -975,73 +964,6 @@ namespace LearningAssistant.Forms
                 }
             }
 
-            // groupBoxLanguage - AI提问区域
-            if (groupBoxLanguage != null)
-            {
-                groupBoxLanguage.BackColor = isNightMode ? Color.FromArgb(40, 40, 40) : Color.White;
-                groupBoxLanguage.ForeColor = isNightMode ? Color.White : Color.Black;
-            }
-
-            // textBoxQuestion - 问题输入框
-            if (textBoxQuestion != null)
-            {
-                textBoxQuestion.BackColor = isNightMode ? Color.FromArgb(30, 30, 30) : Color.White;
-                textBoxQuestion.ForeColor = isNightMode ? Color.White : Color.Black;
-            }
-
-            // richTextBoxAiAnswer - AI回答框
-            if (richTextBoxAiAnswer != null)
-            {
-                richTextBoxAiAnswer.BackColor = isNightMode ? Color.FromArgb(30, 30, 30) : Color.White;
-                richTextBoxAiAnswer.ForeColor = isNightMode ? Color.White : Color.Black;
-            }
-
-            // labelQuestion - 问题标签
-            if (labelQuestion != null)
-            {
-                labelQuestion.ForeColor = isNightMode ? Color.White : Color.Black;
-            }
-
-            // AI相关按钮 - 夜间模式设置深色背景，日间模式恢复默认颜色
-            if (buttonAskAi != null)
-            {
-                if (isNightMode)
-                {
-                    buttonAskAi.BackColor = Color.FromArgb(45, 45, 45);
-                    buttonAskAi.ForeColor = Color.White;
-                }
-                else
-                {
-                    buttonAskAi.BackColor = SystemColors.Control;
-                    buttonAskAi.ForeColor = SystemColors.ControlText;
-                }
-            }
-            if (buttonAddToLearning != null)
-            {
-                if (isNightMode)
-                {
-                    buttonAddToLearning.BackColor = Color.FromArgb(45, 45, 45);
-                    buttonAddToLearning.ForeColor = Color.White;
-                }
-                else
-                {
-                    buttonAddToLearning.BackColor = SystemColors.Control;
-                    buttonAddToLearning.ForeColor = SystemColors.ControlText;
-                }
-            }
-            if (buttonSpeakAnswer != null)
-            {
-                if (isNightMode)
-                {
-                    buttonSpeakAnswer.BackColor = Color.FromArgb(45, 45, 45);
-                    buttonSpeakAnswer.ForeColor = Color.White;
-                }
-                else
-                {
-                    buttonSpeakAnswer.BackColor = SystemColors.Control;
-                    buttonSpeakAnswer.ForeColor = SystemColors.ControlText;
-                }
-            }
         }
 
         private void ApplyNightModeToBookmarksAndHighlights(bool isNightMode)
@@ -1384,10 +1306,7 @@ namespace LearningAssistant.Forms
             return textBoxPage.Text;
         }
 
-        public string GetQuestionText()
-        {
-            return textBoxQuestion.Text;
-        }
+
 
         public string GetTranslationText()
         {
@@ -1414,10 +1333,6 @@ namespace LearningAssistant.Forms
             textBoxOriginal.Text = text;
         }
 
-        public string GetAiAnswerText()
-        {
-            return richTextBoxAiAnswer.Text;
-        }
 
         public Image? GetCurrentImage()
         {
@@ -1575,6 +1490,7 @@ namespace LearningAssistant.Forms
         public event EventHandler? SelectOcrClicked;
         public event EventHandler? TranslateClicked;
         public event EventHandler? ToggleNightMode;
+        public event EventHandler? ToggleTranslation;
         public event EventHandler? LanguageChanged;
         public event EventHandler? SpeakAnswer;
         public event EventHandler? SpeakOriginal;
@@ -1596,12 +1512,14 @@ namespace LearningAssistant.Forms
         private TextBox textBoxTranslation;
         private Button buttonTranslate;
         private Button buttonSpeakTranslation;
+        private Button buttonAddToLearningContent;
         private Panel panelNavigation;
         private Button buttonPrev;
         private TextBox textBoxPage;
         private Label labelPageCount;
         private Button buttonNext;
         private Button buttonNightMode;
+        private Button buttonTranslationToggle;
         private Button buttonLanguage;
         private Button buttonOpenFolder;
         private Label labelZoom;
@@ -1641,6 +1559,7 @@ namespace LearningAssistant.Forms
             _loadingIndicator = new LoadingIndicator();
             buttonLanguage = new Button();
             buttonNightMode = new Button();
+            buttonTranslationToggle = new Button();
             _buttonLockView = new Button();
             _buttonResetView = new Button();
             buttonNext = new Button();
@@ -1667,13 +1586,7 @@ namespace LearningAssistant.Forms
             labelOriginal = new Label();
             buttonSpeakTranslation = new Button();
             buttonTranslate = new Button();
-            groupBoxLanguage = new GroupBox();
-            labelQuestion = new Label();
-            richTextBoxAiAnswer = new RichTextBox();
-            buttonSpeakAnswer = new Button();
-            textBoxQuestion = new TextBox();
-            buttonAddToLearning = new Button();
-            buttonAskAi = new Button();
+            buttonAddToLearningContent = new Button();
             tabPageFiles = new TabPage();
             treeViewFiles = new TreeView();
             _tabPageBookmarksAndHighlights = new TabPage();
@@ -1717,7 +1630,6 @@ namespace LearningAssistant.Forms
             panelThumbnails.SuspendLayout();
             tabPageTranslate.SuspendLayout();
             groupBoxProgress.SuspendLayout();
-            groupBoxLanguage.SuspendLayout();
             tabPageFiles.SuspendLayout();
             _tabPageBookmarksAndHighlights.SuspendLayout();
             _groupBoxHighlights.SuspendLayout();
@@ -1762,6 +1674,7 @@ namespace LearningAssistant.Forms
             panelNavigation.Controls.Add(_loadingIndicator);
             panelNavigation.Controls.Add(buttonLanguage);
             panelNavigation.Controls.Add(buttonNightMode);
+            panelNavigation.Controls.Add(buttonTranslationToggle);
             panelNavigation.Controls.Add(_buttonLockView);
             panelNavigation.Controls.Add(_buttonResetView);
             panelNavigation.Controls.Add(buttonNext);
@@ -1797,8 +1710,7 @@ namespace LearningAssistant.Forms
             // _loadingIndicator
             // 
             _loadingIndicator.BackColor = SystemColors.MenuHighlight;
-            _loadingIndicator.IsLoading = false;
-            _loadingIndicator.Location = new Point(447, 11);
+            _loadingIndicator.Location = new Point(571, 11);
             _loadingIndicator.Name = "_loadingIndicator";
             _loadingIndicator.Size = new Size(38, 35);
             _loadingIndicator.TabIndex = 2;
@@ -1811,7 +1723,7 @@ namespace LearningAssistant.Forms
             buttonLanguage.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
             buttonLanguage.Location = new Point(364, 11);
             buttonLanguage.Name = "buttonLanguage";
-            buttonLanguage.Size = new Size(45, 35);
+            buttonLanguage.Size = new Size(50, 35);
             buttonLanguage.TabIndex = 9;
             buttonLanguage.Text = "eng";
             buttonLanguage.UseVisualStyleBackColor = false;
@@ -1822,21 +1734,34 @@ namespace LearningAssistant.Forms
             buttonNightMode.BackColor = Color.White;
             buttonNightMode.FlatStyle = FlatStyle.Flat;
             buttonNightMode.Font = new Font("Microsoft YaHei UI", 12F);
-            buttonNightMode.Location = new Point(410, 11);
+            buttonNightMode.Location = new Point(415, 11);
             buttonNightMode.Name = "buttonNightMode";
-            buttonNightMode.Size = new Size(35, 35);
+            buttonNightMode.Size = new Size(38, 35);
             buttonNightMode.TabIndex = 6;
             buttonNightMode.Text = "🌙";
             buttonNightMode.UseVisualStyleBackColor = false;
             buttonNightMode.Click += ButtonNightMode_Click;
             // 
+            // buttonTranslationToggle
+            // 
+            buttonTranslationToggle.BackColor = Color.LightGray;
+            buttonTranslationToggle.FlatStyle = FlatStyle.Flat;
+            buttonTranslationToggle.Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold);
+            buttonTranslationToggle.Location = new Point(493, 11);
+            buttonTranslationToggle.Name = "buttonTranslationToggle";
+            buttonTranslationToggle.Size = new Size(38, 35);
+            buttonTranslationToggle.TabIndex = 12;
+            buttonTranslationToggle.Text = "译";
+            buttonTranslationToggle.UseVisualStyleBackColor = false;
+            buttonTranslationToggle.Click += ButtonTranslationToggle_Click;
+            // 
             // _buttonLockView
             // 
             _buttonLockView.BackColor = Color.White;
             _buttonLockView.FlatStyle = FlatStyle.Flat;
-            _buttonLockView.Location = new Point(410, 11);
+            _buttonLockView.Location = new Point(454, 11);
             _buttonLockView.Name = "_buttonLockView";
-            _buttonLockView.Size = new Size(35, 35);
+            _buttonLockView.Size = new Size(38, 35);
             _buttonLockView.TabIndex = 10;
             _buttonLockView.Text = "🔓";
             _buttonLockView.UseVisualStyleBackColor = false;
@@ -1847,9 +1772,9 @@ namespace LearningAssistant.Forms
             _buttonResetView.BackColor = Color.White;
             _buttonResetView.FlatStyle = FlatStyle.Flat;
             _buttonResetView.Font = new Font("Microsoft YaHei UI", 10F);
-            _buttonResetView.Location = new Point(495, 11);
+            _buttonResetView.Location = new Point(532, 11);
             _buttonResetView.Name = "_buttonResetView";
-            _buttonResetView.Size = new Size(35, 35);
+            _buttonResetView.Size = new Size(38, 35);
             _buttonResetView.TabIndex = 11;
             _buttonResetView.Text = "↺";
             _buttonResetView.UseVisualStyleBackColor = false;
@@ -2020,7 +1945,6 @@ namespace LearningAssistant.Forms
             // tabPageTranslate
             // 
             tabPageTranslate.Controls.Add(groupBoxProgress);
-            tabPageTranslate.Controls.Add(groupBoxLanguage);
             tabPageTranslate.Location = new Point(4, 26);
             tabPageTranslate.Name = "tabPageTranslate";
             tabPageTranslate.Padding = new Padding(3);
@@ -2031,16 +1955,17 @@ namespace LearningAssistant.Forms
             // groupBoxProgress
             // 
             groupBoxProgress.Controls.Add(textBoxTranslation);
+            groupBoxProgress.Controls.Add(buttonSpeakTranslation);
+            groupBoxProgress.Controls.Add(buttonAddToLearningContent);
             groupBoxProgress.Controls.Add(textBoxOriginal);
             groupBoxProgress.Controls.Add(buttonSpeakOriginal);
             groupBoxProgress.Controls.Add(labelTranslation);
             groupBoxProgress.Controls.Add(labelOriginal);
-            groupBoxProgress.Controls.Add(buttonSpeakTranslation);
             groupBoxProgress.Controls.Add(buttonTranslate);
             groupBoxProgress.Dock = DockStyle.Top;
             groupBoxProgress.Location = new Point(3, 3);
             groupBoxProgress.Name = "groupBoxProgress";
-            groupBoxProgress.Size = new Size(326, 523);
+            groupBoxProgress.Size = new Size(326, 477);
             groupBoxProgress.TabIndex = 24;
             groupBoxProgress.TabStop = false;
             groupBoxProgress.Text = "学习统计摘要";
@@ -2048,27 +1973,27 @@ namespace LearningAssistant.Forms
             // textBoxTranslation
             // 
             textBoxTranslation.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            textBoxTranslation.Location = new Point(9, 325);
+            textBoxTranslation.Location = new Point(6, 266);
             textBoxTranslation.Multiline = true;
             textBoxTranslation.Name = "textBoxTranslation";
             textBoxTranslation.ReadOnly = true;
             textBoxTranslation.ScrollBars = ScrollBars.Vertical;
-            textBoxTranslation.Size = new Size(311, 181);
+            textBoxTranslation.Size = new Size(311, 155);
             textBoxTranslation.TabIndex = 5;
             // 
             // textBoxOriginal
             // 
             textBoxOriginal.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            textBoxOriginal.Location = new Point(9, 42);
+            textBoxOriginal.Location = new Point(6, 42);
             textBoxOriginal.Multiline = true;
             textBoxOriginal.Name = "textBoxOriginal";
             textBoxOriginal.ScrollBars = ScrollBars.Vertical;
-            textBoxOriginal.Size = new Size(311, 195);
+            textBoxOriginal.Size = new Size(311, 155);
             textBoxOriginal.TabIndex = 1;
             // 
             // buttonSpeakOriginal
             // 
-            buttonSpeakOriginal.Location = new Point(122, 250);
+            buttonSpeakOriginal.Location = new Point(112, 203);
             buttonSpeakOriginal.Name = "buttonSpeakOriginal";
             buttonSpeakOriginal.Size = new Size(85, 34);
             buttonSpeakOriginal.TabIndex = 23;
@@ -2077,23 +2002,23 @@ namespace LearningAssistant.Forms
             // 
             // labelTranslation
             // 
-            labelTranslation.Location = new Point(9, 302);
+            labelTranslation.Location = new Point(6, 243);
             labelTranslation.Name = "labelTranslation";
-            labelTranslation.Size = new Size(260, 20);
+            labelTranslation.Size = new Size(311, 20);
             labelTranslation.TabIndex = 2;
             labelTranslation.Text = "译文:";
             // 
             // labelOriginal
             // 
-            labelOriginal.Location = new Point(9, 17);
+            labelOriginal.Location = new Point(6, 17);
             labelOriginal.Name = "labelOriginal";
-            labelOriginal.Size = new Size(260, 20);
+            labelOriginal.Size = new Size(311, 20);
             labelOriginal.TabIndex = 0;
             labelOriginal.Text = "原文:";
             // 
             // buttonSpeakTranslation
             // 
-            buttonSpeakTranslation.Location = new Point(229, 250);
+            buttonSpeakTranslation.Location = new Point(235, 427);
             buttonSpeakTranslation.Name = "buttonSpeakTranslation";
             buttonSpeakTranslation.Size = new Size(85, 34);
             buttonSpeakTranslation.TabIndex = 4;
@@ -2102,79 +2027,21 @@ namespace LearningAssistant.Forms
             // 
             // buttonTranslate
             // 
-            buttonTranslate.Location = new Point(9, 250);
+            buttonTranslate.Location = new Point(16, 203);
             buttonTranslate.Name = "buttonTranslate";
             buttonTranslate.Size = new Size(85, 34);
             buttonTranslate.TabIndex = 3;
             buttonTranslate.Text = "📚翻译";
             buttonTranslate.Click += ButtonTranslate_Click;
             // 
-            // groupBoxLanguage
+            // buttonAddToLearningContent
             // 
-            groupBoxLanguage.Controls.Add(labelQuestion);
-            groupBoxLanguage.Controls.Add(richTextBoxAiAnswer);
-            groupBoxLanguage.Controls.Add(buttonSpeakAnswer);
-            groupBoxLanguage.Controls.Add(textBoxQuestion);
-            groupBoxLanguage.Controls.Add(buttonAddToLearning);
-            groupBoxLanguage.Controls.Add(buttonAskAi);
-            groupBoxLanguage.Dock = DockStyle.Bottom;
-            groupBoxLanguage.Location = new Point(3, 493);
-            groupBoxLanguage.Name = "groupBoxLanguage";
-            groupBoxLanguage.Size = new Size(326, 287);
-            groupBoxLanguage.TabIndex = 22;
-            groupBoxLanguage.TabStop = false;
-            groupBoxLanguage.Text = "🤖 AI提问";
-            // 
-            // labelQuestion
-            // 
-            labelQuestion.Location = new Point(9, 28);
-            labelQuestion.Name = "labelQuestion";
-            labelQuestion.Size = new Size(305, 20);
-            labelQuestion.TabIndex = 0;
-            labelQuestion.Text = "问题:";
-            // 
-            // richTextBoxAiAnswer
-            // 
-            richTextBoxAiAnswer.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            richTextBoxAiAnswer.Location = new Point(9, 120);
-            richTextBoxAiAnswer.Name = "richTextBoxAiAnswer";
-            richTextBoxAiAnswer.ReadOnly = true;
-            richTextBoxAiAnswer.ScrollBars = RichTextBoxScrollBars.Vertical;
-            richTextBoxAiAnswer.Size = new Size(311, 161);
-            richTextBoxAiAnswer.TabIndex = 5;
-            richTextBoxAiAnswer.Text = "";
-            // 
-            // buttonSpeakAnswer
-            // 
-            buttonSpeakAnswer.Location = new Point(219, 81);
-            buttonSpeakAnswer.Name = "buttonSpeakAnswer";
-            buttonSpeakAnswer.Size = new Size(85, 34);
-            buttonSpeakAnswer.TabIndex = 4;
-            buttonSpeakAnswer.Text = "🔊 朗读原文";
-            // 
-            // textBoxQuestion
-            // 
-            textBoxQuestion.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            textBoxQuestion.Location = new Point(9, 51);
-            textBoxQuestion.Name = "textBoxQuestion";
-            textBoxQuestion.Size = new Size(302, 23);
-            textBoxQuestion.TabIndex = 1;
-            // 
-            // buttonAddToLearning
-            // 
-            buttonAddToLearning.Location = new Point(9, 81);
-            buttonAddToLearning.Name = "buttonAddToLearning";
-            buttonAddToLearning.Size = new Size(85, 34);
-            buttonAddToLearning.TabIndex = 3;
-            buttonAddToLearning.Text = "📝 加生词本";
-            // 
-            // buttonAskAi
-            // 
-            buttonAskAi.Location = new Point(112, 81);
-            buttonAskAi.Name = "buttonAskAi";
-            buttonAskAi.Size = new Size(85, 34);
-            buttonAskAi.TabIndex = 2;
-            buttonAskAi.Text = "🤖 AI提问";
+            buttonAddToLearningContent.Location = new Point(208, 203);
+            buttonAddToLearningContent.Name = "buttonAddToLearningContent";
+            buttonAddToLearningContent.Size = new Size(100, 34);
+            buttonAddToLearningContent.TabIndex = 6;
+            buttonAddToLearningContent.Text = "📝添加到学习";
+            buttonAddToLearningContent.Click += ButtonAddToLearningContent_Click;
             // 
             // tabPageFiles
             // 
@@ -2487,8 +2354,6 @@ namespace LearningAssistant.Forms
             tabPageTranslate.ResumeLayout(false);
             groupBoxProgress.ResumeLayout(false);
             groupBoxProgress.PerformLayout();
-            groupBoxLanguage.ResumeLayout(false);
-            groupBoxLanguage.PerformLayout();
             tabPageFiles.ResumeLayout(false);
             _tabPageBookmarksAndHighlights.ResumeLayout(false);
             _groupBoxHighlights.ResumeLayout(false);
@@ -2940,6 +2805,15 @@ namespace LearningAssistant.Forms
                 // 使用OCR识别选中区域的文字
                 string ocrText = await GetOcrTextFromSelectionAsync(selectionRect, currentPageImage);
 
+                // 如果OCR文本为空，提示用户
+                if (string.IsNullOrEmpty(ocrText))
+                {
+                    if (_presenter != null && !_presenter.IsOcrAvailable())
+                    {
+                        ShowWarning("OCR服务不可用，无法识别文字。\n请检查 tessdata 目录和语言数据文件是否存在。");
+                    }
+                }
+
                 // 添加高亮（包含OCR识别的文字）
                 var highlight = new PdfHighlight
                 {
@@ -2973,6 +2847,18 @@ namespace LearningAssistant.Forms
                 RefreshHighlightList();
                 UpdateHighlightLayer();
                 pictureBoxPdf.Invalidate();
+
+                // 同步OCR文本到翻译原文框
+                if (!string.IsNullOrEmpty(ocrText) && textBoxOriginal != null)
+                {
+                    textBoxOriginal.Text = ocrText;
+
+                    // 如果翻译功能已启用，自动触发翻译
+                    if (_isTranslationEnabled)
+                    {
+                        TranslateClicked?.Invoke(this, EventArgs.Empty);
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -3043,7 +2929,7 @@ namespace LearningAssistant.Forms
                         // Ctrl + 滚轮：缩放
                         if (e.Delta > 0) _zoomLevel = Math.Min(400, _zoomLevel + 10);
                         else _zoomLevel = Math.Max(10, _zoomLevel - 10);
-                        
+
                         // 异步渲染，避免阻塞 UI 线程
                         Task.Run(async () =>
                         {
@@ -3314,9 +3200,16 @@ namespace LearningAssistant.Forms
             AddToLearningList?.Invoke(this, EventArgs.Empty);
         }
 
-        private void ButtonSpeakAnswer_Click(object? sender, EventArgs e)
+        private void ButtonOpenAI_Click(object? sender, EventArgs e)
         {
-            SpeakAnswer?.Invoke(this, EventArgs.Empty);
+            if (_aiPanelPopupService != null)
+            {
+                _aiPanelPopupService.ShowAIAbilityPanel(this, textBoxOriginal.Text);
+            }
+            else
+            {
+                MessageBox.Show("AI面板服务未初始化", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
         }
 
         private void ButtonPrev_Click(object? sender, EventArgs e)
@@ -3335,6 +3228,22 @@ namespace LearningAssistant.Forms
         {
             NightMode();
             ToggleNightMode?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ButtonTranslationToggle_Click(object? sender, EventArgs e)
+        {
+            TranslationToggle();
+            ToggleTranslation?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void TranslationToggle()
+        {
+            _isTranslationEnabled = !_isTranslationEnabled;
+            if (buttonTranslationToggle != null)
+            {
+                buttonTranslationToggle.Text = _isTranslationEnabled ? "译" : "译";
+                buttonTranslationToggle.BackColor = _isTranslationEnabled ? Color.LightGreen : Color.LightGray;
+            }
         }
 
         private void ButtonLanguage_Click(object? sender, EventArgs e)
@@ -3442,6 +3351,217 @@ namespace LearningAssistant.Forms
         public bool GetImageMode()
         {
             return _isImageMode;
+        }
+
+        private void buttonAddToLearning_Click_1(object sender, EventArgs e)
+        {
+
+        }
+
+        private void ButtonAddToLearningContent_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                var originalText = textBoxOriginal?.Text ?? string.Empty;
+                var translationText = textBoxTranslation?.Text ?? string.Empty;
+
+                if (string.IsNullOrWhiteSpace(originalText))
+                {
+                    ShowWarning("请先输入或选择要学习的文本内容");
+                    return;
+                }
+
+                // 判断语言和内容类型
+                var language = DetectLanguage(originalText);
+                var contentType = DetectContentType(originalText, language);
+
+                // 使用AI生成学习内容模板
+                _ = GenerateAndAddLearningContentAsync(originalText, translationText, language, contentType);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in ButtonAddToLearningContent_Click");
+                ShowError("添加到学习内容失败: " + ex.Message);
+            }
+        }
+
+        private string DetectLanguage(string text)
+        {
+            // 简单的语言检测：检查是否包含中文字符
+            if (System.Text.RegularExpressions.Regex.IsMatch(text, @"[\u4e00-\u9fa5]"))
+            {
+                return Constants.Language.Chinese;
+            }
+            return Constants.Language.English;
+        }
+
+        private string DetectContentType(string text, string language)
+        {
+            text = text.Trim();
+
+            // 根据文本长度和特征判断内容类型
+            if (language == Constants.Language.Chinese)
+            {
+                // 中文内容类型判断
+                if (text.Length == 1)
+                    return "字";
+                else if (text.Length <= 4 && !text.Contains(" "))
+                    return "成语";
+                else if (text.Length <= 10)
+                    return "短语";
+                else if (text.Contains("\n") || text.Length > 50)
+                    return "句子";
+                else
+                    return "短语";
+            }
+            else
+            {
+                // 英文内容类型判断
+                var words = text.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                if (words.Length == 1)
+                    return "单词";
+                else if (words.Length <= 3)
+                    return "短语";
+                else if (text.Contains("\n") || text.Length > 50)
+                    return "句子";
+                else
+                    return "短语";
+            }
+        }
+
+        private async Task GenerateAndAddLearningContentAsync(string originalText, string translationText, string language, string contentType)
+        {
+            try
+            {
+                SetLoadingState(true);
+
+                // 构建AI提示词，生成学习内容模板
+                var prompt = BuildLearningContentPrompt(originalText, translationText, language, contentType);
+
+                // 使用AI服务生成内容
+                var aiGeneratedContent = await _presenter?.GenerateAiContentAsync(prompt) ?? string.Empty;
+
+                // 合成最终的学习内容JSON
+                var learningContent = BuildLearningContentJson(originalText, translationText, language, contentType, aiGeneratedContent);
+
+                // 触发添加到编辑器事件
+                RaiseAddToEditor(learningContent, language);
+
+                ShowMessage($"已添加到学习内容\n语言: {language}\n类型: {contentType}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating learning content");
+                ShowError("生成学习内容失败: " + ex.Message);
+            }
+            finally
+            {
+                SetLoadingState(false);
+            }
+        }
+
+        private string BuildLearningContentPrompt(string originalText, string translationText, string language, string contentType)
+        {
+            var languageName = language == Constants.Language.Chinese ? "中文" : "英语";
+
+            return $@"请为以下{languageName}{contentType}生成学习内容模板，包括：
+1. 释义/翻译（如果已有翻译则优化）
+2. 例句（1-2个）
+3. 相关知识点或记忆技巧
+
+原文: {originalText}
+译文: {(string.IsNullOrEmpty(translationText) ? "请提供翻译" : translationText)}
+
+请以JSON格式返回，格式如下：
+{{""meaning"": ""释义"", ""example"": ""例句"", ""tips"": ""记忆技巧""}}";
+        }
+
+        private string BuildLearningContentJson(string originalText, string translationText, string language, string contentType, string aiGeneratedContent)
+        {
+            // 解析AI生成的内容
+            string meaning = translationText;
+            string example = "";
+            string tips = "";
+
+            try
+            {
+                if (!string.IsNullOrEmpty(aiGeneratedContent))
+                {
+                    // 尝试解析JSON
+                    var jsonStart = aiGeneratedContent.IndexOf('{');
+                    var jsonEnd = aiGeneratedContent.LastIndexOf('}');
+                    if (jsonStart >= 0 && jsonEnd > jsonStart)
+                    {
+                        var jsonStr = aiGeneratedContent.Substring(jsonStart, jsonEnd - jsonStart + 1);
+                        var jsonObj = Newtonsoft.Json.Linq.JObject.Parse(jsonStr);
+                        meaning = jsonObj["meaning"]?.ToString() ?? translationText;
+                        example = jsonObj["example"]?.ToString() ?? "";
+                        tips = jsonObj["tips"]?.ToString() ?? "";
+                    }
+                }
+            }
+            catch
+            {
+                // 如果解析失败，使用原始翻译
+            }
+
+            // 根据内容类型构建不同的JSON结构
+            if (language == Constants.Language.Chinese)
+            {
+                if (contentType == "字")
+                {
+                    return Newtonsoft.Json.JsonConvert.SerializeObject(new
+                    {
+                        Character = originalText,
+                        Meaning = meaning,
+                        Example = example,
+                        Tips = tips
+                    });
+                }
+                else if (contentType == "成语")
+                {
+                    return Newtonsoft.Json.JsonConvert.SerializeObject(new
+                    {
+                        Idiom = originalText,
+                        Meaning = meaning,
+                        Example = example,
+                        Origin = tips
+                    });
+                }
+                else
+                {
+                    return Newtonsoft.Json.JsonConvert.SerializeObject(new
+                    {
+                        Phrase = originalText,
+                        Meaning = meaning,
+                        Example = example,
+                        Tips = tips
+                    });
+                }
+            }
+            else
+            {
+                if (contentType == "单词")
+                {
+                    return Newtonsoft.Json.JsonConvert.SerializeObject(new
+                    {
+                        Word = originalText,
+                        Meaning = meaning,
+                        Example = example,
+                        Tips = tips
+                    });
+                }
+                else
+                {
+                    return Newtonsoft.Json.JsonConvert.SerializeObject(new
+                    {
+                        Phrase = originalText,
+                        Meaning = meaning,
+                        Example = example,
+                        Tips = tips
+                    });
+                }
+            }
         }
     }
 }

@@ -1,9 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Windows.Forms;
-using System.Globalization;
-using Microsoft.Extensions.Logging;
 using LearningAssistant.Services.Learning;
+using Microsoft.Extensions.Logging;
+using System.Globalization;
 
 namespace LearningAssistant.Forms
 {
@@ -31,7 +28,7 @@ namespace LearningAssistant.Forms
             _quoteService = quoteService;
             _logger = logger;
             _userId = userId ?? Environment.UserName;
-            
+
             _logger?.LogInformation("学习管理窗口初始化，用户ID: {UserId}", _userId);
             LoadData();
         }
@@ -63,7 +60,7 @@ namespace LearningAssistant.Forms
         private void LoadTodayStats()
         {
             var stats = _analyticsService.GetDailyStatistics(_userId, DateTime.Today);
-            
+
             lblTodayMinutes.Text = $"{stats.TotalMinutes} 分钟";
             lblTodayItems.Text = $"{stats.TotalItems} 个";
             lblTodayAccuracy.Text = $"{stats.CorrectRate:P2}";
@@ -74,7 +71,7 @@ namespace LearningAssistant.Forms
         {
             var weekNum = ISOWeek.GetWeekOfYear(DateTime.Today);
             var stats = _analyticsService.GetWeeklyStatistics(_userId, DateTime.Today.Year, weekNum);
-            
+
             lblWeekMinutes.Text = $"{stats.TotalMinutes} 分钟";
             lblWeekItems.Text = $"{stats.TotalItems} 个";
             lblWeekAccuracy.Text = $"{stats.CorrectRate:P2}";
@@ -84,7 +81,7 @@ namespace LearningAssistant.Forms
         {
             var reminders = _reminderService.GetUserReminders(_userId);
             listReminders.Items.Clear();
-            
+
             foreach (var reminder in reminders)
             {
                 var status = reminder.Enabled ? "已启用" : "已禁用";
@@ -106,7 +103,7 @@ namespace LearningAssistant.Forms
                     Enabled = true,
                     CreatedAt = DateTime.Now
                 };
-                
+
                 _reminderService.AddReminder(reminder);
                 LoadReminders();
                 MessageBox.Show("提醒已添加", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -125,7 +122,7 @@ namespace LearningAssistant.Forms
             {
                 var report = _reportService.GenerateDailyReport(_userId, DateTime.Today);
                 var reportText = _reportService.GenerateReportText(report);
-                
+
                 var resultForm = new ResultForm(_logger);
                 resultForm.ShowReport(reportText);
                 resultForm.Show();
@@ -173,151 +170,220 @@ namespace LearningAssistant.Forms
 
         private void InitializeComponent()
         {
-            this.components = new System.ComponentModel.Container();
-            this.lblQuote = new System.Windows.Forms.Label();
-            this.lblAuthor = new System.Windows.Forms.Label();
-            this.lblTodayHeader = new System.Windows.Forms.Label();
-            this.lblTodayMinutes = new System.Windows.Forms.Label();
-            this.lblTodayItems = new System.Windows.Forms.Label();
-            this.lblTodayAccuracy = new System.Windows.Forms.Label();
-            this.lblStreak = new System.Windows.Forms.Label();
-            this.lblWeekHeader = new System.Windows.Forms.Label();
-            this.lblWeekMinutes = new System.Windows.Forms.Label();
-            this.lblWeekItems = new System.Windows.Forms.Label();
-            this.lblWeekAccuracy = new System.Windows.Forms.Label();
-            this.listReminders = new System.Windows.Forms.ListBox();
-            this.btnAddReminder = new System.Windows.Forms.Button();
-            this.btnGenerateReport = new System.Windows.Forms.Button();
-            this.btnRefresh = new System.Windows.Forms.Button();
-            this.tabControl = new System.Windows.Forms.TabControl();
-            this.tabOverview = new System.Windows.Forms.TabPage();
-            this.tabReminders = new System.Windows.Forms.TabPage();
-            this.tabReports = new System.Windows.Forms.TabPage();
-            this.tabControl.SuspendLayout();
-            this.tabOverview.SuspendLayout();
-            this.tabReminders.SuspendLayout();
-            this.SuspendLayout();
-
+            lblQuote = new Label();
+            lblAuthor = new Label();
+            lblTodayHeader = new Label();
+            lblTodayMinutes = new Label();
+            lblTodayItems = new Label();
+            lblTodayAccuracy = new Label();
+            lblStreak = new Label();
+            lblWeekHeader = new Label();
+            lblWeekMinutes = new Label();
+            lblWeekItems = new Label();
+            lblWeekAccuracy = new Label();
+            listReminders = new ListBox();
+            btnAddReminder = new Button();
+            btnGenerateReport = new Button();
+            btnRefresh = new Button();
+            tabControl = new TabControl();
+            tabOverview = new TabPage();
+            tabReminders = new TabPage();
+            tabReports = new TabPage();
+            tabControl.SuspendLayout();
+            tabOverview.SuspendLayout();
+            tabReminders.SuspendLayout();
+            tabReports.SuspendLayout();
+            SuspendLayout();
+            // 
             // lblQuote
-            this.lblQuote.Location = new System.Drawing.Point(20, 20);
-            this.lblQuote.Size = new System.Drawing.Size(500, 60);
-            this.lblQuote.Font = new System.Drawing.Font("微软雅黑", 12F, System.Drawing.FontStyle.Italic);
-            this.lblQuote.ForeColor = System.Drawing.Color.DarkSlateGray;
-
+            // 
+            lblQuote.Font = new Font("微软雅黑", 12F, FontStyle.Italic);
+            lblQuote.ForeColor = Color.DarkSlateGray;
+            lblQuote.Location = new Point(20, 13);
+            lblQuote.Name = "lblQuote";
+            lblQuote.Size = new Size(530, 87);
+            lblQuote.TabIndex = 0;
+            // 
             // lblAuthor
-            this.lblAuthor.Location = new System.Drawing.Point(400, 70);
-            this.lblAuthor.Size = new System.Drawing.Size(120, 20);
-            this.lblAuthor.Font = new System.Drawing.Font("微软雅黑", 10F);
-            this.lblAuthor.ForeColor = System.Drawing.Color.Gray;
-
+            // 
+            lblAuthor.Font = new Font("微软雅黑", 10F);
+            lblAuthor.ForeColor = Color.Gray;
+            lblAuthor.Location = new Point(400, 70);
+            lblAuthor.Name = "lblAuthor";
+            lblAuthor.Size = new Size(120, 20);
+            lblAuthor.TabIndex = 1;
+            // 
             // lblTodayHeader
-            this.lblTodayHeader.Text = "今日学习";
-            this.lblTodayHeader.Location = new System.Drawing.Point(20, 100);
-            this.lblTodayHeader.Size = new System.Drawing.Size(100, 20);
-            this.lblTodayHeader.Font = new System.Drawing.Font("微软雅黑", 12F, System.Drawing.FontStyle.Bold);
-
+            // 
+            lblTodayHeader.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
+            lblTodayHeader.Location = new Point(20, 130);
+            lblTodayHeader.Name = "lblTodayHeader";
+            lblTodayHeader.Size = new Size(100, 20);
+            lblTodayHeader.TabIndex = 2;
+            lblTodayHeader.Text = "今日学习";
+            // 
             // lblTodayMinutes
-            this.lblTodayMinutes.Location = new System.Drawing.Point(20, 130);
-            this.lblTodayMinutes.Size = new System.Drawing.Size(150, 30);
-            this.lblTodayMinutes.Font = new System.Drawing.Font("微软雅黑", 14F);
-
+            // 
+            lblTodayMinutes.Font = new Font("微软雅黑", 14F);
+            lblTodayMinutes.Location = new Point(20, 160);
+            lblTodayMinutes.Name = "lblTodayMinutes";
+            lblTodayMinutes.Size = new Size(150, 30);
+            lblTodayMinutes.TabIndex = 3;
+            // 
             // lblTodayItems
-            this.lblTodayItems.Location = new System.Drawing.Point(180, 130);
-            this.lblTodayItems.Size = new System.Drawing.Size(150, 30);
-            this.lblTodayItems.Font = new System.Drawing.Font("微软雅黑", 14F);
-
+            // 
+            lblTodayItems.Font = new Font("微软雅黑", 14F);
+            lblTodayItems.Location = new Point(180, 160);
+            lblTodayItems.Name = "lblTodayItems";
+            lblTodayItems.Size = new Size(150, 30);
+            lblTodayItems.TabIndex = 4;
+            // 
             // lblTodayAccuracy
-            this.lblTodayAccuracy.Location = new System.Drawing.Point(340, 130);
-            this.lblTodayAccuracy.Size = new System.Drawing.Size(100, 30);
-            this.lblTodayAccuracy.Font = new System.Drawing.Font("微软雅黑", 14F);
-
+            // 
+            lblTodayAccuracy.Font = new Font("微软雅黑", 14F);
+            lblTodayAccuracy.Location = new Point(340, 160);
+            lblTodayAccuracy.Name = "lblTodayAccuracy";
+            lblTodayAccuracy.Size = new Size(100, 30);
+            lblTodayAccuracy.TabIndex = 5;
+            // 
             // lblStreak
-            this.lblStreak.Location = new System.Drawing.Point(450, 130);
-            this.lblStreak.Size = new System.Drawing.Size(100, 30);
-            this.lblStreak.Font = new System.Drawing.Font("微软雅黑", 14F);
-            this.lblStreak.ForeColor = System.Drawing.Color.OrangeRed;
-
+            // 
+            lblStreak.Font = new Font("微软雅黑", 14F);
+            lblStreak.ForeColor = Color.OrangeRed;
+            lblStreak.Location = new Point(450, 160);
+            lblStreak.Name = "lblStreak";
+            lblStreak.Size = new Size(100, 30);
+            lblStreak.TabIndex = 6;
+            // 
             // lblWeekHeader
-            this.lblWeekHeader.Text = "本周学习";
-            this.lblWeekHeader.Location = new System.Drawing.Point(20, 180);
-            this.lblWeekHeader.Size = new System.Drawing.Size(100, 20);
-            this.lblWeekHeader.Font = new System.Drawing.Font("微软雅黑", 12F, System.Drawing.FontStyle.Bold);
-
+            // 
+            lblWeekHeader.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
+            lblWeekHeader.Location = new Point(20, 210);
+            lblWeekHeader.Name = "lblWeekHeader";
+            lblWeekHeader.Size = new Size(100, 20);
+            lblWeekHeader.TabIndex = 7;
+            lblWeekHeader.Text = "本周学习";
+            // 
             // lblWeekMinutes
-            this.lblWeekMinutes.Location = new System.Drawing.Point(20, 210);
-            this.lblWeekMinutes.Size = new System.Drawing.Size(150, 30);
-            this.lblWeekMinutes.Font = new System.Drawing.Font("微软雅黑", 14F);
-
+            // 
+            lblWeekMinutes.Font = new Font("微软雅黑", 14F);
+            lblWeekMinutes.Location = new Point(20, 240);
+            lblWeekMinutes.Name = "lblWeekMinutes";
+            lblWeekMinutes.Size = new Size(150, 30);
+            lblWeekMinutes.TabIndex = 8;
+            // 
             // lblWeekItems
-            this.lblWeekItems.Location = new System.Drawing.Point(180, 210);
-            this.lblWeekItems.Size = new System.Drawing.Size(150, 30);
-            this.lblWeekItems.Font = new System.Drawing.Font("微软雅黑", 14F);
-
+            // 
+            lblWeekItems.Font = new Font("微软雅黑", 14F);
+            lblWeekItems.Location = new Point(180, 240);
+            lblWeekItems.Name = "lblWeekItems";
+            lblWeekItems.Size = new Size(150, 30);
+            lblWeekItems.TabIndex = 9;
+            // 
             // lblWeekAccuracy
-            this.lblWeekAccuracy.Location = new System.Drawing.Point(340, 210);
-            this.lblWeekAccuracy.Size = new System.Drawing.Size(100, 30);
-            this.lblWeekAccuracy.Font = new System.Drawing.Font("微软雅黑", 14F);
-
-            // btnRefresh
-            this.btnRefresh.Text = "刷新";
-            this.btnRefresh.Location = new System.Drawing.Point(520, 10);
-            this.btnRefresh.Click += new EventHandler(this.btnRefresh_Click);
-
-            // tabControl
-            this.tabControl.Controls.Add(this.tabOverview);
-            this.tabControl.Controls.Add(this.tabReminders);
-            this.tabControl.Controls.Add(this.tabReports);
-            this.tabControl.Location = new System.Drawing.Point(10, 10);
-            this.tabControl.Size = new System.Drawing.Size(580, 350);
-
-            // tabOverview
-            this.tabOverview.Controls.Add(this.lblQuote);
-            this.tabOverview.Controls.Add(this.lblAuthor);
-            this.tabOverview.Controls.Add(this.lblTodayHeader);
-            this.tabOverview.Controls.Add(this.lblTodayMinutes);
-            this.tabOverview.Controls.Add(this.lblTodayItems);
-            this.tabOverview.Controls.Add(this.lblTodayAccuracy);
-            this.tabOverview.Controls.Add(this.lblStreak);
-            this.tabOverview.Controls.Add(this.lblWeekHeader);
-            this.tabOverview.Controls.Add(this.lblWeekMinutes);
-            this.tabOverview.Controls.Add(this.lblWeekItems);
-            this.tabOverview.Controls.Add(this.lblWeekAccuracy);
-            this.tabOverview.Text = "概览";
-
-            // tabReminders
-            this.tabReminders.Controls.Add(this.listReminders);
-            this.tabReminders.Controls.Add(this.btnAddReminder);
-            this.tabReminders.Text = "提醒管理";
-
+            // 
+            lblWeekAccuracy.Font = new Font("微软雅黑", 14F);
+            lblWeekAccuracy.Location = new Point(340, 240);
+            lblWeekAccuracy.Name = "lblWeekAccuracy";
+            lblWeekAccuracy.Size = new Size(100, 30);
+            lblWeekAccuracy.TabIndex = 10;
+            // 
             // listReminders
-            this.listReminders.Location = new System.Drawing.Point(20, 20);
-            this.listReminders.Size = new System.Drawing.Size(520, 250);
-
+            // 
+            listReminders.Location = new Point(20, 20);
+            listReminders.Name = "listReminders";
+            listReminders.Size = new Size(520, 242);
+            listReminders.TabIndex = 0;
+            // 
             // btnAddReminder
-            this.btnAddReminder.Text = "添加提醒";
-            this.btnAddReminder.Location = new System.Drawing.Point(450, 280);
-            this.btnAddReminder.Click += new EventHandler(this.btnAddReminder_Click);
-
-            // tabReports
-            this.tabReports.Controls.Add(this.btnGenerateReport);
-            this.tabReports.Text = "学习报告";
-
+            // 
+            btnAddReminder.Location = new Point(450, 280);
+            btnAddReminder.Name = "btnAddReminder";
+            btnAddReminder.Size = new Size(75, 23);
+            btnAddReminder.TabIndex = 1;
+            btnAddReminder.Text = "添加提醒";
+            btnAddReminder.Click += btnAddReminder_Click;
+            // 
             // btnGenerateReport
-            this.btnGenerateReport.Text = "生成今日报告";
-            this.btnGenerateReport.Location = new System.Drawing.Point(220, 150);
-            this.btnGenerateReport.Click += new EventHandler(this.btnGenerateReport_Click);
-
+            // 
+            btnGenerateReport.Location = new Point(220, 150);
+            btnGenerateReport.Name = "btnGenerateReport";
+            btnGenerateReport.Size = new Size(75, 23);
+            btnGenerateReport.TabIndex = 0;
+            btnGenerateReport.Text = "生成今日报告";
+            btnGenerateReport.Click += btnGenerateReport_Click;
+            // 
+            // btnRefresh
+            // 
+            btnRefresh.Location = new Point(520, 10);
+            btnRefresh.Name = "btnRefresh";
+            btnRefresh.Size = new Size(75, 23);
+            btnRefresh.TabIndex = 1;
+            btnRefresh.Text = "刷新";
+            btnRefresh.Click += btnRefresh_Click;
+            // 
+            // tabControl
+            // 
+            tabControl.Controls.Add(tabOverview);
+            tabControl.Controls.Add(tabReminders);
+            tabControl.Controls.Add(tabReports);
+            tabControl.Location = new Point(10, 10);
+            tabControl.Name = "tabControl";
+            tabControl.SelectedIndex = 0;
+            tabControl.Size = new Size(580, 350);
+            tabControl.TabIndex = 0;
+            // 
+            // tabOverview
+            // 
+            tabOverview.Controls.Add(lblAuthor);
+            tabOverview.Controls.Add(lblTodayHeader);
+            tabOverview.Controls.Add(lblTodayMinutes);
+            tabOverview.Controls.Add(lblTodayItems);
+            tabOverview.Controls.Add(lblTodayAccuracy);
+            tabOverview.Controls.Add(lblStreak);
+            tabOverview.Controls.Add(lblWeekHeader);
+            tabOverview.Controls.Add(lblWeekMinutes);
+            tabOverview.Controls.Add(lblWeekItems);
+            tabOverview.Controls.Add(lblWeekAccuracy);
+            tabOverview.Controls.Add(lblQuote);
+            tabOverview.Location = new Point(4, 26);
+            tabOverview.Name = "tabOverview";
+            tabOverview.Size = new Size(572, 320);
+            tabOverview.TabIndex = 0;
+            tabOverview.Text = "概览";
+            // 
+            // tabReminders
+            // 
+            tabReminders.Controls.Add(listReminders);
+            tabReminders.Controls.Add(btnAddReminder);
+            tabReminders.Location = new Point(4, 26);
+            tabReminders.Name = "tabReminders";
+            tabReminders.Size = new Size(572, 320);
+            tabReminders.TabIndex = 1;
+            tabReminders.Text = "提醒管理";
+            // 
+            // tabReports
+            // 
+            tabReports.Controls.Add(btnGenerateReport);
+            tabReports.Location = new Point(4, 26);
+            tabReports.Name = "tabReports";
+            tabReports.Size = new Size(572, 320);
+            tabReports.TabIndex = 2;
+            tabReports.Text = "学习报告";
+            // 
             // LearningManagementForm
-            this.ClientSize = new System.Drawing.Size(600, 400);
-            this.Controls.Add(this.tabControl);
-            this.Controls.Add(this.btnRefresh);
-            this.Text = "学习管理";
-            this.Load += new EventHandler(this.LearningManagementForm_Load);
-
-            this.tabControl.ResumeLayout(false);
-            this.tabOverview.ResumeLayout(false);
-            this.tabReminders.ResumeLayout(false);
-            this.ResumeLayout(false);
+            // 
+            ClientSize = new Size(600, 400);
+            Controls.Add(tabControl);
+            Controls.Add(btnRefresh);
+            Name = "LearningManagementForm";
+            Text = "学习管理";
+            Load += LearningManagementForm_Load;
+            tabControl.ResumeLayout(false);
+            tabOverview.ResumeLayout(false);
+            tabReminders.ResumeLayout(false);
+            tabReports.ResumeLayout(false);
+            ResumeLayout(false);
         }
 
         protected override void Dispose(bool disposing)
@@ -329,6 +395,6 @@ namespace LearningAssistant.Forms
             base.Dispose(disposing);
         }
 
-        #endregion
+        #endregion 
     }
 }

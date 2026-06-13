@@ -192,7 +192,6 @@ namespace LearningAssistant.Presenters
             _view.TemplateDeleteClicked += (_, _) => OnTemplateDeleteClicked();
             _view.ImportClicked += (_, _) => OnImportClicked();
             _view.ExportClicked += (_, _) => OnExportClicked();
-            _view.GenerateWithAIClicked += (_, _) => OnGenerateWithAIClicked();
             _view.GridCellEndEdit += (_, _) => OnGridValueChanged();
             _view.GridRowsAdded += (_, _) => OnGridValueChanged();
 
@@ -628,65 +627,6 @@ namespace LearningAssistant.Presenters
         }
 
         /// <summary>
-        /// AI生成内容事件处理方法
-        /// </summary>
-        private async void OnGenerateWithAIClicked()
-        {
-            var category = _view.SelectedSubCategory;
-
-            if (string.IsNullOrEmpty(category))
-            {
-                _view.ShowMessage("请先选择一个类别！");
-                return;
-            }
-
-            if (!int.TryParse(_view.GenerateCount, out var count))
-            {
-                _view.ShowMessage("请输入有效的生成数量！");
-                return;
-            }
-
-            var range = string.IsNullOrWhiteSpace(_view.GenerateRange) || _view.GenerateRange == "请输入关键词或范围"
-                ? "常用" : _view.GenerateRange;
-
-            try
-            {
-                var prompt = GetAIPrompt(category, count, range);
-                _view.PromptText = prompt;
-                _logger.LogInformation("Generating {Count} {Range} {Category} items with AI", count, range, category);
-                var response = await _aiQuestionService.AskAsync(prompt);
-
-                if (!string.IsNullOrEmpty(response))
-                {
-
-
-                    _view.CurrentEditItemJson = response;
-                    //OnTemplateSaveClicked();
-                    _logger.LogInformation("Successfully generated {Count} {Category} items with AI", count, category);
-                }
-                else
-                {
-                    _view.ShowMessage("AI生成失败，请重试！");
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                _logger.LogDebug("OnGenerateWithAIClicked was cancelled");
-                _view.ShowMessage("操作已取消");
-            }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogError(ex, "AI API HTTP error for category {Category}", category);
-                _view.ShowMessage(GetFriendlyErrorMessage(ex.Message));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to generate items with AI for category {Category}", category);
-                _view.ShowMessage($"生成失败：{ex.Message}");
-            }
-        }
-
-        /// <summary>
         /// 根据HTTP错误信息生成友好的中文错误提示
         /// </summary>
         /// <param name="errorMessage">原始错误信息</param>
@@ -790,7 +730,6 @@ namespace LearningAssistant.Presenters
             _view.TemplateDeleteClicked -= (_, _) => OnTemplateDeleteClicked();
             _view.ImportClicked -= (_, _) => OnImportClicked();
             _view.ExportClicked -= (_, _) => OnExportClicked();
-            _view.GenerateWithAIClicked -= (_, _) => OnGenerateWithAIClicked();
             _view.GridCellEndEdit -= (_, _) => OnGridValueChanged();
             _view.GridRowsAdded -= (_, _) => OnGridValueChanged();
 

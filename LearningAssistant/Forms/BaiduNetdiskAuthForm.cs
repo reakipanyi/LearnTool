@@ -15,11 +15,11 @@ namespace LearningAssistant.Forms
             _onAuthCompleted = onAuthCompleted ?? throw new ArgumentNullException(nameof(onAuthCompleted));
         }
 
-        private void BaiduNetdiskAuthForm_Load(object sender, EventArgs e)
+        private async void BaiduNetdiskAuthForm_Load(object sender, EventArgs e)
         {
             try
             {
-                var authUrl = _cloudService.GetAuthorizationUrlAsync().Result;
+                var authUrl = await _cloudService.GetAuthorizationUrlAsync();
                 labelAuthUrl.Text = authUrl;
                 
                 if (MessageBox.Show($"请访问以下URL完成百度网盘授权，或点击确定在浏览器中打开。\n\n{authUrl}", "百度网盘授权", 

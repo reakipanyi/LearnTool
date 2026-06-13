@@ -1,15 +1,17 @@
-using UnifiedLearningAssistant.Common;
-using UnifiedLearningAssistant.Presenters;
-using UnifiedLearningAssistant.Services;
-using UnifiedLearningAssistant.Views;
-using UnifiedLearningAssistant.Services.AI;
-using UnifiedLearningAssistant.Services.TTS;
-using UnifiedLearningAssistant.Services.Feedback;
+using LearningAssistant.Common.Events;
+using LearningAssistant.Common.Themes;
+using LearningAssistant.Presenters;
+using LearningAssistant.Services;
+using LearningAssistant.Services.AI;
+using LearningAssistant.Services.Cloud;
+using LearningAssistant.Services.Feedback;
+using LearningAssistant.Services.Learning;
+using LearningAssistant.Services.TTS;
+using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using UnifiedLearningAssistant.Services.Learning;
 
-namespace UnifiedLearningAssistant.Forms
+namespace LearningAssistant.Forms
 {
     /// <summary>
     /// 窗体预览工具 - 用于预览所有窗体的样式
@@ -60,7 +62,7 @@ namespace UnifiedLearningAssistant.Forms
             var mockAppConfig = new Models.Config.AppConfig();
             var mockCloudStorageService = CreateMockCloudStorageService();
             var mockThemeService = CreateMockThemeService();
-            
+
             return new MainForm(mockPresenter, mockWindowManager, mockAppConfig, mockCloudStorageService, mockThemeService);
         }
 
@@ -69,25 +71,24 @@ namespace UnifiedLearningAssistant.Forms
             var logger = NullLoggerFactory.Instance.CreateLogger<LearningForm>();
             var aiQuestionService = CreateMockAiQuestionService();
             var ttsService = CreateMockTtsService();
-            
+
             return new LearningForm(aiQuestionService, ttsService, logger, NullLoggerFactory.Instance);
         }
 
         private static Form CreateContentEditorFormPreview()
         {
             var logger = NullLoggerFactory.Instance.CreateLogger<ContentEditorForm>();
-            var aiService = CreateMockSiliconFlowAiService();
-            var contentLoaderService = CreateMockContentLoaderService();
-            var windowManager = CreateMockWindowManager();
-            
-            return new ContentEditorForm(logger, aiService, contentLoaderService, windowManager);
+            var appConfig = new Models.Config.AppConfig();
+            var aiPanelPopupService = CreateMockAIPanelPopupService();
+
+            return new ContentEditorForm(logger, appConfig, aiPanelPopupService);
         }
 
         private static Form CreatePdfReaderFormPreview()
         {
             var logger = NullLoggerFactory.Instance.CreateLogger<PdfReaderForm>();
             var ttsService = CreateMockTtsService();
-            
+
             return new PdfReaderForm(logger, ttsService);
         }
 
@@ -111,7 +112,7 @@ namespace UnifiedLearningAssistant.Forms
                 Icon = "🏆"
             };
             var soundService = new SoundService();
-            
+
             return new AchievementNotificationForm(achievement, soundService);
         }
 
@@ -126,7 +127,7 @@ namespace UnifiedLearningAssistant.Forms
             var achievementService = CreateMockAchievementService();
             var windowManager = CreateMockWindowManager();
             var logger = NullLoggerFactory.Instance.CreateLogger<MainPresenter>();
-            
+
             return new MainPresenter(userProfileService, contentLoaderService, achievementService, windowManager, logger);
         }
 
@@ -169,9 +170,10 @@ namespace UnifiedLearningAssistant.Forms
             return new MockTtsService();
         }
 
-        private static ISiliconFlowAiService CreateMockSiliconFlowAiService()
+
+        private static IAIPanelPopupService CreateMockAIPanelPopupService()
         {
-            return new MockSiliconFlowAiService();
+            return new MockAIPanelPopupService();
         }
 
         private static ICloudStorageService CreateMockCloudStorageService()
@@ -243,12 +245,10 @@ namespace UnifiedLearningAssistant.Forms
         public void Stop() { }
     }
 
-    internal class MockSiliconFlowAiService : ISiliconFlowAiService
+    internal class MockAIPanelPopupService : IAIPanelPopupService
     {
-        public Task<string> GenerateTextAsync(string prompt, string? systemPrompt = null) => Task.FromResult("");
-        public Task<string> GenerateExplanationAsync(string word, string? example = null, string? language = null) => Task.FromResult("");
-        public Task<string> GenerateQuestionAsync(string word, string? example = null, string? language = null) => Task.FromResult("");
-        public Task<string> GenerateComprehensiveContentAsync(string content, string type, string language) => Task.FromResult("");
+        public void ShowAIAbilityPanel(Form parent, string? prompt = null, string? aiUrl = null) { }
+        public void HideAIAbilityPanel(Form parent) { }
     }
 
     internal class MockCloudStorageService : ICloudStorageService
@@ -262,7 +262,7 @@ namespace UnifiedLearningAssistant.Forms
         public bool IsAuthenticated => false;
     }
 
-    internal class MockEventBus : Common.Events.IEventBus
+    internal class MockEventBus : IEventBus
     {
         public void Subscribe<TEvent>(Action<TEvent> handler) where TEvent : Common.Events.IApplicationEvent { }
         public void Unsubscribe<TEvent>(Action<TEvent> handler) where TEvent : Common.Events.IApplicationEvent { }

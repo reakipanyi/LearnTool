@@ -177,34 +177,42 @@ namespace LearningAssistant.Presenters
             SaveSession();
         }
 
-        private void View_OpenLearningWindowClicked(object? sender, EventArgs e)
+        private async void View_OpenLearningWindowClicked(object? sender, EventArgs e)
         {
-            _logger.LogInformation("Open learning window clicked");
-            SaveSession();
-            
-            string language = Constants.Language.Chinese;
-            string subCategory = Constants.SubCategory.ChineseCharacter;
-            
-            if (_currentUserProfile != null)
+            try
             {
-                var progress = _currentUserProfile.LearningProgress;
+                _logger.LogInformation("Open learning window clicked");
+                SaveSession();
                 
-                if (progress.CategoryProgresses.Any())
+                string language = Constants.Language.Chinese;
+                string subCategory = Constants.SubCategory.ChineseCharacter;
+                
+                if (_currentUserProfile != null)
                 {
-                    var lastCategory = progress.CategoryProgresses.Values
-                        .OrderByDescending(cp => cp.LastTestDate)
-                        .FirstOrDefault();
+                    var progress = _currentUserProfile.LearningProgress;
                     
-                    if (lastCategory != null)
+                    if (progress.CategoryProgresses.Any())
                     {
-                        subCategory = lastCategory.CategoryName;
-                        language = GetLanguageFromCategory(subCategory);
-                        _logger.LogInformation("Resuming learning from last session: Language={Language}, Category={Category}", language, subCategory);
+                        var lastCategory = progress.CategoryProgresses.Values
+                            .OrderByDescending(cp => cp.LastTestDate)
+                            .FirstOrDefault();
+                        
+                        if (lastCategory != null)
+                        {
+                            subCategory = lastCategory.CategoryName;
+                            language = GetLanguageFromCategory(subCategory);
+                            _logger.LogInformation("Resuming learning from last session: Language={Language}, Category={Category}", language, subCategory);
+                        }
                     }
                 }
+                
+                await _windowManager.OpenLearningWindowAsync(_currentUserId, language, subCategory, string.Empty, true);
             }
-            
-            _windowManager.OpenLearningWindowAsync(_currentUserId, language, subCategory, string.Empty, true).ConfigureAwait(false);
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to open learning window");
+                MessageBox.Show($"打开学习窗口失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
         
         private string GetLanguageFromCategory(string category)

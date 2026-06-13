@@ -1,10 +1,8 @@
+using LearningAssistant.Models.Config;
+using Microsoft.Extensions.Logging;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
-using Microsoft.Extensions.Logging;
-using System;
-using System.IO;
-using System.Threading.Tasks;
-using System.Windows.Forms;
+using System.ComponentModel;
 
 namespace LearningAssistant.Forms
 {
@@ -12,14 +10,35 @@ namespace LearningAssistant.Forms
     {
         private readonly ILogger<AIWebViewForm>? _logger;
         private WebView2? _webView;
-        private bool _isWebViewReady = false;
+        private readonly string _initialUrl;
+        private string? _initialPrompt;
 
-        private const string DoubaoUrl = "https://www.doubao.com/chat";
-        private const string DeepseekUrl = "https://chat.deepseek.com/";
+        /// <summary>
+        /// 初始化时自动填入的提示词
+        /// </summary>
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public string? InitialPrompt
+        {
+            get => _initialPrompt;
+            set => _initialPrompt = value;
+        }
 
-        public AIWebViewForm(ILogger<AIWebViewForm>? logger = null)
+        public AIWebViewForm(ILogger<AIWebViewForm>? logger = null, string? initialUrl = null, string? initialPrompt = null)
         {
             _logger = logger;
+            _initialPrompt = initialPrompt;
+            if (!string.IsNullOrEmpty(initialUrl))
+            {
+                _initialUrl = initialUrl;
+            }
+            else if (AiConfig.Providers.TryGetValue("doubao", out var defaultProvider))
+            {
+                _initialUrl = defaultProvider.WebViewUrl;
+            }
+            else
+            {
+                _initialUrl = "https://www.doubao.com/chat";
+            }
             InitializeComponent();
             Load += AIWebViewForm_Load;
         }
@@ -62,14 +81,12 @@ namespace LearningAssistant.Forms
                         _webView.CoreWebView2.Settings.IsScriptEnabled = true;
                         _webView.CoreWebView2.Settings.AreDevToolsEnabled = true;
                         _webView.CoreWebView2.Settings.IsZoomControlEnabled = true;
-                        _webView.CoreWebView2.Settings.DefaultZoomFactor = 1.0;
 
-                        _webView.Source = new Uri(DoubaoUrl);
+                        _webView.Source = new Uri(_initialUrl);
 
                         _webView.NavigationCompleted += OnNavigationCompleted;
 
                         panelBrowser.Controls.Add(_webView);
-                        _isWebViewReady = true;
                         success = true;
                     }
                     else
@@ -80,7 +97,7 @@ namespace LearningAssistant.Forms
                 catch (Exception ex)
                 {
                     retryCount++;
-                    _logger?.LogError(ex, $"WebView2 初始化失败 (尝试 {retryCount}/{maxRetryCount})");
+                    _logger?.LogError(ex, "WebView2 初始化失败 (尝试 {RetryCount}/{MaxRetryCount})", retryCount, maxRetryCount);
 
                     if (retryCount >= maxRetryCount)
                     {
@@ -99,7 +116,7 @@ namespace LearningAssistant.Forms
         {
             if (IsDisposed || !IsHandleCreated) return;
 
-            BeginInvoke(new Action(() =>
+            BeginInvoke(new Action(async () =>
             {
                 if (_webView != null)
                 {
@@ -107,32 +124,183 @@ namespace LearningAssistant.Forms
                     btnBack.Enabled = _webView.CanGoBack;
                     btnForward.Enabled = _webView.CanGoForward;
 
-                    bool isDoubao = _webView.Source?.ToString()?.StartsWith("https://www.doubao.com") ?? false;
-                    bool isDeepseek = _webView.Source?.ToString()?.StartsWith("https://chat.deepseek.com") ?? false;
+                    string? currentHost = _webView.Source?.Host;
+                    Text = "AI 助手";
 
-                    btnDoubao.Enabled = !isDoubao;
-                    btnDeepseek.Enabled = !isDeepseek;
+                    // 重置所有平台按钮
+                    btnProviderDeepseek.BackColor = SystemColors.Control;
+                    btnProviderDeepseek.Enabled = true;
+                    btnProviderDoubao.BackColor = SystemColors.Control;
+                    btnProviderDoubao.Enabled = true;
+                    btnProviderZhipu.BackColor = SystemColors.Control;
+                    btnProviderZhipu.Enabled = true;
+                    btnProviderQwen.BackColor = SystemColors.Control;
+                    btnProviderQwen.Enabled = true;
+                    btnProviderSpark.BackColor = SystemColors.Control;
+                    btnProviderSpark.Enabled = true;
+                    btnProviderWenxin.BackColor = SystemColors.Control;
+                    btnProviderWenxin.Enabled = true;
 
-                    if (isDoubao)
+
+                    // 高亮当前平台按钮（使用Host精确匹配）
+                    if (currentHost == "chat.deepseek.com")
                     {
-                        Text = "🤖 豆包 AI";
-                        btnDoubao.BackColor = Color.LightBlue;
-                        btnDeepseek.BackColor = SystemColors.Control;
+                        btnProviderDeepseek.BackColor = Color.LightBlue;
+                        btnProviderDeepseek.Enabled = false;
+                        Text = "🤖 DeepSeek";
                     }
-                    else if (isDeepseek)
+                    else if (currentHost == "www.doubao.com")
                     {
-                        Text = "🤖 DeepSeek AI";
-                        btnDeepseek.BackColor = Color.LightBlue;
-                        btnDoubao.BackColor = SystemColors.Control;
+                        btnProviderDoubao.BackColor = Color.LightBlue;
+                        btnProviderDoubao.Enabled = false;
+                        Text = "🤖 豆包 (Doubao)";
                     }
-                    else
+                    else if (currentHost == "chat.deepseek.com")
                     {
-                        Text = "AI 助手";
-                        btnDoubao.BackColor = SystemColors.Control;
-                        btnDeepseek.BackColor = SystemColors.Control;
+                        btnProviderDeepseek.BackColor = Color.LightBlue;
+                        btnProviderDeepseek.Enabled = false;
+                        Text = "🤖 DeepSeek";
+                    }
+
+                    else if (currentHost == "chatglm.cn")
+                    {
+                        btnProviderZhipu.BackColor = Color.LightBlue;
+                        btnProviderZhipu.Enabled = false;
+                        Text = "🤖 智谱AI (Zhipu/GLM)";
+                    }
+                    else if (currentHost == "tongyi.aliyun.com")
+                    {
+                        btnProviderQwen.BackColor = Color.LightBlue;
+                        btnProviderQwen.Enabled = false;
+                        Text = "🤖 通义千问 (Qwen/DashScope)";
+                    }
+                    else if (currentHost == "xinghuo.xfyun.cn")
+                    {
+                        btnProviderSpark.BackColor = Color.LightBlue;
+                        btnProviderSpark.Enabled = false;
+                        Text = "🤖 讯飞星火 (Spark)";
+                    }
+                    else if (currentHost == "yiyan.baidu.com")
+                    {
+                        btnProviderWenxin.BackColor = Color.LightBlue;
+                        btnProviderWenxin.Enabled = false;
+                        Text = "🤖 文心一言 (ERNIE)";
+                    }
+
+                    // 自动填充提示词
+                    if (!string.IsNullOrEmpty(_initialPrompt))
+                    {
+                        await FillPromptAsync(_initialPrompt, currentHost);
+                        _initialPrompt = null; // 只填充一次
                     }
                 }
             }));
+        }
+
+        private async Task FillPromptAsync(string prompt, string? host)
+        {
+            if (_webView?.CoreWebView2 == null) return;
+
+            try
+            {
+                string script = host switch
+                {
+                    // 豆包
+                    "www.doubao.com" => $@"
+                        (function() {{
+                            var textarea = document.querySelector('textarea[placeholder*='输入']') || document.querySelector('textarea');
+                            if (textarea) {{
+                                textarea.value = '{EscapeForJavaScript(prompt)}';
+                                textarea.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                textarea.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                return 'success';
+                            }}
+                            return 'textarea not found';
+                        }})();
+                    ",
+                    // DeepSeek
+                    "chat.deepseek.com" => $@"
+                        (function() {{
+                            var textarea = document.querySelector('textarea') || document.querySelector('[placeholder*='Ask']');
+                            if (textarea) {{
+                                textarea.value = '{EscapeForJavaScript(prompt)}';
+                                textarea.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                return 'success';
+                            }}
+                            return 'textarea not found';
+                        }})();
+                    ",
+                    // 智谱AI
+                    "chatglm.cn" => $@"
+                        (function() {{
+                            var textarea = document.querySelector('textarea') || document.querySelector('[placeholder*='问题']');
+                            if (textarea) {{
+                                textarea.value = '{EscapeForJavaScript(prompt)}';
+                                textarea.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                return 'success';
+                            }}
+                            return 'textarea not found';
+                        }})();
+                    ",
+                    // 通义千问
+                    "tongyi.aliyun.com" => $@"
+                        (function() {{
+                            var textarea = document.querySelector('textarea') || document.querySelector('[placeholder*='输入']');
+                            if (textarea) {{
+                                textarea.value = '{EscapeForJavaScript(prompt)}';
+                                textarea.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                return 'success';
+                            }}
+                            return 'textarea not found';
+                        }})();
+                    ",
+                    // 讯飞星火
+                    "xinghuo.xfyun.cn" => $@"
+                        (function() {{
+                            var textarea = document.querySelector('textarea') || document.querySelector('[placeholder*='输入']') || document.querySelector('[placeholder*='问题']');
+                            if (textarea) {{
+                                textarea.value = '{EscapeForJavaScript(prompt)}';
+                                textarea.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                textarea.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                return 'success';
+                            }}
+                            return 'textarea not found';
+                        }})();
+                    ",
+                    // 文心一言
+                    "yiyan.baidu.com" => $@"
+                        (function() {{
+                            var textarea = document.querySelector('textarea') || document.querySelector('[placeholder*='输入']') || document.querySelector('[placeholder*='问题']');
+                            if (textarea) {{
+                                textarea.value = '{EscapeForJavaScript(prompt)}';
+                                textarea.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                textarea.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                return 'success';
+                            }}
+                            return 'textarea not found';
+                        }})();
+                    ",
+                    _ => "/* unknown host */"
+                };
+
+                if (script.StartsWith("/*"))
+                {
+                    _logger?.LogDebug("跳过未知主机的自动填充: {Host}", host);
+                    return;
+                }
+
+                var result = await _webView.CoreWebView2.ExecuteScriptAsync(script);
+                _logger?.LogDebug("自动填充结果: {Result}", result);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "自动填充提示词失败");
+            }
+        }
+
+        private static string EscapeForJavaScript(string text)
+        {
+            return text.Replace("\\", "\\\\").Replace("'", "\\'").Replace("\n", "\\n").Replace("\r", "\\r");
         }
 
         private void btnGo_Click(object sender, EventArgs e)
@@ -186,20 +354,21 @@ namespace LearningAssistant.Forms
             }
         }
 
-        private void btnDoubao_Click(object sender, EventArgs e)
+        private void ProviderButton_Click(object? sender, EventArgs e)
         {
-            if (_webView != null)
-            {
-                _webView.Source = new Uri(DoubaoUrl);
-            }
-        }
+            if (sender == btnProviderDeepseek)
+                _webView.Source = new Uri("https://chat.deepseek.com/");
+            else if (sender == btnProviderDoubao)
+                _webView.Source = new Uri("https://www.doubao.com/chat");
+            else if (sender == btnProviderZhipu)
+                _webView.Source = new Uri("https://chatglm.cn");
+            else if (sender == btnProviderQwen)
+                _webView.Source = new Uri("https://tongyi.aliyun.com/qianwen");
+            else if (sender == btnProviderSpark)
+                _webView.Source = new Uri("https://xinghuo.xfyun.cn");
+            else if (sender == btnProviderWenxin)
+                _webView.Source = new Uri("https://yiyan.baidu.com");
 
-        private void btnDeepseek_Click(object sender, EventArgs e)
-        {
-            if (_webView != null)
-            {
-                _webView.Source = new Uri(DeepseekUrl);
-            }
         }
 
         protected override void Dispose(bool disposing)
@@ -226,134 +395,170 @@ namespace LearningAssistant.Forms
         private ToolStripButton btnRefresh;
         private ToolStripTextBox txtUrl;
         private ToolStripButton btnGo;
-        private ToolStripSeparator toolStripSeparator1;
-        private ToolStripButton btnDoubao;
-        private ToolStripButton btnDeepseek;
+        private ToolStripSeparator toolStripSeparatorProvider;
+        private ToolStripButton btnProviderDeepseek;
+        private ToolStripButton btnProviderDoubao;
+        private ToolStripButton btnProviderZhipu;
+        private ToolStripButton btnProviderQwen;
+        private ToolStripButton btnProviderSpark;
+        private ToolStripButton btnProviderWenxin;
+
         private Panel panelBrowser;
 
         private void InitializeComponent()
         {
-            this.toolStrip = new System.Windows.Forms.ToolStrip();
-            this.btnBack = new System.Windows.Forms.ToolStripButton();
-            this.btnForward = new System.Windows.Forms.ToolStripButton();
-            this.btnRefresh = new System.Windows.Forms.ToolStripButton();
-            this.txtUrl = new System.Windows.Forms.ToolStripTextBox();
-            this.btnGo = new System.Windows.Forms.ToolStripButton();
-            this.toolStripSeparator1 = new System.Windows.Forms.ToolStripSeparator();
-            this.btnDoubao = new System.Windows.Forms.ToolStripButton();
-            this.btnDeepseek = new System.Windows.Forms.ToolStripButton();
-            this.panelBrowser = new System.Windows.Forms.Panel();
-            this.toolStrip.SuspendLayout();
-            this.SuspendLayout();
+            toolStrip = new ToolStrip();
+            btnBack = new ToolStripButton();
+            btnForward = new ToolStripButton();
+            btnRefresh = new ToolStripButton();
+            txtUrl = new ToolStripTextBox();
+            btnGo = new ToolStripButton();
+            toolStripSeparatorProvider = new ToolStripSeparator();
+            btnProviderDeepseek = new ToolStripButton();
+            btnProviderDoubao = new ToolStripButton();
+            btnProviderZhipu = new ToolStripButton();
+            btnProviderQwen = new ToolStripButton();
+            btnProviderSpark = new ToolStripButton();
+            btnProviderWenxin = new ToolStripButton();
+            panelBrowser = new Panel();
+            toolStrip.SuspendLayout();
+            SuspendLayout();
             // 
             // toolStrip
             // 
-            this.toolStrip.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.btnBack,
-            this.btnForward,
-            this.btnRefresh,
-            this.txtUrl,
-            this.btnGo,
-            this.toolStripSeparator1,
-            this.btnDoubao,
-            this.btnDeepseek});
-            this.toolStrip.Location = new System.Drawing.Point(0, 0);
-            this.toolStrip.Name = "toolStrip";
-            this.toolStrip.Size = new System.Drawing.Size(1024, 25);
-            this.toolStrip.TabIndex = 0;
-            this.toolStrip.Text = "toolStrip1";
+            toolStrip.Items.AddRange(new ToolStripItem[] { btnBack, btnForward, btnRefresh, txtUrl, btnGo, toolStripSeparatorProvider, btnProviderDeepseek, btnProviderDoubao, btnProviderZhipu, btnProviderQwen, btnProviderSpark, btnProviderWenxin });
+            toolStrip.Location = new Point(0, 0);
+            toolStrip.Name = "toolStrip";
+            toolStrip.Size = new Size(1548, 25);
+            toolStrip.TabIndex = 0;
+            toolStrip.Text = "toolStrip1";
             // 
             // btnBack
             // 
-            this.btnBack.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
-            this.btnBack.Enabled = false;
-            this.btnBack.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.btnBack.Name = "btnBack";
-            this.btnBack.Size = new System.Drawing.Size(36, 22);
-            this.btnBack.Text = "后退";
-            this.btnBack.Click += new System.EventHandler(this.btnBack_Click);
+            btnBack.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnBack.Enabled = false;
+            btnBack.ImageTransparentColor = Color.Magenta;
+            btnBack.Name = "btnBack";
+            btnBack.Size = new Size(36, 22);
+            btnBack.Text = "后退";
+            btnBack.Click += btnBack_Click;
             // 
             // btnForward
             // 
-            this.btnForward.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
-            this.btnForward.Enabled = false;
-            this.btnForward.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.btnForward.Name = "btnForward";
-            this.btnForward.Size = new System.Drawing.Size(36, 22);
-            this.btnForward.Text = "前进";
-            this.btnForward.Click += new System.EventHandler(this.btnForward_Click);
+            btnForward.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnForward.Enabled = false;
+            btnForward.ImageTransparentColor = Color.Magenta;
+            btnForward.Name = "btnForward";
+            btnForward.Size = new Size(36, 22);
+            btnForward.Text = "前进";
+            btnForward.Click += btnForward_Click;
             // 
             // btnRefresh
             // 
-            this.btnRefresh.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
-            this.btnRefresh.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.btnRefresh.Name = "btnRefresh";
-            this.btnRefresh.Size = new System.Drawing.Size(36, 22);
-            this.btnRefresh.Text = "刷新";
-            this.btnRefresh.Click += new System.EventHandler(this.btnRefresh_Click);
+            btnRefresh.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnRefresh.ImageTransparentColor = Color.Magenta;
+            btnRefresh.Name = "btnRefresh";
+            btnRefresh.Size = new Size(36, 22);
+            btnRefresh.Text = "刷新";
+            btnRefresh.Click += btnRefresh_Click;
             // 
             // txtUrl
             // 
-            this.txtUrl.Name = "txtUrl";
-            this.txtUrl.Size = new System.Drawing.Size(500, 25);
-            this.txtUrl.Text = "https://www.doubao.com/chat";
-            this.txtUrl.KeyDown += new System.Windows.Forms.KeyEventHandler(this.txtUrl_KeyDown);
+            txtUrl.Name = "txtUrl";
+            txtUrl.Size = new Size(500, 25);
+            txtUrl.KeyDown += txtUrl_KeyDown;
             // 
             // btnGo
             // 
-            this.btnGo.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
-            this.btnGo.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.btnGo.Name = "btnGo";
-            this.btnGo.Size = new System.Drawing.Size(36, 22);
-            this.btnGo.Text = "跳转";
-            this.btnGo.Click += new System.EventHandler(this.btnGo_Click);
+            btnGo.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnGo.ImageTransparentColor = Color.Magenta;
+            btnGo.Name = "btnGo";
+            btnGo.Size = new Size(36, 22);
+            btnGo.Text = "跳转";
+            btnGo.Click += btnGo_Click;
             // 
-            // toolStripSeparator1
+            // toolStripSeparatorProvider
             // 
-            this.toolStripSeparator1.Name = "toolStripSeparator1";
-            this.toolStripSeparator1.Size = new System.Drawing.Size(6, 25);
+            toolStripSeparatorProvider.Name = "toolStripSeparatorProvider";
+            toolStripSeparatorProvider.Size = new Size(6, 25);
             // 
-            // btnDoubao
+            // btnProviderDeepseek
             // 
-            this.btnDoubao.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
-            this.btnDoubao.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.btnDoubao.Name = "btnDoubao";
-            this.btnDoubao.Size = new System.Drawing.Size(60, 22);
-            this.btnDoubao.Text = "豆包";
-            this.btnDoubao.Click += new System.EventHandler(this.btnDoubao_Click);
+            btnProviderDeepseek.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnProviderDeepseek.ImageTransparentColor = Color.Magenta;
+            btnProviderDeepseek.Name = "btnProviderDeepseek";
+            btnProviderDeepseek.Size = new Size(71, 22);
+            btnProviderDeepseek.Text = "DeepSeek";
+            btnProviderDeepseek.Click += ProviderButton_Click;
             // 
-            // btnDeepseek
+            // btnProviderDoubao
             // 
-            this.btnDeepseek.DisplayStyle = System.Windows.Forms.ToolStripItemDisplayStyle.Text;
-            this.btnDeepseek.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.btnDeepseek.Name = "btnDeepseek";
-            this.btnDeepseek.Size = new System.Drawing.Size(72, 22);
-            this.btnDeepseek.Text = "DeepSeek";
-            this.btnDeepseek.Click += new System.EventHandler(this.btnDeepseek_Click);
+            btnProviderDoubao.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnProviderDoubao.ImageTransparentColor = Color.Magenta;
+            btnProviderDoubao.Name = "btnProviderDoubao";
+            btnProviderDoubao.Size = new Size(95, 22);
+            btnProviderDoubao.Text = "豆包 (Doubao)";
+            btnProviderDoubao.Click += ProviderButton_Click;
+            // 
+            // btnProviderZhipu
+            // 
+            btnProviderZhipu.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnProviderZhipu.ImageTransparentColor = Color.Magenta;
+            btnProviderZhipu.Name = "btnProviderZhipu";
+            btnProviderZhipu.Size = new Size(124, 22);
+            btnProviderZhipu.Text = "智谱AI (Zhipu/GLM)";
+            btnProviderZhipu.Click += ProviderButton_Click;
+            // 
+            // btnProviderQwen
+            // 
+            btnProviderQwen.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnProviderQwen.ImageTransparentColor = Color.Magenta;
+            btnProviderQwen.Name = "btnProviderQwen";
+            btnProviderQwen.Size = new Size(175, 22);
+            btnProviderQwen.Text = "通义千问 (Qwen/DashScope)";
+            btnProviderQwen.Click += ProviderButton_Click;
+            // 
+            // btnProviderSpark
+            // 
+            btnProviderSpark.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnProviderSpark.ImageTransparentColor = Color.Magenta;
+            btnProviderSpark.Name = "btnProviderSpark";
+            btnProviderSpark.Size = new Size(100, 22);
+            btnProviderSpark.Text = "讯飞星火 (Spark)";
+            btnProviderSpark.Click += ProviderButton_Click;
+            // 
+            // btnProviderWenxin
+            // 
+            btnProviderWenxin.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnProviderWenxin.ImageTransparentColor = Color.Magenta;
+            btnProviderWenxin.Name = "btnProviderWenxin";
+            btnProviderWenxin.Size = new Size(100, 22);
+            btnProviderWenxin.Text = "文心一言 (ERNIE)";
+            btnProviderWenxin.Click += ProviderButton_Click;
             // 
             // panelBrowser
             // 
-            this.panelBrowser.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.panelBrowser.Location = new System.Drawing.Point(0, 25);
-            this.panelBrowser.Name = "panelBrowser";
-            this.panelBrowser.Size = new System.Drawing.Size(1024, 675);
-            this.panelBrowser.TabIndex = 1;
+            panelBrowser.Dock = DockStyle.Fill;
+            panelBrowser.Location = new Point(0, 25);
+            panelBrowser.Name = "panelBrowser";
+            panelBrowser.Size = new Size(1548, 768);
+            panelBrowser.TabIndex = 1;
             // 
             // AIWebViewForm
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(1024, 700);
-            this.Controls.Add(this.panelBrowser);
-            this.Controls.Add(this.toolStrip);
-            this.Name = "AIWebViewForm";
-            this.StartPosition = FormStartPosition.CenterScreen;
-            this.Text = "🤖 豆包 AI";
-            this.WindowState = FormWindowState.Maximized;
-            this.toolStrip.ResumeLayout(false);
-            this.toolStrip.PerformLayout();
-            this.ResumeLayout(false);
-            this.PerformLayout();
+            AutoScaleDimensions = new SizeF(7F, 17F);
+            AutoScaleMode = AutoScaleMode.Font;
+            ClientSize = new Size(1548, 793);
+            Controls.Add(panelBrowser);
+            Controls.Add(toolStrip);
+            Name = "AIWebViewForm";
+            StartPosition = FormStartPosition.CenterScreen;
+            Text = "🤖 AI 助手";
+            WindowState = FormWindowState.Maximized;
+            toolStrip.ResumeLayout(false);
+            toolStrip.PerformLayout();
+            ResumeLayout(false);
+            PerformLayout();
         }
 
         #endregion

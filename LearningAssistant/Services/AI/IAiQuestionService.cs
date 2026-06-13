@@ -10,22 +10,25 @@ namespace LearningAssistant.Services.AI
         /// </summary>
         /// <param name="text">问题文本</param>
         /// <param name="context">上下文信息（可选）</param>
+        /// <param name="cancellationToken">取消令牌</param>
         /// <returns>AI回答</returns>
-        Task<string> AskAsync(string text, string context = "");
+        Task<string> AskAsync(string text, string context = "", CancellationToken cancellationToken = default);
 
         /// <summary>
         /// 异步生成练习题
         /// </summary>
         /// <param name="text">学习内容文本</param>
         /// <param name="language">学习语言</param>
+        /// <param name="cancellationToken">取消令牌</param>
         /// <returns>生成的练习题</returns>
-        Task<string> GenerateExerciseAsync(string text, string language);
+        Task<string> GenerateExerciseAsync(string text, string language, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// 异步摘要文本
         /// </summary>
         /// <param name="text">要摘要的文本</param>
+        /// <param name="cancellationToken">取消令牌</param>
         /// <returns>生成的摘要</returns>
-        Task<string> SummarizeTextAsync(string text);
+        Task<string> SummarizeTextAsync(string text, CancellationToken cancellationToken = default);
     }
 }

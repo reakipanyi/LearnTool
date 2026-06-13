@@ -135,8 +135,8 @@ namespace LearningAssistant.Forms
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string Model
         {
-            get => textBoxModel.Text;
-            set => textBoxModel.Text = value;
+            get => comboBoxModel.Text;
+            set => comboBoxModel.Text = value;
         }
 
 
@@ -261,6 +261,7 @@ namespace LearningAssistant.Forms
 
         public event EventHandler? SaveClicked;
         public event EventHandler? CancelClicked;
+        public event EventHandler? OpenWebViewClicked;
 
         public void ShowMessage(string msg)
         {
@@ -285,7 +286,7 @@ namespace LearningAssistant.Forms
         private Label labelApiEndpoint;
         private TextBox textBoxApiEndpoint;
         private Label labelModel;
-        private TextBox textBoxModel;
+        private ComboBox comboBoxModel;
         private GroupBox groupBoxTts;
         private CheckBox checkBoxTtsEnabled;
         private Label labelTtsApiKey;
@@ -323,11 +324,10 @@ namespace LearningAssistant.Forms
 
         private void InitializeComponent()
         {
-            components = new System.ComponentModel.Container();
-            AiProviderInfo aiProviderInfo1 = new AiProviderInfo();
+            ComponentResourceManager resources = new ComponentResourceManager(typeof(SettingForm));
             groupBoxAi = new GroupBox();
             labelModel = new Label();
-            textBoxModel = new TextBox();
+            comboBoxModel = new ComboBox();
             labelApiEndpoint = new Label();
             textBoxApiEndpoint = new TextBox();
             labelApiKey = new Label();
@@ -373,22 +373,22 @@ namespace LearningAssistant.Forms
             checkBoxIsAIExplanationEnabled = new CheckBox();
             groupBoxAi.SuspendLayout();
             groupBoxTts.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)trackBarVolume).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)trackBarSpeed).BeginInit();
+            ((ISupportInitialize)trackBarVolume).BeginInit();
+            ((ISupportInitialize)trackBarSpeed).BeginInit();
             groupBoxInterface.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)numericUpDownFontSize).BeginInit();
+            ((ISupportInitialize)numericUpDownFontSize).BeginInit();
             groupBoxTranslation.SuspendLayout();
             groupBoxCloudStorage.SuspendLayout();
             headerPanel.SuspendLayout();
             groupBoxLearningSettings.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)numericUpDownPronunciationScope).BeginInit();
+            ((ISupportInitialize)numericUpDownPronunciationScope).BeginInit();
             SuspendLayout();
             // 
             // groupBoxAi
             // 
             groupBoxAi.BackColor = Color.FromArgb(255, 250, 240);
             groupBoxAi.Controls.Add(labelModel);
-            groupBoxAi.Controls.Add(textBoxModel);
+            groupBoxAi.Controls.Add(comboBoxModel);
             groupBoxAi.Controls.Add(labelApiEndpoint);
             groupBoxAi.Controls.Add(textBoxApiEndpoint);
             groupBoxAi.Controls.Add(labelApiKey);
@@ -400,7 +400,7 @@ namespace LearningAssistant.Forms
             groupBoxAi.ForeColor = Color.FromArgb(70, 90, 110);
             groupBoxAi.Location = new Point(15, 68);
             groupBoxAi.Name = "groupBoxAi";
-            groupBoxAi.Size = new Size(550, 175);
+            groupBoxAi.Size = new Size(550, 210);
             groupBoxAi.TabIndex = 0;
             groupBoxAi.TabStop = false;
             groupBoxAi.Text = "🤖 AI 接口配置";
@@ -414,12 +414,13 @@ namespace LearningAssistant.Forms
             labelModel.TabIndex = 7;
             labelModel.Text = "模型:";
             // 
-            // textBoxModel
+            // comboBoxModel
             // 
-            textBoxModel.Location = new Point(120, 137);
-            textBoxModel.Name = "textBoxModel";
-            textBoxModel.Size = new Size(400, 25);
-            textBoxModel.TabIndex = 6;
+            comboBoxModel.FormattingEnabled = true;
+            comboBoxModel.Location = new Point(120, 137);
+            comboBoxModel.Name = "comboBoxModel";
+            comboBoxModel.Size = new Size(400, 27);
+            comboBoxModel.TabIndex = 6;
             // 
             // labelApiEndpoint
             // 
@@ -466,10 +467,6 @@ namespace LearningAssistant.Forms
             // 
             comboBoxProvider.DisplayMember = "Value.Name";
             comboBoxProvider.FormattingEnabled = true;
-            aiProviderInfo1.BaseUrl = "https://api.siliconflow.cn/v1/chat/completions";
-            aiProviderInfo1.DefaultModel = "qwen/qwen-2.5-7b-instruct";
-            aiProviderInfo1.Name = "千问 (SiliconFlow)";
-            comboBoxProvider.Items.AddRange(new object[] { aiProviderInfo1 });
             comboBoxProvider.Location = new Point(120, 17);
             comboBoxProvider.Name = "comboBoxProvider";
             comboBoxProvider.Size = new Size(200, 27);
@@ -903,17 +900,17 @@ namespace LearningAssistant.Forms
             groupBoxAi.PerformLayout();
             groupBoxTts.ResumeLayout(false);
             groupBoxTts.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)trackBarVolume).EndInit();
-            ((System.ComponentModel.ISupportInitialize)trackBarSpeed).EndInit();
+            ((ISupportInitialize)trackBarVolume).EndInit();
+            ((ISupportInitialize)trackBarSpeed).EndInit();
             groupBoxInterface.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)numericUpDownFontSize).EndInit();
+            ((ISupportInitialize)numericUpDownFontSize).EndInit();
             groupBoxTranslation.ResumeLayout(false);
             groupBoxTranslation.PerformLayout();
             groupBoxCloudStorage.ResumeLayout(false);
             groupBoxCloudStorage.PerformLayout();
             headerPanel.ResumeLayout(false);
             groupBoxLearningSettings.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)numericUpDownPronunciationScope).EndInit();
+            ((ISupportInitialize)numericUpDownPronunciationScope).EndInit();
             ResumeLayout(false);
         }
 
@@ -935,7 +932,7 @@ namespace LearningAssistant.Forms
             if (selectedItem.HasValue && AiConfig.Providers.TryGetValue(selectedItem.Value.Key, out var providerInfo))
             {
                 var hasCustomConfig = !string.IsNullOrWhiteSpace(textBoxApiEndpoint.Text) ||
-                                     !string.IsNullOrWhiteSpace(textBoxModel.Text);
+                                     !string.IsNullOrWhiteSpace(comboBoxModel.Text);
 
                 if (hasCustomConfig)
                 {
@@ -952,7 +949,17 @@ namespace LearningAssistant.Forms
                 }
 
                 textBoxApiEndpoint.Text = providerInfo.BaseUrl;
-                textBoxModel.Text = providerInfo.DefaultModel;
+
+                // 动态加载该厂商的模型列表
+                comboBoxModel.Items.Clear();
+                if (providerInfo.Models != null && providerInfo.Models.Count > 0)
+                {
+                    foreach (var model in providerInfo.Models)
+                    {
+                        comboBoxModel.Items.Add(model);
+                    }
+                }
+                comboBoxModel.Text = providerInfo.DefaultModel;
             }
         }
 
@@ -969,6 +976,11 @@ namespace LearningAssistant.Forms
         private void ButtonCancel_Click(object? sender, EventArgs e)
         {
             CancelClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ButtonOpenWebView_Click(object? sender, EventArgs e)
+        {
+            OpenWebViewClicked?.Invoke(this, EventArgs.Empty);
         }
 
         private void CheckBoxNightMode_CheckedChanged(object? sender, EventArgs e)

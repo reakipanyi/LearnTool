@@ -100,17 +100,14 @@ namespace LearningAssistant.Presenters
             _view.FileSelected += View_FileSelected;
             _view.PageChanged += View_PageChanged;
             _view.OcrSelectionComplete += View_OcrSelectionComplete;
-            _view.AiQuestionAsked += View_AiQuestionAsked;
-            _view.AddToLearningList += View_AddWordToLearningList;
+
             _view.SpeakOriginal += View_SpeakOriginal;
             _view.SpeakTranslation += View_SpeakTranslation;
             _view.SpeakText += View_SpeakText;
-            _view.AskAiWithText += View_AskAiWithText;
             _view.SelectOcrClicked += View_SelectOcrClicked;
             _view.TranslateClicked += View_TranslateClicked;
             _view.ToggleNightMode += View_ToggleNightMode;
             _view.LanguageChanged += View_LanguageChanged;
-            _view.SpeakAnswer += View_SpeakAnswer;
         }
 
         private void UnsubscribeFromEvents()
@@ -121,17 +118,14 @@ namespace LearningAssistant.Presenters
             _view.FileSelected -= View_FileSelected;
             _view.PageChanged -= View_PageChanged;
             _view.OcrSelectionComplete -= View_OcrSelectionComplete;
-            _view.AiQuestionAsked -= View_AiQuestionAsked;
-            _view.AddToLearningList -= View_AddWordToLearningList;
+
             _view.SpeakOriginal -= View_SpeakOriginal;
             _view.SpeakTranslation -= View_SpeakTranslation;
             _view.SpeakText -= View_SpeakText;
-            _view.AskAiWithText -= View_AskAiWithText;
             _view.SelectOcrClicked -= View_SelectOcrClicked;
             _view.TranslateClicked -= View_TranslateClicked;
             _view.ToggleNightMode -= View_ToggleNightMode;
             _view.LanguageChanged -= View_LanguageChanged;
-            _view.SpeakAnswer -= View_SpeakAnswer;
         }
 
         public int PageCount => _pdfRenderer.PageCount;
@@ -329,6 +323,11 @@ namespace LearningAssistant.Presenters
             return await _pdfAiService.GetAnswerAsync(question, context, cancellationToken);
         }
 
+        public async Task<string> GenerateAiContentAsync(string prompt, CancellationToken cancellationToken = default)
+        {
+            return await _pdfAiService.GetAnswerAsync(prompt, "", cancellationToken);
+        }
+
         public void TogglePenMode(bool enabled)
         {
         }
@@ -408,10 +407,6 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        public void SetQuestionInput(string text)
-        {
-            _view?.SetQuestionInput(text);
-        }
 
         public (string? Folder, string? FilePath, Dictionary<string, int>? FilePageMap) LoadSession()
         {
@@ -583,64 +578,6 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        private async void View_AiQuestionAsked(object? sender, EventArgs e)
-        {
-            try
-            {
-                var question = _view?.GetQuestionText();
-                if (string.IsNullOrWhiteSpace(question))
-                {
-                    question = _view?.GetPageText();
-                }
-
-                if (string.IsNullOrWhiteSpace(question))
-                {
-                    _view?.ShowWarning("请输入要提问的内容");
-                    return;
-                }
-
-                _view?.SetLoadingState(true);
-                var answer = await GetAiAnswerAsync(question, "", CancellationToken.None);
-                _view?.UpdateAiAnswer(answer);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in View_AiQuestionAsked");
-                _view?.ShowError("AI提问失败: " + ex.Message);
-            }
-            finally
-            {
-                _view?.SetLoadingState(false);
-            }
-        }
-
-        private void View_AddWordToLearningList(object? sender, EventArgs e)
-        {
-            var word = _view?.GetOriginalText();
-            if (string.IsNullOrWhiteSpace(word))
-            {
-                word = _view?.GetQuestionText();
-            }
-
-            if (!string.IsNullOrWhiteSpace(word))
-            {
-                bool success = _pdfStudyIntegration.AddWordToLearningList(word);
-                if (success)
-                {
-                    string cleanWord = word.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ").Trim();
-                    _view?.ShowMessage($"已将 \"{cleanWord}\" 添加到生词本");
-                    _view?.RaiseAddToEditor(cleanWord, _currentLanguage);
-                }
-                else
-                {
-                    _view?.ShowError("添加到生词本失败");
-                }
-            }
-            else
-            {
-                _view?.ShowWarning("请先输入要添加的单词");
-            }
-        }
 
         private void View_SpeakOriginal(object? sender, EventArgs e)
         {
@@ -689,37 +626,8 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        private void View_AskAiWithText(object? sender, string text)
-        {
-            try
-            {
-                if (!string.IsNullOrWhiteSpace(text))
-                {
-                    _view?.SetQuestionInput(text);
-                    View_AiQuestionAsked(sender, EventArgs.Empty);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in View_AskAiWithText");
-            }
-        }
 
-        private void View_SpeakAnswer(object? sender, EventArgs e)
-        {
-            try
-            {
-                var answerText = _view?.GetAiAnswerText();
-                if (!string.IsNullOrWhiteSpace(answerText))
-                {
-                    _ = _pdfTtsService.SpeakTextAsync(answerText);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in View_SpeakAnswer");
-            }
-        }
+
 
         private void View_SelectOcrClicked(object? sender, EventArgs e)
         {
@@ -745,7 +653,15 @@ namespace LearningAssistant.Presenters
                 }
                 else
                 {
-                    _view?.ShowWarning("翻译失败，请检查网络连接");
+                    // 检查失败原因
+                    if (!_pdfTranslationService.IsAvailable)
+                    {
+                        _view?.ShowWarning("翻译服务不可用，请检查API配置");
+                    }
+                    else
+                    {
+                        _view?.ShowWarning("翻译失败，请检查网络连接或稍后重试");
+                    }
                 }
             }
             catch (Exception ex)

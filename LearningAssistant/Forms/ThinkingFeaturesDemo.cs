@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Windows.Forms;
 using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Forms
@@ -13,21 +9,21 @@ namespace LearningAssistant.Forms
     {
         private LearningForm _learningForm;
         private readonly ILogger<ThinkingFeaturesDemo> _logger;
-        
+
         /// <summary>
         /// 初始化思考功能
         /// </summary>
         public void InitializeThinkingFeatures(LearningForm form)
         {
             _learningForm = form;
-            
+
             // 在 LearningForm 中添加思考功能按钮
             AddThinkingButtons();
-            
+
             // 绑定事件
             BindThinkingEvents();
         }
-        
+
         /// <summary>
         /// 添加思考功能按钮
         /// </summary>
@@ -35,7 +31,7 @@ namespace LearningAssistant.Forms
         {
             // 这些按钮应该在 LearningForm 的 InitializeComponent 方法中添加
             // 这里只是示例如何创建
-            
+
             // 渐进提示按钮
             var btnProgressiveHint = new Button
             {
@@ -48,7 +44,7 @@ namespace LearningAssistant.Forms
                 Font = new System.Drawing.Font("微软雅黑", 10F, System.Drawing.FontStyle.Bold)
             };
             btnProgressiveHint.Click += OnProgressiveHintClick;
-            
+
             // 联想学习按钮
             var btnAssociation = new Button
             {
@@ -61,7 +57,7 @@ namespace LearningAssistant.Forms
                 Font = new System.Drawing.Font("微软雅黑", 10F, System.Drawing.FontStyle.Bold)
             };
             btnAssociation.Click += OnAssociationClick;
-            
+
             // 主动回忆按钮
             var btnActiveRecall = new Button
             {
@@ -74,7 +70,7 @@ namespace LearningAssistant.Forms
                 Font = new System.Drawing.Font("微软雅黑", 10F, System.Drawing.FontStyle.Bold)
             };
             btnActiveRecall.Click += OnActiveRecallClick;
-            
+
             // 每日思考按钮
             var btnDailyThinking = new Button
             {
@@ -87,7 +83,7 @@ namespace LearningAssistant.Forms
                 Font = new System.Drawing.Font("微软雅黑", 10F, System.Drawing.FontStyle.Bold)
             };
             btnDailyThinking.Click += OnDailyThinkingClick;
-            
+
             MessageBox.Show(
                 "思考功能按钮已准备好！\n\n" +
                 "请在 LearningForm 的 InitializeComponent 方法中添加这些按钮到适当位置。\n\n" +
@@ -101,7 +97,7 @@ namespace LearningAssistant.Forms
                 MessageBoxIcon.Information
             );
         }
-        
+
         /// <summary>
         /// 绑定思考功能事件
         /// </summary>
@@ -109,76 +105,76 @@ namespace LearningAssistant.Forms
         {
             // 事件绑定应该在 LearningForm 的构造函数或 Load 事件中完成
         }
-        
+
         /// <summary>
         /// 渐进提示按钮点击事件
         /// </summary>
         private void OnProgressiveHintClick(object sender, EventArgs e)
         {
             if (_learningForm == null) return;
-            
+
             // 获取当前学习内容
             var currentContent = GetCurrentContent();
             var currentAnswer = GetCurrentAnswer();
-            
+
             if (string.IsNullOrEmpty(currentContent))
             {
                 MessageBox.Show("请先选择要学习的内容！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-            
+
             // 创建渐进提示
             var hints = GenerateSmartHints(currentContent, currentAnswer);
-            
+
             var hintForm = new ProgressiveHintForm(currentContent, currentAnswer, hints, (revealedAnswer) =>
             {
                 // 记录用户查看答案
                 LogAnswerRevealed(currentContent, revealedAnswer);
             });
-            
+
             hintForm.ShowDialog();
         }
-        
+
         /// <summary>
         /// 联想学习按钮点击事件
         /// </summary>
         private void OnAssociationClick(object sender, EventArgs e)
         {
             if (_learningForm == null) return;
-            
+
             var currentContent = GetCurrentContent();
-            
+
             if (string.IsNullOrEmpty(currentContent))
             {
                 MessageBox.Show("请先选择要学习的内容！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-            
+
             var associationForm = new AssociationLearningForm(currentContent);
             associationForm.ShowDialog();
         }
-        
+
         /// <summary>
         /// 主动回忆按钮点击事件
         /// </summary>
         private void OnActiveRecallClick(object sender, EventArgs e)
         {
             if (_learningForm == null) return;
-            
+
             // 获取当前学习列表中的所有项目
             var reviewItems = GetReviewItemsFromLearningList();
-            
+
             if (reviewItems.Count == 0)
             {
                 MessageBox.Show("没有可复习的内容！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
-            
+
             var recallForm = new ActiveRecallForm();
             recallForm.LoadReviewItems(reviewItems);
             recallForm.ShowDialog();
         }
-        
+
         /// <summary>
         /// 每日思考任务按钮点击事件
         /// </summary>
@@ -187,9 +183,9 @@ namespace LearningAssistant.Forms
             var thinker = new ThinkingStimulator(_learningForm);
             thinker.ShowDailyThinkingTask();
         }
-        
+
         #region 辅助方法
-        
+
         /// <summary>
         /// 获取当前学习内容
         /// </summary>
@@ -251,14 +247,14 @@ namespace LearningAssistant.Forms
 
             return "";
         }
-        
+
         /// <summary>
         /// 从学习列表获取复习项目
         /// </summary>
         private List<ReviewItem> GetReviewItemsFromLearningList()
         {
             var items = new List<ReviewItem>();
-            
+
             // 这里应该从 LearningForm 的学习列表中获取所有项目
             // 示例：
             try
@@ -267,7 +263,7 @@ namespace LearningAssistant.Forms
                 var listBoxField = _learningForm.GetType().GetField("listBoxItems",
                     System.Reflection.BindingFlags.NonPublic |
                     System.Reflection.BindingFlags.Instance);
-                
+
                 if (listBoxField != null)
                 {
                     var listBox = listBoxField.GetValue(_learningForm) as ListBox;
@@ -276,17 +272,17 @@ namespace LearningAssistant.Forms
                         // 限制数量，避免过多
                         int maxItems = Math.Min(listBox.Items.Count, 20);
                         Random random = new Random();
-                        
+
                         for (int i = 0; i < maxItems; i++)
                         {
                             var itemText = listBox.Items[i].ToString();
                             if (!string.IsNullOrEmpty(itemText))
                             {
                                 // 移除序号
-                                var content = itemText.Contains('.') 
-                                    ? itemText.Substring(itemText.IndexOf('.') + 1).Trim() 
+                                var content = itemText.Contains('.')
+                                    ? itemText.Substring(itemText.IndexOf('.') + 1).Trim()
                                     : itemText;
-                                
+
                                 items.Add(new ReviewItem
                                 {
                                     Question = $"回忆这个内容：{content}",
@@ -295,7 +291,7 @@ namespace LearningAssistant.Forms
                                 });
                             }
                         }
-                        
+
                         // 随机打乱顺序
                         items = items.OrderBy(x => random.Next()).ToList();
                     }
@@ -305,27 +301,27 @@ namespace LearningAssistant.Forms
             {
                 MessageBox.Show($"获取复习列表失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-            
+
             return items;
         }
-        
+
         /// <summary>
         /// 生成智能提示
         /// </summary>
         private List<string> GenerateSmartHints(string content, string answer)
         {
             var hints = new List<string>();
-            
+
             if (IsChineseContent(content))
             {
                 // 汉字内容提示
                 hints.Add($"📝 这个内容有 {content.Length} 个字");
-                
+
                 if (content.Length > 1)
                 {
                     hints.Add($"💡 第一个字是：'{content[0]}'");
                 }
-                
+
                 hints.Add($"🔄 可以组成词语或句子");
                 hints.Add($"🤔 想想在什么场景下会用到");
             }
@@ -334,13 +330,13 @@ namespace LearningAssistant.Forms
                 // 英文内容提示
                 hints.Add($"📝 这个内容有 {content.Length} 个字母");
                 hints.Add($"🔤 首字母是：{content[0].ToString().ToUpper()}");
-                
+
                 if (content.Contains(" "))
                 {
                     var words = content.Split(' ');
                     hints.Add($"💡 这个短语有 {words.Length} 个单词");
                 }
-                
+
                 hints.Add($"🌐 想想其中文意思是什么");
             }
             else
@@ -351,10 +347,10 @@ namespace LearningAssistant.Forms
                 hints.Add("📖 想想之前学过的类似内容");
                 hints.Add("❓ 如果要解释给朋友听，你会怎么说？");
             }
-            
+
             return hints.Take(4).ToList();
         }
-        
+
         /// <summary>
         /// 生成单条提示
         /// </summary>
@@ -373,7 +369,7 @@ namespace LearningAssistant.Forms
                 return "回忆一下之前学过的内容";
             }
         }
-        
+
         /// <summary>
         /// 判断是否为中文内容
         /// </summary>
@@ -381,18 +377,18 @@ namespace LearningAssistant.Forms
         {
             return text.Any(c => c >= 0x4e00 && c <= 0x9fa5);
         }
-        
+
         /// <summary>
         /// 判断是否为英文内容
         /// </summary>
         private bool IsEnglishContent(string text)
         {
-            return text.All(c => 
-                (c >= 'a' && c <= 'z') || 
-                (c >= 'A' && c <= 'Z') || 
+            return text.All(c =>
+                (c >= 'a' && c <= 'z') ||
+                (c >= 'A' && c <= 'Z') ||
                 c == ' ');
         }
-        
+
         /// <summary>
         /// 记录用户查看答案
         /// </summary>
@@ -403,11 +399,11 @@ namespace LearningAssistant.Forms
                 $"用户查看了答案 - 内容: {content}, 答案: {answer}"
             );
         }
-        
+
         #endregion
-        
+
         #region 推荐的学习流程
-        
+
         /// <summary>
         /// 推荐的学习流程 - 整合所有思考功能
         /// </summary>
@@ -430,7 +426,7 @@ namespace LearningAssistant.Forms
                 MessageBoxIcon.Information
             );
         }
-        
+
         #endregion
     }
 }

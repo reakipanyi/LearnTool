@@ -10,6 +10,8 @@ namespace LearningAssistant.Forms
         {
             _comparisonData = comparisonData;
             InitializeComponent();
+            subtitleLabel.Text = $"共 {_comparisonData.Count} 位玩家参与对战";
+
             LoadComparisonData();
         }
 
@@ -148,129 +150,163 @@ namespace LearningAssistant.Forms
                 valuesPanel.ResumeLayout();
             }
         }
-
         private void InitializeComponent()
         {
-            this.SuspendLayout();
-
-            // 窗体设置
-            this.Text = "🏆 用户对战";
-            this.Size = new Size(700, 500);
-            this.StartPosition = FormStartPosition.CenterParent;
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
-            this.BackColor = Color.FromArgb(250, 250, 250);
-
-            // 主容器
-            var mainPanel = new Panel
-            {
-                Dock = DockStyle.Fill,
-                Padding = new Padding(20),
-                BackColor = Color.White
-            };
-
-            // 标题
-            var titleLabel = new Label
-            {
-                Text = "📊 用户学习对战",
-                Dock = DockStyle.Top,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Font = new Font("Microsoft YaHei", 18, FontStyle.Bold),
-                ForeColor = Color.FromArgb(33, 33, 33),
-                Height = 60
-            };
-
-            // 副标题
-            var subtitleLabel = new Label
-            {
-                Text = $"共 {_comparisonData.Count} 位玩家参与对战",
-                Dock = DockStyle.Top,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Font = new Font("Microsoft YaHei", 10),
-                ForeColor = Color.FromArgb(117, 117, 117),
-                Height = 30
-            };
-
-            // 内容容器
-            panelContent = new Panel
-            {
-                Dock = DockStyle.Fill,
-                AutoScroll = true,
-                BackColor = Color.White
-            };
-
-            // 用户标题面板（横向排列用户名）
-            panelUserHeaders = new FlowLayoutPanel
-            {
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false,
-                Dock = DockStyle.Top,
-                Height = 50,
-                Margin = new Padding(0),
-                Padding = new Padding(150, 0, 0, 0)
-            };
-
-            // 数据面板（垂直排列各项指标）
-            panelStats = new List<Panel>();
-            panelValues = new List<FlowLayoutPanel>();
-
-            // 关闭按钮
-            var buttonPanel = new Panel
-            {
-                Dock = DockStyle.Bottom,
-                Height = 50,
-                BackColor = Color.White
-            };
-
-            var closeButton = new Button
-            {
-                Text = "关闭",
-                Size = new Size(100, 35),
-                Location = new Point(280, 8),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(76, 175, 80),
-                ForeColor = Color.White,
-                Font = new Font("Microsoft YaHei", 10)
-            };
-            closeButton.Click += (s, e) => this.Close();
-
-            var refreshButton = new Button
-            {
-                Text = "刷新",
-                Size = new Size(100, 35),
-                Location = new Point(400, 8),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(33, 150, 243),
-                ForeColor = Color.White,
-                Font = new Font("Microsoft YaHei", 10)
-            };
-            refreshButton.Click += (s, e) =>
-            {
-                panelUserHeaders.Controls.Clear();
-                foreach (var p in panelStats) p.Dispose();
-                panelStats.Clear();
-                foreach (var p in panelValues) p.Dispose();
-                panelValues.Clear();
-                LoadComparisonData();
-            };
-
-            buttonPanel.Controls.Add(closeButton);
-            buttonPanel.Controls.Add(refreshButton);
-
+            mainPanel = new Panel();
+            panelContent = new Panel();
+            panelUserHeaders = new FlowLayoutPanel();
+            buttonPanel = new Panel();
+            closeButton = new Button();
+            refreshButton = new Button();
+            subtitleLabel = new Label();
+            titleLabel = new Label();
+            mainPanel.SuspendLayout();
+            panelContent.SuspendLayout();
+            buttonPanel.SuspendLayout();
+            SuspendLayout();
+            // 
+            // mainPanel
+            // 
+            mainPanel.BackColor = Color.White;
             mainPanel.Controls.Add(panelContent);
             mainPanel.Controls.Add(buttonPanel);
             mainPanel.Controls.Add(subtitleLabel);
             mainPanel.Controls.Add(titleLabel);
-
-            this.Controls.Add(mainPanel);
-
-            this.ResumeLayout(false);
+            mainPanel.Dock = DockStyle.Fill;
+            mainPanel.Location = new Point(0, 0);
+            mainPanel.Name = "mainPanel";
+            mainPanel.Padding = new Padding(20);
+            mainPanel.Size = new Size(684, 461);
+            mainPanel.TabIndex = 0;
+            // 
+            // panelContent
+            // 
+            panelContent.AutoScroll = true;
+            panelContent.BackColor = Color.White;
+            panelContent.Controls.Add(panelUserHeaders);
+            panelContent.Dock = DockStyle.Fill;
+            panelContent.Location = new Point(20, 110);
+            panelContent.Name = "panelContent";
+            panelContent.Size = new Size(644, 281);
+            panelContent.TabIndex = 0;
+            // 
+            // panelUserHeaders
+            // 
+            panelUserHeaders.Dock = DockStyle.Top;
+            panelUserHeaders.Location = new Point(0, 0);
+            panelUserHeaders.Margin = new Padding(0);
+            panelUserHeaders.Name = "panelUserHeaders";
+            panelUserHeaders.Padding = new Padding(150, 0, 0, 0);
+            panelUserHeaders.Size = new Size(644, 50);
+            panelUserHeaders.TabIndex = 0;
+            panelUserHeaders.WrapContents = false;
+            // 
+            // buttonPanel
+            // 
+            buttonPanel.BackColor = Color.White;
+            buttonPanel.Controls.Add(closeButton);
+            buttonPanel.Controls.Add(refreshButton);
+            buttonPanel.Dock = DockStyle.Bottom;
+            buttonPanel.Location = new Point(20, 391);
+            buttonPanel.Name = "buttonPanel";
+            buttonPanel.Size = new Size(644, 50);
+            buttonPanel.TabIndex = 1;
+            // 
+            // closeButton
+            // 
+            closeButton.BackColor = Color.FromArgb(76, 175, 80);
+            closeButton.FlatStyle = FlatStyle.Flat;
+            closeButton.Font = new Font("微软雅黑", 10F);
+            closeButton.ForeColor = Color.White;
+            closeButton.Location = new Point(280, 8);
+            closeButton.Name = "closeButton";
+            closeButton.Size = new Size(100, 35);
+            closeButton.TabIndex = 0;
+            closeButton.Text = "关闭";
+            closeButton.UseVisualStyleBackColor = false;
+            closeButton.Click += closeButton_Click;
+            // 
+            // refreshButton
+            // 
+            refreshButton.BackColor = Color.FromArgb(33, 150, 243);
+            refreshButton.FlatStyle = FlatStyle.Flat;
+            refreshButton.Font = new Font("微软雅黑", 10F);
+            refreshButton.ForeColor = Color.White;
+            refreshButton.Location = new Point(400, 8);
+            refreshButton.Name = "refreshButton";
+            refreshButton.Size = new Size(100, 35);
+            refreshButton.TabIndex = 1;
+            refreshButton.Text = "刷新";
+            refreshButton.UseVisualStyleBackColor = false;
+            refreshButton.Click += refreshButton_Click;
+            // 
+            // subtitleLabel
+            // 
+            subtitleLabel.Dock = DockStyle.Top;
+            subtitleLabel.Font = new Font("微软雅黑", 10F);
+            subtitleLabel.ForeColor = Color.FromArgb(117, 117, 117);
+            subtitleLabel.Location = new Point(20, 80);
+            subtitleLabel.Name = "subtitleLabel";
+            subtitleLabel.Size = new Size(644, 30);
+            subtitleLabel.TabIndex = 2;
+            subtitleLabel.Text = "共   位玩家参与对战";
+            subtitleLabel.TextAlign = ContentAlignment.MiddleCenter;
+            // 
+            // titleLabel
+            // 
+            titleLabel.Dock = DockStyle.Top;
+            titleLabel.Font = new Font("微软雅黑", 18F, FontStyle.Bold);
+            titleLabel.ForeColor = Color.FromArgb(33, 33, 33);
+            titleLabel.Location = new Point(20, 20);
+            titleLabel.Name = "titleLabel";
+            titleLabel.Size = new Size(644, 60);
+            titleLabel.TabIndex = 3;
+            titleLabel.Text = "📊 用户学习对战";
+            titleLabel.TextAlign = ContentAlignment.MiddleCenter;
+            // 
+            // UserComparisonForm
+            // 
+            BackColor = Color.FromArgb(250, 250, 250);
+            ClientSize = new Size(684, 461);
+            Controls.Add(mainPanel);
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            Name = "UserComparisonForm";
+            StartPosition = FormStartPosition.CenterParent;
+            Text = "🏆 用户对战";
+            mainPanel.ResumeLayout(false);
+            panelContent.ResumeLayout(false);
+            buttonPanel.ResumeLayout(false);
+            ResumeLayout(false);
         }
-
         private Panel panelContent = null!;
         private FlowLayoutPanel panelUserHeaders = null!;
         private List<Panel> panelStats = null!;
+        private Panel mainPanel;
+        private Panel buttonPanel;
+        private Button closeButton;
+        private Button refreshButton;
+        private Label subtitleLabel;
+        private Label titleLabel;
         private List<FlowLayoutPanel> panelValues = null!;
+
+        private void closeButton_Click(object sender, EventArgs e)
+        {
+            this.Close();
+        }
+
+        private void refreshButton_Click(object sender, EventArgs e)
+        {
+
+
+            panelUserHeaders.Controls.Clear();
+            foreach (var p in panelStats) p.Dispose();
+            panelStats.Clear();
+            foreach (var p in panelValues) p.Dispose();
+            panelValues.Clear();
+            LoadComparisonData();
+
+        }
     }
 }

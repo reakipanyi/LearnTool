@@ -67,17 +67,6 @@ namespace LearningAssistant.Views
         /// <param name="message">错误消息内容</param>
         void ShowError(string message);
 
-        /// <summary>
-        /// 更新AI回答内容
-        /// </summary>
-        /// <param name="answer">AI回答文本</param>
-        void UpdateAiAnswer(string answer);
-
-        /// <summary>
-        /// 设置问题输入框文本
-        /// </summary>
-        /// <param name="text">问题文本</param>
-        void SetQuestionInput(string text);
 
         /// <summary>
         /// 设置加载状态
@@ -179,12 +168,6 @@ namespace LearningAssistant.Views
         string GetPageText();
 
         /// <summary>
-        /// 获取问题文本
-        /// </summary>
-        /// <returns>问题内容</returns>
-        string GetQuestionText();
-
-        /// <summary>
         /// 获取翻译文本
         /// </summary>
         /// <returns>翻译内容</returns>
@@ -214,11 +197,6 @@ namespace LearningAssistant.Views
         /// <param name="text">OCR识别结果</param>
         void SetOcrResultText(string text);
 
-        /// <summary>
-        /// 获取AI回答文本
-        /// </summary>
-        /// <returns>AI回答</returns>
-        string GetAiAnswerText();
 
         /// <summary>
         /// 获取当前显示的图片
@@ -276,10 +254,7 @@ namespace LearningAssistant.Views
         /// </summary>
         event EventHandler? OcrSelectionComplete;
 
-        /// <summary>
-        /// AI提问事件
-        /// </summary>
-        event EventHandler? AiQuestionAsked;
+
 
         /// <summary>
         /// 添加到学习列表事件
@@ -314,11 +289,6 @@ namespace LearningAssistant.Views
         /// <param name="text">文本内容</param>
         event EventHandler<string>? SpeakText;
 
-        /// <summary>
-        /// 使用指定文本向AI提问事件
-        /// </summary>
-        /// <param name="text">提问内容</param>
-        event EventHandler<string>? AskAiWithText;
 
         /// <summary>
         /// 选择OCR区域点击事件
@@ -340,10 +310,6 @@ namespace LearningAssistant.Views
         /// </summary>
         event EventHandler? LanguageChanged;
 
-        /// <summary>
-        /// 朗读AI回答点击事件
-        /// </summary>
-        event EventHandler? SpeakAnswer;
     }
 
     /// <summary>

@@ -1,9 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
-using System.Windows.Forms;
-
 namespace LearningAssistant.Forms
 {
     /// <summary>
@@ -43,6 +37,14 @@ namespace LearningAssistant.Forms
         private Panel panelDetails;
         private Label labelHint;
         private Label labelCurrent;
+        private Label labelDetailTitle;
+        private Label labelTitle;
+        private Label labelTreeTitle;
+        private Label labelDetailContent;
+        private Panel panelActions;
+        private Button buttonThinkMore;
+        private Button buttonSkip;
+
 
         #endregion
 
@@ -57,6 +59,25 @@ namespace LearningAssistant.Forms
             _currentContent = content;
             _associations = new List<AssociationNode>();
             InitializeComponent();
+            // 横向类型标签循环（无需提前声明，动态创建）
+            string[] associationTypes = { "📝 同类词", "🔄 反义词", "🏷️ 相关词", "📖 例句", "💡 知识点" };
+            int xPos = 15;
+            foreach (var type in associationTypes)
+            {
+                Label label = new Label();
+                label.Text = type;
+                label.Location = new Point(xPos, 85);
+                label.Size = new Size(120, 25);
+                label.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+                label.ForeColor = Color.FromArgb(80, 80, 80);
+                label.BorderStyle = BorderStyle.FixedSingle;
+                label.TextAlign = ContentAlignment.MiddleCenter;
+
+                panelMain.Controls.Add(label);
+                xPos += 130;
+            }
+
+            labelCurrent.Text = $"当前学习：{_currentContent}";
             LoadAssociations();
         }
 
@@ -77,164 +98,153 @@ namespace LearningAssistant.Forms
         /// </summary>
         private void InitializeComponent()
         {
-            // 窗体基本设置
+            // 窗体基础属性
+            this.SuspendLayout();
+
             this.Text = "🧠 联想学习";
             this.Size = new Size(700, 500);
             this.StartPosition = FormStartPosition.CenterParent;
             this.BackColor = Color.FromArgb(250, 248, 245);
 
-            // 主面板
-            panelMain = new Panel { Dock = DockStyle.Fill };
-            this.Controls.Add(panelMain);
+            #region 实例化所有控件 new()
+            panelMain = new Panel();
+            labelHint = new Label();
+            labelCurrent = new Label();
+            treeViewAssociations = new TreeView();
+            panelDetails = new Panel();
+            labelDetailTitle = new Label();
+            labelTitle = new Label();
+            labelTreeTitle = new Label();
+            labelDetailContent = new Label();
+            panelActions = new Panel();
+            buttonThinkMore = new Button();
+            buttonSkip = new Button();
+            #endregion
 
-            // 标题
-            Label labelTitle = new Label
-            {
-                Text = "🔗 联想学习 - 建立知识网络",
-                Font = new Font("微软雅黑", 13F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(103, 58, 183),
-                Dock = DockStyle.Top,
-                Height = 40,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(15, 0, 0, 0)
-            };
-            panelMain.Controls.Add(labelTitle);
+            #region panelMain 整体配置
+            panelMain.Dock = DockStyle.Fill;
+            #endregion
 
-            // 提示标签（底部）
-            labelHint = new Label
-            {
-                Text = "💡 提示：联想学习帮助你建立知识之间的关联，关联越强，记忆越深刻！",
-                Dock = DockStyle.Bottom,
-                Height = 35,
-                Font = new Font("微软雅黑", 9F),
-                ForeColor = Color.FromArgb(100, 100, 100),
-                TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(15, 0, 0, 0),
-                BackColor = Color.FromArgb(248, 250, 252)
-            };
-            panelMain.Controls.Add(labelHint);
+            #region 标题 labelTitle
+            labelTitle.Text = "🔗 联想学习 - 建立知识网络";
+            labelTitle.Font = new Font("微软雅黑", 13F, FontStyle.Bold);
+            labelTitle.ForeColor = Color.FromArgb(103, 58, 183);
+            labelTitle.Dock = DockStyle.Top;
+            labelTitle.Height = 40;
+            labelTitle.TextAlign = ContentAlignment.MiddleLeft;
+            labelTitle.Padding = new Padding(15, 0, 0, 0);
+            #endregion
 
-            // 当前内容显示
-            labelCurrent = new Label
-            {
-                Text = $"当前学习：{_currentContent}",
-                Location = new Point(15, 50),
-                Size = new Size(650, 30),
-                Font = new Font("微软雅黑", 12F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(66, 133, 244)
-            };
-            panelMain.Controls.Add(labelCurrent);
+            #region 底部提示 labelHint
+            labelHint.Text = "💡 提示：联想学习帮助你建立知识之间的关联，关联越强，记忆越深刻！";
+            labelHint.Dock = DockStyle.Bottom;
+            labelHint.Height = 35;
+            labelHint.Font = new Font("微软雅黑", 9F);
+            labelHint.ForeColor = Color.FromArgb(100, 100, 100);
+            labelHint.TextAlign = ContentAlignment.MiddleLeft;
+            labelHint.Padding = new Padding(15, 0, 0, 0);
+            labelHint.BackColor = Color.FromArgb(248, 250, 252);
+            #endregion
 
-            // 联想类型标签（顶部横向排列）
-            string[] associationTypes = { "📝 同类词", "🔄 反义词", "🏷️ 相关词", "📖 例句", "💡 知识点" };
-            int xPos = 15;
-            foreach (var type in associationTypes)
-            {
-                Label label = new Label
-                {
-                    Text = type,
-                    Location = new Point(xPos, 85),
-                    Size = new Size(120, 25),
-                    Font = new Font("微软雅黑", 9F, FontStyle.Bold),
-                    ForeColor = Color.FromArgb(80, 80, 80),
-                    BorderStyle = BorderStyle.FixedSingle,
-                    TextAlign = ContentAlignment.MiddleCenter
-                };
-                panelMain.Controls.Add(label);
-                xPos += 130;
-            }
 
-            // 联想网络树视图标题
-            Label labelTreeTitle = new Label
-            {
-                Text = "🌳 联想网络",
-                Location = new Point(15, 115),
-                Font = new Font("微软雅黑", 10F, FontStyle.Bold),
-                AutoSize = true
-            };
-            panelMain.Controls.Add(labelTreeTitle);
+            #region 树视图标题 labelTreeTitle
+            labelTreeTitle.Text = "🌳 联想网络";
+            labelTreeTitle.Location = new Point(15, 115);
+            labelTreeTitle.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            labelTreeTitle.AutoSize = true;
+            #endregion
 
-            // 联想网络树视图
-            treeViewAssociations = new TreeView
-            {
-                Location = new Point(15, 140),
-                Size = new Size(300, 280),
-                Font = new Font("微软雅黑", 10F),
-                BackColor = Color.White,
-                BorderStyle = BorderStyle.FixedSingle
-            };
+            #region TreeView
+            treeViewAssociations.Location = new Point(15, 140);
+            treeViewAssociations.Size = new Size(300, 280);
+            treeViewAssociations.Font = new Font("微软雅黑", 10F);
+            treeViewAssociations.BackColor = Color.White;
+            treeViewAssociations.BorderStyle = BorderStyle.FixedSingle;
             treeViewAssociations.AfterSelect += TreeViewAssociations_AfterSelect;
-            panelMain.Controls.Add(treeViewAssociations);
+            #endregion
 
-            // 详情面板标题
-            Label labelDetailTitle = new Label
-            {
-                Text = "📋 详细信息",
-                Location = new Point(330, 115),
-                Font = new Font("微软雅黑", 10F, FontStyle.Bold),
-                AutoSize = true
-            };
-            panelMain.Controls.Add(labelDetailTitle);
+            #region 详情标题 labelDetailTitle
+            labelDetailTitle.Text = "📋 详细信息";
+            labelDetailTitle.Location = new Point(330, 115);
+            labelDetailTitle.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            labelDetailTitle.AutoSize = true;
+            #endregion
 
-            // 详情面板
-            panelDetails = new Panel
-            {
-                Location = new Point(330, 140),
-                Size = new Size(340, 280),
-                BackColor = Color.White,
-                BorderStyle = BorderStyle.FixedSingle,
-                AutoScroll = true
-            };
-            panelMain.Controls.Add(panelDetails);
+            #region 详情面板 panelDetails
+            panelDetails.Location = new Point(330, 140);
+            panelDetails.Size = new Size(340, 280);
+            panelDetails.BackColor = Color.White;
+            panelDetails.BorderStyle = BorderStyle.FixedSingle;
+            panelDetails.AutoScroll = true;
+            #endregion
 
-            // 详情内容标签
-            Label labelDetailContent = new Label
-            {
-                Name = "detailContent",
-                Dock = DockStyle.Fill,
-                Font = new Font("微软雅黑", 10F),
-                ForeColor = Color.FromArgb(60, 60, 60),
-                Padding = new Padding(10),
-                Text = "从左侧选择一个联想项查看详情"
-            };
+            #region 详情内部标签 labelDetailContent
+            labelDetailContent.Name = "detailContent";
+            labelDetailContent.Dock = DockStyle.Fill;
+            labelDetailContent.Font = new Font("微软雅黑", 10F);
+            labelDetailContent.ForeColor = Color.FromArgb(60, 60, 60);
+            labelDetailContent.Padding = new Padding(10);
+            labelDetailContent.Text = "从左侧选择一个联想项查看详情";
+            #endregion
+
+            #region 按钮容器 panelActions
+            panelActions.Location = new Point(330, 430);
+            panelActions.Size = new Size(340, 35);
+            panelActions.BackColor = Color.Transparent;
+            #endregion
+
+            #region 思考更多按钮
+            buttonThinkMore.Text = "🤔 我能想到更多...";
+            buttonThinkMore.Location = new Point(0, 0);
+            buttonThinkMore.Size = new Size(160, 30);
+            buttonThinkMore.BackColor = Color.FromArgb(76, 175, 80);
+            buttonThinkMore.ForeColor = Color.White;
+            buttonThinkMore.FlatStyle = FlatStyle.Flat;
+            buttonThinkMore.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            buttonThinkMore.Click += ButtonThinkMore_Click;
+            #endregion
+
+            #region 跳过按钮
+            buttonSkip.Text = "➡ 跳过";
+            buttonSkip.Location = new Point(175, 0);
+            buttonSkip.Size = new Size(80, 30);
+            buttonSkip.BackColor = Color.Gray;
+            buttonSkip.ForeColor = Color.White;
+            buttonSkip.FlatStyle = FlatStyle.Flat;
+            buttonSkip.Font = new Font("微软雅黑", 9F);
+            buttonSkip.Click += ButtonSkip_Click;
+            #endregion
+
+            #region 当前内容 labelCurrent
+            labelCurrent.Text = "当前学习：";
+            labelCurrent.Location = new Point(15, 50);
+            labelCurrent.Size = new Size(650, 30);
+            labelCurrent.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
+            labelCurrent.ForeColor = Color.FromArgb(66, 133, 244);
+            #endregion
+            #region 逐级控件嵌套 Add 加入容器（标准顺序）
+            // 详情面板内部
             panelDetails.Controls.Add(labelDetailContent);
 
-            // 操作按钮面板
-            Panel panelActions = new Panel
-            {
-                Location = new Point(330, 430),
-                Size = new Size(340, 35),
-                BackColor = Color.Transparent
-            };
-            panelMain.Controls.Add(panelActions);
-
-            // "我能想到更多..."按钮
-            Button buttonThinkMore = new Button
-            {
-                Text = "🤔 我能想到更多...",
-                Location = new Point(0, 0),
-                Size = new Size(160, 30),
-                BackColor = Color.FromArgb(76, 175, 80),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("微软雅黑", 9F, FontStyle.Bold)
-            };
-            buttonThinkMore.Click += ButtonThinkMore_Click;
+            // 按钮面板内部
             panelActions.Controls.Add(buttonThinkMore);
-
-            // 跳过按钮
-            Button buttonSkip = new Button
-            {
-                Text = "➡ 跳过",
-                Location = new Point(175, 0),
-                Size = new Size(80, 30),
-                BackColor = Color.Gray,
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("微软雅黑", 9F)
-            };
-            buttonSkip.Click += (s, e) => this.Close();
             panelActions.Controls.Add(buttonSkip);
+
+            // 主面板批量加入子控件
+            panelMain.Controls.Add(labelHint);
+            panelMain.Controls.Add(panelActions);
+            panelMain.Controls.Add(panelDetails);
+            panelMain.Controls.Add(labelDetailTitle);
+            panelMain.Controls.Add(treeViewAssociations);
+            panelMain.Controls.Add(labelTreeTitle);
+            panelMain.Controls.Add(labelCurrent);
+            panelMain.Controls.Add(labelTitle);
+
+            // 窗体挂载主面板
+            this.Controls.Add(panelMain);
+            #endregion
+
+            this.ResumeLayout(false);
         }
 
         #endregion
@@ -463,6 +473,10 @@ namespace LearningAssistant.Forms
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information
             );
+        }
+        private void ButtonSkip_Click(object sender, EventArgs e)
+        {
+            this.Close();
         }
 
         #endregion
