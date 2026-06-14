@@ -1,6 +1,7 @@
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
+using static LearningAssistant.Forms.LearningForm;
 
 namespace LearningAssistant.Presenters
 {
@@ -50,6 +51,7 @@ namespace LearningAssistant.Presenters
             _view.SettingsChanged += View_SettingsChanged;
             _view.OpenStatisticsClicked += View_OpenStatisticsClicked;
             _view.ExportErrorBookClicked += View_ExportErrorBookClicked;
+            _view.ItemSelectedFromList += View_ItemSelectedFromList;
         }
 
         private void UnsubscribeFromViewEvents()
@@ -63,6 +65,7 @@ namespace LearningAssistant.Presenters
             _view.SettingsChanged -= View_SettingsChanged;
             _view.OpenStatisticsClicked -= View_OpenStatisticsClicked;
             _view.ExportErrorBookClicked -= View_ExportErrorBookClicked;
+            _view.ItemSelectedFromList -= View_ItemSelectedFromList;
         }
 
         private void SubscribeToMediatorEvents()
@@ -139,6 +142,11 @@ namespace LearningAssistant.Presenters
         private void View_ExportErrorBookClicked(object? sender, EventArgs e)
         {
             _eventMediator.RaiseExportErrorBook();
+        }
+
+        private async void View_ItemSelectedFromList(object? sender, ItemSelectedEventArgs e)
+        {
+            await _flowHandler.HandleItemSelectedAsync(e.Index);
         }
 
         private void HandleSendToPdfQuestion(string text, string language)

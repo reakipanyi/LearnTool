@@ -16,6 +16,7 @@ namespace LearningAssistant.Services.AI
         }
 
         public override string ModelName => "Deepseek";
+        public override string ProviderName => "deepseek";
 
         protected override string BuildExplanationPrompt(string text, string language, string subType)
         {

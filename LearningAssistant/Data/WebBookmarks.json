@@ -1,0 +1,280 @@
+{
+  "categories": [
+    {
+      "name": "英文学习（自然拼读+打字拼写）",
+      "icon": "📚",
+      "bookmarks": [
+        {
+          "title": "拼读树",
+          "url": "https://pindushu.com/phonics",
+          "icon": "🌳",
+          "remark": "中文界面，音素拖拽拼接，分步拼读合成，低幼零基础友好"
+        },
+        {
+          "title": "WordChop音节拆分拼读",
+          "url": "https://wordchop.com/",
+          "icon": "✂️",
+          "remark": "自动拆音节、单音节点读，一键连读整词，外教备课常用"
+        },
+        {
+          "title": "Starfall自然拼读启蒙",
+          "url": "https://www.starfall.com/",
+          "icon": "⭐",
+          "remark": "系统Phonics体系，动画儿歌+互动点读，2-8岁英文入门首选"
+        },
+        {
+          "title": "Tricky Words Trainer拼写打字",
+          "url": "https://trickywords.fun/",
+          "icon": "⌨️",
+          "remark": "听音选词+键盘打字拼写，无广告，高频 Sight Word 专项练习"
+        },
+        {
+          "title": "打字侠（英文打字专项）",
+          "url": "https://www.hellotyping.com/",
+          "icon": "🖥️",
+          "remark": "英文单词分级打字，边练指法边记单词，免费无需登录"
+        },
+        {
+          "title": "牛津猫头鹰英文图书馆",
+          "url": "https://www.oxfordowl.co.uk/",
+          "icon": "🦉",
+          "remark": "免费牛津分级绘本，自带音频，配套拼读练习题"
+        },
+        {
+          "title": "BBC Learning English Kids",
+          "url": "https://learnenglishkids.britishcouncil.org/",
+          "icon": "🇬🇧",
+          "remark": "英领馆官方少儿英文站，听说读写全覆盖，小游戏+儿歌+分级阅读，国内可直连"
+        },
+        {
+          "title": "Storyline Online绘本朗读",
+          "url": "https://www.storylineonline.net/",
+          "icon": "📖",
+          "remark": "好莱坞演员真人朗读英文绘本，配动画画面，练听力绝佳"
+        },
+        {
+          "title": "ManyThings英文小游戏",
+          "url": "https://www.manythings.org/",
+          "icon": "🔤",
+          "remark": "专为二外学习者设计，单词填空、填词闯关、语法小游戏，适合小学生巩固"
+        }
+      ]
+    },
+    {
+      "name": "中文语文（拼音识字+练字朗读）",
+      "icon": "🀄️",
+      "bookmarks": [
+        {
+          "title": "人教点读",
+          "url": "https://www.reader.cn/",
+          "icon": "📖",
+          "remark": "部编版语文课本同步点读、生字听写、课文跟读"
+        },
+        {
+          "title": "国家少儿数字图书馆",
+          "url": "https://www.childlib.org/",
+          "icon": "📕",
+          "remark": "公益免费，海量绘本、有声诵读、儿童期刊，无广告"
+        },
+        {
+          "title": "汉听大赛在线识字练习",
+          "url": "https://hanyingting.com/",
+          "icon": "🔤",
+          "remark": "汉字听写、形近字辨析、组词闯关，小学生生字巩固"
+        },
+        {
+          "title": "中小学语文示范诵读库",
+          "url": "https://voice.moe.gov.cn/",
+          "icon": "🎙️",
+          "remark": "央视+教育部出品，专业播音员朗读课本全文，矫正普通话、练朗诵"
+        },
+        {
+          "title": "兔小乖在线字帖生成",
+          "url": "https://www.tuxiaoguai.com/",
+          "icon": "✍️",
+          "remark": "人教版同步生字田字格字帖，可自定义排版导出PDF打印，笔顺演示免费"
+        }
+      ]
+    },
+    {
+      "name": "数学思维（游戏化刷题+出题）",
+      "icon": "🔢",
+      "bookmarks": [
+        {
+          "title": "可汗学院数学",
+          "url": "https://zh.khanacademy.org/math",
+          "icon": "🎓",
+          "remark": "全学段免费系统课程，视频讲解+配套习题，自适应学习"
+        },
+        {
+          "title": "Prodigy数学RPG闯关",
+          "url": "https://www.prodigy.com/",
+          "icon": "🧙",
+          "remark": "打怪升级做数学题，自动匹配难度，1-8年级，核心功能永久免费"
+        },
+        {
+          "title": "Math Playground数学游乐场",
+          "url": "https://www.mathplayground.com/",
+          "icon": "🎠",
+          "remark": "口算、应用题、逻辑谜题，分年级筛选，边玩边练计算"
+        },
+        {
+          "title": "CoolMath益智逻辑游戏",
+          "url": "https://www.coolmathgames.com/",
+          "icon": "🧠",
+          "remark": "数字推理、策略闯关，锻炼数学逻辑思维，纯网页免安装"
+        },
+        {
+          "title": "习题打印生成器",
+          "url": "https://www.dayin.page",
+          "icon": "📝",
+          "remark": "一键批量生成口算、竖式、应用题，支持导出打印，完全无广告免费"
+        },
+        {
+          "title": "Maths Chase乘法口诀闯关",
+          "url": "https://mathschase.com/",
+          "icon": "🏃",
+          "remark": "竞速小游戏背九九乘法表，自动计时打分，适合低年级提速"
+        }
+      ]
+    },
+    {
+      "name": "官方权威全科同步平台（必收藏）",
+      "icon": "🏛️",
+      "bookmarks": [
+        {
+          "title": "国家中小学智慧教育平台",
+          "url": "https://basic.smartedu.cn/",
+          "icon": "🏫",
+          "remark": "教育部官方，全学段全版本课本同步名师课、习题、电子课本，零广告全免费，新增AI学习助手"
+        },
+        {
+          "title": "国家教育资源公共服务平台",
+          "url": "http://www.eduyun.cn/",
+          "icon": "📚",
+          "remark": "配套课件、虚拟实验、同步备课资源，预习复习一站式"
+        },
+        {
+          "title": "全国中小学实验在线平台",
+          "url": "https://syzx.jiaoyu.org.cn/",
+          "icon": "⚗️",
+          "remark": "理化生虚拟实验，不用实物器材就能操作实验步骤，科学课配套使用"
+        }
+      ]
+    },
+    {
+      "name": "少儿编程启蒙",
+      "icon": "💻",
+      "bookmarks": [
+        {
+          "title": "Code.org编程一小时",
+          "url": "https://code.org/",
+          "icon": "👨‍💻",
+          "remark": "中文完整适配，积木拖拽编程，4岁起零基础入门，公益免费"
+        },
+        {
+          "title": "Scratch在线编辑器",
+          "url": "https://scratch.mit.edu/",
+          "icon": "🐱",
+          "remark": "麻省理工官方，图形化编程，做动画小游戏，小学生标配"
+        }
+      ]
+    },
+    {
+      "name": "全科综合益智小游戏（学玩一体）",
+      "icon": "🎮",
+      "bookmarks": [
+        {
+          "title": "ABCya全科启蒙小游戏",
+          "url": "https://www.abcya.com/",
+          "icon": "🎯",
+          "remark": "学前到6年级，英文/数学/打字/拼图全覆盖，按年级筛选游戏"
+        },
+        {
+          "title": "KidSpark无广告益智站",
+          "url": "https://www.playkidspark.com/",
+          "icon": "🌟",
+          "remark": "50+免费学科小游戏，无需登录，分级难度，安全儿童环境"
+        },
+        {
+          "title": "Teach Your Monster to Read",
+          "url": "https://www.teachyourmonster.org/",
+          "icon": "👾",
+          "remark": "喂养小怪兽闯关学拼读，游戏粘性极强，低龄自主练习神器"
+        },
+        {
+          "title": "WithoutAD纯净益智站",
+          "url": "https://withoutad.com",
+          "icon": "🚫",
+          "remark": "家长自制无广告网站，数独、华容道、成语接龙、2048，纯逻辑训练"
+        },
+        {
+          "title": "Topmarks英国小学全科资源站",
+          "url": "https://www.topmarks.co.uk/",
+          "icon": "🇬🇧",
+          "remark": "数学、英文、科学互动白板游戏，外教常用，分年级精准筛选"
+        }
+      ]
+    },
+    {
+      "name": "科学科普+自然探索",
+      "icon": "🔬",
+      "bookmarks": [
+        {
+          "title": "中国数字科技馆",
+          "url": "https://www.cdstm.cn/",
+          "icon": "🔭",
+          "remark": "国家级公益平台，虚拟实验、天文地理、动植物科普动画"
+        },
+        {
+          "title": "BrainPOP科普动画",
+          "url": "https://www.brainpop.com/",
+          "icon": "🧪",
+          "remark": "趣味动画讲解数理化生、历史人文，看完配套小测验巩固知识点"
+        },
+        {
+          "title": "国家地理少儿版",
+          "url": "https://kids.nationalgeographic.com/",
+          "icon": "🌍",
+          "remark": "动物、自然、宇宙高清图文+短视频，拓展眼界，配套小问答"
+        }
+      ]
+    },
+    {
+      "name": "历史地理+人文美育拓展",
+      "icon": "🖼️",
+      "bookmarks": [
+        {
+          "title": "国图公开课少儿专区",
+          "url": "https://open.nlc.cn/onlineedu/children/index.htm",
+          "icon": "📜",
+          "remark": "国家图书馆免费国学、历史、传统文化讲座，适合文史积累"
+        },
+        {
+          "title": "Krokotak手工创意站",
+          "url": "https://krokotak.com/",
+          "icon": "✂️",
+          "remark": "海量儿童折纸、剪纸、涂色手工教程，图文步骤清晰，美育动手课"
+        }
+      ]
+    },
+    {
+      "name": "AI学习辅助工具",
+      "icon": "🤖",
+      "bookmarks": [
+        {
+          "title": "豆包",
+          "url": "https://doubao.com",
+          "icon": "🫛",
+          "remark": "作业答疑、单词讲解、课文翻译、作文批改、知识点梳理全能用"
+        },
+        {
+          "title": "Kimi",
+          "url": "https://kimi.moonshot.cn",
+          "icon": "🌙",
+          "remark": "长文档解析，可上传课本PDF批量整理习题、总结考点"
+        }
+      ]
+    }
+  ]
+}

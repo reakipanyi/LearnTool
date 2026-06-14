@@ -24,6 +24,7 @@ namespace LearningAssistant.Services.AI
         }
 
         public abstract string ModelName { get; }
+        public abstract string ProviderName { get; }
 
         public virtual async Task<string> GetExplanationAsync(string text, string language, string subType, CancellationToken cancellationToken = default)
         {
@@ -87,6 +88,67 @@ namespace LearningAssistant.Services.AI
             }
         }
 
+        public virtual async Task<string> GenerateExerciseAsync(string text, string language, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return string.Empty;
+
+            var cacheKey = $"exercise_{GetHash(text)}_{language}";
+            if (_cacheService.TryGet(cacheKey, out string cached))
+            {
+                return cached;
+            }
+
+            language = language ?? "中文";
+            var prompt = language == "中文"
+                ? $"请针对以下内容生成练习题：\n\n{text}\n\n请生成3-5道练习题，包括选择题、填空题或问答题。"
+                : $"Please generate exercises for the following content:\n\n{text}\n\nGenerate 3-5 exercises including multiple choice, fill-in-the-blank or short answer questions.";
+
+            try
+            {
+                var response = await CallApiWithRetryAsync(prompt, cancellationToken);
+                if (!string.IsNullOrWhiteSpace(response))
+                {
+                    _cacheService.Set(cacheKey, response, 60 * 24 * 3);
+                }
+                return response;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "生成练习题失败");
+                return "生成练习题失败";
+            }
+        }
+
+        public virtual async Task<string> SummarizeAsync(string text, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return string.Empty;
+
+            var cacheKey = $"summarize_{GetHash(text)}";
+            if (_cacheService.TryGet(cacheKey, out string cached))
+            {
+                return cached;
+            }
+
+            var prompt = $"请简要总结以下文本的主要内容：\n\n{text}\n\n总结要求：简洁明了，突出重点。";
+
+            try
+            {
+                var response = await CallApiWithRetryAsync(prompt, cancellationToken);
+                if (!string.IsNullOrWhiteSpace(response))
+                {
+                    _cacheService.Set(cacheKey, response, 60 * 60);
+                }
+                return response;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "文本总结失败");
+                return "总结失败";
+            }
+        }
+
         protected abstract string BuildExplanationPrompt(string text, string language, string subType);
         protected abstract Task<string> CallApiAsync(string prompt, CancellationToken cancellationToken = default);
 
@@ -119,14 +181,31 @@ namespace LearningAssistant.Services.AI
         {
             get
             {
+                if (string.IsNullOrEmpty(_config.ApiKey))
+                    return string.Empty;
+                
                 try
                 {
+                    // 先尝试Base64解码
                     return Encoding.UTF8.GetString(Convert.FromBase64String(_config.ApiKey));
                 }
                 catch
                 {
+                    // 如果解码失败，直接返回原始密钥（可能未加密）
                     return _config.ApiKey;
                 }
+            }
+        }
+        
+        /// <summary>
+        /// 检查API密钥是否有效
+        /// </summary>
+        protected bool IsApiKeyValid
+        {
+            get
+            {
+                var key = DecryptedApiKey;
+                return !string.IsNullOrEmpty(key) && key.Length > 10;
             }
         }
     }

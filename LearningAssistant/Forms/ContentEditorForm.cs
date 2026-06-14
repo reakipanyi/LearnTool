@@ -16,6 +16,7 @@ namespace LearningAssistant.Forms
         private readonly ILogger<ContentEditorForm> _logger;
         private readonly AppConfig _appConfig;
         private readonly IAIPanelPopupService _aiPanelPopupService;
+        private readonly Services.Learning.IPendingContentService? _pendingContentService;
         private ContentEditorPresenter? _presenter;
         private TableLayoutPanel mainPanel;
         private Panel topPanel;
@@ -30,14 +31,14 @@ namespace LearningAssistant.Forms
         private TabControl tabControl1;
         private TabPage tabPage1;
         private TabPage tabPage2;
-        private TabPage tabPage3;
         private bool _disposed = false;
 
-        public ContentEditorForm(ILogger<ContentEditorForm> logger, AppConfig appConfig, IAIPanelPopupService aiPanelPopupService)
+        public ContentEditorForm(ILogger<ContentEditorForm> logger, AppConfig appConfig, IAIPanelPopupService aiPanelPopupService, Services.Learning.IPendingContentService? pendingContentService = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _appConfig = appConfig ?? throw new ArgumentNullException(nameof(appConfig));
             _aiPanelPopupService = aiPanelPopupService ?? throw new ArgumentNullException(nameof(aiPanelPopupService));
+            _pendingContentService = pendingContentService;
             InitializeComponent();
         }
 
@@ -399,6 +400,40 @@ namespace LearningAssistant.Forms
             _aiPanelPopupService.ShowAIAbilityPanel(this, prompt);
         }
 
+        private void ButtonLoadPending_Click(object? sender, EventArgs e)
+        {
+            if (_pendingContentService == null)
+            {
+                ShowMessage("待添加内容服务未初始化");
+                return;
+            }
+
+            var pendingItems = _pendingContentService.GetAll();
+            if (pendingItems.Count == 0)
+            {
+                ShowMessage("没有待添加的学习内容");
+                return;
+            }
+
+            // 切换到JSON编辑标签页
+            tabControl1.SelectedIndex = 1;
+
+            // 将待添加内容追加到JSON文本框
+            foreach (var item in pendingItems)
+            {
+                if (!string.IsNullOrEmpty(textBoxJson.Text))
+                {
+                    textBoxJson.Text += "," + Environment.NewLine;
+                }
+                textBoxJson.Text += item.Content;
+            }
+
+            // 清除已加载的内容
+            _pendingContentService.Clear();
+
+            ShowMessage($"已加载 {pendingItems.Count} 条待添加内容到JSON编辑区，请编辑后保存");
+        }
+
 
         private void InitializeComponent()
         {
@@ -421,7 +456,7 @@ namespace LearningAssistant.Forms
             tabPage1 = new TabPage();
             tabPage2 = new TabPage();
             buttonPanel = new FlowLayoutPanel();
-            tabPage3 = new TabPage();
+            // 移除空的AIWebView标签页 tabPage3
             ((ISupportInitialize)dataGridView).BeginInit();
             mainPanel.SuspendLayout();
             topPanel.SuspendLayout();
@@ -548,7 +583,25 @@ namespace LearningAssistant.Forms
             buttonGenerateAI.Click += ButtonGenerateAI_Click;
             buttonGenerateAI.MouseEnter += Button_HoverEnter;
             buttonGenerateAI.MouseLeave += Button_HoverLeave;
-            // 
+            //
+            // buttonLoadPending
+            //
+            var buttonLoadPending = new Button();
+            buttonLoadPending.BackColor = Color.FromArgb(255, 152, 0);
+            buttonLoadPending.FlatAppearance.BorderSize = 0;
+            buttonLoadPending.FlatStyle = FlatStyle.Flat;
+            buttonLoadPending.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            buttonLoadPending.ForeColor = Color.White;
+            buttonLoadPending.Location = new Point(614, 3);
+            buttonLoadPending.Name = "buttonLoadPending";
+            buttonLoadPending.Size = new Size(130, 42);
+            buttonLoadPending.TabIndex = 6;
+            buttonLoadPending.Text = "📥 加载待添加";
+            buttonLoadPending.UseVisualStyleBackColor = false;
+            buttonLoadPending.Click += ButtonLoadPending_Click;
+            buttonLoadPending.MouseEnter += Button_HoverEnter;
+            buttonLoadPending.MouseLeave += Button_HoverLeave;
+            //
             // dataGridView
             // 
             dataGridView.AllowUserToOrderColumns = true;
@@ -665,7 +718,7 @@ namespace LearningAssistant.Forms
             // 
             tabControl1.Controls.Add(tabPage1);
             tabControl1.Controls.Add(tabPage2);
-            tabControl1.Controls.Add(tabPage3);
+            // 移除空的AIWebView标签页
             tabControl1.Dock = DockStyle.Fill;
             tabControl1.Location = new Point(0, 0);
             tabControl1.Name = "tabControl1";
@@ -703,22 +756,13 @@ namespace LearningAssistant.Forms
             buttonPanel.Controls.Add(buttonImport);
             buttonPanel.Controls.Add(buttonExport);
             buttonPanel.Controls.Add(buttonGenerateAI);
+            buttonPanel.Controls.Add(buttonLoadPending);
             buttonPanel.Dock = DockStyle.Fill;
             buttonPanel.Location = new Point(3, 696);
             buttonPanel.Name = "buttonPanel";
             buttonPanel.Size = new Size(1212, 67);
             buttonPanel.TabIndex = 4;
             buttonPanel.WrapContents = false;
-            // 
-            // tabPage3
-            // 
-            tabPage3.Location = new Point(4, 26);
-            tabPage3.Name = "tabPage3";
-            tabPage3.Padding = new Padding(3);
-            tabPage3.Size = new Size(1204, 611);
-            tabPage3.TabIndex = 2;
-            tabPage3.Text = "AIWebView";
-            tabPage3.UseVisualStyleBackColor = true;
             // 
             // ContentEditorForm
             // 

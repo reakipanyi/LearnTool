@@ -1,5 +1,7 @@
 using LearningAssistant.Forms;
 using LearningAssistant.Presenters;
+using LearningAssistant.Services.Cloud;
+using LearningAssistant.Services.Web;
 using LearningAssistant.Views;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -228,10 +230,11 @@ namespace LearningAssistant.Services
 
             try
             {
-                using var scope = _serviceProvider.CreateScope();
-                var scopedProvider = scope.ServiceProvider;
+                var cloudStorageService = _serviceProvider.GetService<ICloudStorageService>();
+                var logger = _serviceProvider.GetService<ILogger<WebView2BrowserForm>>();
+                var webBookmarkService = _serviceProvider.GetService<IWebBookmarkService>();
 
-                var form = scopedProvider.GetRequiredService<AIWebViewForm>();
+                var form = new WebView2BrowserForm(cloudStorageService, logger, webBookmarkService);
                 form.InitialPrompt = initialPrompt;
                 form.StartPosition = FormStartPosition.CenterParent;
                 form.ShowDialog();

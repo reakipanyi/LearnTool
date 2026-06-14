@@ -87,10 +87,10 @@ namespace LearningAssistant.Common
             services.AddTransient<IAiQuestionService, AiQuestionService>();
             services.AddSingleton<IContentLoaderService, ContentLoaderService>();
             services.AddSingleton<IUserSessionService, UserSessionService>();
-            services.AddSingleton<IProgressService, ProgressService>();
+            // IProgressService 已移除，功能合并到 IStudyEngine
             services.AddSingleton<IExportService, ExportService>();
             services.AddSingleton<QuoteService>();
-            services.AddSingleton<SubjectLearningService>();
+
             services.AddSingleton<SpeechService>();
             services.AddSingleton<LearningReportService>();
             services.AddSingleton<IPdfContentLinkService, PdfContentLinkService>();
@@ -133,7 +133,7 @@ namespace LearningAssistant.Common
             services.AddScoped<IPdfFileManager, PdfFileManager>();
             services.AddScoped<IPdfOcrService, PdfOcrService>();
             services.AddScoped<IPdfTranslationService, PdfTranslationService>();
-            services.AddScoped<IPdfAiService, PdfAiService>();
+            // IPdfAiService 已移除，PdfPresenter 直接使用 IAIService
             services.AddScoped<IPdfTtsService, PdfTtsService>();
             services.AddScoped<IPdfStudyIntegration, PdfStudyIntegration>();
             services.AddScoped<IPdfExportService, PdfExportService>();
@@ -156,21 +156,23 @@ namespace LearningAssistant.Common
                 var progressManager = sp.GetRequiredService<IProgressManager>();
                 var studyListProcessor = sp.GetRequiredService<IStudyListProcessor>();
                 var analyticsService = sp.GetService<ILearningAnalyticsService>();
-                return new StudyEngine(contentLoaderService, progressManager, studyListProcessor, analyticsService);
+                var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
+                return new StudyEngine(contentLoaderService, progressManager, studyListProcessor, analyticsService, persistenceService);
             });
 
             services.AddSingleton<ILearningAnalyticsService, LearningAnalyticsService>();
             services.AddSingleton<ILearningReminderService, LearningReminderService>();
+            services.AddSingleton<IPendingContentService, PendingContentService>();
             services.AddSingleton<DataMigrationService>();
             services.AddSingleton<ISpacedRepetitionService, SpacedRepetitionService>();
             services.AddSingleton<IHighlightSyncService, HighlightSyncService>();
             services.AddSingleton<ILearningChartService, LearningChartService>();
+            services.AddSingleton<Services.Web.IWebBookmarkService, Services.Web.WebBookmarkService>();
             services.AddSingleton<ISoundService>(sp => new SoundService(sp.GetService<ITTSService>()));
             services.AddSingleton<IAdvancedSpeechService, AdvancedSpeechService>();
             services.AddSingleton<IEnhancedReminderService, EnhancedReminderService>();
 
             services.AddScoped<ILearningSettingsManager, LearningSettingsManager>();
-            services.AddScoped<ILearningExportService, LearningExportService>();
             services.AddScoped<ILearningEventMediator, LearningEventMediator>();
             services.AddScoped<ILearningFlowHandler>(sp =>
             {
@@ -182,10 +184,9 @@ namespace LearningAssistant.Common
                 var exportService = sp.GetRequiredService<IExportService>();
                 var windowManager = sp.GetRequiredService<IWindowManager>();
                 var settingsManager = sp.GetRequiredService<ILearningSettingsManager>();
-                var exportHelper = sp.GetRequiredService<ILearningExportService>();
                 var view = sp.GetRequiredService<ILearningView>();
                 return new LearningFlowHandler(logger, studyEngine, aiService, ttsService, contentLoaderService,
-                    exportService, windowManager, settingsManager, exportHelper, view);
+                    exportService, windowManager, settingsManager, view);
             });
 
             return services;
@@ -228,7 +229,7 @@ namespace LearningAssistant.Common
                 var pdfFileManager = sp.GetRequiredService<IPdfFileManager>();
                 var pdfOcrService = sp.GetRequiredService<IPdfOcrService>();
                 var pdfTranslationService = sp.GetRequiredService<IPdfTranslationService>();
-                var pdfAiService = sp.GetRequiredService<IPdfAiService>();
+                var aiService = sp.GetRequiredService<IAIService>();
                 var pdfTtsService = sp.GetRequiredService<IPdfTtsService>();
                 var pdfStudyIntegration = sp.GetRequiredService<IPdfStudyIntegration>();
                 var pdfExportService = sp.GetRequiredService<IPdfExportService>();
@@ -236,7 +237,7 @@ namespace LearningAssistant.Common
                 var highlightService = sp.GetRequiredService<IHighlightService>();
                 var pdfService = sp.GetRequiredService<IPdfService>();
                 return new PdfPresenter(logger, pdfRenderer, pdfFileManager, pdfOcrService, pdfTranslationService,
-                    pdfAiService, pdfTtsService, pdfStudyIntegration, pdfExportService,
+                    aiService, pdfTtsService, pdfStudyIntegration, pdfExportService,
                     annotationService, highlightService, pdfService);
             });
 
@@ -268,12 +269,6 @@ namespace LearningAssistant.Common
                 var quoteService = sp.GetRequiredService<QuoteService>();
                 var logger = sp.GetService<ILogger<LearningManagementForm>>();
                 return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService, logger);
-            });
-
-            services.AddScoped<AIWebViewForm>(sp =>
-            {
-                var logger = sp.GetService<ILogger<AIWebViewForm>>();
-                return new AIWebViewForm(logger);
             });
 
             services.AddScoped<ISettingView>(sp => sp.GetRequiredService<SettingForm>());

@@ -22,7 +22,7 @@ namespace LearningAssistant.Forms
         private readonly ILoggerFactory _loggerFactory;
         private readonly ISoundService _soundService;
         private readonly IThemeService _themeService;
-        private AIWebViewForm? _aiDialog;
+        private WebView2BrowserForm? _aiDialog;
         private bool _disposed = false;
         private Settings _settings = new();
 
@@ -106,6 +106,7 @@ namespace LearningAssistant.Forms
         private Button buttonRevealAnswer;
         private Button buttonFavorite;
         private Button buttonNote;
+        private Button buttonAIAsk;
         private Button buttonExit;
         private FlowLayoutPanel settingsFlowLayoutPanel;
         private CheckBox checkBoxVoice;
@@ -113,7 +114,6 @@ namespace LearningAssistant.Forms
         private RadioButton radioOriginal;
         private RadioButton radioExplanation;
         private RadioButton radioBoth;
-        private Label labelShortcutHints;
         private int _xpToNextLevel = 100;
 
         private class Badge
@@ -267,11 +267,6 @@ namespace LearningAssistant.Forms
                 labelContent.BackColor = colors.Surface;
             }
 
-            if (richTextBoxAI != null)
-            {
-                richTextBoxAI.BackColor = colors.Surface;
-                richTextBoxAI.ForeColor = colors.TextPrimary;
-            }
 
             if (buttonKnown != null)
             {
@@ -517,10 +512,11 @@ namespace LearningAssistant.Forms
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public string AIExplanation
+        public LearningItem? CurrentItem
         {
-            set => richTextBoxAI.Text = value;
+            set => _currentItem = value;
         }
+
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string Statistics
@@ -680,7 +676,6 @@ namespace LearningAssistant.Forms
         private Panel panelContent;
         private Label labelDisplay;
         private Label labelContent;
-        private RichTextBox richTextBoxAI;
         private Label labelStatistics;
         private Panel panelList;
         private ListBox listBoxItems;
@@ -751,12 +746,11 @@ namespace LearningAssistant.Forms
             panelContent = new Panel();
             labelDisplay = new Label();
             labelContent = new Label();
-            richTextBoxAI = new RichTextBox();
             labelStatistics = new Label();
             panelList = new Panel();
             labelListStatus = new Label();
-            listBoxItems = new ListBox();
             labelListTitle = new Label();
+            listBoxItems = new ListBox();
             panelConfig = new Panel();
             labelConfigTitle = new Label();
             groupBoxMode = new GroupBox();
@@ -787,7 +781,6 @@ namespace LearningAssistant.Forms
             mainTableLayoutPanel = new TableLayoutPanel();
             middlePanel = new Panel();
             middleTableLayoutPanel = new TableLayoutPanel();
-            progressBar1 = new ProgressBar();
             buttonsFlowLayoutPanel = new FlowLayoutPanel();
             buttonKnown = new Button();
             buttonUnknown = new Button();
@@ -797,13 +790,14 @@ namespace LearningAssistant.Forms
             buttonFavorite = new Button();
             buttonNote = new Button();
             buttonExit = new Button();
+            buttonAIAsk = new Button();
+            progressBar1 = new ProgressBar();
             settingsFlowLayoutPanel = new FlowLayoutPanel();
             checkBoxVoice = new CheckBox();
             pronunciationFlowLayoutPanel = new FlowLayoutPanel();
             radioOriginal = new RadioButton();
             radioExplanation = new RadioButton();
             radioBoth = new RadioButton();
-            labelShortcutHints = new Label();
             panelNotes = new Panel();
             richTextBoxNotes = new RichTextBox();
             labelNotesTitle = new Label();
@@ -853,7 +847,7 @@ namespace LearningAssistant.Forms
             panelContent.Dock = DockStyle.Fill;
             panelContent.Location = new Point(3, 3);
             panelContent.Name = "panelContent";
-            panelContent.Size = new Size(1155, 539);
+            panelContent.Size = new Size(1155, 636);
             panelContent.TabIndex = 0;
             panelContent.Paint += PanelContent_Paint;
             // 
@@ -877,27 +871,19 @@ namespace LearningAssistant.Forms
             labelContent.ForeColor = Color.FromArgb(70, 90, 110);
             labelContent.Location = new Point(0, 89);
             labelContent.Name = "labelContent";
-            labelContent.Size = new Size(1155, 450);
+            labelContent.Size = new Size(1155, 547);
             labelContent.TabIndex = 0;
             labelContent.TextAlign = ContentAlignment.MiddleCenter;
             labelContent.Click += LabelContent_Click;
             // 
-            // richTextBoxAI
-            // 
-            richTextBoxAI.Location = new Point(0, 0);
-            richTextBoxAI.Name = "richTextBoxAI";
-            richTextBoxAI.Size = new Size(100, 96);
-            richTextBoxAI.TabIndex = 0;
-            richTextBoxAI.Text = "";
-            // 
             // labelStatistics
             // 
-            labelStatistics.Dock = DockStyle.Bottom;
+            labelStatistics.Dock = DockStyle.Fill;
             labelStatistics.Font = new Font("微软雅黑", 11F);
             labelStatistics.ForeColor = Color.FromArgb(80, 100, 120);
-            labelStatistics.Location = new Point(3, 798);
+            labelStatistics.Location = new Point(3, 806);
             labelStatistics.Name = "labelStatistics";
-            labelStatistics.Size = new Size(1155, 8);
+            labelStatistics.Size = new Size(1155, 32);
             labelStatistics.TabIndex = 3;
             // 
             // panelList
@@ -905,8 +891,8 @@ namespace LearningAssistant.Forms
             panelList.BackColor = Color.FromArgb(248, 248, 252);
             panelList.BorderStyle = BorderStyle.FixedSingle;
             panelList.Controls.Add(labelListStatus);
-            panelList.Controls.Add(listBoxItems);
             panelList.Controls.Add(labelListTitle);
+            panelList.Controls.Add(listBoxItems);
             panelList.Dock = DockStyle.Fill;
             panelList.Location = new Point(3, 3);
             panelList.Name = "panelList";
@@ -919,24 +905,12 @@ namespace LearningAssistant.Forms
             labelListStatus.Dock = DockStyle.Bottom;
             labelListStatus.Font = new Font("微软雅黑", 9F);
             labelListStatus.ForeColor = Color.FromArgb(80, 100, 120);
-            labelListStatus.Location = new Point(0, 813);
+            labelListStatus.Location = new Point(0, 796);
             labelListStatus.Name = "labelListStatus";
-            labelListStatus.Size = new Size(192, 23);
+            labelListStatus.Size = new Size(192, 40);
             labelListStatus.TabIndex = 2;
             labelListStatus.Text = "共 0 项";
             labelListStatus.TextAlign = ContentAlignment.MiddleCenter;
-            // 
-            // listBoxItems
-            // 
-            listBoxItems.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
-            listBoxItems.Font = new Font("微软雅黑", 10F);
-            listBoxItems.FormattingEnabled = true;
-            listBoxItems.ItemHeight = 25;
-            listBoxItems.Location = new Point(0, 35);
-            listBoxItems.Name = "listBoxItems";
-            listBoxItems.Size = new Size(192, 764);
-            listBoxItems.TabIndex = 1;
-            listBoxItems.SelectedIndexChanged += ListBoxItems_SelectedIndexChanged;
             // 
             // labelListTitle
             // 
@@ -950,6 +924,17 @@ namespace LearningAssistant.Forms
             labelListTitle.TabIndex = 0;
             labelListTitle.Text = "📚 学习列表";
             labelListTitle.TextAlign = ContentAlignment.MiddleCenter;
+            // 
+            // listBoxItems
+            // 
+            listBoxItems.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
+            listBoxItems.Font = new Font("微软雅黑", 10F);
+            listBoxItems.FormattingEnabled = true;
+            listBoxItems.Location = new Point(0, 35);
+            listBoxItems.Name = "listBoxItems";
+            listBoxItems.Size = new Size(192, 764);
+            listBoxItems.TabIndex = 1;
+            listBoxItems.SelectedIndexChanged += ListBoxItems_SelectedIndexChanged;
             // 
             // panelConfig
             // 
@@ -1323,35 +1308,22 @@ namespace LearningAssistant.Forms
             middleTableLayoutPanel.ColumnCount = 1;
             middleTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             middleTableLayoutPanel.Controls.Add(panelContent, 0, 0);
-            middleTableLayoutPanel.Controls.Add(progressBar1, 0, 1);
-            middleTableLayoutPanel.Controls.Add(buttonsFlowLayoutPanel, 0, 2);
+            middleTableLayoutPanel.Controls.Add(buttonsFlowLayoutPanel, 0, 1);
+            middleTableLayoutPanel.Controls.Add(progressBar1, 0, 2);
             middleTableLayoutPanel.Controls.Add(settingsFlowLayoutPanel, 0, 3);
-            middleTableLayoutPanel.Controls.Add(labelShortcutHints, 0, 4);
-            middleTableLayoutPanel.Controls.Add(labelStatistics, 0, 5);
+            middleTableLayoutPanel.Controls.Add(labelStatistics, 0, 4);
             middleTableLayoutPanel.Dock = DockStyle.Fill;
             middleTableLayoutPanel.Location = new Point(0, 0);
             middleTableLayoutPanel.Name = "middleTableLayoutPanel";
-            middleTableLayoutPanel.RowCount = 7;
+            middleTableLayoutPanel.RowCount = 5;
             middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 50F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 112F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 68F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 23F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 8F));
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 71F));
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 51F));
             middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
             middleTableLayoutPanel.Size = new Size(1161, 838);
             middleTableLayoutPanel.TabIndex = 0;
-            // 
-            // progressBar1
-            // 
-            progressBar1.BackColor = Color.FromArgb(240, 240, 240);
-            progressBar1.Dock = DockStyle.Fill;
-            progressBar1.ForeColor = Color.FromArgb(255, 140, 0);
-            progressBar1.Location = new Point(3, 548);
-            progressBar1.Name = "progressBar1";
-            progressBar1.Size = new Size(1155, 44);
-            progressBar1.Style = ProgressBarStyle.Continuous;
-            progressBar1.TabIndex = 2;
             // 
             // buttonsFlowLayoutPanel
             // 
@@ -1363,11 +1335,12 @@ namespace LearningAssistant.Forms
             buttonsFlowLayoutPanel.Controls.Add(buttonFavorite);
             buttonsFlowLayoutPanel.Controls.Add(buttonNote);
             buttonsFlowLayoutPanel.Controls.Add(buttonExit);
+            buttonsFlowLayoutPanel.Controls.Add(buttonAIAsk);
             buttonsFlowLayoutPanel.Dock = DockStyle.Fill;
-            buttonsFlowLayoutPanel.Location = new Point(3, 598);
+            buttonsFlowLayoutPanel.Location = new Point(3, 645);
             buttonsFlowLayoutPanel.Name = "buttonsFlowLayoutPanel";
             buttonsFlowLayoutPanel.Padding = new Padding(10, 5, 10, 5);
-            buttonsFlowLayoutPanel.Size = new Size(1155, 106);
+            buttonsFlowLayoutPanel.Size = new Size(1155, 65);
             buttonsFlowLayoutPanel.TabIndex = 4;
             buttonsFlowLayoutPanel.WrapContents = false;
             // 
@@ -1500,15 +1473,42 @@ namespace LearningAssistant.Forms
             buttonExit.UseVisualStyleBackColor = false;
             buttonExit.Click += ButtonExit_Click;
             // 
+            // buttonAIAsk
+            // 
+            buttonAIAsk.BackColor = Color.FromArgb(0, 120, 215);
+            buttonAIAsk.FlatAppearance.BorderSize = 0;
+            buttonAIAsk.FlatStyle = FlatStyle.Flat;
+            buttonAIAsk.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            buttonAIAsk.ForeColor = Color.White;
+            buttonAIAsk.Location = new Point(1022, 10);
+            buttonAIAsk.Margin = new Padding(5);
+            buttonAIAsk.Name = "buttonAIAsk";
+            buttonAIAsk.Size = new Size(100, 45);
+            buttonAIAsk.TabIndex = 14;
+            buttonAIAsk.Text = "🤖 AI问答";
+            buttonAIAsk.UseVisualStyleBackColor = false;
+            buttonAIAsk.Click += ButtonAIAsk_Click;
+            // 
+            // progressBar1
+            // 
+            progressBar1.BackColor = Color.FromArgb(240, 240, 240);
+            progressBar1.Dock = DockStyle.Fill;
+            progressBar1.ForeColor = Color.FromArgb(255, 140, 0);
+            progressBar1.Location = new Point(3, 716);
+            progressBar1.Name = "progressBar1";
+            progressBar1.Size = new Size(1155, 36);
+            progressBar1.Style = ProgressBarStyle.Continuous;
+            progressBar1.TabIndex = 2;
+            // 
             // settingsFlowLayoutPanel
             // 
             settingsFlowLayoutPanel.Controls.Add(checkBoxVoice);
             settingsFlowLayoutPanel.Controls.Add(pronunciationFlowLayoutPanel);
             settingsFlowLayoutPanel.Dock = DockStyle.Fill;
-            settingsFlowLayoutPanel.Location = new Point(3, 710);
+            settingsFlowLayoutPanel.Location = new Point(3, 758);
             settingsFlowLayoutPanel.Name = "settingsFlowLayoutPanel";
             settingsFlowLayoutPanel.Padding = new Padding(10, 5, 10, 5);
-            settingsFlowLayoutPanel.Size = new Size(1155, 62);
+            settingsFlowLayoutPanel.Size = new Size(1155, 45);
             settingsFlowLayoutPanel.TabIndex = 5;
             settingsFlowLayoutPanel.WrapContents = false;
             // 
@@ -1571,18 +1571,6 @@ namespace LearningAssistant.Forms
             radioBoth.TabIndex = 15;
             radioBoth.Text = "原文+释义";
             // 
-            // labelShortcutHints
-            // 
-            labelShortcutHints.AutoSize = true;
-            labelShortcutHints.Dock = DockStyle.Bottom;
-            labelShortcutHints.Font = new Font("Microsoft YaHei UI", 9F);
-            labelShortcutHints.ForeColor = Color.FromArgb(120, 120, 120);
-            labelShortcutHints.Location = new Point(3, 781);
-            labelShortcutHints.Name = "labelShortcutHints";
-            labelShortcutHints.Size = new Size(1155, 17);
-            labelShortcutHints.TabIndex = 16;
-            labelShortcutHints.Text = "快捷键: 空格-发音 | 回车-下一个 | 1/K-会了 | 2/U-不会 | Esc-返回";
-            // 
             // panelNotes
             // 
             panelNotes.BackColor = Color.FromArgb(255, 253, 238);
@@ -1641,7 +1629,6 @@ namespace LearningAssistant.Forms
             listBoxExamples.BackColor = Color.FromArgb(248, 250, 252);
             listBoxExamples.Font = new Font("微软雅黑", 10F);
             listBoxExamples.FormattingEnabled = true;
-            listBoxExamples.ItemHeight = 25;
             listBoxExamples.Location = new Point(0, 30);
             listBoxExamples.Name = "listBoxExamples";
             listBoxExamples.Size = new Size(2106, 99);
@@ -1806,7 +1793,6 @@ namespace LearningAssistant.Forms
             mainTableLayoutPanel.ResumeLayout(false);
             middlePanel.ResumeLayout(false);
             middleTableLayoutPanel.ResumeLayout(false);
-            middleTableLayoutPanel.PerformLayout();
             buttonsFlowLayoutPanel.ResumeLayout(false);
             settingsFlowLayoutPanel.ResumeLayout(false);
             pronunciationFlowLayoutPanel.ResumeLayout(false);
@@ -2830,6 +2816,42 @@ namespace LearningAssistant.Forms
             }
 
             Location = originalLocation;
+        }
+
+        /// <summary>
+        /// AI问答按钮点击事件
+        /// </summary>
+        private void ButtonAIAsk_Click(object? sender, EventArgs e)
+        {
+            if (_currentItem == null)
+            {
+                MessageBox.Show("请先选择一个学习内容", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            try
+            {
+                // 获取当前学习内容作为上下文
+                string context = _currentItem.GetMainContent();
+                string displayText = _currentItem.GetDisplayText();
+
+                // 构建AI提示词
+                string prompt = $"请解释以下内容：\n{displayText}\n\n原文：{context}";
+
+                // 创建并显示AI对话框
+                _aiDialog = new WebView2BrowserForm(
+                    null,
+                    _loggerFactory?.CreateLogger<WebView2BrowserForm>(),
+                    null
+                );
+                _aiDialog.InitialPrompt = prompt;
+                _aiDialog.Show();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "打开AI问答窗口失败");
+                MessageBox.Show($"打开AI问答窗口失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void ButtonExit_Click(object? sender, EventArgs e)

@@ -2,6 +2,7 @@ namespace LearningAssistant.Services.AI
 {
     /// <summary>
     /// AI服务接口 - 提供AI解释和问答功能
+    /// 统一的AI服务入口，支持解释、问答、练习生成和摘要功能
     /// </summary>
     public interface IAIService
     {
@@ -25,8 +26,30 @@ namespace LearningAssistant.Services.AI
         Task<string> AskQuestionAsync(string question, string context = "", CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// 生成练习题
+        /// </summary>
+        /// <param name="text">学习内容文本</param>
+        /// <param name="language">学习语言</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        /// <returns>生成的练习题</returns>
+        Task<string> GenerateExerciseAsync(string text, string language, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 摘要文本
+        /// </summary>
+        /// <param name="text">要摘要的文本</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        /// <returns>生成的摘要</returns>
+        Task<string> SummarizeAsync(string text, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// 模型名称
         /// </summary>
         string ModelName { get; }
+
+        /// <summary>
+        /// 提供商名称
+        /// </summary>
+        string ProviderName { get; }
     }
 }

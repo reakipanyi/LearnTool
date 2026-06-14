@@ -17,6 +17,7 @@ namespace LearningAssistant.Presenters
         Task HandlePronounceAsync();
         Task MoveToNextAsync();
         Task HandleSettingsChangedAsync();
+        Task HandleItemSelectedAsync(int index);
         void Exit();
         void ExportErrorBook();
         void OpenStatistics();
@@ -35,7 +36,6 @@ namespace LearningAssistant.Presenters
         private readonly IExportService _exportService;
         private readonly IWindowManager _windowManager;
         private readonly ILearningSettingsManager _settingsManager;
-        private readonly ILearningExportService _exportHelper;
         private readonly ILearningView _view;
 
         private CancellationTokenSource? _cts;
@@ -56,7 +56,6 @@ namespace LearningAssistant.Presenters
             IExportService exportService,
             IWindowManager windowManager,
             ILearningSettingsManager settingsManager,
-            ILearningExportService exportHelper,
             ILearningView view)
         {
             _logger = logger;
@@ -67,7 +66,6 @@ namespace LearningAssistant.Presenters
             _exportService = exportService;
             _windowManager = windowManager;
             _settingsManager = settingsManager;
-            _exportHelper = exportHelper;
             _view = view;
             _cts = new CancellationTokenSource();
         }
@@ -166,6 +164,7 @@ namespace LearningAssistant.Presenters
 
                 _view.CurrentContent = item.GetMainContent();
                 _view.CurrentDisplayText = item.GetDisplayText();
+                _view.CurrentItem = item;
                 _view.ProgressMax = _studyEngine.TotalCount;
                 _view.ProgressValue = _studyEngine.CurrentIndex + 1;
 
@@ -303,6 +302,26 @@ namespace LearningAssistant.Presenters
             }
         }
 
+        public async Task HandleItemSelectedAsync(int index)
+        {
+            try
+            {
+                _cts?.Token.ThrowIfCancellationRequested();
+                _autoPronunciationCount = 0;
+
+                _studyEngine.SetCurrentIndex(index);
+                await DisplayCurrentItemAsync();
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogDebug("HandleItemSelectedAsync was cancelled");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in HandleItemSelectedAsync, index: {Index}", index);
+            }
+        }
+
         public async Task HandleSettingsChangedAsync()
         {
             try
@@ -365,7 +384,7 @@ namespace LearningAssistant.Presenters
 
         public void ExportErrorBook()
         {
-            string result = _exportHelper.ExportErrorBook(_exportService, _currentUserId);
+            string result = _exportService.ExportErrorBookWithDialog(_currentUserId);
             _view.ShowMessage(result);
         }
 

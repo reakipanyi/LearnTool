@@ -14,7 +14,8 @@ namespace LearningAssistant.Services
         /// <param name="parent">父窗体</param>
         /// <param name="prompt">初始提示词</param>
         /// <param name="aiUrl">AI URL（可选）</param>
-        void ShowAIAbilityPanel(Form parent, string? prompt = null, string? aiUrl = null);
+        /// <param name="context">上下文文本（可选，如PDF选中的内容）</param>
+        void ShowAIAbilityPanel(Form parent, string? prompt = null, string? aiUrl = null, string? context = null);
 
         /// <summary>
         /// 关闭指定父窗体上的AI面板
@@ -31,7 +32,7 @@ namespace LearningAssistant.Services
     {
         private readonly Dictionary<Form, Panel> _panelContainers = new();
 
-        public void ShowAIAbilityPanel(Form parent, string? prompt = null, string? aiUrl = null)
+        public void ShowAIAbilityPanel(Form parent, string? prompt = null, string? aiUrl = null, string? context = null)
         {
             if (parent == null)
                 throw new ArgumentNullException(nameof(parent));
@@ -42,10 +43,13 @@ namespace LearningAssistant.Services
                 existingContainer.Visible = true;
                 existingContainer.BringToFront();
 
-                // 更新提示词和URL
+                // 更新提示词、URL和上下文
                 var aiPanel = existingContainer.Controls.OfType<AIAbilityPanel>().FirstOrDefault();
                 if (aiPanel != null)
                 {
+                    if (!string.IsNullOrEmpty(context))
+                        aiPanel.ContextText = context;
+
                     if (!string.IsNullOrEmpty(prompt))
                         aiPanel.PromptText = prompt;
 
@@ -62,6 +66,9 @@ namespace LearningAssistant.Services
             };
 
             // 设置初始值
+            if (!string.IsNullOrEmpty(context))
+                aiAbilityPanel.ContextText = context;
+
             if (!string.IsNullOrEmpty(prompt))
                 aiAbilityPanel.PromptText = prompt;
 

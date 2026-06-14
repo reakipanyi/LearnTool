@@ -6,26 +6,6 @@ namespace LearningAssistant.Views
     public interface ISettingView
     {
         /// <summary>
-        /// AI服务提供商
-        /// </summary>
-        string Provider { get; set; }
-
-        /// <summary>
-        /// API密钥
-        /// </summary>
-        string ApiKey { get; set; }
-
-        /// <summary>
-        /// API端点
-        /// </summary>
-        string ApiEndpoint { get; set; }
-
-        /// <summary>
-        /// 模型名称
-        /// </summary>
-        string Model { get; set; }
-
-        /// <summary>
         /// 是否启用TTS
         /// </summary>
         bool TTSEnabled { get; set; }
@@ -59,26 +39,8 @@ namespace LearningAssistant.Views
         /// 主题名称
         /// </summary>
         string Theme { get; set; }
-
-        /// <summary>
-        /// 百度应用ID
-        /// </summary>
         string BaiduAppId { get; set; }
-
-        /// <summary>
-        /// 百度密钥
-        /// </summary>
         string BaiduSecret { get; set; }
-
-        /// <summary>
-        /// 百度网盘客户端ID
-        /// </summary>
-        string BaiduNetdiskClientId { get; set; }
-
-        /// <summary>
-        /// 百度网盘客户端密钥
-        /// </summary>
-        string BaiduNetdiskClientSecret { get; set; }
 
         /// <summary>
         /// 是否启用语音
@@ -104,11 +66,6 @@ namespace LearningAssistant.Views
         /// 取消按钮点击事件
         /// </summary>
         event EventHandler? CancelClicked;
-
-        /// <summary>
-        /// 打开网页版AI按钮点击事件
-        /// </summary>
-        event EventHandler? OpenWebViewClicked;
 
         /// <summary>
         /// 显示消息

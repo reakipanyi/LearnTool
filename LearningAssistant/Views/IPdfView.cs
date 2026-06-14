@@ -310,6 +310,16 @@ namespace LearningAssistant.Views
         /// </summary>
         event EventHandler? LanguageChanged;
 
+        /// <summary>
+        /// AI问答按钮点击事件
+        /// </summary>
+        event EventHandler? AiQuestionAsked;
+
+        /// <summary>
+        /// 触发AI问答面板
+        /// </summary>
+        void RaiseAiQuestionAsked();
+
     }
 
     /// <summary>

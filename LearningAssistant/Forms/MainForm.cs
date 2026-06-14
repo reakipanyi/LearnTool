@@ -4,7 +4,6 @@ using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
 using LearningAssistant.Services.Cloud;
-using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 
@@ -223,10 +222,6 @@ namespace LearningAssistant.Forms
         private Button buttonLearningManagement;
         private Button buttonBrowser;
         private Button buttonWebView2Browser;
-        private Button buttonAIWebView;
-        private Button buttonSubjectLearning;
-        private Button buttonBaiduNetdisk;
-        private Button buttonDictation;
         private MenuStrip menuStrip1;
         private ToolStripMenuItem toolStripMenuItemFile;
         private ToolStripMenuItem toolStripMenuItemNewUser;
@@ -256,11 +251,7 @@ namespace LearningAssistant.Forms
             labelStreakDays = new Label();
             buttonLearningManagement = new Button();
             buttonWebView2Browser = new Button();
-            buttonAIWebView = new Button();
-            buttonSubjectLearning = new Button();
-            buttonDictation = new Button();
             buttonBrowser = new Button();
-            buttonBaiduNetdisk = new Button();
             menuStrip1 = new MenuStrip();
             toolStripMenuItemFile = new ToolStripMenuItem();
             toolStripMenuItemNewUser = new ToolStripMenuItem();
@@ -287,9 +278,6 @@ namespace LearningAssistant.Forms
             panelMain.Controls.Add(groupBoxUser);
             panelMain.Controls.Add(buttonLearningManagement);
             panelMain.Controls.Add(buttonWebView2Browser);
-            panelMain.Controls.Add(buttonAIWebView);
-            panelMain.Controls.Add(buttonSubjectLearning);
-            panelMain.Controls.Add(buttonDictation);
             panelMain.Dock = DockStyle.Fill;
             panelMain.Location = new Point(0, 25);
             panelMain.Margin = new Padding(4);
@@ -435,7 +423,7 @@ namespace LearningAssistant.Forms
             buttonLearningManagement.FlatAppearance.BorderSize = 0;
             buttonLearningManagement.FlatStyle = FlatStyle.Flat;
             buttonLearningManagement.ForeColor = Color.White;
-            buttonLearningManagement.Location = new Point(31, 476);
+            buttonLearningManagement.Location = new Point(433, 398);
             buttonLearningManagement.Name = "buttonLearningManagement";
             buttonLearningManagement.Size = new Size(150, 51);
             buttonLearningManagement.TabIndex = 18;
@@ -453,51 +441,9 @@ namespace LearningAssistant.Forms
             buttonWebView2Browser.Name = "buttonWebView2Browser";
             buttonWebView2Browser.Size = new Size(150, 51);
             buttonWebView2Browser.TabIndex = 23;
-            buttonWebView2Browser.Text = "🌐 WebView2浏览器";
+            buttonWebView2Browser.Text = "🌐 浏览器";
             buttonWebView2Browser.UseVisualStyleBackColor = false;
             buttonWebView2Browser.Click += ButtonWebView2Browser_Click;
-            // 
-            // buttonAIWebView
-            // 
-            buttonAIWebView.BackColor = Color.FromArgb(233, 30, 99);
-            buttonAIWebView.FlatAppearance.BorderSize = 0;
-            buttonAIWebView.FlatStyle = FlatStyle.Flat;
-            buttonAIWebView.ForeColor = Color.White;
-            buttonAIWebView.Location = new Point(232, 476);
-            buttonAIWebView.Name = "buttonAIWebView";
-            buttonAIWebView.Size = new Size(150, 51);
-            buttonAIWebView.TabIndex = 24;
-            buttonAIWebView.Text = "🤖 AI助手";
-            buttonAIWebView.UseVisualStyleBackColor = false;
-            buttonAIWebView.Click += ButtonAIWebView_Click;
-            // 
-            // buttonSubjectLearning
-            // 
-            buttonSubjectLearning.BackColor = Color.FromArgb(76, 175, 80);
-            buttonSubjectLearning.FlatAppearance.BorderSize = 0;
-            buttonSubjectLearning.FlatStyle = FlatStyle.Flat;
-            buttonSubjectLearning.ForeColor = Color.White;
-            buttonSubjectLearning.Location = new Point(433, 476);
-            buttonSubjectLearning.Name = "buttonSubjectLearning";
-            buttonSubjectLearning.Size = new Size(150, 51);
-            buttonSubjectLearning.TabIndex = 20;
-            buttonSubjectLearning.Text = "📚 学科学习";
-            buttonSubjectLearning.UseVisualStyleBackColor = false;
-            buttonSubjectLearning.Click += ButtonSubjectLearning_Click;
-            // 
-            // buttonDictation
-            // 
-            buttonDictation.BackColor = Color.FromArgb(76, 175, 80);
-            buttonDictation.FlatAppearance.BorderSize = 0;
-            buttonDictation.FlatStyle = FlatStyle.Flat;
-            buttonDictation.ForeColor = Color.White;
-            buttonDictation.Location = new Point(433, 398);
-            buttonDictation.Name = "buttonDictation";
-            buttonDictation.Size = new Size(150, 51);
-            buttonDictation.TabIndex = 22;
-            buttonDictation.Text = "🎤 听写练习";
-            buttonDictation.UseVisualStyleBackColor = false;
-            buttonDictation.Click += ButtonDictation_Click;
             // 
             // buttonBrowser
             // 
@@ -505,20 +451,7 @@ namespace LearningAssistant.Forms
             buttonBrowser.Name = "buttonBrowser";
             buttonBrowser.Size = new Size(75, 23);
             buttonBrowser.TabIndex = 0;
-            // 
-            // buttonBaiduNetdisk
-            // 
-            buttonBaiduNetdisk.BackColor = Color.FromArgb(33, 150, 243);
-            buttonBaiduNetdisk.FlatAppearance.BorderSize = 0;
-            buttonBaiduNetdisk.FlatStyle = FlatStyle.Flat;
-            buttonBaiduNetdisk.ForeColor = Color.White;
-            buttonBaiduNetdisk.Location = new Point(232, 476);
-            buttonBaiduNetdisk.Name = "buttonBaiduNetdisk";
-            buttonBaiduNetdisk.Size = new Size(150, 51);
-            buttonBaiduNetdisk.TabIndex = 21;
-            buttonBaiduNetdisk.Text = "☁️ 百度网盘";
-            buttonBaiduNetdisk.UseVisualStyleBackColor = false;
-            buttonBaiduNetdisk.Click += ButtonBaiduNetdisk_Click;
+
             // 
             // menuStrip1
             // 
@@ -643,7 +576,8 @@ namespace LearningAssistant.Forms
             {
                 var cloudStorageService = Program.GetService<ICloudStorageService>();
                 var logger = Program.GetService<ILogger<WebView2BrowserForm>>();
-                var form = new WebView2BrowserForm(cloudStorageService, logger);
+                var webBookmarkService = Program.GetService<Services.Web.IWebBookmarkService>();
+                var form = new WebView2BrowserForm(cloudStorageService, logger, webBookmarkService);
                 form.Show();
             }
             catch (Exception ex)
@@ -657,62 +591,13 @@ namespace LearningAssistant.Forms
             _windowManager.OpenAIWebViewWindow();
         }
 
-        private void ButtonSubjectLearning_Click(object? sender, EventArgs e)
-        {
-            MessageBox.Show("学科学习功能正在开发中，敬请期待！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
 
-        private void ButtonBaiduNetdisk_Click(object? sender, EventArgs e)
-        {
-            try
-            {
-                if (!_cloudStorageService.IsConfigured)
-                {
-                    MessageBox.Show("百度网盘未配置，请先在系统设置中配置 Client ID 和 Client Secret。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
-
-                if (!_cloudStorageService.IsAuthenticated)
-                {
-                    using var authForm = new BaiduNetdiskAuthForm(_cloudStorageService, OnBaiduNetdiskAuthCompleted);
-                    authForm.ShowDialog();
-                }
-                else
-                {
-                    ShowBaiduNetdiskFiles();
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"百度网盘操作失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
 
         private void OnBaiduNetdiskAuthCompleted(bool success)
         {
             if (success)
             {
                 ShowBaiduNetdiskFiles();
-            }
-        }
-
-        private void ButtonDictation_Click(object? sender, EventArgs e)
-        {
-            try
-            {
-                var ttsService = Program.GetService<ITTSService>();
-                if (ttsService == null)
-                {
-                    MessageBox.Show("TTS服务未初始化", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-
-                using var dictationForm = new DictationForm(ttsService);
-                dictationForm.ShowDialog();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"打开听写窗口失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 

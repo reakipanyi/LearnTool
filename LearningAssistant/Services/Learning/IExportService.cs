@@ -19,5 +19,12 @@ namespace LearningAssistant.Services.Learning
         /// <param name="userId">用户ID</param>
         /// <returns>错题内容列表</returns>
         List<string> GetErrorBookItems(string userId);
+
+        /// <summary>
+        /// 通过对话框导出错题本（带UI交互）
+        /// </summary>
+        /// <param name="userId">用户ID</param>
+        /// <returns>导出结果消息</returns>
+        string ExportErrorBookWithDialog(string userId);
     }
 }

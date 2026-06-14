@@ -1,6 +1,5 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
-using LearningAssistant.Models.Config;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel;
@@ -87,60 +86,6 @@ namespace LearningAssistant.Forms
 
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public string Provider
-        {
-            get
-            {
-                var selected = comboBoxProvider.SelectedItem as KeyValuePair<string, AiProviderInfo>?;
-                return selected?.Key ?? string.Empty;
-            }
-            set
-            {
-                _isProgrammaticChange = true;
-                try
-                {
-                    for (int i = 0; i < comboBoxProvider.Items.Count; i++)
-                    {
-                        if (comboBoxProvider.Items[i] is KeyValuePair<string, AiProviderInfo> item && item.Key == value)
-                        {
-                            comboBoxProvider.SelectedIndex = i;
-                            break;
-                        }
-                    }
-                }
-                finally
-                {
-                    _isProgrammaticChange = false;
-                }
-            }
-        }
-
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public string ApiKey
-        {
-            get => textBoxApiKey.Text;
-            set => textBoxApiKey.Text = value;
-        }
-
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public string ApiEndpoint
-        {
-            get => textBoxApiEndpoint.Text;
-            set => textBoxApiEndpoint.Text = value;
-        }
-
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public string Model
-        {
-            get => comboBoxModel.Text;
-            set => comboBoxModel.Text = value;
-        }
-
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool TTSEnabled
         {
             get => checkBoxTtsEnabled.Checked;
@@ -221,22 +166,6 @@ namespace LearningAssistant.Forms
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
 
-        public string BaiduNetdiskClientId
-        {
-            get => textBoxBaiduNetdiskClientId.Text;
-            set => textBoxBaiduNetdiskClientId.Text = value;
-        }
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-
-        public string BaiduNetdiskClientSecret
-        {
-            get => textBoxBaiduNetdiskClientSecret.Text;
-            set => textBoxBaiduNetdiskClientSecret.Text = value;
-        }
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-
         public bool IsVoiceEnabled
         {
             get => checkBoxIsVoiceEnabled.Checked;
@@ -261,7 +190,6 @@ namespace LearningAssistant.Forms
 
         public event EventHandler? SaveClicked;
         public event EventHandler? CancelClicked;
-        public event EventHandler? OpenWebViewClicked;
 
         public void ShowMessage(string msg)
         {
@@ -278,15 +206,6 @@ namespace LearningAssistant.Forms
         #region WinForms Designer Generated Code
 
         private System.ComponentModel.IContainer components = null;
-        private GroupBox groupBoxAi;
-        private Label labelProvider;
-        private ComboBox comboBoxProvider;
-        private Label labelApiKey;
-        private TextBox textBoxApiKey;
-        private Label labelApiEndpoint;
-        private TextBox textBoxApiEndpoint;
-        private Label labelModel;
-        private ComboBox comboBoxModel;
         private GroupBox groupBoxTts;
         private CheckBox checkBoxTtsEnabled;
         private Label labelTtsApiKey;
@@ -309,11 +228,6 @@ namespace LearningAssistant.Forms
         private TextBox textBoxBaiduAppId;
         private Label labelBaiduSecret;
         private TextBox textBoxBaiduSecret;
-        private GroupBox groupBoxCloudStorage;
-        private Label labelBaiduNetdiskClientId;
-        private TextBox textBoxBaiduNetdiskClientId;
-        private Label labelBaiduNetdiskClientSecret;
-        private TextBox textBoxBaiduNetdiskClientSecret;
         private GroupBox groupBoxLearningSettings;
         private CheckBox checkBoxIsVoiceEnabled;
         private Label labelPronunciationScope;
@@ -324,16 +238,6 @@ namespace LearningAssistant.Forms
 
         private void InitializeComponent()
         {
-            ComponentResourceManager resources = new ComponentResourceManager(typeof(SettingForm));
-            groupBoxAi = new GroupBox();
-            labelModel = new Label();
-            comboBoxModel = new ComboBox();
-            labelApiEndpoint = new Label();
-            textBoxApiEndpoint = new TextBox();
-            labelApiKey = new Label();
-            textBoxApiKey = new TextBox();
-            labelProvider = new Label();
-            comboBoxProvider = new ComboBox();
             groupBoxTts = new GroupBox();
             labelVolumeValue = new Label();
             labelVolume = new Label();
@@ -357,11 +261,6 @@ namespace LearningAssistant.Forms
             labelBaiduSecret = new Label();
             textBoxBaiduAppId = new TextBox();
             labelBaiduAppId = new Label();
-            groupBoxCloudStorage = new GroupBox();
-            textBoxBaiduNetdiskClientSecret = new TextBox();
-            labelBaiduNetdiskClientSecret = new Label();
-            textBoxBaiduNetdiskClientId = new TextBox();
-            labelBaiduNetdiskClientId = new Label();
             buttonSave = new Button();
             buttonCancel = new Button();
             headerPanel = new Panel();
@@ -371,108 +270,16 @@ namespace LearningAssistant.Forms
             labelPronunciationScope = new Label();
             numericUpDownPronunciationScope = new NumericUpDown();
             checkBoxIsAIExplanationEnabled = new CheckBox();
-            groupBoxAi.SuspendLayout();
             groupBoxTts.SuspendLayout();
             ((ISupportInitialize)trackBarVolume).BeginInit();
             ((ISupportInitialize)trackBarSpeed).BeginInit();
             groupBoxInterface.SuspendLayout();
             ((ISupportInitialize)numericUpDownFontSize).BeginInit();
             groupBoxTranslation.SuspendLayout();
-            groupBoxCloudStorage.SuspendLayout();
             headerPanel.SuspendLayout();
             groupBoxLearningSettings.SuspendLayout();
             ((ISupportInitialize)numericUpDownPronunciationScope).BeginInit();
             SuspendLayout();
-            // 
-            // groupBoxAi
-            // 
-            groupBoxAi.BackColor = Color.FromArgb(255, 250, 240);
-            groupBoxAi.Controls.Add(labelModel);
-            groupBoxAi.Controls.Add(comboBoxModel);
-            groupBoxAi.Controls.Add(labelApiEndpoint);
-            groupBoxAi.Controls.Add(textBoxApiEndpoint);
-            groupBoxAi.Controls.Add(labelApiKey);
-            groupBoxAi.Controls.Add(textBoxApiKey);
-            groupBoxAi.Controls.Add(labelProvider);
-            groupBoxAi.Controls.Add(comboBoxProvider);
-            groupBoxAi.FlatStyle = FlatStyle.Flat;
-            groupBoxAi.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            groupBoxAi.ForeColor = Color.FromArgb(70, 90, 110);
-            groupBoxAi.Location = new Point(15, 68);
-            groupBoxAi.Name = "groupBoxAi";
-            groupBoxAi.Size = new Size(550, 210);
-            groupBoxAi.TabIndex = 0;
-            groupBoxAi.TabStop = false;
-            groupBoxAi.Text = "🤖 AI 接口配置";
-            // 
-            // labelModel
-            // 
-            labelModel.ForeColor = Color.FromArgb(33, 33, 33);
-            labelModel.Location = new Point(15, 140);
-            labelModel.Name = "labelModel";
-            labelModel.Size = new Size(100, 23);
-            labelModel.TabIndex = 7;
-            labelModel.Text = "模型:";
-            // 
-            // comboBoxModel
-            // 
-            comboBoxModel.FormattingEnabled = true;
-            comboBoxModel.Location = new Point(120, 137);
-            comboBoxModel.Name = "comboBoxModel";
-            comboBoxModel.Size = new Size(400, 27);
-            comboBoxModel.TabIndex = 6;
-            // 
-            // labelApiEndpoint
-            // 
-            labelApiEndpoint.ForeColor = Color.FromArgb(33, 33, 33);
-            labelApiEndpoint.Location = new Point(15, 100);
-            labelApiEndpoint.Name = "labelApiEndpoint";
-            labelApiEndpoint.Size = new Size(100, 23);
-            labelApiEndpoint.TabIndex = 5;
-            labelApiEndpoint.Text = "API端点:";
-            // 
-            // textBoxApiEndpoint
-            // 
-            textBoxApiEndpoint.Location = new Point(120, 97);
-            textBoxApiEndpoint.Name = "textBoxApiEndpoint";
-            textBoxApiEndpoint.Size = new Size(400, 25);
-            textBoxApiEndpoint.TabIndex = 4;
-            // 
-            // labelApiKey
-            // 
-            labelApiKey.ForeColor = Color.FromArgb(33, 33, 33);
-            labelApiKey.Location = new Point(15, 60);
-            labelApiKey.Name = "labelApiKey";
-            labelApiKey.Size = new Size(100, 23);
-            labelApiKey.TabIndex = 3;
-            labelApiKey.Text = "API Key:";
-            // 
-            // textBoxApiKey
-            // 
-            textBoxApiKey.Location = new Point(120, 57);
-            textBoxApiKey.Name = "textBoxApiKey";
-            textBoxApiKey.Size = new Size(400, 25);
-            textBoxApiKey.TabIndex = 2;
-            // 
-            // labelProvider
-            // 
-            labelProvider.ForeColor = Color.FromArgb(33, 33, 33);
-            labelProvider.Location = new Point(15, 20);
-            labelProvider.Name = "labelProvider";
-            labelProvider.Size = new Size(100, 23);
-            labelProvider.TabIndex = 1;
-            labelProvider.Text = "服务商:";
-            // 
-            // comboBoxProvider
-            // 
-            comboBoxProvider.DisplayMember = "Value.Name";
-            comboBoxProvider.FormattingEnabled = true;
-            comboBoxProvider.Location = new Point(120, 17);
-            comboBoxProvider.Name = "comboBoxProvider";
-            comboBoxProvider.Size = new Size(200, 27);
-            comboBoxProvider.TabIndex = 0;
-            comboBoxProvider.ValueMember = "Key";
-            comboBoxProvider.SelectedIndexChanged += ComboBoxProvider_SelectedIndexChanged;
             // 
             // groupBoxTts
             // 
@@ -491,7 +298,7 @@ namespace LearningAssistant.Forms
             groupBoxTts.FlatStyle = FlatStyle.Flat;
             groupBoxTts.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             groupBoxTts.ForeColor = Color.FromArgb(33, 33, 33);
-            groupBoxTts.Location = new Point(15, 255);
+            groupBoxTts.Location = new Point(15, 68);
             groupBoxTts.Name = "groupBoxTts";
             groupBoxTts.Size = new Size(550, 181);
             groupBoxTts.TabIndex = 1;
@@ -681,7 +488,7 @@ namespace LearningAssistant.Forms
             groupBoxTranslation.FlatStyle = FlatStyle.Flat;
             groupBoxTranslation.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             groupBoxTranslation.ForeColor = Color.FromArgb(33, 33, 33);
-            groupBoxTranslation.Location = new Point(15, 550);
+            groupBoxTranslation.Location = new Point(15, 255);
             groupBoxTranslation.Name = "groupBoxTranslation";
             groupBoxTranslation.Size = new Size(550, 91);
             groupBoxTranslation.TabIndex = 3;
@@ -720,57 +527,6 @@ namespace LearningAssistant.Forms
             labelBaiduAppId.TabIndex = 0;
             labelBaiduAppId.Text = "百度AppId:";
             // 
-            // groupBoxCloudStorage
-            // 
-            groupBoxCloudStorage.BackColor = Color.FromArgb(255, 250, 240);
-            groupBoxCloudStorage.Controls.Add(textBoxBaiduNetdiskClientSecret);
-            groupBoxCloudStorage.Controls.Add(labelBaiduNetdiskClientSecret);
-            groupBoxCloudStorage.Controls.Add(textBoxBaiduNetdiskClientId);
-            groupBoxCloudStorage.Controls.Add(labelBaiduNetdiskClientId);
-            groupBoxCloudStorage.FlatStyle = FlatStyle.Flat;
-            groupBoxCloudStorage.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            groupBoxCloudStorage.ForeColor = Color.FromArgb(33, 33, 33);
-            groupBoxCloudStorage.Location = new Point(15, 756);
-            groupBoxCloudStorage.Name = "groupBoxCloudStorage";
-            groupBoxCloudStorage.Size = new Size(550, 65);
-            groupBoxCloudStorage.TabIndex = 4;
-            groupBoxCloudStorage.TabStop = false;
-            groupBoxCloudStorage.Text = "☁️ 百度网盘配置";
-            // 
-            // textBoxBaiduNetdiskClientSecret
-            // 
-            textBoxBaiduNetdiskClientSecret.Location = new Point(350, 23);
-            textBoxBaiduNetdiskClientSecret.Name = "textBoxBaiduNetdiskClientSecret";
-            textBoxBaiduNetdiskClientSecret.PasswordChar = '*';
-            textBoxBaiduNetdiskClientSecret.Size = new Size(170, 25);
-            textBoxBaiduNetdiskClientSecret.TabIndex = 3;
-            // 
-            // labelBaiduNetdiskClientSecret
-            // 
-            labelBaiduNetdiskClientSecret.ForeColor = Color.FromArgb(33, 33, 33);
-            labelBaiduNetdiskClientSecret.Location = new Point(220, 26);
-            labelBaiduNetdiskClientSecret.Name = "labelBaiduNetdiskClientSecret";
-            labelBaiduNetdiskClientSecret.Size = new Size(120, 23);
-            labelBaiduNetdiskClientSecret.TabIndex = 2;
-            labelBaiduNetdiskClientSecret.Text = "Client Secret:";
-            // 
-            // textBoxBaiduNetdiskClientId
-            // 
-            textBoxBaiduNetdiskClientId.Location = new Point(120, 23);
-            textBoxBaiduNetdiskClientId.Name = "textBoxBaiduNetdiskClientId";
-            textBoxBaiduNetdiskClientId.PasswordChar = '*';
-            textBoxBaiduNetdiskClientId.Size = new Size(90, 25);
-            textBoxBaiduNetdiskClientId.TabIndex = 1;
-            // 
-            // labelBaiduNetdiskClientId
-            // 
-            labelBaiduNetdiskClientId.ForeColor = Color.FromArgb(33, 33, 33);
-            labelBaiduNetdiskClientId.Location = new Point(15, 26);
-            labelBaiduNetdiskClientId.Name = "labelBaiduNetdiskClientId";
-            labelBaiduNetdiskClientId.Size = new Size(100, 23);
-            labelBaiduNetdiskClientId.TabIndex = 0;
-            labelBaiduNetdiskClientId.Text = "Client ID:";
-            // 
             // buttonSave
             // 
             buttonSave.BackColor = Color.FromArgb(76, 175, 80);
@@ -778,7 +534,7 @@ namespace LearningAssistant.Forms
             buttonSave.FlatStyle = FlatStyle.Flat;
             buttonSave.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             buttonSave.ForeColor = Color.White;
-            buttonSave.Location = new Point(300, 838);
+            buttonSave.Location = new Point(315, 554);
             buttonSave.Name = "buttonSave";
             buttonSave.Size = new Size(120, 45);
             buttonSave.TabIndex = 6;
@@ -795,7 +551,7 @@ namespace LearningAssistant.Forms
             buttonCancel.FlatStyle = FlatStyle.Flat;
             buttonCancel.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             buttonCancel.ForeColor = Color.White;
-            buttonCancel.Location = new Point(430, 838);
+            buttonCancel.Location = new Point(445, 554);
             buttonCancel.Name = "buttonCancel";
             buttonCancel.Size = new Size(120, 45);
             buttonCancel.TabIndex = 7;
@@ -836,7 +592,7 @@ namespace LearningAssistant.Forms
             groupBoxLearningSettings.FlatStyle = FlatStyle.Flat;
             groupBoxLearningSettings.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             groupBoxLearningSettings.ForeColor = Color.FromArgb(33, 33, 33);
-            groupBoxLearningSettings.Location = new Point(15, 652);
+            groupBoxLearningSettings.Location = new Point(15, 352);
             groupBoxLearningSettings.Name = "groupBoxLearningSettings";
             groupBoxLearningSettings.Size = new Size(550, 91);
             groupBoxLearningSettings.TabIndex = 5;
@@ -884,20 +640,16 @@ namespace LearningAssistant.Forms
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.FromArgb(240, 240, 240);
-            ClientSize = new Size(580, 896);
+            ClientSize = new Size(580, 609);
             Controls.Add(buttonCancel);
             Controls.Add(buttonSave);
-            Controls.Add(groupBoxCloudStorage);
             Controls.Add(groupBoxLearningSettings);
             Controls.Add(groupBoxTranslation);
             Controls.Add(groupBoxInterface);
             Controls.Add(groupBoxTts);
-            Controls.Add(groupBoxAi);
             Controls.Add(headerPanel);
             Name = "SettingForm";
             Text = "⚙️ 系统设置";
-            groupBoxAi.ResumeLayout(false);
-            groupBoxAi.PerformLayout();
             groupBoxTts.ResumeLayout(false);
             groupBoxTts.PerformLayout();
             ((ISupportInitialize)trackBarVolume).EndInit();
@@ -906,8 +658,6 @@ namespace LearningAssistant.Forms
             ((ISupportInitialize)numericUpDownFontSize).EndInit();
             groupBoxTranslation.ResumeLayout(false);
             groupBoxTranslation.PerformLayout();
-            groupBoxCloudStorage.ResumeLayout(false);
-            groupBoxCloudStorage.PerformLayout();
             headerPanel.ResumeLayout(false);
             groupBoxLearningSettings.ResumeLayout(false);
             ((ISupportInitialize)numericUpDownPronunciationScope).EndInit();
@@ -923,46 +673,6 @@ namespace LearningAssistant.Forms
             labelSpeedValue.Text = $"{trackBarSpeed.Value}%";
         }
 
-        private void ComboBoxProvider_SelectedIndexChanged(object? sender, EventArgs e)
-        {
-            if (_isProgrammaticChange)
-                return;
-
-            var selectedItem = comboBoxProvider.SelectedItem as KeyValuePair<string, AiProviderInfo>?;
-            if (selectedItem.HasValue && AiConfig.Providers.TryGetValue(selectedItem.Value.Key, out var providerInfo))
-            {
-                var hasCustomConfig = !string.IsNullOrWhiteSpace(textBoxApiEndpoint.Text) ||
-                                     !string.IsNullOrWhiteSpace(comboBoxModel.Text);
-
-                if (hasCustomConfig)
-                {
-                    var result = MessageBox.Show(
-                        "切换服务商将覆盖您自定义的 API 端点和模型配置，是否继续？",
-                        "确认切换",
-                        MessageBoxButtons.YesNo,
-                        MessageBoxIcon.Question);
-
-                    if (result != DialogResult.Yes)
-                    {
-                        return;
-                    }
-                }
-
-                textBoxApiEndpoint.Text = providerInfo.BaseUrl;
-
-                // 动态加载该厂商的模型列表
-                comboBoxModel.Items.Clear();
-                if (providerInfo.Models != null && providerInfo.Models.Count > 0)
-                {
-                    foreach (var model in providerInfo.Models)
-                    {
-                        comboBoxModel.Items.Add(model);
-                    }
-                }
-                comboBoxModel.Text = providerInfo.DefaultModel;
-            }
-        }
-
         private void TrackBarVolume_Scroll(object? sender, EventArgs e)
         {
             labelVolumeValue.Text = $"{trackBarVolume.Value}%";
@@ -976,11 +686,6 @@ namespace LearningAssistant.Forms
         private void ButtonCancel_Click(object? sender, EventArgs e)
         {
             CancelClicked?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void ButtonOpenWebView_Click(object? sender, EventArgs e)
-        {
-            OpenWebViewClicked?.Invoke(this, EventArgs.Empty);
         }
 
         private void CheckBoxNightMode_CheckedChanged(object? sender, EventArgs e)

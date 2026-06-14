@@ -11,11 +11,13 @@
 		<NoWarn>NU1510;NU1603</NoWarn>
 	</PropertyGroup>
 	<ItemGroup>
+	  <Compile Remove="Forms\BaiduNetdiskAuthForm.cs" />
 	  <Compile Remove="Forms\FormPreviewer.cs" />
 	  <Compile Remove="Services\AI\SiliconFlowAIService.cs" />
 	  <Compile Remove="Services\Cloud\BaiduPanFileManager.cs" />
 	</ItemGroup>
 	<ItemGroup>
+	  <EmbeddedResource Remove="Forms\BaiduNetdiskAuthForm.resx" />
 	  <EmbeddedResource Remove="Forms\BrowserForm.resx" />
 	</ItemGroup>
 	<ItemGroup>

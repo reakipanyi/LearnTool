@@ -89,7 +89,36 @@ namespace LearningAssistant.Services.AI
             }
         }
 
+        public async Task<string> GenerateExerciseAsync(string text, string language, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                return await _currentService.GenerateExerciseAsync(text, language, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "AI服务调用失败，尝试切换到备用服务");
+                return await TryFallbackAsync(service =>
+                    service.GenerateExerciseAsync(text, language, cancellationToken), cancellationToken);
+            }
+        }
+
+        public async Task<string> SummarizeAsync(string text, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                return await _currentService.SummarizeAsync(text, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "AI服务调用失败，尝试切换到备用服务");
+                return await TryFallbackAsync(service =>
+                    service.SummarizeAsync(text, cancellationToken), cancellationToken);
+            }
+        }
+
         public string ModelName => _currentService.ModelName;
+        public string ProviderName => _currentService.ProviderName;
 
         private async Task<string> TryFallbackAsync(Func<IAIService, Task<string>> callServiceMethod, CancellationToken cancellationToken = default)
         {

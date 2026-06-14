@@ -15,6 +15,7 @@ namespace LearningAssistant.Services.AI
         }
 
         public override string ModelName => "Doubao";
+        public override string ProviderName => "doubao";
 
         protected override string BuildExplanationPrompt(string text, string language, string subType)
         {

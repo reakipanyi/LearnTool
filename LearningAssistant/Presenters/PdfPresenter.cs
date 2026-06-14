@@ -1,5 +1,6 @@
 using LearningAssistant.Common;
 using LearningAssistant.Models.Pdf;
+using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
@@ -14,7 +15,7 @@ namespace LearningAssistant.Presenters
         private readonly IPdfFileManager _pdfFileManager;
         private readonly IPdfOcrService _pdfOcrService;
         private readonly IPdfTranslationService _pdfTranslationService;
-        private readonly IPdfAiService _pdfAiService;
+        private readonly IAIService _aiService;
         private readonly IPdfTtsService _pdfTtsService;
         private readonly IPdfStudyIntegration _pdfStudyIntegration;
         private readonly IPdfExportService _pdfExportService;
@@ -33,7 +34,7 @@ namespace LearningAssistant.Presenters
             IPdfFileManager pdfFileManager,
             IPdfOcrService pdfOcrService,
             IPdfTranslationService pdfTranslationService,
-            IPdfAiService pdfAiService,
+            IAIService aiService,
             IPdfTtsService pdfTtsService,
             IPdfStudyIntegration pdfStudyIntegration,
             IPdfExportService pdfExportService,
@@ -46,7 +47,7 @@ namespace LearningAssistant.Presenters
             _pdfFileManager = pdfFileManager ?? throw new ArgumentNullException(nameof(pdfFileManager));
             _pdfOcrService = pdfOcrService ?? throw new ArgumentNullException(nameof(pdfOcrService));
             _pdfTranslationService = pdfTranslationService ?? throw new ArgumentNullException(nameof(pdfTranslationService));
-            _pdfAiService = pdfAiService ?? throw new ArgumentNullException(nameof(pdfAiService));
+            _aiService = aiService ?? throw new ArgumentNullException(nameof(aiService));
             _pdfTtsService = pdfTtsService ?? throw new ArgumentNullException(nameof(pdfTtsService));
             _pdfStudyIntegration = pdfStudyIntegration ?? throw new ArgumentNullException(nameof(pdfStudyIntegration));
             _pdfExportService = pdfExportService ?? throw new ArgumentNullException(nameof(pdfExportService));
@@ -108,6 +109,7 @@ namespace LearningAssistant.Presenters
             _view.TranslateClicked += View_TranslateClicked;
             _view.ToggleNightMode += View_ToggleNightMode;
             _view.LanguageChanged += View_LanguageChanged;
+            _view.AiQuestionAsked += View_AiQuestionAsked;
         }
 
         private void UnsubscribeFromEvents()
@@ -126,6 +128,7 @@ namespace LearningAssistant.Presenters
             _view.TranslateClicked -= View_TranslateClicked;
             _view.ToggleNightMode -= View_ToggleNightMode;
             _view.LanguageChanged -= View_LanguageChanged;
+            _view.AiQuestionAsked -= View_AiQuestionAsked;
         }
 
         public int PageCount => _pdfRenderer.PageCount;
@@ -320,12 +323,12 @@ namespace LearningAssistant.Presenters
 
         public async Task<string> GetAiAnswerAsync(string question, string context = "", CancellationToken cancellationToken = default)
         {
-            return await _pdfAiService.GetAnswerAsync(question, context, cancellationToken);
+            return await _aiService.AskQuestionAsync(question, context, cancellationToken);
         }
 
         public async Task<string> GenerateAiContentAsync(string prompt, CancellationToken cancellationToken = default)
         {
-            return await _pdfAiService.GetAnswerAsync(prompt, "", cancellationToken);
+            return await _aiService.AskQuestionAsync(prompt, "", cancellationToken);
         }
 
         public void TogglePenMode(bool enabled)
@@ -692,6 +695,12 @@ namespace LearningAssistant.Presenters
                     _view?.ShowWarning($"无法切换到语言: {language}");
                 }
             }
+        }
+
+        private void View_AiQuestionAsked(object? sender, EventArgs e)
+        {
+            // 触发AI问答面板显示
+            _view?.RaiseAiQuestionAsked();
         }
 
         public void Dispose()

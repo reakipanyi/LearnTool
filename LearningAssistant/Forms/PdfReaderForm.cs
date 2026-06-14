@@ -19,6 +19,7 @@ namespace LearningAssistant.Forms
         private readonly BookmarkService _bookmarkService;
         private readonly HighlightService _highlightService;
         private readonly IAIPanelPopupService? _aiPanelPopupService;
+        private readonly Services.Learning.IPendingContentService? _pendingContentService;
         private int _zoomLevel = 100;
         private bool _isSelecting = false;
         private bool _isDrawing = false;
@@ -96,13 +97,14 @@ namespace LearningAssistant.Forms
         private GroupBox groupBox2;
         private string _currentLanguage = "eng";
 
-        public PdfReaderForm(ILogger<PdfReaderForm> logger, IAIPanelPopupService? aiPanelPopupService = null)
+        public PdfReaderForm(ILogger<PdfReaderForm> logger, IAIPanelPopupService? aiPanelPopupService = null, Services.Learning.IPendingContentService? pendingContentService = null)
         {
             InitializeComponent();
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _bookmarkService = new BookmarkService();
             _highlightService = new HighlightService();
             _aiPanelPopupService = aiPanelPopupService;
+            _pendingContentService = pendingContentService;
             Load += PdfReaderForm_Load;
             Resize += PdfReaderForm_Resize;
             KeyDown += PdfReaderForm_KeyDown;
@@ -344,6 +346,35 @@ namespace LearningAssistant.Forms
             trackBarZoom.Value = 100;
             labelZoom.Text = "100%";
             ResetZoom();
+        }
+
+        private void TrackBarZoom_Scroll(object? sender, EventArgs e)
+        {
+            if (_isLocked)
+                return;
+
+            _zoomLevel = trackBarZoom.Value;
+            labelZoom.Text = $"{_zoomLevel}%";
+            
+            // 异步渲染缩放后的页面
+            Task.Run(async () =>
+            {
+                try
+                {
+                    var page = int.TryParse(textBoxPage.Text, out var p) ? p - 1 : 0;
+                    int targetW = (int)(pictureBoxPdf.ClientSize.Width * _zoomLevel / 100.0);
+                    int targetH = (int)(pictureBoxPdf.ClientSize.Height * _zoomLevel / 100.0);
+                    var bmp = await _presenter!.RenderPageAsync(page, Math.Max(1, targetW), Math.Max(1, targetH));
+                    if (bmp != null)
+                    {
+                        BeginInvoke(() => DisplayImage(bmp));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error rendering page during zoom");
+                }
+            });
         }
 
         private void ButtonRemoveHighlight_Click(object? sender, EventArgs e)
@@ -805,6 +836,12 @@ namespace LearningAssistant.Forms
                     buttonLanguage.BackColor = Color.FromArgb(45, 45, 45);
                     buttonLanguage.ForeColor = Color.White;
                 }
+                // 更新AI问答按钮背景色
+                if (buttonAskAi != null)
+                {
+                    buttonAskAi.BackColor = Color.FromArgb(0, 120, 215);
+                    buttonAskAi.ForeColor = Color.White;
+                }
                 // 右侧tab页夜间模式 - 翻译结果页面
                 ApplyNightModeToTabPageTranslate(true);
                 // 右侧tab页夜间模式 - 书签和高亮页面
@@ -832,6 +869,12 @@ namespace LearningAssistant.Forms
                 {
                     buttonLanguage.BackColor = Color.White;
                     buttonLanguage.ForeColor = Color.Black;
+                }
+                // 更新AI问答按钮背景色
+                if (buttonAskAi != null)
+                {
+                    buttonAskAi.BackColor = Color.FromArgb(0, 120, 215);
+                    buttonAskAi.ForeColor = Color.White;
                 }
                 // 右侧tab页日间模式 - 翻译结果页面
                 ApplyNightModeToTabPageTranslate(false);
@@ -1521,6 +1564,7 @@ namespace LearningAssistant.Forms
         private Button buttonNightMode;
         private Button buttonTranslationToggle;
         private Button buttonLanguage;
+        private Button buttonAskAi;
         private Button buttonOpenFolder;
         private Label labelZoom;
         private TrackBar trackBarZoom;
@@ -1558,6 +1602,7 @@ namespace LearningAssistant.Forms
             labelZoom = new Label();
             _loadingIndicator = new LoadingIndicator();
             buttonLanguage = new Button();
+            buttonAskAi = new Button();
             buttonNightMode = new Button();
             buttonTranslationToggle = new Button();
             _buttonLockView = new Button();
@@ -1580,13 +1625,13 @@ namespace LearningAssistant.Forms
             tabPageTranslate = new TabPage();
             groupBoxProgress = new GroupBox();
             textBoxTranslation = new TextBox();
+            buttonSpeakTranslation = new Button();
+            buttonAddToLearningContent = new Button();
             textBoxOriginal = new TextBox();
             buttonSpeakOriginal = new Button();
             labelTranslation = new Label();
             labelOriginal = new Label();
-            buttonSpeakTranslation = new Button();
             buttonTranslate = new Button();
-            buttonAddToLearningContent = new Button();
             tabPageFiles = new TabPage();
             treeViewFiles = new TreeView();
             _tabPageBookmarksAndHighlights = new TabPage();
@@ -1673,6 +1718,7 @@ namespace LearningAssistant.Forms
             panelNavigation.Controls.Add(labelZoom);
             panelNavigation.Controls.Add(_loadingIndicator);
             panelNavigation.Controls.Add(buttonLanguage);
+            panelNavigation.Controls.Add(buttonAskAi);
             panelNavigation.Controls.Add(buttonNightMode);
             panelNavigation.Controls.Add(buttonTranslationToggle);
             panelNavigation.Controls.Add(_buttonLockView);
@@ -1698,6 +1744,7 @@ namespace LearningAssistant.Forms
             trackBarZoom.Size = new Size(150, 45);
             trackBarZoom.TabIndex = 8;
             trackBarZoom.Value = 100;
+            trackBarZoom.Scroll += TrackBarZoom_Scroll;
             // 
             // labelZoom
             // 
@@ -1709,12 +1756,13 @@ namespace LearningAssistant.Forms
             // 
             // _loadingIndicator
             // 
-            _loadingIndicator.BackColor = SystemColors.MenuHighlight;
-            _loadingIndicator.Location = new Point(571, 11);
+            _loadingIndicator.BackColor = Color.FromArgb(245, 245, 245);
+            _loadingIndicator.Location = new Point(616, 11);
             _loadingIndicator.Name = "_loadingIndicator";
             _loadingIndicator.Size = new Size(38, 35);
             _loadingIndicator.TabIndex = 2;
             _loadingIndicator.Visible = false;
+            _loadingIndicator.Click += _loadingIndicator_Click;
             // 
             // buttonLanguage
             // 
@@ -1728,6 +1776,20 @@ namespace LearningAssistant.Forms
             buttonLanguage.Text = "eng";
             buttonLanguage.UseVisualStyleBackColor = false;
             buttonLanguage.Click += ButtonLanguage_Click;
+            // 
+            // buttonAskAi
+            // 
+            buttonAskAi.BackColor = Color.LightGray;
+            buttonAskAi.FlatStyle = FlatStyle.Flat;
+            buttonAskAi.Font = new Font("Microsoft YaHei UI", 9F);
+            buttonAskAi.ForeColor = Color.Black;
+            buttonAskAi.Location = new Point(572, 11);
+            buttonAskAi.Name = "buttonAskAi";
+            buttonAskAi.Size = new Size(38, 35);
+            buttonAskAi.TabIndex = 10;
+            buttonAskAi.Text = "🤖 ";
+            buttonAskAi.UseVisualStyleBackColor = false;
+            buttonAskAi.Click += ButtonAskAi_Click;
             // 
             // buttonNightMode
             // 
@@ -1981,6 +2043,24 @@ namespace LearningAssistant.Forms
             textBoxTranslation.Size = new Size(311, 155);
             textBoxTranslation.TabIndex = 5;
             // 
+            // buttonSpeakTranslation
+            // 
+            buttonSpeakTranslation.Location = new Point(235, 427);
+            buttonSpeakTranslation.Name = "buttonSpeakTranslation";
+            buttonSpeakTranslation.Size = new Size(85, 34);
+            buttonSpeakTranslation.TabIndex = 4;
+            buttonSpeakTranslation.Text = "🔊朗读译文";
+            buttonSpeakTranslation.Click += ButtonSpeakTranslation_Click;
+            // 
+            // buttonAddToLearningContent
+            // 
+            buttonAddToLearningContent.Location = new Point(208, 203);
+            buttonAddToLearningContent.Name = "buttonAddToLearningContent";
+            buttonAddToLearningContent.Size = new Size(100, 34);
+            buttonAddToLearningContent.TabIndex = 6;
+            buttonAddToLearningContent.Text = "📝添加到学习";
+            buttonAddToLearningContent.Click += ButtonAddToLearningContent_Click;
+            // 
             // textBoxOriginal
             // 
             textBoxOriginal.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
@@ -2016,15 +2096,6 @@ namespace LearningAssistant.Forms
             labelOriginal.TabIndex = 0;
             labelOriginal.Text = "原文:";
             // 
-            // buttonSpeakTranslation
-            // 
-            buttonSpeakTranslation.Location = new Point(235, 427);
-            buttonSpeakTranslation.Name = "buttonSpeakTranslation";
-            buttonSpeakTranslation.Size = new Size(85, 34);
-            buttonSpeakTranslation.TabIndex = 4;
-            buttonSpeakTranslation.Text = "🔊朗读译文";
-            buttonSpeakTranslation.Click += ButtonSpeakTranslation_Click;
-            // 
             // buttonTranslate
             // 
             buttonTranslate.Location = new Point(16, 203);
@@ -2033,15 +2104,6 @@ namespace LearningAssistant.Forms
             buttonTranslate.TabIndex = 3;
             buttonTranslate.Text = "📚翻译";
             buttonTranslate.Click += ButtonTranslate_Click;
-            // 
-            // buttonAddToLearningContent
-            // 
-            buttonAddToLearningContent.Location = new Point(208, 203);
-            buttonAddToLearningContent.Name = "buttonAddToLearningContent";
-            buttonAddToLearningContent.Size = new Size(100, 34);
-            buttonAddToLearningContent.TabIndex = 6;
-            buttonAddToLearningContent.Text = "📝添加到学习";
-            buttonAddToLearningContent.Click += ButtonAddToLearningContent_Click;
             // 
             // tabPageFiles
             // 
@@ -2594,6 +2656,10 @@ namespace LearningAssistant.Forms
         {
             try
             {
+                // 如果锁定状态，不允许拖动
+                if (_isLocked)
+                    return;
+
                 // 长按检测：如果在长按等待期间移动超过一定距离，取消长按
                 if (_isLongPressPending && !_longPressDragStarted)
                 {
@@ -2764,6 +2830,9 @@ namespace LearningAssistant.Forms
 
         private void StartDragging(Point startLocation)
         {
+            if (_isLocked)
+                return;
+
             _isDragging = true;
             _longPressDragStarted = true;
             _dragStart = startLocation;
@@ -3202,9 +3271,16 @@ namespace LearningAssistant.Forms
 
         private void ButtonOpenAI_Click(object? sender, EventArgs e)
         {
+            RaiseAiQuestionAsked();
+        }
+
+        public void RaiseAiQuestionAsked()
+        {
             if (_aiPanelPopupService != null)
             {
-                _aiPanelPopupService.ShowAIAbilityPanel(this, textBoxOriginal.Text);
+                // 获取原文作为上下文
+                var context = textBoxOriginal?.Text ?? string.Empty;
+                _aiPanelPopupService.ShowAIAbilityPanel(this, context, null, context);
             }
             else
             {
@@ -3444,10 +3520,13 @@ namespace LearningAssistant.Forms
                 // 合成最终的学习内容JSON
                 var learningContent = BuildLearningContentJson(originalText, translationText, language, contentType, aiGeneratedContent);
 
-                // 触发添加到编辑器事件
+                // 使用PendingContentService保存内容
+                _pendingContentService?.Add(learningContent, language, GetCategoryFromContentType(contentType, language));
+
+                // 触发添加到编辑器事件（供其他监听器使用）
                 RaiseAddToEditor(learningContent, language);
 
-                ShowMessage($"已添加到学习内容\n语言: {language}\n类型: {contentType}");
+                ShowMessage($"已添加到学习内容\n语言: {language}\n类型: {contentType}\n\n请到内容编辑页面查看");
             }
             catch (Exception ex)
             {
@@ -3457,6 +3536,31 @@ namespace LearningAssistant.Forms
             finally
             {
                 SetLoadingState(false);
+            }
+        }
+
+        private string GetCategoryFromContentType(string contentType, string language)
+        {
+            if (language == Constants.Language.Chinese)
+            {
+                return contentType switch
+                {
+                    "识字" => Constants.SubCategory.ChineseCharacter,
+                    "成语" => Constants.SubCategory.ChineseIdiom,
+                    "短语" => Constants.SubCategory.ChinesePhrase,
+                    "诗词" => Constants.SubCategory.ChinesePoem,
+                    _ => Constants.SubCategory.ChineseComprehensive
+                };
+            }
+            else
+            {
+                return contentType switch
+                {
+                    "英语单词" => Constants.SubCategory.EnglishWord,
+                    "英语短语" => Constants.SubCategory.EnglishPhrase,
+                    "英语句子" => Constants.SubCategory.EnglishSentence,
+                    _ => Constants.SubCategory.EnglishComprehensive
+                };
             }
         }
 
@@ -3562,6 +3666,11 @@ namespace LearningAssistant.Forms
                     });
                 }
             }
+        }
+
+        private void _loadingIndicator_Click(object sender, EventArgs e)
+        {
+
         }
     }
 }

@@ -1,3 +1,6 @@
+using LearningAssistant.Models.Learning;
+using static LearningAssistant.Forms.LearningForm;
+
 namespace LearningAssistant.Views
 {
     /// <summary>
@@ -35,6 +38,11 @@ namespace LearningAssistant.Views
         /// 当前显示文本（带格式）
         /// </summary>
         string CurrentDisplayText { set; }
+
+        /// <summary>
+        /// 当前学习项
+        /// </summary>
+        Models.Learning.LearningItem? CurrentItem { set; }
 
 
         /// <summary>
@@ -132,6 +140,11 @@ namespace LearningAssistant.Views
         /// 导出错题本点击事件
         /// </summary>
         event EventHandler? ExportErrorBookClicked;
+
+        /// <summary>
+        /// 从列表中选择项事件
+        /// </summary>
+        event EventHandler<ItemSelectedEventArgs>? ItemSelectedFromList;
 
         /// <summary>
         /// 显示消息

@@ -15,7 +15,6 @@ namespace LearningAssistant.Presenters
         private readonly ILogger<MainPresenter> _logger;
         private readonly IUserSessionService _sessionService;
         private readonly IContentLoaderService _contentLoaderService;
-        private readonly IProgressService _progressService;
         private readonly IExportService _exportService;
         private readonly ITTSService _ttsService;
         private readonly ICacheService _cacheService;
@@ -35,7 +34,6 @@ namespace LearningAssistant.Presenters
             ILogger<MainPresenter> logger,
             IUserSessionService sessionService,
             IContentLoaderService contentLoaderService,
-            IProgressService progressService,
             IExportService exportService,
             ITTSService ttsService,
             ICacheService cacheService,
@@ -45,7 +43,6 @@ namespace LearningAssistant.Presenters
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
             _contentLoaderService = contentLoaderService ?? throw new ArgumentNullException(nameof(contentLoaderService));
-            _progressService = progressService ?? throw new ArgumentNullException(nameof(progressService));
             _exportService = exportService ?? throw new ArgumentNullException(nameof(exportService));
             _ttsService = ttsService ?? throw new ArgumentNullException(nameof(ttsService));
             _cacheService = cacheService ?? throw new ArgumentNullException(nameof(cacheService));
