@@ -1,13 +1,9 @@
 using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
-using LearningAssistant.Presenters;
 using LearningAssistant.Services;
-using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System.ComponentModel;
-using System.Data;
 
 namespace LearningAssistant.Forms
 {
@@ -17,7 +13,6 @@ namespace LearningAssistant.Forms
         private readonly AppConfig _appConfig;
         private readonly IAIPanelPopupService _aiPanelPopupService;
         private readonly Services.Learning.IPendingContentService? _pendingContentService;
-        private ContentEditorPresenter? _presenter;
         private TableLayoutPanel mainPanel;
         private Panel topPanel;
         private Panel gridPanel;
@@ -45,8 +40,8 @@ namespace LearningAssistant.Forms
 
         public void SetPresenter(ContentEditorPresenter presenter)
         {
-            _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
-            _presenter.Initialize();
+            presenter ??= throw new ArgumentNullException(nameof(presenter));
+            presenter.Initialize();
             _logger.LogInformation("ContentEditorPresenter 已设置并初始化");
         }
 
@@ -305,25 +300,12 @@ namespace LearningAssistant.Forms
             UpdateGridFromJson();
         }
 
-        // TODO: 实现树形视图刷新逻辑
-        public void RefreshTreeView(TreeNodeCollection nodes)
-        {
-        }
-
-        // TODO: 实现加载项目编辑逻辑
-        public void LoadItemForEdit(dynamic item)
-        {
-        }
+        
 
         public void ClearEditForm()
         {
             textBoxJson.Text = "";
             dataGridView.DataSource = null;
-        }
-
-        // TODO: 实现项目列表更新逻辑
-        public void UpdateItemList()
-        {
         }
 
         private void DataGridView_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
@@ -336,12 +318,7 @@ namespace LearningAssistant.Forms
             GridRowsAdded?.Invoke(this, EventArgs.Empty);
         }
 
-        // TODO: 实现单元格双击逻辑
-        private void DataGridView_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
-        {
-        }
-
-        private void RadioChinese_CheckedChanged(object? sender, EventArgs e)
+        private void RadioChinese_CheckedChanged(object? sender, DataGridViewCellEventArgs e)
         {
             if (radioChinese.Checked)
                 LanguageChanged?.Invoke(this, EventArgs.Empty);
@@ -389,8 +366,6 @@ namespace LearningAssistant.Forms
         }
         private void ButtonGenerateAI_Click(object? sender, EventArgs e)
         {
-            GenerateWithAIClicked?.Invoke(this, EventArgs.Empty);
-
             // 获取当前编辑的内容作为上下文
             string context = textBoxJson.Text.Trim();
             string prompt;
@@ -406,6 +381,9 @@ namespace LearningAssistant.Forms
 
             // 使用AI面板服务显示AIAbilityPanel，传递提示词和上下文
             _aiPanelPopupService.ShowAIAbilityPanel(this, prompt, null, context);
+
+            // 在AI服务调用后触发事件，允许事件处理程序获取最新状态
+            GenerateWithAIClicked?.Invoke(this, EventArgs.Empty);
         }
 
         private void ButtonLoadPending_Click(object? sender, EventArgs e)
@@ -811,9 +789,7 @@ namespace LearningAssistant.Forms
 
             if (disposing)
             {
-                // 释放托管资源
-                // 如果有需要释放的资源，可以在这里添加
-                // 例如：_presenter?.Dispose();
+                // 控件资源由 base.Dispose 自动清理
             }
 
             _disposed = true;

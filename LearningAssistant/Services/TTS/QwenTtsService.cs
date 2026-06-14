@@ -8,7 +8,7 @@ namespace LearningAssistant.Services.TTS
     {
         private readonly QwenTtsClient? _client;
         private const long MaxCacheSizeBytes = 100 * 1024 * 1024; // 100MB 缓存上限
-        private static readonly string CacheDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TTSTemp");
+        private static readonly string CacheDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LearningAssistant", "TTSTemp");
         private SoundPlayer? _currentPlayer;
         private bool _stopRequested = false;
         private readonly object _playerLock = new object();

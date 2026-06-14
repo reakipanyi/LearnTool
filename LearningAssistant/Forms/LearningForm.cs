@@ -29,7 +29,7 @@ namespace LearningAssistant.Forms
 
         private readonly List<ConfettiParticle> _confettiParticles = new List<ConfettiParticle>();
         private readonly System.Windows.Forms.Timer _confettiTimer = new System.Windows.Forms.Timer();
-        private readonly Random _random = new Random();
+        private static readonly ThreadLocal<Random> _random = new ThreadLocal<Random>(() => new Random());
         private bool _isConfettiActive;
 
         private readonly System.Windows.Forms.Timer _studyTimer = new System.Windows.Forms.Timer();
@@ -629,7 +629,7 @@ namespace LearningAssistant.Forms
                     string json = File.ReadAllText(favoritesPath);
                     var favorites = JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
 
-                    string key = GetFavoriteKey();
+                    string key = GetItemKey();
                     _isFavorite = favorites.Contains(key);
 
                     // 兼容旧数据：检查旧键
@@ -1001,7 +1001,7 @@ namespace LearningAssistant.Forms
             panelContent.Dock = DockStyle.Fill;
             panelContent.Location = new Point(3, 3);
             panelContent.Name = "panelContent";
-            panelContent.Size = new Size(1155, 636);
+            panelContent.Size = new Size(1089, 636);
             panelContent.TabIndex = 0;
             panelContent.Paint += PanelContent_Paint;
             // 
@@ -1013,7 +1013,7 @@ namespace LearningAssistant.Forms
             listBoxDisplay.ForeColor = Color.FromArgb(100, 150, 180);
             listBoxDisplay.Location = new Point(0, 0);
             listBoxDisplay.Name = "listBoxDisplay";
-            listBoxDisplay.Size = new Size(1155, 160);
+            listBoxDisplay.Size = new Size(1089, 160);
             listBoxDisplay.TabIndex = 1;
             listBoxDisplay.Visible = false;
             listBoxDisplay.Click += ListBoxDisplay_Click;
@@ -1026,7 +1026,7 @@ namespace LearningAssistant.Forms
             labelContent.ForeColor = Color.FromArgb(70, 90, 110);
             labelContent.Location = new Point(0, 0);
             labelContent.Name = "labelContent";
-            labelContent.Size = new Size(1155, 636);
+            labelContent.Size = new Size(1089, 636);
             labelContent.TabIndex = 0;
             labelContent.TextAlign = ContentAlignment.MiddleCenter;
             labelContent.Click += LabelContent_Click;
@@ -1038,7 +1038,7 @@ namespace LearningAssistant.Forms
             labelStatistics.ForeColor = Color.FromArgb(80, 100, 120);
             labelStatistics.Location = new Point(3, 806);
             labelStatistics.Name = "labelStatistics";
-            labelStatistics.Size = new Size(1155, 32);
+            labelStatistics.Size = new Size(1089, 32);
             labelStatistics.TabIndex = 3;
             // 
             // panelList
@@ -1051,7 +1051,7 @@ namespace LearningAssistant.Forms
             panelList.Dock = DockStyle.Fill;
             panelList.Location = new Point(3, 3);
             panelList.Name = "panelList";
-            panelList.Size = new Size(194, 838);
+            panelList.Size = new Size(260, 838);
             panelList.TabIndex = 18;
             // 
             // labelListStatus
@@ -1062,7 +1062,7 @@ namespace LearningAssistant.Forms
             labelListStatus.ForeColor = Color.FromArgb(80, 100, 120);
             labelListStatus.Location = new Point(0, 796);
             labelListStatus.Name = "labelListStatus";
-            labelListStatus.Size = new Size(192, 40);
+            labelListStatus.Size = new Size(258, 40);
             labelListStatus.TabIndex = 2;
             labelListStatus.Text = "共 0 项";
             labelListStatus.TextAlign = ContentAlignment.MiddleCenter;
@@ -1075,7 +1075,7 @@ namespace LearningAssistant.Forms
             labelListTitle.ForeColor = Color.White;
             labelListTitle.Location = new Point(0, 0);
             labelListTitle.Name = "labelListTitle";
-            labelListTitle.Size = new Size(192, 35);
+            labelListTitle.Size = new Size(258, 35);
             labelListTitle.TabIndex = 0;
             labelListTitle.Text = "📚 学习列表";
             labelListTitle.TextAlign = ContentAlignment.MiddleCenter;
@@ -1087,9 +1087,8 @@ namespace LearningAssistant.Forms
             listBoxItems.FormattingEnabled = true;
             listBoxItems.Location = new Point(0, 35);
             listBoxItems.Name = "listBoxItems";
-            listBoxItems.Size = new Size(192, 764);
+            listBoxItems.Size = new Size(259, 764);
             listBoxItems.TabIndex = 1;
-            listBoxItems.ItemHeight = 30;//此行不要删
             listBoxItems.SelectedIndexChanged += ListBoxItems_SelectedIndexChanged;
             // 
             // panelConfig
@@ -1461,7 +1460,7 @@ namespace LearningAssistant.Forms
             // mainTableLayoutPanel
             // 
             mainTableLayoutPanel.ColumnCount = 3;
-            mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 200F));
+            mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 266F));
             mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220F));
             mainTableLayoutPanel.Controls.Add(panelList, 0, 0);
@@ -1481,9 +1480,9 @@ namespace LearningAssistant.Forms
             middlePanel.BackColor = Color.FromArgb(250, 245, 235);
             middlePanel.Controls.Add(middleTableLayoutPanel);
             middlePanel.Dock = DockStyle.Fill;
-            middlePanel.Location = new Point(203, 3);
+            middlePanel.Location = new Point(269, 3);
             middlePanel.Name = "middlePanel";
-            middlePanel.Size = new Size(1161, 838);
+            middlePanel.Size = new Size(1095, 838);
             middlePanel.TabIndex = 20;
             // 
             // middleTableLayoutPanel
@@ -1506,7 +1505,7 @@ namespace LearningAssistant.Forms
             middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
             middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 51F));
             middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));
-            middleTableLayoutPanel.Size = new Size(1161, 838);
+            middleTableLayoutPanel.Size = new Size(1095, 838);
             middleTableLayoutPanel.TabIndex = 0;
             // 
             // panelNotes
@@ -1518,7 +1517,7 @@ namespace LearningAssistant.Forms
             panelNotes.Dock = DockStyle.Fill;
             panelNotes.Location = new Point(3, 645);
             panelNotes.Name = "panelNotes";
-            panelNotes.Size = new Size(1155, 1);
+            panelNotes.Size = new Size(1089, 1);
             panelNotes.TabIndex = 7;
             panelNotes.Visible = false;
             // 
@@ -1530,7 +1529,7 @@ namespace LearningAssistant.Forms
             richTextBoxNotes.ForeColor = Color.FromArgb(60, 80, 100);
             richTextBoxNotes.Location = new Point(0, 30);
             richTextBoxNotes.Name = "richTextBoxNotes";
-            richTextBoxNotes.Size = new Size(1153, 0);
+            richTextBoxNotes.Size = new Size(1087, 0);
             richTextBoxNotes.TabIndex = 1;
             richTextBoxNotes.Text = "";
             richTextBoxNotes.TextChanged += RichTextBoxNotes_TextChanged;
@@ -1543,7 +1542,7 @@ namespace LearningAssistant.Forms
             labelNotesTitle.Location = new Point(0, 0);
             labelNotesTitle.Name = "labelNotesTitle";
             labelNotesTitle.Padding = new Padding(10, 0, 0, 0);
-            labelNotesTitle.Size = new Size(1153, 30);
+            labelNotesTitle.Size = new Size(1087, 30);
             labelNotesTitle.TabIndex = 0;
             labelNotesTitle.Text = "📝 我的笔记";
             labelNotesTitle.TextAlign = ContentAlignment.MiddleLeft;
@@ -1563,7 +1562,7 @@ namespace LearningAssistant.Forms
             buttonsFlowLayoutPanel.Location = new Point(3, 645);
             buttonsFlowLayoutPanel.Name = "buttonsFlowLayoutPanel";
             buttonsFlowLayoutPanel.Padding = new Padding(10, 5, 10, 5);
-            buttonsFlowLayoutPanel.Size = new Size(1155, 65);
+            buttonsFlowLayoutPanel.Size = new Size(1089, 65);
             buttonsFlowLayoutPanel.TabIndex = 4;
             buttonsFlowLayoutPanel.WrapContents = false;
             // 
@@ -1737,7 +1736,7 @@ namespace LearningAssistant.Forms
             progressBar1.ForeColor = Color.FromArgb(255, 140, 0);
             progressBar1.Location = new Point(3, 716);
             progressBar1.Name = "progressBar1";
-            progressBar1.Size = new Size(1155, 36);
+            progressBar1.Size = new Size(1089, 36);
             progressBar1.Style = ProgressBarStyle.Continuous;
             progressBar1.TabIndex = 2;
             // 
@@ -1750,7 +1749,7 @@ namespace LearningAssistant.Forms
             settingsFlowLayoutPanel.Location = new Point(3, 758);
             settingsFlowLayoutPanel.Name = "settingsFlowLayoutPanel";
             settingsFlowLayoutPanel.Padding = new Padding(10, 5, 10, 5);
-            settingsFlowLayoutPanel.Size = new Size(1155, 45);
+            settingsFlowLayoutPanel.Size = new Size(1089, 45);
             settingsFlowLayoutPanel.TabIndex = 5;
             settingsFlowLayoutPanel.WrapContents = false;
             // 
@@ -2034,8 +2033,9 @@ namespace LearningAssistant.Forms
                     _streakDays = 1;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "加载学习统计失败");
                 _streakDays = 1;
             }
 
@@ -2067,8 +2067,9 @@ namespace LearningAssistant.Forms
                 string json = JsonSerializer.Serialize(stats, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(statsPath, json);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "保存学习统计失败");
             }
         }
 
@@ -2093,8 +2094,9 @@ namespace LearningAssistant.Forms
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "加载徽章失败");
             }
         }
 
@@ -2109,8 +2111,9 @@ namespace LearningAssistant.Forms
                 string json = JsonSerializer.Serialize(_unlockedBadges, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(badgesPath, json);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "保存徽章失败");
             }
         }
 
@@ -2255,8 +2258,9 @@ namespace LearningAssistant.Forms
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "加载每日挑战失败");
             }
 
             _dailyChallenges = new List<Challenge>
@@ -2279,8 +2283,9 @@ namespace LearningAssistant.Forms
                 string json = JsonSerializer.Serialize(_dailyChallenges, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(challengesPath, json);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "保存每日挑战失败");
             }
         }
 
@@ -2538,7 +2543,7 @@ namespace LearningAssistant.Forms
             // 只在达到间隔时更新鼓励语
             if (_encouragementCounter >= EncouragementInterval && labelEncouragement != null)
             {
-                labelEncouragement.Text = _encouragements[_random.Next(_encouragements.Length)];
+                labelEncouragement.Text = _encouragements[_random.Value.Next(_encouragements.Length)];
                 _encouragementCounter = 0;
             }
         }
@@ -2695,32 +2700,9 @@ namespace LearningAssistant.Forms
             }
         }
 
-        private void PanelAI_Paint(object? sender, PaintEventArgs e)
-        {
-            if (DesignMode) return;
-            if (sender is not Panel panel) return;
-
-            try
-            {
-                using var gradient = new System.Drawing.Drawing2D.LinearGradientBrush(
-                    new Point(0, 0),
-                    new Point(0, panel.Height),
-                    Color.FromArgb(252, 248, 240),
-                    Color.FromArgb(248, 244, 235)
-                );
-                e.Graphics.FillRectangle(gradient, panel.ClientRectangle);
-
-                using var pen = new Pen(Color.FromArgb(210, 200, 190), 2);
-                e.Graphics.DrawRectangle(pen, 1, 1, panel.Width - 3, panel.Height - 3);
-            }
-            catch
-            {
-                e.Graphics.Clear(Color.LightYellow);
-            }
-        }
-
         private void labelAI_Click(object? sender, EventArgs e)
         {
+            // AI功能已通过按钮触发，此事件保留以兼容设计器
         }
 
         private void mainTableLayoutPanel_Paint(object? sender, PaintEventArgs e)
@@ -2751,6 +2733,12 @@ namespace LearningAssistant.Forms
         {
             _isDetailVisible = !_isDetailVisible;
             listBoxDisplay.Visible = _isDetailVisible;
+
+            // 同步更新复选框状态
+            if (checkBoxShowDetail != null)
+            {
+                checkBoxShowDetail.Checked = _isDetailVisible;
+            }
 
             if (_isDetailVisible && _currentItem != null)
             {
@@ -2864,7 +2852,7 @@ namespace LearningAssistant.Forms
                 _quizCorrectCount++;
                 _isDetailVisible = true;
                 listBoxDisplay.Visible = true;
-                UpdateDetailContent(_correctMessages[_random.Next(_correctMessages.Length)]);
+                UpdateDetailContent(_correctMessages[_random.Value.Next(_correctMessages.Length)]);
             }
 
             UpdateEncouragement();
@@ -2883,7 +2871,7 @@ namespace LearningAssistant.Forms
             {
                 _isDetailVisible = true;
                 listBoxDisplay.Visible = true;
-                UpdateDetailContent(_wrongMessages[_random.Next(_wrongMessages.Length)]);
+                UpdateDetailContent(_wrongMessages[_random.Value.Next(_wrongMessages.Length)]);
             }
 
             MarkAsUnknownClicked?.Invoke(this, EventArgs.Empty);
@@ -2915,11 +2903,11 @@ namespace LearningAssistant.Forms
             for (int i = 0; i < 50; i++)
             {
                 var particle = CreateConfettiParticle();
-                particle.X = _random.Next(Width);
-                particle.Y = -_random.Next(100);
-                particle.VelocityY = (float)(_random.NextDouble() * 4 + 3);
-                particle.Size = _random.Next(6, 15);
-                particle.RotationSpeed = (float)(_random.NextDouble() * 15 - 7.5);
+                particle.X = _random.Value.Next(Width);
+                particle.Y = -_random.Value.Next(100);
+                particle.VelocityY = (float)(_random.Value.NextDouble() * 4 + 3);
+                particle.Size = _random.Value.Next(6, 15);
+                particle.RotationSpeed = (float)(_random.Value.NextDouble() * 15 - 7.5);
                 _confettiParticles.Add(particle);
             }
 
@@ -2931,19 +2919,19 @@ namespace LearningAssistant.Forms
             var shapes = new[] { ParticleShape.Rectangle, ParticleShape.Circle, ParticleShape.Triangle, ParticleShape.Star };
             return new ConfettiParticle
             {
-                X = _random.Next(Width),
-                Y = -_random.Next(200),
-                Size = _random.Next(8, 20),
-                Color = _celebrationColors[_random.Next(_celebrationColors.Length)],
-                VelocityX = (float)(_random.NextDouble() * 6 - 3),
-                VelocityY = (float)(_random.NextDouble() * 3 + 2),
-                Rotation = _random.Next(360),
-                RotationSpeed = (float)(_random.NextDouble() * 12 - 6),
-                Shape = shapes[_random.Next(shapes.Length)],
+                X = _random.Value.Next(Width),
+                Y = -_random.Value.Next(200),
+                Size = _random.Value.Next(8, 20),
+                Color = _celebrationColors[_random.Value.Next(_celebrationColors.Length)],
+                VelocityX = (float)(_random.Value.NextDouble() * 6 - 3),
+                VelocityY = (float)(_random.Value.NextDouble() * 3 + 2),
+                Rotation = _random.Value.Next(360),
+                RotationSpeed = (float)(_random.Value.NextDouble() * 12 - 6),
+                Shape = shapes[_random.Value.Next(shapes.Length)],
                 Opacity = 1.0f,
-                FadeSpeed = (float)(_random.NextDouble() * 0.01 + 0.005),
-                WobbleOffset = (float)(_random.NextDouble() * Math.PI * 2),
-                WobbleSpeed = (float)(_random.NextDouble() * 0.1 + 0.05)
+                FadeSpeed = (float)(_random.Value.NextDouble() * 0.01 + 0.005),
+                WobbleOffset = (float)(_random.Value.NextDouble() * Math.PI * 2),
+                WobbleSpeed = (float)(_random.Value.NextDouble() * 0.1 + 0.05)
             };
         }
 
@@ -3039,14 +3027,13 @@ namespace LearningAssistant.Forms
             var shakeAmount = 15;
             var shakeSteps = 8;
             var stepDelay = 15;
-            var random = new Random();
 
             for (int i = 0; i < shakeSteps; i++)
             {
                 int currentShakeAmount = (int)(shakeAmount * (1 - (i / (float)shakeSteps)));
 
-                int dx = (random.Next(3) - 1) * currentShakeAmount;
-                int dy = (random.Next(3) - 1) * currentShakeAmount;
+                int dx = (_random.Value.Next(3) - 1) * currentShakeAmount;
+                int dy = (_random.Value.Next(3) - 1) * currentShakeAmount;
 
                 Location = new Point(originalLocation.X + dx, originalLocation.Y + dy);
                 await Task.Delay(stepDelay);
@@ -3063,12 +3050,6 @@ namespace LearningAssistant.Forms
             if (_currentItem == null)
             {
                 MessageBox.Show("请先选择一个学习内容", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            if (_aiPanelPopupService == null)
-            {
-                MessageBox.Show("AI面板服务未初始化", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -3238,7 +3219,7 @@ namespace LearningAssistant.Forms
                     favorites = JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
                 }
 
-                string key = GetFavoriteKey();
+                string key = GetItemKey();
                 if (!string.IsNullOrEmpty(key) && !favorites.Contains(key))
                 {
                     favorites.Add(key);
@@ -3265,7 +3246,7 @@ namespace LearningAssistant.Forms
                     string json = File.ReadAllText(favoritesPath);
                     List<string> favorites = JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
 
-                    string key = GetFavoriteKey();
+                    string key = GetItemKey();
                     if (!string.IsNullOrEmpty(key))
                     {
                         favorites.Remove(key);
@@ -3281,9 +3262,9 @@ namespace LearningAssistant.Forms
         }
 
         /// <summary>
-        /// 生成收藏的唯一键（子类别+内容），避免跨类别冲突
+        /// 生成项目的唯一键（子类别+内容），避免跨类别冲突
         /// </summary>
-        private string GetFavoriteKey()
+        private string GetItemKey()
         {
             if (_currentItem == null) return string.Empty;
 
@@ -3395,17 +3376,9 @@ namespace LearningAssistant.Forms
         }
 
         /// <summary>
-        /// 生成笔记的唯一键（子类别+内容），避免跨类别冲突
+        /// 获取笔记的唯一键（复用 GetItemKey）
         /// </summary>
-        private string GetNoteKey()
-        {
-            if (_currentItem == null) return string.Empty;
-
-            string subCategory = comboBoxSubCategory?.Text ?? "unknown";
-            string content = _currentItem.GetMainContent();
-
-            return $"[{subCategory}]{content}";
-        }
+        private string GetNoteKey() => GetItemKey();
 
         private void RichTextBoxNotes_TextChanged(object? sender, EventArgs e)
         {
@@ -3485,10 +3458,6 @@ namespace LearningAssistant.Forms
         }
 
 
-
-        private class PanelDecorator
-        {
-        }
 
         public class ItemSelectedEventArgs : EventArgs
         {
