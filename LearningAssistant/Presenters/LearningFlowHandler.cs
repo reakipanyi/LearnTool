@@ -87,12 +87,13 @@ namespace LearningAssistant.Presenters
         private async Task InitializeCore(string userId, string language, string subCategory, string wordBankFile, bool continueMode)
         {
             _currentUserId = userId;
-            _currentLanguage = language;
+            // 使用视图上当前选择的语言（已从设置加载），而不是外部传入的语言参数
+            _currentLanguage = _view.Language;
 
-            subCategory = await LoadSubCategoriesAsync(language, subCategory);
+            subCategory = await LoadSubCategoriesAsync(_currentLanguage, subCategory);
             _currentSubCategory = subCategory;
 
-            _studyEngine.Initialize(userId, language, subCategory, wordBankFile, _view.LearningMode, _view.SortOrder, continueMode);
+            _studyEngine.Initialize(userId, _currentLanguage, subCategory, wordBankFile, _view.LearningMode, _view.SortOrder, continueMode);
             UpdateLearningList();
             await DisplayCurrentItemAsync();
         }

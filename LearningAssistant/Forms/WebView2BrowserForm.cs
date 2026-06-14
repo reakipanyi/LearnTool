@@ -1,21 +1,82 @@
+using LearningAssistant.Common;
 using LearningAssistant.Services.Cloud;
 using LearningAssistant.Services.Web;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using System.ComponentModel;
+using System.Text.Json;
 
 namespace LearningAssistant.Forms
 {
+    /// <summary>
+    /// WebView2 浏览器窗体，支持多个 AI 平台快捷导航和百度网盘集成
+    /// </summary>
     public partial class WebView2BrowserForm : Form
     {
         private readonly ICloudStorageService? _cloudStorageService;
         private readonly ILogger<WebView2BrowserForm>? _logger;
         private readonly IWebBookmarkService? _webBookmarkService;
         private WebView2? _webView;
-        private const string BaiduNetdiskUrl = "https://pan.baidu.com";
         private bool _isWebViewReady = false;
         private string? _initialPrompt;
+        private IReadOnlyList<WebBookmarkCategory>? _cachedBookmarkCategories;
+        private List<ToolStripButton>? _providerButtons;
+        private Dictionary<string, ToolStripButton>? _hostToButtonMapping;
+        private Dictionary<int, string>? _bookmarkIndexToUrl;
+
+        /// <summary>
+        /// URL 常量
+        /// </summary>
+        private static class Urls
+        {
+            public const string BaiduNetdisk = "https://pan.baidu.com";
+            public const string Baidu = "https://www.baidu.com";
+            public const string DeepSeek = "https://chat.deepseek.com/";
+            public const string Doubao = "https://www.doubao.com/chat";
+            public const string Zhipu = "https://chatglm.cn";
+            public const string Qwen = "https://tongyi.aliyun.com/qianwen";
+            public const string Spark = "https://xinghuo.xfyun.cn";
+            public const string Wenxin = "https://yiyan.baidu.com";
+        }
+
+        /// <summary>
+        /// 提示消息常量
+        /// </summary>
+        private static class Messages
+        {
+            public const string NetdiskNotConfigured = "百度网盘服务未配置或未授权";
+            public const string NetdiskNotAuthorized = "请先完成百度网盘授权";
+            public const string NetdiskNavigatePrompt = "请先浏览到百度网盘文件页面";
+            public const string NetdiskPathParseError = "无法解析网盘文件路径";
+            public const string WebView2InitFailed = "初始化 WebView2 失败: {0}\n\n可能需要安装 WebView2 Runtime。";
+        }
+
+        /// <summary>
+        /// 平台信息映射 (Host -> 显示名称)
+        /// </summary>
+        private static readonly Dictionary<string, string> ProviderDisplayNames = new()
+        {
+            ["www.doubao.com"] = "🤖 豆包 (Doubao)",
+            ["chat.deepseek.com"] = "🤖 DeepSeek",
+            ["chatglm.cn"] = "🤖 智谱AI (Zhipu/GLM)",
+            ["tongyi.aliyun.com"] = "🤖 通义千问 (Qwen/DashScope)",
+            ["xinghuo.xfyun.cn"] = "🤖 讯飞星火 (Spark)",
+            ["yiyan.baidu.com"] = "🤖 文心一言 (ERNIE)"
+        };
+
+        /// <summary>
+        /// 平台脚本选择器配置 (Host -> CSS选择器)
+        /// </summary>
+        private static readonly Dictionary<string, string> ProviderScriptSelectors = new()
+        {
+            ["www.doubao.com"] = "textarea[placeholder*=\"输入\"], textarea",
+            ["chat.deepseek.com"] = "textarea, [placeholder*=\"Ask\"]",
+            ["chatglm.cn"] = "textarea, [placeholder*=\"问题\"]",
+            ["tongyi.aliyun.com"] = "textarea, [placeholder*=\"输入\"]",
+            ["xinghuo.xfyun.cn"] = "textarea, [placeholder*=\"输入\"], [placeholder*=\"问题\"]",
+            ["yiyan.baidu.com"] = "textarea, [placeholder*=\"输入\"], [placeholder*=\"问题\"]"
+        };
 
         /// <summary>
         /// 初始化时自动填入的提示词
@@ -27,6 +88,12 @@ namespace LearningAssistant.Forms
             set => _initialPrompt = value;
         }
 
+        /// <summary>
+        /// 初始化 WebView2 浏览器窗体
+        /// </summary>
+        /// <param name="cloudStorageService">云存储服务（可选）</param>
+        /// <param name="logger">日志记录器（可选）</param>
+        /// <param name="webBookmarkService">网页书签服务（可选）</param>
         public WebView2BrowserForm(ICloudStorageService? cloudStorageService = null,
                                    ILogger<WebView2BrowserForm>? logger = null,
                                    IWebBookmarkService? webBookmarkService = null)
@@ -35,8 +102,31 @@ namespace LearningAssistant.Forms
             _logger = logger;
             _webBookmarkService = webBookmarkService;
             InitializeComponent();
+            InitializeProviderButtonMappings();
             InitializeBookmarks();
             Load += WebView2BrowserForm_Load;
+        }
+
+        /// <summary>
+        /// 初始化平台按钮映射
+        /// </summary>
+        private void InitializeProviderButtonMappings()
+        {
+            _providerButtons = new List<ToolStripButton>
+            {
+                btnProviderDeepseek, btnProviderDoubao, btnProviderZhipu,
+                btnProviderQwen, btnProviderSpark, btnProviderWenxin
+            };
+
+            _hostToButtonMapping = new Dictionary<string, ToolStripButton>
+            {
+                ["chat.deepseek.com"] = btnProviderDeepseek,
+                ["www.doubao.com"] = btnProviderDoubao,
+                ["chatglm.cn"] = btnProviderZhipu,
+                ["tongyi.aliyun.com"] = btnProviderQwen,
+                ["xinghuo.xfyun.cn"] = btnProviderSpark,
+                ["yiyan.baidu.com"] = btnProviderWenxin
+            };
         }
 
         private void InitializeBookmarks()
@@ -45,15 +135,20 @@ namespace LearningAssistant.Forms
                 return;
 
             comboBoxBookmarks.Items.Clear();
+            _bookmarkIndexToUrl = new Dictionary<int, string>();
+
+            // 添加占位符项
             comboBoxBookmarks.Items.Add("🔖 书签...");
 
-            var categories = _webBookmarkService.GetAllCategories();
-            foreach (var category in categories)
+            _cachedBookmarkCategories = _webBookmarkService.GetAllCategories();
+            foreach (var category in _cachedBookmarkCategories)
             {
+                // 添加分类标题（不可点击）
                 comboBoxBookmarks.Items.Add($"📁 {category.Name}");
                 foreach (var bookmark in category.Bookmarks)
                 {
-                    comboBoxBookmarks.Items.Add($"  {bookmark.Icon} {bookmark.Title}");
+                    int index = comboBoxBookmarks.Items.Add($"  {bookmark.Icon} {bookmark.Title}");
+                    _bookmarkIndexToUrl[index] = bookmark.Url;
                 }
             }
 
@@ -62,24 +157,13 @@ namespace LearningAssistant.Forms
 
         private void ComboBoxBookmarks_SelectedIndexChanged(object? sender, EventArgs e)
         {
-            if (_webBookmarkService == null || comboBoxBookmarks == null || comboBoxBookmarks.SelectedIndex <= 0)
+            if (comboBoxBookmarks == null || comboBoxBookmarks.SelectedIndex <= 0)
                 return;
 
-            var categories = _webBookmarkService.GetAllCategories();
-            int currentIndex = comboBoxBookmarks.SelectedIndex - 1;
-
-            foreach (var category in categories)
+            int selectedIndex = comboBoxBookmarks.SelectedIndex;
+            if (_bookmarkIndexToUrl?.TryGetValue(selectedIndex, out var url) == true)
             {
-                if (currentIndex < category.Bookmarks.Count + 1)
-                {
-                    if (currentIndex > 0)
-                    {
-                        var bookmark = category.Bookmarks[currentIndex - 1];
-                        NavigateToUrl(bookmark.Url);
-                    }
-                    break;
-                }
-                currentIndex -= category.Bookmarks.Count + 1;
+                NavigateToUrl(url);
             }
 
             comboBoxBookmarks.SelectedIndex = 0;
@@ -87,7 +171,15 @@ namespace LearningAssistant.Forms
 
         private async void WebView2BrowserForm_Load(object? sender, EventArgs e)
         {
-            await InitializeWebViewAsync();
+            try
+            {
+                await InitializeWebViewAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "WebView2 初始化过程发生未处理异常");
+                MessageBox.Show($"初始化浏览器时发生错误: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private async Task InitializeWebViewAsync()
@@ -100,8 +192,7 @@ namespace LearningAssistant.Forms
             {
                 try
                 {
-                    var appDataDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                    var cacheDir = Path.Combine(appDataDir, "LearningAssistant", "webview2_cache");
+                    var cacheDir = CachePaths.WebView2;
                     if (!Directory.Exists(cacheDir))
                     {
                         Directory.CreateDirectory(cacheDir);
@@ -123,11 +214,9 @@ namespace LearningAssistant.Forms
                         _webView.CoreWebView2.Settings.IsScriptEnabled = true;
                         _webView.CoreWebView2.Settings.AreDevToolsEnabled = true;
 
-                        _webView.Source = new Uri("https://www.baidu.com");
+                        _webView.Source = new Uri(Urls.Baidu);
 
                         _webView.NavigationCompleted += OnNavigationCompleted;
-                        // 使用 NavigationCompleted 事件替代 TitleChanged（兼容旧版本 WebView2）
-                        // _webView.CoreWebView2.TitleChanged += OnTitleChanged;
 
                         panelBrowser.Controls.Add(_webView);
                         _isWebViewReady = true;
@@ -145,7 +234,7 @@ namespace LearningAssistant.Forms
 
                     if (retryCount >= maxRetryCount)
                     {
-                        MessageBox.Show($"初始化 WebView2 失败: {ex.Message}\n\n可能需要安装 WebView2 Runtime。", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        MessageBox.Show(string.Format(Messages.WebView2InitFailed, ex.Message), "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                         _logger?.LogError(ex, "WebView2 初始化最终失败");
                     }
                     else
@@ -168,7 +257,7 @@ namespace LearningAssistant.Forms
                     btnBack.Enabled = _webView.CanGoBack;
                     btnForward.Enabled = _webView.CanGoForward;
 
-                    bool isNetdiskPage = _webView.Source?.ToString()?.StartsWith("https://pan.baidu.com") ?? false;
+                    bool isNetdiskPage = _webView.Source?.ToString()?.StartsWith(Urls.BaiduNetdisk) ?? false;
                     btnOpenNetdisk.Visible = !isNetdiskPage;
                     btnDownloadNetdisk.Visible = isNetdiskPage && _cloudStorageService != null && _cloudStorageService.IsAuthenticated;
 
@@ -189,59 +278,36 @@ namespace LearningAssistant.Forms
             }));
         }
 
+        /// <summary>
+        /// 重置所有平台按钮状态
+        /// </summary>
         private void ResetProviderButtons()
         {
-            btnProviderDeepseek.BackColor = SystemColors.Control;
-            btnProviderDeepseek.Enabled = true;
-            btnProviderDoubao.BackColor = SystemColors.Control;
-            btnProviderDoubao.Enabled = true;
-            btnProviderZhipu.BackColor = SystemColors.Control;
-            btnProviderZhipu.Enabled = true;
-            btnProviderQwen.BackColor = SystemColors.Control;
-            btnProviderQwen.Enabled = true;
-            btnProviderSpark.BackColor = SystemColors.Control;
-            btnProviderSpark.Enabled = true;
-            btnProviderWenxin.BackColor = SystemColors.Control;
-            btnProviderWenxin.Enabled = true;
+            if (_providerButtons == null) return;
+
+            foreach (var button in _providerButtons)
+            {
+                button.BackColor = SystemColors.Control;
+                button.Enabled = true;
+            }
         }
 
+        /// <summary>
+        /// 高亮当前平台按钮
+        /// </summary>
+        /// <param name="host">当前页面的主机名</param>
         private void HighlightCurrentProvider(string? host)
         {
-            if (host == "chat.deepseek.com")
+            ResetProviderButtons();
+
+            if (host != null && ProviderDisplayNames.TryGetValue(host, out var displayName))
             {
-                btnProviderDeepseek.BackColor = Color.LightBlue;
-                btnProviderDeepseek.Enabled = false;
-                Text = "🤖 DeepSeek";
-            }
-            else if (host == "www.doubao.com")
-            {
-                btnProviderDoubao.BackColor = Color.LightBlue;
-                btnProviderDoubao.Enabled = false;
-                Text = "🤖 豆包 (Doubao)";
-            }
-            else if (host == "chatglm.cn")
-            {
-                btnProviderZhipu.BackColor = Color.LightBlue;
-                btnProviderZhipu.Enabled = false;
-                Text = "🤖 智谱AI (Zhipu/GLM)";
-            }
-            else if (host == "tongyi.aliyun.com")
-            {
-                btnProviderQwen.BackColor = Color.LightBlue;
-                btnProviderQwen.Enabled = false;
-                Text = "🤖 通义千问 (Qwen/DashScope)";
-            }
-            else if (host == "xinghuo.xfyun.cn")
-            {
-                btnProviderSpark.BackColor = Color.LightBlue;
-                btnProviderSpark.Enabled = false;
-                Text = "🤖 讯飞星火 (Spark)";
-            }
-            else if (host == "yiyan.baidu.com")
-            {
-                btnProviderWenxin.BackColor = Color.LightBlue;
-                btnProviderWenxin.Enabled = false;
-                Text = "🤖 文心一言 (ERNIE)";
+                if (_hostToButtonMapping!.TryGetValue(host, out var button))
+                {
+                    button.BackColor = Color.LightBlue;
+                    button.Enabled = false;
+                }
+                Text = displayName;
             }
             else
             {
@@ -249,97 +315,31 @@ namespace LearningAssistant.Forms
             }
         }
 
+        /// <summary>
+        /// 自动填充提示词到当前平台的输入框
+        /// </summary>
+        /// <param name="prompt">要填充的提示词</param>
+        /// <param name="host">当前页面的主机名</param>
         private async Task FillPromptAsync(string prompt, string? host)
         {
-            if (_webView?.CoreWebView2 == null) return;
+            if (_webView?.CoreWebView2 == null || host == null) return;
+            if (!ProviderScriptSelectors.TryGetValue(host, out var selector)) return;
 
             try
             {
-                string script = host switch
-                {
-                    // 豆包
-                    "www.doubao.com" => $@"
-                        (function() {{
-                            var textarea = document.querySelector('textarea[placeholder*='输入']') || document.querySelector('textarea');
-                            if (textarea) {{
-                                textarea.value = '{EscapeForJavaScript(prompt)}';
-                                textarea.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                                textarea.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                                return 'success';
-                            }}
-                            return 'textarea not found';
-                        }})();
-                    ",
-                    // DeepSeek
-                    "chat.deepseek.com" => $@"
-                        (function() {{
-                            var textarea = document.querySelector('textarea') || document.querySelector('[placeholder*='Ask']');
-                            if (textarea) {{
-                                textarea.value = '{EscapeForJavaScript(prompt)}';
-                                textarea.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                                return 'success';
-                            }}
-                            return 'textarea not found';
-                        }})();
-                    ",
-                    // 智谱AI
-                    "chatglm.cn" => $@"
-                        (function() {{
-                            var textarea = document.querySelector('textarea') || document.querySelector('[placeholder*='问题']');
-                            if (textarea) {{
-                                textarea.value = '{EscapeForJavaScript(prompt)}';
-                                textarea.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                                return 'success';
-                            }}
-                            return 'textarea not found';
-                        }})();
-                    ",
-                    // 通义千问
-                    "tongyi.aliyun.com" => $@"
-                        (function() {{
-                            var textarea = document.querySelector('textarea') || document.querySelector('[placeholder*='输入']');
-                            if (textarea) {{
-                                textarea.value = '{EscapeForJavaScript(prompt)}';
-                                textarea.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                                return 'success';
-                            }}
-                            return 'textarea not found';
-                        }})();
-                    ",
-                    // 讯飞星火
-                    "xinghuo.xfyun.cn" => $@"
-                        (function() {{
-                            var textarea = document.querySelector('textarea') || document.querySelector('[placeholder*='输入']') || document.querySelector('[placeholder*='问题']');
-                            if (textarea) {{
-                                textarea.value = '{EscapeForJavaScript(prompt)}';
-                                textarea.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                                textarea.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                                return 'success';
-                            }}
-                            return 'textarea not found';
-                        }})();
-                    ",
-                    // 文心一言
-                    "yiyan.baidu.com" => $@"
-                        (function() {{
-                            var textarea = document.querySelector('textarea') || document.querySelector('[placeholder*='输入']') || document.querySelector('[placeholder*='问题']');
-                            if (textarea) {{
-                                textarea.value = '{EscapeForJavaScript(prompt)}';
-                                textarea.dispatchEvent(new Event('input', {{ bubbles: true }}));
-                                textarea.dispatchEvent(new Event('change', {{ bubbles: true }}));
-                                return 'success';
-                            }}
-                            return 'textarea not found';
-                        }})();
-                    ",
-                    _ => "/* unknown host */"
-                };
-
-                if (script.StartsWith("/*"))
-                {
-                    _logger?.LogDebug("跳过未知主机的自动填充: {Host}", host);
-                    return;
-                }
+                // 使用 JSON 序列化安全传递 prompt，避免注入风险
+                string escapedPrompt = JsonSerializer.Serialize(prompt);
+                string script = $@"
+                    (function() {{
+                        var textarea = document.querySelector('{selector}');
+                        if (textarea) {{
+                            textarea.value = {escapedPrompt};
+                            textarea.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            textarea.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                            return 'success';
+                        }}
+                        return 'textarea not found';
+                    }})();";
 
                 var result = await _webView.CoreWebView2.ExecuteScriptAsync(script);
                 _logger?.LogDebug("自动填充结果: {Result}", result);
@@ -350,37 +350,12 @@ namespace LearningAssistant.Forms
             }
         }
 
-        private static string EscapeForJavaScript(string text)
-        {
-            return text.Replace("\\", "\\\\").Replace("'", "\\'").Replace("\n", "\\n").Replace("\r", "\\r");
-        }
-
         private void ProviderButton_Click(object? sender, EventArgs e)
         {
-            if (sender == btnProviderDeepseek)
-                _webView.Source = new Uri("https://chat.deepseek.com/");
-            else if (sender == btnProviderDoubao)
-                _webView.Source = new Uri("https://www.doubao.com/chat");
-            else if (sender == btnProviderZhipu)
-                _webView.Source = new Uri("https://chatglm.cn");
-            else if (sender == btnProviderQwen)
-                _webView.Source = new Uri("https://tongyi.aliyun.com/qianwen");
-            else if (sender == btnProviderSpark)
-                _webView.Source = new Uri("https://xinghuo.xfyun.cn");
-            else if (sender == btnProviderWenxin)
-                _webView.Source = new Uri("https://yiyan.baidu.com");
-        }
-
-        private void OnTitleChanged(object? sender, object e)
-        {
-            if (IsDisposed || !IsHandleCreated) return;
-
-            BeginInvoke(new Action(() =>
+            if (sender is ToolStripButton button && button.Tag is string url)
             {
-                // 使用页面标题的替代方式（通过 JavaScript 获取或使用文档标题）
-                // Text = $"WebView2 浏览器 - {_webView.CoreWebView2.Title ?? "未知"}";
-                Text = "WebView2 浏览器";
-            }));
+                _webView.Source = new Uri(url);
+            }
         }
 
         private void btnGo_Click(object sender, EventArgs e)
@@ -417,28 +392,44 @@ namespace LearningAssistant.Forms
             }
         }
 
-        private void NavigateToUrl()
+        /// <summary>
+        /// 导航到指定URL
+        /// </summary>
+        /// <param name="url">目标URL，如果为null则使用文本框中的URL</param>
+        public void NavigateToUrl(string? url = null)
         {
-            var url = txtUrl.Text.Trim();
-            if (!string.IsNullOrEmpty(url))
-            {
-                if (!url.StartsWith("http://") && !url.StartsWith("https://"))
-                {
-                    url = "https://" + url;
-                }
+            url ??= txtUrl.Text;
+            var normalizedUrl = NormalizeUrl(url);
 
-                if (_webView != null)
-                {
-                    _webView.Source = new Uri(url);
-                }
+            if (!string.IsNullOrEmpty(normalizedUrl) && _webView != null)
+            {
+                _webView.Source = new Uri(normalizedUrl);
             }
+        }
+
+        /// <summary>
+        /// 标准化URL格式
+        /// </summary>
+        /// <param name="url">原始URL</param>
+        /// <returns>标准化后的URL</returns>
+        private static string NormalizeUrl(string? url)
+        {
+            if (string.IsNullOrWhiteSpace(url)) return string.Empty;
+
+            url = url.Trim();
+            if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                url = "https://" + url;
+            }
+            return url;
         }
 
         private void btnOpenNetdisk_Click(object sender, EventArgs e)
         {
             if (_webView != null)
             {
-                _webView.Source = new Uri(BaiduNetdiskUrl);
+                _webView.Source = new Uri(Urls.BaiduNetdisk);
             }
         }
 
@@ -448,27 +439,27 @@ namespace LearningAssistant.Forms
             {
                 if (_cloudStorageService == null)
                 {
-                    MessageBox.Show("百度网盘服务未配置或未授权", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(Messages.NetdiskNotConfigured, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
                 if (!_cloudStorageService.IsAuthenticated)
                 {
-                    MessageBox.Show("请先完成百度网盘授权", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(Messages.NetdiskNotAuthorized, "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
                 var currentUrl = _webView?.Source?.ToString();
-                if (string.IsNullOrEmpty(currentUrl) || !currentUrl.StartsWith("https://pan.baidu.com"))
+                if (string.IsNullOrEmpty(currentUrl) || !currentUrl.StartsWith(Urls.BaiduNetdisk))
                 {
-                    MessageBox.Show("请先浏览到百度网盘文件页面", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(Messages.NetdiskNavigatePrompt, "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
                 var fileInfo = ParseNetdiskUrl(currentUrl);
                 if (!fileInfo.HasValue)
                 {
-                    MessageBox.Show("无法解析网盘文件路径", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(Messages.NetdiskPathParseError, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
@@ -536,28 +527,10 @@ namespace LearningAssistant.Forms
 
                 return ("/", "root");
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogWarning(ex, "解析网盘URL失败: {Url}", url);
                 return null;
-            }
-        }
-
-        /// <summary>
-        /// 导航到指定URL
-        /// </summary>
-        public void NavigateToUrl(string url)
-        {
-            if (string.IsNullOrWhiteSpace(url))
-                return;
-
-            if (!url.StartsWith("http://") && !url.StartsWith("https://"))
-            {
-                url = "https://" + url;
-            }
-
-            if (_webView != null)
-            {
-                _webView.Source = new Uri(url);
             }
         }
 
@@ -568,11 +541,6 @@ namespace LearningAssistant.Forms
                 if (_webView != null)
                 {
                     _webView.NavigationCompleted -= OnNavigationCompleted;
-                    // 对应注释掉的 TitleChanged 事件
-                    // if (_webView.CoreWebView2 != null)
-                    // {
-                    //     _webView.CoreWebView2.TitleChanged -= OnTitleChanged;
-                    // }
                     _webView.Dispose();
                     _webView = null;
                 }
@@ -675,7 +643,7 @@ namespace LearningAssistant.Forms
             // 
             txtUrl.Name = "txtUrl";
             txtUrl.Size = new Size(400, 25);
-            txtUrl.Text = "https://www.baidu.com";
+            txtUrl.Text = Urls.Baidu;
             txtUrl.KeyDown += txtUrl_KeyDown;
             // 
             // btnGo
@@ -699,6 +667,7 @@ namespace LearningAssistant.Forms
             btnProviderDeepseek.Name = "btnProviderDeepseek";
             btnProviderDeepseek.Size = new Size(71, 22);
             btnProviderDeepseek.Text = "DeepSeek";
+            btnProviderDeepseek.Tag = Urls.DeepSeek;
             btnProviderDeepseek.Click += ProviderButton_Click;
             // 
             // btnProviderDoubao
@@ -708,6 +677,7 @@ namespace LearningAssistant.Forms
             btnProviderDoubao.Name = "btnProviderDoubao";
             btnProviderDoubao.Size = new Size(36, 22);
             btnProviderDoubao.Text = "豆包";
+            btnProviderDoubao.Tag = Urls.Doubao;
             btnProviderDoubao.Click += ProviderButton_Click;
             // 
             // btnProviderZhipu
@@ -717,6 +687,7 @@ namespace LearningAssistant.Forms
             btnProviderZhipu.Name = "btnProviderZhipu";
             btnProviderZhipu.Size = new Size(36, 22);
             btnProviderZhipu.Text = "智谱";
+            btnProviderZhipu.Tag = Urls.Zhipu;
             btnProviderZhipu.Click += ProviderButton_Click;
             // 
             // btnProviderQwen
@@ -726,6 +697,7 @@ namespace LearningAssistant.Forms
             btnProviderQwen.Name = "btnProviderQwen";
             btnProviderQwen.Size = new Size(36, 22);
             btnProviderQwen.Text = "千问";
+            btnProviderQwen.Tag = Urls.Qwen;
             btnProviderQwen.Click += ProviderButton_Click;
             // 
             // btnProviderSpark
@@ -735,6 +707,7 @@ namespace LearningAssistant.Forms
             btnProviderSpark.Name = "btnProviderSpark";
             btnProviderSpark.Size = new Size(36, 22);
             btnProviderSpark.Text = "讯飞";
+            btnProviderSpark.Tag = Urls.Spark;
             btnProviderSpark.Click += ProviderButton_Click;
             // 
             // btnProviderWenxin
@@ -744,6 +717,7 @@ namespace LearningAssistant.Forms
             btnProviderWenxin.Name = "btnProviderWenxin";
             btnProviderWenxin.Size = new Size(36, 22);
             btnProviderWenxin.Text = "文心";
+            btnProviderWenxin.Tag = Urls.Wenxin;
             btnProviderWenxin.Click += ProviderButton_Click;
             // 
             // toolStripSeparator

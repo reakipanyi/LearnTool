@@ -390,14 +390,22 @@ namespace LearningAssistant.Forms
         private void ButtonGenerateAI_Click(object? sender, EventArgs e)
         {
             GenerateWithAIClicked?.Invoke(this, EventArgs.Empty);
-            
-            string prompt = textBoxJson.Text.Trim();
-            if (string.IsNullOrEmpty(prompt))
+
+            // 获取当前编辑的内容作为上下文
+            string context = textBoxJson.Text.Trim();
+            string prompt;
+
+            if (string.IsNullOrEmpty(context))
             {
-                prompt = "请帮我生成学习内容";
+                prompt = "请帮我生成学习内容，格式为JSON数组，每个元素包含 content（内容）和 displayText（显示文本）字段。";
             }
-            
-            _aiPanelPopupService.ShowAIAbilityPanel(this, prompt);
+            else
+            {
+                prompt = $"请帮我完善或扩展以下学习内容：\n\n{context}";
+            }
+
+            // 使用AI面板服务显示AIAbilityPanel，传递提示词和上下文
+            _aiPanelPopupService.ShowAIAbilityPanel(this, prompt, null, context);
         }
 
         private void ButtonLoadPending_Click(object? sender, EventArgs e)

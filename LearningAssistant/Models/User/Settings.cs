@@ -9,5 +9,6 @@ namespace LearningAssistant.Models.User
         public string SortOrder { get; set; } = "Sequential"; // 排序方式：Sequential 或 Random
         public string Language { get; set; } = "English"; // 语言：Chinese 或 English
         public string SubCategory { get; set; } = ""; // 学习分类
+        public bool IsDetailVisible { get; set; } = false; // 显示详情
     }
 }

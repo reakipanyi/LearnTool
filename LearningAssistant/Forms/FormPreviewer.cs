@@ -71,8 +71,10 @@ namespace LearningAssistant.Forms
             var logger = NullLoggerFactory.Instance.CreateLogger<LearningForm>();
             var aiQuestionService = CreateMockAiQuestionService();
             var ttsService = CreateMockTtsService();
+            var aiPanelPopupService = CreateMockAIPanelPopupService();
+            var themeService = CreateMockThemeService();
 
-            return new LearningForm(aiQuestionService, ttsService, logger, NullLoggerFactory.Instance);
+            return new LearningForm(aiQuestionService, ttsService, logger, NullLoggerFactory.Instance, ttsService, themeService, aiPanelPopupService);
         }
 
         private static Form CreateContentEditorFormPreview()

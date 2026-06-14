@@ -27,17 +27,17 @@ namespace LearningAssistant.Services.AI
 
             return provider.ToLower() switch
             {
-                "deepseek" => new DeepseekAIService(
-                    _serviceProvider.GetRequiredService<AiConfig>(),
-                    _serviceProvider.GetRequiredService<ICacheService>(),
-                    _serviceProvider.GetRequiredService<ILogger<DeepseekAIService>>(),
-                    _serviceProvider.GetRequiredService<HttpClient>()),
-
                 "doubao" or "豆包" => new DoubaoAIService(
                     _serviceProvider.GetRequiredService<AiConfig>(),
                     _serviceProvider.GetRequiredService<ICacheService>(),
                     _serviceProvider.GetRequiredService<ILogger<DoubaoAIService>>(),
+                    _serviceProvider.GetRequiredService<HttpClient>()),
+                "deepseek" => new DeepseekAIService(
+                    _serviceProvider.GetRequiredService<AiConfig>(),
+                    _serviceProvider.GetRequiredService<ICacheService>(),
+                    _serviceProvider.GetRequiredService<ILogger<DeepseekAIService>>(),
                     _serviceProvider.GetRequiredService<HttpClient>())
+
             };
         }
     }

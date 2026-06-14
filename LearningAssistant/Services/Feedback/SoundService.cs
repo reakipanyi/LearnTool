@@ -1,4 +1,6 @@
+using System.IO;
 using System.Media;
+using LearningAssistant.Common;
 using LearningAssistant.Services.TTS;
 
 namespace LearningAssistant.Services.Feedback
@@ -6,7 +8,7 @@ namespace LearningAssistant.Services.Feedback
     public class SoundService : ISoundService
     {
         private readonly ITTSService? _ttsService;
-        private static readonly string CacheDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "SoundCache");
+        private static readonly string CacheDirectory = CachePaths.Sound;
         private static readonly string HoorayCachePath = Path.Combine(CacheDirectory, "hooray.wav");
         private static readonly string OopsCachePath = Path.Combine(CacheDirectory, "oops.wav");
         private static readonly string NavigationCachePath = Path.Combine(CacheDirectory, "nav.wav");
@@ -16,10 +18,7 @@ namespace LearningAssistant.Services.Feedback
         public SoundService(ITTSService? ttsService = null)
         {
             _ttsService = ttsService;
-            if (!Directory.Exists(CacheDirectory))
-            {
-                Directory.CreateDirectory(CacheDirectory);
-            }
+            AppPaths.EnsureDirectoryExists(CacheDirectory);
         }
         
         public void PlaySuccess()

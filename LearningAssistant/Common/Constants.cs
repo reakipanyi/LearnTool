@@ -1,3 +1,5 @@
+using System;
+
 namespace LearningAssistant.Common
 {
     public static class Constants
@@ -10,8 +12,8 @@ namespace LearningAssistant.Common
 
         public static class LearningMode
         {
-            public const string Study = "学习模式";
-            public const string Quick = "快速模式";
+            public const string Study = "练习";
+            public const string Quick = "复习";
         }
 
         public static class SubCategory
@@ -45,18 +47,39 @@ namespace LearningAssistant.Common
             public const string EnglishSentence = "英语句子.json";
             public const string EnglishComprehensive = "英语综合.json";
         }
-
     }
+
+    /// <summary>
+    /// 路径常量 - 已过时，请使用 AppPaths
+    /// </summary>
+    [Obsolete("请使用 AppPaths 类代替")]
     public static class Paths
     {
+        [Obsolete("请使用 AppPaths.DataDir")]
         public const string DataDirectory = "Data";
-        public const string UsersDirectory = "Users";
-        public const string CacheDirectory = "Cache";
-        public const string AnnotationsDirectory = "Annotations";
-        public const string TranslationsDirectory = "Translations";
+        
+        [Obsolete("请使用 AppPaths.UsersDir")]
+        public const string UsersDirectory = "users";
+        
+        [Obsolete("请使用 AppPaths.CacheDir")]
+        public const string CacheDirectory = "cache";
+        
+        [Obsolete("请使用 AppPaths.AnnotationsDir")]
+        public const string AnnotationsDirectory = "annotations";
+        
+        [Obsolete("请使用 AppPaths.TranslationsDir")]
+        public const string TranslationsDirectory = "translations";
+        
+        [Obsolete("请使用 AppPaths.SessionDir")]
         public const string SessionFile = "session.json";
+        
+        [Obsolete("请使用 AppPaths.ConfigDir")]
         public const string SettingsFile = "settings.json";
-        public const string BookmarksDirectory = "Bookmarks";
-        public const string HighlightsDirectory = "Highlights";
+        
+        [Obsolete("请使用 AppPaths.BookmarksDir")]
+        public const string BookmarksDirectory = "bookmarks";
+        
+        [Obsolete("请使用 AppPaths.HighlightsDir")]
+        public const string HighlightsDirectory = "highlights";
     }
 }

@@ -1,83 +1,85 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+
 namespace LearningAssistant.Common
 {
+    /// <summary>
+    /// 文件操作帮助类 - 已重构使用 AppPaths
+    /// </summary>
+    [Obsolete("建议使用 AppPaths 和 CachePaths 代替此类")]
     public static class FileHelper
     {
+        [Obsolete("建议使用 AppPaths.GetAppDirectory()")]
         public static string GetAppDirectory()
         {
-            return AppDomain.CurrentDomain.BaseDirectory;
+            return AppPaths.AssemblyDir;
         }
 
+        [Obsolete("建议使用 AppPaths.DataDir")]
         public static string GetDataDirectory()
         {
-            var path = Path.Combine(GetAppDirectory(), Paths.DataDirectory);
-            EnsureDirectoryExists(path);
-            return path;
+            return AppPaths.DataDir;
         }
 
+        [Obsolete("建议使用 AppPaths.UsersDir")]
         public static string GetUsersDirectory()
         {
-            var path = Path.Combine(GetAppDirectory(), Paths.UsersDirectory);
-            EnsureDirectoryExists(path);
-            return path;
+            return AppPaths.UsersDir;
         }
 
+        [Obsolete("建议使用 AppPaths.CacheDir 或 CachePaths")]
         public static string GetCacheDirectory()
         {
-            var path = Path.Combine(GetAppDirectory(), Paths.CacheDirectory);
-            EnsureDirectoryExists(path);
-            return path;
+            return AppPaths.CacheDir;
         }
 
+        [Obsolete("建议使用 AppPaths.AnnotationsDir")]
         public static string GetAnnotationsDirectory()
         {
-            var path = Path.Combine(GetAppDirectory(), Paths.AnnotationsDirectory);
-            EnsureDirectoryExists(path);
-            return path;
+            return AppPaths.AnnotationsDir;
         }
 
+        [Obsolete("建议使用 AppPaths.TranslationsDir")]
         public static string GetTranslationsDirectory()
         {
-            var path = Path.Combine(GetAppDirectory(), Paths.TranslationsDirectory);
-            EnsureDirectoryExists(path);
-            return path;
+            return AppPaths.TranslationsDir;
         }
 
+        [Obsolete("建议使用 AppPaths.BookmarksDir")]
         public static string GetBookmarksDirectory()
         {
-            var path = Path.Combine(GetAppDirectory(), Paths.BookmarksDirectory);
-            EnsureDirectoryExists(path);
-            return path;
+            return AppPaths.BookmarksDir;
         }
 
+        [Obsolete("建议使用 AppPaths.HighlightsDir")]
         public static string GetHighlightsDirectory()
         {
-            var path = Path.Combine(GetAppDirectory(), Paths.HighlightsDirectory);
-            EnsureDirectoryExists(path);
-            return path;
+            return AppPaths.HighlightsDir;
         }
 
         public static void EnsureDirectoryExists(string path)
         {
-            if (!Directory.Exists(path))
-            {
-                Directory.CreateDirectory(path);
-            }
+            AppPaths.EnsureDirectoryExists(path);
         }
 
+        [Obsolete("建议使用 AppPaths.GetUserProgressPath()")]
         public static string GetUserProgressPath(string userName)
         {
-            return Path.Combine(GetUsersDirectory(), $"{userName}.json");
+            return AppPaths.GetUserProgressPath(userName);
         }
 
+        [Obsolete("建议使用 AppPaths.GetAnnotationPath()")]
         public static string GetAnnotationPath(string pdfPath, int pageIndex)
         {
-            var fileName = Path.GetFileNameWithoutExtension(pdfPath);
-            return Path.Combine(GetAnnotationsDirectory(), $"{fileName}_page{pageIndex}.json");
+            return AppPaths.GetAnnotationPath(pdfPath, pageIndex);
         }
 
+        [Obsolete("建议使用 AppPaths.LastSessionPath")]
         public static string GetSessionPath()
         {
-            return Path.Combine(GetAppDirectory(), Paths.SessionFile);
+            return AppPaths.LastSessionPath;
         }
 
         public static bool FileExists(string path)
@@ -85,9 +87,10 @@ namespace LearningAssistant.Common
             return !string.IsNullOrWhiteSpace(path) && File.Exists(path);
         }
 
+        [Obsolete("建议使用 AppPaths.GetCacheFilePath() 或 CachePaths")]
         public static string GetCacheFilePath(string key)
         {
-            return Path.Combine(GetCacheDirectory(), $"{key}.json");
+            return AppPaths.GetCacheFilePath(key);
         }
 
         public static IEnumerable<string> GetFilesByExtension(string directory, string extension)

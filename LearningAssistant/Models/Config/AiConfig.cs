@@ -28,20 +28,6 @@ namespace LearningAssistant.Models.Config
         public static readonly Dictionary<string, AiProviderInfo> Providers = new()
         {
             {
-                "deepseek", new AiProviderInfo
-                {
-                    Name = "DeepSeek",
-                    BaseUrl = "https://api.deepseek.com/v1/chat/completions",
-                    DefaultModel = "deepseek-chat",
-                    Models = new List<string>
-                    {
-                        "deepseek-chat",
-                        "deepseek-reasoner"
-                    },
-                    WebViewUrl = "https://chat.deepseek.com/"
-                }
-            },
-            {
                 "doubao", new AiProviderInfo
                 {
                     Name = "豆包 (Doubao)",
@@ -55,6 +41,20 @@ namespace LearningAssistant.Models.Config
                         "doubao-lite-128k"
                     },
                     WebViewUrl = "https://www.doubao.com/chat"
+                }
+            },
+            {
+                "deepseek", new AiProviderInfo
+                {
+                    Name = "DeepSeek",
+                    BaseUrl = "https://api.deepseek.com/v1/chat/completions",
+                    DefaultModel = "deepseek-chat",
+                    Models = new List<string>
+                    {
+                        "deepseek-chat",
+                        "deepseek-reasoner"
+                    },
+                    WebViewUrl = "https://chat.deepseek.com/"
                 }
             },
             {
