@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -50,9 +51,7 @@ namespace LearningAssistant.Services.AI
                 // 尝试从多个位置加载配置
                 string[] configPaths = new[]
                 {
-                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Models", "Config", "AIPrompts.json"),
-                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Config", "AIPrompts.json"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LearningAssistant", "AIPrompts.json")
+                    AppPaths.AiPromptsPath
                 };
 
                 foreach (var configPath in configPaths)

@@ -15,7 +15,7 @@ namespace LearningAssistant.Services.Pdf
         private bool _isImageMode = false;
         private readonly List<string> _imageFiles = new List<string>();
         private readonly Dictionary<string, int> _filePageMap = new Dictionary<string, int>();
-        private readonly string _sessionPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "lastsession.json");
+
 
         public event EventHandler<FileLoadedEventArgs>? FileLoaded;
         public event EventHandler<FolderLoadedEventArgs>? FolderLoaded;
@@ -58,7 +58,7 @@ namespace LearningAssistant.Services.Pdf
             {
                 var data = new SessionData(_lastFolderPath, _currentPdfPath, new Dictionary<string, int>(_filePageMap));
                 var json = JsonSerializer.Serialize(data);
-                File.WriteAllText(_sessionPath, json);
+                File.WriteAllText(AppPaths.LastSessionPath, json);
             }
             catch (Exception ex)
             {
@@ -70,8 +70,8 @@ namespace LearningAssistant.Services.Pdf
         {
             try
             {
-                if (!File.Exists(_sessionPath)) return (null, null, null);
-                var json = File.ReadAllText(_sessionPath);
+                if (!File.Exists(AppPaths.LastSessionPath)) return (null, null, null);
+                var json = File.ReadAllText(AppPaths.LastSessionPath);
                 var data = JsonSerializer.Deserialize<SessionData>(json);
                 if (data == null) return (null, null, null);
                 return (data.Folder, data.FilePath, data.FilePageMap);
@@ -193,7 +193,7 @@ namespace LearningAssistant.Services.Pdf
                 {
                     filePath = Path.Combine(_lastFolderPath, fileName);
                 }
-                
+
                 if (!File.Exists(filePath))
                     return;
 

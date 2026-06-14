@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -50,9 +51,7 @@ namespace LearningAssistant.Services
                 // 尝试从多个位置加载配置
                 string[] configPaths = new[]
                 {
-                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Models", "Config", "SubjectTemplates.json"),
-                    Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Config", "SubjectTemplates.json"),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LearningAssistant", "SubjectTemplates.json")
+                    AppPaths.SubjectTemplatesPath
                 };
 
                 foreach (var configPath in configPaths)

@@ -52,7 +52,7 @@ namespace LearningAssistant
                 return;
             }
 
-            ILogger<MainForm> logger = null!;
+            ILogger<MainForm>? logger = null;
 
             try
             {

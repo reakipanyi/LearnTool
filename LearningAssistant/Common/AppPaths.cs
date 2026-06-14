@@ -1,6 +1,3 @@
-using System;
-using System.IO;
-
 namespace LearningAssistant.Common
 {
     /// <summary>
@@ -104,6 +101,8 @@ namespace LearningAssistant.Common
         /// </summary>
         public static string HighlightsDir => Path.Combine(DataRoot, "highlights");
 
+        public static string TTSCacheDir => Path.Combine(CacheDir, "tts");
+
         #endregion
 
         #region 文件路径
@@ -117,6 +116,7 @@ namespace LearningAssistant.Common
         /// AI提示词配置路径
         /// </summary>
         public static string AiPromptsPath => Path.Combine(ConfigDir, "AIPrompts.json");
+        public static string WebBookmarksPath => Path.Combine(ConfigDir, "WebBookmarks.json");
 
         /// <summary>
         /// 科目模板配置路径
@@ -154,7 +154,7 @@ namespace LearningAssistant.Common
         {
             // 应用数据根目录
             EnsureDirectoryExists(DataRoot);
-            
+
             // 子目录
             EnsureDirectoryExists(ConfigDir);
             EnsureDirectoryExists(DataDir);
@@ -167,6 +167,8 @@ namespace LearningAssistant.Common
             EnsureDirectoryExists(TranslationsDir);
             EnsureDirectoryExists(BookmarksDir);
             EnsureDirectoryExists(HighlightsDir);
+            EnsureDirectoryExists(TTSCacheDir);
+            EnsureDirectoryExists(TesseractDataDir);
         }
 
         /// <summary>
@@ -210,12 +212,7 @@ namespace LearningAssistant.Common
         /// </summary>
         public static string GetDataFilePath(string fileName)
         {
-            // 1. 内置数据目录
-            var builtInPath = Path.Combine(BuiltInDataDir, fileName);
-            if (File.Exists(builtInPath))
-                return builtInPath;
-
-            // 2. 用户数据目录
+            //  用户数据目录
             var userPath = Path.Combine(DataDir, fileName);
             if (File.Exists(userPath))
                 return userPath;

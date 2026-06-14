@@ -1,5 +1,3 @@
-using System;
-
 namespace LearningAssistant.Common
 {
     public static class Constants
@@ -32,7 +30,7 @@ namespace LearningAssistant.Common
         public static class SortOrder
         {
             public const string Sequential = "顺序";
-            public const string Random = "Random";
+            public const string Random = "随机";
         }
 
         public static class FileName
@@ -47,39 +45,32 @@ namespace LearningAssistant.Common
             public const string EnglishSentence = "英语句子.json";
             public const string EnglishComprehensive = "英语综合.json";
         }
+
+        /// <summary>
+        /// 缓存持续时间（分钟）
+        /// </summary>
+        public static class CacheDuration
+        {
+            /// <summary>
+            /// AI解释缓存：7天
+            /// </summary>
+            public const int ExplanationMinutes = 7 * 24 * 60;
+
+            /// <summary>
+            /// AI问答缓存：3天
+            /// </summary>
+            public const int QAMinutes = 3 * 24 * 60;
+
+            /// <summary>
+            /// 练习题缓存：3天
+            /// </summary>
+            public const int ExerciseMinutes = 3 * 24 * 60;
+
+            /// <summary>
+            /// 文本总结缓存：1小时
+            /// </summary>
+            public const int SummarizeMinutes = 60;
+        }
     }
 
-    /// <summary>
-    /// 路径常量 - 已过时，请使用 AppPaths
-    /// </summary>
-    [Obsolete("请使用 AppPaths 类代替")]
-    public static class Paths
-    {
-        [Obsolete("请使用 AppPaths.DataDir")]
-        public const string DataDirectory = "Data";
-        
-        [Obsolete("请使用 AppPaths.UsersDir")]
-        public const string UsersDirectory = "users";
-        
-        [Obsolete("请使用 AppPaths.CacheDir")]
-        public const string CacheDirectory = "cache";
-        
-        [Obsolete("请使用 AppPaths.AnnotationsDir")]
-        public const string AnnotationsDirectory = "annotations";
-        
-        [Obsolete("请使用 AppPaths.TranslationsDir")]
-        public const string TranslationsDirectory = "translations";
-        
-        [Obsolete("请使用 AppPaths.SessionDir")]
-        public const string SessionFile = "session.json";
-        
-        [Obsolete("请使用 AppPaths.ConfigDir")]
-        public const string SettingsFile = "settings.json";
-        
-        [Obsolete("请使用 AppPaths.BookmarksDir")]
-        public const string BookmarksDirectory = "bookmarks";
-        
-        [Obsolete("请使用 AppPaths.HighlightsDir")]
-        public const string HighlightsDirectory = "highlights";
-    }
 }

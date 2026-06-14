@@ -2,7 +2,6 @@ using LearningAssistant.Common.Events;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Data.Database;
 using LearningAssistant.Forms;
-using LearningAssistant.Forms;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
@@ -248,7 +247,9 @@ namespace LearningAssistant.Common
                 var appConfig = sp.GetRequiredService<AppConfig>();
                 var cloudStorageService = sp.GetRequiredService<ICloudStorageService>();
                 var themeService = sp.GetRequiredService<IThemeService>();
-                return new MainForm(presenter, windowManager, appConfig, cloudStorageService, themeService);
+                var logger = sp.GetRequiredService<ILogger<MainForm>>();
+                var webBookmarkService = sp.GetRequiredService<Services.Web.IWebBookmarkService>();
+                return new MainForm(presenter, windowManager, appConfig, cloudStorageService, themeService, logger, webBookmarkService);
             });
             services.AddScoped<SettingForm>();
             services.AddScoped<LearningForm>();
@@ -286,21 +287,9 @@ namespace LearningAssistant.Common
         /// </summary>
         private static string GetCacheDirectorySafely()
         {
-            string cacheDir;
-            try
-            {
-                cacheDir = FileHelper.GetCacheDirectory();
-            }
-            catch (Exception ex)
-            {
-                // 使用默认目录作为后备
-                cacheDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Cache");
-                System.Diagnostics.Debug.WriteLine($"获取缓存目录失败: {ex.Message}, 使用默认目录: {cacheDir}");
-            }
-
+            string cacheDir = AppPaths.CacheDir;
             if (!Directory.Exists(cacheDir))
                 Directory.CreateDirectory(cacheDir);
-
             return cacheDir;
         }
     }

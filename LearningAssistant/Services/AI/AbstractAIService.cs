@@ -1,10 +1,9 @@
+using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Services.Cache;
 using Microsoft.Extensions.Logging;
-using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace LearningAssistant.Services.AI
 {
@@ -46,7 +45,7 @@ namespace LearningAssistant.Services.AI
                 var explanation = await CallApiWithRetryAsync(prompt, cancellationToken);
                 if (!string.IsNullOrWhiteSpace(explanation))
                 {
-                    _cacheService.Set(cacheKey, explanation, 60 * 24 * 7);
+                    _cacheService.Set(cacheKey, explanation, Constants.CacheDuration.ExplanationMinutes);
                 }
                 return explanation;
             }
@@ -138,7 +137,7 @@ namespace LearningAssistant.Services.AI
                 var response = await CallApiWithRetryAsync(prompt, cancellationToken);
                 if (!string.IsNullOrWhiteSpace(response))
                 {
-                    _cacheService.Set(cacheKey, response, 60 * 60);
+                    _cacheService.Set(cacheKey, response, Constants.CacheDuration.SummarizeMinutes);
                 }
                 return response;
             }
@@ -183,20 +182,21 @@ namespace LearningAssistant.Services.AI
             {
                 if (string.IsNullOrEmpty(_config.ApiKey))
                     return string.Empty;
-                
+
                 try
                 {
-                    // 先尝试Base64解码
-                    return Encoding.UTF8.GetString(Convert.FromBase64String(_config.ApiKey));
+                    // 使用安全的配置管理器解密
+                    return Services.Utils.SecureConfigManager.Decrypt(_config.ApiKey);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // 如果解码失败，直接返回原始密钥（可能未加密）
+                    _logger.LogError(ex, "API密钥解密失败，尝试使用原始密钥");
+                    // 如果解密失败，可能是未加密的密钥，直接返回
                     return _config.ApiKey;
                 }
             }
         }
-        
+
         /// <summary>
         /// 检查API密钥是否有效
         /// </summary>

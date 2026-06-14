@@ -55,8 +55,6 @@ namespace LearningAssistant.Services.AI
         {
             try
             {
-                _httpClient.DefaultRequestHeaders.Clear();
-
                 var requestBody = new
                 {
                     model = _config.Model,
@@ -69,16 +67,18 @@ namespace LearningAssistant.Services.AI
                 };
 
                 var json = Newtonsoft.Json.JsonConvert.SerializeObject(requestBody);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
-
+                
+                using var request = new HttpRequestMessage(HttpMethod.Post, _config.BaseUrl);
+                request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+                
                 string apiKey = DecryptedApiKey;
                 if (!string.IsNullOrEmpty(apiKey))
                 {
-                    content.Headers.Add("Authorization", $"Bearer {apiKey}");
+                    request.Headers.Add("Authorization", $"Bearer {apiKey}");
                 }
 
-                var response = await _httpClient.PostAsync(_config.BaseUrl, content, cancellationToken);
-                var responseJson = await response.Content.ReadAsStringAsync();
+                var response = await _httpClient.SendAsync(request, cancellationToken);
+                var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
 
                 if (!response.IsSuccessStatusCode)
                 {

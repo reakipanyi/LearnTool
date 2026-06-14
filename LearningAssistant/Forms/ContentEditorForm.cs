@@ -1,9 +1,13 @@
 using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
+using LearningAssistant.Presenters;
 using LearningAssistant.Services;
+using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using System.ComponentModel;
+using System.Data;
 
 namespace LearningAssistant.Forms
 {
@@ -40,7 +44,7 @@ namespace LearningAssistant.Forms
 
         public void SetPresenter(ContentEditorPresenter presenter)
         {
-            presenter ??= throw new ArgumentNullException(nameof(presenter));
+            if (presenter == null) throw new ArgumentNullException(nameof(presenter));
             presenter.Initialize();
             _logger.LogInformation("ContentEditorPresenter 已设置并初始化");
         }
@@ -300,12 +304,27 @@ namespace LearningAssistant.Forms
             UpdateGridFromJson();
         }
 
-        
+
 
         public void ClearEditForm()
         {
             textBoxJson.Text = "";
             dataGridView.DataSource = null;
+        }
+
+        public void RefreshTreeView(TreeNodeCollection nodes)
+        {
+            // 树形视图刷新方法 - 如果需要可以在此实现
+        }
+
+        public void UpdateItemList()
+        {
+            // 更新学习项列表显示 - 如果需要可以在此实现
+        }
+
+        public void LoadItemForEdit(dynamic item)
+        {
+            // 加载学习项进行编辑 - 如果需要可以在此实现
         }
 
         private void DataGridView_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
@@ -318,7 +337,7 @@ namespace LearningAssistant.Forms
             GridRowsAdded?.Invoke(this, EventArgs.Empty);
         }
 
-        private void RadioChinese_CheckedChanged(object? sender, DataGridViewCellEventArgs e)
+        private void RadioChinese_CheckedChanged(object? sender, EventArgs e)
         {
             if (radioChinese.Checked)
                 LanguageChanged?.Invoke(this, EventArgs.Empty);
@@ -368,15 +387,80 @@ namespace LearningAssistant.Forms
         {
             // 获取当前编辑的内容作为上下文
             string context = textBoxJson.Text.Trim();
-            string prompt;
 
-            if (string.IsNullOrEmpty(context))
+            // 构建一个用于示例结构的 JSON 片段：优先使用 context 中的第一个元素来体现结构
+            string exampleStructure = string.Empty;
+            if (!string.IsNullOrEmpty(context))
             {
-                prompt = "请帮我生成学习内容，格式为JSON数组，每个元素包含 content（内容）和 displayText（显示文本）字段。";
+                try
+                {
+                    var token = JToken.Parse(context);
+
+                    JToken? exampleToken = null;
+                    if (token.Type == JTokenType.Array)
+                    {
+                        exampleToken = token.First ?? token; // 使用第一个元素或数组本身
+                    }
+                    else
+                    {
+                        exampleToken = token;
+                    }
+
+                    if (exampleToken is JObject obj)
+                    {
+                        // 构造一个只包含键的示例对象，值为占位符以体现结构
+                        var demo = new JObject();
+                        foreach (var prop in obj.Properties())
+                        {
+                            demo[prop.Name] = "示例";
+                        }
+                        // 将示例包装为数组以展示最终输出应该是数组
+                        var demoArray = new JArray { demo };
+                        exampleStructure = demoArray.ToString(Formatting.Indented);
+                    }
+                    else
+                    {
+                        // 如果第一个元素不是对象（例如字符串或数字），直接使用其值作为示例
+                        exampleStructure = new JArray { exampleToken }.ToString(Formatting.Indented);
+                    }
+                }
+                catch
+                {
+                    // 无法解析时使用一个简短的默认示例结构
+                    exampleStructure = new JArray
+                    {
+                        new JObject
+                        {
+                            ["Character"] = "示例",
+                            ["Pinyin"] = "示例",
+                            ["Meaning"] = "示例"
+                        }
+                    }.ToString(Formatting.Indented);
+                }
             }
             else
             {
-                prompt = $"请帮我完善或扩展以下学习内容：\n\n{context}";
+                // 空上下文时使用默认结构示例
+                exampleStructure = new JArray
+                {
+                    new JObject
+                    {
+                        ["Character"] = "示例",
+                        ["Pinyin"] = "示例",
+                        ["Meaning"] = "示例"
+                    }
+                }.ToString(Formatting.Indented);
+            }
+
+            // 构建提示词：包含上下文（如果存在）和仅用于展示结构的示例（只用第一个元素的结构）
+            string prompt = string.Empty;
+            if (string.IsNullOrEmpty(context))
+            {
+                prompt = $"请帮我生成学习内容，输出格式为 JSON 数组。示例结构仅用于说明字段和层级（示例只取一项）：\n\n{exampleStructure}\n\n请仅返回 JSON 数组，且遵循上述结构。";
+            }
+            else
+            {
+                prompt = $"下面是当前编辑区的内容，请帮我完善或扩展这些学习内容（保留现有字段并补充/生成更多条目）。\n\n当前内容：\n{context}\n\n示例结构（仅展示第一个条目的结构以示范字段）：\n{exampleStructure}\n\n请返回一个 JSON 数组，结构与示例一致。";
             }
 
             // 使用AI面板服务显示AIAbilityPanel，传递提示词和上下文
@@ -587,7 +671,7 @@ namespace LearningAssistant.Forms
             buttonLoadPending.Click += ButtonLoadPending_Click;
             buttonLoadPending.MouseEnter += Button_HoverEnter;
             buttonLoadPending.MouseLeave += Button_HoverLeave;
-            //
+            // 
             // dataGridView
             // 
             dataGridView.AllowUserToOrderColumns = true;
@@ -599,6 +683,8 @@ namespace LearningAssistant.Forms
             dataGridView.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dataGridView.Size = new Size(1198, 605);
             dataGridView.TabIndex = 1;
+            dataGridView.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.AllCells;
+            dataGridView.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
             dataGridView.CellEndEdit += DataGridView_CellEndEdit;
             dataGridView.RowsAdded += DataGridView_RowsAdded;
             dataGridView.SelectionChanged += DataGridView_SelectionChanged;

@@ -15,7 +15,7 @@ namespace LearningAssistant.Forms
     public partial class WebView2BrowserForm : Form
     {
         private readonly ICloudStorageService? _cloudStorageService;
-        private readonly ILogger<WebView2BrowserForm>? _logger;
+        private readonly ILogger? _logger;
         private readonly IWebBookmarkService? _webBookmarkService;
         private WebView2? _webView;
         private bool _isWebViewReady = false;
@@ -95,7 +95,7 @@ namespace LearningAssistant.Forms
         /// <param name="logger">日志记录器（可选）</param>
         /// <param name="webBookmarkService">网页书签服务（可选）</param>
         public WebView2BrowserForm(ICloudStorageService? cloudStorageService = null,
-                                   ILogger<WebView2BrowserForm>? logger = null,
+                                   ILogger? logger = null,
                                    IWebBookmarkService? webBookmarkService = null)
         {
             _cloudStorageService = cloudStorageService;
@@ -636,7 +636,8 @@ namespace LearningAssistant.Forms
             // 
             comboBoxBookmarks.DropDownStyle = ComboBoxStyle.DropDownList;
             comboBoxBookmarks.Name = "comboBoxBookmarks";
-            comboBoxBookmarks.Size = new Size(150, 25);
+            comboBoxBookmarks.Size = new Size(280, 25);
+            comboBoxBookmarks.DropDownWidth = 450;
             comboBoxBookmarks.SelectedIndexChanged += ComboBoxBookmarks_SelectedIndexChanged;
             // 
             // txtUrl

@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using System.Collections.Concurrent;
@@ -69,28 +70,16 @@ namespace LearningAssistant.Services.Web
         public List<WebBookmarkCategory> Categories { get; set; } = new();
     }
 
+
     public class WebBookmarkService : IWebBookmarkService
     {
         private readonly ILogger<WebBookmarkService>? _logger;
         private readonly ConcurrentBag<WebBookmarkCategory> _categories = new();
-        private readonly string _filePath;
+
 
         public WebBookmarkService(ILogger<WebBookmarkService>? logger = null)
         {
             _logger = logger;
-            var appDataPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "LearningAssistant", "Data");
-            Directory.CreateDirectory(appDataPath);
-            _filePath = Path.Combine(appDataPath, "WebBookmarks.json");
-
-            // 同时尝试从程序目录加载
-            var programDataPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data", "WebBookmarks.json");
-            if (File.Exists(programDataPath))
-            {
-                _filePath = programDataPath;
-            }
-
             LoadFromFile();
         }
 
@@ -181,12 +170,14 @@ namespace LearningAssistant.Services.Web
             {
                 var data = new WebBookmarkData { Categories = _categories.ToList() };
                 var json = JsonConvert.SerializeObject(data, Formatting.Indented);
-                File.WriteAllText(_filePath, json);
-                _logger?.LogDebug("书签已保存到: {Path}", _filePath);
+
+                // 始终写入到用户可写目录，避免覆盖内置只读资源
+                File.WriteAllText(AppPaths.WebBookmarksPath, json);
+                _logger?.LogDebug("书签已保存到: {Path}", AppPaths.WebBookmarksPath);
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "保存书签文件失败: {Path}", _filePath);
+                _logger?.LogError(ex, "保存书签文件失败: {Path}", AppPaths.WebBookmarksPath);
             }
         }
 
@@ -194,9 +185,9 @@ namespace LearningAssistant.Services.Web
         {
             try
             {
-                if (File.Exists(_filePath))
+                if (File.Exists(AppPaths.WebBookmarksPath))
                 {
-                    var json = File.ReadAllText(_filePath);
+                    var json = File.ReadAllText(AppPaths.WebBookmarksPath);
                     var data = JsonConvert.DeserializeObject<WebBookmarkData>(json);
                     if (data?.Categories != null)
                     {
@@ -205,18 +196,17 @@ namespace LearningAssistant.Services.Web
                         {
                             _categories.Add(category);
                         }
-                        _logger?.LogInformation("从文件加载书签: {Path}, 分类数: {Count}", _filePath, data.Categories.Count);
+                        _logger?.LogInformation("从文件加载书签: {Path}, 分类数: {Count}", AppPaths.WebBookmarksPath, data.Categories.Count);
+                        return;
                     }
                 }
-                else
-                {
-                    _logger?.LogInformation("书签文件不存在，加载默认数据");
-                    LoadDefaultBookmarks();
-                }
+
+                _logger?.LogInformation("书签文件不存在，加载默认数据");
+                LoadDefaultBookmarks();
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "加载书签文件失败: {Path}", _filePath);
+                _logger?.LogError(ex, "加载书签文件失败: {Path}", AppPaths.WebBookmarksPath);
                 LoadDefaultBookmarks();
             }
         }

@@ -82,7 +82,7 @@ namespace LearningAssistant.Services.TTS
                     speed = speed,
                     pitch = 1.1,
                     //instructions = "语气幽默，语调活泼多变，充满童趣和笑意，节奏轻快，发音清晰，带有欢快的笑意，语速偏慢，声音响亮一些。",
-                    instructions = "请用耐心、清晰的老师语气，语速稍慢，适合学生跟读",
+                    instructions = "用清晰、缓慢、标准的发音进行教学，每个单词之间留有轻微停顿，便于跟读",
                 },
                 parameters = new
                 {

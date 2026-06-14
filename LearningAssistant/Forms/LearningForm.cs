@@ -128,7 +128,6 @@ namespace LearningAssistant.Forms
         private Button buttonUnknown;
         private Button buttonNext;
         private Button buttonPronounce;
-        private Button buttonRevealAnswer;
         private Button buttonFavorite;
         private Button buttonNote;
         private Button buttonAIAsk;
@@ -261,24 +260,28 @@ namespace LearningAssistant.Forms
         {
             BackColor = colors.Background;
 
-            if (panelContent != null)
+            // Light 主题下不改变 Panel 的颜色
+            if (colors.ThemeMode == ThemeMode.Dark)
             {
-                panelContent.BackColor = colors.Surface;
-            }
+                if (panelContent != null)
+                {
+                    panelContent.BackColor = colors.Surface;
+                }
 
-            if (panelConfig != null)
-            {
-                panelConfig.BackColor = colors.Surface;
-            }
+                if (panelConfig != null)
+                {
+                    panelConfig.BackColor = colors.Surface;
+                }
 
-            if (panelStats != null)
-            {
-                panelStats.BackColor = colors.Surface;
-            }
+                if (panelStats != null)
+                {
+                    panelStats.BackColor = colors.Surface;
+                }
 
-            if (panelQuizMode != null)
-            {
-                panelQuizMode.BackColor = colors.Background;
+                if (panelQuizMode != null)
+                {
+                    panelQuizMode.BackColor = colors.Background;
+                }
             }
 
             if (listBoxDisplay != null)
@@ -353,7 +356,11 @@ namespace LearningAssistant.Forms
             }
             else if (control is Panel panel)
             {
-                panel.BackColor = colors.Surface;
+                // Light 主题下不改变 Panel 的颜色
+                if (colors.ThemeMode == ThemeMode.Dark)
+                {
+                    panel.BackColor = colors.Surface;
+                }
             }
             else if (control is GroupBox groupBox)
             {
@@ -402,7 +409,7 @@ namespace LearningAssistant.Forms
         {
             try
             {
-                string settingsPath = Path.Combine(Paths.DataDirectory, Paths.SettingsFile);
+                string settingsPath = AppPaths.AppSettingsPath;
                 if (File.Exists(settingsPath))
                 {
                     string json = File.ReadAllText(settingsPath);
@@ -433,13 +440,12 @@ namespace LearningAssistant.Forms
                 _settings.SubCategory = comboBoxSubCategory.Text;
                 _settings.IsDetailVisible = checkBoxShowDetail.Checked;
 
-                string settingsDir = Paths.DataDirectory;
-                if (!Directory.Exists(settingsDir))
+                string settingsPath = Path.Combine(AppPaths.ConfigDir, "settings.json");
+                var dir = Path.GetDirectoryName(settingsPath);
+                if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                 {
-                    Directory.CreateDirectory(settingsDir);
+                    Directory.CreateDirectory(dir);
                 }
-
-                string settingsPath = Path.Combine(settingsDir, Paths.SettingsFile);
                 string json = JsonSerializer.Serialize(_settings, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(settingsPath, json);
                 _logger.LogInformation("Settings saved successfully");
@@ -536,9 +542,42 @@ namespace LearningAssistant.Forms
             set
             {
                 labelContent.Text = value;
+                AdjustFontSizeBasedOnContent(value);
                 // 切换学习项时重置详情区状态
                 ResetDetailState();
             }
+        }
+
+        private void AdjustFontSizeBasedOnContent(string content)
+        {
+            if (string.IsNullOrEmpty(content))
+                return;
+
+            int charCount = content.Length;
+            float fontSize;
+
+            if (charCount <= 2)
+            {
+                fontSize = 80F;
+            }
+            else if (charCount <= 4)
+            {
+                fontSize = 72F;
+            }
+            else if (charCount <= 8)
+            {
+                fontSize = 64F;
+            }
+            else if (charCount <= 15)
+            {
+                fontSize = 56F;
+            }
+            else
+            {
+                fontSize = 48F;
+            }
+
+            labelContent.Font = new Font("微软雅黑", fontSize, FontStyle.Bold, GraphicsUnit.Point, 134);
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -578,7 +617,6 @@ namespace LearningAssistant.Forms
                 _isDetailVisible = false;
                 listBoxDisplay.Visible = false;
                 UpdateDetailContent("❓ 请猜测答案");
-                buttonRevealAnswer.Visible = true;
                 // 答题模式下重置复选框状态
                 if (checkBoxShowDetail != null)
                 {
@@ -623,7 +661,7 @@ namespace LearningAssistant.Forms
             // 检查当前项是否已收藏
             try
             {
-                string favoritesPath = Path.Combine(Paths.DataDirectory, "favorites.json");
+                string favoritesPath = Path.Combine(AppPaths.DataDir, "favorites.json");
                 if (File.Exists(favoritesPath))
                 {
                     string json = File.ReadAllText(favoritesPath);
@@ -947,7 +985,6 @@ namespace LearningAssistant.Forms
             buttonUnknown = new Button();
             buttonNext = new Button();
             buttonPronounce = new Button();
-            buttonRevealAnswer = new Button();
             buttonFavorite = new Button();
             buttonNote = new Button();
             buttonExit = new Button();
@@ -1021,9 +1058,9 @@ namespace LearningAssistant.Forms
             // labelContent
             // 
             labelContent.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            labelContent.BackColor = Color.FromArgb(255, 255, 192);
+            labelContent.BackColor = Color.FromArgb(255, 248, 230);
             labelContent.Font = new Font("微软雅黑", 48F, FontStyle.Bold, GraphicsUnit.Point, 134);
-            labelContent.ForeColor = Color.FromArgb(70, 90, 110);
+            labelContent.ForeColor = Color.FromArgb(50, 60, 80);
             labelContent.Location = new Point(0, 0);
             labelContent.Name = "labelContent";
             labelContent.Size = new Size(1089, 636);
@@ -1083,7 +1120,7 @@ namespace LearningAssistant.Forms
             // listBoxItems
             // 
             listBoxItems.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
-            listBoxItems.Font = new Font("微软雅黑", 10F);
+            listBoxItems.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             listBoxItems.FormattingEnabled = true;
             listBoxItems.Location = new Point(0, 35);
             listBoxItems.Name = "listBoxItems";
@@ -1452,7 +1489,7 @@ namespace LearningAssistant.Forms
             checkBoxShowDetail.Name = "checkBoxShowDetail";
             checkBoxShowDetail.Size = new Size(132, 27);
             checkBoxShowDetail.TabIndex = 10;
-            checkBoxShowDetail.Text = "📋 显示详情";
+            checkBoxShowDetail.Text = "👁️ 显示答案";
             checkBoxShowDetail.TextAlign = ContentAlignment.MiddleCenter;
             checkBoxShowDetail.UseVisualStyleBackColor = false;
             checkBoxShowDetail.CheckedChanged += CheckBoxShowDetail_CheckedChanged;
@@ -1553,7 +1590,6 @@ namespace LearningAssistant.Forms
             buttonsFlowLayoutPanel.Controls.Add(buttonUnknown);
             buttonsFlowLayoutPanel.Controls.Add(buttonNext);
             buttonsFlowLayoutPanel.Controls.Add(buttonPronounce);
-            buttonsFlowLayoutPanel.Controls.Add(buttonRevealAnswer);
             buttonsFlowLayoutPanel.Controls.Add(buttonFavorite);
             buttonsFlowLayoutPanel.Controls.Add(buttonNote);
             buttonsFlowLayoutPanel.Controls.Add(buttonExit);
@@ -1638,25 +1674,6 @@ namespace LearningAssistant.Forms
             buttonPronounce.UseVisualStyleBackColor = false;
             buttonPronounce.Click += ButtonPronounce_Click;
             // 
-            // buttonRevealAnswer
-            // 
-            buttonRevealAnswer.BackColor = Color.FromArgb(66, 133, 244);
-            buttonRevealAnswer.FlatAppearance.BorderSize = 0;
-            buttonRevealAnswer.FlatAppearance.MouseDownBackColor = Color.FromArgb(56, 123, 234);
-            buttonRevealAnswer.FlatAppearance.MouseOverBackColor = Color.FromArgb(76, 143, 254);
-            buttonRevealAnswer.FlatStyle = FlatStyle.Flat;
-            buttonRevealAnswer.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
-            buttonRevealAnswer.ForeColor = Color.White;
-            buttonRevealAnswer.Location = new Point(605, 10);
-            buttonRevealAnswer.Margin = new Padding(5);
-            buttonRevealAnswer.Name = "buttonRevealAnswer";
-            buttonRevealAnswer.Size = new Size(105, 45);
-            buttonRevealAnswer.TabIndex = 11;
-            buttonRevealAnswer.Text = "👁️ 显示答案";
-            buttonRevealAnswer.UseVisualStyleBackColor = false;
-            buttonRevealAnswer.Visible = false;
-            buttonRevealAnswer.Click += ButtonRevealAnswer_Click;
-            // 
             // buttonFavorite
             // 
             buttonFavorite.BackColor = Color.FromArgb(255, 193, 7);
@@ -1666,7 +1683,7 @@ namespace LearningAssistant.Forms
             buttonFavorite.FlatStyle = FlatStyle.Flat;
             buttonFavorite.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             buttonFavorite.ForeColor = Color.White;
-            buttonFavorite.Location = new Point(720, 10);
+            buttonFavorite.Location = new Point(605, 10);
             buttonFavorite.Margin = new Padding(5);
             buttonFavorite.Name = "buttonFavorite";
             buttonFavorite.Size = new Size(105, 45);
@@ -1684,7 +1701,7 @@ namespace LearningAssistant.Forms
             buttonNote.FlatStyle = FlatStyle.Flat;
             buttonNote.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             buttonNote.ForeColor = Color.White;
-            buttonNote.Location = new Point(835, 10);
+            buttonNote.Location = new Point(720, 10);
             buttonNote.Margin = new Padding(5);
             buttonNote.Name = "buttonNote";
             buttonNote.Size = new Size(105, 45);
@@ -1702,7 +1719,7 @@ namespace LearningAssistant.Forms
             buttonExit.FlatStyle = FlatStyle.Flat;
             buttonExit.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             buttonExit.ForeColor = Color.White;
-            buttonExit.Location = new Point(950, 10);
+            buttonExit.Location = new Point(835, 10);
             buttonExit.Margin = new Padding(5);
             buttonExit.Name = "buttonExit";
             buttonExit.Size = new Size(105, 45);
@@ -1720,7 +1737,7 @@ namespace LearningAssistant.Forms
             buttonAIAsk.FlatStyle = FlatStyle.Flat;
             buttonAIAsk.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             buttonAIAsk.ForeColor = Color.White;
-            buttonAIAsk.Location = new Point(1065, 10);
+            buttonAIAsk.Location = new Point(950, 10);
             buttonAIAsk.Margin = new Padding(5);
             buttonAIAsk.Name = "buttonAIAsk";
             buttonAIAsk.Size = new Size(105, 45);
@@ -1995,7 +2012,7 @@ namespace LearningAssistant.Forms
         {
             try
             {
-                string statsPath = Path.Combine(Paths.DataDirectory, "study_stats.json");
+                string statsPath = Path.Combine(AppPaths.DataDir, "study_stats.json");
                 if (File.Exists(statsPath))
                 {
                     string json = File.ReadAllText(statsPath);
@@ -2063,7 +2080,7 @@ namespace LearningAssistant.Forms
                     CurrentLevel = _currentLevel
                 };
 
-                string statsPath = Path.Combine(Paths.DataDirectory, "study_stats.json");
+                string statsPath = Path.Combine(AppPaths.DataDir, "study_stats.json");
                 string json = JsonSerializer.Serialize(stats, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(statsPath, json);
             }
@@ -2080,7 +2097,7 @@ namespace LearningAssistant.Forms
         {
             try
             {
-                string badgesPath = Path.Combine(Paths.DataDirectory, "badges.json");
+                string badgesPath = Path.Combine(AppPaths.DataDir, "badges.json");
                 if (File.Exists(badgesPath))
                 {
                     string json = File.ReadAllText(badgesPath);
@@ -2107,7 +2124,9 @@ namespace LearningAssistant.Forms
         {
             try
             {
-                string badgesPath = Path.Combine(Paths.DataDirectory, "badges.json");
+                string badgesPath = Path.Combine(AppPaths.DataDir, "badges.json");
+                var badgesDir = Path.GetDirectoryName(badgesPath);
+                if (!string.IsNullOrEmpty(badgesDir) && !Directory.Exists(badgesDir)) Directory.CreateDirectory(badgesDir);
                 string json = JsonSerializer.Serialize(_unlockedBadges, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(badgesPath, json);
             }
@@ -2240,7 +2259,7 @@ namespace LearningAssistant.Forms
         {
             try
             {
-                string challengesPath = Path.Combine(Paths.DataDirectory, "challenges.json");
+                string challengesPath = Path.Combine(AppPaths.DataDir, "challenges.json");
 
                 if (File.Exists(challengesPath))
                 {
@@ -2279,7 +2298,9 @@ namespace LearningAssistant.Forms
         {
             try
             {
-                string challengesPath = Path.Combine(Paths.DataDirectory, "challenges.json");
+                string challengesPath = Path.Combine(AppPaths.DataDir, "challenges.json");
+                var challengesDir = Path.GetDirectoryName(challengesPath);
+                if (!string.IsNullOrEmpty(challengesDir) && !Directory.Exists(challengesDir)) Directory.CreateDirectory(challengesDir);
                 string json = JsonSerializer.Serialize(_dailyChallenges, new JsonSerializerOptions { WriteIndented = true });
                 File.WriteAllText(challengesPath, json);
             }
@@ -2543,7 +2564,7 @@ namespace LearningAssistant.Forms
             // 只在达到间隔时更新鼓励语
             if (_encouragementCounter >= EncouragementInterval && labelEncouragement != null)
             {
-                labelEncouragement.Text = _encouragements[_random.Value.Next(_encouragements.Length)];
+                labelEncouragement.Text = _encouragements[Random.Shared.Next(_encouragements.Length)];
                 _encouragementCounter = 0;
             }
         }
@@ -2578,9 +2599,9 @@ namespace LearningAssistant.Forms
             if (listBoxItems == null) return;
 
             listBoxItems.Items.Clear();
-            for (int i = 0; i < items.Count; i++)
+            foreach (var item in items)
             {
-                listBoxItems.Items.Add($"{i + 1}. {items[i]}");
+                listBoxItems.Items.Add(item);
             }
 
             UpdateListStatus(items.Count, currentIndex);
@@ -2619,6 +2640,7 @@ namespace LearningAssistant.Forms
         {
             if (listBoxItems == null) return;
 
+            listBoxItems.ItemHeight = 30;
             listBoxItems.DrawMode = enable ? DrawMode.OwnerDrawFixed : DrawMode.Normal;
             if (enable)
             {
@@ -2747,7 +2769,6 @@ namespace LearningAssistant.Forms
                 if (_isQuizMode && !_answerRevealed)
                 {
                     _answerRevealed = true;
-                    buttonRevealAnswer.Visible = false;
                 }
             }
         }
@@ -2832,8 +2853,19 @@ namespace LearningAssistant.Forms
                 SettingsChanged?.Invoke(this, EventArgs.Empty);
         }
 
-        private void ButtonKnown_Click(object? sender, EventArgs e)
+        private async void ButtonKnown_Click(object? sender, EventArgs e)
         {
+            // 禁用按钮防止连续点击
+            EnableButtons(false);
+
+            // 显示当前学习项的内容
+            if (_currentItem != null)
+            {
+                _isDetailVisible = true;
+                listBoxDisplay.Visible = true;
+                //UpdateDetailContent(_currentItem.GetDisplayText());
+            }
+
             _celebrationCounter++;
 
             if (_celebrationCounter >= CelebrationInterval)
@@ -2850,29 +2882,42 @@ namespace LearningAssistant.Forms
             if (_isQuizMode && !_answerRevealed)
             {
                 _quizCorrectCount++;
-                _isDetailVisible = true;
-                listBoxDisplay.Visible = true;
-                UpdateDetailContent(_correctMessages[_random.Value.Next(_correctMessages.Length)]);
             }
 
             UpdateEncouragement();
             CheckBadgeUnlock();
             UpdateChallengesProgress();
 
+            // 添加延迟，让用户看到当前项的内容
+            await Task.Delay(500);
+
+            // 重新启用按钮
+            EnableButtons(true);
+
             MarkAsKnownClicked?.Invoke(this, EventArgs.Empty);
         }
 
-        private void ButtonUnknown_Click(object? sender, EventArgs e)
+        private async void ButtonUnknown_Click(object? sender, EventArgs e)
         {
-            _soundService?.PlayError();
-            ShakeWindow();
+            // 禁用按钮防止连续点击
+            EnableButtons(false);
 
-            if (_isQuizMode && !_answerRevealed)
+            // 显示当前学习项的内容
+            if (_currentItem != null)
             {
                 _isDetailVisible = true;
                 listBoxDisplay.Visible = true;
-                UpdateDetailContent(_wrongMessages[_random.Value.Next(_wrongMessages.Length)]);
+                UpdateDetailContent(_currentItem.GetDisplayText());
             }
+
+            _soundService?.PlayError();
+            //ShakeWindow();
+
+            // 添加延迟，让用户看到当前项的内容
+            await Task.Delay(2000);
+
+            // 重新启用按钮
+            EnableButtons(true);
 
             MarkAsUnknownClicked?.Invoke(this, EventArgs.Empty);
         }
@@ -2903,11 +2948,11 @@ namespace LearningAssistant.Forms
             for (int i = 0; i < 50; i++)
             {
                 var particle = CreateConfettiParticle();
-                particle.X = _random.Value.Next(Width);
-                particle.Y = -_random.Value.Next(100);
-                particle.VelocityY = (float)(_random.Value.NextDouble() * 4 + 3);
-                particle.Size = _random.Value.Next(6, 15);
-                particle.RotationSpeed = (float)(_random.Value.NextDouble() * 15 - 7.5);
+                particle.X = Random.Shared.Next(Width);
+                particle.Y = -Random.Shared.Next(100);
+                particle.VelocityY = (float)(Random.Shared.NextDouble() * 4 + 3);
+                particle.Size = Random.Shared.Next(6, 15);
+                particle.RotationSpeed = (float)(Random.Shared.NextDouble() * 15 - 7.5);
                 _confettiParticles.Add(particle);
             }
 
@@ -2919,19 +2964,19 @@ namespace LearningAssistant.Forms
             var shapes = new[] { ParticleShape.Rectangle, ParticleShape.Circle, ParticleShape.Triangle, ParticleShape.Star };
             return new ConfettiParticle
             {
-                X = _random.Value.Next(Width),
-                Y = -_random.Value.Next(200),
-                Size = _random.Value.Next(8, 20),
-                Color = _celebrationColors[_random.Value.Next(_celebrationColors.Length)],
-                VelocityX = (float)(_random.Value.NextDouble() * 6 - 3),
-                VelocityY = (float)(_random.Value.NextDouble() * 3 + 2),
-                Rotation = _random.Value.Next(360),
-                RotationSpeed = (float)(_random.Value.NextDouble() * 12 - 6),
-                Shape = shapes[_random.Value.Next(shapes.Length)],
+                X = Random.Shared.Next(Width),
+                Y = -Random.Shared.Next(200),
+                Size = Random.Shared.Next(8, 20),
+                Color = _celebrationColors[Random.Shared.Next(_celebrationColors.Length)],
+                VelocityX = (float)(Random.Shared.NextDouble() * 6 - 3),
+                VelocityY = (float)(Random.Shared.NextDouble() * 3 + 2),
+                Rotation = Random.Shared.Next(360),
+                RotationSpeed = (float)(Random.Shared.NextDouble() * 12 - 6),
+                Shape = shapes[Random.Shared.Next(shapes.Length)],
                 Opacity = 1.0f,
-                FadeSpeed = (float)(_random.Value.NextDouble() * 0.01 + 0.005),
-                WobbleOffset = (float)(_random.Value.NextDouble() * Math.PI * 2),
-                WobbleSpeed = (float)(_random.Value.NextDouble() * 0.1 + 0.05)
+                FadeSpeed = (float)(Random.Shared.NextDouble() * 0.01 + 0.005),
+                WobbleOffset = (float)(Random.Shared.NextDouble() * Math.PI * 2),
+                WobbleSpeed = (float)(Random.Shared.NextDouble() * 0.1 + 0.05)
             };
         }
 
@@ -3032,8 +3077,8 @@ namespace LearningAssistant.Forms
             {
                 int currentShakeAmount = (int)(shakeAmount * (1 - (i / (float)shakeSteps)));
 
-                int dx = (_random.Value.Next(3) - 1) * currentShakeAmount;
-                int dy = (_random.Value.Next(3) - 1) * currentShakeAmount;
+                int dx = (Random.Shared.Next(3) - 1) * currentShakeAmount;
+                int dy = (Random.Shared.Next(3) - 1) * currentShakeAmount;
 
                 Location = new Point(originalLocation.X + dx, originalLocation.Y + dy);
                 await Task.Delay(stepDelay);
@@ -3092,7 +3137,6 @@ namespace LearningAssistant.Forms
         private void ButtonRevealAnswer_Click(object? sender, EventArgs e)
         {
             _answerRevealed = true;
-            buttonRevealAnswer.Visible = false;
             _isDetailVisible = true;
             listBoxDisplay.Visible = true;
 
@@ -3128,7 +3172,6 @@ namespace LearningAssistant.Forms
             listBoxDisplay.Visible = false;
             UpdateDetailContent("❓ 请猜测答案");
             _answerRevealed = false;
-            buttonRevealAnswer.Visible = true;
         }
 
         private void ShowAnswer()
@@ -3141,7 +3184,6 @@ namespace LearningAssistant.Forms
                 UpdateDetailContent(_currentItem.GetDisplayText());
             }
             _answerRevealed = true;
-            buttonRevealAnswer.Visible = false;
         }
 
         private void CheckBoxShowDetail_CheckedChanged(object? sender, EventArgs e)
@@ -3210,7 +3252,7 @@ namespace LearningAssistant.Forms
 
             try
             {
-                string favoritesPath = Path.Combine(Paths.DataDirectory, "favorites.json");
+                string favoritesPath = Path.Combine(AppPaths.DataDir, "favorites.json");
                 List<string> favorites = new List<string>();
 
                 if (File.Exists(favoritesPath))
@@ -3239,7 +3281,7 @@ namespace LearningAssistant.Forms
 
             try
             {
-                string favoritesPath = Path.Combine(Paths.DataDirectory, "favorites.json");
+                string favoritesPath = Path.Combine(AppPaths.DataDir, "favorites.json");
 
                 if (File.Exists(favoritesPath))
                 {
@@ -3301,7 +3343,7 @@ namespace LearningAssistant.Forms
 
             try
             {
-                string notesPath = Path.Combine(Paths.DataDirectory, "notes.json");
+                string notesPath = Path.Combine(AppPaths.DataDir, "notes.json");
 
                 if (File.Exists(notesPath))
                 {
@@ -3350,7 +3392,7 @@ namespace LearningAssistant.Forms
 
             try
             {
-                string notesPath = Path.Combine(Paths.DataDirectory, "notes.json");
+                string notesPath = Path.Combine(AppPaths.DataDir, "notes.json");
                 Dictionary<string, string> notesDict = new Dictionary<string, string>();
 
                 if (File.Exists(notesPath))
@@ -3398,34 +3440,48 @@ namespace LearningAssistant.Forms
 
         private void LearningForm_KeyDown(object? sender, KeyEventArgs e)
         {
-            switch (e.KeyCode)
+            if (ProcessShortcut(e.KeyCode))
+            {
+                e.Handled = true;
+            }
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (ProcessShortcut(keyData))
+            {
+                return true;
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private bool ProcessShortcut(Keys keyCode)
+        {
+            switch (keyCode)
             {
                 case Keys.Space:
-                    e.Handled = true;
                     PronounceClicked?.Invoke(this, EventArgs.Empty);
-                    break;
+                    return true;
                 case Keys.Enter:
-                    e.Handled = true;
                     _soundService?.PlayNavigation();
                     NextClicked?.Invoke(this, EventArgs.Empty);
-                    break;
+                    return true;
                 case Keys.D1:
                 case Keys.K:
-                    e.Handled = true;
                     _soundService?.PlaySuccess();
                     MarkAsKnownClicked?.Invoke(this, EventArgs.Empty);
-                    break;
+                    return true;
                 case Keys.D2:
                 case Keys.U:
-                    e.Handled = true;
                     _soundService?.PlayError();
                     MarkAsUnknownClicked?.Invoke(this, EventArgs.Empty);
-                    break;
+                    return true;
                 case Keys.Escape:
-                    e.Handled = true;
                     ExitClicked?.Invoke(this, EventArgs.Empty);
                     Close();
-                    break;
+                    return true;
+                default:
+                    return false;
             }
         }
 

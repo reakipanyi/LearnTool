@@ -36,8 +36,8 @@ namespace LearningAssistant.Services.AI
                     _serviceProvider.GetRequiredService<AiConfig>(),
                     _serviceProvider.GetRequiredService<ICacheService>(),
                     _serviceProvider.GetRequiredService<ILogger<DeepseekAIService>>(),
-                    _serviceProvider.GetRequiredService<HttpClient>())
-
+                    _serviceProvider.GetRequiredService<HttpClient>()),
+                _ => throw new ArgumentException($"不支持的AI服务提供商: {provider}", nameof(provider))
             };
         }
     }

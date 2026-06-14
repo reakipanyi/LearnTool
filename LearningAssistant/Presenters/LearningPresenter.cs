@@ -100,22 +100,50 @@ namespace LearningAssistant.Presenters
 
         private async void View_MarkAsKnownClicked(object? sender, EventArgs e)
         {
-            _eventMediator.RaiseMarkAsKnown();
+            try
+            {
+                _eventMediator.RaiseMarkAsKnown();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "标记为已知失败");
+            }
         }
 
         private async void View_MarkAsUnknownClicked(object? sender, EventArgs e)
         {
-            _eventMediator.RaiseMarkAsUnknown();
+            try
+            {
+                _eventMediator.RaiseMarkAsUnknown();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "标记为未知失败");
+            }
         }
 
         private async void View_PronounceClicked(object? sender, EventArgs e)
         {
-            _eventMediator.RaisePronounce();
+            try
+            {
+                _eventMediator.RaisePronounce();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "发音失败");
+            }
         }
 
         private async void View_NextClicked(object? sender, EventArgs e)
         {
-            _eventMediator.RaiseNext();
+            try
+            {
+                _eventMediator.RaiseNext();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "切换到下一项失败");
+            }
         }
 
         private void View_ExitClicked(object? sender, EventArgs e)

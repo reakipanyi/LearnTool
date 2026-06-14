@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace LearningAssistant.Data.Database
@@ -27,21 +28,8 @@ namespace LearningAssistant.Data.Database
         /// </summary>
         private string GetDefaultDbPath()
         {
-            try
-            {
-                var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                var appFolder = Path.Combine(appDataPath, "LearningAssistant");
-                if (!Directory.Exists(appFolder))
-                    Directory.CreateDirectory(appFolder);
+            return AppPaths.DatabasePath;
 
-                return Path.Combine(appFolder, "learning_assistant.db");
-            }
-            catch (Exception)
-            {
-                // 回退到应用程序目录
-                var fallbackPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "learning_assistant.db");
-                return fallbackPath;
-            }
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

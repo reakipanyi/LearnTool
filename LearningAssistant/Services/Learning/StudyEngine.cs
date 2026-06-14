@@ -14,8 +14,8 @@ namespace LearningAssistant.Services.Learning
         private readonly IDataPersistenceService _persistenceService;
 
         private readonly StudyEngineState _state = new StudyEngineState();
-        private List<LearningItem> _allItems = new List<LearningItem>();
-        private List<LearningItem> _studyItems = new List<LearningItem>();
+        private List<LearningItem> _allItems = [];
+        private List<LearningItem> _studyItems = [];
 
         public int CurrentIndex => _state.CurrentMode == Constants.LearningMode.Quick
             ? _state.QuickModeIndex

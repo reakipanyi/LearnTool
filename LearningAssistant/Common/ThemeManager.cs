@@ -66,6 +66,7 @@ namespace LearningAssistant.Common
             {
                 ThemeMode.Light => new ThemeColors
                 {
+                    ThemeMode = ThemeMode.Light,
                     Primary = Color.FromArgb(25, 118, 210),
                     PrimaryLight = Color.FromArgb(66, 165, 245),
                     PrimaryDark = Color.FromArgb(13, 71, 161),
@@ -82,6 +83,7 @@ namespace LearningAssistant.Common
                 },
                 ThemeMode.Dark => new ThemeColors
                 {
+                    ThemeMode = ThemeMode.Dark,
                     Primary = Color.FromArgb(100, 181, 246),
                     PrimaryLight = Color.FromArgb(144, 202, 249),
                     PrimaryDark = Color.FromArgb(66, 165, 245),
@@ -109,6 +111,7 @@ namespace LearningAssistant.Common
 
     public class ThemeColors
     {
+        public ThemeMode ThemeMode { get; set; }
         public Color Primary { get; set; }
         public Color PrimaryLight { get; set; }
         public Color PrimaryDark { get; set; }

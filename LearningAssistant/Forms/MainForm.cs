@@ -16,9 +16,18 @@ namespace LearningAssistant.Forms
         private readonly AppConfig _appConfig;
         private readonly ICloudStorageService _cloudStorageService;
         private readonly IThemeService _themeService;
+        private readonly ILogger<MainForm> _logger;
+        private readonly Services.Web.IWebBookmarkService _webBookmarkService;
         private bool _isDisposed = false;
 
-        public MainForm(MainPresenter presenter, IWindowManager windowManager, AppConfig appConfig, ICloudStorageService cloudStorageService, IThemeService themeService)
+        public MainForm(
+            MainPresenter presenter,
+            IWindowManager windowManager,
+            AppConfig appConfig,
+            ICloudStorageService cloudStorageService,
+            IThemeService themeService,
+            ILogger<MainForm> logger,
+            Services.Web.IWebBookmarkService webBookmarkService)
         {
             InitializeComponent();
             _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
@@ -26,6 +35,8 @@ namespace LearningAssistant.Forms
             _appConfig = appConfig ?? throw new ArgumentNullException(nameof(appConfig));
             _cloudStorageService = cloudStorageService ?? throw new ArgumentNullException(nameof(cloudStorageService));
             _themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _webBookmarkService = webBookmarkService ?? throw new ArgumentNullException(nameof(webBookmarkService));
 
             Load += MainForm_Load;
 
@@ -36,9 +47,13 @@ namespace LearningAssistant.Forms
         {
             BackColor = colors.Background;
 
-            if (panelMain != null)
+            // Light 主题下不改变 Panel 的颜色
+            if (colors.ThemeMode == ThemeMode.Dark)
             {
-                panelMain.BackColor = colors.Surface;
+                if (panelMain != null)
+                {
+                    panelMain.BackColor = colors.Surface;
+                }
             }
 
             if (comboBoxUser != null)
@@ -51,11 +66,6 @@ namespace LearningAssistant.Forms
             {
                 textBoxProgress.BackColor = colors.Surface;
                 textBoxProgress.ForeColor = colors.TextPrimary;
-            }
-
-            if (panelMain != null)
-            {
-                panelMain.BackColor = colors.Surface;
             }
 
             foreach (Control control in Controls)
@@ -79,7 +89,11 @@ namespace LearningAssistant.Forms
             }
             else if (control is Panel panel)
             {
-                panel.BackColor = colors.Surface;
+                // Light 主题下不改变 Panel 的颜色
+                if (colors.ThemeMode == ThemeMode.Dark)
+                {
+                    panel.BackColor = colors.Surface;
+                }
             }
             else if (control is GroupBox groupBox)
             {
@@ -574,10 +588,7 @@ namespace LearningAssistant.Forms
         {
             try
             {
-                var cloudStorageService = Program.GetService<ICloudStorageService>();
-                var logger = Program.GetService<ILogger<WebView2BrowserForm>>();
-                var webBookmarkService = Program.GetService<Services.Web.IWebBookmarkService>();
-                var form = new WebView2BrowserForm(cloudStorageService, logger, webBookmarkService);
+                var form = new WebView2BrowserForm(_cloudStorageService, _logger, _webBookmarkService);
                 form.Show();
             }
             catch (Exception ex)

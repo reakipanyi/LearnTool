@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using System.Media;
 using System.Security.Cryptography;
 using System.Text;
@@ -8,7 +9,7 @@ namespace LearningAssistant.Services.TTS
     {
         private readonly QwenTtsClient? _client;
         private const long MaxCacheSizeBytes = 100 * 1024 * 1024; // 100MB 缓存上限
-        private static readonly string CacheDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LearningAssistant", "TTSTemp");
+
         private SoundPlayer? _currentPlayer;
         private bool _stopRequested = false;
         private readonly object _playerLock = new object();
@@ -28,7 +29,7 @@ namespace LearningAssistant.Services.TTS
 
         public bool Available => _client != null && _client.Available;
 
-        public bool IsSpeaking 
+        public bool IsSpeaking
         {
             get
             {
@@ -51,7 +52,7 @@ namespace LearningAssistant.Services.TTS
 
             try
             {
-                Directory.CreateDirectory(CacheDirectory);
+                Directory.CreateDirectory(AppPaths.TTSCacheDir);
 
                 // create deterministic filename based on SHA1 of text + language + speed
                 string path = GetCacheFilePath(text, language, speed);
@@ -90,7 +91,7 @@ namespace LearningAssistant.Services.TTS
         private async Task PlayAudioAsync(string filePath)
         {
             _stopRequested = false;
-            
+
             lock (_playerLock)
             {
                 _currentPlayer?.Dispose();
@@ -143,7 +144,7 @@ namespace LearningAssistant.Services.TTS
             try
             {
                 var fmt = string.IsNullOrWhiteSpace(format) ? "wav" : format;
-                
+
                 // 转换语言代码为完整语言名称
                 string lang = language switch
                 {
@@ -151,7 +152,7 @@ namespace LearningAssistant.Services.TTS
                     "en" => "English",
                     _ => language ?? "English"
                 };
-                
+
                 var bytes = await _client.SynthesizeAsync(text: text, voice: "Cherry", language: lang, speed: speed ?? 1.0f, format: fmt).ConfigureAwait(false);
                 return bytes;
             }
@@ -180,16 +181,16 @@ namespace LearningAssistant.Services.TTS
             var hash = sha1.ComputeHash(Encoding.UTF8.GetBytes(meta));
             var sb = new StringBuilder();
             foreach (var b in hash) sb.Append(b.ToString("x2"));
-            return Path.Combine(CacheDirectory, sb.ToString() + ".wav");
+            return Path.Combine(AppPaths.TTSCacheDir, sb.ToString() + ".wav");
         }
 
         private void CleanupOldCache()
         {
             try
             {
-                if (!Directory.Exists(CacheDirectory)) return;
+                if (!Directory.Exists(AppPaths.TTSCacheDir)) return;
 
-                var files = new DirectoryInfo(CacheDirectory)
+                var files = new DirectoryInfo(AppPaths.TTSCacheDir)
                     .GetFiles("*.wav")
                     .OrderByDescending(f => f.LastWriteTimeUtc)
                     .ToList();

@@ -1,5 +1,6 @@
-using Tesseract;
+using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
+using Tesseract;
 
 namespace LearningAssistant.Services.Pdf
 {
@@ -37,78 +38,28 @@ namespace LearningAssistant.Services.Pdf
         {
             try
             {
-                string tessDataPath;
 
-                if (!string.IsNullOrWhiteSpace(_config.DataPath))
+                if (!Directory.Exists(AppPaths.TesseractDataDir))
                 {
-                    if (!Path.IsPathRooted(_config.DataPath))
-                    {
-                        var projectDir = AppDomain.CurrentDomain.BaseDirectory;
-                        tessDataPath = Path.GetFullPath(Path.Combine(projectDir, _config.DataPath));
-                        if (!Directory.Exists(tessDataPath))
-                        {
-                            var sourceDir = Path.GetFullPath(Path.Combine(projectDir, "..", "..", ".."));
-                            tessDataPath = Path.GetFullPath(Path.Combine(sourceDir, _config.DataPath));
-                        }
-
-
-
-
-
-                    }
-                    else
-                    {
-                        tessDataPath = Path.GetFullPath(_config.DataPath);
-                    }
-                }
-                else
-                {
-                    tessDataPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tessdata");
-                }
-
-                tessDataPath = Path.GetFullPath(tessDataPath);
-
-                if (!Directory.Exists(tessDataPath))
-                {
-                    var baseDirTessdata = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tessdata");
-                    if (Directory.Exists(baseDirTessdata))
-                    {
-                        tessDataPath = baseDirTessdata;
-                    }
-                    else
-                    {
-                        var sourceDir = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
-                        var sourceTessdata = Path.Combine(sourceDir, "tessdata");
-                        if (Directory.Exists(sourceTessdata))
-                        {
-                            tessDataPath = sourceTessdata;
-                        }
-                    }
-                }
-
-                if (!Directory.Exists(tessDataPath))
-                {
-                    tessDataPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tessdata");
-                    Directory.CreateDirectory(tessDataPath);
-                    _initErrorMessage = $"Tesseract数据目录不存在，已在 {tessDataPath} 创建目录。\n\n请从 https://github.com/tesseract-ocr/tessdata 下载语言数据文件（如 chi_sim.traineddata、eng.traineddata）并放入该目录";
+                    _initErrorMessage = $"Tesseract数据目录不存在，已在 {AppPaths.TesseractDataDir} 创建目录。\n\n请从 https://github.com/tesseract-ocr/tessdata 下载语言数据文件（如 chi_sim.traineddata、eng.traineddata）并放入该目录";
                     return false;
                 }
 
-                _tessDataPath = tessDataPath;
+                _tessDataPath = AppPaths.TesseractDataDir;
 
                 var langFiles = language.Split('+')
-                    .Select(lang => Path.Combine(tessDataPath, $"{lang}.traineddata"))
+                    .Select(lang => Path.Combine(AppPaths.TesseractDataDir, $"{lang}.traineddata"))
                     .ToList();
 
                 var missingFiles = langFiles.Where(f => !File.Exists(f)).ToList();
                 if (missingFiles.Any())
                 {
                     var missingList = string.Join("\n", missingFiles);
-                    _initErrorMessage = $"缺少语言数据文件:\n{missingList}\n\n当前目录: {tessDataPath}\n\n请从 https://github.com/tesseract-ocr/tessdata 下载所需的语言数据文件";
+                    _initErrorMessage = $"缺少语言数据文件:\n{missingList}\n\n当前目录: {AppPaths.TesseractDataDir}\n\n请从 https://github.com/tesseract-ocr/tessdata 下载所需的语言数据文件";
                     return false;
                 }
 
-                _engine = new TesseractEngine(tessDataPath, language, EngineMode.Default);
+                _engine = new TesseractEngine(AppPaths.TesseractDataDir, language, EngineMode.Default);
                 _engine.DefaultPageSegMode = PageSegMode.Auto;
                 _currentLanguage = language;
                 _initErrorMessage = null;
@@ -270,7 +221,7 @@ namespace LearningAssistant.Services.Pdf
             text = System.Text.RegularExpressions.Regex.Replace(text, @"(\S)\n(\S)", "$1 $2");
             text = System.Text.RegularExpressions.Regex.Replace(text, @"\n(\S)", " $1");
             text = System.Text.RegularExpressions.Regex.Replace(text, @"(\S)\n", "$1 ");
-            
+
             // 最后将剩余的换行符替换为空格
             text = text.Replace("\n", " ");
 

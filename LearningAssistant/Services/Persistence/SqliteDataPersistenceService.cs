@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using LearningAssistant.Data.Database;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Models.User;
@@ -161,7 +162,7 @@ namespace LearningAssistant.Services.Persistence
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Failed to save user profile for {UserId}", profile.UserId);
-                throw; // 可选：重新抛出或静默处理，取决于业务需求
+                throw new PersistenceException($"保存用户配置失败: {profile.UserId}", ex);
             }
         }
 
