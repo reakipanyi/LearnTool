@@ -12,7 +12,6 @@ namespace LearningAssistant.Views
         private FlowLayoutPanel _buttonsPanel = null!;
         private Button _buttonKnown = null!;
         private Button _buttonUnknown = null!;
-        private Button _buttonNext = null!;
         private Button _buttonPronounce = null!;
         private Button _buttonFavorite = null!;
         private Button _buttonNote = null!;
@@ -31,9 +30,6 @@ namespace LearningAssistant.Views
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Button ButtonUnknown => _buttonUnknown;
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public Button ButtonNext => _buttonNext;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Button ButtonPronounce => _buttonPronounce;
@@ -108,7 +104,6 @@ namespace LearningAssistant.Views
             _buttonsPanel = new FlowLayoutPanel();
             _buttonKnown = new Button();
             _buttonUnknown = new Button();
-            _buttonNext = new Button();
             _buttonPronounce = new Button();
             _buttonFavorite = new Button();
             _buttonNote = new Button();
@@ -123,7 +118,6 @@ namespace LearningAssistant.Views
             //
             _buttonsPanel.Controls.Add(_buttonKnown);
             _buttonsPanel.Controls.Add(_buttonUnknown);
-            _buttonsPanel.Controls.Add(_buttonNext);
             _buttonsPanel.Controls.Add(_buttonPronounce);
             _buttonsPanel.Controls.Add(_buttonFavorite);
             _buttonsPanel.Controls.Add(_buttonNote);
@@ -175,24 +169,6 @@ namespace LearningAssistant.Views
             _buttonUnknown.UseVisualStyleBackColor = false;
             _buttonUnknown.Click += ButtonUnknown_Click;
 
-            //
-            // _buttonNext
-            //
-            _buttonNext.BackColor = Color.FromArgb(33, 150, 243);
-            _buttonNext.FlatAppearance.BorderSize = 0;
-            _buttonNext.FlatAppearance.MouseDownBackColor = Color.FromArgb(23, 140, 233);
-            _buttonNext.FlatAppearance.MouseOverBackColor = Color.FromArgb(43, 160, 253);
-            _buttonNext.FlatStyle = FlatStyle.Flat;
-            _buttonNext.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
-            _buttonNext.ForeColor = Color.White;
-            _buttonNext.Location = new Point(295, 10);
-            _buttonNext.Margin = new Padding(5);
-            _buttonNext.Name = "buttonNext";
-            _buttonNext.Size = new Size(150, 45);
-            _buttonNext.TabIndex = 2;
-            _buttonNext.Text = "➡ 下一个 [Enter]";
-            _buttonNext.UseVisualStyleBackColor = false;
-            _buttonNext.Click += ButtonNext_Click;
 
             //
             // _buttonPronounce
@@ -204,11 +180,11 @@ namespace LearningAssistant.Views
             _buttonPronounce.FlatStyle = FlatStyle.Flat;
             _buttonPronounce.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonPronounce.ForeColor = Color.White;
-            _buttonPronounce.Location = new Point(455, 10);
+            _buttonPronounce.Location = new Point(295, 10);
             _buttonPronounce.Margin = new Padding(5);
             _buttonPronounce.Name = "buttonPronounce";
             _buttonPronounce.Size = new Size(140, 45);
-            _buttonPronounce.TabIndex = 3;
+            _buttonPronounce.TabIndex = 2;
             _buttonPronounce.Text = "🔊 发音 [Space]";
             _buttonPronounce.UseVisualStyleBackColor = false;
             _buttonPronounce.Click += ButtonPronounce_Click;
@@ -261,11 +237,11 @@ namespace LearningAssistant.Views
             _buttonExit.FlatStyle = FlatStyle.Flat;
             _buttonExit.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonExit.ForeColor = Color.White;
-            _buttonExit.Location = new Point(835, 10);
+            _buttonExit.Location = new Point(675, 10);
             _buttonExit.Margin = new Padding(5);
             _buttonExit.Name = "buttonExit";
             _buttonExit.Size = new Size(105, 45);
-            _buttonExit.TabIndex = 6;
+            _buttonExit.TabIndex = 5;
             _buttonExit.Text = "🏠 返回";
             _buttonExit.UseVisualStyleBackColor = false;
             _buttonExit.Click += ButtonExit_Click;
@@ -301,8 +277,6 @@ namespace LearningAssistant.Views
 
         private void ButtonUnknown_Click(object? sender, EventArgs e) => UnknownClicked?.Invoke(sender, e);
 
-        private void ButtonNext_Click(object? sender, EventArgs e) => NextClicked?.Invoke(sender, e);
-
         private void ButtonPronounce_Click(object? sender, EventArgs e) => PronounceClicked?.Invoke(sender, e);
 
         private void ButtonFavorite_Click(object? sender, EventArgs e) => FavoriteClicked?.Invoke(sender, e);
@@ -324,7 +298,6 @@ namespace LearningAssistant.Views
         {
             _buttonKnown.Enabled = enabled;
             _buttonUnknown.Enabled = enabled;
-            _buttonNext.Enabled = enabled;
             _buttonPronounce.Enabled = enabled;
             _buttonFavorite.Enabled = enabled;
             _buttonNote.Enabled = enabled;

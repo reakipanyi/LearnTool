@@ -24,6 +24,7 @@ namespace LearningAssistant.Forms
         private readonly ISoundService _soundService;
         private readonly IThemeService _themeService;
         private readonly IAIPanelPopupService? _aiPanelPopupService;
+        private readonly IEncouragementService _encouragementService;
         private bool _disposed = false;
         private Settings _settings = new();
 
@@ -122,22 +123,6 @@ namespace LearningAssistant.Forms
         private int _currentLevel = 0;
         private string _levelTitle = "小白";
         private int _xp = 0;
-        //private ProgressBar progressBar1;
-        //private FlowLayoutPanel buttonsFlowLayoutPanel;
-        //private Button buttonKnown;
-        //private Button buttonUnknown;
-        //private Button buttonNext;
-        //private Button buttonPronounce;
-        //private Button buttonFavorite;
-        //private Button buttonNote;
-        //private Button buttonAIAsk;
-        //private Button buttonExit;
-        //private FlowLayoutPanel settingsFlowLayoutPanel;
-        //private CheckBox checkBoxVoice;
-        //private FlowLayoutPanel pronunciationFlowLayoutPanel;
-        //private RadioButton radioOriginal;
-        //private RadioButton radioExplanation;
-        //private RadioButton radioBoth;
         private int _xpToNextLevel = 100;
 
         private class Badge
@@ -231,7 +216,9 @@ namespace LearningAssistant.Forms
             Color.FromArgb(100, 200, 220)
         };
 
-        public LearningForm(IAiQuestionService aiQuestionService, ITTSService ttsService, ILogger<LearningForm> logger, ILoggerFactory loggerFactory, ISoundService soundService, IThemeService themeService, IAIPanelPopupService aiPanelPopupService)
+        private readonly Dictionary<int, SolidBrush> _colorBrushCache = new Dictionary<int, SolidBrush>();
+
+        public LearningForm(IAiQuestionService aiQuestionService, ITTSService ttsService, ILogger<LearningForm> logger, ILoggerFactory loggerFactory, ISoundService soundService, IThemeService themeService, IAIPanelPopupService aiPanelPopupService, IEncouragementService encouragementService)
         {
             InitializeComponent();
             _aiQuestionService = aiQuestionService ?? throw new ArgumentNullException(nameof(aiQuestionService));
@@ -241,6 +228,7 @@ namespace LearningAssistant.Forms
             _soundService = soundService ?? throw new ArgumentNullException(nameof(soundService));
             _themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
             _aiPanelPopupService = aiPanelPopupService ?? throw new ArgumentNullException(nameof(aiPanelPopupService));
+            _encouragementService = encouragementService ?? throw new ArgumentNullException(nameof(encouragementService));
 
 
             Load += LearningForm_Load;
@@ -252,25 +240,27 @@ namespace LearningAssistant.Forms
             _confettiTimer.Tick += ConfettiTimer_Tick;
 
             _themeService.RegisterThemeable(this);
+
+            // 初始化笔记保存计时器
+            _noteSaveTimer.Tick += NoteSaveTimer_Tick;
         }
 
         private void BindSubViewEvents()
         {
             _buttonsView.KnownClicked += ButtonKnown_Click;
             _buttonsView.UnknownClicked += ButtonUnknown_Click;
-            _buttonsView.NextClicked += ButtonNext_Click;
             _buttonsView.PronounceClicked += ButtonPronounce_Click;
             _buttonsView.FavoriteClicked += ButtonFavorite_Click;
             _buttonsView.NoteClicked += ButtonNote_Click;
             _buttonsView.ExitClicked += ButtonExit_Click;
             _buttonsView.AIAskClicked += ButtonAIAsk_Click;
 
-            _settingsView.RadioStudyMode.CheckedChanged += RadioStudyMode_CheckedChanged;
-            _settingsView.RadioQuickMode.CheckedChanged += RadioQuickMode_CheckedChanged;
-            _settingsView.RadioSequential.CheckedChanged += RadioSequential_CheckedChanged;
-            _settingsView.RadioRandom.CheckedChanged += RadioRandom_CheckedChanged;
-            _settingsView.RadioChinese.CheckedChanged += RadioChinese_CheckedChanged;
-            _settingsView.RadioEnglish.CheckedChanged += RadioEnglish_CheckedChanged;
+            _settingsView.RadioStudyMode.CheckedChanged += RadioSetting_CheckedChanged;
+            _settingsView.RadioQuickMode.CheckedChanged += RadioSetting_CheckedChanged;
+            _settingsView.RadioSequential.CheckedChanged += RadioSetting_CheckedChanged;
+            _settingsView.RadioRandom.CheckedChanged += RadioSetting_CheckedChanged;
+            _settingsView.RadioChinese.CheckedChanged += RadioSetting_CheckedChanged;
+            _settingsView.RadioEnglish.CheckedChanged += RadioSetting_CheckedChanged;
             _settingsView.ComboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
             _settingsView.ButtonOpenStatistics.Click += ButtonOpenStatistics_Click;
             _settingsView.ButtonExportErrorBook.Click += ButtonExportErrorBook_Click;
@@ -279,7 +269,6 @@ namespace LearningAssistant.Forms
 
             _contentView.ContentClicked += LabelContent_Click;
             _contentView.DetailClicked += ListBoxDisplay_Click;
-            _contentView.DetailCheckChanged += CheckBoxShowDetail_CheckedChanged;
             _contentView.NoteTextChanged += RichTextBoxNotes_TextChanged;
 
             _listView.SelectedIndexChanged += ListBoxItems_SelectedIndexChanged;
@@ -430,11 +419,20 @@ namespace LearningAssistant.Forms
         }
 
 
-        private void LearningForm_FormClosing(object? sender, FormClosingEventArgs e)
+        private async void LearningForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
             SaveSettings();
-            // 停止语音播放
-            _ttsService?.StopAsync().ConfigureAwait(false);
+            try
+            {
+                if (_ttsService != null)
+                {
+                    await _ttsService.StopAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to stop TTS service");
+            }
         }
 
         private void LoadSettings()
@@ -470,8 +468,6 @@ namespace LearningAssistant.Forms
                 _settings.SortOrder = radioSequential.Checked ? Constants.SortOrder.Sequential : Constants.SortOrder.Random;
                 _settings.Language = radioChinese.Checked ? Constants.Language.Chinese : Constants.Language.English;
                 _settings.SubCategory = comboBoxSubCategory.Text;
-                _settings.IsDetailVisible = checkBoxShowDetail.Checked;
-
                 string settingsPath = Path.Combine(AppPaths.ConfigDir, "settings.json");
                 var dir = Path.GetDirectoryName(settingsPath);
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
@@ -518,6 +514,9 @@ namespace LearningAssistant.Forms
                 if (shouldSetQuick) radioQuickMode.Checked = true;
                 else if (shouldSetStudy) radioStudyMode.Checked = true;
 
+                // 同步 _isQuizMode 状态
+                _isQuizMode = radioQuickMode.Checked;
+
                 // 处理排序方式单选按钮
                 bool shouldSetRandom = _settings.SortOrder == "Random" && !radioRandom.Checked;
                 bool shouldSetSequential = _settings.SortOrder != "Random" && !radioSequential.Checked;
@@ -542,9 +541,6 @@ namespace LearningAssistant.Forms
                     }
                 }
 
-                // 处理显示详情复选框
-                if (checkBoxShowDetail.Checked != _settings.IsDetailVisible)
-                    checkBoxShowDetail.Checked = _settings.IsDetailVisible;
             }
             finally
             {
@@ -575,8 +571,7 @@ namespace LearningAssistant.Forms
             {
                 labelContent.Text = value;
                 AdjustFontSizeBasedOnContent(value);
-                // 切换学习项时重置详情区状态
-                ResetDetailState();
+                // 注意：不在此处调用 ResetDetailState，由 CurrentItem 统一管理状态
             }
         }
 
@@ -617,6 +612,7 @@ namespace LearningAssistant.Forms
         {
             set
             {
+                // 仅更新内容，由 CurrentItem 统一管理状态
                 if (!string.IsNullOrEmpty(value))
                 {
                     UpdateDetailContent(value);
@@ -629,6 +625,7 @@ namespace LearningAssistant.Forms
         {
             set
             {
+                // 仅更新内容，由 CurrentItem 统一管理状态
                 if (!string.IsNullOrEmpty(value))
                 {
                     UpdateDetailContent(value);
@@ -644,6 +641,8 @@ namespace LearningAssistant.Forms
                 _currentItem = value;
                 if (_currentItem != null)
                 {
+                    // 切换学习项时，根据当前模式重置详情区状态
+                    ResetDetailState();
                 }
             }
         }
@@ -654,39 +653,10 @@ namespace LearningAssistant.Forms
         private void ResetDetailState()
         {
             _answerRevealed = false;
+            _currentNoteCounted = false;
 
-            if (_isQuizMode)
-            {
-                // 答题模式：隐藏详情区
-                _isDetailVisible = false;
-                listBoxDisplay.Visible = false;
-                UpdateDetailContent("❓ 请猜测答案");
-                // 答题模式下重置复选框状态
-                if (checkBoxShowDetail != null)
-                {
-                    checkBoxShowDetail.Checked = false;
-                }
-            }
-            else
-            {
-                // 根据用户之前的选择恢复显示状态
-                if (checkBoxShowDetail != null && checkBoxShowDetail.Checked)
-                {
-                    _isDetailVisible = true;
-                    listBoxDisplay.Visible = true;
-                    if (_currentItem != null)
-                    {
-                        UpdateDetailContent(_currentItem.GetDisplayText());
-                    }
-                }
-                else
-                {
-                    _isDetailVisible = false;
-                    listBoxDisplay.Visible = false;
-                }
-            }
+            UpdateDetailState(true, !_isQuizMode);
 
-            // 重置收藏状态
             ResetFavoriteState();
         }
 
@@ -733,8 +703,9 @@ namespace LearningAssistant.Forms
                     _isFavorite = false;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "Failed to reset favorite state");
                 _isFavorite = false;
             }
 
@@ -897,14 +868,19 @@ namespace LearningAssistant.Forms
         {
             buttonKnown.Enabled = enabled;
             buttonUnknown.Enabled = enabled;
-            buttonNext.Enabled = enabled;
             buttonPronounce.Enabled = enabled;
         }
 
-        public void PlayPronunciation(string text, string language)
+        public async void PlayPronunciation(string text, string language)
         {
-            // 委托给TTS服务播放发音
-            _ttsService.SpeakAsync(text, language).ConfigureAwait(false);
+            try
+            {
+                await _ttsService.SpeakAsync(text, language);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to play pronunciation");
+            }
         }
 
 
@@ -945,7 +921,6 @@ namespace LearningAssistant.Forms
         private ComboBox comboBoxSubCategory => _settingsView.ComboBoxSubCategory;
         private Button buttonOpenStatistics => _settingsView.ButtonOpenStatistics;
         private Button buttonExportErrorBook => _settingsView.ButtonExportErrorBook;
-        private CheckBox checkBoxShowDetail => _contentView.CheckBoxShowDetail;
         private Button buttonPronounce => _buttonsView.ButtonPronounce;
         private Button buttonFavorite => _buttonsView.ButtonFavorite;
         private Button buttonNote => _buttonsView.ButtonNote;
@@ -953,7 +928,7 @@ namespace LearningAssistant.Forms
         private Button buttonAIAsk => _buttonsView.ButtonAIAsk;
         private Button buttonKnown => _buttonsView.ButtonKnown;
         private Button buttonUnknown => _buttonsView.ButtonUnknown;
-        private Button buttonNext => _buttonsView.ButtonNext;
+
         private FlowLayoutPanel buttonsFlowLayoutPanel => _buttonsView.ButtonsPanel;
         private Panel panelNotes => _contentView.PanelNotes;
         private RichTextBox richTextBoxNotes => _contentView.RichTextBoxNotes;
@@ -962,8 +937,7 @@ namespace LearningAssistant.Forms
         private Button buttonQuizMode => _settingsView.ButtonQuizMode;
         private Label labelQuizHint => _settingsView.LabelQuizHint;
         private Button buttonThemeToggle => _settingsView.ButtonThemeToggle;
-        private GroupBox groupBoxPronunciationScope => _settingsView.GroupBoxPronunciationScope;
-        private FlowLayoutPanel settingsFlowLayoutPanel => _settingsView.SettingsFlowLayoutPanel;
+
         private CheckBox checkBoxVoice => _settingsView.CheckBoxVoice;
         private FlowLayoutPanel pronunciationFlowLayoutPanel => _settingsView.PronunciationFlowLayoutPanel;
         private RadioButton radioOriginal => _settingsView.RadioOriginal;
@@ -1069,7 +1043,6 @@ namespace LearningAssistant.Forms
             middleTableLayoutPanel.Controls.Add(_contentView.PanelNotes, 0, 1);
             middleTableLayoutPanel.Controls.Add(_buttonsView.ButtonsPanel, 0, 2);
             middleTableLayoutPanel.Controls.Add(progressBar1, 0, 3);
-            middleTableLayoutPanel.Controls.Add(settingsFlowLayoutPanel, 0, 4);
             middleTableLayoutPanel.Controls.Add(_statsView.LabelStatistics, 0, 5);
             middleTableLayoutPanel.Dock = DockStyle.Fill;
             middleTableLayoutPanel.Location = new Point(0, 0);
@@ -1084,18 +1057,7 @@ namespace LearningAssistant.Forms
             middleTableLayoutPanel.Size = new Size(1095, 838);
             middleTableLayoutPanel.TabIndex = 0;
 
-            // progressBar1 已在 LearningStatsView 中初始化
 
-            //
-            // settingsFlowLayoutPanel (已在 LearningSettingsView 中初始化)
-            //
-            settingsFlowLayoutPanel.Dock = DockStyle.Fill;
-            settingsFlowLayoutPanel.Location = new Point(3, 758);
-            settingsFlowLayoutPanel.Name = "settingsFlowLayoutPanel";
-            settingsFlowLayoutPanel.Padding = new Padding(10, 5, 10, 5);
-            settingsFlowLayoutPanel.Size = new Size(1089, 45);
-            settingsFlowLayoutPanel.TabIndex = 5;
-            settingsFlowLayoutPanel.WrapContents = false;
 
             //
             // _confettiTimer
@@ -1138,6 +1100,9 @@ namespace LearningAssistant.Forms
             _gameTimer = new System.Windows.Forms.Timer();
             _gameTimer.Interval = 1000;
             _gameTimer.Tick += GameTimer_Tick;
+
+            _noteSaveTimer.Interval = 1000;
+            _noteSaveTimer.Tick += NoteSaveTimer_Tick;
 
             LoadStudyStats();
             LoadBadges();
@@ -1327,6 +1292,11 @@ namespace LearningAssistant.Forms
             }
         }
 
+        private readonly SolidBrush _selectedBackgroundBrush = new SolidBrush(Color.FromArgb(76, 175, 80));
+        private readonly SolidBrush _selectedForegroundBrush = new SolidBrush(Color.White);
+        private readonly SolidBrush _normalForegroundBrush = new SolidBrush(Color.Black);
+        private readonly Pen _selectedBorderPen = new Pen(Color.White, 2);
+
         private void ListBoxItems_DrawItem(object? sender, DrawItemEventArgs e)
         {
             if (sender is not ListBox listBox) return;
@@ -1336,24 +1306,18 @@ namespace LearningAssistant.Forms
 
             bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
 
-            using (var brush = new SolidBrush(isSelected ? Color.FromArgb(76, 175, 80) : listBox.BackColor))
+            if (isSelected)
             {
-                e.Graphics.FillRectangle(brush, e.Bounds);
+                e.Graphics.FillRectangle(_selectedBackgroundBrush, e.Bounds);
             }
 
             string text = listBox.Items[e.Index].ToString() ?? string.Empty;
 
-            using (var foreBrush = new SolidBrush(isSelected ? Color.White : Color.Black))
-            {
-                e.Graphics.DrawString(text, e.Font, foreBrush, e.Bounds, StringFormat.GenericDefault);
-            }
+            e.Graphics.DrawString(text, e.Font, isSelected ? _selectedForegroundBrush : _normalForegroundBrush, e.Bounds, StringFormat.GenericDefault);
 
             if (isSelected)
             {
-                using (var pen = new Pen(Color.White, 2))
-                {
-                    e.Graphics.DrawRectangle(pen, e.Bounds.X, e.Bounds.Y, e.Bounds.Width - 1, e.Bounds.Height - 1);
-                }
+                e.Graphics.DrawRectangle(_selectedBorderPen, e.Bounds.X, e.Bounds.Y, e.Bounds.Width - 1, e.Bounds.Height - 1);
             }
 
             e.DrawFocusRectangle();
@@ -1415,63 +1379,83 @@ namespace LearningAssistant.Forms
 
         private void LabelContent_Click(object? sender, EventArgs e)
         {
-            ToggleDetail();
+            // 点击内容区：根据模式显示或隐藏答案
+            if (_isQuizMode)
+            {
+                // 答题模式：切换答案显示状态
+                UpdateDetailState(true, !_answerRevealed);
+            }
+            else
+            {
+                // 学习模式：直接显示完整内容
+                UpdateDetailState(true, true);
+            }
         }
 
         private void ListBoxDisplay_Click(object? sender, EventArgs e)
         {
-            ToggleDetail();
-        }
-
-        /// <summary>
-        /// 切换详情区的显示/隐藏
-        /// </summary>
-        private void ToggleDetail()
-        {
-            _isDetailVisible = !_isDetailVisible;
-            listBoxDisplay.Visible = _isDetailVisible;
-
-            // 同步更新复选框状态
-            if (checkBoxShowDetail != null)
+            // 点击详情区：根据模式显示或隐藏答案
+            if (_isQuizMode)
             {
-                checkBoxShowDetail.Checked = _isDetailVisible;
+                // 答题模式：切换答案显示状态
+                UpdateDetailState(true, !_answerRevealed);
             }
-
-            if (_isDetailVisible && _currentItem != null)
+            else
             {
-                UpdateDetailContent(_currentItem.GetDisplayText());
-                // 答题模式下查看答案，标记为已显示
-                if (_isQuizMode && !_answerRevealed)
-                {
-                    _answerRevealed = true;
-                }
+                // 学习模式：直接显示完整内容
+                UpdateDetailState(true, true);
             }
         }
 
         /// <summary>
-        /// 格式化显示文本，将竖线替换为换行
+        /// 更新详情区内容
         /// </summary>
-        private string FormatDisplayText(string text)
-        {
-            if (string.IsNullOrEmpty(text)) return text;
-            return text.Replace("||", "\n\n").Replace("|", "\n");
-        }
-
-        /// <summary>
-        /// 更新详情区内容（用于答题模式等场景）
-        /// </summary>
+        /// <param name="text">要显示的文本</param>
         private void UpdateDetailContent(string text)
         {
             listBoxDisplay.Items.Clear();
-            string formattedText = FormatDisplayText(text);
-            // 将格式化后的文本按换行分割为多个列表项
-            string[] lines = formattedText.Split(new[] { '\n', '|' }, StringSplitOptions.RemoveEmptyEntries);
+            if (string.IsNullOrEmpty(text)) return;
+
+            string[] lines = text.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
             foreach (string line in lines)
             {
                 string trimmedLine = line.Trim();
                 if (!string.IsNullOrEmpty(trimmedLine))
                 {
                     listBoxDisplay.Items.Add(trimmedLine);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 统一更新详情区状态
+        /// </summary>
+        /// <param name="visible">是否可见</param>
+        /// <param name="showAnswer">是否显示答案（答题模式下）</param>
+        private void UpdateDetailState(bool visible, bool showAnswer = true)
+        {
+            listBoxDisplay.Visible = visible;
+
+            if (visible && _currentItem != null)
+            {
+                if (_isQuizMode)
+                {
+                    // 答题模式：根据是否已揭示答案显示不同内容
+                    _answerRevealed = showAnswer;
+                    if (_answerRevealed)
+                    {
+                        UpdateDetailContent(_currentItem.GetDisplayText()); // 显示完整答案
+                    }
+                    else
+                    {
+                        UpdateDetailContent(_currentItem.GetDisplayStruct()); // 只显示结构（问题）
+                    }
+                }
+                else
+                {
+                    // 学习模式：显示完整内容
+                    _answerRevealed = true;
+                    UpdateDetailContent(_currentItem.GetDisplayText());
                 }
             }
         }
@@ -1931,46 +1915,31 @@ namespace LearningAssistant.Forms
 
         #endregion
 
-        #region Event Handlers
 
-        private bool _isDetailVisible = false;
-
-        private void RadioStudyMode_CheckedChanged(object? sender, EventArgs e)
+        private void RadioSetting_CheckedChanged(object? sender, EventArgs e)
         {
-            if (radioStudyMode.Checked && !_settingsChangedEventsSuspended)
-                SettingsChanged?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void RadioQuickMode_CheckedChanged(object? sender, EventArgs e)
-        {
-            if (radioQuickMode.Checked && !_settingsChangedEventsSuspended)
-                SettingsChanged?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void RadioSequential_CheckedChanged(object? sender, EventArgs e)
-        {
-            if (radioSequential.Checked && !_settingsChangedEventsSuspended)
-                SettingsChanged?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void RadioRandom_CheckedChanged(object? sender, EventArgs e)
-        {
-            if (radioRandom.Checked && !_settingsChangedEventsSuspended)
-                SettingsChanged?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void RadioChinese_CheckedChanged(object? sender, EventArgs e)
-        {
-            if (radioChinese.Checked && !_settingsChangedEventsSuspended)
+            if (sender is RadioButton radio && radio.Checked && !_settingsChangedEventsSuspended)
             {
-                SettingsChanged?.Invoke(this, EventArgs.Empty);
-            }
-        }
+                // 学习模式/答题模式切换时，更新 _isQuizMode 和详情区状态
+                if (radio == radioStudyMode)
+                {
+                    _isQuizMode = false;
+                    UpdateDetailState(true, true);  // 学习模式：显示答案
+                    // 更新快捷按钮文本
+                    buttonQuizMode.BackColor = Color.FromArgb(255, 193, 7);
+                    buttonQuizMode.Text = "🎮 答题模式";
+                    labelQuizHint.Text = "学习模式，显示完整内容";
+                }
+                else if (radio == radioQuickMode)
+                {
+                    _isQuizMode = true;
+                    UpdateDetailState(true, false);  // 答题模式：隐藏答案
+                    // 更新快捷按钮文本
+                    buttonQuizMode.BackColor = Color.FromArgb(76, 175, 80);
+                    buttonQuizMode.Text = "📖 学习模式";
+                    labelQuizHint.Text = "答案已隐藏";
+                }
 
-        private void RadioEnglish_CheckedChanged(object? sender, EventArgs e)
-        {
-            if (radioEnglish.Checked && !_settingsChangedEventsSuspended)
-            {
                 SettingsChanged?.Invoke(this, EventArgs.Empty);
             }
         }
@@ -1989,71 +1958,74 @@ namespace LearningAssistant.Forms
 
         private async void ButtonKnown_Click(object? sender, EventArgs e)
         {
-            // 禁用按钮防止连续点击
-            EnableButtons(false);
-
-            // 显示当前学习项的内容
-            if (_currentItem != null)
+            try
             {
-                _isDetailVisible = true;
-                listBoxDisplay.Visible = true;
-                //UpdateDetailContent(_currentItem.GetDisplayText());
+                EnableButtons(false);
+
+                _celebrationCounter++;
+
+                if (_celebrationCounter >= CelebrationInterval)
+                {
+                    _soundService?.PlaySuccess();
+                    StartConfetti();
+                    _celebrationCounter = 0;
+                }
+
+                int points = _isQuizMode && !_answerRevealed ? 20 : 10;
+                IncrementScore(points);
+
+                _totalLearnedCount++;
+                if (_isQuizMode && !_answerRevealed)
+                {
+                    _quizCorrectCount++;
+                }
+
+                UpdateEncouragement();
+                CheckBadgeUnlock();
+                UpdateChallengesProgress();
+
+                _ = _encouragementService.PlayRandomKnownFeedbackAsync();
+
+                await Task.Delay(500);
+
+                EnableButtons(true);
+
+                MarkAsKnownClicked?.Invoke(this, EventArgs.Empty);
             }
-
-            _celebrationCounter++;
-
-            if (_celebrationCounter >= CelebrationInterval)
+            catch (Exception ex)
             {
-                _soundService?.PlaySuccess();
-                StartConfetti();
-                _celebrationCounter = 0;
+                _logger?.LogError(ex, "ButtonKnown_Click failed");
+                EnableButtons(true);
             }
-
-            int points = _isQuizMode && !_answerRevealed ? 20 : 10;
-            IncrementScore(points);
-
-            _totalLearnedCount++;
-            if (_isQuizMode && !_answerRevealed)
-            {
-                _quizCorrectCount++;
-            }
-
-            UpdateEncouragement();
-            CheckBadgeUnlock();
-            UpdateChallengesProgress();
-
-            // 添加延迟，让用户看到当前项的内容
-            await Task.Delay(500);
-
-            // 重新启用按钮
-            EnableButtons(true);
-
-            MarkAsKnownClicked?.Invoke(this, EventArgs.Empty);
         }
 
         private async void ButtonUnknown_Click(object? sender, EventArgs e)
         {
-            // 禁用按钮防止连续点击
-            EnableButtons(false);
-
-            // 显示当前学习项的内容
-            if (_currentItem != null)
+            try
             {
-                _isDetailVisible = true;
-                listBoxDisplay.Visible = true;
-                UpdateDetailContent(_currentItem.GetDisplayText());
+                EnableButtons(false);
+
+                if (_currentItem != null)
+                {
+                    // 不认识按钮：强制显示答案（用于学习目的）
+                    UpdateDetailState(true, true);
+                }
+
+                _soundService?.PlayError();
+
+                _ = _encouragementService.PlayRandomUnknownFeedbackAsync();
+
+                await Task.Delay(2000);
+
+                EnableButtons(true);
+
+                MarkAsUnknownClicked?.Invoke(this, EventArgs.Empty);
             }
-
-            _soundService?.PlayError();
-            //ShakeWindow();
-
-            // 添加延迟，让用户看到当前项的内容
-            await Task.Delay(2000);
-
-            // 重新启用按钮
-            EnableButtons(true);
-
-            MarkAsUnknownClicked?.Invoke(this, EventArgs.Empty);
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "ButtonUnknown_Click failed");
+                EnableButtons(true);
+            }
         }
 
         private void ButtonNext_Click(object? sender, EventArgs e)
@@ -2159,7 +2131,14 @@ namespace LearningAssistant.Forms
             {
                 if (particle.Y > Height + 50 || particle.Opacity <= 0) continue;
 
-                using var brush = new SolidBrush(Color.FromArgb((int)(particle.Opacity * 255), particle.Color));
+                int colorKey = particle.Color.ToArgb();
+                if (!_colorBrushCache.TryGetValue(colorKey, out var brush))
+                {
+                    brush = new SolidBrush(particle.Color);
+                    _colorBrushCache[colorKey] = brush;
+                }
+
+                brush.Color = Color.FromArgb((int)(particle.Opacity * 255), particle.Color);
 
                 g.TranslateTransform(particle.X, particle.Y);
                 g.RotateTransform(particle.Rotation);
@@ -2271,7 +2250,6 @@ namespace LearningAssistant.Forms
         private void ButtonRevealAnswer_Click(object? sender, EventArgs e)
         {
             _answerRevealed = true;
-            _isDetailVisible = true;
             listBoxDisplay.Visible = true;
 
             if (_currentItem != null)
@@ -2282,65 +2260,27 @@ namespace LearningAssistant.Forms
 
         private void ButtonQuizMode_Click(object? sender, EventArgs e)
         {
-            _isQuizMode = !_isQuizMode;
-
+            // 通过切换RadioButton来同步状态
             if (_isQuizMode)
             {
-                buttonQuizMode.BackColor = Color.FromArgb(76, 175, 80);
-                buttonQuizMode.Text = "📖 学习模式";
-                labelQuizHint.Text = "答案已隐藏";
-                HideAnswer();
+                // 当前是答题模式，切换到学习模式
+                radioStudyMode.Checked = true;
             }
             else
             {
-                buttonQuizMode.BackColor = Color.FromArgb(255, 193, 7);
-                buttonQuizMode.Text = "🎮 答题模式";
-                labelQuizHint.Text = "先隐藏答案，测试自己";
-                ShowAnswer();
+                // 当前是学习模式，切换到答题模式
+                radioQuickMode.Checked = true;
             }
         }
 
         private void HideAnswer()
         {
-            _isDetailVisible = false;
-            listBoxDisplay.Visible = false;
-            UpdateDetailContent("❓ 请猜测答案");
-            _answerRevealed = false;
+            UpdateDetailState(true, false);
         }
 
         private void ShowAnswer()
         {
-            _isDetailVisible = true;
-            listBoxDisplay.Visible = true;
-
-            if (_currentItem != null)
-            {
-                UpdateDetailContent(_currentItem.GetDisplayText());
-            }
-            _answerRevealed = true;
-        }
-
-        private void CheckBoxShowDetail_CheckedChanged(object? sender, EventArgs e)
-        {
-            if (sender is not CheckBox checkBox) return;
-
-            if (checkBox.Checked)
-            {
-                // 显示详情
-                _isDetailVisible = true;
-                listBoxDisplay.Visible = true;
-
-                if (_currentItem != null)
-                {
-                    UpdateDetailContent(_currentItem.GetDisplayText());
-                }
-            }
-            else
-            {
-                // 隐藏详情
-                _isDetailVisible = false;
-                listBoxDisplay.Visible = false;
-            }
+            UpdateDetailState(true, true);
         }
 
         private void ButtonThemeToggle_Click(object? sender, EventArgs e)
@@ -2358,6 +2298,8 @@ namespace LearningAssistant.Forms
         }
 
         private bool _isFavorite = false;
+        private bool _currentNoteCounted = false;
+        private readonly System.Windows.Forms.Timer _noteSaveTimer = new System.Windows.Forms.Timer();
 
         private void ButtonFavorite_Click(object? sender, EventArgs e)
         {
@@ -2558,13 +2500,30 @@ namespace LearningAssistant.Forms
 
         private void RichTextBoxNotes_TextChanged(object? sender, EventArgs e)
         {
-            SaveNotes();
-
-            if (richTextBoxNotes != null && !string.IsNullOrWhiteSpace(richTextBoxNotes.Text))
+            if (richTextBoxNotes != null)
             {
-                _noteCount++;
-                CheckBadgeUnlock();
+                bool hasContent = !string.IsNullOrWhiteSpace(richTextBoxNotes.Text);
+                if (hasContent && !_currentNoteCounted)
+                {
+                    _currentNoteCounted = true;
+                    _noteCount++;
+                    CheckBadgeUnlock();
+                }
+                else if (!hasContent && _currentNoteCounted)
+                {
+                    _currentNoteCounted = false;
+                    _noteCount = Math.Max(0, _noteCount - 1);
+                }
             }
+
+            _noteSaveTimer.Stop();
+            _noteSaveTimer.Start();
+        }
+
+        private void NoteSaveTimer_Tick(object? sender, EventArgs e)
+        {
+            _noteSaveTimer.Stop();
+            SaveNotes();
         }
 
         private bool ContainsChinese(string text)
@@ -2587,6 +2546,27 @@ namespace LearningAssistant.Forms
                 return true;
             }
             return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        protected override bool ProcessDialogKey(Keys keyData)
+        {
+            // 全局拦截上下键用于列表导航，防止被其他控件（如RadioButton）消耗
+            if (keyData == Keys.Up || keyData == Keys.Down)
+            {
+                if (listBoxItems != null && listBoxItems.Items.Count > 0)
+                {
+                    int newIndex = keyData == Keys.Up
+                        ? listBoxItems.SelectedIndex - 1
+                        : listBoxItems.SelectedIndex + 1;
+
+                    if (newIndex < 0) newIndex = listBoxItems.Items.Count - 1;
+                    if (newIndex >= listBoxItems.Items.Count) newIndex = 0;
+
+                    listBoxItems.SelectedIndex = newIndex;
+                    return true;
+                }
+            }
+            return base.ProcessDialogKey(keyData);
         }
 
         private bool ProcessShortcut(Keys keyCode)
@@ -2619,7 +2599,6 @@ namespace LearningAssistant.Forms
             }
         }
 
-        #endregion
 
         protected override void Dispose(bool disposing)
         {
@@ -2636,11 +2615,72 @@ namespace LearningAssistant.Forms
                 _studyTimer?.Stop();
                 _studyTimer?.Dispose();
 
-                _gameTimer?.Stop();
-                _gameTimer?.Dispose();
-
                 _confettiTimer?.Stop();
                 _confettiTimer?.Dispose();
+
+                _noteSaveTimer?.Stop();
+                _noteSaveTimer?.Dispose();
+
+                _toolTip?.Dispose();
+
+                // 解绑子视图事件，防止内存泄漏
+                if (_buttonsView != null)
+                {
+                    _buttonsView.KnownClicked -= ButtonKnown_Click;
+                    _buttonsView.UnknownClicked -= ButtonUnknown_Click;
+                    _buttonsView.NextClicked -= ButtonNext_Click;
+                    _buttonsView.PronounceClicked -= ButtonPronounce_Click;
+                    _buttonsView.FavoriteClicked -= ButtonFavorite_Click;
+                    _buttonsView.NoteClicked -= ButtonNote_Click;
+                    _buttonsView.ExitClicked -= ButtonExit_Click;
+                    _buttonsView.AIAskClicked -= ButtonAIAsk_Click;
+                }
+
+                if (_settingsView != null)
+                {
+                    _settingsView.RadioStudyMode.CheckedChanged -= RadioSetting_CheckedChanged;
+                    _settingsView.RadioQuickMode.CheckedChanged -= RadioSetting_CheckedChanged;
+                    _settingsView.RadioSequential.CheckedChanged -= RadioSetting_CheckedChanged;
+                    _settingsView.RadioRandom.CheckedChanged -= RadioSetting_CheckedChanged;
+                    _settingsView.RadioChinese.CheckedChanged -= RadioSetting_CheckedChanged;
+                    _settingsView.RadioEnglish.CheckedChanged -= RadioSetting_CheckedChanged;
+                    _settingsView.ComboBoxSubCategory.SelectedIndexChanged -= ComboBoxSubCategory_SelectedIndexChanged;
+                    _settingsView.ButtonOpenStatistics.Click -= ButtonOpenStatistics_Click;
+                    _settingsView.ButtonExportErrorBook.Click -= ButtonExportErrorBook_Click;
+                    _settingsView.ButtonQuizMode.Click -= ButtonQuizMode_Click;
+                    _settingsView.ButtonThemeToggle.Click -= ButtonThemeToggle_Click;
+                }
+
+                if (_contentView != null)
+                {
+                    _contentView.ContentClicked -= LabelContent_Click;
+                    _contentView.DetailClicked -= ListBoxDisplay_Click;
+                    _contentView.NoteTextChanged -= RichTextBoxNotes_TextChanged;
+                }
+
+                if (_listView != null)
+                {
+                    _listView.SelectedIndexChanged -= ListBoxItems_SelectedIndexChanged;
+                }
+
+                _listView?.Dispose();
+                _contentView?.Dispose();
+                _buttonsView?.Dispose();
+                _statsView?.Dispose();
+                _settingsView?.Dispose();
+
+                _confettiParticles.Clear();
+
+                _selectedBackgroundBrush.Dispose();
+                _selectedForegroundBrush.Dispose();
+                _normalForegroundBrush.Dispose();
+                _selectedBorderPen.Dispose();
+
+                foreach (var brush in _colorBrushCache.Values)
+                {
+                    brush.Dispose();
+                }
+                _colorBrushCache.Clear();
             }
 
             _disposed = true;

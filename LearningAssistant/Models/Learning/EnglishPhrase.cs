@@ -9,12 +9,12 @@ namespace LearningAssistant.Models.Learning
         /// 短语
         /// </summary>
         public string Phrase { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// 释义
         /// </summary>
         public string Meaning { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// 例句
         /// </summary>
@@ -22,18 +22,18 @@ namespace LearningAssistant.Models.Learning
 
         /// <inheritdoc/>
         public override string GetMainContent() => Phrase;
-        
+
         /// <inheritdoc/>
-        public override string GetDisplayText() 
+        public override string GetDisplayText()
         {
             var parts = new List<string>();
             if (!string.IsNullOrWhiteSpace(Meaning))
                 parts.Add($"释义: {Meaning}");
             if (!string.IsNullOrWhiteSpace(Example))
                 parts.Add($"例句: {Example}");
-            return string.Join(" | ", parts);
+            return string.Join("\n", parts);
         }
-        
+
         /// <inheritdoc/>
         public override string GetPronunciation() => string.Empty;
 
@@ -42,10 +42,10 @@ namespace LearningAssistant.Models.Learning
         {
             var parts = new List<string>();
             if (!string.IsNullOrWhiteSpace(Meaning))
-                parts.Add("释义");
+                parts.Add("释义:?");
             if (!string.IsNullOrWhiteSpace(Example))
-                parts.Add("例句");
-            return string.Join(" | ", parts);
+                parts.Add("例句:?");
+            return string.Join("\n", parts);
         }
     }
 }

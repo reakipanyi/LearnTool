@@ -9,22 +9,22 @@ namespace LearningAssistant.Models.Learning
         /// 成语
         /// </summary>
         public string Idiom { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// 拼音
         /// </summary>
         public string Pinyin { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// 释义
         /// </summary>
         public string Meaning { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// 出处
         /// </summary>
         public string Origin { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// 例句
         /// </summary>
@@ -32,9 +32,9 @@ namespace LearningAssistant.Models.Learning
 
         /// <inheritdoc/>
         public override string GetMainContent() => Idiom;
-        
+
         /// <inheritdoc/>
-        public override string GetDisplayText() 
+        public override string GetDisplayText()
         {
             var parts = new List<string>();
             if (!string.IsNullOrWhiteSpace(Pinyin))
@@ -45,9 +45,9 @@ namespace LearningAssistant.Models.Learning
                 parts.Add($"例句: {Example}");
             if (!string.IsNullOrWhiteSpace(Origin))
                 parts.Add($"出处: {Origin}");
-            return string.Join(" | ", parts);
+            return string.Join("\n", parts);
         }
-        
+
         /// <inheritdoc/>
         public override string GetPronunciation() => Pinyin;
 
@@ -56,14 +56,14 @@ namespace LearningAssistant.Models.Learning
         {
             var parts = new List<string>();
             if (!string.IsNullOrWhiteSpace(Pinyin))
-                parts.Add("拼音");
+                parts.Add("拼音:?");
             if (!string.IsNullOrWhiteSpace(Meaning))
-                parts.Add("释义");
+                parts.Add("释义:?");
             if (!string.IsNullOrWhiteSpace(Example))
-                parts.Add("例句");
+                parts.Add("例句:?");
             if (!string.IsNullOrWhiteSpace(Origin))
-                parts.Add("出处");
-            return string.Join(" | ", parts);
+                parts.Add("出处:?");
+            return string.Join("\n", parts);
         }
     }
 }

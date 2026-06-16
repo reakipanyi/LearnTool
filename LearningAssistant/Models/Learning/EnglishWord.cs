@@ -9,22 +9,22 @@ namespace LearningAssistant.Models.Learning
         /// 单词
         /// </summary>
         public string Word { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// 音标
         /// </summary>
         public string Phonetic { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// 释义
         /// </summary>
         public string Meaning { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// 例句
         /// </summary>
         public string Example { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// 词性（如noun、verb等）
         /// </summary>
@@ -37,9 +37,9 @@ namespace LearningAssistant.Models.Learning
 
         /// <inheritdoc/>
         public override string GetMainContent() => Word;
-        
+
         /// <inheritdoc/>
-        public override string GetDisplayText() 
+        public override string GetDisplayText()
         {
             var parts = new List<string>();
             if (!string.IsNullOrWhiteSpace(PartOfSpeech))
@@ -52,9 +52,9 @@ namespace LearningAssistant.Models.Learning
                 parts.Add($"释义: {Meaning}");
             if (!string.IsNullOrWhiteSpace(Example))
                 parts.Add($"例句: {Example}");
-            return string.Join(" | ", parts);
+            return string.Join("\n", parts);
         }
-        
+
         /// <inheritdoc/>
         public override string GetPronunciation() => Phonetic;
 
@@ -63,16 +63,16 @@ namespace LearningAssistant.Models.Learning
         {
             var parts = new List<string>();
             if (!string.IsNullOrWhiteSpace(PartOfSpeech))
-                parts.Add("词性");
+                parts.Add("词性:?");
             if (!string.IsNullOrWhiteSpace(Phonetic))
-                parts.Add("音标");
+                parts.Add("音标:?");
             if (!string.IsNullOrWhiteSpace(SyllableBreakdown))
-                parts.Add("拼读");
+                parts.Add("拼读:?");
             if (!string.IsNullOrWhiteSpace(Meaning))
-                parts.Add("释义");
+                parts.Add("释义:?");
             if (!string.IsNullOrWhiteSpace(Example))
-                parts.Add("例句");
-            return string.Join(" | ", parts);
+                parts.Add("例句:?");
+            return string.Join("\n", parts);
         }
     }
 }

@@ -142,7 +142,7 @@ namespace LearningAssistant.Models.Learning
                     break;
             }
 
-            return string.Join(" | ", parts);
+            return string.Join("\n", parts);
         }
 
         /// <inheritdoc/>
@@ -157,41 +157,41 @@ namespace LearningAssistant.Models.Learning
             {
                 case EnglishItemType.Word:
                     if (!string.IsNullOrWhiteSpace(PartOfSpeech))
-                        parts.Add("词性");
+                        parts.Add("词性:?");
                     if (!string.IsNullOrWhiteSpace(Phonetic))
-                        parts.Add("音标");
+                        parts.Add("音标:?");
                     if (!string.IsNullOrWhiteSpace(SyllableBreakdown))
-                        parts.Add("拼读");
+                        parts.Add("拼读:?");
                     if (!string.IsNullOrWhiteSpace(ChineseMeaning))
-                        parts.Add("释义");
+                        parts.Add("释义:?");
                     if (!string.IsNullOrWhiteSpace(EnglishMeaning))
-                        parts.Add("英文释义");
+                        parts.Add("英文释义:?");
                     if (!string.IsNullOrWhiteSpace(Example))
-                        parts.Add("例句");
+                        parts.Add("例句:?");
                     if (Synonyms.Count > 0)
-                        parts.Add("同义词");
+                        parts.Add("同义词:?");
                     break;
 
                 case EnglishItemType.Phrase:
                     if (!string.IsNullOrWhiteSpace(Phonetic))
-                        parts.Add("音标");
+                        parts.Add("音标:?");
                     if (!string.IsNullOrWhiteSpace(ChineseMeaning))
-                        parts.Add("释义");
+                        parts.Add("释义:?");
                     if (!string.IsNullOrWhiteSpace(Example))
-                        parts.Add("例句");
+                        parts.Add("例句:?");
                     break;
 
                 case EnglishItemType.Sentence:
                     if (!string.IsNullOrWhiteSpace(ChineseMeaning))
-                        parts.Add("翻译");
+                        parts.Add("翻译:?");
                     if (!string.IsNullOrWhiteSpace(EnglishMeaning))
-                        parts.Add("英文解释");
+                        parts.Add("英文解释:?");
                     if (!string.IsNullOrWhiteSpace(Topic))
-                        parts.Add("主题");
+                        parts.Add("主题:?");
                     break;
             }
 
-            return string.Join(" | ", parts);
+            return string.Join("\n", parts);
         }
     }
 

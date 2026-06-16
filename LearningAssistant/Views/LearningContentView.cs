@@ -15,7 +15,6 @@ namespace LearningAssistant.Views
         private Panel _panelNotes = null!;
         private RichTextBox _richTextBoxNotes = null!;
         private Label _labelNotesTitle = null!;
-        private CheckBox _checkBoxShowDetail = null!;
 
         #endregion
 
@@ -39,9 +38,6 @@ namespace LearningAssistant.Views
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Label LabelNotesTitle => _labelNotesTitle;
 
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public CheckBox CheckBoxShowDetail => _checkBoxShowDetail;
-
         #endregion
 
         #region Events
@@ -55,11 +51,6 @@ namespace LearningAssistant.Views
         /// 详情列表点击事件
         /// </summary>
         public event EventHandler? DetailClicked;
-
-        /// <summary>
-        /// 显示详情复选框变更事件
-        /// </summary>
-        public event EventHandler? DetailCheckChanged;
 
         /// <summary>
         /// 笔记面板切换事件
@@ -88,118 +79,94 @@ namespace LearningAssistant.Views
             _panelNotes = new Panel();
             _richTextBoxNotes = new RichTextBox();
             _labelNotesTitle = new Label();
-            _checkBoxShowDetail = new CheckBox();
-
             _panelContent.SuspendLayout();
             _panelNotes.SuspendLayout();
             SuspendLayout();
-
-            //
+            // 
             // _panelContent
-            //
+            // 
             _panelContent.BackColor = Color.FromArgb(224, 224, 224);
             _panelContent.Controls.Add(_listBoxDisplay);
             _panelContent.Controls.Add(_labelContent);
             _panelContent.Dock = DockStyle.Fill;
-            _panelContent.Location = new Point(3, 3);
-            _panelContent.Name = "panelContent";
-            _panelContent.Size = new Size(1089, 636);
+            _panelContent.Location = new Point(0, 0);
+            _panelContent.Name = "_panelContent";
+            _panelContent.Size = new Size(954, 225);
             _panelContent.TabIndex = 0;
-
-            //
+            // 
             // _listBoxDisplay
-            //
+            // 
             _listBoxDisplay.BackColor = Color.FromArgb(192, 255, 192);
             _listBoxDisplay.Dock = DockStyle.Top;
             _listBoxDisplay.Font = new Font("微软雅黑", 21.75F, FontStyle.Bold, GraphicsUnit.Point, 134);
             _listBoxDisplay.ForeColor = Color.FromArgb(100, 150, 180);
             _listBoxDisplay.Location = new Point(0, 0);
-            _listBoxDisplay.Name = "listBoxDisplay";
-            _listBoxDisplay.Size = new Size(1089, 160);
+            _listBoxDisplay.Name = "_listBoxDisplay";
+            _listBoxDisplay.Size = new Size(954, 160);
             _listBoxDisplay.TabIndex = 1;
             _listBoxDisplay.Visible = false;
             _listBoxDisplay.Click += ListBoxDisplay_Click;
-
-            //
+            // 
             // _labelContent
-            //
+            // 
             _labelContent.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             _labelContent.BackColor = Color.FromArgb(255, 248, 230);
             _labelContent.Font = new Font("微软雅黑", 48F, FontStyle.Bold, GraphicsUnit.Point, 134);
             _labelContent.ForeColor = Color.FromArgb(50, 60, 80);
             _labelContent.Location = new Point(0, 0);
-            _labelContent.Name = "labelContent";
-            _labelContent.Size = new Size(1089, 636);
+            _labelContent.Name = "_labelContent";
+            _labelContent.Size = new Size(954, 225);
             _labelContent.TabIndex = 0;
             _labelContent.TextAlign = ContentAlignment.MiddleCenter;
             _labelContent.Click += LabelContent_Click;
-
-            //
+            // 
             // _panelNotes
-            //
+            // 
             _panelNotes.BackColor = Color.FromArgb(255, 253, 238);
             _panelNotes.BorderStyle = BorderStyle.FixedSingle;
             _panelNotes.Controls.Add(_richTextBoxNotes);
             _panelNotes.Controls.Add(_labelNotesTitle);
             _panelNotes.Dock = DockStyle.Fill;
-            _panelNotes.Location = new Point(3, 645);
-            _panelNotes.Name = "panelNotes";
-            _panelNotes.Size = new Size(1089, 1);
+            _panelNotes.Location = new Point(0, 0);
+            _panelNotes.Name = "_panelNotes";
+            _panelNotes.Size = new Size(954, 225);
             _panelNotes.TabIndex = 0;
             _panelNotes.Visible = false;
-
-            //
+            // 
             // _richTextBoxNotes
-            //
+            // 
             _richTextBoxNotes.BackColor = Color.FromArgb(255, 253, 238);
             _richTextBoxNotes.Dock = DockStyle.Fill;
             _richTextBoxNotes.Font = new Font("微软雅黑", 11F);
             _richTextBoxNotes.ForeColor = Color.FromArgb(60, 80, 100);
-            _richTextBoxNotes.Location = new Point(0, 30);
-            _richTextBoxNotes.Name = "richTextBoxNotes";
-            _richTextBoxNotes.Size = new Size(1087, 0);
+            _richTextBoxNotes.Location = new Point(0, 34);
+            _richTextBoxNotes.Name = "_richTextBoxNotes";
+            _richTextBoxNotes.Size = new Size(952, 189);
             _richTextBoxNotes.TabIndex = 1;
             _richTextBoxNotes.Text = "";
             _richTextBoxNotes.TextChanged += RichTextBoxNotes_TextChanged;
-
-            //
+            // 
             // _labelNotesTitle
-            //
+            // 
             _labelNotesTitle.Dock = DockStyle.Top;
             _labelNotesTitle.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _labelNotesTitle.ForeColor = Color.FromArgb(139, 119, 101);
             _labelNotesTitle.Location = new Point(0, 0);
-            _labelNotesTitle.Name = "labelNotesTitle";
+            _labelNotesTitle.Name = "_labelNotesTitle";
             _labelNotesTitle.Padding = new Padding(10, 0, 0, 0);
-            _labelNotesTitle.Size = new Size(1087, 30);
+            _labelNotesTitle.Size = new Size(952, 34);
             _labelNotesTitle.TabIndex = 0;
             _labelNotesTitle.Text = "📝 我的笔记";
             _labelNotesTitle.TextAlign = ContentAlignment.MiddleLeft;
-
-            //
-            // _checkBoxShowDetail
-            //
-            _checkBoxShowDetail.BackColor = Color.FromArgb(250, 245, 235);
-            _checkBoxShowDetail.FlatAppearance.BorderSize = 0;
-            _checkBoxShowDetail.FlatAppearance.MouseDownBackColor = Color.FromArgb(66, 165, 70);
-            _checkBoxShowDetail.FlatAppearance.MouseOverBackColor = Color.FromArgb(86, 185, 90);
-            _checkBoxShowDetail.FlatStyle = FlatStyle.Flat;
-            _checkBoxShowDetail.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
-            _checkBoxShowDetail.ForeColor = Color.Black;
-            _checkBoxShowDetail.Location = new Point(333, 8);
-            _checkBoxShowDetail.Name = "checkBoxShowDetail";
-            _checkBoxShowDetail.Size = new Size(132, 27);
-            _checkBoxShowDetail.TabIndex = 0;
-            _checkBoxShowDetail.Text = "👁️ 显示答案";
-            _checkBoxShowDetail.TextAlign = ContentAlignment.MiddleCenter;
-            _checkBoxShowDetail.UseVisualStyleBackColor = false;
-            _checkBoxShowDetail.CheckedChanged += CheckBoxShowDetail_CheckedChanged;
-            AutoScaleDimensions = new SizeF(7F, 15F);
+            // 
+            // LearningContentView
+            // 
+            AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
-            Controls.Add(_panelNotes);    // 关键：添加 _panelNotes
-            Controls.Add(_panelContent);  // 关键：添加 _panelContent
+            Controls.Add(_panelNotes);
+            Controls.Add(_panelContent);
             Name = "LearningContentView";
-            Size = new Size(1095, 680);
+            Size = new Size(954, 225);
             _panelContent.ResumeLayout(false);
             _panelNotes.ResumeLayout(false);
             ResumeLayout(false);
@@ -210,8 +177,6 @@ namespace LearningAssistant.Views
         private void LabelContent_Click(object? sender, EventArgs e) => ContentClicked?.Invoke(sender, e);
 
         private void RichTextBoxNotes_TextChanged(object? sender, EventArgs e) => NoteTextChanged?.Invoke(sender, e);
-
-        private void CheckBoxShowDetail_CheckedChanged(object? sender, EventArgs e) => DetailCheckChanged?.Invoke(sender, e);
 
         #endregion
 
@@ -267,14 +232,6 @@ namespace LearningAssistant.Views
         public string GetNotes()
         {
             return _richTextBoxNotes.Text;
-        }
-
-        /// <summary>
-        /// 设置显示详情复选框状态
-        /// </summary>
-        public void SetShowDetailChecked(bool chk)
-        {
-            _checkBoxShowDetail.Checked = chk;
         }
 
         #endregion

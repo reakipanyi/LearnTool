@@ -1,6 +1,4 @@
 using System.ComponentModel;
-using System.Drawing;
-using System.Windows.Forms;
 
 namespace LearningAssistant.Views
 {
@@ -47,13 +45,9 @@ namespace LearningAssistant.Views
         private Button _buttonThemeToggle = null!;
 
         // 发音范围
-        private GroupBox _groupBoxPronunciationScope = null!;
         private RadioButton _radioOriginal = null!;
         private RadioButton _radioExplanation = null!;
         private RadioButton _radioBoth = null!;
-
-        // 设置面板容器
-        private FlowLayoutPanel _settingsFlowLayoutPanel = null!;
 
         // 自动朗读
         private CheckBox _checkBoxVoice = null!;
@@ -102,9 +96,6 @@ namespace LearningAssistant.Views
         public Button ButtonThemeToggle => _buttonThemeToggle;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public GroupBox GroupBoxPronunciationScope => _groupBoxPronunciationScope;
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public GroupBox GroupBoxMode => _groupBoxMode;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -115,9 +106,6 @@ namespace LearningAssistant.Views
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Label LabelSubCategory => _labelSubCategory;
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public FlowLayoutPanel SettingsFlowLayoutPanel => _settingsFlowLayoutPanel;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Panel PanelQuizMode => _panelQuizMode;
@@ -170,24 +158,21 @@ namespace LearningAssistant.Views
             _buttonQuizMode = new Button();
             _labelQuizHint = new Label();
             _buttonThemeToggle = new Button();
-            _groupBoxPronunciationScope = new GroupBox();
             _radioOriginal = new RadioButton();
             _radioExplanation = new RadioButton();
             _radioBoth = new RadioButton();
-            _settingsFlowLayoutPanel = new FlowLayoutPanel();
             _checkBoxVoice = new CheckBox();
             _pronunciationFlowLayoutPanel = new FlowLayoutPanel();
-
             _panelConfig.SuspendLayout();
             _groupBoxMode.SuspendLayout();
             _groupBoxSort.SuspendLayout();
             _groupBoxLanguage.SuspendLayout();
             _panelQuizMode.SuspendLayout();
+            _pronunciationFlowLayoutPanel.SuspendLayout();
             SuspendLayout();
-
-            //
+            // 
             // _panelConfig
-            //
+            // 
             _panelConfig.BackColor = Color.FromArgb(245, 245, 250);
             _panelConfig.BorderStyle = BorderStyle.FixedSingle;
             _panelConfig.Controls.Add(_labelConfigTitle);
@@ -198,174 +183,163 @@ namespace LearningAssistant.Views
             _panelConfig.Controls.Add(_comboBoxSubCategory);
             _panelConfig.Controls.Add(_buttonOpenStatistics);
             _panelConfig.Controls.Add(_buttonExportErrorBook);
+            _panelConfig.Controls.Add(_checkBoxVoice);
+            _panelConfig.Controls.Add(_pronunciationFlowLayoutPanel);
             _panelConfig.Controls.Add(_panelQuizMode);
             _panelConfig.Controls.Add(_buttonThemeToggle);
             _panelConfig.Dock = DockStyle.Fill;
-            _panelConfig.Location = new Point(1370, 3);
-            _panelConfig.Name = "panelConfig";
-            _panelConfig.Size = new Size(214, 838);
+            _panelConfig.Location = new Point(0, 0);
+            _panelConfig.Name = "_panelConfig";
+            _panelConfig.Size = new Size(220, 950);
             _panelConfig.TabIndex = 0;
-
-            //
+            // 
             // _labelConfigTitle
-            //
+            // 
             _labelConfigTitle.BackColor = Color.FromArgb(103, 58, 183);
             _labelConfigTitle.Dock = DockStyle.Top;
             _labelConfigTitle.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _labelConfigTitle.ForeColor = Color.White;
             _labelConfigTitle.Location = new Point(0, 0);
-            _labelConfigTitle.Name = "labelConfigTitle";
-            _labelConfigTitle.Size = new Size(212, 35);
+            _labelConfigTitle.Name = "_labelConfigTitle";
+            _labelConfigTitle.Size = new Size(218, 40);
             _labelConfigTitle.TabIndex = 0;
             _labelConfigTitle.Text = "⚙️ 设置";
             _labelConfigTitle.TextAlign = ContentAlignment.MiddleCenter;
-
-            //
+            // 
             // _groupBoxMode
-            //
+            // 
             _groupBoxMode.Controls.Add(_radioStudyMode);
             _groupBoxMode.Controls.Add(_radioQuickMode);
             _groupBoxMode.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
             _groupBoxMode.ForeColor = Color.FromArgb(60, 80, 100);
-            _groupBoxMode.Location = new Point(10, 45);
-            _groupBoxMode.Name = "groupBoxMode";
-            _groupBoxMode.Size = new Size(180, 68);
+            _groupBoxMode.Location = new Point(10, 51);
+            _groupBoxMode.Name = "_groupBoxMode";
+            _groupBoxMode.Size = new Size(180, 77);
             _groupBoxMode.TabIndex = 1;
             _groupBoxMode.TabStop = false;
             _groupBoxMode.Text = "学习模式";
-
-            //
+            // 
             // _radioStudyMode
-            //
+            // 
             _radioStudyMode.AutoSize = true;
             _radioStudyMode.Checked = true;
             _radioStudyMode.Font = new Font("微软雅黑", 9F);
             _radioStudyMode.ForeColor = Color.FromArgb(70, 90, 110);
-            _radioStudyMode.Location = new Point(15, 25);
-            _radioStudyMode.Name = "radioStudyMode";
+            _radioStudyMode.Location = new Point(15, 28);
+            _radioStudyMode.Name = "_radioStudyMode";
             _radioStudyMode.Size = new Size(70, 21);
             _radioStudyMode.TabIndex = 0;
             _radioStudyMode.TabStop = true;
             _radioStudyMode.Text = "📝 练习";
-
-            //
+            // 
             // _radioQuickMode
-            //
+            // 
             _radioQuickMode.AutoSize = true;
             _radioQuickMode.Font = new Font("微软雅黑", 9F);
             _radioQuickMode.ForeColor = Color.FromArgb(70, 90, 110);
-            _radioQuickMode.Location = new Point(90, 25);
-            _radioQuickMode.Name = "radioQuickMode";
+            _radioQuickMode.Location = new Point(90, 28);
+            _radioQuickMode.Name = "_radioQuickMode";
             _radioQuickMode.Size = new Size(70, 21);
             _radioQuickMode.TabIndex = 1;
             _radioQuickMode.Text = "🔄 复习";
-
-            //
+            // 
             // _groupBoxSort
-            //
+            // 
             _groupBoxSort.Controls.Add(_radioSequential);
             _groupBoxSort.Controls.Add(_radioRandom);
             _groupBoxSort.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
             _groupBoxSort.ForeColor = Color.FromArgb(60, 80, 100);
-            _groupBoxSort.Location = new Point(10, 130);
-            _groupBoxSort.Name = "groupBoxSort";
-            _groupBoxSort.Size = new Size(180, 75);
+            _groupBoxSort.Location = new Point(10, 147);
+            _groupBoxSort.Name = "_groupBoxSort";
+            _groupBoxSort.Size = new Size(180, 85);
             _groupBoxSort.TabIndex = 2;
             _groupBoxSort.TabStop = false;
             _groupBoxSort.Text = "排序方式";
-
-            //
+            // 
             // _radioSequential
-            //
+            // 
             _radioSequential.AutoSize = true;
             _radioSequential.Checked = true;
             _radioSequential.Font = new Font("微软雅黑", 9F);
             _radioSequential.ForeColor = Color.FromArgb(70, 90, 110);
-            _radioSequential.Location = new Point(15, 25);
-            _radioSequential.Name = "radioSequential";
+            _radioSequential.Location = new Point(15, 28);
+            _radioSequential.Name = "_radioSequential";
             _radioSequential.Size = new Size(68, 21);
             _radioSequential.TabIndex = 0;
             _radioSequential.TabStop = true;
             _radioSequential.Text = "📋 顺序";
-
-            //
+            // 
             // _radioRandom
-            //
+            // 
             _radioRandom.AutoSize = true;
             _radioRandom.Font = new Font("微软雅黑", 9F);
             _radioRandom.ForeColor = Color.FromArgb(70, 90, 110);
-            _radioRandom.Location = new Point(90, 25);
-            _radioRandom.Name = "radioRandom";
+            _radioRandom.Location = new Point(90, 28);
+            _radioRandom.Name = "_radioRandom";
             _radioRandom.Size = new Size(69, 21);
             _radioRandom.TabIndex = 1;
             _radioRandom.Text = "🎲 随机";
-
-            //
+            // 
             // _groupBoxLanguage
-            //
+            // 
             _groupBoxLanguage.Controls.Add(_radioChinese);
             _groupBoxLanguage.Controls.Add(_radioEnglish);
             _groupBoxLanguage.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
             _groupBoxLanguage.ForeColor = Color.FromArgb(60, 80, 100);
-            _groupBoxLanguage.Location = new Point(10, 215);
-            _groupBoxLanguage.Name = "groupBoxLanguage";
-            _groupBoxLanguage.Size = new Size(180, 75);
+            _groupBoxLanguage.Location = new Point(10, 244);
+            _groupBoxLanguage.Name = "_groupBoxLanguage";
+            _groupBoxLanguage.Size = new Size(180, 85);
             _groupBoxLanguage.TabIndex = 3;
             _groupBoxLanguage.TabStop = false;
             _groupBoxLanguage.Text = "语言";
-
-            //
+            // 
             // _radioChinese
-            //
+            // 
             _radioChinese.AutoSize = true;
             _radioChinese.Checked = true;
             _radioChinese.Font = new Font("微软雅黑", 9F);
             _radioChinese.ForeColor = Color.FromArgb(70, 90, 110);
-            _radioChinese.Location = new Point(15, 25);
-            _radioChinese.Name = "radioChinese";
+            _radioChinese.Location = new Point(15, 28);
+            _radioChinese.Name = "_radioChinese";
             _radioChinese.Size = new Size(67, 21);
             _radioChinese.TabIndex = 0;
             _radioChinese.TabStop = true;
             _radioChinese.Text = "🇨🇳 中文";
-
-            //
+            // 
             // _radioEnglish
-            //
+            // 
             _radioEnglish.AutoSize = true;
             _radioEnglish.Font = new Font("微软雅黑", 9F);
             _radioEnglish.ForeColor = Color.FromArgb(70, 90, 110);
-            _radioEnglish.Location = new Point(90, 25);
-            _radioEnglish.Name = "radioEnglish";
+            _radioEnglish.Location = new Point(90, 28);
+            _radioEnglish.Name = "_radioEnglish";
             _radioEnglish.Size = new Size(66, 21);
             _radioEnglish.TabIndex = 1;
             _radioEnglish.Text = "🇬🇧 英语";
-
-            //
+            // 
             // _labelSubCategory
-            //
+            // 
             _labelSubCategory.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
             _labelSubCategory.ForeColor = Color.FromArgb(70, 90, 110);
-            _labelSubCategory.Location = new Point(10, 300);
-            _labelSubCategory.Name = "labelSubCategory";
-            _labelSubCategory.Size = new Size(50, 23);
+            _labelSubCategory.Location = new Point(10, 340);
+            _labelSubCategory.Name = "_labelSubCategory";
+            _labelSubCategory.Size = new Size(50, 26);
             _labelSubCategory.TabIndex = 4;
             _labelSubCategory.Text = "📖";
             _labelSubCategory.TextAlign = ContentAlignment.MiddleLeft;
-
-            //
+            // 
             // _comboBoxSubCategory
-            //
+            // 
             _comboBoxSubCategory.DropDownStyle = ComboBoxStyle.DropDownList;
             _comboBoxSubCategory.Font = new Font("微软雅黑", 9F);
             _comboBoxSubCategory.FormattingEnabled = true;
-            _comboBoxSubCategory.Location = new Point(65, 297);
-            _comboBoxSubCategory.Name = "comboBoxSubCategory";
+            _comboBoxSubCategory.Location = new Point(65, 337);
+            _comboBoxSubCategory.Name = "_comboBoxSubCategory";
             _comboBoxSubCategory.Size = new Size(125, 25);
             _comboBoxSubCategory.TabIndex = 5;
-
-            //
+            // 
             // _buttonOpenStatistics
-            //
+            // 
             _buttonOpenStatistics.BackColor = Color.FromArgb(255, 152, 0);
             _buttonOpenStatistics.FlatAppearance.BorderSize = 0;
             _buttonOpenStatistics.FlatAppearance.MouseDownBackColor = Color.FromArgb(245, 142, 0);
@@ -373,16 +347,15 @@ namespace LearningAssistant.Views
             _buttonOpenStatistics.FlatStyle = FlatStyle.Flat;
             _buttonOpenStatistics.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonOpenStatistics.ForeColor = Color.White;
-            _buttonOpenStatistics.Location = new Point(10, 335);
-            _buttonOpenStatistics.Name = "buttonOpenStatistics";
-            _buttonOpenStatistics.Size = new Size(180, 40);
+            _buttonOpenStatistics.Location = new Point(10, 380);
+            _buttonOpenStatistics.Name = "_buttonOpenStatistics";
+            _buttonOpenStatistics.Size = new Size(180, 45);
             _buttonOpenStatistics.TabIndex = 6;
             _buttonOpenStatistics.Text = "📊 学习统计";
             _buttonOpenStatistics.UseVisualStyleBackColor = false;
-
-            //
+            // 
             // _buttonExportErrorBook
-            //
+            // 
             _buttonExportErrorBook.BackColor = Color.FromArgb(244, 67, 54);
             _buttonExportErrorBook.FlatAppearance.BorderSize = 0;
             _buttonExportErrorBook.FlatAppearance.MouseDownBackColor = Color.FromArgb(234, 57, 44);
@@ -390,28 +363,26 @@ namespace LearningAssistant.Views
             _buttonExportErrorBook.FlatStyle = FlatStyle.Flat;
             _buttonExportErrorBook.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonExportErrorBook.ForeColor = Color.White;
-            _buttonExportErrorBook.Location = new Point(10, 385);
-            _buttonExportErrorBook.Name = "buttonExportErrorBook";
-            _buttonExportErrorBook.Size = new Size(180, 40);
+            _buttonExportErrorBook.Location = new Point(10, 436);
+            _buttonExportErrorBook.Name = "_buttonExportErrorBook";
+            _buttonExportErrorBook.Size = new Size(180, 45);
             _buttonExportErrorBook.TabIndex = 7;
             _buttonExportErrorBook.Text = "❌ 导出错题本";
             _buttonExportErrorBook.UseVisualStyleBackColor = false;
-
-            //
+            // 
             // _panelQuizMode
-            //
+            // 
             _panelQuizMode.BackColor = Color.FromArgb(255, 248, 220);
             _panelQuizMode.BorderStyle = BorderStyle.FixedSingle;
             _panelQuizMode.Controls.Add(_buttonQuizMode);
             _panelQuizMode.Controls.Add(_labelQuizHint);
-            _panelQuizMode.Location = new Point(10, 660);
-            _panelQuizMode.Name = "panelQuizMode";
-            _panelQuizMode.Size = new Size(180, 80);
-            _panelQuizMode.TabIndex = 8;
-
-            //
+            _panelQuizMode.Location = new Point(10, 808);
+            _panelQuizMode.Name = "_panelQuizMode";
+            _panelQuizMode.Size = new Size(180, 90);
+            _panelQuizMode.TabIndex = 10;
+            // 
             // _buttonQuizMode
-            //
+            // 
             _buttonQuizMode.BackColor = Color.FromArgb(255, 193, 7);
             _buttonQuizMode.FlatAppearance.BorderSize = 0;
             _buttonQuizMode.FlatAppearance.MouseDownBackColor = Color.FromArgb(245, 183, 0);
@@ -419,27 +390,25 @@ namespace LearningAssistant.Views
             _buttonQuizMode.FlatStyle = FlatStyle.Flat;
             _buttonQuizMode.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             _buttonQuizMode.ForeColor = Color.White;
-            _buttonQuizMode.Location = new Point(10, 10);
-            _buttonQuizMode.Name = "buttonQuizMode";
-            _buttonQuizMode.Size = new Size(160, 35);
+            _buttonQuizMode.Location = new Point(10, 11);
+            _buttonQuizMode.Name = "_buttonQuizMode";
+            _buttonQuizMode.Size = new Size(160, 40);
             _buttonQuizMode.TabIndex = 0;
             _buttonQuizMode.Text = "🎮 答题模式";
             _buttonQuizMode.UseVisualStyleBackColor = false;
-
-            //
+            // 
             // _labelQuizHint
-            //
+            // 
             _labelQuizHint.Font = new Font("微软雅黑", 8.5F);
             _labelQuizHint.ForeColor = Color.FromArgb(139, 119, 101);
-            _labelQuizHint.Location = new Point(10, 50);
-            _labelQuizHint.Name = "labelQuizHint";
-            _labelQuizHint.Size = new Size(160, 25);
+            _labelQuizHint.Location = new Point(10, 57);
+            _labelQuizHint.Name = "_labelQuizHint";
+            _labelQuizHint.Size = new Size(160, 28);
             _labelQuizHint.TabIndex = 1;
             _labelQuizHint.Text = "先隐藏答案，测试自己";
-
-            //
+            // 
             // _buttonThemeToggle
-            //
+            // 
             _buttonThemeToggle.BackColor = Color.FromArgb(103, 58, 183);
             _buttonThemeToggle.FlatAppearance.BorderSize = 0;
             _buttonThemeToggle.FlatAppearance.MouseDownBackColor = Color.FromArgb(93, 48, 173);
@@ -447,104 +416,72 @@ namespace LearningAssistant.Views
             _buttonThemeToggle.FlatStyle = FlatStyle.Flat;
             _buttonThemeToggle.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             _buttonThemeToggle.ForeColor = Color.White;
-            _buttonThemeToggle.Location = new Point(10, 760);
-            _buttonThemeToggle.Name = "buttonThemeToggle";
-            _buttonThemeToggle.Size = new Size(180, 40);
-            _buttonThemeToggle.TabIndex = 9;
+            _buttonThemeToggle.Location = new Point(10, 921);
+            _buttonThemeToggle.Name = "_buttonThemeToggle";
+            _buttonThemeToggle.Size = new Size(180, 45);
+            _buttonThemeToggle.TabIndex = 11;
             _buttonThemeToggle.Text = "🌙 深色模式";
             _buttonThemeToggle.UseVisualStyleBackColor = false;
 
-            //
-            // _groupBoxPronunciationScope
-            //
-            _groupBoxPronunciationScope.Controls.Add(_radioOriginal);
-            _groupBoxPronunciationScope.Controls.Add(_radioExplanation);
-            _groupBoxPronunciationScope.Controls.Add(_radioBoth);
-            _groupBoxPronunciationScope.Location = new Point(0, 0);
-            _groupBoxPronunciationScope.Name = "groupBoxPronunciationScope";
-            _groupBoxPronunciationScope.Size = new Size(200, 100);
-            _groupBoxPronunciationScope.TabIndex = 0;
-            _groupBoxPronunciationScope.TabStop = false;
-
-            //
+            // 
             // _radioOriginal
-            //
+            // 
             _radioOriginal.AutoSize = true;
             _radioOriginal.Checked = true;
             _radioOriginal.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
             _radioOriginal.ForeColor = Color.FromArgb(70, 90, 110);
             _radioOriginal.Location = new Point(3, 3);
-            _radioOriginal.Name = "radioOriginal";
+            _radioOriginal.Name = "_radioOriginal";
             _radioOriginal.Size = new Size(50, 21);
             _radioOriginal.TabIndex = 0;
             _radioOriginal.TabStop = true;
             _radioOriginal.Text = "原文";
-
-            //
+            // 
             // _radioExplanation
-            //
+            // 
             _radioExplanation.AutoSize = true;
             _radioExplanation.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
             _radioExplanation.ForeColor = Color.FromArgb(70, 90, 110);
             _radioExplanation.Location = new Point(59, 3);
-            _radioExplanation.Name = "radioExplanation";
+            _radioExplanation.Name = "_radioExplanation";
             _radioExplanation.Size = new Size(50, 21);
             _radioExplanation.TabIndex = 1;
             _radioExplanation.Text = "释义";
-
-            //
+            // 
             // _radioBoth
-            //
-            _radioBoth.AutoSize = true;
-            _radioBoth.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
-            _radioBoth.ForeColor = Color.FromArgb(70, 90, 110);
-            _radioBoth.Location = new Point(115, 3);
-            _radioBoth.Name = "radioBoth";
-            _radioBoth.Size = new Size(83, 21);
-            _radioBoth.TabIndex = 2;
-            _radioBoth.Text = "原文+释义";
-
-            //
-            // _settingsFlowLayoutPanel
-            //
-            _settingsFlowLayoutPanel.Location = new Point(0, 0);
-            _settingsFlowLayoutPanel.Name = "settingsFlowLayoutPanel";
-            _settingsFlowLayoutPanel.Size = new Size(200, 100);
-            _settingsFlowLayoutPanel.TabIndex = 0;
-            _settingsFlowLayoutPanel.WrapContents = false;
-
-            //
+            // 
+            // 
             // _checkBoxVoice
-            //
+            // 
             _checkBoxVoice.Checked = true;
             _checkBoxVoice.CheckState = CheckState.Checked;
             _checkBoxVoice.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
             _checkBoxVoice.ForeColor = Color.FromArgb(70, 90, 110);
-            _checkBoxVoice.Name = "checkBoxVoice";
-            _checkBoxVoice.Size = new Size(85, 25);
-            _checkBoxVoice.TabIndex = 0;
-            _checkBoxVoice.Text = "自动朗读";
-
-            //
+            _checkBoxVoice.Location = new Point(10, 498);
+            _checkBoxVoice.Name = "_checkBoxVoice";
+            _checkBoxVoice.Size = new Size(100, 25);
+            _checkBoxVoice.TabIndex = 8;
+            _checkBoxVoice.Text = "🔊 自动朗读";
+            // 
             // _pronunciationFlowLayoutPanel
-            //
+            // 
             _pronunciationFlowLayoutPanel.Controls.Add(_radioOriginal);
             _pronunciationFlowLayoutPanel.Controls.Add(_radioExplanation);
             _pronunciationFlowLayoutPanel.Controls.Add(_radioBoth);
-            _pronunciationFlowLayoutPanel.Name = "pronunciationFlowLayoutPanel";
-            _pronunciationFlowLayoutPanel.Size = new Size(219, 27);
-            _pronunciationFlowLayoutPanel.TabIndex = 0;
+            _pronunciationFlowLayoutPanel.Location = new Point(10, 535);
+            _pronunciationFlowLayoutPanel.Name = "_pronunciationFlowLayoutPanel";
+            _pronunciationFlowLayoutPanel.Size = new Size(180, 30);
+            _pronunciationFlowLayoutPanel.TabIndex = 9;
             _pronunciationFlowLayoutPanel.WrapContents = false;
-
-            //
+            // 
             // LearningSettingsView
-            //
-            AutoScaleDimensions = new SizeF(7F, 15F);
+            // 
+            AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
             Controls.Add(_panelConfig);
             Name = "LearningSettingsView";
-            Size = new Size(220, 838);
-
+            Size = new Size(220, 1000);
+            _panelConfig.ResumeLayout(false);
             _groupBoxMode.ResumeLayout(false);
             _groupBoxMode.PerformLayout();
             _groupBoxSort.ResumeLayout(false);
@@ -552,7 +489,8 @@ namespace LearningAssistant.Views
             _groupBoxLanguage.ResumeLayout(false);
             _groupBoxLanguage.PerformLayout();
             _panelQuizMode.ResumeLayout(false);
-            _panelConfig.ResumeLayout(false);
+            _pronunciationFlowLayoutPanel.ResumeLayout(false);
+            _pronunciationFlowLayoutPanel.PerformLayout();
             ResumeLayout(false);
         }
 
@@ -612,5 +550,7 @@ namespace LearningAssistant.Views
         }
 
         #endregion
+
+
     }
 }

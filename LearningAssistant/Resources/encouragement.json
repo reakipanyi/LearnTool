@@ -1,0 +1,28 @@
+{
+  "KnownAudios": [
+    "well_done",
+    "great",
+    "好极了",
+    "棒棒哒",
+    "awesome",
+    "excellent",
+    "perfect",
+    "太棒了",
+    "真厉害",
+    "答对了"
+  ],
+  "UnknownAudios": [
+    "加油",
+    "可惜啦",
+    "keep_trying",
+    "dont_give_up",
+    "come_on",
+    "try_again",
+    "再想想",
+    "别灰心",
+    "继续努力",
+    "相信自己"
+  ],
+  "UseTTSAsFallback": true,
+  "Volume": 100
+}

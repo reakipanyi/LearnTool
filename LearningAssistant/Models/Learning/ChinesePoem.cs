@@ -9,22 +9,22 @@ namespace LearningAssistant.Models.Learning
         /// 诗题
         /// </summary>
         public string Title { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// 作者
         /// </summary>
         public string Author { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// 朝代
         /// </summary>
         public string Dynasty { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// 诗句列表
         /// </summary>
         public List<string> Verses { get; set; } = new List<string>();
-        
+
         /// <summary>
         /// 注释
         /// </summary>
@@ -32,9 +32,9 @@ namespace LearningAssistant.Models.Learning
 
         /// <inheritdoc/>
         public override string GetMainContent() => Title;
-        
+
         /// <inheritdoc/>
-        public override string GetDisplayText() 
+        public override string GetDisplayText()
         {
             var parts = new List<string>();
             if (!string.IsNullOrWhiteSpace(Author))
@@ -43,9 +43,9 @@ namespace LearningAssistant.Models.Learning
                 parts.Add($"朝代: {Dynasty}");
             if (Verses != null && Verses.Any())
                 parts.Add($"诗句: {string.Join("，", Verses)}");
-            return string.Join(" | ", parts);
+            return string.Join("\n", parts);
         }
-        
+
         /// <inheritdoc/>
         public override string GetPronunciation() => string.Empty;
 
@@ -54,12 +54,12 @@ namespace LearningAssistant.Models.Learning
         {
             var parts = new List<string>();
             if (!string.IsNullOrWhiteSpace(Author))
-                parts.Add("作者");
+                parts.Add("作者:?");
             if (!string.IsNullOrWhiteSpace(Dynasty))
-                parts.Add("朝代");
+                parts.Add("朝代:?");
             if (Verses != null && Verses.Any())
-                parts.Add("诗句");
-            return string.Join(" | ", parts);
+                parts.Add("诗句:?");
+            return string.Join("\n", parts);
         }
 
     }

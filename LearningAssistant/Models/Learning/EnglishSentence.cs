@@ -9,12 +9,12 @@ namespace LearningAssistant.Models.Learning
         /// 英文原句
         /// </summary>
         public string Sentence { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// 中文翻译
         /// </summary>
         public string Translation { get; set; } = string.Empty;
-        
+
         /// <summary>
         /// 语法分析
         /// </summary>
@@ -22,18 +22,18 @@ namespace LearningAssistant.Models.Learning
 
         /// <inheritdoc/>
         public override string GetMainContent() => Sentence;
-        
+
         /// <inheritdoc/>
-        public override string GetDisplayText() 
+        public override string GetDisplayText()
         {
             var parts = new List<string>();
             if (!string.IsNullOrWhiteSpace(Translation))
                 parts.Add($"翻译: {Translation}");
             if (!string.IsNullOrWhiteSpace(Grammar))
                 parts.Add($"语法: {Grammar}");
-            return string.Join(" | ", parts);
+            return string.Join("\n", parts);
         }
-        
+
         /// <inheritdoc/>
         public override string GetPronunciation() => string.Empty;
 
@@ -42,10 +42,10 @@ namespace LearningAssistant.Models.Learning
         {
             var parts = new List<string>();
             if (!string.IsNullOrWhiteSpace(Translation))
-                parts.Add("翻译");
+                parts.Add("翻译:?");
             if (!string.IsNullOrWhiteSpace(Grammar))
-                parts.Add("语法");
-            return string.Join(" | ", parts);
+                parts.Add("语法:?");
+            return string.Join("\n", parts);
         }
     }
 }

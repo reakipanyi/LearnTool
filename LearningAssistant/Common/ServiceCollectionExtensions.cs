@@ -170,6 +170,7 @@ namespace LearningAssistant.Common
             services.AddSingleton<ISoundService>(sp => new SoundService(sp.GetService<ITTSService>()));
             services.AddSingleton<IAdvancedSpeechService, AdvancedSpeechService>();
             services.AddSingleton<IEnhancedReminderService, EnhancedReminderService>();
+            services.AddSingleton<IEncouragementService, EncouragementService>();
 
             services.AddScoped<ILearningSettingsManager, LearningSettingsManager>();
             services.AddScoped<ILearningEventMediator, LearningEventMediator>();
