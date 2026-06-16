@@ -1528,6 +1528,91 @@ namespace LearningAssistant.Forms
         }
 
         /// <summary>
+        /// 加载学习统计数据
+        /// </summary>
+        private void LoadStudyStats()
+        {
+            try
+            {
+                string statsPath = Path.Combine(AppPaths.DataDir, "study_stats.json");
+                if (File.Exists(statsPath))
+                {
+                    string json = File.ReadAllText(statsPath);
+                    var stats = JsonSerializer.Deserialize<StudyStats>(json);
+                    if (stats != null)
+                    {
+                        _todayLearnedCount = stats.TodayLearnedCount;
+                        _streakDays = stats.StreakDays;
+                        _score = stats.TotalScore;
+                        _totalLearnedCount = stats.TotalLearnedCount;
+                        _quizCorrectCount = stats.QuizCorrectCount;
+                        _favoriteCount = stats.FavoriteCount;
+                        _noteCount = stats.NoteCount;
+                        _xp = stats.XP;
+                        _currentLevel = stats.CurrentLevel;
+                        _levelTitle = _currentLevel < _levelTitles.Count ? _levelTitles[_currentLevel] : "圣人";
+                        _xpToNextLevel = (_currentLevel + 1) * 100;
+
+                        if (stats.LastStudyDate != DateTime.Today.Date)
+                        {
+                            _todayLearnedCount = 0;
+                            if (stats.LastStudyDate == DateTime.Today.Date.AddDays(-1))
+                            {
+                                _streakDays++;
+                            }
+                            else if (stats.LastStudyDate < DateTime.Today.Date.AddDays(-1))
+                            {
+                                _streakDays = 1;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    _streakDays = 1;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "加载学习统计失败");
+                _streakDays = 1;
+            }
+
+            UpdateStatsDisplay();
+        }
+
+        /// <summary>
+        /// 保存学习统计数据到文件
+        /// </summary>
+        private void SaveStudyStats()
+        {
+            try
+            {
+                var stats = new StudyStats
+                {
+                    TodayLearnedCount = _todayLearnedCount,
+                    StreakDays = _streakDays,
+                    TotalScore = _score,
+                    LastStudyDate = DateTime.Today.Date,
+                    TotalLearnedCount = _totalLearnedCount,
+                    QuizCorrectCount = _quizCorrectCount,
+                    FavoriteCount = _favoriteCount,
+                    NoteCount = _noteCount,
+                    XP = _xp,
+                    CurrentLevel = _currentLevel
+                };
+
+                string statsPath = Path.Combine(AppPaths.DataDir, "study_stats.json");
+                string json = JsonSerializer.Serialize(stats, new JsonSerializerOptions { WriteIndented = true });
+                File.WriteAllText(statsPath, json);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "保存学习统计失败");
+            }
+        }
+
+        /// <summary>
         /// 从文件加载已解锁的徽章
         /// </summary>
         private void LoadBadges()
@@ -1966,6 +2051,32 @@ namespace LearningAssistant.Forms
         }
 
         /// <summary>
+        /// 更新统计信息显示
+        /// </summary>
+        private void UpdateStatsDisplay()
+        {
+            if (labelStudyTime != null)
+                labelStudyTime.Text = $"⏱️ 学习时长: {_studyDuration.ToString(@"hh\:mm")}";
+
+            if (labelScore != null)
+                labelScore.Text = $"🏆 得分: {_score}";
+
+            if (labelTodayCount != null)
+                labelTodayCount.Text = $"📚 今日学习: {_todayLearnedCount} 项";
+
+            if (labelStreak != null)
+                labelStreak.Text = $"🔥 连续学习: {_streakDays} 天";
+
+            if (progressDailyGoal != null)
+            {
+                progressDailyGoal.Value = Math.Min(_todayLearnedCount, 50);
+            }
+
+            if (labelDailyGoal != null)
+                labelDailyGoal.Text = $"今日目标: {_todayLearnedCount}/50";
+        }
+
+        /// <summary>
         /// 更新鼓励语显示（按间隔显示，避免太频繁）
         /// </summary>
         private void UpdateEncouragement()
@@ -1980,11 +2091,237 @@ namespace LearningAssistant.Forms
             }
         }
 
+        /// <summary>
+        /// 学习计时器回调
+        /// </summary>
+        private void StudyTimer_Tick(object? sender, EventArgs e)
+        {
+            _studyDuration = _studyDuration.Add(TimeSpan.FromSeconds(1));
+            UpdateStatsDisplay();
+        }
+
+        /// <summary>
+        /// 增加分数并保存
+        /// </summary>
+        /// <param name="points">要增加的分数</param>
+        private void IncrementScore(int points)
+        {
+            _score += points;
+            _todayLearnedCount++;
+            UpdateStatsDisplay();
+            SaveStudyStats();
+        }
+
+        #endregion
+
+        #region List Management
+
+        public void UpdateLearningList(List<string> items, int currentIndex)
+        {
+            if (listBoxItems == null) return;
+
+            listBoxItems.Items.Clear();
+            foreach (var item in items)
+            {
+                listBoxItems.Items.Add(item);
+            }
+
+            UpdateListStatus(items.Count, currentIndex);
+
+            if (currentIndex >= 0 && currentIndex < items.Count)
+            {
+                listBoxItems.SelectedIndex = currentIndex;
+                listBoxItems.TopIndex = Math.Max(0, currentIndex - 5);
+            }
+        }
+
+        private void UpdateListStatus(int totalItems, int currentIndex)
+        {
+            if (totalItems == 0)
+            {
+                labelListStatus.Text = "暂无学习内容";
+                return;
+            }
+
+            int progressPercent = totalItems > 0 ? (int)((currentIndex + 1) * 100.0 / totalItems) : 0;
+            labelListStatus.Text = $"共 {totalItems} 项 | 当前 {currentIndex + 1} | 进度 {progressPercent}%";
+        }
+
+        public void UpdateLearningListSelection(int currentIndex)
+        {
+            if (listBoxItems == null) return;
+
+            if (currentIndex >= 0 && currentIndex < listBoxItems.Items.Count)
+            {
+                listBoxItems.SelectedIndex = currentIndex;
+                listBoxItems.TopIndex = Math.Max(0, currentIndex - 5);
+            }
+        }
+
+        public void EnableListHighlighting(bool enable)
+        {
+            if (listBoxItems == null) return;
+
+            listBoxItems.ItemHeight = 30;
+            listBoxItems.DrawMode = enable ? DrawMode.OwnerDrawFixed : DrawMode.Normal;
+            if (enable)
+            {
+                listBoxItems.DrawItem += ListBoxItems_DrawItem;
+            }
+            else
+            {
+                listBoxItems.DrawItem -= ListBoxItems_DrawItem;
+            }
+        }
+
+        private void ListBoxItems_DrawItem(object? sender, DrawItemEventArgs e)
+        {
+            if (sender is not ListBox listBox) return;
+            if (e.Index < 0) return;
+
+            e.DrawBackground();
+
+            bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+
+            using (var brush = new SolidBrush(isSelected ? Color.FromArgb(76, 175, 80) : listBox.BackColor))
+            {
+                e.Graphics.FillRectangle(brush, e.Bounds);
+            }
+
+            string text = listBox.Items[e.Index].ToString() ?? string.Empty;
+
+            using (var foreBrush = new SolidBrush(isSelected ? Color.White : Color.Black))
+            {
+                e.Graphics.DrawString(text, e.Font, foreBrush, e.Bounds, StringFormat.GenericDefault);
+            }
+
+            if (isSelected)
+            {
+                using (var pen = new Pen(Color.White, 2))
+                {
+                    e.Graphics.DrawRectangle(pen, e.Bounds.X, e.Bounds.Y, e.Bounds.Width - 1, e.Bounds.Height - 1);
+                }
+            }
+
+            e.DrawFocusRectangle();
+        }
+
+        private void ListBoxItems_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            if (listBoxItems.SelectedIndex >= 0)
+            {
+                ItemSelectedFromList?.Invoke(this, new ItemSelectedEventArgs(listBoxItems.SelectedIndex));
+            }
+        }
+
+        public event EventHandler<ItemSelectedEventArgs>? ItemSelectedFromList;
+
+        #endregion
+
+        #region Paint Event Handlers
+
+        private void PanelContent_Paint(object? sender, PaintEventArgs e)
+        {
+            if (DesignMode) return;
+            if (sender is not Panel panel) return;
+
+            try
+            {
+                using var gradient = new System.Drawing.Drawing2D.LinearGradientBrush(
+                    new Point(0, 0),
+                    new Point(panel.Width, panel.Height),
+                    Color.FromArgb(255, 255, 255),
+                    Color.FromArgb(245, 250, 248)
+                );
+                e.Graphics.FillRectangle(gradient, panel.ClientRectangle);
+
+                using var pen = new Pen(Color.FromArgb(200, 210, 220), 2);
+                e.Graphics.DrawRectangle(pen, 1, 1, panel.Width - 3, panel.Height - 3);
+            }
+            catch
+            {
+                e.Graphics.Clear(Color.White);
+            }
+        }
+
+        private void labelAI_Click(object? sender, EventArgs e)
+        {
+            // AI功能已通过按钮触发，此事件保留以兼容设计器
+        }
+
+        private void mainTableLayoutPanel_Paint(object? sender, PaintEventArgs e)
+        {
+            DrawConfetti(e.Graphics);
+        }
+
         #endregion
 
         #region Event Handlers
 
         private bool _isDetailVisible = false;
+
+        private void LabelContent_Click(object? sender, EventArgs e)
+        {
+            ToggleDetail();
+        }
+
+        private void ListBoxDisplay_Click(object? sender, EventArgs e)
+        {
+            ToggleDetail();
+        }
+
+        /// <summary>
+        /// 切换详情区的显示/隐藏
+        /// </summary>
+        private void ToggleDetail()
+        {
+            _isDetailVisible = !_isDetailVisible;
+            listBoxDisplay.Visible = _isDetailVisible;
+
+            // 同步更新复选框状态
+            if (checkBoxShowDetail != null)
+            {
+                checkBoxShowDetail.Checked = _isDetailVisible;
+            }
+
+            if (_isDetailVisible && _currentItem != null)
+            {
+                UpdateDetailContent(_currentItem.GetDisplayText());
+                // 答题模式下查看答案，标记为已显示
+                if (_isQuizMode && !_answerRevealed)
+                {
+                    _answerRevealed = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 格式化显示文本，将竖线替换为换行
+        /// </summary>
+        private string FormatDisplayText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            return text.Replace("||", "\n\n").Replace("|", "\n");
+        }
+
+        /// <summary>
+        /// 更新详情区内容（用于答题模式等场景）
+        /// </summary>
+        private void UpdateDetailContent(string text)
+        {
+            listBoxDisplay.Items.Clear();
+            string formattedText = FormatDisplayText(text);
+            // 将格式化后的文本按换行分割为多个列表项
+            string[] lines = formattedText.Split(new[] { '\n', '|' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string line in lines)
+            {
+                string trimmedLine = line.Trim();
+                if (!string.IsNullOrEmpty(trimmedLine))
+                {
+                    listBoxDisplay.Items.Add(trimmedLine);
+                }
+            }
+        }
 
         private void RadioStudyMode_CheckedChanged(object? sender, EventArgs e)
         {
