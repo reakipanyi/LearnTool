@@ -66,6 +66,7 @@ namespace LearningAssistant.Presenters
             { "Meaning", "释义" },
             { "StrokeCount", "笔画数" },
             { "Radical", "部首" },
+            { "StrokeOrder", "笔顺" },
             { "Words", "组词" },
             { "Idiom", "成语" },
             { "Origin", "出处" },
@@ -79,6 +80,7 @@ namespace LearningAssistant.Presenters
             { "Word", "单词" },
             { "Phonetic", "音标" },
             { "PartOfSpeech", "词性" },
+            { "SyllableBreakdown", "音节拼读" },
             { "Sentence", "句子" },
             { "Translation", "翻译" },
             { "Grammar", "语法" },
@@ -97,7 +99,7 @@ namespace LearningAssistant.Presenters
             {
                 Constants.SubCategory.ChineseCharacter, new Dictionary<string, object>
                 {
-                    { "Character", "" }, { "Pinyin", "" }, { "Meaning", "" }, { "StrokeCount", "" }, { "Radical", "" }, { "Words", new List<string> { "", "", "", "", "" } }
+                    { "Character", "" }, { "Pinyin", "" }, { "Meaning", "" }, { "StrokeCount", "" }, { "Radical", "" }, { "StrokeOrder", "" }, { "Words", new List<string> { "", "", "", "", "" } }
                 }
             },
             {
@@ -121,7 +123,7 @@ namespace LearningAssistant.Presenters
             {
                 Constants.SubCategory.EnglishWord, new Dictionary<string, object>
                 {
-                    { "Word", "" }, { "Phonetic", "" }, { "PartOfSpeech", "" }, { "Meaning", "" }, { "Example", "" }
+                    { "Word", "" }, { "Phonetic", "" }, { "PartOfSpeech", "" }, { "SyllableBreakdown", "" }, { "Meaning", "" }, { "Example", "" }
                 }
             },
             {
@@ -155,12 +157,12 @@ namespace LearningAssistant.Presenters
         /// </summary>
         private static readonly Dictionary<string, string> JsonFormatHints = new()
         {
-            { Constants.SubCategory.ChineseCharacter, @"[  {""Character"":"""",""Pinyin"":"""",""Meaning"":"""",""StrokeCount"":"""",""Radical"":"""",""Words"":""...,...""} ]" },
+            { Constants.SubCategory.ChineseCharacter, @"[  {""Character"":"""",""Pinyin"":"""",""Meaning"":"""",""StrokeCount"":"""",""Radical"":"""",""StrokeOrder"":"""",""Words"":""...,...""} ]" },
             { Constants.SubCategory.ChineseIdiom, @"[  {""Idiom"":"""",""Pinyin"":"""",""Meaning"":"""",""Origin"":"""",""Example"":""""} ]" },
             { Constants.SubCategory.ChinesePhrase, @"[  {""Phrase"":"""",""Pinyin"":"""",""Meaning"":"""",""Example"":""""} ]" },
             { Constants.SubCategory.ChinesePoem, @"[  {""Title"":"""",""Author"":"""",""Dynasty"":"""",""Verses"":["""","""","""",""""],""Annotation"":""""} ]" },
             { Constants.SubCategory.ChineseComprehensive, @"[  {""Title"":"""",""Content"":"""",""Questions"":[{""Question"":"""",""Answer"":""""}],""Analysis"":""""} ]" },
-            { Constants.SubCategory.EnglishWord, @"[  {""Word"":"""",""Phonetic"":"""",""PartOfSpeech"":"""",""Meaning"":"""",""Example"":""""} ]" },
+            { Constants.SubCategory.EnglishWord, @"[  {""Word"":"""",""Phonetic"":"""",""PartOfSpeech"":"""",""SyllableBreakdown"":"""",""Meaning"":"""",""Example"":""""} ]" },
             { Constants.SubCategory.EnglishPhrase, @"[  {""Phrase"":"""",""Meaning"":"""",""Example"":""""} ]" },
             { Constants.SubCategory.EnglishSentence, @"[  {""Sentence"":"""",""Translation"":"""",""Grammar"":""""} ]" },
             { Constants.SubCategory.EnglishComprehensive, @"[  {""Title"":"""",""Content"":"""",""Questions"":[{""Question"":"""",""Answer"":""""}],""Analysis"":""""} ]" }
