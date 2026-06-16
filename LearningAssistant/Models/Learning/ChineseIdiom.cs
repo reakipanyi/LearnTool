@@ -50,5 +50,20 @@ namespace LearningAssistant.Models.Learning
         
         /// <inheritdoc/>
         public override string GetPronunciation() => Pinyin;
+
+        /// <inheritdoc/>
+        public override string GetDisplayStruct()
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(Pinyin))
+                parts.Add("拼音");
+            if (!string.IsNullOrWhiteSpace(Meaning))
+                parts.Add("释义");
+            if (!string.IsNullOrWhiteSpace(Example))
+                parts.Add("例句");
+            if (!string.IsNullOrWhiteSpace(Origin))
+                parts.Add("出处");
+            return string.Join(" | ", parts);
+        }
     }
 }

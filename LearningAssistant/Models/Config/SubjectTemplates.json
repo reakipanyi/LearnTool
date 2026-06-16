@@ -7,22 +7,24 @@
       "templates": {
         "识字": {
           "name": "识字",
-          "fields": ["Character", "Pinyin", "Meaning", "StrokeCount", "Words", "Radical"],
+          "fields": ["Character", "Pinyin", "Meaning", "StrokeCount", "Radical", "StrokeOrder", "Words"],
           "fieldNames": {
             "Character": "汉字",
             "Pinyin": "拼音",
             "Meaning": "释义",
             "StrokeCount": "笔画数",
-            "Words": "组词",
-            "Radical": "部首"
+            "Radical": "部首",
+            "StrokeOrder": "笔顺",
+            "Words": "组词"
           },
           "sample": {
             "Character": "学",
             "Pinyin": "xué",
             "Meaning": "学习；模仿；学科",
             "StrokeCount": 8,
-            "Words": "学习、学校、学生",
-            "Radical": "子"
+            "Radical": "子",
+            "StrokeOrder": "点 横 横 竖 撇 捺",
+            "Words": "学习、学校、学生"
           }
         },
         "成语": {
@@ -100,11 +102,12 @@
       "templates": {
         "英语单词": {
           "name": "英语单词",
-          "fields": ["Word", "Phonetic", "PartOfSpeech", "Meaning", "Example"],
+          "fields": ["Word", "Phonetic", "PartOfSpeech", "SyllableBreakdown", "Meaning", "Example"],
           "fieldNames": {
             "Word": "单词",
             "Phonetic": "音标",
             "PartOfSpeech": "词性",
+            "SyllableBreakdown": "音节拼读",
             "Meaning": "释义",
             "Example": "例句"
           },
@@ -112,6 +115,7 @@
             "Word": "learn",
             "Phonetic": "/lɜːrn/",
             "PartOfSpeech": "v.",
+            "SyllableBreakdown": "l-ea-rn",
             "Meaning": "学习",
             "Example": "I learn English every day."
           }

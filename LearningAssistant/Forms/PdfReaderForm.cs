@@ -3619,7 +3619,8 @@ namespace LearningAssistant.Forms
                         Character = originalText,
                         Meaning = meaning,
                         Example = example,
-                        Tips = tips
+                        Tips = tips,
+                        StrokeOrder = ""
                     });
                 }
                 else if (contentType == "成语")
@@ -3652,7 +3653,8 @@ namespace LearningAssistant.Forms
                         Word = originalText,
                         Meaning = meaning,
                         Example = example,
-                        Tips = tips
+                        Tips = tips,
+                        SyllableBreakdown = ""
                     });
                 }
                 else

@@ -31,6 +31,11 @@ namespace LearningAssistant.Models.Learning
         public string Radical { get; set; } = string.Empty;
 
         /// <summary>
+        /// 笔顺
+        /// </summary>
+        public string StrokeOrder { get; set; } = string.Empty;
+
+        /// <summary>
         /// 组成的词语列表
         /// </summary>
         public string Words { get; set; }
@@ -52,10 +57,10 @@ namespace LearningAssistant.Models.Learning
                 parts.Add($"笔画: {StrokeCount}画");
             if (!string.IsNullOrWhiteSpace(Radical))
                 parts.Add($"部首: {Radical}");
-            if (!string.IsNullOrWhiteSpace(Radical))
+            if (!string.IsNullOrWhiteSpace(StrokeOrder))
+                parts.Add($"笔顺: {StrokeOrder}");
+            if (!string.IsNullOrWhiteSpace(Words))
                 parts.Add($"组词: {Words}");
-            //if (Words != null && Words.Any())
-            //    parts.Add($"组词: {string.Join(", ", Words.Take(5))}");
             return string.Join(" | ", parts);
         }
 
@@ -63,6 +68,25 @@ namespace LearningAssistant.Models.Learning
         public override string GetPronunciation() => Pinyin;
 
 
+
+        /// <inheritdoc/>
+        public override string GetDisplayStruct()
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(Pinyin))
+                parts.Add("拼音");
+            if (!string.IsNullOrWhiteSpace(Meaning))
+                parts.Add("释义");
+            if (!string.IsNullOrWhiteSpace(StrokeCount))
+                parts.Add("笔画");
+            if (!string.IsNullOrWhiteSpace(Radical))
+                parts.Add("部首");
+            if (!string.IsNullOrWhiteSpace(StrokeOrder))
+                parts.Add("笔顺");
+            if (!string.IsNullOrWhiteSpace(Words))
+                parts.Add("组词");
+            return string.Join(" | ", parts);
+        }
 
     }
 }

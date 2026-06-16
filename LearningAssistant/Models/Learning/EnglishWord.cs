@@ -30,6 +30,11 @@ namespace LearningAssistant.Models.Learning
         /// </summary>
         public string PartOfSpeech { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 音节拼读
+        /// </summary>
+        public string SyllableBreakdown { get; set; } = string.Empty;
+
         /// <inheritdoc/>
         public override string GetMainContent() => Word;
         
@@ -41,6 +46,8 @@ namespace LearningAssistant.Models.Learning
                 parts.Add($"词性: {PartOfSpeech}");
             if (!string.IsNullOrWhiteSpace(Phonetic))
                 parts.Add($"音标: {Phonetic}");
+            if (!string.IsNullOrWhiteSpace(SyllableBreakdown))
+                parts.Add($"拼读: {SyllableBreakdown}");
             if (!string.IsNullOrWhiteSpace(Meaning))
                 parts.Add($"释义: {Meaning}");
             if (!string.IsNullOrWhiteSpace(Example))
@@ -50,5 +57,22 @@ namespace LearningAssistant.Models.Learning
         
         /// <inheritdoc/>
         public override string GetPronunciation() => Phonetic;
+
+        /// <inheritdoc/>
+        public override string GetDisplayStruct()
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(PartOfSpeech))
+                parts.Add("词性");
+            if (!string.IsNullOrWhiteSpace(Phonetic))
+                parts.Add("音标");
+            if (!string.IsNullOrWhiteSpace(SyllableBreakdown))
+                parts.Add("拼读");
+            if (!string.IsNullOrWhiteSpace(Meaning))
+                parts.Add("释义");
+            if (!string.IsNullOrWhiteSpace(Example))
+                parts.Add("例句");
+            return string.Join(" | ", parts);
+        }
     }
 }

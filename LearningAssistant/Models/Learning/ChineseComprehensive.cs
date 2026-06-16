@@ -78,6 +78,11 @@ namespace LearningAssistant.Models.Learning
         public string Radical { get; set; } = string.Empty;
 
         /// <summary>
+        /// 笔顺（适用于：生字）
+        /// </summary>
+        public string StrokeOrder { get; set; } = string.Empty;
+
+        /// <summary>
         /// 难度级别
         /// </summary>
         public int DifficultyLevel { get; set; } = 1;
@@ -114,6 +119,8 @@ namespace LearningAssistant.Models.Learning
                         parts.Add($"笔画: {StrokeCount}画");
                     if (!string.IsNullOrWhiteSpace(Radical))
                         parts.Add($"部首: {Radical}");
+                    if (!string.IsNullOrWhiteSpace(StrokeOrder))
+                        parts.Add($"笔顺: {StrokeOrder}");
                     if (!string.IsNullOrWhiteSpace(Example))
                         parts.Add($"示例: {Example}");
                     break;
@@ -152,6 +159,60 @@ namespace LearningAssistant.Models.Learning
 
         /// <inheritdoc/>
         public override string GetPronunciation() => Pinyin;
+
+        /// <inheritdoc/>
+        public override string GetDisplayStruct()
+        {
+            var parts = new List<string>();
+
+            switch (ItemType)
+            {
+                case ChineseItemType.Character:
+                    if (!string.IsNullOrWhiteSpace(Pinyin))
+                        parts.Add("拼音");
+                    if (!string.IsNullOrWhiteSpace(Meaning))
+                        parts.Add("释义");
+                    if (WordCombinations.Count > 0)
+                        parts.Add("组词");
+                    if (!string.IsNullOrWhiteSpace(StrokeCount))
+                        parts.Add("笔画");
+                    if (!string.IsNullOrWhiteSpace(Radical))
+                        parts.Add("部首");
+                    if (!string.IsNullOrWhiteSpace(StrokeOrder))
+                        parts.Add("笔顺");
+                    if (!string.IsNullOrWhiteSpace(Example))
+                        parts.Add("示例");
+                    break;
+
+                case ChineseItemType.Phrase:
+                case ChineseItemType.Idiom:
+                    if (!string.IsNullOrWhiteSpace(Pinyin))
+                        parts.Add("拼音");
+                    if (!string.IsNullOrWhiteSpace(Meaning))
+                        parts.Add("释义");
+                    if (!string.IsNullOrWhiteSpace(Example))
+                        parts.Add("示例");
+                    break;
+
+                case ChineseItemType.Sentence:
+                    if (!string.IsNullOrWhiteSpace(Pinyin))
+                        parts.Add("拼音");
+                    if (!string.IsNullOrWhiteSpace(Meaning))
+                        parts.Add("解释");
+                    break;
+
+                case ChineseItemType.Poem:
+                    if (!string.IsNullOrWhiteSpace(PoemAuthor))
+                        parts.Add("作者");
+                    if (!string.IsNullOrWhiteSpace(PoemDynasty))
+                        parts.Add("朝代");
+                    if (PoemLines.Count > 0)
+                        parts.Add("内容");
+                    break;
+            }
+
+            return string.Join(" | ", parts);
+        }
     }
 
     /// <summary>
