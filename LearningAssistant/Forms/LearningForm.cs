@@ -122,22 +122,6 @@ namespace LearningAssistant.Forms
         private int _currentLevel = 0;
         private string _levelTitle = "小白";
         private int _xp = 0;
-        private ProgressBar progressBar1;
-        private FlowLayoutPanel buttonsFlowLayoutPanel;
-        private Button buttonKnown;
-        private Button buttonUnknown;
-        private Button buttonNext;
-        private Button buttonPronounce;
-        private Button buttonFavorite;
-        private Button buttonNote;
-        private Button buttonAIAsk;
-        private Button buttonExit;
-        private FlowLayoutPanel settingsFlowLayoutPanel;
-        private CheckBox checkBoxVoice;
-        private FlowLayoutPanel pronunciationFlowLayoutPanel;
-        private RadioButton radioOriginal;
-        private RadioButton radioExplanation;
-        private RadioButton radioBoth;
         private int _xpToNextLevel = 100;
 
         private class Badge
@@ -242,6 +226,32 @@ namespace LearningAssistant.Forms
             _themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
             _aiPanelPopupService = aiPanelPopupService ?? throw new ArgumentNullException(nameof(aiPanelPopupService));
 
+            // ========== 子视图事件订阅 ==========
+            _listView.SelectedIndexChanged += ListBoxItems_SelectedIndexChanged;
+            _contentView.ContentClicked += LabelContent_Click;
+            _contentView.DetailClicked += ListBoxDisplay_Click;
+            _contentView.NoteToggleClicked += ButtonNote_Click;
+            _contentView.DetailCheckChanged += CheckBoxShowDetail_CheckedChanged;
+            _contentView.NoteTextChanged += RichTextBoxNotes_TextChanged;
+            _buttonsView.KnownClicked += ButtonKnown_Click;
+            _buttonsView.UnknownClicked += ButtonUnknown_Click;
+            _buttonsView.NextClicked += ButtonNext_Click;
+            _buttonsView.PronounceClicked += ButtonPronounce_Click;
+            _buttonsView.FavoriteClicked += ButtonFavorite_Click;
+            _buttonsView.NoteClicked += ButtonNote_Click;
+            _buttonsView.ExitClicked += ButtonExit_Click;
+            _buttonsView.AIAskClicked += ButtonAIAsk_Click;
+            _settingsView.RadioStudyMode.CheckedChanged += RadioStudyMode_CheckedChanged;
+            _settingsView.RadioQuickMode.CheckedChanged += RadioQuickMode_CheckedChanged;
+            _settingsView.RadioSequential.CheckedChanged += RadioSequential_CheckedChanged;
+            _settingsView.RadioRandom.CheckedChanged += RadioRandom_CheckedChanged;
+            _settingsView.RadioChinese.CheckedChanged += RadioChinese_CheckedChanged;
+            _settingsView.RadioEnglish.CheckedChanged += RadioEnglish_CheckedChanged;
+            _settingsView.ComboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
+            _settingsView.ButtonOpenStatistics.Click += ButtonOpenStatistics_Click;
+            _settingsView.ButtonExportErrorBook.Click += ButtonExportErrorBook_Click;
+            _settingsView.ButtonQuizMode.Click += ButtonQuizMode_Click;
+            _settingsView.ButtonThemeToggle.Click += ButtonThemeToggle_Click;
 
             Load += LearningForm_Load;
             FormClosing += LearningForm_FormClosing;
@@ -910,98 +920,83 @@ namespace LearningAssistant.Forms
         #region WinForms Designer Generated Code
 
         private System.ComponentModel.IContainer components = null;
-        // 必须在类内部定义这些控件变量（修复编译报错）
-        private Panel panelContent;
-        private ListBox listBoxDisplay;
-        private Label labelContent;
-        private Label labelStatistics;
-        private Panel panelList;
-        private ListBox listBoxItems;
-        private Label labelListTitle;
-        private Label labelListStatus;
-        private Panel panelConfig;
-        private Label labelConfigTitle;
-        private GroupBox groupBoxMode;
-        private RadioButton radioStudyMode;
-        private RadioButton radioQuickMode;
-        private GroupBox groupBoxSort;
-        private RadioButton radioSequential;
-        private RadioButton radioRandom;
-        private GroupBox groupBoxLanguage;
-        private RadioButton radioChinese;
-        private RadioButton radioEnglish;
-        private Label labelSubCategory;
-        private ComboBox comboBoxSubCategory;
-        private TableLayoutPanel mainTableLayoutPanel;
-        private Panel middlePanel;
-        private TableLayoutPanel middleTableLayoutPanel;
-        private GroupBox groupBoxPronunciationScope;
-        private Button buttonOpenStatistics;
-        private Button buttonExportErrorBook;
 
-        private Panel panelStats;
-        private Label labelStudyTime;
-        private Label labelScore;
-        private Label labelTodayCount;
-        private Label labelStreak;
-        private Label labelEncouragement;
-        private ProgressBar progressDailyGoal;
-        private Label labelDailyGoal;
-        private CheckBox checkBoxShowDetail;
-        private Panel panelQuizMode;
-        private Button buttonQuizMode;
-        private Label labelQuizHint;
-        private Button buttonThemeToggle;
-        private Panel panelNotes;
-        private RichTextBox richTextBoxNotes;
-        private Label labelNotesTitle;
+        // ========== 子视图实例（主视图通过这些管理子视图）==========
+        private LearningListView _listView = null!;
+        private LearningContentView _contentView = null!;
+        private LearningButtonsView _buttonsView = null!;
+        private LearningStatsView _statsView = null!;
+        private LearningSettingsView _settingsView = null!;
 
-        private Label labelGameTitle;
-        private bool _isGameActive = false;
-        private Panel panelBadges;
-        private Label labelBadgesTitle;
-        private Button buttonMiniGame;
-        private Button buttonGameSubmit;
-        private Panel panelChallenges;
-        private Label labelChallengesTitle;
-        private FlowLayoutPanel flowLayoutPanelBadges;
-        private Label labelLevel;
-        private ProgressBar progressXP;
-        private Label labelXP;
-        private FlowLayoutPanel flowLayoutPanelChallenges;
-
-        private Panel panelGame;
-        private Label labelGameQuestion;
-        private TextBox textBoxGameAnswer;
-        private Label labelGameResult;
-        private System.Windows.Forms.Timer _gameTimer;
-        private int _gameScore = 0;
+        // ========== 兼容访问器（委托到子视图，保持现有代码不动）==========
+        private Panel panelContent => _contentView.PanelContent;
+        private ListBox listBoxDisplay => _contentView.ListBoxDisplay;
+        private Label labelContent => _contentView.LabelContent;
+        private Label labelStatistics => _statsView.LabelStatistics;
+        private Panel panelList => _listView.PanelList;
+        private ListBox listBoxItems => _listView.ListBoxItems;
+        private Panel panelConfig => _settingsView.PanelConfig;
+        private ComboBox comboBoxSubCategory => _settingsView.ComboBoxSubCategory;
+        private CheckBox checkBoxShowDetail => _contentView.CheckBoxShowDetail;
+        private Button buttonPronounce => _buttonsView.ButtonPronounce;
+        private Button buttonFavorite => _buttonsView.ButtonFavorite;
+        private Button buttonNote => _buttonsView.ButtonNote;
+        private Button buttonExit => _buttonsView.ButtonExit;
+        private Button buttonAIAsk => _buttonsView.ButtonAIAsk;
+        private Button buttonKnown => _buttonsView.ButtonKnown;
+        private Button buttonUnknown => _buttonsView.ButtonUnknown;
+        private Button buttonNext => _buttonsView.ButtonNext;
+        private FlowLayoutPanel buttonsFlowLayoutPanel => _buttonsView.ButtonsPanel;
+        private Panel panelNotes => _contentView.PanelNotes;
+        private RichTextBox richTextBoxNotes => _contentView.RichTextBoxNotes;
+        // ========== 独立控件（后续迭代可移入子视图）==========
+        private TableLayoutPanel mainTableLayoutPanel = null!;
+        private Panel middlePanel = null!;
+        private TableLayoutPanel middleTableLayoutPanel = null!;
+        private Panel panelStats = null!;
+        private Label labelStudyTime = null!;
+        private Label labelScore = null!;
+        private Label labelTodayCount = null!;
+        private Label labelStreak = null!;
+        private Label labelEncouragement = null!;
+        private ProgressBar progressDailyGoal = null!;
+        private Label labelDailyGoal = null!;
+        private Panel panelQuizMode = null!;
+        private Label labelQuizHint = null!;
+        private GroupBox groupBoxMode = null!;
+        private GroupBox groupBoxSort = null!;
+        private GroupBox groupBoxLanguage = null!;
+        private Label labelSubCategory = null!;
+        private RadioButton radioStudyMode = null!;
+        private RadioButton radioQuickMode = null!;
+        private RadioButton radioSequential = null!;
+        private RadioButton radioRandom = null!;
+        private RadioButton radioChinese = null!;
+        private RadioButton radioEnglish = null!;
+        private ComboBox pronunciationComboBox = null!;
+        private CheckBox checkBoxVoice = null!;
+        private FlowLayoutPanel pronunciationFlowLayoutPanel = null!;
+        private RadioButton radioOriginal = null!;
+        private RadioButton radioExplanation = null!;
+        private RadioButton radioBoth = null!;
+        private GroupBox groupBoxPronunciationScope = null!;
+        private ProgressBar progressBar1 = null!;
+        private FlowLayoutPanel settingsFlowLayoutPanel = null!;
+        private System.Windows.Forms.Timer _confettiTimer = null!;
 
         private void InitializeComponent()
         {
-            panelContent = new Panel();
-            listBoxDisplay = new ListBox();
-            labelContent = new Label();
-            labelStatistics = new Label();
-            panelList = new Panel();
-            labelListStatus = new Label();
-            labelListTitle = new Label();
-            listBoxItems = new ListBox();
-            panelConfig = new Panel();
-            labelConfigTitle = new Label();
-            groupBoxMode = new GroupBox();
-            radioStudyMode = new RadioButton();
-            radioQuickMode = new RadioButton();
-            groupBoxSort = new GroupBox();
-            radioSequential = new RadioButton();
-            radioRandom = new RadioButton();
-            groupBoxLanguage = new GroupBox();
-            radioChinese = new RadioButton();
-            radioEnglish = new RadioButton();
-            labelSubCategory = new Label();
-            comboBoxSubCategory = new ComboBox();
-            buttonOpenStatistics = new Button();
-            buttonExportErrorBook = new Button();
+            // ========== 创建子视图（它们内部已创建所有子控件）==========
+            _listView = new LearningListView();
+            _contentView = new LearningContentView();
+            _buttonsView = new LearningButtonsView();
+            _statsView = new LearningStatsView();
+            _settingsView = new LearningSettingsView();
+
+            // ========== 仅创建独立控件（不是子视图覆盖的）==========
+            mainTableLayoutPanel = new TableLayoutPanel();
+            middlePanel = new Panel();
+            middleTableLayoutPanel = new TableLayoutPanel();
             panelStats = new Panel();
             labelStudyTime = new Label();
             labelScore = new Label();
@@ -1011,302 +1006,93 @@ namespace LearningAssistant.Forms
             progressDailyGoal = new ProgressBar();
             labelDailyGoal = new Label();
             panelQuizMode = new Panel();
-            buttonQuizMode = new Button();
             labelQuizHint = new Label();
-            buttonThemeToggle = new Button();
-            checkBoxShowDetail = new CheckBox();
-            mainTableLayoutPanel = new TableLayoutPanel();
-            middlePanel = new Panel();
-            middleTableLayoutPanel = new TableLayoutPanel();
-            panelNotes = new Panel();
-            richTextBoxNotes = new RichTextBox();
-            labelNotesTitle = new Label();
-            buttonsFlowLayoutPanel = new FlowLayoutPanel();
-            buttonKnown = new Button();
-            buttonUnknown = new Button();
-            buttonNext = new Button();
-            buttonPronounce = new Button();
-            buttonFavorite = new Button();
-            buttonNote = new Button();
-            buttonExit = new Button();
-            buttonAIAsk = new Button();
-            progressBar1 = new ProgressBar();
-            settingsFlowLayoutPanel = new FlowLayoutPanel();
+            groupBoxMode = _settingsView.GroupBoxMode;
+            groupBoxSort = _settingsView.GroupBoxSort;
+            groupBoxLanguage = _settingsView.GroupBoxLanguage;
+            labelSubCategory = _settingsView.LabelSubCategory;
+            radioStudyMode = _settingsView.RadioStudyMode;
+            radioQuickMode = _settingsView.RadioQuickMode;
+            radioSequential = _settingsView.RadioSequential;
+            radioRandom = _settingsView.RadioRandom;
+            radioChinese = _settingsView.RadioChinese;
+            radioEnglish = _settingsView.RadioEnglish;
+            pronunciationComboBox = new ComboBox();
             checkBoxVoice = new CheckBox();
             pronunciationFlowLayoutPanel = new FlowLayoutPanel();
             radioOriginal = new RadioButton();
             radioExplanation = new RadioButton();
             radioBoth = new RadioButton();
             groupBoxPronunciationScope = new GroupBox();
-            labelGameTitle = new Label();
-            panelBadges = new Panel();
-            labelBadgesTitle = new Label();
-            buttonMiniGame = new Button();
-            buttonGameSubmit = new Button();
-            panelChallenges = new Panel();
-            labelChallengesTitle = new Label();
-            flowLayoutPanelBadges = new FlowLayoutPanel();
-            labelLevel = new Label();
-            progressXP = new ProgressBar();
-            labelXP = new Label();
-            flowLayoutPanelChallenges = new FlowLayoutPanel();
-            panelGame = new Panel();
-            labelGameQuestion = new Label();
-            textBoxGameAnswer = new TextBox();
-            labelGameResult = new Label();
-            panelContent.SuspendLayout();
-            panelList.SuspendLayout();
-            panelConfig.SuspendLayout();
-            groupBoxMode.SuspendLayout();
-            groupBoxSort.SuspendLayout();
-            groupBoxLanguage.SuspendLayout();
+            progressBar1 = new ProgressBar();
+            settingsFlowLayoutPanel = new FlowLayoutPanel();
+            _confettiTimer = new System.Windows.Forms.Timer();
+
+            // ========== 以下代码保持原有逻辑不变 ==========
+            // 注意：子视图已在其 InitializeComponent() 中完成所有子控件的创建和配置
+            // 此处仅设置布局引用，不重复配置子视图控件
+
+            // SuspendLayout calls for independent panels only
             panelStats.SuspendLayout();
             panelQuizMode.SuspendLayout();
             mainTableLayoutPanel.SuspendLayout();
             middlePanel.SuspendLayout();
             middleTableLayoutPanel.SuspendLayout();
-            panelNotes.SuspendLayout();
-            buttonsFlowLayoutPanel.SuspendLayout();
-            settingsFlowLayoutPanel.SuspendLayout();
-            pronunciationFlowLayoutPanel.SuspendLayout();
             SuspendLayout();
+
             // 
-            // panelContent
+            // mainTableLayoutPanel (布局由子视图提供，此处仅设置列/行)
             // 
-            panelContent.BackColor = Color.FromArgb(224, 224, 224);
-            panelContent.Controls.Add(listBoxDisplay);
-            panelContent.Controls.Add(labelContent);
-            panelContent.Dock = DockStyle.Fill;
-            panelContent.Location = new Point(3, 3);
-            panelContent.Name = "panelContent";
-            panelContent.Size = new Size(1089, 636);
-            panelContent.TabIndex = 0;
-            panelContent.Paint += PanelContent_Paint;
+            mainTableLayoutPanel.ColumnCount = 3;
+            mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 266F));
+            mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220F));
+            mainTableLayoutPanel.Controls.Add(_listView.PanelList, 0, 0);
+            mainTableLayoutPanel.Controls.Add(middlePanel, 1, 0);
+            mainTableLayoutPanel.Controls.Add(_settingsView.PanelConfig, 2, 0);
+            mainTableLayoutPanel.Dock = DockStyle.Fill;
+            mainTableLayoutPanel.Location = new Point(0, 0);
+            mainTableLayoutPanel.Name = "mainTableLayoutPanel";
+            mainTableLayoutPanel.RowCount = 1;
+            mainTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            mainTableLayoutPanel.Size = new Size(1587, 844);
+            mainTableLayoutPanel.TabIndex = 0;
+            mainTableLayoutPanel.Paint += mainTableLayoutPanel_Paint;
+
             // 
-            // listBoxDisplay
+            // middlePanel
             // 
-            listBoxDisplay.BackColor = Color.FromArgb(192, 255, 192);
-            listBoxDisplay.Dock = DockStyle.Top;
-            listBoxDisplay.Font = new Font("微软雅黑", 21.75F, FontStyle.Bold, GraphicsUnit.Point, 134);
-            listBoxDisplay.ForeColor = Color.FromArgb(100, 150, 180);
-            listBoxDisplay.Location = new Point(0, 0);
-            listBoxDisplay.Name = "listBoxDisplay";
-            listBoxDisplay.Size = new Size(1089, 160);
-            listBoxDisplay.TabIndex = 1;
-            listBoxDisplay.Visible = false;
-            listBoxDisplay.Click += ListBoxDisplay_Click;
+            middlePanel.BackColor = Color.FromArgb(250, 245, 235);
+            middlePanel.Controls.Add(middleTableLayoutPanel);
+            middlePanel.Dock = DockStyle.Fill;
+            middlePanel.Location = new Point(269, 3);
+            middlePanel.Name = "middlePanel";
+            middlePanel.Size = new Size(1095, 838);
+            middlePanel.TabIndex = 20;
+
             // 
-            // labelContent
+            // middleTableLayoutPanel
             // 
-            labelContent.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            labelContent.BackColor = Color.FromArgb(255, 248, 230);
-            labelContent.Font = new Font("微软雅黑", 48F, FontStyle.Bold, GraphicsUnit.Point, 134);
-            labelContent.ForeColor = Color.FromArgb(50, 60, 80);
-            labelContent.Location = new Point(0, 0);
-            labelContent.Name = "labelContent";
-            labelContent.Size = new Size(1089, 636);
-            labelContent.TabIndex = 0;
-            labelContent.TextAlign = ContentAlignment.MiddleCenter;
-            labelContent.Click += LabelContent_Click;
-            // 
-            // labelStatistics
-            // 
-            labelStatistics.Dock = DockStyle.Fill;
-            labelStatistics.Font = new Font("微软雅黑", 11F);
-            labelStatistics.ForeColor = Color.FromArgb(80, 100, 120);
-            labelStatistics.Location = new Point(3, 806);
-            labelStatistics.Name = "labelStatistics";
-            labelStatistics.Size = new Size(1089, 32);
-            labelStatistics.TabIndex = 3;
-            // 
-            // panelList
-            // 
-            panelList.BackColor = Color.FromArgb(248, 248, 252);
-            panelList.BorderStyle = BorderStyle.FixedSingle;
-            panelList.Controls.Add(labelListStatus);
-            panelList.Controls.Add(labelListTitle);
-            panelList.Controls.Add(listBoxItems);
-            panelList.Dock = DockStyle.Fill;
-            panelList.Location = new Point(3, 3);
-            panelList.Name = "panelList";
-            panelList.Size = new Size(260, 838);
-            panelList.TabIndex = 18;
-            // 
-            // labelListStatus
-            // 
-            labelListStatus.BackColor = Color.FromArgb(240, 240, 245);
-            labelListStatus.Dock = DockStyle.Bottom;
-            labelListStatus.Font = new Font("微软雅黑", 9F);
-            labelListStatus.ForeColor = Color.FromArgb(80, 100, 120);
-            labelListStatus.Location = new Point(0, 796);
-            labelListStatus.Name = "labelListStatus";
-            labelListStatus.Size = new Size(258, 40);
-            labelListStatus.TabIndex = 2;
-            labelListStatus.Text = "共 0 项";
-            labelListStatus.TextAlign = ContentAlignment.MiddleCenter;
-            // 
-            // labelListTitle
-            // 
-            labelListTitle.BackColor = Color.FromArgb(66, 133, 244);
-            labelListTitle.Dock = DockStyle.Top;
-            labelListTitle.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
-            labelListTitle.ForeColor = Color.White;
-            labelListTitle.Location = new Point(0, 0);
-            labelListTitle.Name = "labelListTitle";
-            labelListTitle.Size = new Size(258, 35);
-            labelListTitle.TabIndex = 0;
-            labelListTitle.Text = "📚 学习列表";
-            labelListTitle.TextAlign = ContentAlignment.MiddleCenter;
-            // 
-            // listBoxItems
-            // 
-            listBoxItems.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
-            listBoxItems.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            listBoxItems.FormattingEnabled = true;
-            listBoxItems.Location = new Point(0, 35);
-            listBoxItems.Name = "listBoxItems";
-            listBoxItems.Size = new Size(259, 764);
-            listBoxItems.TabIndex = 1;
-            listBoxItems.SelectedIndexChanged += ListBoxItems_SelectedIndexChanged;
-            // 
-            // panelConfig
-            // 
-            panelConfig.BackColor = Color.FromArgb(245, 245, 250);
-            panelConfig.BorderStyle = BorderStyle.FixedSingle;
-            panelConfig.Controls.Add(labelConfigTitle);
-            panelConfig.Controls.Add(groupBoxMode);
-            panelConfig.Controls.Add(groupBoxSort);
-            panelConfig.Controls.Add(groupBoxLanguage);
-            panelConfig.Controls.Add(labelSubCategory);
-            panelConfig.Controls.Add(comboBoxSubCategory);
-            panelConfig.Controls.Add(buttonOpenStatistics);
-            panelConfig.Controls.Add(buttonExportErrorBook);
-            panelConfig.Controls.Add(panelStats);
-            panelConfig.Controls.Add(panelQuizMode);
-            panelConfig.Controls.Add(buttonThemeToggle);
-            panelConfig.Dock = DockStyle.Fill;
-            panelConfig.Location = new Point(1370, 3);
-            panelConfig.Name = "panelConfig";
-            panelConfig.Size = new Size(214, 838);
-            panelConfig.TabIndex = 19;
-            // 
-            // labelConfigTitle
-            // 
-            labelConfigTitle.BackColor = Color.FromArgb(103, 58, 183);
-            labelConfigTitle.Dock = DockStyle.Top;
-            labelConfigTitle.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
-            labelConfigTitle.ForeColor = Color.White;
-            labelConfigTitle.Location = new Point(0, 0);
-            labelConfigTitle.Name = "labelConfigTitle";
-            labelConfigTitle.Size = new Size(212, 35);
-            labelConfigTitle.TabIndex = 0;
-            labelConfigTitle.Text = "⚙️ 设置";
-            labelConfigTitle.TextAlign = ContentAlignment.MiddleCenter;
-            // 
-            // groupBoxMode
-            // 
-            groupBoxMode.Controls.Add(radioStudyMode);
-            groupBoxMode.Controls.Add(radioQuickMode);
-            groupBoxMode.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
-            groupBoxMode.ForeColor = Color.FromArgb(60, 80, 100);
-            groupBoxMode.Location = new Point(10, 45);
-            groupBoxMode.Name = "groupBoxMode";
-            groupBoxMode.Size = new Size(180, 68);
-            groupBoxMode.TabIndex = 1;
-            groupBoxMode.TabStop = false;
-            groupBoxMode.Text = "学习模式";
-            // 
-            // radioStudyMode
-            // 
-            radioStudyMode.AutoSize = true;
-            radioStudyMode.Checked = true;
-            radioStudyMode.Font = new Font("微软雅黑", 9F);
-            radioStudyMode.ForeColor = Color.FromArgb(70, 90, 110);
-            radioStudyMode.Location = new Point(15, 25);
-            radioStudyMode.Name = "radioStudyMode";
-            radioStudyMode.Size = new Size(70, 21);
-            radioStudyMode.TabIndex = 0;
-            radioStudyMode.TabStop = true;
-            radioStudyMode.Text = "📝 练习";
-            radioStudyMode.CheckedChanged += RadioStudyMode_CheckedChanged;
-            // 
-            // radioQuickMode
-            // 
-            radioQuickMode.AutoSize = true;
-            radioQuickMode.Font = new Font("微软雅黑", 9F);
-            radioQuickMode.ForeColor = Color.FromArgb(70, 90, 110);
-            radioQuickMode.Location = new Point(90, 25);
-            radioQuickMode.Name = "radioQuickMode";
-            radioQuickMode.Size = new Size(70, 21);
-            radioQuickMode.TabIndex = 1;
-            radioQuickMode.Text = "🔄 复习";
-            radioQuickMode.CheckedChanged += RadioQuickMode_CheckedChanged;
-            // 
-            // groupBoxSort
-            // 
-            groupBoxSort.Controls.Add(radioSequential);
-            groupBoxSort.Controls.Add(radioRandom);
-            groupBoxSort.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
-            groupBoxSort.ForeColor = Color.FromArgb(60, 80, 100);
-            groupBoxSort.Location = new Point(10, 130);
-            groupBoxSort.Name = "groupBoxSort";
-            groupBoxSort.Size = new Size(180, 75);
-            groupBoxSort.TabIndex = 2;
-            groupBoxSort.TabStop = false;
-            groupBoxSort.Text = "排序方式";
-            // 
-            // radioSequential
-            // 
-            radioSequential.AutoSize = true;
-            radioSequential.Checked = true;
-            radioSequential.Font = new Font("微软雅黑", 9F);
-            radioSequential.ForeColor = Color.FromArgb(70, 90, 110);
-            radioSequential.Location = new Point(15, 25);
-            radioSequential.Name = "radioSequential";
-            radioSequential.Size = new Size(68, 21);
-            radioSequential.TabIndex = 0;
-            radioSequential.TabStop = true;
-            radioSequential.Text = "📋 顺序";
-            radioSequential.CheckedChanged += RadioSequential_CheckedChanged;
-            // 
-            // radioRandom
-            // 
-            radioRandom.AutoSize = true;
-            radioRandom.Font = new Font("微软雅黑", 9F);
-            radioRandom.ForeColor = Color.FromArgb(70, 90, 110);
-            radioRandom.Location = new Point(90, 25);
-            radioRandom.Name = "radioRandom";
-            radioRandom.Size = new Size(69, 21);
-            radioRandom.TabIndex = 1;
-            radioRandom.Text = "🎲 随机";
-            radioRandom.CheckedChanged += RadioRandom_CheckedChanged;
-            // 
-            // groupBoxLanguage
-            // 
-            groupBoxLanguage.Controls.Add(radioChinese);
-            groupBoxLanguage.Controls.Add(radioEnglish);
-            groupBoxLanguage.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
-            groupBoxLanguage.ForeColor = Color.FromArgb(60, 80, 100);
-            groupBoxLanguage.Location = new Point(10, 215);
-            groupBoxLanguage.Name = "groupBoxLanguage";
-            groupBoxLanguage.Size = new Size(180, 75);
-            groupBoxLanguage.TabIndex = 3;
-            groupBoxLanguage.TabStop = false;
-            groupBoxLanguage.Text = "语言";
-            // 
-            // radioChinese
-            // 
-            radioChinese.AutoSize = true;
-            radioChinese.Checked = true;
-            radioChinese.Font = new Font("微软雅黑", 9F);
-            radioChinese.ForeColor = Color.FromArgb(70, 90, 110);
-            radioChinese.Location = new Point(15, 25);
-            radioChinese.Name = "radioChinese";
-            radioChinese.Size = new Size(67, 21);
-            radioChinese.TabIndex = 0;
-            radioChinese.TabStop = true;
-            radioChinese.Text = "🇨🇳 中文";
-            radioChinese.CheckedChanged += RadioChinese_CheckedChanged;
+            middleTableLayoutPanel.ColumnCount = 1;
+            middleTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            middleTableLayoutPanel.Controls.Add(_contentView.PanelContent, 0, 0);
+            middleTableLayoutPanel.Controls.Add(_contentView.PanelNotes, 0, 1);
+            middleTableLayoutPanel.Controls.Add(_buttonsView.ButtonsPanel, 0, 2);
+            middleTableLayoutPanel.Controls.Add(progressBar1, 0, 3);
+            middleTableLayoutPanel.Controls.Add(settingsFlowLayoutPanel, 0, 4);
+            middleTableLayoutPanel.Controls.Add(_statsView.LabelStatistics, 0, 5);
+            middleTableLayoutPanel.Dock = DockStyle.Fill;
+            middleTableLayoutPanel.Location = new Point(0, 0);
+            middleTableLayoutPanel.Name = "middleTableLayoutPanel";
+            middleTableLayoutPanel.RowCount = 6;
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 0F));
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 71F));
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 51F));
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));
+            middleTableLayoutPanel.Size = new Size(1095, 838);
+            middleTableLayoutPanel.TabIndex = 0;
             // 
             // radioEnglish
             // 
@@ -1534,461 +1320,7 @@ namespace LearningAssistant.Forms
             checkBoxShowDetail.TextAlign = ContentAlignment.MiddleCenter;
             checkBoxShowDetail.UseVisualStyleBackColor = false;
             checkBoxShowDetail.CheckedChanged += CheckBoxShowDetail_CheckedChanged;
-            // 
-            // mainTableLayoutPanel
-            // 
-            mainTableLayoutPanel.ColumnCount = 3;
-            mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 266F));
-            mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220F));
-            mainTableLayoutPanel.Controls.Add(panelList, 0, 0);
-            mainTableLayoutPanel.Controls.Add(middlePanel, 1, 0);
-            mainTableLayoutPanel.Controls.Add(panelConfig, 2, 0);
-            mainTableLayoutPanel.Dock = DockStyle.Fill;
-            mainTableLayoutPanel.Location = new Point(0, 0);
-            mainTableLayoutPanel.Name = "mainTableLayoutPanel";
-            mainTableLayoutPanel.RowCount = 1;
-            mainTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            mainTableLayoutPanel.Size = new Size(1587, 844);
-            mainTableLayoutPanel.TabIndex = 0;
-            mainTableLayoutPanel.Paint += mainTableLayoutPanel_Paint;
-            // 
-            // middlePanel
-            // 
-            middlePanel.BackColor = Color.FromArgb(250, 245, 235);
-            middlePanel.Controls.Add(middleTableLayoutPanel);
-            middlePanel.Dock = DockStyle.Fill;
-            middlePanel.Location = new Point(269, 3);
-            middlePanel.Name = "middlePanel";
-            middlePanel.Size = new Size(1095, 838);
-            middlePanel.TabIndex = 20;
-            // 
-            // middleTableLayoutPanel
-            // 
-            middleTableLayoutPanel.ColumnCount = 1;
-            middleTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            middleTableLayoutPanel.Controls.Add(panelContent, 0, 0);
-            middleTableLayoutPanel.Controls.Add(panelNotes, 0, 1);
-            middleTableLayoutPanel.Controls.Add(buttonsFlowLayoutPanel, 0, 2);
-            middleTableLayoutPanel.Controls.Add(progressBar1, 0, 3);
-            middleTableLayoutPanel.Controls.Add(settingsFlowLayoutPanel, 0, 4);
-            middleTableLayoutPanel.Controls.Add(labelStatistics, 0, 5);
-            middleTableLayoutPanel.Dock = DockStyle.Fill;
-            middleTableLayoutPanel.Location = new Point(0, 0);
-            middleTableLayoutPanel.Name = "middleTableLayoutPanel";
-            middleTableLayoutPanel.RowCount = 6;
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 0F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 71F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 51F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));
-            middleTableLayoutPanel.Size = new Size(1095, 838);
-            middleTableLayoutPanel.TabIndex = 0;
-            // 
-            // panelNotes
-            // 
-            panelNotes.BackColor = Color.FromArgb(255, 253, 238);
-            panelNotes.BorderStyle = BorderStyle.FixedSingle;
-            panelNotes.Controls.Add(richTextBoxNotes);
-            panelNotes.Controls.Add(labelNotesTitle);
-            panelNotes.Dock = DockStyle.Fill;
-            panelNotes.Location = new Point(3, 645);
-            panelNotes.Name = "panelNotes";
-            panelNotes.Size = new Size(1089, 1);
-            panelNotes.TabIndex = 7;
-            panelNotes.Visible = false;
-            // 
-            // richTextBoxNotes
-            // 
-            richTextBoxNotes.BackColor = Color.FromArgb(255, 253, 238);
-            richTextBoxNotes.Dock = DockStyle.Fill;
-            richTextBoxNotes.Font = new Font("微软雅黑", 11F);
-            richTextBoxNotes.ForeColor = Color.FromArgb(60, 80, 100);
-            richTextBoxNotes.Location = new Point(0, 30);
-            richTextBoxNotes.Name = "richTextBoxNotes";
-            richTextBoxNotes.Size = new Size(1087, 0);
-            richTextBoxNotes.TabIndex = 1;
-            richTextBoxNotes.Text = "";
-            richTextBoxNotes.TextChanged += RichTextBoxNotes_TextChanged;
-            // 
-            // labelNotesTitle
-            // 
-            labelNotesTitle.Dock = DockStyle.Top;
-            labelNotesTitle.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
-            labelNotesTitle.ForeColor = Color.FromArgb(139, 119, 101);
-            labelNotesTitle.Location = new Point(0, 0);
-            labelNotesTitle.Name = "labelNotesTitle";
-            labelNotesTitle.Padding = new Padding(10, 0, 0, 0);
-            labelNotesTitle.Size = new Size(1087, 30);
-            labelNotesTitle.TabIndex = 0;
-            labelNotesTitle.Text = "📝 我的笔记";
-            labelNotesTitle.TextAlign = ContentAlignment.MiddleLeft;
-            // 
-            // buttonsFlowLayoutPanel
-            // 
-            buttonsFlowLayoutPanel.Controls.Add(buttonKnown);
-            buttonsFlowLayoutPanel.Controls.Add(buttonUnknown);
-            buttonsFlowLayoutPanel.Controls.Add(buttonNext);
-            buttonsFlowLayoutPanel.Controls.Add(buttonPronounce);
-            buttonsFlowLayoutPanel.Controls.Add(buttonFavorite);
-            buttonsFlowLayoutPanel.Controls.Add(buttonNote);
-            buttonsFlowLayoutPanel.Controls.Add(buttonExit);
-            buttonsFlowLayoutPanel.Controls.Add(buttonAIAsk);
-            buttonsFlowLayoutPanel.Dock = DockStyle.Fill;
-            buttonsFlowLayoutPanel.Location = new Point(3, 645);
-            buttonsFlowLayoutPanel.Name = "buttonsFlowLayoutPanel";
-            buttonsFlowLayoutPanel.Padding = new Padding(10, 5, 10, 5);
-            buttonsFlowLayoutPanel.Size = new Size(1089, 65);
-            buttonsFlowLayoutPanel.TabIndex = 4;
-            buttonsFlowLayoutPanel.WrapContents = false;
-            // 
-            // buttonKnown
-            // 
-            buttonKnown.BackColor = Color.FromArgb(76, 175, 80);
-            buttonKnown.FlatAppearance.BorderSize = 0;
-            buttonKnown.FlatAppearance.MouseDownBackColor = Color.FromArgb(66, 155, 70);
-            buttonKnown.FlatAppearance.MouseOverBackColor = Color.FromArgb(86, 185, 90);
-            buttonKnown.FlatStyle = FlatStyle.Flat;
-            buttonKnown.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
-            buttonKnown.ForeColor = Color.White;
-            buttonKnown.Location = new Point(15, 10);
-            buttonKnown.Margin = new Padding(5);
-            buttonKnown.Name = "buttonKnown";
-            buttonKnown.Size = new Size(130, 45);
-            buttonKnown.TabIndex = 4;
-            buttonKnown.Text = "✅ 会了 [K/1]";
-            buttonKnown.UseVisualStyleBackColor = false;
-            buttonKnown.Click += ButtonKnown_Click;
-            // 
-            // buttonUnknown
-            // 
-            buttonUnknown.BackColor = Color.FromArgb(244, 67, 54);
-            buttonUnknown.FlatAppearance.BorderSize = 0;
-            buttonUnknown.FlatAppearance.MouseDownBackColor = Color.FromArgb(234, 57, 44);
-            buttonUnknown.FlatAppearance.MouseOverBackColor = Color.FromArgb(254, 77, 64);
-            buttonUnknown.FlatStyle = FlatStyle.Flat;
-            buttonUnknown.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
-            buttonUnknown.ForeColor = Color.White;
-            buttonUnknown.Location = new Point(155, 10);
-            buttonUnknown.Margin = new Padding(5);
-            buttonUnknown.Name = "buttonUnknown";
-            buttonUnknown.Size = new Size(130, 45);
-            buttonUnknown.TabIndex = 5;
-            buttonUnknown.Text = "❌ 不会 [U/2]";
-            buttonUnknown.UseVisualStyleBackColor = false;
-            buttonUnknown.Click += ButtonUnknown_Click;
-            // 
-            // buttonNext
-            // 
-            buttonNext.BackColor = Color.FromArgb(33, 150, 243);
-            buttonNext.FlatAppearance.BorderSize = 0;
-            buttonNext.FlatAppearance.MouseDownBackColor = Color.FromArgb(23, 140, 233);
-            buttonNext.FlatAppearance.MouseOverBackColor = Color.FromArgb(43, 160, 253);
-            buttonNext.FlatStyle = FlatStyle.Flat;
-            buttonNext.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
-            buttonNext.ForeColor = Color.White;
-            buttonNext.Location = new Point(295, 10);
-            buttonNext.Margin = new Padding(5);
-            buttonNext.Name = "buttonNext";
-            buttonNext.Size = new Size(150, 45);
-            buttonNext.TabIndex = 6;
-            buttonNext.Text = "➡ 下一个 [Enter]";
-            buttonNext.UseVisualStyleBackColor = false;
-            buttonNext.Click += ButtonNext_Click;
-            // 
-            // buttonPronounce
-            // 
-            buttonPronounce.BackColor = Color.FromArgb(0, 188, 212);
-            buttonPronounce.FlatAppearance.BorderSize = 0;
-            buttonPronounce.FlatAppearance.MouseDownBackColor = Color.FromArgb(0, 178, 202);
-            buttonPronounce.FlatAppearance.MouseOverBackColor = Color.FromArgb(10, 198, 222);
-            buttonPronounce.FlatStyle = FlatStyle.Flat;
-            buttonPronounce.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
-            buttonPronounce.ForeColor = Color.White;
-            buttonPronounce.Location = new Point(455, 10);
-            buttonPronounce.Margin = new Padding(5);
-            buttonPronounce.Name = "buttonPronounce";
-            buttonPronounce.Size = new Size(140, 45);
-            buttonPronounce.TabIndex = 7;
-            buttonPronounce.Text = "🔊 发音 [Space]";
-            buttonPronounce.UseVisualStyleBackColor = false;
-            buttonPronounce.Click += ButtonPronounce_Click;
-            // 
-            // buttonFavorite
-            // 
-            buttonFavorite.BackColor = Color.FromArgb(255, 193, 7);
-            buttonFavorite.FlatAppearance.BorderSize = 0;
-            buttonFavorite.FlatAppearance.MouseDownBackColor = Color.FromArgb(245, 183, 0);
-            buttonFavorite.FlatAppearance.MouseOverBackColor = Color.FromArgb(255, 203, 27);
-            buttonFavorite.FlatStyle = FlatStyle.Flat;
-            buttonFavorite.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
-            buttonFavorite.ForeColor = Color.White;
-            buttonFavorite.Location = new Point(605, 10);
-            buttonFavorite.Margin = new Padding(5);
-            buttonFavorite.Name = "buttonFavorite";
-            buttonFavorite.Size = new Size(105, 45);
-            buttonFavorite.TabIndex = 12;
-            buttonFavorite.Text = "⭐ 收藏";
-            buttonFavorite.UseVisualStyleBackColor = false;
-            buttonFavorite.Click += ButtonFavorite_Click;
-            // 
-            // buttonNote
-            // 
-            buttonNote.BackColor = Color.FromArgb(76, 175, 80);
-            buttonNote.FlatAppearance.BorderSize = 0;
-            buttonNote.FlatAppearance.MouseDownBackColor = Color.FromArgb(66, 155, 70);
-            buttonNote.FlatAppearance.MouseOverBackColor = Color.FromArgb(86, 185, 90);
-            buttonNote.FlatStyle = FlatStyle.Flat;
-            buttonNote.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
-            buttonNote.ForeColor = Color.White;
-            buttonNote.Location = new Point(720, 10);
-            buttonNote.Margin = new Padding(5);
-            buttonNote.Name = "buttonNote";
-            buttonNote.Size = new Size(105, 45);
-            buttonNote.TabIndex = 13;
-            buttonNote.Text = "📝 笔记";
-            buttonNote.UseVisualStyleBackColor = false;
-            buttonNote.Click += ButtonNote_Click;
-            // 
-            // buttonExit
-            // 
-            buttonExit.BackColor = Color.FromArgb(108, 117, 125);
-            buttonExit.FlatAppearance.BorderSize = 0;
-            buttonExit.FlatAppearance.MouseDownBackColor = Color.FromArgb(98, 107, 115);
-            buttonExit.FlatAppearance.MouseOverBackColor = Color.FromArgb(118, 127, 135);
-            buttonExit.FlatStyle = FlatStyle.Flat;
-            buttonExit.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
-            buttonExit.ForeColor = Color.White;
-            buttonExit.Location = new Point(835, 10);
-            buttonExit.Margin = new Padding(5);
-            buttonExit.Name = "buttonExit";
-            buttonExit.Size = new Size(105, 45);
-            buttonExit.TabIndex = 8;
-            buttonExit.Text = "🏠 返回";
-            buttonExit.UseVisualStyleBackColor = false;
-            buttonExit.Click += ButtonExit_Click;
-            // 
-            // buttonAIAsk
-            // 
-            buttonAIAsk.BackColor = Color.FromArgb(0, 120, 215);
-            buttonAIAsk.FlatAppearance.BorderSize = 0;
-            buttonAIAsk.FlatAppearance.MouseDownBackColor = Color.FromArgb(0, 110, 205);
-            buttonAIAsk.FlatAppearance.MouseOverBackColor = Color.FromArgb(10, 130, 225);
-            buttonAIAsk.FlatStyle = FlatStyle.Flat;
-            buttonAIAsk.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
-            buttonAIAsk.ForeColor = Color.White;
-            buttonAIAsk.Location = new Point(950, 10);
-            buttonAIAsk.Margin = new Padding(5);
-            buttonAIAsk.Name = "buttonAIAsk";
-            buttonAIAsk.Size = new Size(105, 45);
-            buttonAIAsk.TabIndex = 14;
-            buttonAIAsk.Text = "🤖 AI问答";
-            buttonAIAsk.UseVisualStyleBackColor = false;
-            buttonAIAsk.Click += ButtonAIAsk_Click;
-            // 
-            // progressBar1
-            // 
-            progressBar1.BackColor = Color.FromArgb(240, 240, 240);
-            progressBar1.Dock = DockStyle.Fill;
-            progressBar1.ForeColor = Color.FromArgb(255, 140, 0);
-            progressBar1.Location = new Point(3, 716);
-            progressBar1.Name = "progressBar1";
-            progressBar1.Size = new Size(1089, 36);
-            progressBar1.Style = ProgressBarStyle.Continuous;
-            progressBar1.TabIndex = 2;
-            // 
-            // settingsFlowLayoutPanel
-            // 
-            settingsFlowLayoutPanel.Controls.Add(checkBoxVoice);
-            settingsFlowLayoutPanel.Controls.Add(pronunciationFlowLayoutPanel);
-            settingsFlowLayoutPanel.Controls.Add(checkBoxShowDetail);
-            settingsFlowLayoutPanel.Dock = DockStyle.Fill;
-            settingsFlowLayoutPanel.Location = new Point(3, 758);
-            settingsFlowLayoutPanel.Name = "settingsFlowLayoutPanel";
-            settingsFlowLayoutPanel.Padding = new Padding(10, 5, 10, 5);
-            settingsFlowLayoutPanel.Size = new Size(1089, 45);
-            settingsFlowLayoutPanel.TabIndex = 5;
-            settingsFlowLayoutPanel.WrapContents = false;
-            // 
-            // checkBoxVoice
-            // 
-            checkBoxVoice.Checked = true;
-            checkBoxVoice.CheckState = CheckState.Checked;
-            checkBoxVoice.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
-            checkBoxVoice.ForeColor = Color.FromArgb(70, 90, 110);
-            checkBoxVoice.Location = new Point(15, 10);
-            checkBoxVoice.Margin = new Padding(5);
-            checkBoxVoice.Name = "checkBoxVoice";
-            checkBoxVoice.Size = new Size(85, 25);
-            checkBoxVoice.TabIndex = 9;
-            checkBoxVoice.Text = "自动朗读";
-            // 
-            // pronunciationFlowLayoutPanel
-            // 
-            pronunciationFlowLayoutPanel.Controls.Add(radioOriginal);
-            pronunciationFlowLayoutPanel.Controls.Add(radioExplanation);
-            pronunciationFlowLayoutPanel.Controls.Add(radioBoth);
-            pronunciationFlowLayoutPanel.Location = new Point(108, 8);
-            pronunciationFlowLayoutPanel.Name = "pronunciationFlowLayoutPanel";
-            pronunciationFlowLayoutPanel.Size = new Size(219, 27);
-            pronunciationFlowLayoutPanel.TabIndex = 0;
-            pronunciationFlowLayoutPanel.WrapContents = false;
-            // 
-            // radioOriginal
-            // 
-            radioOriginal.AutoSize = true;
-            radioOriginal.Checked = true;
-            radioOriginal.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
-            radioOriginal.ForeColor = Color.FromArgb(70, 90, 110);
-            radioOriginal.Location = new Point(3, 3);
-            radioOriginal.Name = "radioOriginal";
-            radioOriginal.Size = new Size(50, 21);
-            radioOriginal.TabIndex = 13;
-            radioOriginal.TabStop = true;
-            radioOriginal.Text = "原文";
-            // 
-            // radioExplanation
-            // 
-            radioExplanation.AutoSize = true;
-            radioExplanation.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
-            radioExplanation.ForeColor = Color.FromArgb(70, 90, 110);
-            radioExplanation.Location = new Point(59, 3);
-            radioExplanation.Name = "radioExplanation";
-            radioExplanation.Size = new Size(50, 21);
-            radioExplanation.TabIndex = 14;
-            radioExplanation.Text = "释义";
-            // 
-            // radioBoth
-            // 
-            radioBoth.AutoSize = true;
-            radioBoth.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
-            radioBoth.ForeColor = Color.FromArgb(70, 90, 110);
-            radioBoth.Location = new Point(115, 3);
-            radioBoth.Name = "radioBoth";
-            radioBoth.Size = new Size(83, 21);
-            radioBoth.TabIndex = 15;
-            radioBoth.Text = "原文+释义";
-            // 
-            // groupBoxPronunciationScope
-            // 
-            groupBoxPronunciationScope.Location = new Point(0, 0);
-            groupBoxPronunciationScope.Name = "groupBoxPronunciationScope";
-            groupBoxPronunciationScope.Size = new Size(200, 100);
-            groupBoxPronunciationScope.TabIndex = 0;
-            groupBoxPronunciationScope.TabStop = false;
-            // 
-            // labelGameTitle
-            // 
-            labelGameTitle.Location = new Point(0, 0);
-            labelGameTitle.Name = "labelGameTitle";
-            labelGameTitle.Size = new Size(100, 23);
-            labelGameTitle.TabIndex = 0;
-            // 
-            // panelBadges
-            // 
-            panelBadges.Location = new Point(0, 0);
-            panelBadges.Name = "panelBadges";
-            panelBadges.Size = new Size(200, 100);
-            panelBadges.TabIndex = 0;
-            // 
-            // labelBadgesTitle
-            // 
-            labelBadgesTitle.Location = new Point(0, 0);
-            labelBadgesTitle.Name = "labelBadgesTitle";
-            labelBadgesTitle.Size = new Size(100, 23);
-            labelBadgesTitle.TabIndex = 0;
-            // 
-            // buttonMiniGame
-            // 
-            buttonMiniGame.Location = new Point(0, 0);
-            buttonMiniGame.Name = "buttonMiniGame";
-            buttonMiniGame.Size = new Size(75, 23);
-            buttonMiniGame.TabIndex = 0;
-            // 
-            // buttonGameSubmit
-            // 
-            buttonGameSubmit.Location = new Point(0, 0);
-            buttonGameSubmit.Name = "buttonGameSubmit";
-            buttonGameSubmit.Size = new Size(75, 23);
-            buttonGameSubmit.TabIndex = 0;
-            // 
-            // panelChallenges
-            // 
-            panelChallenges.Location = new Point(0, 0);
-            panelChallenges.Name = "panelChallenges";
-            panelChallenges.Size = new Size(200, 100);
-            panelChallenges.TabIndex = 0;
-            // 
-            // labelChallengesTitle
-            // 
-            labelChallengesTitle.Location = new Point(0, 0);
-            labelChallengesTitle.Name = "labelChallengesTitle";
-            labelChallengesTitle.Size = new Size(100, 23);
-            labelChallengesTitle.TabIndex = 0;
-            // 
-            // flowLayoutPanelBadges
-            // 
-            flowLayoutPanelBadges.Location = new Point(0, 0);
-            flowLayoutPanelBadges.Name = "flowLayoutPanelBadges";
-            flowLayoutPanelBadges.Size = new Size(200, 100);
-            flowLayoutPanelBadges.TabIndex = 0;
-            // 
-            // labelLevel
-            // 
-            labelLevel.Location = new Point(0, 0);
-            labelLevel.Name = "labelLevel";
-            labelLevel.Size = new Size(100, 23);
-            labelLevel.TabIndex = 0;
-            // 
-            // progressXP
-            // 
-            progressXP.Location = new Point(0, 0);
-            progressXP.Name = "progressXP";
-            progressXP.Size = new Size(100, 23);
-            progressXP.TabIndex = 0;
-            // 
-            // labelXP
-            // 
-            labelXP.Location = new Point(0, 0);
-            labelXP.Name = "labelXP";
-            labelXP.Size = new Size(100, 23);
-            labelXP.TabIndex = 0;
-            // 
-            // flowLayoutPanelChallenges
-            // 
-            flowLayoutPanelChallenges.Location = new Point(0, 0);
-            flowLayoutPanelChallenges.Name = "flowLayoutPanelChallenges";
-            flowLayoutPanelChallenges.Size = new Size(200, 100);
-            flowLayoutPanelChallenges.TabIndex = 0;
-            // 
-            // panelGame
-            // 
-            panelGame.Location = new Point(0, 0);
-            panelGame.Name = "panelGame";
-            panelGame.Size = new Size(200, 100);
-            panelGame.TabIndex = 0;
-            // 
-            // labelGameQuestion
-            // 
-            labelGameQuestion.Location = new Point(0, 0);
-            labelGameQuestion.Name = "labelGameQuestion";
-            labelGameQuestion.Size = new Size(100, 23);
-            labelGameQuestion.TabIndex = 0;
-            // 
-            // textBoxGameAnswer
-            // 
-            textBoxGameAnswer.Location = new Point(0, 0);
-            textBoxGameAnswer.Name = "textBoxGameAnswer";
-            textBoxGameAnswer.Size = new Size(100, 23);
-            textBoxGameAnswer.TabIndex = 0;
-            // 
-            // labelGameResult
-            // 
-            labelGameResult.Location = new Point(0, 0);
-            labelGameResult.Name = "labelGameResult";
-            labelGameResult.Size = new Size(100, 23);
-            labelGameResult.TabIndex = 0;
+
             // 
             // LearningForm
             // 
@@ -2002,9 +1334,6 @@ namespace LearningAssistant.Forms
             Name = "LearningForm";
             Text = "✨ 学习模式 ✨";
             TransparencyKey = Color.FromArgb(255, 0, 255);
-            panelContent.ResumeLayout(false);
-            panelList.ResumeLayout(false);
-            panelConfig.ResumeLayout(false);
             groupBoxMode.ResumeLayout(false);
             groupBoxMode.PerformLayout();
             groupBoxSort.ResumeLayout(false);
@@ -2016,8 +1345,6 @@ namespace LearningAssistant.Forms
             mainTableLayoutPanel.ResumeLayout(false);
             middlePanel.ResumeLayout(false);
             middleTableLayoutPanel.ResumeLayout(false);
-            panelNotes.ResumeLayout(false);
-            buttonsFlowLayoutPanel.ResumeLayout(false);
             settingsFlowLayoutPanel.ResumeLayout(false);
             pronunciationFlowLayoutPanel.ResumeLayout(false);
             pronunciationFlowLayoutPanel.PerformLayout();
