@@ -50,5 +50,20 @@ namespace LearningAssistant.Models.Learning
         
         /// <inheritdoc/>
         public override string GetPronunciation() => Phonetic;
+
+        /// <inheritdoc/>
+        public override string GetDisplayStruct()
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(PartOfSpeech))
+                parts.Add("词性");
+            if (!string.IsNullOrWhiteSpace(Phonetic))
+                parts.Add("音标");
+            if (!string.IsNullOrWhiteSpace(Meaning))
+                parts.Add("释义");
+            if (!string.IsNullOrWhiteSpace(Example))
+                parts.Add("例句");
+            return string.Join(" | ", parts);
+        }
     }
 }

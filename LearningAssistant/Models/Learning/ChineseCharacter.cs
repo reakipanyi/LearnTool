@@ -64,5 +64,22 @@ namespace LearningAssistant.Models.Learning
 
 
 
+        /// <inheritdoc/>
+        public override string GetDisplayStruct()
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(Pinyin))
+                parts.Add("拼音");
+            if (!string.IsNullOrWhiteSpace(Meaning))
+                parts.Add("释义");
+            if (!string.IsNullOrWhiteSpace(StrokeCount))
+                parts.Add("笔画");
+            if (!string.IsNullOrWhiteSpace(Radical))
+                parts.Add("部首");
+            if (!string.IsNullOrWhiteSpace(Words))
+                parts.Add("组词");
+            return string.Join(" | ", parts);
+        }
+
     }
 }

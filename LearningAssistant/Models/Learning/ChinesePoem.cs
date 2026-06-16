@@ -49,5 +49,18 @@ namespace LearningAssistant.Models.Learning
         /// <inheritdoc/>
         public override string GetPronunciation() => string.Empty;
 
+        /// <inheritdoc/>
+        public override string GetDisplayStruct()
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(Author))
+                parts.Add("作者");
+            if (!string.IsNullOrWhiteSpace(Dynasty))
+                parts.Add("朝代");
+            if (Verses != null && Verses.Any())
+                parts.Add("诗句");
+            return string.Join(" | ", parts);
+        }
+
     }
 }

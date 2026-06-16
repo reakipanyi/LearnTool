@@ -39,5 +39,11 @@ namespace LearningAssistant.Models.Learning
         /// </summary>
         /// <returns>发音信息</returns>
         public abstract string GetPronunciation();
+
+        /// <summary>
+        /// 获取显示结构（DisplayContent 中冒号左侧的标签部分，例如：词性 | 音标 | 释义）
+        /// </summary>
+        /// <returns>结构标签文本</returns>
+        public abstract string GetDisplayStruct();
     }
 }

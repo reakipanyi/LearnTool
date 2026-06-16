@@ -165,6 +165,7 @@ namespace LearningAssistant.Presenters
 
                 _view.CurrentContent = item.GetMainContent();
                 _view.CurrentDisplayText = item.GetDisplayText();
+                _view.CurrentDisplayStruct = item.GetDisplayStruct();
                 _view.CurrentItem = item;
                 _view.ProgressMax = _studyEngine.TotalCount;
                 _view.ProgressValue = _studyEngine.CurrentIndex + 1;

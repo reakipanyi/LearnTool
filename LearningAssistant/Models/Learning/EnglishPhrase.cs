@@ -36,5 +36,16 @@ namespace LearningAssistant.Models.Learning
         
         /// <inheritdoc/>
         public override string GetPronunciation() => string.Empty;
+
+        /// <inheritdoc/>
+        public override string GetDisplayStruct()
+        {
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(Meaning))
+                parts.Add("释义");
+            if (!string.IsNullOrWhiteSpace(Example))
+                parts.Add("例句");
+            return string.Join(" | ", parts);
+        }
     }
 }

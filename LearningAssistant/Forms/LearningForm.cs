@@ -587,8 +587,62 @@ namespace LearningAssistant.Forms
             {
                 if (!string.IsNullOrEmpty(value))
                 {
-                    UpdateDetailContent(value);
+                    _currentDisplayText = value;
+                    RefreshDetailContent();
                 }
+            }
+        }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public string CurrentDisplayStruct
+        {
+            set
+            {
+                _currentDisplayStruct = value;
+                RefreshDetailContent();
+            }
+        }
+
+        /// <summary>
+        /// 缓存的完整显示文本
+        /// </summary>
+        private string _currentDisplayText = string.Empty;
+
+        /// <summary>
+        /// 缓存的结构显示文本
+        /// </summary>
+        private string _currentDisplayStruct = string.Empty;
+
+        /// <summary>
+        /// 根据复选框状态刷新详情区域内容
+        /// </summary>
+        private void RefreshDetailContent()
+        {
+            if (_currentItem == null) return;
+
+            // 答题模式下的特殊逻辑仍由 ResetDetailState / HideAnswer 等管理
+            if (_isQuizMode && !_answerRevealed)
+            {
+                return;
+            }
+
+            if (checkBoxShowDetail.Checked)
+            {
+                // 显示详情：完整内容（标签: 值）
+                string text = !string.IsNullOrEmpty(_currentDisplayText)
+                    ? _currentDisplayText
+                    : _currentItem.GetDisplayText();
+                UpdateDetailContent(text);
+                listBoxDisplay.Visible = true;
+            }
+            else
+            {
+                // 不显示详情：仅显示结构标签
+                string text = !string.IsNullOrEmpty(_currentDisplayStruct)
+                    ? _currentDisplayStruct
+                    : _currentItem.GetDisplayStruct();
+                UpdateDetailContent(text);
+                listBoxDisplay.Visible = true;
             }
         }
 
@@ -625,21 +679,8 @@ namespace LearningAssistant.Forms
             }
             else
             {
-                // 根据用户之前的选择恢复显示状态
-                if (checkBoxShowDetail != null && checkBoxShowDetail.Checked)
-                {
-                    _isDetailVisible = true;
-                    listBoxDisplay.Visible = true;
-                    if (_currentItem != null)
-                    {
-                        UpdateDetailContent(_currentItem.GetDisplayText());
-                    }
-                }
-                else
-                {
-                    _isDetailVisible = false;
-                    listBoxDisplay.Visible = false;
-                }
+                // 根据复选框状态显示详情（勾选=完整内容，不勾=结构标签）
+                RefreshDetailContent();
             }
 
             // 重置收藏状态
@@ -2749,27 +2790,20 @@ namespace LearningAssistant.Forms
         }
 
         /// <summary>
-        /// 切换详情区的显示/隐藏
+        /// 切换详情区：勾选→完整内容，不勾→结构标签
         /// </summary>
         private void ToggleDetail()
         {
-            _isDetailVisible = !_isDetailVisible;
-            listBoxDisplay.Visible = _isDetailVisible;
-
-            // 同步更新复选框状态
+            // 切换复选框状态（触发 CheckedChanged 事件处理具体内容切换）
             if (checkBoxShowDetail != null)
             {
-                checkBoxShowDetail.Checked = _isDetailVisible;
+                checkBoxShowDetail.Checked = !checkBoxShowDetail.Checked;
             }
 
-            if (_isDetailVisible && _currentItem != null)
+            // 答题模式下查看答案，标记为已显示
+            if (checkBoxShowDetail.Checked && _isQuizMode && !_answerRevealed)
             {
-                UpdateDetailContent(_currentItem.GetDisplayText());
-                // 答题模式下查看答案，标记为已显示
-                if (_isQuizMode && !_answerRevealed)
-                {
-                    _answerRevealed = true;
-                }
+                _answerRevealed = true;
             }
         }
 
@@ -2810,7 +2844,12 @@ namespace LearningAssistant.Forms
         private void RadioQuickMode_CheckedChanged(object? sender, EventArgs e)
         {
             if (radioQuickMode.Checked && !_settingsChangedEventsSuspended)
+            {
+                // 快速模式默认不勾选显示详情
+                if (checkBoxShowDetail != null)
+                    checkBoxShowDetail.Checked = false;
                 SettingsChanged?.Invoke(this, EventArgs.Empty);
+            }
         }
 
         private void RadioSequential_CheckedChanged(object? sender, EventArgs e)
@@ -2902,12 +2941,17 @@ namespace LearningAssistant.Forms
             // 禁用按钮防止连续点击
             EnableButtons(false);
 
-            // 显示当前学习项的内容
+            // 显示当前学习项的完整内容（未知按钮强制显示详情）
             if (_currentItem != null)
             {
                 _isDetailVisible = true;
                 listBoxDisplay.Visible = true;
-                UpdateDetailContent(_currentItem.GetDisplayText());
+                string text = !string.IsNullOrEmpty(_currentDisplayText)
+                    ? _currentDisplayText
+                    : _currentItem.GetDisplayText();
+                UpdateDetailContent(text);
+                if (checkBoxShowDetail != null && !checkBoxShowDetail.Checked)
+                    checkBoxShowDetail.Checked = true;
             }
 
             _soundService?.PlayError();
@@ -3142,7 +3186,10 @@ namespace LearningAssistant.Forms
 
             if (_currentItem != null)
             {
-                UpdateDetailContent(_currentItem.GetDisplayText());
+                string text = !string.IsNullOrEmpty(_currentDisplayText)
+                    ? _currentDisplayText
+                    : _currentItem.GetDisplayText();
+                UpdateDetailContent(text);
             }
         }
 
@@ -3181,32 +3228,28 @@ namespace LearningAssistant.Forms
 
             if (_currentItem != null)
             {
-                UpdateDetailContent(_currentItem.GetDisplayText());
+                string text = !string.IsNullOrEmpty(_currentDisplayText)
+                    ? _currentDisplayText
+                    : _currentItem.GetDisplayText();
+                UpdateDetailContent(text);
             }
             _answerRevealed = true;
         }
 
         private void CheckBoxShowDetail_CheckedChanged(object? sender, EventArgs e)
         {
-            if (sender is not CheckBox checkBox) return;
+            bool isChecked = checkBoxShowDetail.Checked;
+            _isDetailVisible = isChecked;
 
-            if (checkBox.Checked)
+            // 答题模式下的特殊逻辑：不勾选时不显示内容
+            if (_isQuizMode && !_answerRevealed && !isChecked)
             {
-                // 显示详情
-                _isDetailVisible = true;
-                listBoxDisplay.Visible = true;
-
-                if (_currentItem != null)
-                {
-                    UpdateDetailContent(_currentItem.GetDisplayText());
-                }
-            }
-            else
-            {
-                // 隐藏详情
-                _isDetailVisible = false;
                 listBoxDisplay.Visible = false;
+                return;
             }
+
+            // 非答题模式：勾选显示完整内容，不勾显示结构标签
+            RefreshDetailContent();
         }
 
         private void ButtonThemeToggle_Click(object? sender, EventArgs e)

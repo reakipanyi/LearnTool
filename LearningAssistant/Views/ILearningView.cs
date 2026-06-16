@@ -40,6 +40,11 @@ namespace LearningAssistant.Views
         string CurrentDisplayText { set; }
 
         /// <summary>
+        /// 当前显示结构（DisplayContent 冒号左侧标签部分）
+        /// </summary>
+        string CurrentDisplayStruct { set; }
+
+        /// <summary>
         /// 当前学习项
         /// </summary>
         Models.Learning.LearningItem? CurrentItem { set; }
