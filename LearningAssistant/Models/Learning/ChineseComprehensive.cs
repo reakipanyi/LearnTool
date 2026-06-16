@@ -78,6 +78,11 @@ namespace LearningAssistant.Models.Learning
         public string Radical { get; set; } = string.Empty;
 
         /// <summary>
+        /// 笔顺（适用于：生字）
+        /// </summary>
+        public string StrokeOrder { get; set; } = string.Empty;
+
+        /// <summary>
         /// 难度级别
         /// </summary>
         public int DifficultyLevel { get; set; } = 1;
@@ -114,6 +119,8 @@ namespace LearningAssistant.Models.Learning
                         parts.Add($"笔画: {StrokeCount}画");
                     if (!string.IsNullOrWhiteSpace(Radical))
                         parts.Add($"部首: {Radical}");
+                    if (!string.IsNullOrWhiteSpace(StrokeOrder))
+                        parts.Add($"笔顺: {StrokeOrder}");
                     if (!string.IsNullOrWhiteSpace(Example))
                         parts.Add($"示例: {Example}");
                     break;
@@ -171,6 +178,8 @@ namespace LearningAssistant.Models.Learning
                         parts.Add("笔画");
                     if (!string.IsNullOrWhiteSpace(Radical))
                         parts.Add("部首");
+                    if (!string.IsNullOrWhiteSpace(StrokeOrder))
+                        parts.Add("笔顺");
                     if (!string.IsNullOrWhiteSpace(Example))
                         parts.Add("示例");
                     break;

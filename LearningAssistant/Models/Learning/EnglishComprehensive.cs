@@ -48,6 +48,11 @@ namespace LearningAssistant.Models.Learning
         public string PartOfSpeech { get; set; } = string.Empty;
 
         /// <summary>
+        /// 音节拼读（适用于：单词）
+        /// </summary>
+        public string SyllableBreakdown { get; set; } = string.Empty;
+
+        /// <summary>
         /// 例句（适用于：单词、短语、句子）
         /// </summary>
         public string Example { get; set; } = string.Empty;
@@ -106,6 +111,8 @@ namespace LearningAssistant.Models.Learning
                         parts.Add($"词性: {PartOfSpeech}");
                     if (!string.IsNullOrWhiteSpace(Phonetic))
                         parts.Add($"音标: {Phonetic}");
+                    if (!string.IsNullOrWhiteSpace(SyllableBreakdown))
+                        parts.Add($"拼读: {SyllableBreakdown}");
                     if (!string.IsNullOrWhiteSpace(ChineseMeaning))
                         parts.Add($"释义: {ChineseMeaning}");
                     if (!string.IsNullOrWhiteSpace(EnglishMeaning))
@@ -153,6 +160,8 @@ namespace LearningAssistant.Models.Learning
                         parts.Add("词性");
                     if (!string.IsNullOrWhiteSpace(Phonetic))
                         parts.Add("音标");
+                    if (!string.IsNullOrWhiteSpace(SyllableBreakdown))
+                        parts.Add("拼读");
                     if (!string.IsNullOrWhiteSpace(ChineseMeaning))
                         parts.Add("释义");
                     if (!string.IsNullOrWhiteSpace(EnglishMeaning))
