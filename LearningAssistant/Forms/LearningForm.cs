@@ -122,22 +122,22 @@ namespace LearningAssistant.Forms
         private int _currentLevel = 0;
         private string _levelTitle = "小白";
         private int _xp = 0;
-        private ProgressBar progressBar1;
-        private FlowLayoutPanel buttonsFlowLayoutPanel;
-        private Button buttonKnown;
-        private Button buttonUnknown;
-        private Button buttonNext;
-        private Button buttonPronounce;
-        private Button buttonFavorite;
-        private Button buttonNote;
-        private Button buttonAIAsk;
-        private Button buttonExit;
-        private FlowLayoutPanel settingsFlowLayoutPanel;
-        private CheckBox checkBoxVoice;
-        private FlowLayoutPanel pronunciationFlowLayoutPanel;
-        private RadioButton radioOriginal;
-        private RadioButton radioExplanation;
-        private RadioButton radioBoth;
+        //private ProgressBar progressBar1;
+        //private FlowLayoutPanel buttonsFlowLayoutPanel;
+        //private Button buttonKnown;
+        //private Button buttonUnknown;
+        //private Button buttonNext;
+        //private Button buttonPronounce;
+        //private Button buttonFavorite;
+        //private Button buttonNote;
+        //private Button buttonAIAsk;
+        //private Button buttonExit;
+        //private FlowLayoutPanel settingsFlowLayoutPanel;
+        //private CheckBox checkBoxVoice;
+        //private FlowLayoutPanel pronunciationFlowLayoutPanel;
+        //private RadioButton radioOriginal;
+        //private RadioButton radioExplanation;
+        //private RadioButton radioBoth;
         private int _xpToNextLevel = 100;
 
         private class Badge
@@ -593,6 +593,18 @@ namespace LearningAssistant.Forms
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public string CurrentDisplayStruct
+        {
+            set
+            {
+                if (!string.IsNullOrEmpty(value))
+                {
+                    UpdateDetailContent(value);
+                }
+            }
+        }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public LearningItem? CurrentItem
         {
             set
@@ -934,14 +946,13 @@ namespace LearningAssistant.Forms
         private Label labelStreak => _statsView.LabelStreak;
         private Label labelEncouragement => _statsView.LabelEncouragement;
         private ProgressBar progressBar1 => _statsView.ProgressBar;
-
+        private Label labelDailyGoal;
         // ========== 布局相关控件（暂保留）==========
         private TableLayoutPanel mainTableLayoutPanel = null!;
         private Panel middlePanel = null!;
         private TableLayoutPanel middleTableLayoutPanel = null!;
 
-        // ========== 游戏相关控件（暂保留，后续清理）==========
-        private System.Windows.Forms.Timer _confettiTimer = null!;
+        // ========== 游戏相关控件（暂保留，后续清理）========== 
         private Label labelGameTitle;
         private bool _isGameActive = false;
         private Panel panelBadges;
@@ -976,28 +987,13 @@ namespace LearningAssistant.Forms
             mainTableLayoutPanel = new TableLayoutPanel();
             middlePanel = new Panel();
             middleTableLayoutPanel = new TableLayoutPanel();
-            panelStats = new Panel();
-            labelStudyTime = new Label();
-            labelScore = new Label();
-            labelTodayCount = new Label();
-            labelStreak = new Label();
-            labelEncouragement = new Label();
-            progressDailyGoal = new ProgressBar();
-            labelDailyGoal = new Label();
-            progressBar1 = new ProgressBar();
-            checkBoxVoice = new CheckBox();
-            pronunciationFlowLayoutPanel = new FlowLayoutPanel();
-            radioOriginal = new RadioButton();
-            radioExplanation = new RadioButton();
-            radioBoth = new RadioButton();
-            _confettiTimer = new System.Windows.Forms.Timer();
+
 
             // ========== SuspendLayout（仅对独立控件）==========
             panelStats.SuspendLayout();
             mainTableLayoutPanel.SuspendLayout();
             middlePanel.SuspendLayout();
             middleTableLayoutPanel.SuspendLayout();
-            pronunciationFlowLayoutPanel.SuspendLayout();
             SuspendLayout();
 
             // ========== 子视图已在其构造函数中完成所有初始化，此处仅设置布局引用 ==========
@@ -1214,8 +1210,6 @@ namespace LearningAssistant.Forms
             labelScore.Text = $"🏆 得分: {_score}";
             labelTodayCount.Text = $"📚 今日学习: {_todayLearnedCount} 项";
             labelStreak.Text = $"🔥 连续学习: {_streakDays} 天";
-            progressDailyGoal.Value = Math.Min(_todayLearnedCount, progressDailyGoal.Maximum);
-            labelDailyGoal.Text = $"今日目标: {_todayLearnedCount}/{progressDailyGoal.Maximum}";
         }
 
         /// <summary>
@@ -1385,7 +1379,7 @@ namespace LearningAssistant.Forms
 
         #region Event Handlers
 
-        private bool _isDetailVisible = false;
+
 
         private void LabelContent_Click(object? sender, EventArgs e)
         {

@@ -1,4 +1,3 @@
-using LearningAssistant.Models.Learning;
 using static LearningAssistant.Forms.LearningForm;
 
 namespace LearningAssistant.Views
@@ -38,6 +37,7 @@ namespace LearningAssistant.Views
         /// 当前显示文本（带格式）
         /// </summary>
         string CurrentDisplayText { set; }
+        string CurrentDisplayStruct { set; }
 
         /// <summary>
         /// 当前学习项
