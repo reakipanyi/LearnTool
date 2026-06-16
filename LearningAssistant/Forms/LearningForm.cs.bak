@@ -915,7 +915,7 @@ namespace LearningAssistant.Forms
         private RichTextBox richTextBoxNotes => _contentView.RichTextBoxNotes;
         private Label labelNotesTitle => _contentView.LabelNotesTitle;
         private Panel panelQuizMode => _settingsView.PanelQuizMode;
-        private Button buttonQuizMode => _settingsView.ButtonQuizMode;
+        private Button buttonShowAnswer => _settingsView.ButtonShowAnswer;
         private Label labelQuizHint => _settingsView.LabelQuizHint;
         private Button buttonThemeToggle => _settingsView.ButtonThemeToggle;
         private GroupBox groupBoxPronunciationScope => _settingsView.GroupBoxPronunciationScope;
@@ -3014,21 +3014,21 @@ namespace LearningAssistant.Forms
             }
         }
 
-        private void ButtonQuizMode_Click(object? sender, EventArgs e)
+        private void ButtonShowAnswer_Click(object? sender, EventArgs e)
         {
             _isQuizMode = !_isQuizMode;
 
             if (_isQuizMode)
             {
-                buttonQuizMode.BackColor = Color.FromArgb(76, 175, 80);
-                buttonQuizMode.Text = "📖 学习模式";
+                buttonShowAnswer.BackColor = Color.FromArgb(76, 175, 80);
+                buttonShowAnswer.Text = "📖 学习模式";
                 labelQuizHint.Text = "答案已隐藏";
                 HideAnswer();
             }
             else
             {
-                buttonQuizMode.BackColor = Color.FromArgb(255, 193, 7);
-                buttonQuizMode.Text = "🎮 答题模式";
+                buttonShowAnswer.BackColor = Color.FromArgb(255, 193, 7);
+                buttonShowAnswer.Text = "🎮 答题模式";
                 labelQuizHint.Text = "先隐藏答案，测试自己";
                 ShowAnswer();
             }

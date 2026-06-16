@@ -38,7 +38,7 @@ namespace LearningAssistant.Views
 
         // Quiz 模式
         private Panel _panelQuizMode = null!;
-        private Button _buttonQuizMode = null!;
+        private Button _buttonShowAnswer = null!;
         private Label _labelQuizHint = null!;
 
         // 主题切换
@@ -90,7 +90,7 @@ namespace LearningAssistant.Views
         public Button ButtonExportErrorBook => _buttonExportErrorBook;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public Button ButtonQuizMode => _buttonQuizMode;
+        public Button ButtonShowAnswer => _buttonShowAnswer;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Button ButtonThemeToggle => _buttonThemeToggle;
@@ -154,21 +154,21 @@ namespace LearningAssistant.Views
             _comboBoxSubCategory = new ComboBox();
             _buttonOpenStatistics = new Button();
             _buttonExportErrorBook = new Button();
-            _panelQuizMode = new Panel();
-            _buttonQuizMode = new Button();
-            _labelQuizHint = new Label();
-            _buttonThemeToggle = new Button();
+            _checkBoxVoice = new CheckBox();
+            _pronunciationFlowLayoutPanel = new FlowLayoutPanel();
             _radioOriginal = new RadioButton();
             _radioExplanation = new RadioButton();
             _radioBoth = new RadioButton();
-            _checkBoxVoice = new CheckBox();
-            _pronunciationFlowLayoutPanel = new FlowLayoutPanel();
+            _panelQuizMode = new Panel();
+            _buttonShowAnswer = new Button();
+            _labelQuizHint = new Label();
+            _buttonThemeToggle = new Button();
             _panelConfig.SuspendLayout();
             _groupBoxMode.SuspendLayout();
             _groupBoxSort.SuspendLayout();
             _groupBoxLanguage.SuspendLayout();
-            _panelQuizMode.SuspendLayout();
             _pronunciationFlowLayoutPanel.SuspendLayout();
+            _panelQuizMode.SuspendLayout();
             SuspendLayout();
             // 
             // _panelConfig
@@ -190,7 +190,7 @@ namespace LearningAssistant.Views
             _panelConfig.Dock = DockStyle.Fill;
             _panelConfig.Location = new Point(0, 0);
             _panelConfig.Name = "_panelConfig";
-            _panelConfig.Size = new Size(220, 950);
+            _panelConfig.Size = new Size(220, 837);
             _panelConfig.TabIndex = 0;
             // 
             // _labelConfigTitle
@@ -370,59 +370,27 @@ namespace LearningAssistant.Views
             _buttonExportErrorBook.Text = "❌ 导出错题本";
             _buttonExportErrorBook.UseVisualStyleBackColor = false;
             // 
-            // _panelQuizMode
+            // _checkBoxVoice
             // 
-            _panelQuizMode.BackColor = Color.FromArgb(255, 248, 220);
-            _panelQuizMode.BorderStyle = BorderStyle.FixedSingle;
-            _panelQuizMode.Controls.Add(_buttonQuizMode);
-            _panelQuizMode.Controls.Add(_labelQuizHint);
-            _panelQuizMode.Location = new Point(10, 808);
-            _panelQuizMode.Name = "_panelQuizMode";
-            _panelQuizMode.Size = new Size(180, 90);
-            _panelQuizMode.TabIndex = 10;
+            _checkBoxVoice.Checked = true;
+            _checkBoxVoice.CheckState = CheckState.Checked;
+            _checkBoxVoice.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            _checkBoxVoice.ForeColor = Color.FromArgb(70, 90, 110);
+            _checkBoxVoice.Location = new Point(10, 498);
+            _checkBoxVoice.Name = "_checkBoxVoice";
+            _checkBoxVoice.Size = new Size(100, 25);
+            _checkBoxVoice.TabIndex = 8;
+            _checkBoxVoice.Text = "🔊 自动朗读";
             // 
-            // _buttonQuizMode
+            // _pronunciationFlowLayoutPanel
             // 
-            _buttonQuizMode.BackColor = Color.FromArgb(255, 193, 7);
-            _buttonQuizMode.FlatAppearance.BorderSize = 0;
-            _buttonQuizMode.FlatAppearance.MouseDownBackColor = Color.FromArgb(245, 183, 0);
-            _buttonQuizMode.FlatAppearance.MouseOverBackColor = Color.FromArgb(255, 203, 27);
-            _buttonQuizMode.FlatStyle = FlatStyle.Flat;
-            _buttonQuizMode.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            _buttonQuizMode.ForeColor = Color.White;
-            _buttonQuizMode.Location = new Point(10, 11);
-            _buttonQuizMode.Name = "_buttonQuizMode";
-            _buttonQuizMode.Size = new Size(160, 40);
-            _buttonQuizMode.TabIndex = 0;
-            _buttonQuizMode.Text = "🎮 答题模式";
-            _buttonQuizMode.UseVisualStyleBackColor = false;
-            // 
-            // _labelQuizHint
-            // 
-            _labelQuizHint.Font = new Font("微软雅黑", 8.5F);
-            _labelQuizHint.ForeColor = Color.FromArgb(139, 119, 101);
-            _labelQuizHint.Location = new Point(10, 57);
-            _labelQuizHint.Name = "_labelQuizHint";
-            _labelQuizHint.Size = new Size(160, 28);
-            _labelQuizHint.TabIndex = 1;
-            _labelQuizHint.Text = "先隐藏答案，测试自己";
-            // 
-            // _buttonThemeToggle
-            // 
-            _buttonThemeToggle.BackColor = Color.FromArgb(103, 58, 183);
-            _buttonThemeToggle.FlatAppearance.BorderSize = 0;
-            _buttonThemeToggle.FlatAppearance.MouseDownBackColor = Color.FromArgb(93, 48, 173);
-            _buttonThemeToggle.FlatAppearance.MouseOverBackColor = Color.FromArgb(113, 68, 193);
-            _buttonThemeToggle.FlatStyle = FlatStyle.Flat;
-            _buttonThemeToggle.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            _buttonThemeToggle.ForeColor = Color.White;
-            _buttonThemeToggle.Location = new Point(10, 921);
-            _buttonThemeToggle.Name = "_buttonThemeToggle";
-            _buttonThemeToggle.Size = new Size(180, 45);
-            _buttonThemeToggle.TabIndex = 11;
-            _buttonThemeToggle.Text = "🌙 深色模式";
-            _buttonThemeToggle.UseVisualStyleBackColor = false;
-
+            _pronunciationFlowLayoutPanel.Controls.Add(_radioOriginal);
+            _pronunciationFlowLayoutPanel.Controls.Add(_radioExplanation);
+            _pronunciationFlowLayoutPanel.Controls.Add(_radioBoth);
+            _pronunciationFlowLayoutPanel.Location = new Point(10, 529);
+            _pronunciationFlowLayoutPanel.Name = "_pronunciationFlowLayoutPanel";
+            _pronunciationFlowLayoutPanel.Size = new Size(126, 71);
+            _pronunciationFlowLayoutPanel.TabIndex = 9;
             // 
             // _radioOriginal
             // 
@@ -450,29 +418,66 @@ namespace LearningAssistant.Views
             // 
             // _radioBoth
             // 
+            _radioBoth.Location = new Point(3, 30);
+            _radioBoth.Name = "_radioBoth";
+            _radioBoth.Size = new Size(104, 24);
+            _radioBoth.TabIndex = 2;
+            _radioBoth.Text = "原文+释义";
             // 
-            // _checkBoxVoice
+            // _panelQuizMode
             // 
-            _checkBoxVoice.Checked = true;
-            _checkBoxVoice.CheckState = CheckState.Checked;
-            _checkBoxVoice.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
-            _checkBoxVoice.ForeColor = Color.FromArgb(70, 90, 110);
-            _checkBoxVoice.Location = new Point(10, 498);
-            _checkBoxVoice.Name = "_checkBoxVoice";
-            _checkBoxVoice.Size = new Size(100, 25);
-            _checkBoxVoice.TabIndex = 8;
-            _checkBoxVoice.Text = "🔊 自动朗读";
+            _panelQuizMode.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            _panelQuizMode.BackColor = Color.FromArgb(255, 248, 220);
+            _panelQuizMode.BorderStyle = BorderStyle.FixedSingle;
+            _panelQuizMode.Controls.Add(_buttonShowAnswer);
+            _panelQuizMode.Controls.Add(_labelQuizHint);
+            _panelQuizMode.Location = new Point(10, 669);
+            _panelQuizMode.Name = "_panelQuizMode";
+            _panelQuizMode.Size = new Size(180, 90);
+            _panelQuizMode.TabIndex = 10;
             // 
-            // _pronunciationFlowLayoutPanel
+            // _buttonShowAnswer
             // 
-            _pronunciationFlowLayoutPanel.Controls.Add(_radioOriginal);
-            _pronunciationFlowLayoutPanel.Controls.Add(_radioExplanation);
-            _pronunciationFlowLayoutPanel.Controls.Add(_radioBoth);
-            _pronunciationFlowLayoutPanel.Location = new Point(10, 535);
-            _pronunciationFlowLayoutPanel.Name = "_pronunciationFlowLayoutPanel";
-            _pronunciationFlowLayoutPanel.Size = new Size(180, 30);
-            _pronunciationFlowLayoutPanel.TabIndex = 9;
-            _pronunciationFlowLayoutPanel.WrapContents = false;
+            _buttonShowAnswer.BackColor = Color.FromArgb(255, 193, 7);
+            _buttonShowAnswer.FlatAppearance.BorderSize = 0;
+            _buttonShowAnswer.FlatAppearance.MouseDownBackColor = Color.FromArgb(245, 183, 0);
+            _buttonShowAnswer.FlatAppearance.MouseOverBackColor = Color.FromArgb(255, 203, 27);
+            _buttonShowAnswer.FlatStyle = FlatStyle.Flat;
+            _buttonShowAnswer.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            _buttonShowAnswer.ForeColor = Color.White;
+            _buttonShowAnswer.Location = new Point(10, 11);
+            _buttonShowAnswer.Name = "_buttonShowAnswer";
+            _buttonShowAnswer.Size = new Size(160, 40);
+            _buttonShowAnswer.TabIndex = 0;
+            _buttonShowAnswer.Text = "🎮 答题模式";
+            _buttonShowAnswer.UseVisualStyleBackColor = false;
+            // 
+            // _labelQuizHint
+            // 
+            _labelQuizHint.Font = new Font("微软雅黑", 8.5F);
+            _labelQuizHint.ForeColor = Color.FromArgb(139, 119, 101);
+            _labelQuizHint.Location = new Point(10, 57);
+            _labelQuizHint.Name = "_labelQuizHint";
+            _labelQuizHint.Size = new Size(160, 28);
+            _labelQuizHint.TabIndex = 1;
+            _labelQuizHint.Text = "先隐藏答案，测试自己";
+            // 
+            // _buttonThemeToggle
+            // 
+            _buttonThemeToggle.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            _buttonThemeToggle.BackColor = Color.FromArgb(103, 58, 183);
+            _buttonThemeToggle.FlatAppearance.BorderSize = 0;
+            _buttonThemeToggle.FlatAppearance.MouseDownBackColor = Color.FromArgb(93, 48, 173);
+            _buttonThemeToggle.FlatAppearance.MouseOverBackColor = Color.FromArgb(113, 68, 193);
+            _buttonThemeToggle.FlatStyle = FlatStyle.Flat;
+            _buttonThemeToggle.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            _buttonThemeToggle.ForeColor = Color.White;
+            _buttonThemeToggle.Location = new Point(10, 782);
+            _buttonThemeToggle.Name = "_buttonThemeToggle";
+            _buttonThemeToggle.Size = new Size(180, 45);
+            _buttonThemeToggle.TabIndex = 11;
+            _buttonThemeToggle.Text = "🌙 深色模式";
+            _buttonThemeToggle.UseVisualStyleBackColor = false;
             // 
             // LearningSettingsView
             // 
@@ -480,7 +485,7 @@ namespace LearningAssistant.Views
             AutoScaleMode = AutoScaleMode.Font;
             Controls.Add(_panelConfig);
             Name = "LearningSettingsView";
-            Size = new Size(220, 1000);
+            Size = new Size(220, 837);
             _panelConfig.ResumeLayout(false);
             _groupBoxMode.ResumeLayout(false);
             _groupBoxMode.PerformLayout();
@@ -488,9 +493,9 @@ namespace LearningAssistant.Views
             _groupBoxSort.PerformLayout();
             _groupBoxLanguage.ResumeLayout(false);
             _groupBoxLanguage.PerformLayout();
-            _panelQuizMode.ResumeLayout(false);
             _pronunciationFlowLayoutPanel.ResumeLayout(false);
             _pronunciationFlowLayoutPanel.PerformLayout();
+            _panelQuizMode.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -538,7 +543,7 @@ namespace LearningAssistant.Views
         /// </summary>
         public void SetQuizModeButtonText(string text)
         {
-            _buttonQuizMode.Text = text;
+            _buttonShowAnswer.Text = text;
         }
 
         /// <summary>

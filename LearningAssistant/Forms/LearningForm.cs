@@ -16,7 +16,7 @@ namespace LearningAssistant.Forms
 {
     public partial class LearningForm : Form, ILearningView, IThemeable
     {
-        private LearningItem? _currentItem;
+        #region === 依赖服务 ===
         private readonly IAiQuestionService _aiQuestionService;
         private readonly ITTSService _ttsService;
         private readonly ILogger<LearningForm> _logger;
@@ -25,97 +25,34 @@ namespace LearningAssistant.Forms
         private readonly IThemeService _themeService;
         private readonly IAIPanelPopupService? _aiPanelPopupService;
         private readonly IEncouragementService _encouragementService;
+        private readonly BadgeManager _badgeManager;
+        #endregion
+
+        #region === 学习状态 ===
+        private LearningItem? _currentItem;
+        private bool _isShowAnswer = false;      // 答题模式标志
+        private bool _answerRevealed = false;    // 答案是否已揭示
+        private bool _isFavorite = false;
+        private bool _currentNoteCounted = false;
         private bool _disposed = false;
         private Settings _settings = new();
+        #endregion
 
-        private readonly List<ConfettiParticle> _confettiParticles = new List<ConfettiParticle>();
-        private readonly System.Windows.Forms.Timer _confettiTimer = new System.Windows.Forms.Timer();
-        private static readonly ThreadLocal<Random> _random = new ThreadLocal<Random>(() => new Random());
-        private bool _isConfettiActive;
+        #region === UI 状态 ===
+        private bool _settingsChangedEventsSuspended = false;
+        private bool _isGameActive = false;
+        private bool _isConfettiActive = false;
+        private ToolTip _toolTip = new ToolTip();
+        #endregion
 
+        #region === 统计数据 ===
         private readonly System.Windows.Forms.Timer _studyTimer = new System.Windows.Forms.Timer();
         private TimeSpan _studyDuration = TimeSpan.Zero;
         private int _todayLearnedCount = 0;
         private int _streakDays = 0;
         private int _score = 0;
-        private bool _isQuizMode = false;
-        private bool _answerRevealed = false;
         private int _encouragementCounter = 0;
         private int _celebrationCounter = 0;
-        private const int EncouragementInterval = 3;
-        private const int CelebrationInterval = 5;
-
-        private readonly string[] _encouragements = {
-            "太棒了！继续保持！💪",
-            "你做得很好！🌟",
-            "学习使我快乐！📚",
-            "坚持就是胜利！✨",
-            "知识就是力量！💡",
-            "每天进步一点点！🌱",
-            "加油，你可以的！🚀",
-            "聪明的选择！🎯",
-            "继续努力！🔥",
-            "你真了不起！👏",
-            "再接再厉！🏃",
-            "勇往直前！⚡",
-            "信心十足！💯",
-            "专注学习！🎧",
-            "收获满满！📖",
-            "步步为营！🚶",
-            "厚积薄发！📈",
-            "持之以恒！⏰",
-            "自强不息！🌟",
-            "志在必得！🎯"
-        };
-
-        private readonly string[] _correctMessages = {
-            "回答正确！🎉",
-            "完美！🌟",
-            "太棒了！👏",
-            "正确！✅",
-            "你真聪明！💡",
-            "非常棒！⭐",
-            "答对了！🎊",
-            "真厉害！💪",
-            "满分！💯",
-            "超棒！🔥"
-        };
-
-        private readonly string[] _wrongMessages = {
-            "再想想！💭",
-            "加油！💪",
-            "别灰心！🌈",
-            "继续尝试！🔥",
-            "下次会更好！🌟",
-            "再接再厉！💡",
-            "相信自己！💪",
-            "仔细想想！🤔",
-            "别放弃！🚀",
-            "坚持就是胜利！✨"
-        };
-
-        private readonly Dictionary<string, Badge> _badges = new Dictionary<string, Badge>
-        {
-            {"first_blood", new Badge("first_blood", "首战告捷", "完成第一次学习", "🏆", 1)},
-            {"streak_3", new Badge("streak_3", "三日坚持", "连续学习3天", "🔥", 3)},
-            {"streak_7", new Badge("streak_7", "一周达人", "连续学习7天", "⭐", 7)},
-            {"streak_30", new Badge("streak_30", "月度冠军", "连续学习30天", "👑", 30)},
-            {"learn_100", new Badge("learn_100", "百题斩", "累计学习100项", "💯", 100)},
-            {"learn_500", new Badge("learn_500", "五百勇士", "累计学习500项", "⚔️", 500)},
-            {"learn_1000", new Badge("learn_1000", "千题大师", "累计学习1000项", "🏅", 1000)},
-            {"perfect_day", new Badge("perfect_day", "完美一天", "单日学习50项", "🌟", 50)},
-            {"quiz_master", new Badge("quiz_master", "答题高手", "答题模式答对20题", "🎯", 20)},
-            {"favorite_collector", new Badge("favorite_collector", "收藏达人", "收藏20个内容", "❤️", 20)},
-            {"note_taker", new Badge("note_taker", "笔记达人", "记录10条笔记", "📝", 10)},
-            {"speed_learner", new Badge("speed_learner", "神速学习", "5分钟内完成10项", "⚡", 10)}
-        };
-
-        private readonly List<string> _levelTitles = new List<string>
-        {
-            "小白", "学徒", "学者", "秀才", "举人", "进士", "翰林", "大师", "宗师", "圣人"
-        };
-
-        private List<string> _unlockedBadges = new List<string>();
         private int _totalLearnedCount = 0;
         private int _quizCorrectCount = 0;
         private int _favoriteCount = 0;
@@ -124,101 +61,138 @@ namespace LearningAssistant.Forms
         private string _levelTitle = "小白";
         private int _xp = 0;
         private int _xpToNextLevel = 100;
+        private int _gameScore = 0;
+        private readonly System.Windows.Forms.Timer _noteSaveTimer = new System.Windows.Forms.Timer();
+        #endregion
 
-        private class Badge
-        {
-            public string Id { get; }
-            public string Name { get; }
-            public string Description { get; }
-            public string Emoji { get; }
-            public int RequiredCount { get; }
-            public bool Unlocked { get; set; }
+        #region === 静态资源 ===
+        private const int EncouragementInterval = 3;
+        private readonly EncouragementManager _encouragementManager = new EncouragementManager();
 
-            public Badge(string id, string name, string description, string emoji, int requiredCount)
-            {
-                Id = id;
-                Name = name;
-                Description = description;
-                Emoji = emoji;
-                RequiredCount = requiredCount;
-                Unlocked = false;
-            }
-        }
+        private const int CelebrationInterval = 5;
 
-        private class Challenge
-        {
-            public string Id { get; set; }
-            public string Name { get; set; }
-            public string Description { get; set; }
-            public string Emoji { get; set; }
-            public int Target { get; set; }
-            public int Current { get; set; }
-            public int Reward { get; set; }
-            public bool Completed { get; set; }
-            public bool Claimed { get; set; }
-
-            public Challenge() { }
-
-            public Challenge(string id, string name, string description, string emoji, int target, int reward)
-            {
-                Id = id;
-                Name = name;
-                Description = description;
-                Emoji = emoji;
-                Target = target;
-                Current = 0;
-                Reward = reward;
-                Completed = false;
-                Claimed = false;
-            }
-        }
+        // 等级称号
+        private readonly List<string> _levelTitles = new List<string> {
+            "小白", "学徒", "学者", "秀才", "举人", "进士", "翰林", "大师", "宗师", "圣人"
+        };
 
         private List<Challenge> _dailyChallenges = new List<Challenge>();
-        private bool _badgesEventBound = false;
-        private ToolTip _toolTip = new ToolTip();
 
-        private enum ParticleShape
-        {
-            Rectangle,
-            Circle,
-            Triangle,
-            Star
-        }
+        // 彩纸粒子
+        private readonly List<ConfettiParticle> _confettiParticles = new List<ConfettiParticle>();
+        private readonly System.Windows.Forms.Timer _confettiTimer = new System.Windows.Forms.Timer();
 
-        private class ConfettiParticle
-        {
-            public float X { get; set; }
-            public float Y { get; set; }
-            public float Size { get; set; }
-            public Color Color { get; set; }
-            public float VelocityX { get; set; }
-            public float VelocityY { get; set; }
-            public float Rotation { get; set; }
-            public float RotationSpeed { get; set; }
-            public ParticleShape Shape { get; set; }
-            public float Opacity { get; set; } = 1.0f;
-            public float FadeSpeed { get; set; }
-            public double WobbleOffset { get; set; }
-            public float WobbleSpeed { get; set; }
-        }
-
-        private readonly Color[] _celebrationColors = new[]
-        {
-            Color.FromArgb(255, 59, 48),
-            Color.FromArgb(255, 149, 0),
-            Color.FromArgb(255, 204, 0),
-            Color.FromArgb(52, 199, 89),
-            Color.FromArgb(0, 122, 255),
-            Color.FromArgb(88, 86, 214),
-            Color.FromArgb(175, 82, 222),
-            Color.FromArgb(255, 69, 58),
-            Color.FromArgb(245, 90, 140),
+        // 庆祝颜色
+        private readonly Color[] _celebrationColors = new[] {
+            Color.FromArgb(255, 59, 48), Color.FromArgb(255, 149, 0), Color.FromArgb(255, 204, 0),
+            Color.FromArgb(52, 199, 89), Color.FromArgb(0, 122, 255), Color.FromArgb(88, 86, 214),
+            Color.FromArgb(175, 82, 222), Color.FromArgb(255, 69, 58), Color.FromArgb(245, 90, 140),
             Color.FromArgb(100, 200, 220)
         };
 
         private readonly Dictionary<int, SolidBrush> _colorBrushCache = new Dictionary<int, SolidBrush>();
 
-        public LearningForm(IAiQuestionService aiQuestionService, ITTSService ttsService, ILogger<LearningForm> logger, ILoggerFactory loggerFactory, ISoundService soundService, IThemeService themeService, IAIPanelPopupService aiPanelPopupService, IEncouragementService encouragementService)
+        // 列表绘制相关
+        private readonly SolidBrush _selectedBackgroundBrush = new SolidBrush(Color.FromArgb(76, 175, 80));
+        private readonly SolidBrush _selectedForegroundBrush = new SolidBrush(Color.White);
+        private readonly SolidBrush _normalForegroundBrush = new SolidBrush(Color.Black);
+        private readonly Pen _selectedBorderPen = new Pen(Color.White, 2);
+        #endregion
+
+        #region === 子视图实例 ===
+        private LearningListView _listView = null!;
+        private LearningContentView _contentView = null!;
+        private LearningButtonsView _buttonsView = null!;
+        private LearningStatsView _statsView = null!;
+        private LearningSettingsView _settingsView = null!;
+        #endregion
+
+        #region === 控件访问器 ===
+        private Panel panelContent => _contentView.PanelContent;
+        private ListBox listBoxDisplay => _contentView.ListBoxDisplay;
+        private Label labelContent => _contentView.LabelContent;
+        private Label labelStatistics => _statsView.LabelStatistics;
+        private Panel panelList => _listView.PanelList;
+        private ListBox listBoxItems => _listView.ListBoxItems;
+        private Label labelListTitle => _listView.LabelListTitle;
+        private Label labelListStatus => _listView.LabelListStatus;
+        private Panel panelConfig => _settingsView.PanelConfig;
+        private Panel panelStats => _statsView.PanelStatsContainer;
+        private Label labelStudyTime => _statsView.LabelStudyTime;
+        private Label labelScore => _statsView.LabelScore;
+        private Label labelTodayCount => _statsView.LabelTodayCount;
+        private Label labelStreak => _statsView.LabelStreak;
+        private Label labelEncouragement => _statsView.LabelEncouragement;
+        private ProgressBar progressBar1 => _statsView.ProgressBar;
+        private Panel panelQuizMode => _settingsView.PanelQuizMode;
+        private Button buttonShowAnswer => _settingsView.ButtonShowAnswer;
+        private Label labelQuizHint => _settingsView.LabelQuizHint;
+        private Button buttonThemeToggle => _settingsView.ButtonThemeToggle;
+        private CheckBox checkBoxVoice => _settingsView.CheckBoxVoice;
+        private FlowLayoutPanel pronunciationFlowLayoutPanel => _settingsView.PronunciationFlowLayoutPanel;
+        private RadioButton radioOriginal => _settingsView.RadioOriginal;
+        private RadioButton radioExplanation => _settingsView.RadioExplanation;
+        private RadioButton radioBoth => _settingsView.RadioBoth;
+        private GroupBox groupBoxMode => _settingsView.GroupBoxMode;
+        private RadioButton radioStudyMode => _settingsView.RadioStudyMode;
+        private RadioButton radioQuickMode => _settingsView.RadioQuickMode;
+        private GroupBox groupBoxSort => _settingsView.GroupBoxSort;
+        private RadioButton radioSequential => _settingsView.RadioSequential;
+        private RadioButton radioRandom => _settingsView.RadioRandom;
+        private GroupBox groupBoxLanguage => _settingsView.GroupBoxLanguage;
+        private RadioButton radioChinese => _settingsView.RadioChinese;
+        private RadioButton radioEnglish => _settingsView.RadioEnglish;
+        private Label labelSubCategory => _settingsView.LabelSubCategory;
+        private ComboBox comboBoxSubCategory => _settingsView.ComboBoxSubCategory;
+        private Button buttonOpenStatistics => _settingsView.ButtonOpenStatistics;
+        private Button buttonExportErrorBook => _settingsView.ButtonExportErrorBook;
+        private FlowLayoutPanel buttonsFlowLayoutPanel => _buttonsView.ButtonsPanel;
+        private Panel panelNotes => _contentView.PanelNotes;
+        private RichTextBox richTextBoxNotes => _contentView.RichTextBoxNotes;
+        private Label labelNotesTitle => _contentView.LabelNotesTitle;
+        private Button buttonPronounce => _buttonsView.ButtonPronounce;
+        private Button buttonFavorite => _buttonsView.ButtonFavorite;
+        private Button buttonNote => _buttonsView.ButtonNote;
+        private Button buttonExit => _buttonsView.ButtonExit;
+        private Button buttonAIAsk => _buttonsView.ButtonAIAsk;
+        private Button buttonKnown => _buttonsView.ButtonKnown;
+        private Button buttonUnknown => _buttonsView.ButtonUnknown;
+        private Label labelDailyGoal = new Label();
+        #endregion
+
+        #region === 布局控件 ===
+        private TableLayoutPanel mainTableLayoutPanel = null!;
+        private Panel middlePanel = null!;
+        private TableLayoutPanel middleTableLayoutPanel = null!;
+        #endregion
+
+        #region === 游戏相关控件 ===
+        private FlowLayoutPanel flowLayoutPanelBadges = null!;
+        private FlowLayoutPanel flowLayoutPanelChallenges = null!;
+        private Label labelLevel = null!;
+        private ProgressBar progressXP = null!;
+        private Label labelXP = null!;
+        private Panel panelGame = null!;
+        private Label labelGameQuestion = null!;
+        private TextBox textBoxGameAnswer = null!;
+        private Label labelGameResult = null!;
+        private System.Windows.Forms.Timer _gameTimer = null!;
+        #endregion
+
+        #region === 设计器生成 ===
+        private System.ComponentModel.IContainer components = null;
+        #endregion
+
+        #region === 构造函数 ===
+        public LearningForm(
+            IAiQuestionService aiQuestionService,
+            ITTSService ttsService,
+            ILogger<LearningForm> logger,
+            ILoggerFactory loggerFactory,
+            ISoundService soundService,
+            IThemeService themeService,
+            IAIPanelPopupService aiPanelPopupService,
+            IEncouragementService encouragementService)
         {
             InitializeComponent();
             _aiQuestionService = aiQuestionService ?? throw new ArgumentNullException(nameof(aiQuestionService));
@@ -230,6 +204,9 @@ namespace LearningAssistant.Forms
             _aiPanelPopupService = aiPanelPopupService ?? throw new ArgumentNullException(nameof(aiPanelPopupService));
             _encouragementService = encouragementService ?? throw new ArgumentNullException(nameof(encouragementService));
 
+            // 初始化徽章管理器
+            _badgeManager = new BadgeManager(_loggerFactory.CreateLogger<BadgeManager>());
+            _badgeManager.BadgesUnlocked += OnBadgesUnlocked;
 
             Load += LearningForm_Load;
             FormClosing += LearningForm_FormClosing;
@@ -241,9 +218,10 @@ namespace LearningAssistant.Forms
 
             _themeService.RegisterThemeable(this);
 
-            // 初始化笔记保存计时器
+            // 笔记保存计时器
             _noteSaveTimer.Tick += NoteSaveTimer_Tick;
         }
+        #endregion
 
         private void BindSubViewEvents()
         {
@@ -264,7 +242,7 @@ namespace LearningAssistant.Forms
             _settingsView.ComboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
             _settingsView.ButtonOpenStatistics.Click += ButtonOpenStatistics_Click;
             _settingsView.ButtonExportErrorBook.Click += ButtonExportErrorBook_Click;
-            _settingsView.ButtonQuizMode.Click += ButtonQuizMode_Click;
+            _settingsView.ButtonShowAnswer.Click += ButtonShowAnswer_Click;
             _settingsView.ButtonThemeToggle.Click += ButtonThemeToggle_Click;
 
             _contentView.ContentClicked += LabelContent_Click;
@@ -514,8 +492,8 @@ namespace LearningAssistant.Forms
                 if (shouldSetQuick) radioQuickMode.Checked = true;
                 else if (shouldSetStudy) radioStudyMode.Checked = true;
 
-                // 同步 _isQuizMode 状态
-                _isQuizMode = radioQuickMode.Checked;
+                // 同步 _isShowAnswer 状态
+                _isShowAnswer = radioQuickMode.Checked;
 
                 // 处理排序方式单选按钮
                 bool shouldSetRandom = _settings.SortOrder == "Random" && !radioRandom.Checked;
@@ -551,16 +529,8 @@ namespace LearningAssistant.Forms
             }
         }
 
-        private bool _settingsChangedEventsSuspended = false;
-        private void SuspendSettingsChangedEvents()
-        {
-            _settingsChangedEventsSuspended = true;
-        }
-
-        private void ResumeSettingsChangedEvents()
-        {
-            _settingsChangedEventsSuspended = false;
-        }
+        private void SuspendSettingsChangedEvents() => _settingsChangedEventsSuspended = true;
+        private void ResumeSettingsChangedEvents() => _settingsChangedEventsSuspended = false;
 
         #region ILearningView Implementation
 
@@ -655,7 +625,7 @@ namespace LearningAssistant.Forms
             _answerRevealed = false;
             _currentNoteCounted = false;
 
-            UpdateDetailState(true, !_isQuizMode);
+            UpdateDetailState(true, !_isShowAnswer);
 
             ResetFavoriteState();
         }
@@ -888,98 +858,6 @@ namespace LearningAssistant.Forms
 
         #region WinForms Designer Generated Code
 
-        private System.ComponentModel.IContainer components = null;
-
-        // ========== 子视图实例（主视图通过这些管理子视图）==========
-        private LearningListView _listView = null!;
-        private LearningContentView _contentView = null!;
-        private LearningButtonsView _buttonsView = null!;
-        private LearningStatsView _statsView = null!;
-        private LearningSettingsView _settingsView = null!;
-
-        // ========== 兼容访问器（委托到子视图，保持现有代码不动）==========
-        private Panel panelContent => _contentView.PanelContent;
-        private ListBox listBoxDisplay => _contentView.ListBoxDisplay;
-        private Label labelContent => _contentView.LabelContent;
-        private Label labelStatistics => _statsView.LabelStatistics;
-        private Panel panelList => _listView.PanelList;
-        private ListBox listBoxItems => _listView.ListBoxItems;
-        private Label labelListTitle => _listView.LabelListTitle;
-        private Label labelListStatus => _listView.LabelListStatus;
-        private Panel panelConfig => _settingsView.PanelConfig;
-        private Label labelConfigTitle => _settingsView.PanelConfig.Controls.OfType<Label>().FirstOrDefault(l => l.Dock == DockStyle.Top) ?? new Label();
-        private GroupBox groupBoxMode => _settingsView.GroupBoxMode;
-        private RadioButton radioStudyMode => _settingsView.RadioStudyMode;
-        private RadioButton radioQuickMode => _settingsView.RadioQuickMode;
-        private GroupBox groupBoxSort => _settingsView.GroupBoxSort;
-        private RadioButton radioSequential => _settingsView.RadioSequential;
-        private RadioButton radioRandom => _settingsView.RadioRandom;
-        private GroupBox groupBoxLanguage => _settingsView.GroupBoxLanguage;
-        private RadioButton radioChinese => _settingsView.RadioChinese;
-        private RadioButton radioEnglish => _settingsView.RadioEnglish;
-        private Label labelSubCategory => _settingsView.LabelSubCategory;
-        private ComboBox comboBoxSubCategory => _settingsView.ComboBoxSubCategory;
-        private Button buttonOpenStatistics => _settingsView.ButtonOpenStatistics;
-        private Button buttonExportErrorBook => _settingsView.ButtonExportErrorBook;
-        private Button buttonPronounce => _buttonsView.ButtonPronounce;
-        private Button buttonFavorite => _buttonsView.ButtonFavorite;
-        private Button buttonNote => _buttonsView.ButtonNote;
-        private Button buttonExit => _buttonsView.ButtonExit;
-        private Button buttonAIAsk => _buttonsView.ButtonAIAsk;
-        private Button buttonKnown => _buttonsView.ButtonKnown;
-        private Button buttonUnknown => _buttonsView.ButtonUnknown;
-
-        private FlowLayoutPanel buttonsFlowLayoutPanel => _buttonsView.ButtonsPanel;
-        private Panel panelNotes => _contentView.PanelNotes;
-        private RichTextBox richTextBoxNotes => _contentView.RichTextBoxNotes;
-        private Label labelNotesTitle => _contentView.LabelNotesTitle;
-        private Panel panelQuizMode => _settingsView.PanelQuizMode;
-        private Button buttonQuizMode => _settingsView.ButtonQuizMode;
-        private Label labelQuizHint => _settingsView.LabelQuizHint;
-        private Button buttonThemeToggle => _settingsView.ButtonThemeToggle;
-
-        private CheckBox checkBoxVoice => _settingsView.CheckBoxVoice;
-        private FlowLayoutPanel pronunciationFlowLayoutPanel => _settingsView.PronunciationFlowLayoutPanel;
-        private RadioButton radioOriginal => _settingsView.RadioOriginal;
-        private RadioButton radioExplanation => _settingsView.RadioExplanation;
-        private RadioButton radioBoth => _settingsView.RadioBoth;
-
-        // ========== 统计相关控件（委托到 StatsView）==========
-        private Panel panelStats => _statsView.PanelStatsContainer;
-        private Label labelStudyTime => _statsView.LabelStudyTime;
-        private Label labelScore => _statsView.LabelScore;
-        private Label labelTodayCount => _statsView.LabelTodayCount;
-        private Label labelStreak => _statsView.LabelStreak;
-        private Label labelEncouragement => _statsView.LabelEncouragement;
-        private ProgressBar progressBar1 => _statsView.ProgressBar;
-        private Label labelDailyGoal;
-        // ========== 布局相关控件（暂保留）==========
-        private TableLayoutPanel mainTableLayoutPanel = null!;
-        private Panel middlePanel = null!;
-        private TableLayoutPanel middleTableLayoutPanel = null!;
-
-        // ========== 游戏相关控件（暂保留，后续清理）========== 
-        private Label labelGameTitle;
-        private bool _isGameActive = false;
-        private Panel panelBadges;
-        private Label labelBadgesTitle;
-        private Button buttonMiniGame;
-        private Button buttonGameSubmit;
-        private Panel panelChallenges;
-        private Label labelChallengesTitle;
-        private FlowLayoutPanel flowLayoutPanelBadges;
-        private Label labelLevel;
-        private ProgressBar progressXP;
-        private Label labelXP;
-        private FlowLayoutPanel flowLayoutPanelChallenges;
-
-        private Panel panelGame;
-        private Label labelGameQuestion;
-        private TextBox textBoxGameAnswer;
-        private Label labelGameResult;
-        private System.Windows.Forms.Timer _gameTimer;
-        private int _gameScore = 0;
-
         private void InitializeComponent()
         {
             // ========== 创建子视图（它们内部已创建所有子控件）==========
@@ -1104,12 +982,18 @@ namespace LearningAssistant.Forms
             _noteSaveTimer.Interval = 1000;
             _noteSaveTimer.Tick += NoteSaveTimer_Tick;
 
+            // 设置徽章管理器的UI引用
+            if (flowLayoutPanelBadges != null)
+            {
+                _badgeManager.SetUI(flowLayoutPanelBadges, _toolTip);
+            }
+
             LoadStudyStats();
-            LoadBadges();
+            _badgeManager.Load();
             LoadChallenges();
             UpdateEncouragement();
             UpdateLevelDisplay();
-            UpdateBadgesDisplay();
+            _badgeManager.UpdateDisplay();
             UpdateChallengesDisplay();
         }
 
@@ -1255,6 +1139,8 @@ namespace LearningAssistant.Forms
 
         private void UpdateListStatus(int totalItems, int currentIndex)
         {
+            if (labelListStatus == null) return;
+
             if (totalItems == 0)
             {
                 labelListStatus.Text = "暂无学习内容";
@@ -1291,11 +1177,6 @@ namespace LearningAssistant.Forms
                 listBoxItems.DrawItem -= ListBoxItems_DrawItem;
             }
         }
-
-        private readonly SolidBrush _selectedBackgroundBrush = new SolidBrush(Color.FromArgb(76, 175, 80));
-        private readonly SolidBrush _selectedForegroundBrush = new SolidBrush(Color.White);
-        private readonly SolidBrush _normalForegroundBrush = new SolidBrush(Color.Black);
-        private readonly Pen _selectedBorderPen = new Pen(Color.White, 2);
 
         private void ListBoxItems_DrawItem(object? sender, DrawItemEventArgs e)
         {
@@ -1377,10 +1258,12 @@ namespace LearningAssistant.Forms
 
 
 
-        private void LabelContent_Click(object? sender, EventArgs e)
+        /// <summary>
+        /// 处理内容区点击事件（答题模式下切换答案显示）
+        /// </summary>
+        private void ContentArea_Click(object? sender, EventArgs e)
         {
-            // 点击内容区：根据模式显示或隐藏答案
-            if (_isQuizMode)
+            if (_isShowAnswer)
             {
                 // 答题模式：切换答案显示状态
                 UpdateDetailState(true, !_answerRevealed);
@@ -1392,20 +1275,9 @@ namespace LearningAssistant.Forms
             }
         }
 
-        private void ListBoxDisplay_Click(object? sender, EventArgs e)
-        {
-            // 点击详情区：根据模式显示或隐藏答案
-            if (_isQuizMode)
-            {
-                // 答题模式：切换答案显示状态
-                UpdateDetailState(true, !_answerRevealed);
-            }
-            else
-            {
-                // 学习模式：直接显示完整内容
-                UpdateDetailState(true, true);
-            }
-        }
+        // 为了兼容性保留原来的事件处理方法名
+        private void LabelContent_Click(object? sender, EventArgs e) => ContentArea_Click(sender, e);
+        private void ListBoxDisplay_Click(object? sender, EventArgs e) => ContentArea_Click(sender, e);
 
         /// <summary>
         /// 更新详情区内容
@@ -1413,6 +1285,8 @@ namespace LearningAssistant.Forms
         /// <param name="text">要显示的文本</param>
         private void UpdateDetailContent(string text)
         {
+            if (listBoxDisplay == null) return;
+
             listBoxDisplay.Items.Clear();
             if (string.IsNullOrEmpty(text)) return;
 
@@ -1434,11 +1308,13 @@ namespace LearningAssistant.Forms
         /// <param name="showAnswer">是否显示答案（答题模式下）</param>
         private void UpdateDetailState(bool visible, bool showAnswer = true)
         {
+            if (listBoxDisplay == null) return;
+
             listBoxDisplay.Visible = visible;
 
             if (visible && _currentItem != null)
             {
-                if (_isQuizMode)
+                if (_isShowAnswer)
                 {
                     // 答题模式：根据是否已揭示答案显示不同内容
                     _answerRevealed = showAnswer;
@@ -1461,165 +1337,16 @@ namespace LearningAssistant.Forms
         }
 
         /// <summary>
-        /// 从文件加载已解锁的徽章
+        /// 徽章解锁事件处理
         /// </summary>
-        private void LoadBadges()
+        private void OnBadgesUnlocked(List<string> badges)
         {
-            try
-            {
-                string badgesPath = Path.Combine(AppPaths.DataDir, "badges.json");
-                if (File.Exists(badgesPath))
-                {
-                    string json = File.ReadAllText(badgesPath);
-                    _unlockedBadges = JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
-                    foreach (var badgeId in _unlockedBadges)
-                    {
-                        if (_badges.TryGetValue(badgeId, out var badge))
-                        {
-                            badge.Unlocked = true;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "加载徽章失败");
-            }
-        }
-
-        /// <summary>
-        /// 保存已解锁的徽章到文件
-        /// </summary>
-        private void SaveBadges()
-        {
-            try
-            {
-                string badgesPath = Path.Combine(AppPaths.DataDir, "badges.json");
-                var badgesDir = Path.GetDirectoryName(badgesPath);
-                if (!string.IsNullOrEmpty(badgesDir) && !Directory.Exists(badgesDir)) Directory.CreateDirectory(badgesDir);
-                string json = JsonSerializer.Serialize(_unlockedBadges, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(badgesPath, json);
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "保存徽章失败");
-            }
-        }
-
-        /// <summary>
-        /// 检查并解锁达成的徽章
-        /// </summary>
-        private void CheckBadgeUnlock()
-        {
-            List<string> newlyUnlocked = new List<string>();
-
-            TryUnlockBadge("first_blood", _totalLearnedCount >= 1, newlyUnlocked);
-            TryUnlockBadge("streak_3", _streakDays >= 3, newlyUnlocked);
-            TryUnlockBadge("streak_7", _streakDays >= 7, newlyUnlocked);
-            TryUnlockBadge("streak_30", _streakDays >= 30, newlyUnlocked);
-            TryUnlockBadge("learn_100", _totalLearnedCount >= 100, newlyUnlocked);
-            TryUnlockBadge("learn_500", _totalLearnedCount >= 500, newlyUnlocked);
-            TryUnlockBadge("learn_1000", _totalLearnedCount >= 1000, newlyUnlocked);
-            TryUnlockBadge("perfect_day", _todayLearnedCount >= 50, newlyUnlocked);
-            TryUnlockBadge("quiz_master", _quizCorrectCount >= 20, newlyUnlocked);
-            TryUnlockBadge("favorite_collector", _favoriteCount >= 20, newlyUnlocked);
-            TryUnlockBadge("note_taker", _noteCount >= 10, newlyUnlocked);
-
-            if (newlyUnlocked.Count > 0)
-            {
-                SaveBadges();
-                UpdateBadgesDisplay();
-                ShowBadgeNotification(newlyUnlocked);
-            }
-        }
-
-        /// <summary>
-        /// 尝试解锁徽章的安全方法
-        /// </summary>
-        /// <param name="badgeId">徽章ID</param>
-        /// <param name="condition">解锁条件</param>
-        /// <param name="newlyUnlocked">新解锁的徽章列表</param>
-        private void TryUnlockBadge(string badgeId, bool condition, List<string> newlyUnlocked)
-        {
-            if (condition && _badges.TryGetValue(badgeId, out var badge) && !badge.Unlocked)
-            {
-                UnlockBadge(badgeId, newlyUnlocked);
-            }
-        }
-
-        /// <summary>
-        /// 解锁指定徽章并记录
-        /// </summary>
-        /// <param name="badgeId">徽章ID</param>
-        /// <param name="newlyUnlocked">新解锁的徽章列表</param>
-        private void UnlockBadge(string badgeId, List<string> newlyUnlocked)
-        {
-            if (_badges.TryGetValue(badgeId, out var badge))
-            {
-                badge.Unlocked = true;
-                _unlockedBadges.Add(badgeId);
-                newlyUnlocked.Add(badgeId);
-                _score += 50;
-                _xp += 50;
-                CheckLevelUp();
-            }
-        }
-
-        /// <summary>
-        /// 显示徽章解锁通知
-        /// </summary>
-        /// <param name="badges">已解锁的徽章ID列表</param>
-        private void ShowBadgeNotification(List<string> badges)
-        {
-            string message = "🎉 解锁成就！\n\n";
-            foreach (var badgeId in badges)
-            {
-                if (_badges.TryGetValue(badgeId, out var badge))
-                {
-                    message += $"{badge.Emoji} {badge.Name}\n{badge.Description}\n\n";
-                }
-            }
-            message += "获得 50 积分奖励！";
-            MessageBox.Show(message, "成就解锁", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-
-        /// <summary>
-        /// 更新徽章显示面板
-        /// </summary>
-        private void UpdateBadgesDisplay()
-        {
-            if (flowLayoutPanelBadges != null)
-            {
-                flowLayoutPanelBadges.Controls.Clear();
-
-                foreach (var badge in _badges.Values)
-                {
-                    Label label = new Label();
-                    label.Font = new Font("微软雅黑", 14F);
-                    label.Text = badge.Unlocked ? badge.Emoji : "🔒";
-                    label.Size = new Size(40, 40);
-                    label.TextAlign = ContentAlignment.MiddleCenter;
-                    label.Cursor = Cursors.Hand;
-                    label.Tag = badge;
-                    label.Click += Badge_Click;
-                    _toolTip.SetToolTip(label, badge.Unlocked ? $"{badge.Name}: {badge.Description}" : "未解锁");
-                    flowLayoutPanelBadges.Controls.Add(label);
-                }
-            }
-        }
-
-        /// <summary>
-        /// 徽章点击事件处理器
-        /// </summary>
-        private void Badge_Click(object? sender, EventArgs e)
-        {
-            if (sender is Label label && label.Tag is Badge badge)
-            {
-                MessageBox.Show($"{badge.Emoji} {badge.Name}\n\n{badge.Description}",
-                    badge.Unlocked ? "成就详情" : "锁定的成就",
-                    MessageBoxButtons.OK,
-                    badge.Unlocked ? MessageBoxIcon.Information : MessageBoxIcon.Question);
-            }
+            _badgeManager.ShowNotification(badges);
+            _badgeManager.UpdateDisplay();
+            // 增加积分和XP
+            _score += 50 * badges.Count;
+            _xp += 50 * badges.Count;
+            CheckLevelUp();
         }
 
         /// <summary>
@@ -1908,7 +1635,7 @@ namespace LearningAssistant.Forms
             // 只在达到间隔时更新鼓励语
             if (_encouragementCounter >= EncouragementInterval && labelEncouragement != null)
             {
-                labelEncouragement.Text = _encouragements[Random.Shared.Next(_encouragements.Length)];
+                labelEncouragement.Text = _encouragementManager.GetRandomEncouragement();
                 _encouragementCounter = 0;
             }
         }
@@ -1920,27 +1647,18 @@ namespace LearningAssistant.Forms
         {
             if (sender is RadioButton radio && radio.Checked && !_settingsChangedEventsSuspended)
             {
-                // 学习模式/答题模式切换时，更新 _isQuizMode 和详情区状态
-                if (radio == radioStudyMode)
+                // 练习/复习切换：只控制左侧列表显示，触发 SettingsChanged 刷新列表
+                if (radio == radioStudyMode || radio == radioQuickMode)
                 {
-                    _isQuizMode = false;
-                    UpdateDetailState(true, true);  // 学习模式：显示答案
-                    // 更新快捷按钮文本
-                    buttonQuizMode.BackColor = Color.FromArgb(255, 193, 7);
-                    buttonQuizMode.Text = "🎮 答题模式";
-                    labelQuizHint.Text = "学习模式，显示完整内容";
+                    _isShowAnswer = radioQuickMode.Checked;
+                    // 触发列表刷新，不更新显示内容
+                    SettingsChanged?.Invoke(this, EventArgs.Empty);
                 }
-                else if (radio == radioQuickMode)
+                else
                 {
-                    _isQuizMode = true;
-                    UpdateDetailState(true, false);  // 答题模式：隐藏答案
-                    // 更新快捷按钮文本
-                    buttonQuizMode.BackColor = Color.FromArgb(76, 175, 80);
-                    buttonQuizMode.Text = "📖 学习模式";
-                    labelQuizHint.Text = "答案已隐藏";
+                    // 排序、语言等设置变更，触发列表刷新
+                    SettingsChanged?.Invoke(this, EventArgs.Empty);
                 }
-
-                SettingsChanged?.Invoke(this, EventArgs.Empty);
             }
         }
 
@@ -1971,17 +1689,17 @@ namespace LearningAssistant.Forms
                     _celebrationCounter = 0;
                 }
 
-                int points = _isQuizMode && !_answerRevealed ? 20 : 10;
+                int points = _isShowAnswer && !_answerRevealed ? 20 : 10;
                 IncrementScore(points);
 
                 _totalLearnedCount++;
-                if (_isQuizMode && !_answerRevealed)
+                if (_isShowAnswer && !_answerRevealed)
                 {
                     _quizCorrectCount++;
                 }
 
                 UpdateEncouragement();
-                CheckBadgeUnlock();
+                _badgeManager.CheckUnlock(_totalLearnedCount, _streakDays, _todayLearnedCount, _quizCorrectCount, _favoriteCount, _noteCount);
                 UpdateChallengesProgress();
 
                 _ = _encouragementService.PlayRandomKnownFeedbackAsync();
@@ -2258,29 +1976,27 @@ namespace LearningAssistant.Forms
             }
         }
 
-        private void ButtonQuizMode_Click(object? sender, EventArgs e)
+        private void ButtonShowAnswer_Click(object? sender, EventArgs e)
         {
-            // 通过切换RadioButton来同步状态
-            if (_isQuizMode)
+            // 直接切换显示内容，不联动 RadioButton，不刷新列表
+            if (_isShowAnswer)
             {
                 // 当前是答题模式，切换到学习模式
-                radioStudyMode.Checked = true;
+                _isShowAnswer = false;
+                UpdateDetailState(true, true);
+                buttonShowAnswer.BackColor = Color.FromArgb(255, 193, 7);
+                buttonShowAnswer.Text = "🎮 答题模式";
+                labelQuizHint.Text = "学习模式，显示完整内容";
             }
             else
             {
                 // 当前是学习模式，切换到答题模式
-                radioQuickMode.Checked = true;
+                _isShowAnswer = true;
+                UpdateDetailState(true, false);
+                buttonShowAnswer.BackColor = Color.FromArgb(76, 175, 80);
+                buttonShowAnswer.Text = "📖 学习模式";
+                labelQuizHint.Text = "答案已隐藏";
             }
-        }
-
-        private void HideAnswer()
-        {
-            UpdateDetailState(true, false);
-        }
-
-        private void ShowAnswer()
-        {
-            UpdateDetailState(true, true);
         }
 
         private void ButtonThemeToggle_Click(object? sender, EventArgs e)
@@ -2297,10 +2013,6 @@ namespace LearningAssistant.Forms
             }
         }
 
-        private bool _isFavorite = false;
-        private bool _currentNoteCounted = false;
-        private readonly System.Windows.Forms.Timer _noteSaveTimer = new System.Windows.Forms.Timer();
-
         private void ButtonFavorite_Click(object? sender, EventArgs e)
         {
             _isFavorite = !_isFavorite;
@@ -2310,7 +2022,7 @@ namespace LearningAssistant.Forms
                 _soundService?.PlaySuccess();
                 _favoriteCount++;
                 SaveFavorite();
-                CheckBadgeUnlock();
+                _badgeManager.CheckUnlock(_totalLearnedCount, _streakDays, _todayLearnedCount, _quizCorrectCount, _favoriteCount, _noteCount);
                 UpdateChallengesProgress();
             }
             else
@@ -2507,7 +2219,7 @@ namespace LearningAssistant.Forms
                 {
                     _currentNoteCounted = true;
                     _noteCount++;
-                    CheckBadgeUnlock();
+                    _badgeManager.CheckUnlock(_totalLearnedCount, _streakDays, _todayLearnedCount, _quizCorrectCount, _favoriteCount, _noteCount);
                 }
                 else if (!hasContent && _currentNoteCounted)
                 {
@@ -2526,10 +2238,7 @@ namespace LearningAssistant.Forms
             SaveNotes();
         }
 
-        private bool ContainsChinese(string text)
-        {
-            return text.Any(c => c >= 0x4E00 && c <= 0x9FFF);
-        }
+        private bool ContainsChinese(string text) => text.Any(c => c >= 0x4E00 && c <= 0x9FFF);
 
         private void LearningForm_KeyDown(object? sender, KeyEventArgs e)
         {
@@ -2647,7 +2356,7 @@ namespace LearningAssistant.Forms
                     _settingsView.ComboBoxSubCategory.SelectedIndexChanged -= ComboBoxSubCategory_SelectedIndexChanged;
                     _settingsView.ButtonOpenStatistics.Click -= ButtonOpenStatistics_Click;
                     _settingsView.ButtonExportErrorBook.Click -= ButtonExportErrorBook_Click;
-                    _settingsView.ButtonQuizMode.Click -= ButtonQuizMode_Click;
+                    _settingsView.ButtonShowAnswer.Click -= ButtonShowAnswer_Click;
                     _settingsView.ButtonThemeToggle.Click -= ButtonThemeToggle_Click;
                 }
 
@@ -2686,32 +2395,5 @@ namespace LearningAssistant.Forms
             _disposed = true;
             base.Dispose(disposing);
         }
-
-
-
-        public class ItemSelectedEventArgs : EventArgs
-        {
-            public int Index { get; }
-
-            public ItemSelectedEventArgs(int index)
-            {
-                Index = index;
-            }
-        }
-
-        public class StudyStats
-        {
-            public int TodayLearnedCount { get; set; }
-            public int StreakDays { get; set; }
-            public int TotalScore { get; set; }
-            public DateTime LastStudyDate { get; set; }
-            public int TotalLearnedCount { get; set; }
-            public int QuizCorrectCount { get; set; }
-            public int FavoriteCount { get; set; }
-            public int NoteCount { get; set; }
-            public int XP { get; set; }
-            public int CurrentLevel { get; set; }
-        }
-
     }
 }

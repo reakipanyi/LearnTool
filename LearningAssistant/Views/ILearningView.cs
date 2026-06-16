@@ -1,4 +1,4 @@
-using static LearningAssistant.Forms.LearningForm;
+using LearningAssistant.Forms;
 
 namespace LearningAssistant.Views
 {

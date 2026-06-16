@@ -1,7 +1,7 @@
+using LearningAssistant.Forms;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
-using static LearningAssistant.Forms.LearningForm;
 
 namespace LearningAssistant.Presenters
 {
