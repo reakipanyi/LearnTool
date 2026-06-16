@@ -926,22 +926,22 @@ namespace LearningAssistant.Forms
         private RadioButton radioExplanation => _settingsView.RadioExplanation;
         private RadioButton radioBoth => _settingsView.RadioBoth;
 
-        // ========== 独立控件（后续迭代可移入子视图）==========
+        // ========== 统计相关控件（委托到 StatsView）==========
+        private Panel panelStats => _statsView.PanelStatsContainer;
+        private Label labelStudyTime => _statsView.LabelStudyTime;
+        private Label labelScore => _statsView.LabelScore;
+        private Label labelTodayCount => _statsView.LabelTodayCount;
+        private Label labelStreak => _statsView.LabelStreak;
+        private Label labelEncouragement => _statsView.LabelEncouragement;
+        private ProgressBar progressBar1 => _statsView.ProgressBar;
+
+        // ========== 布局相关控件（暂保留）==========
         private TableLayoutPanel mainTableLayoutPanel = null!;
         private Panel middlePanel = null!;
         private TableLayoutPanel middleTableLayoutPanel = null!;
-        private Panel panelStats = null!;
-        private Label labelStudyTime = null!;
-        private Label labelScore = null!;
-        private Label labelTodayCount = null!;
-        private Label labelStreak = null!;
-        private Label labelEncouragement = null!;
-        private ProgressBar progressDailyGoal = null!;
-        private Label labelDailyGoal = null!;
-        private ProgressBar progressBar1 = null!;
-        private System.Windows.Forms.Timer _confettiTimer = null!;
 
         // ========== 游戏相关控件（暂保留，后续清理）==========
+        private System.Windows.Forms.Timer _confettiTimer = null!;
         private Label labelGameTitle;
         private bool _isGameActive = false;
         private Panel panelBadges;
@@ -1056,17 +1056,7 @@ namespace LearningAssistant.Forms
             middleTableLayoutPanel.Size = new Size(1095, 838);
             middleTableLayoutPanel.TabIndex = 0;
 
-            //
-            // progressBar1
-            //
-            progressBar1.BackColor = Color.FromArgb(240, 240, 240);
-            progressBar1.Dock = DockStyle.Fill;
-            progressBar1.ForeColor = Color.FromArgb(255, 140, 0);
-            progressBar1.Location = new Point(3, 716);
-            progressBar1.Name = "progressBar1";
-            progressBar1.Size = new Size(1089, 36);
-            progressBar1.Style = ProgressBarStyle.Continuous;
-            progressBar1.TabIndex = 2;
+            // progressBar1 已在 LearningStatsView 中初始化
 
             //
             // settingsFlowLayoutPanel (已在 LearningSettingsView 中初始化)
