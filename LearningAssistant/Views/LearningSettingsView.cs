@@ -536,6 +536,15 @@ namespace LearningAssistant.Views
             _pronunciationFlowLayoutPanel.TabIndex = 0;
             _pronunciationFlowLayoutPanel.WrapContents = false;
 
+            //
+            // LearningSettingsView
+            //
+            AutoScaleDimensions = new SizeF(7F, 15F);
+            AutoScaleMode = AutoScaleMode.Font;
+            Controls.Add(_panelConfig);
+            Name = "LearningSettingsView";
+            Size = new Size(220, 838);
+
             _groupBoxMode.ResumeLayout(false);
             _groupBoxMode.PerformLayout();
             _groupBoxSort.ResumeLayout(false);

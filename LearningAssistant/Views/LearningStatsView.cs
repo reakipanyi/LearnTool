@@ -154,6 +154,22 @@ namespace LearningAssistant.Views
             _labelEncouragement.TabIndex = 6;
             _labelEncouragement.TextAlign = ContentAlignment.MiddleRight;
 
+            //
+            // LearningStatsView
+            //
+            AutoScaleDimensions = new SizeF(7F, 15F);
+            AutoScaleMode = AutoScaleMode.Font;
+            Controls.Add(_panelStatsContainer);
+            Controls.Add(_progressBar);
+            Controls.Add(_labelStatistics);
+            Controls.Add(_labelStudyTime);
+            Controls.Add(_labelScore);
+            Controls.Add(_labelTodayCount);
+            Controls.Add(_labelStreak);
+            Controls.Add(_labelEncouragement);
+            Name = "LearningStatsView";
+            Size = new Size(1095, 838);
+
             _panelStatsContainer.ResumeLayout(false);
             ResumeLayout(false);
         }

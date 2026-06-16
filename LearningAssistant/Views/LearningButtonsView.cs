@@ -1,6 +1,4 @@
 using System.ComponentModel;
-using System.Drawing;
-using System.Windows.Forms;
 
 namespace LearningAssistant.Views
 {
@@ -156,7 +154,7 @@ namespace LearningAssistant.Views
             _buttonKnown.TabIndex = 0;
             _buttonKnown.Text = "✅ 会了 [K/1]";
             _buttonKnown.UseVisualStyleBackColor = false;
-            _buttonKnown.Click += (s, e) => KnownClicked?.Invoke(s, e);
+            _buttonKnown.Click += ButtonKnown_Click;
 
             //
             // _buttonUnknown
@@ -175,7 +173,7 @@ namespace LearningAssistant.Views
             _buttonUnknown.TabIndex = 1;
             _buttonUnknown.Text = "❌ 不会 [U/2]";
             _buttonUnknown.UseVisualStyleBackColor = false;
-            _buttonUnknown.Click += (s, e) => UnknownClicked?.Invoke(s, e);
+            _buttonUnknown.Click += ButtonUnknown_Click;
 
             //
             // _buttonNext
@@ -194,7 +192,7 @@ namespace LearningAssistant.Views
             _buttonNext.TabIndex = 2;
             _buttonNext.Text = "➡ 下一个 [Enter]";
             _buttonNext.UseVisualStyleBackColor = false;
-            _buttonNext.Click += (s, e) => NextClicked?.Invoke(s, e);
+            _buttonNext.Click += ButtonNext_Click;
 
             //
             // _buttonPronounce
@@ -213,7 +211,7 @@ namespace LearningAssistant.Views
             _buttonPronounce.TabIndex = 3;
             _buttonPronounce.Text = "🔊 发音 [Space]";
             _buttonPronounce.UseVisualStyleBackColor = false;
-            _buttonPronounce.Click += (s, e) => PronounceClicked?.Invoke(s, e);
+            _buttonPronounce.Click += ButtonPronounce_Click;
 
             //
             // _buttonFavorite
@@ -232,7 +230,7 @@ namespace LearningAssistant.Views
             _buttonFavorite.TabIndex = 4;
             _buttonFavorite.Text = "⭐ 收藏";
             _buttonFavorite.UseVisualStyleBackColor = false;
-            _buttonFavorite.Click += (s, e) => FavoriteClicked?.Invoke(s, e);
+            _buttonFavorite.Click += ButtonFavorite_Click;
 
             //
             // _buttonNote
@@ -251,7 +249,7 @@ namespace LearningAssistant.Views
             _buttonNote.TabIndex = 5;
             _buttonNote.Text = "📝 笔记";
             _buttonNote.UseVisualStyleBackColor = false;
-            _buttonNote.Click += (s, e) => NoteClicked?.Invoke(s, e);
+            _buttonNote.Click += ButtonNote_Click;
 
             //
             // _buttonExit
@@ -270,7 +268,7 @@ namespace LearningAssistant.Views
             _buttonExit.TabIndex = 6;
             _buttonExit.Text = "🏠 返回";
             _buttonExit.UseVisualStyleBackColor = false;
-            _buttonExit.Click += (s, e) => ExitClicked?.Invoke(s, e);
+            _buttonExit.Click += ButtonExit_Click;
 
             //
             // _buttonAIAsk
@@ -289,11 +287,31 @@ namespace LearningAssistant.Views
             _buttonAIAsk.TabIndex = 7;
             _buttonAIAsk.Text = "🤖 AI问答";
             _buttonAIAsk.UseVisualStyleBackColor = false;
-            _buttonAIAsk.Click += (s, e) => AIAskClicked?.Invoke(s, e);
-
+            _buttonAIAsk.Click += ButtonAIAsk_Click;
+            AutoScaleDimensions = new SizeF(7F, 15F);
+            AutoScaleMode = AutoScaleMode.Font;
+            Controls.Add(_buttonsPanel);  // 关键：将 _buttonsPanel 添加到 Controls
+            Name = "LearningButtonsView";
+            Size = new Size(1095, 71);
             _buttonsPanel.ResumeLayout(false);
             ResumeLayout(false);
         }
+
+        private void ButtonKnown_Click(object? sender, EventArgs e) => KnownClicked?.Invoke(sender, e);
+
+        private void ButtonUnknown_Click(object? sender, EventArgs e) => UnknownClicked?.Invoke(sender, e);
+
+        private void ButtonNext_Click(object? sender, EventArgs e) => NextClicked?.Invoke(sender, e);
+
+        private void ButtonPronounce_Click(object? sender, EventArgs e) => PronounceClicked?.Invoke(sender, e);
+
+        private void ButtonFavorite_Click(object? sender, EventArgs e) => FavoriteClicked?.Invoke(sender, e);
+
+        private void ButtonNote_Click(object? sender, EventArgs e) => NoteClicked?.Invoke(sender, e);
+
+        private void ButtonExit_Click(object? sender, EventArgs e) => ExitClicked?.Invoke(sender, e);
+
+        private void ButtonAIAsk_Click(object? sender, EventArgs e) => AIAskClicked?.Invoke(sender, e);
 
         #endregion
 

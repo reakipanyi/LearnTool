@@ -254,6 +254,37 @@ namespace LearningAssistant.Forms
             _themeService.RegisterThemeable(this);
         }
 
+        private void BindSubViewEvents()
+        {
+            _buttonsView.KnownClicked += ButtonKnown_Click;
+            _buttonsView.UnknownClicked += ButtonUnknown_Click;
+            _buttonsView.NextClicked += ButtonNext_Click;
+            _buttonsView.PronounceClicked += ButtonPronounce_Click;
+            _buttonsView.FavoriteClicked += ButtonFavorite_Click;
+            _buttonsView.NoteClicked += ButtonNote_Click;
+            _buttonsView.ExitClicked += ButtonExit_Click;
+            _buttonsView.AIAskClicked += ButtonAIAsk_Click;
+
+            _settingsView.RadioStudyMode.CheckedChanged += RadioStudyMode_CheckedChanged;
+            _settingsView.RadioQuickMode.CheckedChanged += RadioQuickMode_CheckedChanged;
+            _settingsView.RadioSequential.CheckedChanged += RadioSequential_CheckedChanged;
+            _settingsView.RadioRandom.CheckedChanged += RadioRandom_CheckedChanged;
+            _settingsView.RadioChinese.CheckedChanged += RadioChinese_CheckedChanged;
+            _settingsView.RadioEnglish.CheckedChanged += RadioEnglish_CheckedChanged;
+            _settingsView.ComboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
+            _settingsView.ButtonOpenStatistics.Click += ButtonOpenStatistics_Click;
+            _settingsView.ButtonExportErrorBook.Click += ButtonExportErrorBook_Click;
+            _settingsView.ButtonQuizMode.Click += ButtonQuizMode_Click;
+            _settingsView.ButtonThemeToggle.Click += ButtonThemeToggle_Click;
+
+            _contentView.ContentClicked += LabelContent_Click;
+            _contentView.DetailClicked += ListBoxDisplay_Click;
+            _contentView.DetailCheckChanged += CheckBoxShowDetail_CheckedChanged;
+            _contentView.NoteTextChanged += RichTextBoxNotes_TextChanged;
+
+            _listView.SelectedIndexChanged += ListBoxItems_SelectedIndexChanged;
+        }
+
 
 
         public void ApplyTheme(ThemeColors colors)
@@ -391,6 +422,7 @@ namespace LearningAssistant.Forms
 
         private void LearningForm_Load(object? sender, EventArgs e)
         {
+            BindSubViewEvents();
             LoadSettings();
             ApplySettings();
             EnableListHighlighting(true);

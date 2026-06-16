@@ -1,6 +1,4 @@
 using System.ComponentModel;
-using System.Drawing;
-using System.Windows.Forms;
 
 namespace LearningAssistant.Views
 {
@@ -120,7 +118,7 @@ namespace LearningAssistant.Views
             _listBoxDisplay.Size = new Size(1089, 160);
             _listBoxDisplay.TabIndex = 1;
             _listBoxDisplay.Visible = false;
-            _listBoxDisplay.Click += (s, e) => DetailClicked?.Invoke(s, e);
+            _listBoxDisplay.Click += ListBoxDisplay_Click;
 
             //
             // _labelContent
@@ -134,7 +132,7 @@ namespace LearningAssistant.Views
             _labelContent.Size = new Size(1089, 636);
             _labelContent.TabIndex = 0;
             _labelContent.TextAlign = ContentAlignment.MiddleCenter;
-            _labelContent.Click += (s, e) => ContentClicked?.Invoke(s, e);
+            _labelContent.Click += LabelContent_Click;
 
             //
             // _panelNotes
@@ -162,7 +160,7 @@ namespace LearningAssistant.Views
             _richTextBoxNotes.Size = new Size(1087, 0);
             _richTextBoxNotes.TabIndex = 1;
             _richTextBoxNotes.Text = "";
-            _richTextBoxNotes.TextChanged += (s, e) => NoteTextChanged?.Invoke(s, e);
+            _richTextBoxNotes.TextChanged += RichTextBoxNotes_TextChanged;
 
             //
             // _labelNotesTitle
@@ -195,12 +193,25 @@ namespace LearningAssistant.Views
             _checkBoxShowDetail.Text = "👁️ 显示答案";
             _checkBoxShowDetail.TextAlign = ContentAlignment.MiddleCenter;
             _checkBoxShowDetail.UseVisualStyleBackColor = false;
-            _checkBoxShowDetail.CheckedChanged += (s, e) => DetailCheckChanged?.Invoke(s, e);
-
+            _checkBoxShowDetail.CheckedChanged += CheckBoxShowDetail_CheckedChanged;
+            AutoScaleDimensions = new SizeF(7F, 15F);
+            AutoScaleMode = AutoScaleMode.Font;
+            Controls.Add(_panelNotes);    // 关键：添加 _panelNotes
+            Controls.Add(_panelContent);  // 关键：添加 _panelContent
+            Name = "LearningContentView";
+            Size = new Size(1095, 680);
             _panelContent.ResumeLayout(false);
             _panelNotes.ResumeLayout(false);
             ResumeLayout(false);
         }
+
+        private void ListBoxDisplay_Click(object? sender, EventArgs e) => DetailClicked?.Invoke(sender, e);
+
+        private void LabelContent_Click(object? sender, EventArgs e) => ContentClicked?.Invoke(sender, e);
+
+        private void RichTextBoxNotes_TextChanged(object? sender, EventArgs e) => NoteTextChanged?.Invoke(sender, e);
+
+        private void CheckBoxShowDetail_CheckedChanged(object? sender, EventArgs e) => DetailCheckChanged?.Invoke(sender, e);
 
         #endregion
 
@@ -261,9 +272,9 @@ namespace LearningAssistant.Views
         /// <summary>
         /// 设置显示详情复选框状态
         /// </summary>
-        public void SetShowDetailChecked(bool checked)
+        public void SetShowDetailChecked(bool chk)
         {
-            _checkBoxShowDetail.Checked = checked;
+            _checkBoxShowDetail.Checked = chk;
         }
 
         #endregion
