@@ -920,6 +920,11 @@ namespace LearningAssistant.Forms
         private Button buttonThemeToggle => _settingsView.ButtonThemeToggle;
         private GroupBox groupBoxPronunciationScope => _settingsView.GroupBoxPronunciationScope;
         private FlowLayoutPanel settingsFlowLayoutPanel => _settingsView.SettingsFlowLayoutPanel;
+        private CheckBox checkBoxVoice => _settingsView.CheckBoxVoice;
+        private FlowLayoutPanel pronunciationFlowLayoutPanel => _settingsView.PronunciationFlowLayoutPanel;
+        private RadioButton radioOriginal => _settingsView.RadioOriginal;
+        private RadioButton radioExplanation => _settingsView.RadioExplanation;
+        private RadioButton radioBoth => _settingsView.RadioBoth;
 
         // ========== 独立控件（后续迭代可移入子视图）==========
         private TableLayoutPanel mainTableLayoutPanel = null!;
@@ -934,11 +939,6 @@ namespace LearningAssistant.Forms
         private ProgressBar progressDailyGoal = null!;
         private Label labelDailyGoal = null!;
         private ProgressBar progressBar1 = null!;
-        private CheckBox checkBoxVoice = null!;
-        private FlowLayoutPanel pronunciationFlowLayoutPanel = null!;
-        private RadioButton radioOriginal = null!;
-        private RadioButton radioExplanation = null!;
-        private RadioButton radioBoth = null!;
         private System.Windows.Forms.Timer _confettiTimer = null!;
 
         // ========== 游戏相关控件（暂保留，后续清理）==========
@@ -1069,11 +1069,8 @@ namespace LearningAssistant.Forms
             progressBar1.TabIndex = 2;
 
             //
-            // settingsFlowLayoutPanel
+            // settingsFlowLayoutPanel (已在 LearningSettingsView 中初始化)
             //
-            settingsFlowLayoutPanel.Controls.Add(checkBoxVoice);
-            settingsFlowLayoutPanel.Controls.Add(pronunciationFlowLayoutPanel);
-            settingsFlowLayoutPanel.Controls.Add(_contentView.CheckBoxShowDetail);
             settingsFlowLayoutPanel.Dock = DockStyle.Fill;
             settingsFlowLayoutPanel.Location = new Point(3, 758);
             settingsFlowLayoutPanel.Name = "settingsFlowLayoutPanel";
@@ -1081,70 +1078,6 @@ namespace LearningAssistant.Forms
             settingsFlowLayoutPanel.Size = new Size(1089, 45);
             settingsFlowLayoutPanel.TabIndex = 5;
             settingsFlowLayoutPanel.WrapContents = false;
-
-            //
-            // checkBoxVoice
-            //
-            checkBoxVoice.Checked = true;
-            checkBoxVoice.CheckState = CheckState.Checked;
-            checkBoxVoice.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
-            checkBoxVoice.ForeColor = Color.FromArgb(70, 90, 110);
-            checkBoxVoice.Location = new Point(15, 10);
-            checkBoxVoice.Margin = new Padding(5);
-            checkBoxVoice.Name = "checkBoxVoice";
-            checkBoxVoice.Size = new Size(85, 25);
-            checkBoxVoice.TabIndex = 9;
-            checkBoxVoice.Text = "自动朗读";
-
-            //
-            // pronunciationFlowLayoutPanel
-            //
-            pronunciationFlowLayoutPanel.Controls.Add(radioOriginal);
-            pronunciationFlowLayoutPanel.Controls.Add(radioExplanation);
-            pronunciationFlowLayoutPanel.Controls.Add(radioBoth);
-            pronunciationFlowLayoutPanel.Location = new Point(108, 8);
-            pronunciationFlowLayoutPanel.Name = "pronunciationFlowLayoutPanel";
-            pronunciationFlowLayoutPanel.Size = new Size(219, 27);
-            pronunciationFlowLayoutPanel.TabIndex = 0;
-            pronunciationFlowLayoutPanel.WrapContents = false;
-
-            //
-            // radioOriginal
-            //
-            radioOriginal.AutoSize = true;
-            radioOriginal.Checked = true;
-            radioOriginal.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
-            radioOriginal.ForeColor = Color.FromArgb(70, 90, 110);
-            radioOriginal.Location = new Point(3, 3);
-            radioOriginal.Name = "radioOriginal";
-            radioOriginal.Size = new Size(50, 21);
-            radioOriginal.TabIndex = 13;
-            radioOriginal.TabStop = true;
-            radioOriginal.Text = "原文";
-
-            //
-            // radioExplanation
-            //
-            radioExplanation.AutoSize = true;
-            radioExplanation.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
-            radioExplanation.ForeColor = Color.FromArgb(70, 90, 110);
-            radioExplanation.Location = new Point(59, 3);
-            radioExplanation.Name = "radioExplanation";
-            radioExplanation.Size = new Size(50, 21);
-            radioExplanation.TabIndex = 14;
-            radioExplanation.Text = "释义";
-
-            //
-            // radioBoth
-            //
-            radioBoth.AutoSize = true;
-            radioBoth.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
-            radioBoth.ForeColor = Color.FromArgb(70, 90, 110);
-            radioBoth.Location = new Point(115, 3);
-            radioBoth.Name = "radioBoth";
-            radioBoth.Size = new Size(83, 21);
-            radioBoth.TabIndex = 15;
-            radioBoth.Text = "原文+释义";
 
             //
             // _confettiTimer

@@ -55,6 +55,12 @@ namespace LearningAssistant.Views
         // 设置面板容器
         private FlowLayoutPanel _settingsFlowLayoutPanel = null!;
 
+        // 自动朗读
+        private CheckBox _checkBoxVoice = null!;
+
+        // 发音范围面板
+        private FlowLayoutPanel _pronunciationFlowLayoutPanel = null!;
+
         #endregion
 
         #region Public Controls
@@ -119,6 +125,21 @@ namespace LearningAssistant.Views
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Label LabelQuizHint => _labelQuizHint;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public CheckBox CheckBoxVoice => _checkBoxVoice;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public FlowLayoutPanel PronunciationFlowLayoutPanel => _pronunciationFlowLayoutPanel;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public RadioButton RadioOriginal => _radioOriginal;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public RadioButton RadioExplanation => _radioExplanation;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public RadioButton RadioBoth => _radioBoth;
+
         #endregion
 
         #region Initialization
@@ -154,6 +175,8 @@ namespace LearningAssistant.Views
             _radioExplanation = new RadioButton();
             _radioBoth = new RadioButton();
             _settingsFlowLayoutPanel = new FlowLayoutPanel();
+            _checkBoxVoice = new CheckBox();
+            _pronunciationFlowLayoutPanel = new FlowLayoutPanel();
 
             _panelConfig.SuspendLayout();
             _groupBoxMode.SuspendLayout();
@@ -489,6 +512,29 @@ namespace LearningAssistant.Views
             _settingsFlowLayoutPanel.Size = new Size(200, 100);
             _settingsFlowLayoutPanel.TabIndex = 0;
             _settingsFlowLayoutPanel.WrapContents = false;
+
+            //
+            // _checkBoxVoice
+            //
+            _checkBoxVoice.Checked = true;
+            _checkBoxVoice.CheckState = CheckState.Checked;
+            _checkBoxVoice.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            _checkBoxVoice.ForeColor = Color.FromArgb(70, 90, 110);
+            _checkBoxVoice.Name = "checkBoxVoice";
+            _checkBoxVoice.Size = new Size(85, 25);
+            _checkBoxVoice.TabIndex = 0;
+            _checkBoxVoice.Text = "自动朗读";
+
+            //
+            // _pronunciationFlowLayoutPanel
+            //
+            _pronunciationFlowLayoutPanel.Controls.Add(_radioOriginal);
+            _pronunciationFlowLayoutPanel.Controls.Add(_radioExplanation);
+            _pronunciationFlowLayoutPanel.Controls.Add(_radioBoth);
+            _pronunciationFlowLayoutPanel.Name = "pronunciationFlowLayoutPanel";
+            _pronunciationFlowLayoutPanel.Size = new Size(219, 27);
+            _pronunciationFlowLayoutPanel.TabIndex = 0;
+            _pronunciationFlowLayoutPanel.WrapContents = false;
 
             _groupBoxMode.ResumeLayout(false);
             _groupBoxMode.PerformLayout();
