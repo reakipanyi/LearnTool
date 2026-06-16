@@ -1,11 +1,12 @@
 using System.ComponentModel;
 using System.Drawing;
 using System.Windows.Forms;
+using LearningAssistant.Views.UI;
 
 namespace LearningAssistant.Views
 {
     /// <summary>
-    /// 学习统计视图 - 底部统计信息条和进度条
+    /// 学习统计视图 - 底部统计信息条、进度条和记忆曲线图表
     /// </summary>
     public class LearningStatsView : UserControl
     {
@@ -19,6 +20,8 @@ namespace LearningAssistant.Views
         private Label _labelTodayCount = null!;
         private Label _labelStreak = null!;
         private Label _labelEncouragement = null!;
+        private ChartControl _chartMemoryCurve = null!;
+        private Label _labelAISummary = null!;
 
         #endregion
 
@@ -48,6 +51,12 @@ namespace LearningAssistant.Views
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Panel PanelStatsContainer => _panelStatsContainer;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public ChartControl ChartMemoryCurve => _chartMemoryCurve;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Label LabelAISummary => _labelAISummary;
+
         #endregion
 
         #region Initialization
@@ -67,6 +76,8 @@ namespace LearningAssistant.Views
             _labelTodayCount = new Label();
             _labelStreak = new Label();
             _labelEncouragement = new Label();
+            _chartMemoryCurve = new ChartControl();
+            _labelAISummary = new Label();
 
             _panelStatsContainer.SuspendLayout();
             SuspendLayout();
@@ -156,6 +167,45 @@ namespace LearningAssistant.Views
             _labelEncouragement.TabIndex = 6;
             _labelEncouragement.TextAlign = ContentAlignment.MiddleRight;
 
+            //
+            // _chartMemoryCurve
+            //
+            _chartMemoryCurve.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            _chartMemoryCurve.BackColor = Color.FromArgb(250, 250, 255);
+            _chartMemoryCurve.ChartType = ChartType.Line;
+            _chartMemoryCurve.Font = new Font("微软雅黑", 9F);
+            _chartMemoryCurve.ForeColor = Color.FromArgb(80, 100, 120);
+            _chartMemoryCurve.Location = new Point(15, 40);
+            _chartMemoryCurve.Name = "chartMemoryCurve";
+            _chartMemoryCurve.Size = new Size(1050, 350);
+            _chartMemoryCurve.TabIndex = 7;
+            _chartMemoryCurve.Title = "记忆曲线 - 近7天学习进度";
+
+            //
+            // _labelAISummary
+            //
+            _labelAISummary.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            _labelAISummary.Font = new Font("微软雅黑", 10F);
+            _labelAISummary.ForeColor = Color.FromArgb(70, 90, 110);
+            _labelAISummary.Location = new Point(15, 400);
+            _labelAISummary.Name = "labelAISummary";
+            _labelAISummary.Size = new Size(1050, 100);
+            _labelAISummary.TabIndex = 8;
+            _labelAISummary.Text = "📝 AI学习总结：暂无数据";
+            _labelAISummary.AutoEllipsis = true;
+
+            //
+            // _panelStatsContainer
+            //
+            _panelStatsContainer.Controls.Add(_labelAISummary);
+            _panelStatsContainer.Controls.Add(_chartMemoryCurve);
+            _panelStatsContainer.Controls.Add(_labelEncouragement);
+            _panelStatsContainer.Controls.Add(_labelStreak);
+            _panelStatsContainer.Controls.Add(_labelTodayCount);
+            _panelStatsContainer.Controls.Add(_labelScore);
+            _panelStatsContainer.Controls.Add(_labelStudyTime);
+            _panelStatsContainer.Controls.Add(_labelStatistics);
+            _panelStatsContainer.Controls.Add(_progressBar);
             _panelStatsContainer.ResumeLayout(false);
             ResumeLayout(false);
         }
@@ -236,6 +286,28 @@ namespace LearningAssistant.Views
         public void SetEncouragement(string text)
         {
             _labelEncouragement.Text = text;
+        }
+
+        /// <summary>
+        /// 设置记忆曲线数据
+        /// </summary>
+        public void SetMemoryCurveData(double[] values, string[] labels, Color[] colors)
+        {
+            if (_chartMemoryCurve != null && values != null && values.Length > 0)
+            {
+                _chartMemoryCurve.SetData(values, labels, colors);
+            }
+        }
+
+        /// <summary>
+        /// 设置AI学习总结
+        /// </summary>
+        public void SetAISummary(string summary)
+        {
+            if (_labelAISummary != null)
+            {
+                _labelAISummary.Text = $"📝 AI学习总结：{summary}";
+            }
         }
 
         #endregion

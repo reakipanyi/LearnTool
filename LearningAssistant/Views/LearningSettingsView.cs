@@ -61,6 +61,9 @@ namespace LearningAssistant.Views
         // 发音范围面板
         private FlowLayoutPanel _pronunciationFlowLayoutPanel = null!;
 
+        // 收藏筛选
+        private CheckBox _checkBoxShowFavoritesOnly = null!;
+
         #endregion
 
         #region Public Controls
@@ -140,6 +143,9 @@ namespace LearningAssistant.Views
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public RadioButton RadioBoth => _radioBoth;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public CheckBox CheckBoxShowFavoritesOnly => _checkBoxShowFavoritesOnly;
+
         #endregion
 
         #region Initialization
@@ -177,6 +183,7 @@ namespace LearningAssistant.Views
             _settingsFlowLayoutPanel = new FlowLayoutPanel();
             _checkBoxVoice = new CheckBox();
             _pronunciationFlowLayoutPanel = new FlowLayoutPanel();
+            _checkBoxShowFavoritesOnly = new CheckBox();
 
             _panelConfig.SuspendLayout();
             _groupBoxMode.SuspendLayout();
@@ -535,6 +542,17 @@ namespace LearningAssistant.Views
             _pronunciationFlowLayoutPanel.Size = new Size(219, 27);
             _pronunciationFlowLayoutPanel.TabIndex = 0;
             _pronunciationFlowLayoutPanel.WrapContents = false;
+
+            //
+            // _checkBoxShowFavoritesOnly
+            //
+            _checkBoxShowFavoritesOnly.AutoSize = true;
+            _checkBoxShowFavoritesOnly.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            _checkBoxShowFavoritesOnly.ForeColor = Color.FromArgb(70, 90, 110);
+            _checkBoxShowFavoritesOnly.Name = "checkBoxShowFavoritesOnly";
+            _checkBoxShowFavoritesOnly.Size = new Size(80, 21);
+            _checkBoxShowFavoritesOnly.TabIndex = 0;
+            _checkBoxShowFavoritesOnly.Text = "⭐ 仅收藏";
 
             _groupBoxMode.ResumeLayout(false);
             _groupBoxMode.PerformLayout();

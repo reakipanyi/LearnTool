@@ -139,6 +139,8 @@ namespace LearningAssistant.Forms
         private RadioButton radioExplanation;
         private RadioButton radioBoth;
         private int _xpToNextLevel = 100;
+        private List<string> _currentItemKeys = new List<string>();
+        private List<string> _currentItemTexts = new List<string>();
 
         private class Badge
         {
@@ -925,6 +927,7 @@ namespace LearningAssistant.Forms
         private RadioButton radioOriginal => _settingsView.RadioOriginal;
         private RadioButton radioExplanation => _settingsView.RadioExplanation;
         private RadioButton radioBoth => _settingsView.RadioBoth;
+        private CheckBox checkBoxShowFavoritesOnly => _settingsView.CheckBoxShowFavoritesOnly;
 
         // ========== 统计相关控件（委托到 StatsView）==========
         private Panel panelStats => _statsView.PanelStatsContainer;
@@ -934,6 +937,8 @@ namespace LearningAssistant.Forms
         private Label labelStreak => _statsView.LabelStreak;
         private Label labelEncouragement => _statsView.LabelEncouragement;
         private ProgressBar progressBar1 => _statsView.ProgressBar;
+        private Views.UI.ChartControl chartMemoryCurve => _statsView.ChartMemoryCurve;
+        private Label labelAISummary => _statsView.LabelAISummary;
 
         // ========== 布局相关控件（暂保留）==========
         private TableLayoutPanel mainTableLayoutPanel = null!;
@@ -1111,6 +1116,25 @@ namespace LearningAssistant.Forms
             _gameTimer.Interval = 1000;
             _gameTimer.Tick += GameTimer_Tick;
 
+            // 订阅收藏筛选复选框事件
+            if (checkBoxShowFavoritesOnly != null)
+            {
+                checkBoxShowFavoritesOnly.CheckedChanged += CheckBoxShowFavoritesOnly_CheckedChanged;
+            }
+
+            // 订阅按钮视图事件
+            if (_buttonsView != null)
+            {
+                _buttonsView.KnownClicked += (_, _) => ButtonKnown_Click(null, EventArgs.Empty);
+                _buttonsView.UnknownClicked += (_, _) => ButtonUnknown_Click(null, EventArgs.Empty);
+                _buttonsView.NextClicked += (_, _) => ButtonNext_Click(null, EventArgs.Empty);
+                _buttonsView.PronounceClicked += (_, _) => ButtonPronounce_Click(null, EventArgs.Empty);
+                _buttonsView.FavoriteClicked += (_, _) => ButtonFavorite_Click(null, EventArgs.Empty);
+                _buttonsView.NoteClicked += (_, _) => ButtonNote_Click(null, EventArgs.Empty);
+                _buttonsView.ExitClicked += (_, _) => ButtonExit_Click(null, EventArgs.Empty);
+                _buttonsView.AIAskClicked += (_, _) => ButtonAIAsk_Click(null, EventArgs.Empty);
+            }
+
             LoadStudyStats();
             LoadBadges();
             LoadChallenges();
@@ -1216,6 +1240,105 @@ namespace LearningAssistant.Forms
             labelStreak.Text = $"🔥 连续学习: {_streakDays} 天";
             progressDailyGoal.Value = Math.Min(_todayLearnedCount, progressDailyGoal.Maximum);
             labelDailyGoal.Text = $"今日目标: {_todayLearnedCount}/{progressDailyGoal.Maximum}";
+            UpdateMemoryCurveChart();
+            UpdateAISummary();
+        }
+
+        /// <summary>
+        /// 更新记忆曲线图表
+        /// </summary>
+        private void UpdateMemoryCurveChart()
+        {
+            try
+            {
+                // 加载近7天的学习数据
+                var (dates, counts) = LoadWeeklyStudyData();
+                if (dates.Count > 0)
+                {
+                    var colors = new Color[]
+                    {
+                        Color.FromArgb(255, 140, 0),    // 橙色
+                        Color.FromArgb(0, 122, 255),   // 蓝色
+                        Color.FromArgb(52, 199, 89),   // 绿色
+                        Color.FromArgb(255, 59, 48),   // 红色
+                        Color.FromArgb(175, 82, 222),  // 紫色
+                        Color.FromArgb(88, 86, 214),   // 靛蓝
+                        Color.FromArgb(255, 149, 0)    // 琥珀色
+                    };
+                    chartMemoryCurve?.SetData(counts, dates, colors);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "更新记忆曲线图表失败");
+            }
+        }
+
+        private (List<string> dates, double[] counts) LoadWeeklyStudyData()
+        {
+            var dates = new List<string>();
+            var counts = new List<double>();
+            try
+            {
+                string statsPath = Path.Combine(AppPaths.DataDir, "study_stats.json");
+                if (File.Exists(statsPath))
+                {
+                    string json = File.ReadAllText(statsPath);
+                    var stats = JsonSerializer.Deserialize<StudyStats>(json);
+                    if (stats?.WeeklyData != null)
+                    {
+                        foreach (var day in stats.WeeklyData)
+                        {
+                            dates.Add(day.Date);
+                            counts.Add(day.Count);
+                        }
+                    }
+                }
+                // 如果没有数据，生成近7天的标签（每天0）
+                if (dates.Count == 0)
+                {
+                    for (int i = 6; i >= 0; i--)
+                    {
+                        dates.Add(DateTime.Today.AddDays(-i).ToString("MM-dd"));
+                        counts.Add(0);
+                    }
+                }
+            }
+            catch { }
+            return (dates, counts.ToArray());
+        }
+
+        /// <summary>
+        /// 更新AI学习总结
+        /// </summary>
+        private void UpdateAISummary()
+        {
+            try
+            {
+                // 基于当前统计生成简单的学习总结
+                string summary = $"今日已学习 {_todayLearnedCount} 项，连续学习 {_streakDays} 天，总得分 {_score}。";
+                if (_todayLearnedCount >= 20)
+                {
+                    summary += " 学习状态非常好！继续保持！";
+                }
+                else if (_todayLearnedCount >= 10)
+                {
+                    summary += " 学习进度良好，继续加油！";
+                }
+                else if (_todayLearnedCount > 0)
+                {
+                    summary += " 可以适当增加学习量。";
+                }
+                else
+                {
+                    summary = "📝 AI学习总结：暂无数据，开始学习吧！";
+                }
+                labelAISummary.Text = $"📝 AI学习总结：{summary}";
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "更新AI学习总结失败");
+            }
         }
 
         /// <summary>
@@ -1247,19 +1370,66 @@ namespace LearningAssistant.Forms
         {
             if (listBoxItems == null) return;
 
-            listBoxItems.Items.Clear();
-            foreach (var item in items)
+            // Store items and generate keys for favorites filtering
+            _currentItemTexts = new List<string>(items);
+            string subCategory = comboBoxSubCategory?.Text ?? "unknown";
+            _currentItemKeys = items.Select(item => $"[{subCategory}]{item}").ToList();
+
+            // Apply favorites filter if enabled
+            if (checkBoxShowFavoritesOnly?.Checked == true)
             {
-                listBoxItems.Items.Add(item);
+                var favorites = LoadFavorites();
+                var filteredItems = new List<string>();
+                for (int i = 0; i < _currentItemTexts.Count; i++)
+                {
+                    if (favorites.Contains(_currentItemKeys[i]))
+                    {
+                        filteredItems.Add(_currentItemTexts[i]);
+                    }
+                }
+                listBoxItems.Items.Clear();
+                foreach (var item in filteredItems)
+                {
+                    listBoxItems.Items.Add(item);
+                }
+                UpdateListStatus(filteredItems.Count, currentIndex >= 0 && currentIndex < filteredItems.Count ? currentIndex : 0);
+            }
+            else
+            {
+                listBoxItems.Items.Clear();
+                foreach (var item in items)
+                {
+                    listBoxItems.Items.Add(item);
+                }
+                UpdateListStatus(items.Count, currentIndex);
             }
 
-            UpdateListStatus(items.Count, currentIndex);
-
-            if (currentIndex >= 0 && currentIndex < items.Count)
+            if (currentIndex >= 0 && currentIndex < listBoxItems.Items.Count)
             {
                 listBoxItems.SelectedIndex = currentIndex;
                 listBoxItems.TopIndex = Math.Max(0, currentIndex - 5);
             }
+        }
+
+        private HashSet<string> LoadFavorites()
+        {
+            var favorites = new HashSet<string>();
+            try
+            {
+                string favoritesPath = Path.Combine(AppPaths.DataDir, "favorites.json");
+                if (File.Exists(favoritesPath))
+                {
+                    string json = File.ReadAllText(favoritesPath);
+                    var list = JsonSerializer.Deserialize<List<string>>(json);
+                    if (list != null)
+                    {
+                        foreach (var f in list)
+                            favorites.Add(f);
+                    }
+                }
+            }
+            catch { }
+            return favorites;
         }
 
         private void UpdateListStatus(int totalItems, int currentIndex)
@@ -1961,6 +2131,40 @@ namespace LearningAssistant.Forms
                 SettingsChanged?.Invoke(this, EventArgs.Empty);
         }
 
+        private void CheckBoxShowFavoritesOnly_CheckedChanged(object? sender, EventArgs e)
+        {
+            // Reapply favorites filter to current list
+            if (listBoxItems == null || _currentItemTexts.Count == 0) return;
+
+            if (checkBoxShowFavoritesOnly?.Checked == true)
+            {
+                var favorites = LoadFavorites();
+                var filteredItems = new List<string>();
+                for (int i = 0; i < _currentItemTexts.Count; i++)
+                {
+                    if (favorites.Contains(_currentItemKeys[i]))
+                    {
+                        filteredItems.Add(_currentItemTexts[i]);
+                    }
+                }
+                listBoxItems.Items.Clear();
+                foreach (var item in filteredItems)
+                {
+                    listBoxItems.Items.Add(item);
+                }
+                UpdateListStatus(filteredItems.Count, 0);
+            }
+            else
+            {
+                listBoxItems.Items.Clear();
+                foreach (var item in _currentItemTexts)
+                {
+                    listBoxItems.Items.Add(item);
+                }
+                UpdateListStatus(_currentItemTexts.Count, listBoxItems.SelectedIndex >= 0 ? listBoxItems.SelectedIndex : 0);
+            }
+        }
+
         private async void ButtonKnown_Click(object? sender, EventArgs e)
         {
             // 禁用按钮防止连续点击
@@ -2645,6 +2849,13 @@ namespace LearningAssistant.Forms
             public int NoteCount { get; set; }
             public int XP { get; set; }
             public int CurrentLevel { get; set; }
+            public List<DailyStudyData> WeeklyData { get; set; } = new List<DailyStudyData>();
+        }
+
+        public class DailyStudyData
+        {
+            public string Date { get; set; } = "";
+            public double Count { get; set; }
         }
 
     }

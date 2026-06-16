@@ -183,9 +183,10 @@ namespace LearningAssistant.Common
                 var exportService = sp.GetRequiredService<IExportService>();
                 var windowManager = sp.GetRequiredService<IWindowManager>();
                 var settingsManager = sp.GetRequiredService<ILearningSettingsManager>();
+                var spacedRepetitionService = sp.GetRequiredService<ISpacedRepetitionService>();
                 var view = sp.GetRequiredService<ILearningView>();
                 return new LearningFlowHandler(logger, studyEngine, aiService, ttsService, contentLoaderService,
-                    exportService, windowManager, settingsManager, view);
+                    exportService, windowManager, settingsManager, spacedRepetitionService, view);
             });
 
             return services;

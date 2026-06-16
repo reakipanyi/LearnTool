@@ -37,6 +37,7 @@ namespace LearningAssistant.Presenters
         private readonly IWindowManager _windowManager;
         private readonly ILearningSettingsManager _settingsManager;
         private readonly ILearningView _view;
+        private readonly ISpacedRepetitionService _spacedRepetitionService;
 
         private CancellationTokenSource? _cts;
         private string _currentExplanation = "";
@@ -56,6 +57,7 @@ namespace LearningAssistant.Presenters
             IExportService exportService,
             IWindowManager windowManager,
             ILearningSettingsManager settingsManager,
+            ISpacedRepetitionService spacedRepetitionService,
             ILearningView view)
         {
             _logger = logger;
@@ -66,6 +68,7 @@ namespace LearningAssistant.Presenters
             _exportService = exportService;
             _windowManager = windowManager;
             _settingsManager = settingsManager;
+            _spacedRepetitionService = spacedRepetitionService;
             _view = view;
             _cts = new CancellationTokenSource();
         }
@@ -228,6 +231,8 @@ namespace LearningAssistant.Presenters
 
         public async Task MarkAsKnownAsync()
         {
+            // 更新间隔重复数据 (quality 5 = 完美记忆)
+            UpdateSpacedRepetition(5);
             _studyEngine.MarkCurrentAsKnown();
             SaveProgress();
             await MoveToNextAsync();
@@ -235,9 +240,38 @@ namespace LearningAssistant.Presenters
 
         public async Task MarkAsUnknownAsync()
         {
+            // 更新间隔重复数据 (quality 2 = 记忆失败)
+            UpdateSpacedRepetition(2);
             _studyEngine.MarkCurrentAsUnknown();
             SaveProgress();
             await MoveToNextAsync();
+        }
+
+        private void UpdateSpacedRepetition(int quality)
+        {
+            try
+            {
+                var item = _studyEngine.GetCurrentItem();
+                if (item == null || string.IsNullOrWhiteSpace(_currentUserId)) return;
+
+                var userId = string.IsNullOrWhiteSpace(_currentUserId) ? "default" : _currentUserId;
+                var allItems = _spacedRepetitionService.GetAllItems(userId);
+                var existingItem = allItems.FirstOrDefault(x => x.Content == item.GetMainContent());
+
+                if (existingItem != null)
+                {
+                    _spacedRepetitionService.CalculateNextReview(existingItem, quality);
+                }
+                else
+                {
+                    var newItem = _spacedRepetitionService.CreateNewItem(userId, item.GetMainContent(), item.GetDisplayText());
+                    _spacedRepetitionService.CalculateNextReview(newItem, quality);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to update spaced repetition data");
+            }
         }
 
         private void SaveProgress()
