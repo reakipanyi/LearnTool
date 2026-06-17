@@ -1,5 +1,4 @@
 using LearningAssistant.Common;
-using LearningAssistant.Models;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
@@ -7,62 +6,34 @@ using LearningAssistant.Services.Pdf;
 using LearningAssistant.Views;
 using LearningAssistant.Views.UI;
 using Microsoft.Extensions.Logging;
+using System.ComponentModel;
 using System.Drawing.Drawing2D;
 
 namespace LearningAssistant.Forms
 {
 
-    public partial class PdfReaderForm : Form, IPdfView
+    public partial class PdfReaderForm : Form, IPdfView, IPdfReaderFormAccess
     {
         private PdfPresenter? _presenter;
         private readonly ILogger<PdfReaderForm> _logger;
-        private readonly BookmarkService _bookmarkService;
-        private readonly HighlightService _highlightService;
         private readonly IAIPanelPopupService? _aiPanelPopupService;
         private readonly Services.Learning.IPendingContentService? _pendingContentService;
-        private int _zoomLevel = 100;
-        private bool _isSelecting = false;
-        private bool _isDrawing = false;
-        private bool _isDragging = false;
-        private bool _isLocked = false;
-        private Button? _buttonLockView;
-        private Button? _buttonResetView;
-        private Point _selectStart = Point.Empty;
-        private Point _selectEnd = Point.Empty;
-        private Point _dragStart = Point.Empty;
-        private Point _imageOffset = Point.Empty;
-        private Rectangle? _lastSelectionRect = null;
+        private readonly IHighlightService _highlightService;
+        private readonly IBookmarkService _bookmarkService;
+
+        private PdfReaderNightModeManager? _nightModeManager;
+        private PdfReaderHighlightManager? _highlightManager;
+        private PdfReaderBookmarkManager? _bookmarkManager;
+        private PdfReaderNavigationManager? _navigationManager;
+
         private readonly Pen _pen = new Pen(Color.Red, 4f);
-        private Bitmap? _annotationBitmap;
-        private Graphics? _annotationGraphics;
-        private List<PointF>? _currentStrokePoints;
-        private Bitmap? _highlightBitmap;
-        private Graphics? _highlightGraphics;
-        private readonly Stack<HighlightUndoAction> _highlightUndoStack = new Stack<HighlightUndoAction>();
         private bool _disposed = false;
 
         private Panel? _ocrPanel;
         private PictureBox? _ocrPictureBox;
         private Button? _ocrCloseButton;
-        private bool _isOcrPanelDragging = false;
-        private Point _ocrPanelStartPoint = Point.Empty;
-        private bool _isDoubleClickPending = false;
-        private DateTime _lastClickTime = DateTime.MinValue;
-        private Point _lastClickLocation = Point.Empty;
-        private const int DoubleClickTime_ms = 200;
-        private const int DoubleClickDistance = 5;
 
-        // 长按拖动相关
-        private System.Windows.Forms.Timer? _longPressTimer;
-        private bool _isLongPressPending = false;
-        private Point _longPressStartLocation = Point.Empty;
-        private const int LongPressTime_ms = 300; // 长按时间阈值
-        private bool _longPressDragStarted = false;
-
-        private bool _isNavPanelDragging = false;
-        private Point _navPanelStartPoint = Point.Empty;
         private LoadingIndicator? _loadingIndicator;
-        private bool _isNightMode = false;
         private bool _isTranslationEnabled = false;
 
         private GroupBox? _groupBoxBookmarks;
@@ -78,8 +49,6 @@ namespace LearningAssistant.Forms
         private Button? _buttonExportHighlights;
 
         private TabPage? _tabPageBookmarksAndHighlights;
-        private HighlightColor _currentHighlightColor = HighlightColor.Yellow;
-        private bool _isHighlightMode = true;
 
         private string _currentPdfPath = string.Empty;
         private int _currentPageIndex = 0;
@@ -87,33 +56,168 @@ namespace LearningAssistant.Forms
 
         private Panel? _pageTransitionOverlay;
         private System.Windows.Forms.Timer? _pageTransitionTimer;
-        private bool _isAnimating = false;
-        private Bitmap? _currentPageImage; // 保存当前页面图像，避免 PictureBox 自动绘制
+
+        private Bitmap? _currentPageImage;
+
+        private Button? _buttonLockView;
+        private Button? _buttonResetView;
+
+        private int _zoomLevel = 100;
+        private Point _imageOffset = Point.Empty;
+        private Rectangle? _lastSelectionRect;
+
+        private bool _isNavPanelDragging = false;
+        private Point _navPanelStartPoint = Point.Empty;
+
+        private bool _isLongPressPending = false;
+        private Point _longPressStartLocation = Point.Empty;
+        private bool _longPressDragStarted = false;
+
+        private DateTime _lastClickTime = DateTime.MinValue;
+        private Point _lastClickLocation = Point.Empty;
+        private const int DoubleClickTime_ms = 200;
+        private const int DoubleClickDistance = 5;
+        private bool _isDoubleClickPending = false;
+
+        private bool _isSelecting = false;
+        private bool _isDrawing = false;
+        private Point _selectStart = Point.Empty;
+        private Point _selectEnd = Point.Empty;
+        private List<PointF>? _currentStrokePoints;
+
+        private bool _isHighlightMode = true;
+        private bool _isLocked = false;
+        private bool _isDragging = false;
+        private Point _dragStart = Point.Empty;
+
+        private Bitmap? _annotationBitmap;
+        private Graphics? _annotationGraphics;
+
+        private System.Windows.Forms.Timer? _longPressTimer;
+
+        private HighlightColor _currentHighlightColor = HighlightColor.Yellow;
+        private Stack<HighlightUndoAction>? _highlightUndoStack;
+
+        private bool _isNightMode = false;
+        private Bitmap? _highlightBitmap;
 
         private SplitContainer splitContainer1;
-        private Button buttonSpeakOriginal;
-        private GroupBox groupBoxProgress;
-        private GroupBox groupBox1;
-        private GroupBox groupBox2;
+        private Button? buttonSpeakOriginal;
+        private GroupBox? groupBoxProgress;
+        private GroupBox? groupBox1;
+        private GroupBox? groupBox2;
         private string _currentLanguage = "eng";
 
-        public PdfReaderForm(ILogger<PdfReaderForm> logger, IAIPanelPopupService? aiPanelPopupService = null, Services.Learning.IPendingContentService? pendingContentService = null)
+        public PdfReaderForm(ILogger<PdfReaderForm> logger, IAIPanelPopupService? aiPanelPopupService = null, Services.Learning.IPendingContentService? pendingContentService = null, IHighlightService? highlightService = null, IBookmarkService? bookmarkService = null)
         {
             InitializeComponent();
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _bookmarkService = new BookmarkService();
-            _highlightService = new HighlightService();
             _aiPanelPopupService = aiPanelPopupService;
             _pendingContentService = pendingContentService;
+            _highlightService = highlightService ?? new HighlightService();
+            _bookmarkService = bookmarkService ?? new BookmarkService();
             Load += PdfReaderForm_Load;
             Resize += PdfReaderForm_Resize;
             KeyDown += PdfReaderForm_KeyDown;
 
-            // 初始化长按计时器
-            _longPressTimer = new System.Windows.Forms.Timer();
-            _longPressTimer.Interval = LongPressTime_ms;
-            _longPressTimer.Tick += LongPressTimer_Tick;
+            InitializeManagers();
         }
+
+        private void InitializeManagers()
+        {
+            _nightModeManager = new PdfReaderNightModeManager(_logger, this);
+            _highlightManager = new PdfReaderHighlightManager(_logger, this, _highlightService);
+            _bookmarkManager = new PdfReaderBookmarkManager(_logger, this, _bookmarkService);
+            _navigationManager = new PdfReaderNavigationManager(_logger, this);
+
+            _navigationManager.IsHighlightModeCallback = () => _highlightManager?.IsHighlightMode ?? true;
+            _navigationManager.AddHighlightCallback = rect => _highlightManager?.AddHighlight(rect);
+        }
+
+        #region IPdfReaderFormAccess Implementation
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public string CurrentPdfPath
+        {
+            get => _currentPdfPath;
+            set => _currentPdfPath = value;
+        }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public int CurrentPageIndex
+        {
+            get => _currentPageIndex;
+            set => _currentPageIndex = value;
+        }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Bitmap? CurrentPageImage
+        {
+            get => _currentPageImage;
+            set => _currentPageImage = value;
+        }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public bool IsTranslationEnabled
+        {
+            get => _isTranslationEnabled;
+            set => _isTranslationEnabled = value;
+        }
+
+        public PictureBox PictureBoxPdf => pictureBoxPdf;
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public PdfPresenter? Presenter
+        {
+            get => _presenter;
+            set => _presenter = value;
+        }
+        public TextBox TextBoxOriginal => textBoxOriginal;
+        public TextBox TextBoxPage => textBoxPage;
+        public Label LabelZoom => labelZoom;
+        public TrackBar TrackBarZoom => trackBarZoom;
+
+        public Button? ButtonNightMode => buttonNightMode;
+        public Button? ButtonLanguage => buttonLanguage;
+        public Button? ButtonAskAi => buttonAskAi;
+
+        public TabPage? TabPageTranslate => tabPageTranslate;
+        public GroupBox? GroupBoxProgress => groupBoxProgress;
+        public TextBox? TextBoxTranslation => textBoxTranslation;
+        public Label? LabelOriginal => labelOriginal;
+        public Label? LabelTranslation => labelTranslation;
+        public Button? ButtonTranslate => buttonTranslate;
+        public Button? ButtonSpeakOriginal => buttonSpeakOriginal;
+        public Button? ButtonSpeakTranslation => buttonSpeakTranslation;
+
+        public TabPage? TabPageBookmarksAndHighlights => _tabPageBookmarksAndHighlights;
+        public GroupBox? GroupBoxBookmarks => _groupBoxBookmarks;
+        public ListBox? ListBoxBookmarks => _listBoxBookmarks;
+        public TextBox? TextBoxBookmarkTitle => _textBoxBookmarkTitle;
+        public Button? ButtonAddBookmark => _buttonAddBookmark;
+        public Button? ButtonRemoveBookmark => _buttonRemoveBookmark;
+
+        public GroupBox? GroupBoxHighlights => _groupBoxHighlights;
+        public ListBox? ListBoxHighlights => _listBoxHighlights;
+        public GroupBox? GroupBoxHighlightColor => groupBoxHighlightColor;
+        public Button? ButtonRemoveHighlight => _buttonRemoveHighlight;
+        public Button? ButtonBatchRemoveHighlight => _buttonBatchRemoveHighlight;
+        public Button? ButtonExportHighlights => _buttonExportHighlights;
+        public Button? ButtonUndoHighlight => buttonUndoHighlight;
+
+        public Panel? PanelPdf => panelPdf;
+        public Panel? PanelNavigation => panelNavigation;
+        public TreeView? TreeViewFiles => treeViewFiles;
+        public TabControl? TabControlLeft => tabControlLeft;
+        public Panel? PanelThumbnails => panelThumbnails;
+        public FlowLayoutPanel? FlowLayoutPanelThumbnails => flowLayoutPanelThumbnails;
+
+        public Panel? PageTransitionOverlay => _pageTransitionOverlay;
+        public System.Windows.Forms.Timer? PageTransitionTimer => _pageTransitionTimer;
+        public Button? ButtonLockView => _buttonLockView;
+
+        public Pen Pen => _pen;
+
+        #endregion
 
 
         private void PdfReaderForm_Load(object? sender, EventArgs e)
@@ -209,63 +313,21 @@ namespace LearningAssistant.Forms
                 _logger.LogWarning(ex, "Error in CleanupOldTabPages");
             }
         }
-        private int _transitionStep = 0;
-        private bool _transitionFadeOut = false;
-
         private void StartPageTransition(bool forward)
         {
-            if (_isAnimating || _pageTransitionOverlay == null) return;
-
-            _isAnimating = true;
-            _transitionStep = 0;
-            _transitionFadeOut = true;
-            _pageTransitionOverlay.Visible = true;
-            _pageTransitionOverlay.BackColor = Color.White;
-            _pageTransitionOverlay.BackColor = Color.FromArgb(255, 255, 255);
-
-            if (_pageTransitionTimer != null)
-            {
-                _pageTransitionTimer.Start();
-            }
+            _navigationManager?.StartPageTransition(forward);
         }
 
         private void PageTransitionTimer_Tick(object? sender, EventArgs e)
         {
-            if (_pageTransitionOverlay == null || !_isAnimating) return;
-
-            _transitionStep++;
-
-            if (_transitionFadeOut)
-            {
-                int alpha = 255 - (_transitionStep * 25);
-                if (alpha <= 0)
-                {
-                    alpha = 0;
-                    _transitionFadeOut = false;
-                    _transitionStep = 0;
-                }
-                _pageTransitionOverlay.BackColor = Color.FromArgb(alpha, 255, 255, 255);
-            }
-            else
-            {
-                int alpha = _transitionStep * 25;
-                if (alpha >= 255)
-                {
-                    alpha = 255;
-                    _pageTransitionTimer?.Stop();
-                    _isAnimating = false;
-                    _pageTransitionOverlay.Visible = false;
-                    return;
-                }
-                _pageTransitionOverlay.BackColor = Color.FromArgb(alpha, 255, 255, 255);
-            }
+            _navigationManager?.PageTransitionTimer_Tick();
         }
 
         private void RadioHighlightColor_CheckedChanged(object? sender, EventArgs e)
         {
             if (sender is RadioButton radio && radio.Checked && radio.Tag is int colorIndex)
             {
-                _currentHighlightColor = (HighlightColor)colorIndex;
+                _highlightManager!.CurrentHighlightColor = (HighlightColor)colorIndex;
             }
         }
 
@@ -273,27 +335,18 @@ namespace LearningAssistant.Forms
         {
             if (_listBoxBookmarks?.SelectedItem is PdfBookmark bookmark)
             {
-                _presenter?.RenderPage(bookmark.PageIndex);
+                _bookmarkManager?.NavigateToBookmark(bookmark);
             }
         }
 
         private void ButtonAddBookmark_Click(object? sender, EventArgs e)
         {
-            if (string.IsNullOrEmpty(_currentPdfPath)) return;
-
-            var title = _textBoxBookmarkTitle?.Text ?? $"第 {_currentPageIndex + 1} 页";
-            _bookmarkService.AddBookmark(_currentPdfPath, _currentPageIndex, title);
-            RefreshBookmarkList();
-            _textBoxBookmarkTitle!.Text = string.Empty;
+            _bookmarkManager?.AddBookmark();
         }
 
         private void ButtonRemoveBookmark_Click(object? sender, EventArgs e)
         {
-            if (_listBoxBookmarks?.SelectedItem is PdfBookmark bookmark)
-            {
-                _bookmarkService.RemoveBookmark(_currentPdfPath, bookmark.PageIndex, bookmark.Title);
-                RefreshBookmarkList();
-            }
+            _bookmarkManager?.RemoveBookmark();
         }
 
         private void ListBoxHighlights_DoubleClick(object? sender, EventArgs e)
@@ -322,74 +375,24 @@ namespace LearningAssistant.Forms
 
         private void ButtonLockView_Click(object? sender, EventArgs e)
         {
-            _isLocked = !_isLocked;
-            if (_buttonLockView != null)
-            {
-                _buttonLockView.Text = _isLocked ? "🔒" : "🔓";
-                _buttonLockView.BackColor = _isLocked ? Color.LightSalmon : Color.White;
-            }
-
-            if (_isLocked)
-            {
-                trackBarZoom.Enabled = false;
-            }
-            else
-            {
-                trackBarZoom.Enabled = true;
-            }
+            _navigationManager?.ToggleLockView();
         }
 
         private void ButtonResetView_Click(object? sender, EventArgs e)
         {
-            _zoomLevel = 100;
-            _imageOffset = Point.Empty;
-            trackBarZoom.Value = 100;
-            labelZoom.Text = "100%";
-            ResetZoom();
+            _navigationManager?.ResetZoom();
         }
 
         private void TrackBarZoom_Scroll(object? sender, EventArgs e)
         {
-            if (_isLocked)
-                return;
-
-            _zoomLevel = trackBarZoom.Value;
-            labelZoom.Text = $"{_zoomLevel}%";
-            
-            // 异步渲染缩放后的页面
-            Task.Run(async () =>
-            {
-                try
-                {
-                    var page = int.TryParse(textBoxPage.Text, out var p) ? p - 1 : 0;
-                    int targetW = (int)(pictureBoxPdf.ClientSize.Width * _zoomLevel / 100.0);
-                    int targetH = (int)(pictureBoxPdf.ClientSize.Height * _zoomLevel / 100.0);
-                    var bmp = await _presenter!.RenderPageAsync(page, Math.Max(1, targetW), Math.Max(1, targetH));
-                    if (bmp != null)
-                    {
-                        BeginInvoke(() => DisplayImage(bmp));
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error rendering page during zoom");
-                }
-            });
+            _navigationManager?.Zoom(trackBarZoom.Value);
         }
 
         private void ButtonRemoveHighlight_Click(object? sender, EventArgs e)
         {
             if (_listBoxHighlights?.SelectedItem is PdfHighlight highlight)
             {
-                _highlightUndoStack.Push(new HighlightUndoAction
-                {
-                    ActionType = HighlightActionType.Remove,
-                    Highlight = highlight
-                });
-                _highlightService.RemoveHighlight(_currentPdfPath, highlight.Id);
-                RefreshHighlightList();
-                UpdateHighlightLayer();
-                pictureBoxPdf?.Invalidate();
+                _highlightManager?.RemoveHighlight(highlight);
             }
         }
 
@@ -400,229 +403,42 @@ namespace LearningAssistant.Forms
 
         private void ButtonBatchRemoveHighlight_Click(object? sender, EventArgs e)
         {
-            var highlights = _highlightService.GetHighlights(_currentPdfPath);
-            if (highlights == null || highlights.Count == 0)
-            {
-                MessageBox.Show("当前文档没有高亮可删除", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            var result = MessageBox.Show($"确定要删除所有 {highlights.Count} 个高亮吗？", "确认删除",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-
-            if (result == DialogResult.Yes)
-            {
-                foreach (var highlight in highlights)
-                {
-                    _highlightUndoStack.Push(new HighlightUndoAction
-                    {
-                        ActionType = HighlightActionType.Remove,
-                        Highlight = highlight
-                    });
-                    _highlightService.RemoveHighlight(_currentPdfPath, highlight.Id);
-                }
-
-                RefreshHighlightList();
-                UpdateHighlightLayer();
-                pictureBoxPdf?.Invalidate();
-
-                MessageBox.Show($"已成功删除 {highlights.Count} 个高亮", "删除完成",
-                    MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
+            _highlightManager?.BatchRemoveHighlights();
         }
 
         private void ButtonUndoHighlight_Click(object? sender, EventArgs e)
         {
-            if (_highlightUndoStack.Count > 0)
-            {
-                var lastAction = _highlightUndoStack.Pop();
-                if (lastAction.ActionType == HighlightActionType.Add)
-                {
-                    _highlightService.RemoveHighlight(_currentPdfPath, lastAction.Highlight.Id);
-                }
-                else if (lastAction.ActionType == HighlightActionType.Remove)
-                {
-                    _highlightService.AddHighlight(
-                        _currentPdfPath,
-                        lastAction.Highlight.PageIndex,
-                        lastAction.Highlight.NormalizedX > 0 ? lastAction.Highlight.NormalizedX : lastAction.Highlight.X,
-                        lastAction.Highlight.NormalizedY > 0 ? lastAction.Highlight.NormalizedY : lastAction.Highlight.Y,
-                        lastAction.Highlight.NormalizedWidth > 0 ? lastAction.Highlight.NormalizedWidth : lastAction.Highlight.Width,
-                        lastAction.Highlight.NormalizedHeight > 0 ? lastAction.Highlight.NormalizedHeight : lastAction.Highlight.Height,
-                        lastAction.Highlight.Text,
-                        lastAction.Highlight.Color
-                    );
-                }
-                RefreshHighlightList();
-                UpdateHighlightLayer();
-                pictureBoxPdf?.Invalidate();
-            }
+            _highlightManager?.UndoHighlight();
         }
 
         private void RefreshBookmarkList()
         {
-            if (_listBoxBookmarks == null || string.IsNullOrEmpty(_currentPdfPath)) return;
-
-            _listBoxBookmarks.Items.Clear();
-            var bookmarks = _bookmarkService.GetBookmarks(_currentPdfPath);
-            foreach (var bookmark in bookmarks)
-            {
-                _listBoxBookmarks.Items.Add(bookmark);
-            }
+            _bookmarkManager?.RefreshBookmarkList();
         }
 
         private void RefreshHighlightList()
         {
-            if (_listBoxHighlights == null || string.IsNullOrEmpty(_currentPdfPath)) return;
-
-            _listBoxHighlights.Items.Clear();
-            // 获取整个目录的高亮
-            var folderPath = Path.GetDirectoryName(_currentPdfPath) ?? "";
-            var highlights = _highlightService.GetHighlightsForFolder(folderPath);
-            foreach (var highlight in highlights)
-            {
-                _listBoxHighlights.Items.Add(highlight);
-            }
+            _highlightManager?.RefreshHighlightList();
         }
 
         private void LoadHighlightsForCurrentPage()
         {
-            if (string.IsNullOrEmpty(_currentPdfPath) || _currentPageImage == null) return;
-
-            var highlights = _highlightService.GetHighlightsForPage(_currentPdfPath, _currentPageIndex);
-            UpdateHighlightLayer();
-            pictureBoxPdf.Invalidate();
+            _highlightManager?.LoadHighlightsForCurrentPage();
         }
 
         private void UpdateHighlightLayer()
         {
-            try
-            {
-                if (_currentPageImage == null)
-                {
-                    CleanupHighlightLayer();
-                    return;
-                }
-
-                var imgRect = GetImageDisplayRect();
-                if (imgRect.Width <= 0 || imgRect.Height <= 0) return;
-
-                int imgWidth = imgRect.Width;
-                int imgHeight = imgRect.Height;
-
-                bool needsRecreate = false;
-                if (_highlightBitmap != null)
-                {
-                    try
-                    {
-                        if (_highlightBitmap.Width != imgWidth || _highlightBitmap.Height != imgHeight)
-                        {
-                            needsRecreate = true;
-                            CleanupHighlightLayer();
-                        }
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                        needsRecreate = true;
-                        CleanupHighlightLayer();
-                    }
-                }
-
-                if (_highlightBitmap == null || needsRecreate)
-                {
-                    _highlightBitmap = new Bitmap(imgWidth, imgHeight);
-                    _highlightGraphics = Graphics.FromImage(_highlightBitmap);
-                    _highlightGraphics.Clear(Color.Transparent);
-                }
-
-                _highlightGraphics!.Clear(Color.Transparent);
-
-                var highlights = _highlightService.GetHighlightsForPage(_currentPdfPath, _currentPageIndex);
-                foreach (var highlight in highlights)
-                {
-                    var color = HighlightService.GetHighlightColor(highlight.Color);
-
-                    // 使用归一化坐标，兼容旧格式
-                    float x, y, width, height;
-                    if (highlight.NormalizedWidth > 0)
-                    {
-                        x = highlight.NormalizedX * imgWidth;
-                        y = highlight.NormalizedY * imgHeight;
-                        width = highlight.NormalizedWidth * imgWidth;
-                        height = highlight.NormalizedHeight * imgHeight;
-                    }
-                    else
-                    {
-                        x = highlight.X;
-                        y = highlight.Y;
-                        width = highlight.Width;
-                        height = highlight.Height;
-                    }
-
-                    var rect = new RectangleF(x, y, width, height);
-
-                    // 确保矩形有效
-                    if (rect.Width <= 0 || rect.Height <= 0 || rect.X < 0 || rect.Y < 0)
-                    {
-                        continue;
-                    }
-
-                    // 使用渐变画笔，更美观
-                    using var gradientBrush = new LinearGradientBrush(
-                        rect,
-                        Color.FromArgb(color.A, color.R, color.G, color.B),
-                        Color.FromArgb(color.A - 30, color.R, color.G, color.B),
-                        LinearGradientMode.ForwardDiagonal);
-
-                    _highlightGraphics.FillRectangle(gradientBrush, rect);
-
-                    // 绘制边界
-                    using var pen = new Pen(Color.FromArgb(color.A + 50, color.R, color.G, color.B), 1.5f);
-                    _highlightGraphics.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
-
-                    if (!string.IsNullOrEmpty(highlight.Note))
-                    {
-                        using var font = new Font("Microsoft YaHei UI", 10F);
-                        using var textBrush = new SolidBrush(Color.Black);
-                        _highlightGraphics.DrawString("📝", font, textBrush, rect.Location);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in UpdateHighlightLayer");
-                CleanupHighlightLayer();
-            }
+            _highlightManager?.UpdateHighlightLayer();
         }
 
         private void CleanupHighlightLayer()
         {
-            try
-            {
-                _highlightGraphics?.Dispose();
-                _highlightBitmap?.Dispose();
-                _highlightGraphics = null;
-                _highlightBitmap = null;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error cleaning up highlight layer");
-            }
+            _highlightManager?.CleanupHighlightLayer();
         }
 
         private void CleanupAnnotationBitmap()
         {
-            try
-            {
-                _annotationGraphics?.Dispose();
-                _annotationBitmap?.Dispose();
-                _annotationGraphics = null;
-                _annotationBitmap = null;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error cleaning up annotation bitmap");
-            }
+            _navigationManager?.CleanupAnnotationBitmap();
         }
 
 
@@ -632,8 +448,8 @@ namespace LearningAssistant.Forms
             CleanupHighlightLayer();
             ClearThumbnails();
             _currentPdfPath = pdfPath;
-            _bookmarkService.ClearCache();
-            _highlightService.ClearCacheForPdf(pdfPath);
+            _bookmarkManager?.ClearCache();
+            _highlightManager?.ClearCacheForPdf(pdfPath);
 
             InitializeBookmarkAndHighlightUI();
 
@@ -800,348 +616,10 @@ namespace LearningAssistant.Forms
             }
         }
 
-        // 新增功能：低优先级 - 夜间模式切换
         public void NightMode()
         {
-            _isNightMode = !_isNightMode;
-            ApplyNightMode();
-            if (buttonNightMode != null)
-            {
-                buttonNightMode.Text = _isNightMode ? "☀️" : "🌙";
-            }
+            _nightModeManager?.ToggleNightMode();
         }
-
-        private void ApplyNightMode()
-        {
-            if (_isNightMode)
-            {
-                // 夜间模式 - 深色背景
-                this.BackColor = Color.FromArgb(30, 30, 30);
-                panelPdf.BackColor = Color.FromArgb(20, 20, 20);
-                panelNavigation.BackColor = Color.FromArgb(45, 45, 45);
-                treeViewFiles.BackColor = Color.FromArgb(40, 40, 40);
-                treeViewFiles.ForeColor = Color.White;
-                tabControlLeft.BackColor = Color.FromArgb(40, 40, 40);
-                // 缩略图面板夜间模式
-                panelThumbnails.BackColor = Color.FromArgb(40, 40, 40);
-                flowLayoutPanelThumbnails.BackColor = Color.FromArgb(40, 40, 40);
-                // 更新夜间模式按钮背景色
-                if (buttonNightMode != null)
-                {
-                    buttonNightMode.BackColor = Color.FromArgb(45, 45, 45);
-                }
-                // 更新语言切换按钮背景色
-                if (buttonLanguage != null)
-                {
-                    buttonLanguage.BackColor = Color.FromArgb(45, 45, 45);
-                    buttonLanguage.ForeColor = Color.White;
-                }
-                // 更新AI问答按钮背景色
-                if (buttonAskAi != null)
-                {
-                    buttonAskAi.BackColor = Color.FromArgb(0, 120, 215);
-                    buttonAskAi.ForeColor = Color.White;
-                }
-                // 右侧tab页夜间模式 - 翻译结果页面
-                ApplyNightModeToTabPageTranslate(true);
-                // 右侧tab页夜间模式 - 书签和高亮页面
-                ApplyNightModeToBookmarksAndHighlights(true);
-            }
-            else
-            {
-                // 日间模式 - 浅色背景
-                this.BackColor = Color.FromArgb(240, 240, 240);
-                panelPdf.BackColor = Color.White;
-                panelNavigation.BackColor = Color.FromArgb(240, 240, 240);
-                treeViewFiles.BackColor = Color.White;
-                treeViewFiles.ForeColor = Color.Black;
-                tabControlLeft.BackColor = Color.White;
-                // 缩略图面板日间模式
-                panelThumbnails.BackColor = Color.FromArgb(240, 240, 240);
-                flowLayoutPanelThumbnails.BackColor = Color.FromArgb(240, 240, 240);
-                // 更新夜间模式按钮背景色
-                if (buttonNightMode != null)
-                {
-                    buttonNightMode.BackColor = Color.White;
-                }
-                // 更新语言切换按钮背景色
-                if (buttonLanguage != null)
-                {
-                    buttonLanguage.BackColor = Color.White;
-                    buttonLanguage.ForeColor = Color.Black;
-                }
-                // 更新AI问答按钮背景色
-                if (buttonAskAi != null)
-                {
-                    buttonAskAi.BackColor = Color.FromArgb(0, 120, 215);
-                    buttonAskAi.ForeColor = Color.White;
-                }
-                // 右侧tab页日间模式 - 翻译结果页面
-                ApplyNightModeToTabPageTranslate(false);
-                // 右侧tab页日间模式 - 书签和高亮页面
-                ApplyNightModeToBookmarksAndHighlights(false);
-            }
-
-            // 更新缩略图背景色
-            UpdateThumbnailsBackground();
-
-            // 重新渲染当前页面以应用反色（如果需要）
-            if (_presenter != null)
-            {
-                // 请求 Presenter 重新渲染当前页（Presenter 公开了异步渲染方法）
-                _ = _presenter.RenderAndDisplayCurrentPageAsync();
-            }
-        }
-
-        private void UpdateThumbnailsBackground()
-        {
-            if (flowLayoutPanelThumbnails == null) return;
-
-            foreach (Control control in flowLayoutPanelThumbnails.Controls)
-            {
-                if (control is Panel panel)
-                {
-                    if (_isNightMode)
-                    {
-                        panel.BackColor = Color.FromArgb(45, 45, 45);
-                        foreach (Control child in panel.Controls)
-                        {
-                            if (child is Label label)
-                            {
-                                label.ForeColor = Color.White;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        panel.BackColor = Color.White;
-                        foreach (Control child in panel.Controls)
-                        {
-                            if (child is Label label)
-                            {
-                                label.ForeColor = Color.Black;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        private void ApplyNightModeToTabPageTranslate(bool isNightMode)
-        {
-            // 翻译结果页面的控件
-            if (tabPageTranslate != null)
-            {
-                tabPageTranslate.BackColor = isNightMode ? Color.FromArgb(40, 40, 40) : Color.White;
-            }
-
-            // groupBoxProgress - 学习统计摘要
-            if (groupBoxProgress != null)
-            {
-                groupBoxProgress.BackColor = isNightMode ? Color.FromArgb(40, 40, 40) : Color.White;
-                groupBoxProgress.ForeColor = isNightMode ? Color.White : Color.Black;
-            }
-
-            // textBoxOriginal - 原文文本框
-            if (textBoxOriginal != null)
-            {
-                textBoxOriginal.BackColor = isNightMode ? Color.FromArgb(30, 30, 30) : Color.White;
-                textBoxOriginal.ForeColor = isNightMode ? Color.White : Color.Black;
-            }
-
-            // textBoxTranslation - 译文文本框
-            if (textBoxTranslation != null)
-            {
-                textBoxTranslation.BackColor = isNightMode ? Color.FromArgb(30, 30, 30) : Color.White;
-                textBoxTranslation.ForeColor = isNightMode ? Color.White : Color.Black;
-            }
-
-            // labelOriginal, labelTranslation - 标签
-            if (labelOriginal != null)
-            {
-                labelOriginal.ForeColor = isNightMode ? Color.White : Color.Black;
-            }
-            if (labelTranslation != null)
-            {
-                labelTranslation.ForeColor = isNightMode ? Color.White : Color.Black;
-            }
-
-            // 翻译相关按钮 - 夜间模式设置深色背景，日间模式恢复默认颜色
-            if (buttonTranslate != null)
-            {
-                if (isNightMode)
-                {
-                    buttonTranslate.BackColor = Color.FromArgb(45, 45, 45);
-                    buttonTranslate.ForeColor = Color.White;
-                }
-                else
-                {
-                    buttonTranslate.BackColor = SystemColors.Control;
-                    buttonTranslate.ForeColor = SystemColors.ControlText;
-                }
-            }
-            if (buttonSpeakOriginal != null)
-            {
-                if (isNightMode)
-                {
-                    buttonSpeakOriginal.BackColor = Color.FromArgb(45, 45, 45);
-                    buttonSpeakOriginal.ForeColor = Color.White;
-                }
-                else
-                {
-                    buttonSpeakOriginal.BackColor = SystemColors.Control;
-                    buttonSpeakOriginal.ForeColor = SystemColors.ControlText;
-                }
-            }
-            if (buttonSpeakTranslation != null)
-            {
-                if (isNightMode)
-                {
-                    buttonSpeakTranslation.BackColor = Color.FromArgb(45, 45, 45);
-                    buttonSpeakTranslation.ForeColor = Color.White;
-                }
-                else
-                {
-                    buttonSpeakTranslation.BackColor = SystemColors.Control;
-                    buttonSpeakTranslation.ForeColor = SystemColors.ControlText;
-                }
-            }
-
-        }
-
-        private void ApplyNightModeToBookmarksAndHighlights(bool isNightMode)
-        {
-            // 书签和高亮页面
-            if (_tabPageBookmarksAndHighlights != null)
-            {
-                _tabPageBookmarksAndHighlights.BackColor = isNightMode ? Color.FromArgb(40, 40, 40) : Color.White;
-            }
-
-            // 书签区域
-            if (_groupBoxBookmarks != null)
-            {
-                _groupBoxBookmarks.BackColor = isNightMode ? Color.FromArgb(40, 40, 40) : Color.White;
-                _groupBoxBookmarks.ForeColor = isNightMode ? Color.White : Color.Black;
-            }
-
-            // 书签列表
-            if (_listBoxBookmarks != null)
-            {
-                _listBoxBookmarks.BackColor = isNightMode ? Color.FromArgb(30, 30, 30) : Color.White;
-                _listBoxBookmarks.ForeColor = isNightMode ? Color.White : Color.Black;
-            }
-
-            // 书签标题输入框
-            if (_textBoxBookmarkTitle != null)
-            {
-                _textBoxBookmarkTitle.BackColor = isNightMode ? Color.FromArgb(30, 30, 30) : Color.White;
-                _textBoxBookmarkTitle.ForeColor = isNightMode ? Color.White : Color.Black;
-            }
-
-            // 书签按钮 - 夜间模式设置深色背景，日间模式恢复默认颜色
-            if (_buttonAddBookmark != null)
-            {
-                if (isNightMode)
-                {
-                    _buttonAddBookmark.BackColor = Color.FromArgb(45, 45, 45);
-                    _buttonAddBookmark.ForeColor = Color.White;
-                }
-                else
-                {
-                    _buttonAddBookmark.BackColor = SystemColors.Control;
-                    _buttonAddBookmark.ForeColor = SystemColors.ControlText;
-                }
-            }
-            if (_buttonRemoveBookmark != null)
-            {
-                if (isNightMode)
-                {
-                    _buttonRemoveBookmark.BackColor = Color.FromArgb(45, 45, 45);
-                    _buttonRemoveBookmark.ForeColor = Color.White;
-                }
-                else
-                {
-                    _buttonRemoveBookmark.BackColor = SystemColors.Control;
-                    _buttonRemoveBookmark.ForeColor = SystemColors.ControlText;
-                }
-            }
-
-            // 高亮区域
-            if (_groupBoxHighlights != null)
-            {
-                _groupBoxHighlights.BackColor = isNightMode ? Color.FromArgb(40, 40, 40) : Color.White;
-                _groupBoxHighlights.ForeColor = isNightMode ? Color.White : Color.Black;
-            }
-
-            // 高亮列表
-            if (_listBoxHighlights != null)
-            {
-                _listBoxHighlights.BackColor = isNightMode ? Color.FromArgb(30, 30, 30) : Color.White;
-                _listBoxHighlights.ForeColor = isNightMode ? Color.White : Color.Black;
-            }
-
-            // 高亮颜色选择区域
-            if (groupBoxHighlightColor != null)
-            {
-                groupBoxHighlightColor.BackColor = isNightMode ? Color.FromArgb(40, 40, 40) : Color.White;
-                groupBoxHighlightColor.ForeColor = isNightMode ? Color.White : Color.Black;
-            }
-
-            // 高亮按钮 - 夜间模式设置深色背景，日间模式恢复默认颜色
-            if (_buttonRemoveHighlight != null)
-            {
-                if (isNightMode)
-                {
-                    _buttonRemoveHighlight.BackColor = Color.FromArgb(45, 45, 45);
-                    _buttonRemoveHighlight.ForeColor = Color.White;
-                }
-                else
-                {
-                    _buttonRemoveHighlight.BackColor = SystemColors.Control;
-                    _buttonRemoveHighlight.ForeColor = SystemColors.ControlText;
-                }
-            }
-            if (_buttonBatchRemoveHighlight != null)
-            {
-                if (isNightMode)
-                {
-                    _buttonBatchRemoveHighlight.BackColor = Color.FromArgb(45, 45, 45);
-                    _buttonBatchRemoveHighlight.ForeColor = Color.White;
-                }
-                else
-                {
-                    _buttonBatchRemoveHighlight.BackColor = SystemColors.Control;
-                    _buttonBatchRemoveHighlight.ForeColor = SystemColors.ControlText;
-                }
-            }
-            if (_buttonExportHighlights != null)
-            {
-                if (isNightMode)
-                {
-                    _buttonExportHighlights.BackColor = Color.FromArgb(45, 45, 45);
-                    _buttonExportHighlights.ForeColor = Color.White;
-                }
-                else
-                {
-                    _buttonExportHighlights.BackColor = SystemColors.Control;
-                    _buttonExportHighlights.ForeColor = SystemColors.ControlText;
-                }
-            }
-            if (buttonUndoHighlight != null)
-            {
-                if (isNightMode)
-                {
-                    buttonUndoHighlight.BackColor = Color.FromArgb(45, 45, 45);
-                    buttonUndoHighlight.ForeColor = Color.White;
-                }
-                else
-                {
-                    buttonUndoHighlight.BackColor = SystemColors.Control;
-                    buttonUndoHighlight.ForeColor = SystemColors.ControlText;
-                }
-            }
-        }
-
 
         private void ToggleLanguage()
         {
@@ -1208,14 +686,12 @@ namespace LearningAssistant.Forms
             panel.BorderStyle = BorderStyle.FixedSingle;
             panel.Tag = pageIndex;
 
-            // 根据夜间模式设置背景色
-            panel.BackColor = _isNightMode ? Color.FromArgb(45, 45, 45) : Color.White;
+            _nightModeManager?.UpdateThumbnailPanelColor(panel);
 
-            // 如果是夜间模式，对缩略图进行反色处理
             Image displayImage = thumbnail;
-            if (_isNightMode)
+            if (_nightModeManager?.IsNightMode ?? false)
             {
-                displayImage = InvertImage(thumbnail);
+                displayImage = _nightModeManager.InvertImage(thumbnail);
             }
 
             var pictureBox = new PictureBox();
@@ -1245,8 +721,7 @@ namespace LearningAssistant.Forms
             label.Size = new Size(90, 15);
             label.TextAlign = ContentAlignment.MiddleCenter;
             label.Font = new Font("Microsoft YaHei UI", 8F);
-            // 根据夜间模式设置文字颜色
-            label.ForeColor = _isNightMode ? Color.White : Color.Black;
+            _nightModeManager?.UpdateThumbnailLabelColor(label);
             label.Tag = pageIndex;
             label.Click += (s, e) =>
             {
@@ -1283,32 +758,6 @@ namespace LearningAssistant.Forms
             flowLayoutPanelThumbnails.Controls.Add(panel);
         }
 
-        private Image InvertImage(Image image)
-        {
-            Bitmap bitmap = new Bitmap(image);
-            var rect = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
-            var data = bitmap.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadWrite, bitmap.PixelFormat);
-            int bytesPerPixel = Image.GetPixelFormatSize(bitmap.PixelFormat) / 8;
-            IntPtr ptr = data.Scan0;
-            int bytes = Math.Abs(data.Stride) * bitmap.Height;
-            byte[] rgbValues = new byte[bytes];
-            System.Runtime.InteropServices.Marshal.Copy(ptr, rgbValues, 0, bytes);
-
-            for (int i = 0; i < rgbValues.Length; i += bytesPerPixel)
-            {
-                if (bytesPerPixel >= 3)
-                {
-                    rgbValues[i] = (byte)(255 - rgbValues[i]);
-                    rgbValues[i + 1] = (byte)(255 - rgbValues[i + 1]);
-                    rgbValues[i + 2] = (byte)(255 - rgbValues[i + 2]);
-                }
-            }
-
-            System.Runtime.InteropServices.Marshal.Copy(rgbValues, 0, ptr, bytes);
-            bitmap.UnlockBits(data);
-            return bitmap;
-        }
-
         public void HighlightThumbnail(int pageIndex)
         {
             if (flowLayoutPanelThumbnails == null) return;
@@ -1325,17 +774,15 @@ namespace LearningAssistant.Forms
                     }
                     else
                     {
-                        panel.BackColor = _isNightMode ? Color.FromArgb(45, 45, 45) : Color.White;
+                        _nightModeManager?.UpdateThumbnailPanelColor(panel);
                         panel.BorderStyle = BorderStyle.FixedSingle;
                     }
                 }
             }
         }
 
-        // 新增功能：中等级 - 私有方法用于翻页
         private void NavigateToPage(int pageIndex)
         {
-            // 直接调用 presenter 的渲染方法
             _presenter?.RenderPage(pageIndex);
         }
 
@@ -3349,15 +2796,6 @@ namespace LearningAssistant.Forms
             {
                 try
                 {
-                    _pen?.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Error disposing pen");
-                }
-
-                try
-                {
                     CleanupAnnotationBitmap();
                 }
                 catch (Exception ex)
@@ -3412,6 +2850,18 @@ namespace LearningAssistant.Forms
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Error disposing components");
+                }
+
+                try
+                {
+                    _nightModeManager?.Dispose();
+                    _highlightManager?.Dispose();
+                    _bookmarkManager?.Dispose();
+                    _navigationManager?.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error disposing managers");
                 }
             }
 
