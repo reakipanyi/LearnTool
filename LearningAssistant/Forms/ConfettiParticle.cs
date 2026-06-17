@@ -29,5 +29,14 @@ namespace LearningAssistant.Forms
         public float FadeSpeed { get; set; }
         public double WobbleOffset { get; set; }
         public float WobbleSpeed { get; set; }
+
+        public void Update(float gravity, float wind)
+        {
+            X += VelocityX + wind;
+            Y += VelocityY;
+            VelocityY += gravity;
+            Rotation += RotationSpeed;
+            Opacity = Math.Max(0, Opacity - 0.005f);
+        }
     }
 }

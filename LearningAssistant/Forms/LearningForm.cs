@@ -26,6 +26,10 @@ namespace LearningAssistant.Forms
         private readonly IAIPanelPopupService? _aiPanelPopupService;
         private readonly IEncouragementService _encouragementService;
         private readonly BadgeManager _badgeManager;
+        private readonly StudyStatsManager _statsManager;
+        private readonly ChallengeManager _challengeManager;
+        private readonly ConfettiManager _confettiManager;
+        private readonly EncouragementManager _encouragementManager;
         #endregion
 
         #region === 学习状态 ===
@@ -47,50 +51,21 @@ namespace LearningAssistant.Forms
 
         #region === 统计数据 ===
         private readonly System.Windows.Forms.Timer _studyTimer = new System.Windows.Forms.Timer();
+        private readonly System.Windows.Forms.Timer _confettiTimer = new System.Windows.Forms.Timer();
         private TimeSpan _studyDuration = TimeSpan.Zero;
-        private int _todayLearnedCount = 0;
-        private int _streakDays = 0;
-        private int _score = 0;
         private int _encouragementCounter = 0;
         private int _celebrationCounter = 0;
-        private int _totalLearnedCount = 0;
         private int _quizCorrectCount = 0;
         private int _favoriteCount = 0;
         private int _noteCount = 0;
-        private int _currentLevel = 0;
-        private string _levelTitle = "小白";
-        private int _xp = 0;
-        private int _xpToNextLevel = 100;
+        private int _totalLearnedCount = 0;
         private int _gameScore = 0;
         private readonly System.Windows.Forms.Timer _noteSaveTimer = new System.Windows.Forms.Timer();
         #endregion
 
         #region === 静态资源 ===
         private const int EncouragementInterval = 3;
-        private readonly EncouragementManager _encouragementManager = new EncouragementManager();
-
         private const int CelebrationInterval = 5;
-
-        // 等级称号
-        private readonly List<string> _levelTitles = new List<string> {
-            "小白", "学徒", "学者", "秀才", "举人", "进士", "翰林", "大师", "宗师", "圣人"
-        };
-
-        private List<Challenge> _dailyChallenges = new List<Challenge>();
-
-        // 彩纸粒子
-        private readonly List<ConfettiParticle> _confettiParticles = new List<ConfettiParticle>();
-        private readonly System.Windows.Forms.Timer _confettiTimer = new System.Windows.Forms.Timer();
-
-        // 庆祝颜色
-        private readonly Color[] _celebrationColors = new[] {
-            Color.FromArgb(255, 59, 48), Color.FromArgb(255, 149, 0), Color.FromArgb(255, 204, 0),
-            Color.FromArgb(52, 199, 89), Color.FromArgb(0, 122, 255), Color.FromArgb(88, 86, 214),
-            Color.FromArgb(175, 82, 222), Color.FromArgb(255, 69, 58), Color.FromArgb(245, 90, 140),
-            Color.FromArgb(100, 200, 220)
-        };
-
-        private readonly Dictionary<int, SolidBrush> _colorBrushCache = new Dictionary<int, SolidBrush>();
 
         // 列表绘制相关
         private readonly SolidBrush _selectedBackgroundBrush = new SolidBrush(Color.FromArgb(76, 175, 80));
@@ -112,9 +87,7 @@ namespace LearningAssistant.Forms
         private ListBox listBoxDisplay => _contentView.ListBoxDisplay;
         private Label labelContent => _contentView.LabelContent;
         private Label labelStatistics => _statsView.LabelStatistics;
-        private Panel panelList => _listView.PanelList;
         private ListBox listBoxItems => _listView.ListBoxItems;
-        private Label labelListTitle => _listView.LabelListTitle;
         private Label labelListStatus => _listView.LabelListStatus;
         private Panel panelConfig => _settingsView.PanelConfig;
         private Panel panelStats => _statsView.PanelStatsContainer;
@@ -133,28 +106,18 @@ namespace LearningAssistant.Forms
         private RadioButton radioOriginal => _settingsView.RadioOriginal;
         private RadioButton radioExplanation => _settingsView.RadioExplanation;
         private RadioButton radioBoth => _settingsView.RadioBoth;
-        private GroupBox groupBoxMode => _settingsView.GroupBoxMode;
         private RadioButton radioStudyMode => _settingsView.RadioStudyMode;
         private RadioButton radioQuickMode => _settingsView.RadioQuickMode;
-        private GroupBox groupBoxSort => _settingsView.GroupBoxSort;
         private RadioButton radioSequential => _settingsView.RadioSequential;
         private RadioButton radioRandom => _settingsView.RadioRandom;
-        private GroupBox groupBoxLanguage => _settingsView.GroupBoxLanguage;
         private RadioButton radioChinese => _settingsView.RadioChinese;
         private RadioButton radioEnglish => _settingsView.RadioEnglish;
-        private Label labelSubCategory => _settingsView.LabelSubCategory;
         private ComboBox comboBoxSubCategory => _settingsView.ComboBoxSubCategory;
-        private Button buttonOpenStatistics => _settingsView.ButtonOpenStatistics;
-        private Button buttonExportErrorBook => _settingsView.ButtonExportErrorBook;
-        private FlowLayoutPanel buttonsFlowLayoutPanel => _buttonsView.ButtonsPanel;
         private Panel panelNotes => _contentView.PanelNotes;
         private RichTextBox richTextBoxNotes => _contentView.RichTextBoxNotes;
-        private Label labelNotesTitle => _contentView.LabelNotesTitle;
         private Button buttonPronounce => _buttonsView.ButtonPronounce;
         private Button buttonFavorite => _buttonsView.ButtonFavorite;
         private Button buttonNote => _buttonsView.ButtonNote;
-        private Button buttonExit => _buttonsView.ButtonExit;
-        private Button buttonAIAsk => _buttonsView.ButtonAIAsk;
         private Button buttonKnown => _buttonsView.ButtonKnown;
         private Button buttonUnknown => _buttonsView.ButtonUnknown;
         private Label labelDailyGoal = new Label();
@@ -204,9 +167,25 @@ namespace LearningAssistant.Forms
             _aiPanelPopupService = aiPanelPopupService ?? throw new ArgumentNullException(nameof(aiPanelPopupService));
             _encouragementService = encouragementService ?? throw new ArgumentNullException(nameof(encouragementService));
 
-            // 初始化徽章管理器
             _badgeManager = new BadgeManager(_loggerFactory.CreateLogger<BadgeManager>());
             _badgeManager.BadgesUnlocked += OnBadgesUnlocked;
+
+            _encouragementManager = new EncouragementManager();
+
+            _statsManager = new StudyStatsManager(
+                _loggerFactory.CreateLogger<StudyStatsManager>(),
+                OnLevelUp,
+                score => { },
+                xp => { });
+
+            _challengeManager = new ChallengeManager(
+                _loggerFactory.CreateLogger<ChallengeManager>(),
+                points => _statsManager.AddScore(points),
+                xp => _statsManager.AddXP(xp),
+                OnLevelUp,
+                () => { });
+
+            _confettiManager = new ConfettiManager();
 
             Load += LearningForm_Load;
             FormClosing += LearningForm_FormClosing;
@@ -982,136 +961,52 @@ namespace LearningAssistant.Forms
             _noteSaveTimer.Interval = 1000;
             _noteSaveTimer.Tick += NoteSaveTimer_Tick;
 
-            // 设置徽章管理器的UI引用
             if (flowLayoutPanelBadges != null)
             {
                 _badgeManager.SetUI(flowLayoutPanelBadges, _toolTip);
             }
 
-            LoadStudyStats();
+            if (labelStudyTime != null && labelScore != null && labelTodayCount != null &&
+                labelStreak != null && labelLevel != null && labelXP != null && progressXP != null)
+            {
+                _statsManager.SetUI(labelStudyTime, labelScore, labelTodayCount, labelStreak, labelLevel, labelXP, progressXP);
+            }
+
+            if (flowLayoutPanelChallenges != null)
+            {
+                _challengeManager.SetUI(flowLayoutPanelChallenges, _soundService);
+            }
+
+            _confettiManager.SetTargetControl(mainTableLayoutPanel);
+
+            _statsManager.Load();
             _badgeManager.Load();
-            LoadChallenges();
+            _challengeManager.Load();
             UpdateEncouragement();
-            UpdateLevelDisplay();
             _badgeManager.UpdateDisplay();
-            UpdateChallengesDisplay();
+            _challengeManager.UpdateDisplay();
         }
 
-        /// <summary>
-        /// 加载学习统计数据
-        /// </summary>
-        private void LoadStudyStats()
+        private void OnLevelUp()
         {
-            try
+            _soundService?.PlaySuccess();
+            StartConfetti();
+            string levelTitle = _statsManager.LevelTitle;
+            if (InvokeRequired)
             {
-                string statsPath = Path.Combine(AppPaths.DataDir, "study_stats.json");
-                if (File.Exists(statsPath))
-                {
-                    string json = File.ReadAllText(statsPath);
-                    var stats = JsonSerializer.Deserialize<StudyStats>(json);
-                    if (stats != null)
-                    {
-                        _todayLearnedCount = stats.TodayLearnedCount;
-                        _streakDays = stats.StreakDays;
-                        _score = stats.TotalScore;
-                        _totalLearnedCount = stats.TotalLearnedCount;
-                        _quizCorrectCount = stats.QuizCorrectCount;
-                        _favoriteCount = stats.FavoriteCount;
-                        _noteCount = stats.NoteCount;
-                        _xp = stats.XP;
-                        _currentLevel = stats.CurrentLevel;
-                        _levelTitle = _currentLevel < _levelTitles.Count ? _levelTitles[_currentLevel] : "圣人";
-                        _xpToNextLevel = (_currentLevel + 1) * 100;
-
-                        if (stats.LastStudyDate != DateTime.Today.Date)
-                        {
-                            _todayLearnedCount = 0;
-                            if (stats.LastStudyDate == DateTime.Today.Date.AddDays(-1))
-                            {
-                                _streakDays++;
-                            }
-                            else if (stats.LastStudyDate < DateTime.Today.Date.AddDays(-1))
-                            {
-                                _streakDays = 1;
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    _streakDays = 1;
-                }
+                Invoke(new Action(() =>
+                    MessageBox.Show($"🎉 恭喜升级！\n\n你现在是「{levelTitle}」级别！", "升级成功", MessageBoxButtons.OK, MessageBoxIcon.Information)));
             }
-            catch (Exception ex)
+            else
             {
-                _logger?.LogError(ex, "加载学习统计失败");
-                _streakDays = 1;
-            }
-
-            UpdateStatsDisplay();
-        }
-
-        /// <summary>
-        /// 保存学习统计数据到文件
-        /// </summary>
-        private void SaveStudyStats()
-        {
-            try
-            {
-                var stats = new StudyStats
-                {
-                    TodayLearnedCount = _todayLearnedCount,
-                    StreakDays = _streakDays,
-                    TotalScore = _score,
-                    LastStudyDate = DateTime.Today.Date,
-                    TotalLearnedCount = _totalLearnedCount,
-                    QuizCorrectCount = _quizCorrectCount,
-                    FavoriteCount = _favoriteCount,
-                    NoteCount = _noteCount,
-                    XP = _xp,
-                    CurrentLevel = _currentLevel
-                };
-
-                string statsPath = Path.Combine(AppPaths.DataDir, "study_stats.json");
-                string json = JsonSerializer.Serialize(stats, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(statsPath, json);
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "保存学习统计失败");
+                MessageBox.Show($"🎉 恭喜升级！\n\n你现在是「{levelTitle}」级别！", "升级成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
-        /// <summary>
-        /// 更新统计显示
-        /// </summary>
-        private void UpdateStatsDisplay()
-        {
-            labelStudyTime.Text = $"⏱️ 学习时长: {_studyDuration:hh\\:mm\\:ss}";
-            labelScore.Text = $"🏆 得分: {_score}";
-            labelTodayCount.Text = $"📚 今日学习: {_todayLearnedCount} 项";
-            labelStreak.Text = $"🔥 连续学习: {_streakDays} 天";
-        }
-
-        /// <summary>
-        /// 学习计时器回调
-        /// </summary>
         private void StudyTimer_Tick(object? sender, EventArgs e)
         {
             _studyDuration = _studyDuration.Add(TimeSpan.FromSeconds(1));
-            UpdateStatsDisplay();
-        }
-
-        /// <summary>
-        /// 增加分数并保存
-        /// </summary>
-        /// <param name="points">要增加的分数</param>
-        private void IncrementScore(int points)
-        {
-            _score += points;
-            _todayLearnedCount++;
-            UpdateStatsDisplay();
-            SaveStudyStats();
+            _statsManager.UpdateStudyTime(_studyDuration);
         }
 
         #endregion
@@ -1249,7 +1144,8 @@ namespace LearningAssistant.Forms
 
         private void mainTableLayoutPanel_Paint(object? sender, PaintEventArgs e)
         {
-            DrawConfetti(e.Graphics);
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            _confettiManager.Draw(e.Graphics);
         }
 
         #endregion
@@ -1336,234 +1232,23 @@ namespace LearningAssistant.Forms
             }
         }
 
-        /// <summary>
-        /// 徽章解锁事件处理
-        /// </summary>
         private void OnBadgesUnlocked(List<string> badges)
         {
             _badgeManager.ShowNotification(badges);
             _badgeManager.UpdateDisplay();
-            // 增加积分和XP
-            _score += 50 * badges.Count;
-            _xp += 50 * badges.Count;
-            CheckLevelUp();
+            _statsManager.AddScore(50 * badges.Count);
+            _statsManager.AddXP(50 * badges.Count);
         }
 
-        /// <summary>
-        /// 加载每日挑战任务
-        /// </summary>
-        private void LoadChallenges()
-        {
-            try
-            {
-                string challengesPath = Path.Combine(AppPaths.DataDir, "challenges.json");
+        
 
-                if (File.Exists(challengesPath))
-                {
-                    string json = File.ReadAllText(challengesPath);
-                    var saved = JsonSerializer.Deserialize<List<Challenge>>(json);
-
-                    if (saved != null && saved.Any() && saved[0].Current != 0)
-                    {
-                        DateTime lastDate = File.GetLastWriteTime(challengesPath);
-                        if (lastDate.Date == DateTime.Today.Date)
-                        {
-                            _dailyChallenges = saved;
-                            return;
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "加载每日挑战失败");
-            }
-
-            _dailyChallenges = new List<Challenge>
-            {
-                new Challenge("daily_learn", "每日学习", "学习10个内容", "📚", 10, 30),
-                new Challenge("daily_quiz", "答题挑战", "答题模式答对5题", "🎯", 5, 50),
-                new Challenge("daily_streak", "连续打卡", "今天完成学习", "🔥", 1, 20),
-                new Challenge("daily_favorite", "收藏达人", "收藏3个内容", "❤️", 3, 25)
-            };
-        }
-
-        /// <summary>
-        /// 保存每日挑战进度
-        /// </summary>
-        private void SaveChallenges()
-        {
-            try
-            {
-                string challengesPath = Path.Combine(AppPaths.DataDir, "challenges.json");
-                var challengesDir = Path.GetDirectoryName(challengesPath);
-                if (!string.IsNullOrEmpty(challengesDir) && !Directory.Exists(challengesDir)) Directory.CreateDirectory(challengesDir);
-                string json = JsonSerializer.Serialize(_dailyChallenges, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(challengesPath, json);
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "保存每日挑战失败");
-            }
-        }
-
-        /// <summary>
-        /// 更新挑战任务显示面板
-        /// </summary>
-        private void UpdateChallengesDisplay()
-        {
-            if (flowLayoutPanelChallenges != null)
-            {
-                flowLayoutPanelChallenges.Controls.Clear();
-
-                foreach (var challenge in _dailyChallenges)
-                {
-                    Panel panel = new Panel();
-                    panel.Size = new Size(160, 70);
-                    panel.BackColor = challenge.Completed ? Color.FromArgb(200, 255, 200) : Color.FromArgb(240, 240, 240);
-                    panel.BorderStyle = BorderStyle.FixedSingle;
-
-                    Label labelName = new Label();
-                    labelName.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-                    labelName.Text = $"{challenge.Emoji} {challenge.Name}";
-                    labelName.Size = new Size(150, 20);
-                    labelName.Location = new Point(5, 5);
-
-                    Label labelProgress = new Label();
-                    labelProgress.Font = new Font("微软雅黑", 9F);
-                    labelProgress.Text = challenge.Completed ? $"已完成 ✓ +{challenge.Reward}分" : $"{challenge.Current}/{challenge.Target}";
-                    labelProgress.Size = new Size(150, 20);
-                    labelProgress.Location = new Point(5, 30);
-
-                    ProgressBar progress = new ProgressBar();
-                    progress.Size = new Size(150, 12);
-                    progress.Location = new Point(5, 50);
-                    progress.Maximum = challenge.Target;
-                    progress.Value = Math.Min(challenge.Current, challenge.Target);
-
-                    panel.Controls.Add(labelName);
-                    panel.Controls.Add(labelProgress);
-                    panel.Controls.Add(progress);
-
-                    if (challenge.Completed && !challenge.Claimed)
-                    {
-                        Button claimBtn = new Button();
-                        claimBtn.Text = "领取";
-                        claimBtn.Size = new Size(50, 20);
-                        claimBtn.Location = new Point(100, 45);
-                        claimBtn.Click += (s, e) => ClaimChallenge(challenge);
-                        panel.Controls.Add(claimBtn);
-                    }
-
-                    flowLayoutPanelChallenges.Controls.Add(panel);
-                }
-            }
-        }
-
-        /// <summary>
-        /// 领取挑战奖励
-        /// </summary>
-        /// <param name="challenge">要领取奖励的挑战</param>
-        private void ClaimChallenge(Challenge challenge)
-        {
-            if (!challenge.Claimed)
-            {
-                challenge.Claimed = true;
-                _score += challenge.Reward;
-                _xp += challenge.Reward;
-                CheckLevelUp();
-                UpdateStatsDisplay();
-                UpdateChallengesDisplay();
-                SaveChallenges();
-                SaveStudyStats();
-                _soundService?.PlaySuccess();
-                MessageBox.Show($"🎁 领取成功！获得 {challenge.Reward} 积分！", "挑战奖励", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-        }
-
-        /// <summary>
-        /// 更新所有挑战任务的进度
-        /// </summary>
         private void UpdateChallengesProgress()
         {
-            foreach (var challenge in _dailyChallenges)
-            {
-                switch (challenge.Id)
-                {
-                    case "daily_learn":
-                        challenge.Current = _todayLearnedCount;
-                        break;
-                    case "daily_quiz":
-                        challenge.Current = _quizCorrectCount;
-                        break;
-                    case "daily_streak":
-                        challenge.Current = _todayLearnedCount > 0 ? 1 : 0;
-                        break;
-                    case "daily_favorite":
-                        challenge.Current = _favoriteCount;
-                        break;
-                }
-
-                if (challenge.Current >= challenge.Target && !challenge.Completed)
-                {
-                    challenge.Completed = true;
-                }
-            }
-
-            SaveChallenges();
-            UpdateChallengesDisplay();
+            _challengeManager.SetLearningData(_statsManager.TodayLearnedCount, _quizCorrectCount, _favoriteCount);
+            _challengeManager.UpdateProgress();
         }
 
-        /// <summary>
-        /// 检查是否满足升级条件并进行升级
-        /// </summary>
-        private void CheckLevelUp()
-        {
-            while (_xp >= _xpToNextLevel && _currentLevel < _levelTitles.Count - 1)
-            {
-                _xp -= _xpToNextLevel;
-                _currentLevel++;
-                _levelTitle = _levelTitles[_currentLevel];
-                _xpToNextLevel = (_currentLevel + 1) * 100;
-
-                _soundService?.PlaySuccess();
-                StartConfetti();
-
-                if (InvokeRequired)
-                {
-                    Invoke(new Action(() =>
-                        MessageBox.Show($"🎉 恭喜升级！\n\n你现在是「{_levelTitle}」级别！", "升级成功", MessageBoxButtons.OK, MessageBoxIcon.Information)));
-                }
-                else
-                {
-                    MessageBox.Show($"🎉 恭喜升级！\n\n你现在是「{_levelTitle}」级别！", "升级成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-            }
-
-            UpdateLevelDisplay();
-        }
-
-        /// <summary>
-        /// 更新等级显示信息
-        /// </summary>
-        private void UpdateLevelDisplay()
-        {
-            if (labelLevel != null)
-            {
-                labelLevel.Text = $"🏅 {_levelTitle} Lv.{_currentLevel + 1}";
-            }
-
-            if (progressXP != null)
-            {
-                progressXP.Maximum = _xpToNextLevel;
-                progressXP.Value = _xp;
-            }
-
-            if (labelXP != null)
-            {
-                labelXP.Text = $"经验值: {_xp}/{_xpToNextLevel}";
-            }
-        }
+        
 
         /// <summary>
         /// 启动猜词小游戏
@@ -1602,9 +1287,8 @@ namespace LearningAssistant.Forms
             if (correctAnswer.Contains(userAnswer) || userAnswer.Contains(correctAnswer))
             {
                 _gameScore += 10;
-                _score += 10;
-                _xp += 10;
-                CheckLevelUp();
+                _statsManager.AddScore(10);
+                _statsManager.AddXP(10);
                 labelGameResult.Text = $"✅ 正确！得分: {_gameScore}";
                 _soundService?.PlaySuccess();
             }
@@ -1614,7 +1298,6 @@ namespace LearningAssistant.Forms
                 _soundService?.PlayError();
             }
 
-            UpdateStatsDisplay();
             NextGameQuestion();
         }
 
@@ -1690,7 +1373,8 @@ namespace LearningAssistant.Forms
                 }
 
                 int points = _isShowAnswer && !_answerRevealed ? 20 : 10;
-                IncrementScore(points);
+                _statsManager.AddScore(points);
+                _statsManager.IncrementLearnedCount();
 
                 _totalLearnedCount++;
                 if (_isShowAnswer && !_answerRevealed)
@@ -1699,7 +1383,7 @@ namespace LearningAssistant.Forms
                 }
 
                 UpdateEncouragement();
-                _badgeManager.CheckUnlock(_totalLearnedCount, _streakDays, _todayLearnedCount, _quizCorrectCount, _favoriteCount, _noteCount);
+                _badgeManager.CheckUnlock(_totalLearnedCount, _statsManager.StreakDays, _statsManager.TodayLearnedCount, _quizCorrectCount, _favoriteCount, _noteCount);
                 UpdateChallengesProgress();
 
                 _ = _encouragementService.PlayRandomKnownFeedbackAsync();
@@ -1760,141 +1444,21 @@ namespace LearningAssistant.Forms
         private void StartConfetti()
         {
             if (_isConfettiActive) return;
-
             _isConfettiActive = true;
-            _confettiParticles.Clear();
-
-            for (int i = 0; i < 100; i++)
-            {
-                _confettiParticles.Add(CreateConfettiParticle());
-            }
-
-            for (int i = 0; i < 50; i++)
-            {
-                var particle = CreateConfettiParticle();
-                particle.X = Random.Shared.Next(Width);
-                particle.Y = -Random.Shared.Next(100);
-                particle.VelocityY = (float)(Random.Shared.NextDouble() * 4 + 3);
-                particle.Size = Random.Shared.Next(6, 15);
-                particle.RotationSpeed = (float)(Random.Shared.NextDouble() * 15 - 7.5);
-                _confettiParticles.Add(particle);
-            }
-
+            _confettiManager.Start(Width / 2f, 0, 150);
             _confettiTimer.Start();
-        }
-
-        private ConfettiParticle CreateConfettiParticle()
-        {
-            var shapes = new[] { ParticleShape.Rectangle, ParticleShape.Circle, ParticleShape.Triangle, ParticleShape.Star };
-            return new ConfettiParticle
-            {
-                X = Random.Shared.Next(Width),
-                Y = -Random.Shared.Next(200),
-                Size = Random.Shared.Next(8, 20),
-                Color = _celebrationColors[Random.Shared.Next(_celebrationColors.Length)],
-                VelocityX = (float)(Random.Shared.NextDouble() * 6 - 3),
-                VelocityY = (float)(Random.Shared.NextDouble() * 3 + 2),
-                Rotation = Random.Shared.Next(360),
-                RotationSpeed = (float)(Random.Shared.NextDouble() * 12 - 6),
-                Shape = shapes[Random.Shared.Next(shapes.Length)],
-                Opacity = 1.0f,
-                FadeSpeed = (float)(Random.Shared.NextDouble() * 0.01 + 0.005),
-                WobbleOffset = (float)(Random.Shared.NextDouble() * Math.PI * 2),
-                WobbleSpeed = (float)(Random.Shared.NextDouble() * 0.1 + 0.05)
-            };
         }
 
         private void ConfettiTimer_Tick(object? sender, EventArgs e)
         {
             if (!_isConfettiActive) return;
-
-            bool hasActiveParticles = false;
-
-            foreach (var particle in _confettiParticles)
-            {
-                particle.WobbleOffset += particle.WobbleSpeed;
-                particle.X += particle.VelocityX + (float)Math.Sin(particle.WobbleOffset) * 0.5f;
-                particle.Y += particle.VelocityY;
-                particle.VelocityY += 0.08f;
-                particle.Rotation += particle.RotationSpeed;
-
-                if (particle.Y > Height * 0.7)
-                {
-                    particle.Opacity -= particle.FadeSpeed;
-                }
-
-                if (particle.Y < Height + 50 && particle.Opacity > 0)
-                {
-                    hasActiveParticles = true;
-                }
-            }
-
-            if (!hasActiveParticles)
+            _confettiManager.Update();
+            if (!_confettiManager.HasActiveParticles)
             {
                 _isConfettiActive = false;
                 _confettiTimer.Stop();
-                _confettiParticles.Clear();
             }
-
             Invalidate();
-        }
-
-        private void DrawConfetti(Graphics g)
-        {
-            if (!_isConfettiActive || _confettiParticles.Count == 0) return;
-
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-
-            foreach (var particle in _confettiParticles)
-            {
-                if (particle.Y > Height + 50 || particle.Opacity <= 0) continue;
-
-                int colorKey = particle.Color.ToArgb();
-                if (!_colorBrushCache.TryGetValue(colorKey, out var brush))
-                {
-                    brush = new SolidBrush(particle.Color);
-                    _colorBrushCache[colorKey] = brush;
-                }
-
-                brush.Color = Color.FromArgb((int)(particle.Opacity * 255), particle.Color);
-
-                g.TranslateTransform(particle.X, particle.Y);
-                g.RotateTransform(particle.Rotation);
-
-                switch (particle.Shape)
-                {
-                    case ParticleShape.Rectangle:
-                        g.FillRectangle(brush, -particle.Size / 2, -particle.Size / 2, particle.Size, particle.Size * 0.6f);
-                        break;
-                    case ParticleShape.Circle:
-                        g.FillEllipse(brush, -particle.Size / 2, -particle.Size / 2, particle.Size, particle.Size);
-                        break;
-                    case ParticleShape.Triangle:
-                        var trianglePoints = new PointF[]
-                        {
-                            new PointF(0, -particle.Size / 2),
-                            new PointF(-particle.Size / 2, particle.Size / 2),
-                            new PointF(particle.Size / 2, particle.Size / 2)
-                        };
-                        g.FillPolygon(brush, trianglePoints);
-                        break;
-                    case ParticleShape.Star:
-                        var starPoints = new PointF[10];
-                        for (int i = 0; i < 10; i++)
-                        {
-                            float radius = (i % 2 == 0) ? particle.Size / 2 : particle.Size / 4;
-                            float angle = (float)(i * Math.PI / 5 - Math.PI / 2);
-                            starPoints[i] = new PointF(
-                                (float)Math.Cos(angle) * radius,
-                                (float)Math.Sin(angle) * radius
-                            );
-                        }
-                        g.FillPolygon(brush, starPoints);
-                        break;
-                }
-
-                g.ResetTransform();
-            }
         }
 
         private async void ShakeWindow()
@@ -2022,7 +1586,7 @@ namespace LearningAssistant.Forms
                 _soundService?.PlaySuccess();
                 _favoriteCount++;
                 SaveFavorite();
-                _badgeManager.CheckUnlock(_totalLearnedCount, _streakDays, _todayLearnedCount, _quizCorrectCount, _favoriteCount, _noteCount);
+                _badgeManager.CheckUnlock(_totalLearnedCount, _statsManager.StreakDays, _statsManager.TodayLearnedCount, _quizCorrectCount, _favoriteCount, _noteCount);
                 UpdateChallengesProgress();
             }
             else
@@ -2219,7 +1783,7 @@ namespace LearningAssistant.Forms
                 {
                     _currentNoteCounted = true;
                     _noteCount++;
-                    _badgeManager.CheckUnlock(_totalLearnedCount, _streakDays, _todayLearnedCount, _quizCorrectCount, _favoriteCount, _noteCount);
+                    _badgeManager.CheckUnlock(_totalLearnedCount, _statsManager.StreakDays, _statsManager.TodayLearnedCount, _quizCorrectCount, _favoriteCount, _noteCount);
                 }
                 else if (!hasContent && _currentNoteCounted)
                 {
@@ -2378,18 +1942,10 @@ namespace LearningAssistant.Forms
                 _statsView?.Dispose();
                 _settingsView?.Dispose();
 
-                _confettiParticles.Clear();
-
                 _selectedBackgroundBrush.Dispose();
                 _selectedForegroundBrush.Dispose();
                 _normalForegroundBrush.Dispose();
                 _selectedBorderPen.Dispose();
-
-                foreach (var brush in _colorBrushCache.Values)
-                {
-                    brush.Dispose();
-                }
-                _colorBrushCache.Clear();
             }
 
             _disposed = true;
