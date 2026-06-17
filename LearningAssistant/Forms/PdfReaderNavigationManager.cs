@@ -90,7 +90,7 @@ namespace LearningAssistant.Forms
                     var bmp = await _form.Presenter!.RenderPageAsync(page, Math.Max(1, targetW), Math.Max(1, targetH));
                     if (bmp != null)
                     {
-                        _form.BeginInvoke(() => _form.DisplayImage(bmp));
+                        _form.Form.BeginInvoke(() => _form.DisplayImage(bmp));
                     }
                 }
                 catch (Exception ex)
@@ -121,7 +121,7 @@ namespace LearningAssistant.Forms
                             var bmp = await _form.Presenter!.RenderPageAsync(page, Math.Max(1, targetW), Math.Max(1, targetH));
                             if (bmp != null)
                             {
-                                _form.BeginInvoke(() => _form.DisplayImage(bmp));
+                                _form.Form.BeginInvoke(() => _form.DisplayImage(bmp));
                             }
                         }
                         catch (Exception ex)
@@ -166,7 +166,7 @@ namespace LearningAssistant.Forms
                     var bmp = await _form.Presenter!.RenderPageAsync(page, _form.PictureBoxPdf.ClientSize.Width, _form.PictureBoxPdf.ClientSize.Height);
                     if (bmp != null)
                     {
-                        _form.BeginInvoke(() => _form.DisplayImage(bmp));
+                        _form.Form.BeginInvoke(() => _form.DisplayImage(bmp));
                     }
                 }
                 catch (Exception ex)
@@ -421,7 +421,7 @@ namespace LearningAssistant.Forms
                     else
                     {
                         _form.PictureBoxPdf.Invalidate();
-                        _form.SelectOcrClicked?.Invoke(_form, EventArgs.Empty);
+                        _form.OnSelectOcrClicked();
                     }
                 }
 
@@ -586,9 +586,9 @@ namespace LearningAssistant.Forms
             if (e.Button == MouseButtons.Left)
             {
                 _isNavPanelDragging = true;
-                _navPanelStartPoint = _form.PointToScreen(e.Location);
-                _form.panelNavigation.Cursor = Cursors.SizeAll;
-                _form.panelNavigation.Capture = true;
+                _navPanelStartPoint = _form.Form.PointToScreen(e.Location);
+                _form.PanelNavigation.Cursor = Cursors.SizeAll;
+                _form.PanelNavigation.Capture = true;
             }
         }
 
@@ -596,20 +596,20 @@ namespace LearningAssistant.Forms
         {
             if (_isNavPanelDragging)
             {
-                Point currentScreenPoint = _form.PointToScreen(e.Location);
+                Point currentScreenPoint = _form.Form.PointToScreen(e.Location);
                 int deltaX = currentScreenPoint.X - _navPanelStartPoint.X;
                 int deltaY = currentScreenPoint.Y - _navPanelStartPoint.Y;
 
-                int newX = _form.panelNavigation.Left + deltaX;
-                int newY = _form.panelNavigation.Top + deltaY;
+                int newX = _form.PanelNavigation.Left + deltaX;
+                int newY = _form.PanelNavigation.Top + deltaY;
 
                 int leftBoundary = 0;
-                int rightBoundary = _form.ClientSize.Width - _form.panelNavigation.Width;
+                int rightBoundary = _form.Form.ClientSize.Width - _form.PanelNavigation.Width;
 
                 newX = Math.Max(leftBoundary, Math.Min(newX, rightBoundary));
-                newY = Math.Max(0, Math.Min(newY, _form.ClientSize.Height - _form.panelNavigation.Height));
+                newY = Math.Max(0, Math.Min(newY, _form.Form.ClientSize.Height - _form.PanelNavigation.Height));
 
-                _form.panelNavigation.Location = new Point(newX, newY);
+                _form.PanelNavigation.Location = new Point(newX, newY);
                 _navPanelStartPoint = currentScreenPoint;
             }
         }
@@ -619,8 +619,8 @@ namespace LearningAssistant.Forms
             if (_isNavPanelDragging)
             {
                 _isNavPanelDragging = false;
-                _form.panelNavigation.Cursor = Cursors.Default;
-                _form.panelNavigation.Capture = false;
+                _form.PanelNavigation.Cursor = Cursors.Default;
+                _form.PanelNavigation.Capture = false;
             }
         }
 

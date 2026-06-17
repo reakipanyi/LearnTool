@@ -238,7 +238,7 @@ namespace LearningAssistant.Forms
                     _form.TextBoxOriginal.Text = ocrText;
                     if (_form.IsTranslationEnabled)
                     {
-                        _form.TranslateClicked?.Invoke(_form, EventArgs.Empty);
+                        _form.OnTranslateClicked();
                     }
                 }
             }

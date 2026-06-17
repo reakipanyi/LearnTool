@@ -24,9 +24,9 @@ namespace LearningAssistant.Forms
             _isNightMode = !_isNightMode;
             ApplyNightMode();
             
-            if (_form.buttonNightMode != null)
+            if (_form.ButtonNightMode != null)
             {
-                _form.buttonNightMode.Text = _isNightMode ? "☀️" : "🌙";
+                _form.ButtonNightMode.Text = _isNightMode ? "☀️" : "🌙";
             }
 
             if (_form.Presenter != null)
@@ -55,32 +55,32 @@ namespace LearningAssistant.Forms
             if (_isNightMode)
             {
                 _form.BackColor = Color.FromArgb(30, 30, 30);
-                _form.panelPdf.BackColor = Color.FromArgb(20, 20, 20);
-                _form.panelNavigation.BackColor = Color.FromArgb(45, 45, 45);
-                _form.treeViewFiles.BackColor = Color.FromArgb(40, 40, 40);
-                _form.treeViewFiles.ForeColor = Color.White;
-                _form.tabControlLeft.BackColor = Color.FromArgb(40, 40, 40);
-                _form.panelThumbnails.BackColor = Color.FromArgb(40, 40, 40);
-                _form.flowLayoutPanelThumbnails.BackColor = Color.FromArgb(40, 40, 40);
+                _form.PanelPdf!.BackColor = Color.FromArgb(20, 20, 20);
+                _form.PanelNavigation!.BackColor = Color.FromArgb(45, 45, 45);
+                _form.TreeViewFiles!.BackColor = Color.FromArgb(40, 40, 40);
+                _form.TreeViewFiles.ForeColor = Color.White;
+                _form.TabControlLeft!.BackColor = Color.FromArgb(40, 40, 40);
+                _form.PanelThumbnails!.BackColor = Color.FromArgb(40, 40, 40);
+                _form.FlowLayoutPanelThumbnails!.BackColor = Color.FromArgb(40, 40, 40);
 
-                UpdateButtonNightModeColor(_form.buttonNightMode, true);
-                UpdateButtonLanguageColor(_form.buttonLanguage, true);
-                UpdateButtonAiColor(_form.buttonAskAi, true);
+                UpdateButtonNightModeColor(_form.ButtonNightMode, true);
+                UpdateButtonLanguageColor(_form.ButtonLanguage, true);
+                UpdateButtonAiColor(_form.ButtonAskAi, true);
             }
             else
             {
                 _form.BackColor = Color.FromArgb(240, 240, 240);
-                _form.panelPdf.BackColor = Color.White;
-                _form.panelNavigation.BackColor = Color.FromArgb(240, 240, 240);
-                _form.treeViewFiles.BackColor = Color.White;
-                _form.treeViewFiles.ForeColor = Color.Black;
-                _form.tabControlLeft.BackColor = Color.White;
-                _form.panelThumbnails.BackColor = Color.FromArgb(240, 240, 240);
-                _form.flowLayoutPanelThumbnails.BackColor = Color.FromArgb(240, 240, 240);
+                _form.PanelPdf!.BackColor = Color.White;
+                _form.PanelNavigation!.BackColor = Color.FromArgb(240, 240, 240);
+                _form.TreeViewFiles!.BackColor = Color.White;
+                _form.TreeViewFiles.ForeColor = Color.Black;
+                _form.TabControlLeft!.BackColor = Color.White;
+                _form.PanelThumbnails!.BackColor = Color.FromArgb(240, 240, 240);
+                _form.FlowLayoutPanelThumbnails!.BackColor = Color.FromArgb(240, 240, 240);
 
-                UpdateButtonNightModeColor(_form.buttonNightMode, false);
-                UpdateButtonLanguageColor(_form.buttonLanguage, false);
-                UpdateButtonAiColor(_form.buttonAskAi, false);
+                UpdateButtonNightModeColor(_form.ButtonNightMode, false);
+                UpdateButtonLanguageColor(_form.ButtonLanguage, false);
+                UpdateButtonAiColor(_form.ButtonAskAi, false);
             }
         }
 
@@ -106,16 +106,16 @@ namespace LearningAssistant.Forms
 
         private void ApplyNightModeToTabPageTranslate()
         {
-            ApplyControlBackColor(_form.tabPageTranslate, _isNightMode);
-            ApplyGroupBoxNightMode(_form.groupBoxProgress);
-            ApplyTextBoxNightMode(_form.textBoxOriginal);
-            ApplyTextBoxNightMode(_form.textBoxTranslation);
-            ApplyLabelForeColor(_form.labelOriginal);
-            ApplyLabelForeColor(_form.labelTranslation);
+            ApplyControlBackColor(_form.TabPageTranslate, _isNightMode);
+            ApplyGroupBoxNightMode(_form.GroupBoxProgress);
+            ApplyTextBoxNightMode(_form.TextBoxOriginal);
+            ApplyTextBoxNightMode(_form.TextBoxTranslation);
+            ApplyLabelForeColor(_form.LabelOriginal);
+            ApplyLabelForeColor(_form.LabelTranslation);
 
-            ApplyButtonNightMode(_form.buttonTranslate);
-            ApplyButtonNightMode(_form.buttonSpeakOriginal);
-            ApplyButtonNightMode(_form.buttonSpeakTranslation);
+            ApplyButtonNightMode(_form.ButtonTranslate);
+            ApplyButtonNightMode(_form.ButtonSpeakOriginal);
+            ApplyButtonNightMode(_form.ButtonSpeakTranslation);
         }
 
         private void ApplyNightModeToBookmarksAndHighlights()
@@ -187,9 +187,9 @@ namespace LearningAssistant.Forms
 
         public void UpdateThumbnailsBackground()
         {
-            if (_form.flowLayoutPanelThumbnails == null) return;
+            if (_form.FlowLayoutPanelThumbnails == null) return;
 
-            foreach (Control control in _form.flowLayoutPanelThumbnails.Controls)
+            foreach (Control control in _form.FlowLayoutPanelThumbnails.Controls)
             {
                 if (control is Panel panel)
                 {

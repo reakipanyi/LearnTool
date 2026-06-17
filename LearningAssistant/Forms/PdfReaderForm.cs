@@ -463,7 +463,6 @@ namespace LearningAssistant.Forms
             _presenter.SetView(this);
         }
 
-        #region IPdfView Implementation
 
         public void SetFileList(IEnumerable<string> files)
         {
@@ -984,6 +983,13 @@ namespace LearningAssistant.Forms
         public event EventHandler? LanguageChanged;
         public event EventHandler? SpeakAnswer;
         public event EventHandler? SpeakOriginal;
+
+        #region IPdfReaderFormAccess Implementation
+
+        public Form Form => this;
+
+        public void OnSelectOcrClicked() => SelectOcrClicked?.Invoke(this, EventArgs.Empty);
+        public void OnTranslateClicked() => TranslateClicked?.Invoke(this, EventArgs.Empty);
 
         #endregion
 
