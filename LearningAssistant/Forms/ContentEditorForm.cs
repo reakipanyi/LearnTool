@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Common.Themes;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
@@ -11,12 +12,13 @@ using System.Data;
 
 namespace LearningAssistant.Forms
 {
-    public partial class ContentEditorForm : Form, IContentEditorView
+    public partial class ContentEditorForm : Form, IContentEditorView, IThemeable
     {
         private readonly ILogger<ContentEditorForm> _logger;
         private readonly AppConfig _appConfig;
         private readonly IAIPanelPopupService _aiPanelPopupService;
         private readonly Services.Learning.IPendingContentService? _pendingContentService;
+        private readonly IThemeService _themeService;
         private TableLayoutPanel mainPanel;
         private Panel topPanel;
         private Panel gridPanel;
@@ -32,13 +34,16 @@ namespace LearningAssistant.Forms
         private TabPage tabPage2;
         private bool _disposed = false;
 
-        public ContentEditorForm(ILogger<ContentEditorForm> logger, AppConfig appConfig, IAIPanelPopupService aiPanelPopupService, Services.Learning.IPendingContentService? pendingContentService = null)
+        public ContentEditorForm(ILogger<ContentEditorForm> logger, AppConfig appConfig, IAIPanelPopupService aiPanelPopupService, IThemeService themeService, Services.Learning.IPendingContentService? pendingContentService = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _appConfig = appConfig ?? throw new ArgumentNullException(nameof(appConfig));
             _aiPanelPopupService = aiPanelPopupService ?? throw new ArgumentNullException(nameof(aiPanelPopupService));
+            _themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
             _pendingContentService = pendingContentService;
             InitializeComponent();
+
+            _themeService.RegisterThemeable(this);
         }
 
 
@@ -877,6 +882,7 @@ namespace LearningAssistant.Forms
 
             if (disposing)
             {
+                _themeService?.UnregisterThemeable(this);
                 // 控件资源由 base.Dispose 自动清理
             }
 
@@ -884,14 +890,128 @@ namespace LearningAssistant.Forms
             base.Dispose(disposing);
         }
 
+        public void ApplyTheme(ThemeColors colors)
+        {
+            BackColor = colors.Background;
+
+            if (topPanel != null)
+            {
+                topPanel.BackColor = colors.Background;
+            }
+
+            if (groupBoxLanguage != null)
+            {
+                groupBoxLanguage.BackColor = colors.ThemeMode == ThemeMode.Dark ? colors.Surface : Color.FromArgb(255, 250, 240);
+            }
+
+            if (gridPanel != null)
+            {
+                gridPanel.BackColor = colors.Background;
+            }
+
+            if (mainPanel != null)
+            {
+                mainPanel.BackColor = colors.Background;
+            }
+
+            if (buttonPanel != null)
+            {
+                buttonPanel.BackColor = colors.Background;
+            }
+
+            if (tabControl1 != null)
+            {
+                tabControl1.BackColor = colors.Surface;
+            }
+
+            if (tabPage1 != null)
+            {
+                tabPage1.BackColor = colors.Surface;
+            }
+
+            if (tabPage2 != null)
+            {
+                tabPage2.BackColor = colors.Surface;
+            }
+
+            if (dataGridView != null)
+            {
+                dataGridView.BackgroundColor = colors.Surface;
+                dataGridView.DefaultCellStyle.BackColor = colors.Surface;
+                dataGridView.DefaultCellStyle.ForeColor = colors.TextPrimary;
+                dataGridView.DefaultCellStyle.SelectionBackColor = colors.Primary;
+                dataGridView.DefaultCellStyle.SelectionForeColor = Color.White;
+                dataGridView.ColumnHeadersDefaultCellStyle.BackColor = colors.ThemeMode == ThemeMode.Dark ? colors.Surface : Color.FromArgb(245, 245, 245);
+                dataGridView.ColumnHeadersDefaultCellStyle.ForeColor = colors.TextPrimary;
+                dataGridView.GridColor = colors.ThemeMode == ThemeMode.Dark ? colors.Divider : Color.FromArgb(224, 224, 224);
+                dataGridView.EnableHeadersVisualStyles = false;
+            }
+
+            if (textBoxJson != null)
+            {
+                textBoxJson.BackColor = colors.Surface;
+                textBoxJson.ForeColor = colors.TextPrimary;
+            }
+
+            foreach (Control control in Controls)
+            {
+                ApplyThemeToControl(control, colors);
+            }
+        }
+
+        private void ApplyThemeToControl(Control control, ThemeColors colors)
+        {
+            if (control is Label label)
+            {
+                label.ForeColor = colors.TextPrimary;
+            }
+            else if (control is RadioButton radioButton)
+            {
+                radioButton.ForeColor = colors.TextPrimary;
+                radioButton.BackColor = colors.ThemeMode == ThemeMode.Dark ? colors.Surface : Color.FromArgb(255, 250, 240);
+            }
+            else if (control is ComboBox comboBox)
+            {
+                comboBox.BackColor = colors.Surface;
+                comboBox.ForeColor = colors.TextPrimary;
+            }
+            else if (control is TextBox textBox)
+            {
+                textBox.BackColor = colors.Surface;
+                textBox.ForeColor = colors.TextPrimary;
+            }
+            else if (control is TabPage tabPage)
+            {
+                tabPage.BackColor = colors.Surface;
+                tabPage.ForeColor = colors.TextPrimary;
+            }
+            else if (control is Panel panel)
+            {
+                panel.BackColor = colors.Background;
+            }
+            else if (control is FlowLayoutPanel flowLayoutPanel)
+            {
+                flowLayoutPanel.BackColor = colors.Background;
+            }
+            else if (control is TableLayoutPanel tableLayoutPanel)
+            {
+                tableLayoutPanel.BackColor = colors.Background;
+            }
+
+            foreach (Control child in control.Controls)
+            {
+                ApplyThemeToControl(child, colors);
+            }
+        }
+
         private void Button_HoverEnter(object? sender, EventArgs e)
         {
             if (sender is Button button)
             {
                 button.BackColor = Color.FromArgb(
-                    Math.Min(255, button.BackColor.R + 25),
-                    Math.Min(255, button.BackColor.G + 25),
-                    Math.Min(255, button.BackColor.B + 25));
+                    Math.Min(255, (int)button.BackColor.R + 25),
+                    Math.Min(255, (int)button.BackColor.G + 25),
+                    Math.Min(255, (int)button.BackColor.B + 25));
                 button.Cursor = Cursors.Hand;
             }
         }

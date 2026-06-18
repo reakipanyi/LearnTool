@@ -82,8 +82,9 @@ namespace LearningAssistant.Forms
             var logger = NullLoggerFactory.Instance.CreateLogger<ContentEditorForm>();
             var appConfig = new Models.Config.AppConfig();
             var aiPanelPopupService = CreateMockAIPanelPopupService();
+            var themeService = CreateMockThemeService();
 
-            return new ContentEditorForm(logger, appConfig, aiPanelPopupService);
+            return new ContentEditorForm(logger, appConfig, aiPanelPopupService, themeService);
         }
 
         private static Form CreatePdfReaderFormPreview()
@@ -96,12 +97,15 @@ namespace LearningAssistant.Forms
 
         private static Form CreateResultFormPreview()
         {
-            return new ResultForm(10, 8, 2, 80);
+            var themeService = CreateMockThemeService();
+            return new ResultForm(NullLogger<ResultForm>.Instance, themeService);
         }
 
         private static Form CreateSettingFormPreview()
         {
-            return new SettingForm();
+            var themeService = CreateMockThemeService();
+            var logger = NullLoggerFactory.Instance.CreateLogger<SettingForm>();
+            return new SettingForm(logger, themeService);
         }
 
         private static Form CreateAchievementNotificationFormPreview()

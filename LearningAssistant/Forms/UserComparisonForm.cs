@@ -1,16 +1,25 @@
+using LearningAssistant.Common;
+using LearningAssistant.Common.Themes;
 using LearningAssistant.Views;
 
 namespace LearningAssistant.Forms
 {
-    public partial class UserComparisonForm : Form
+    public partial class UserComparisonForm : Form, IThemeable
     {
         private readonly List<UserComparisonData> _comparisonData;
+        private readonly IThemeService? _themeService;
+        private readonly List<Label> _dynamicHeaderLabels = new List<Label>();
+        private readonly List<Label> _dynamicValueLabels = new List<Label>();
+        private ThemeColors? _currentColors;
 
-        public UserComparisonForm(List<UserComparisonData> comparisonData)
+        public UserComparisonForm(List<UserComparisonData> comparisonData, IThemeService? themeService = null)
         {
             _comparisonData = comparisonData;
+            _themeService = themeService;
             InitializeComponent();
             subtitleLabel.Text = $"共 {_comparisonData.Count} 位玩家参与对战";
+
+            _themeService?.RegisterThemeable(this);
 
             LoadComparisonData();
         }
@@ -32,13 +41,14 @@ namespace LearningAssistant.Forms
                     Text = user.UserId,
                     TextAlign = ContentAlignment.MiddleCenter,
                     Font = new Font("Microsoft YaHei", 14, FontStyle.Bold),
-                    ForeColor = Color.FromArgb(33, 33, 33),
+                    ForeColor = _currentColors?.TextPrimary ?? Color.FromArgb(33, 33, 33),
                     Dock = DockStyle.Fill,
                     Padding = new Padding(5)
                 };
 
                 // 添加到用户标题面板
                 panelUserHeaders.Controls.Add(headerLabel);
+                _dynamicHeaderLabels.Add(headerLabel);
             }
 
             // 数据行
@@ -73,7 +83,7 @@ namespace LearningAssistant.Forms
                     Text = label,
                     TextAlign = ContentAlignment.MiddleLeft,
                     Font = new Font("Microsoft YaHei", 10),
-                    ForeColor = Color.FromArgb(117, 117, 117),
+                    ForeColor = _currentColors?.TextSecondary ?? Color.FromArgb(117, 117, 117),
                     Dock = DockStyle.Fill
                 };
                 labelPanel.Controls.Add(labelText);
@@ -106,7 +116,7 @@ namespace LearningAssistant.Forms
                         Text = value(user),
                         TextAlign = ContentAlignment.MiddleCenter,
                         Font = new Font("Microsoft YaHei", isWinner ? 12 : 10, isWinner ? FontStyle.Bold : FontStyle.Regular),
-                        ForeColor = isWinner ? Color.FromArgb(255, 87, 34) : Color.FromArgb(33, 33, 33),
+                        ForeColor = isWinner ? Color.FromArgb(255, 87, 34) : (_currentColors?.TextPrimary ?? Color.FromArgb(33, 33, 33)),
                         Dock = DockStyle.Fill
                     };
 
@@ -117,6 +127,7 @@ namespace LearningAssistant.Forms
 
                     valuePanel.Controls.Add(valueLabel);
                     valuesPanel.Controls.Add(valuePanel);
+                    _dynamicValueLabels.Add(valueLabel);
                 }
 
                 panelValues.Add(valuesPanel);
@@ -300,6 +311,8 @@ namespace LearningAssistant.Forms
         {
 
 
+            _dynamicHeaderLabels.Clear();
+            _dynamicValueLabels.Clear();
             panelUserHeaders.Controls.Clear();
             foreach (var p in panelStats) p.Dispose();
             panelStats.Clear();
@@ -307,6 +320,64 @@ namespace LearningAssistant.Forms
             panelValues.Clear();
             LoadComparisonData();
 
+        }
+
+        public void ApplyTheme(ThemeColors colors)
+        {
+            _currentColors = colors;
+            BackColor = colors.Background;
+
+            if (mainPanel != null)
+            {
+                mainPanel.BackColor = colors.Surface;
+            }
+
+            if (panelContent != null)
+            {
+                panelContent.BackColor = colors.Surface;
+            }
+
+            if (buttonPanel != null)
+            {
+                buttonPanel.BackColor = colors.Surface;
+            }
+
+            if (subtitleLabel != null)
+            {
+                subtitleLabel.ForeColor = colors.TextSecondary;
+            }
+
+            if (titleLabel != null)
+            {
+                titleLabel.ForeColor = colors.TextPrimary;
+            }
+
+            // 更新动态创建的标签
+            foreach (var label in _dynamicHeaderLabels)
+            {
+                label.ForeColor = colors.TextPrimary;
+            }
+            foreach (var label in _dynamicValueLabels)
+            {
+                // 保持获胜者颜色
+                if (label.Text.Contains("👑"))
+                {
+                    label.ForeColor = Color.FromArgb(255, 87, 34);
+                }
+                else
+                {
+                    label.ForeColor = colors.TextPrimary;
+                }
+            }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _themeService?.UnregisterThemeable(this);
+            }
+            base.Dispose(disposing);
         }
     }
 }

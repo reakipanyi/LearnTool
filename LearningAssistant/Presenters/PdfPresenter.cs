@@ -220,7 +220,22 @@ namespace LearningAssistant.Presenters
 
         public async Task<string?> TranslateAsync(string text)
         {
+            if (!_pdfTranslationService.IsAvailable)
+            {
+                _view?.ShowWarning("翻译服务不可用，请检查API配置");
+                return null;
+            }
             return await _pdfTranslationService.TranslateAsync(text);
+        }
+
+        public bool IsTranslationServiceAvailable()
+        {
+            return _pdfTranslationService != null && _pdfTranslationService.IsAvailable;
+        }
+
+        public bool IsTTSServiceAvailable()
+        {
+            return _pdfTtsService != null && _pdfTtsService.IsAvailable;
         }
 
         public async Task OcrCropAndTranslateAsync(Bitmap img, Rectangle selRect, Rectangle imgDisplayRect)
@@ -582,50 +597,80 @@ namespace LearningAssistant.Presenters
         }
 
 
-        private void View_SpeakOriginal(object? sender, EventArgs e)
+        private async void View_SpeakOriginal(object? sender, EventArgs e)
         {
             try
             {
                 var text = _view?.GetOriginalText();
-                if (!string.IsNullOrWhiteSpace(text))
+                if (string.IsNullOrWhiteSpace(text))
                 {
-                    _ = _pdfTtsService.SpeakTextAsync(text);
+                    _view?.ShowWarning("请先输入或选择要朗读的文本");
+                    return;
                 }
+
+                if (!_pdfTtsService.IsAvailable)
+                {
+                    _view?.ShowWarning("朗读服务不可用，请检查TTS配置");
+                    return;
+                }
+
+                await _pdfTtsService.SpeakTextAsync(text);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in View_SpeakOriginal");
+                _view?.ShowError("朗读失败: " + ex.Message);
             }
         }
 
-        private void View_SpeakTranslation(object? sender, EventArgs e)
+        private async void View_SpeakTranslation(object? sender, EventArgs e)
         {
             try
             {
                 var text = _view?.GetTranslationText();
-                if (!string.IsNullOrWhiteSpace(text))
+                if (string.IsNullOrWhiteSpace(text))
                 {
-                    _ = _pdfTtsService.SpeakTextAsync(text, "zh", 1.0f);
+                    _view?.ShowWarning("请先进行翻译");
+                    return;
                 }
+
+                if (!_pdfTtsService.IsAvailable)
+                {
+                    _view?.ShowWarning("朗读服务不可用，请检查TTS配置");
+                    return;
+                }
+
+                await _pdfTtsService.SpeakTextAsync(text, "zh", 1.0f);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in View_SpeakTranslation");
+                _view?.ShowError("朗读失败: " + ex.Message);
             }
         }
 
-        private void View_SpeakText(object? sender, string text)
+        private async void View_SpeakText(object? sender, string text)
         {
             try
             {
-                if (!string.IsNullOrWhiteSpace(text))
+                if (string.IsNullOrWhiteSpace(text))
                 {
-                    _ = _pdfTtsService.SpeakTextAsync(text);
+                    _view?.ShowWarning("请先输入要朗读的文本");
+                    return;
                 }
+
+                if (!_pdfTtsService.IsAvailable)
+                {
+                    _view?.ShowWarning("朗读服务不可用，请检查TTS配置");
+                    return;
+                }
+
+                await _pdfTtsService.SpeakTextAsync(text);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in View_SpeakText");
+                _view?.ShowError("朗读失败: " + ex.Message);
             }
         }
 

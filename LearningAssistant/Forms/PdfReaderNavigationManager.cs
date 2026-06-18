@@ -53,6 +53,7 @@ namespace LearningAssistant.Forms
         public int ZoomLevel => _zoomLevel;
         public bool IsLocked => _isLocked;
         public Rectangle? LastSelectionRect => _lastSelectionRect;
+        public Point ImageOffset => _imageOffset;
 
         public Func<bool>? IsHighlightModeCallback { get; set; }
         public Action<Rectangle>? AddHighlightCallback { get; set; }
@@ -274,6 +275,7 @@ namespace LearningAssistant.Forms
 
                     if (timeDiff < DoubleClickTime_ms && distance < DoubleClickDistance)
                     {
+                        _logger.LogInformation("MouseDown Right: DoubleClick detected, canceling selection");
                         _isDoubleClickPending = true;
                         _isSelecting = false;
                         _isDrawing = false;
@@ -288,6 +290,7 @@ namespace LearningAssistant.Forms
 
                     if (_isDrawing || (Control.ModifierKeys & Keys.Control) == Keys.Control)
                     {
+                        _logger.LogInformation("MouseDown Right: Drawing mode, starting annotation");
                         _isDrawing = true;
                         EnsureAnnotationBitmap();
                         _selectStart = e.Location;
@@ -298,6 +301,7 @@ namespace LearningAssistant.Forms
                         return;
                     }
 
+                    _logger.LogInformation("MouseDown Right: Starting highlight selection at {X},{Y}", e.Location.X, e.Location.Y);
                     _isSelecting = true;
                     _selectStart = e.Location;
                     _selectEnd = e.Location;
@@ -413,10 +417,17 @@ namespace LearningAssistant.Forms
                     _selectEnd = e.Location;
                     _lastSelectionRect = GetSelectionRectangle(_selectStart, _selectEnd);
 
+                    _logger.LogInformation("MouseUp: _isSelecting=true, _lastSelectionRect={X},{Y} {Width}x{Height}",
+                        _lastSelectionRect?.X, _lastSelectionRect?.Y, _lastSelectionRect?.Width, _lastSelectionRect?.Height);
+
                     var isHighlightMode = IsHighlightModeCallback?.Invoke() ?? true;
+                    _logger.LogInformation("MouseUp: isHighlightMode={IsHighlightMode}", isHighlightMode);
+                    
                     if (isHighlightMode && _lastSelectionRect.HasValue)
                     {
+                        _logger.LogInformation("MouseUp: Calling AddHighlightCallback");
                         AddHighlightCallback?.Invoke(_lastSelectionRect.Value);
+                        _lastSelectionRect = null;
                     }
                     else
                     {

@@ -96,7 +96,6 @@ namespace LearningAssistant.Forms
         private System.Windows.Forms.Timer? _longPressTimer;
 
         private HighlightColor _currentHighlightColor = HighlightColor.Yellow;
-        private Stack<HighlightUndoAction>? _highlightUndoStack;
 
         private bool _isNightMode = false;
         private Bitmap? _highlightBitmap;
@@ -132,6 +131,11 @@ namespace LearningAssistant.Forms
 
             _navigationManager.IsHighlightModeCallback = () => _highlightManager?.IsHighlightMode ?? true;
             _navigationManager.AddHighlightCallback = rect => _highlightManager?.AddHighlight(rect);
+
+            // 在 _navigationManager 初始化后绑定鼠标事件
+            pictureBoxPdf.MouseDown += _navigationManager.MouseDown;
+            pictureBoxPdf.MouseMove += _navigationManager.MouseMove;
+            pictureBoxPdf.MouseUp += _navigationManager.MouseUp;
         }
 
         #region IPdfReaderFormAccess Implementation
@@ -206,6 +210,7 @@ namespace LearningAssistant.Forms
 
         public Panel? PanelPdf => panelPdf;
         public Panel? PanelNavigation => panelNavigation;
+        public Panel? PanelLeftContainer => panelLeftContainer;
         public TreeView? TreeViewFiles => treeViewFiles;
         public TabControl? TabControlLeft => tabControlLeft;
         public Panel? PanelThumbnails => panelThumbnails;
@@ -449,12 +454,13 @@ namespace LearningAssistant.Forms
             ClearThumbnails();
             _currentPdfPath = pdfPath;
             _bookmarkManager?.ClearCache();
-            _highlightManager?.ClearCacheForPdf(pdfPath);
 
             InitializeBookmarkAndHighlightUI();
 
             RefreshBookmarkList();
             RefreshHighlightList();
+
+            LoadHighlightsForCurrentPage();
         }
 
         public void SetPresenter(PdfPresenter presenter)
@@ -879,14 +885,15 @@ namespace LearningAssistant.Forms
                     displayWidth = (int)(controlHeight * imageAspect);
                 }
 
-                // 应用缩放级别
-                float scale = _zoomLevel / 100.0f;
+                // 使用 _navigationManager 的缩放状态
+                float scale = _navigationManager != null ? _navigationManager.ZoomLevel / 100.0f : _zoomLevel / 100.0f;
                 displayWidth = (int)(displayWidth * scale);
                 displayHeight = (int)(displayHeight * scale);
 
                 // 计算居中位置（考虑拖动偏移）
-                displayX = (controlWidth - displayWidth) / 2 + _imageOffset.X;
-                displayY = (controlHeight - displayHeight) / 2 + _imageOffset.Y;
+                var imageOffset = _navigationManager != null ? _navigationManager.ImageOffset : _imageOffset;
+                displayX = (controlWidth - displayWidth) / 2 + imageOffset.X;
+                displayY = (controlHeight - displayHeight) / 2 + imageOffset.Y;
 
                 return new Rectangle(displayX, displayY, displayWidth, displayHeight);
             }
@@ -1339,9 +1346,7 @@ namespace LearningAssistant.Forms
             pictureBoxPdf.TabIndex = 1;
             pictureBoxPdf.TabStop = false;
             pictureBoxPdf.Paint += PictureBoxPdf_Paint;
-            pictureBoxPdf.MouseDown += PictureBoxPdf_MouseDown;
-            pictureBoxPdf.MouseMove += PictureBoxPdf_MouseMove;
-            pictureBoxPdf.MouseUp += PictureBoxPdf_MouseUp;
+            // 鼠标事件在 InitializeManagers() 之后绑定，因为 _navigationManager 需要先初始化
             pictureBoxPdf.MouseWheel += PictureBoxPdf_MouseWheel;
             // 
             // _ocrPanel
@@ -2211,29 +2216,7 @@ namespace LearningAssistant.Forms
                     }
                     return;
                 }
-                if (_isSelecting)
-                {
-                    _isSelecting = false;
-                    _selectEnd = e.Location;
-                    _lastSelectionRect = GetSelectionRectangle(_selectStart, _selectEnd);
-
-                    if (_isHighlightMode && _lastSelectionRect.HasValue)
-                    {
-                        _ = AddHighlightFromSelectionAsync(_lastSelectionRect.Value);
-                    }
-                    else
-                    {
-                        try
-                        {
-                            pictureBoxPdf.Invalidate();
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Error invalidating after selection");
-                        }
-                        SelectOcrClicked?.Invoke(this, EventArgs.Empty);
-                    }
-                }
+                
 
                 if (_isDragging || _longPressDragStarted)
                 {
@@ -2292,101 +2275,7 @@ namespace LearningAssistant.Forms
             pictureBoxPdf.Cursor = Cursors.Hand;
         }
 
-        private async Task AddHighlightFromSelectionAsync(Rectangle selectionRect)
-        {
-            try
-            {
-                // 捕获共享状态到局部变量，避免异步操作中的竞态条件
-                var currentPageImage = _currentPageImage;
-                var currentPdfPath = _currentPdfPath;
-                var currentPageIndex = _currentPageIndex;
-                var currentHighlightColor = _currentHighlightColor;
-
-                if (currentPageImage == null || string.IsNullOrEmpty(currentPdfPath)) return;
-
-                var imgRect = GetImageDisplayRect();
-                if (imgRect.Width <= 0 || imgRect.Height <= 0) return;
-
-                // 计算选择区域在显示矩形中的相对位置
-                float x = Math.Max(0, selectionRect.X - imgRect.X);
-                float y = Math.Max(0, selectionRect.Y - imgRect.Y);
-                float width = Math.Min(selectionRect.Width, imgRect.Right - selectionRect.X);
-                float height = Math.Min(selectionRect.Height, imgRect.Bottom - selectionRect.Y);
-
-                // 直接使用显示矩形尺寸进行归一化，与UpdateHighlightLayer保持一致
-                var normalizedRect = new RectangleF(
-                    x / imgRect.Width,
-                    y / imgRect.Height,
-                    width / imgRect.Width,
-                    height / imgRect.Height
-                );
-
-                // 确保矩形有效
-                if (normalizedRect.Width < 0.01f || normalizedRect.Height < 0.01f) return;
-
-                // 使用OCR识别选中区域的文字
-                string ocrText = await GetOcrTextFromSelectionAsync(selectionRect, currentPageImage);
-
-                // 如果OCR文本为空，提示用户
-                if (string.IsNullOrEmpty(ocrText))
-                {
-                    if (_presenter != null && !_presenter.IsOcrAvailable())
-                    {
-                        ShowWarning("OCR服务不可用，无法识别文字。\n请检查 tessdata 目录和语言数据文件是否存在。");
-                    }
-                }
-
-                // 添加高亮（包含OCR识别的文字）
-                var highlight = new PdfHighlight
-                {
-                    PdfPath = currentPdfPath,
-                    PageIndex = currentPageIndex,
-                    NormalizedX = normalizedRect.X,
-                    NormalizedY = normalizedRect.Y,
-                    NormalizedWidth = normalizedRect.Width,
-                    NormalizedHeight = normalizedRect.Height,
-                    Text = ocrText,
-                    Color = currentHighlightColor,
-                    CreatedAt = DateTime.Now
-                };
-
-                _highlightUndoStack.Push(new HighlightUndoAction
-                {
-                    ActionType = HighlightActionType.Add,
-                    Highlight = highlight
-                });
-                _highlightService.AddHighlight(
-                    currentPdfPath,
-                    currentPageIndex,
-                    normalizedRect.X,
-                    normalizedRect.Y,
-                    normalizedRect.Width,
-                    normalizedRect.Height,
-                    ocrText,
-                    currentHighlightColor
-                );
-
-                RefreshHighlightList();
-                UpdateHighlightLayer();
-                pictureBoxPdf.Invalidate();
-
-                // 同步OCR文本到翻译原文框
-                if (!string.IsNullOrEmpty(ocrText) && textBoxOriginal != null)
-                {
-                    textBoxOriginal.Text = ocrText;
-
-                    // 如果翻译功能已启用，自动触发翻译
-                    if (_isTranslationEnabled)
-                    {
-                        TranslateClicked?.Invoke(this, EventArgs.Empty);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error adding highlight from selection");
-            }
-        }
+        
 
         private async Task<string> GetOcrTextFromSelectionAsync(Rectangle selectionRect, Bitmap currentPageImage)
         {
@@ -2446,47 +2335,8 @@ namespace LearningAssistant.Forms
             {
                 if (e.Delta != 0)
                 {
-                    if ((ModifierKeys & Keys.Control) == Keys.Control)
-                    {
-                        // Ctrl + 滚轮：缩放
-                        if (e.Delta > 0) _zoomLevel = Math.Min(400, _zoomLevel + 10);
-                        else _zoomLevel = Math.Max(10, _zoomLevel - 10);
-
-                        // 异步渲染，避免阻塞 UI 线程
-                        Task.Run(async () =>
-                        {
-                            try
-                            {
-                                var page = int.TryParse(textBoxPage.Text, out var p) ? p - 1 : 0;
-                                int targetW = (int)(pictureBoxPdf.ClientSize.Width * _zoomLevel / 100.0);
-                                int targetH = (int)(pictureBoxPdf.ClientSize.Height * _zoomLevel / 100.0);
-                                var bmp = await _presenter!.RenderPageAsync(page, Math.Max(1, targetW), Math.Max(1, targetH));
-                                if (bmp != null)
-                                {
-                                    BeginInvoke(() => DisplayImage(bmp));
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogError(ex, "Error rendering page during zoom");
-                            }
-                        });
-                    }
-                    else
-                    {
-                        // 普通滚轮：翻页
-                        if (_presenter != null)
-                        {
-                            if (e.Delta < 0)
-                            {
-                                _presenter.NextPage();
-                            }
-                            else
-                            {
-                                _presenter.PreviousPage();
-                            }
-                        }
-                    }
+                    // 使用 _navigationManager 处理鼠标滚轮事件
+                    _navigationManager?.ZoomByMouseWheel(e.Delta, (ModifierKeys & Keys.Control) == Keys.Control);
                 }
             }
             catch (Exception ex)
@@ -2497,25 +2347,7 @@ namespace LearningAssistant.Forms
 
         public async void ResetZoom()
         {
-            _zoomLevel = 100;
-            _imageOffset = Point.Empty;
-            if (_presenter != null)
-            {
-                var page = int.TryParse(textBoxPage.Text, out var p) ? p - 1 : 0;
-                try
-                {
-                    var bmp = await _presenter.RenderPageAsync(page, pictureBoxPdf.ClientSize.Width, pictureBoxPdf.ClientSize.Height);
-                    if (bmp != null)
-                    {
-                        DisplayImage(bmp);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error resetting zoom");
-                }
-            }
-            pictureBoxPdf.Invalidate();
+            _navigationManager?.ResetZoom();
         }
 
         private void PictureBoxPdf_Paint(object? sender, PaintEventArgs e)
@@ -2539,13 +2371,15 @@ namespace LearningAssistant.Forms
                     e.Graphics.DrawImage(_currentPageImage, imgRect);
                 }
 
-                if (_isSelecting)
+                // 使用 _navigationManager 的状态
+                if (_navigationManager != null && _navigationManager.LastSelectionRect.HasValue)
                 {
-                    var rect = GetSelectionRectangle(_selectStart, _selectEnd);
+                    var isHighlightMode = _navigationManager.IsHighlightModeCallback?.Invoke() ?? true;
+                    var rect = _navigationManager.LastSelectionRect.Value;
 
-                    if (_isHighlightMode)
+                    if (isHighlightMode)
                     {
-                        var color = HighlightService.GetHighlightColor(_currentHighlightColor);
+                        var color = HighlightService.GetHighlightColor(_highlightManager?.CurrentHighlightColor ?? _currentHighlightColor);
                         using var brush = new SolidBrush(Color.FromArgb(color.A, color.R, color.G, color.B));
                         e.Graphics.FillRectangle(brush, rect);
                         using var pen = new Pen(Color.FromArgb(color.A + 50, color.R, color.G, color.B), 2);
@@ -2558,11 +2392,6 @@ namespace LearningAssistant.Forms
                         using var pen = new Pen(Color.Orange, 2);
                         e.Graphics.DrawRectangle(pen, rect);
                     }
-                }
-                else if (_isDrawing)
-                {
-                    using var pen = new Pen(Color.Red, 4f);
-                    e.Graphics.DrawLine(pen, _selectStart, _selectEnd);
                 }
 
                 if (!string.IsNullOrEmpty(_currentPdfPath) && _currentPageImage != null)
@@ -2586,13 +2415,14 @@ namespace LearningAssistant.Forms
         {
             try
             {
-                if (_highlightBitmap == null || _currentPageImage == null)
+                if (_currentPageImage == null)
                     return;
 
-                var imgRect = GetImageDisplayRect();
-
-                // _highlightBitmap已经是imgRect尺寸，直接绘制到imgRect位置
-                g.DrawImage(_highlightBitmap, imgRect.Location);
+                // 使用 _highlightManager 的高亮位图
+                if (_highlightManager != null)
+                {
+                    _highlightManager.DrawHighlightsFromLayer(g);
+                }
             }
             catch (ObjectDisposedException ex)
             {
@@ -2699,16 +2529,43 @@ namespace LearningAssistant.Forms
 
         private void ButtonTranslate_Click(object? sender, EventArgs e)
         {
+            if (_presenter != null && !_presenter.IsTranslationServiceAvailable())
+            {
+                MessageBox.Show("翻译服务不可用，请检查百度翻译API配置", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
             TranslateClicked?.Invoke(this, EventArgs.Empty);
         }
 
         private void ButtonSpeakOriginal_Click(object? sender, EventArgs e)
         {
+            var text = textBoxOriginal?.Text ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                MessageBox.Show("请先输入或选择要朗读的文本", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (_presenter != null && !_presenter.IsTTSServiceAvailable())
+            {
+                MessageBox.Show("朗读服务不可用，请检查TTS配置", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
             SpeakOriginal?.Invoke(this, EventArgs.Empty);
         }
 
         private void ButtonSpeakTranslation_Click(object? sender, EventArgs e)
         {
+            var text = textBoxTranslation?.Text ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                MessageBox.Show("请先进行翻译", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (_presenter != null && !_presenter.IsTTSServiceAvailable())
+            {
+                MessageBox.Show("朗读服务不可用，请检查TTS配置", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
             SpeakTranslation?.Invoke(this, EventArgs.Empty);
         }
 

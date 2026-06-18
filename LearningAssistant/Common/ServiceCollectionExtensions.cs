@@ -255,13 +255,19 @@ namespace LearningAssistant.Common
             services.AddScoped<SettingForm>();
             services.AddScoped<LearningForm>();
             services.AddScoped<PdfReaderForm>();
-            services.AddScoped<ResultForm>();
+            services.AddScoped<ResultForm>(sp =>
+            {
+                var logger = sp.GetService<ILogger<ResultForm>>();
+                var themeService = sp.GetService<IThemeService>();
+                return new ResultForm(logger, themeService);
+            });
             services.AddScoped<ContentEditorForm>(sp =>
             {
                 var logger = sp.GetRequiredService<ILogger<ContentEditorForm>>();
                 var appConfig = sp.GetRequiredService<AppConfig>();
                 var aiPanelPopupService = sp.GetRequiredService<IAIPanelPopupService>();
-                return new ContentEditorForm(logger, appConfig, aiPanelPopupService);
+                var themeService = sp.GetRequiredService<IThemeService>();
+                return new ContentEditorForm(logger, appConfig, aiPanelPopupService, themeService);
             });
             services.AddScoped<LearningManagementForm>(sp =>
             {
@@ -270,7 +276,8 @@ namespace LearningAssistant.Common
                 var reportService = sp.GetRequiredService<LearningReportService>();
                 var quoteService = sp.GetRequiredService<QuoteService>();
                 var logger = sp.GetService<ILogger<LearningManagementForm>>();
-                return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService, logger);
+                var themeService = sp.GetService<IThemeService>();
+                return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService, logger, themeService);
             });
 
             services.AddScoped<ISettingView>(sp => sp.GetRequiredService<SettingForm>());

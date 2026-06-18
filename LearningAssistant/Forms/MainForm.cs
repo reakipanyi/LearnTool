@@ -212,7 +212,7 @@ namespace LearningAssistant.Forms
 
         public void UpdateUserComparison(List<UserComparisonData> comparisonData)
         {
-            var form = new UserComparisonForm(comparisonData);
+            var form = new UserComparisonForm(comparisonData, _themeService);
             form.ShowDialog();
         }
 
@@ -588,7 +588,7 @@ namespace LearningAssistant.Forms
         {
             try
             {
-                var form = new WebView2BrowserForm(_cloudStorageService, _logger, _webBookmarkService);
+                var form = new WebView2BrowserForm(_cloudStorageService, _logger, _webBookmarkService, _themeService);
                 form.Show();
             }
             catch (Exception ex)

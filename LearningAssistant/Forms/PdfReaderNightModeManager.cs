@@ -57,6 +57,7 @@ namespace LearningAssistant.Forms
                 _form.BackColor = Color.FromArgb(30, 30, 30);
                 _form.PanelPdf!.BackColor = Color.FromArgb(20, 20, 20);
                 _form.PanelNavigation!.BackColor = Color.FromArgb(45, 45, 45);
+                _form.PanelLeftContainer!.BackColor = Color.FromArgb(35, 35, 35);
                 _form.TreeViewFiles!.BackColor = Color.FromArgb(40, 40, 40);
                 _form.TreeViewFiles.ForeColor = Color.White;
                 _form.TabControlLeft!.BackColor = Color.FromArgb(40, 40, 40);
@@ -72,6 +73,7 @@ namespace LearningAssistant.Forms
                 _form.BackColor = Color.FromArgb(240, 240, 240);
                 _form.PanelPdf!.BackColor = Color.White;
                 _form.PanelNavigation!.BackColor = Color.FromArgb(240, 240, 240);
+                _form.PanelLeftContainer!.BackColor = Color.FromArgb(240, 240, 240);
                 _form.TreeViewFiles!.BackColor = Color.White;
                 _form.TreeViewFiles.ForeColor = Color.Black;
                 _form.TabControlLeft!.BackColor = Color.White;

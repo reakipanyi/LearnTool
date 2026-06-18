@@ -237,28 +237,34 @@ namespace LearningAssistant.Forms
         {
             BackColor = colors.Background;
 
-            // Light 主题下不改变 Panel 的颜色
-            if (colors.ThemeMode == ThemeMode.Dark)
+            if (panelContent != null)
             {
-                if (panelContent != null)
-                {
-                    panelContent.BackColor = colors.Surface;
-                }
+                panelContent.BackColor = colors.Surface;
+            }
 
-                if (panelConfig != null)
-                {
-                    panelConfig.BackColor = colors.Surface;
-                }
+            if (panelConfig != null)
+            {
+                panelConfig.BackColor = colors.Surface;
+            }
 
-                if (panelStats != null)
-                {
-                    panelStats.BackColor = colors.Surface;
-                }
+            if (panelStats != null)
+            {
+                panelStats.BackColor = colors.Surface;
+            }
 
-                if (panelQuizMode != null)
-                {
-                    panelQuizMode.BackColor = colors.Background;
-                }
+            if (panelQuizMode != null)
+            {
+                panelQuizMode.BackColor = colors.ThemeMode == ThemeMode.Dark ? colors.Surface : Color.FromArgb(255, 248, 220);
+            }
+
+            if (middlePanel != null)
+            {
+                middlePanel.BackColor = colors.Background;
+            }
+
+            if (_buttonsView != null && _buttonsView.ButtonsPanel != null)
+            {
+                _buttonsView.ButtonsPanel.BackColor = colors.Background;
             }
 
             if (listBoxDisplay != null)
@@ -272,7 +278,6 @@ namespace LearningAssistant.Forms
                 labelContent.ForeColor = colors.TextPrimary;
                 labelContent.BackColor = colors.Surface;
             }
-
 
             if (buttonKnown != null)
             {
@@ -301,7 +306,7 @@ namespace LearningAssistant.Forms
 
             if (labelStreak != null)
             {
-                labelStreak.ForeColor = colors.TextPrimary;
+                labelStreak.ForeColor = colors.ThemeMode == ThemeMode.Dark ? colors.Accent : Color.FromArgb(255, 140, 0);
             }
 
             if (labelEncouragement != null)
@@ -319,6 +324,29 @@ namespace LearningAssistant.Forms
                 labelQuizHint.ForeColor = colors.TextSecondary;
             }
 
+            if (listBoxItems != null)
+            {
+                listBoxItems.ForeColor = colors.TextPrimary;
+                listBoxItems.BackColor = colors.Surface;
+            }
+
+            if (labelListStatus != null)
+            {
+                labelListStatus.ForeColor = colors.TextSecondary;
+                labelListStatus.BackColor = colors.Surface;
+            }
+
+            if (panelNotes != null)
+            {
+                panelNotes.BackColor = colors.Surface;
+            }
+
+            if (richTextBoxNotes != null)
+            {
+                richTextBoxNotes.ForeColor = colors.TextPrimary;
+                richTextBoxNotes.BackColor = colors.Surface;
+            }
+
             foreach (Control control in Controls)
             {
                 ApplyThemeToControl(control, colors);
@@ -333,11 +361,7 @@ namespace LearningAssistant.Forms
             }
             else if (control is Panel panel)
             {
-                // Light 主题下不改变 Panel 的颜色
-                if (colors.ThemeMode == ThemeMode.Dark)
-                {
-                    panel.BackColor = colors.Surface;
-                }
+                panel.BackColor = colors.Surface;
             }
             else if (control is GroupBox groupBox)
             {
@@ -347,15 +371,39 @@ namespace LearningAssistant.Forms
             else if (control is CheckBox checkBox)
             {
                 checkBox.ForeColor = colors.TextPrimary;
+                checkBox.BackColor = colors.Surface;
             }
             else if (control is RadioButton radioButton)
             {
                 radioButton.ForeColor = colors.TextPrimary;
+                radioButton.BackColor = colors.Surface;
             }
             else if (control is ComboBox comboBox)
             {
                 comboBox.BackColor = colors.Surface;
                 comboBox.ForeColor = colors.TextPrimary;
+            }
+            else if (control is FlowLayoutPanel flowLayoutPanel)
+            {
+                flowLayoutPanel.BackColor = colors.Background;
+            }
+            else if (control is RichTextBox richTextBox)
+            {
+                richTextBox.ForeColor = colors.TextPrimary;
+                richTextBox.BackColor = colors.Surface;
+            }
+            else if (control is ProgressBar progressBar)
+            {
+                progressBar.BackColor = colors.Surface;
+            }
+            else if (control is TableLayoutPanel tableLayoutPanel)
+            {
+                tableLayoutPanel.BackColor = colors.Background;
+            }
+            else if (control is ListBox listBox)
+            {
+                listBox.ForeColor = colors.TextPrimary;
+                listBox.BackColor = colors.Surface;
             }
 
             foreach (Control child in control.Controls)

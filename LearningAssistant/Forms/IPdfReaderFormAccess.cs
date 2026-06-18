@@ -46,6 +46,7 @@ namespace LearningAssistant.Forms
 
         Panel? PanelPdf { get; }
         Panel? PanelNavigation { get; }
+        Panel? PanelLeftContainer { get; }
         TreeView? TreeViewFiles { get; }
         TabControl? TabControlLeft { get; }
         Panel? PanelThumbnails { get; }

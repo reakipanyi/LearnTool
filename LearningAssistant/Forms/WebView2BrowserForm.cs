@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Common.Themes;
 using LearningAssistant.Services.Cloud;
 using LearningAssistant.Services.Web;
 using Microsoft.Extensions.Logging;
@@ -12,11 +13,12 @@ namespace LearningAssistant.Forms
     /// <summary>
     /// WebView2 浏览器窗体，支持多个 AI 平台快捷导航和百度网盘集成
     /// </summary>
-    public partial class WebView2BrowserForm : Form
+    public partial class WebView2BrowserForm : Form, IThemeable
     {
         private readonly ICloudStorageService? _cloudStorageService;
         private readonly ILogger? _logger;
         private readonly IWebBookmarkService? _webBookmarkService;
+        private readonly IThemeService? _themeService;
         private WebView2? _webView;
         private bool _isWebViewReady = false;
         private string? _initialPrompt;
@@ -24,6 +26,7 @@ namespace LearningAssistant.Forms
         private List<ToolStripButton>? _providerButtons;
         private Dictionary<string, ToolStripButton>? _hostToButtonMapping;
         private Dictionary<int, string>? _bookmarkIndexToUrl;
+        private ThemeMode _currentThemeMode = ThemeMode.Light;
 
         /// <summary>
         /// URL 常量
@@ -94,17 +97,22 @@ namespace LearningAssistant.Forms
         /// <param name="cloudStorageService">云存储服务（可选）</param>
         /// <param name="logger">日志记录器（可选）</param>
         /// <param name="webBookmarkService">网页书签服务（可选）</param>
+        /// <param name="themeService">主题服务（可选）</param>
         public WebView2BrowserForm(ICloudStorageService? cloudStorageService = null,
                                    ILogger? logger = null,
-                                   IWebBookmarkService? webBookmarkService = null)
+                                   IWebBookmarkService? webBookmarkService = null,
+                                   IThemeService? themeService = null)
         {
             _cloudStorageService = cloudStorageService;
             _logger = logger;
             _webBookmarkService = webBookmarkService;
+            _themeService = themeService;
             InitializeComponent();
             InitializeProviderButtonMappings();
             InitializeBookmarks();
             Load += WebView2BrowserForm_Load;
+
+            _themeService?.RegisterThemeable(this);
         }
 
         /// <summary>
@@ -538,6 +546,7 @@ namespace LearningAssistant.Forms
         {
             if (disposing)
             {
+                _themeService?.UnregisterThemeable(this);
                 if (_webView != null)
                 {
                     _webView.NavigationCompleted -= OnNavigationCompleted;
@@ -547,6 +556,55 @@ namespace LearningAssistant.Forms
                 components?.Dispose();
             }
             base.Dispose(disposing);
+        }
+
+        public void ApplyTheme(ThemeColors colors)
+        {
+            _currentThemeMode = colors.ThemeMode;
+            BackColor = colors.Background;
+
+            if (toolStrip != null)
+            {
+                if (colors.ThemeMode == ThemeMode.Dark)
+                {
+                    toolStrip.BackColor = colors.Surface;
+                    toolStrip.ForeColor = colors.TextPrimary;
+                    toolStrip.RenderMode = ToolStripRenderMode.Professional;
+                    toolStrip.Renderer = new DarkToolStripRenderer(colors);
+                }
+                else
+                {
+                    toolStrip.BackColor = SystemColors.Control;
+                    toolStrip.ForeColor = SystemColors.ControlText;
+                    toolStrip.RenderMode = ToolStripRenderMode.System;
+                    toolStrip.Renderer = null;
+                }
+            }
+
+            if (panelBrowser != null)
+            {
+                panelBrowser.BackColor = colors.Surface;
+            }
+
+            // 通知 WebView2 页面主题变更
+            ApplyWebView2ThemeAsync(colors.ThemeMode == ThemeMode.Dark);
+        }
+
+        private async void ApplyWebView2ThemeAsync(bool isDark)
+        {
+            if (_webView?.CoreWebView2 == null) return;
+
+            try
+            {
+                string script = isDark
+                    ? @"document.documentElement.style.colorScheme = 'dark'; document.documentElement.style.backgroundColor = '#121212';"
+                    : @"document.documentElement.style.colorScheme = 'light'; document.documentElement.style.backgroundColor = '';";
+                await _webView.CoreWebView2.ExecuteScriptAsync(script);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "应用 WebView2 主题失败");
+            }
         }
 
         #region Windows Form Designer generated code
@@ -769,5 +827,59 @@ namespace LearningAssistant.Forms
         }
 
         #endregion
+    }
+
+    /// <summary>
+    /// 深色主题的 ToolStrip 渲染器
+    /// </summary>
+    internal class DarkToolStripRenderer : ToolStripProfessionalRenderer
+    {
+        private readonly ThemeColors _colors;
+
+        public DarkToolStripRenderer(ThemeColors colors) : base(new DarkColorTable(colors))
+        {
+            _colors = colors;
+        }
+
+        protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+        {
+            if (e.Item is ToolStripButton btn && btn.Enabled)
+            {
+                e.TextColor = _colors.TextPrimary;
+            }
+            else
+            {
+                e.TextColor = _colors.TextSecondary;
+            }
+            base.OnRenderItemText(e);
+        }
+    }
+
+    /// <summary>
+    /// 深色主题 ToolStrip 颜色表
+    /// </summary>
+    internal class DarkColorTable : ProfessionalColorTable
+    {
+        private readonly ThemeColors _colors;
+
+        public DarkColorTable(ThemeColors colors)
+        {
+            _colors = colors;
+        }
+
+        public override Color ToolStripBorder => _colors.Divider;
+        public override Color ToolStripContentPanelGradientBegin => _colors.Surface;
+        public override Color ToolStripContentPanelGradientEnd => _colors.Surface;
+        public override Color ToolStripGradientBegin => _colors.Surface;
+        public override Color ToolStripGradientEnd => _colors.Surface;
+        public override Color ToolStripGradientMiddle => _colors.Surface;
+        public override Color ButtonSelectedGradientBegin => _colors.Primary;
+        public override Color ButtonSelectedGradientEnd => _colors.Primary;
+        public override Color ButtonCheckedGradientBegin => _colors.Primary;
+        public override Color ButtonCheckedGradientEnd => _colors.Primary;
+        public override Color ButtonPressedGradientBegin => _colors.PrimaryDark;
+        public override Color ButtonPressedGradientEnd => _colors.PrimaryDark;
+        public override Color MenuItemBorder => _colors.Divider;
+        public override Color MenuItemSelected => _colors.Primary;
     }
 }

@@ -1,16 +1,19 @@
+using LearningAssistant.Common;
+using LearningAssistant.Common.Themes;
 using LearningAssistant.Services.Learning;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
 
 namespace LearningAssistant.Forms
 {
-    public partial class LearningManagementForm : Form
+    public partial class LearningManagementForm : Form, IThemeable
     {
         private readonly ILearningAnalyticsService _analyticsService;
         private readonly ILearningReminderService _reminderService;
         private readonly LearningReportService _reportService;
         private readonly QuoteService _quoteService;
         private readonly ILogger<LearningManagementForm>? _logger;
+        private readonly IThemeService? _themeService;
         private readonly string _userId;
 
         public LearningManagementForm(
@@ -19,6 +22,7 @@ namespace LearningAssistant.Forms
             LearningReportService reportService,
             QuoteService quoteService,
             ILogger<LearningManagementForm>? logger = null,
+            IThemeService? themeService = null,
             string? userId = null)
         {
             InitializeComponent();
@@ -27,7 +31,10 @@ namespace LearningAssistant.Forms
             _reportService = reportService;
             _quoteService = quoteService;
             _logger = logger;
+            _themeService = themeService;
             _userId = userId ?? Environment.UserName;
+
+            _themeService?.RegisterThemeable(this);
 
             _logger?.LogInformation("学习管理窗口初始化，用户ID: {UserId}", _userId);
             LoadData();
@@ -123,7 +130,7 @@ namespace LearningAssistant.Forms
                 var report = _reportService.GenerateDailyReport(_userId, DateTime.Today);
                 var reportText = _reportService.GenerateReportText(report);
 
-                var resultForm = new ResultForm(_logger);
+                var resultForm = new ResultForm(_logger, _themeService);
                 resultForm.ShowReport(reportText);
                 resultForm.Show();
                 _logger?.LogInformation("生成学习报告");
@@ -388,13 +395,83 @@ namespace LearningAssistant.Forms
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing && (components != null))
+            if (disposing)
             {
-                components.Dispose();
+                _themeService?.UnregisterThemeable(this);
+                if (components != null)
+                {
+                    components.Dispose();
+                }
             }
             base.Dispose(disposing);
         }
 
-        #endregion 
+        public void ApplyTheme(ThemeColors colors)
+        {
+            BackColor = colors.Background;
+
+            if (tabControl != null)
+            {
+                tabControl.BackColor = colors.Background;
+            }
+
+            if (tabOverview != null)
+            {
+                tabOverview.BackColor = colors.Surface;
+            }
+
+            if (tabReminders != null)
+            {
+                tabReminders.BackColor = colors.Surface;
+            }
+
+            if (tabReports != null)
+            {
+                tabReports.BackColor = colors.Surface;
+            }
+
+            if (listReminders != null)
+            {
+                listReminders.BackColor = colors.Surface;
+                listReminders.ForeColor = colors.TextPrimary;
+            }
+
+            foreach (Control control in Controls)
+            {
+                ApplyThemeToControl(control, colors);
+            }
+        }
+
+        private void ApplyThemeToControl(Control control, ThemeColors colors)
+        {
+            if (control is Label label)
+            {
+                label.ForeColor = colors.TextPrimary;
+            }
+            else if (control is Button button)
+            {
+                if (button.Name == "btnRefresh")
+                {
+                    button.ForeColor = Color.White;
+                }
+            }
+            else if (control is ListBox listBox)
+            {
+                listBox.BackColor = colors.Surface;
+                listBox.ForeColor = colors.TextPrimary;
+            }
+            else if (control is TabPage tabPage)
+            {
+                tabPage.BackColor = colors.Surface;
+                tabPage.ForeColor = colors.TextPrimary;
+            }
+
+            foreach (Control child in control.Controls)
+            {
+                ApplyThemeToControl(child, colors);
+            }
+        }
+
+        #endregion
     }
 }

@@ -1,3 +1,4 @@
+using LearningAssistant.Models;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.Pdf;
 using Microsoft.Extensions.Logging;
@@ -6,18 +7,6 @@ using System.Drawing.Drawing2D;
 
 namespace LearningAssistant.Forms
 {
-    public enum HighlightActionType
-    {
-        Add,
-        Remove
-    }
-
-    public class HighlightUndoAction
-    {
-        public HighlightActionType ActionType { get; set; }
-        public PdfHighlight? Highlight { get; set; }
-    }
-
     public class PdfReaderHighlightManager : IDisposable
     {
         private readonly ILogger _logger;
@@ -45,15 +34,16 @@ namespace LearningAssistant.Forms
             {
                 if (_form.CurrentPageImage == null)
                 {
+                    _logger.LogWarning("UpdateHighlightLayer: CurrentPageImage is null");
                     CleanupHighlightLayer();
                     return;
                 }
 
-                var imgRect = _form.GetImageDisplayRect();
-                if (imgRect.Width <= 0 || imgRect.Height <= 0) return;
+                int imgWidth = _form.CurrentPageImage.Width;
+                int imgHeight = _form.CurrentPageImage.Height;
 
-                int imgWidth = imgRect.Width;
-                int imgHeight = imgRect.Height;
+                _logger.LogInformation("UpdateHighlightLayer: imgSize={Width}x{Height}, CurrentPdfPath={Path}, CurrentPageIndex={Page}", 
+                    imgWidth, imgHeight, _form.CurrentPdfPath, _form.CurrentPageIndex);
 
                 bool needsRecreate = false;
                 if (_highlightBitmap != null)
@@ -83,6 +73,8 @@ namespace LearningAssistant.Forms
                 _highlightGraphics!.Clear(Color.Transparent);
 
                 var highlights = _highlightService.GetHighlightsForPage(_form.CurrentPdfPath, _form.CurrentPageIndex);
+                _logger.LogInformation("UpdateHighlightLayer: GetHighlightsForPage returned {Count} highlights", highlights.Count);
+                
                 foreach (var highlight in highlights)
                 {
                     DrawHighlight(highlight, imgWidth, imgHeight);
@@ -117,20 +109,28 @@ namespace LearningAssistant.Forms
 
             var rect = new RectangleF(x, y, width, height);
 
+            _logger.LogDebug("DrawHighlight: Id={Id}, Page={Page}, Color={Color}, Rect={X},{Y} {Width}x{Height}, imgSize={ImgWidth}x{ImgHeight}",
+                highlight.Id, highlight.PageIndex, highlight.Color, rect.X, rect.Y, rect.Width, rect.Height, imgWidth, imgHeight);
+
             if (rect.Width <= 0 || rect.Height <= 0 || rect.X < 0 || rect.Y < 0)
             {
+                _logger.LogWarning("DrawHighlight: rect has invalid dimensions, skipping");
                 return;
             }
 
+            int alpha1 = Math.Max(0, color.A);
+            int alpha2 = Math.Max(0, color.A - 30);
+            int alpha3 = Math.Min(255, color.A + 50);
+
             using var gradientBrush = new LinearGradientBrush(
                 rect,
-                Color.FromArgb(color.A, color.R, color.G, color.B),
-                Color.FromArgb(color.A - 30, color.R, color.G, color.B),
+                Color.FromArgb(alpha1, color.R, color.G, color.B),
+                Color.FromArgb(alpha2, color.R, color.G, color.B),
                 LinearGradientMode.ForwardDiagonal);
 
             _highlightGraphics!.FillRectangle(gradientBrush, rect);
 
-            using var pen = new Pen(Color.FromArgb(color.A + 50, color.R, color.G, color.B), 1.5f);
+            using var pen = new Pen(Color.FromArgb(alpha3, color.R, color.G, color.B), 1.5f);
             _highlightGraphics.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
 
             if (!string.IsNullOrEmpty(highlight.Note))
@@ -158,6 +158,8 @@ namespace LearningAssistant.Forms
 
         public void AddHighlight(Rectangle selectionRect)
         {
+            _logger.LogInformation("AddHighlight called with rect: {X},{Y} {Width}x{Height}", 
+                selectionRect.X, selectionRect.Y, selectionRect.Width, selectionRect.Height);
             _ = AddHighlightFromSelectionAsync(selectionRect);
         }
 
@@ -170,24 +172,51 @@ namespace LearningAssistant.Forms
                 var currentPageIndex = _form.CurrentPageIndex;
                 var currentHighlightColor = CurrentHighlightColor;
 
-                if (currentPageImage == null || string.IsNullOrEmpty(currentPdfPath)) return;
+                _logger.LogInformation("AddHighlightFromSelectionAsync: PdfPath={Path}, PageIndex={Page}, ImageSize={Width}x{Height}", 
+                    currentPdfPath, currentPageIndex, currentPageImage?.Width, currentPageImage?.Height);
+
+                if (currentPageImage == null || string.IsNullOrEmpty(currentPdfPath))
+                {
+                    _logger.LogWarning("AddHighlightFromSelectionAsync: currentPageImage or currentPdfPath is null");
+                    return;
+                }
 
                 var imgRect = _form.GetImageDisplayRect();
-                if (imgRect.Width <= 0 || imgRect.Height <= 0) return;
+                _logger.LogInformation("AddHighlightFromSelectionAsync: imgRect={X},{Y} {Width}x{Height}", 
+                    imgRect.X, imgRect.Y, imgRect.Width, imgRect.Height);
+                    
+                if (imgRect.Width <= 0 || imgRect.Height <= 0)
+                {
+                    _logger.LogWarning("AddHighlightFromSelectionAsync: imgRect has invalid size");
+                    return;
+                }
 
-                float x = Math.Max(0, selectionRect.X - imgRect.X);
-                float y = Math.Max(0, selectionRect.Y - imgRect.Y);
-                float width = Math.Min(selectionRect.Width, imgRect.Right - selectionRect.X);
-                float height = Math.Min(selectionRect.Height, imgRect.Bottom - selectionRect.Y);
+                int originalWidth = currentPageImage.Width;
+                int originalHeight = currentPageImage.Height;
+
+                float scaleX = (float)originalWidth / imgRect.Width;
+                float scaleY = (float)originalHeight / imgRect.Height;
+
+                float x = Math.Max(0, (selectionRect.X - imgRect.X) * scaleX);
+                float y = Math.Max(0, (selectionRect.Y - imgRect.Y) * scaleY);
+                float width = Math.Min(selectionRect.Width * scaleX, originalWidth - x);
+                float height = Math.Min(selectionRect.Height * scaleY, originalHeight - y);
 
                 var normalizedRect = new RectangleF(
-                    x / imgRect.Width,
-                    y / imgRect.Height,
-                    width / imgRect.Width,
-                    height / imgRect.Height
+                    x / originalWidth,
+                    y / originalHeight,
+                    width / originalWidth,
+                    height / originalHeight
                 );
 
-                if (normalizedRect.Width < 0.01f || normalizedRect.Height < 0.01f) return;
+                _logger.LogInformation("AddHighlightFromSelectionAsync: normalizedRect={X},{Y} {Width}x{Height}", 
+                    normalizedRect.X, normalizedRect.Y, normalizedRect.Width, normalizedRect.Height);
+
+                if (normalizedRect.Width < 0.001f || normalizedRect.Height < 0.001f)
+                {
+                    _logger.LogWarning("AddHighlightFromSelectionAsync: normalizedRect too small");
+                    return;
+                }
 
                 string ocrText = await GetOcrTextFromSelectionAsync(selectionRect, currentPageImage);
 
@@ -229,6 +258,7 @@ namespace LearningAssistant.Forms
                     currentHighlightColor
                 );
 
+                _logger.LogInformation("AddHighlightFromSelectionAsync: RefreshHighlightList and UpdateHighlightLayer");
                 RefreshHighlightList();
                 UpdateHighlightLayer();
                 _form.PictureBoxPdf?.Invalidate();
@@ -378,8 +408,7 @@ namespace LearningAssistant.Forms
             if (_form.ListBoxHighlights == null || string.IsNullOrEmpty(_form.CurrentPdfPath)) return;
 
             _form.ListBoxHighlights.Items.Clear();
-            var folderPath = Path.GetDirectoryName(_form.CurrentPdfPath) ?? "";
-            var highlights = _highlightService.GetHighlightsForFolder(folderPath);
+            var highlights = _highlightService.GetHighlights(_form.CurrentPdfPath);
             foreach (var highlight in highlights)
             {
                 _form.ListBoxHighlights.Items.Add(highlight);
@@ -407,7 +436,7 @@ namespace LearningAssistant.Forms
                     return;
 
                 var imgRect = _form.GetImageDisplayRect();
-                g.DrawImage(_highlightBitmap, imgRect.Location);
+                g.DrawImage(_highlightBitmap, imgRect);
             }
             catch (ObjectDisposedException ex)
             {

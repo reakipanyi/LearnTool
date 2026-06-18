@@ -1,3 +1,4 @@
+using LearningAssistant.Common.Themes;
 using LearningAssistant.Forms;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services.Cloud;
@@ -233,8 +234,9 @@ namespace LearningAssistant.Services
                 var cloudStorageService = _serviceProvider.GetService<ICloudStorageService>();
                 var logger = _serviceProvider.GetService<ILogger<WebView2BrowserForm>>();
                 var webBookmarkService = _serviceProvider.GetService<IWebBookmarkService>();
+                var themeService = _serviceProvider.GetService<IThemeService>();
 
-                var form = new WebView2BrowserForm(cloudStorageService, logger, webBookmarkService);
+                var form = new WebView2BrowserForm(cloudStorageService, logger, webBookmarkService, themeService);
                 form.InitialPrompt = initialPrompt;
                 form.StartPosition = FormStartPosition.CenterParent;
                 form.ShowDialog();

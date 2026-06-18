@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Common.Themes;
 using LearningAssistant.Views;
 using LearningAssistant.Views.UI;
 using Microsoft.Extensions.Logging;
@@ -6,9 +7,10 @@ using System.ComponentModel;
 
 namespace LearningAssistant.Forms
 {
-    public partial class ResultForm : Form, IResultView
+    public partial class ResultForm : Form, IResultView, IThemeable
     {
         private readonly ILogger _logger;
+        private readonly IThemeService? _themeService;
         private bool _disposed = false;
         private ChartControl chartControl;
         private int _knownCount = 0;
@@ -21,11 +23,14 @@ namespace LearningAssistant.Forms
 
 
 
-        public ResultForm(ILogger? logger = null)
+        public ResultForm(ILogger? logger = null, IThemeService? themeService = null)
         {
             InitializeComponent();
             _logger = logger;
+            _themeService = themeService;
             MinimumSize = new Size(900, 600);
+
+            _themeService?.RegisterThemeable(this);
         }
 
 
@@ -500,9 +505,9 @@ namespace LearningAssistant.Forms
             if (sender is Button button)
             {
                 button.BackColor = Color.FromArgb(
-                    Math.Min(255, button.BackColor.R + 30),
-                    Math.Min(255, button.BackColor.G + 30),
-                    Math.Min(255, button.BackColor.B + 30));
+                    Math.Min(255, (int)button.BackColor.R + 30),
+                    Math.Min(255, (int)button.BackColor.G + 30),
+                    Math.Min(255, (int)button.BackColor.B + 30));
                 button.Cursor = Cursors.Hand;
             }
         }
@@ -542,6 +547,7 @@ namespace LearningAssistant.Forms
 
             if (disposing)
             {
+                _themeService?.UnregisterThemeable(this);
                 if (components != null)
                 {
                     components.Dispose();
@@ -550,6 +556,109 @@ namespace LearningAssistant.Forms
 
             _disposed = true;
             base.Dispose(disposing);
+        }
+
+        public void ApplyTheme(ThemeColors colors)
+        {
+            BackColor = colors.Background;
+
+            if (headerPanel != null)
+            {
+                headerPanel.BackColor = colors.Primary;
+            }
+
+            if (labelTitle != null)
+            {
+                labelTitle.ForeColor = Color.White;
+            }
+
+            if (groupBoxChart != null)
+            {
+                groupBoxChart.BackColor = colors.Surface;
+                groupBoxChart.ForeColor = colors.TextPrimary;
+            }
+
+            if (groupBoxKnown != null)
+            {
+                groupBoxKnown.BackColor = colors.Surface;
+                groupBoxKnown.ForeColor = colors.TextPrimary;
+            }
+
+            if (groupBoxUnknown != null)
+            {
+                groupBoxUnknown.BackColor = colors.Surface;
+                groupBoxUnknown.ForeColor = colors.TextPrimary;
+            }
+
+            if (listBoxKnown != null)
+            {
+                listBoxKnown.BackColor = colors.Surface;
+                listBoxKnown.ForeColor = colors.TextPrimary;
+            }
+
+            if (listBoxUnknown != null)
+            {
+                listBoxUnknown.BackColor = colors.Surface;
+                listBoxUnknown.ForeColor = colors.TextPrimary;
+            }
+
+            if (chartControl != null)
+            {
+                chartControl.BackColor = colors.Surface;
+            }
+
+            if (progressBarAccuracyGradient != null)
+            {
+                progressBarAccuracyGradient.BackColor = colors.Surface;
+            }
+
+            foreach (Control control in Controls)
+            {
+                ApplyThemeToControl(control, colors);
+            }
+        }
+
+        private void ApplyThemeToControl(Control control, ThemeColors colors)
+        {
+            if (control is Label label)
+            {
+                if (label.Name == "labelTitle" || label.Name == "labelMotivational")
+                {
+                    // 标题和鼓励语使用专属颜色
+                    return;
+                }
+                label.ForeColor = colors.TextPrimary;
+            }
+            else if (control is ProgressBar progressBar)
+            {
+                progressBar.BackColor = colors.Surface;
+            }
+            else if (control is GroupBox groupBox)
+            {
+                groupBox.BackColor = colors.Surface;
+                groupBox.ForeColor = colors.TextPrimary;
+            }
+            else if (control is ListBox listBox)
+            {
+                listBox.BackColor = colors.Surface;
+                listBox.ForeColor = colors.TextPrimary;
+            }
+            else if (control is Panel panel)
+            {
+                if (panel.Name == "headerPanel")
+                {
+                    panel.BackColor = colors.Primary;
+                }
+                else
+                {
+                    panel.BackColor = colors.Background;
+                }
+            }
+
+            foreach (Control child in control.Controls)
+            {
+                ApplyThemeToControl(child, colors);
+            }
         }
     }
 }
