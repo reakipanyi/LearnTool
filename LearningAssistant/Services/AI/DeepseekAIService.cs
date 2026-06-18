@@ -91,8 +91,9 @@ namespace LearningAssistant.Services.AI
                         if (errorObj != null && errorObj.error != null)
                             errorDetail += $": {errorObj.error}";
                     }
-                    catch
+                    catch (JsonException ex)
                     {
+                        _logger.LogWarning("Failed to parse error response: {Ex}", ex.Message);
                     }
 
                     _logger.LogError("Deepseek API调用失败: {Error}", errorDetail);

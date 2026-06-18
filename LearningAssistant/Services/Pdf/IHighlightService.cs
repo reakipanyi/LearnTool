@@ -50,7 +50,8 @@ namespace LearningAssistant.Services.Pdf
         /// <param name="normalizedHeight">归一化高度（0-1）</param>
         /// <param name="text">高亮选中的文本</param>
         /// <param name="color">高亮颜色</param>
-        void AddHighlight(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text = "", HighlightColor color = HighlightColor.Yellow);
+        /// <returns>添加的高亮的Id</returns>
+        string AddHighlight(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text = "", HighlightColor color = HighlightColor.Yellow);
 
         /// <summary>
         /// 添加带笔记的高亮

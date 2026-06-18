@@ -76,13 +76,8 @@ namespace LearningAssistant.Forms
 
         private void ApplyThemeToControl(Control control, ThemeColors colors)
         {
-            /*
-            if (control is Button button)
-            {
-                button.BackColor = colors.Primary;
-                button.ForeColor = Color.White;
-            }
-            else*/
+            if (control == null) return;
+
             if (control is Label label)
             {
                 label.ForeColor = colors.TextPrimary;
@@ -101,9 +96,15 @@ namespace LearningAssistant.Forms
                 groupBox.ForeColor = colors.TextPrimary;
             }
 
-            foreach (Control child in control.Controls)
+            if (control.Controls != null)
             {
-                ApplyThemeToControl(child, colors);
+                foreach (Control child in control.Controls)
+                {
+                    if (child != null)
+                    {
+                        ApplyThemeToControl(child, colors);
+                    }
+                }
             }
         }
 

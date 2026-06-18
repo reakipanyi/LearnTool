@@ -23,6 +23,7 @@ namespace LearningAssistant.Forms
         private Point _dragStart = Point.Empty;
         private Point _imageOffset = Point.Empty;
         private Rectangle? _lastSelectionRect = null;
+        private Rectangle? _pendingHighlightRect = null;
 
         private bool _isOcrPanelDragging = false;
         private Point _ocrPanelStartPoint = Point.Empty;
@@ -52,7 +53,7 @@ namespace LearningAssistant.Forms
 
         public int ZoomLevel => _zoomLevel;
         public bool IsLocked => _isLocked;
-        public Rectangle? LastSelectionRect => _lastSelectionRect;
+        public Rectangle? LastSelectionRect => _lastSelectionRect ?? _pendingHighlightRect;
         public Point ImageOffset => _imageOffset;
 
         public Func<bool>? IsHighlightModeCallback { get; set; }
@@ -94,6 +95,10 @@ namespace LearningAssistant.Forms
                         _form.Form.BeginInvoke(() => _form.DisplayImage(bmp));
                     }
                 }
+                catch (OperationCanceledException)
+                {
+                    // Zoom operation cancelled, ignore
+                }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error rendering page during zoom");
@@ -125,6 +130,10 @@ namespace LearningAssistant.Forms
                                 _form.Form.BeginInvoke(() => _form.DisplayImage(bmp));
                             }
                         }
+                        catch (OperationCanceledException)
+                        {
+                            // Render cancelled, ignore
+                        }
                         catch (Exception ex)
                         {
                             _logger.LogError(ex, "Error rendering page during zoom");
@@ -145,6 +154,14 @@ namespace LearningAssistant.Forms
                         }
                     }
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                // Zoom cancelled, ignore
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogWarning(ex, "Invalid operation in ZoomByMouseWheel");
             }
             catch (Exception ex)
             {
@@ -169,6 +186,10 @@ namespace LearningAssistant.Forms
                     {
                         _form.Form.BeginInvoke(() => _form.DisplayImage(bmp));
                     }
+                }
+                catch (OperationCanceledException)
+                {
+                    // Reset cancelled, ignore
                 }
                 catch (Exception ex)
                 {
@@ -426,8 +447,16 @@ namespace LearningAssistant.Forms
                     if (isHighlightMode && _lastSelectionRect.HasValue)
                     {
                         _logger.LogInformation("MouseUp: Calling AddHighlightCallback");
+                        // 保存选择矩形用于显示
+                        _pendingHighlightRect = _lastSelectionRect;
+                        // 触发重绘，让用户看到选择矩形
+                        _form.PictureBoxPdf.Invalidate();
+                        // 调用添加高亮的回调
                         AddHighlightCallback?.Invoke(_lastSelectionRect.Value);
+                        // 清除选择矩形
                         _lastSelectionRect = null;
+                        // 延迟清除待处理矩形
+                        StartClearPendingHighlightTimer();
                     }
                     else
                     {
@@ -469,6 +498,26 @@ namespace LearningAssistant.Forms
                 _longPressTimer.Stop();
             }
             _isLongPressPending = false;
+        }
+
+        private System.Windows.Forms.Timer? _clearPendingHighlightTimer;
+
+        private void StartClearPendingHighlightTimer()
+        {
+            // 先停止旧的定时器
+            _clearPendingHighlightTimer?.Stop();
+            _clearPendingHighlightTimer?.Dispose();
+
+            // 创建新的定时器，延迟清除待处理高亮矩形
+            _clearPendingHighlightTimer = new System.Windows.Forms.Timer();
+            _clearPendingHighlightTimer.Interval = 100; // 100ms 延迟
+            _clearPendingHighlightTimer.Tick += (s, e) =>
+            {
+                _clearPendingHighlightTimer?.Stop();
+                _pendingHighlightRect = null;
+                _form.PictureBoxPdf?.Invalidate();
+            };
+            _clearPendingHighlightTimer.Start();
         }
 
         private void LongPressTimer_Tick(object? sender, EventArgs e)

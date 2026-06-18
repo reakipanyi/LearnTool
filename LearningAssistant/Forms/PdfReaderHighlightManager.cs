@@ -2,7 +2,6 @@ using LearningAssistant.Models;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.Pdf;
 using Microsoft.Extensions.Logging;
-using System.Drawing;
 using System.Drawing.Drawing2D;
 
 namespace LearningAssistant.Forms
@@ -42,7 +41,7 @@ namespace LearningAssistant.Forms
                 int imgWidth = _form.CurrentPageImage.Width;
                 int imgHeight = _form.CurrentPageImage.Height;
 
-                _logger.LogInformation("UpdateHighlightLayer: imgSize={Width}x{Height}, CurrentPdfPath={Path}, CurrentPageIndex={Page}", 
+                _logger.LogInformation("UpdateHighlightLayer: imgSize={Width}x{Height}, CurrentPdfPath={Path}, CurrentPageIndex={Page}",
                     imgWidth, imgHeight, _form.CurrentPdfPath, _form.CurrentPageIndex);
 
                 bool needsRecreate = false;
@@ -74,7 +73,7 @@ namespace LearningAssistant.Forms
 
                 var highlights = _highlightService.GetHighlightsForPage(_form.CurrentPdfPath, _form.CurrentPageIndex);
                 _logger.LogInformation("UpdateHighlightLayer: GetHighlightsForPage returned {Count} highlights", highlights.Count);
-                
+
                 foreach (var highlight in highlights)
                 {
                     DrawHighlight(highlight, imgWidth, imgHeight);
@@ -118,7 +117,7 @@ namespace LearningAssistant.Forms
                 return;
             }
 
-            int alpha1 = Math.Max(0, color.A);
+            int alpha1 = Math.Max(0, color.A - 0);
             int alpha2 = Math.Max(0, color.A - 30);
             int alpha3 = Math.Min(255, color.A + 50);
 
@@ -158,7 +157,7 @@ namespace LearningAssistant.Forms
 
         public void AddHighlight(Rectangle selectionRect)
         {
-            _logger.LogInformation("AddHighlight called with rect: {X},{Y} {Width}x{Height}", 
+            _logger.LogInformation("AddHighlight called with rect: {X},{Y} {Width}x{Height}",
                 selectionRect.X, selectionRect.Y, selectionRect.Width, selectionRect.Height);
             _ = AddHighlightFromSelectionAsync(selectionRect);
         }
@@ -172,7 +171,7 @@ namespace LearningAssistant.Forms
                 var currentPageIndex = _form.CurrentPageIndex;
                 var currentHighlightColor = CurrentHighlightColor;
 
-                _logger.LogInformation("AddHighlightFromSelectionAsync: PdfPath={Path}, PageIndex={Page}, ImageSize={Width}x{Height}", 
+                _logger.LogInformation("AddHighlightFromSelectionAsync: PdfPath={Path}, PageIndex={Page}, ImageSize={Width}x{Height}",
                     currentPdfPath, currentPageIndex, currentPageImage?.Width, currentPageImage?.Height);
 
                 if (currentPageImage == null || string.IsNullOrEmpty(currentPdfPath))
@@ -182,9 +181,9 @@ namespace LearningAssistant.Forms
                 }
 
                 var imgRect = _form.GetImageDisplayRect();
-                _logger.LogInformation("AddHighlightFromSelectionAsync: imgRect={X},{Y} {Width}x{Height}", 
+                _logger.LogInformation("AddHighlightFromSelectionAsync: imgRect={X},{Y} {Width}x{Height}",
                     imgRect.X, imgRect.Y, imgRect.Width, imgRect.Height);
-                    
+
                 if (imgRect.Width <= 0 || imgRect.Height <= 0)
                 {
                     _logger.LogWarning("AddHighlightFromSelectionAsync: imgRect has invalid size");
@@ -209,7 +208,7 @@ namespace LearningAssistant.Forms
                     height / originalHeight
                 );
 
-                _logger.LogInformation("AddHighlightFromSelectionAsync: normalizedRect={X},{Y} {Width}x{Height}", 
+                _logger.LogInformation("AddHighlightFromSelectionAsync: normalizedRect={X},{Y} {Width}x{Height}",
                     normalizedRect.X, normalizedRect.Y, normalizedRect.Width, normalizedRect.Height);
 
                 if (normalizedRect.Width < 0.001f || normalizedRect.Height < 0.001f)
@@ -241,13 +240,8 @@ namespace LearningAssistant.Forms
                     CreatedAt = DateTime.Now
                 };
 
-                _undoStack.Push(new HighlightUndoAction
-                {
-                    ActionType = HighlightActionType.Add,
-                    Highlight = highlight
-                });
-
-                _highlightService.AddHighlight(
+                // 添加高亮并获取生成的Id
+                var highlightId = _highlightService.AddHighlight(
                     currentPdfPath,
                     currentPageIndex,
                     normalizedRect.X,
@@ -257,6 +251,15 @@ namespace LearningAssistant.Forms
                     ocrText,
                     currentHighlightColor
                 );
+
+                // 更新highlight的Id以匹配实际保存的高亮
+                highlight.Id = highlightId;
+
+                _undoStack.Push(new HighlightUndoAction
+                {
+                    ActionType = HighlightActionType.Add,
+                    Highlight = highlight
+                });
 
                 _logger.LogInformation("AddHighlightFromSelectionAsync: RefreshHighlightList and UpdateHighlightLayer");
                 RefreshHighlightList();
@@ -371,30 +374,43 @@ namespace LearningAssistant.Forms
 
         public void UndoHighlight()
         {
-            if (_undoStack.Count == 0) return;
+            if (_undoStack.Count == 0)
+            {
+                _logger.LogInformation("UndoHighlight: 撤销栈为空，无可撤销的操作");
+                _form.ShowMessage("没有可撤销的操作", "提示");
+                return;
+            }
 
             var lastAction = _undoStack.Pop();
+            _logger.LogInformation("UndoHighlight: 执行撤销, ActionType={ActionType}, HighlightId={HighlightId}",
+                lastAction.ActionType, lastAction.Highlight?.Id);
+
             if (lastAction.ActionType == HighlightActionType.Add)
             {
                 if (lastAction.Highlight != null)
                 {
                     _highlightService.RemoveHighlight(_form.CurrentPdfPath, lastAction.Highlight.Id);
+                    _logger.LogInformation("UndoHighlight: 已删除高亮, Id={HighlightId}", lastAction.Highlight.Id);
                 }
             }
             else if (lastAction.ActionType == HighlightActionType.Remove)
             {
                 if (lastAction.Highlight != null)
                 {
-                    _highlightService.AddHighlight(
+                    var highlight = lastAction.Highlight;
+                    var newHighlightId = _highlightService.AddHighlight(
                         _form.CurrentPdfPath,
-                        lastAction.Highlight.PageIndex,
-                        lastAction.Highlight.NormalizedX > 0 ? lastAction.Highlight.NormalizedX : lastAction.Highlight.X,
-                        lastAction.Highlight.NormalizedY > 0 ? lastAction.Highlight.NormalizedY : lastAction.Highlight.Y,
-                        lastAction.Highlight.NormalizedWidth > 0 ? lastAction.Highlight.NormalizedWidth : lastAction.Highlight.Width,
-                        lastAction.Highlight.NormalizedHeight > 0 ? lastAction.Highlight.NormalizedHeight : lastAction.Highlight.Height,
-                        lastAction.Highlight.Text,
-                        lastAction.Highlight.Color
+                        highlight.PageIndex,
+                        highlight.NormalizedX > 0 ? highlight.NormalizedX : highlight.X,
+                        highlight.NormalizedY > 0 ? highlight.NormalizedY : highlight.Y,
+                        highlight.NormalizedWidth > 0 ? highlight.NormalizedWidth : highlight.Width,
+                        highlight.NormalizedHeight > 0 ? highlight.NormalizedHeight : highlight.Height,
+                        highlight.Text,
+                        highlight.Color
                     );
+                    // 更新highlight的Id为新生成的Id，以便后续撤销
+                    highlight.Id = newHighlightId;
+                    _logger.LogInformation("UndoHighlight: 已恢复高亮, Id={HighlightId}", newHighlightId);
                 }
             }
 
@@ -457,12 +473,12 @@ namespace LearningAssistant.Forms
         protected virtual void Dispose(bool disposing)
         {
             if (_disposed) return;
-            
+
             if (disposing)
             {
                 CleanupHighlightLayer();
             }
-            
+
             _disposed = true;
         }
     }

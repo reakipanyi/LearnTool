@@ -60,9 +60,9 @@ namespace LearningAssistant.Services.Pdf
             return collection.Highlights.ToList();
         }
 
-        public void AddHighlight(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text = "", HighlightColor color = HighlightColor.Yellow)
+        public string AddHighlight(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text = "", HighlightColor color = HighlightColor.Yellow)
         {
-            AddHighlightInternal(pdfPath, pageIndex, normalizedX, normalizedY, normalizedWidth, normalizedHeight, text, null, color);
+            return AddHighlightInternal(pdfPath, pageIndex, normalizedX, normalizedY, normalizedWidth, normalizedHeight, text, null, color);
         }
 
         public void AddHighlightWithNote(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text, string note, HighlightColor color = HighlightColor.Yellow)
@@ -70,7 +70,7 @@ namespace LearningAssistant.Services.Pdf
             AddHighlightInternal(pdfPath, pageIndex, normalizedX, normalizedY, normalizedWidth, normalizedHeight, text, note, color);
         }
 
-        private void AddHighlightInternal(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text, string? note, HighlightColor color)
+        private string AddHighlightInternal(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text, string? note, HighlightColor color)
         {
             var folderPath = Path.GetDirectoryName(pdfPath) ?? "";
             var collection = GetOrCreateFolderCollection(folderPath);
@@ -95,8 +95,10 @@ namespace LearningAssistant.Services.Pdf
 
             // 验证保存成功
             var verificationHighlights = collection.Highlights.Where(h => h.PageIndex == pageIndex).ToList();
-            _logger?.LogInformation("添加高亮成功: {Path}, 页码: {Page}, 颜色: {Color}, 验证数量: {Count}",
-                pdfPath, pageIndex, color, verificationHighlights.Count);
+            _logger?.LogInformation("添加高亮成功: {Path}, 页码: {Page}, 颜色: {Color}, 验证数量: {Count}, HighlightId: {HighlightId}",
+                pdfPath, pageIndex, color, verificationHighlights.Count, highlight.Id);
+
+            return highlight.Id;
         }
 
         public void UpdateHighlightNote(string pdfPath, string highlightId, string note)

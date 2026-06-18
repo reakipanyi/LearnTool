@@ -783,9 +783,9 @@ namespace LearningAssistant.Forms
             if (sender is Button button)
             {
                 button.BackColor = Color.FromArgb(
-                    Math.Min(255, button.BackColor.R + 20),
-                    Math.Min(255, button.BackColor.G + 20),
-                    Math.Min(255, button.BackColor.B + 20));
+                    Math.Min(255, (int)button.BackColor.R + 20),
+                    Math.Min(255, (int)button.BackColor.G + 20),
+                    Math.Min(255, (int)button.BackColor.B + 20));
                 button.Cursor = Cursors.Hand;
             }
         }

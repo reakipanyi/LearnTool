@@ -18,8 +18,10 @@ namespace LearningAssistant.Services.Utils
                 {
                     return Convert.FromBase64String(envEntropy);
                 }
-                catch
+                catch (FormatException ex)
                 {
+                    // 环境变量格式错误，使用 fallback
+                    System.Diagnostics.Debug.WriteLine($"Invalid entropy format: {ex.Message}");
                 }
             }
 
@@ -40,8 +42,9 @@ namespace LearningAssistant.Services.Utils
                     userData, Entropy, DataProtectionScope.CurrentUser);
                 return Convert.ToBase64String(encryptedData);
             }
-            catch (Exception)
+            catch (CryptographicException ex)
             {
+                System.Diagnostics.Debug.WriteLine($"Encryption failed: {ex.Message}");
                 return plainText;
             }
         }
@@ -58,8 +61,9 @@ namespace LearningAssistant.Services.Utils
                     encryptedData, Entropy, DataProtectionScope.CurrentUser);
                 return Encoding.UTF8.GetString(decryptedData);
             }
-            catch (Exception)
+            catch (CryptographicException ex)
             {
+                System.Diagnostics.Debug.WriteLine($"Decryption failed: {ex.Message}");
                 return encryptedText;
             }
         }

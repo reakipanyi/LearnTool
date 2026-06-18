@@ -230,9 +230,9 @@ namespace LearningAssistant.Common
         public static void AddButtonHoverEffect(Button button, Color originalColor, int brightnessAdjustment = -30)
         {
             Color hoverColor = Color.FromArgb(
-                Math.Max(0, originalColor.R + brightnessAdjustment),
-                Math.Max(0, originalColor.G + brightnessAdjustment),
-                Math.Max(0, originalColor.B + brightnessAdjustment));
+                Math.Max(0, (int)originalColor.R + brightnessAdjustment),
+                Math.Max(0, (int)originalColor.G + brightnessAdjustment),
+                Math.Max(0, (int)originalColor.B + brightnessAdjustment));
 
             button.MouseEnter += (s, e) => button.BackColor = hoverColor;
             button.MouseLeave += (s, e) => button.BackColor = originalColor;
@@ -244,9 +244,9 @@ namespace LearningAssistant.Common
         public static Color GetHoverColor(Color baseColor, int adjustment = -30)
         {
             return Color.FromArgb(
-                Math.Max(0, baseColor.R + adjustment),
-                Math.Max(0, baseColor.G + adjustment),
-                Math.Max(0, baseColor.B + adjustment));
+                Math.Max(0, (int)baseColor.R + adjustment),
+                Math.Max(0, (int)baseColor.G + adjustment),
+                Math.Max(0, (int)baseColor.B + adjustment));
         }
     }
 }

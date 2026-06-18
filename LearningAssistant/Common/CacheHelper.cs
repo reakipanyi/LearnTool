@@ -5,6 +5,7 @@ namespace LearningAssistant.Common
     public static class CacheHelper
     {
         private static readonly ConcurrentDictionary<string, CacheItem> _cache = new ConcurrentDictionary<string, CacheItem>();
+        private static readonly object _lock = new object();
 
         private class CacheItem
         {
@@ -44,9 +45,16 @@ namespace LearningAssistant.Common
             if (TryGet(key, out T value))
                 return value;
             
-            value = factory();
-            Set(key, value, expirationMinutes);
-            return value;
+            lock (_lock)
+            {
+                // Double-check after acquiring lock
+                if (TryGet(key, out value))
+                    return value;
+                
+                value = factory();
+                Set(key, value, expirationMinutes);
+                return value;
+            }
         }
 
         public static void Remove(string key)

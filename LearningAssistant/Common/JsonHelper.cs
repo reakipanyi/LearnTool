@@ -34,8 +34,18 @@ namespace LearningAssistant.Common
                 var json = File.ReadAllText(filePath);
                 return Deserialize<T>(json);
             }
-            catch
+            catch (FileNotFoundException)
             {
+                return default;
+            }
+            catch (JsonException ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"JSON parse error in {filePath}: {ex.Message}");
+                return default;
+            }
+            catch (IOException ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"IO error reading {filePath}: {ex.Message}");
                 return default;
             }
         }

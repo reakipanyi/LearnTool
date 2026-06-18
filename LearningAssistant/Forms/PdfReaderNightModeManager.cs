@@ -209,28 +209,34 @@ namespace LearningAssistant.Forms
 
         public Image InvertImage(Image image)
         {
-            Bitmap bitmap = new Bitmap(image);
+            using Bitmap bitmap = new Bitmap(image);
             var rect = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
             var data = bitmap.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadWrite, bitmap.PixelFormat);
-            int bytesPerPixel = Image.GetPixelFormatSize(bitmap.PixelFormat) / 8;
-            IntPtr ptr = data.Scan0;
-            int bytes = Math.Abs(data.Stride) * bitmap.Height;
-            byte[] rgbValues = new byte[bytes];
-            System.Runtime.InteropServices.Marshal.Copy(ptr, rgbValues, 0, bytes);
-
-            for (int i = 0; i < rgbValues.Length; i += bytesPerPixel)
+            try
             {
-                if (bytesPerPixel >= 3)
-                {
-                    rgbValues[i] = (byte)(255 - rgbValues[i]);
-                    rgbValues[i + 1] = (byte)(255 - rgbValues[i + 1]);
-                    rgbValues[i + 2] = (byte)(255 - rgbValues[i + 2]);
-                }
-            }
+                int bytesPerPixel = Image.GetPixelFormatSize(bitmap.PixelFormat) / 8;
+                IntPtr ptr = data.Scan0;
+                int bytes = Math.Abs(data.Stride) * bitmap.Height;
+                byte[] rgbValues = new byte[bytes];
+                System.Runtime.InteropServices.Marshal.Copy(ptr, rgbValues, 0, bytes);
 
-            System.Runtime.InteropServices.Marshal.Copy(rgbValues, 0, ptr, bytes);
-            bitmap.UnlockBits(data);
-            return bitmap;
+                for (int i = 0; i < rgbValues.Length; i += bytesPerPixel)
+                {
+                    if (bytesPerPixel >= 3)
+                    {
+                        rgbValues[i] = (byte)(255 - rgbValues[i]);
+                        rgbValues[i + 1] = (byte)(255 - rgbValues[i + 1]);
+                        rgbValues[i + 2] = (byte)(255 - rgbValues[i + 2]);
+                    }
+                }
+
+                System.Runtime.InteropServices.Marshal.Copy(rgbValues, 0, ptr, bytes);
+            }
+            finally
+            {
+                bitmap.UnlockBits(data);
+            }
+            return new Bitmap(bitmap);
         }
 
         public void UpdateThumbnailPanelColor(Panel panel)
