@@ -255,7 +255,7 @@ namespace LearningAssistant.Forms
                 // 更新highlight的Id以匹配实际保存的高亮
                 highlight.Id = highlightId;
 
-                _undoStack.Push(new HighlightUndoAction
+                PushUndoAction(new HighlightUndoAction
                 {
                     ActionType = HighlightActionType.Add,
                     Highlight = highlight
@@ -325,14 +325,37 @@ namespace LearningAssistant.Forms
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "OCR recognition failed");
+                _logger.LogWarning(ex, "OCR recognition failed for selection at ({X}, {Y}, {Width}, {Height})",
+                    selectionRect.X, selectionRect.Y, selectionRect.Width, selectionRect.Height);
                 return string.Empty;
             }
         }
 
+        private const int MaxUndoStackSize = 50;
+
+        private void PushUndoAction(HighlightUndoAction action)
+        {
+            if (_undoStack.Count >= MaxUndoStackSize)
+            {
+                // 移除最旧的撤销记录
+                var tempStack = new Stack<HighlightUndoAction>();
+                for (int i = 0; i < MaxUndoStackSize - 1; i++)
+                {
+                    tempStack.Push(_undoStack.Pop());
+                }
+                _undoStack.Clear();
+                while (tempStack.Count > 0)
+                {
+                    _undoStack.Push(tempStack.Pop());
+                }
+                _logger.LogDebug("UndoHighlight: 撤销栈已满，移除最旧的记录");
+            }
+            _undoStack.Push(action);
+        }
+
         public void RemoveHighlight(PdfHighlight highlight)
         {
-            _undoStack.Push(new HighlightUndoAction
+            PushUndoAction(new HighlightUndoAction
             {
                 ActionType = HighlightActionType.Remove,
                 Highlight = highlight
@@ -358,7 +381,7 @@ namespace LearningAssistant.Forms
 
             foreach (var highlight in highlights)
             {
-                _undoStack.Push(new HighlightUndoAction
+                PushUndoAction(new HighlightUndoAction
                 {
                     ActionType = HighlightActionType.Remove,
                     Highlight = highlight
@@ -408,9 +431,30 @@ namespace LearningAssistant.Forms
                         highlight.Text,
                         highlight.Color
                     );
-                    // 更新highlight的Id为新生成的Id，以便后续撤销
-                    highlight.Id = newHighlightId;
-                    _logger.LogInformation("UndoHighlight: 已恢复高亮, Id={HighlightId}", newHighlightId);
+
+                    // 创建恢复后的高亮对象（带新Id），用于后续撤销
+                    var recoveredHighlight = new PdfHighlight
+                    {
+                        Id = newHighlightId,
+                        PdfPath = _form.CurrentPdfPath,
+                        PageIndex = highlight.PageIndex,
+                        NormalizedX = highlight.NormalizedX > 0 ? highlight.NormalizedX : highlight.X,
+                        NormalizedY = highlight.NormalizedY > 0 ? highlight.NormalizedY : highlight.Y,
+                        NormalizedWidth = highlight.NormalizedWidth > 0 ? highlight.NormalizedWidth : highlight.Width,
+                        NormalizedHeight = highlight.NormalizedHeight > 0 ? highlight.NormalizedHeight : highlight.Height,
+                        Text = highlight.Text,
+                        Color = highlight.Color,
+                        CreatedAt = highlight.CreatedAt
+                    };
+
+                    // 将恢复的操作压入撤销栈，以便再次撤销
+                    PushUndoAction(new HighlightUndoAction
+                    {
+                        ActionType = HighlightActionType.Add,
+                        Highlight = recoveredHighlight
+                    });
+
+                    _logger.LogInformation("UndoHighlight: 已恢复高亮, 新Id={HighlightId}", newHighlightId);
                 }
             }
 

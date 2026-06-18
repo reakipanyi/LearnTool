@@ -269,8 +269,9 @@ namespace LearningAssistant.Services.Pdf
                 }
                 return sb.ToString();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogDebug(ex, "计算文件夹哈希失败: {FolderPath}", folderPath);
                 return null;
             }
         }
@@ -291,8 +292,9 @@ namespace LearningAssistant.Services.Pdf
                 }
                 return sb.ToString();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogDebug(ex, "计算文件哈希失败: {FilePath}", filePath);
                 return null;
             }
         }

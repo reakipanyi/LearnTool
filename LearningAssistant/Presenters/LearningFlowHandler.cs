@@ -139,18 +139,13 @@ namespace LearningAssistant.Presenters
 
         private async Task DisplayCurrentItemAsync()
         {
-            if (_isLoading)
-            {
-                _logger.LogDebug("DisplayCurrentItemAsync already running, skipping");
-                return;
-            }
+            // 取消之前的操作，确保立即响应新的切换请求
+            _cts?.Cancel();
+            _cts = new CancellationTokenSource();
 
             _isLoading = true;
             try
             {
-                _cts?.Cancel();
-                _cts = new CancellationTokenSource();
-
                 _currentExplanation = "";
 
                 var item = _studyEngine.GetCurrentItem();
@@ -163,6 +158,7 @@ namespace LearningAssistant.Presenters
                     return;
                 }
 
+                // 立即更新视图内容，确保列表选中项和内容同步
                 _view.CurrentContent = item.GetMainContent();
                 _view.CurrentDisplayText = item.GetDisplayText();
                 _view.CurrentDisplayStruct = item.GetDisplayStruct();
@@ -180,6 +176,10 @@ namespace LearningAssistant.Presenters
                     await PlayPronunciationAsync(item, _currentExplanation, _cts.Token);
                     _autoPronunciationCount++;
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogDebug("DisplayCurrentItemAsync was cancelled");
             }
             finally
             {

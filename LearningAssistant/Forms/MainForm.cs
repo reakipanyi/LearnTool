@@ -537,7 +537,7 @@ namespace LearningAssistant.Forms
             MainMenuStrip = menuStrip1;
             Margin = new Padding(4);
             Name = "MainForm";
-            Text = "统一学习助手";
+            Text = "学习助手";
             panelMain.ResumeLayout(false);
             groupBoxProgress.ResumeLayout(false);
             groupBoxProgress.PerformLayout();

@@ -516,9 +516,15 @@ namespace LearningAssistant.Forms
 
                 // 夜间模式时反转图片
                 Bitmap imageToDisplay = bmp;
+                Bitmap? oldImageToDispose = null;
                 if (_nightModeManager?.IsNightMode ?? false)
                 {
                     imageToDisplay = new Bitmap(_nightModeManager.InvertImage(bmp));
+                    // 如果当前显示的不是原图（夜间模式切换），需要先释放旧图
+                    if (_currentPageImage != null && _currentPageImage != bmp)
+                    {
+                        oldImageToDispose = _currentPageImage;
+                    }
                 }
 
                 var old = _currentPageImage;
@@ -530,11 +536,16 @@ namespace LearningAssistant.Forms
                 // 延迟释放旧图像，避免竞态条件
                 if (old != null && old != bmp && old != imageToDisplay)
                 {
+                    oldImageToDispose = old;
+                }
+
+                if (oldImageToDispose != null)
+                {
                     Task.Delay(100).ContinueWith(_ =>
                     {
                         try
                         {
-                            old.Dispose();
+                            oldImageToDispose?.Dispose();
                         }
                         catch (Exception ex)
                         {

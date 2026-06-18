@@ -1065,6 +1065,13 @@ namespace LearningAssistant.Forms
         {
             if (listBoxItems == null) return;
 
+            // 确保在UI线程上执行，避免跨线程问题
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => UpdateLearningList(items, currentIndex)));
+                return;
+            }
+
             listBoxItems.Items.Clear();
             foreach (var item in items)
             {
@@ -1097,6 +1104,13 @@ namespace LearningAssistant.Forms
         public void UpdateLearningListSelection(int currentIndex)
         {
             if (listBoxItems == null) return;
+
+            // 确保在UI线程上执行，避免跨线程问题
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => UpdateLearningListSelection(currentIndex)));
+                return;
+            }
 
             if (currentIndex >= 0 && currentIndex < listBoxItems.Items.Count)
             {
