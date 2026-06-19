@@ -1,12 +1,12 @@
 using Microsoft.Extensions.Logging;
 using LearningAssistant.Common;
-using LearningAssistant.Services;
 using LearningAssistant.Services.Cache;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.TTS;
 using LearningAssistant.Services.Persistence;
-using LearningAssistant.Views;
 using LearningAssistant.Models.User;
+using LearningAssistant.Views;
+using LearningAssistant.Managers;
 
 namespace LearningAssistant.Presenters
 {
@@ -255,7 +255,7 @@ namespace LearningAssistant.Presenters
                     return;
                 }
 
-                var comparisonData = new List<Views.UserComparisonData>();
+                var comparisonData = new List<UserComparisonData>();
                 foreach (var userId in users)
                 {
                     var profile = _persistenceService.LoadUserProfile(userId);

@@ -11,6 +11,11 @@
 		<NoWarn>NU1510;NU1603</NoWarn>
 	</PropertyGroup>
 	<ItemGroup>
+	  <Compile Remove="tessdata\**" />
+	  <EmbeddedResource Remove="tessdata\**" />
+	  <None Remove="tessdata\**" />
+	</ItemGroup>
+	<ItemGroup>
 	  <Compile Remove="Forms\BaiduNetdiskAuthForm.cs" />
 	  <Compile Remove="Forms\FormPreviewer.cs" />
 	  <Compile Remove="Services\AI\SiliconFlowAIService.cs" />
@@ -51,13 +56,8 @@
 		<None Update="Data\*.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
-		<None Update="tessdata\**">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-		</None>
 	</ItemGroup>
 	<ItemGroup>
 		<Folder Include="Data\" />
-		<Folder Include="Forms\Assist\" />
-		<Folder Include="tessdata\" />
 	</ItemGroup>
 </Project>

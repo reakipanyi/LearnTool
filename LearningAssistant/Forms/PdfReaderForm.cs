@@ -4,10 +4,10 @@ using LearningAssistant.Presenters;
 using LearningAssistant.Services;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Views;
-using LearningAssistant.Views.UI;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel;
 using System.Drawing.Drawing2D;
+using LearningAssistant.Managers;
 
 namespace LearningAssistant.Forms
 {
@@ -993,10 +993,10 @@ namespace LearningAssistant.Forms
         public event EventHandler? OcrSelectionComplete;
         public event EventHandler? AiQuestionAsked;
         public event EventHandler? AddToLearningList;
-        public event EventHandler<Views.AddToEditorEventArgs>? AddToEditor;
+        public event EventHandler<AddToEditorEventArgs>? AddToEditor;
         public void RaiseAddToEditor(string text, string language)
         {
-            AddToEditor?.Invoke(this, new Views.AddToEditorEventArgs { Text = text, Language = language });
+            AddToEditor?.Invoke(this, new AddToEditorEventArgs { Text = text, Language = language });
         }
         public event EventHandler? SpeakTranslation;
         public event EventHandler<string>? SpeakText;

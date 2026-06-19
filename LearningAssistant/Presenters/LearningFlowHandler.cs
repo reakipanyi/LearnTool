@@ -1,6 +1,6 @@
 using LearningAssistant.Common;
+using LearningAssistant.Managers;
 using LearningAssistant.Models.Learning;
-using LearningAssistant.Services;
 using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.TTS;
@@ -19,7 +19,6 @@ namespace LearningAssistant.Presenters
         Task HandleSettingsChangedAsync();
         Task HandleItemSelectedAsync(int index);
         void Exit();
-        void ExportErrorBook();
         void OpenStatistics();
         void SendToPdfQuestion();
 
@@ -212,7 +211,7 @@ namespace LearningAssistant.Presenters
             if (!_ttsService.Available) return;
 
             var scope = _view.PronunciationScope;
-            string lang = _currentLanguage == Constants.Language.Chinese ? "zh" : "en";
+            string lang = _currentSubject == Constants.Subject.Chinese ? "zh" : "en";
 
             if (scope == PronunciationScope.Original || scope == PronunciationScope.Both)
             {
@@ -384,12 +383,6 @@ namespace LearningAssistant.Presenters
             _settingsManager.SaveSettings(_view);
         }
 
-        public void ExportErrorBook()
-        {
-            string result = _exportService.ExportErrorBookWithDialog(_currentUserId);
-            _view.ShowMessage(result);
-        }
-
         public void OpenStatistics()
         {
             try
@@ -412,7 +405,7 @@ namespace LearningAssistant.Presenters
                 OnSendToPdfQuestion?.Invoke(this, new SendToPdfEventArgs
                 {
                     Text = item.GetMainContent(),
-                    Language = _currentLanguage
+                    Language = _currentSubject
                 });
             }
         }

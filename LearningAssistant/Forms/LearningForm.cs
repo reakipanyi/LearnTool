@@ -1,5 +1,7 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
+using LearningAssistant.Forms.UserControls;
+using LearningAssistant.Managers;
 using LearningAssistant.Models.Learning;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services;
@@ -9,7 +11,6 @@ using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel;
-using System.Drawing.Drawing2D;
 using System.Text.Json;
 
 namespace LearningAssistant.Forms
@@ -199,7 +200,7 @@ namespace LearningAssistant.Forms
             // 笔记保存计时器
             _noteSaveTimer.Tick += NoteSaveTimer_Tick;
 
-            
+
         }
         #endregion
 
@@ -1414,6 +1415,12 @@ namespace LearningAssistant.Forms
                     SettingsChanged?.Invoke(this, EventArgs.Empty);
                 }
             }
+        }
+
+        private void ComboBoxSubject_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            if (!_settingsChangedEventsSuspended)
+                SettingsChanged?.Invoke(this, EventArgs.Empty);
         }
 
         private void ComboBoxSubCategory_SelectedIndexChanged(object? sender, EventArgs e)

@@ -57,38 +57,76 @@ namespace LearningAssistant.Presenters
         };
 
         /// <summary>
-        /// 表头中英文映射字典
+        /// 按子分类分组的表头中英文映射字典
         /// </summary>
-        private static readonly Dictionary<string, string> ColumnHeaderNames = new()
+        private static readonly Dictionary<string, Dictionary<string, string>> CategoryColumnHeaders = new()
         {
-            { "Character", "汉字" },
-            { "Pinyin", "拼音" },
-            { "Meaning", "释义" },
-            { "StrokeCount", "笔画数" },
-            { "Radical", "部首" },
-            { "StrokeOrder", "笔顺" },
-            { "Words", "组词" },
-            { "Idiom", "成语" },
-            { "Origin", "出处" },
-            { "Example", "例句" },
-            { "Phrase", "短语" },
-            { "Title", "标题" },
-            { "Author", "作者" },
-            { "Dynasty", "朝代" },
-            { "Verses", "诗句" },
-            { "Annotation", "注释" },
-            { "Word", "单词" },
-            { "Phonetic", "音标" },
-            { "PartOfSpeech", "词性" },
-            { "SyllableBreakdown", "音节拼读" },
-            { "Sentence", "句子" },
-            { "Translation", "翻译" },
-            { "Grammar", "语法" },
-            { "Content", "内容" },
-            { "Questions", "题目" },
-            { "Question", "问题" },
-            { "Answer", "答案" },
-            { "Analysis", "解析" }
+            { Constants.SubCategory.ChineseCharacter, new Dictionary<string, string>
+                { { "Character", "汉字" }, { "Pinyin", "拼音" }, { "Meaning", "释义" }, { "StrokeCount", "笔画数" }, { "Radical", "部首" }, { "StrokeOrder", "笔顺" }, { "Words", "组词" } } },
+            { Constants.SubCategory.ChineseIdiom, new Dictionary<string, string>
+                { { "Idiom", "成语" }, { "Pinyin", "拼音" }, { "Meaning", "释义" }, { "Origin", "出处" }, { "Example", "例句" } } },
+            { Constants.SubCategory.ChinesePhrase, new Dictionary<string, string>
+                { { "Phrase", "短语" }, { "Pinyin", "拼音" }, { "Meaning", "释义" }, { "Example", "例句" } } },
+            { Constants.SubCategory.ChinesePoem, new Dictionary<string, string>
+                { { "Title", "诗名" }, { "Author", "作者" }, { "Dynasty", "朝代" }, { "Verses", "诗句" }, { "Annotation", "注释" } } },
+            { Constants.SubCategory.ChineseComprehensive, new Dictionary<string, string>
+                { { "Title", "课文标题" }, { "Content", "课文内容" }, { "Questions", "课后习题" }, { "Question", "题目" }, { "Answer", "答案" }, { "Analysis", "解析" } } },
+            { Constants.SubCategory.EnglishWord, new Dictionary<string, string>
+                { { "Word", "单词" }, { "Phonetic", "音标" }, { "PartOfSpeech", "词性" }, { "SyllableBreakdown", "音节拼读" }, { "Meaning", "中文释义" }, { "Example", "例句" } } },
+            { Constants.SubCategory.EnglishPhrase, new Dictionary<string, string>
+                { { "Phrase", "短语" }, { "Meaning", "中文释义" }, { "Example", "例句" } } },
+            { Constants.SubCategory.EnglishSentence, new Dictionary<string, string>
+                { { "Sentence", "句子" }, { "Translation", "中文翻译" }, { "Grammar", "语法点" } } },
+            { Constants.SubCategory.EnglishComprehensive, new Dictionary<string, string>
+                { { "Title", "文章标题" }, { "Content", "文章内容" }, { "Questions", "阅读理解题" }, { "Question", "题目" }, { "Answer", "答案" }, { "Analysis", "解析" } } },
+            { Constants.SubCategory.MathFormula, new Dictionary<string, string>
+                { { "Name", "公式名称" }, { "Formula", "公式表达式" }, { "Description", "公式说明" }, { "Conditions", "适用条件" }, { "Example", "应用举例" }, { "Difficulty", "难度等级" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.MathExample, new Dictionary<string, string>
+                { { "Title", "例题标题" }, { "Problem", "题目描述" }, { "Solution", "解答过程" }, { "KeySteps", "关键步骤" }, { "Analysis", "方法总结" }, { "Difficulty", "难度等级" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.MathConcept, new Dictionary<string, string>
+                { { "Name", "概念名称" }, { "Definition", "定义" }, { "Properties", "性质" }, { "Example", "举例说明" }, { "Notes", "注意事项" }, { "Difficulty", "难度等级" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.MathComprehensive, new Dictionary<string, string>
+                { { "Title", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" }, { "Example", "典型例题" }, { "Explanation", "答案解析" }, { "Difficulty", "难度等级" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.PhysicsLaw, new Dictionary<string, string>
+                { { "Name", "定律名称" }, { "Statement", "定律内容" }, { "Formula", "公式" }, { "Conditions", "适用条件" }, { "Application", "应用场景" }, { "Difficulty", "难度等级" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.PhysicsExperiment, new Dictionary<string, string>
+                { { "Name", "实验名称" }, { "Purpose", "实验目的" }, { "Equipment", "实验器材" }, { "Procedure", "实验步骤" }, { "Conclusion", "实验结论" }, { "Difficulty", "难度等级" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.PhysicsDerivation, new Dictionary<string, string>
+                { { "Name", "公式名称" }, { "Formula", "推导结果" }, { "DerivationSteps", "推导步骤" }, { "Conditions", "前提条件" }, { "Example", "应用实例" }, { "Difficulty", "难度等级" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.PhysicsComprehensive, new Dictionary<string, string>
+                { { "Title", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" }, { "Example", "典型例题" }, { "Explanation", "答案解析" }, { "Difficulty", "难度等级" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.ChemistryEquation, new Dictionary<string, string>
+                { { "Name", "反应名称" }, { "Reactants", "反应物" }, { "Products", "生成物" }, { "Equation", "化学方程式" }, { "Conditions", "反应条件" }, { "Phenomenon", "反应现象" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.ChemistryElement, new Dictionary<string, string>
+                { { "Name", "元素名称" }, { "Symbol", "元素符号" }, { "AtomicNumber", "原子序数" }, { "Properties", "元素性质" }, { "Uses", "主要用途" }, { "Difficulty", "难度等级" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.ChemistryExperiment, new Dictionary<string, string>
+                { { "Name", "实验名称" }, { "Purpose", "实验目的" }, { "Equipment", "实验器材" }, { "Procedure", "操作步骤" }, { "Phenomenon", "实验现象" }, { "Conclusion", "实验结论" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.ChemistryComprehensive, new Dictionary<string, string>
+                { { "Title", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" }, { "Example", "典型例题" }, { "Explanation", "答案解析" }, { "Difficulty", "难度等级" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.HistoryEvent, new Dictionary<string, string>
+                { { "Name", "事件名称" }, { "Time", "发生时间" }, { "Location", "发生地点" }, { "Background", "历史背景" }, { "Process", "事件经过" }, { "Impact", "历史影响" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.HistoryPerson, new Dictionary<string, string>
+                { { "Name", "人物姓名" }, { "Dynasty", "所处朝代" }, { "Lifetime", "生卒年月" }, { "Achievements", "主要成就" }, { "Evaluation", "历史评价" }, { "Works", "代表作品" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.HistoryTimeline, new Dictionary<string, string>
+                { { "Era", "时代名称" }, { "TimePeriod", "时间范围" }, { "KeyEvents", "重要事件" }, { "Characteristics", "时代特征" }, { "ImportantFigures", "重要人物" }, { "Notes", "备注" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.HistoryComprehensive, new Dictionary<string, string>
+                { { "Title", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" }, { "Example", "典型例题" }, { "Explanation", "答案解析" }, { "Difficulty", "难度等级" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.GeographyKnowledge, new Dictionary<string, string>
+                { { "Name", "地理名称" }, { "Category", "地理分类" }, { "Description", "地理描述" }, { "Distribution", "分布地区" }, { "Features", "主要特征" }, { "Notes", "备注" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.GeographyMap, new Dictionary<string, string>
+                { { "Name", "地图名称" }, { "Region", "所属地区" }, { "Features", "地理特征" }, { "KeyLocations", "重要地点" }, { "ReadingTips", "读图技巧" }, { "Notes", "备注" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.GeographyClimate, new Dictionary<string, string>
+                { { "Type", "气候类型" }, { "Distribution", "分布地区" }, { "Characteristics", "气候特征" }, { "Causes", "形成原因" }, { "Vegetation", "植被类型" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.GeographyComprehensive, new Dictionary<string, string>
+                { { "Title", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" }, { "Example", "典型例题" }, { "Explanation", "答案解析" }, { "Difficulty", "难度等级" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.BiologyConcept, new Dictionary<string, string>
+                { { "Name", "概念名称" }, { "Definition", "定义" }, { "Classification", "分类" }, { "Features", "主要特征" }, { "Function", "功能作用" }, { "Example", "实例" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.BiologyExperiment, new Dictionary<string, string>
+                { { "Name", "实验名称" }, { "Purpose", "实验目的" }, { "Materials", "实验材料" }, { "Steps", "实验步骤" }, { "Result", "实验结果" }, { "Conclusion", "实验结论" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.BiologyPhenomenon, new Dictionary<string, string>
+                { { "Name", "现象名称" }, { "Description", "现象描述" }, { "Type", "现象类型" }, { "Causes", "产生原因" }, { "Examples", "常见实例" }, { "Significance", "生物意义" }, { "Tags", "标签" } } },
+            { Constants.SubCategory.BiologyComprehensive, new Dictionary<string, string>
+                { { "Title", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" }, { "Example", "典型例题" }, { "Explanation", "答案解析" }, { "Difficulty", "难度等级" }, { "Tags", "标签" } } }
         };
 
         /// <summary>
@@ -149,6 +187,150 @@ namespace LearningAssistant.Presenters
                 {
                     { "Title", "" }, { "Content", "" }, { "Questions", new List<object> { new Dictionary<string, object> { { "Question", "" }, { "Answer", "" } } } }, { "Analysis", "" }
                 }
+            },
+            {
+                Constants.SubCategory.MathFormula, new Dictionary<string, object>
+                {
+                    { "Name", "" }, { "Formula", "" }, { "Description", "" }, { "Conditions", "" }, { "Example", "" }, { "Difficulty", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.MathExample, new Dictionary<string, object>
+                {
+                    { "Title", "" }, { "Problem", "" }, { "Solution", "" }, { "KeySteps", new List<string> { "", "", "" } }, { "Analysis", "" }, { "Difficulty", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.MathConcept, new Dictionary<string, object>
+                {
+                    { "Name", "" }, { "Definition", "" }, { "Properties", new List<string> { "", "", "" } }, { "Example", "" }, { "Notes", "" }, { "Difficulty", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.MathComprehensive, new Dictionary<string, object>
+                {
+                    { "Title", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Example", "" }, { "Explanation", "" }, { "Difficulty", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.PhysicsLaw, new Dictionary<string, object>
+                {
+                    { "Name", "" }, { "Statement", "" }, { "Formula", "" }, { "Conditions", "" }, { "Application", "" }, { "Difficulty", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.PhysicsExperiment, new Dictionary<string, object>
+                {
+                    { "Name", "" }, { "Purpose", "" }, { "Equipment", new List<string> { "", "", "" } }, { "Procedure", new List<string> { "", "", "" } }, { "Conclusion", "" }, { "Difficulty", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.PhysicsDerivation, new Dictionary<string, object>
+                {
+                    { "Name", "" }, { "Formula", "" }, { "DerivationSteps", new List<string> { "", "", "" } }, { "Conditions", "" }, { "Example", "" }, { "Difficulty", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.PhysicsComprehensive, new Dictionary<string, object>
+                {
+                    { "Title", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Example", "" }, { "Explanation", "" }, { "Difficulty", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.ChemistryEquation, new Dictionary<string, object>
+                {
+                    { "Name", "" }, { "Reactants", "" }, { "Products", "" }, { "Equation", "" }, { "Conditions", "" }, { "Phenomenon", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.ChemistryElement, new Dictionary<string, object>
+                {
+                    { "Name", "" }, { "Symbol", "" }, { "AtomicNumber", "" }, { "Properties", new List<string> { "", "", "" } }, { "Uses", "" }, { "Difficulty", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.ChemistryExperiment, new Dictionary<string, object>
+                {
+                    { "Name", "" }, { "Purpose", "" }, { "Equipment", new List<string> { "", "", "" } }, { "Procedure", new List<string> { "", "", "" } }, { "Phenomenon", "" }, { "Conclusion", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.ChemistryComprehensive, new Dictionary<string, object>
+                {
+                    { "Title", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Example", "" }, { "Explanation", "" }, { "Difficulty", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.HistoryEvent, new Dictionary<string, object>
+                {
+                    { "Name", "" }, { "Time", "" }, { "Location", "" }, { "Background", "" }, { "Process", "" }, { "Impact", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.HistoryPerson, new Dictionary<string, object>
+                {
+                    { "Name", "" }, { "Dynasty", "" }, { "Lifetime", "" }, { "Achievements", new List<string> { "", "", "" } }, { "Evaluation", "" }, { "Works", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.HistoryTimeline, new Dictionary<string, object>
+                {
+                    { "Era", "" }, { "TimePeriod", "" }, { "KeyEvents", new List<string> { "", "", "" } }, { "Characteristics", "" }, { "ImportantFigures", "" }, { "Notes", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.HistoryComprehensive, new Dictionary<string, object>
+                {
+                    { "Title", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Example", "" }, { "Explanation", "" }, { "Difficulty", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.GeographyKnowledge, new Dictionary<string, object>
+                {
+                    { "Name", "" }, { "Category", "" }, { "Description", "" }, { "Distribution", "" }, { "Features", new List<string> { "", "", "" } }, { "Notes", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.GeographyMap, new Dictionary<string, object>
+                {
+                    { "Name", "" }, { "Region", "" }, { "Features", new List<string> { "", "", "" } }, { "KeyLocations", "" }, { "ReadingTips", "" }, { "Notes", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.GeographyClimate, new Dictionary<string, object>
+                {
+                    { "Type", "" }, { "Distribution", "" }, { "Characteristics", new List<string> { "", "", "" } }, { "Causes", "" }, { "Vegetation", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.GeographyComprehensive, new Dictionary<string, object>
+                {
+                    { "Title", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Example", "" }, { "Explanation", "" }, { "Difficulty", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.BiologyConcept, new Dictionary<string, object>
+                {
+                    { "Name", "" }, { "Definition", "" }, { "Classification", "" }, { "Features", new List<string> { "", "", "" } }, { "Function", "" }, { "Example", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.BiologyExperiment, new Dictionary<string, object>
+                {
+                    { "Name", "" }, { "Purpose", "" }, { "Materials", new List<string> { "", "", "" } }, { "Steps", new List<string> { "", "", "" } }, { "Result", "" }, { "Conclusion", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.BiologyPhenomenon, new Dictionary<string, object>
+                {
+                    { "Name", "" }, { "Description", "" }, { "Type", "" }, { "Causes", new List<string> { "", "", "" } }, { "Examples", "" }, { "Significance", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
+            },
+            {
+                Constants.SubCategory.BiologyComprehensive, new Dictionary<string, object>
+                {
+                    { "Title", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Example", "" }, { "Explanation", "" }, { "Difficulty", "" }, { "Tags", new List<string> { "", "", "" } }
+                }
             }
         };
 
@@ -187,6 +369,7 @@ namespace LearningAssistant.Presenters
             _contentLoaderService = contentLoaderService ?? throw new ArgumentNullException(nameof(contentLoaderService));
             _aiQuestionService = aiQuestionService ?? throw new ArgumentNullException(nameof(aiQuestionService));
 
+            _view.SubjectChanged += (_, _) => OnSubjectChanged();
             _view.LanguageChanged += (_, _) => OnLanguageChanged();
             _view.SubCategoryChanged += (_, _) => OnSubCategoryChanged();
             _view.TemplateAddClicked += (_, _) => OnTemplateAddClicked();
@@ -211,15 +394,23 @@ namespace LearningAssistant.Presenters
         }
 
         /// <summary>
-        /// 语言切换事件处理方法
+        /// 学科切换事件处理方法
         /// </summary>
-        private void OnLanguageChanged()
+        private void OnSubjectChanged()
         {
             if (CheckAndSaveUnsavedChanges())
             {
                 LoadSubCategories();
                 LoadItems();
             }
+        }
+
+        /// <summary>
+        /// 语言切换事件处理方法（兼容旧版）
+        /// </summary>
+        private void OnLanguageChanged()
+        {
+            // 学科变更事件已经处理了，这里不做额外处理
         }
 
         /// <summary>
@@ -238,23 +429,8 @@ namespace LearningAssistant.Presenters
         /// </summary>
         private void LoadSubCategories()
         {
-            var language = _view.SelectedLanguage;
-            var subCategories = language == Constants.Language.Chinese
-                ? new List<string>
-                {
-                    Constants.SubCategory.ChineseCharacter,
-                    Constants.SubCategory.ChinesePhrase,
-                    Constants.SubCategory.ChineseIdiom,
-                    Constants.SubCategory.ChinesePoem,
-                    Constants.SubCategory.ChineseComprehensive
-                }
-                : new List<string>
-                {
-                    Constants.SubCategory.EnglishWord,
-                    Constants.SubCategory.EnglishPhrase,
-                    Constants.SubCategory.EnglishSentence,
-                    Constants.SubCategory.EnglishComprehensive
-                };
+            var subject = _view.SelectedSubject;
+            var subCategories = _contentLoaderService.GetSubCategoriesBySubject(subject);
             _view.RefreshSubCategories(subCategories);
         }
 
@@ -274,9 +450,15 @@ namespace LearningAssistant.Presenters
         /// </summary>
         /// <param name="columnName">英文列名</param>
         /// <returns>中文列名，如果没有映射则返回原名称</returns>
-        private static string GetChineseColumnName(string columnName)
+        private static string GetChineseColumnName(string columnName, string category)
         {
-            return ColumnHeaderNames.TryGetValue(columnName, out var chineseName) ? chineseName : columnName;
+            if (!string.IsNullOrEmpty(category) &&
+                CategoryColumnHeaders.TryGetValue(category, out var headers) &&
+                headers.TryGetValue(columnName, out var chineseName))
+            {
+                return chineseName;
+            }
+            return columnName;
         }
 
         /// <summary>
@@ -296,7 +478,7 @@ namespace LearningAssistant.Presenters
                     foreach (var key in template.Keys)
                     {
                         var column = table.Columns.Add(key, typeof(string));
-                        column.Caption = GetChineseColumnName(key);
+                        column.Caption = GetChineseColumnName(key, category);
                     }
                 }
                 return table;
@@ -306,7 +488,7 @@ namespace LearningAssistant.Presenters
             foreach (var prop in properties)
             {
                 var column = table.Columns.Add(prop.Name, typeof(string));
-                column.Caption = GetChineseColumnName(prop.Name);
+                column.Caption = GetChineseColumnName(prop.Name, category);
             }
 
             foreach (var item in items)
@@ -725,6 +907,7 @@ namespace LearningAssistant.Presenters
             OnTemplateSaveClicked();
 
 
+            _view.SubjectChanged -= (_, _) => OnSubjectChanged();
             _view.LanguageChanged -= (_, _) => OnLanguageChanged();
             _view.SubCategoryChanged -= (_, _) => OnSubCategoryChanged();
             _view.TemplateAddClicked -= (_, _) => OnTemplateAddClicked();

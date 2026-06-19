@@ -1,4 +1,4 @@
-using LearningAssistant.Forms;
+using LearningAssistant.Managers;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
@@ -78,7 +78,6 @@ namespace LearningAssistant.Presenters
             _eventMediator.SendToPdfQuestion += (_, args) => HandleSendToPdfQuestion(args.Text, args.Language);
             _eventMediator.SettingsChanged += async (_, _) => await _flowHandler.HandleSettingsChangedAsync();
             _eventMediator.OpenStatistics += (_, _) => _flowHandler.OpenStatistics();
-            _eventMediator.ExportErrorBook += (_, _) => _flowHandler.ExportErrorBook();
         }
 
         public void Initialize(string userId, string language, string subCategory, string wordBankFile, bool continueMode = true)

@@ -1,4 +1,4 @@
-using LearningAssistant.Views.UI;
+using LearningAssistant.Forms.UserControls;
 using System.Windows.Forms;
 
 namespace LearningAssistant.Services

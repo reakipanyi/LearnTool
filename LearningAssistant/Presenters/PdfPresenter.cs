@@ -51,7 +51,7 @@ namespace LearningAssistant.Presenters
             _aiService = aiService ?? throw new ArgumentNullException(nameof(aiService));
             _pdfTtsService = pdfTtsService ?? throw new ArgumentNullException(nameof(pdfTtsService));
             _pdfStudyIntegration = pdfStudyIntegration ?? throw new ArgumentNullException(nameof(pdfStudyIntegration));
-            _ExportService = _ExportService ?? throw new ArgumentNullException(nameof(pdfExportService));
+            _ExportService = _ExportService ?? throw new ArgumentNullException(nameof(ExportService));
             _annotationService = annotationService ?? throw new ArgumentNullException(nameof(annotationService));
             _highlightService = highlightService ?? throw new ArgumentNullException(nameof(highlightService));
             _pdfService = pdfService ?? throw new ArgumentNullException(nameof(pdfService));

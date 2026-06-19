@@ -24,9 +24,8 @@ namespace LearningAssistant.Forms
         private Panel gridPanel;
         private FlowLayoutPanel buttonPanel;
 
-        private Panel groupBoxLanguage;
-        private RadioButton radioEnglish;
-        private RadioButton radioChinese;
+        private Panel groupBoxSubject;
+        private ComboBox comboBoxSubject;
         private Label labelCategory;
         private ComboBox comboBoxSubCategory;
         private TabControl tabControl1;
@@ -43,7 +42,31 @@ namespace LearningAssistant.Forms
             _pendingContentService = pendingContentService;
             InitializeComponent();
 
+            InitSubjectComboBox();
+
             _themeService.RegisterThemeable(this);
+        }
+
+        private void InitSubjectComboBox()
+        {
+            comboBoxSubject.Items.Clear();
+            var subjects = new List<string>
+            {
+                Constants.Subject.Chinese,
+                Constants.Subject.English,
+                Constants.Subject.Math,
+                Constants.Subject.Physics,
+                Constants.Subject.Chemistry,
+                Constants.Subject.History,
+                Constants.Subject.Geography,
+                Constants.Subject.Biology
+            };
+            foreach (var subject in subjects)
+            {
+                comboBoxSubject.Items.Add(subject);
+            }
+            if (comboBoxSubject.Items.Count > 0)
+                comboBoxSubject.SelectedIndex = 1; // 默认选英语
         }
 
 
@@ -56,7 +79,17 @@ namespace LearningAssistant.Forms
 
 
 
-        public string SelectedLanguage => radioChinese.Checked ? Constants.Language.Chinese : Constants.Language.English;
+        public string SelectedSubject => comboBoxSubject.SelectedItem?.ToString() ?? "";
+
+        public string SelectedLanguage
+        {
+            get
+            {
+                if (SelectedSubject == Constants.Subject.Chinese) return Constants.Language.Chinese;
+                if (SelectedSubject == Constants.Subject.English) return Constants.Language.English;
+                return Constants.Language.Chinese;
+            }
+        }
 
         public string SelectedSubCategory => comboBoxSubCategory.SelectedItem?.ToString() ?? "";
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -91,6 +124,7 @@ namespace LearningAssistant.Forms
         public List<int> SelectedRowIndices => dataGridView.SelectedRows.Cast<DataGridViewRow>().Select(row => row.Index).ToList();
 
         public event EventHandler? LanguageChanged;
+        public event EventHandler? SubjectChanged;
         public event EventHandler? SubCategoryChanged;
         public event EventHandler? TemplateAddClicked;
         public event EventHandler? TemplateSaveClicked;
@@ -111,11 +145,20 @@ namespace LearningAssistant.Forms
         {
             if (language == Constants.Language.Chinese)
             {
-                radioChinese.Checked = true;
+                SetInitialSubject(Constants.Subject.Chinese);
             }
             else if (language == Constants.Language.English)
             {
-                radioEnglish.Checked = true;
+                SetInitialSubject(Constants.Subject.English);
+            }
+        }
+
+        public void SetInitialSubject(string subject)
+        {
+            var index = comboBoxSubject.Items.IndexOf(subject);
+            if (index >= 0)
+            {
+                comboBoxSubject.SelectedIndex = index;
             }
         }
 
@@ -140,42 +183,274 @@ namespace LearningAssistant.Forms
             }
         }
 
-        private static readonly Dictionary<string, string> ColumnHeaderNames = new()
+        private static readonly Dictionary<string, Dictionary<string, string>> CategoryColumnHeaders = new()
         {
-            { "Character", "汉字" },
-            { "Pinyin", "拼音" },
-            { "Meaning", "释义" },
-            { "StrokeCount", "笔画数" },
-            { "Words", "组词" },
-            { "Radical", "部首" },
-            { "StrokeOrder", "笔顺" },
-            { "Idiom", "成语" },
-            { "Origin", "出处" },
-            { "Example", "例句" },
-            { "Phrase", "短语" },
-            { "Title", "标题" },
-            { "Author", "作者" },
-            { "Dynasty", "朝代" },
-            { "Verses", "诗句" },
-            { "Annotation", "注释" },
-            { "Word", "单词" },
-            { "Phonetic", "音标" },
-            { "PartOfSpeech", "词性" },
-            { "SyllableBreakdown", "音节拼读" },
-            { "Sentence", "句子" },
-            { "Translation", "翻译" },
-            { "Grammar", "语法" },
-            { "Content", "内容" },
-            { "Questions", "题目" },
-            { "Question", "问题" },
-            { "Answer", "答案" },
-            { "Analysis", "解析" }
+            {
+                Constants.SubCategory.ChineseCharacter, new Dictionary<string, string>
+                {
+                    { "Character", "汉字" }, { "Pinyin", "拼音" }, { "Meaning", "释义" },
+                    { "StrokeCount", "笔画数" }, { "Radical", "部首" }, { "StrokeOrder", "笔顺" },
+                    { "Words", "组词" }
+                }
+            },
+            {
+                Constants.SubCategory.ChineseIdiom, new Dictionary<string, string>
+                {
+                    { "Idiom", "成语" }, { "Pinyin", "拼音" }, { "Meaning", "释义" },
+                    { "Origin", "出处" }, { "Example", "例句" }
+                }
+            },
+            {
+                Constants.SubCategory.ChinesePhrase, new Dictionary<string, string>
+                {
+                    { "Phrase", "短语" }, { "Pinyin", "拼音" }, { "Meaning", "释义" },
+                    { "Example", "例句" }
+                }
+            },
+            {
+                Constants.SubCategory.ChinesePoem, new Dictionary<string, string>
+                {
+                    { "Title", "诗名" }, { "Author", "作者" }, { "Dynasty", "朝代" },
+                    { "Verses", "诗句" }, { "Annotation", "注释" }
+                }
+            },
+            {
+                Constants.SubCategory.ChineseComprehensive, new Dictionary<string, string>
+                {
+                    { "Title", "课文标题" }, { "Content", "课文内容" }, { "Questions", "课后习题" },
+                    { "Question", "题目" }, { "Answer", "答案" }, { "Analysis", "解析" }
+                }
+            },
+            {
+                Constants.SubCategory.EnglishWord, new Dictionary<string, string>
+                {
+                    { "Word", "单词" }, { "Phonetic", "音标" }, { "PartOfSpeech", "词性" },
+                    { "SyllableBreakdown", "音节拼读" }, { "Meaning", "中文释义" }, { "Example", "例句" }
+                }
+            },
+            {
+                Constants.SubCategory.EnglishPhrase, new Dictionary<string, string>
+                {
+                    { "Phrase", "短语" }, { "Meaning", "中文释义" }, { "Example", "例句" }
+                }
+            },
+            {
+                Constants.SubCategory.EnglishSentence, new Dictionary<string, string>
+                {
+                    { "Sentence", "句子" }, { "Translation", "中文翻译" }, { "Grammar", "语法点" }
+                }
+            },
+            {
+                Constants.SubCategory.EnglishComprehensive, new Dictionary<string, string>
+                {
+                    { "Title", "文章标题" }, { "Content", "文章内容" }, { "Questions", "阅读理解题" },
+                    { "Question", "题目" }, { "Answer", "答案" }, { "Analysis", "解析" }
+                }
+            },
+            {
+                Constants.SubCategory.MathFormula, new Dictionary<string, string>
+                {
+                    { "Name", "公式名称" }, { "Formula", "公式表达式" }, { "Description", "公式说明" },
+                    { "Conditions", "适用条件" }, { "Example", "应用举例" },
+                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.MathExample, new Dictionary<string, string>
+                {
+                    { "Title", "例题标题" }, { "Problem", "题目描述" }, { "Solution", "解答过程" },
+                    { "KeySteps", "关键步骤" }, { "Analysis", "方法总结" },
+                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.MathConcept, new Dictionary<string, string>
+                {
+                    { "Name", "概念名称" }, { "Definition", "定义" }, { "Properties", "性质" },
+                    { "Example", "举例说明" }, { "Notes", "注意事项" },
+                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.MathComprehensive, new Dictionary<string, string>
+                {
+                    { "Title", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" },
+                    { "Example", "典型例题" }, { "Explanation", "答案解析" },
+                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.PhysicsLaw, new Dictionary<string, string>
+                {
+                    { "Name", "定律名称" }, { "Statement", "定律内容" }, { "Formula", "公式" },
+                    { "Conditions", "适用条件" }, { "Application", "应用场景" },
+                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.PhysicsExperiment, new Dictionary<string, string>
+                {
+                    { "Name", "实验名称" }, { "Purpose", "实验目的" }, { "Equipment", "实验器材" },
+                    { "Procedure", "实验步骤" }, { "Conclusion", "实验结论" },
+                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.PhysicsDerivation, new Dictionary<string, string>
+                {
+                    { "Name", "公式名称" }, { "Formula", "推导结果" }, { "DerivationSteps", "推导步骤" },
+                    { "Conditions", "前提条件" }, { "Example", "应用实例" },
+                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.PhysicsComprehensive, new Dictionary<string, string>
+                {
+                    { "Title", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" },
+                    { "Example", "典型例题" }, { "Explanation", "答案解析" },
+                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.ChemistryEquation, new Dictionary<string, string>
+                {
+                    { "Name", "反应名称" }, { "Reactants", "反应物" }, { "Products", "生成物" },
+                    { "Equation", "化学方程式" }, { "Conditions", "反应条件" },
+                    { "Phenomenon", "反应现象" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.ChemistryElement, new Dictionary<string, string>
+                {
+                    { "Name", "元素名称" }, { "Symbol", "元素符号" }, { "AtomicNumber", "原子序数" },
+                    { "Properties", "元素性质" }, { "Uses", "主要用途" },
+                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.ChemistryExperiment, new Dictionary<string, string>
+                {
+                    { "Name", "实验名称" }, { "Purpose", "实验目的" }, { "Equipment", "实验器材" },
+                    { "Procedure", "操作步骤" }, { "Phenomenon", "实验现象" },
+                    { "Conclusion", "实验结论" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.ChemistryComprehensive, new Dictionary<string, string>
+                {
+                    { "Title", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" },
+                    { "Example", "典型例题" }, { "Explanation", "答案解析" },
+                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.HistoryEvent, new Dictionary<string, string>
+                {
+                    { "Name", "事件名称" }, { "Time", "发生时间" }, { "Location", "发生地点" },
+                    { "Background", "历史背景" }, { "Process", "事件经过" },
+                    { "Impact", "历史影响" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.HistoryPerson, new Dictionary<string, string>
+                {
+                    { "Name", "人物姓名" }, { "Dynasty", "所处朝代" }, { "Lifetime", "生卒年月" },
+                    { "Achievements", "主要成就" }, { "Evaluation", "历史评价" },
+                    { "Works", "代表作品" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.HistoryTimeline, new Dictionary<string, string>
+                {
+                    { "Era", "时代名称" }, { "TimePeriod", "时间范围" }, { "KeyEvents", "重要事件" },
+                    { "Characteristics", "时代特征" }, { "ImportantFigures", "重要人物" },
+                    { "Notes", "备注" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.HistoryComprehensive, new Dictionary<string, string>
+                {
+                    { "Title", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" },
+                    { "Example", "典型例题" }, { "Explanation", "答案解析" },
+                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.GeographyKnowledge, new Dictionary<string, string>
+                {
+                    { "Name", "地理名称" }, { "Category", "地理分类" }, { "Description", "地理描述" },
+                    { "Distribution", "分布地区" }, { "Features", "主要特征" },
+                    { "Notes", "备注" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.GeographyMap, new Dictionary<string, string>
+                {
+                    { "Name", "地图名称" }, { "Region", "所属地区" }, { "Features", "地理特征" },
+                    { "KeyLocations", "重要地点" }, { "ReadingTips", "读图技巧" },
+                    { "Notes", "备注" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.GeographyClimate, new Dictionary<string, string>
+                {
+                    { "Type", "气候类型" }, { "Distribution", "分布地区" }, { "Characteristics", "气候特征" },
+                    { "Causes", "形成原因" }, { "Vegetation", "植被类型" },
+                    { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.GeographyComprehensive, new Dictionary<string, string>
+                {
+                    { "Title", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" },
+                    { "Example", "典型例题" }, { "Explanation", "答案解析" },
+                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.BiologyConcept, new Dictionary<string, string>
+                {
+                    { "Name", "概念名称" }, { "Definition", "定义" }, { "Classification", "分类" },
+                    { "Features", "主要特征" }, { "Function", "功能作用" },
+                    { "Example", "实例" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.BiologyExperiment, new Dictionary<string, string>
+                {
+                    { "Name", "实验名称" }, { "Purpose", "实验目的" }, { "Materials", "实验材料" },
+                    { "Steps", "实验步骤" }, { "Result", "实验结果" },
+                    { "Conclusion", "实验结论" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.BiologyPhenomenon, new Dictionary<string, string>
+                {
+                    { "Name", "现象名称" }, { "Description", "现象描述" }, { "Type", "现象类型" },
+                    { "Causes", "产生原因" }, { "Examples", "常见实例" },
+                    { "Significance", "生物意义" }, { "Tags", "标签" }
+                }
+            },
+            {
+                Constants.SubCategory.BiologyComprehensive, new Dictionary<string, string>
+                {
+                    { "Title", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" },
+                    { "Example", "典型例题" }, { "Explanation", "答案解析" },
+                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                }
+            }
         };
 
-
-        private static string GetChineseColumnName(string columnName)
+        private string GetChineseColumnName(string columnName)
         {
-            return ColumnHeaderNames.TryGetValue(columnName, out var chineseName) ? chineseName : columnName;
+            var subCategory = SelectedSubCategory;
+            if (!string.IsNullOrEmpty(subCategory) &&
+                CategoryColumnHeaders.TryGetValue(subCategory, out var headers) &&
+                headers.TryGetValue(columnName, out var chineseName))
+            {
+                return chineseName;
+            }
+            return columnName;
         }
 
         public void UpdateGridFromJson()
@@ -260,10 +535,7 @@ namespace LearningAssistant.Forms
             {
                 foreach (DataGridViewColumn column in dataGridView.Columns)
                 {
-                    if (ColumnHeaderNames.TryGetValue(column.Name, out var chineseName))
-                    {
-                        column.HeaderText = chineseName;
-                    }
+                    column.HeaderText = GetChineseColumnName(column.Name);
                 }
             }
         }
@@ -344,16 +616,10 @@ namespace LearningAssistant.Forms
             GridRowsAdded?.Invoke(this, EventArgs.Empty);
         }
 
-        private void RadioChinese_CheckedChanged(object? sender, EventArgs e)
+        private void ComboBoxSubject_SelectedIndexChanged(object? sender, EventArgs e)
         {
-            if (radioChinese.Checked)
-                LanguageChanged?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void RadioEnglish_CheckedChanged(object? sender, EventArgs e)
-        {
-            if (radioEnglish.Checked)
-                LanguageChanged?.Invoke(this, EventArgs.Empty);
+            SubjectChanged?.Invoke(this, EventArgs.Empty);
+            LanguageChanged?.Invoke(this, EventArgs.Empty);
         }
 
         private void ComboBoxSubCategory_SelectedIndexChanged(object? sender, EventArgs e)
@@ -523,9 +789,8 @@ namespace LearningAssistant.Forms
             dataGridView = new DataGridView();
             mainPanel = new TableLayoutPanel();
             topPanel = new Panel();
-            groupBoxLanguage = new Panel();
-            radioEnglish = new RadioButton();
-            radioChinese = new RadioButton();
+            groupBoxSubject = new Panel();
+            comboBoxSubject = new ComboBox();
             labelCategory = new Label();
             comboBoxSubCategory = new ComboBox();
             gridPanel = new Panel();
@@ -537,7 +802,7 @@ namespace LearningAssistant.Forms
             ((ISupportInitialize)dataGridView).BeginInit();
             mainPanel.SuspendLayout();
             topPanel.SuspendLayout();
-            groupBoxLanguage.SuspendLayout();
+            groupBoxSubject.SuspendLayout();
             gridPanel.SuspendLayout();
             tabControl1.SuspendLayout();
             tabPage1.SuspendLayout();
@@ -716,7 +981,7 @@ namespace LearningAssistant.Forms
             // 
             // topPanel
             // 
-            topPanel.Controls.Add(groupBoxLanguage);
+            topPanel.Controls.Add(groupBoxSubject);
             topPanel.Controls.Add(labelCategory);
             topPanel.Controls.Add(comboBoxSubCategory);
             topPanel.Location = new Point(3, 3);
@@ -724,42 +989,28 @@ namespace LearningAssistant.Forms
             topPanel.Size = new Size(1212, 40);
             topPanel.TabIndex = 0;
             // 
-            // groupBoxLanguage
+            // groupBoxSubject
             // 
-            groupBoxLanguage.BackColor = Color.FromArgb(255, 250, 240);
-            groupBoxLanguage.Controls.Add(radioEnglish);
-            groupBoxLanguage.Controls.Add(radioChinese);
-            groupBoxLanguage.Dock = DockStyle.Left;
-            groupBoxLanguage.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            groupBoxLanguage.ForeColor = Color.FromArgb(33, 33, 33);
-            groupBoxLanguage.Location = new Point(0, 0);
-            groupBoxLanguage.Name = "groupBoxLanguage";
-            groupBoxLanguage.Size = new Size(328, 40);
-            groupBoxLanguage.TabIndex = 21;
+            groupBoxSubject.BackColor = Color.FromArgb(255, 250, 240);
+            groupBoxSubject.Controls.Add(comboBoxSubject);
+            groupBoxSubject.Dock = DockStyle.Left;
+            groupBoxSubject.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            groupBoxSubject.ForeColor = Color.FromArgb(33, 33, 33);
+            groupBoxSubject.Location = new Point(0, 0);
+            groupBoxSubject.Name = "groupBoxSubject";
+            groupBoxSubject.Size = new Size(180, 40);
+            groupBoxSubject.TabIndex = 21;
             // 
-            // radioEnglish
+            // comboBoxSubject
             // 
-            radioEnglish.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            radioEnglish.ForeColor = Color.FromArgb(33, 33, 33);
-            radioEnglish.Location = new Point(151, 8);
-            radioEnglish.Name = "radioEnglish";
-            radioEnglish.Size = new Size(80, 27);
-            radioEnglish.TabIndex = 2;
-            radioEnglish.Text = "🇬🇧 英语";
-            radioEnglish.CheckedChanged += RadioEnglish_CheckedChanged;
-            // 
-            // radioChinese
-            // 
-            radioChinese.Checked = true;
-            radioChinese.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            radioChinese.ForeColor = Color.FromArgb(33, 33, 33);
-            radioChinese.Location = new Point(33, 8);
-            radioChinese.Name = "radioChinese";
-            radioChinese.Size = new Size(80, 27);
-            radioChinese.TabIndex = 1;
-            radioChinese.TabStop = true;
-            radioChinese.Text = "🇨🇳 中文";
-            radioChinese.CheckedChanged += RadioChinese_CheckedChanged;
+            comboBoxSubject.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboBoxSubject.Font = new Font("微软雅黑", 10F);
+            comboBoxSubject.FormattingEnabled = true;
+            comboBoxSubject.Location = new Point(15, 8);
+            comboBoxSubject.Name = "comboBoxSubject";
+            comboBoxSubject.Size = new Size(150, 28);
+            comboBoxSubject.TabIndex = 0;
+            comboBoxSubject.SelectedIndexChanged += ComboBoxSubject_SelectedIndexChanged;
             // 
             // labelCategory
             // 
@@ -854,7 +1105,7 @@ namespace LearningAssistant.Forms
             mainPanel.ResumeLayout(false);
             topPanel.ResumeLayout(false);
             topPanel.PerformLayout();
-            groupBoxLanguage.ResumeLayout(false);
+            groupBoxSubject.ResumeLayout(false);
             gridPanel.ResumeLayout(false);
             tabControl1.ResumeLayout(false);
             tabPage1.ResumeLayout(false);
@@ -899,10 +1150,6 @@ namespace LearningAssistant.Forms
                 topPanel.BackColor = colors.Background;
             }
 
-            if (groupBoxLanguage != null)
-            {
-                groupBoxLanguage.BackColor = colors.ThemeMode == ThemeMode.Dark ? colors.Surface : Color.FromArgb(255, 250, 240);
-            }
 
             if (gridPanel != null)
             {

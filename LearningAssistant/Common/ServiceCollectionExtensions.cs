@@ -2,6 +2,7 @@ using LearningAssistant.Common.Events;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Data.Database;
 using LearningAssistant.Forms;
+using LearningAssistant.Managers;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
@@ -88,7 +89,6 @@ namespace LearningAssistant.Common
             services.AddSingleton<IUserSessionService, UserSessionService>();
 
             services.AddSingleton<ExportService>();
-            services.AddSingleton<IExportService>(sp => sp.GetRequiredService<ExportService>());
             services.AddSingleton<QuoteService>();
 
 
@@ -136,7 +136,7 @@ namespace LearningAssistant.Common
             services.AddScoped<IPdfTranslationService, PdfTranslationService>();
             services.AddScoped<IPdfTtsService, PdfTtsService>();
             services.AddScoped<IPdfStudyIntegration, PdfStudyIntegration>();
-            services.AddScoped<IExportService, ExportService>();
+            services.AddSingleton<IExportService>(sp => sp.GetRequiredService<ExportService>());
 
             return services;
         }

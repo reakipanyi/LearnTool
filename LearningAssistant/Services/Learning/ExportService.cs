@@ -10,14 +10,12 @@ namespace LearningAssistant.Services.Learning
     {
         private readonly ILogger<ExportService> _logger;
         private readonly IHighlightService _highlightService;
-        private readonly ExportService _exportService;
-        public ExportService(ILogger<ExportService> logger, IHighlightService highlightService, ExportService exportService)
+        public ExportService(ILogger<ExportService> logger, IHighlightService highlightService)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             ExcelPackage.License.SetNonCommercialPersonal("LearningAssistant");
 
             _highlightService = highlightService ?? throw new ArgumentNullException(nameof(highlightService));
-            _exportService = exportService ?? throw new ArgumentNullException(nameof(exportService));
         }
 
 
@@ -268,11 +266,11 @@ namespace LearningAssistant.Services.Learning
                 if (isImageMode)
                 {
                     var folderPath = Path.GetDirectoryName(sourcePath) ?? "";
-                    return await _exportService.ExportHighlightsToExcelAsync(highlights, folderPath, outputPath, null, imageFiles?.ToList() ?? new List<string>());
+                    return await ExportHighlightsToExcelAsync(highlights, folderPath, outputPath, null, imageFiles?.ToList() ?? new List<string>());
                 }
                 else
                 {
-                    return await _exportService.ExportHighlightsToExcelAsync(highlights, sourcePath, outputPath, pdfService);
+                    return await ExportHighlightsToExcelAsync(highlights, sourcePath, outputPath, pdfService);
                 }
             }
             catch (Exception ex)

@@ -50,7 +50,7 @@ namespace LearningAssistant
 
             if (args.Length > 0 && args[0].ToLower() == "--preview")
             {
-                Application.Run(new Forms.FormPreviewTool());
+                Application.Run(new FormPreviewTool());
                 return;
             }
 
@@ -74,7 +74,7 @@ namespace LearningAssistant
                     }
                     else
                     {
-                        logger.LogWarning("数据迁移部分失败: 成功 {Success}, 失败 {Failed}", 
+                        logger.LogWarning("数据迁移部分失败: 成功 {Success}, 失败 {Failed}",
                             result.SuccessfulMigrations, result.FailedMigrations);
                     }
                 }

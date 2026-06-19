@@ -1,5 +1,3 @@
-using System.ComponentModel;
-
 namespace LearningAssistant.Presenters
 {
     public interface ILearningEventMediator
@@ -12,8 +10,6 @@ namespace LearningAssistant.Presenters
         event EventHandler<SendToPdfEventArgs>? SendToPdfQuestion;
         event EventHandler? SettingsChanged;
         event EventHandler? OpenStatistics;
-        event EventHandler? ExportErrorBook;
-
         void RaiseMarkAsKnown();
         void RaiseMarkAsUnknown();
         void RaisePronounce();

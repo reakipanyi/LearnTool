@@ -1,8 +1,8 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
+using LearningAssistant.Managers;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
-using LearningAssistant.Services;
 using LearningAssistant.Services.Cloud;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;

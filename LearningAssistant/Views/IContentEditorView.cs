@@ -9,9 +9,14 @@ namespace LearningAssistant.Views
     public interface IContentEditorView
     {
         /// <summary>
-        /// 当前选中的语言
+        /// 当前选中的语言（兼容旧版）
         /// </summary>
         string SelectedLanguage { get; }
+
+        /// <summary>
+        /// 当前选中的学科
+        /// </summary>
+        string SelectedSubject { get; }
 
         /// <summary>
         /// 当前选中的子类别
@@ -40,9 +45,14 @@ namespace LearningAssistant.Views
         List<int> SelectedRowIndices { get; }
 
         /// <summary>
-        /// 语言变更事件
+        /// 语言变更事件（兼容旧版）
         /// </summary>
         event EventHandler? LanguageChanged;
+
+        /// <summary>
+        /// 学科变更事件
+        /// </summary>
+        event EventHandler? SubjectChanged;
 
         /// <summary>
         /// 子类别变更事件
@@ -136,10 +146,16 @@ namespace LearningAssistant.Views
         void UpdateGridFromJson();
 
         /// <summary>
-        /// 设置初始语言
+        /// 设置初始语言（兼容旧版）
         /// </summary>
         /// <param name="language">语言代码</param>
         void SetInitialLanguage(string language);
+
+        /// <summary>
+        /// 设置初始学科
+        /// </summary>
+        /// <param name="subject">学科名称</param>
+        void SetInitialSubject(string subject);
 
         /// <summary>
         /// 设置初始子类别

@@ -1,9 +1,9 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Views;
-using LearningAssistant.Views.UI;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel;
+using LearningAssistant.Forms.UserControls;
 
 namespace LearningAssistant.Forms
 {
