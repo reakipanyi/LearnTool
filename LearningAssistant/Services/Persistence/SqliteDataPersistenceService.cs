@@ -67,7 +67,7 @@ namespace LearningAssistant.Services.Persistence
                 var configToSave = config;
                 ConfigEncryptionHelper.EncryptSensitiveConfig(configToSave);
 
-                var path = Path.Combine(Common.FileHelper.GetAppDirectory(), "appsettings.json");
+                var path = AppPaths.AppSettingsPath;
                 Common.JsonHelper.SaveToFile(path, configToSave);
             }
             catch (Exception ex)
@@ -193,8 +193,7 @@ namespace LearningAssistant.Services.Persistence
         {
             try
             {
-                // 会话数据仍然保存到 JSON 文件，保持原样
-                var path = Common.FileHelper.GetSessionPath();
+                var path = AppPaths.LastSessionPath;
                 Common.JsonHelper.SaveToFile(path, session);
             }
             catch (Exception ex)
@@ -207,7 +206,7 @@ namespace LearningAssistant.Services.Persistence
         {
             try
             {
-                var path = Common.FileHelper.GetSessionPath();
+                var path = AppPaths.LastSessionPath;
                 return Common.JsonHelper.LoadFromFile<SessionData>(path) ?? new SessionData();
             }
             catch (Exception ex)

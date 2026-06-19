@@ -127,7 +127,7 @@ namespace LearningAssistant.Services.Learning
         {
             try
             {
-                var dataDir = FileHelper.GetDataDirectory();
+                var dataDir = AppPaths.DataDir;
                 var defaultFile = _categoryFileMap.GetValueOrDefault(subCategory, "");
 
                 var categoryPrefix = GetCategoryFilePrefix(subCategory);
@@ -183,7 +183,7 @@ namespace LearningAssistant.Services.Learning
         {
             try
             {
-                var userContentDir = Path.Combine(FileHelper.GetDataDirectory(), "UserContent");
+                var userContentDir = Path.Combine(AppPaths.DataDir, "UserContent");
                 Directory.CreateDirectory(userContentDir);
                 
                 var filePath = Path.Combine(userContentDir, $"{content.UserId}_{content.Id}.json");
@@ -200,16 +200,16 @@ namespace LearningAssistant.Services.Learning
         {
             if (!string.IsNullOrWhiteSpace(wordBankFile))
             {
-                return Path.Combine(FileHelper.GetDataDirectory(), wordBankFile);
+                return Path.Combine(AppPaths.DataDir, wordBankFile);
             }
-            return Path.Combine(FileHelper.GetDataDirectory(), _categoryFileMap.GetValueOrDefault(subCategory, "data.json"));
+            return Path.Combine(AppPaths.DataDir, _categoryFileMap.GetValueOrDefault(subCategory, "data.json"));
         }
 
         private bool IsPathSafe(string filePath)
         {
             try
             {
-                var dataDir = new DirectoryInfo(FileHelper.GetDataDirectory()).FullName;
+                var dataDir = new DirectoryInfo(AppPaths.DataDir).FullName;
                 var fullPath = new FileInfo(filePath).FullName;
                 return fullPath.StartsWith(dataDir, StringComparison.OrdinalIgnoreCase);
             }

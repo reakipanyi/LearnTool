@@ -12,7 +12,7 @@ namespace LearningAssistant.Services.Pdf
         public HighlightExportService(ILogger<HighlightExportService> logger)
         {
             _logger = logger;
-            ExcelPackage.License.SetNonCommercialPersonal("PolyForm NonCommercial 1.0.0.txt");
+            ExcelPackage.License.SetNonCommercialPersonal("LearningAssistant");
         }
 
         /// <summary>
@@ -231,8 +231,8 @@ namespace LearningAssistant.Services.Pdf
             try
             {
                 // 根据PdfPath查找对应的图片文件（处理可能的索引不匹配问题）
-                string? imagePath = imageFiles.FirstOrDefault(f => 
-                    string.Equals(Path.GetFileName(f), Path.GetFileName(highlight.PdfPath), 
+                string? imagePath = imageFiles.FirstOrDefault(f =>
+                    string.Equals(Path.GetFileName(f), Path.GetFileName(highlight.PdfPath),
                     StringComparison.OrdinalIgnoreCase));
 
                 if (imagePath == null)

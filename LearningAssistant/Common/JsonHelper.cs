@@ -55,7 +55,7 @@ namespace LearningAssistant.Common
             var directory = Path.GetDirectoryName(filePath);
             if (!string.IsNullOrWhiteSpace(directory))
             {
-                FileHelper.EnsureDirectoryExists(directory);
+                AppPaths.EnsureDirectoryExists(directory);
             }
             
             var json = Serialize(obj);

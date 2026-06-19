@@ -22,7 +22,7 @@ namespace LearningAssistant.Services.Learning
 
         public LearningReminderService()
         {
-            _remindersFilePath = Path.Combine(FileHelper.GetAppDirectory(), "learning_reminders.json");
+            _remindersFilePath = AppPaths.RemindersPath;
             LoadReminders();
         }
 

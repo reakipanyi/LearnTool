@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using System.Windows.Forms;
 
 namespace LearningAssistant.Services.Learning
 {
@@ -17,7 +16,7 @@ namespace LearningAssistant.Services.Learning
         public string ExportErrorBook(string userId, string filePath)
         {
             var items = GetErrorBookItems(userId);
-            
+
             if (items.Count == 0)
             {
                 return "错题本为空，没有可导出的内容！";
@@ -71,5 +70,6 @@ namespace LearningAssistant.Services.Learning
                 return $"导出错题本失败：{ex.Message}";
             }
         }
+
     }
 }

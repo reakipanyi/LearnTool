@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using System.Collections.Concurrent;
@@ -52,11 +53,8 @@ namespace LearningAssistant.Services.Learning
         public PendingContentService(ILogger<PendingContentService>? logger = null)
         {
             _logger = logger;
-            var appDataPath = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "LearningAssistant");
-            Directory.CreateDirectory(appDataPath);
-            _filePath = Path.Combine(appDataPath, "pending_content.json");
+            _filePath = AppPaths.PendingContentPath;
+            Directory.CreateDirectory(AppPaths.ConfigDir);
             LoadFromFile();
         }
 

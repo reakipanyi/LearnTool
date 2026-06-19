@@ -86,9 +86,10 @@ namespace LearningAssistant.Common
             services.AddTransient<IAiQuestionService, AiQuestionService>();
             services.AddSingleton<IContentLoaderService, ContentLoaderService>();
             services.AddSingleton<IUserSessionService, UserSessionService>();
-            // IProgressService 已移除，功能合并到 IStudyEngine
+
             services.AddSingleton<IExportService, ExportService>();
             services.AddSingleton<QuoteService>();
+
 
             services.AddSingleton<SpeechService>();
             services.AddSingleton<LearningReportService>();
@@ -279,6 +280,8 @@ namespace LearningAssistant.Common
                 var themeService = sp.GetService<IThemeService>();
                 return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService, logger, themeService);
             });
+
+
 
             services.AddScoped<ISettingView>(sp => sp.GetRequiredService<SettingForm>());
             services.AddScoped<ILearningView>(sp => sp.GetRequiredService<LearningForm>());

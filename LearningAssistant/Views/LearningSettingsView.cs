@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using System.ComponentModel;
 
 namespace LearningAssistant.Views
@@ -555,7 +556,6 @@ namespace LearningAssistant.Views
         }
 
         #endregion
-
 
     }
 }

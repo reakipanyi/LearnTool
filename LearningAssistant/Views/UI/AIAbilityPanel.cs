@@ -657,8 +657,7 @@ namespace LearningAssistant.Views.UI
         {
             try
             {
-                var appDataDir = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                var cacheDir = Path.Combine(appDataDir, "LearningAssistant", "ai_panel_cache");
+                var cacheDir = Path.Combine(CachePaths.WebView2, "ai_panel");
                 if (!Directory.Exists(cacheDir))
                     Directory.CreateDirectory(cacheDir);
 

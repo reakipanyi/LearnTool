@@ -85,7 +85,7 @@ namespace LearningAssistant.Views
             // 
             // _panelContent
             // 
-            _panelContent.BackColor = Color.FromArgb(224, 224, 224);
+            _panelContent.BackColor = Color.White;
             _panelContent.Controls.Add(_listBoxDisplay);
             _panelContent.Controls.Add(_labelContent);
             _panelContent.Dock = DockStyle.Fill;
@@ -96,10 +96,10 @@ namespace LearningAssistant.Views
             // 
             // _listBoxDisplay
             // 
-            _listBoxDisplay.BackColor = Color.FromArgb(192, 255, 192);
+            _listBoxDisplay.BackColor = Color.White;
             _listBoxDisplay.Dock = DockStyle.Top;
             _listBoxDisplay.Font = new Font("微软雅黑", 21.75F, FontStyle.Bold, GraphicsUnit.Point, 134);
-            _listBoxDisplay.ForeColor = Color.FromArgb(100, 150, 180);
+            _listBoxDisplay.ForeColor = Color.Black;
             _listBoxDisplay.Location = new Point(0, 0);
             _listBoxDisplay.Name = "_listBoxDisplay";
             _listBoxDisplay.Size = new Size(954, 160);
@@ -110,9 +110,9 @@ namespace LearningAssistant.Views
             // _labelContent
             // 
             _labelContent.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            _labelContent.BackColor = Color.FromArgb(255, 248, 230);
+            _labelContent.BackColor = Color.Transparent;
             _labelContent.Font = new Font("微软雅黑", 48F, FontStyle.Bold, GraphicsUnit.Point, 134);
-            _labelContent.ForeColor = Color.FromArgb(50, 60, 80);
+            _labelContent.ForeColor = Color.Black;
             _labelContent.Location = new Point(0, 0);
             _labelContent.Name = "_labelContent";
             _labelContent.Size = new Size(954, 225);
@@ -122,8 +122,8 @@ namespace LearningAssistant.Views
             // 
             // _panelNotes
             // 
-            _panelNotes.BackColor = Color.FromArgb(255, 253, 238);
-            _panelNotes.BorderStyle = BorderStyle.FixedSingle;
+            _panelNotes.BackColor = Color.White;
+            _panelNotes.BorderStyle = BorderStyle.None;
             _panelNotes.Controls.Add(_richTextBoxNotes);
             _panelNotes.Controls.Add(_labelNotesTitle);
             _panelNotes.Dock = DockStyle.Fill;
@@ -135,10 +135,11 @@ namespace LearningAssistant.Views
             // 
             // _richTextBoxNotes
             // 
-            _richTextBoxNotes.BackColor = Color.FromArgb(255, 253, 238);
+            _richTextBoxNotes.BackColor = Color.White;
+            _richTextBoxNotes.BorderStyle = BorderStyle.None;
             _richTextBoxNotes.Dock = DockStyle.Fill;
             _richTextBoxNotes.Font = new Font("微软雅黑", 11F);
-            _richTextBoxNotes.ForeColor = Color.FromArgb(60, 80, 100);
+            _richTextBoxNotes.ForeColor = Color.Black;
             _richTextBoxNotes.Location = new Point(0, 34);
             _richTextBoxNotes.Name = "_richTextBoxNotes";
             _richTextBoxNotes.Size = new Size(952, 189);
@@ -150,7 +151,7 @@ namespace LearningAssistant.Views
             // 
             _labelNotesTitle.Dock = DockStyle.Top;
             _labelNotesTitle.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
-            _labelNotesTitle.ForeColor = Color.FromArgb(139, 119, 101);
+            _labelNotesTitle.ForeColor = Color.Black;
             _labelNotesTitle.Location = new Point(0, 0);
             _labelNotesTitle.Name = "_labelNotesTitle";
             _labelNotesTitle.Padding = new Padding(10, 0, 0, 0);

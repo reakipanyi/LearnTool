@@ -5,13 +5,14 @@ using LearningAssistant.Services.Web;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
+using Newtonsoft.Json;
 using System.ComponentModel;
-using System.Text.Json;
+using System.Diagnostics;
 
 namespace LearningAssistant.Forms
 {
     /// <summary>
-    /// WebView2 浏览器窗体，支持多个 AI 平台快捷导航和百度网盘集成
+    /// WebView2 浏览器窗体，支持多标签页、多个 AI 平台快捷导航和百度网盘集成
     /// </summary>
     public partial class WebView2BrowserForm : Form, IThemeable
     {
@@ -19,14 +20,29 @@ namespace LearningAssistant.Forms
         private readonly ILogger? _logger;
         private readonly IWebBookmarkService? _webBookmarkService;
         private readonly IThemeService? _themeService;
-        private WebView2? _webView;
-        private bool _isWebViewReady = false;
+        private CoreWebView2Environment? _webViewEnvironment;
+        private readonly Dictionary<TabPage, WebView2> _webViews = new();
         private string? _initialPrompt;
         private IReadOnlyList<WebBookmarkCategory>? _cachedBookmarkCategories;
         private List<ToolStripButton>? _providerButtons;
         private Dictionary<string, ToolStripButton>? _hostToButtonMapping;
         private Dictionary<int, string>? _bookmarkIndexToUrl;
         private ThemeMode _currentThemeMode = ThemeMode.Light;
+        private int _tabCounter = 0;
+        private int _zoomLevel = Config.DefaultZoomLevel;
+
+        /// <summary>
+        /// 当前活动的 WebView2
+        /// </summary>
+        private WebView2? CurrentWebView
+        {
+            get
+            {
+                if (tabControl?.SelectedTab is TabPage tab && _webViews.TryGetValue(tab, out var webView))
+                    return webView;
+                return null;
+            }
+        }
 
         /// <summary>
         /// URL 常量
@@ -53,6 +69,46 @@ namespace LearningAssistant.Forms
             public const string NetdiskNavigatePrompt = "请先浏览到百度网盘文件页面";
             public const string NetdiskPathParseError = "无法解析网盘文件路径";
             public const string WebView2InitFailed = "初始化 WebView2 失败: {0}\n\n可能需要安装 WebView2 Runtime。";
+            public const string TooManyTabs = "标签页太多了（已超过 {0} 个），请关闭一些标签页后再试。";
+        }
+
+        /// <summary>
+        /// 配置常量
+        /// </summary>
+        private static class Config
+        {
+            public const int MaxTabCount = 8;
+            public const int DefaultZoomLevel = 100;
+            public const int MinZoomLevel = 50;
+            public const int MaxZoomLevel = 300;
+            public const int ZoomStep = 10;
+            private static string? _tabStateFilePath;
+            public static string TabStateFilePath
+            {
+                get
+                {
+                    if (_tabStateFilePath == null)
+                    {
+                        _tabStateFilePath = Path.Combine(AppPaths.ConfigDir, "browser_tabs.json");
+                    }
+                    return _tabStateFilePath;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 标签页状态数据模型
+        /// </summary>
+        private class TabState
+        {
+            public List<TabItemState> Tabs { get; set; } = new();
+            public int SelectedIndex { get; set; }
+        }
+
+        private class TabItemState
+        {
+            public string Url { get; set; } = string.Empty;
+            public string Title { get; set; } = string.Empty;
         }
 
         /// <summary>
@@ -111,6 +167,7 @@ namespace LearningAssistant.Forms
             InitializeProviderButtonMappings();
             InitializeBookmarks();
             Load += WebView2BrowserForm_Load;
+            FormClosing += WebView2BrowserForm_FormClosing;
 
             _themeService?.RegisterThemeable(this);
         }
@@ -145,13 +202,11 @@ namespace LearningAssistant.Forms
             comboBoxBookmarks.Items.Clear();
             _bookmarkIndexToUrl = new Dictionary<int, string>();
 
-            // 添加占位符项
             comboBoxBookmarks.Items.Add("🔖 书签...");
 
             _cachedBookmarkCategories = _webBookmarkService.GetAllCategories();
             foreach (var category in _cachedBookmarkCategories)
             {
-                // 添加分类标题（不可点击）
                 comboBoxBookmarks.Items.Add($"📁 {category.Name}");
                 foreach (var bookmark in category.Bookmarks)
                 {
@@ -181,7 +236,13 @@ namespace LearningAssistant.Forms
         {
             try
             {
-                await InitializeWebViewAsync();
+                await EnsureEnvironmentAsync();
+
+                bool restored = await LoadTabStateAsync();
+                if (!restored)
+                {
+                    await CreateNewTabAsync(Urls.BaiduNetdisk, "百度网盘");
+                }
             }
             catch (Exception ex)
             {
@@ -190,100 +251,426 @@ namespace LearningAssistant.Forms
             }
         }
 
-        private async Task InitializeWebViewAsync()
+        private void WebView2BrowserForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
-            const int maxRetryCount = 3;
-            int retryCount = 0;
-            bool success = false;
+            SaveTabState();
+        }
 
-            while (!success && retryCount < maxRetryCount)
+        /// <summary>
+        /// 确保 CoreWebView2Environment 已创建
+        /// </summary>
+        private async Task EnsureEnvironmentAsync()
+        {
+            if (_webViewEnvironment != null) return;
+
+            var cacheDir = CachePaths.WebView2;
+            if (!Directory.Exists(cacheDir))
+            {
+                Directory.CreateDirectory(cacheDir);
+            }
+
+            _webViewEnvironment = await CoreWebView2Environment.CreateAsync(null, cacheDir);
+        }
+
+        /// <summary>
+        /// 创建新标签页
+        /// </summary>
+        /// <param name="url">初始 URL</param>
+        /// <param name="title">标签页标题</param>
+        /// <returns>创建的 WebView2 控件</returns>
+        private async Task<WebView2?> CreateNewTabAsync(string url, string title)
+        {
+            try
+            {
+                if (tabControl.TabCount >= Config.MaxTabCount)
+                {
+                    MessageBox.Show(
+                        string.Format(Messages.TooManyTabs, Config.MaxTabCount),
+                        "提示",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return null;
+                }
+
+                await EnsureEnvironmentAsync();
+                if (_webViewEnvironment == null) return null;
+
+                _tabCounter++;
+                var tabPage = new TabPage(title)
+                {
+                    Tag = _tabCounter
+                };
+
+                var webView = new WebView2
+                {
+                    Dock = DockStyle.Fill
+                };
+
+                tabPage.Controls.Add(webView);
+                _webViews[tabPage] = webView;
+                tabControl.TabPages.Add(tabPage);
+                tabControl.SelectedTab = tabPage;
+
+                await webView.EnsureCoreWebView2Async(_webViewEnvironment);
+
+                if (webView.CoreWebView2 != null)
+                {
+                    webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+                    webView.CoreWebView2.Settings.IsWebMessageEnabled = true;
+                    webView.CoreWebView2.Settings.IsScriptEnabled = true;
+                    webView.CoreWebView2.Settings.AreDevToolsEnabled = true;
+
+                    webView.ZoomFactor = _zoomLevel / 100.0;
+
+                    webView.CoreWebView2.NewWindowRequested += CoreWebView2_NewWindowRequested;
+                    webView.NavigationCompleted += WebView_NavigationCompleted;
+                    webView.CoreWebView2.DocumentTitleChanged += CoreWebView2_DocumentTitleChanged;
+                    webView.CoreWebView2.ProcessFailed += CoreWebView2_ProcessFailed;
+
+                    webView.CoreWebView2.Navigate(url);
+                }
+
+                return webView;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "创建新标签页失败");
+                MessageBox.Show($"创建新标签页失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 关闭指定标签页
+        /// </summary>
+        private void CloseTab(TabPage tabPage)
+        {
+            if (_webViews.TryGetValue(tabPage, out var webView))
+            {
+                if (webView.CoreWebView2 != null)
+                {
+                    webView.CoreWebView2.NewWindowRequested -= CoreWebView2_NewWindowRequested;
+                    webView.NavigationCompleted -= WebView_NavigationCompleted;
+                    webView.CoreWebView2.DocumentTitleChanged -= CoreWebView2_DocumentTitleChanged;
+                    webView.CoreWebView2.ProcessFailed -= CoreWebView2_ProcessFailed;
+                }
+                webView.Dispose();
+                _webViews.Remove(tabPage);
+            }
+
+            tabControl.TabPages.Remove(tabPage);
+            tabPage.Dispose();
+
+            if (tabControl.TabCount == 0)
+            {
+                _ = CreateNewTabAsync(Urls.BaiduNetdisk, "百度网盘");
+            }
+        }
+
+        /// <summary>
+        /// 新窗口请求处理 - 在新标签页打开
+        /// </summary>
+        private void CoreWebView2_NewWindowRequested(object? sender, CoreWebView2NewWindowRequestedEventArgs e)
+        {
+            if (IsDisposed || !IsHandleCreated)
+            {
+                e.Handled = true;
+                return;
+            }
+
+            e.Handled = true;
+
+            var uri = e.Uri;
+            BeginInvoke(new Action(async () =>
             {
                 try
                 {
-                    var cacheDir = CachePaths.WebView2;
-                    if (!Directory.Exists(cacheDir))
-                    {
-                        Directory.CreateDirectory(cacheDir);
-                    }
-
-                    var environment = await CoreWebView2Environment.CreateAsync(null, cacheDir);
-
-                    _webView = new WebView2
-                    {
-                        Dock = DockStyle.Fill
-                    };
-
-                    await _webView.EnsureCoreWebView2Async(environment);
-
-                    if (_webView.CoreWebView2 != null)
-                    {
-                        _webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
-                        _webView.CoreWebView2.Settings.IsWebMessageEnabled = true;
-                        _webView.CoreWebView2.Settings.IsScriptEnabled = true;
-                        _webView.CoreWebView2.Settings.AreDevToolsEnabled = true;
-
-                        _webView.Source = new Uri(Urls.Baidu);
-
-                        _webView.NavigationCompleted += OnNavigationCompleted;
-
-                        panelBrowser.Controls.Add(_webView);
-                        _isWebViewReady = true;
-                        success = true;
-                    }
-                    else
-                    {
-                        throw new InvalidOperationException("CoreWebView2 初始化失败");
-                    }
+                    await CreateNewTabAsync(uri, "新标签页");
                 }
                 catch (Exception ex)
                 {
-                    retryCount++;
-                    _logger?.LogError(ex, $"WebView2 初始化失败 (尝试 {retryCount}/{maxRetryCount})");
+                    _logger?.LogError(ex, "处理新窗口请求失败");
+                }
+            }));
+        }
 
-                    if (retryCount >= maxRetryCount)
+        /// <summary>
+        /// 文档标题变更处理 - 更新标签页标题
+        /// </summary>
+        private void CoreWebView2_DocumentTitleChanged(object? sender, object e)
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+
+            var webView = sender as WebView2;
+            if (webView == null) return;
+
+            BeginInvoke(new Action(() =>
+            {
+                UpdateTabPageTitle(webView);
+            }));
+        }
+
+        private void UpdateTabPageTitle(WebView2 webView)
+        {
+            var tabPage = _webViews.FirstOrDefault(kvp => kvp.Value == webView).Key;
+            if (tabPage != null && webView.CoreWebView2 != null)
+            {
+                var title = webView.CoreWebView2.DocumentTitle;
+                if (!string.IsNullOrEmpty(title))
+                {
+                    if (title.Length > 30)
+                        title = title.Substring(0, 30) + "...";
+                    tabPage.Text = title;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 浏览器进程崩溃处理
+        /// </summary>
+        private void CoreWebView2_ProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs e)
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+
+            var webView = sender as WebView2;
+            if (webView == null) return;
+
+            _logger?.LogError("WebView2 浏览器进程崩溃，原因：{Reason}", e.ProcessFailedKind);
+
+            BeginInvoke(new Action(() =>
+            {
+                var tabPage = _webViews.FirstOrDefault(kvp => kvp.Value == webView).Key;
+                if (tabPage != null)
+                {
+                    try
                     {
-                        MessageBox.Show(string.Format(Messages.WebView2InitFailed, ex.Message), "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        _logger?.LogError(ex, "WebView2 初始化最终失败");
+                        CloseTab(tabPage);
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        await Task.Delay(1000);
+                        _logger?.LogError(ex, "关闭崩溃的标签页失败");
+                    }
+                }
+            }));
+        }
+
+        /// <summary>
+        /// 导航完成处理
+        /// </summary>
+        private void WebView_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+
+            var webView = sender as WebView2;
+            if (webView == null) return;
+
+            BeginInvoke(new Action(() =>
+            {
+                UpdateTabPageTitle(webView);
+            }));
+
+            if (webView != CurrentWebView) return;
+
+            BeginInvoke(new Action(async () =>
+            {
+                if (CurrentWebView != null)
+                {
+                    txtUrl.Text = CurrentWebView.Source?.ToString() ?? string.Empty;
+                    btnBack.Enabled = CurrentWebView.CanGoBack;
+                    btnForward.Enabled = CurrentWebView.CanGoForward;
+
+                    bool isNetdiskPage = CurrentWebView.Source?.ToString()?.StartsWith(Urls.BaiduNetdisk) ?? false;
+                    btnOpenNetdisk.Visible = !isNetdiskPage;
+
+                    ResetProviderButtons();
+
+                    string? currentHost = CurrentWebView.Source?.Host;
+                    HighlightCurrentProvider(currentHost);
+
+                    if (!string.IsNullOrEmpty(_initialPrompt) && CurrentWebView.CoreWebView2 != null)
+                    {
+                        await FillPromptAsync(_initialPrompt, currentHost);
+                        _initialPrompt = null;
+                    }
+                }
+            }));
+        }
+
+        /// <summary>
+        /// 标签页切换处理
+        /// </summary>
+        private void TabControl_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            if (CurrentWebView != null)
+            {
+                txtUrl.Text = CurrentWebView.Source?.ToString() ?? string.Empty;
+                btnBack.Enabled = CurrentWebView.CanGoBack;
+                btnForward.Enabled = CurrentWebView.CanGoForward;
+
+                string? currentHost = CurrentWebView.Source?.Host;
+                ResetProviderButtons();
+                HighlightCurrentProvider(currentHost);
+
+                bool isNetdiskPage = CurrentWebView.Source?.ToString()?.StartsWith(Urls.BaiduNetdisk) ?? false;
+                btnOpenNetdisk.Visible = !isNetdiskPage;
+
+                ApplyZoom();
+                ApplyWebView2ThemeAsync(_currentThemeMode == ThemeMode.Dark);
+            }
+        }
+
+        /// <summary>
+        /// 标签页鼠标点击 - 处理中键关闭
+        /// </summary>
+        private void TabControl_MouseDown(object? sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Middle)
+            {
+                for (int i = 0; i < tabControl.TabCount; i++)
+                {
+                    if (tabControl.GetTabRect(i).Contains(e.Location))
+                    {
+                        CloseTab(tabControl.TabPages[i]);
+                        break;
+                    }
+                }
+            }
+            else if (e.Button == MouseButtons.Right)
+            {
+                for (int i = 0; i < tabControl.TabCount; i++)
+                {
+                    if (tabControl.GetTabRect(i).Contains(e.Location))
+                    {
+                        tabControl.SelectedIndex = i;
+                        ShowTabContextMenu(e.Location, tabControl.TabPages[i]);
+                        break;
                     }
                 }
             }
         }
 
-        private void OnNavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
+        /// <summary>
+        /// 显示标签页右键菜单
+        /// </summary>
+        private void ShowTabContextMenu(Point location, TabPage tabPage)
         {
-            if (IsDisposed || !IsHandleCreated) return;
+            var menu = new ContextMenuStrip();
 
-            BeginInvoke(new Action(async () =>
+            var newTabItem = new ToolStripMenuItem("新建标签页");
+            newTabItem.Click += async (s, e) => await CreateNewTabAsync(Urls.BaiduNetdisk, "百度网盘");
+            menu.Items.Add(newTabItem);
+
+            menu.Items.Add(new ToolStripSeparator());
+
+            var closeTabItem = new ToolStripMenuItem("关闭此标签页");
+            closeTabItem.Click += (s, e) => CloseTab(tabPage);
+            closeTabItem.Enabled = tabControl.TabCount > 1;
+            menu.Items.Add(closeTabItem);
+
+            var closeOtherItem = new ToolStripMenuItem("关闭其他标签页");
+            closeOtherItem.Click += (s, e) =>
             {
-                if (_webView != null)
+                var tabsToClose = tabControl.TabPages.Cast<TabPage>().Where(t => t != tabPage).ToList();
+                foreach (var tab in tabsToClose)
+                    CloseTab(tab);
+            };
+            closeOtherItem.Enabled = tabControl.TabCount > 1;
+            menu.Items.Add(closeOtherItem);
+
+            menu.Show(tabControl, location);
+        }
+
+        /// <summary>
+        /// 保存标签页状态到本地 JSON 文件
+        /// </summary>
+        private void SaveTabState()
+        {
+            try
+            {
+                var tabState = new TabState
                 {
-                    txtUrl.Text = _webView.Source?.ToString() ?? string.Empty;
-                    btnBack.Enabled = _webView.CanGoBack;
-                    btnForward.Enabled = _webView.CanGoForward;
+                    SelectedIndex = tabControl.SelectedIndex
+                };
 
-                    bool isNetdiskPage = _webView.Source?.ToString()?.StartsWith(Urls.BaiduNetdisk) ?? false;
-                    btnOpenNetdisk.Visible = !isNetdiskPage;
-                    btnDownloadNetdisk.Visible = isNetdiskPage && _cloudStorageService != null && _cloudStorageService.IsAuthenticated;
-
-                    // 重置所有平台按钮
-                    ResetProviderButtons();
-
-                    // 高亮当前平台按钮
-                    string? currentHost = _webView.Source?.Host;
-                    HighlightCurrentProvider(currentHost);
-
-                    // 自动填充提示词
-                    if (!string.IsNullOrEmpty(_initialPrompt) && _webView.CoreWebView2 != null)
+                foreach (TabPage tabPage in tabControl.TabPages)
+                {
+                    if (_webViews.TryGetValue(tabPage, out var webView))
                     {
-                        await FillPromptAsync(_initialPrompt, currentHost);
-                        _initialPrompt = null; // 只填充一次
+                        var url = webView.Source?.ToString() ?? string.Empty;
+                        if (!string.IsNullOrEmpty(url))
+                        {
+                            tabState.Tabs.Add(new TabItemState
+                            {
+                                Url = url,
+                                Title = tabPage.Text
+                            });
+                        }
                     }
                 }
-            }));
+
+                if (tabState.Tabs.Count == 0)
+                    return;
+
+                var json = JsonConvert.SerializeObject(tabState, Formatting.Indented);
+                var directory = Path.GetDirectoryName(Config.TabStateFilePath);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                File.WriteAllText(Config.TabStateFilePath, json);
+                _logger?.LogInformation("已保存 {Count} 个标签页状态", tabState.Tabs.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "保存标签页状态失败");
+            }
+        }
+
+        /// <summary>
+        /// 从本地 JSON 文件加载标签页状态并恢复
+        /// </summary>
+        /// <returns>是否成功恢复了标签页</returns>
+        private async Task<bool> LoadTabStateAsync()
+        {
+            try
+            {
+                if (!File.Exists(Config.TabStateFilePath))
+                    return false;
+
+                var json = File.ReadAllText(Config.TabStateFilePath);
+                if (string.IsNullOrWhiteSpace(json))
+                    return false;
+
+                var tabState = JsonConvert.DeserializeObject<TabState>(json);
+                if (tabState == null || tabState.Tabs.Count == 0)
+                    return false;
+
+                _logger?.LogInformation("正在恢复 {Count} 个标签页...", tabState.Tabs.Count);
+
+                for (int i = 0; i < tabState.Tabs.Count; i++)
+                {
+                    var tab = tabState.Tabs[i];
+                    if (string.IsNullOrEmpty(tab.Url))
+                        continue;
+
+                    var title = !string.IsNullOrEmpty(tab.Title) ? tab.Title : "新标签页";
+                    await CreateNewTabAsync(tab.Url, title);
+                }
+
+                if (tabState.SelectedIndex >= 0 && tabState.SelectedIndex < tabControl.TabCount)
+                {
+                    tabControl.SelectedIndex = tabState.SelectedIndex;
+                }
+
+                _logger?.LogInformation("标签页恢复完成，共 {Count} 个", tabControl.TabCount);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "加载标签页状态失败");
+                return false;
+            }
         }
 
         /// <summary>
@@ -326,17 +713,14 @@ namespace LearningAssistant.Forms
         /// <summary>
         /// 自动填充提示词到当前平台的输入框
         /// </summary>
-        /// <param name="prompt">要填充的提示词</param>
-        /// <param name="host">当前页面的主机名</param>
         private async Task FillPromptAsync(string prompt, string? host)
         {
-            if (_webView?.CoreWebView2 == null || host == null) return;
+            if (CurrentWebView?.CoreWebView2 == null || host == null) return;
             if (!ProviderScriptSelectors.TryGetValue(host, out var selector)) return;
 
             try
             {
-                // 使用 JSON 序列化安全传递 prompt，避免注入风险
-                string escapedPrompt = JsonSerializer.Serialize(prompt);
+                string escapedPrompt = JsonConvert.SerializeObject(prompt);
                 string script = $@"
                     (function() {{
                         var textarea = document.querySelector('{selector}');
@@ -349,7 +733,7 @@ namespace LearningAssistant.Forms
                         return 'textarea not found';
                     }})();";
 
-                var result = await _webView.CoreWebView2.ExecuteScriptAsync(script);
+                var result = await CurrentWebView.CoreWebView2.ExecuteScriptAsync(script);
                 _logger?.LogDebug("自动填充结果: {Result}", result);
             }
             catch (Exception ex)
@@ -362,7 +746,7 @@ namespace LearningAssistant.Forms
         {
             if (sender is ToolStripButton button && button.Tag is string url)
             {
-                _webView.Source = new Uri(url);
+                NavigateToUrl(url);
             }
         }
 
@@ -373,23 +757,216 @@ namespace LearningAssistant.Forms
 
         private void btnBack_Click(object sender, EventArgs e)
         {
-            if (_webView?.CanGoBack == true)
+            try
             {
-                _webView.GoBack();
+                if (CurrentWebView?.CoreWebView2 != null && CurrentWebView.CanGoBack)
+                {
+                    CurrentWebView.GoBack();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "后退操作失败");
             }
         }
 
         private void btnForward_Click(object sender, EventArgs e)
         {
-            if (_webView?.CanGoForward == true)
+            try
             {
-                _webView.GoForward();
+                if (CurrentWebView?.CoreWebView2 != null && CurrentWebView.CanGoForward)
+                {
+                    CurrentWebView.GoForward();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "前进操作失败");
             }
         }
 
         private void btnRefresh_Click(object sender, EventArgs e)
         {
-            _webView?.Reload();
+            try
+            {
+                if (CurrentWebView?.CoreWebView2 != null)
+                {
+                    CurrentWebView.Reload();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "刷新操作失败");
+            }
+        }
+
+        private void btnNewTab_Click(object? sender, EventArgs e)
+        {
+            _ = CreateNewTabAsync(Urls.BaiduNetdisk, "百度网盘");
+        }
+
+        private void btnZoomIn_Click(object? sender, EventArgs e)
+        {
+            ZoomIn();
+        }
+
+        private void btnZoomOut_Click(object? sender, EventArgs e)
+        {
+            ZoomOut();
+        }
+
+        private void ZoomIn()
+        {
+            try
+            {
+                if (_zoomLevel < Config.MaxZoomLevel)
+                {
+                    _zoomLevel += Config.ZoomStep;
+                    ApplyZoom();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "放大操作失败");
+            }
+        }
+
+        private void ZoomOut()
+        {
+            try
+            {
+                if (_zoomLevel > Config.MinZoomLevel)
+                {
+                    _zoomLevel -= Config.ZoomStep;
+                    ApplyZoom();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "缩小操作失败");
+            }
+        }
+
+        private void ApplyZoom()
+        {
+            double zoomFactor = _zoomLevel / 100.0;
+            foreach (var webView in _webViews.Values)
+            {
+                if (webView != null)
+                {
+                    webView.ZoomFactor = zoomFactor;
+                }
+            }
+            if (lblZoom != null)
+            {
+                lblZoom.Text = $"{_zoomLevel}%";
+            }
+        }
+
+        private async void btnScreenshot_Click(object? sender, EventArgs e)
+        {
+            await CaptureRegionScreenshotAsync();
+        }
+
+        private async Task<string?> CaptureFullScreenshotBase64Async()
+        {
+            var currentWebView = CurrentWebView;
+            if (currentWebView?.CoreWebView2 == null)
+                return null;
+
+            string param = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                format = "png",
+                captureBeyondViewport = true,
+                fromSurface = true
+            });
+
+            var response = await currentWebView.CoreWebView2.CallDevToolsProtocolMethodAsync("Page.captureScreenshot", param);
+            using var responseDoc = System.Text.Json.JsonDocument.Parse(response);
+            return responseDoc.RootElement.GetProperty("data").GetString();
+        }
+
+        private async Task<Image?> GetRegionScreenshotAsync()
+        {
+            var base64 = await CaptureFullScreenshotBase64Async();
+            if (string.IsNullOrEmpty(base64))
+            {
+                MessageBox.Show("截图失败", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return null;
+            }
+
+            var bytes = Convert.FromBase64String(base64);
+            var fullImage = Image.FromStream(new MemoryStream(bytes));
+
+            try
+            {
+                using var selectionForm = new RegionSelectionForm(fullImage);
+                if (selectionForm.ShowDialog(this) == DialogResult.OK && selectionForm.SelectedRegion.HasValue)
+                {
+                    var rect = selectionForm.SelectedRegion.Value;
+                    if (rect.Width < 5 || rect.Height < 5)
+                    {
+                        MessageBox.Show("选择的区域太小", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return null;
+                    }
+                    return CropImage(fullImage, rect);
+                }
+                fullImage.Dispose();
+                return null;
+            }
+            catch
+            {
+                fullImage.Dispose();
+                throw;
+            }
+        }
+
+        private async Task<string?> CaptureRegionScreenshotAsync()
+        {
+            try
+            {
+                var currentWebView = CurrentWebView;
+                if (currentWebView?.CoreWebView2 == null)
+                {
+                    MessageBox.Show("当前没有可截图的页面", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return null;
+                }
+
+                using var croppedImage = await GetRegionScreenshotAsync();
+                if (croppedImage == null)
+                    return null;
+
+                using var saveDialog = new SaveFileDialog
+                {
+                    Filter = "PNG 图片 (*.png)|*.png",
+                    FileName = $"Screenshot_{DateTime.Now:yyyyMMdd_HHmmss}.png",
+                    Title = "保存截图"
+                };
+
+                if (saveDialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    croppedImage.Save(saveDialog.FileName, System.Drawing.Imaging.ImageFormat.Png);
+                    _logger?.LogInformation("区域截图已保存: {FilePath}", saveDialog.FileName);
+                    MessageBox.Show($"截图已保存到：\n{saveDialog.FileName}", "截图成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return saveDialog.FileName;
+                }
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "区域截图失败");
+                MessageBox.Show($"截图失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return null;
+            }
+        }
+
+        private static Image CropImage(Image image, Rectangle rect)
+        {
+            var cropped = new Bitmap(rect.Width, rect.Height);
+            using var g = Graphics.FromImage(cropped);
+            g.DrawImage(image, 0, 0, rect, GraphicsUnit.Pixel);
+            return cropped;
         }
 
         private void txtUrl_KeyDown(object sender, KeyEventArgs e)
@@ -406,20 +983,33 @@ namespace LearningAssistant.Forms
         /// <param name="url">目标URL，如果为null则使用文本框中的URL</param>
         public void NavigateToUrl(string? url = null)
         {
-            url ??= txtUrl.Text;
-            var normalizedUrl = NormalizeUrl(url);
-
-            if (!string.IsNullOrEmpty(normalizedUrl) && _webView != null)
+            try
             {
-                _webView.Source = new Uri(normalizedUrl);
+                url ??= txtUrl.Text;
+                var normalizedUrl = NormalizeUrl(url);
+
+                if (string.IsNullOrEmpty(normalizedUrl))
+                    return;
+
+                var currentWebView = CurrentWebView;
+                if (currentWebView == null || currentWebView.CoreWebView2 == null)
+                {
+                    _logger?.LogWarning("当前 WebView2 不可用，无法导航到：{Url}", normalizedUrl);
+                    return;
+                }
+
+                currentWebView.CoreWebView2.Navigate(normalizedUrl);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "导航失败：{Url}", url);
+                MessageBox.Show($"导航失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
         /// <summary>
         /// 标准化URL格式
         /// </summary>
-        /// <param name="url">原始URL</param>
-        /// <returns>标准化后的URL</returns>
         private static string NormalizeUrl(string? url)
         {
             if (string.IsNullOrWhiteSpace(url)) return string.Empty;
@@ -435,110 +1025,103 @@ namespace LearningAssistant.Forms
 
         private void btnOpenNetdisk_Click(object sender, EventArgs e)
         {
-            if (_webView != null)
+            NavigateToUrl(Urls.BaiduNetdisk);
+        }
+
+        private void btnOpenInBrowser_Click(object sender, EventArgs e)
+        {
+            var url = CurrentWebView?.Source?.ToString() ?? txtUrl.Text;
+            if (!string.IsNullOrEmpty(url))
             {
-                _webView.Source = new Uri(Urls.BaiduNetdisk);
+                try
+                {
+                    var psi = new ProcessStartInfo(url)
+                    {
+                        UseShellExecute = true
+                    };
+                    Process.Start(psi);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "在浏览器中打开URL失败: {Url}", url);
+                    MessageBox.Show($"无法在浏览器中打开链接: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
 
-        private async void btnDownloadNetdisk_Click(object sender, EventArgs e)
+        private void btnAddBookmark_Click(object sender, EventArgs e)
         {
             try
             {
-                if (_cloudStorageService == null)
+                if (_webBookmarkService == null || CurrentWebView == null)
                 {
-                    MessageBox.Show(Messages.NetdiskNotConfigured, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("书签服务未配置", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
-                if (!_cloudStorageService.IsAuthenticated)
+                var currentUrl = CurrentWebView.Source?.ToString();
+                if (string.IsNullOrEmpty(currentUrl))
                 {
-                    MessageBox.Show(Messages.NetdiskNotAuthorized, "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show("当前页面没有可添加的URL", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
-                var currentUrl = _webView?.Source?.ToString();
-                if (string.IsNullOrEmpty(currentUrl) || !currentUrl.StartsWith(Urls.BaiduNetdisk))
+                var existingBookmark = _webBookmarkService.GetBookmarkByUrl(currentUrl);
+                if (existingBookmark != null)
                 {
-                    MessageBox.Show(Messages.NetdiskNavigatePrompt, "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show($"该页面已在书签中：{existingBookmark.Title}", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
-                var fileInfo = ParseNetdiskUrl(currentUrl);
-                if (!fileInfo.HasValue)
+                string pageTitle = CurrentWebView.CoreWebView2?.DocumentTitle ?? currentUrl;
+
+                using var bookmarkDialog = new AddBookmarkDialog(
+                    pageTitle,
+                    currentUrl,
+                    _webBookmarkService.GetAllCategories().Select(c => c.Name).ToList());
+
+                if (bookmarkDialog.ShowDialog(this) == DialogResult.OK)
                 {
-                    MessageBox.Show(Messages.NetdiskPathParseError, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    var bookmark = new WebBookmarkItem
+                    {
+                        Title = bookmarkDialog.BookmarkTitle,
+                        Url = currentUrl,
+                        Icon = "🔗"
+                    };
+
+                    _webBookmarkService.AddBookmark(bookmarkDialog.CategoryName, bookmark);
+                    InitializeBookmarks();
+                    MessageBox.Show($"书签已添加：{bookmark.Title}", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "添加书签失败");
+                MessageBox.Show($"添加书签失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void btnManageBookmarks_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (_webBookmarkService == null)
+                {
+                    MessageBox.Show("书签服务未配置", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     return;
                 }
 
-                var (cloudPath, fileName) = fileInfo.Value;
-
-                using var saveDialog = new SaveFileDialog
+                using var managerForm = new BookmarkManagerForm(_webBookmarkService, _logger);
+                managerForm.BookmarksChanged += (s, e) =>
                 {
-                    Filter = "所有文件 (*.*)|*.*",
-                    FileName = fileName,
-                    Title = "保存网盘文件"
+                    InitializeBookmarks();
                 };
-
-                if (saveDialog.ShowDialog() == DialogResult.OK)
-                {
-                    using var progressForm = new ProgressForm();
-                    progressForm.ShowDialog(this);
-
-                    bool success = await _cloudStorageService.DownloadFileAsync(
-                        cloudPath,
-                        saveDialog.FileName,
-                        (progress) =>
-                        {
-                            progressForm.UpdateProgress(progress);
-                        });
-
-                    if (success)
-                    {
-                        MessageBox.Show($"文件下载成功！\n\n保存位置: {saveDialog.FileName}", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    }
-                    else
-                    {
-                        MessageBox.Show("文件下载失败", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
-                }
+                managerForm.ShowDialog(this);
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "下载网盘文件失败");
-                MessageBox.Show($"下载失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        private (string CloudPath, string FileName)? ParseNetdiskUrl(string url)
-        {
-            try
-            {
-                var uri = new Uri(url);
-                var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
-
-                var path = query["path"];
-                if (!string.IsNullOrEmpty(path))
-                {
-                    return (path, Path.GetFileName(path));
-                }
-
-                var segments = uri.Segments;
-                if (segments.Length >= 3)
-                {
-                    if (segments[1].Equals("s/", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var shareId = segments[2].TrimEnd('/');
-                        return ($"/share/{shareId}", shareId);
-                    }
-                }
-
-                return ("/", "root");
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogWarning(ex, "解析网盘URL失败: {Url}", url);
-                return null;
+                _logger?.LogError(ex, "打开书签管理器失败");
+                MessageBox.Show($"打开书签管理器失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -547,12 +1130,20 @@ namespace LearningAssistant.Forms
             if (disposing)
             {
                 _themeService?.UnregisterThemeable(this);
-                if (_webView != null)
+                var webViewList = _webViews.ToList();
+                foreach (var kvp in webViewList)
                 {
-                    _webView.NavigationCompleted -= OnNavigationCompleted;
-                    _webView.Dispose();
-                    _webView = null;
+                    var webView = kvp.Value;
+                    if (webView.CoreWebView2 != null)
+                    {
+                        webView.CoreWebView2.NewWindowRequested -= CoreWebView2_NewWindowRequested;
+                        webView.NavigationCompleted -= WebView_NavigationCompleted;
+                        webView.CoreWebView2.DocumentTitleChanged -= CoreWebView2_DocumentTitleChanged;
+                        webView.CoreWebView2.ProcessFailed -= CoreWebView2_ProcessFailed;
+                    }
+                    webView.Dispose();
                 }
+                _webViews.Clear();
                 components?.Dispose();
             }
             base.Dispose(disposing);
@@ -581,29 +1172,40 @@ namespace LearningAssistant.Forms
                 }
             }
 
-            if (panelBrowser != null)
+            if (tabControl != null)
             {
-                panelBrowser.BackColor = colors.Surface;
+                if (colors.ThemeMode == ThemeMode.Dark)
+                {
+                    tabControl.BackColor = colors.Surface;
+                }
+                else
+                {
+                    tabControl.BackColor = SystemColors.Control;
+                }
             }
 
-            // 通知 WebView2 页面主题变更
             ApplyWebView2ThemeAsync(colors.ThemeMode == ThemeMode.Dark);
         }
 
         private async void ApplyWebView2ThemeAsync(bool isDark)
         {
-            if (_webView?.CoreWebView2 == null) return;
+            var webViewList = _webViews.ToList();
+            foreach (var kvp in webViewList)
+            {
+                var webView = kvp.Value;
+                if (webView?.CoreWebView2 == null) continue;
 
-            try
-            {
-                string script = isDark
-                    ? @"document.documentElement.style.colorScheme = 'dark'; document.documentElement.style.backgroundColor = '#121212';"
-                    : @"document.documentElement.style.colorScheme = 'light'; document.documentElement.style.backgroundColor = '';";
-                await _webView.CoreWebView2.ExecuteScriptAsync(script);
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogWarning(ex, "应用 WebView2 主题失败");
+                try
+                {
+                    string script = isDark
+                        ? @"document.documentElement.style.colorScheme = 'dark'; document.documentElement.style.backgroundColor = '#121212';"
+                        : @"document.documentElement.style.colorScheme = 'light'; document.documentElement.style.backgroundColor = '';";
+                    await webView.CoreWebView2.ExecuteScriptAsync(script);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "应用 WebView2 主题失败");
+                }
             }
         }
 
@@ -614,12 +1216,12 @@ namespace LearningAssistant.Forms
         private ToolStripButton btnBack;
         private ToolStripButton btnForward;
         private ToolStripButton btnRefresh;
+        private ToolStripButton btnNewTab;
         private ToolStripTextBox txtUrl;
         private ToolStripButton btnGo;
         private ToolStripSeparator toolStripSeparator;
         private ToolStripButton btnOpenNetdisk;
-        private ToolStripButton btnDownloadNetdisk;
-        private Panel panelBrowser;
+        private TabControl tabControl;
         private ToolStripComboBox comboBoxBookmarks;
         private ToolStripSeparator toolStripSeparatorProvider;
         private ToolStripButton btnProviderDeepseek;
@@ -628,6 +1230,15 @@ namespace LearningAssistant.Forms
         private ToolStripButton btnProviderQwen;
         private ToolStripButton btnProviderSpark;
         private ToolStripButton btnProviderWenxin;
+        private ToolStripButton btnOpenInBrowser;
+        private ToolStripButton btnAddBookmark;
+        private ToolStripButton btnManageBookmarks;
+        private ToolStripSeparator toolStripSeparatorZoom;
+        private ToolStripButton btnZoomOut;
+        private ToolStripLabel lblZoom;
+        private ToolStripButton btnZoomIn;
+        private ToolStripSeparator toolStripSeparatorTools;
+        private ToolStripButton btnScreenshot;
 
         private void InitializeComponent()
         {
@@ -635,6 +1246,7 @@ namespace LearningAssistant.Forms
             btnBack = new ToolStripButton();
             btnForward = new ToolStripButton();
             btnRefresh = new ToolStripButton();
+            btnNewTab = new ToolStripButton();
             comboBoxBookmarks = new ToolStripComboBox();
             txtUrl = new ToolStripTextBox();
             btnGo = new ToolStripButton();
@@ -647,14 +1259,22 @@ namespace LearningAssistant.Forms
             btnProviderWenxin = new ToolStripButton();
             toolStripSeparator = new ToolStripSeparator();
             btnOpenNetdisk = new ToolStripButton();
-            btnDownloadNetdisk = new ToolStripButton();
-            panelBrowser = new Panel();
+            btnOpenInBrowser = new ToolStripButton();
+            btnAddBookmark = new ToolStripButton();
+            btnManageBookmarks = new ToolStripButton();
+            toolStripSeparatorZoom = new ToolStripSeparator();
+            btnZoomOut = new ToolStripButton();
+            lblZoom = new ToolStripLabel();
+            btnZoomIn = new ToolStripButton();
+            toolStripSeparatorTools = new ToolStripSeparator();
+            btnScreenshot = new ToolStripButton();
+            tabControl = new TabControl();
             toolStrip.SuspendLayout();
             SuspendLayout();
             // 
             // toolStrip
             // 
-            toolStrip.Items.AddRange(new ToolStripItem[] { btnBack, btnForward, btnRefresh, comboBoxBookmarks, txtUrl, btnGo, toolStripSeparatorProvider, btnProviderDoubao, btnProviderDeepseek, btnProviderZhipu, btnProviderQwen, btnProviderSpark, btnProviderWenxin, toolStripSeparator, btnOpenNetdisk, btnDownloadNetdisk });
+            toolStrip.Items.AddRange(new ToolStripItem[] { btnBack, btnForward, btnRefresh, btnNewTab, comboBoxBookmarks, btnAddBookmark, btnManageBookmarks, toolStripSeparatorZoom, btnZoomOut, lblZoom, btnZoomIn, txtUrl, btnGo, toolStripSeparatorProvider, btnProviderDoubao, btnProviderDeepseek, btnProviderZhipu, btnProviderQwen, btnProviderSpark, btnProviderWenxin, toolStripSeparator, btnOpenNetdisk, toolStripSeparatorTools, btnScreenshot, btnOpenInBrowser });
             toolStrip.Location = new Point(0, 0);
             toolStrip.Name = "toolStrip";
             toolStrip.Size = new Size(1160, 25);
@@ -690,19 +1310,29 @@ namespace LearningAssistant.Forms
             btnRefresh.Text = "刷新";
             btnRefresh.Click += btnRefresh_Click;
             // 
+            // btnNewTab
+            // 
+            btnNewTab.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnNewTab.ImageTransparentColor = Color.Magenta;
+            btnNewTab.Name = "btnNewTab";
+            btnNewTab.Size = new Size(36, 22);
+            btnNewTab.Text = "➕ 新页";
+            btnNewTab.ToolTipText = "新建标签页";
+            btnNewTab.Click += btnNewTab_Click;
+            // 
             // comboBoxBookmarks
             // 
             comboBoxBookmarks.DropDownStyle = ComboBoxStyle.DropDownList;
             comboBoxBookmarks.Name = "comboBoxBookmarks";
-            comboBoxBookmarks.Size = new Size(280, 25);
+            comboBoxBookmarks.Size = new Size(200, 25);
             comboBoxBookmarks.DropDownWidth = 450;
             comboBoxBookmarks.SelectedIndexChanged += ComboBoxBookmarks_SelectedIndexChanged;
             // 
             // txtUrl
             // 
             txtUrl.Name = "txtUrl";
-            txtUrl.Size = new Size(400, 25);
-            txtUrl.Text = Urls.Baidu;
+            txtUrl.Size = new Size(300, 25);
+            txtUrl.Text = Urls.BaiduNetdisk;
             txtUrl.KeyDown += txtUrl_KeyDown;
             // 
             // btnGo
@@ -793,30 +1423,99 @@ namespace LearningAssistant.Forms
             btnOpenNetdisk.Text = "百度网盘";
             btnOpenNetdisk.Click += btnOpenNetdisk_Click;
             // 
-            // btnDownloadNetdisk
+            // btnOpenInBrowser
             // 
-            btnDownloadNetdisk.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            btnDownloadNetdisk.ImageTransparentColor = Color.Magenta;
-            btnDownloadNetdisk.Name = "btnDownloadNetdisk";
-            btnDownloadNetdisk.Size = new Size(60, 22);
-            btnDownloadNetdisk.Text = "下载文件";
-            btnDownloadNetdisk.Visible = false;
-            btnDownloadNetdisk.Click += btnDownloadNetdisk_Click;
+            btnOpenInBrowser.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnOpenInBrowser.ImageTransparentColor = Color.Magenta;
+            btnOpenInBrowser.Name = "btnOpenInBrowser";
+            btnOpenInBrowser.Size = new Size(84, 22);
+            btnOpenInBrowser.Text = "🌐 在浏览器中打开";
+            btnOpenInBrowser.Click += btnOpenInBrowser_Click;
             // 
-            // panelBrowser
+            // btnAddBookmark
             // 
-            panelBrowser.Dock = DockStyle.Fill;
-            panelBrowser.Location = new Point(0, 25);
-            panelBrowser.Name = "panelBrowser";
-            panelBrowser.Size = new Size(1160, 577);
-            panelBrowser.TabIndex = 1;
+            btnAddBookmark.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnAddBookmark.ImageTransparentColor = Color.Magenta;
+            btnAddBookmark.Name = "btnAddBookmark";
+            btnAddBookmark.Size = new Size(36, 22);
+            btnAddBookmark.Text = "⭐ 添加";
+            btnAddBookmark.ToolTipText = "添加当前页面到书签";
+            btnAddBookmark.Click += btnAddBookmark_Click;
+            // 
+            // btnManageBookmarks
+            // 
+            btnManageBookmarks.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnManageBookmarks.ImageTransparentColor = Color.Magenta;
+            btnManageBookmarks.Name = "btnManageBookmarks";
+            btnManageBookmarks.Size = new Size(36, 22);
+            btnManageBookmarks.Text = "📚 管理";
+            btnManageBookmarks.ToolTipText = "书签管理器";
+            btnManageBookmarks.Click += btnManageBookmarks_Click;
+            // 
+            // toolStripSeparatorZoom
+            // 
+            toolStripSeparatorZoom.Name = "toolStripSeparatorZoom";
+            toolStripSeparatorZoom.Size = new Size(6, 25);
+            // 
+            // btnZoomOut
+            // 
+            btnZoomOut.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnZoomOut.ImageTransparentColor = Color.Magenta;
+            btnZoomOut.Name = "btnZoomOut";
+            btnZoomOut.Size = new Size(23, 22);
+            btnZoomOut.Text = "−";
+            btnZoomOut.ToolTipText = "缩小";
+            btnZoomOut.Click += btnZoomOut_Click;
+            // 
+            // lblZoom
+            // 
+            lblZoom.Name = "lblZoom";
+            lblZoom.Size = new Size(48, 22);
+            lblZoom.Text = Config.DefaultZoomLevel + "%";
+            lblZoom.ToolTipText = "缩放比例";
+            // 
+            // btnZoomIn
+            // 
+            btnZoomIn.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnZoomIn.ImageTransparentColor = Color.Magenta;
+            btnZoomIn.Name = "btnZoomIn";
+            btnZoomIn.Size = new Size(23, 22);
+            btnZoomIn.Text = "+";
+            btnZoomIn.ToolTipText = "放大";
+            btnZoomIn.Click += btnZoomIn_Click;
+            // 
+            // toolStripSeparatorTools
+            // 
+            toolStripSeparatorTools.Name = "toolStripSeparatorTools";
+            toolStripSeparatorTools.Size = new Size(6, 25);
+            // 
+            // btnScreenshot
+            // 
+            btnScreenshot.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnScreenshot.ImageTransparentColor = Color.Magenta;
+            btnScreenshot.Name = "btnScreenshot";
+            btnScreenshot.Size = new Size(60, 22);
+            btnScreenshot.Text = "📷 截图";
+            btnScreenshot.ToolTipText = "截取当前页面";
+            btnScreenshot.Click += btnScreenshot_Click;
+            // 
+            // tabControl
+            // 
+            tabControl.Dock = DockStyle.Fill;
+            tabControl.Location = new Point(0, 25);
+            tabControl.Name = "tabControl";
+            tabControl.SelectedIndex = 0;
+            tabControl.Size = new Size(1160, 577);
+            tabControl.TabIndex = 1;
+            tabControl.SelectedIndexChanged += TabControl_SelectedIndexChanged;
+            tabControl.MouseDown += TabControl_MouseDown;
             // 
             // WebView2BrowserForm
             // 
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1160, 602);
-            Controls.Add(panelBrowser);
+            Controls.Add(tabControl);
             Controls.Add(toolStrip);
             Name = "WebView2BrowserForm";
             Text = "WebView2 浏览器";
@@ -829,57 +1528,267 @@ namespace LearningAssistant.Forms
         #endregion
     }
 
-    /// <summary>
-    /// 深色主题的 ToolStrip 渲染器
-    /// </summary>
     internal class DarkToolStripRenderer : ToolStripProfessionalRenderer
     {
         private readonly ThemeColors _colors;
 
-        public DarkToolStripRenderer(ThemeColors colors) : base(new DarkColorTable(colors))
+        public DarkToolStripRenderer(ThemeColors colors)
         {
             _colors = colors;
         }
 
-        protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+        protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
         {
-            if (e.Item is ToolStripButton btn && btn.Enabled)
+            using var brush = new SolidBrush(_colors.Surface);
+            e.Graphics.FillRectangle(brush, e.AffectedBounds);
+        }
+
+        protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+        {
+            if (e.Item.Selected)
             {
-                e.TextColor = _colors.TextPrimary;
+                using var brush = new SolidBrush(_colors.Primary);
+                e.Graphics.FillRectangle(brush, e.Item.ContentRectangle);
             }
-            else
+        }
+
+        protected override void OnRenderButtonBackground(ToolStripItemRenderEventArgs e)
+        {
+            if (e.Item.Selected || e.Item.Pressed)
             {
-                e.TextColor = _colors.TextSecondary;
+                using var brush = new SolidBrush(_colors.PrimaryLight);
+                e.Graphics.FillRectangle(brush, e.Item.ContentRectangle);
             }
-            base.OnRenderItemText(e);
         }
     }
 
     /// <summary>
-    /// 深色主题 ToolStrip 颜色表
+    /// 区域选择窗体 - 用于截图时框选区域
     /// </summary>
-    internal class DarkColorTable : ProfessionalColorTable
+    internal class RegionSelectionForm : Form
     {
-        private readonly ThemeColors _colors;
+        private readonly Image _image;
+        private Point _startPoint;
+        private Point _endPoint;
+        private bool _isSelecting;
+        private Rectangle _imageRect;
+        public Rectangle? SelectedRegion { get; private set; }
 
-        public DarkColorTable(ThemeColors colors)
+        public RegionSelectionForm(Image image)
         {
-            _colors = colors;
+            _image = image;
+            _imageRect = Rectangle.Empty;
+            InitializeComponent();
+            Text = "拖拽选择截图区域（按 Enter 确认，Esc 取消）";
+            WindowState = FormWindowState.Maximized;
+            FormBorderStyle = FormBorderStyle.None;
+            TopMost = true;
+            DoubleBuffered = true;
+            SetStyle(ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
+            Cursor = Cursors.Cross;
+            StartPosition = FormStartPosition.CenterScreen;
         }
 
-        public override Color ToolStripBorder => _colors.Divider;
-        public override Color ToolStripContentPanelGradientBegin => _colors.Surface;
-        public override Color ToolStripContentPanelGradientEnd => _colors.Surface;
-        public override Color ToolStripGradientBegin => _colors.Surface;
-        public override Color ToolStripGradientEnd => _colors.Surface;
-        public override Color ToolStripGradientMiddle => _colors.Surface;
-        public override Color ButtonSelectedGradientBegin => _colors.Primary;
-        public override Color ButtonSelectedGradientEnd => _colors.Primary;
-        public override Color ButtonCheckedGradientBegin => _colors.Primary;
-        public override Color ButtonCheckedGradientEnd => _colors.Primary;
-        public override Color ButtonPressedGradientBegin => _colors.PrimaryDark;
-        public override Color ButtonPressedGradientEnd => _colors.PrimaryDark;
-        public override Color MenuItemBorder => _colors.Divider;
-        public override Color MenuItemSelected => _colors.Primary;
+        private void InitializeComponent()
+        {
+            SuspendLayout();
+            AutoScaleDimensions = new SizeF(7F, 17F);
+            ClientSize = new Size(800, 600);
+            Name = "RegionSelectionForm";
+            KeyDown += RegionSelectionForm_KeyDown;
+            MouseDown += RegionSelectionForm_MouseDown;
+            MouseMove += RegionSelectionForm_MouseMove;
+            MouseUp += RegionSelectionForm_MouseUp;
+            Paint += RegionSelectionForm_Paint;
+            Resize += RegionSelectionForm_Resize;
+            Shown += RegionSelectionForm_Shown;
+            ResumeLayout(false);
+        }
+
+        private void RegionSelectionForm_Shown(object? sender, EventArgs e)
+        {
+            CalculateImageRect();
+            Invalidate();
+        }
+
+        private void RegionSelectionForm_Resize(object? sender, EventArgs e)
+        {
+            CalculateImageRect();
+            Invalidate();
+        }
+
+        private void CalculateImageRect()
+        {
+            if (_image == null || ClientSize.Width == 0 || ClientSize.Height == 0)
+                return;
+
+            float imgRatio = (float)_image.Width / _image.Height;
+            float screenRatio = (float)ClientSize.Width / ClientSize.Height;
+
+            int width, height;
+            if (imgRatio > screenRatio)
+            {
+                width = ClientSize.Width;
+                height = (int)(width / imgRatio);
+            }
+            else
+            {
+                height = ClientSize.Height;
+                width = (int)(height * imgRatio);
+            }
+
+            int x = (ClientSize.Width - width) / 2;
+            int y = (ClientSize.Height - height) / 2;
+            _imageRect = new Rectangle(x, y, width, height);
+        }
+
+        private void RegionSelectionForm_Paint(object? sender, PaintEventArgs e)
+        {
+            e.Graphics.Clear(Color.Black);
+
+            if (_image != null && _imageRect.Width > 0)
+            {
+                e.Graphics.DrawImage(_image, _imageRect);
+            }
+
+            using var brush = new SolidBrush(Color.FromArgb(120, 0, 0, 0));
+            var rect = GetSelectionRect();
+
+            if (rect.Width > 0 && rect.Height > 0)
+            {
+                var regions = new[]
+                {
+                    new Rectangle(0, 0, ClientSize.Width, rect.Top),
+                    new Rectangle(0, rect.Bottom, ClientSize.Width, ClientSize.Height - rect.Bottom),
+                    new Rectangle(0, rect.Top, rect.Left, rect.Height),
+                    new Rectangle(rect.Right, rect.Top, ClientSize.Width - rect.Right, rect.Height)
+                };
+                foreach (var r in regions)
+                {
+                    e.Graphics.FillRectangle(brush, r);
+                }
+
+                using var pen = new Pen(Color.Red, 2);
+                e.Graphics.DrawRectangle(pen, rect);
+
+                var originalRect = ScreenToImage(rect);
+                var text = $"{originalRect.Width} x {originalRect.Height}";
+                var textSize = e.Graphics.MeasureString(text, Font);
+                var textRect = new RectangleF(rect.X, rect.Y - (int)textSize.Height - 5, (int)textSize.Width + 10, (int)textSize.Height + 4);
+                if (textRect.Y < 0)
+                    textRect.Y = rect.Y + 5;
+                if (textRect.Right > ClientSize.Width)
+                    textRect.X = ClientSize.Width - textRect.Width;
+
+                e.Graphics.FillRectangle(Brushes.Black, textRect);
+                e.Graphics.DrawString(text, Font, Brushes.White, textRect.X + 5, textRect.Y + 2);
+            }
+            else
+            {
+                e.Graphics.FillRectangle(brush, ClientRectangle);
+
+                var tipText = "拖拽鼠标选择截图区域（Enter 确认，Esc 取消）";
+                using var tipFont = new Font("Microsoft YaHei UI", 16F, FontStyle.Bold);
+                var tipSize = e.Graphics.MeasureString(tipText, tipFont);
+                var tipX = (ClientSize.Width - tipSize.Width) / 2;
+                var tipY = (ClientSize.Height - tipSize.Height) / 2;
+                e.Graphics.DrawString(tipText, tipFont, Brushes.White, tipX, tipY);
+            }
+        }
+
+        private Rectangle GetSelectionRect()
+        {
+            int x = Math.Min(_startPoint.X, _endPoint.X);
+            int y = Math.Min(_startPoint.Y, _endPoint.Y);
+            int width = Math.Abs(_endPoint.X - _startPoint.X);
+            int height = Math.Abs(_endPoint.Y - _startPoint.Y);
+            return new Rectangle(x, y, width, height);
+        }
+
+        private Rectangle ScreenToImage(Rectangle screenRect)
+        {
+            if (_imageRect.Width == 0 || _imageRect.Height == 0 || _image == null)
+                return screenRect;
+
+            float scaleX = (float)_image.Width / _imageRect.Width;
+            float scaleY = (float)_image.Height / _imageRect.Height;
+
+            int x = (int)((screenRect.X - _imageRect.X) * scaleX);
+            int y = (int)((screenRect.Y - _imageRect.Y) * scaleY);
+            int width = (int)(screenRect.Width * scaleX);
+            int height = (int)(screenRect.Height * scaleY);
+
+            x = Math.Clamp(x, 0, _image.Width);
+            y = Math.Clamp(y, 0, _image.Height);
+            width = Math.Clamp(width, 0, _image.Width - x);
+            height = Math.Clamp(height, 0, _image.Height - y);
+
+            return new Rectangle(x, y, width, height);
+        }
+
+        private void RegionSelectionForm_MouseDown(object? sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                _startPoint = e.Location;
+                _endPoint = e.Location;
+                _isSelecting = true;
+                Invalidate();
+            }
+        }
+
+        private void RegionSelectionForm_MouseMove(object? sender, MouseEventArgs e)
+        {
+            if (_isSelecting)
+            {
+                _endPoint = e.Location;
+                Invalidate();
+            }
+        }
+
+        private void RegionSelectionForm_MouseUp(object? sender, MouseEventArgs e)
+        {
+            if (_isSelecting && e.Button == MouseButtons.Left)
+            {
+                _endPoint = e.Location;
+                _isSelecting = false;
+                var screenRect = GetSelectionRect();
+                if (screenRect.Width > 10 && screenRect.Height > 10)
+                {
+                    SelectedRegion = ScreenToImage(screenRect);
+                    DialogResult = DialogResult.OK;
+                    Close();
+                }
+                Invalidate();
+            }
+        }
+
+        private void RegionSelectionForm_KeyDown(object? sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Escape)
+            {
+                DialogResult = DialogResult.Cancel;
+                Close();
+            }
+            else if (e.KeyCode == Keys.Enter)
+            {
+                var screenRect = GetSelectionRect();
+                if (screenRect.Width > 10 && screenRect.Height > 10)
+                {
+                    SelectedRegion = ScreenToImage(screenRect);
+                    DialogResult = DialogResult.OK;
+                    Close();
+                }
+            }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _image?.Dispose();
+            }
+            base.Dispose(disposing);
+        }
     }
 }

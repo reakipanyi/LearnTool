@@ -25,7 +25,7 @@ namespace LearningAssistant.Services.Feedback
         {
             try
             {
-                string configPath = Path.Combine(AppPaths.ConfigDir, "encouragement.json");
+                string configPath = AppPaths.EncouragementConfigPath;
                 if (File.Exists(configPath))
                 {
                     string json = File.ReadAllText(configPath);
@@ -94,14 +94,14 @@ namespace LearningAssistant.Services.Feedback
         {
             string[] possiblePaths = new[]
             {
-                Path.Combine(AppPaths.DataDir, "Audio", $"{audioName}.wav"),
-                Path.Combine(AppPaths.DataDir, "Audio", $"{audioName}.mp3"),
-                Path.Combine(AppPaths.DataDir, "Audio", "known", $"{audioName}.wav"),
-                Path.Combine(AppPaths.DataDir, "Audio", "known", $"{audioName}.mp3"),
-                Path.Combine(AppPaths.DataDir, "Audio", "unknown", $"{audioName}.wav"),
-                Path.Combine(AppPaths.DataDir, "Audio", "unknown", $"{audioName}.mp3"),
-                Path.Combine(AppPaths.DataDir, "Audio", $"{audioName}.wav"),
-                Path.Combine(AppPaths.DataDir, "Audio", $"{audioName}.mp3")
+                Path.Combine(AppPaths.AudioDir, $"{audioName}.wav"),
+                Path.Combine(AppPaths.AudioDir, $"{audioName}.mp3"),
+                Path.Combine(AppPaths.AudioDir, "known", $"{audioName}.wav"),
+                Path.Combine(AppPaths.AudioDir, "known", $"{audioName}.mp3"),
+                Path.Combine(AppPaths.AudioDir, "unknown", $"{audioName}.wav"),
+                Path.Combine(AppPaths.AudioDir, "unknown", $"{audioName}.mp3"),
+                Path.Combine(AppPaths.AudioDir, $"{audioName}.wav"),
+                Path.Combine(AppPaths.AudioDir, $"{audioName}.mp3")
             };
 
             return possiblePaths.FirstOrDefault(File.Exists);

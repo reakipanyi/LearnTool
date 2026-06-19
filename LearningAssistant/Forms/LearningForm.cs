@@ -199,6 +199,8 @@ namespace LearningAssistant.Forms
 
             // 笔记保存计时器
             _noteSaveTimer.Tick += NoteSaveTimer_Tick;
+
+            
         }
         #endregion
 
@@ -926,7 +928,6 @@ namespace LearningAssistant.Forms
             mainTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             mainTableLayoutPanel.Size = new Size(1587, 844);
             mainTableLayoutPanel.TabIndex = 0;
-            mainTableLayoutPanel.Paint += mainTableLayoutPanel_Paint;
 
             //
             // middlePanel
@@ -979,7 +980,7 @@ namespace LearningAssistant.Forms
             ClientSize = new Size(1587, 844);
             Controls.Add(mainTableLayoutPanel);
             DoubleBuffered = true;
-            MinimumSize = new Size(800, 600);
+            MinimumSize = new Size(1024, 768);
             Name = "LearningForm";
             Text = "✨ 学习模式 ✨";
             TransparencyKey = Color.FromArgb(255, 0, 255);
@@ -1173,45 +1174,6 @@ namespace LearningAssistant.Forms
 
         #endregion
 
-        #region Paint Event Handlers
-
-        private void PanelContent_Paint(object? sender, PaintEventArgs e)
-        {
-            if (DesignMode) return;
-            if (sender is not Panel panel) return;
-
-            try
-            {
-                using var gradient = new System.Drawing.Drawing2D.LinearGradientBrush(
-                    new Point(0, 0),
-                    new Point(panel.Width, panel.Height),
-                    Color.FromArgb(255, 255, 255),
-                    Color.FromArgb(245, 250, 248)
-                );
-                e.Graphics.FillRectangle(gradient, panel.ClientRectangle);
-
-                using var pen = new Pen(Color.FromArgb(200, 210, 220), 2);
-                e.Graphics.DrawRectangle(pen, 1, 1, panel.Width - 3, panel.Height - 3);
-            }
-            catch
-            {
-                e.Graphics.Clear(Color.White);
-            }
-        }
-
-        private void labelAI_Click(object? sender, EventArgs e)
-        {
-            // AI功能已通过按钮触发，此事件保留以兼容设计器
-        }
-
-        private void mainTableLayoutPanel_Paint(object? sender, PaintEventArgs e)
-        {
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            _confettiManager.Draw(e.Graphics);
-        }
-
-        #endregion
-
         #region Event Handlers
 
 
@@ -1302,7 +1264,7 @@ namespace LearningAssistant.Forms
             _statsManager.AddXP(50 * badges.Count);
         }
 
-        
+
 
         private void UpdateChallengesProgress()
         {
@@ -1310,7 +1272,7 @@ namespace LearningAssistant.Forms
             _challengeManager.UpdateProgress();
         }
 
-        
+
 
         /// <summary>
         /// 启动猜词小游戏
@@ -1730,24 +1692,58 @@ namespace LearningAssistant.Forms
             return $"[{subCategory}]{content}";
         }
 
-        private void ButtonNote_Click(object? sender, EventArgs e)
+        private async void ButtonNote_Click(object? sender, EventArgs e)
         {
-            panelNotes.Visible = !panelNotes.Visible;
-
             if (panelNotes.Visible)
             {
-                buttonNote.BackColor = Color.FromArgb(156, 39, 176);
-                buttonNote.Text = "📝 笔记 (开)";
-                // 设置笔记面板行高
-                middleTableLayoutPanel.RowStyles[1] = new RowStyle(SizeType.Absolute, 150F);
-                LoadNotes();
+                await AnimateNotesPanel(false);
             }
             else
             {
-                buttonNote.BackColor = Color.FromArgb(76, 175, 80);
-                buttonNote.Text = "📝 笔记";
-                // 隐藏笔记面板行
+                LoadNotes();
+                await AnimateNotesPanel(true);
+            }
+        }
+
+        private async Task AnimateNotesPanel(bool show)
+        {
+            const int targetHeight = 200;
+            const int step = 10;
+            const int delay = 10;
+
+            if (show)
+            {
+                panelNotes.Visible = true;
                 middleTableLayoutPanel.RowStyles[1] = new RowStyle(SizeType.Absolute, 0F);
+                middleTableLayoutPanel.PerformLayout();
+
+                for (int height = 0; height <= targetHeight; height += step)
+                {
+                    middleTableLayoutPanel.RowStyles[1] = new RowStyle(SizeType.Absolute, height);
+                    middleTableLayoutPanel.PerformLayout();
+                    await Task.Delay(delay);
+                }
+
+                middleTableLayoutPanel.RowStyles[1] = new RowStyle(SizeType.Absolute, targetHeight);
+                middleTableLayoutPanel.PerformLayout();
+                buttonNote.Text = "📝 笔记 (开)";
+            }
+            else
+            {
+                var currentStyle = middleTableLayoutPanel.RowStyles[1];
+                int currentHeight = (int)(currentStyle.SizeType == SizeType.Absolute ? currentStyle.Height : targetHeight);
+
+                for (int height = currentHeight; height >= 0; height -= step)
+                {
+                    middleTableLayoutPanel.RowStyles[1] = new RowStyle(SizeType.Absolute, Math.Max(0, height));
+                    middleTableLayoutPanel.PerformLayout();
+                    await Task.Delay(delay);
+                }
+
+                middleTableLayoutPanel.RowStyles[1] = new RowStyle(SizeType.Absolute, 0F);
+                middleTableLayoutPanel.PerformLayout();
+                panelNotes.Visible = false;
+                buttonNote.Text = "📝 笔记";
             }
         }
 

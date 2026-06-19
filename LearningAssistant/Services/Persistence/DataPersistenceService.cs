@@ -43,7 +43,7 @@ namespace LearningAssistant.Services.Persistence
                 var configToSave = Common.JsonHelper.Deserialize<AppConfig>(json) ?? new AppConfig();
                 ConfigEncryptionHelper.EncryptSensitiveConfig(configToSave);
 
-                var path = Path.Combine(FileHelper.GetAppDirectory(), "appsettings.json");
+                var path = AppPaths.AppSettingsPath;
                 JsonHelper.SaveToFile(path, configToSave);
             }
             catch (Exception ex)
@@ -56,7 +56,7 @@ namespace LearningAssistant.Services.Persistence
         {
             try
             {
-                var path = FileHelper.GetUserProgressPath(userId);
+                var path = AppPaths.GetUserProgressPath(userId);
                 var profile = JsonHelper.LoadFromFile<UserProfile>(path);
                 if (profile != null)
                     return profile;
@@ -72,7 +72,7 @@ namespace LearningAssistant.Services.Persistence
         {
             try
             {
-                var path = FileHelper.GetUserProgressPath(profile.UserId);
+                var path = AppPaths.GetUserProgressPath(profile.UserId);
                 JsonHelper.SaveToFile(path, profile);
             }
             catch (Exception ex)
@@ -85,7 +85,7 @@ namespace LearningAssistant.Services.Persistence
         {
             try
             {
-                var dir = FileHelper.GetUsersDirectory();
+                var dir = AppPaths.UsersDir;
                 return Directory.EnumerateFiles(dir, "*.json")
                                .Select(f => Path.GetFileNameWithoutExtension(f))
                                .ToList();
@@ -120,7 +120,7 @@ namespace LearningAssistant.Services.Persistence
         {
             try
             {
-                var path = FileHelper.GetSessionPath();
+                var path = AppPaths.LastSessionPath;
                 JsonHelper.SaveToFile(path, session);
             }
             catch (Exception ex)
@@ -133,7 +133,7 @@ namespace LearningAssistant.Services.Persistence
         {
             try
             {
-                var path = FileHelper.GetSessionPath();
+                var path = AppPaths.LastSessionPath;
                 return JsonHelper.LoadFromFile<SessionData>(path) ?? new SessionData();
             }
             catch (Exception ex)

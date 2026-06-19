@@ -67,7 +67,7 @@ namespace LearningAssistant.Views
             _panelList.Dock = DockStyle.Fill;
             _panelList.Location = new Point(0, 0);
             _panelList.Name = "_panelList";
-            _panelList.Size = new Size(260, 950);
+            _panelList.Size = new Size(260, 981);
             _panelList.TabIndex = 0;
             // 
             // _labelListStatus
@@ -76,7 +76,7 @@ namespace LearningAssistant.Views
             _labelListStatus.Dock = DockStyle.Bottom;
             _labelListStatus.Font = new Font("微软雅黑", 9F);
             _labelListStatus.ForeColor = Color.FromArgb(80, 100, 120);
-            _labelListStatus.Location = new Point(0, 903);
+            _labelListStatus.Location = new Point(0, 934);
             _labelListStatus.Name = "_labelListStatus";
             _labelListStatus.Size = new Size(258, 45);
             _labelListStatus.TabIndex = 2;
@@ -99,11 +99,13 @@ namespace LearningAssistant.Views
             // _listBoxItems
             // 
             _listBoxItems.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
+            _listBoxItems.DrawMode = DrawMode.OwnerDrawFixed;
             _listBoxItems.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             _listBoxItems.FormattingEnabled = true;
+            _listBoxItems.ItemHeight = 36;
             _listBoxItems.Location = new Point(0, 40);
             _listBoxItems.Name = "_listBoxItems";
-            _listBoxItems.Size = new Size(259, 859);
+            _listBoxItems.Size = new Size(259, 904);
             _listBoxItems.TabIndex = 1;
             _listBoxItems.SelectedIndexChanged += ListBoxItems_SelectedIndexChanged;
             // 
@@ -113,7 +115,7 @@ namespace LearningAssistant.Views
             AutoScaleMode = AutoScaleMode.Font;
             Controls.Add(_panelList);
             Name = "LearningListView";
-            Size = new Size(260, 950);
+            Size = new Size(260, 981);
             _panelList.ResumeLayout(false);
             ResumeLayout(false);
         }

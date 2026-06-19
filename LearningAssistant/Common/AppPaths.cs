@@ -2,35 +2,26 @@ namespace LearningAssistant.Common
 {
     /// <summary>
     /// 统一的应用路径管理器
-    /// 遵循 Windows 最佳实践：
-    /// - 用户数据存储在 %APPDATA%（可漫游）
-    /// - 本地数据存储在 %LOCALAPPDATA%（不可漫游）
-    /// - 程序集目录仅包含只读资源
+    /// 所有用户数据统一存储在程序运行目录下的 AppData 文件夹中
     /// </summary>
     public static class AppPaths
     {
         static AppPaths()
         {
-            // 首次访问时确保目录存在
             EnsureDirectoriesExist();
         }
 
         #region 基础路径
 
         /// <summary>
-        /// 应用数据根目录 - 使用本地安装目录
-        /// </summary>
-        public static string AppDataRoot => AppDomain.CurrentDomain.BaseDirectory;
-
-        /// <summary>
-        /// 用户数据目录 - 存储在安装目录下
-        /// </summary>
-        public static string DataRoot => Path.Combine(AppDataRoot, "AppData");
-
-        /// <summary>
-        /// 程序集目录（只读资源）
+        /// 程序集根目录（只读资源）
         /// </summary>
         public static string AssemblyDir => AppDomain.CurrentDomain.BaseDirectory;
+
+        /// <summary>
+        /// 用户数据根目录 - 程序运行目录下的 AppData
+        /// </summary>
+        public static string DataRoot => Path.Combine(AssemblyDir, "AppData");
 
         /// <summary>
         /// 内置数据目录（只读）
@@ -82,6 +73,11 @@ namespace LearningAssistant.Common
         public static string SessionDir => Path.Combine(DataRoot, "session");
 
         /// <summary>
+        /// 导出目录
+        /// </summary>
+        public static string ExportsDir => Path.Combine(DataRoot, "Exports");
+
+        /// <summary>
         /// PDF标注目录
         /// </summary>
         public static string AnnotationsDir => Path.Combine(DataRoot, "annotations");
@@ -101,6 +97,19 @@ namespace LearningAssistant.Common
         /// </summary>
         public static string HighlightsDir => Path.Combine(DataRoot, "highlights");
 
+        /// <summary>
+        /// 缩略图目录
+        /// </summary>
+        public static string ThumbnailsDir => Path.Combine(DataDir, "Thumbnails");
+
+        /// <summary>
+        /// 音频目录
+        /// </summary>
+        public static string AudioDir => Path.Combine(DataDir, "Audio");
+
+        /// <summary>
+        /// TTS 缓存目录
+        /// </summary>
         public static string TTSCacheDir => Path.Combine(CacheDir, "tts");
 
         #endregion
@@ -116,6 +125,10 @@ namespace LearningAssistant.Common
         /// AI提示词配置路径
         /// </summary>
         public static string AiPromptsPath => Path.Combine(ConfigDir, "AIPrompts.json");
+
+        /// <summary>
+        /// 网页书签路径
+        /// </summary>
         public static string WebBookmarksPath => Path.Combine(ConfigDir, "WebBookmarks.json");
 
         /// <summary>
@@ -134,9 +147,24 @@ namespace LearningAssistant.Common
         public static string AnalyticsPath => Path.Combine(ConfigDir, "learning_analytics.json");
 
         /// <summary>
+        /// 鼓励配置文件路径
+        /// </summary>
+        public static string EncouragementConfigPath => Path.Combine(ConfigDir, "encouragement.json");
+
+        /// <summary>
+        /// 待处理内容文件路径
+        /// </summary>
+        public static string PendingContentPath => Path.Combine(ConfigDir, "pending_content.json");
+
+        /// <summary>
         /// 上次会话文件路径
         /// </summary>
         public static string LastSessionPath => Path.Combine(SessionDir, "lastsession.json");
+
+        /// <summary>
+        /// 会话文件路径
+        /// </summary>
+        public static string SessionPath => Path.Combine(SessionDir, "session.json");
 
         /// <summary>
         /// 数据库文件路径
@@ -152,10 +180,8 @@ namespace LearningAssistant.Common
         /// </summary>
         public static void EnsureDirectoriesExist()
         {
-            // 应用数据根目录
             EnsureDirectoryExists(DataRoot);
 
-            // 子目录
             EnsureDirectoryExists(ConfigDir);
             EnsureDirectoryExists(DataDir);
             EnsureDirectoryExists(UsersDir);
@@ -163,10 +189,13 @@ namespace LearningAssistant.Common
             EnsureDirectoryExists(CacheDir);
             EnsureDirectoryExists(DatabaseDir);
             EnsureDirectoryExists(SessionDir);
+            EnsureDirectoryExists(ExportsDir);
             EnsureDirectoryExists(AnnotationsDir);
             EnsureDirectoryExists(TranslationsDir);
             EnsureDirectoryExists(BookmarksDir);
             EnsureDirectoryExists(HighlightsDir);
+            EnsureDirectoryExists(ThumbnailsDir);
+            EnsureDirectoryExists(AudioDir);
             EnsureDirectoryExists(TTSCacheDir);
             EnsureDirectoryExists(TesseractDataDir);
         }
@@ -200,6 +229,24 @@ namespace LearningAssistant.Common
         }
 
         /// <summary>
+        /// 获取PDF书签文件路径
+        /// </summary>
+        public static string GetPdfBookmarkPath(string pdfPath)
+        {
+            var fileName = SanitizeFileName(Path.GetFileNameWithoutExtension(pdfPath));
+            return Path.Combine(BookmarksDir, $"{fileName}_bookmarks.json");
+        }
+
+        /// <summary>
+        /// 获取目录高亮文件路径
+        /// </summary>
+        public static string GetFolderHighlightPath(string folderPath)
+        {
+            var folderName = SanitizeFileName(Path.GetFileName(folderPath.TrimEnd(Path.DirectorySeparatorChar)));
+            return Path.Combine(HighlightsDir, $"{folderName}_highlights.json");
+        }
+
+        /// <summary>
         /// 获取缓存文件路径
         /// </summary>
         public static string GetCacheFilePath(string key)
@@ -212,48 +259,38 @@ namespace LearningAssistant.Common
         /// </summary>
         public static string GetDataFilePath(string fileName)
         {
-            //  用户数据目录
             var userPath = Path.Combine(DataDir, fileName);
             if (File.Exists(userPath))
                 return userPath;
 
-            // 3. 返回用户路径（用于创建新文件）
             return userPath;
         }
 
         /// <summary>
         /// 查找配置文件（支持回退机制）
         /// </summary>
-        public static string FindConfigFile(string fileName, string?[] searchPaths = null)
+        public static string FindConfigFile(string fileName, string?[]? searchPaths = null)
         {
-            // 搜索路径顺序（优先级从高到低）
             var paths = new[]
             {
-                // 1. 用户配置目录（最高优先级）
                 Path.Combine(ConfigDir, fileName),
-                // 2. 程序集根目录
                 Path.Combine(AssemblyDir, fileName),
-                // 3. 程序集/Models/Config 目录
                 Path.Combine(AssemblyDir, "Models", "Config", fileName),
-                // 4. 程序集/Config 目录
                 Path.Combine(AssemblyDir, "Config", fileName),
             };
 
-            // 添加自定义搜索路径
             if (searchPaths != null)
             {
                 var customPaths = searchPaths.Where(p => !string.IsNullOrEmpty(p)).ToArray();
                 paths = customPaths.Concat(paths).ToArray();
             }
 
-            // 返回第一个存在的文件
             foreach (var path in paths)
             {
                 if (File.Exists(path))
                     return path;
             }
 
-            // 不存在则返回用户配置目录路径
             return Path.Combine(ConfigDir, fileName);
         }
 
@@ -265,7 +302,6 @@ namespace LearningAssistant.Common
             if (string.IsNullOrEmpty(fileName))
                 return "unnamed";
 
-            // 移除非法字符
             var invalid = Path.GetInvalidFileNameChars();
             foreach (var c in invalid)
             {

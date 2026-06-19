@@ -492,35 +492,6 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        public async Task<bool> ExportHighlightsToExcelAsync(string outputPath, List<Models.Pdf.PdfHighlight>? highlights = null)
-        {
-            if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath))
-            {
-                _logger.LogWarning("No PDF loaded, cannot export highlights");
-                return false;
-            }
-
-            if (highlights != null && highlights.Count > 0)
-            {
-                return await _pdfExportService.ExportHighlightsToExcelAsync(
-                    outputPath,
-                    highlights,
-                    _pdfFileManager.CurrentFilePath,
-                    _pdfFileManager.IsImageMode,
-                    _pdfFileManager.IsImageMode ? _pdfFileManager.ImageFiles : null,
-                    _pdfFileManager.IsImageMode ? null : _pdfService
-                );
-            }
-
-            return await _pdfExportService.ExportHighlightsToExcelAsync(
-                outputPath,
-                _pdfFileManager.CurrentFilePath,
-                _pdfFileManager.IsImageMode,
-                _pdfFileManager.IsImageMode ? _pdfFileManager.ImageFiles : null,
-                _pdfFileManager.IsImageMode ? null : _pdfService
-            );
-        }
-
         private void OnFileLoaded(object? sender, FileLoadedEventArgs e)
         {
             _view?.SetCurrentPdfPath(e.FilePath);

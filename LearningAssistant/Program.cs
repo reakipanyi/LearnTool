@@ -5,6 +5,7 @@ using LearningAssistant.Services.Migration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using OfficeOpenXml;
 
 namespace LearningAssistant
 {
@@ -20,6 +21,7 @@ namespace LearningAssistant
                 .SetBasePath(AppDomain.CurrentDomain.BaseDirectory)
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                 .AddJsonFile("appsettings.Development.json", optional: true, reloadOnChange: true)
+                .AddJsonFile(Path.Combine(AppPaths.ConfigDir, "appsettings.json"), optional: true, reloadOnChange: true)
                 .Build();
 
             services.AddSingleton<IConfiguration>(configuration);
@@ -40,7 +42,7 @@ namespace LearningAssistant
         [STAThread]
         static void Main(string[] args)
         {
-
+            ExcelPackage.License.SetNonCommercialPersonal("LearningAssistant");
 
             Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
             Application.EnableVisualStyles();

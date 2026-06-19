@@ -250,7 +250,7 @@ namespace LearningAssistant.Services.Pdf
             {
                 folderName = $"{folderName}_{hash.Substring(0, Math.Min(8, hash.Length))}";
             }
-            return Path.Combine(FileHelper.GetHighlightsDirectory(), $"{folderName}_highlights.json");
+            return Path.Combine(AppPaths.HighlightsDir, $"{folderName}_highlights.json");
         }
 
         private string? ComputeFolderHash(string folderPath)

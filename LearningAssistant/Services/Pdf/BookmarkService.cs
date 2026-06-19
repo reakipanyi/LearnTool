@@ -151,8 +151,7 @@ namespace LearningAssistant.Services.Pdf
 
         private string GetBookmarkPath(string pdfPath)
         {
-            var fileName = Path.GetFileNameWithoutExtension(pdfPath);
-            return Path.Combine(FileHelper.GetBookmarksDirectory(), $"{fileName}_bookmarks.json");
+            return AppPaths.GetPdfBookmarkPath(pdfPath);
         }
     }
 }

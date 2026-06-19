@@ -20,7 +20,7 @@ namespace LearningAssistant.Services.Learning
         public LearningAnalyticsService(ILogger<LearningAnalyticsService>? logger = null)
         {
             _logger = logger;
-            _analyticsFilePath = Path.Combine(FileHelper.GetAppDirectory(), "learning_analytics.json");
+            _analyticsFilePath = AppPaths.AnalyticsPath;
             LoadAnalytics();
         }
 

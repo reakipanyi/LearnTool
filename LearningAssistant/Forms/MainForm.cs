@@ -297,7 +297,7 @@ namespace LearningAssistant.Forms
             panelMain.Location = new Point(0, 25);
             panelMain.Margin = new Padding(4);
             panelMain.Name = "panelMain";
-            panelMain.Size = new Size(632, 593);
+            panelMain.Size = new Size(632, 484);
             panelMain.TabIndex = 0;
             // 
             // groupBoxProgress
@@ -466,7 +466,6 @@ namespace LearningAssistant.Forms
             buttonBrowser.Name = "buttonBrowser";
             buttonBrowser.Size = new Size(75, 23);
             buttonBrowser.TabIndex = 0;
-
             // 
             // menuStrip1
             // 
@@ -513,7 +512,7 @@ namespace LearningAssistant.Forms
             // statusStrip1
             // 
             statusStrip1.Items.AddRange(new ToolStripItem[] { toolStripStatusLabel });
-            statusStrip1.Location = new Point(0, 618);
+            statusStrip1.Location = new Point(0, 509);
             statusStrip1.Name = "statusStrip1";
             statusStrip1.Size = new Size(632, 22);
             statusStrip1.TabIndex = 2;
@@ -529,7 +528,7 @@ namespace LearningAssistant.Forms
             AutoScaleDimensions = new SizeF(10F, 21F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.FromArgb(250, 245, 235);
-            ClientSize = new Size(632, 640);
+            ClientSize = new Size(632, 531);
             Controls.Add(panelMain);
             Controls.Add(statusStrip1);
             Controls.Add(menuStrip1);

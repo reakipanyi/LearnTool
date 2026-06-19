@@ -57,7 +57,7 @@ namespace LearningAssistant.Services.Learning
         public SpacedRepetitionService(ILogger<SpacedRepetitionService>? logger = null)
         {
             _logger = logger;
-            _storagePath = Path.Combine(FileHelper.GetDataDirectory(), "spaced_repetition.json");
+            _storagePath = Path.Combine(AppPaths.DataDir, "spaced_repetition.json");
             LoadItems();
         }
 
