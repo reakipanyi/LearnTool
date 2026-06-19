@@ -16,7 +16,9 @@
 	  <None Remove="tessdata\**" />
 	</ItemGroup>
 	<ItemGroup>
+	  <Compile Remove="Forms\AddBookmarkDialog.cs" />
 	  <Compile Remove="Forms\BaiduNetdiskAuthForm.cs" />
+	  <Compile Remove="Forms\BookmarkManagerForm.cs" />
 	  <Compile Remove="Forms\FormPreviewer.cs" />
 	  <Compile Remove="Services\AI\SiliconFlowAIService.cs" />
 	  <Compile Remove="Services\Cloud\BaiduPanFileManager.cs" />
