@@ -87,9 +87,14 @@ namespace LearningAssistant.Views
         string SortOrder { get; }
 
         /// <summary>
-        /// 学习语言
+        /// 学习语言（兼容旧版）
         /// </summary>
         string Language { get; }
+
+        /// <summary>
+        /// 学习学科
+        /// </summary>
+        string Subject { get; }
 
         /// <summary>
         /// 当前子类别

@@ -42,7 +42,7 @@ namespace LearningAssistant.Presenters
         private string _currentExplanation = "";
         private bool _isLoading = false;
         private string _currentUserId = "";
-        private string _currentLanguage = "";
+        private string _currentSubject = "";
         private string _currentSubCategory = "";
         private int _autoPronunciationCount = 0;
         private const int MaxAutoPronunciationCount = 5;
@@ -87,22 +87,22 @@ namespace LearningAssistant.Presenters
         private async Task InitializeCore(string userId, string language, string subCategory, string wordBankFile, bool continueMode)
         {
             _currentUserId = userId;
-            // 使用视图上当前选择的语言（已从设置加载），而不是外部传入的语言参数
-            _currentLanguage = _view.Language;
+            // 使用视图上当前选择的学科（已从设置加载），而不是外部传入的语言参数
+            _currentSubject = _view.Subject;
 
-            subCategory = await LoadSubCategoriesAsync(_currentLanguage, subCategory);
+            subCategory = await LoadSubCategoriesAsync(_currentSubject, subCategory);
             _currentSubCategory = subCategory;
 
-            _studyEngine.Initialize(userId, _currentLanguage, subCategory, wordBankFile, _view.LearningMode, _view.SortOrder, continueMode);
+            _studyEngine.Initialize(userId, _currentSubject, subCategory, wordBankFile, _view.LearningMode, _view.SortOrder, continueMode);
             UpdateLearningList();
             await DisplayCurrentItemAsync();
         }
 
-        private async Task<string> LoadSubCategoriesAsync(string language, string subCategory)
+        private async Task<string> LoadSubCategoriesAsync(string subject, string subCategory)
         {
             try
             {
-                var subCategories = _contentLoaderService.GetSubCategories(language);
+                var subCategories = _contentLoaderService.GetSubCategoriesBySubject(subject);
                 _view.RefreshSubCategories(subCategories);
 
                 if (string.IsNullOrEmpty(subCategory) || !subCategories.Contains(subCategory))
@@ -330,20 +330,20 @@ namespace LearningAssistant.Presenters
             {
                 _logger.LogInformation("Settings changed");
 
-                string newLanguage = _view.Language;
+                string newSubject = _view.Subject;
                 string newSubCategory = _view.SubCategory;
                 string newMode = _view.LearningMode;
                 string newSortOrder = _view.SortOrder;
 
-                bool languageChanged = newLanguage != _currentLanguage;
+                bool subjectChanged = newSubject != _currentSubject;
                 bool subCategoryChanged = newSubCategory != _currentSubCategory;
                 bool modeChanged = newMode != _studyEngine.CurrentMode;
                 bool sortChanged = newSortOrder != _studyEngine.CurrentSortOrder;
 
-                if (languageChanged)
+                if (subjectChanged)
                 {
-                    _currentLanguage = newLanguage;
-                    var subCategories = _contentLoaderService.GetSubCategories(newLanguage);
+                    _currentSubject = newSubject;
+                    var subCategories = _contentLoaderService.GetSubCategoriesBySubject(newSubject);
                     _view.RefreshSubCategories(subCategories);
 
                     if (subCategories.Count > 0)
@@ -357,10 +357,10 @@ namespace LearningAssistant.Presenters
                     _currentSubCategory = newSubCategory;
                 }
 
-                if (languageChanged || subCategoryChanged)
+                if (subjectChanged || subCategoryChanged)
                 {
                     string userId = string.IsNullOrWhiteSpace(_currentUserId) ? "default" : _currentUserId;
-                    _studyEngine.Initialize(userId, _currentLanguage, _currentSubCategory, "", newMode, newSortOrder, true);
+                    _studyEngine.Initialize(userId, _currentSubject, _currentSubCategory, "", newMode, newSortOrder, true);
                 }
                 else if (modeChanged || sortChanged)
                 {

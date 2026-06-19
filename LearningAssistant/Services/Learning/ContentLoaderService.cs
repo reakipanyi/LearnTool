@@ -18,7 +18,31 @@ namespace LearningAssistant.Services.Learning
             { Constants.SubCategory.EnglishWord, typeof(EnglishWord) },
             { Constants.SubCategory.EnglishPhrase, typeof(EnglishPhrase) },
             { Constants.SubCategory.EnglishSentence, typeof(EnglishSentence) },
-            { Constants.SubCategory.EnglishComprehensive, typeof(EnglishComprehensive) }
+            { Constants.SubCategory.EnglishComprehensive, typeof(EnglishComprehensive) },
+            { Constants.SubCategory.MathFormula, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.MathExample, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.MathConcept, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.MathComprehensive, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.PhysicsLaw, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.PhysicsExperiment, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.PhysicsDerivation, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.PhysicsComprehensive, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.ChemistryEquation, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.ChemistryElement, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.ChemistryExperiment, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.ChemistryComprehensive, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.HistoryEvent, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.HistoryPerson, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.HistoryTimeline, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.HistoryComprehensive, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.GeographyKnowledge, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.GeographyMap, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.GeographyClimate, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.GeographyComprehensive, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.BiologyConcept, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.BiologyExperiment, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.BiologyPhenomenon, typeof(GeneralSubjectItem) },
+            { Constants.SubCategory.BiologyComprehensive, typeof(GeneralSubjectItem) }
         };
 
         private readonly Dictionary<string, string> _categoryFileMap = new Dictionary<string, string>
@@ -31,7 +55,31 @@ namespace LearningAssistant.Services.Learning
             { Constants.SubCategory.EnglishWord, Constants.FileName.EnglishWord },
             { Constants.SubCategory.EnglishPhrase, Constants.FileName.EnglishPhrase },
             { Constants.SubCategory.EnglishSentence, Constants.FileName.EnglishSentence },
-            { Constants.SubCategory.EnglishComprehensive, Constants.FileName.EnglishComprehensive }
+            { Constants.SubCategory.EnglishComprehensive, Constants.FileName.EnglishComprehensive },
+            { Constants.SubCategory.MathFormula, Constants.FileName.MathFormula },
+            { Constants.SubCategory.MathExample, Constants.FileName.MathExample },
+            { Constants.SubCategory.MathConcept, Constants.FileName.MathConcept },
+            { Constants.SubCategory.MathComprehensive, Constants.FileName.MathComprehensive },
+            { Constants.SubCategory.PhysicsLaw, Constants.FileName.PhysicsLaw },
+            { Constants.SubCategory.PhysicsExperiment, Constants.FileName.PhysicsExperiment },
+            { Constants.SubCategory.PhysicsDerivation, Constants.FileName.PhysicsDerivation },
+            { Constants.SubCategory.PhysicsComprehensive, Constants.FileName.PhysicsComprehensive },
+            { Constants.SubCategory.ChemistryEquation, Constants.FileName.ChemistryEquation },
+            { Constants.SubCategory.ChemistryElement, Constants.FileName.ChemistryElement },
+            { Constants.SubCategory.ChemistryExperiment, Constants.FileName.ChemistryExperiment },
+            { Constants.SubCategory.ChemistryComprehensive, Constants.FileName.ChemistryComprehensive },
+            { Constants.SubCategory.HistoryEvent, Constants.FileName.HistoryEvent },
+            { Constants.SubCategory.HistoryPerson, Constants.FileName.HistoryPerson },
+            { Constants.SubCategory.HistoryTimeline, Constants.FileName.HistoryTimeline },
+            { Constants.SubCategory.HistoryComprehensive, Constants.FileName.HistoryComprehensive },
+            { Constants.SubCategory.GeographyKnowledge, Constants.FileName.GeographyKnowledge },
+            { Constants.SubCategory.GeographyMap, Constants.FileName.GeographyMap },
+            { Constants.SubCategory.GeographyClimate, Constants.FileName.GeographyClimate },
+            { Constants.SubCategory.GeographyComprehensive, Constants.FileName.GeographyComprehensive },
+            { Constants.SubCategory.BiologyConcept, Constants.FileName.BiologyConcept },
+            { Constants.SubCategory.BiologyExperiment, Constants.FileName.BiologyExperiment },
+            { Constants.SubCategory.BiologyPhenomenon, Constants.FileName.BiologyPhenomenon },
+            { Constants.SubCategory.BiologyComprehensive, Constants.FileName.BiologyComprehensive }
         };
 
         public ContentLoaderService(ILogger<ContentLoaderService> logger)
@@ -121,6 +169,86 @@ namespace LearningAssistant.Services.Learning
                     Constants.SubCategory.EnglishComprehensive
                 };
             }
+        }
+
+        public List<string> GetSubCategoriesBySubject(string subject)
+        {
+            return subject switch
+            {
+                Constants.Subject.Chinese => new List<string>
+                {
+                    Constants.SubCategory.ChineseCharacter,
+                    Constants.SubCategory.ChineseIdiom,
+                    Constants.SubCategory.ChinesePhrase,
+                    Constants.SubCategory.ChinesePoem,
+                    Constants.SubCategory.ChineseComprehensive
+                },
+                Constants.Subject.English => new List<string>
+                {
+                    Constants.SubCategory.EnglishWord,
+                    Constants.SubCategory.EnglishPhrase,
+                    Constants.SubCategory.EnglishSentence,
+                    Constants.SubCategory.EnglishComprehensive
+                },
+                Constants.Subject.Math => new List<string>
+                {
+                    Constants.SubCategory.MathFormula,
+                    Constants.SubCategory.MathExample,
+                    Constants.SubCategory.MathConcept,
+                    Constants.SubCategory.MathComprehensive
+                },
+                Constants.Subject.Physics => new List<string>
+                {
+                    Constants.SubCategory.PhysicsLaw,
+                    Constants.SubCategory.PhysicsExperiment,
+                    Constants.SubCategory.PhysicsDerivation,
+                    Constants.SubCategory.PhysicsComprehensive
+                },
+                Constants.Subject.Chemistry => new List<string>
+                {
+                    Constants.SubCategory.ChemistryEquation,
+                    Constants.SubCategory.ChemistryElement,
+                    Constants.SubCategory.ChemistryExperiment,
+                    Constants.SubCategory.ChemistryComprehensive
+                },
+                Constants.Subject.History => new List<string>
+                {
+                    Constants.SubCategory.HistoryEvent,
+                    Constants.SubCategory.HistoryPerson,
+                    Constants.SubCategory.HistoryTimeline,
+                    Constants.SubCategory.HistoryComprehensive
+                },
+                Constants.Subject.Geography => new List<string>
+                {
+                    Constants.SubCategory.GeographyKnowledge,
+                    Constants.SubCategory.GeographyMap,
+                    Constants.SubCategory.GeographyClimate,
+                    Constants.SubCategory.GeographyComprehensive
+                },
+                Constants.Subject.Biology => new List<string>
+                {
+                    Constants.SubCategory.BiologyConcept,
+                    Constants.SubCategory.BiologyExperiment,
+                    Constants.SubCategory.BiologyPhenomenon,
+                    Constants.SubCategory.BiologyComprehensive
+                },
+                _ => new List<string>()
+            };
+        }
+
+        public List<string> GetAllSubjects()
+        {
+            return new List<string>
+            {
+                Constants.Subject.Chinese,
+                Constants.Subject.English,
+                Constants.Subject.Math,
+                Constants.Subject.Physics,
+                Constants.Subject.Chemistry,
+                Constants.Subject.History,
+                Constants.Subject.Geography,
+                Constants.Subject.Biology
+            };
         }
 
         public List<string> GetWordBankFiles(string subCategory)

@@ -1,3 +1,6 @@
+using LearningAssistant.Models.Pdf;
+using LearningAssistant.Services.Pdf;
+
 namespace LearningAssistant.Services.Learning
 {
     /// <summary>
@@ -5,26 +8,30 @@ namespace LearningAssistant.Services.Learning
     /// </summary>
     public interface IExportService
     {
-        /// <summary>
-        /// 导出错题本到指定文件路径
-        /// </summary>
-        /// <param name="userId">用户ID</param>
-        /// <param name="filePath">目标文件路径（如 CSV、TXT 格式）</param>
-        /// <returns>导出成功返回文件路径，失败返回空字符串</returns>
-        string ExportErrorBook(string userId, string filePath);
+
 
         /// <summary>
-        /// 获取用户的错题本项目列表
+        /// 导出高亮列表到Excel文件
         /// </summary>
-        /// <param name="userId">用户ID</param>
-        /// <returns>错题内容列表</returns>
-        List<string> GetErrorBookItems(string userId);
+        /// <param name="outputPath">输出Excel文件路径</param>
+        /// <param name="highlights">高亮列表</param>
+        /// <param name="sourcePath">源PDF/文件夹路径</param>
+        /// <param name="isImageMode">是否为图片模式</param>
+        /// <param name="imageFiles">图片模式下的文件列表</param>
+        /// <param name="pdfService">PDF服务实例（PDF模式时使用）</param>
+        /// <returns>导出成功返回true</returns>
+        Task<bool> ExportHighlightsToExcelAsync(string outputPath, List<PdfHighlight> highlights, string sourcePath, bool isImageMode, List<string>? imageFiles = null, IPdfService? pdfService = null);
 
         /// <summary>
-        /// 通过对话框导出错题本（带UI交互）
+        /// 导出PDF的所有高亮到Excel文件
         /// </summary>
-        /// <param name="userId">用户ID</param>
-        /// <returns>导出结果消息</returns>
-        string ExportErrorBookWithDialog(string userId);
+        /// <param name="outputPath">输出Excel文件路径</param>
+        /// <param name="sourcePath">源PDF/文件夹路径</param>
+        /// <param name="isImageMode">是否为图片模式</param>
+        /// <param name="imageFiles">图片模式下的文件列表</param>
+        /// <param name="pdfService">PDF服务实例（PDF模式时使用）</param>
+        /// <returns>导出成功返回true</returns>
+        Task<bool> ExportHighlightsToExcelAsync(string outputPath, string sourcePath, bool isImageMode, List<string>? imageFiles = null, IPdfService? pdfService = null);
+
     }
 }

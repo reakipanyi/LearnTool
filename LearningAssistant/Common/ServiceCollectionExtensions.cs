@@ -87,7 +87,8 @@ namespace LearningAssistant.Common
             services.AddSingleton<IContentLoaderService, ContentLoaderService>();
             services.AddSingleton<IUserSessionService, UserSessionService>();
 
-            services.AddSingleton<IExportService, ExportService>();
+            services.AddSingleton<ExportService>();
+            services.AddSingleton<IExportService>(sp => sp.GetRequiredService<ExportService>());
             services.AddSingleton<QuoteService>();
 
 
@@ -133,10 +134,9 @@ namespace LearningAssistant.Common
             services.AddScoped<IPdfFileManager, PdfFileManager>();
             services.AddScoped<IPdfOcrService, PdfOcrService>();
             services.AddScoped<IPdfTranslationService, PdfTranslationService>();
-            // IPdfAiService 已移除，PdfPresenter 直接使用 IAIService
             services.AddScoped<IPdfTtsService, PdfTtsService>();
             services.AddScoped<IPdfStudyIntegration, PdfStudyIntegration>();
-            services.AddScoped<IPdfExportService, PdfExportService>();
+            services.AddScoped<IExportService, ExportService>();
 
             return services;
         }
@@ -233,12 +233,12 @@ namespace LearningAssistant.Common
                 var aiService = sp.GetRequiredService<IAIService>();
                 var pdfTtsService = sp.GetRequiredService<IPdfTtsService>();
                 var pdfStudyIntegration = sp.GetRequiredService<IPdfStudyIntegration>();
-                var pdfExportService = sp.GetRequiredService<IPdfExportService>();
+                var exportService = sp.GetRequiredService<IExportService>();
                 var annotationService = sp.GetRequiredService<IAnnotationService>();
                 var highlightService = sp.GetRequiredService<IHighlightService>();
                 var pdfService = sp.GetRequiredService<IPdfService>();
                 return new PdfPresenter(logger, pdfRenderer, pdfFileManager, pdfOcrService, pdfTranslationService,
-                    aiService, pdfTtsService, pdfStudyIntegration, pdfExportService,
+                    aiService, pdfTtsService, pdfStudyIntegration, exportService,
                     annotationService, highlightService, pdfService);
             });
 

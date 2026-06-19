@@ -31,6 +31,19 @@ namespace LearningAssistant.Services.Learning
         List<string> GetSubCategories(string language);
 
         /// <summary>
+        /// 获取指定学科的所有子类别列表
+        /// </summary>
+        /// <param name="subject">学科名称</param>
+        /// <returns>子类别名称列表</returns>
+        List<string> GetSubCategoriesBySubject(string subject);
+
+        /// <summary>
+        /// 获取所有学科列表
+        /// </summary>
+        /// <returns>学科名称列表</returns>
+        List<string> GetAllSubjects();
+
+        /// <summary>
         /// 获取指定子类别关联的所有词库文件
         /// </summary>
         /// <param name="subCategory">子类别</param>

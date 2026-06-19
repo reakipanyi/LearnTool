@@ -110,8 +110,7 @@ namespace LearningAssistant.Forms
         private RadioButton radioQuickMode => _settingsView.RadioQuickMode;
         private RadioButton radioSequential => _settingsView.RadioSequential;
         private RadioButton radioRandom => _settingsView.RadioRandom;
-        private RadioButton radioChinese => _settingsView.RadioChinese;
-        private RadioButton radioEnglish => _settingsView.RadioEnglish;
+        private ComboBox comboBoxSubject => _settingsView.ComboBoxSubject;
         private ComboBox comboBoxSubCategory => _settingsView.ComboBoxSubCategory;
         private Panel panelNotes => _contentView.PanelNotes;
         private RichTextBox richTextBoxNotes => _contentView.RichTextBoxNotes;
@@ -218,8 +217,7 @@ namespace LearningAssistant.Forms
             _settingsView.RadioQuickMode.CheckedChanged += RadioSetting_CheckedChanged;
             _settingsView.RadioSequential.CheckedChanged += RadioSetting_CheckedChanged;
             _settingsView.RadioRandom.CheckedChanged += RadioSetting_CheckedChanged;
-            _settingsView.RadioChinese.CheckedChanged += RadioSetting_CheckedChanged;
-            _settingsView.RadioEnglish.CheckedChanged += RadioSetting_CheckedChanged;
+            _settingsView.ComboBoxSubject.SelectedIndexChanged += ComboBoxSubject_SelectedIndexChanged;
             _settingsView.ComboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
             _settingsView.ButtonOpenStatistics.Click += ButtonOpenStatistics_Click;
             _settingsView.ButtonExportErrorBook.Click += ButtonExportErrorBook_Click;
@@ -446,6 +444,9 @@ namespace LearningAssistant.Forms
         {
             try
             {
+                // 填充学科下拉框
+                InitSubjectComboBox();
+
                 string settingsPath = AppPaths.AppSettingsPath;
                 if (File.Exists(settingsPath))
                 {
@@ -454,6 +455,17 @@ namespace LearningAssistant.Forms
                     if (settings != null)
                     {
                         _settings = settings;
+
+                        // 从旧版设置迁移：Language -> Subject
+                        if (string.IsNullOrEmpty(_settings.Subject))
+                        {
+                            if (_settings.Language == "Chinese")
+                                _settings.Subject = Constants.Subject.Chinese;
+                            else if (_settings.Language == "English")
+                                _settings.Subject = Constants.Subject.English;
+                            else
+                                _settings.Subject = Constants.Subject.English;
+                        }
                     }
                 }
             }
@@ -461,6 +473,28 @@ namespace LearningAssistant.Forms
             {
                 _logger.LogError(ex, "Failed to load settings");
             }
+        }
+
+        private void InitSubjectComboBox()
+        {
+            comboBoxSubject.Items.Clear();
+            var subjects = new List<string>
+            {
+                Constants.Subject.Chinese,
+                Constants.Subject.English,
+                Constants.Subject.Math,
+                Constants.Subject.Physics,
+                Constants.Subject.Chemistry,
+                Constants.Subject.History,
+                Constants.Subject.Geography,
+                Constants.Subject.Biology
+            };
+            foreach (var subject in subjects)
+            {
+                comboBoxSubject.Items.Add(subject);
+            }
+            if (comboBoxSubject.Items.Count > 0)
+                comboBoxSubject.SelectedIndex = 1; // 默认选英语
         }
 
         private void SaveSettings()
@@ -473,7 +507,7 @@ namespace LearningAssistant.Forms
                 else _settings.PronunciationScope = 2;
                 _settings.LearningMode = radioStudyMode.Checked ? Constants.LearningMode.Study : Constants.LearningMode.Quick;
                 _settings.SortOrder = radioSequential.Checked ? Constants.SortOrder.Sequential : Constants.SortOrder.Random;
-                _settings.Language = radioChinese.Checked ? Constants.Language.Chinese : Constants.Language.English;
+                _settings.Subject = comboBoxSubject.Text;
                 _settings.SubCategory = comboBoxSubCategory.Text;
                 string settingsPath = Path.Combine(AppPaths.ConfigDir, "settings.json");
                 var dir = Path.GetDirectoryName(settingsPath);
@@ -531,12 +565,15 @@ namespace LearningAssistant.Forms
                 if (shouldSetRandom) radioRandom.Checked = true;
                 else if (shouldSetSequential) radioSequential.Checked = true;
 
-                // 处理语言单选按钮
-                bool shouldSetChinese = _settings.Language == "Chinese" && !radioChinese.Checked;
-                bool shouldSetEnglish = _settings.Language != "Chinese" && !radioEnglish.Checked;
-
-                if (shouldSetChinese) radioChinese.Checked = true;
-                else if (shouldSetEnglish) radioEnglish.Checked = true;
+                // 处理学科下拉框
+                if (!string.IsNullOrEmpty(_settings.Subject))
+                {
+                    var index = comboBoxSubject.Items.IndexOf(_settings.Subject);
+                    if (index >= 0 && comboBoxSubject.SelectedIndex != index)
+                    {
+                        comboBoxSubject.SelectedIndex = index;
+                    }
+                }
 
                 // 处理子分类
                 if (!string.IsNullOrEmpty(_settings.SubCategory))
@@ -787,7 +824,17 @@ namespace LearningAssistant.Forms
 
         public string SortOrder => radioSequential.Checked ? "Sequential" : "Random";
 
-        public string Language => radioChinese.Checked ? Constants.Language.Chinese : Constants.Language.English;
+        public string Subject => comboBoxSubject.Text;
+
+        public string Language
+        {
+            get
+            {
+                if (Subject == Constants.Subject.Chinese) return Constants.Language.Chinese;
+                if (Subject == Constants.Subject.English) return Constants.Language.English;
+                return Constants.Language.Chinese;
+            }
+        }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string SubCategory
@@ -1973,8 +2020,7 @@ namespace LearningAssistant.Forms
                     _settingsView.RadioQuickMode.CheckedChanged -= RadioSetting_CheckedChanged;
                     _settingsView.RadioSequential.CheckedChanged -= RadioSetting_CheckedChanged;
                     _settingsView.RadioRandom.CheckedChanged -= RadioSetting_CheckedChanged;
-                    _settingsView.RadioChinese.CheckedChanged -= RadioSetting_CheckedChanged;
-                    _settingsView.RadioEnglish.CheckedChanged -= RadioSetting_CheckedChanged;
+                    _settingsView.ComboBoxSubject.SelectedIndexChanged -= ComboBoxSubject_SelectedIndexChanged;
                     _settingsView.ComboBoxSubCategory.SelectedIndexChanged -= ComboBoxSubCategory_SelectedIndexChanged;
                     _settingsView.ButtonOpenStatistics.Click -= ButtonOpenStatistics_Click;
                     _settingsView.ButtonExportErrorBook.Click -= ButtonExportErrorBook_Click;

@@ -24,10 +24,9 @@ namespace LearningAssistant.Views
         private RadioButton _radioSequential = null!;
         private RadioButton _radioRandom = null!;
 
-        // 语言选择
-        private GroupBox _groupBoxLanguage = null!;
-        private RadioButton _radioChinese = null!;
-        private RadioButton _radioEnglish = null!;
+        // 学科选择
+        private GroupBox _groupBoxSubject = null!;
+        private ComboBox _comboBoxSubject = null!;
 
         // 子类别
         private Label _labelSubCategory = null!;
@@ -76,10 +75,7 @@ namespace LearningAssistant.Views
         public RadioButton RadioRandom => _radioRandom;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public RadioButton RadioChinese => _radioChinese;
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public RadioButton RadioEnglish => _radioEnglish;
+        public ComboBox ComboBoxSubject => _comboBoxSubject;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public ComboBox ComboBoxSubCategory => _comboBoxSubCategory;
@@ -103,7 +99,7 @@ namespace LearningAssistant.Views
         public GroupBox GroupBoxSort => _groupBoxSort;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public GroupBox GroupBoxLanguage => _groupBoxLanguage;
+        public GroupBox GroupBoxSubject => _groupBoxSubject;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Label LabelSubCategory => _labelSubCategory;
@@ -148,9 +144,8 @@ namespace LearningAssistant.Views
             _groupBoxSort = new GroupBox();
             _radioSequential = new RadioButton();
             _radioRandom = new RadioButton();
-            _groupBoxLanguage = new GroupBox();
-            _radioChinese = new RadioButton();
-            _radioEnglish = new RadioButton();
+            _groupBoxSubject = new GroupBox();
+            _comboBoxSubject = new ComboBox();
             _labelSubCategory = new Label();
             _comboBoxSubCategory = new ComboBox();
             _buttonOpenStatistics = new Button();
@@ -167,7 +162,7 @@ namespace LearningAssistant.Views
             _panelConfig.SuspendLayout();
             _groupBoxMode.SuspendLayout();
             _groupBoxSort.SuspendLayout();
-            _groupBoxLanguage.SuspendLayout();
+            _groupBoxSubject.SuspendLayout();
             _pronunciationFlowLayoutPanel.SuspendLayout();
             _panelQuizMode.SuspendLayout();
             SuspendLayout();
@@ -179,7 +174,7 @@ namespace LearningAssistant.Views
             _panelConfig.Controls.Add(_labelConfigTitle);
             _panelConfig.Controls.Add(_groupBoxMode);
             _panelConfig.Controls.Add(_groupBoxSort);
-            _panelConfig.Controls.Add(_groupBoxLanguage);
+            _panelConfig.Controls.Add(_groupBoxSubject);
             _panelConfig.Controls.Add(_labelSubCategory);
             _panelConfig.Controls.Add(_comboBoxSubCategory);
             _panelConfig.Controls.Add(_buttonOpenStatistics);
@@ -281,42 +276,27 @@ namespace LearningAssistant.Views
             _radioRandom.TabIndex = 1;
             _radioRandom.Text = "🎲 随机";
             // 
-            // _groupBoxLanguage
+            // _groupBoxSubject
             // 
-            _groupBoxLanguage.Controls.Add(_radioChinese);
-            _groupBoxLanguage.Controls.Add(_radioEnglish);
-            _groupBoxLanguage.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
-            _groupBoxLanguage.ForeColor = Color.FromArgb(60, 80, 100);
-            _groupBoxLanguage.Location = new Point(10, 244);
-            _groupBoxLanguage.Name = "_groupBoxLanguage";
-            _groupBoxLanguage.Size = new Size(180, 85);
-            _groupBoxLanguage.TabIndex = 3;
-            _groupBoxLanguage.TabStop = false;
-            _groupBoxLanguage.Text = "语言";
+            _groupBoxSubject.Controls.Add(_comboBoxSubject);
+            _groupBoxSubject.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            _groupBoxSubject.ForeColor = Color.FromArgb(60, 80, 100);
+            _groupBoxSubject.Location = new Point(10, 244);
+            _groupBoxSubject.Name = "_groupBoxSubject";
+            _groupBoxSubject.Size = new Size(180, 70);
+            _groupBoxSubject.TabIndex = 3;
+            _groupBoxSubject.TabStop = false;
+            _groupBoxSubject.Text = "学科";
             // 
-            // _radioChinese
+            // _comboBoxSubject
             // 
-            _radioChinese.AutoSize = true;
-            _radioChinese.Checked = true;
-            _radioChinese.Font = new Font("微软雅黑", 9F);
-            _radioChinese.ForeColor = Color.FromArgb(70, 90, 110);
-            _radioChinese.Location = new Point(15, 28);
-            _radioChinese.Name = "_radioChinese";
-            _radioChinese.Size = new Size(67, 21);
-            _radioChinese.TabIndex = 0;
-            _radioChinese.TabStop = true;
-            _radioChinese.Text = "🇨🇳 中文";
-            // 
-            // _radioEnglish
-            // 
-            _radioEnglish.AutoSize = true;
-            _radioEnglish.Font = new Font("微软雅黑", 9F);
-            _radioEnglish.ForeColor = Color.FromArgb(70, 90, 110);
-            _radioEnglish.Location = new Point(90, 28);
-            _radioEnglish.Name = "_radioEnglish";
-            _radioEnglish.Size = new Size(66, 21);
-            _radioEnglish.TabIndex = 1;
-            _radioEnglish.Text = "🇬🇧 英语";
+            _comboBoxSubject.DropDownStyle = ComboBoxStyle.DropDownList;
+            _comboBoxSubject.Font = new Font("微软雅黑", 9F);
+            _comboBoxSubject.FormattingEnabled = true;
+            _comboBoxSubject.Location = new Point(15, 28);
+            _comboBoxSubject.Name = "_comboBoxSubject";
+            _comboBoxSubject.Size = new Size(150, 25);
+            _comboBoxSubject.TabIndex = 0;
             // 
             // _labelSubCategory
             // 
@@ -492,8 +472,8 @@ namespace LearningAssistant.Views
             _groupBoxMode.PerformLayout();
             _groupBoxSort.ResumeLayout(false);
             _groupBoxSort.PerformLayout();
-            _groupBoxLanguage.ResumeLayout(false);
-            _groupBoxLanguage.PerformLayout();
+            _groupBoxSubject.ResumeLayout(false);
+            _groupBoxSubject.PerformLayout();
             _pronunciationFlowLayoutPanel.ResumeLayout(false);
             _pronunciationFlowLayoutPanel.PerformLayout();
             _panelQuizMode.ResumeLayout(false);

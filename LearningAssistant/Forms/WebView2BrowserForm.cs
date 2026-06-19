@@ -305,6 +305,7 @@ namespace LearningAssistant.Forms
                 {
                     Dock = DockStyle.Fill
                 };
+                webView.Tag = tabPage;
 
                 tabPage.Controls.Add(webView);
                 _webViews[tabPage] = webView;
@@ -383,6 +384,7 @@ namespace LearningAssistant.Forms
             var uri = e.Uri;
             BeginInvoke(new Action(async () =>
             {
+                if (IsDisposed) return;
                 try
                 {
                     await CreateNewTabAsync(uri, "新标签页");
@@ -406,13 +408,14 @@ namespace LearningAssistant.Forms
 
             BeginInvoke(new Action(() =>
             {
+                if (IsDisposed) return;
                 UpdateTabPageTitle(webView);
             }));
         }
 
         private void UpdateTabPageTitle(WebView2 webView)
         {
-            var tabPage = _webViews.FirstOrDefault(kvp => kvp.Value == webView).Key;
+            var tabPage = webView.Tag as TabPage;
             if (tabPage != null && webView.CoreWebView2 != null)
             {
                 var title = webView.CoreWebView2.DocumentTitle;
@@ -439,7 +442,8 @@ namespace LearningAssistant.Forms
 
             BeginInvoke(new Action(() =>
             {
-                var tabPage = _webViews.FirstOrDefault(kvp => kvp.Value == webView).Key;
+                if (IsDisposed) return;
+                var tabPage = webView.Tag as TabPage;
                 if (tabPage != null)
                 {
                     try
@@ -466,6 +470,7 @@ namespace LearningAssistant.Forms
 
             BeginInvoke(new Action(() =>
             {
+                if (IsDisposed) return;
                 UpdateTabPageTitle(webView);
             }));
 
@@ -473,6 +478,7 @@ namespace LearningAssistant.Forms
 
             BeginInvoke(new Action(async () =>
             {
+                if (IsDisposed) return;
                 if (CurrentWebView != null)
                 {
                     txtUrl.Text = CurrentWebView.Source?.ToString() ?? string.Empty;
@@ -852,7 +858,7 @@ namespace LearningAssistant.Forms
             double zoomFactor = _zoomLevel / 100.0;
             foreach (var webView in _webViews.Values)
             {
-                if (webView != null)
+                if (webView != null && webView.CoreWebView2 != null)
                 {
                     webView.ZoomFactor = zoomFactor;
                 }
@@ -911,13 +917,11 @@ namespace LearningAssistant.Forms
                     }
                     return CropImage(fullImage, rect);
                 }
-                fullImage.Dispose();
                 return null;
             }
-            catch
+            finally
             {
                 fullImage.Dispose();
-                throw;
             }
         }
 
@@ -1784,10 +1788,6 @@ namespace LearningAssistant.Forms
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing)
-            {
-                _image?.Dispose();
-            }
             base.Dispose(disposing);
         }
     }

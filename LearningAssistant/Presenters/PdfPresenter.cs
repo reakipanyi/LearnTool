@@ -1,6 +1,7 @@
 using LearningAssistant.Common;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.AI;
+using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
@@ -18,7 +19,7 @@ namespace LearningAssistant.Presenters
         private readonly IAIService _aiService;
         private readonly IPdfTtsService _pdfTtsService;
         private readonly IPdfStudyIntegration _pdfStudyIntegration;
-        private readonly IPdfExportService _pdfExportService;
+        private readonly IExportService _ExportService;
         private readonly IAnnotationService _annotationService;
         private readonly IHighlightService _highlightService;
         private readonly IPdfService _pdfService;
@@ -37,7 +38,7 @@ namespace LearningAssistant.Presenters
             IAIService aiService,
             IPdfTtsService pdfTtsService,
             IPdfStudyIntegration pdfStudyIntegration,
-            IPdfExportService pdfExportService,
+            IExportService pdfExportService,
             IAnnotationService annotationService,
             IHighlightService highlightService,
             IPdfService pdfService)
@@ -50,7 +51,7 @@ namespace LearningAssistant.Presenters
             _aiService = aiService ?? throw new ArgumentNullException(nameof(aiService));
             _pdfTtsService = pdfTtsService ?? throw new ArgumentNullException(nameof(pdfTtsService));
             _pdfStudyIntegration = pdfStudyIntegration ?? throw new ArgumentNullException(nameof(pdfStudyIntegration));
-            _pdfExportService = pdfExportService ?? throw new ArgumentNullException(nameof(pdfExportService));
+            _ExportService = _ExportService ?? throw new ArgumentNullException(nameof(pdfExportService));
             _annotationService = annotationService ?? throw new ArgumentNullException(nameof(annotationService));
             _highlightService = highlightService ?? throw new ArgumentNullException(nameof(highlightService));
             _pdfService = pdfService ?? throw new ArgumentNullException(nameof(pdfService));
@@ -454,7 +455,7 @@ namespace LearningAssistant.Presenters
 
             try
             {
-                bool success = await _pdfExportService.ExportHighlightsToExcelAsync(
+                bool success = await _ExportService.ExportHighlightsToExcelAsync(
                     savePath,
                     _pdfFileManager.CurrentFilePath,
                     _pdfFileManager.IsImageMode,
