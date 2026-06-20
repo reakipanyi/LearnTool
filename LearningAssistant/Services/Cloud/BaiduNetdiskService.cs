@@ -49,13 +49,6 @@ namespace LearningAssistant.Services.Cloud
             };
         }
 
-        private void SaveTokens()
-        {
-            _config.BaiduAccessToken = _accessToken ?? "";
-            _config.BaiduRefreshToken = _refreshToken ?? "";
-            _config.BaiduTokenExpireTime = _tokenExpireTime;
-            _logger?.LogInformation("Tokens saved to config");
-        }
 
         #region 配置方法
 
@@ -286,30 +279,9 @@ namespace LearningAssistant.Services.Cloud
             return false;
         }
 
-        private async Task TryPersistConfigAsync()
-        {
-            try
-            {
-                if (_persistenceService != null)
-                {
-                    // 加载完整配置并更新
-                    var fullConfig = _persistenceService.LoadConfig();
-                    if (fullConfig.CloudStorageConfig != null)
-                    {
-                        fullConfig.CloudStorageConfig.BaiduAccessToken = _accessToken ?? "";
-                        fullConfig.CloudStorageConfig.BaiduRefreshToken = _refreshToken ?? "";
-                        fullConfig.CloudStorageConfig.BaiduTokenExpireTime = _tokenExpireTime;
-                        _persistenceService.SaveConfig(fullConfig);
-                        _logger?.LogInformation("Config persisted successfully");
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogWarning(ex, "Failed to persist config to file");
-            }
-        }
-#endregion
+
+
+        #endregion
 
         #region 文件操作
 

@@ -223,7 +223,7 @@ namespace LearningAssistant.Services.Migration
 
             return result;
         }
-
+        #endregion
         #region 私有迁移方法
 
         /// <summary>
