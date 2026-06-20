@@ -25,9 +25,13 @@ namespace LearningAssistant.Services.Cloud
         private DateTime _tokenExpireTime;
         private bool _disposed = false;
 
+        #region 公共属性
+
         public string ServiceName => "百度网盘";
         public bool IsAuthenticated => !string.IsNullOrEmpty(_accessToken) && DateTime.Now < _tokenExpireTime;
         public bool IsConfigured => !string.IsNullOrWhiteSpace(_config.BaiduClientId) && !string.IsNullOrWhiteSpace(_config.BaiduClientSecret);
+
+        #endregion
 
         public BaiduNetdiskService(CloudStorageConfig config, ILogger<BaiduNetdiskService>? logger = null, IDataPersistenceService? persistenceService = null)
         {
@@ -53,6 +57,8 @@ namespace LearningAssistant.Services.Cloud
             _logger?.LogInformation("Tokens saved to config");
         }
 
+        #region 配置方法
+
         public void Configure(string clientId, string clientSecret)
         {
             if (string.IsNullOrWhiteSpace(clientId))
@@ -64,6 +70,10 @@ namespace LearningAssistant.Services.Cloud
             _config.BaiduClientSecret = clientSecret;
             _logger?.LogInformation("百度网盘服务配置已更新");
         }
+
+        #endregion
+
+        #region Dispose 模式
 
         public void Dispose()
         {
@@ -89,6 +99,10 @@ namespace LearningAssistant.Services.Cloud
             if (_disposed)
                 throw new ObjectDisposedException(nameof(BaiduNetdiskService));
         }
+
+        #endregion
+
+        #region 授权与认证
 
         public async Task<string> GetAuthorizationUrlAsync()
         {
@@ -295,6 +309,9 @@ namespace LearningAssistant.Services.Cloud
                 _logger?.LogWarning(ex, "Failed to persist config to file");
             }
         }
+#endregion
+
+        #region 文件操作
 
         public async Task<bool> DownloadFileAsync(string cloudPath, string localPath, Action<int>? progress = null)
         {
@@ -524,6 +541,41 @@ namespace LearningAssistant.Services.Cloud
             }
         }
 
+        #endregion
+
+        #region 私有辅助方法
+
+        private void SaveTokens()
+        {
+            _config.BaiduAccessToken = _accessToken ?? "";
+            _config.BaiduRefreshToken = _refreshToken ?? "";
+            _config.BaiduTokenExpireTime = _tokenExpireTime;
+            _logger?.LogInformation("Tokens saved to config");
+        }
+
+        private async Task TryPersistConfigAsync()
+        {
+            try
+            {
+                if (_persistenceService != null)
+                {
+                    var fullConfig = _persistenceService.LoadConfig();
+                    if (fullConfig.CloudStorageConfig != null)
+                    {
+                        fullConfig.CloudStorageConfig.BaiduAccessToken = _accessToken ?? "";
+                        fullConfig.CloudStorageConfig.BaiduRefreshToken = _refreshToken ?? "";
+                        fullConfig.CloudStorageConfig.BaiduTokenExpireTime = _tokenExpireTime;
+                        _persistenceService.SaveConfig(fullConfig);
+                        _logger?.LogInformation("Config persisted successfully");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to persist config to file");
+            }
+        }
+
         private async Task EnsureAuthenticatedAsync()
         {
             if (!IsConfigured)
@@ -573,6 +625,10 @@ namespace LearningAssistant.Services.Cloud
             return string.Join("&", parameters.Select(kv => $"{kv.Key}={Uri.EscapeDataString(kv.Value)}"));
         }
 
+        #endregion
+
+        #region 内部响应模型
+
         private class TokenResponse
         {
             [JsonPropertyName("access_token")]
@@ -614,5 +670,7 @@ namespace LearningAssistant.Services.Cloud
             [JsonPropertyName("url")]
             public string Url { get; set; } = string.Empty;
         }
+
+        #endregion
     }
 }

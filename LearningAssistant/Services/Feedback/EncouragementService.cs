@@ -9,6 +9,8 @@ namespace LearningAssistant.Services.Feedback
 {
     public class EncouragementService : IEncouragementService
     {
+        #region 字段与构造函数
+
         private readonly ILogger<EncouragementService> _logger;
         private readonly ITTSService _ttsService;
         private readonly EncouragementConfig _config;
@@ -20,6 +22,10 @@ namespace LearningAssistant.Services.Feedback
             _ttsService = ttsService;
             _config = LoadConfig();
         }
+
+        #endregion
+
+        #region 配置加载
 
         private EncouragementConfig LoadConfig()
         {
@@ -45,6 +51,10 @@ namespace LearningAssistant.Services.Feedback
             return new EncouragementConfig();
         }
 
+        #endregion
+
+        #region 公共方法
+
         public async Task PlayRandomKnownFeedbackAsync(CancellationToken cancellationToken = default)
         {
             await PlayRandomAudioAsync(_config.KnownAudios, "known", cancellationToken);
@@ -54,6 +64,10 @@ namespace LearningAssistant.Services.Feedback
         {
             await PlayRandomAudioAsync(_config.UnknownAudios, "unknown", cancellationToken);
         }
+
+        #endregion
+
+        #region 私有辅助方法
 
         private async Task PlayRandomAudioAsync(System.Collections.Generic.List<string> audioList, string category, CancellationToken cancellationToken)
         {
@@ -134,5 +148,7 @@ namespace LearningAssistant.Services.Feedback
 
             return text.Any(c => c >= 0x4E00 && c <= 0x9FFF) ? "zh-CN" : "en-US";
         }
+
+        #endregion
     }
 }

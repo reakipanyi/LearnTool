@@ -87,6 +87,8 @@ namespace LearningAssistant.Common
             services.AddTransient<IAiQuestionService, AiQuestionService>();
             services.AddSingleton<IContentLoaderService, ContentLoaderService>();
             services.AddSingleton<IUserSessionService, UserSessionService>();
+            services.AddSingleton<ISubjectTemplateService, SubjectTemplateService>();
+            services.AddSingleton<IDataMigrationService, DataMigrationService>();
 
             services.AddSingleton<ExportService>();
             services.AddSingleton<QuoteService>();

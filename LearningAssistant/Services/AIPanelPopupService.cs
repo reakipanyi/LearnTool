@@ -30,105 +30,26 @@ namespace LearningAssistant.Services
 
     public class AIPanelPopupService : IAIPanelPopupService
     {
+        #region 字段
+
         private readonly Dictionary<Form, Panel> _panelContainers = new();
+
+        #endregion
+
+        #region 公共方法
 
         public void ShowAIAbilityPanel(Form parent, string? prompt = null, string? aiUrl = null, string? context = null)
         {
             if (parent == null)
                 throw new ArgumentNullException(nameof(parent));
 
-            // 检查是否已有面板
             if (_panelContainers.TryGetValue(parent, out var existingContainer))
             {
-                existingContainer.Visible = true;
-                existingContainer.BringToFront();
-
-                // 更新提示词、URL和上下文
-                var aiPanel = existingContainer.Controls.OfType<AIAbilityPanel>().FirstOrDefault();
-                if (aiPanel != null)
-                {
-                    if (!string.IsNullOrEmpty(context))
-                        aiPanel.ContextText = context;
-
-                    if (!string.IsNullOrEmpty(prompt))
-                        aiPanel.PromptText = prompt;
-
-                    var urlToUse = !string.IsNullOrEmpty(aiUrl) ? aiUrl : aiPanel.CurrentAIUrl;
-                    aiPanel.OpenWebView(urlToUse, prompt);
-                }
+                ShowExistingPanel(existingContainer, prompt, aiUrl, context);
                 return;
             }
 
-            // 创建AI面板
-            var aiAbilityPanel = new AIAbilityPanel
-            {
-                Dock = DockStyle.Fill
-            };
-
-            // 设置初始值
-            if (!string.IsNullOrEmpty(context))
-                aiAbilityPanel.ContextText = context;
-
-            if (!string.IsNullOrEmpty(prompt))
-                aiAbilityPanel.PromptText = prompt;
-
-            // 创建容器面板
-            var containerPanel = new Panel
-            {
-                Dock = DockStyle.Fill,
-                Name = "AIAbilityContainer",
-                BackColor = Color.White
-            };
-            containerPanel.Controls.Add(aiAbilityPanel);
-
-            // 创建关闭按钮
-            var closeButton = new Button
-            {
-                Text = "✕ 关闭",
-                Dock = DockStyle.Top,
-                Height = 30,
-                BackColor = Color.FromArgb(240, 240, 240),
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("微软雅黑", 9F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(60, 60, 60)
-            };
-            closeButton.FlatAppearance.BorderSize = 0;
-            closeButton.Click += (s, args) => HideAIAbilityPanel(parent);
-            containerPanel.Controls.Add(closeButton);
-
-            // 添加到父窗体
-            parent.Controls.Add(containerPanel);
-            containerPanel.BringToFront();
-
-            // 记录容器
-            _panelContainers[parent] = containerPanel;
-
-            // 打开WebView
-            var finalUrl = !string.IsNullOrEmpty(aiUrl) ? aiUrl : aiAbilityPanel.CurrentAIUrl;
-            aiAbilityPanel.OpenWebView(finalUrl, prompt);
-
-            // 监听父窗体关闭
-            parent.FormClosed += ParentFormClosedHandler;
-        }
-
-        private void ParentFormClosedHandler(object? sender, FormClosedEventArgs e)
-        {
-            if (sender is Form parent)
-            {
-                if (_panelContainers.TryGetValue(parent, out var container))
-                {
-                    try
-                    {
-                        container.Dispose();
-                    }
-                    catch (Exception ex)
-                    {
-                        // 忽略 dispose 过程中的异常，确保后续清理继续执行
-                    }
-                    _panelContainers.Remove(parent);
-                    parent.FormClosed -= ParentFormClosedHandler;
-                }
-            }
+            CreateAndShowNewPanel(parent, prompt, aiUrl, context);
         }
 
         public void HideAIAbilityPanel(Form parent)
@@ -147,19 +68,116 @@ namespace LearningAssistant.Services
             if (parent == null)
                 throw new ArgumentNullException(nameof(parent));
 
+            DisposePanel(parent);
+        }
+
+        #endregion
+
+        #region 私有方法
+
+        private void ShowExistingPanel(Panel container, string? prompt, string? aiUrl, string? context)
+        {
+            container.Visible = true;
+            container.BringToFront();
+
+            var aiPanel = container.Controls.OfType<AIAbilityPanel>().FirstOrDefault();
+            if (aiPanel != null)
+            {
+                if (!string.IsNullOrEmpty(context))
+                    aiPanel.ContextText = context;
+
+                if (!string.IsNullOrEmpty(prompt))
+                    aiPanel.PromptText = prompt;
+
+                var urlToUse = !string.IsNullOrEmpty(aiUrl) ? aiUrl : aiPanel.CurrentAIUrl;
+                aiPanel.OpenWebView(urlToUse, prompt);
+            }
+        }
+
+        private void CreateAndShowNewPanel(Form parent, string? prompt, string? aiUrl, string? context)
+        {
+            var aiAbilityPanel = CreateAIAbilityPanel(prompt, context);
+            var containerPanel = CreateContainerPanel(aiAbilityPanel, parent);
+
+            parent.Controls.Add(containerPanel);
+            containerPanel.BringToFront();
+            _panelContainers[parent] = containerPanel;
+
+            var finalUrl = !string.IsNullOrEmpty(aiUrl) ? aiUrl : aiAbilityPanel.CurrentAIUrl;
+            aiAbilityPanel.OpenWebView(finalUrl, prompt);
+
+            parent.FormClosed += ParentFormClosedHandler;
+        }
+
+        private AIAbilityPanel CreateAIAbilityPanel(string? prompt, string? context)
+        {
+            var panel = new AIAbilityPanel
+            {
+                Dock = DockStyle.Fill
+            };
+
+            if (!string.IsNullOrEmpty(context))
+                panel.ContextText = context;
+
+            if (!string.IsNullOrEmpty(prompt))
+                panel.PromptText = prompt;
+
+            return panel;
+        }
+
+        private Panel CreateContainerPanel(AIAbilityPanel aiPanel, Form parent)
+        {
+            var containerPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Name = "AIAbilityContainer",
+                BackColor = Color.White
+            };
+
+            containerPanel.Controls.Add(aiPanel);
+
+            var closeButton = new Button
+            {
+                Text = "✕ 关闭",
+                Dock = DockStyle.Top,
+                Height = 30,
+                BackColor = Color.FromArgb(240, 240, 240),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("微软雅黑", 9F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(60, 60, 60)
+            };
+            closeButton.FlatAppearance.BorderSize = 0;
+            closeButton.Click += (s, args) => HideAIAbilityPanel(parent);
+            containerPanel.Controls.Add(closeButton);
+
+            return containerPanel;
+        }
+
+        private void ParentFormClosedHandler(object? sender, FormClosedEventArgs e)
+        {
+            if (sender is Form parent)
+            {
+                DisposePanel(parent);
+            }
+        }
+
+        private void DisposePanel(Form parent)
+        {
             if (_panelContainers.TryGetValue(parent, out var container))
             {
                 try
                 {
                     container.Dispose();
                 }
-                catch (Exception ex)
+                catch
                 {
-                    // 忽略 dispose 过程中的异常
+                    // 忽略 dispose 过程中的异常，确保后续清理继续执行
                 }
                 _panelContainers.Remove(parent);
                 parent.FormClosed -= ParentFormClosedHandler;
             }
         }
+
+        #endregion
     }
 }

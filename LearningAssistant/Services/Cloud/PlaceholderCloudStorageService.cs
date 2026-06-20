@@ -21,7 +21,7 @@ namespace LearningAssistant.Services.Cloud
 
         public Task<string> GetAuthorizationUrlAsync()
         {
-            return (Task<string>)ThrowNotImplemented();
+            return ThrowNotImplemented<string>();
         }
 
         public Task<bool> AuthenticateAsync(string authCode)

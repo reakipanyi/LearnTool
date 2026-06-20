@@ -9,14 +9,31 @@ using Microsoft.Extensions.Logging;
 namespace LearningAssistant.Services.Migration
 {
     /// <summary>
+    /// 数据迁移服务接口
+    /// </summary>
+    public interface IDataMigrationService
+    {
+        event EventHandler<MigrationProgressEventArgs>? ProgressChanged;
+
+        bool NeedsMigration();
+        MigrationResult PerformMigration();
+    }
+
+    /// <summary>
     /// 数据迁移服务，负责将 JSON 格式数据迁移到 SQLite 数据库
     /// </summary>
-    public class DataMigrationService
+    public class DataMigrationService : IDataMigrationService
     {
+        #region 字段与事件
+
         private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
         private readonly ILogger<DataMigrationService>? _logger;
 
         public event EventHandler<MigrationProgressEventArgs>? ProgressChanged;
+
+        #endregion
+
+        #region 构造函数
 
         public DataMigrationService(
             IDbContextFactory<AppDbContext> dbContextFactory,
@@ -25,6 +42,10 @@ namespace LearningAssistant.Services.Migration
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _logger = logger;
         }
+
+        #endregion
+
+        #region 公共方法
 
         /// <summary>
         /// 检查是否需要迁移
@@ -203,6 +224,8 @@ namespace LearningAssistant.Services.Migration
             return result;
         }
 
+        #region 私有迁移方法
+
         /// <summary>
         /// 迁移单个用户
         /// </summary>
@@ -346,6 +369,8 @@ namespace LearningAssistant.Services.Migration
                 Message = message
             });
         }
+
+        #endregion
     }
 
     /// <summary>

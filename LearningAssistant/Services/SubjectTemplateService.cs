@@ -6,39 +6,37 @@ using Newtonsoft.Json;
 namespace LearningAssistant.Services
 {
     /// <summary>
+    /// 科目模板服务接口
+    /// </summary>
+    public interface ISubjectTemplateService
+    {
+        List<string> GetAllSubjects();
+        SubjectTemplate? GetSubjectTemplate(string subjectKey);
+        string GetSubjectName(string subjectKey);
+        string GetSubjectIcon(string subjectKey);
+        List<string> GetCategories(string subjectKey);
+        CategoryTemplate? GetCategoryTemplate(string subjectKey, string categoryKey);
+        List<string> GetFields(string subjectKey, string categoryKey);
+        string GetFieldDisplayName(string subjectKey, string categoryKey, string fieldKey);
+        Dictionary<string, string> GetFieldDisplayNames(string subjectKey, string categoryKey);
+        Dictionary<string, object> GetSampleData(string subjectKey, string categoryKey);
+        bool HasSubject(string subjectKey);
+        bool HasCategory(string subjectKey, string categoryKey);
+        void ReloadConfig();
+        List<(string Key, string Name, string Icon)> GetSubjectList();
+        string GetCategoryDisplayName(string subjectKey, string categoryKey);
+    }
+
+    /// <summary>
     /// 科目模板服务 - 从JSON配置加载和管理科目模板
     /// </summary>
-    public class SubjectTemplateService
+    public class SubjectTemplateService : ISubjectTemplateService
     {
         private SubjectTemplateConfig _config;
         private readonly ILogger<SubjectTemplateService>? _logger;
-        private static SubjectTemplateService? _instance;
-        private static readonly object _lock = new object();
+        private readonly object _lock = new object();
 
-        /// <summary>
-        /// 单例实例
-        /// </summary>
-        public static SubjectTemplateService Instance
-        {
-            get
-            {
-                if (_instance == null)
-                {
-                    lock (_lock)
-                    {
-                        _instance ??= new SubjectTemplateService();
-                    }
-                }
-                return _instance;
-            }
-        }
-
-        private SubjectTemplateService()
-        {
-            _config = LoadConfig();
-        }
-
-        public SubjectTemplateService(ILogger<SubjectTemplateService>? logger)
+        public SubjectTemplateService(ILogger<SubjectTemplateService>? logger = null)
         {
             _logger = logger;
             _config = LoadConfig();

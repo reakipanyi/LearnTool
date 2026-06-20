@@ -69,7 +69,7 @@ namespace LearningAssistant
                 logger.LogInformation("数据库初始化完成");
 
                 // 执行数据迁移（从 JSON 到 SQLite）
-                var migrationService = ServiceProvider.GetService<DataMigrationService>();
+                var migrationService = ServiceProvider.GetService<IDataMigrationService>();
                 if (migrationService != null && migrationService.NeedsMigration())
                 {
                     logger.LogInformation("检测到需要迁移的数据，开始迁移...");
