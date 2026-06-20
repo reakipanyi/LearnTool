@@ -12,6 +12,8 @@ namespace LearningAssistant.Data.Database
         public DbSet<CategoryProgressEntity> CategoryProgresses { get; set; }
         public DbSet<LearningRecordEntity> LearningRecords { get; set; }
         public DbSet<ReminderEntity> Reminders { get; set; }
+        public DbSet<SpacedRepetitionItemEntity> SpacedRepetitionItems { get; set; }
+        public DbSet<AppSessionEntity> AppSessions { get; set; }
 
         private readonly string _dbPath;
 
@@ -104,6 +106,26 @@ namespace LearningAssistant.Data.Database
                 .WithMany(u => u.Reminders)
                 .HasForeignKey(r => r.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // 间隔重复配置
+            modelBuilder.Entity<SpacedRepetitionItemEntity>()
+                .HasKey(s => s.Id);
+
+            modelBuilder.Entity<SpacedRepetitionItemEntity>()
+                .HasIndex(s => s.UserId);
+
+            modelBuilder.Entity<SpacedRepetitionItemEntity>()
+                .HasIndex(s => s.NextReviewDate);
+
+            modelBuilder.Entity<SpacedRepetitionItemEntity>()
+                .HasIndex(s => s.IsActive);
+
+            // 会话状态配置
+            modelBuilder.Entity<AppSessionEntity>()
+                .HasKey(a => a.SessionKey);
+
+            modelBuilder.Entity<AppSessionEntity>()
+                .HasIndex(a => a.LastAccessTime);
         }
 
         /// <summary>

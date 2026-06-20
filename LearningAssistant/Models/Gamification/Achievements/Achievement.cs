@@ -1,4 +1,3 @@
-
 namespace LearningAssistant.Models.User
 {
     public class Achievement
@@ -157,4 +156,3 @@ namespace LearningAssistant.Models.User
         }
     }
 }
-

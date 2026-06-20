@@ -79,69 +79,6 @@ namespace LearningAssistant.Services.Learning
             _logger?.LogDebug("记录活动: {UserId}, 类型: {ActivityType}, 分类: {Category}, 数量: {Count}", userId, activityType, subCategory, count);
         }
 
-        public DailyLearningStats GetDailyStats(string userId, DateTime date)
-        {
-            var stats = new DailyLearningStats { Date = date };
-
-            if (_userAnalytics.TryGetValue(userId, out var userData) && 
-                userData.DailyRecords.TryGetValue(date, out var record))
-            {
-                stats.ItemsLearned = record.ItemsLearned;
-                stats.TotalTimeMinutes = record.TimeSpentMinutes;
-                stats.AccuracyRate = record.CorrectCount + record.WrongCount > 0 
-                    ? (double)record.CorrectCount / (record.CorrectCount + record.WrongCount) * 100 
-                    : 0;
-            }
-
-            return stats;
-        }
-
-        public WeeklyLearningStats GetWeeklyStats(string userId, DateTime weekStart)
-        {
-            var weeklyStats = new WeeklyLearningStats { WeekStart = weekStart };
-
-            if (_userAnalytics.TryGetValue(userId, out var userData))
-            {
-                for (int i = 0; i < 7; i++)
-                {
-                    var date = weekStart.AddDays(i);
-                    var dailyStats = GetDailyStats(userId, date);
-                    weeklyStats.DailyStats.Add(dailyStats);
-                    weeklyStats.TotalItemsLearned += dailyStats.ItemsLearned;
-                    weeklyStats.TotalTimeMinutes += dailyStats.TotalTimeMinutes;
-                }
-
-                weeklyStats.AverageAccuracyRate = weeklyStats.DailyStats.Any() 
-                    ? weeklyStats.DailyStats.Average(s => s.AccuracyRate) 
-                    : 0;
-            }
-
-            return weeklyStats;
-        }
-
-        public List<DailyProgressPoint> GetProgressTrend(string userId, int days = 7)
-        {
-            var trend = new List<DailyProgressPoint>();
-            
-            if (_userAnalytics.TryGetValue(userId, out var userData))
-            {
-                for (int i = days - 1; i >= 0; i--)
-                {
-                    var date = DateTime.Today.AddDays(-i);
-                    var record = userData.DailyRecords.TryGetValue(date, out var r) ? r : new DailyRecord();
-                    
-                    trend.Add(new DailyProgressPoint
-                    {
-                        Date = date,
-                        ItemsLearned = record.ItemsLearned,
-                        TimeMinutes = record.TimeSpentMinutes
-                    });
-                }
-            }
-
-            return trend;
-        }
-
         public Dictionary<string, int> GetCategoryStats(string userId)
         {
             if (_userAnalytics.TryGetValue(userId, out var userData))
@@ -151,7 +88,7 @@ namespace LearningAssistant.Services.Learning
             return new Dictionary<string, int>();
         }
 
-        public int GetLearningStreak(string userId)
+        public int GetStudyStreak(string userId)
         {
             if (!_userAnalytics.TryGetValue(userId, out var userData))
                 return 0;
@@ -317,11 +254,6 @@ namespace LearningAssistant.Services.Learning
             }
 
             return trend;
-        }
-
-        public int GetStudyStreak(string userId)
-        {
-            return GetLearningStreak(userId);
         }
         
         private DateTime GetFirstDateOfWeek(int year, int weekNumber)

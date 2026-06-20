@@ -172,4 +172,57 @@ namespace LearningAssistant.Data.Database
         // 导航属性
         public UserProfileEntity? UserProfile { get; set; }
     }
+
+    /// <summary>
+    /// 间隔重复复习项实体
+    /// </summary>
+    public class SpacedRepetitionItemEntity
+    {
+        [Key]
+        public Guid Id { get; set; }
+
+        [Required]
+        [MaxLength(100)]
+        public string UserId { get; set; } = string.Empty;
+
+        [Required]
+        public string Content { get; set; } = string.Empty;
+
+        public string Answer { get; set; } = string.Empty;
+
+        public int Interval { get; set; } = 0;
+
+        public int Repetitions { get; set; } = 0;
+
+        public double EFactor { get; set; } = 2.5;
+
+        public DateTime NextReviewDate { get; set; } = DateTime.Now;
+
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+
+        public DateTime UpdatedAt { get; set; } = DateTime.Now;
+
+        public int WrongCount { get; set; } = 0;
+
+        public int CorrectCount { get; set; } = 0;
+
+        public bool IsActive { get; set; } = true;
+    }
+
+    /// <summary>
+    /// 应用会话状态实体
+    /// </summary>
+    public class AppSessionEntity
+    {
+        [Key]
+        [MaxLength(100)]
+        public string SessionKey { get; set; } = string.Empty;
+
+        [Required]
+        public string SessionDataJson { get; set; } = string.Empty;
+
+        public DateTime LastAccessTime { get; set; } = DateTime.Now;
+
+        public DateTime UpdatedAt { get; set; } = DateTime.Now;
+    }
 }

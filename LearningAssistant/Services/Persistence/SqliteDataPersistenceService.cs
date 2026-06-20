@@ -162,7 +162,12 @@ namespace LearningAssistant.Services.Persistence
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Failed to save user profile for {UserId}", profile.UserId);
-                throw new PersistenceException($"保存用户配置失败: {profile.UserId}", ex);
+                var errorMsg = $"保存用户配置失败: {profile.UserId}";
+                if (ex.InnerException != null)
+                {
+                    errorMsg += $" - {ex.InnerException.Message}";
+                }
+                throw new PersistenceException(errorMsg, ex);
             }
         }
 
@@ -193,8 +198,28 @@ namespace LearningAssistant.Services.Persistence
         {
             try
             {
-                var path = AppPaths.LastSessionPath;
-                Common.JsonHelper.SaveToFile(path, session);
+                using var db = _dbContextFactory.CreateDbContext();
+                var sessionJson = Common.JsonHelper.Serialize(session);
+                var entity = db.AppSessions.FirstOrDefault(s => s.SessionKey == "app_session");
+
+                if (entity != null)
+                {
+                    entity.SessionDataJson = sessionJson;
+                    entity.LastAccessTime = DateTime.Now;
+                    entity.UpdatedAt = DateTime.Now;
+                }
+                else
+                {
+                    db.AppSessions.Add(new AppSessionEntity
+                    {
+                        SessionKey = "app_session",
+                        SessionDataJson = sessionJson,
+                        LastAccessTime = DateTime.Now,
+                        UpdatedAt = DateTime.Now
+                    });
+                }
+
+                db.SaveChanges();
             }
             catch (Exception ex)
             {
@@ -206,14 +231,39 @@ namespace LearningAssistant.Services.Persistence
         {
             try
             {
+                using var db = _dbContextFactory.CreateDbContext();
+                var entity = db.AppSessions.FirstOrDefault(s => s.SessionKey == "app_session");
+
+                if (entity != null)
+                {
+                    var session = Common.JsonHelper.Deserialize<SessionData>(entity.SessionDataJson);
+                    if (session != null)
+                    {
+                        entity.LastAccessTime = DateTime.Now;
+                        db.SaveChanges();
+                        return session;
+                    }
+                }
+
+                // 尝试从旧的 JSON 文件迁移
                 var path = AppPaths.LastSessionPath;
-                return Common.JsonHelper.LoadFromFile<SessionData>(path) ?? new SessionData();
+                if (File.Exists(path))
+                {
+                    var oldSession = Common.JsonHelper.LoadFromFile<SessionData>(path);
+                    if (oldSession != null)
+                    {
+                        SaveSession(oldSession);
+                        _logger?.LogInformation("Migrated session data from JSON to SQLite");
+                        return oldSession;
+                    }
+                }
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Failed to load session");
-                return new SessionData();
             }
+
+            return new SessionData();
         }
 
         public T? LoadJsonFile<T>(string filePath)

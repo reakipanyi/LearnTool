@@ -2,6 +2,7 @@ using LearningAssistant.Common;
 using LearningAssistant.Forms;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Migration;
+using LearningAssistant.Services.Persistence;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -61,6 +62,11 @@ namespace LearningAssistant
                 ServiceProvider = BuildServiceProvider();
                 logger = ServiceProvider.GetRequiredService<ILogger<MainForm>>();
                 logger.LogInformation("服务容器初始化成功");
+
+                // 初始化数据库（确保表已创建）
+                var persistenceService = ServiceProvider.GetService<IDataPersistenceService>();
+                persistenceService?.Initialize();
+                logger.LogInformation("数据库初始化完成");
 
                 // 执行数据迁移（从 JSON 到 SQLite）
                 var migrationService = ServiceProvider.GetService<DataMigrationService>();

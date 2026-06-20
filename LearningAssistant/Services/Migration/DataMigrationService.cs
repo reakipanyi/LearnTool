@@ -1,8 +1,10 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
+using LearningAssistant.Common;
 using LearningAssistant.Data.Database;
 using LearningAssistant.Models.User;
+using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Services.Migration
 {
@@ -11,18 +13,15 @@ namespace LearningAssistant.Services.Migration
     /// </summary>
     public class DataMigrationService
     {
-        private readonly IDataPersistenceService _jsonDataService;
         private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
         private readonly ILogger<DataMigrationService>? _logger;
 
         public event EventHandler<MigrationProgressEventArgs>? ProgressChanged;
 
         public DataMigrationService(
-            IDataPersistenceService jsonDataService,
             IDbContextFactory<AppDbContext> dbContextFactory,
             ILogger<DataMigrationService>? logger = null)
         {
-            _jsonDataService = jsonDataService ?? throw new ArgumentNullException(nameof(jsonDataService));
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _logger = logger;
         }
@@ -34,26 +33,48 @@ namespace LearningAssistant.Services.Migration
         {
             try
             {
-                // 检查是否存在 JSON 用户数据
-                var userIds = _jsonDataService.GetUserIds();
-                if (userIds.Count == 0)
-                    return false;
+                var needsMigration = false;
 
-                // 检查是否有未迁移的用户
-                using var db = _dbContextFactory.CreateDbContext();
-                var existingUserIds = new HashSet<string>(db.UserProfiles.Select(u => u.UserId));
-                
-                // 检查是否有任何 JSON 用户不在 SQLite 中
-                foreach (var userId in userIds)
+                // 检查用户数据
+                if (JsonUserIds.Count > 0)
                 {
-                    if (!existingUserIds.Contains(userId))
+                    using var db = _dbContextFactory.CreateDbContext();
+                    var existingUserIds = new HashSet<string>(db.UserProfiles.Select(u => u.UserId));
+
+                    foreach (var userId in JsonUserIds)
                     {
-                        _logger?.LogInformation("Found user {UserId} not in SQLite, migration needed", userId);
-                        return true;
+                        if (!existingUserIds.Contains(userId))
+                        {
+                            _logger?.LogInformation("Found user {UserId} not in SQLite, migration needed", userId);
+                            needsMigration = true;
+                            break;
+                        }
                     }
                 }
-                
-                return false;
+
+                // 检查间隔重复数据
+                if (!needsMigration && File.Exists(SpacedRepetitionJsonPath))
+                {
+                    using var db = _dbContextFactory.CreateDbContext();
+                    if (!db.SpacedRepetitionItems.Any())
+                    {
+                        _logger?.LogInformation("Spaced repetition data needs migration");
+                        needsMigration = true;
+                    }
+                }
+
+                // 检查会话数据
+                if (!needsMigration && File.Exists(SessionJsonPath))
+                {
+                    using var db = _dbContextFactory.CreateDbContext();
+                    if (!db.AppSessions.Any(s => s.SessionKey == "app_session"))
+                    {
+                        _logger?.LogInformation("Session data needs migration");
+                        needsMigration = true;
+                    }
+                }
+
+                return needsMigration;
             }
             catch (Exception ex)
             {
@@ -61,6 +82,39 @@ namespace LearningAssistant.Services.Migration
                 return false;
             }
         }
+
+        private List<string>? _jsonUserIds;
+        private List<string> JsonUserIds
+        {
+            get
+            {
+                if (_jsonUserIds == null)
+                {
+                    try
+                    {
+                        var dir = AppPaths.UsersDir;
+                        if (Directory.Exists(dir))
+                        {
+                            _jsonUserIds = Directory.EnumerateFiles(dir, "*.json")
+                                .Select(f => Path.GetFileNameWithoutExtension(f))
+                                .ToList();
+                        }
+                        else
+                        {
+                            _jsonUserIds = new List<string>();
+                        }
+                    }
+                    catch
+                    {
+                        _jsonUserIds = new List<string>();
+                    }
+                }
+                return _jsonUserIds;
+            }
+        }
+
+        private string SpacedRepetitionJsonPath => Path.Combine(AppPaths.DataDir, "spaced_repetition.json");
+        private string SessionJsonPath => AppPaths.LastSessionPath;
 
         /// <summary>
         /// 执行迁移
@@ -73,16 +127,16 @@ namespace LearningAssistant.Services.Migration
                 _logger?.LogInformation("Starting data migration...");
                 ReportProgress(0, "开始迁移...");
 
-                var userIds = _jsonDataService.GetUserIds();
+                // 1. 迁移用户数据
+                var userIds = JsonUserIds;
                 result.TotalUsers = userIds.Count;
 
                 for (int i = 0; i < userIds.Count; i++)
                 {
                     var userId = userIds[i];
-                    // 安全计算进度百分比，避免除以零
-                    var progress = result.TotalUsers > 0 ? (i + 1) * 100 / result.TotalUsers : 100;
+                    var progress = result.TotalUsers > 0 ? (i + 1) * 60 / result.TotalUsers : 60;
                     ReportProgress(progress, $"正在迁移用户: {userId}");
-                    
+
                     try
                     {
                         if (MigrateUser(userId))
@@ -102,9 +156,41 @@ namespace LearningAssistant.Services.Migration
                     }
                 }
 
+                // 2. 迁移间隔重复数据
+                ReportProgress(70, "正在迁移间隔重复数据...");
+                try
+                {
+                    if (MigrateSpacedRepetitionData())
+                    {
+                        result.SpacedRepetitionMigrated = true;
+                        _logger?.LogInformation("Spaced repetition data migrated successfully");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Failed to migrate spaced repetition data");
+                    result.Errors.Add($"迁移间隔重复数据失败: {ex.Message}");
+                }
+
+                // 3. 迁移会话数据
+                ReportProgress(90, "正在迁移会话数据...");
+                try
+                {
+                    if (MigrateSessionData())
+                    {
+                        result.SessionMigrated = true;
+                        _logger?.LogInformation("Session data migrated successfully");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Failed to migrate session data");
+                    result.Errors.Add($"迁移会话数据失败: {ex.Message}");
+                }
+
                 ReportProgress(100, "迁移完成!");
                 result.Success = result.FailedMigrations == 0;
-                _logger?.LogInformation("Migration completed: {SuccessCount} successful, {FailedCount} failed", 
+                _logger?.LogInformation("Migration completed: {SuccessCount} successful, {FailedCount} failed",
                     result.SuccessfulMigrations, result.FailedMigrations);
             }
             catch (Exception ex)
@@ -123,29 +209,25 @@ namespace LearningAssistant.Services.Migration
         private bool MigrateUser(string userId)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(userId, nameof(userId));
-            
+
             using var db = _dbContextFactory.CreateDbContext();
-            
-            // 检查用户是否已存在
+
             if (db.UserProfiles.Any(u => u.UserId == userId))
             {
                 _logger?.LogInformation("User {UserId} already exists, skipping", userId);
-                return true; // 视为成功
+                return true;
             }
 
-            // 从 JSON 加载用户
-            var profile = _jsonDataService.LoadUserProfile(userId);
+            var profile = LoadUserProfileFromJson(userId);
             if (profile == null)
             {
                 _logger?.LogWarning("Failed to load user {UserId} from JSON", userId);
                 return false;
             }
 
-            // 保存到 SQLite
             var userEntity = profile.ToEntity();
             db.UserProfiles.Add(userEntity);
 
-            // 添加分类进度
             foreach (var categoryProgress in profile.LearningProgress.CategoryProgresses.Values)
             {
                 userEntity.CategoryProgresses.Add(categoryProgress.ToEntity(userId));
@@ -154,6 +236,106 @@ namespace LearningAssistant.Services.Migration
             db.SaveChanges();
             _logger?.LogInformation("Successfully migrated user {UserId}", userId);
             return true;
+        }
+
+        /// <summary>
+        /// 迁移间隔重复数据
+        /// </summary>
+        private bool MigrateSpacedRepetitionData()
+        {
+            if (!File.Exists(SpacedRepetitionJsonPath))
+            {
+                _logger?.LogInformation("No spaced repetition JSON file found, skipping");
+                return false;
+            }
+
+            using var db = _dbContextFactory.CreateDbContext();
+
+            if (db.SpacedRepetitionItems.Any())
+            {
+                _logger?.LogInformation("Spaced repetition data already exists, skipping");
+                return true;
+            }
+
+            var json = File.ReadAllText(SpacedRepetitionJsonPath);
+            var userItems = Common.JsonHelper.Deserialize<Dictionary<string, List<ReviewItem>>>(json);
+
+            if (userItems == null || userItems.Count == 0)
+            {
+                _logger?.LogInformation("No spaced repetition data to migrate");
+                return false;
+            }
+
+            var totalItems = 0;
+            foreach (var kvp in userItems)
+            {
+                foreach (var item in kvp.Value)
+                {
+                    db.SpacedRepetitionItems.Add(item.ToEntity());
+                    totalItems++;
+                }
+            }
+
+            db.SaveChanges();
+            _logger?.LogInformation("Migrated {Count} spaced repetition items", totalItems);
+            return true;
+        }
+
+        /// <summary>
+        /// 迁移会话数据
+        /// </summary>
+        private bool MigrateSessionData()
+        {
+            if (!File.Exists(SessionJsonPath))
+            {
+                _logger?.LogInformation("No session JSON file found, skipping");
+                return false;
+            }
+
+            using var db = _dbContextFactory.CreateDbContext();
+
+            if (db.AppSessions.Any(s => s.SessionKey == "app_session"))
+            {
+                _logger?.LogInformation("Session data already exists, skipping");
+                return true;
+            }
+
+            var session = Common.JsonHelper.LoadFromFile<SessionData>(SessionJsonPath);
+            if (session == null)
+            {
+                _logger?.LogWarning("Failed to load session data from JSON");
+                return false;
+            }
+
+            var sessionJson = Common.JsonHelper.Serialize(session);
+            db.AppSessions.Add(new AppSessionEntity
+            {
+                SessionKey = "app_session",
+                SessionDataJson = sessionJson,
+                LastAccessTime = DateTime.Now,
+                UpdatedAt = DateTime.Now
+            });
+
+            db.SaveChanges();
+            _logger?.LogInformation("Session data migrated successfully");
+            return true;
+        }
+
+        /// <summary>
+        /// 从 JSON 文件加载用户配置
+        /// </summary>
+        private UserProfile? LoadUserProfileFromJson(string userId)
+        {
+            try
+            {
+                var path = AppPaths.GetUserProgressPath(userId);
+                return Common.JsonHelper.LoadFromFile<UserProfile>(path);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to load user profile from JSON: {UserId}", userId);
+                return null;
+            }
         }
 
         private void ReportProgress(int percentage, string message)
@@ -184,6 +366,8 @@ namespace LearningAssistant.Services.Migration
         public int TotalUsers { get; set; }
         public int SuccessfulMigrations { get; set; }
         public int FailedMigrations { get; set; }
+        public bool SpacedRepetitionMigrated { get; set; }
+        public bool SessionMigrated { get; set; }
         public List<string> Errors { get; set; } = new List<string>();
     }
 }

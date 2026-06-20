@@ -90,27 +90,21 @@ namespace LearningAssistant.Services.Cloud
         /// <summary>
         /// 文件完整路径
         /// </summary>
-        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "文件路径不能为空")]
-        [System.ComponentModel.DataAnnotations.MaxLength(1000, ErrorMessage = "文件路径长度不能超过1000个字符")]
         public string Path { get; set; } = string.Empty;
 
         /// <summary>
         /// 文件名（不含路径）
         /// </summary>
-        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "文件名不能为空")]
-        [System.ComponentModel.DataAnnotations.MaxLength(500, ErrorMessage = "文件名长度不能超过500个字符")]
         public string Name { get; set; } = string.Empty;
 
         /// <summary>
         /// 文件大小（字节）
         /// </summary>
-        [System.ComponentModel.DataAnnotations.Range(0, long.MaxValue, ErrorMessage = "文件大小不能为负数")]
         public long Size { get; set; }
 
         /// <summary>
         /// 最后修改时间
         /// </summary>
-        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "修改时间不能为空")]
         public DateTime ModifiedTime { get; set; }
 
         /// <summary>

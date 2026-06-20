@@ -10,6 +10,11 @@ namespace LearningAssistant.Services.Persistence
     public interface IDataPersistenceService
     {
         /// <summary>
+        /// 初始化存储层（确保数据库/文件目录就绪）
+        /// </summary>
+        void Initialize();
+
+        /// <summary>
         /// 加载应用配置
         /// </summary>
         /// <returns>应用配置对象</returns>

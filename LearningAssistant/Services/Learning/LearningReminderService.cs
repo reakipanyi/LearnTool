@@ -44,11 +44,6 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        public void DeleteReminder(Guid reminderId)
-        {
-            RemoveReminder(reminderId);
-        }
-
         public void UpdateReminder(Reminder reminder)
         {
             lock (_lock)

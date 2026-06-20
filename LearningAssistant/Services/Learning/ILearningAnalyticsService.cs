@@ -20,27 +20,11 @@ namespace LearningAssistant.Services.Learning
         /// </summary>
         /// <param name="userId">用户ID</param>
         /// <param name="date">日期</param>
-        /// <returns>每日学习统计数据</returns>
-        DailyLearningStats GetDailyStats(string userId, DateTime date);
-
-        /// <summary>
-        /// 获取每日学习统计（为报告服务）
-        /// </summary>
-        /// <param name="userId">用户ID</param>
-        /// <param name="date">日期</param>
         /// <returns>每日统计数据</returns>
         DailyStatistics GetDailyStatistics(string userId, DateTime date);
 
         /// <summary>
         /// 获取每周学习统计
-        /// </summary>
-        /// <param name="userId">用户ID</param>
-        /// <param name="weekStart">周起始日期</param>
-        /// <returns>每周学习统计数据</returns>
-        WeeklyLearningStats GetWeeklyStats(string userId, DateTime weekStart);
-
-        /// <summary>
-        /// 获取每周学习统计（为报告服务）
         /// </summary>
         /// <param name="userId">用户ID</param>
         /// <param name="year">年份</param>
@@ -49,7 +33,7 @@ namespace LearningAssistant.Services.Learning
         WeeklyStatistics GetWeeklyStatistics(string userId, int year, int weekNumber);
 
         /// <summary>
-        /// 获取月度学习统计（为报告服务）
+        /// 获取月度学习统计
         /// </summary>
         /// <param name="userId">用户ID</param>
         /// <param name="year">年份</param>
@@ -58,15 +42,7 @@ namespace LearningAssistant.Services.Learning
         MonthlyStatistics GetMonthlyStatistics(string userId, int year, int month);
 
         /// <summary>
-        /// 获取学习进度趋势（过去N天）
-        /// </summary>
-        /// <param name="userId">用户ID</param>
-        /// <param name="days">天数，默认为7</param>
-        /// <returns>每日进度点列表</returns>
-        List<DailyProgressPoint> GetProgressTrend(string userId, int days = 7);
-
-        /// <summary>
-        /// 获取学习趋势（为报告服务）
+        /// 获取学习趋势（指定日期范围）
         /// </summary>
         /// <param name="userId">用户ID</param>
         /// <param name="startDate">开始日期</param>
@@ -86,13 +62,6 @@ namespace LearningAssistant.Services.Learning
         /// </summary>
         /// <param name="userId">用户ID</param>
         /// <returns>连续学习天数</returns>
-        int GetLearningStreak(string userId);
-
-        /// <summary>
-        /// 获取学习连续天数（为报告服务）
-        /// </summary>
-        /// <param name="userId">用户ID</param>
-        /// <returns>连续学习天数</returns>
         int GetStudyStreak(string userId);
 
         /// <summary>
@@ -107,85 +76,7 @@ namespace LearningAssistant.Services.Learning
     }
 
     /// <summary>
-    /// 每日学习统计 - 包含单日学习的关键指标
-    /// </summary>
-    public class DailyLearningStats
-    {
-        /// <summary>
-        /// 日期
-        /// </summary>
-        public DateTime Date { get; set; }
-
-        /// <summary>
-        /// 学习了多少项
-        /// </summary>
-        public int ItemsLearned { get; set; }
-
-        /// <summary>
-        /// 总学习时长（分钟）
-        /// </summary>
-        public int TotalTimeMinutes { get; set; }
-
-        /// <summary>
-        /// 正确率（百分比）
-        /// </summary>
-        public double AccuracyRate { get; set; }
-    }
-
-    /// <summary>
-    /// 每周学习统计 - 包含一周的学习汇总数据
-    /// </summary>
-    public class WeeklyLearningStats
-    {
-        /// <summary>
-        /// 周起始日期
-        /// </summary>
-        public DateTime WeekStart { get; set; }
-
-        /// <summary>
-        /// 本周总学习项数
-        /// </summary>
-        public int TotalItemsLearned { get; set; }
-
-        /// <summary>
-        /// 本周总学习时长（分钟）
-        /// </summary>
-        public int TotalTimeMinutes { get; set; }
-
-        /// <summary>
-        /// 本周平均正确率
-        /// </summary>
-        public double AverageAccuracyRate { get; set; }
-
-        /// <summary>
-        /// 每日统计数据列表
-        /// </summary>
-        public List<DailyLearningStats> DailyStats { get; set; } = new List<DailyLearningStats>();
-    }
-
-    /// <summary>
-    /// 每日进度点 - 用于绘制学习趋势图
-    /// </summary>
-    public class DailyProgressPoint
-    {
-        /// <summary>
-        /// 日期
-        /// </summary>
-        public DateTime Date { get; set; }
-
-        /// <summary>
-        /// 学习了多少项
-        /// </summary>
-        public int ItemsLearned { get; set; }
-
-        /// <summary>
-        /// 学习时长（分钟）
-        /// </summary>
-        public int TimeMinutes { get; set; }
-    }
-
-    /// <summary>
-    /// 每日学习统计（为报告服务）
+    /// 每日学习统计
     /// </summary>
     public class DailyStatistics
     {
@@ -231,7 +122,7 @@ namespace LearningAssistant.Services.Learning
     }
 
     /// <summary>
-    /// 每周学习统计（为报告服务）
+    /// 每周学习统计
     /// </summary>
     public class WeeklyStatistics
     {
@@ -272,7 +163,7 @@ namespace LearningAssistant.Services.Learning
     }
 
     /// <summary>
-    /// 月度学习统计（为报告服务）
+    /// 月度学习统计
     /// </summary>
     public class MonthlyStatistics
     {

@@ -92,11 +92,6 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        public void DeleteReminder(Guid reminderId)
-        {
-            RemoveReminder(reminderId);
-        }
-
         public void UpdateReminder(Reminder reminder)
         {
             ArgumentNullException.ThrowIfNull(reminder, nameof(reminder));

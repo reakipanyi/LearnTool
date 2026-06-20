@@ -1,0 +1,318 @@
+using LearningAssistant.Common;
+using LearningAssistant.Data.Database;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+
+namespace LearningAssistant.Services.Learning
+{
+    public class SqliteSpacedRepetitionService : ISpacedRepetitionService
+    {
+        private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
+        private readonly ILogger<SqliteSpacedRepetitionService>? _logger;
+
+        public SqliteSpacedRepetitionService(
+            IDbContextFactory<AppDbContext> dbContextFactory,
+            ILogger<SqliteSpacedRepetitionService>? logger = null)
+        {
+            _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
+            _logger = logger;
+        }
+
+        public ReviewResult CalculateNextReview(ReviewItem item, int quality)
+        {
+            var result = new ReviewResult();
+
+            if (quality < 0 || quality > 5)
+            {
+                result.ShouldReview = true;
+                result.Message = "质量评分无效，需要重新学习";
+                _logger?.LogWarning("无效的质量评分: {Quality}", quality);
+                return result;
+            }
+
+            double newEFactor = Math.Max(1.3, item.EFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
+
+            int newInterval;
+            int newRepetitions;
+
+            if (quality < 3)
+            {
+                newRepetitions = 0;
+                newInterval = 1;
+                result.Message = "需要重新学习";
+            }
+            else
+            {
+                if (item.Repetitions == 0)
+                {
+                    newInterval = 1;
+                }
+                else if (item.Repetitions == 1)
+                {
+                    newInterval = 6;
+                }
+                else
+                {
+                    newInterval = (int)Math.Round(item.Interval * newEFactor);
+                }
+
+                newRepetitions = item.Repetitions + 1;
+                result.Message = quality == 5 ? "完美！下次复习将在 {0} 天后" : "继续加油！下次复习将在 {0} 天后";
+            }
+
+            var nextReview = DateTime.Today.AddDays(newInterval);
+
+            result.ShouldReview = false;
+            result.NewInterval = newInterval;
+            result.NewRepetitions = newRepetitions;
+            result.NewEFactor = newEFactor;
+            result.NextReviewDate = nextReview;
+
+            item.Interval = newInterval;
+            item.Repetitions = newRepetitions;
+            item.EFactor = newEFactor;
+            item.NextReviewDate = nextReview;
+            item.UpdatedAt = DateTime.Now;
+
+            if (quality >= 3)
+            {
+                item.CorrectCount++;
+            }
+            else
+            {
+                item.WrongCount++;
+            }
+
+            UpdateItem(item);
+            _logger?.LogInformation("计算复习结果: 用户 {UserId}, 间隔 {Interval} 天, 重复次数 {Repetitions}, EF {EFactor}",
+                item.UserId, newInterval, newRepetitions, newEFactor);
+
+            return result;
+        }
+
+        public ReviewItem CreateNewItem(string userId, string content, string answer = "")
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+                throw new ArgumentException("userId cannot be null or empty", nameof(userId));
+
+            var item = new ReviewItem
+            {
+                UserId = userId,
+                Content = content,
+                Answer = answer,
+                Interval = 0,
+                Repetitions = 0,
+                EFactor = 2.5,
+                NextReviewDate = DateTime.Today,
+                CreatedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now
+            };
+
+            UpdateItem(item);
+
+            var logContent = content.Length > 30 ? content.Substring(0, 30) + "..." : content;
+            _logger?.LogInformation("创建新复习项: 用户 {UserId}, 内容 {Content}", userId, logContent);
+            return item;
+        }
+
+        public List<ReviewItem> GetItemsDueForReview(string userId, DateTime? date = null)
+        {
+            var targetDate = date ?? DateTime.Today;
+
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var dueItems = db.SpacedRepetitionItems
+                    .Where(i => i.UserId == userId && i.IsActive && i.NextReviewDate <= targetDate.Date)
+                    .OrderBy(i => i.NextReviewDate)
+                    .Select(i => i.ToModel())
+                    .ToList();
+
+                _logger?.LogDebug("获取待复习项: 用户 {UserId}, 数量 {Count}", userId, dueItems.Count);
+                return dueItems;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "获取待复习项失败: 用户 {UserId}", userId);
+                return new List<ReviewItem>();
+            }
+        }
+
+        public void UpdateItem(ReviewItem item)
+        {
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var entity = db.SpacedRepetitionItems.FirstOrDefault(i => i.Id == item.Id);
+
+                if (entity != null)
+                {
+                    entity.UpdateFromModel(item);
+                }
+                else
+                {
+                    db.SpacedRepetitionItems.Add(item.ToEntity());
+                }
+
+                db.SaveChanges();
+                _logger?.LogDebug("更新复习项: {Id}", item.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "更新复习项失败: {Id}", item.Id);
+            }
+        }
+
+        public List<ReviewItem> GetAllItems(string userId)
+        {
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var items = db.SpacedRepetitionItems
+                    .Where(i => i.UserId == userId && i.IsActive)
+                    .Select(i => i.ToModel())
+                    .ToList();
+
+                return items;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "获取所有复习项失败: 用户 {UserId}", userId);
+                return new List<ReviewItem>();
+            }
+        }
+
+        public void DeleteItem(Guid itemId)
+        {
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var entity = db.SpacedRepetitionItems.FirstOrDefault(i => i.Id == itemId);
+
+                if (entity != null)
+                {
+                    entity.IsActive = false;
+                    entity.UpdatedAt = DateTime.Now;
+                    db.SaveChanges();
+                    _logger?.LogInformation("标记复习项为删除: {Id}", itemId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "删除复习项失败: {Id}", itemId);
+            }
+        }
+
+        public int GetTodayReviewCount(string userId)
+        {
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var today = DateTime.Today;
+                var count = db.SpacedRepetitionItems
+                    .Count(i => i.UserId == userId &&
+                                i.IsActive &&
+                                i.NextReviewDate <= today &&
+                                i.UpdatedAt >= today &&
+                                i.CorrectCount > 0);
+
+                return count;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "获取今日复习数量失败: 用户 {UserId}", userId);
+                return 0;
+            }
+        }
+
+        public double CalculateRetentionRate(string userId)
+        {
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var activeItems = db.SpacedRepetitionItems
+                    .Where(i => i.UserId == userId && i.IsActive)
+                    .ToList();
+
+                if (activeItems.Count == 0)
+                {
+                    return 0;
+                }
+
+                var totalReviews = activeItems.Sum(i => i.CorrectCount + i.WrongCount);
+                if (totalReviews == 0)
+                {
+                    return 0;
+                }
+
+                var correctReviews = activeItems.Sum(i => i.CorrectCount);
+                var retentionRate = (double)correctReviews / totalReviews * 100;
+
+                _logger?.LogDebug("计算保持率: 用户 {UserId}, 保持率 {Rate}%", userId, retentionRate);
+                return retentionRate;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "计算保持率失败: 用户 {UserId}", userId);
+                return 0;
+            }
+        }
+    }
+
+    public static class SpacedRepetitionMappingExtensions
+    {
+        public static SpacedRepetitionItemEntity ToEntity(this ReviewItem item)
+        {
+            return new SpacedRepetitionItemEntity
+            {
+                Id = item.Id,
+                UserId = item.UserId,
+                Content = item.Content,
+                Answer = item.Answer,
+                Interval = item.Interval,
+                Repetitions = item.Repetitions,
+                EFactor = item.EFactor,
+                NextReviewDate = item.NextReviewDate,
+                CreatedAt = item.CreatedAt,
+                UpdatedAt = item.UpdatedAt,
+                WrongCount = item.WrongCount,
+                CorrectCount = item.CorrectCount,
+                IsActive = item.IsActive
+            };
+        }
+
+        public static ReviewItem ToModel(this SpacedRepetitionItemEntity entity)
+        {
+            return new ReviewItem
+            {
+                Id = entity.Id,
+                UserId = entity.UserId,
+                Content = entity.Content,
+                Answer = entity.Answer,
+                Interval = entity.Interval,
+                Repetitions = entity.Repetitions,
+                EFactor = entity.EFactor,
+                NextReviewDate = entity.NextReviewDate,
+                CreatedAt = entity.CreatedAt,
+                UpdatedAt = entity.UpdatedAt,
+                WrongCount = entity.WrongCount,
+                CorrectCount = entity.CorrectCount,
+                IsActive = entity.IsActive
+            };
+        }
+
+        public static void UpdateFromModel(this SpacedRepetitionItemEntity entity, ReviewItem item)
+        {
+            entity.Content = item.Content;
+            entity.Answer = item.Answer;
+            entity.Interval = item.Interval;
+            entity.Repetitions = item.Repetitions;
+            entity.EFactor = item.EFactor;
+            entity.NextReviewDate = item.NextReviewDate;
+            entity.UpdatedAt = item.UpdatedAt;
+            entity.WrongCount = item.WrongCount;
+            entity.CorrectCount = item.CorrectCount;
+            entity.IsActive = item.IsActive;
+        }
+    }
+}

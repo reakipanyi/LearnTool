@@ -19,12 +19,6 @@ namespace LearningAssistant.Services.Learning
         void RemoveReminder(Guid reminderId);
 
         /// <summary>
-        /// 删除提醒（RemoveReminder的别名）
-        /// </summary>
-        /// <param name="reminderId">提醒唯一ID</param>
-        void DeleteReminder(Guid reminderId);
-
-        /// <summary>
         /// 更新提醒
         /// </summary>
         /// <param name="reminder">更新后的提醒对象</param>

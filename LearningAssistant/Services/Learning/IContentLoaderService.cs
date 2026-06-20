@@ -13,7 +13,7 @@ namespace LearningAssistant.Services.Learning
         /// <param name="subCategory">子类别（如CET4, CET6, GRE）</param>
         /// <param name="wordBankFile">词库文件路径，为空则使用默认</param>
         /// <returns>学习项对象列表</returns>
-        List<object> LoadItems(string subCategory, string wordBankFile = "");
+        List<LearningItem> LoadItems(string subCategory, string wordBankFile = "");
 
         /// <summary>
         /// 保存学习项列表到文件
@@ -21,7 +21,7 @@ namespace LearningAssistant.Services.Learning
         /// <param name="subCategory">子类别</param>
         /// <param name="items">要保存的学习项列表</param>
         /// <param name="wordBankFile">词库文件路径，为空则使用默认</param>
-        void SaveItems(string subCategory, List<object> items, string wordBankFile = "");
+        void SaveItems(string subCategory, List<LearningItem> items, string wordBankFile = "");
 
         /// <summary>
         /// 获取指定语言的所有子类别列表

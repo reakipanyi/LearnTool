@@ -1,7 +1,7 @@
 
 namespace LearningAssistant.Common
 {
-    public enum LanguageType
+    public enum SubjectType
     {
         Chinese,
         English
@@ -34,12 +34,12 @@ namespace LearningAssistant.Common
 
     public static class EnumExtensions
     {
-        public static string ToDisplayString(this LanguageType language)
+        public static string ToDisplayString(this SubjectType language)
         {
             return language switch
             {
-                LanguageType.Chinese => "中文",
-                LanguageType.English => "英语",
+                SubjectType.Chinese => "中文",
+                SubjectType.English => "英语",
                 _ => language.ToString()
             };
         }
@@ -81,12 +81,12 @@ namespace LearningAssistant.Common
             };
         }
 
-        public static LanguageType ToLanguageType(this string displayString)
+        public static SubjectType ToLanguageType(this string displayString)
         {
             return displayString switch
             {
-                "中文" => LanguageType.Chinese,
-                "英语" => LanguageType.English,
+                "中文" => SubjectType.Chinese,
+                "英语" => SubjectType.English,
                 _ => throw new ArgumentOutOfRangeException(nameof(displayString))
             };
         }

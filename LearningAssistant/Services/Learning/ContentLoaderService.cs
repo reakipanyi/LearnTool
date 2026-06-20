@@ -87,7 +87,7 @@ namespace LearningAssistant.Services.Learning
             _logger = logger;
         }
 
-        public List<object> LoadItems(string subCategory, string wordBankFile = "")
+        public List<LearningItem> LoadItems(string subCategory, string wordBankFile = "")
         {
             try
             {
@@ -96,19 +96,18 @@ namespace LearningAssistant.Services.Learning
                 if (!IsPathSafe(filePath))
                 {
                     _logger.LogWarning("Path traversal detected: {FilePath}", filePath);
-                    return new List<object>();
+                    return new List<LearningItem>();
                 }
                 
                 if (!File.Exists(filePath))
                 {
                     _logger.LogWarning("File not found: {FilePath}", filePath);
-                    return new List<object>();
+                    return new List<LearningItem>();
                 }
 
                 var itemType = GetItemType(subCategory);
                 var json = File.ReadAllText(filePath);
 
-                // 直接反序列化为具体类型列表，而不是 List<object>
                 var listType = typeof(List<>).MakeGenericType(itemType);
                 var items = System.Text.Json.JsonSerializer.Deserialize(json, listType,
                     new System.Text.Json.JsonSerializerOptions
@@ -120,19 +119,19 @@ namespace LearningAssistant.Services.Learning
                 if (items == null)
                 {
                     _logger.LogWarning("No items loaded from file: {FilePath}", filePath);
-                    return new List<object>();
+                    return new List<LearningItem>();
                 }
 
-                return ((System.Collections.IList)items).Cast<object>().ToList();
+                return ((System.Collections.IList)items).Cast<LearningItem>().ToList();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load items for subCategory: {SubCategory}", subCategory);
-                return new List<object>();
+                return new List<LearningItem>();
             }
         }
 
-        public void SaveItems(string subCategory, List<object> items, string wordBankFile = "")
+        public void SaveItems(string subCategory, List<LearningItem> items, string wordBankFile = "")
         {
             try
             {

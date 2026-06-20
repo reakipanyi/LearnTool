@@ -467,7 +467,7 @@ namespace LearningAssistant.Presenters
         /// <param name="items">对象列表</param>
         /// <param name="category">类别名称</param>
         /// <returns>转换后的DataTable</returns>
-        private DataTable ConvertToDataTable(List<object> items, string category)
+        private DataTable ConvertToDataTable(List<LearningItem> items, string category)
         {
             var table = new DataTable();
 
@@ -569,22 +569,14 @@ namespace LearningAssistant.Presenters
 
             foreach (var newItem in items)
             {
-                if (newItem is LearningItem newLearningItem)
-                {
-                    var newMainContent = newLearningItem.GetMainContent().Trim().ToLower();
-                    var existingIndex = itemsOld.FindIndex(item =>
-                        item is LearningItem existingItem &&
-                        existingItem.GetMainContent().Trim().ToLower() == newMainContent);
+                var newMainContent = newItem.GetMainContent().Trim().ToLower();
+                var existingIndex = itemsOld.FindIndex(item =>
+                    item.GetMainContent().Trim().ToLower() == newMainContent);
 
-                    if (existingIndex >= 0)
-                    {
-                        itemsOld[existingIndex] = newItem;
-                        _logger.LogInformation("覆盖重复项: {MainContent}", newMainContent);
-                    }
-                    else
-                    {
-                        itemsOld.Add(newItem);
-                    }
+                if (existingIndex >= 0)
+                {
+                    itemsOld[existingIndex] = newItem;
+                    _logger.LogInformation("覆盖重复项: {MainContent}", newMainContent);
                 }
                 else
                 {
@@ -602,9 +594,9 @@ namespace LearningAssistant.Presenters
         /// <param name="json">JSON字符串</param>
         /// <param name="category">类别名称，用于确定对象类型</param>
         /// <returns>解析后的对象列表</returns>
-        private List<object> ParseJsonToItems(string json, string category)
+        private List<LearningItem> ParseJsonToItems(string json, string category)
         {
-            var items = new List<object>();
+            var items = new List<LearningItem>();
             var itemType = _contentLoaderService.GetItemType(category);
 
             if (!json.TrimStart().StartsWith("[")) json = $"[{json}]";
@@ -616,7 +608,7 @@ namespace LearningAssistant.Presenters
                     PropertyNameCaseInsensitive = true,
                     Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
                 });
-            var importedItems = ((System.Collections.IList)data).Cast<object>().ToList();
+            var importedItems = ((System.Collections.IList)data).Cast<LearningItem>().ToList();
             foreach (var item in importedItems)
             {
                 items.Add(item);
@@ -631,7 +623,7 @@ namespace LearningAssistant.Presenters
         /// <param name="table">DataTable数据源</param>
         /// <param name="category">类别名称，用于确定对象类型</param>
         /// <returns>转换后的对象列表</returns>
-        private List<object> ConvertDataTableToItems(DataTable table, string category)
+        private List<LearningItem> ConvertDataTableToItems(DataTable table, string category)
         {
             var itemType = _contentLoaderService.GetItemType(category);
             return table.Rows.Cast<DataRow>().Select(row =>
@@ -643,7 +635,7 @@ namespace LearningAssistant.Presenters
                     jsonObj[col.ColumnName] = TryParseAsList(value) ?? value ?? "";
                 }
                 return jsonObj.ToObject(itemType);
-            }).Where(item => item != null).Cast<object>().ToList();
+            }).Where(item => item != null).Cast<LearningItem>().ToList();
         }
 
         /// <summary>
@@ -734,7 +726,7 @@ namespace LearningAssistant.Presenters
             try
             {
                 var content = File.ReadAllText(dialog.FileName);
-                var importedItems = JsonConvert.DeserializeObject<List<object>>(content,
+                var importedItems = JsonConvert.DeserializeObject<List<LearningItem>>(content,
                     new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.Auto });
 
                 if (importedItems?.Count > 0)
@@ -743,22 +735,14 @@ namespace LearningAssistant.Presenters
 
                     foreach (var newItem in importedItems)
                     {
-                        if (newItem is LearningItem newLearningItem)
-                        {
-                            var newMainContent = newLearningItem.GetMainContent().Trim().ToLower();
-                            var existingIndex = existingItems.FindIndex(item =>
-                                item is LearningItem existingItem &&
-                                existingItem.GetMainContent().Trim().ToLower() == newMainContent);
+                        var newMainContent = newItem.GetMainContent().Trim().ToLower();
+                        var existingIndex = existingItems.FindIndex(item =>
+                            item.GetMainContent().Trim().ToLower() == newMainContent);
 
-                            if (existingIndex >= 0)
-                            {
-                                existingItems[existingIndex] = newItem;
-                                _logger.LogInformation("导入时覆盖重复项: {MainContent}", newMainContent);
-                            }
-                            else
-                            {
-                                existingItems.Add(newItem);
-                            }
+                        if (existingIndex >= 0)
+                        {
+                            existingItems[existingIndex] = newItem;
+                            _logger.LogInformation("导入时覆盖重复项: {MainContent}", newMainContent);
                         }
                         else
                         {

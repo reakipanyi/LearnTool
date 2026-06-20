@@ -131,7 +131,7 @@ namespace LearningAssistant.Services.Learning
 
         public void RemoveReminder(Guid reminderId)
         {
-            _reminderService.DeleteReminder(reminderId);
+            _reminderService.RemoveReminder(reminderId);
             _activeReminders.RemoveAll(r => r.Id == reminderId);
 
             _logger?.LogInformation("删除提醒: {Id}", reminderId);

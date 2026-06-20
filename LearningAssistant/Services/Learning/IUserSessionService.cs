@@ -40,17 +40,44 @@ namespace LearningAssistant.Services.Learning
         /// <summary>
         /// 保存学习配置
         /// </summary>
-        /// <param name="language">学习语言</param>
-        /// <param name="subCategory">子类别</param>
-        /// <param name="mode">学习模式</param>
-        /// <param name="wordBankFile">词库文件</param>
-        /// <param name="sortOrder">排序方式</param>
-        void SaveLearningConfig(string language, string subCategory, string mode, string wordBankFile, string sortOrder);
+        /// <param name="config">学习配置</param>
+        void SaveLearningConfig(LearningConfig config);
 
         /// <summary>
         /// 加载学习配置
         /// </summary>
-        /// <returns>元组(语言, 子类别, 模式, 词库文件, 排序方式)</returns>
-        (string Language, string SubCategory, string Mode, string WordBankFile, string SortOrder) LoadLearningConfig();
+        /// <returns>学习配置对象</returns>
+        LearningConfig LoadLearningConfig();
+    }
+
+    /// <summary>
+    /// 学习配置 - 包含语言、子类别、模式等学习设置
+    /// </summary>
+    public class LearningConfig
+    {
+        /// <summary>
+        /// 学习语言
+        /// </summary>
+        public string Language { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 子类别（如 CET4, CET6）
+        /// </summary>
+        public string SubCategory { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 学习模式（Study/Test）
+        /// </summary>
+        public string Mode { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 词库文件路径
+        /// </summary>
+        public string WordBankFile { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 排序方式（Sequential/Random）
+        /// </summary>
+        public string SortOrder { get; set; } = string.Empty;
     }
 }

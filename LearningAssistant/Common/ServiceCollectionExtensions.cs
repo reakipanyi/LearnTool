@@ -70,7 +70,7 @@ namespace LearningAssistant.Common
         {
             services.AddSingleton<IEventBus, EventBus>();
             services.AddSingleton<IThemeService, ThemeService>();
-            services.AddSingleton<IDataPersistenceService, DataPersistenceService>();
+            services.AddSingleton<IDataPersistenceService, SqliteDataPersistenceService>();
             services.AddSingleton<ICacheService>(sp =>
             {
                 var cacheDir = GetCacheDirectorySafely();
@@ -164,7 +164,7 @@ namespace LearningAssistant.Common
             services.AddSingleton<ILearningReminderService, LearningReminderService>();
             services.AddSingleton<IPendingContentService, PendingContentService>();
             services.AddSingleton<DataMigrationService>();
-            services.AddSingleton<ISpacedRepetitionService, SpacedRepetitionService>();
+            services.AddSingleton<ISpacedRepetitionService, SqliteSpacedRepetitionService>();
             services.AddSingleton<IHighlightSyncService, HighlightSyncService>();
             services.AddSingleton<ILearningChartService, LearningChartService>();
             services.AddSingleton<Services.Web.IWebBookmarkService, Services.Web.WebBookmarkService>();

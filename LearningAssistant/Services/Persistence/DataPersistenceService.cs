@@ -1,9 +1,9 @@
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services.Cache;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Services.Persistence
 {
@@ -18,6 +18,12 @@ namespace LearningAssistant.Services.Persistence
             _configuration = configuration;
             _cacheService = cacheService;
             _logger = logger;
+        }
+
+        public void Initialize()
+        {
+            AppPaths.EnsureDirectoriesExist();
+            _logger.LogInformation("JSON 持久化层初始化完成");
         }
 
         public AppConfig LoadConfig()
