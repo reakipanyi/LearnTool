@@ -1,4 +1,6 @@
 using LearningAssistant.Forms;
+using LearningAssistant.Services.AI;
+using LearningAssistant.Services.Learning;
 
 namespace LearningAssistant.Managers
 {
@@ -34,6 +36,8 @@ namespace LearningAssistant.Managers
     /// </summary>
     public class ThinkingStimulator : IThinkingStimulator
     {
+        private readonly IAiQuestionService? _aiService;
+
         #region 构造函数
 
         /// <summary>
@@ -41,6 +45,15 @@ namespace LearningAssistant.Managers
         /// </summary>
         public ThinkingStimulator()
         {
+        }
+
+        /// <summary>
+        /// 带 AI 服务的构造函数
+        /// </summary>
+        /// <param name="aiService">AI 问答服务</param>
+        public ThinkingStimulator(IAiQuestionService? aiService)
+        {
+            _aiService = aiService;
         }
 
         #endregion
@@ -79,7 +92,7 @@ namespace LearningAssistant.Managers
         /// <param name="content">要学习的内容</param>
         public void StartAssociationLearning(string content)
         {
-            var associationForm = new AssociationLearningForm(content);
+            var associationForm = new AssociationLearningForm(content, _aiService);
             associationForm.ShowDialog();
         }
 

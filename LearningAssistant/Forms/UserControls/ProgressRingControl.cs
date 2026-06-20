@@ -74,7 +74,8 @@ namespace LearningAssistant.Forms.UserControls
                 ControlStyles.UserPaint |
                 ControlStyles.AllPaintingInWmPaint |
                 ControlStyles.OptimizedDoubleBuffer |
-                ControlStyles.ResizeRedraw,
+                ControlStyles.ResizeRedraw |
+                ControlStyles.SupportsTransparentBackColor,
                 true);
             DoubleBuffered = true;
             BackColor = Color.Transparent;

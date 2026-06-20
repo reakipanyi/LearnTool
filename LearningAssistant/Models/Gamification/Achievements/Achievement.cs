@@ -36,7 +36,9 @@ namespace LearningAssistant.Models.User
         MasteredItems,
         CategoriesCompleted,
         PerfectSession,
-        StudyDuration
+        StudyDuration,
+        FeynmanCompleted,
+        FeynmanMaster
     }
 
     public static class AchievementHelper
@@ -151,6 +153,38 @@ namespace LearningAssistant.Models.User
                     Category = AchievementCategory.Special,
                     Requirement = new AchievementRequirement { Type = AchievementType.PerfectSession, TargetValue = 1 },
                     DisplayOrder = 10
+                },
+
+                // 费曼学习成就
+                new Achievement
+                {
+                    Id = "feynman_first",
+                    Name = "费曼新手",
+                    Description = "完成第一次费曼学习法四步流程",
+                    Icon = "🧠",
+                    Category = AchievementCategory.Mastery,
+                    Requirement = new AchievementRequirement { Type = AchievementType.FeynmanCompleted, TargetValue = 1 },
+                    DisplayOrder = 11
+                },
+                new Achievement
+                {
+                    Id = "feynman_10",
+                    Name = "费曼学徒",
+                    Description = "完成 10 次费曼学习法",
+                    Icon = "📖",
+                    Category = AchievementCategory.Mastery,
+                    Requirement = new AchievementRequirement { Type = AchievementType.FeynmanCompleted, TargetValue = 10 },
+                    DisplayOrder = 12
+                },
+                new Achievement
+                {
+                    Id = "feynman_master",
+                    Name = "费曼大师",
+                    Description = "完成 50 次费曼学习法",
+                    Icon = "🎓",
+                    Category = AchievementCategory.Mastery,
+                    Requirement = new AchievementRequirement { Type = AchievementType.FeynmanMaster, TargetValue = 50 },
+                    DisplayOrder = 13
                 }
             };
         }

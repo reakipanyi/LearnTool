@@ -80,11 +80,7 @@ namespace LearningAssistant.Views
         /// <param name="studyTimeSummary">学习时间摘要</param>
         void UpdateStreakInfo(int consecutiveDays, string studyTimeSummary);
 
-        /// <summary>
-        /// 更新用户对比(PK)数据
-        /// </summary>
-        /// <param name="comparisonData">用户对比数据列表</param>
-        void UpdateUserComparison(List<UserComparisonData> comparisonData);
+
     }
 
     /// <summary>

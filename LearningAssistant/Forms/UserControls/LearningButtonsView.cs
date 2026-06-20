@@ -17,6 +17,7 @@ namespace LearningAssistant.Forms.UserControls
         private Button _buttonNote = null!;
         private Button _buttonExit = null!;
         private Button _buttonAIAsk = null!;
+        private Button _buttonFeynman = null!;
 
         #endregion
 
@@ -45,6 +46,9 @@ namespace LearningAssistant.Forms.UserControls
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Button ButtonAIAsk => _buttonAIAsk;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Button ButtonFeynman => _buttonFeynman;
 
         #endregion
 
@@ -90,6 +94,11 @@ namespace LearningAssistant.Forms.UserControls
         /// </summary>
         public event EventHandler? AIAskClicked;
 
+        /// <summary>
+        /// 费曼学习按钮点击事件
+        /// </summary>
+        public event EventHandler? FeynmanClicked;
+
         #endregion
 
         #region Initialization
@@ -109,6 +118,7 @@ namespace LearningAssistant.Forms.UserControls
             _buttonNote = new Button();
             _buttonExit = new Button();
             _buttonAIAsk = new Button();
+            _buttonFeynman = new Button();
 
             _buttonsPanel.SuspendLayout();
             SuspendLayout();
@@ -123,6 +133,7 @@ namespace LearningAssistant.Forms.UserControls
             _buttonsPanel.Controls.Add(_buttonNote);
             _buttonsPanel.Controls.Add(_buttonExit);
             _buttonsPanel.Controls.Add(_buttonAIAsk);
+            _buttonsPanel.Controls.Add(_buttonFeynman);
             _buttonsPanel.Dock = DockStyle.Fill;
             _buttonsPanel.Location = new Point(3, 645);
             _buttonsPanel.Name = "buttonsFlowLayoutPanel";
@@ -264,6 +275,25 @@ namespace LearningAssistant.Forms.UserControls
             _buttonAIAsk.Text = "🤖 AI问答";
             _buttonAIAsk.UseVisualStyleBackColor = false;
             _buttonAIAsk.Click += ButtonAIAsk_Click;
+
+            //
+            // _buttonFeynman
+            //
+            _buttonFeynman.BackColor = Color.FromArgb(147, 112, 219);
+            _buttonFeynman.FlatAppearance.BorderSize = 0;
+            _buttonFeynman.FlatAppearance.MouseDownBackColor = Color.FromArgb(137, 102, 209);
+            _buttonFeynman.FlatAppearance.MouseOverBackColor = Color.FromArgb(157, 122, 229);
+            _buttonFeynman.FlatStyle = FlatStyle.Flat;
+            _buttonFeynman.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            _buttonFeynman.ForeColor = Color.White;
+            _buttonFeynman.Location = new Point(1065, 10);
+            _buttonFeynman.Margin = new Padding(5);
+            _buttonFeynman.Name = "buttonFeynman";
+            _buttonFeynman.Size = new Size(105, 45);
+            _buttonFeynman.TabIndex = 8;
+            _buttonFeynman.Text = "🧠 费曼";
+            _buttonFeynman.UseVisualStyleBackColor = false;
+            _buttonFeynman.Click += ButtonFeynman_Click;
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             Controls.Add(_buttonsPanel);  // 关键：将 _buttonsPanel 添加到 Controls
@@ -287,6 +317,8 @@ namespace LearningAssistant.Forms.UserControls
 
         private void ButtonAIAsk_Click(object? sender, EventArgs e) => AIAskClicked?.Invoke(sender, e);
 
+        private void ButtonFeynman_Click(object? sender, EventArgs e) => FeynmanClicked?.Invoke(sender, e);
+
         #endregion
 
         #region Public Methods
@@ -303,6 +335,7 @@ namespace LearningAssistant.Forms.UserControls
             _buttonNote.Enabled = enabled;
             _buttonExit.Enabled = enabled;
             _buttonAIAsk.Enabled = enabled;
+            _buttonFeynman.Enabled = enabled;
         }
 
         /// <summary>

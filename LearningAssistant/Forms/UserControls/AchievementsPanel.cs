@@ -1,0 +1,201 @@
+using LearningAssistant.Models.User;
+using System.ComponentModel;
+
+namespace LearningAssistant.Forms.UserControls
+{
+    public class AchievementsPanel : UserControl
+    {
+        private Panel _panelHeader = null!;
+        private Label _labelTitle = null!;
+        private Label _labelStats = null!;
+        private FlowLayoutPanel _flowLayoutPanelFilters = null!;
+        private Panel _panelContent = null!;
+        private FlowLayoutPanel _flowLayoutPanelCards = null!;
+
+        private List<Badge> _allBadges = new();
+        private Dictionary<string, int> _badgeProgress = new();
+        private BadgeCategory? _currentFilter = null;
+        private List<Button> _filterButtons = new();
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public List<Badge> Badges
+        {
+            get => _allBadges;
+            set
+            {
+                _allBadges = value ?? new List<Badge>();
+                UpdateCards();
+            }
+        }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Dictionary<string, int> BadgeProgress
+        {
+            get => _badgeProgress;
+            set
+            {
+                _badgeProgress = value ?? new Dictionary<string, int>();
+                UpdateCards();
+            }
+        }
+
+        public event EventHandler<Badge>? BadgeClicked;
+
+        public AchievementsPanel()
+        {
+            InitializeComponent();
+            CreateFilterButtons();
+        }
+
+        private void InitializeComponent()
+        {
+            _panelHeader = new Panel();
+            _labelTitle = new Label();
+            _labelStats = new Label();
+            _flowLayoutPanelFilters = new FlowLayoutPanel();
+            _panelContent = new Panel();
+            _flowLayoutPanelCards = new FlowLayoutPanel();
+
+            _panelHeader.SuspendLayout();
+            _flowLayoutPanelFilters.SuspendLayout();
+            _panelContent.SuspendLayout();
+            SuspendLayout();
+
+            _panelHeader.Dock = DockStyle.Top;
+            _panelHeader.AutoSize = true;
+            _panelHeader.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            _panelHeader.Padding = new Padding(15, 10, 15, 10);
+            _panelHeader.BackColor = Color.FromArgb(250, 250, 252);
+
+            _labelTitle.Dock = DockStyle.Top;
+            _labelTitle.Font = new Font("微软雅黑", 14F, FontStyle.Bold);
+            _labelTitle.ForeColor = Color.FromArgb(51, 51, 51);
+            _labelTitle.Text = "🏆 成就系统";
+            _labelTitle.Height = 30;
+
+            _labelStats.Dock = DockStyle.Top;
+            _labelStats.Font = new Font("微软雅黑", 10F);
+            _labelStats.ForeColor = Color.FromArgb(102, 102, 102);
+            _labelStats.Text = "已解锁 0 / 0";
+            _labelStats.Height = 25;
+
+            _flowLayoutPanelFilters.Dock = DockStyle.Top;
+            _flowLayoutPanelFilters.AutoSize = true;
+            _flowLayoutPanelFilters.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            _flowLayoutPanelFilters.Padding = new Padding(10, 0, 10, 0);
+            _flowLayoutPanelFilters.WrapContents = true;
+            _flowLayoutPanelFilters.BackColor = Color.Transparent;
+
+            _panelHeader.Controls.Add(_flowLayoutPanelFilters);
+            _panelHeader.Controls.Add(_labelStats);
+            _panelHeader.Controls.Add(_labelTitle);
+
+            _panelContent.Dock = DockStyle.Fill;
+            _panelContent.AutoScroll = true;
+            _panelContent.Padding = new Padding(15, 10, 15, 10);
+            _panelContent.BackColor = Color.White;
+
+            _flowLayoutPanelCards.Dock = DockStyle.Top;
+            _flowLayoutPanelCards.AutoSize = true;
+            _flowLayoutPanelCards.WrapContents = true;
+            _flowLayoutPanelCards.BackColor = Color.Transparent;
+
+            _panelContent.Controls.Add(_flowLayoutPanelCards);
+
+            Controls.Add(_panelContent);
+            Controls.Add(_panelHeader);
+
+            Size = new Size(600, 500);
+            BackColor = Color.White;
+            DoubleBuffered = true;
+
+            _panelHeader.ResumeLayout(false);
+            _flowLayoutPanelFilters.ResumeLayout(false);
+            _panelContent.ResumeLayout(false);
+            ResumeLayout(false);
+        }
+
+        private void CreateFilterButtons()
+        {
+            _flowLayoutPanelFilters.Controls.Clear();
+            _filterButtons.Clear();
+
+            AddFilterButton("全部", null);
+            AddFilterButton("📚 学习", BadgeCategory.Learning);
+            AddFilterButton("🔥 坚持", BadgeCategory.Consistency);
+            AddFilterButton("🏆 精通", BadgeCategory.Mastery);
+            AddFilterButton("⭐ 特殊", BadgeCategory.Special);
+
+            UpdateFilterButtonStyles();
+        }
+
+        private void AddFilterButton(string text, BadgeCategory? category)
+        {
+            Button btn = new()
+            {
+                Text = text,
+                Tag = category,
+                Size = new Size(70, 28),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("微软雅黑", 9F),
+                Cursor = Cursors.Hand
+            };
+            btn.FlatAppearance.BorderSize = 0;
+            btn.Click += FilterButton_Click;
+            _filterButtons.Add(btn);
+            _flowLayoutPanelFilters.Controls.Add(btn);
+        }
+
+        private void FilterButton_Click(object? sender, EventArgs e)
+        {
+            if (sender is Button btn)
+            {
+                BadgeCategory? category = btn.Tag is BadgeCategory c ? c : null;
+                _currentFilter = category;
+                UpdateFilterButtonStyles();
+                UpdateCards();
+            }
+        }
+
+        private void UpdateFilterButtonStyles()
+        {
+            foreach (var btn in _filterButtons)
+            {
+                var isActive = (btn.Tag as BadgeCategory?) == _currentFilter;
+                btn.BackColor = isActive ? Color.FromArgb(255, 152, 0) : Color.Transparent;
+                btn.ForeColor = isActive ? Color.White : Color.FromArgb(102, 102, 102);
+                btn.Font = new Font("微软雅黑", 9F, isActive ? FontStyle.Bold : FontStyle.Regular);
+            }
+        }
+
+        private void UpdateCards()
+        {
+            _flowLayoutPanelCards.Controls.Clear();
+
+            var filtered = _currentFilter.HasValue
+                ? _allBadges.Where(b => b.Category == _currentFilter.Value).ToList()
+                : _allBadges;
+
+            int unlockedCount = filtered.Count(b => b.IsUnlocked);
+            _labelStats.Text = $"已解锁 {unlockedCount} / {filtered.Count}";
+
+            foreach (var badge in filtered)
+            {
+                var card = new AchievementCard
+                {
+                    Badge = badge,
+                    IsUnlocked = badge.IsUnlocked,
+                    CurrentValue = _badgeProgress.TryGetValue(badge.Id, out var val) ? val : 0,
+                    Margin = new Padding(5)
+                };
+                card.CardClicked += (s, e) => BadgeClicked?.Invoke(this, badge);
+                _flowLayoutPanelCards.Controls.Add(card);
+            }
+        }
+
+        public void RefreshData()
+        {
+            UpdateCards();
+        }
+    }
+}

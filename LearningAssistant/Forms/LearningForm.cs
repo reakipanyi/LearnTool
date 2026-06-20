@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Common.Events;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Forms.UserControls;
 using LearningAssistant.Managers;
@@ -7,6 +8,7 @@ using LearningAssistant.Models.User;
 using LearningAssistant.Services;
 using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Feedback;
+using LearningAssistant.Services.Gamification;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
@@ -30,9 +32,8 @@ namespace LearningAssistant.Forms
         private readonly IThinkingStimulator? _thinkingStimulator;
         private readonly IAchievementService? _achievementService;
         private readonly ISpacedRepetitionService? _spacedRepetitionService;
-        private readonly BadgeManager _badgeManager;
-        private readonly StudyStatsManager _statsManager;
-        private readonly ChallengeManager _challengeManager;
+        private readonly IGamificationService _gamificationService;
+        private readonly IEventBus? _eventBus;
         private readonly ConfettiManager _confettiManager;
         private readonly EncouragementManager _encouragementManager;
         #endregion
@@ -124,11 +125,7 @@ namespace LearningAssistant.Forms
         private Button buttonNote => _buttonsView.ButtonNote;
         private Button buttonKnown => _buttonsView.ButtonKnown;
         private Button buttonUnknown => _buttonsView.ButtonUnknown;
-        private Button buttonAchievements => _statsView.ButtonAchievements;
-        private Button buttonChallenges => _statsView.ButtonChallenges;
-        private Button buttonPK => _statsView.ButtonPK;
-        private Button buttonReview => _statsView.ButtonReview;
-        private Label labelBadges => _statsView.LabelBadges;
+
         private Label labelDailyGoal = new Label();
         #endregion
 
@@ -149,6 +146,13 @@ namespace LearningAssistant.Forms
         private TextBox textBoxGameAnswer = null!;
         private Label labelGameResult = null!;
         private System.Windows.Forms.Timer _gameTimer = null!;
+        private FloatingText _floatingText = null!;
+        #endregion
+
+        #region === 费曼学习面板 ===
+        private FeynmanLearningPanel? _feynmanPanel;
+        private Panel? _feynmanContainerPanel;
+        private bool _isFeynmanPanelVisible = false;
         #endregion
 
         #region === 设计器生成 ===
@@ -167,7 +171,9 @@ namespace LearningAssistant.Forms
             IEncouragementService encouragementService,
             IThinkingStimulator? thinkingStimulator = null,
             IAchievementService? achievementService = null,
-            ISpacedRepetitionService? spacedRepetitionService = null)
+            ISpacedRepetitionService? spacedRepetitionService = null,
+            IGamificationService? gamificationService = null,
+            IEventBus? eventBus = null)
         {
             InitializeComponent();
             _aiQuestionService = aiQuestionService ?? throw new ArgumentNullException(nameof(aiQuestionService));
@@ -181,24 +187,16 @@ namespace LearningAssistant.Forms
             _thinkingStimulator = thinkingStimulator;
             _achievementService = achievementService;
             _spacedRepetitionService = spacedRepetitionService;
+            _eventBus = eventBus;
+            _gamificationService = gamificationService ?? new GamificationService(
+                _loggerFactory,
+                null);
 
-            _badgeManager = new BadgeManager(_loggerFactory.CreateLogger<BadgeManager>());
-            _badgeManager.BadgesUnlocked += OnBadgesUnlocked;
+            _gamificationService.BadgesUnlocked += OnBadgesUnlocked;
+            _gamificationService.LevelUp += OnLevelUp;
+            _gamificationService.XPChanged += OnXPChanged;
 
             _encouragementManager = new EncouragementManager();
-
-            _statsManager = new StudyStatsManager(
-                _loggerFactory.CreateLogger<StudyStatsManager>(),
-                OnLevelUp,
-                score => { },
-                xp => { });
-
-            _challengeManager = new ChallengeManager(
-                _loggerFactory.CreateLogger<ChallengeManager>(),
-                points => _statsManager.AddScore(points),
-                xp => _statsManager.AddXP(xp),
-                OnLevelUp,
-                () => { });
 
             _confettiManager = new ConfettiManager();
 
@@ -228,6 +226,7 @@ namespace LearningAssistant.Forms
             _buttonsView.NoteClicked += ButtonNote_Click;
             _buttonsView.ExitClicked += ButtonExit_Click;
             _buttonsView.AIAskClicked += ButtonAIAsk_Click;
+            _buttonsView.FeynmanClicked += ButtonFeynman_Click;
 
             _settingsView.RadioStudyMode.CheckedChanged += RadioSetting_CheckedChanged;
             _settingsView.RadioQuickMode.CheckedChanged += RadioSetting_CheckedChanged;
@@ -248,7 +247,6 @@ namespace LearningAssistant.Forms
 
             _statsView.AchievementsClicked += ButtonAchievements_Click;
             _statsView.ChallengesClicked += ButtonChallenges_Click;
-            _statsView.PKClicked += ButtonPK_Click;
             _statsView.ReviewClicked += ButtonReview_Click;
         }
 
@@ -450,6 +448,8 @@ namespace LearningAssistant.Forms
             SaveSettings();
             try
             {
+                _gamificationService?.Save();
+
                 if (_ttsService != null)
                 {
                     await _ttsService.StopAsync();
@@ -925,6 +925,7 @@ namespace LearningAssistant.Forms
         public event EventHandler? SettingsChanged;
         public event EventHandler? OpenStatisticsClicked;
         public event EventHandler? ExportErrorBookClicked;
+        public event EventHandler? ReviewClicked;
 
         public void ShowMessage(string msg)
         {
@@ -1077,35 +1078,59 @@ namespace LearningAssistant.Forms
 
             if (flowLayoutPanelBadges != null)
             {
-                _badgeManager.SetUI(flowLayoutPanelBadges, _toolTip);
+                _gamificationService.SetBadgeUI(flowLayoutPanelBadges, _toolTip);
             }
 
             if (labelStudyTime != null && labelScore != null && labelTodayCount != null &&
                 labelStreak != null && labelLevel != null && labelXP != null && progressXP != null)
             {
-                _statsManager.SetUI(labelStudyTime, labelScore, labelTodayCount, labelStreak, labelLevel, labelXP, progressXP);
+                _gamificationService.SetStatsUI(labelStudyTime, labelScore, labelTodayCount, labelStreak, labelLevel, labelXP, progressXP);
             }
 
             if (flowLayoutPanelChallenges != null)
             {
-                _challengeManager.SetUI(flowLayoutPanelChallenges, _soundService);
+                _gamificationService.SetChallengeUI(flowLayoutPanelChallenges, _soundService);
             }
 
             _confettiManager.SetTargetControl(mainTableLayoutPanel);
 
-            _statsManager.Load();
-            _badgeManager.Load();
-            _challengeManager.Load();
+            _gamificationService.Load("default");
             UpdateEncouragement();
-            _badgeManager.UpdateDisplay();
-            _challengeManager.UpdateDisplay();
+            _gamificationService.UpdateAllDisplays();
+
+            _statsView.UpdateLevel(
+                _gamificationService.CurrentLevel,
+                _gamificationService.XP,
+                _gamificationService.XPToNextLevel,
+                _gamificationService.LevelTitle);
         }
 
-        private void OnLevelUp()
+        private void OnXPChanged(object? sender, XPChangedEventArgs e)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => OnXPChanged(sender, e)));
+                return;
+            }
+
+            _statsView.UpdateLevel(
+                _gamificationService.CurrentLevel,
+                _gamificationService.XP,
+                _gamificationService.XPToNextLevel,
+                _gamificationService.LevelTitle);
+
+            if (e.Added > 0)
+            {
+                ShowXPFloatingText(e.Added);
+            }
+        }
+
+        private void OnLevelUp(object? sender, LevelUpEventArgs e)
         {
             _soundService?.PlaySuccess();
             StartConfetti();
-            string levelTitle = _statsManager.LevelTitle;
+            _statsView.TriggerLevelUp(e.NewLevel, e.LevelTitle);
+            string levelTitle = e.LevelTitle;
             if (InvokeRequired)
             {
                 Invoke(new Action(() =>
@@ -1120,7 +1145,7 @@ namespace LearningAssistant.Forms
         private void StudyTimer_Tick(object? sender, EventArgs e)
         {
             _studyDuration = _studyDuration.Add(TimeSpan.FromSeconds(1));
-            _statsManager.UpdateStudyTime(_studyDuration);
+            _gamificationService.UpdateStudyDuration(_studyDuration);
         }
 
         #endregion
@@ -1259,9 +1284,13 @@ namespace LearningAssistant.Forms
         public void ShowFeynmanQuestions()
         {
             if (_currentItem == null || _thinkingStimulator == null) return;
-            var content = _currentItem.GetMainContent();
-            var questions = _thinkingStimulator.CreateFeynmanQuestions(content);
-            MessageBox.Show(string.Join("\n\n", questions), "🧠 费曼学习法", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+            if (!_isFeynmanPanelVisible)
+            {
+                ShowFeynmanPanel();
+            }
+
+            _feynmanPanel?.GoToStep(FeynmanStep.Review);
         }
 
         public void ShowDailyThinkingTask()
@@ -1353,20 +1382,16 @@ namespace LearningAssistant.Forms
             }
         }
 
-        private void OnBadgesUnlocked(List<string> badges)
+        private void OnBadgesUnlocked(object? sender, BadgesUnlockedEventArgs e)
         {
-            _badgeManager.ShowNotification(badges);
-            _badgeManager.UpdateDisplay();
-            _statsManager.AddScore(50 * badges.Count);
-            _statsManager.AddXP(50 * badges.Count);
+            _gamificationService.AddScore(50 * e.BadgeIds.Count);
+            _gamificationService.AddXP(50 * e.BadgeIds.Count);
+            _gamificationService.UpdateAllDisplays();
         }
-
-
 
         private void UpdateChallengesProgress()
         {
-            _challengeManager.SetLearningData(_statsManager.TodayLearnedCount, _quizCorrectCount, _favoriteCount);
-            _challengeManager.UpdateProgress();
+            _gamificationService.UpdateChallengeProgress("learn", _gamificationService.TodayLearnedCount);
         }
 
 
@@ -1408,8 +1433,8 @@ namespace LearningAssistant.Forms
             if (correctAnswer.Contains(userAnswer) || userAnswer.Contains(correctAnswer))
             {
                 _gameScore += 10;
-                _statsManager.AddScore(10);
-                _statsManager.AddXP(10);
+                _gamificationService.AddScore(10);
+                _gamificationService.AddXP(10);
                 labelGameResult.Text = $"✅ 正确！得分: {_gameScore}";
                 _soundService?.PlaySuccess();
             }
@@ -1500,17 +1525,18 @@ namespace LearningAssistant.Forms
                 }
 
                 int points = _isShowAnswer && !_answerRevealed ? 20 : 10;
-                _statsManager.AddScore(points);
-                _statsManager.IncrementLearnedCount();
+                _gamificationService.AddScore(points);
+                _gamificationService.IncrementTodayLearned();
 
                 _totalLearnedCount++;
                 if (_isShowAnswer && !_answerRevealed)
                 {
                     _quizCorrectCount++;
+                    _gamificationService.RecordQuizCorrect();
                 }
 
                 UpdateEncouragement();
-                _badgeManager.CheckUnlock(_totalLearnedCount, _statsManager.StreakDays, _statsManager.TodayLearnedCount, _quizCorrectCount, _favoriteCount, _noteCount);
+                _gamificationService.CheckBadgeUnlock("learn", _totalLearnedCount);
                 UpdateChallengesProgress();
 
                 _ = _encouragementService.PlayRandomKnownFeedbackAsync();
@@ -1566,6 +1592,26 @@ namespace LearningAssistant.Forms
         private void ButtonPronounce_Click(object? sender, EventArgs e)
         {
             PronounceClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ShowXPFloatingText(int xpGained)
+        {
+            if (_floatingText == null)
+            {
+                _floatingText = new FloatingText();
+                Controls.Add(_floatingText);
+            }
+
+            var badgeRect = _statsView.LevelBadge.RectangleToScreen(
+                new Rectangle(0, 0, _statsView.LevelBadge.Width, _statsView.LevelBadge.Height));
+            var formPoint = PointToClient(badgeRect.Location);
+
+            _floatingText.Text = $"+{xpGained} XP";
+            _floatingText.TextColor = Color.FromArgb(255, 152, 0);
+            _floatingText.ShowAt(this,
+                formPoint.X + _statsView.LevelBadge.Width / 2 - 40,
+                formPoint.Y,
+                $"+{xpGained} XP");
         }
 
         private void StartConfetti()
@@ -1639,6 +1685,258 @@ namespace LearningAssistant.Forms
             }
         }
 
+        /// <summary>
+        /// 费曼学习按钮点击事件
+        /// </summary>
+        private void ButtonFeynman_Click(object? sender, EventArgs e)
+        {
+            if (_currentItem == null)
+            {
+                MessageBox.Show("请先选择一个学习内容", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            try
+            {
+                ToggleFeynmanPanel();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "打开费曼学习面板失败");
+                MessageBox.Show($"打开费曼学习面板失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 切换费曼学习面板显示状态
+        /// </summary>
+        private void ToggleFeynmanPanel()
+        {
+            if (_isFeynmanPanelVisible)
+            {
+                HideFeynmanPanel();
+            }
+            else
+            {
+                ShowFeynmanPanel();
+            }
+        }
+
+        /// <summary>
+        /// 显示费曼学习面板
+        /// </summary>
+        private void ShowFeynmanPanel()
+        {
+            if (_currentItem == null || _thinkingStimulator == null)
+                return;
+
+            if (_feynmanContainerPanel == null)
+            {
+                CreateFeynmanPanel();
+            }
+
+            if (_feynmanPanel != null && _currentItem != null)
+            {
+                var content = _currentItem.GetMainContent();
+                var displayText = _currentItem.GetDisplayText();
+                var questions = _thinkingStimulator.CreateFeynmanQuestions(content);
+
+                _feynmanPanel.Content = content;
+                _feynmanPanel.DisplayText = displayText;
+                _feynmanPanel.SetQuestions(questions);
+                _feynmanPanel.GoToStep(FeynmanStep.Study);
+
+                _themeService?.RegisterThemeable(_feynmanPanel);
+            }
+
+            if (_feynmanContainerPanel != null)
+            {
+                _feynmanContainerPanel.Visible = true;
+                _feynmanContainerPanel.BringToFront();
+                _isFeynmanPanelVisible = true;
+            }
+        }
+
+        /// <summary>
+        /// 隐藏费曼学习面板
+        /// </summary>
+        private void HideFeynmanPanel()
+        {
+            if (_feynmanContainerPanel != null)
+            {
+                _feynmanContainerPanel.Visible = false;
+                _isFeynmanPanelVisible = false;
+            }
+        }
+
+        /// <summary>
+        /// 创建费曼学习面板
+        /// </summary>
+        private void CreateFeynmanPanel()
+        {
+            _feynmanPanel = new FeynmanLearningPanel
+            {
+                Dock = DockStyle.Fill
+            };
+            _feynmanPanel.CloseClicked += FeynmanPanel_CloseClicked;
+            _feynmanPanel.Completed += FeynmanPanel_Completed;
+            _feynmanPanel.AIFeedbackRequested += FeynmanPanel_AIFeedbackRequested;
+            _feynmanPanel.GenerateSimplifiedRequested += FeynmanPanel_GenerateSimplifiedRequested;
+            _feynmanPanel.GenerateAnalogyRequested += FeynmanPanel_GenerateAnalogyRequested;
+
+            _feynmanContainerPanel = new Panel
+            {
+                Dock = DockStyle.Right,
+                Width = 380,
+                Name = "FeynmanPanelContainer",
+                BackColor = Color.White
+            };
+
+            var headerPanel = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 35,
+                BackColor = Color.FromArgb(147, 112, 219)
+            };
+
+            var titleLabel = new Label
+            {
+                Text = "🧠 费曼学习法",
+                Dock = DockStyle.Left,
+                ForeColor = Color.White,
+                Font = new Font("微软雅黑", 11F, FontStyle.Bold),
+                Padding = new Padding(15, 7, 0, 0),
+                AutoSize = true
+            };
+
+            var closeButton = new Button
+            {
+                Text = "✕",
+                Dock = DockStyle.Right,
+                Width = 40,
+                FlatStyle = FlatStyle.Flat,
+                ForeColor = Color.White,
+                Font = new Font("微软雅黑", 12F, FontStyle.Bold),
+                BackColor = Color.Transparent
+            };
+            closeButton.FlatAppearance.BorderSize = 0;
+            closeButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(127, 92, 199);
+            closeButton.Click += (s, e) => HideFeynmanPanel();
+
+            headerPanel.Controls.Add(titleLabel);
+            headerPanel.Controls.Add(closeButton);
+
+            _feynmanContainerPanel.Controls.Add(_feynmanPanel);
+            _feynmanContainerPanel.Controls.Add(headerPanel);
+
+            Controls.Add(_feynmanContainerPanel);
+        }
+
+        private void FeynmanPanel_CloseClicked(object? sender, EventArgs e)
+        {
+            HideFeynmanPanel();
+        }
+
+        private void FeynmanPanel_Completed(object? sender, EventArgs e)
+        {
+            _soundService?.PlaySuccess();
+            _gamificationService.AddXP(50);
+            _gamificationService.AddScore(100);
+
+            if (_currentItem != null && _eventBus != null)
+            {
+                _eventBus.Publish(eventData: new FeynmanCompletedEvent
+                {
+                    UserId = "default",
+                    ItemContent = _currentItem.GetDisplayText(),
+                    SubCategory = _settings.SubCategory
+                });
+            }
+
+            _gamificationService.Save();
+            MessageBox.Show("🎉 恭喜完成费曼学习法四步流程！\n\n获得 50 XP 和 100 分！\n你的理解会更加深刻！", "完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            HideFeynmanPanel();
+        }
+
+        private async void FeynmanPanel_AIFeedbackRequested(object? sender, string userExplanation)
+        {
+            if (_currentItem == null || _aiQuestionService == null || _feynmanPanel == null)
+                return;
+
+            try
+            {
+                _feynmanPanel.SetAIFeedbackLoading(true);
+
+                var content = _currentItem.GetMainContent();
+                var displayText = _currentItem.GetDisplayText();
+
+                var prompt = $"请评估以下用户对知识点的解释是否准确，并给出改进建议。\n\n" +
+                             $"知识点：{displayText}\n" +
+                             $"参考内容：{content}\n\n" +
+                             $"用户的解释：{userExplanation}\n\n" +
+                             $"请从以下几个方面评估：\n" +
+                             $"1. 准确性：解释是否正确\n" +
+                             $"2. 清晰度：是否容易理解\n" +
+                             $"3. 完整性：是否涵盖了关键点\n" +
+                             $"4. 改进建议：如何更好地解释";
+
+                var feedback = await _aiQuestionService.AskAsync(prompt, content);
+                _feynmanPanel.SetAIFeedback(feedback);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "获取AI反馈失败");
+                _feynmanPanel?.SetAIFeedback($"❌ 获取AI反馈失败：{ex.Message}");
+            }
+        }
+
+        private async void FeynmanPanel_GenerateSimplifiedRequested(object? sender, EventArgs e)
+        {
+            if (_currentItem == null || _aiQuestionService == null || _feynmanPanel == null)
+                return;
+
+            try
+            {
+                _feynmanPanel.SetSimplifiedLoading(true);
+
+                var content = _currentItem.GetMainContent();
+                var prompt = $"请用一句话（不超过30个字）总结以下知识点的核心内容：\n\n{content}";
+
+                var result = await _aiQuestionService.AskAsync(prompt, content);
+                result = result.Trim().Trim('"', '。', '.');
+                _feynmanPanel.SetSimplifiedText(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "生成简化总结失败");
+                _feynmanPanel?.SetSimplifiedText($"❌ 生成失败：{ex.Message}");
+            }
+        }
+
+        private async void FeynmanPanel_GenerateAnalogyRequested(object? sender, EventArgs e)
+        {
+            if (_currentItem == null || _aiQuestionService == null || _feynmanPanel == null)
+                return;
+
+            try
+            {
+                _feynmanPanel.SetAnalogyLoading(true);
+
+                var content = _currentItem.GetMainContent();
+                var displayText = _currentItem.GetDisplayText();
+                var prompt = $"请用一个生动形象的比喻/类比来解释\"{displayText}\"这个概念，让初学者也能轻松理解：\n\n参考内容：{content}";
+
+                var result = await _aiQuestionService.AskAsync(prompt, content);
+                result = result.Trim();
+                _feynmanPanel.SetAnalogyText(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "生成类比失败");
+                _feynmanPanel?.SetAnalogyText($"❌ 生成失败：{ex.Message}");
+            }
+        }
+
         private void ButtonExit_Click(object? sender, EventArgs e)
         {
             Close();
@@ -1647,113 +1945,58 @@ namespace LearningAssistant.Forms
 
         private void ButtonAchievements_Click(object? sender, EventArgs e)
         {
-            var achievements = _achievementService?.GetAllAchievements() ?? new List<Achievement>();
-            var unlocked = _achievementService?.GetUnlockedAchievements() ?? new List<Achievement>();
-            var message = $"🏆 成就系统\n\n" +
-                          $"已解锁: {unlocked.Count} / {achievements.Count}\n\n";
-            foreach (var a in achievements.Take(10))
+            try
             {
-                var status = unlocked.Any(u => u.Id == a.Id) ? "✅" : "🔒";
-                message += $"{status} {a.Icon} {a.Name}\n";
+                var achievementForm = new AchievementForm(_gamificationService);
+                achievementForm.ShowDialog(this);
             }
-            if (achievements.Count > 10)
-                message += $"\n... 还有 {achievements.Count - 10} 个成就";
-            MessageBox.Show(message, "成就", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "打开成就窗口失败");
+                MessageBox.Show($"打开成就窗口失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private void ButtonChallenges_Click(object? sender, EventArgs e)
         {
-            _challengeManager.UpdateDisplay();
-            var message = "🎯 每日挑战\n\n";
-            var challenges = _challengeManager.GetAllChallenges();
-            foreach (var c in challenges)
-            {
-                var status = c.Completed ? "✅" : "⏳";
-                var claimed = c.Claimed ? " [已领取]" : "";
-                message += $"{status} {c.Emoji} {c.Name} ({c.Current}/{c.Target}){claimed}\n";
-            }
-            var completed = _challengeManager.CompletedCount;
-            var total = challenges.Count();
-            message += $"\n完成进度: {completed}/{total}";
-            MessageBox.Show(message, "挑战", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-
-        private void ButtonPK_Click(object? sender, EventArgs e)
-        {
             try
             {
-                var myData = new UserComparisonData
-                {
-                    UserId = "我",
-                    ConsecutiveStudyDays = _statsManager.StreakDays,
-                    TodayStudyTimeMinutes = (int)_studyDuration.TotalMinutes,
-                    AccuracyRate = _statsManager.TotalLearnedCount > 0
-                        ? (double)_quizCorrectCount / _statsManager.TotalLearnedCount * 100
-                        : 0,
-                    KnownItemsCount = _statsManager.TotalLearnedCount,
-                    TotalStudyTimeMinutes = (int)_studyDuration.TotalMinutes,
-                    TotalItems = _totalLearnedCount,
-                    AchievementCount = _achievementService?.GetUnlockedAchievements()?.Count ?? 0
-                };
-
-                var rival1 = new UserComparisonData
-                {
-                    UserId = "学霸小明",
-                    ConsecutiveStudyDays = Math.Max(1, _statsManager.StreakDays + 2),
-                    TodayStudyTimeMinutes = Math.Max(10, (int)_studyDuration.TotalMinutes + 15),
-                    AccuracyRate = 85.5,
-                    KnownItemsCount = Math.Max(50, _totalLearnedCount + 30),
-                    TotalStudyTimeMinutes = Math.Max(60, (int)_studyDuration.TotalMinutes + 45),
-                    TotalItems = Math.Max(100, _totalLearnedCount + 50),
-                    AchievementCount = Math.Max(3, (_achievementService?.GetUnlockedAchievements()?.Count ?? 0) + 2)
-                };
-
-                var rival2 = new UserComparisonData
-                {
-                    UserId = "努力小红",
-                    ConsecutiveStudyDays = Math.Max(1, _statsManager.StreakDays - 1),
-                    TodayStudyTimeMinutes = Math.Max(5, (int)_studyDuration.TotalMinutes - 5),
-                    AccuracyRate = 72.3,
-                    KnownItemsCount = Math.Max(20, _totalLearnedCount - 10),
-                    TotalStudyTimeMinutes = Math.Max(30, (int)_studyDuration.TotalMinutes - 20),
-                    TotalItems = Math.Max(50, _totalLearnedCount - 20),
-                    AchievementCount = Math.Max(1, (_achievementService?.GetUnlockedAchievements()?.Count ?? 0) - 1)
-                };
-
-                var comparisonData = new List<UserComparisonData> { myData, rival1, rival2 };
-                var pkForm = new UserComparisonForm(comparisonData, _themeService);
-                pkForm.ShowDialog(this);
+                var challengeForm = new ChallengeForm(_gamificationService);
+                challengeForm.ShowDialog(this);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "打开PK对比窗口失败");
-                MessageBox.Show($"打开PK对比窗口失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _logger.LogError(ex, "打开挑战窗口失败");
+                MessageBox.Show($"打开挑战窗口失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
+
+
         private void ButtonReview_Click(object? sender, EventArgs e)
         {
-            var dueItems = _spacedRepetitionService?.GetItemsDueForReview("default");
-            var message = $"🔔 间隔重复复习\n\n" +
-                          $"今日待复习: {dueItems.Count} 项\n";
-            var todayCount = _spacedRepetitionService?.GetTodayReviewCount("default") ?? 0;
-            var retention = _spacedRepetitionService?.CalculateRetentionRate("default") ?? 0;
-            message += $"今日已复习: {todayCount} 项\n";
-            message += $"记忆保持率: {retention:P0}\n\n";
-
-            if (dueItems.Count > 0)
+            try
             {
-                message += "前5个待复习内容:\n";
-                foreach (var item in dueItems.Take(5))
+                if (_spacedRepetitionService == null)
                 {
-                    message += $"  • {item.Content}\n";
+                    MessageBox.Show("复习服务未初始化", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
                 }
+
+                var reviewForm = new ReviewForm(_spacedRepetitionService, "default");
+                reviewForm.StartReview += OnStartReview;
+                reviewForm.ShowDialog(this);
             }
-            else
+            catch (Exception ex)
             {
-                message += "🎉 今天没有待复习的内容！";
+                _logger.LogError(ex, "打开复习窗口失败");
+                MessageBox.Show($"打开复习窗口失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-            MessageBox.Show(message, "间隔重复复习", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void OnStartReview(object? sender, EventArgs e)
+        {
+            ReviewClicked?.Invoke(this, EventArgs.Empty);
         }
 
 
@@ -1824,7 +2067,8 @@ namespace LearningAssistant.Forms
                 _soundService?.PlaySuccess();
                 _favoriteCount++;
                 SaveFavorite();
-                _badgeManager.CheckUnlock(_totalLearnedCount, _statsManager.StreakDays, _statsManager.TodayLearnedCount, _quizCorrectCount, _favoriteCount, _noteCount);
+                _gamificationService.RecordFavorite();
+                _gamificationService.CheckBadgeUnlock("favorite", _favoriteCount);
                 UpdateChallengesProgress();
             }
             else
@@ -2055,7 +2299,8 @@ namespace LearningAssistant.Forms
                 {
                     _currentNoteCounted = true;
                     _noteCount++;
-                    _badgeManager.CheckUnlock(_totalLearnedCount, _statsManager.StreakDays, _statsManager.TodayLearnedCount, _quizCorrectCount, _favoriteCount, _noteCount);
+                    _gamificationService.RecordNote();
+                    _gamificationService.CheckBadgeUnlock("note", _noteCount);
                 }
                 else if (!hasContent && _currentNoteCounted)
                 {
@@ -2178,7 +2423,21 @@ namespace LearningAssistant.Forms
                 _noteSaveTimer?.Stop();
                 _noteSaveTimer?.Dispose();
 
+                _gameTimer?.Stop();
+                _gameTimer?.Dispose();
+
                 _toolTip?.Dispose();
+
+                _themeService?.UnregisterThemeable(this);
+
+                if (_gamificationService != null)
+                {
+                    _gamificationService.BadgesUnlocked -= OnBadgesUnlocked;
+                    _gamificationService.LevelUp -= OnLevelUp;
+                    _gamificationService.XPChanged -= OnXPChanged;
+                }
+
+                (_confettiManager as IDisposable)?.Dispose();
 
                 // 解绑子视图事件，防止内存泄漏
                 if (_buttonsView != null)
@@ -2191,6 +2450,7 @@ namespace LearningAssistant.Forms
                     _buttonsView.NoteClicked -= ButtonNote_Click;
                     _buttonsView.ExitClicked -= ButtonExit_Click;
                     _buttonsView.AIAskClicked -= ButtonAIAsk_Click;
+                    _buttonsView.FeynmanClicked -= ButtonFeynman_Click;
                 }
 
                 if (_settingsView != null)

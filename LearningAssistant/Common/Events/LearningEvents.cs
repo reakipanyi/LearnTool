@@ -27,6 +27,13 @@ namespace LearningAssistant.Common.Events
         public string SubCategory { get; set; } = string.Empty;
     }
 
+    public class FeynmanCompletedEvent : ApplicationEventBase
+    {
+        public string UserId { get; set; } = string.Empty;
+        public string ItemContent { get; set; } = string.Empty;
+        public string SubCategory { get; set; } = string.Empty;
+    }
+
     // 成就相关事件
     public class AchievementUnlockedEvent : ApplicationEventBase
     {

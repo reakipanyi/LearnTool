@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 using LearningAssistant.Common;
+using LearningAssistant.Services.Learning;
 
 namespace LearningAssistant.Forms
 {
@@ -554,65 +555,4 @@ namespace LearningAssistant.Forms
 
         #endregion
     }
-
-    #region 复习项类
-
-    /// <summary>
-    /// 复习项
-    /// 
-    /// 表示一个需要复习的知识点，包含问题、答案、提示和复习计划信息。
-    /// </summary>
-    public class ReviewItem
-    {
-        /// <summary>
-        /// 问题（回忆任务）
-        /// </summary>
-        public string Question { get; set; }
-
-        /// <summary>
-        /// 正确答案
-        /// </summary>
-        public string Answer { get; set; }
-
-        /// <summary>
-        /// 提示信息
-        /// </summary>
-        public string Hint { get; set; }
-
-        /// <summary>
-        /// 下次复习日期（基于间隔重复算法）
-        /// </summary>
-        public DateTime NextReviewDate { get; set; }
-
-        /// <summary>
-        /// 连续正确次数（用于调整复习间隔）
-        /// </summary>
-        public int CorrectStreak { get; set; }
-
-        /// <summary>
-        /// 默认构造函数
-        /// </summary>
-        public ReviewItem()
-        {
-            NextReviewDate = DateTime.Now;
-            CorrectStreak = 0;
-        }
-
-        /// <summary>
-        /// 带参数的构造函数
-        /// </summary>
-        /// <param name="question">问题</param>
-        /// <param name="answer">答案</param>
-        /// <param name="hint">提示（可选）</param>
-        public ReviewItem(string question, string answer, string hint = "")
-        {
-            Question = question;
-            Answer = answer;
-            Hint = hint;
-            NextReviewDate = DateTime.Now;
-            CorrectStreak = 0;
-        }
-    }
-
-    #endregion
 }

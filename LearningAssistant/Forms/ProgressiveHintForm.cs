@@ -25,6 +25,20 @@ namespace LearningAssistant.Forms
     /// </summary>
     public partial class ProgressiveHintForm : Form
     {
+        #region 常量定义
+
+        /// <summary>
+        /// 最大提示等级数
+        /// </summary>
+        private const int MaxHintLevels = 4;
+
+        /// <summary>
+        /// 答案相似度匹配阈值
+        /// </summary>
+        private const double SimilarityThreshold = 0.7;
+
+        #endregion
+
         #region 字段定义
 
         /// <summary>
@@ -45,12 +59,12 @@ namespace LearningAssistant.Forms
         /// <summary>
         /// 正确答案
         /// </summary>
-        private string _correctAnswer;
+        private readonly string _correctAnswer;
 
         /// <summary>
         /// 答案被查看时的回调函数
         /// </summary>
-        private Action<string> _onAnswerRevealed;
+        private readonly Action<string>? _onAnswerRevealed;
 
         // UI 控件
         private Label labelTitle;
@@ -63,6 +77,7 @@ namespace LearningAssistant.Forms
         private Button buttonSubmitGuess;
         private Label labelGuessResult;
         private Panel panelMain;
+        private Label _labelHintContent;
 
         #endregion
 
@@ -75,11 +90,15 @@ namespace LearningAssistant.Forms
         /// <param name="correctAnswer">正确答案</param>
         /// <param name="hints">提示列表（最多4条，按强度递增顺序）</param>
         /// <param name="onAnswerRevealed">答案被查看时的回调</param>
-        public ProgressiveHintForm(string question, string correctAnswer, List<string> hints, Action<string> onAnswerRevealed = null)
+        public ProgressiveHintForm(string question, string correctAnswer, List<string> hints, Action<string>? onAnswerRevealed = null)
         {
+            if (question == null) throw new ArgumentNullException(nameof(question));
+            if (correctAnswer == null) throw new ArgumentNullException(nameof(correctAnswer));
+            if (hints == null) throw new ArgumentNullException(nameof(hints));
+
             _correctAnswer = correctAnswer;
             _hints = hints;
-            _maxHints = Math.Min(hints.Count, 4);  // 限制最多4级提示
+            _maxHints = Math.Min(hints.Count, MaxHintLevels);
             _onAnswerRevealed = onAnswerRevealed;
 
             InitializeComponent();
@@ -106,7 +125,7 @@ namespace LearningAssistant.Forms
         {
             // 窗体基本设置
             this.Text = "💡 渐进式思考";
-            this.Size = new Size(600, 500);
+            this.Size = new Size(600, 540);
             this.StartPosition = FormStartPosition.CenterParent;
             this.BackColor = Color.FromArgb(250, 248, 245);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -215,7 +234,8 @@ namespace LearningAssistant.Forms
                 Location = new Point(20, 300),
                 Size = new Size(540, 50),
                 FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false
+                WrapContents = false,
+                AutoScroll = true
             };
             panelMain.Controls.Add(hintButtonsPanel);
 
@@ -237,22 +257,21 @@ namespace LearningAssistant.Forms
             panelHints = new Panel
             {
                 Location = new Point(20, 390),
-                Size = new Size(540, 60),
-                BackColor = Color.FromArgb(255, 253, 230),  // 浅黄色背景
+                Size = new Size(540, 100),
+                BackColor = Color.FromArgb(255, 253, 230),
                 BorderStyle = BorderStyle.FixedSingle,
                 AutoScroll = true
             };
 
-            Label labelHintContent = new Label
+            _labelHintContent = new Label
             {
-                Name = "labelHintContent",
                 Dock = DockStyle.Fill,
                 Font = new Font("微软雅黑", 10F),
                 ForeColor = Color.FromArgb(80, 80, 80),
                 Padding = new Padding(10),
                 Text = "点击上方按钮查看提示"
             };
-            panelHints.Controls.Add(labelHintContent);
+            panelHints.Controls.Add(_labelHintContent);
             panelMain.Controls.Add(panelHints);
 
             // 直接显示答案按钮
@@ -296,7 +315,8 @@ namespace LearningAssistant.Forms
                 Button hintButton = new Button
                 {
                     Text = $"💡 {buttonTexts[i]}",
-                    Size = new Size(120, 40),
+                    Size = new Size(128, 40),
+                    Margin = new Padding(0, 0, 4, 0),
                     BackColor = buttonColors[i],
                     ForeColor = Color.White,
                     FlatStyle = FlatStyle.Flat,
@@ -357,7 +377,7 @@ namespace LearningAssistant.Forms
                     {
                         hintContent += $"提示{i + 1}：{_hints[i]}\n";
                     }
-                    panelHints.Controls[0].Text = hintContent;
+                    _labelHintContent.Text = hintContent;
                 }
             }
         }
@@ -386,8 +406,7 @@ namespace LearningAssistant.Forms
             }
 
             // 使用智能匹配验证答案正确性
-            bool isCorrect = _correctAnswer.Contains(guess) || guess.Contains(_correctAnswer) ||
-                           StringSimilarityHelper.CalculateSimilarity(_correctAnswer, guess) > 0.6;
+            bool isCorrect = StringSimilarityHelper.CheckAnswer(guess, _correctAnswer, SimilarityThreshold);
 
             if (isCorrect)
             {
@@ -396,14 +415,14 @@ namespace LearningAssistant.Forms
                 labelGuessResult.ForeColor = Color.Green;
                 textBoxGuess.BackColor = Color.FromArgb(200, 255, 200);  // 绿色背景
 
-                // 启用所有未启用的提示按钮
+                // 启用所有提示按钮
                 for (int i = 0; i < hintButtonsPanel.Controls.Count; i++)
                 {
-                    if (!hintButtonsPanel.Controls[i].Enabled && i <= _currentHintLevel)
-                    {
-                        hintButtonsPanel.Controls[i].Enabled = true;
-                    }
+                    hintButtonsPanel.Controls[i].Enabled = true;
                 }
+                _currentHintLevel = _maxHints;
+                labelHintStatus.Text = $"提示等级：{_currentHintLevel}/{_maxHints}";
+                labelHintStatus.ForeColor = Color.FromArgb(120, 120, 120);
             }
             else
             {
@@ -435,9 +454,9 @@ namespace LearningAssistant.Forms
         /// <param name="e">事件参数</param>
         private void ButtonRevealAnswer_Click(object sender, EventArgs e)
         {
-            // 弹出确认对话框
+            // 弹出确认对话框（不包含答案内容）
             DialogResult result = MessageBox.Show(
-                $"确定要查看答案吗？\n\n答案：{_correctAnswer}\n\n💡 建议：先努力回忆，实在想不出来再看答案，这样记忆更深刻！",
+                "确定要查看答案吗？\n\n💡 建议：先努力回忆，实在想不出来再看答案，这样记忆更深刻！",
                 "确认查看答案",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question

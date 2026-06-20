@@ -193,10 +193,6 @@ namespace LearningAssistant.Presenters
                 var bitmap = await _pdfRenderer.RenderPageAsync(_pdfFileManager.CurrentPageIndex, 1000, 1400);
                 if (bitmap != null)
                 {
-                    if (_pdfRenderer.IsNightMode)
-                    {
-                        _pdfRenderer.ApplyNightMode(bitmap);
-                    }
                     _view?.DisplayImage(bitmap);
                 }
 

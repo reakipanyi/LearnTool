@@ -3,7 +3,7 @@ using LearningAssistant.Models.UI;
 
 namespace LearningAssistant.Managers
 {
-    public class ConfettiManager
+    public class ConfettiManager : IDisposable
     {
         private readonly List<ConfettiParticle> _particles = new();
         private readonly Color[] _colors = new[] {
@@ -15,6 +15,7 @@ namespace LearningAssistant.Managers
         private readonly Random _random = new Random();
         private readonly Dictionary<int, SolidBrush> _brushCache = new();
         private Control? _targetControl;
+        private bool _disposed = false;
 
         /// <summary>
         /// 设置目标控件（用于绘制彩纸）
@@ -156,5 +157,23 @@ namespace LearningAssistant.Managers
         /// 获取粒子数量
         /// </summary>
         public int ParticleCount => _particles.Count;
+
+        /// <summary>
+        /// 释放资源
+        /// </summary>
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+
+            foreach (var brush in _brushCache.Values)
+            {
+                brush.Dispose();
+            }
+            _brushCache.Clear();
+            _particles.Clear();
+            _targetControl = null;
+            _disposed = true;
+        }
     }
 }

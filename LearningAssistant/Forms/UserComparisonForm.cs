@@ -171,6 +171,8 @@ namespace LearningAssistant.Forms
             refreshButton = new Button();
             subtitleLabel = new Label();
             titleLabel = new Label();
+            panelStats = new List<Panel>();
+            panelValues = new List<FlowLayoutPanel>();
             mainPanel.SuspendLayout();
             panelContent.SuspendLayout();
             buttonPanel.SuspendLayout();

@@ -1,4 +1,3 @@
-using LearningAssistant.Common;
 using System.ComponentModel;
 
 namespace LearningAssistant.Forms.UserControls
@@ -21,9 +20,9 @@ namespace LearningAssistant.Forms.UserControls
         private FlowLayoutPanel _flowLayoutPanelFeatures = null!;
         private Button _buttonAchievements = null!;
         private Button _buttonChallenges = null!;
-        private Button _buttonPK = null!;
         private Button _buttonReview = null!;
         private Label _labelBadges = null!;
+        private LevelBadge _levelBadge = null!;
         private FlowLayoutPanel _flowLayoutPanelBottomStats = null!;
 
         #endregion
@@ -63,8 +62,6 @@ namespace LearningAssistant.Forms.UserControls
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Button ButtonChallenges => _buttonChallenges;
 
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public Button ButtonPK => _buttonPK;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Button ButtonReview => _buttonReview;
@@ -72,13 +69,15 @@ namespace LearningAssistant.Forms.UserControls
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Label LabelBadges => _labelBadges;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public LevelBadge LevelBadge => _levelBadge;
+
         #endregion
 
         #region Events
 
         public event EventHandler? AchievementsClicked;
         public event EventHandler? ChallengesClicked;
-        public event EventHandler? PKClicked;
         public event EventHandler? ReviewClicked;
 
         #endregion
@@ -93,6 +92,7 @@ namespace LearningAssistant.Forms.UserControls
         private void InitializeComponent()
         {
             _panelStatsContainer = new Panel();
+            _levelBadge = new LevelBadge();
             _labelStatistics = new Label();
             _progressBar = new ProgressBar();
             _labelStudyTime = new Label();
@@ -103,191 +103,187 @@ namespace LearningAssistant.Forms.UserControls
             _flowLayoutPanelFeatures = new FlowLayoutPanel();
             _buttonAchievements = new Button();
             _buttonChallenges = new Button();
-            _buttonPK = new Button();
             _buttonReview = new Button();
             _labelBadges = new Label();
-
+            _flowLayoutPanelBottomStats = new FlowLayoutPanel();
             _panelStatsContainer.SuspendLayout();
+            _flowLayoutPanelFeatures.SuspendLayout();
+            _flowLayoutPanelBottomStats.SuspendLayout();
             SuspendLayout();
-
             // 
             // _panelStatsContainer
             // 
+            _panelStatsContainer.Controls.Add(_levelBadge);
             _panelStatsContainer.Dock = DockStyle.Fill;
-            _panelStatsContainer.Location = new Point(0, 0);
-            _panelStatsContainer.Name = "panelStatsContainer";
-            _panelStatsContainer.Size = new Size(1089, 836);
+            _panelStatsContainer.Location = new Point(0, 98);
+            _panelStatsContainer.Name = "_panelStatsContainer";
+            _panelStatsContainer.Size = new Size(1095, 777);
             _panelStatsContainer.TabIndex = 0;
-
             // 
-            // _progressBar
+            // _levelBadge
             // 
-            _progressBar.BackColor = Color.FromArgb(240, 240, 240);
-            _progressBar.Dock = DockStyle.Bottom;
-            _progressBar.ForeColor = Color.FromArgb(255, 140, 0);
-            _progressBar.Location = new Point(0, 800);
-            _progressBar.Name = "progressBar";
-            _progressBar.Size = new Size(1089, 36);
-            _progressBar.Style = ProgressBarStyle.Continuous;
-            _progressBar.TabIndex = 0;
-
+            _levelBadge.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
+            _levelBadge.BackColor = Color.Transparent;
+            _levelBadge.Location = new Point(966, 601);
+            _levelBadge.Name = "_levelBadge";
+            _levelBadge.Size = new Size(100, 136);
+            _levelBadge.TabIndex = 8;
             // 
             // _labelStatistics
             // 
             _labelStatistics.Dock = DockStyle.Top;
             _labelStatistics.Font = new Font("微软雅黑", 11F);
             _labelStatistics.ForeColor = Color.FromArgb(80, 100, 120);
-            _labelStatistics.Location = new Point(0, 0);
-            _labelStatistics.Name = "labelStatistics";
-            _labelStatistics.Size = new Size(1089, 32);
+            _labelStatistics.Location = new Point(0, 43);
+            _labelStatistics.Name = "_labelStatistics";
+            _labelStatistics.Size = new Size(1095, 55);
             _labelStatistics.TabIndex = 1;
             _labelStatistics.TextAlign = ContentAlignment.MiddleCenter;
-
             // 
-            // _flowLayoutPanelFeatures
+            // _progressBar
             // 
-            _flowLayoutPanelFeatures.Dock = DockStyle.Top;
-            _flowLayoutPanelFeatures.Height = 38;
-            _flowLayoutPanelFeatures.Name = "flowLayoutPanelFeatures";
-            _flowLayoutPanelFeatures.Padding = new Padding(10, 3, 10, 3);
-            _flowLayoutPanelFeatures.TabIndex = 7;
-            _flowLayoutPanelFeatures.WrapContents = false;
-            _flowLayoutPanelFeatures.Controls.Add(_buttonAchievements);
-            _flowLayoutPanelFeatures.Controls.Add(_buttonChallenges);
-            _flowLayoutPanelFeatures.Controls.Add(_buttonPK);
-            _flowLayoutPanelFeatures.Controls.Add(_buttonReview);
-            _flowLayoutPanelFeatures.Controls.Add(_labelBadges);
-
-            // 
-            // _buttonAchievements
-            // 
-            _buttonAchievements.FlatStyle = FlatStyle.Flat;
-            _buttonAchievements.FlatAppearance.BorderSize = 0;
-            _buttonAchievements.Font = new Font("微软雅黑", 9F);
-            _buttonAchievements.ForeColor = Color.FromArgb(255, 152, 0);
-            _buttonAchievements.Size = new Size(70, 28);
-            _buttonAchievements.Text = "🏆 成就";
-            _buttonAchievements.UseVisualStyleBackColor = false;
-            _buttonAchievements.Click += ButtonAchievements_Click;
-
-            // 
-            // _buttonChallenges
-            // 
-            _buttonChallenges.FlatStyle = FlatStyle.Flat;
-            _buttonChallenges.FlatAppearance.BorderSize = 0;
-            _buttonChallenges.Font = new Font("微软雅黑", 9F);
-            _buttonChallenges.ForeColor = Color.FromArgb(76, 175, 80);
-            _buttonChallenges.Size = new Size(70, 28);
-            _buttonChallenges.Text = "🎯 挑战";
-            _buttonChallenges.UseVisualStyleBackColor = false;
-            _buttonChallenges.Click += ButtonChallenges_Click;
-
-            // 
-            // _buttonPK
-            // 
-            _buttonPK.FlatStyle = FlatStyle.Flat;
-            _buttonPK.FlatAppearance.BorderSize = 0;
-            _buttonPK.Font = new Font("微软雅黑", 9F);
-            _buttonPK.ForeColor = Color.FromArgb(244, 67, 54);
-            _buttonPK.Size = new Size(70, 28);
-            _buttonPK.Text = "⚔️ PK";
-            _buttonPK.UseVisualStyleBackColor = false;
-            _buttonPK.Click += ButtonPK_Click;
-
-            // 
-            // _buttonReview
-            // 
-            _buttonReview.FlatStyle = FlatStyle.Flat;
-            _buttonReview.FlatAppearance.BorderSize = 0;
-            _buttonReview.Font = new Font("微软雅黑", 9F);
-            _buttonReview.ForeColor = Color.FromArgb(33, 150, 243);
-            _buttonReview.Size = new Size(80, 28);
-            _buttonReview.Text = "🔔 复习";
-            _buttonReview.UseVisualStyleBackColor = false;
-            _buttonReview.Click += ButtonReview_Click;
-
-            // 
-            // _labelBadges
-            // 
-            _labelBadges.AutoSize = true;
-            _labelBadges.Font = new Font("Segoe UI Emoji", 16F);
-            _labelBadges.Margin = new Padding(20, 0, 0, 0);
-            _labelBadges.Name = "labelBadges";
-            _labelBadges.Size = new Size(400, 32);
-            _labelBadges.Text = "🏅🎖️";
-            _labelBadges.TextAlign = ContentAlignment.MiddleRight;
-
+            _progressBar.BackColor = Color.FromArgb(240, 240, 240);
+            _progressBar.Dock = DockStyle.Bottom;
+            _progressBar.ForeColor = Color.FromArgb(255, 140, 0);
+            _progressBar.Location = new Point(0, 909);
+            _progressBar.Name = "_progressBar";
+            _progressBar.Size = new Size(1095, 41);
+            _progressBar.Style = ProgressBarStyle.Continuous;
+            _progressBar.TabIndex = 0;
             // 
             // _labelStudyTime
             // 
             _labelStudyTime.Font = new Font("微软雅黑", 9F);
             _labelStudyTime.ForeColor = Color.FromArgb(70, 90, 110);
-            _labelStudyTime.Location = new Point(15, 750);
-            _labelStudyTime.Name = "labelStudyTime";
-            _labelStudyTime.Size = new Size(120, 23);
+            _labelStudyTime.Location = new Point(18, 3);
+            _labelStudyTime.Name = "_labelStudyTime";
+            _labelStudyTime.Size = new Size(120, 26);
             _labelStudyTime.TabIndex = 2;
-
             // 
             // _labelScore
             // 
             _labelScore.Font = new Font("微软雅黑", 9F);
             _labelScore.ForeColor = Color.FromArgb(70, 90, 110);
-            _labelScore.Location = new Point(145, 750);
-            _labelScore.Name = "labelScore";
-            _labelScore.Size = new Size(120, 23);
+            _labelScore.Location = new Point(144, 3);
+            _labelScore.Name = "_labelScore";
+            _labelScore.Size = new Size(120, 26);
             _labelScore.TabIndex = 3;
-
             // 
             // _labelTodayCount
             // 
             _labelTodayCount.Font = new Font("微软雅黑", 9F);
             _labelTodayCount.ForeColor = Color.FromArgb(70, 90, 110);
-            _labelTodayCount.Location = new Point(275, 750);
-            _labelTodayCount.Name = "labelTodayCount";
-            _labelTodayCount.Size = new Size(120, 23);
+            _labelTodayCount.Location = new Point(270, 3);
+            _labelTodayCount.Name = "_labelTodayCount";
+            _labelTodayCount.Size = new Size(120, 26);
             _labelTodayCount.TabIndex = 4;
-
             // 
             // _labelStreak
             // 
             _labelStreak.Font = new Font("微软雅黑", 9F);
             _labelStreak.ForeColor = Color.FromArgb(255, 140, 0);
-            _labelStreak.Location = new Point(405, 750);
-            _labelStreak.Name = "labelStreak";
-            _labelStreak.Size = new Size(100, 23);
+            _labelStreak.Location = new Point(396, 3);
+            _labelStreak.Name = "_labelStreak";
+            _labelStreak.Size = new Size(100, 26);
             _labelStreak.TabIndex = 5;
-
             // 
             // _labelEncouragement
             // 
             _labelEncouragement.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             _labelEncouragement.Font = new Font("微软雅黑", 10F, FontStyle.Italic);
             _labelEncouragement.ForeColor = Color.FromArgb(100, 150, 180);
-            _labelEncouragement.Location = new Point(850, 750);
-            _labelEncouragement.Name = "labelEncouragement";
-            _labelEncouragement.Size = new Size(220, 23);
+            _labelEncouragement.Location = new Point(502, 3);
+            _labelEncouragement.Name = "_labelEncouragement";
+            _labelEncouragement.Size = new Size(220, 26);
             _labelEncouragement.TabIndex = 6;
             _labelEncouragement.TextAlign = ContentAlignment.MiddleRight;
-
+            // 
+            // _flowLayoutPanelFeatures
+            // 
+            _flowLayoutPanelFeatures.Controls.Add(_buttonAchievements);
+            _flowLayoutPanelFeatures.Controls.Add(_buttonChallenges);
+            _flowLayoutPanelFeatures.Controls.Add(_buttonReview);
+            _flowLayoutPanelFeatures.Controls.Add(_labelBadges);
+            _flowLayoutPanelFeatures.Dock = DockStyle.Top;
+            _flowLayoutPanelFeatures.Location = new Point(0, 0);
+            _flowLayoutPanelFeatures.Name = "_flowLayoutPanelFeatures";
+            _flowLayoutPanelFeatures.Padding = new Padding(10, 3, 10, 3);
+            _flowLayoutPanelFeatures.Size = new Size(1095, 43);
+            _flowLayoutPanelFeatures.TabIndex = 7;
+            _flowLayoutPanelFeatures.WrapContents = false;
+            // 
+            // _buttonAchievements
+            // 
+            _buttonAchievements.FlatAppearance.BorderSize = 0;
+            _buttonAchievements.FlatStyle = FlatStyle.Flat;
+            _buttonAchievements.Font = new Font("微软雅黑", 9F);
+            _buttonAchievements.ForeColor = Color.FromArgb(255, 152, 0);
+            _buttonAchievements.Location = new Point(13, 6);
+            _buttonAchievements.Name = "_buttonAchievements";
+            _buttonAchievements.Size = new Size(70, 32);
+            _buttonAchievements.TabIndex = 0;
+            _buttonAchievements.Text = "🏆 成就";
+            _buttonAchievements.UseVisualStyleBackColor = false;
+            _buttonAchievements.Click += ButtonAchievements_Click;
+            // 
+            // _buttonChallenges
+            // 
+            _buttonChallenges.FlatAppearance.BorderSize = 0;
+            _buttonChallenges.FlatStyle = FlatStyle.Flat;
+            _buttonChallenges.Font = new Font("微软雅黑", 9F);
+            _buttonChallenges.ForeColor = Color.FromArgb(76, 175, 80);
+            _buttonChallenges.Location = new Point(89, 6);
+            _buttonChallenges.Name = "_buttonChallenges";
+            _buttonChallenges.Size = new Size(70, 32);
+            _buttonChallenges.TabIndex = 1;
+            _buttonChallenges.Text = "🎯 挑战";
+            _buttonChallenges.UseVisualStyleBackColor = false;
+            _buttonChallenges.Click += ButtonChallenges_Click;
+            // 
+            // _buttonReview
+            // 
+            _buttonReview.FlatAppearance.BorderSize = 0;
+            _buttonReview.FlatStyle = FlatStyle.Flat;
+            _buttonReview.Font = new Font("微软雅黑", 9F);
+            _buttonReview.ForeColor = Color.FromArgb(33, 150, 243);
+            _buttonReview.Location = new Point(165, 6);
+            _buttonReview.Name = "_buttonReview";
+            _buttonReview.Size = new Size(80, 32);
+            _buttonReview.TabIndex = 3;
+            _buttonReview.Text = "🔔 复习";
+            _buttonReview.UseVisualStyleBackColor = false;
+            _buttonReview.Click += ButtonReview_Click;
+            // 
+            // _labelBadges
+            // 
+            _labelBadges.AutoSize = true;
+            _labelBadges.Font = new Font("Segoe UI Emoji", 16F);
+            _labelBadges.Location = new Point(268, 3);
+            _labelBadges.Margin = new Padding(20, 0, 0, 0);
+            _labelBadges.Name = "_labelBadges";
+            _labelBadges.Size = new Size(66, 30);
+            _labelBadges.TabIndex = 4;
+            _labelBadges.Text = "🏅🎖️";
+            _labelBadges.TextAlign = ContentAlignment.MiddleRight;
             // 
             // _flowLayoutPanelBottomStats
             // 
-            _flowLayoutPanelBottomStats = new FlowLayoutPanel();
-            _flowLayoutPanelBottomStats.Dock = DockStyle.Bottom;
-            _flowLayoutPanelBottomStats.Height = 30;
-            _flowLayoutPanelBottomStats.Name = "flowLayoutPanelBottomStats";
-            _flowLayoutPanelBottomStats.Padding = new Padding(15, 3, 15, 3);
-            _flowLayoutPanelBottomStats.WrapContents = false;
             _flowLayoutPanelBottomStats.Controls.Add(_labelStudyTime);
             _flowLayoutPanelBottomStats.Controls.Add(_labelScore);
             _flowLayoutPanelBottomStats.Controls.Add(_labelTodayCount);
             _flowLayoutPanelBottomStats.Controls.Add(_labelStreak);
             _flowLayoutPanelBottomStats.Controls.Add(_labelEncouragement);
-
-            //
+            _flowLayoutPanelBottomStats.Dock = DockStyle.Bottom;
+            _flowLayoutPanelBottomStats.Location = new Point(0, 875);
+            _flowLayoutPanelBottomStats.Name = "_flowLayoutPanelBottomStats";
+            _flowLayoutPanelBottomStats.Padding = new Padding(15, 3, 15, 3);
+            _flowLayoutPanelBottomStats.Size = new Size(1095, 34);
+            _flowLayoutPanelBottomStats.TabIndex = 2;
+            _flowLayoutPanelBottomStats.WrapContents = false;
+            // 
             // LearningStatsView
-            //
-            AutoScaleDimensions = new SizeF(7F, 15F);
+            // 
+            AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
             Controls.Add(_panelStatsContainer);
             Controls.Add(_labelStatistics);
@@ -295,15 +291,16 @@ namespace LearningAssistant.Forms.UserControls
             Controls.Add(_flowLayoutPanelFeatures);
             Controls.Add(_progressBar);
             Name = "LearningStatsView";
-            Size = new Size(1095, 838);
-
+            Size = new Size(1095, 950);
             _panelStatsContainer.ResumeLayout(false);
+            _flowLayoutPanelFeatures.ResumeLayout(false);
+            _flowLayoutPanelFeatures.PerformLayout();
+            _flowLayoutPanelBottomStats.ResumeLayout(false);
             ResumeLayout(false);
         }
 
         private void ButtonAchievements_Click(object? sender, EventArgs e) => AchievementsClicked?.Invoke(sender, e);
         private void ButtonChallenges_Click(object? sender, EventArgs e) => ChallengesClicked?.Invoke(sender, e);
-        private void ButtonPK_Click(object? sender, EventArgs e) => PKClicked?.Invoke(sender, e);
         private void ButtonReview_Click(object? sender, EventArgs e) => ReviewClicked?.Invoke(sender, e);
 
         #endregion
@@ -382,6 +379,26 @@ namespace LearningAssistant.Forms.UserControls
         public void SetEncouragement(string text)
         {
             _labelEncouragement.Text = text;
+        }
+
+        /// <summary>
+        /// 更新等级信息
+        /// </summary>
+        public void UpdateLevel(int level, int currentXP, int xpToNextLevel, string levelTitle)
+        {
+            if (_levelBadge == null) return;
+            _levelBadge.Level = level;
+            _levelBadge.LevelTitle = levelTitle;
+            _levelBadge.SetXP(currentXP, xpToNextLevel);
+        }
+
+        /// <summary>
+        /// 触发升级动画
+        /// </summary>
+        public void TriggerLevelUp(int newLevel, string newTitle)
+        {
+            if (_levelBadge == null) return;
+            _levelBadge.TriggerLevelUp(newLevel, newTitle);
         }
 
         #endregion

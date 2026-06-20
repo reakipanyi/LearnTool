@@ -1,12 +1,12 @@
-using Microsoft.Extensions.Logging;
 using LearningAssistant.Common;
+using LearningAssistant.Managers;
+using LearningAssistant.Models.User;
 using LearningAssistant.Services.Cache;
 using LearningAssistant.Services.Learning;
-using LearningAssistant.Services.TTS;
 using LearningAssistant.Services.Persistence;
-using LearningAssistant.Models.User;
+using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
-using LearningAssistant.Managers;
+using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Presenters
 {
@@ -180,20 +180,20 @@ namespace LearningAssistant.Presenters
             {
                 _logger.LogInformation("Open learning window clicked");
                 SaveSession();
-                
+
                 string language = Constants.Language.Chinese;
                 string subCategory = Constants.SubCategory.ChineseCharacter;
-                
+
                 if (_currentUserProfile != null)
                 {
                     var progress = _currentUserProfile.LearningProgress;
-                    
+
                     if (progress.CategoryProgresses.Any())
                     {
                         var lastCategory = progress.CategoryProgresses.Values
                             .OrderByDescending(cp => cp.LastTestDate)
                             .FirstOrDefault();
-                        
+
                         if (lastCategory != null)
                         {
                             subCategory = lastCategory.CategoryName;
@@ -202,7 +202,7 @@ namespace LearningAssistant.Presenters
                         }
                     }
                 }
-                
+
                 await _windowManager.OpenLearningWindowAsync(_currentUserId, language, subCategory, string.Empty, true);
             }
             catch (Exception ex)
@@ -211,7 +211,7 @@ namespace LearningAssistant.Presenters
                 MessageBox.Show($"打开学习窗口失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
-        
+
         private string GetLanguageFromCategory(string category)
         {
             if (category.Contains("English", StringComparison.OrdinalIgnoreCase))
@@ -286,7 +286,6 @@ namespace LearningAssistant.Presenters
                     });
                 }
 
-                _view?.UpdateUserComparison(comparisonData);
                 _logger.LogInformation("Loaded user comparison data for {UserCount} users", comparisonData.Count);
             }
             catch (Exception ex)
@@ -305,7 +304,7 @@ namespace LearningAssistant.Presenters
                     return;
 
                 var userId = input.Trim();
-                
+
                 if (_sessionService.GetUserList().Contains(userId))
                 {
                     _view?.ShowMessage("该玩家名称已存在，请使用其他名称！");

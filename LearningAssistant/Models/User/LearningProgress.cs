@@ -20,6 +20,8 @@ namespace LearningAssistant.Models.User
 
         public int PerfectSessions { get; set; } = 0;
 
+        public int FeynmanCompletedCount { get; set; } = 0;
+
         /// <summary>
         /// 已学习项目总数 - 从所有分类进度动态计算得出
         /// 避免手动同步导致的数据不一致

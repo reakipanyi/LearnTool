@@ -25,6 +25,7 @@ namespace LearningAssistant.Services.Learning
         public string UserId { get; set; } = string.Empty;
         public string Content { get; set; } = string.Empty;
         public string Answer { get; set; } = string.Empty;
+        public string Hint { get; set; } = string.Empty;
         public int Interval { get; set; } = 0;
         public int Repetitions { get; set; } = 0;
         public double EFactor { get; set; } = 2.5;
@@ -33,7 +34,14 @@ namespace LearningAssistant.Services.Learning
         public DateTime UpdatedAt { get; set; } = DateTime.Now;
         public int WrongCount { get; set; } = 0;
         public int CorrectCount { get; set; } = 0;
+        public int CorrectStreak { get; set; } = 0;
         public bool IsActive { get; set; } = true;
+        
+        public string Question
+        {
+            get => Content;
+            set => Content = value;
+        }
         
         public double Difficulty => EFactor < 2.3 ? 3 : EFactor < 2.5 ? 2 : 1;
     }

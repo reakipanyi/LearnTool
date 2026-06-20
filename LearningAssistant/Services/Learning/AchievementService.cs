@@ -26,6 +26,7 @@ namespace LearningAssistant.Services.Learning
             _eventBus.Subscribe<LearningItemCompletedEvent>(OnLearningItemCompleted);
             _eventBus.Subscribe<LearningSessionCompletedEvent>(OnLearningSessionCompleted);
             _eventBus.Subscribe<UserProfileUpdatedEvent>(OnUserProfileUpdated);
+            _eventBus.Subscribe<FeynmanCompletedEvent>(OnFeynmanCompleted);
         }
 
         private void UnsubscribeFromEvents()
@@ -33,6 +34,7 @@ namespace LearningAssistant.Services.Learning
             _eventBus.Unsubscribe<LearningItemCompletedEvent>(OnLearningItemCompleted);
             _eventBus.Unsubscribe<LearningSessionCompletedEvent>(OnLearningSessionCompleted);
             _eventBus.Unsubscribe<UserProfileUpdatedEvent>(OnUserProfileUpdated);
+            _eventBus.Unsubscribe<FeynmanCompletedEvent>(OnFeynmanCompleted);
         }
 
         private void OnLearningItemCompleted(LearningItemCompletedEvent evt)
@@ -47,6 +49,15 @@ namespace LearningAssistant.Services.Learning
         {
             if (_currentUserProfile != null && evt.UserId == _currentUserId)
             {
+                CheckAndUnlockAchievements(_currentUserProfile, _currentUserProfile.LearningProgress);
+            }
+        }
+
+        private void OnFeynmanCompleted(FeynmanCompletedEvent evt)
+        {
+            if (_currentUserProfile != null && evt.UserId == _currentUserId)
+            {
+                _currentUserProfile.LearningProgress.FeynmanCompletedCount++;
                 CheckAndUnlockAchievements(_currentUserProfile, _currentUserProfile.LearningProgress);
             }
         }
@@ -124,6 +135,8 @@ namespace LearningAssistant.Services.Learning
                 AchievementType.MasteredItems => progress.ComputedTotalItemsMastered >= requirement.TargetValue,
                 AchievementType.ConsecutiveDays => CheckConsecutiveDays(progress, requirement.TargetValue),
                 AchievementType.PerfectSession => CheckPerfectSession(progress),
+                AchievementType.FeynmanCompleted => progress.FeynmanCompletedCount >= requirement.TargetValue,
+                AchievementType.FeynmanMaster => progress.FeynmanCompletedCount >= requirement.TargetValue,
                 _ => false
             };
         }

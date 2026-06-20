@@ -10,6 +10,22 @@ namespace LearningAssistant.Models.User
         public BadgeRequirement Requirement { get; set; } = new BadgeRequirement();
         public bool IsUnlocked { get; set; }
         public DateTime? UnlockedAt { get; set; }
+
+        public BadgeRarity Rarity
+        {
+            get
+            {
+                int target = Requirement.TargetValue;
+                return target switch
+                {
+                    <= 10 => BadgeRarity.Common,
+                    <= 50 => BadgeRarity.Uncommon,
+                    <= 200 => BadgeRarity.Rare,
+                    <= 1000 => BadgeRarity.Epic,
+                    _ => BadgeRarity.Legendary
+                };
+            }
+        }
     }
 
     public class BadgeRequirement
@@ -31,7 +47,20 @@ namespace LearningAssistant.Models.User
         ConsecutiveDays,
         TotalStudyTime,
         TotalItemsLearned,
-        PerfectSession
+        PerfectSession,
+        QuizCorrect,
+        FavoriteCount,
+        NoteCount,
+        SpeedLearning
+    }
+
+    public enum BadgeRarity
+    {
+        Common,
+        Uncommon,
+        Rare,
+        Epic,
+        Legendary
     }
 
     public static class BadgeHelper

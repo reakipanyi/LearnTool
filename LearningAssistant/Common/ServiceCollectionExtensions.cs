@@ -10,6 +10,7 @@ using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Cache;
 using LearningAssistant.Services.Cloud;
 using LearningAssistant.Services.Feedback;
+using LearningAssistant.Services.Gamification;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Migration;
 using LearningAssistant.Services.Pdf;
@@ -176,6 +177,7 @@ namespace LearningAssistant.Common
             services.AddSingleton<IEnhancedReminderService, EnhancedReminderService>();
             services.AddSingleton<IEncouragementService, EncouragementService>();
             services.AddSingleton<IAchievementService, AchievementService>();
+            services.AddScoped<IGamificationService, GamificationService>();
 
             services.AddScoped<ILearningSettingsManager, LearningSettingsManager>();
             services.AddScoped<ILearningEventMediator, LearningEventMediator>();

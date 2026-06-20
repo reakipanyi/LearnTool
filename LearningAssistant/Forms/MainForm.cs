@@ -211,12 +211,6 @@ namespace LearningAssistant.Forms
             }
         }
 
-        public void UpdateUserComparison(List<UserComparisonData> comparisonData)
-        {
-            var form = new UserComparisonForm(comparisonData, _themeService);
-            form.ShowDialog();
-        }
-
         #endregion
 
         #region WinForms Designer Generated Code

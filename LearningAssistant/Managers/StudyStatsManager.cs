@@ -286,6 +286,8 @@ namespace LearningAssistant.Managers
         public int TotalScore => _totalScore;
         public int TotalLearnedCount => _totalLearnedCount;
         public int XP => _xp;
+        public int CurrentLevel => _currentLevel + 1;
+        public int XPToNextLevel => _xpToNextLevel;
         public string LevelTitle => _levelTitle;
     }
 }

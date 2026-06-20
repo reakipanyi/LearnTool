@@ -1,3 +1,5 @@
+using LearningAssistant.Services.AI;
+
 namespace LearningAssistant.Forms
 {
     /// <summary>
@@ -31,8 +33,17 @@ namespace LearningAssistant.Forms
         /// </summary>
         private List<AssociationNode> _associations;
 
+        /// <summary>
+        /// AI 问答服务
+        /// </summary>
+        private readonly IAiQuestionService? _aiService;
+
         // UI 控件
         private Panel panelMain;
+        private Panel panelContent;
+        private Panel panelFilterBar;
+        private Panel panelLeft;
+        private Panel panelRight;
         private TreeView treeViewAssociations;
         private Panel panelDetails;
         private Label labelHint;
@@ -44,6 +55,7 @@ namespace LearningAssistant.Forms
         private Panel panelActions;
         private Button buttonThinkMore;
         private Button buttonSkip;
+        private Button _buttonGenerateAi;
 
 
         #endregion
@@ -54,31 +66,39 @@ namespace LearningAssistant.Forms
         /// 初始化联想学习对话框
         /// </summary>
         /// <param name="content">要学习的内容</param>
-        public AssociationLearningForm(string content)
+        /// <param name="aiService">AI 问答服务（可选）</param>
+        public AssociationLearningForm(string content, IAiQuestionService? aiService = null)
         {
             _currentContent = content;
             _associations = new List<AssociationNode>();
+            _aiService = aiService;
             InitializeComponent();
-            // 横向类型标签循环（无需提前声明，动态创建）
+            // 横向类型标签循环（改为可点击的按钮，用于过滤）
             string[] associationTypes = { "📝 同类词", "🔄 反义词", "🏷️ 相关词", "📖 例句", "💡 知识点" };
-            int xPos = 15;
+            int xPos = 0;
             foreach (var type in associationTypes)
             {
-                Label label = new Label();
-                label.Text = type;
-                label.Location = new Point(xPos, 85);
-                label.Size = new Size(120, 25);
-                label.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
-                label.ForeColor = Color.FromArgb(80, 80, 80);
-                label.BorderStyle = BorderStyle.FixedSingle;
-                label.TextAlign = ContentAlignment.MiddleCenter;
+                Button btn = new Button();
+                btn.Text = type;
+                btn.Location = new Point(xPos, 8);
+                btn.Size = new Size(120, 28);
+                btn.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+                btn.ForeColor = Color.FromArgb(80, 80, 80);
+                btn.BackColor = Color.White;
+                btn.FlatStyle = FlatStyle.Flat;
+                btn.FlatAppearance.BorderSize = 1;
+                btn.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
+                btn.TextAlign = ContentAlignment.MiddleCenter;
+                btn.Tag = type;
+                btn.Click += FilterTypeButton_Click;
 
-                panelMain.Controls.Add(label);
-                xPos += 130;
+                panelFilterBar.Controls.Add(btn);
+                xPos += 128;
             }
 
             labelCurrent.Text = $"当前学习：{_currentContent}";
             LoadAssociations();
+            SetupAiButton();
         }
 
         #endregion
@@ -98,153 +118,256 @@ namespace LearningAssistant.Forms
         /// </summary>
         private void InitializeComponent()
         {
-            // 窗体基础属性
-            this.SuspendLayout();
-
-            this.Text = "🧠 联想学习";
-            this.Size = new Size(700, 500);
-            this.StartPosition = FormStartPosition.CenterParent;
-            this.BackColor = Color.FromArgb(250, 248, 245);
-
-            #region 实例化所有控件 new()
             panelMain = new Panel();
             labelHint = new Label();
-            labelCurrent = new Label();
-            treeViewAssociations = new TreeView();
-            panelDetails = new Panel();
-            labelDetailTitle = new Label();
-            labelTitle = new Label();
-            labelTreeTitle = new Label();
-            labelDetailContent = new Label();
             panelActions = new Panel();
             buttonThinkMore = new Button();
             buttonSkip = new Button();
-            #endregion
-
-            #region panelMain 整体配置
+            _buttonGenerateAi = new Button();
+            panelContent = new Panel();
+            panelRight = new Panel();
+            panelDetails = new Panel();
+            labelDetailContent = new Label();
+            labelDetailTitle = new Label();
+            panelLeft = new Panel();
+            treeViewAssociations = new TreeView();
+            labelTreeTitle = new Label();
+            panelFilterBar = new Panel();
+            labelCurrent = new Label();
+            labelTitle = new Label();
+            panelMain.SuspendLayout();
+            panelActions.SuspendLayout();
+            panelContent.SuspendLayout();
+            panelRight.SuspendLayout();
+            panelDetails.SuspendLayout();
+            panelLeft.SuspendLayout();
+            SuspendLayout();
+            // 
+            // panelMain
+            // 
+            panelMain.Controls.Add(labelHint);
+            panelMain.Controls.Add(panelActions);
+            panelMain.Controls.Add(panelContent);
+            panelMain.Controls.Add(panelFilterBar);
+            panelMain.Controls.Add(labelCurrent);
+            panelMain.Controls.Add(labelTitle);
             panelMain.Dock = DockStyle.Fill;
-            #endregion
-
-            #region 标题 labelTitle
-            labelTitle.Text = "🔗 联想学习 - 建立知识网络";
-            labelTitle.Font = new Font("微软雅黑", 13F, FontStyle.Bold);
-            labelTitle.ForeColor = Color.FromArgb(103, 58, 183);
-            labelTitle.Dock = DockStyle.Top;
-            labelTitle.Height = 40;
-            labelTitle.TextAlign = ContentAlignment.MiddleLeft;
-            labelTitle.Padding = new Padding(15, 0, 0, 0);
-            #endregion
-
-            #region 底部提示 labelHint
-            labelHint.Text = "💡 提示：联想学习帮助你建立知识之间的关联，关联越强，记忆越深刻！";
+            panelMain.Location = new Point(0, 0);
+            panelMain.Name = "panelMain";
+            panelMain.Size = new Size(684, 461);
+            panelMain.TabIndex = 0;
+            // 
+            // labelHint
+            // 
+            labelHint.BackColor = Color.FromArgb(248, 250, 252);
             labelHint.Dock = DockStyle.Bottom;
-            labelHint.Height = 35;
             labelHint.Font = new Font("微软雅黑", 9F);
             labelHint.ForeColor = Color.FromArgb(100, 100, 100);
-            labelHint.TextAlign = ContentAlignment.MiddleLeft;
+            labelHint.Location = new Point(0, 381);
+            labelHint.Name = "labelHint";
             labelHint.Padding = new Padding(15, 0, 0, 0);
-            labelHint.BackColor = Color.FromArgb(248, 250, 252);
-            #endregion
-
-
-            #region 树视图标题 labelTreeTitle
-            labelTreeTitle.Text = "🌳 联想网络";
-            labelTreeTitle.Location = new Point(15, 115);
-            labelTreeTitle.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            labelTreeTitle.AutoSize = true;
-            #endregion
-
-            #region TreeView
-            treeViewAssociations.Location = new Point(15, 140);
-            treeViewAssociations.Size = new Size(300, 280);
-            treeViewAssociations.Font = new Font("微软雅黑", 10F);
-            treeViewAssociations.BackColor = Color.White;
-            treeViewAssociations.BorderStyle = BorderStyle.FixedSingle;
-            treeViewAssociations.AfterSelect += TreeViewAssociations_AfterSelect;
-            #endregion
-
-            #region 详情标题 labelDetailTitle
-            labelDetailTitle.Text = "📋 详细信息";
-            labelDetailTitle.Location = new Point(330, 115);
-            labelDetailTitle.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            labelDetailTitle.AutoSize = true;
-            #endregion
-
-            #region 详情面板 panelDetails
-            panelDetails.Location = new Point(330, 140);
-            panelDetails.Size = new Size(340, 280);
+            labelHint.Size = new Size(684, 35);
+            labelHint.TabIndex = 0;
+            labelHint.Text = "💡 提示：联想学习帮助你建立知识之间的关联，关联越强，记忆越深刻！";
+            labelHint.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // panelActions
+            // 
+            panelActions.BackColor = Color.Transparent;
+            panelActions.Controls.Add(buttonThinkMore);
+            panelActions.Controls.Add(buttonSkip);
+            panelActions.Controls.Add(_buttonGenerateAi);
+            panelActions.Dock = DockStyle.Bottom;
+            panelActions.Location = new Point(0, 416);
+            panelActions.Name = "panelActions";
+            panelActions.Padding = new Padding(15, 5, 15, 5);
+            panelActions.Size = new Size(684, 45);
+            panelActions.TabIndex = 1;
+            // 
+            // buttonThinkMore
+            // 
+            buttonThinkMore.BackColor = Color.FromArgb(76, 175, 80);
+            buttonThinkMore.FlatStyle = FlatStyle.Flat;
+            buttonThinkMore.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            buttonThinkMore.ForeColor = Color.White;
+            buttonThinkMore.Location = new Point(0, 5);
+            buttonThinkMore.Name = "buttonThinkMore";
+            buttonThinkMore.Size = new Size(160, 30);
+            buttonThinkMore.TabIndex = 0;
+            buttonThinkMore.Text = "🤔 我能想到更多...";
+            buttonThinkMore.UseVisualStyleBackColor = false;
+            buttonThinkMore.Click += ButtonThinkMore_Click;
+            // 
+            // buttonSkip
+            // 
+            buttonSkip.BackColor = Color.Gray;
+            buttonSkip.FlatStyle = FlatStyle.Flat;
+            buttonSkip.Font = new Font("微软雅黑", 9F);
+            buttonSkip.ForeColor = Color.White;
+            buttonSkip.Location = new Point(170, 5);
+            buttonSkip.Name = "buttonSkip";
+            buttonSkip.Size = new Size(80, 30);
+            buttonSkip.TabIndex = 1;
+            buttonSkip.Text = "➡ 跳过";
+            buttonSkip.UseVisualStyleBackColor = false;
+            buttonSkip.Click += ButtonSkip_Click;
+            // 
+            // _buttonGenerateAi
+            // 
+            _buttonGenerateAi.BackColor = Color.FromArgb(156, 39, 176);
+            _buttonGenerateAi.FlatStyle = FlatStyle.Flat;
+            _buttonGenerateAi.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            _buttonGenerateAi.ForeColor = Color.White;
+            _buttonGenerateAi.Location = new Point(260, 5);
+            _buttonGenerateAi.Name = "_buttonGenerateAi";
+            _buttonGenerateAi.Size = new Size(120, 30);
+            _buttonGenerateAi.TabIndex = 2;
+            _buttonGenerateAi.Text = "✨ AI生成联想";
+            _buttonGenerateAi.UseVisualStyleBackColor = false;
+            _buttonGenerateAi.Visible = false;
+            _buttonGenerateAi.Click += ButtonGenerateAi_Click;
+            // 
+            // panelContent
+            // 
+            panelContent.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            panelContent.Controls.Add(panelRight);
+            panelContent.Controls.Add(panelLeft);
+            panelContent.Location = new Point(0, 115);
+            panelContent.Name = "panelContent";
+            panelContent.Padding = new Padding(15);
+            panelContent.Size = new Size(684, 263);
+            panelContent.TabIndex = 2;
+            // 
+            // panelRight
+            // 
+            panelRight.BackColor = Color.White;
+            panelRight.BorderStyle = BorderStyle.FixedSingle;
+            panelRight.Controls.Add(panelDetails);
+            panelRight.Controls.Add(labelDetailTitle);
+            panelRight.Dock = DockStyle.Fill;
+            panelRight.Location = new Point(335, 15);
+            panelRight.Name = "panelRight";
+            panelRight.Size = new Size(334, 233);
+            panelRight.TabIndex = 0;
+            // 
+            // panelDetails
+            // 
+            panelDetails.AutoScroll = true;
             panelDetails.BackColor = Color.White;
             panelDetails.BorderStyle = BorderStyle.FixedSingle;
-            panelDetails.AutoScroll = true;
-            #endregion
-
-            #region 详情内部标签 labelDetailContent
-            labelDetailContent.Name = "detailContent";
+            panelDetails.Controls.Add(labelDetailContent);
+            panelDetails.Dock = DockStyle.Fill;
+            panelDetails.Location = new Point(0, 25);
+            panelDetails.Name = "panelDetails";
+            panelDetails.Size = new Size(332, 206);
+            panelDetails.TabIndex = 0;
+            // 
+            // labelDetailContent
+            // 
             labelDetailContent.Dock = DockStyle.Fill;
             labelDetailContent.Font = new Font("微软雅黑", 10F);
             labelDetailContent.ForeColor = Color.FromArgb(60, 60, 60);
+            labelDetailContent.Location = new Point(0, 0);
+            labelDetailContent.Name = "labelDetailContent";
             labelDetailContent.Padding = new Padding(10);
+            labelDetailContent.Size = new Size(330, 204);
+            labelDetailContent.TabIndex = 0;
             labelDetailContent.Text = "从左侧选择一个联想项查看详情";
-            #endregion
-
-            #region 按钮容器 panelActions
-            panelActions.Location = new Point(330, 430);
-            panelActions.Size = new Size(340, 35);
-            panelActions.BackColor = Color.Transparent;
-            #endregion
-
-            #region 思考更多按钮
-            buttonThinkMore.Text = "🤔 我能想到更多...";
-            buttonThinkMore.Location = new Point(0, 0);
-            buttonThinkMore.Size = new Size(160, 30);
-            buttonThinkMore.BackColor = Color.FromArgb(76, 175, 80);
-            buttonThinkMore.ForeColor = Color.White;
-            buttonThinkMore.FlatStyle = FlatStyle.Flat;
-            buttonThinkMore.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
-            buttonThinkMore.Click += ButtonThinkMore_Click;
-            #endregion
-
-            #region 跳过按钮
-            buttonSkip.Text = "➡ 跳过";
-            buttonSkip.Location = new Point(175, 0);
-            buttonSkip.Size = new Size(80, 30);
-            buttonSkip.BackColor = Color.Gray;
-            buttonSkip.ForeColor = Color.White;
-            buttonSkip.FlatStyle = FlatStyle.Flat;
-            buttonSkip.Font = new Font("微软雅黑", 9F);
-            buttonSkip.Click += ButtonSkip_Click;
-            #endregion
-
-            #region 当前内容 labelCurrent
-            labelCurrent.Text = "当前学习：";
-            labelCurrent.Location = new Point(15, 50);
-            labelCurrent.Size = new Size(650, 30);
+            // 
+            // labelDetailTitle
+            // 
+            labelDetailTitle.Dock = DockStyle.Top;
+            labelDetailTitle.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            labelDetailTitle.Location = new Point(0, 0);
+            labelDetailTitle.Name = "labelDetailTitle";
+            labelDetailTitle.Size = new Size(332, 25);
+            labelDetailTitle.TabIndex = 1;
+            labelDetailTitle.Text = "📋 详细信息";
+            // 
+            // panelLeft
+            // 
+            panelLeft.BackColor = Color.White;
+            panelLeft.BorderStyle = BorderStyle.FixedSingle;
+            panelLeft.Controls.Add(treeViewAssociations);
+            panelLeft.Controls.Add(labelTreeTitle);
+            panelLeft.Dock = DockStyle.Left;
+            panelLeft.Location = new Point(15, 15);
+            panelLeft.Name = "panelLeft";
+            panelLeft.Size = new Size(320, 233);
+            panelLeft.TabIndex = 1;
+            // 
+            // treeViewAssociations
+            // 
+            treeViewAssociations.BackColor = Color.White;
+            treeViewAssociations.BorderStyle = BorderStyle.FixedSingle;
+            treeViewAssociations.Dock = DockStyle.Fill;
+            treeViewAssociations.Font = new Font("微软雅黑", 10F);
+            treeViewAssociations.Location = new Point(0, 25);
+            treeViewAssociations.Name = "treeViewAssociations";
+            treeViewAssociations.Size = new Size(318, 206);
+            treeViewAssociations.TabIndex = 0;
+            treeViewAssociations.AfterSelect += TreeViewAssociations_AfterSelect;
+            // 
+            // labelTreeTitle
+            // 
+            labelTreeTitle.Dock = DockStyle.Top;
+            labelTreeTitle.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            labelTreeTitle.Location = new Point(0, 0);
+            labelTreeTitle.Name = "labelTreeTitle";
+            labelTreeTitle.Size = new Size(318, 25);
+            labelTreeTitle.TabIndex = 1;
+            labelTreeTitle.Text = "🌳 联想网络";
+            // 
+            // panelFilterBar
+            // 
+            panelFilterBar.BackColor = Color.Transparent;
+            panelFilterBar.Dock = DockStyle.Top;
+            panelFilterBar.Location = new Point(0, 70);
+            panelFilterBar.Name = "panelFilterBar";
+            panelFilterBar.Size = new Size(684, 45);
+            panelFilterBar.TabIndex = 3;
+            // 
+            // labelCurrent
+            // 
+            labelCurrent.Dock = DockStyle.Top;
             labelCurrent.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
             labelCurrent.ForeColor = Color.FromArgb(66, 133, 244);
-            #endregion
-            #region 逐级控件嵌套 Add 加入容器（标准顺序）
-            // 详情面板内部
-            panelDetails.Controls.Add(labelDetailContent);
-
-            // 按钮面板内部
-            panelActions.Controls.Add(buttonThinkMore);
-            panelActions.Controls.Add(buttonSkip);
-
-            // 主面板批量加入子控件
-            panelMain.Controls.Add(labelHint);
-            panelMain.Controls.Add(panelActions);
-            panelMain.Controls.Add(panelDetails);
-            panelMain.Controls.Add(labelDetailTitle);
-            panelMain.Controls.Add(treeViewAssociations);
-            panelMain.Controls.Add(labelTreeTitle);
-            panelMain.Controls.Add(labelCurrent);
-            panelMain.Controls.Add(labelTitle);
-
-            // 窗体挂载主面板
-            this.Controls.Add(panelMain);
-            #endregion
-
-            this.ResumeLayout(false);
+            labelCurrent.Location = new Point(0, 40);
+            labelCurrent.Name = "labelCurrent";
+            labelCurrent.Padding = new Padding(15, 0, 0, 0);
+            labelCurrent.Size = new Size(684, 30);
+            labelCurrent.TabIndex = 4;
+            labelCurrent.Text = "当前学习：";
+            labelCurrent.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // labelTitle
+            // 
+            labelTitle.Dock = DockStyle.Top;
+            labelTitle.Font = new Font("微软雅黑", 13F, FontStyle.Bold);
+            labelTitle.ForeColor = Color.FromArgb(103, 58, 183);
+            labelTitle.Location = new Point(0, 0);
+            labelTitle.Name = "labelTitle";
+            labelTitle.Padding = new Padding(15, 0, 0, 0);
+            labelTitle.Size = new Size(684, 40);
+            labelTitle.TabIndex = 5;
+            labelTitle.Text = "🔗 联想学习 - 建立知识网络";
+            labelTitle.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // AssociationLearningForm
+            // 
+            BackColor = Color.FromArgb(250, 248, 245);
+            ClientSize = new Size(684, 461);
+            Controls.Add(panelMain);
+            Name = "AssociationLearningForm";
+            StartPosition = FormStartPosition.CenterParent;
+            Text = "\U0001f9e0 联想学习";
+            panelMain.ResumeLayout(false);
+            panelActions.ResumeLayout(false);
+            panelContent.ResumeLayout(false);
+            panelRight.ResumeLayout(false);
+            panelDetails.ResumeLayout(false);
+            panelLeft.ResumeLayout(false);
+            ResumeLayout(false);
         }
 
         #endregion
@@ -442,15 +565,103 @@ namespace LearningAssistant.Forms
             var detailLabel = panelDetails.Controls["detailContent"] as Label;
             if (detailLabel != null)
             {
-                string detailText = $"类型：{association.Type}\n\n" +
-                                  $"内容：{association.Content}\n\n" +
-                                  $"说明：{association.Description}\n\n" +
-                                  "━━━━━━━━━━━━━━━━━━━━\n" +
-                                  "💡 思考题：\n" +
-                                  "你能用自己的话解释这个联想吗？\n" +
-                                  "这个知识点和你之前学过的有什么联系？";
+                string typeIcon = GetTypeIcon(association.Type);
+                string detailText =
+                    $"{typeIcon} 【{association.Type}】\n\n" +
+                    $"━━━━━━━━━━━━━━━━━━━━\n\n" +
+                    $"📝 内容：\n   {association.Content}\n\n" +
+                    $"📖 说明：\n   {association.Description}\n\n" +
+                    $"━━━━━━━━━━━━━━━━━━━━\n\n" +
+                    $"🧠 记忆技巧：\n" +
+                    $"   • 把「{_currentContent}」和「{association.Content}」联系起来\n" +
+                    $"   • 想象一个包含两者的画面\n" +
+                    $"   • 用自己的话复述这个关联\n\n" +
+                    $"💡 思考题：\n" +
+                    $"   1. 你能用自己的话解释这个联想吗？\n" +
+                    $"   2. 这个知识点和你之前学过的有什么联系？\n" +
+                    $"   3. 你能想到更多类似的关联吗？";
 
                 detailLabel.Text = detailText;
+            }
+        }
+
+        /// <summary>
+        /// 获取类型对应的图标
+        /// </summary>
+        private string GetTypeIcon(string type)
+        {
+            return type switch
+            {
+                "同类词" => "📝",
+                "反义词" => "🔄",
+                "相关词" => "🏷️",
+                "例句" => "📖",
+                "知识点" => "💡",
+                _ => "✨"
+            };
+        }
+
+        /// <summary>
+        /// 类型过滤按钮点击事件
+        /// 点击后在树视图中展开对应类型的节点
+        /// </summary>
+        private void FilterTypeButton_Click(object? sender, EventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is string typeText)
+            {
+                string type = typeText.Replace("📝", "").Replace("🔄", "").Replace("🏷️", "").Replace("📖", "").Replace("💡", "").Trim();
+
+                foreach (TreeNode node in treeViewAssociations.Nodes)
+                {
+                    string nodeType = node.Text.Replace("📝", "").Replace("🔄", "").Replace("🏷️", "").Replace("📖", "").Replace("💡", "").Trim();
+
+                    if (nodeType == type)
+                    {
+                        treeViewAssociations.SelectedNode = node;
+                        node.Expand();
+
+                        if (node.Nodes.Count > 0)
+                        {
+                            treeViewAssociations.SelectedNode = node.Nodes[0];
+                            var association = _associations.FirstOrDefault(a => a.Type == type && a.Content == node.Nodes[0].Text);
+                            if (association != null)
+                            {
+                                ShowDetail(association);
+                            }
+                        }
+
+                        HighlightFilterButton(typeText);
+                        return;
+                    }
+                }
+
+                labelDetailContent.Text = $"暂无「{type}」类型的联想内容\n\n点击「✨ AI生成联想」按钮生成更多内容！";
+                HighlightFilterButton(typeText);
+            }
+        }
+
+        /// <summary>
+        /// 高亮当前选中的过滤按钮
+        /// </summary>
+        private void HighlightFilterButton(string selectedType)
+        {
+            foreach (Control ctrl in panelMain.Controls)
+            {
+                if (ctrl is Button btn && btn.Tag is string type)
+                {
+                    if (type == selectedType)
+                    {
+                        btn.BackColor = Color.FromArgb(103, 58, 183);
+                        btn.ForeColor = Color.White;
+                        btn.FlatAppearance.BorderColor = Color.FromArgb(103, 58, 183);
+                    }
+                    else
+                    {
+                        btn.BackColor = Color.White;
+                        btn.ForeColor = Color.FromArgb(80, 80, 80);
+                        btn.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
+                    }
+                }
             }
         }
 
@@ -477,6 +688,177 @@ namespace LearningAssistant.Forms
         private void ButtonSkip_Click(object sender, EventArgs e)
         {
             this.Close();
+        }
+
+        /// <summary>
+        /// 设置AI按钮可见性
+        /// </summary>
+        private void SetupAiButton()
+        {
+            if (_aiService != null)
+            {
+                _buttonGenerateAi.Visible = true;
+            }
+        }
+
+        /// <summary>
+        /// AI生成联想按钮点击事件
+        /// </summary>
+        private async void ButtonGenerateAi_Click(object? sender, EventArgs e)
+        {
+            if (_aiService == null) return;
+
+            try
+            {
+                _buttonGenerateAi.Enabled = false;
+                _buttonGenerateAi.Text = "生成中...";
+                labelDetailContent.Text = "正在AI生成联想内容，请稍候...";
+
+                string prompt = $"请为学习内容\"{_currentContent}\"生成联想学习内容，包括：\n" +
+                              "1. 3-5个同类词/近义词\n" +
+                              "2. 2-3个反义词\n" +
+                              "3. 3-5个相关词\n" +
+                              "4. 2-3个例句\n" +
+                              "5. 2-3个相关知识点\n\n" +
+                              "请按以下JSON格式返回（不要包含其他文字）：\n" +
+                              "{\n" +
+                              "  \"similar\": [\"同类词1\", \"同类词2\"],\n" +
+                              "  \"opposite\": [\"反义词1\", \"反义词2\"],\n" +
+                              "  \"related\": [\"相关词1\", \"相关词2\"],\n" +
+                              "  \"examples\": [\"例句1\", \"例句2\"],\n" +
+                              "  \"knowledge\": [\"知识点1\", \"知识点2\"]\n" +
+                              "}";
+
+                string result = await _aiService.AskAsync(prompt);
+                var associations = ParseAiAssociations(result);
+
+                if (associations.Count > 0)
+                {
+                    _associations = associations;
+                    LoadAssociations();
+                    labelDetailContent.Text = $"✨ AI已为你生成 {associations.Count} 条联想内容！\n\n点击左侧树状图查看详情。";
+                }
+                else
+                {
+                    labelDetailContent.Text = "AI生成失败，请稍后重试。\n\n已显示默认联想内容。";
+                }
+            }
+            catch (Exception ex)
+            {
+                labelDetailContent.Text = $"生成失败：{ex.Message}\n\n已显示默认联想内容。";
+            }
+            finally
+            {
+                _buttonGenerateAi.Enabled = true;
+                _buttonGenerateAi.Text = "✨ AI生成联想";
+            }
+        }
+
+        /// <summary>
+        /// 解析AI返回的联想内容
+        /// </summary>
+        private List<AssociationNode> ParseAiAssociations(string aiResponse)
+        {
+            var result = new List<AssociationNode>();
+
+            try
+            {
+                int jsonStart = aiResponse.IndexOf('{');
+                int jsonEnd = aiResponse.LastIndexOf('}');
+                if (jsonStart >= 0 && jsonEnd > jsonStart)
+                {
+                    string json = aiResponse.Substring(jsonStart, jsonEnd - jsonStart + 1);
+
+                    var similarItems = ParseJsonArray(json, "similar");
+                    foreach (var item in similarItems)
+                    {
+                        result.Add(new AssociationNode
+                        {
+                            Type = "同类词",
+                            Content = item,
+                            Description = $"与「{_currentContent}」含义相近或属于同一类别的词汇"
+                        });
+                    }
+
+                    var oppositeItems = ParseJsonArray(json, "opposite");
+                    foreach (var item in oppositeItems)
+                    {
+                        result.Add(new AssociationNode
+                        {
+                            Type = "反义词",
+                            Content = item,
+                            Description = $"与「{_currentContent}」含义相反的词汇"
+                        });
+                    }
+
+                    var relatedItems = ParseJsonArray(json, "related");
+                    foreach (var item in relatedItems)
+                    {
+                        result.Add(new AssociationNode
+                        {
+                            Type = "相关词",
+                            Content = item,
+                            Description = $"与「{_currentContent}」相关联的其他词汇或概念"
+                        });
+                    }
+
+                    var exampleItems = ParseJsonArray(json, "examples");
+                    foreach (var item in exampleItems)
+                    {
+                        result.Add(new AssociationNode
+                        {
+                            Type = "例句",
+                            Content = item.Length > 30 ? item.Substring(0, 30) + "..." : item,
+                            Description = item
+                        });
+                    }
+
+                    var knowledgeItems = ParseJsonArray(json, "knowledge");
+                    foreach (var item in knowledgeItems)
+                    {
+                        result.Add(new AssociationNode
+                        {
+                            Type = "知识点",
+                            Content = item.Length > 25 ? item.Substring(0, 25) + "..." : item,
+                            Description = item
+                        });
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// 简单解析JSON数组
+        /// </summary>
+        private List<string> ParseJsonArray(string json, string key)
+        {
+            var result = new List<string>();
+            string pattern = $"\"{key}\"";
+            int idx = json.IndexOf(pattern);
+            if (idx < 0) return result;
+
+            int bracketStart = json.IndexOf('[', idx);
+            int bracketEnd = json.IndexOf(']', bracketStart);
+            if (bracketStart < 0 || bracketEnd < 0) return result;
+
+            string arrayContent = json.Substring(bracketStart + 1, bracketEnd - bracketStart - 1);
+
+            var items = arrayContent.Split(',');
+            foreach (var item in items)
+            {
+                string trimmed = item.Trim().Trim('"', ' ', '\n', '\r', '\t');
+                if (!string.IsNullOrEmpty(trimmed))
+                {
+                    result.Add(trimmed);
+                }
+            }
+
+            return result;
         }
 
         #endregion
