@@ -18,6 +18,13 @@ namespace LearningAssistant.Forms.UserControls
         private Label _labelTodayCount = null!;
         private Label _labelStreak = null!;
         private Label _labelEncouragement = null!;
+        private FlowLayoutPanel _flowLayoutPanelFeatures = null!;
+        private Button _buttonAchievements = null!;
+        private Button _buttonChallenges = null!;
+        private Button _buttonPK = null!;
+        private Button _buttonReview = null!;
+        private Label _labelBadges = null!;
+        private FlowLayoutPanel _flowLayoutPanelBottomStats = null!;
 
         #endregion
 
@@ -47,6 +54,33 @@ namespace LearningAssistant.Forms.UserControls
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Panel PanelStatsContainer => _panelStatsContainer;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public FlowLayoutPanel FlowLayoutPanelFeatures => _flowLayoutPanelFeatures;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Button ButtonAchievements => _buttonAchievements;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Button ButtonChallenges => _buttonChallenges;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Button ButtonPK => _buttonPK;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Button ButtonReview => _buttonReview;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Label LabelBadges => _labelBadges;
+
+        #endregion
+
+        #region Events
+
+        public event EventHandler? AchievementsClicked;
+        public event EventHandler? ChallengesClicked;
+        public event EventHandler? PKClicked;
+        public event EventHandler? ReviewClicked;
+
         #endregion
 
         #region Initialization
@@ -66,6 +100,12 @@ namespace LearningAssistant.Forms.UserControls
             _labelTodayCount = new Label();
             _labelStreak = new Label();
             _labelEncouragement = new Label();
+            _flowLayoutPanelFeatures = new FlowLayoutPanel();
+            _buttonAchievements = new Button();
+            _buttonChallenges = new Button();
+            _buttonPK = new Button();
+            _buttonReview = new Button();
+            _labelBadges = new Label();
 
             _panelStatsContainer.SuspendLayout();
             SuspendLayout();
@@ -102,6 +142,80 @@ namespace LearningAssistant.Forms.UserControls
             _labelStatistics.Size = new Size(1089, 32);
             _labelStatistics.TabIndex = 1;
             _labelStatistics.TextAlign = ContentAlignment.MiddleCenter;
+
+            // 
+            // _flowLayoutPanelFeatures
+            // 
+            _flowLayoutPanelFeatures.Dock = DockStyle.Top;
+            _flowLayoutPanelFeatures.Height = 38;
+            _flowLayoutPanelFeatures.Name = "flowLayoutPanelFeatures";
+            _flowLayoutPanelFeatures.Padding = new Padding(10, 3, 10, 3);
+            _flowLayoutPanelFeatures.TabIndex = 7;
+            _flowLayoutPanelFeatures.WrapContents = false;
+            _flowLayoutPanelFeatures.Controls.Add(_buttonAchievements);
+            _flowLayoutPanelFeatures.Controls.Add(_buttonChallenges);
+            _flowLayoutPanelFeatures.Controls.Add(_buttonPK);
+            _flowLayoutPanelFeatures.Controls.Add(_buttonReview);
+            _flowLayoutPanelFeatures.Controls.Add(_labelBadges);
+
+            // 
+            // _buttonAchievements
+            // 
+            _buttonAchievements.FlatStyle = FlatStyle.Flat;
+            _buttonAchievements.FlatAppearance.BorderSize = 0;
+            _buttonAchievements.Font = new Font("微软雅黑", 9F);
+            _buttonAchievements.ForeColor = Color.FromArgb(255, 152, 0);
+            _buttonAchievements.Size = new Size(70, 28);
+            _buttonAchievements.Text = "🏆 成就";
+            _buttonAchievements.UseVisualStyleBackColor = false;
+            _buttonAchievements.Click += ButtonAchievements_Click;
+
+            // 
+            // _buttonChallenges
+            // 
+            _buttonChallenges.FlatStyle = FlatStyle.Flat;
+            _buttonChallenges.FlatAppearance.BorderSize = 0;
+            _buttonChallenges.Font = new Font("微软雅黑", 9F);
+            _buttonChallenges.ForeColor = Color.FromArgb(76, 175, 80);
+            _buttonChallenges.Size = new Size(70, 28);
+            _buttonChallenges.Text = "🎯 挑战";
+            _buttonChallenges.UseVisualStyleBackColor = false;
+            _buttonChallenges.Click += ButtonChallenges_Click;
+
+            // 
+            // _buttonPK
+            // 
+            _buttonPK.FlatStyle = FlatStyle.Flat;
+            _buttonPK.FlatAppearance.BorderSize = 0;
+            _buttonPK.Font = new Font("微软雅黑", 9F);
+            _buttonPK.ForeColor = Color.FromArgb(244, 67, 54);
+            _buttonPK.Size = new Size(70, 28);
+            _buttonPK.Text = "⚔️ PK";
+            _buttonPK.UseVisualStyleBackColor = false;
+            _buttonPK.Click += ButtonPK_Click;
+
+            // 
+            // _buttonReview
+            // 
+            _buttonReview.FlatStyle = FlatStyle.Flat;
+            _buttonReview.FlatAppearance.BorderSize = 0;
+            _buttonReview.Font = new Font("微软雅黑", 9F);
+            _buttonReview.ForeColor = Color.FromArgb(33, 150, 243);
+            _buttonReview.Size = new Size(80, 28);
+            _buttonReview.Text = "🔔 复习";
+            _buttonReview.UseVisualStyleBackColor = false;
+            _buttonReview.Click += ButtonReview_Click;
+
+            // 
+            // _labelBadges
+            // 
+            _labelBadges.AutoSize = true;
+            _labelBadges.Font = new Font("Segoe UI Emoji", 16F);
+            _labelBadges.Margin = new Padding(20, 0, 0, 0);
+            _labelBadges.Name = "labelBadges";
+            _labelBadges.Size = new Size(400, 32);
+            _labelBadges.Text = "🏅🎖️";
+            _labelBadges.TextAlign = ContentAlignment.MiddleRight;
 
             // 
             // _labelStudyTime
@@ -155,25 +269,42 @@ namespace LearningAssistant.Forms.UserControls
             _labelEncouragement.TabIndex = 6;
             _labelEncouragement.TextAlign = ContentAlignment.MiddleRight;
 
+            // 
+            // _flowLayoutPanelBottomStats
+            // 
+            _flowLayoutPanelBottomStats = new FlowLayoutPanel();
+            _flowLayoutPanelBottomStats.Dock = DockStyle.Bottom;
+            _flowLayoutPanelBottomStats.Height = 30;
+            _flowLayoutPanelBottomStats.Name = "flowLayoutPanelBottomStats";
+            _flowLayoutPanelBottomStats.Padding = new Padding(15, 3, 15, 3);
+            _flowLayoutPanelBottomStats.WrapContents = false;
+            _flowLayoutPanelBottomStats.Controls.Add(_labelStudyTime);
+            _flowLayoutPanelBottomStats.Controls.Add(_labelScore);
+            _flowLayoutPanelBottomStats.Controls.Add(_labelTodayCount);
+            _flowLayoutPanelBottomStats.Controls.Add(_labelStreak);
+            _flowLayoutPanelBottomStats.Controls.Add(_labelEncouragement);
+
             //
             // LearningStatsView
             //
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             Controls.Add(_panelStatsContainer);
-            Controls.Add(_progressBar);
             Controls.Add(_labelStatistics);
-            Controls.Add(_labelStudyTime);
-            Controls.Add(_labelScore);
-            Controls.Add(_labelTodayCount);
-            Controls.Add(_labelStreak);
-            Controls.Add(_labelEncouragement);
+            Controls.Add(_flowLayoutPanelBottomStats);
+            Controls.Add(_flowLayoutPanelFeatures);
+            Controls.Add(_progressBar);
             Name = "LearningStatsView";
             Size = new Size(1095, 838);
 
             _panelStatsContainer.ResumeLayout(false);
             ResumeLayout(false);
         }
+
+        private void ButtonAchievements_Click(object? sender, EventArgs e) => AchievementsClicked?.Invoke(sender, e);
+        private void ButtonChallenges_Click(object? sender, EventArgs e) => ChallengesClicked?.Invoke(sender, e);
+        private void ButtonPK_Click(object? sender, EventArgs e) => PKClicked?.Invoke(sender, e);
+        private void ButtonReview_Click(object? sender, EventArgs e) => ReviewClicked?.Invoke(sender, e);
 
         #endregion
 
