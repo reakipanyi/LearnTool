@@ -89,6 +89,7 @@ namespace LearningAssistant.Common
             services.AddSingleton<IUserSessionService, UserSessionService>();
             services.AddSingleton<ISubjectTemplateService, SubjectTemplateService>();
             services.AddSingleton<IDataMigrationService, DataMigrationService>();
+            services.AddSingleton<IThinkingStimulator, ThinkingStimulator>();
 
             services.AddSingleton<ExportService>();
             services.AddSingleton<QuoteService>();
@@ -174,6 +175,7 @@ namespace LearningAssistant.Common
             services.AddSingleton<IAdvancedSpeechService, AdvancedSpeechService>();
             services.AddSingleton<IEnhancedReminderService, EnhancedReminderService>();
             services.AddSingleton<IEncouragementService, EncouragementService>();
+            services.AddSingleton<IAchievementService, AchievementService>();
 
             services.AddScoped<ILearningSettingsManager, LearningSettingsManager>();
             services.AddScoped<ILearningEventMediator, LearningEventMediator>();

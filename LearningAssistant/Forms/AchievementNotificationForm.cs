@@ -6,11 +6,17 @@ namespace LearningAssistant.Forms
 {
     public partial class AchievementNotificationForm : Form
     {
+        #region 字段
+
         private readonly System.Windows.Forms.Timer _displayTimer = new System.Windows.Forms.Timer();
         private readonly System.Windows.Forms.Timer _fadeTimer = new System.Windows.Forms.Timer();
         private float _opacityValue = 0;
         private ConfettiControl? _confetti;
         private readonly ISoundService _soundService;
+
+        #endregion
+
+        #region 构造函数
 
         public AchievementNotificationForm(Achievement achievement)
         {
@@ -27,6 +33,10 @@ namespace LearningAssistant.Forms
             SetupAnimations();
             _soundService = soundService ?? new SoundService();
         }
+
+        #endregion
+
+        #region 初始化方法
 
         private void SetAchievementData(Achievement achievement)
         {
@@ -46,6 +56,10 @@ namespace LearningAssistant.Forms
 
             Load += (s, e) => _fadeTimer.Start();
         }
+
+        #endregion
+
+        #region 动画事件处理
 
         private void OnFadeTimerTick(object? sender, EventArgs e)
         {
@@ -79,6 +93,10 @@ namespace LearningAssistant.Forms
             }
             Opacity = _opacityValue;
         }
+
+        #endregion
+
+        #region 重写方法
 
         protected override void OnLoad(EventArgs e)
         {
@@ -115,6 +133,10 @@ namespace LearningAssistant.Forms
             }
             base.Dispose(disposing);
         }
+
+        #endregion
+
+        #region Windows Form Designer generated code
 
         private void InitializeComponent()
         {
@@ -210,5 +232,7 @@ namespace LearningAssistant.Forms
         private Label lblTitle = null!;
         private Label lblAchievementName = null!;
         private Label lblDescription = null!;
+
+        #endregion
     }
 }

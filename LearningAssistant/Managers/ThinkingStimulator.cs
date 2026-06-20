@@ -3,6 +3,18 @@ using LearningAssistant.Forms;
 namespace LearningAssistant.Managers
 {
     /// <summary>
+    /// 思考激发服务接口
+    /// </summary>
+    public interface IThinkingStimulator
+    {
+        void StartProgressiveHint(string content, string answer);
+        void StartAssociationLearning(string content);
+        void StartActiveRecall(List<ReviewItem> reviewItems);
+        List<string> CreateFeynmanQuestions(string content);
+        void ShowDailyThinkingTask();
+    }
+
+    /// <summary>
     /// 思考激发管理器
     /// 
     /// 核心功能：整合所有激发思考的功能，提供统一的调用接口。
@@ -20,7 +32,7 @@ namespace LearningAssistant.Managers
     /// - 帮助用户建立知识关联
     /// - 培养用户的深度思考习惯
     /// </summary>
-    public class ThinkingStimulator
+    public class ThinkingStimulator : IThinkingStimulator
     {
         #region 构造函数
 
@@ -28,14 +40,6 @@ namespace LearningAssistant.Managers
         /// 默认构造函数
         /// </summary>
         public ThinkingStimulator()
-        {
-        }
-
-        /// <summary>
-        /// 保持向后兼容的构造函数
-        /// </summary>
-        /// <param name="_">LearningForm 实例（未使用，仅用于兼容）</param>
-        public ThinkingStimulator(LearningForm _)
         {
         }
 

@@ -4,10 +4,16 @@ namespace LearningAssistant.Forms
 {
     public partial class ReminderNotificationForm : Form
     {
+        #region 字段
+
         private readonly System.Windows.Forms.Timer _fadeInTimer;
         private readonly System.Windows.Forms.Timer _fadeOutTimer;
         private readonly int _displayDuration = 5000;
         private int _currentOpacity = 0;
+
+        #endregion
+
+        #region 属性
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string ReminderTitle { get; set; } = "学习提醒";
@@ -16,9 +22,17 @@ namespace LearningAssistant.Forms
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string ReminderTime { get; set; } = string.Empty;
 
+        #endregion
+
+        #region 事件
+
         public event EventHandler? OpenLearningClicked;
         public event EventHandler? SnoozeClicked;
         public event EventHandler? DismissClicked;
+
+        #endregion
+
+        #region 构造函数
 
         public ReminderNotificationForm()
         {
@@ -32,6 +46,10 @@ namespace LearningAssistant.Forms
 
             Load += ReminderNotificationForm_Load;
         }
+
+        #endregion
+
+        #region 加载与动画
 
         private void ReminderNotificationForm_Load(object? sender, EventArgs e)
         {
@@ -90,6 +108,10 @@ namespace LearningAssistant.Forms
             }
         }
 
+        #endregion
+
+        #region 按钮事件处理
+
         private void ButtonOpenLearning_Click(object? sender, EventArgs e)
         {
             _fadeInTimer.Stop();
@@ -116,6 +138,8 @@ namespace LearningAssistant.Forms
             OpenLearningClicked?.Invoke(this, EventArgs.Empty);
             Close();
         }
+
+        #endregion
 
         #region Windows Form Designer generated code
 

@@ -7,6 +7,7 @@ using LearningAssistant.Models.User;
 using LearningAssistant.Services;
 using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Feedback;
+using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
@@ -26,6 +27,9 @@ namespace LearningAssistant.Forms
         private readonly IThemeService _themeService;
         private readonly IAIPanelPopupService? _aiPanelPopupService;
         private readonly IEncouragementService _encouragementService;
+        private readonly IThinkingStimulator? _thinkingStimulator;
+        private readonly IAchievementService? _achievementService;
+        private readonly ISpacedRepetitionService? _spacedRepetitionService;
         private readonly BadgeManager _badgeManager;
         private readonly StudyStatsManager _statsManager;
         private readonly ChallengeManager _challengeManager;
@@ -120,6 +124,11 @@ namespace LearningAssistant.Forms
         private Button buttonNote => _buttonsView.ButtonNote;
         private Button buttonKnown => _buttonsView.ButtonKnown;
         private Button buttonUnknown => _buttonsView.ButtonUnknown;
+        private Button buttonAchievements => _statsView.ButtonAchievements;
+        private Button buttonChallenges => _statsView.ButtonChallenges;
+        private Button buttonPK => _statsView.ButtonPK;
+        private Button buttonReview => _statsView.ButtonReview;
+        private Label labelBadges => _statsView.LabelBadges;
         private Label labelDailyGoal = new Label();
         #endregion
 
@@ -155,7 +164,10 @@ namespace LearningAssistant.Forms
             ISoundService soundService,
             IThemeService themeService,
             IAIPanelPopupService aiPanelPopupService,
-            IEncouragementService encouragementService)
+            IEncouragementService encouragementService,
+            IThinkingStimulator? thinkingStimulator = null,
+            IAchievementService? achievementService = null,
+            ISpacedRepetitionService? spacedRepetitionService = null)
         {
             InitializeComponent();
             _aiQuestionService = aiQuestionService ?? throw new ArgumentNullException(nameof(aiQuestionService));
@@ -166,6 +178,9 @@ namespace LearningAssistant.Forms
             _themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
             _aiPanelPopupService = aiPanelPopupService ?? throw new ArgumentNullException(nameof(aiPanelPopupService));
             _encouragementService = encouragementService ?? throw new ArgumentNullException(nameof(encouragementService));
+            _thinkingStimulator = thinkingStimulator;
+            _achievementService = achievementService;
+            _spacedRepetitionService = spacedRepetitionService;
 
             _badgeManager = new BadgeManager(_loggerFactory.CreateLogger<BadgeManager>());
             _badgeManager.BadgesUnlocked += OnBadgesUnlocked;
@@ -230,6 +245,11 @@ namespace LearningAssistant.Forms
             _contentView.NoteTextChanged += RichTextBoxNotes_TextChanged;
 
             _listView.SelectedIndexChanged += ListBoxItems_SelectedIndexChanged;
+
+            _statsView.AchievementsClicked += ButtonAchievements_Click;
+            _statsView.ChallengesClicked += ButtonChallenges_Click;
+            _statsView.PKClicked += ButtonPK_Click;
+            _statsView.ReviewClicked += ButtonReview_Click;
         }
 
 
@@ -996,18 +1016,15 @@ namespace LearningAssistant.Forms
             middleTableLayoutPanel.Controls.Add(_contentView.PanelContent, 0, 0);
             middleTableLayoutPanel.Controls.Add(_contentView.PanelNotes, 0, 1);
             middleTableLayoutPanel.Controls.Add(_buttonsView.ButtonsPanel, 0, 2);
-            middleTableLayoutPanel.Controls.Add(progressBar1, 0, 3);
-            middleTableLayoutPanel.Controls.Add(_statsView.LabelStatistics, 0, 5);
+            middleTableLayoutPanel.Controls.Add(_statsView, 0, 3);
             middleTableLayoutPanel.Dock = DockStyle.Fill;
             middleTableLayoutPanel.Location = new Point(0, 0);
             middleTableLayoutPanel.Name = "middleTableLayoutPanel";
-            middleTableLayoutPanel.RowCount = 6;
+            middleTableLayoutPanel.RowCount = 4;
             middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 0F));
             middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 71F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 51F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 170F));
             middleTableLayoutPanel.Size = new Size(1095, 838);
             middleTableLayoutPanel.TabIndex = 0;
 
@@ -1219,6 +1236,38 @@ namespace LearningAssistant.Forms
         }
 
         public event EventHandler<ItemSelectedEventArgs>? ItemSelectedFromList;
+
+        #endregion
+
+        #region 高级学习功能
+
+        public void StartProgressiveHint()
+        {
+            if (_currentItem == null || _thinkingStimulator == null) return;
+            var content = _currentItem.GetMainContent();
+            var answer = _currentItem.GetDisplayText();
+            _thinkingStimulator.StartProgressiveHint(content, answer);
+        }
+
+        public void StartAssociationLearning()
+        {
+            if (_currentItem == null || _thinkingStimulator == null) return;
+            var content = _currentItem.GetMainContent();
+            _thinkingStimulator.StartAssociationLearning(content);
+        }
+
+        public void ShowFeynmanQuestions()
+        {
+            if (_currentItem == null || _thinkingStimulator == null) return;
+            var content = _currentItem.GetMainContent();
+            var questions = _thinkingStimulator.CreateFeynmanQuestions(content);
+            MessageBox.Show(string.Join("\n\n", questions), "🧠 费曼学习法", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        public void ShowDailyThinkingTask()
+        {
+            _thinkingStimulator?.ShowDailyThinkingTask();
+        }
 
         #endregion
 
@@ -1594,6 +1643,117 @@ namespace LearningAssistant.Forms
         {
             Close();
             ExitClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ButtonAchievements_Click(object? sender, EventArgs e)
+        {
+            var achievements = _achievementService?.GetAllAchievements() ?? new List<Achievement>();
+            var unlocked = _achievementService?.GetUnlockedAchievements() ?? new List<Achievement>();
+            var message = $"🏆 成就系统\n\n" +
+                          $"已解锁: {unlocked.Count} / {achievements.Count}\n\n";
+            foreach (var a in achievements.Take(10))
+            {
+                var status = unlocked.Any(u => u.Id == a.Id) ? "✅" : "🔒";
+                message += $"{status} {a.Icon} {a.Name}\n";
+            }
+            if (achievements.Count > 10)
+                message += $"\n... 还有 {achievements.Count - 10} 个成就";
+            MessageBox.Show(message, "成就", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void ButtonChallenges_Click(object? sender, EventArgs e)
+        {
+            _challengeManager.UpdateDisplay();
+            var message = "🎯 每日挑战\n\n";
+            var challenges = _challengeManager.GetAllChallenges();
+            foreach (var c in challenges)
+            {
+                var status = c.Completed ? "✅" : "⏳";
+                var claimed = c.Claimed ? " [已领取]" : "";
+                message += $"{status} {c.Emoji} {c.Name} ({c.Current}/{c.Target}){claimed}\n";
+            }
+            var completed = _challengeManager.CompletedCount;
+            var total = challenges.Count();
+            message += $"\n完成进度: {completed}/{total}";
+            MessageBox.Show(message, "挑战", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void ButtonPK_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                var myData = new UserComparisonData
+                {
+                    UserId = "我",
+                    ConsecutiveStudyDays = _statsManager.StreakDays,
+                    TodayStudyTimeMinutes = (int)_studyDuration.TotalMinutes,
+                    AccuracyRate = _statsManager.TotalLearnedCount > 0
+                        ? (double)_quizCorrectCount / _statsManager.TotalLearnedCount * 100
+                        : 0,
+                    KnownItemsCount = _statsManager.TotalLearnedCount,
+                    TotalStudyTimeMinutes = (int)_studyDuration.TotalMinutes,
+                    TotalItems = _totalLearnedCount,
+                    AchievementCount = _achievementService?.GetUnlockedAchievements()?.Count ?? 0
+                };
+
+                var rival1 = new UserComparisonData
+                {
+                    UserId = "学霸小明",
+                    ConsecutiveStudyDays = Math.Max(1, _statsManager.StreakDays + 2),
+                    TodayStudyTimeMinutes = Math.Max(10, (int)_studyDuration.TotalMinutes + 15),
+                    AccuracyRate = 85.5,
+                    KnownItemsCount = Math.Max(50, _totalLearnedCount + 30),
+                    TotalStudyTimeMinutes = Math.Max(60, (int)_studyDuration.TotalMinutes + 45),
+                    TotalItems = Math.Max(100, _totalLearnedCount + 50),
+                    AchievementCount = Math.Max(3, (_achievementService?.GetUnlockedAchievements()?.Count ?? 0) + 2)
+                };
+
+                var rival2 = new UserComparisonData
+                {
+                    UserId = "努力小红",
+                    ConsecutiveStudyDays = Math.Max(1, _statsManager.StreakDays - 1),
+                    TodayStudyTimeMinutes = Math.Max(5, (int)_studyDuration.TotalMinutes - 5),
+                    AccuracyRate = 72.3,
+                    KnownItemsCount = Math.Max(20, _totalLearnedCount - 10),
+                    TotalStudyTimeMinutes = Math.Max(30, (int)_studyDuration.TotalMinutes - 20),
+                    TotalItems = Math.Max(50, _totalLearnedCount - 20),
+                    AchievementCount = Math.Max(1, (_achievementService?.GetUnlockedAchievements()?.Count ?? 0) - 1)
+                };
+
+                var comparisonData = new List<UserComparisonData> { myData, rival1, rival2 };
+                var pkForm = new UserComparisonForm(comparisonData, _themeService);
+                pkForm.ShowDialog(this);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "打开PK对比窗口失败");
+                MessageBox.Show($"打开PK对比窗口失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ButtonReview_Click(object? sender, EventArgs e)
+        {
+            var dueItems = _spacedRepetitionService?.GetItemsDueForReview("default");
+            var message = $"🔔 间隔重复复习\n\n" +
+                          $"今日待复习: {dueItems.Count} 项\n";
+            var todayCount = _spacedRepetitionService?.GetTodayReviewCount("default") ?? 0;
+            var retention = _spacedRepetitionService?.CalculateRetentionRate("default") ?? 0;
+            message += $"今日已复习: {todayCount} 项\n";
+            message += $"记忆保持率: {retention:P0}\n\n";
+
+            if (dueItems.Count > 0)
+            {
+                message += "前5个待复习内容:\n";
+                foreach (var item in dueItems.Take(5))
+                {
+                    message += $"  • {item.Content}\n";
+                }
+            }
+            else
+            {
+                message += "🎉 今天没有待复习的内容！";
+            }
+            MessageBox.Show(message, "间隔重复复习", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
 
@@ -1978,6 +2138,18 @@ namespace LearningAssistant.Forms
                 case Keys.Escape:
                     ExitClicked?.Invoke(this, EventArgs.Empty);
                     Close();
+                    return true;
+                case Keys.F1:
+                    StartProgressiveHint();
+                    return true;
+                case Keys.F2:
+                    StartAssociationLearning();
+                    return true;
+                case Keys.F4:
+                    ShowFeynmanQuestions();
+                    return true;
+                case Keys.F5:
+                    ShowDailyThinkingTask();
                     return true;
                 default:
                     return false;
