@@ -6,6 +6,13 @@ using System.Windows.Forms;
 
 namespace LearningAssistant.Managers
 {
+    public enum AnnotationToolMode
+    {
+        Highlight,
+        Pen,
+        Text
+    }
+
     public class PdfReaderNavigationManager : IDisposable
     {
         private readonly ILogger _logger;
@@ -17,6 +24,8 @@ namespace LearningAssistant.Managers
         private bool _isDrawing = false;
         private bool _isDragging = false;
         private bool _isLocked = false;
+
+        private AnnotationToolMode _currentToolMode = AnnotationToolMode.Highlight;
 
         private Point _selectStart = Point.Empty;
         private Point _selectEnd = Point.Empty;
@@ -50,22 +59,68 @@ namespace LearningAssistant.Managers
         private Graphics? _annotationGraphics;
         private List<PointF>? _currentStrokePoints;
         private Pen? _drawingPen;
+        private Color _penColor = Color.Red;
+        private float _penWidth = 3f;
 
         public int ZoomLevel => _zoomLevel;
         public bool IsLocked => _isLocked;
         public Rectangle? LastSelectionRect => _lastSelectionRect ?? _pendingHighlightRect;
         public Point ImageOffset => _imageOffset;
+        public AnnotationToolMode CurrentToolMode => _currentToolMode;
+        public Color PenColor => _penColor;
+        public float PenWidth => _penWidth;
+        public bool IsDrawing => _isDrawing;
+        public List<PointF>? CurrentStrokePoints => _currentStrokePoints;
 
         public Func<bool>? IsHighlightModeCallback { get; set; }
         public Action<Rectangle>? AddHighlightCallback { get; set; }
+        public Action<Point>? AddTextCallback { get; set; }
 
         public PdfReaderNavigationManager(ILogger logger, IPdfReaderFormAccess form)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _form = form ?? throw new ArgumentNullException(nameof(form));
             
-            _drawingPen = new Pen(Color.Red, 4f);
+            _drawingPen = new Pen(_penColor, _penWidth);
+            _drawingPen.StartCap = LineCap.Round;
+            _drawingPen.EndCap = LineCap.Round;
+            _drawingPen.LineJoin = LineJoin.Round;
             InitializeLongPressTimer();
+        }
+
+        public void SetToolMode(AnnotationToolMode mode)
+        {
+            _currentToolMode = mode;
+            _isDrawing = false;
+            _isSelecting = false;
+            _currentStrokePoints = null;
+            _form.PictureBoxPdf.Invalidate();
+        }
+
+        public void SetPenColor(Color color)
+        {
+            _penColor = color;
+            if (_drawingPen != null)
+            {
+                _drawingPen.Dispose();
+            }
+            _drawingPen = new Pen(_penColor, _penWidth);
+            _drawingPen.StartCap = LineCap.Round;
+            _drawingPen.EndCap = LineCap.Round;
+            _drawingPen.LineJoin = LineJoin.Round;
+        }
+
+        public void SetPenWidth(float width)
+        {
+            _penWidth = Math.Max(1f, Math.Min(20f, width));
+            if (_drawingPen != null)
+            {
+                _drawingPen.Dispose();
+            }
+            _drawingPen = new Pen(_penColor, _penWidth);
+            _drawingPen.StartCap = LineCap.Round;
+            _drawingPen.EndCap = LineCap.Round;
+            _drawingPen.LineJoin = LineJoin.Round;
         }
 
         private void InitializeLongPressTimer()
@@ -281,10 +336,30 @@ namespace LearningAssistant.Managers
 
                 if (e.Button == MouseButtons.Left)
                 {
-                    _isLongPressPending = true;
-                    _longPressStartLocation = e.Location;
-                    _longPressDragStarted = false;
-                    StartLongPressTimer();
+                    switch (_currentToolMode)
+                    {
+                        case AnnotationToolMode.Highlight:
+                            _logger.LogInformation("MouseDown Left: Starting highlight selection at {X},{Y}", e.Location.X, e.Location.Y);
+                            _isSelecting = true;
+                            _selectStart = e.Location;
+                            _selectEnd = e.Location;
+                            _form.PictureBoxPdf.Invalidate();
+                            break;
+                        case AnnotationToolMode.Pen:
+                            _logger.LogInformation("MouseDown Left: Starting pen drawing at {X},{Y}", e.Location.X, e.Location.Y);
+                            _isDrawing = true;
+                            EnsureAnnotationBitmap();
+                            _selectStart = e.Location;
+                            _selectEnd = e.Location;
+                            var imgPt = ClientToImage(e.Location);
+                            _currentStrokePoints = new List<PointF>() { imgPt };
+                            _form.PictureBoxPdf.Invalidate();
+                            break;
+                        case AnnotationToolMode.Text:
+                            _logger.LogInformation("MouseDown Left: Text tool clicked at {X},{Y}", e.Location.X, e.Location.Y);
+                            AddTextCallback?.Invoke(e.Location);
+                            break;
+                    }
                     return;
                 }
 
@@ -309,7 +384,7 @@ namespace LearningAssistant.Managers
                     _lastClickTime = now;
                     _lastClickLocation = e.Location;
 
-                    if (_isDrawing || (Control.ModifierKeys & Keys.Control) == Keys.Control)
+                    if (_currentToolMode == AnnotationToolMode.Pen || _isDrawing)
                     {
                         _logger.LogInformation("MouseDown Right: Drawing mode, starting annotation");
                         _isDrawing = true;
@@ -322,7 +397,16 @@ namespace LearningAssistant.Managers
                         return;
                     }
 
-                    _logger.LogInformation("MouseDown Right: Starting highlight selection at {X},{Y}", e.Location.X, e.Location.Y);
+                    if (_currentToolMode == AnnotationToolMode.Highlight)
+                    {
+                        _isLongPressPending = true;
+                        _longPressStartLocation = e.Location;
+                        _longPressDragStarted = false;
+                        StartLongPressTimer();
+                        return;
+                    }
+
+                    _logger.LogInformation("MouseDown Right: Starting selection at {X},{Y}", e.Location.X, e.Location.Y);
                     _isSelecting = true;
                     _selectStart = e.Location;
                     _selectEnd = e.Location;
@@ -359,11 +443,14 @@ namespace LearningAssistant.Managers
                     }
                 }
 
-                var ctrlDown = (Control.ModifierKeys & Keys.Control) == Keys.Control;
-                var leftDown = (Control.MouseButtons & MouseButtons.Left) == MouseButtons.Left;
-                if (_isDrawing || (ctrlDown && leftDown))
+                if (_isDrawing)
                 {
                     _selectEnd = e.Location;
+                    var imgPt = ClientToImage(e.Location);
+                    if (_currentStrokePoints != null)
+                    {
+                        _currentStrokePoints.Add(imgPt);
+                    }
                     _form.PictureBoxPdf.Invalidate();
                     return;
                 }
@@ -410,16 +497,19 @@ namespace LearningAssistant.Managers
                     _isDrawing = false;
                     try
                     {
-                        if (_annotationBitmap != null)
+                        if (_annotationBitmap != null && _currentStrokePoints != null && _currentStrokePoints.Count >= 2)
                         {
-                            var ip1 = ClientToImage(_selectStart);
-                            var ip2 = ClientToImage(_selectEnd);
                             _annotationGraphics!.SmoothingMode = SmoothingMode.AntiAlias;
-                            _annotationGraphics.DrawLine(_drawingPen, ip1, ip2);
+                            _annotationGraphics.DrawLines(_drawingPen, _currentStrokePoints.ToArray());
                             _form.Presenter?.SaveAnnotationForCurrentPage((Bitmap)_annotationBitmap.Clone());
                             var imgW = _annotationBitmap.Width;
                             var imgH = _annotationBitmap.Height;
-                            var pts = new List<float>() { ip1.X / imgW, ip1.Y / imgH, ip2.X / imgW, ip2.Y / imgH };
+                            var pts = new List<float>();
+                            foreach (var pt in _currentStrokePoints)
+                            {
+                                pts.Add(pt.X / imgW);
+                                pts.Add(pt.Y / imgH);
+                            }
                             _form.Presenter?.AddAnnotationStroke(pts.ToArray(), _drawingPen.Color.ToArgb(), _drawingPen.Width, imgW, imgH);
                         }
                     }
@@ -441,7 +531,7 @@ namespace LearningAssistant.Managers
                     _logger.LogInformation("MouseUp: _isSelecting=true, _lastSelectionRect={X},{Y} {Width}x{Height}",
                         _lastSelectionRect?.X, _lastSelectionRect?.Y, _lastSelectionRect?.Width, _lastSelectionRect?.Height);
 
-                    var isHighlightMode = IsHighlightModeCallback?.Invoke() ?? true;
+                    var isHighlightMode = _currentToolMode == AnnotationToolMode.Highlight;
                     _logger.LogInformation("MouseUp: isHighlightMode={IsHighlightMode}", isHighlightMode);
                     
                     if (isHighlightMode && _lastSelectionRect.HasValue)
@@ -599,6 +689,69 @@ namespace LearningAssistant.Managers
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error cleaning up annotation bitmap");
+            }
+        }
+
+        public void LoadAnnotationsForCurrentPage()
+        {
+            try
+            {
+                if (_form.CurrentPageImage == null || _form.Presenter == null) return;
+
+                int imgWidth = _form.CurrentPageImage.Width;
+                int imgHeight = _form.CurrentPageImage.Height;
+
+                var annotationBitmap = _form.Presenter.LoadAnnotationForCurrentPage(imgWidth, imgHeight);
+                if (annotationBitmap != null)
+                {
+                    CleanupAnnotationBitmap();
+                    _annotationBitmap = new Bitmap(annotationBitmap);
+                    _annotationGraphics = Graphics.FromImage(_annotationBitmap);
+                    _annotationGraphics.SmoothingMode = SmoothingMode.AntiAlias;
+                }
+                else
+                {
+                    EnsureAnnotationBitmap();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error loading annotations for current page");
+            }
+        }
+
+        public void DrawAnnotations(Graphics g, Rectangle imgRect)
+        {
+            try
+            {
+                if (_annotationBitmap != null)
+                {
+                    g.DrawImage(_annotationBitmap, imgRect);
+                }
+
+                if (_isDrawing && _currentStrokePoints != null && _currentStrokePoints.Count >= 2)
+                {
+                    var scaleX = (float)imgRect.Width / _form.CurrentPageImage.Width;
+                    var scaleY = (float)imgRect.Height / _form.CurrentPageImage.Height;
+
+                    var screenPoints = new List<Point>();
+                    foreach (var pt in _currentStrokePoints)
+                    {
+                        screenPoints.Add(new Point(
+                            (int)(pt.X * scaleX + imgRect.X),
+                            (int)(pt.Y * scaleY + imgRect.Y)));
+                    }
+
+                    using var pen = new Pen(_penColor, _penWidth);
+                    pen.StartCap = LineCap.Round;
+                    pen.EndCap = LineCap.Round;
+                    pen.LineJoin = LineJoin.Round;
+                    g.DrawLines(pen, screenPoints.ToArray());
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error drawing annotations");
             }
         }
 

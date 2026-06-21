@@ -65,7 +65,6 @@ namespace LearningAssistant.Managers
                 _form.FlowLayoutPanelThumbnails!.BackColor = Color.FromArgb(40, 40, 40);
 
                 UpdateButtonNightModeColor(_form.ButtonNightMode, true);
-                UpdateButtonLanguageColor(_form.ButtonLanguage, true);
                 UpdateButtonAiColor(_form.ButtonAskAi, true);
             }
             else
@@ -81,7 +80,6 @@ namespace LearningAssistant.Managers
                 _form.FlowLayoutPanelThumbnails!.BackColor = Color.FromArgb(240, 240, 240);
 
                 UpdateButtonNightModeColor(_form.ButtonNightMode, false);
-                UpdateButtonLanguageColor(_form.ButtonLanguage, false);
                 UpdateButtonAiColor(_form.ButtonAskAi, false);
             }
         }
@@ -90,13 +88,6 @@ namespace LearningAssistant.Managers
         {
             if (button == null) return;
             button.BackColor = isNightMode ? Color.FromArgb(45, 45, 45) : Color.White;
-        }
-
-        private void UpdateButtonLanguageColor(Button? button, bool isNightMode)
-        {
-            if (button == null) return;
-            button.BackColor = isNightMode ? Color.FromArgb(45, 45, 45) : Color.White;
-            button.ForeColor = isNightMode ? Color.White : Color.Black;
         }
 
         private void UpdateButtonAiColor(Button? button, bool isNightMode)

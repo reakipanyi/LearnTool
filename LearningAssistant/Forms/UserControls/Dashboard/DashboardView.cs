@@ -197,7 +197,7 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
                 Description = desc,
                 StartColor = startColor,
                 EndColor = endColor,
-                Width = 140,
+                Width = 150,
                 Height = 130
             };
             _featureCards.Add(card);
@@ -282,7 +282,7 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
         {
             int margin = 24;
             int spacing = 16;
-            int cardWidth = 140;
+            int cardWidth = 150;
             int cardHeight = 130;
 
             int totalWidth = Width - margin * 2;

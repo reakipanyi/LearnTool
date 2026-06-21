@@ -303,12 +303,12 @@ namespace LearningAssistant.Services.Pdf
         {
             return highlightColor switch
             {
-                HighlightColor.Yellow => Color.FromArgb(120, 255, 255, 0),
-                HighlightColor.Green => Color.FromArgb(120, 0, 255, 0),
-                HighlightColor.Blue => Color.FromArgb(120, 0, 191, 255),
-                HighlightColor.Pink => Color.FromArgb(120, 255, 192, 203),
-                HighlightColor.Orange => Color.FromArgb(120, 255, 165, 0),
-                _ => Color.FromArgb(120, 255, 255, 0)
+                HighlightColor.Yellow => Color.FromArgb(70, 255, 255, 0),
+                HighlightColor.Green => Color.FromArgb(70, 0, 255, 0),
+                HighlightColor.Blue => Color.FromArgb(70, 0, 191, 255),
+                HighlightColor.Pink => Color.FromArgb(70, 255, 192, 203),
+                HighlightColor.Orange => Color.FromArgb(70, 255, 165, 0),
+                _ => Color.FromArgb(70, 255, 255, 0)
             };
         }
 

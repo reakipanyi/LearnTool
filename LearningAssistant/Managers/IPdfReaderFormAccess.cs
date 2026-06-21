@@ -7,6 +7,8 @@ namespace LearningAssistant.Managers
         string CurrentPdfPath { get; set; }
         int CurrentPageIndex { get; set; }
         Bitmap? CurrentPageImage { get; set; }
+        Bitmap? SecondPageImage { get; set; }
+        bool IsDualPage { get; }
         bool IsTranslationEnabled { get; set; }
 
         PictureBox PictureBoxPdf { get; }
@@ -59,6 +61,7 @@ namespace LearningAssistant.Managers
         Color BackColor { get; set; }
 
         Rectangle GetImageDisplayRect();
+        (int pageIndex, Rectangle pageRect, Bitmap? pageImage) GetPageAtPoint(Point clientPoint);
         void DisplayImage(Bitmap bmp);
         void ShowWarning(string message);
         bool ShowConfirm(string message, string title);

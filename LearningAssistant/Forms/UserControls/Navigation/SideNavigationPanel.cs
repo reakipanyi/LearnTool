@@ -215,7 +215,16 @@ namespace LearningAssistant.Forms.UserControls.Navigation
         {
             public NavigationItem Item { get; }
             [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-            public bool IsSelected { get; set; }
+            public bool IsSelected
+            {
+                get => _isSelected;
+                set
+                {
+                    _isSelected = value;
+                    Invalidate();
+                }
+            }
+            private bool _isSelected;
             public bool IsHovered { get; private set; }
             [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
             public bool Collapsed { get; set; }

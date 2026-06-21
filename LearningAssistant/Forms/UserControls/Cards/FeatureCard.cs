@@ -109,7 +109,7 @@ namespace LearningAssistant.Forms.UserControls.Cards
                 true);
 
             BackColor = Color.Transparent;
-            Size = new Size(160, 140);
+            Size = new Size(160, 150);
             Cursor = Cursors.Hand;
             DoubleBuffered = true;
         }
@@ -177,17 +177,42 @@ namespace LearningAssistant.Forms.UserControls.Cards
 
             var descFont = new Font("微软雅黑", 9F);
             var descSize = g.MeasureString(_description, descFont);
-            var descX = (Width - descSize.Width) / 2;
             var descY = titleY + titleSize.Height + 6;
+            var maxDescWidth = Width - 20;
+
+            string displayDesc = _description;
+            if (descSize.Width > maxDescWidth)
+            {
+                while (descSize.Width > maxDescWidth && displayDesc.Length > 1)
+                {
+                    displayDesc = displayDesc.Substring(0, displayDesc.Length - 1);
+                    descSize = g.MeasureString(displayDesc + "...", descFont);
+                }
+                displayDesc += "...";
+            }
+
+            var descX = (Width - descSize.Width) / 2;
 
             using var descBrush = new SolidBrush(Color.FromArgb(200, _textColor));
-            g.DrawString(_description, descFont, descBrush, descX, descY);
+            g.DrawString(displayDesc, descFont, descBrush, descX, descY);
 
             if (_isHovered)
             {
                 using var borderPen = new Pen(Color.FromArgb(80, Color.White), 2);
                 g.DrawPath(borderPen, cardPath);
             }
+        }
+
+        private void InitializeComponent()
+        {
+            SuspendLayout();
+            // 
+            // FeatureCard
+            // 
+            Name = "FeatureCard";
+            Size = new Size(160, 150);
+            ResumeLayout(false);
+
         }
 
         private static GraphicsPath RoundedRect(Rectangle rect, int radius)

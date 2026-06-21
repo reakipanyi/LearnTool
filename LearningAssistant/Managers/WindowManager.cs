@@ -18,6 +18,7 @@ namespace LearningAssistant.Managers
         void OpenStatisticsWindow();
         void OpenLearningManagementWindow();
         void OpenPdfReaderWindow();
+        //void OpenPdfReaderWindowV1();
         void OpenAIWebViewWindow(string? initialPrompt = null);
     }
 
@@ -211,7 +212,7 @@ namespace LearningAssistant.Managers
                 using var scope = _serviceProvider.CreateScope();
                 var scopedProvider = scope.ServiceProvider;
 
-                var form = scopedProvider.GetRequiredService<PdfReaderForm>();
+                var form = scopedProvider.GetRequiredService<PdfReaderFormV2>();
                 var presenter = scopedProvider.GetRequiredService<PdfPresenter>();
 
                 form.SetPresenter(presenter);
@@ -225,6 +226,28 @@ namespace LearningAssistant.Managers
             }
         }
 
+        //public void OpenPdfReaderWindowV1()
+        //{
+        //    _logger.LogInformation("Opening PDF reader window");
+        //
+        //    try
+        //    {
+        //        using var scope = _serviceProvider.CreateScope();
+        //        var scopedProvider = scope.ServiceProvider;
+        //
+        //        var form = scopedProvider.GetRequiredService<PdfReaderForm>();
+        //        var presenter = scopedProvider.GetRequiredService<PdfPresenter>();
+        //
+        //        form.SetPresenter(presenter);
+        //        form.StartPosition = FormStartPosition.CenterParent;
+        //        form.ShowDialog();
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        _logger.LogError(ex, "Failed to open PDF reader window");
+        //        throw;
+        //    }
+        //}
         public void OpenAIWebViewWindow(string? initialPrompt = null)
         {
             _logger.LogInformation("Opening AI WebView window");

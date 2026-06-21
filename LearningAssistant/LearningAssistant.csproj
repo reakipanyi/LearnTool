@@ -20,6 +20,7 @@
 	  <Compile Remove="Forms\BaiduNetdiskAuthForm.cs" />
 	  <Compile Remove="Forms\BookmarkManagerForm.cs" />
 	  <Compile Remove="Forms\FormPreviewer.cs" />
+	  <Compile Remove="Forms\PdfReaderForm.cs" />
 	  <Compile Remove="Forms\UserComparisonForm.cs" />
 	  <Compile Remove="Services\AI\SiliconFlowAIService.cs" />
 	  <Compile Remove="Services\Cloud\BaiduPanFileManager.cs" />
@@ -27,6 +28,7 @@
 	<ItemGroup>
 	  <EmbeddedResource Remove="Forms\BaiduNetdiskAuthForm.resx" />
 	  <EmbeddedResource Remove="Forms\BrowserForm.resx" />
+	  <EmbeddedResource Remove="Forms\PdfReaderForm.resx" />
 	  <EmbeddedResource Remove="Forms\UserComparisonForm.resx" />
 	</ItemGroup>
 	<ItemGroup>

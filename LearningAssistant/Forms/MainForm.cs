@@ -21,7 +21,7 @@ namespace LearningAssistant.Forms
         private readonly IThemeService _themeService;
         private readonly ILogger<MainForm> _logger;
         private readonly Services.Web.IWebBookmarkService _webBookmarkService;
-        private bool _isDisposed = false;
+
 
         public MainForm(
             MainPresenter presenter,
@@ -50,14 +50,6 @@ namespace LearningAssistant.Forms
         {
             BackColor = colors.Background;
 
-            // Light 主题下不改变 Panel 的颜色
-            if (colors.ThemeMode == ThemeMode.Dark)
-            {
-                if (panelMain != null)
-                {
-                    panelMain.BackColor = colors.Surface;
-                }
-            }
 
             if (comboBoxUser != null)
             {
@@ -69,6 +61,49 @@ namespace LearningAssistant.Forms
             {
                 textBoxProgress.BackColor = colors.Surface;
                 textBoxProgress.ForeColor = colors.TextPrimary;
+            }
+
+            if (panelTopBar != null)
+            {
+                panelTopBar.BackColor = colors.ThemeMode == ThemeMode.Dark ? colors.Surface : Color.White;
+            }
+
+            if (labelTopBarTitle != null)
+            {
+                labelTopBarTitle.ForeColor = colors.TextPrimary;
+            }
+
+            if (comboBoxNewLayoutUser != null)
+            {
+                comboBoxNewLayoutUser.BackColor = colors.ThemeMode == ThemeMode.Dark ? colors.Surface : Color.FromArgb(245, 245, 250);
+                comboBoxNewLayoutUser.ForeColor = colors.TextPrimary;
+            }
+
+            if (buttonNewUser != null)
+            {
+                buttonNewUser.BackColor = colors.ThemeMode == ThemeMode.Dark ? colors.Surface : Color.FromArgb(245, 245, 250);
+                buttonNewUser.ForeColor = colors.TextPrimary;
+            }
+
+            if (buttonThemeToggle != null)
+            {
+                buttonThemeToggle.BackColor = colors.ThemeMode == ThemeMode.Dark ? colors.Surface : Color.FromArgb(245, 245, 250);
+                buttonThemeToggle.ForeColor = colors.TextPrimary;
+                buttonThemeToggle.Text = colors.ThemeMode == ThemeMode.Light ? "🌙" : "☀️";
+            }
+
+            if (sideNavigation != null)
+            {
+                sideNavigation.BackColor = colors.ThemeMode == ThemeMode.Dark
+                    ? Color.FromArgb(30, 30, 40)
+                    : Color.FromArgb(248, 248, 252);
+            }
+
+            if (panelContent != null)
+            {
+                panelContent.BackColor = colors.ThemeMode == ThemeMode.Dark
+                    ? Color.FromArgb(20, 20, 25)
+                    : Color.FromArgb(245, 245, 250);
             }
 
             foreach (Control control in Controls)
@@ -121,42 +156,12 @@ namespace LearningAssistant.Forms
             _presenter.OnOpenSettings += Presenter_OnOpenSettings;
             _presenter.OnOpenEditor += Presenter_OnOpenEditor;
 
-            // 添加用户对比菜单项
-            var userComparisonMenuItem = new ToolStripMenuItem("👥 用户对比");
-            userComparisonMenuItem.Click += (s, args) => OpenUserComparisonClicked?.Invoke(this, EventArgs.Empty);
-            toolStripMenuItemFile.DropDownItems.Add(userComparisonMenuItem);
-
-            // 添加切换布局菜单项
-            var toggleLayoutMenuItem = new ToolStripMenuItem("🎨 切换新/旧布局");
-            toggleLayoutMenuItem.Click += (s, args) => ToggleLayout();
-            toolStripMenuItemSettings.DropDownItems.Add(toggleLayoutMenuItem);
-
-            // 初始化新布局
-            if (useNewLayout)
+            // 绑定FeatureCard点击
+            foreach (FeatureCard card in this.dashboardView.Controls.OfType<Panel>()
+                .SelectMany(p => p.Controls.OfType<FeatureCard>()))
             {
-                InitializeNewLayout();
+                card.CardClicked += this.FeatureCard_Clicked;
             }
-        }
-
-        private void InitializeNewLayout()
-        {
-            panelMain.Visible = false;
-
-            splitContainerMain = new SplitContainer
-            {
-                Dock = DockStyle.Fill,
-                Orientation = Orientation.Vertical,
-                SplitterDistance = 220,
-                FixedPanel = FixedPanel.Panel1,
-                SplitterWidth = 1,
-                BorderStyle = BorderStyle.None
-            };
-
-            sideNavigation = new SideNavigationPanel
-            {
-                Dock = DockStyle.Fill
-            };
-
             sideNavigation.AddItems(new List<NavigationItem>
             {
                 new() { Key = "dashboard", Icon = "🏠", Text = "首页", Order = 0, Group = "main" },
@@ -174,40 +179,35 @@ namespace LearningAssistant.Forms
                 new() { Key = "settings", Icon = "⚙️", Text = "设置", Order = 99, Group = "system" }
             });
 
-            sideNavigation.SelectItem("dashboard");
-            sideNavigation.NavigationItemClicked += OnNavigationItemClicked;
-
-            panelContent = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = Color.FromArgb(245, 245, 250)
-            };
-
-            dashboardView = new DashboardView
-            {
-                Dock = DockStyle.Fill,
-                UserName = SelectedUser
-            };
-
-            foreach (FeatureCard card in dashboardView.Controls.OfType<Panel>().SelectMany(p => p.Controls.OfType<FeatureCard>()))
-            {
-                card.CardClicked += FeatureCard_Clicked;
-            }
-
-            panelContent.Controls.Add(dashboardView);
-
-            splitContainerMain.Panel1.Controls.Add(sideNavigation);
-            splitContainerMain.Panel2.Controls.Add(panelContent);
-
-            Controls.SetChildIndex(statusStrip1, 0);
-            Controls.SetChildIndex(menuStrip1, 0);
-            Controls.Add(splitContainerMain);
-            splitContainerMain.BringToFront();
-            menuStrip1.BringToFront();
-            statusStrip1.BringToFront();
-
-            Text = "🏠 学习助手 - 首页";
         }
+
+
+        #region 复用字体，Dispose统一释放
+        private readonly Font _fontLogoEmoji = new Font("Segoe UI Emoji", 20F);
+        private readonly Font _fontTopTitle = new Font("微软雅黑", 14F, FontStyle.Bold);
+        private readonly Font _fontIconBtn = new Font("Segoe UI Emoji", 10F);
+        #endregion
+
+
+
+
+        #region Windows Form Designer generated code
+
+
+        /// <summary>顶部栏自适应位置事件提取为方法，符合设计器规范</summary>
+        private void PanelTopBar_Resize(object s, EventArgs e)
+        {
+            int y = (panelTopBar.Height - labelTopBarLogo.Height) / 2;
+            labelTopBarLogo.Location = new Point(16, y);
+            labelTopBarTitle.Location = new Point(labelTopBarLogo.Right + 8, y + 2);
+
+            int rightX = panelTopBar.Width - 16;
+            buttonThemeToggle.Location = new Point(rightX - buttonThemeToggle.Width, (panelTopBar.Height - buttonThemeToggle.Height) / 2);
+            buttonNewUser.Location = new Point(buttonThemeToggle.Left - 8 - buttonNewUser.Width, (panelTopBar.Height - buttonNewUser.Height) / 2);
+            comboBoxNewLayoutUser.Location = new Point(buttonNewUser.Left - 12 - comboBoxNewLayoutUser.Width, (panelTopBar.Height - comboBoxNewLayoutUser.Height) / 2);
+        }
+        #endregion
+
 
         private void OnNavigationItemClicked(object? sender, string key)
         {
@@ -222,6 +222,9 @@ namespace LearningAssistant.Forms
                 case "pdf":
                     _windowManager.OpenPdfReaderWindow();
                     break;
+                //case "pdfV1":
+                //    _windowManager.OpenPdfReaderWindowV1();
+                //    break;
                 case "statistics":
                     buttonOpenStatistics?.PerformClick();
                     break;
@@ -293,33 +296,7 @@ namespace LearningAssistant.Forms
             }
         }
 
-        private void ToggleLayout()
-        {
-            useNewLayout = !useNewLayout;
 
-            if (useNewLayout)
-            {
-                if (splitContainerMain == null)
-                {
-                    InitializeNewLayout();
-                }
-                else
-                {
-                    splitContainerMain.Visible = true;
-                    panelMain.Visible = false;
-                }
-                Text = sideNavigation?.SelectedKey == "dashboard" ? "🏠 学习助手 - 首页" : "学习助手";
-            }
-            else
-            {
-                if (splitContainerMain != null)
-                {
-                    splitContainerMain.Visible = false;
-                }
-                panelMain.Visible = true;
-                Text = "学习助手";
-            }
-        }
 
         private void Presenter_OnOpenSettings(object? sender, EventArgs e)
         {
@@ -336,8 +313,21 @@ namespace LearningAssistant.Forms
         [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public string SelectedUser
         {
-            get => comboBoxUser.Text;
-            set => comboBoxUser.Text = value;
+            get
+            {
+                if (useNewLayout && comboBoxNewLayoutUser != null)
+                    return comboBoxNewLayoutUser.Text;
+                return comboBoxUser.Text;
+            }
+            set
+            {
+                if (comboBoxUser != null)
+                    comboBoxUser.Text = value;
+                if (comboBoxNewLayoutUser != null)
+                    comboBoxNewLayoutUser.Text = value;
+                if (dashboardView != null)
+                    dashboardView.UserName = value;
+            }
         }
 
         [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
@@ -369,10 +359,37 @@ namespace LearningAssistant.Forms
 
         public void RefreshUserList(IEnumerable<string> users)
         {
+            var userList = users.ToList();
+
             comboBoxUser.Items.Clear();
-            foreach (var user in users)
+            foreach (var user in userList)
             {
                 comboBoxUser.Items.Add(user);
+            }
+
+            RefreshNewLayoutUserList(userList);
+        }
+
+        private void RefreshNewLayoutUserList(List<string>? users = null)
+        {
+            if (comboBoxNewLayoutUser == null) return;
+
+            var userList = users ?? comboBoxUser.Items.Cast<string>().ToList();
+            var currentUser = comboBoxNewLayoutUser.Text;
+
+            comboBoxNewLayoutUser.Items.Clear();
+            foreach (var user in userList)
+            {
+                comboBoxNewLayoutUser.Items.Add(user);
+            }
+
+            if (!string.IsNullOrEmpty(currentUser) && userList.Contains(currentUser))
+            {
+                comboBoxNewLayoutUser.Text = currentUser;
+            }
+            else if (userList.Count > 0)
+            {
+                comboBoxNewLayoutUser.Text = userList[0];
             }
         }
 
@@ -413,7 +430,7 @@ namespace LearningAssistant.Forms
         #region WinForms Designer Generated Code
 
         private System.ComponentModel.IContainer components = null;
-        private Panel panelMain;
+        //private Panel panelMain;
         private GroupBox groupBoxUser;
         private ComboBox comboBoxUser;
         private Label labelUser;
@@ -428,12 +445,6 @@ namespace LearningAssistant.Forms
         private Button buttonLearningManagement;
         private Button buttonBrowser;
         private Button buttonWebView2Browser;
-        private MenuStrip menuStrip1;
-        private ToolStripMenuItem toolStripMenuItemFile;
-        private ToolStripMenuItem toolStripMenuItemNewUser;
-        private ToolStripMenuItem toolStripMenuItemExit;
-        private ToolStripMenuItem toolStripMenuItemSettings;
-        private ToolStripMenuItem toolStripMenuItemHelp;
         private ToolStripStatusLabel toolStripStatusLabel;
         private StatusStrip statusStrip1;
         private Panel panelStreakInfo;
@@ -445,11 +456,17 @@ namespace LearningAssistant.Forms
         private SideNavigationPanel sideNavigation;
         private DashboardView dashboardView;
         private Panel panelContent;
+        private Panel panelTopBar;
+        private Label labelTopBarTitle;
+        private Label labelTopBarLogo;
+        private ComboBox comboBoxNewLayoutUser;
+        private Button buttonNewUser;
+        private Button buttonThemeToggle;
         private bool useNewLayout = true;
+
 
         private void InitializeComponent()
         {
-            panelMain = new Panel();
             groupBoxProgress = new GroupBox();
             textBoxProgress = new TextBox();
             buttonOpenPdfReader = new Button();
@@ -465,38 +482,29 @@ namespace LearningAssistant.Forms
             buttonLearningManagement = new Button();
             buttonWebView2Browser = new Button();
             buttonBrowser = new Button();
-            menuStrip1 = new MenuStrip();
-            toolStripMenuItemFile = new ToolStripMenuItem();
-            toolStripMenuItemNewUser = new ToolStripMenuItem();
-            toolStripMenuItemExit = new ToolStripMenuItem();
-            toolStripMenuItemSettings = new ToolStripMenuItem();
-            toolStripMenuItemHelp = new ToolStripMenuItem();
             statusStrip1 = new StatusStrip();
             toolStripStatusLabel = new ToolStripStatusLabel();
-            panelMain.SuspendLayout();
+            splitContainerMain = new SplitContainer();
+            sideNavigation = new SideNavigationPanel();
+            panelContent = new Panel();
+            dashboardView = new DashboardView();
+            panelTopBar = new Panel();
+            labelTopBarLogo = new Label();
+            labelTopBarTitle = new Label();
+            comboBoxNewLayoutUser = new ComboBox();
+            buttonNewUser = new Button();
+            buttonThemeToggle = new Button();
             groupBoxProgress.SuspendLayout();
             groupBoxUser.SuspendLayout();
             panelStreakInfo.SuspendLayout();
-            menuStrip1.SuspendLayout();
             statusStrip1.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)splitContainerMain).BeginInit();
+            splitContainerMain.Panel1.SuspendLayout();
+            splitContainerMain.Panel2.SuspendLayout();
+            splitContainerMain.SuspendLayout();
+            panelContent.SuspendLayout();
+            panelTopBar.SuspendLayout();
             SuspendLayout();
-            // 
-            // panelMain
-            // 
-            panelMain.Controls.Add(groupBoxProgress);
-            panelMain.Controls.Add(buttonOpenPdfReader);
-            panelMain.Controls.Add(buttonOpenEditor);
-            panelMain.Controls.Add(buttonSettings);
-            panelMain.Controls.Add(buttonLearning);
-            panelMain.Controls.Add(groupBoxUser);
-            panelMain.Controls.Add(buttonLearningManagement);
-            panelMain.Controls.Add(buttonWebView2Browser);
-            panelMain.Dock = DockStyle.Fill;
-            panelMain.Location = new Point(0, 25);
-            panelMain.Margin = new Padding(4);
-            panelMain.Name = "panelMain";
-            panelMain.Size = new Size(632, 484);
-            panelMain.TabIndex = 0;
             // 
             // groupBoxProgress
             // 
@@ -511,12 +519,12 @@ namespace LearningAssistant.Forms
             // textBoxProgress
             // 
             textBoxProgress.Dock = DockStyle.Fill;
-            textBoxProgress.Location = new Point(3, 24);
+            textBoxProgress.Location = new Point(3, 19);
             textBoxProgress.Multiline = true;
             textBoxProgress.Name = "textBoxProgress";
             textBoxProgress.ReadOnly = true;
             textBoxProgress.ScrollBars = ScrollBars.Vertical;
-            textBoxProgress.Size = new Size(552, 151);
+            textBoxProgress.Size = new Size(552, 156);
             textBoxProgress.TabIndex = 0;
             // 
             // buttonOpenPdfReader
@@ -592,7 +600,7 @@ namespace LearningAssistant.Forms
             comboBoxUser.FormattingEnabled = true;
             comboBoxUser.Location = new Point(80, 34);
             comboBoxUser.Name = "comboBoxUser";
-            comboBoxUser.Size = new Size(150, 29);
+            comboBoxUser.Size = new Size(150, 25);
             comboBoxUser.TabIndex = 1;
             comboBoxUser.SelectedIndexChanged += ComboBoxUser_SelectedIndexChanged;
             // 
@@ -665,54 +673,12 @@ namespace LearningAssistant.Forms
             buttonBrowser.Size = new Size(75, 23);
             buttonBrowser.TabIndex = 0;
             // 
-            // menuStrip1
-            // 
-            menuStrip1.Items.AddRange(new ToolStripItem[] { toolStripMenuItemFile, toolStripMenuItemSettings, toolStripMenuItemHelp });
-            menuStrip1.Location = new Point(0, 0);
-            menuStrip1.Name = "menuStrip1";
-            menuStrip1.Size = new Size(632, 25);
-            menuStrip1.TabIndex = 1;
-            // 
-            // toolStripMenuItemFile
-            // 
-            toolStripMenuItemFile.DropDownItems.AddRange(new ToolStripItem[] { toolStripMenuItemNewUser, toolStripMenuItemExit });
-            toolStripMenuItemFile.Name = "toolStripMenuItemFile";
-            toolStripMenuItemFile.Size = new Size(44, 21);
-            toolStripMenuItemFile.Text = "文件";
-            // 
-            // toolStripMenuItemNewUser
-            // 
-            toolStripMenuItemNewUser.Name = "toolStripMenuItemNewUser";
-            toolStripMenuItemNewUser.Size = new Size(124, 22);
-            toolStripMenuItemNewUser.Text = "新建玩家";
-            toolStripMenuItemNewUser.Click += ToolStripMenuItemNewUser_Click;
-            // 
-            // toolStripMenuItemExit
-            // 
-            toolStripMenuItemExit.Name = "toolStripMenuItemExit";
-            toolStripMenuItemExit.Size = new Size(124, 22);
-            toolStripMenuItemExit.Text = "退出";
-            toolStripMenuItemExit.Click += ToolStripMenuItemExit_Click;
-            // 
-            // toolStripMenuItemSettings
-            // 
-            toolStripMenuItemSettings.Name = "toolStripMenuItemSettings";
-            toolStripMenuItemSettings.Size = new Size(44, 21);
-            toolStripMenuItemSettings.Text = "设置";
-            toolStripMenuItemSettings.Click += ToolStripMenuItemSettings_Click;
-            // 
-            // toolStripMenuItemHelp
-            // 
-            toolStripMenuItemHelp.Name = "toolStripMenuItemHelp";
-            toolStripMenuItemHelp.Size = new Size(44, 21);
-            toolStripMenuItemHelp.Text = "帮助";
-            // 
             // statusStrip1
             // 
             statusStrip1.Items.AddRange(new ToolStripItem[] { toolStripStatusLabel });
-            statusStrip1.Location = new Point(0, 509);
+            statusStrip1.Location = new Point(0, 690);
             statusStrip1.Name = "statusStrip1";
-            statusStrip1.Size = new Size(632, 22);
+            statusStrip1.Size = new Size(1259, 22);
             statusStrip1.TabIndex = 2;
             // 
             // toolStripStatusLabel
@@ -721,31 +687,165 @@ namespace LearningAssistant.Forms
             toolStripStatusLabel.Size = new Size(32, 17);
             toolStripStatusLabel.Text = "就绪";
             // 
+            // splitContainerMain
+            // 
+            splitContainerMain.Dock = DockStyle.Fill;
+            splitContainerMain.FixedPanel = FixedPanel.Panel1;
+            splitContainerMain.Location = new Point(0, 0);
+            splitContainerMain.Name = "splitContainerMain";
+            // 
+            // splitContainerMain.Panel1
+            // 
+            splitContainerMain.Panel1.Controls.Add(sideNavigation);
+            // 
+            // splitContainerMain.Panel2
+            // 
+            splitContainerMain.Panel2.Controls.Add(panelContent);
+            splitContainerMain.Panel2.Controls.Add(panelTopBar);
+            splitContainerMain.Size = new Size(1259, 690);
+            splitContainerMain.SplitterDistance = 121;
+            splitContainerMain.SplitterWidth = 1;
+            splitContainerMain.TabIndex = 1;
+            // 
+            // sideNavigation
+            // 
+            sideNavigation.BackColor = Color.FromArgb(248, 248, 252);
+            sideNavigation.Dock = DockStyle.Fill;
+            sideNavigation.Location = new Point(0, 0);
+            sideNavigation.Name = "sideNavigation";
+            sideNavigation.Size = new Size(121, 690);
+            sideNavigation.TabIndex = 0;
+            sideNavigation.NavigationItemClicked += OnNavigationItemClicked;
+            // 
+            // panelContent
+            // 
+            panelContent.BackColor = Color.FromArgb(245, 245, 250);
+            panelContent.Controls.Add(dashboardView);
+            panelContent.Dock = DockStyle.Fill;
+            panelContent.Location = new Point(0, 56);
+            panelContent.Name = "panelContent";
+            panelContent.Size = new Size(1137, 634);
+            panelContent.TabIndex = 1;
+            // 
+            // dashboardView
+            // 
+            dashboardView.BackColor = Color.FromArgb(245, 245, 250);
+            dashboardView.Dock = DockStyle.Fill;
+            dashboardView.Location = new Point(0, 0);
+            dashboardView.Name = "dashboardView";
+            dashboardView.Size = new Size(1137, 634);
+            dashboardView.TabIndex = 0;
+            // 
+            // panelTopBar
+            // 
+            panelTopBar.BackColor = Color.White;
+            panelTopBar.Controls.Add(labelTopBarLogo);
+            panelTopBar.Controls.Add(labelTopBarTitle);
+            panelTopBar.Controls.Add(comboBoxNewLayoutUser);
+            panelTopBar.Controls.Add(buttonNewUser);
+            panelTopBar.Controls.Add(buttonThemeToggle);
+            panelTopBar.Dock = DockStyle.Top;
+            panelTopBar.Location = new Point(0, 0);
+            panelTopBar.Name = "panelTopBar";
+            panelTopBar.Padding = new Padding(16, 0, 16, 0);
+            panelTopBar.Size = new Size(1137, 56);
+            panelTopBar.TabIndex = 0;
+            panelTopBar.Resize += PanelTopBar_Resize;
+            // 
+            // labelTopBarLogo
+            // 
+            labelTopBarLogo.AutoSize = true;
+            labelTopBarLogo.Location = new Point(3, 0);
+            labelTopBarLogo.Name = "labelTopBarLogo";
+            labelTopBarLogo.Size = new Size(30, 21);
+            labelTopBarLogo.TabIndex = 0;
+            labelTopBarLogo.Text = "📚";
+            labelTopBarLogo.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // labelTopBarTitle
+            // 
+            labelTopBarTitle.AutoSize = true;
+            labelTopBarTitle.ForeColor = Color.FromArgb(33, 33, 33);
+            labelTopBarTitle.Location = new Point(34, 0);
+            labelTopBarTitle.Name = "labelTopBarTitle";
+            labelTopBarTitle.Size = new Size(74, 21);
+            labelTopBarTitle.TabIndex = 1;
+            labelTopBarTitle.Text = "学习助手";
+            labelTopBarTitle.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // comboBoxNewLayoutUser
+            // 
+            comboBoxNewLayoutUser.BackColor = Color.FromArgb(245, 245, 250);
+            comboBoxNewLayoutUser.Cursor = Cursors.Hand;
+            comboBoxNewLayoutUser.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboBoxNewLayoutUser.FlatStyle = FlatStyle.Flat;
+            comboBoxNewLayoutUser.ForeColor = Color.FromArgb(33, 33, 33);
+            comboBoxNewLayoutUser.FormattingEnabled = true;
+            comboBoxNewLayoutUser.Location = new Point(105, 0);
+            comboBoxNewLayoutUser.Name = "comboBoxNewLayoutUser";
+            comboBoxNewLayoutUser.Size = new Size(140, 29);
+            comboBoxNewLayoutUser.TabIndex = 2;
+            comboBoxNewLayoutUser.SelectedIndexChanged += ComboBoxNewLayoutUser_SelectedIndexChanged;
+            // 
+            // buttonNewUser
+            // 
+            buttonNewUser.BackColor = Color.FromArgb(245, 245, 250);
+            buttonNewUser.Cursor = Cursors.Hand;
+            buttonNewUser.FlatAppearance.BorderSize = 0;
+            buttonNewUser.FlatStyle = FlatStyle.Flat;
+            buttonNewUser.ForeColor = Color.FromArgb(33, 33, 33);
+            buttonNewUser.Location = new Point(0, 0);
+            buttonNewUser.Name = "buttonNewUser";
+            buttonNewUser.Size = new Size(36, 28);
+            buttonNewUser.TabIndex = 3;
+            buttonNewUser.Text = "➕";
+            buttonNewUser.UseVisualStyleBackColor = false;
+            buttonNewUser.Click += ButtonNewUser_Click;
+            // 
+            // buttonThemeToggle
+            // 
+            buttonThemeToggle.BackColor = Color.FromArgb(245, 245, 250);
+            buttonThemeToggle.Cursor = Cursors.Hand;
+            buttonThemeToggle.FlatAppearance.BorderSize = 0;
+            buttonThemeToggle.FlatStyle = FlatStyle.Flat;
+            buttonThemeToggle.ForeColor = Color.FromArgb(33, 33, 33);
+            buttonThemeToggle.Location = new Point(0, 0);
+            buttonThemeToggle.Name = "buttonThemeToggle";
+            buttonThemeToggle.Size = new Size(36, 28);
+            buttonThemeToggle.TabIndex = 4;
+            buttonThemeToggle.Text = "🌙";
+            buttonThemeToggle.UseVisualStyleBackColor = false;
+            buttonThemeToggle.Click += ButtonThemeToggle_Click;
+            // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(10F, 21F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.FromArgb(250, 245, 235);
-            ClientSize = new Size(632, 531);
-            Controls.Add(panelMain);
+            ClientSize = new Size(1259, 712);
+            Controls.Add(splitContainerMain);
             Controls.Add(statusStrip1);
-            Controls.Add(menuStrip1);
             Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
-            MainMenuStrip = menuStrip1;
             Margin = new Padding(4);
             Name = "MainForm";
-            Text = "学习助手";
-            panelMain.ResumeLayout(false);
+            Text = "🏠 学习助手 - 首页";
             groupBoxProgress.ResumeLayout(false);
             groupBoxProgress.PerformLayout();
             groupBoxUser.ResumeLayout(false);
             panelStreakInfo.ResumeLayout(false);
-            menuStrip1.ResumeLayout(false);
-            menuStrip1.PerformLayout();
             statusStrip1.ResumeLayout(false);
             statusStrip1.PerformLayout();
+            splitContainerMain.Panel1.ResumeLayout(false);
+            splitContainerMain.Panel2.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)splitContainerMain).EndInit();
+            splitContainerMain.ResumeLayout(false);
+            panelContent.ResumeLayout(false);
+            panelTopBar.ResumeLayout(false);
+            panelTopBar.PerformLayout();
             ResumeLayout(false);
             PerformLayout();
+
+
         }
 
         #endregion
@@ -755,6 +855,37 @@ namespace LearningAssistant.Forms
         private void ComboBoxUser_SelectedIndexChanged(object? sender, EventArgs e)
         {
             UserChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ComboBoxNewLayoutUser_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            if (comboBoxUser != null && comboBoxUser.Text != comboBoxNewLayoutUser.Text)
+            {
+                comboBoxUser.Text = comboBoxNewLayoutUser.Text;
+            }
+            if (dashboardView != null)
+            {
+                dashboardView.UserName = comboBoxNewLayoutUser.Text;
+            }
+            UserChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ButtonNewUser_Click(object? sender, EventArgs e)
+        {
+            NewUserClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ButtonThemeToggle_Click(object? sender, EventArgs e)
+        {
+            if (_themeService == null) return;
+
+            var currentTheme = _themeService.CurrentTheme;
+            var newTheme = currentTheme == ThemeMode.Light
+                ? ThemeMode.Dark
+                : ThemeMode.Light;
+            _themeService.SetTheme(newTheme);
+
+            buttonThemeToggle.Text = newTheme == ThemeMode.Light ? "🌙" : "☀️";
         }
 
         private void ButtonLearning_Click(object? sender, EventArgs e)
@@ -855,9 +986,6 @@ namespace LearningAssistant.Forms
 
         protected override void Dispose(bool disposing)
         {
-            if (_isDisposed)
-                return;
-
             if (disposing)
             {
                 if (_presenter != null)
@@ -872,8 +1000,6 @@ namespace LearningAssistant.Forms
                     components.Dispose();
                 }
             }
-
-            _isDisposed = true;
             base.Dispose(disposing);
         }
 

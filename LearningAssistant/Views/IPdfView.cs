@@ -56,6 +56,12 @@ namespace LearningAssistant.Views
         void DisplayImage(Bitmap bmp);
 
         /// <summary>
+        /// 设置第二页图像（双页模式）
+        /// </summary>
+        /// <param name="bmp">第二页Bitmap图像</param>
+        void SetSecondPageImage(Bitmap? bmp);
+
+        /// <summary>
         /// 显示警告消息
         /// </summary>
         /// <param name="message">警告消息内容</param>

@@ -12,7 +12,6 @@ using LearningAssistant.Services.Backup.Providers;
 using LearningAssistant.Services.Cache;
 using LearningAssistant.Services.Cloud;
 using LearningAssistant.Services.DragDrop;
-using LearningAssistant.Services.Favorites;
 using LearningAssistant.Services.Feedback;
 using LearningAssistant.Services.Gamification;
 using LearningAssistant.Services.Hotkeys;
@@ -62,9 +61,16 @@ namespace LearningAssistant.Common
         /// </summary>
         public static IServiceCollection AddLoggingServices(this IServiceCollection services)
         {
+            var logDir = AppPaths.LogsDir;
+            if (!Directory.Exists(logDir))
+            {
+                Directory.CreateDirectory(logDir);
+            }
+
             services.AddLogging(builder =>
             {
                 builder.AddConsole();
+                builder.AddFile(logDir, LogLevel.Information);
                 builder.SetMinimumLevel(LogLevel.Information);
             });
 
@@ -308,7 +314,8 @@ namespace LearningAssistant.Common
             });
             services.AddScoped<SettingForm>();
             services.AddScoped<LearningForm>();
-            services.AddScoped<PdfReaderForm>();
+            //services.AddScoped<PdfReaderForm>();
+            services.AddScoped<PdfReaderFormV2>();
             services.AddScoped<ResultForm>(sp =>
             {
                 var logger = sp.GetService<ILogger<ResultForm>>();
@@ -345,7 +352,7 @@ namespace LearningAssistant.Common
 
             services.AddScoped<ISettingView>(sp => sp.GetRequiredService<SettingForm>());
             services.AddScoped<ILearningView>(sp => sp.GetRequiredService<LearningForm>());
-            services.AddScoped<IPdfView>(sp => sp.GetRequiredService<PdfReaderForm>());
+            services.AddScoped<IPdfView>(sp => sp.GetRequiredService<PdfReaderFormV2>());
             services.AddScoped<IMainView>(sp => sp.GetRequiredService<MainForm>());
             services.AddScoped<IResultView>(sp => sp.GetRequiredService<ResultForm>());
             services.AddScoped<IContentEditorView>(sp => sp.GetRequiredService<ContentEditorForm>());

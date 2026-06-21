@@ -118,8 +118,8 @@ namespace LearningAssistant.Managers
             }
 
             int alpha1 = Math.Max(0, color.A - 0);
-            int alpha2 = Math.Max(0, color.A - 30);
-            int alpha3 = Math.Min(255, color.A + 50);
+            int alpha2 = Math.Max(0, color.A - 20);
+            int alpha3 = Math.Min(255, color.A + 120);
 
             using var gradientBrush = new LinearGradientBrush(
                 rect,
@@ -129,7 +129,7 @@ namespace LearningAssistant.Managers
 
             _highlightGraphics!.FillRectangle(gradientBrush, rect);
 
-            using var pen = new Pen(Color.FromArgb(alpha3, color.R, color.G, color.B), 1.5f);
+            using var pen = new Pen(Color.FromArgb(alpha3, color.R, color.G, color.B), 2.5f);
             _highlightGraphics.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
 
             if (!string.IsNullOrEmpty(highlight.Note))
@@ -166,21 +166,21 @@ namespace LearningAssistant.Managers
         {
             try
             {
-                var currentPageImage = _form.CurrentPageImage;
                 var currentPdfPath = _form.CurrentPdfPath;
-                var currentPageIndex = _form.CurrentPageIndex;
                 var currentHighlightColor = CurrentHighlightColor;
 
-                _logger.LogInformation("AddHighlightFromSelectionAsync: PdfPath={Path}, PageIndex={Page}, ImageSize={Width}x{Height}",
-                    currentPdfPath, currentPageIndex, currentPageImage?.Width, currentPageImage?.Height);
+                var centerPoint = new Point(selectionRect.X + selectionRect.Width / 2, selectionRect.Y + selectionRect.Height / 2);
+                var (targetPageIndex, imgRect, targetPageImage) = _form.GetPageAtPoint(centerPoint);
 
-                if (currentPageImage == null || string.IsNullOrEmpty(currentPdfPath))
+                _logger.LogInformation("AddHighlightFromSelectionAsync: PdfPath={Path}, PageIndex={Page}, ImageSize={Width}x{Height}",
+                    currentPdfPath, targetPageIndex, targetPageImage?.Width, targetPageImage?.Height);
+
+                if (targetPageImage == null || string.IsNullOrEmpty(currentPdfPath))
                 {
-                    _logger.LogWarning("AddHighlightFromSelectionAsync: currentPageImage or currentPdfPath is null");
+                    _logger.LogWarning("AddHighlightFromSelectionAsync: targetPageImage or currentPdfPath is null");
                     return;
                 }
 
-                var imgRect = _form.GetImageDisplayRect();
                 _logger.LogInformation("AddHighlightFromSelectionAsync: imgRect={X},{Y} {Width}x{Height}",
                     imgRect.X, imgRect.Y, imgRect.Width, imgRect.Height);
 
@@ -190,8 +190,8 @@ namespace LearningAssistant.Managers
                     return;
                 }
 
-                int originalWidth = currentPageImage.Width;
-                int originalHeight = currentPageImage.Height;
+                int originalWidth = targetPageImage.Width;
+                int originalHeight = targetPageImage.Height;
 
                 float scaleX = (float)originalWidth / imgRect.Width;
                 float scaleY = (float)originalHeight / imgRect.Height;
@@ -217,7 +217,7 @@ namespace LearningAssistant.Managers
                     return;
                 }
 
-                string ocrText = await GetOcrTextFromSelectionAsync(selectionRect, currentPageImage);
+                string ocrText = await GetOcrTextFromSelectionAsync(selectionRect, targetPageImage);
 
                 if (string.IsNullOrEmpty(ocrText))
                 {
@@ -230,7 +230,7 @@ namespace LearningAssistant.Managers
                 var highlight = new PdfHighlight
                 {
                     PdfPath = currentPdfPath,
-                    PageIndex = currentPageIndex,
+                    PageIndex = targetPageIndex,
                     NormalizedX = normalizedRect.X,
                     NormalizedY = normalizedRect.Y,
                     NormalizedWidth = normalizedRect.Width,
@@ -240,10 +240,9 @@ namespace LearningAssistant.Managers
                     CreatedAt = DateTime.Now
                 };
 
-                // 添加高亮并获取生成的Id
                 var highlightId = _highlightService.AddHighlight(
                     currentPdfPath,
-                    currentPageIndex,
+                    targetPageIndex,
                     normalizedRect.X,
                     normalizedRect.Y,
                     normalizedRect.Width,
@@ -252,7 +251,6 @@ namespace LearningAssistant.Managers
                     currentHighlightColor
                 );
 
-                // 更新highlight的Id以匹配实际保存的高亮
                 highlight.Id = highlightId;
 
                 PushUndoAction(new HighlightUndoAction
@@ -505,6 +503,55 @@ namespace LearningAssistant.Managers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in DrawHighlightsFromLayer");
+            }
+        }
+
+        public void DrawHighlightsForPage(Graphics g, int pageIndex, Rectangle targetRect, int imgWidth, int imgHeight)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_form.CurrentPdfPath)) return;
+
+                var highlights = _highlightService.GetHighlightsForPage(_form.CurrentPdfPath, pageIndex);
+                if (highlights.Count == 0) return;
+
+                foreach (var highlight in highlights)
+                {
+                    var color = HighlightService.GetHighlightColor(highlight.Color);
+
+                    float x, y, width, height;
+                    if (highlight.NormalizedWidth > 0)
+                    {
+                        x = highlight.NormalizedX * targetRect.Width + targetRect.X;
+                        y = highlight.NormalizedY * targetRect.Height + targetRect.Y;
+                        width = highlight.NormalizedWidth * targetRect.Width;
+                        height = highlight.NormalizedHeight * targetRect.Height;
+                    }
+                    else
+                    {
+                        x = highlight.NormalizedX * targetRect.Width + targetRect.X;
+                        y = highlight.NormalizedY * targetRect.Height + targetRect.Y;
+                        width = 10;
+                        height = 10;
+                    }
+
+                    var rect = new RectangleF(x, y, width, height);
+
+                    int alpha1 = Math.Max(0, color.A - 0);
+                    int alpha2 = Math.Max(0, color.A - 20);
+                    int alpha3 = Math.Min(255, color.A + 120);
+
+                    using var brush = new SolidBrush(Color.FromArgb(alpha1, color.R, color.G, color.B));
+                    g.FillRectangle(brush, rect);
+
+                    using var pen = new Pen(Color.FromArgb(alpha3, color.R, color.G, color.B), 2.5f);
+                    pen.DashStyle = DashStyle.Solid;
+                    g.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in DrawHighlightsForPage for page {Page}", pageIndex);
             }
         }
 

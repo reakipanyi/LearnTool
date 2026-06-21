@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Managers;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
@@ -7,7 +8,6 @@ using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel;
 using System.Drawing.Drawing2D;
-using LearningAssistant.Managers;
 
 namespace LearningAssistant.Forms
 {
@@ -2234,7 +2234,7 @@ namespace LearningAssistant.Forms
                     }
                     return;
                 }
-                
+
 
                 if (_isDragging || _longPressDragStarted)
                 {
@@ -2293,7 +2293,7 @@ namespace LearningAssistant.Forms
             pictureBoxPdf.Cursor = Cursors.Hand;
         }
 
-        
+
 
         private async Task<string> GetOcrTextFromSelectionAsync(Rectangle selectionRect, Bitmap currentPageImage)
         {
@@ -3004,6 +3004,11 @@ namespace LearningAssistant.Forms
         private void _loadingIndicator_Click(object sender, EventArgs e)
         {
 
+        }
+
+        public void SetSecondPageImage(Bitmap? bmp)
+        {
+            throw new NotImplementedException();
         }
     }
 }

@@ -10,12 +10,14 @@ namespace LearningAssistant.Services.Pdf
             try
             {
                 var annotation = LoadAnnotationData(pdfPath, pageIndex);
-                if (annotation == null || annotation.Strokes.Count == 0)
+                if (annotation == null || (annotation.Strokes.Count == 0 && annotation.Texts.Count == 0))
                     return null;
 
                 var bitmap = new Bitmap(targetWidth, targetHeight);
                 using var g = Graphics.FromImage(bitmap);
                 g.Clear(Color.Transparent);
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
 
                 float scaleX = (float)targetWidth / (pageOriginalSize.Width > 0 ? pageOriginalSize.Width : targetWidth);
                 float scaleY = (float)targetHeight / (pageOriginalSize.Height > 0 ? pageOriginalSize.Height : targetHeight);
@@ -23,14 +25,34 @@ namespace LearningAssistant.Services.Pdf
                 foreach (var stroke in annotation.Strokes)
                 {
                     using var pen = new Pen(Color.FromArgb(stroke.ColorArgb), stroke.Thickness);
-                    for (int i = 0; i < stroke.Points.Length - 3; i += 2)
+                    pen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                    pen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                    pen.LineJoin = System.Drawing.Drawing2D.LineJoin.Round;
+                    
+                    if (stroke.Points.Length >= 4)
                     {
-                        float x1 = stroke.Points[i] * pageOriginalSize.Width * scaleX;
-                        float y1 = stroke.Points[i + 1] * pageOriginalSize.Height * scaleY;
-                        float x2 = stroke.Points[i + 2] * pageOriginalSize.Width * scaleX;
-                        float y2 = stroke.Points[i + 3] * pageOriginalSize.Height * scaleY;
-                        g.DrawLine(pen, x1, y1, x2, y2);
+                        var points = new List<PointF>();
+                        for (int i = 0; i < stroke.Points.Length - 1; i += 2)
+                        {
+                            float x = stroke.Points[i] * pageOriginalSize.Width * scaleX;
+                            float y = stroke.Points[i + 1] * pageOriginalSize.Height * scaleY;
+                            points.Add(new PointF(x, y));
+                        }
+                        if (points.Count >= 2)
+                        {
+                            g.DrawLines(pen, points.ToArray());
+                        }
                     }
+                }
+
+                foreach (var text in annotation.Texts)
+                {
+                    float x = text.NormalizedX * pageOriginalSize.Width * scaleX;
+                    float y = text.NormalizedY * pageOriginalSize.Height * scaleY;
+                    
+                    using var font = new Font(text.FontFamily, text.FontSize * scaleX);
+                    using var brush = new SolidBrush(Color.FromArgb(text.ColorArgb));
+                    g.DrawString(text.Content, font, brush, x, y);
                 }
 
                 return bitmap;
@@ -87,6 +109,29 @@ namespace LearningAssistant.Services.Pdf
             catch
             {
             }
+        }
+
+        public void AddText(string pdfPath, int pageIndex, AnnotationText text)
+        {
+            try
+            {
+                var annotation = LoadAnnotationData(pdfPath, pageIndex) ?? new PdfAnnotation();
+                annotation.PdfPath = pdfPath;
+                annotation.PageIndex = pageIndex;
+                annotation.Texts.Add(text);
+                annotation.UpdatedAt = DateTime.Now;
+
+                SaveAnnotationData(pdfPath, pageIndex, annotation);
+            }
+            catch
+            {
+            }
+        }
+
+        public IEnumerable<AnnotationText> GetTexts(string pdfPath, int pageIndex)
+        {
+            var annotation = LoadAnnotationData(pdfPath, pageIndex);
+            return annotation?.Texts ?? Enumerable.Empty<AnnotationText>();
         }
 
         public void ClearRedo(string pdfPath, int pageIndex)

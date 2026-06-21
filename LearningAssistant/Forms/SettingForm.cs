@@ -112,7 +112,7 @@ namespace LearningAssistant.Forms
         public int TTSSpeed
         {
             get => trackBarSpeed.Value;
-            set => trackBarSpeed.Value = value;
+            set => trackBarSpeed.Value = Math.Clamp(value, trackBarSpeed.Minimum, trackBarSpeed.Maximum);
         }
 
 
@@ -120,7 +120,7 @@ namespace LearningAssistant.Forms
         public int TTSVolume
         {
             get => trackBarVolume.Value;
-            set => trackBarVolume.Value = value;
+            set => trackBarVolume.Value = Math.Clamp(value, trackBarVolume.Minimum, trackBarVolume.Maximum);
         }
 
 
@@ -128,7 +128,7 @@ namespace LearningAssistant.Forms
         public int FontSize
         {
             get => (int)numericUpDownFontSize.Value;
-            set => numericUpDownFontSize.Value = value;
+            set => numericUpDownFontSize.Value = Math.Clamp(value, (int)numericUpDownFontSize.Minimum, (int)numericUpDownFontSize.Maximum);
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -355,7 +355,7 @@ namespace LearningAssistant.Forms
             // 
             trackBarSpeed.Location = new Point(80, 96);
             trackBarSpeed.Maximum = 200;
-            trackBarSpeed.Minimum = 50;
+            trackBarSpeed.Minimum = 0;
             trackBarSpeed.Name = "trackBarSpeed";
             trackBarSpeed.Size = new Size(410, 45);
             trackBarSpeed.TabIndex = 5;

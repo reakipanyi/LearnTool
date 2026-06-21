@@ -6,6 +6,7 @@ using LearningAssistant.Services.Cache;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Threading;
 
 namespace LearningAssistant.Services.Persistence
 {
@@ -105,69 +106,79 @@ namespace LearningAssistant.Services.Persistence
             ArgumentNullException.ThrowIfNull(profile, nameof(profile));
             ArgumentException.ThrowIfNullOrWhiteSpace(profile.UserId, nameof(profile.UserId));
 
-            try
+            const int maxRetries = 3;
+            const int retryDelayMs = 500;
+
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
-                using var db = _dbContextFactory.CreateDbContext();
-                var existingUser = db.UserProfiles
-                    .Include(u => u.CategoryProgresses)
-                    .FirstOrDefault(u => u.UserId == profile.UserId);
-
-                if (existingUser == null)
+                try
                 {
-                    // 创建新用户
-                    var userEntity = profile.ToEntity();
-                    db.UserProfiles.Add(userEntity);
+                    using var db = _dbContextFactory.CreateDbContext();
+                    var existingUser = db.UserProfiles
+                        .Include(u => u.CategoryProgresses)
+                        .FirstOrDefault(u => u.UserId == profile.UserId);
 
-                    // 添加分类进度
-                    foreach (var categoryProgress in profile.LearningProgress.CategoryProgresses.Values)
+                    if (existingUser == null)
                     {
-                        userEntity.CategoryProgresses.Add(categoryProgress.ToEntity(profile.UserId));
-                    }
-                }
-                else
-                {
-                    // 更新用户信息
-                    existingUser.UpdateEntity(profile);
+                        var userEntity = profile.ToEntity();
+                        db.UserProfiles.Add(userEntity);
 
-                    // 删除不再存在的分类进度
-                    var categoryNamesInProfile = new HashSet<string>(profile.LearningProgress.CategoryProgresses.Keys);
-                    var categoriesToRemove = existingUser.CategoryProgresses
-                        .Where(c => !categoryNamesInProfile.Contains(c.CategoryName))
-                        .ToList();
-
-                    foreach (var categoryToRemove in categoriesToRemove)
-                    {
-                        db.CategoryProgresses.Remove(categoryToRemove);
-                    }
-
-                    // 更新或添加分类进度
-                    foreach (var categoryProgress in profile.LearningProgress.CategoryProgresses.Values)
-                    {
-                        var existingCategory = existingUser.CategoryProgresses
-                            .FirstOrDefault(c => c.CategoryName == categoryProgress.CategoryName);
-
-                        if (existingCategory != null)
+                        foreach (var categoryProgress in profile.LearningProgress.CategoryProgresses.Values)
                         {
-                            existingCategory.UpdateEntity(categoryProgress);
-                        }
-                        else
-                        {
-                            existingUser.CategoryProgresses.Add(categoryProgress.ToEntity(profile.UserId));
+                            userEntity.CategoryProgresses.Add(categoryProgress.ToEntity(profile.UserId));
                         }
                     }
-                }
+                    else
+                    {
+                        existingUser.UpdateEntity(profile);
 
-                db.SaveChanges();
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Failed to save user profile for {UserId}", profile.UserId);
-                var errorMsg = $"保存用户配置失败: {profile.UserId}";
-                if (ex.InnerException != null)
-                {
-                    errorMsg += $" - {ex.InnerException.Message}";
+                        var categoryNamesInProfile = new HashSet<string>(profile.LearningProgress.CategoryProgresses.Keys);
+                        var categoriesToRemove = existingUser.CategoryProgresses
+                            .Where(c => !categoryNamesInProfile.Contains(c.CategoryName))
+                            .ToList();
+
+                        foreach (var categoryToRemove in categoriesToRemove)
+                        {
+                            db.CategoryProgresses.Remove(categoryToRemove);
+                        }
+
+                        foreach (var categoryProgress in profile.LearningProgress.CategoryProgresses.Values)
+                        {
+                            var existingCategory = existingUser.CategoryProgresses
+                                .FirstOrDefault(c => c.CategoryName == categoryProgress.CategoryName);
+
+                            if (existingCategory != null)
+                            {
+                                existingCategory.UpdateEntity(categoryProgress);
+                            }
+                            else
+                            {
+                                existingUser.CategoryProgresses.Add(categoryProgress.ToEntity(profile.UserId));
+                            }
+                        }
+                    }
+
+                    db.SaveChanges();
+                    return;
                 }
-                throw new PersistenceException(errorMsg, ex);
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Failed to save user profile for {UserId} (attempt {Attempt}/{MaxRetries})", profile.UserId, attempt, maxRetries);
+
+                    if (attempt >= maxRetries)
+                    {
+                        var errorMsg = $"保存用户配置失败: {profile.UserId}";
+                        var innerEx = ex.InnerException;
+                        while (innerEx != null)
+                        {
+                            errorMsg += $" - {innerEx.Message}";
+                            innerEx = innerEx.InnerException;
+                        }
+                        throw new PersistenceException(errorMsg, ex);
+                    }
+
+                    Thread.Sleep(retryDelayMs);
+                }
             }
         }
 

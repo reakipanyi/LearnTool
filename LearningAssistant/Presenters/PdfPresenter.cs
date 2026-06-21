@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Forms;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Learning;
@@ -194,6 +195,24 @@ namespace LearningAssistant.Presenters
                 if (bitmap != null)
                 {
                     _view?.DisplayImage(bitmap);
+                }
+
+                if (_view is PdfReaderFormV2 v2View && v2View.IsDualPage)
+                {
+                    int nextPageIndex = _pdfFileManager.CurrentPageIndex + 1;
+                    if (nextPageIndex < _pdfRenderer.PageCount)
+                    {
+                        var secondBitmap = await _pdfRenderer.RenderPageAsync(nextPageIndex, 1000, 1400);
+                        _view?.SetSecondPageImage(secondBitmap);
+                    }
+                    else
+                    {
+                        _view?.SetSecondPageImage(null);
+                    }
+                }
+                else
+                {
+                    _view?.SetSecondPageImage(null);
                 }
 
                 _view?.HighlightThumbnail(_pdfFileManager.CurrentPageIndex);
@@ -399,6 +418,57 @@ namespace LearningAssistant.Presenters
             }
         }
 
+        public void AddAnnotationText(float normalizedX, float normalizedY, string text, int colorArgb, float fontSize, string fontFamily, int imageWidth, int imageHeight)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath)) return;
+                var pageSize = _pdfService.GetPageSize(_pdfFileManager.CurrentPageIndex);
+                float pageW = pageSize.Width > 0 ? pageSize.Width : imageWidth;
+                float pageH = pageSize.Height > 0 ? pageSize.Height : imageHeight;
+                
+                var imgX = normalizedX * imageWidth;
+                var imgY = normalizedY * imageHeight;
+                var pageX = imgX * (pageW / Math.Max(1, (float)imageWidth));
+                var pageY = imgY * (pageH / Math.Max(1, (float)imageHeight));
+                
+                var annotationText = new AnnotationText
+                {
+                    NormalizedX = pageX / pageW,
+                    NormalizedY = pageY / pageH,
+                    Content = text,
+                    ColorArgb = colorArgb,
+                    FontSize = fontSize,
+                    FontFamily = fontFamily
+                };
+                _annotationService.AddText(_pdfFileManager.CurrentFilePath, _pdfFileManager.CurrentPageIndex, annotationText);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to add annotation text");
+            }
+        }
+
+        public Bitmap? LoadAnnotationForCurrentPage(int targetWidth, int targetHeight)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath)) return null;
+                var pageSize = _pdfService.GetPageSize(_pdfFileManager.CurrentPageIndex);
+                return _annotationService.LoadAnnotation(
+                    _pdfFileManager.CurrentFilePath, 
+                    _pdfFileManager.CurrentPageIndex, 
+                    targetWidth, 
+                    targetHeight, 
+                    pageSize);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load annotation for current page");
+                return null;
+            }
+        }
+
         public void RememberCurrentPageForCurrentFile(int pageIndex)
         {
             _pdfFileManager.CurrentPageIndex = pageIndex;
@@ -406,19 +476,29 @@ namespace LearningAssistant.Presenters
 
         public void NextPage()
         {
-            var nextPage = _pdfFileManager.CurrentPageIndex + 1;
+            int step = (_view is PdfReaderFormV2 v2View && v2View.IsDualPage) ? 2 : 1;
+            var nextPage = _pdfFileManager.CurrentPageIndex + step;
             if (nextPage < _pdfRenderer.PageCount)
             {
                 _ = RenderPage(nextPage);
+            }
+            else if (_pdfFileManager.CurrentPageIndex < _pdfRenderer.PageCount - 1)
+            {
+                _ = RenderPage(_pdfRenderer.PageCount - 1);
             }
         }
 
         public void PreviousPage()
         {
-            var prevPage = _pdfFileManager.CurrentPageIndex - 1;
+            int step = (_view is PdfReaderFormV2 v2View && v2View.IsDualPage) ? 2 : 1;
+            var prevPage = _pdfFileManager.CurrentPageIndex - step;
             if (prevPage >= 0)
             {
                 _ = RenderPage(prevPage);
+            }
+            else if (_pdfFileManager.CurrentPageIndex > 0)
+            {
+                _ = RenderPage(0);
             }
         }
 
@@ -712,8 +792,6 @@ namespace LearningAssistant.Presenters
 
         private void View_AiQuestionAsked(object? sender, EventArgs e)
         {
-            // 触发AI问答面板显示
-            _view?.RaiseAiQuestionAsked();
         }
 
         public void Dispose()
