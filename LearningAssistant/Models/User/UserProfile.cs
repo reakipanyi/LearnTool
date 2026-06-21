@@ -18,6 +18,34 @@ namespace LearningAssistant.Models.User
         public int TodayStudyTimeMinutes { get; set; }
         public int TodayItemsStudied { get; set; }
 
+        public int XP { get; set; }
+        public int TotalXP { get; set; }
+        public int Level { get; set; } = 1;
+        public int Coins { get; set; }
+        public int TotalStudyMinutes
+        {
+            get => TotalStudyTimeMinutes;
+            set => TotalStudyTimeMinutes = value;
+        }
+        public int TotalItemsStudied { get; set; }
+        public int TodayStudyMinutes
+        {
+            get => TodayStudyTimeMinutes;
+            set => TodayStudyTimeMinutes = value;
+        }
+        public int StudyDays { get; set; }
+        public int LongestStreak { get; set; }
+        public DateTime LastLoginDate
+        {
+            get => LastLoginTime;
+            set => LastLoginTime = value;
+        }
+        public int CurrentStreak
+        {
+            get => ConsecutiveStudyDays;
+            set => ConsecutiveStudyDays = value;
+        }
+
         public void UpdateStudyRecord()
         {
             var today = DateTime.Today;

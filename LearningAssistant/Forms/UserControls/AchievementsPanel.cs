@@ -11,6 +11,7 @@ namespace LearningAssistant.Forms.UserControls
         private FlowLayoutPanel _flowLayoutPanelFilters = null!;
         private Panel _panelContent = null!;
         private FlowLayoutPanel _flowLayoutPanelCards = null!;
+        private EmptyStateView? _emptyState;
 
         private List<Badge> _allBadges = new();
         private Dictionary<string, int> _badgeProgress = new();
@@ -177,7 +178,18 @@ namespace LearningAssistant.Forms.UserControls
                 : _allBadges;
 
             int unlockedCount = filtered.Count(b => b.IsUnlocked);
-            _labelStats.Text = $"已解锁 {unlockedCount} / {filtered.Count}";
+            int totalCount = filtered.Count;
+            double progressPercent = totalCount > 0 ? (double)unlockedCount / totalCount * 100 : 0;
+
+            _labelStats.Text = $"已解锁 {unlockedCount} / {totalCount} · 完成度 {progressPercent:F0}%";
+
+            if (filtered.Count == 0)
+            {
+                ShowEmptyState();
+                return;
+            }
+
+            HideEmptyState();
 
             foreach (var badge in filtered)
             {
@@ -191,6 +203,31 @@ namespace LearningAssistant.Forms.UserControls
                 card.CardClicked += (s, e) => BadgeClicked?.Invoke(this, badge);
                 _flowLayoutPanelCards.Controls.Add(card);
             }
+        }
+
+        private void ShowEmptyState()
+        {
+            if (_emptyState == null)
+            {
+                _emptyState = new EmptyStateView
+                {
+                    Dock = DockStyle.Fill
+                };
+                _emptyState.SetState(EmptyStateType.NoAchievements);
+                _panelContent.Controls.Add(_emptyState);
+                _emptyState.BringToFront();
+            }
+            _emptyState.Visible = true;
+            _flowLayoutPanelCards.Visible = false;
+        }
+
+        private void HideEmptyState()
+        {
+            if (_emptyState != null)
+            {
+                _emptyState.Visible = false;
+            }
+            _flowLayoutPanelCards.Visible = true;
         }
 
         public void RefreshData()

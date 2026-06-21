@@ -30,7 +30,14 @@ namespace LearningAssistant.Data.Database
                 LastStudyDate = profile.LastStudyDate,
                 TotalStudyTimeMinutes = profile.TotalStudyTimeMinutes,
                 TodayStudyTimeMinutes = profile.TodayStudyTimeMinutes,
-                TodayItemsStudied = profile.TodayItemsStudied
+                TodayItemsStudied = profile.TodayItemsStudied,
+                XP = profile.XP,
+                TotalXP = profile.TotalXP,
+                Level = profile.Level,
+                Coins = profile.Coins,
+                TotalItemsStudied = profile.TotalItemsStudied,
+                StudyDays = profile.StudyDays,
+                LongestStreak = profile.LongestStreak
             };
         }
 
@@ -50,6 +57,13 @@ namespace LearningAssistant.Data.Database
             entity.TotalStudyTimeMinutes = profile.TotalStudyTimeMinutes;
             entity.TodayStudyTimeMinutes = profile.TodayStudyTimeMinutes;
             entity.TodayItemsStudied = profile.TodayItemsStudied;
+            entity.XP = profile.XP;
+            entity.TotalXP = profile.TotalXP;
+            entity.Level = profile.Level;
+            entity.Coins = profile.Coins;
+            entity.TotalItemsStudied = profile.TotalItemsStudied;
+            entity.StudyDays = profile.StudyDays;
+            entity.LongestStreak = profile.LongestStreak;
         }
 
         /// <summary>
@@ -70,7 +84,14 @@ namespace LearningAssistant.Data.Database
                 LastStudyDate = entity.LastStudyDate,
                 TotalStudyTimeMinutes = entity.TotalStudyTimeMinutes,
                 TodayStudyTimeMinutes = entity.TodayStudyTimeMinutes,
-                TodayItemsStudied = entity.TodayItemsStudied
+                TodayItemsStudied = entity.TodayItemsStudied,
+                XP = entity.XP,
+                TotalXP = entity.TotalXP,
+                Level = entity.Level,
+                Coins = entity.Coins,
+                TotalItemsStudied = entity.TotalItemsStudied,
+                StudyDays = entity.StudyDays,
+                LongestStreak = entity.LongestStreak
             };
 
             // 加载分类进度
@@ -186,6 +207,7 @@ namespace LearningAssistant.Data.Database
             {
                 Id = reminder.Id,
                 UserId = reminder.UserId,
+                Type = reminder.Type.ToString(),
                 Title = reminder.Title,
                 Description = reminder.Description,
                 Time = reminder.Time,
@@ -194,7 +216,11 @@ namespace LearningAssistant.Data.Database
                 Enabled = reminder.Enabled,
                 LastTriggered = reminder.LastTriggered,
                 CreatedAt = reminder.CreatedAt,
-                UpdatedAt = reminder.UpdatedAt
+                UpdatedAt = reminder.UpdatedAt,
+                TriggerCount = reminder.TriggerCount,
+                OpenCount = reminder.OpenCount,
+                SnoozeCount = reminder.SnoozeCount,
+                DismissCount = reminder.DismissCount
             };
         }
 
@@ -208,6 +234,10 @@ namespace LearningAssistant.Data.Database
             var repeatType = Enum.TryParse<ReminderRepeatType>(entity.RepeatType, out var rt) 
                 ? rt 
                 : ReminderRepeatType.None;
+
+            var reminderType = Enum.TryParse<ReminderType>(entity.Type, out var rType)
+                ? rType
+                : ReminderType.Study;
             
             List<DayOfWeek>? repeatDays = null;
             try
@@ -225,6 +255,7 @@ namespace LearningAssistant.Data.Database
             {
                 Id = entity.Id,
                 UserId = entity.UserId,
+                Type = reminderType,
                 Title = entity.Title,
                 Description = entity.Description,
                 Time = entity.Time,
@@ -233,7 +264,11 @@ namespace LearningAssistant.Data.Database
                 Enabled = entity.Enabled,
                 LastTriggered = entity.LastTriggered,
                 CreatedAt = entity.CreatedAt,
-                UpdatedAt = entity.UpdatedAt
+                UpdatedAt = entity.UpdatedAt,
+                TriggerCount = entity.TriggerCount,
+                OpenCount = entity.OpenCount,
+                SnoozeCount = entity.SnoozeCount,
+                DismissCount = entity.DismissCount
             };
         }
 
@@ -255,6 +290,7 @@ namespace LearningAssistant.Data.Database
                 // 忽略序列化错误
             }
 
+            entity.Type = reminder.Type.ToString();
             entity.Title = reminder.Title;
             entity.Description = reminder.Description;
             entity.Time = reminder.Time;
@@ -263,6 +299,10 @@ namespace LearningAssistant.Data.Database
             entity.Enabled = reminder.Enabled;
             entity.LastTriggered = reminder.LastTriggered;
             entity.UpdatedAt = DateTime.Now;
+            entity.TriggerCount = reminder.TriggerCount;
+            entity.OpenCount = reminder.OpenCount;
+            entity.SnoozeCount = reminder.SnoozeCount;
+            entity.DismissCount = reminder.DismissCount;
         }
     }
 }

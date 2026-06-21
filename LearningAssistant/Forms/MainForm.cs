@@ -1,5 +1,8 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
+using LearningAssistant.Forms.UserControls.Cards;
+using LearningAssistant.Forms.UserControls.Dashboard;
+using LearningAssistant.Forms.UserControls.Navigation;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
@@ -122,6 +125,200 @@ namespace LearningAssistant.Forms
             var userComparisonMenuItem = new ToolStripMenuItem("👥 用户对比");
             userComparisonMenuItem.Click += (s, args) => OpenUserComparisonClicked?.Invoke(this, EventArgs.Empty);
             toolStripMenuItemFile.DropDownItems.Add(userComparisonMenuItem);
+
+            // 添加切换布局菜单项
+            var toggleLayoutMenuItem = new ToolStripMenuItem("🎨 切换新/旧布局");
+            toggleLayoutMenuItem.Click += (s, args) => ToggleLayout();
+            toolStripMenuItemSettings.DropDownItems.Add(toggleLayoutMenuItem);
+
+            // 初始化新布局
+            if (useNewLayout)
+            {
+                InitializeNewLayout();
+            }
+        }
+
+        private void InitializeNewLayout()
+        {
+            panelMain.Visible = false;
+
+            splitContainerMain = new SplitContainer
+            {
+                Dock = DockStyle.Fill,
+                Orientation = Orientation.Vertical,
+                SplitterDistance = 220,
+                FixedPanel = FixedPanel.Panel1,
+                SplitterWidth = 1,
+                BorderStyle = BorderStyle.None
+            };
+
+            sideNavigation = new SideNavigationPanel
+            {
+                Dock = DockStyle.Fill
+            };
+
+            sideNavigation.AddItems(new List<NavigationItem>
+            {
+                new() { Key = "dashboard", Icon = "🏠", Text = "首页", Order = 0, Group = "main" },
+                new() { Key = "learning", Icon = "📚", Text = "学习", Order = 1, Group = "main" },
+                new() { Key = "pdf", Icon = "📖", Text = "PDF阅读", Order = 2, Group = "main" },
+                new() { Key = "statistics", Icon = "📊", Text = "学习统计", Order = 3, Group = "main" },
+                new() { Key = "challenges", Icon = "🎯", Text = "每日挑战", Order = 4, Group = "main" },
+                new() { Key = "achievements", Icon = "🏆", Text = "成就徽章", Order = 5, Group = "main" },
+                new() { Key = "notes", Icon = "📝", Text = "笔记", Order = 6, Group = "tools" },
+                new() { Key = "favorites", Icon = "⭐", Text = "收藏夹", Order = 7, Group = "tools" },
+                new() { Key = "wrongbook", Icon = "📕", Text = "错题本", Order = 8, Group = "tools" },
+                new() { Key = "pomodoro", Icon = "🍅", Text = "番茄钟", Order = 9, Group = "tools" },
+                new() { Key = "browser", Icon = "🌐", Text = "浏览器", Order = 10, Group = "tools" },
+                new() { Key = "editor", Icon = "✏️", Text = "模板编辑", Order = 11, Group = "tools" },
+                new() { Key = "settings", Icon = "⚙️", Text = "设置", Order = 99, Group = "system" }
+            });
+
+            sideNavigation.SelectItem("dashboard");
+            sideNavigation.NavigationItemClicked += OnNavigationItemClicked;
+
+            panelContent = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(245, 245, 250)
+            };
+
+            dashboardView = new DashboardView
+            {
+                Dock = DockStyle.Fill,
+                UserName = SelectedUser
+            };
+
+            foreach (FeatureCard card in dashboardView.Controls.OfType<Panel>().SelectMany(p => p.Controls.OfType<FeatureCard>()))
+            {
+                card.CardClicked += FeatureCard_Clicked;
+            }
+
+            panelContent.Controls.Add(dashboardView);
+
+            splitContainerMain.Panel1.Controls.Add(sideNavigation);
+            splitContainerMain.Panel2.Controls.Add(panelContent);
+
+            Controls.SetChildIndex(statusStrip1, 0);
+            Controls.SetChildIndex(menuStrip1, 0);
+            Controls.Add(splitContainerMain);
+            splitContainerMain.BringToFront();
+            menuStrip1.BringToFront();
+            statusStrip1.BringToFront();
+
+            Text = "🏠 学习助手 - 首页";
+        }
+
+        private void OnNavigationItemClicked(object? sender, string key)
+        {
+            switch (key)
+            {
+                case "dashboard":
+                    ShowDashboard();
+                    break;
+                case "learning":
+                    OpenLearningWindowClicked?.Invoke(this, EventArgs.Empty);
+                    break;
+                case "pdf":
+                    _windowManager.OpenPdfReaderWindow();
+                    break;
+                case "statistics":
+                    buttonOpenStatistics?.PerformClick();
+                    break;
+                case "notes":
+                    MessageBox.Show("笔记功能开发中...", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    break;
+                case "favorites":
+                    MessageBox.Show("收藏夹功能开发中...", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    break;
+                case "wrongbook":
+                    buttonExportErrorBook?.PerformClick();
+                    break;
+                case "pomodoro":
+                    MessageBox.Show("番茄钟功能开发中...", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    break;
+                case "browser":
+                    ButtonWebView2Browser_Click(null, EventArgs.Empty);
+                    break;
+                case "editor":
+                    OpenEditorClicked?.Invoke(this, EventArgs.Empty);
+                    break;
+                case "settings":
+                    OpenSettingsClicked?.Invoke(this, EventArgs.Empty);
+                    break;
+                case "challenges":
+                    MessageBox.Show("每日挑战功能开发中...", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    break;
+                case "achievements":
+                    MessageBox.Show("成就徽章功能开发中...", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    break;
+            }
+        }
+
+        private void ShowDashboard()
+        {
+            if (dashboardView == null) return;
+
+            panelContent.Controls.Clear();
+            panelContent.Controls.Add(dashboardView);
+            dashboardView.BringToFront();
+            Text = "🏠 学习助手 - 首页";
+        }
+
+        private void FeatureCard_Clicked(object? sender, EventArgs e)
+        {
+            if (sender is FeatureCard card)
+            {
+                switch (card.Title)
+                {
+                    case "开始学习":
+                        OpenLearningWindowClicked?.Invoke(this, EventArgs.Empty);
+                        break;
+                    case "PDF阅读":
+                        _windowManager.OpenPdfReaderWindow();
+                        break;
+                    case "错题本":
+                        buttonExportErrorBook?.PerformClick();
+                        break;
+                    case "每日挑战":
+                        MessageBox.Show("每日挑战功能开发中...", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        break;
+                    case "学习统计":
+                        buttonOpenStatistics?.PerformClick();
+                        break;
+                    case "收藏夹":
+                        MessageBox.Show("收藏夹功能开发中...", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        break;
+                }
+            }
+        }
+
+        private void ToggleLayout()
+        {
+            useNewLayout = !useNewLayout;
+
+            if (useNewLayout)
+            {
+                if (splitContainerMain == null)
+                {
+                    InitializeNewLayout();
+                }
+                else
+                {
+                    splitContainerMain.Visible = true;
+                    panelMain.Visible = false;
+                }
+                Text = sideNavigation?.SelectedKey == "dashboard" ? "🏠 学习助手 - 首页" : "学习助手";
+            }
+            else
+            {
+                if (splitContainerMain != null)
+                {
+                    splitContainerMain.Visible = false;
+                }
+                panelMain.Visible = true;
+                Text = "学习助手";
+            }
         }
 
         private void Presenter_OnOpenSettings(object? sender, EventArgs e)
@@ -242,6 +439,13 @@ namespace LearningAssistant.Forms
         private Panel panelStreakInfo;
         private Label labelStreakDays;
         private Label labelStreakIcon;
+
+        // 新布局控件
+        private SplitContainer splitContainerMain;
+        private SideNavigationPanel sideNavigation;
+        private DashboardView dashboardView;
+        private Panel panelContent;
+        private bool useNewLayout = true;
 
         private void InitializeComponent()
         {

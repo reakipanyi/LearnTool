@@ -66,6 +66,84 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
+        public List<Reminder> GetUserRemindersByType(string userId, ReminderType type)
+        {
+            lock (_lock)
+            {
+                return _reminders.Where(r => r.UserId == userId && r.Type == type).ToList();
+            }
+        }
+
+        public void RecordReminderResponse(Guid reminderId, ReminderResponseType responseType)
+        {
+            lock (_lock)
+            {
+                var reminder = _reminders.FirstOrDefault(r => r.Id == reminderId);
+                if (reminder != null)
+                {
+                    switch (responseType)
+                    {
+                        case ReminderResponseType.Opened:
+                            reminder.OpenCount++;
+                            break;
+                        case ReminderResponseType.Snoozed:
+                            reminder.SnoozeCount++;
+                            break;
+                        case ReminderResponseType.Dismissed:
+                            reminder.DismissCount++;
+                            break;
+                    }
+                    reminder.UpdatedAt = DateTime.Now;
+                    SaveReminders();
+                }
+            }
+        }
+
+        public ReminderStats GetReminderStats(string userId)
+        {
+            lock (_lock)
+            {
+                var userReminders = _reminders.Where(r => r.UserId == userId).ToList();
+                var today = DateTime.Today;
+
+                var stats = new ReminderStats
+                {
+                    TotalReminders = userReminders.Count,
+                    EnabledReminders = userReminders.Count(r => r.Enabled),
+                    TriggeredToday = userReminders.Count(r => r.LastTriggered.HasValue && r.LastTriggered.Value.Date == today),
+                    OpenedToday = userReminders.Sum(r => r.OpenCount),
+                    SnoozedToday = userReminders.Sum(r => r.SnoozeCount),
+                    DismissedToday = userReminders.Sum(r => r.DismissCount)
+                };
+
+                var totalResponses = stats.OpenedToday + stats.SnoozedToday + stats.DismissedToday;
+                stats.ResponseRate = stats.TriggeredToday > 0
+                    ? (double)totalResponses / stats.TriggeredToday * 100
+                    : 0;
+
+                stats.AverageSnoozeCount = stats.TriggeredToday > 0
+                    ? (double)stats.SnoozedToday / stats.TriggeredToday
+                    : 0;
+
+                return stats;
+            }
+        }
+
+        public void SnoozeReminder(Guid reminderId, TimeSpan snoozeTime)
+        {
+            lock (_lock)
+            {
+                var reminder = _reminders.FirstOrDefault(r => r.Id == reminderId);
+                if (reminder != null)
+                {
+                    reminder.SnoozeCount++;
+                    reminder.NextTriggerTime = DateTime.Now.Add(snoozeTime);
+                    reminder.UpdatedAt = DateTime.Now;
+                    SaveReminders();
+                }
+            }
+        }
+
         public List<Reminder> GetUpcomingReminders(TimeSpan within)
         {
             var now = DateTime.Now;

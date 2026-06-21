@@ -1159,25 +1159,41 @@ namespace LearningAssistant.Forms
         {
             if (listBoxItems == null) return;
 
-            // 确保在UI线程上执行，避免跨线程问题
             if (InvokeRequired)
             {
                 Invoke(new Action(() => UpdateLearningList(items, currentIndex)));
                 return;
             }
 
-            listBoxItems.Items.Clear();
-            foreach (var item in items)
-            {
-                listBoxItems.Items.Add(item);
-            }
-
-            UpdateListStatus(items.Count, currentIndex);
+            _listView.SetItems(items);
+            LoadFavoritesToListView();
 
             if (currentIndex >= 0 && currentIndex < items.Count)
             {
-                listBoxItems.SelectedIndex = currentIndex;
-                listBoxItems.TopIndex = Math.Max(0, currentIndex - 5);
+                var currentItem = items[currentIndex];
+                int filteredIndex = listBoxItems.Items.IndexOf(currentItem);
+                if (filteredIndex >= 0)
+                {
+                    listBoxItems.SelectedIndex = filteredIndex;
+                    listBoxItems.TopIndex = Math.Max(0, filteredIndex - 5);
+                }
+            }
+        }
+
+        private void LoadFavoritesToListView()
+        {
+            try
+            {
+                string favoritesPath = GetUserFavoritesPath();
+                if (File.Exists(favoritesPath))
+                {
+                    string json = File.ReadAllText(favoritesPath);
+                    var favorites = JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
+                    _listView.SetFavoriteItems(new HashSet<string>(favorites));
+                }
+            }
+            catch
+            {
             }
         }
 
@@ -1199,18 +1215,13 @@ namespace LearningAssistant.Forms
         {
             if (listBoxItems == null) return;
 
-            // 确保在UI线程上执行，避免跨线程问题
             if (InvokeRequired)
             {
                 Invoke(new Action(() => UpdateLearningListSelection(currentIndex)));
                 return;
             }
 
-            if (currentIndex >= 0 && currentIndex < listBoxItems.Items.Count)
-            {
-                listBoxItems.SelectedIndex = currentIndex;
-                listBoxItems.TopIndex = Math.Max(0, currentIndex - 5);
-            }
+            _listView.SetSelectedIndexFromFullList(currentIndex);
         }
 
         public void EnableListHighlighting(bool enable)
@@ -1257,9 +1268,10 @@ namespace LearningAssistant.Forms
 
         private void ListBoxItems_SelectedIndexChanged(object? sender, EventArgs e)
         {
-            if (listBoxItems.SelectedIndex >= 0)
+            int fullIndex = _listView.SelectedIndexInAllItems;
+            if (fullIndex >= 0)
             {
-                ItemSelectedFromList?.Invoke(this, new ItemSelectedEventArgs(listBoxItems.SelectedIndex));
+                ItemSelectedFromList?.Invoke(this, new ItemSelectedEventArgs(fullIndex));
             }
         }
 
@@ -2105,6 +2117,8 @@ namespace LearningAssistant.Forms
                     string json = JsonSerializer.Serialize(favorites, new JsonSerializerOptions { WriteIndented = true });
                     File.WriteAllText(favoritesPath, json);
                 }
+
+                LoadFavoritesToListView();
             }
             catch (Exception ex)
             {
@@ -2132,6 +2146,8 @@ namespace LearningAssistant.Forms
                         string newJson = JsonSerializer.Serialize(favorites, new JsonSerializerOptions { WriteIndented = true });
                         File.WriteAllText(favoritesPath, newJson);
                     }
+
+                    LoadFavoritesToListView();
                 }
             }
             catch (Exception ex)

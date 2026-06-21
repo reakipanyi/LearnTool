@@ -40,6 +40,20 @@ namespace LearningAssistant.Data.Database
         [Range(0, int.MaxValue, ErrorMessage = "今日学习项目数不能为负数")]
         public int TodayItemsStudied { get; set; }
 
+        public int XP { get; set; }
+
+        public int TotalXP { get; set; }
+
+        public int Level { get; set; } = 1;
+
+        public int Coins { get; set; }
+
+        public int TotalItemsStudied { get; set; }
+
+        public int StudyDays { get; set; }
+
+        public int LongestStreak { get; set; }
+
         // 导航属性
         public List<CategoryProgressEntity> CategoryProgresses { get; set; } = new List<CategoryProgressEntity>();
         public List<LearningRecordEntity> LearningRecords { get; set; } = new List<LearningRecordEntity>();
@@ -143,6 +157,10 @@ namespace LearningAssistant.Data.Database
         [MaxLength(100, ErrorMessage = "用户 ID 长度不能超过 100 个字符")]
         public string UserId { get; set; } = string.Empty;
 
+        [Required(ErrorMessage = "提醒类型不能为空")]
+        [MaxLength(50, ErrorMessage = "提醒类型长度不能超过 50 个字符")]
+        public string Type { get; set; } = "Study";
+
         [Required(ErrorMessage = "提醒标题不能为空")]
         [MaxLength(200, ErrorMessage = "提醒标题长度不能超过 200 个字符")]
         public string Title { get; set; } = string.Empty;
@@ -168,6 +186,14 @@ namespace LearningAssistant.Data.Database
 
         [Required]
         public DateTime UpdatedAt { get; set; } = DateTime.Now;
+
+        public int TriggerCount { get; set; }
+
+        public int OpenCount { get; set; }
+
+        public int SnoozeCount { get; set; }
+
+        public int DismissCount { get; set; }
 
         // 导航属性
         public UserProfileEntity? UserProfile { get; set; }

@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Services.Learning;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using System.Collections.Concurrent;
@@ -49,6 +50,16 @@ namespace LearningAssistant.Services.Web
         /// 从文件加载
         /// </summary>
         void LoadFromFile();
+
+        /// <summary>
+        /// 当前用户ID
+        /// </summary>
+        string CurrentUserId { get; }
+
+        /// <summary>
+        /// 切换用户并重新加载书签
+        /// </summary>
+        void SwitchUser(string userId);
     }
 
     public class WebBookmarkCategory
@@ -63,10 +74,13 @@ namespace LearningAssistant.Services.Web
         public string Title { get; set; } = string.Empty;
         public string Url { get; set; } = string.Empty;
         public string Icon { get; set; } = "🔗";
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public int VisitCount { get; set; }
     }
 
     public class WebBookmarkData
     {
+        public string UserId { get; set; } = string.Empty;
         public List<WebBookmarkCategory> Categories { get; set; } = new();
     }
 
@@ -74,13 +88,35 @@ namespace LearningAssistant.Services.Web
     public class WebBookmarkService : IWebBookmarkService
     {
         private readonly ILogger<WebBookmarkService>? _logger;
-        private readonly ConcurrentBag<WebBookmarkCategory> _categories = new();
+        private readonly IUserSessionService? _userSessionService;
+        private ConcurrentBag<WebBookmarkCategory> _categories = new();
+        private string _currentUserId = string.Empty;
 
+        public string CurrentUserId => _currentUserId;
 
-        public WebBookmarkService(ILogger<WebBookmarkService>? logger = null)
+        public WebBookmarkService(ILogger<WebBookmarkService>? logger = null, IUserSessionService? userSessionService = null)
         {
             _logger = logger;
+            _userSessionService = userSessionService;
+
+            _currentUserId = _userSessionService?.CurrentUserId ?? "default";
             LoadFromFile();
+        }
+
+        public void SwitchUser(string userId)
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+                userId = "default";
+
+            if (_currentUserId == userId)
+                return;
+
+            SaveToFile();
+            _currentUserId = userId;
+            _categories = new ConcurrentBag<WebBookmarkCategory>();
+            LoadFromFile();
+
+            _logger?.LogInformation("书签已切换到用户: {UserId}", userId);
         }
 
         public List<WebBookmarkCategory> GetAllCategories()
@@ -118,13 +154,13 @@ namespace LearningAssistant.Services.Web
                 _categories.Add(category);
             }
 
-            // 检查是否已存在相同URL的书签
             if (category.Bookmarks.Any(b => b.Url.Equals(bookmark.Url, StringComparison.OrdinalIgnoreCase)))
             {
                 _logger?.LogWarning("书签已存在: {Url}", bookmark.Url);
                 return;
             }
 
+            bookmark.CreatedAt = DateTime.Now;
             category.Bookmarks.Add(bookmark);
             SaveToFile();
             _logger?.LogInformation("添加书签成功: {Category} - {Title}", categoryName, bookmark.Title);
@@ -168,16 +204,26 @@ namespace LearningAssistant.Services.Web
         {
             try
             {
-                var data = new WebBookmarkData { Categories = _categories.ToList() };
+                var filePath = AppPaths.UserBookmarksPath;
+                var data = new WebBookmarkData
+                {
+                    UserId = _currentUserId,
+                    Categories = _categories.ToList()
+                };
                 var json = JsonConvert.SerializeObject(data, Formatting.Indented);
 
-                // 始终写入到用户可写目录，避免覆盖内置只读资源
-                File.WriteAllText(AppPaths.WebBookmarksPath, json);
-                _logger?.LogDebug("书签已保存到: {Path}", AppPaths.WebBookmarksPath);
+                var directory = Path.GetDirectoryName(filePath);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                File.WriteAllText(filePath, json);
+                _logger?.LogDebug("书签已保存到: {Path}", filePath);
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "保存书签文件失败: {Path}", AppPaths.WebBookmarksPath);
+                _logger?.LogError(ex, "保存书签文件失败");
             }
         }
 
@@ -185,18 +231,19 @@ namespace LearningAssistant.Services.Web
         {
             try
             {
-                if (File.Exists(AppPaths.WebBookmarksPath))
+                var filePath = AppPaths.UserBookmarksPath;
+                if (File.Exists(filePath))
                 {
-                    var json = File.ReadAllText(AppPaths.WebBookmarksPath);
+                    var json = File.ReadAllText(filePath);
                     var data = JsonConvert.DeserializeObject<WebBookmarkData>(json);
                     if (data?.Categories != null)
                     {
-                        _categories.Clear();
+                        _categories = new ConcurrentBag<WebBookmarkCategory>();
                         foreach (var category in data.Categories)
                         {
                             _categories.Add(category);
                         }
-                        _logger?.LogInformation("从文件加载书签: {Path}, 分类数: {Count}", AppPaths.WebBookmarksPath, data.Categories.Count);
+                        _logger?.LogInformation("从文件加载书签: 用户 {UserId}, 分类数: {Count}", _currentUserId, data.Categories.Count);
                         return;
                     }
                 }
@@ -206,14 +253,15 @@ namespace LearningAssistant.Services.Web
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "加载书签文件失败: {Path}", AppPaths.WebBookmarksPath);
+                _logger?.LogError(ex, "加载书签文件失败");
                 LoadDefaultBookmarks();
             }
         }
 
+
         private void LoadDefaultBookmarks()
         {
-            _categories.Clear();
+            _categories = new ConcurrentBag<WebBookmarkCategory>();
             _categories.Add(new WebBookmarkCategory
             {
                 Name = "英文学习",

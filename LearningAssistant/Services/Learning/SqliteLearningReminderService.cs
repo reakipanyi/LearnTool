@@ -143,6 +143,139 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
+        public List<Reminder> GetUserRemindersByType(string userId, ReminderType type)
+        {
+            try
+            {
+                _logger?.LogDebug("获取用户指定类型的提醒列表: {UserId}, {Type}", userId, type);
+                
+                var typeStr = type.ToString();
+                using var db = _dbFactory.CreateDbContext();
+                var reminders = db.Reminders
+                    .Where(r => r.UserId == userId && r.Type == typeStr)
+                    .OrderBy(r => r.CreatedAt)
+                    .Select(r => r.ToModel())
+                    .ToList();
+                
+                _logger?.LogDebug("获取到 {Count} 个 {Type} 类型的提醒", reminders.Count, type);
+                return reminders;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "获取用户指定类型的提醒列表失败: {UserId}, {Type}", userId, type);
+                throw;
+            }
+        }
+
+        public void RecordReminderResponse(Guid reminderId, ReminderResponseType responseType)
+        {
+            try
+            {
+                _logger?.LogDebug("记录提醒响应: {ReminderId}, {ResponseType}", reminderId, responseType);
+                
+                using var db = _dbFactory.CreateDbContext();
+                var entity = db.Reminders.FirstOrDefault(r => r.Id == reminderId);
+                if (entity != null)
+                {
+                    switch (responseType)
+                    {
+                        case ReminderResponseType.Opened:
+                            entity.OpenCount++;
+                            break;
+                        case ReminderResponseType.Snoozed:
+                            entity.SnoozeCount++;
+                            break;
+                        case ReminderResponseType.Dismissed:
+                            entity.DismissCount++;
+                            break;
+                    }
+                    entity.UpdatedAt = DateTime.Now;
+                    db.SaveChanges();
+                    
+                    _logger?.LogInformation("提醒响应记录成功: {ReminderId}, {ResponseType}", reminderId, responseType);
+                }
+                else
+                {
+                    _logger?.LogWarning("未找到要记录响应的提醒: {ReminderId}", reminderId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "记录提醒响应失败: {ReminderId}", reminderId);
+                throw;
+            }
+        }
+
+        public ReminderStats GetReminderStats(string userId)
+        {
+            try
+            {
+                _logger?.LogDebug("获取提醒统计: {UserId}", userId);
+                
+                var today = DateTime.Today;
+                using var db = _dbFactory.CreateDbContext();
+                var userReminders = db.Reminders
+                    .Where(r => r.UserId == userId)
+                    .ToList();
+
+                var stats = new ReminderStats
+                {
+                    TotalReminders = userReminders.Count,
+                    EnabledReminders = userReminders.Count(r => r.Enabled),
+                    TriggeredToday = userReminders.Count(r => r.LastTriggered.HasValue && r.LastTriggered.Value.Date == today),
+                    OpenedToday = userReminders.Sum(r => r.OpenCount),
+                    SnoozedToday = userReminders.Sum(r => r.SnoozeCount),
+                    DismissedToday = userReminders.Sum(r => r.DismissCount)
+                };
+
+                var totalResponses = stats.OpenedToday + stats.SnoozedToday + stats.DismissedToday;
+                stats.ResponseRate = stats.TriggeredToday > 0
+                    ? (double)totalResponses / stats.TriggeredToday * 100
+                    : 0;
+
+                stats.AverageSnoozeCount = stats.TriggeredToday > 0
+                    ? (double)stats.SnoozedToday / stats.TriggeredToday
+                    : 0;
+
+                _logger?.LogDebug("提醒统计获取成功: {UserId}", userId);
+                return stats;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "获取提醒统计失败: {UserId}", userId);
+                throw;
+            }
+        }
+
+        public void SnoozeReminder(Guid reminderId, TimeSpan snoozeTime)
+        {
+            try
+            {
+                _logger?.LogDebug("延后提醒: {ReminderId}, {SnoozeTime}", reminderId, snoozeTime);
+                
+                using var db = _dbFactory.CreateDbContext();
+                var entity = db.Reminders.FirstOrDefault(r => r.Id == reminderId);
+                if (entity != null)
+                {
+                    entity.SnoozeCount++;
+                    entity.LastTriggered = DateTime.Now.Add(snoozeTime);
+                    entity.UpdatedAt = DateTime.Now;
+                    db.SaveChanges();
+                    
+                    _logger?.LogInformation("提醒延后成功: {ReminderId}, 延后 {SnoozeTime}", reminderId, snoozeTime);
+                }
+                else
+                {
+                    _logger?.LogWarning("未找到要延后的提醒: {ReminderId}", reminderId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "延后提醒失败: {ReminderId}", reminderId);
+                throw;
+            }
+        }
+
         public List<Reminder> GetUpcomingReminders(TimeSpan within)
         {
             try

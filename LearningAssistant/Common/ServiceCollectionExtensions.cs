@@ -7,14 +7,21 @@ using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
 using LearningAssistant.Services.AI;
+using LearningAssistant.Services.Backup;
+using LearningAssistant.Services.Backup.Providers;
 using LearningAssistant.Services.Cache;
 using LearningAssistant.Services.Cloud;
+using LearningAssistant.Services.DragDrop;
+using LearningAssistant.Services.Favorites;
 using LearningAssistant.Services.Feedback;
 using LearningAssistant.Services.Gamification;
+using LearningAssistant.Services.Hotkeys;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Migration;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Services.Persistence;
+using LearningAssistant.Services.Recovery;
+using LearningAssistant.Services.SystemTray;
 using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Configuration;
@@ -118,6 +125,7 @@ namespace LearningAssistant.Common
         {
             services.AddSingleton<IAIServiceFactory, AIServiceFactory>();
             services.AddSingleton<IAIService, FallbackAIService>();
+            services.AddSingleton<IPromptTemplateService, PromptTemplateService>();
 
             return services;
         }
@@ -178,6 +186,31 @@ namespace LearningAssistant.Common
             services.AddSingleton<IEncouragementService, EncouragementService>();
             services.AddSingleton<IAchievementService, AchievementService>();
             services.AddScoped<IGamificationService, GamificationService>();
+            services.AddSingleton<ILearningGoalService, LearningGoalService>();
+            services.AddSingleton<FavoritesBackupProvider>();
+            services.AddSingleton<StudyStatsBackupProvider>();
+            services.AddSingleton<LearningGoalsBackupProvider>();
+            services.AddSingleton<IBackupService>(sp =>
+            {
+                var logger = sp.GetService<ILogger<BackupService>>();
+                var backupService = new BackupService(logger);
+
+                var favoritesProvider = sp.GetRequiredService<FavoritesBackupProvider>();
+                var statsProvider = sp.GetRequiredService<StudyStatsBackupProvider>();
+                var goalsProvider = sp.GetRequiredService<LearningGoalsBackupProvider>();
+
+                backupService.RegisterProvider(favoritesProvider);
+                backupService.RegisterProvider(statsProvider);
+                backupService.RegisterProvider(goalsProvider);
+
+                return backupService;
+            });
+            services.AddSingleton<IWrongAnswerService, WrongAnswerService>();
+            services.AddSingleton<INoteService, NoteService>();
+            services.AddSingleton<ILearningPathService, LearningPathService>();
+            services.AddSingleton<ILearningRecommendationService, LearningRecommendationService>();
+            services.AddSingleton<IPomodoroService, PomodoroService>();
+            services.AddSingleton<IDataImportService, DataImportService>();
 
             services.AddScoped<ILearningSettingsManager, LearningSettingsManager>();
             services.AddScoped<ILearningEventMediator, LearningEventMediator>();
@@ -200,6 +233,16 @@ namespace LearningAssistant.Common
         }
 
         /// <summary>
+        /// 添加缓存相关服务
+        /// </summary>
+        public static IServiceCollection AddCacheServices(this IServiceCollection services)
+        {
+            services.AddSingleton<ICacheManagerService, CacheManagerService>();
+
+            return services;
+        }
+
+        /// <summary>
         /// 添加数据库相关服务
         /// </summary>
         public static IServiceCollection AddDatabaseServices(this IServiceCollection services)
@@ -216,6 +259,10 @@ namespace LearningAssistant.Common
         {
             services.AddSingleton<IAIPanelPopupService, AIPanelPopupService>();
             services.AddSingleton<IWindowManager, WindowManager>();
+            services.AddSingleton<IHotkeyService, HotkeyService>();
+            services.AddSingleton<IDragDropService, DragDropService>();
+            services.AddSingleton<ICrashRecoveryService, CrashRecoveryService>();
+            services.AddSingleton<ITrayIconService, TrayIconService>();
             services.AddScoped<MainPresenter>();
             services.AddScoped<SettingPresenter>();
             services.AddScoped<LearningPresenter>(sp =>
@@ -282,12 +329,19 @@ namespace LearningAssistant.Common
                 var reminderService = sp.GetRequiredService<ILearningReminderService>();
                 var reportService = sp.GetRequiredService<LearningReportService>();
                 var quoteService = sp.GetRequiredService<QuoteService>();
+                var goalService = sp.GetRequiredService<ILearningGoalService>();
                 var logger = sp.GetService<ILogger<LearningManagementForm>>();
                 var themeService = sp.GetService<IThemeService>();
-                return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService, logger, themeService);
+                return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService, goalService, logger, themeService);
             });
 
-
+            services.AddScoped<WrongAnswerForm>(sp =>
+            {
+                var wrongAnswerService = sp.GetRequiredService<IWrongAnswerService>();
+                var logger = sp.GetService<ILogger<WrongAnswerForm>>();
+                var themeService = sp.GetService<IThemeService>();
+                return new WrongAnswerForm(wrongAnswerService, logger, themeService);
+            });
 
             services.AddScoped<ISettingView>(sp => sp.GetRequiredService<SettingForm>());
             services.AddScoped<ILearningView>(sp => sp.GetRequiredService<LearningForm>());

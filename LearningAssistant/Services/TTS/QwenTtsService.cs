@@ -52,7 +52,7 @@ namespace LearningAssistant.Services.TTS
 
             try
             {
-                Directory.CreateDirectory(AppPaths.TTSCacheDir);
+                Directory.CreateDirectory(AppPaths.GetUserTtsCacheDir());
 
                 // create deterministic filename based on SHA1 of text + language + speed
                 string path = GetCacheFilePath(text, language, speed);
@@ -181,16 +181,16 @@ namespace LearningAssistant.Services.TTS
             var hash = sha1.ComputeHash(Encoding.UTF8.GetBytes(meta));
             var sb = new StringBuilder();
             foreach (var b in hash) sb.Append(b.ToString("x2"));
-            return Path.Combine(AppPaths.TTSCacheDir, sb.ToString() + ".wav");
+            return Path.Combine(AppPaths.GetUserTtsCacheDir(), sb.ToString() + ".wav");
         }
 
         private void CleanupOldCache()
         {
             try
             {
-                if (!Directory.Exists(AppPaths.TTSCacheDir)) return;
+                if (!Directory.Exists(AppPaths.GetUserTtsCacheDir())) return;
 
-                var files = new DirectoryInfo(AppPaths.TTSCacheDir)
+                var files = new DirectoryInfo(AppPaths.GetUserTtsCacheDir())
                     .GetFiles("*.wav")
                     .OrderByDescending(f => f.LastWriteTimeUtc)
                     .ToList();

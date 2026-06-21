@@ -138,7 +138,7 @@ namespace LearningAssistant.Services.Pdf
 
         private string GetAnnotationPath(string pdfPath, int pageIndex)
         {
-            return AppPaths.GetAnnotationPath(pdfPath, pageIndex);
+            return AppPaths.GetUserAnnotationPath(pdfPath, pageIndex);
         }
     }
 }

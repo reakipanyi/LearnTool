@@ -11,6 +11,7 @@ namespace LearningAssistant.Forms.UserControls
         private Label _labelStats = null!;
         private Panel _panelContent = null!;
         private FlowLayoutPanel _flowLayoutPanelCards = null!;
+        private EmptyStateView? _emptyState;
 
         private List<Challenge> _challenges = new();
         private readonly IGamificationService? _gamificationService;
@@ -101,7 +102,25 @@ namespace LearningAssistant.Forms.UserControls
 
             int completedCount = _challenges.Count(c => c.Completed);
             int claimedCount = _challenges.Count(c => c.Claimed);
-            _labelStats.Text = $"完成 {completedCount} / {_challenges.Count}  |  已领取 {claimedCount}";
+            int totalCount = _challenges.Count;
+            int unclaimedCount = completedCount - claimedCount;
+            double completePercent = totalCount > 0 ? (double)completedCount / totalCount * 100 : 0;
+
+            string statsText = $"完成 {completedCount} / {totalCount} · {completePercent:F0}%";
+            if (unclaimedCount > 0)
+            {
+                statsText += $"  ·  待领取 {unclaimedCount} 个奖励";
+            }
+
+            _labelStats.Text = statsText;
+
+            if (_challenges.Count == 0)
+            {
+                ShowEmptyState();
+                return;
+            }
+
+            HideEmptyState();
 
             foreach (var challenge in _challenges)
             {
@@ -113,6 +132,31 @@ namespace LearningAssistant.Forms.UserControls
                 card.ClaimClicked += OnClaimClicked;
                 _flowLayoutPanelCards.Controls.Add(card);
             }
+        }
+
+        private void ShowEmptyState()
+        {
+            if (_emptyState == null)
+            {
+                _emptyState = new EmptyStateView
+                {
+                    Dock = DockStyle.Fill
+                };
+                _emptyState.SetState(EmptyStateType.NoChallenges);
+                _panelContent.Controls.Add(_emptyState);
+                _emptyState.BringToFront();
+            }
+            _emptyState.Visible = true;
+            _flowLayoutPanelCards.Visible = false;
+        }
+
+        private void HideEmptyState()
+        {
+            if (_emptyState != null)
+            {
+                _emptyState.Visible = false;
+            }
+            _flowLayoutPanelCards.Visible = true;
         }
 
         private void OnClaimClicked(object? sender, Challenge challenge)

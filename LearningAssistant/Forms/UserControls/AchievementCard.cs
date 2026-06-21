@@ -1,21 +1,24 @@
+using LearningAssistant.Common.UI;
 using LearningAssistant.Models.User;
 using System.ComponentModel;
+using System.Drawing.Drawing2D;
 
 namespace LearningAssistant.Forms.UserControls
 {
     public class AchievementCard : UserControl
     {
-        private Panel _panelCard = null!;
         private Label _labelIcon = null!;
         private Label _labelName = null!;
         private Label _labelDescription = null!;
-        private ProgressBar _progressBar = null!;
-        private Label _labelProgress = null!;
+        private Label _labelProgressText = null!;
         private Label _labelCategory = null!;
 
         private Badge? _badge;
         private int _currentValue;
         private bool _isUnlocked;
+        private bool _isHovered;
+        private int _cornerRadius = 12;
+        private int _shadowOffset = 4;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Badge? Badge
@@ -35,7 +38,7 @@ namespace LearningAssistant.Forms.UserControls
             set
             {
                 _currentValue = value;
-                UpdateProgress();
+                Invalidate();
             }
         }
 
@@ -46,7 +49,7 @@ namespace LearningAssistant.Forms.UserControls
             set
             {
                 _isUnlocked = value;
-                UpdateStyle();
+                Invalidate();
             }
         }
 
@@ -58,7 +61,8 @@ namespace LearningAssistant.Forms.UserControls
                 ControlStyles.UserPaint |
                 ControlStyles.AllPaintingInWmPaint |
                 ControlStyles.OptimizedDoubleBuffer |
-                ControlStyles.SupportsTransparentBackColor,
+                ControlStyles.SupportsTransparentBackColor |
+                ControlStyles.ResizeRedraw,
                 true);
             InitializeComponent();
             SetupHoverEffect();
@@ -66,94 +70,72 @@ namespace LearningAssistant.Forms.UserControls
 
         private void InitializeComponent()
         {
-            _panelCard = new Panel();
             _labelIcon = new Label();
             _labelName = new Label();
             _labelDescription = new Label();
-            _progressBar = new ProgressBar();
-            _labelProgress = new Label();
+            _labelProgressText = new Label();
             _labelCategory = new Label();
 
-            _panelCard.SuspendLayout();
             SuspendLayout();
 
-            _panelCard.Dock = DockStyle.Fill;
-            _panelCard.BackColor = Color.White;
-            _panelCard.Padding = new Padding(12);
-            _panelCard.Cursor = Cursors.Hand;
-            _panelCard.Click += (s, e) => CardClicked?.Invoke(this, e);
-
-            _labelIcon.Dock = DockStyle.Top;
-            _labelIcon.Font = new Font("Segoe UI Emoji", 28F);
+            _labelIcon.Font = new Font("Segoe UI Emoji", 32F);
             _labelIcon.TextAlign = ContentAlignment.MiddleCenter;
-            _labelIcon.Height = 50;
+            _labelIcon.BackColor = Color.Transparent;
             _labelIcon.Click += (s, e) => CardClicked?.Invoke(this, e);
+            _labelIcon.Cursor = Cursors.Hand;
 
-            _labelName.Dock = DockStyle.Top;
             _labelName.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
-            _labelName.ForeColor = Color.FromArgb(51, 51, 51);
             _labelName.TextAlign = ContentAlignment.MiddleCenter;
-            _labelName.Height = 25;
+            _labelName.BackColor = Color.Transparent;
             _labelName.Click += (s, e) => CardClicked?.Invoke(this, e);
+            _labelName.Cursor = Cursors.Hand;
 
-            _labelCategory.Dock = DockStyle.Top;
-            _labelCategory.Font = new Font("微软雅黑", 8F);
-            _labelCategory.ForeColor = Color.FromArgb(153, 153, 153);
+            _labelCategory.Font = new Font("微软雅黑", 7.5F);
             _labelCategory.TextAlign = ContentAlignment.MiddleCenter;
-            _labelCategory.Height = 18;
+            _labelCategory.BackColor = Color.Transparent;
             _labelCategory.Click += (s, e) => CardClicked?.Invoke(this, e);
+            _labelCategory.Cursor = Cursors.Hand;
 
-            _labelDescription.Dock = DockStyle.Top;
-            _labelDescription.Font = new Font("微软雅黑", 8.5F);
-            _labelDescription.ForeColor = Color.FromArgb(102, 102, 102);
+            _labelDescription.Font = new Font("微软雅黑", 8F);
             _labelDescription.TextAlign = ContentAlignment.MiddleCenter;
-            _labelDescription.Height = 30;
+            _labelDescription.BackColor = Color.Transparent;
             _labelDescription.Click += (s, e) => CardClicked?.Invoke(this, e);
+            _labelDescription.Cursor = Cursors.Hand;
 
-            _progressBar.Dock = DockStyle.Top;
-            _progressBar.Height = 8;
-            _progressBar.Style = ProgressBarStyle.Continuous;
-            _progressBar.MarqueeAnimationSpeed = 0;
-            _progressBar.Click += (s, e) => CardClicked?.Invoke(this, e);
+            _labelProgressText.Font = new Font("微软雅黑", 8F, FontStyle.Bold);
+            _labelProgressText.TextAlign = ContentAlignment.MiddleCenter;
+            _labelProgressText.BackColor = Color.Transparent;
+            _labelProgressText.Click += (s, e) => CardClicked?.Invoke(this, e);
+            _labelProgressText.Cursor = Cursors.Hand;
 
-            _labelProgress.Dock = DockStyle.Top;
-            _labelProgress.Font = new Font("微软雅黑", 8F);
-            _labelProgress.ForeColor = Color.FromArgb(102, 102, 102);
-            _labelProgress.TextAlign = ContentAlignment.MiddleCenter;
-            _labelProgress.Height = 18;
-            _labelProgress.Click += (s, e) => CardClicked?.Invoke(this, e);
+            Controls.Add(_labelProgressText);
+            Controls.Add(_labelDescription);
+            Controls.Add(_labelCategory);
+            Controls.Add(_labelName);
+            Controls.Add(_labelIcon);
 
-            _panelCard.Controls.Add(_labelProgress);
-            _panelCard.Controls.Add(_progressBar);
-            _panelCard.Controls.Add(_labelDescription);
-            _panelCard.Controls.Add(_labelCategory);
-            _panelCard.Controls.Add(_labelName);
-            _panelCard.Controls.Add(_labelIcon);
-
-            Controls.Add(_panelCard);
-
-            Size = new Size(160, 180);
+            Size = new Size(170, 195);
             BackColor = Color.Transparent;
             DoubleBuffered = true;
+            Cursor = Cursors.Hand;
 
-            _panelCard.ResumeLayout(false);
+            Click += (s, e) => CardClicked?.Invoke(this, e);
+
             ResumeLayout(false);
         }
 
         private void SetupHoverEffect()
         {
-            _panelCard.MouseEnter += (s, e) =>
+            MouseEnter += (s, e) =>
             {
-                if (!_isUnlocked) return;
-                _panelCard.BackColor = Color.FromArgb(245, 245, 250);
-                _panelCard.Location = new Point(_panelCard.Left, _panelCard.Top - 2);
+                _isHovered = true;
+                Invalidate();
             };
 
-            _panelCard.MouseLeave += (s, e) =>
+            MouseLeave += (s, e) =>
             {
-                if (!_isUnlocked) return;
-                _panelCard.BackColor = Color.White;
-                _panelCard.Location = new Point(_panelCard.Left, _panelCard.Top + 2);
+                _isHovered = false;
+                Invalidate();
             };
         }
 
@@ -165,54 +147,265 @@ namespace LearningAssistant.Forms.UserControls
                 _labelName.Text = "未知成就";
                 _labelDescription.Text = "";
                 _labelCategory.Text = "";
+                _labelProgressText.Text = "";
                 return;
             }
 
-            _labelIcon.Text = _badge.Icon;
+            _labelIcon.Text = _isUnlocked ? _badge.Icon : "🔒";
             _labelName.Text = _badge.Name;
             _labelDescription.Text = _badge.Description;
             _labelCategory.Text = GetCategoryText(_badge.Category);
-            _labelCategory.ForeColor = GetCategoryColor(_badge.Category);
 
-            _progressBar.Maximum = _badge.Requirement.TargetValue;
-            UpdateProgress();
+            Invalidate();
         }
 
-        private void UpdateProgress()
+        protected override void OnResize(EventArgs e)
         {
-            if (_badge == null) return;
-
-            int target = _badge.Requirement.TargetValue;
-            int current = Math.Min(_currentValue, target);
-
-            _progressBar.Value = current;
-            _labelProgress.Text = _isUnlocked
-                ? "✅ 已解锁"
-                : $"{current} / {target}";
+            base.OnResize(e);
+            LayoutControls();
         }
 
-        private void UpdateStyle()
+        private void LayoutControls()
         {
-            if (_isUnlocked)
+            int padding = 12;
+            int contentWidth = Width - padding * 2 - _shadowOffset;
+
+            _labelIcon.SetBounds(padding + _shadowOffset / 2, padding + 10 + _shadowOffset / 2,
+                contentWidth, 55);
+
+            _labelName.SetBounds(padding + _shadowOffset / 2, _labelIcon.Bottom + 2,
+                contentWidth, 22);
+
+            _labelCategory.SetBounds(padding + _shadowOffset / 2, _labelName.Bottom,
+                contentWidth, 16);
+
+            _labelDescription.SetBounds(padding + _shadowOffset / 2, _labelCategory.Bottom + 2,
+                contentWidth, 28);
+
+            _labelProgressText.SetBounds(padding + _shadowOffset / 2,
+                Height - padding - 20 - _shadowOffset / 2,
+                contentWidth, 16);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+            int shadowOffset = _isHovered ? 6 : 4;
+            Rectangle cardRect = new(shadowOffset / 2, shadowOffset / 2,
+                Width - shadowOffset - 1, Height - shadowOffset - 1);
+
+            using (var shadowPath = GdiHelper.CreateRoundedRectPath(
+                new Rectangle(shadowOffset, shadowOffset, Width - shadowOffset - 1, Height - shadowOffset - 1),
+                _cornerRadius))
+            using (var shadowBrush = new SolidBrush(Color.FromArgb(25, 0, 0, 0)))
             {
-                _panelCard.BackColor = Color.White;
-                _panelCard.BorderStyle = BorderStyle.None;
-                _labelIcon.ForeColor = Color.Black;
-                _labelName.ForeColor = Color.FromArgb(51, 51, 51);
-                _progressBar.ForeColor = Color.FromArgb(76, 175, 80);
-                _labelProgress.ForeColor = Color.FromArgb(76, 175, 80);
+                g.FillPath(shadowBrush, shadowPath);
+            }
+
+            using var cardPath = GdiHelper.CreateRoundedRectPath(cardRect, _cornerRadius);
+
+            if (_isUnlocked && _badge != null)
+            {
+                var rarityColors = GetRarityGradientColors(_badge.Rarity);
+
+                if (_badge.Rarity >= BadgeRarity.Rare)
+                {
+                    int glowLayers = _badge.Rarity >= BadgeRarity.Legendary ? 4 : 3;
+                    for (int i = glowLayers; i > 0; i--)
+                    {
+                        int offset = i;
+                        int alpha = 25 * i / glowLayers;
+                        using var glowPath = GdiHelper.CreateRoundedRectPath(
+                            new Rectangle(cardRect.X - offset, cardRect.Y - offset,
+                                cardRect.Width + offset * 2, cardRect.Height + offset * 2),
+                            _cornerRadius + offset);
+                        using var glowBrush = new SolidBrush(Color.FromArgb(alpha, rarityColors.GlowColor));
+                        g.FillPath(glowBrush, glowPath);
+                    }
+                }
+
+                using var gradientBrush = new LinearGradientBrush(
+                    cardRect,
+                    rarityColors.StartColor,
+                    rarityColors.EndColor,
+                    LinearGradientMode.Vertical);
+                g.FillPath(gradientBrush, cardPath);
+
+                using var borderPen = new Pen(
+                    _badge.Rarity >= BadgeRarity.Rare ? rarityColors.GlowColor : Color.FromArgb(80, 255, 255, 255),
+                    _badge.Rarity >= BadgeRarity.Legendary ? 2f : 1f);
+                g.DrawPath(borderPen, cardPath);
             }
             else
             {
-                _panelCard.BackColor = Color.FromArgb(245, 245, 245);
-                _panelCard.BorderStyle = BorderStyle.None;
-                _labelIcon.ForeColor = Color.Gray;
-                _labelName.ForeColor = Color.FromArgb(153, 153, 153);
-                _progressBar.ForeColor = Color.FromArgb(200, 200, 200);
-                _labelProgress.ForeColor = Color.FromArgb(153, 153, 153);
+                using var bgBrush = new LinearGradientBrush(
+                    cardRect,
+                    Color.FromArgb(248, 248, 250),
+                    Color.FromArgb(240, 240, 245),
+                    LinearGradientMode.Vertical);
+                g.FillPath(bgBrush, cardPath);
+
+                using var borderPen = new Pen(Color.FromArgb(220, 220, 230));
+                g.DrawPath(borderPen, cardPath);
             }
 
-            UpdateProgress();
+            int progressBarHeight = 6;
+            int progressBarY = Height - 50 - shadowOffset / 2;
+            int progressBarX = 20 + shadowOffset / 2;
+            int progressBarWidth = Width - 40 - shadowOffset;
+
+            double progressPercent = 0;
+            if (_badge != null && _badge.Requirement.TargetValue > 0)
+            {
+                progressPercent = (double)Math.Min(_currentValue, _badge.Requirement.TargetValue) /
+                    _badge.Requirement.TargetValue;
+            }
+
+            Color progressStart, progressEnd;
+            Color progressBg;
+
+            if (_isUnlocked && _badge != null)
+            {
+                progressStart = Color.FromArgb(200, 255, 255, 255);
+                progressEnd = Color.White;
+                progressBg = Color.FromArgb(40, 255, 255, 255);
+            }
+            else
+            {
+                progressStart = Color.FromArgb(33, 150, 243);
+                progressEnd = Color.FromArgb(100, 181, 246);
+                progressBg = Color.FromArgb(230, 230, 235);
+            }
+
+            g.DrawGradientProgressBar(
+                new Rectangle(progressBarX, progressBarY, progressBarWidth, progressBarHeight),
+                progressBarHeight / 2,
+                progressPercent,
+                progressStart,
+                progressEnd,
+                progressBg);
+
+            if (!_isUnlocked && progressPercent > 0)
+            {
+                int percentVal = (int)(progressPercent * 100);
+                string percentText = $"{percentVal}%";
+                var percentFont = new Font("微软雅黑", 7.5F, FontStyle.Bold);
+                var percentColor = Color.FromArgb(102, 102, 102);
+
+                using var sf = new StringFormat
+                {
+                    Alignment = StringAlignment.Far,
+                    LineAlignment = StringAlignment.Near
+                };
+                using var brush = new SolidBrush(percentColor);
+                g.DrawString(percentText, percentFont, brush,
+                    new Rectangle(progressBarX, progressBarY - 16, progressBarWidth, 14), sf);
+            }
+
+            DrawStatusBadge(g, cardRect);
+
+            UpdateTextColors();
+        }
+
+        private void DrawStatusBadge(Graphics g, Rectangle cardRect)
+        {
+            string badgeText;
+            Color badgeBackColor;
+            Color badgeTextColor;
+
+            if (_isUnlocked)
+            {
+                badgeText = "✓ 已解锁";
+                badgeBackColor = Color.FromArgb(120, 255, 255, 255);
+                badgeTextColor = Color.White;
+            }
+            else
+            {
+                badgeText = "🔒 未解锁";
+                badgeBackColor = Color.FromArgb(235, 235, 240);
+                badgeTextColor = Color.FromArgb(120, 120, 130);
+            }
+
+            var badgeFont = new Font("微软雅黑", 7.5F, FontStyle.Bold);
+            var textSize = g.MeasureString(badgeText, badgeFont);
+            int badgeWidth = (int)textSize.Width + 14;
+            int badgeHeight = 20;
+            int badgeX = cardRect.Right - badgeWidth - 12;
+            int badgeY = cardRect.Y + 10;
+
+            var badgeRect = new Rectangle(badgeX, badgeY, badgeWidth, badgeHeight);
+
+            using var badgePath = GdiHelper.CreateRoundedRectPath(badgeRect, badgeHeight / 2);
+            using var badgeBrush = new SolidBrush(badgeBackColor);
+            g.FillPath(badgeBrush, badgePath);
+
+            using var sf = new StringFormat
+            {
+                Alignment = StringAlignment.Center,
+                LineAlignment = StringAlignment.Center
+            };
+            using var textBrush = new SolidBrush(badgeTextColor);
+            g.DrawString(badgeText, badgeFont, textBrush, badgeRect, sf);
+        }
+
+        private void UpdateTextColors()
+        {
+            if (_isUnlocked)
+            {
+                _labelIcon.ForeColor = Color.White;
+                _labelName.ForeColor = Color.White;
+                _labelCategory.ForeColor = Color.FromArgb(220, 255, 255, 255);
+                _labelDescription.ForeColor = Color.FromArgb(200, 255, 255, 255);
+                _labelProgressText.ForeColor = Color.White;
+            }
+            else
+            {
+                _labelIcon.ForeColor = Color.FromArgb(180, 180, 190);
+                _labelName.ForeColor = Color.FromArgb(120, 120, 130);
+                _labelCategory.ForeColor = Color.FromArgb(160, 160, 170);
+                _labelDescription.ForeColor = Color.FromArgb(140, 140, 150);
+                _labelProgressText.ForeColor = Color.FromArgb(120, 120, 130);
+            }
+
+            if (_badge != null)
+            {
+                int target = _badge.Requirement.TargetValue;
+                int current = Math.Min(_currentValue, target);
+                _labelProgressText.Text = _isUnlocked
+                    ? "✓ 已解锁"
+                    : $"{current} / {target}";
+            }
+        }
+
+        private static GraphicsPath CreateRoundedRectPath(Rectangle rect, int radius)
+        {
+            var path = new GraphicsPath();
+            int diameter = radius * 2;
+
+            if (diameter > rect.Width) diameter = rect.Width;
+            if (diameter > rect.Height) diameter = rect.Height;
+
+            Rectangle arcRect = new(rect.Location, new Size(diameter, diameter));
+
+            path.AddArc(arcRect, 180, 90);
+
+            arcRect.X = rect.Right - diameter;
+            path.AddArc(arcRect, 270, 90);
+
+            arcRect.Y = rect.Bottom - diameter;
+            path.AddArc(arcRect, 0, 90);
+
+            arcRect.X = rect.Left;
+            path.AddArc(arcRect, 90, 90);
+
+            path.CloseFigure();
+            return path;
         }
 
         private string GetCategoryText(BadgeCategory category)
@@ -227,77 +420,54 @@ namespace LearningAssistant.Forms.UserControls
             };
         }
 
-        private Color GetCategoryColor(BadgeCategory category)
+        private struct GradientColors
         {
-            return category switch
-            {
-                BadgeCategory.Learning => Color.FromArgb(33, 150, 243),
-                BadgeCategory.Consistency => Color.FromArgb(255, 152, 0),
-                BadgeCategory.Mastery => Color.FromArgb(156, 39, 176),
-                BadgeCategory.Special => Color.FromArgb(233, 30, 99),
-                _ => Color.Gray
-            };
+            public Color StartColor;
+            public Color EndColor;
+            public Color GlowColor;
         }
 
-        private Color GetRarityColor(BadgeRarity rarity)
+        private static GradientColors GetRarityGradientColors(BadgeRarity rarity)
         {
             return rarity switch
             {
-                BadgeRarity.Common => Color.FromArgb(158, 158, 158),
-                BadgeRarity.Uncommon => Color.FromArgb(76, 175, 80),
-                BadgeRarity.Rare => Color.FromArgb(33, 150, 243),
-                BadgeRarity.Epic => Color.FromArgb(156, 39, 176),
-                BadgeRarity.Legendary => Color.FromArgb(255, 152, 0),
-                _ => Color.Gray
+                BadgeRarity.Common => new GradientColors
+                {
+                    StartColor = Color.FromArgb(158, 158, 158),
+                    EndColor = Color.FromArgb(97, 97, 97),
+                    GlowColor = Color.FromArgb(189, 189, 189)
+                },
+                BadgeRarity.Uncommon => new GradientColors
+                {
+                    StartColor = Color.FromArgb(76, 175, 80),
+                    EndColor = Color.FromArgb(46, 125, 50),
+                    GlowColor = Color.FromArgb(102, 187, 106)
+                },
+                BadgeRarity.Rare => new GradientColors
+                {
+                    StartColor = Color.FromArgb(33, 150, 243),
+                    EndColor = Color.FromArgb(21, 101, 192),
+                    GlowColor = Color.FromArgb(66, 165, 245)
+                },
+                BadgeRarity.Epic => new GradientColors
+                {
+                    StartColor = Color.FromArgb(156, 39, 176),
+                    EndColor = Color.FromArgb(106, 27, 154),
+                    GlowColor = Color.FromArgb(171, 71, 188)
+                },
+                BadgeRarity.Legendary => new GradientColors
+                {
+                    StartColor = Color.FromArgb(255, 193, 7),
+                    EndColor = Color.FromArgb(255, 111, 0),
+                    GlowColor = Color.FromArgb(255, 213, 79)
+                },
+                _ => new GradientColors
+                {
+                    StartColor = Color.FromArgb(158, 158, 158),
+                    EndColor = Color.FromArgb(97, 97, 97),
+                    GlowColor = Color.Gray
+                }
             };
-        }
-
-        private string GetRarityText(BadgeRarity rarity)
-        {
-            return rarity switch
-            {
-                BadgeRarity.Common => "普通",
-                BadgeRarity.Uncommon => "优秀",
-                BadgeRarity.Rare => "稀有",
-                BadgeRarity.Epic => "史诗",
-                BadgeRarity.Legendary => "传说",
-                _ => ""
-            };
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            base.OnPaint(e);
-
-            if (_panelCard == null) return;
-
-            using var path = new System.Drawing.Drawing2D.GraphicsPath();
-            int radius = 8;
-            Rectangle rect = new(0, 0, Width - 1, Height - 1);
-            path.AddArc(rect.X, rect.Y, radius, radius, 180, 90);
-            path.AddArc(rect.Right - radius, rect.Y, radius, radius, 270, 90);
-            path.AddArc(rect.Right - radius, rect.Bottom - radius, radius, radius, 0, 90);
-            path.AddArc(rect.X, rect.Bottom - radius, radius, radius, 90, 90);
-            path.CloseAllFigures();
-
-            _panelCard.Region = new Region(path);
-
-            Color borderColor;
-            if (_isUnlocked && _badge != null)
-            {
-                borderColor = GetRarityColor(_badge.Rarity);
-            }
-            else if (_isUnlocked)
-            {
-                borderColor = Color.FromArgb(220, 220, 230);
-            }
-            else
-            {
-                borderColor = Color.FromArgb(230, 230, 230);
-            }
-
-            using Pen borderPen = new(borderColor, _isUnlocked && _badge?.Rarity == BadgeRarity.Legendary ? 2 : 1);
-            e.Graphics.DrawPath(borderPen, path);
         }
     }
 }

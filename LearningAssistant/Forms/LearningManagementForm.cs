@@ -12,6 +12,7 @@ namespace LearningAssistant.Forms
         private readonly ILearningReminderService _reminderService;
         private readonly LearningReportService _reportService;
         private readonly QuoteService _quoteService;
+        private readonly ILearningGoalService _goalService;
         private readonly ILogger<LearningManagementForm>? _logger;
         private readonly IThemeService? _themeService;
         private readonly string _userId;
@@ -21,6 +22,7 @@ namespace LearningAssistant.Forms
             ILearningReminderService reminderService,
             LearningReportService reportService,
             QuoteService quoteService,
+            ILearningGoalService goalService,
             ILogger<LearningManagementForm>? logger = null,
             IThemeService? themeService = null,
             string? userId = null)
@@ -30,6 +32,7 @@ namespace LearningAssistant.Forms
             _reminderService = reminderService;
             _reportService = reportService;
             _quoteService = quoteService;
+            _goalService = goalService;
             _logger = logger;
             _themeService = themeService;
             _userId = userId ?? Environment.UserName;
@@ -48,12 +51,42 @@ namespace LearningAssistant.Forms
                 LoadTodayStats();
                 LoadWeeklyStats();
                 LoadReminders();
+                LoadDailyGoal();
                 _logger?.LogDebug("学习数据加载完成");
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "加载学习数据失败");
                 MessageBox.Show($"加载数据失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private void LoadDailyGoal()
+        {
+            var goal = _goalService.GetDailyGoal(_userId);
+            if (goal != null)
+            {
+                lblGoalProgress.Text = $"{goal.CompletedItems} / {goal.TargetItems} 项";
+                progressBarGoal.Value = Math.Min(100, goal.CompletedItems * 100 / Math.Max(1, goal.TargetItems));
+                lblGoalStatus.Text = goal.IsCompleted ? "🎉 今日目标已完成！" : "继续加油！";
+                numericUpDownGoal.Value = Math.Max(1, Math.Min(500, goal.TargetItems));
+            }
+        }
+
+        private void btnSetGoal_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                int target = (int)numericUpDownGoal.Value;
+                _goalService.SetDailyGoal(_userId, target);
+                LoadDailyGoal();
+                MessageBox.Show("每日目标已更新", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                _logger?.LogInformation("设置每日目标: {Target}", target);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "设置每日目标失败");
+                MessageBox.Show($"设置目标失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -174,6 +207,14 @@ namespace LearningAssistant.Forms
         private TabPage tabOverview;
         private TabPage tabReminders;
         private TabPage tabReports;
+        private GroupBox groupBoxGoal;
+        private Label lblGoalTitle;
+        private Label lblGoalProgress;
+        private ProgressBar progressBarGoal;
+        private Label lblGoalStatus;
+        private NumericUpDown numericUpDownGoal;
+        private Button btnSetGoal;
+        private Label lblGoalTargetLabel;
 
         private void InitializeComponent()
         {
@@ -192,6 +233,14 @@ namespace LearningAssistant.Forms
             btnAddReminder = new Button();
             btnGenerateReport = new Button();
             btnRefresh = new Button();
+            groupBoxGoal = new GroupBox();
+            lblGoalTitle = new Label();
+            lblGoalProgress = new Label();
+            progressBarGoal = new ProgressBar();
+            lblGoalStatus = new Label();
+            numericUpDownGoal = new NumericUpDown();
+            btnSetGoal = new Button();
+            lblGoalTargetLabel = new Label();
             tabControl = new TabControl();
             tabOverview = new TabPage();
             tabReminders = new TabPage();
@@ -320,6 +369,93 @@ namespace LearningAssistant.Forms
             btnGenerateReport.Text = "生成今日报告";
             btnGenerateReport.Click += btnGenerateReport_Click;
             // 
+            // groupBoxGoal
+            // 
+            groupBoxGoal.Controls.Add(lblGoalTargetLabel);
+            groupBoxGoal.Controls.Add(numericUpDownGoal);
+            groupBoxGoal.Controls.Add(btnSetGoal);
+            groupBoxGoal.Controls.Add(lblGoalStatus);
+            groupBoxGoal.Controls.Add(progressBarGoal);
+            groupBoxGoal.Controls.Add(lblGoalProgress);
+            groupBoxGoal.Controls.Add(lblGoalTitle);
+            groupBoxGoal.Location = new Point(20, 290);
+            groupBoxGoal.Name = "groupBoxGoal";
+            groupBoxGoal.Size = new Size(530, 80);
+            groupBoxGoal.TabIndex = 11;
+            groupBoxGoal.TabStop = false;
+            groupBoxGoal.Text = "🎯 每日目标";
+            // 
+            // lblGoalTitle
+            // 
+            lblGoalTitle.AutoSize = true;
+            lblGoalTitle.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            lblGoalTitle.Location = new Point(10, 20);
+            lblGoalTitle.Name = "lblGoalTitle";
+            lblGoalTitle.Size = new Size(55, 20);
+            lblGoalTitle.TabIndex = 0;
+            lblGoalTitle.Text = "今日进度:";
+            // 
+            // lblGoalProgress
+            // 
+            lblGoalProgress.AutoSize = true;
+            lblGoalProgress.Font = new Font("微软雅黑", 10F);
+            lblGoalProgress.Location = new Point(75, 20);
+            lblGoalProgress.Name = "lblGoalProgress";
+            lblGoalProgress.Size = new Size(50, 20);
+            lblGoalProgress.TabIndex = 1;
+            lblGoalProgress.Text = "0 / 20";
+            // 
+            // progressBarGoal
+            // 
+            progressBarGoal.Location = new Point(10, 45);
+            progressBarGoal.Name = "progressBarGoal";
+            progressBarGoal.Size = new Size(250, 20);
+            progressBarGoal.TabIndex = 2;
+            // 
+            // lblGoalStatus
+            // 
+            lblGoalStatus.AutoSize = true;
+            lblGoalStatus.Font = new Font("微软雅黑", 9F);
+            lblGoalStatus.ForeColor = Color.Gray;
+            lblGoalStatus.Location = new Point(270, 47);
+            lblGoalStatus.Name = "lblGoalStatus";
+            lblGoalStatus.Size = new Size(50, 18);
+            lblGoalStatus.TabIndex = 3;
+            lblGoalStatus.Text = "继续加油！";
+            // 
+            // lblGoalTargetLabel
+            // 
+            lblGoalTargetLabel.AutoSize = true;
+            lblGoalTargetLabel.Location = new Point(350, 25);
+            lblGoalTargetLabel.Name = "lblGoalTargetLabel";
+            lblGoalTargetLabel.Size = new Size(44, 17);
+            lblGoalTargetLabel.TabIndex = 4;
+            lblGoalTargetLabel.Text = "目标:";
+            // 
+            // numericUpDownGoal
+            // 
+            numericUpDownGoal.Location = new Point(400, 22);
+            numericUpDownGoal.Maximum = new decimal(new int[] { 500, 0, 0, 0 });
+            numericUpDownGoal.Minimum = new decimal(new int[] { 1, 0, 0, 0 });
+            numericUpDownGoal.Name = "numericUpDownGoal";
+            numericUpDownGoal.Size = new Size(70, 23);
+            numericUpDownGoal.TabIndex = 5;
+            numericUpDownGoal.Value = new decimal(new int[] { 20, 0, 0, 0 });
+            // 
+            // btnSetGoal
+            // 
+            btnSetGoal.BackColor = Color.FromArgb(76, 175, 80);
+            btnSetGoal.FlatAppearance.BorderSize = 0;
+            btnSetGoal.FlatStyle = FlatStyle.Flat;
+            btnSetGoal.ForeColor = Color.White;
+            btnSetGoal.Location = new Point(475, 20);
+            btnSetGoal.Name = "btnSetGoal";
+            btnSetGoal.Size = new Size(50, 25);
+            btnSetGoal.TabIndex = 6;
+            btnSetGoal.Text = "设置";
+            btnSetGoal.UseVisualStyleBackColor = false;
+            btnSetGoal.Click += btnSetGoal_Click;
+            // 
             // btnRefresh
             // 
             btnRefresh.Location = new Point(520, 10);
@@ -353,6 +489,7 @@ namespace LearningAssistant.Forms
             tabOverview.Controls.Add(lblWeekItems);
             tabOverview.Controls.Add(lblWeekAccuracy);
             tabOverview.Controls.Add(lblQuote);
+            tabOverview.Controls.Add(groupBoxGoal);
             tabOverview.Location = new Point(4, 26);
             tabOverview.Name = "tabOverview";
             tabOverview.Size = new Size(572, 320);

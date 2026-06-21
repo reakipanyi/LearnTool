@@ -151,7 +151,7 @@ namespace LearningAssistant.Services.Pdf
 
         private string GetBookmarkPath(string pdfPath)
         {
-            return AppPaths.GetPdfBookmarkPath(pdfPath);
+            return AppPaths.GetUserPdfBookmarkPath(pdfPath);
         }
     }
 }
