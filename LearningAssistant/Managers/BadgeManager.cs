@@ -8,6 +8,7 @@ namespace LearningAssistant.Managers
     public class BadgeManager
     {
         private readonly ILogger<BadgeManager>? _logger;
+        private string _currentUserId = "default";
         private readonly Dictionary<string, Badge> _badges = new();
         private readonly List<string> _unlockedBadges = new();
         private FlowLayoutPanel? _flowLayoutPanelBadges;
@@ -141,11 +142,20 @@ namespace LearningAssistant.Managers
             _toolTip = toolTip;
         }
 
-        public void Load()
+        private static string GetUserBadgesPath(string userId)
         {
+            var userDir = Path.Combine(AppPaths.UsersDir, userId);
+            if (!Directory.Exists(userDir))
+                Directory.CreateDirectory(userDir);
+            return Path.Combine(userDir, "badges.json");
+        }
+
+        public void Load(string userId = "default")
+        {
+            _currentUserId = userId;
             try
             {
-                string badgesPath = Path.Combine(AppPaths.DataDir, "badges.json");
+                string badgesPath = GetUserBadgesPath(userId);
                 if (File.Exists(badgesPath))
                 {
                     string json = File.ReadAllText(badgesPath);
@@ -161,6 +171,14 @@ namespace LearningAssistant.Managers
                         }
                     }
                 }
+                else
+                {
+                    foreach (var badge in _badges.Values)
+                    {
+                        badge.IsUnlocked = false;
+                    }
+                    _unlockedBadges.Clear();
+                }
             }
             catch (Exception ex)
             {
@@ -168,11 +186,11 @@ namespace LearningAssistant.Managers
             }
         }
 
-        public void Save()
+        public void Save(string userId = "default")
         {
             try
             {
-                string badgesPath = Path.Combine(AppPaths.DataDir, "badges.json");
+                string badgesPath = GetUserBadgesPath(userId);
                 var badgesDir = Path.GetDirectoryName(badgesPath);
                 if (!string.IsNullOrEmpty(badgesDir) && !Directory.Exists(badgesDir))
                     Directory.CreateDirectory(badgesDir);
@@ -204,7 +222,7 @@ namespace LearningAssistant.Managers
 
             if (newlyUnlocked.Count > 0)
             {
-                Save();
+                Save(_currentUserId);
                 UpdateDisplay();
                 BadgesUnlocked?.Invoke(newlyUnlocked);
             }

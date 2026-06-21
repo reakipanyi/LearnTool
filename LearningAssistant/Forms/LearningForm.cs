@@ -34,6 +34,7 @@ namespace LearningAssistant.Forms
         private readonly ISpacedRepetitionService? _spacedRepetitionService;
         private readonly IGamificationService _gamificationService;
         private readonly IEventBus? _eventBus;
+        private readonly IUserSessionService? _userSessionService;
         private readonly ConfettiManager _confettiManager;
         private readonly EncouragementManager _encouragementManager;
         #endregion
@@ -173,7 +174,8 @@ namespace LearningAssistant.Forms
             IAchievementService? achievementService = null,
             ISpacedRepetitionService? spacedRepetitionService = null,
             IGamificationService? gamificationService = null,
-            IEventBus? eventBus = null)
+            IEventBus? eventBus = null,
+            IUserSessionService? userSessionService = null)
         {
             InitializeComponent();
             _aiQuestionService = aiQuestionService ?? throw new ArgumentNullException(nameof(aiQuestionService));
@@ -188,6 +190,7 @@ namespace LearningAssistant.Forms
             _achievementService = achievementService;
             _spacedRepetitionService = spacedRepetitionService;
             _eventBus = eventBus;
+            _userSessionService = userSessionService;
             _gamificationService = gamificationService ?? new GamificationService(
                 _loggerFactory,
                 null);
@@ -468,7 +471,7 @@ namespace LearningAssistant.Forms
                 // 填充学科下拉框
                 InitSubjectComboBox();
 
-                string settingsPath = AppPaths.AppSettingsPath;
+                string settingsPath = GetUserSettingsPath();
                 if (File.Exists(settingsPath))
                 {
                     string json = File.ReadAllText(settingsPath);
@@ -530,7 +533,7 @@ namespace LearningAssistant.Forms
                 _settings.SortOrder = radioSequential.Checked ? Constants.SortOrder.Sequential : Constants.SortOrder.Random;
                 _settings.Subject = comboBoxSubject.Text;
                 _settings.SubCategory = comboBoxSubCategory.Text;
-                string settingsPath = Path.Combine(AppPaths.ConfigDir, "settings.json");
+                string settingsPath = GetUserSettingsPath();
                 var dir = Path.GetDirectoryName(settingsPath);
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
                 {
@@ -732,7 +735,7 @@ namespace LearningAssistant.Forms
             // 检查当前项是否已收藏
             try
             {
-                string favoritesPath = Path.Combine(AppPaths.DataDir, "favorites.json");
+                string favoritesPath = GetUserFavoritesPath();
                 if (File.Exists(favoritesPath))
                 {
                     string json = File.ReadAllText(favoritesPath);
@@ -1847,7 +1850,7 @@ namespace LearningAssistant.Forms
             {
                 _eventBus.Publish(eventData: new FeynmanCompletedEvent
                 {
-                    UserId = "default",
+                    UserId = GetCurrentUserId(),
                     ItemContent = _currentItem.GetDisplayText(),
                     SubCategory = _settings.SubCategory
                 });
@@ -2086,7 +2089,7 @@ namespace LearningAssistant.Forms
 
             try
             {
-                string favoritesPath = Path.Combine(AppPaths.DataDir, "favorites.json");
+                string favoritesPath = GetUserFavoritesPath();
                 List<string> favorites = new List<string>();
 
                 if (File.Exists(favoritesPath))
@@ -2115,7 +2118,7 @@ namespace LearningAssistant.Forms
 
             try
             {
-                string favoritesPath = Path.Combine(AppPaths.DataDir, "favorites.json");
+                string favoritesPath = GetUserFavoritesPath();
 
                 if (File.Exists(favoritesPath))
                 {
@@ -2135,6 +2138,50 @@ namespace LearningAssistant.Forms
             {
                 _logger?.LogError(ex, "移除收藏失败");
             }
+        }
+
+        /// <summary>
+        /// 获取当前用户ID
+        /// </summary>
+        private string GetCurrentUserId()
+        {
+            return _userSessionService?.CurrentUserId ?? "default";
+        }
+
+        /// <summary>
+        /// 获取用户收藏文件路径
+        /// </summary>
+        private string GetUserFavoritesPath()
+        {
+            var userId = GetCurrentUserId();
+            var userDir = Path.Combine(AppPaths.UsersDir, userId);
+            if (!Directory.Exists(userDir))
+                Directory.CreateDirectory(userDir);
+            return Path.Combine(userDir, "favorites.json");
+        }
+
+        /// <summary>
+        /// 获取用户笔记文件路径
+        /// </summary>
+        private string GetUserNotesPath()
+        {
+            var userId = GetCurrentUserId();
+            var userDir = Path.Combine(AppPaths.UsersDir, userId);
+            if (!Directory.Exists(userDir))
+                Directory.CreateDirectory(userDir);
+            return Path.Combine(userDir, "notes.json");
+        }
+
+        /// <summary>
+        /// 获取用户设置文件路径
+        /// </summary>
+        private string GetUserSettingsPath()
+        {
+            var userId = GetCurrentUserId();
+            var userDir = Path.Combine(AppPaths.UsersDir, userId);
+            if (!Directory.Exists(userDir))
+                Directory.CreateDirectory(userDir);
+            return Path.Combine(userDir, "settings.json");
         }
 
         /// <summary>
@@ -2211,7 +2258,7 @@ namespace LearningAssistant.Forms
 
             try
             {
-                string notesPath = Path.Combine(AppPaths.DataDir, "notes.json");
+                string notesPath = GetUserNotesPath();
 
                 if (File.Exists(notesPath))
                 {
@@ -2260,7 +2307,7 @@ namespace LearningAssistant.Forms
 
             try
             {
-                string notesPath = Path.Combine(AppPaths.DataDir, "notes.json");
+                string notesPath = GetUserNotesPath();
                 Dictionary<string, string> notesDict = new Dictionary<string, string>();
 
                 if (File.Exists(notesPath))

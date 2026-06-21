@@ -11,6 +11,7 @@ namespace LearningAssistant.Managers
     public class StudyStatsManager
     {
         private readonly ILogger<StudyStatsManager>? _logger;
+        private string _currentUserId = "default";
         private readonly List<string> _levelTitles = new() {
             "小白", "学徒", "学者", "秀才", "举人", "进士", "翰林", "大师", "宗师", "圣人"
         };
@@ -77,13 +78,25 @@ namespace LearningAssistant.Managers
         }
 
         /// <summary>
+        /// 获取用户统计数据文件路径
+        /// </summary>
+        private static string GetUserStatsPath(string userId)
+        {
+            var userDir = Path.Combine(AppPaths.UsersDir, userId);
+            if (!Directory.Exists(userDir))
+                Directory.CreateDirectory(userDir);
+            return Path.Combine(userDir, "study_stats.json");
+        }
+
+        /// <summary>
         /// 从文件加载统计数据
         /// </summary>
-        public void Load()
+        public void Load(string userId = "default")
         {
+            _currentUserId = userId;
             try
             {
-                string statsPath = Path.Combine(AppPaths.DataDir, "study_stats.json");
+                string statsPath = GetUserStatsPath(userId);
                 if (File.Exists(statsPath))
                 {
                     string json = File.ReadAllText(statsPath);
@@ -133,11 +146,11 @@ namespace LearningAssistant.Managers
         /// <summary>
         /// 保存统计数据到文件
         /// </summary>
-        public void Save()
+        public void Save(string userId = "default")
         {
             try
             {
-                string statsPath = Path.Combine(AppPaths.DataDir, "study_stats.json");
+                string statsPath = GetUserStatsPath(userId);
                 var statsDir = Path.GetDirectoryName(statsPath);
                 if (!string.IsNullOrEmpty(statsDir) && !Directory.Exists(statsDir))
                     Directory.CreateDirectory(statsDir);

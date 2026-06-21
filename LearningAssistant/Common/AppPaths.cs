@@ -23,10 +23,6 @@ namespace LearningAssistant.Common
         /// </summary>
         public static string DataRoot => Path.Combine(AssemblyDir, "AppData");
 
-        /// <summary>
-        /// 内置数据目录（只读）
-        /// </summary>
-        public static string BuiltInDataDir => Path.Combine(AssemblyDir, "Data");
 
         /// <summary>
         /// OCR 数据目录（只读）
@@ -181,7 +177,6 @@ namespace LearningAssistant.Common
         public static void EnsureDirectoriesExist()
         {
             EnsureDirectoryExists(DataRoot);
-
             EnsureDirectoryExists(ConfigDir);
             EnsureDirectoryExists(DataDir);
             EnsureDirectoryExists(UsersDir);

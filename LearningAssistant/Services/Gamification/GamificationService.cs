@@ -188,16 +188,16 @@ namespace LearningAssistant.Services.Gamification
         public void Load(string userId)
         {
             _userId = userId;
-            _statsManager.Load();
-            _badgeManager.Load();
-            _challengeManager.Load();
+            _statsManager.Load(userId);
+            _badgeManager.Load(userId);
+            _challengeManager.Load(userId);
         }
 
         public void Save()
         {
-            _statsManager.Save();
-            _badgeManager.Save();
-            _challengeManager.Save();
+            _statsManager.Save(_userId);
+            _badgeManager.Save(_userId);
+            _challengeManager.Save(_userId);
         }
         #endregion
 

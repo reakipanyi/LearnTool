@@ -18,6 +18,7 @@ namespace LearningAssistant.Managers
         private readonly Action? _onLevelUp;
         private readonly Action? _onChallengeCompleted;
 
+        private string _currentUserId = "default";
         private List<Challenge> _dailyChallenges = new();
         private FlowLayoutPanel? _flowLayoutPanelChallenges;
         private ISoundService? _soundService;
@@ -64,13 +65,25 @@ namespace LearningAssistant.Managers
         }
 
         /// <summary>
+        /// 获取用户挑战数据文件路径
+        /// </summary>
+        private static string GetUserChallengesPath(string userId)
+        {
+            var userDir = Path.Combine(AppPaths.UsersDir, userId);
+            if (!Directory.Exists(userDir))
+                Directory.CreateDirectory(userDir);
+            return Path.Combine(userDir, "challenges.json");
+        }
+
+        /// <summary>
         /// 加载每日挑战
         /// </summary>
-        public void Load()
+        public void Load(string userId = "default")
         {
+            _currentUserId = userId;
             try
             {
-                string challengesPath = Path.Combine(AppPaths.DataDir, "challenges.json");
+                string challengesPath = GetUserChallengesPath(userId);
                 string today = DateTime.Today.ToString("yyyy-MM-dd");
 
                 if (File.Exists(challengesPath))
@@ -116,11 +129,11 @@ namespace LearningAssistant.Managers
         /// <summary>
         /// 保存挑战数据
         /// </summary>
-        public void Save()
+        public void Save(string userId = "default")
         {
             try
             {
-                string challengesPath = Path.Combine(AppPaths.DataDir, "challenges.json");
+                string challengesPath = GetUserChallengesPath(userId);
                 var challengesDir = Path.GetDirectoryName(challengesPath);
                 if (!string.IsNullOrEmpty(challengesDir) && !Directory.Exists(challengesDir))
                     Directory.CreateDirectory(challengesDir);
@@ -170,7 +183,7 @@ namespace LearningAssistant.Managers
                 }
             }
 
-            Save();
+            Save(_currentUserId);
             UpdateDisplay();
         }
 
@@ -187,7 +200,7 @@ namespace LearningAssistant.Managers
             _onLevelUp?.Invoke();
             _soundService?.PlaySuccess();
 
-            Save();
+            Save(_currentUserId);
             UpdateDisplay();
         }
 
