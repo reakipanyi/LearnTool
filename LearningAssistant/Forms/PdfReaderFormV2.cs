@@ -180,6 +180,13 @@ namespace LearningAssistant.Forms
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Bitmap? SecondPageImage
+        {
+            get => _secondPageImage;
+            set => _secondPageImage = value;
+        }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool IsTranslationEnabled
         {
             get => _isTranslationEnabled;
@@ -245,7 +252,6 @@ namespace LearningAssistant.Forms
 
         public Button? ButtonLanguage => throw new NotImplementedException();
 
-        public Bitmap? SecondPageImage { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 
         public void OnSelectOcrClicked() => SelectOcrClicked?.Invoke(this, EventArgs.Empty);
         public void OnTranslateClicked() => TranslateClicked?.Invoke(this, EventArgs.Empty);
