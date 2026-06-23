@@ -194,7 +194,7 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             {
                 Icon = icon,
                 Title = title,
-                Description = desc,
+                Description = "",// desc,
                 StartColor = startColor,
                 EndColor = endColor,
                 Width = 150,
