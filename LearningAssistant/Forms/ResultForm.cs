@@ -20,6 +20,15 @@ namespace LearningAssistant.Forms
         private double animationProgress = 0;
         private Label labelMotivational;
         private ProgressBar animatedProgressBar;
+        private Panel _panelPrescription;
+        private Label _labelPrescriptionTitle;
+        private Label _labelPrescriptionContent;
+        private Button _buttonJumpToWeakness;
+        private string _weakCategory = string.Empty;
+        private Panel _panelUnknownFooter;
+        private Button _buttonRetryWrong;
+        private Label _labelWrongCountDetail;
+        private List<string> _wrongItemsList = new();
 
 
 
@@ -83,6 +92,7 @@ namespace LearningAssistant.Forms
             set
             {
                 listBoxUnknown.Items.Clear();
+                _wrongItemsList.Clear();
                 if (!string.IsNullOrWhiteSpace(value))
                 {
                     var parts = value.Split(':');
@@ -93,12 +103,16 @@ namespace LearningAssistant.Forms
                     listBoxUnknown.Items.Add(value);
                 }
                 labelUnknown.Text = $"📘 未掌握: {_unknownCount}";
+                _labelWrongCountDetail.Text = $"共 {_unknownCount} 道错题";
+                _buttonRetryWrong.Visible = _unknownCount > 0;
                 UpdateChart();
             }
         }
 
         public event EventHandler? ReviewUnknownClicked;
         public event EventHandler? CloseClicked;
+        public event EventHandler? JumpToWeaknessClicked;
+        public event EventHandler<List<string>>? RetryWrongClicked;
 
         public void ShowMessage(string msg)
         {
@@ -114,6 +128,7 @@ namespace LearningAssistant.Forms
         {
             labelTotal.Text = reportText;
             UpdateMotivationalMessage();
+            GeneratePrescription();
         }
 
         #endregion
@@ -163,6 +178,13 @@ namespace LearningAssistant.Forms
             labelAccuracyValue = new Label();
             progressBarAccuracyGradient = new ProgressBar();
             animationTimer = new System.Windows.Forms.Timer(components);
+            _panelPrescription = new Panel();
+            _labelPrescriptionTitle = new Label();
+            _labelPrescriptionContent = new Label();
+            _buttonJumpToWeakness = new Button();
+            _panelUnknownFooter = new Panel();
+            _buttonRetryWrong = new Button();
+            _labelWrongCountDetail = new Label();
             groupBoxKnown.SuspendLayout();
             groupBoxUnknown.SuspendLayout();
             groupBoxChart.SuspendLayout();
@@ -303,6 +325,45 @@ namespace LearningAssistant.Forms
             groupBoxUnknown.TabIndex = 8;
             groupBoxUnknown.TabStop = false;
             // 
+            // _panelUnknownFooter
+            // 
+            _panelUnknownFooter.BackColor = Color.FromArgb(245, 250, 255);
+            _panelUnknownFooter.Location = new Point(43, 896);
+            _panelUnknownFooter.Name = "_panelUnknownFooter";
+            _panelUnknownFooter.Size = new Size(543, 45);
+            _panelUnknownFooter.TabIndex = 17;
+            // 
+            // _labelWrongCountDetail
+            // 
+            _labelWrongCountDetail.Font = new Font("微软雅黑", 9F);
+            _labelWrongCountDetail.ForeColor = Color.FromArgb(102, 102, 102);
+            _labelWrongCountDetail.Location = new Point(15, 12);
+            _labelWrongCountDetail.Name = "_labelWrongCountDetail";
+            _labelWrongCountDetail.Size = new Size(200, 25);
+            _labelWrongCountDetail.TabIndex = 0;
+            _labelWrongCountDetail.Text = "共 0 道错题";
+            _labelWrongCountDetail.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // _buttonRetryWrong
+            // 
+            _buttonRetryWrong.BackColor = Color.FromArgb(244, 67, 54);
+            _buttonRetryWrong.FlatAppearance.BorderSize = 0;
+            _buttonRetryWrong.FlatStyle = FlatStyle.Flat;
+            _buttonRetryWrong.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            _buttonRetryWrong.ForeColor = Color.White;
+            _buttonRetryWrong.Location = new Point(410, 7);
+            _buttonRetryWrong.Name = "_buttonRetryWrong";
+            _buttonRetryWrong.Size = new Size(120, 32);
+            _buttonRetryWrong.TabIndex = 1;
+            _buttonRetryWrong.Text = "🎯 重练错题";
+            _buttonRetryWrong.UseVisualStyleBackColor = false;
+            _buttonRetryWrong.Click += ButtonRetryWrong_Click;
+            _buttonRetryWrong.MouseEnter += Button_HoverEnter;
+            _buttonRetryWrong.MouseLeave += Button_HoverLeave;
+            // 
+            _panelUnknownFooter.Controls.Add(_buttonRetryWrong);
+            _panelUnknownFooter.Controls.Add(_labelWrongCountDetail);
+            // 
             // progressBarAccuracy
             // 
             progressBarAccuracy.Location = new Point(0, 0);
@@ -332,10 +393,59 @@ namespace LearningAssistant.Forms
             groupBoxChart.Margin = new Padding(4, 4, 4, 4);
             groupBoxChart.Name = "groupBoxChart";
             groupBoxChart.Padding = new Padding(7, 7, 7, 7);
-            groupBoxChart.Size = new Size(571, 532);
+            groupBoxChart.Size = new Size(571, 320);
             groupBoxChart.TabIndex = 11;
             groupBoxChart.TabStop = false;
             groupBoxChart.Text = "📊 学习统计图表";
+            // 
+            // _panelPrescription
+            // 
+            _panelPrescription.BackColor = Color.FromArgb(255, 248, 235);
+            _panelPrescription.Location = new Point(614, 430);
+            _panelPrescription.Name = "_panelPrescription";
+            _panelPrescription.Size = new Size(571, 200);
+            _panelPrescription.TabIndex = 16;
+            // 
+            // _labelPrescriptionTitle
+            // 
+            _labelPrescriptionTitle.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            _labelPrescriptionTitle.ForeColor = Color.FromArgb(102, 62, 0);
+            _labelPrescriptionTitle.Location = new Point(20, 15);
+            _labelPrescriptionTitle.Name = "_labelPrescriptionTitle";
+            _labelPrescriptionTitle.Size = new Size(300, 30);
+            _labelPrescriptionTitle.TabIndex = 0;
+            _labelPrescriptionTitle.Text = "💊 智能学习处方";
+            // 
+            // _labelPrescriptionContent
+            // 
+            _labelPrescriptionContent.Font = new Font("微软雅黑", 9.5F);
+            _labelPrescriptionContent.ForeColor = Color.FromArgb(80, 80, 80);
+            _labelPrescriptionContent.Location = new Point(20, 50);
+            _labelPrescriptionContent.Name = "_labelPrescriptionContent";
+            _labelPrescriptionContent.Size = new Size(530, 100);
+            _labelPrescriptionContent.TabIndex = 1;
+            _labelPrescriptionContent.Text = "正在分析测试结果...";
+            // 
+            // _buttonJumpToWeakness
+            // 
+            _buttonJumpToWeakness.BackColor = Color.FromArgb(255, 152, 0);
+            _buttonJumpToWeakness.FlatAppearance.BorderSize = 0;
+            _buttonJumpToWeakness.FlatStyle = FlatStyle.Flat;
+            _buttonJumpToWeakness.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            _buttonJumpToWeakness.ForeColor = Color.White;
+            _buttonJumpToWeakness.Location = new Point(20, 155);
+            _buttonJumpToWeakness.Name = "_buttonJumpToWeakness";
+            _buttonJumpToWeakness.Size = new Size(200, 35);
+            _buttonJumpToWeakness.TabIndex = 2;
+            _buttonJumpToWeakness.Text = "🎯 强化薄弱知识点";
+            _buttonJumpToWeakness.UseVisualStyleBackColor = false;
+            _buttonJumpToWeakness.Click += ButtonJumpToWeakness_Click;
+            _buttonJumpToWeakness.MouseEnter += Button_HoverEnter;
+            _buttonJumpToWeakness.MouseLeave += Button_HoverLeave;
+            // 
+            _panelPrescription.Controls.Add(_buttonJumpToWeakness);
+            _panelPrescription.Controls.Add(_labelPrescriptionContent);
+            _panelPrescription.Controls.Add(_labelPrescriptionTitle);
             // 
             // chartControl
             // 
@@ -409,12 +519,14 @@ namespace LearningAssistant.Forms
             Controls.Add(labelAccuracyValue);
             Controls.Add(progressBarAccuracyGradient);
             Controls.Add(headerPanel);
+            Controls.Add(_panelPrescription);
             Controls.Add(labelAccuracy);
             Controls.Add(labelTotal);
             Controls.Add(labelKnown);
             Controls.Add(labelUnknown);
             Controls.Add(groupBoxKnown);
             Controls.Add(groupBoxUnknown);
+            Controls.Add(_panelUnknownFooter);
             Controls.Add(groupBoxChart);
             Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
             Margin = new Padding(4, 4, 4, 4);
@@ -434,6 +546,23 @@ namespace LearningAssistant.Forms
         private void ButtonReview_Click(object? sender, EventArgs e)
         {
             ReviewUnknownClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ButtonJumpToWeakness_Click(object? sender, EventArgs e)
+        {
+            JumpToWeaknessClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ButtonRetryWrong_Click(object? sender, EventArgs e)
+        {
+            if (_wrongItemsList.Count == 0)
+            {
+                for (int i = 0; i < listBoxUnknown.Items.Count; i++)
+                {
+                    _wrongItemsList.Add(listBoxUnknown.Items[i]?.ToString() ?? string.Empty);
+                }
+            }
+            RetryWrongClicked?.Invoke(this, _wrongItemsList);
         }
 
         private void ButtonBack_Click(object? sender, EventArgs e)
@@ -497,6 +626,61 @@ namespace LearningAssistant.Forms
             {
                 labelMotivational.Text = "📚 努力学习，进步就在眼前！";
                 labelMotivational.ForeColor = ThemeHelper.Colors.Orange;
+            }
+        }
+
+        private void GeneratePrescription()
+        {
+            try
+            {
+                int totalCount = _knownCount + _unknownCount;
+                if (totalCount == 0)
+                {
+                    _labelPrescriptionContent.Text = "暂无测试数据，无法生成学习处方。";
+                    _buttonJumpToWeakness.Visible = false;
+                    return;
+                }
+
+                var suggestions = new List<string>();
+
+                if (_accuracyRate >= 90)
+                {
+                    suggestions.Add("✅ 知识掌握非常扎实，建议挑战更高难度内容。");
+                    suggestions.Add("📖 可以尝试学习新知识，拓展知识边界。");
+                    _weakCategory = "进阶学习";
+                }
+                else if (_accuracyRate >= 70)
+                {
+                    suggestions.Add("👍 整体掌握良好，重点巩固薄弱知识点。");
+                    suggestions.Add("🔄 建议对未掌握内容进行间隔重复复习。");
+                    _weakCategory = "巩固提升";
+                }
+                else if (_accuracyRate >= 50)
+                {
+                    suggestions.Add("📚 基础知识需要加强，建议系统复习。");
+                    suggestions.Add("🎯 重点突破高频易错知识点。");
+                    _weakCategory = "基础强化";
+                }
+                else
+                {
+                    suggestions.Add("⚠️ 需要从头梳理知识体系，夯实基础。");
+                    suggestions.Add("📝 建议放慢学习节奏，确保每个知识点都掌握。");
+                    _weakCategory = "基础夯实";
+                }
+
+                if (_unknownCount > 0)
+                {
+                    suggestions.Add($"❌ 本次有 {_unknownCount} 道题未掌握，已加入错题本。");
+                }
+
+                _labelPrescriptionContent.Text = string.Join("\n", suggestions);
+                _buttonJumpToWeakness.Visible = true;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "生成学习处方失败");
+                _labelPrescriptionContent.Text = "学习处方生成中遇到问题，请稍后重试。";
+                _buttonJumpToWeakness.Visible = false;
             }
         }
 

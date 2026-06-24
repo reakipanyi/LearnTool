@@ -28,7 +28,7 @@ namespace LearningAssistant.Forms
             _reviewPanel.StartReviewClicked += OnStartReviewClicked;
 
             Text = "🔔 间隔重复复习";
-            Size = new Size(470, 600);
+            Size = new Size(470, 670);
             StartPosition = FormStartPosition.CenterParent;
             BackColor = Color.White;
             Font = new Font("微软雅黑", 9F);

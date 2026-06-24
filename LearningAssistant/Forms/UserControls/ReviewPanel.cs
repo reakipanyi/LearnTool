@@ -21,14 +21,22 @@ namespace LearningAssistant.Forms.UserControls
         private Panel _panelChart = null!;
         private MiniLineChart _miniLineChart = null!;
         private Label _labelChartTitle = null!;
+        private Panel _panelInsights = null!;
+        private Label _labelInsightsTitle = null!;
+        private Label _labelInsightsContent = null!;
         private Panel _panelContent = null!;
         private Label _labelListTitle = null!;
         private FlowLayoutPanel _flowLayoutPanelItems = null!;
         private Button _buttonStartReview = null!;
+        private EmptyStateView? _emptyState;
 
         private readonly ISpacedRepetitionService? _spacedRepetitionService;
         private readonly string _userId = "default";
         private List<ReviewItem> _dueItems = new();
+
+        private int _dueTotal = 0;
+        private int _todayTotal = 0;
+        private double _retentionRate = 0;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public List<ReviewItem> DueItems
@@ -42,6 +50,7 @@ namespace LearningAssistant.Forms.UserControls
         }
 
         public event EventHandler? StartReviewClicked;
+        public event EventHandler? GoLearnClicked;
 
         public ReviewPanel()
         {
@@ -70,6 +79,9 @@ namespace LearningAssistant.Forms.UserControls
             _panelRetention = new Panel();
             _labelRetention = new Label();
             _labelRetentionLabel = new Label();
+            _panelInsights = new Panel();
+            _labelInsightsTitle = new Label();
+            _labelInsightsContent = new Label();
             _panelContent = new Panel();
             _labelListTitle = new Label();
             _flowLayoutPanelItems = new FlowLayoutPanel();
@@ -80,6 +92,7 @@ namespace LearningAssistant.Forms.UserControls
             _panelDueCount.SuspendLayout();
             _panelTodayCount.SuspendLayout();
             _panelRetention.SuspendLayout();
+            _panelInsights.SuspendLayout();
             _panelContent.SuspendLayout();
             SuspendLayout();
 
@@ -104,21 +117,22 @@ namespace LearningAssistant.Forms.UserControls
             _panelHeader.Controls.Add(_labelTitle);
 
             _panelStats.Dock = DockStyle.Top;
-            _panelStats.Height = 80;
+            _panelStats.Height = 90;
             _panelStats.BackColor = Color.FromArgb(250, 250, 252);
             _panelStats.Padding = new Padding(10, 10, 10, 10);
 
             _panelDueCount.Dock = DockStyle.Left;
-            _panelDueCount.Width = 120;
+            _panelDueCount.Width = 140;
             _panelDueCount.BackColor = Color.White;
             _panelDueCount.Margin = new Padding(5);
+            _panelDueCount.Paint += PanelDueCount_Paint;
 
             _labelDueCount.Dock = DockStyle.Top;
             _labelDueCount.Font = new Font("微软雅黑", 20F, FontStyle.Bold);
             _labelDueCount.ForeColor = Color.FromArgb(244, 67, 54);
             _labelDueCount.TextAlign = ContentAlignment.MiddleCenter;
             _labelDueCount.Text = "0";
-            _labelDueCount.Height = 40;
+            _labelDueCount.Height = 45;
 
             _labelDueLabel.Dock = DockStyle.Fill;
             _labelDueLabel.Font = new Font("微软雅黑", 8.5F);
@@ -130,16 +144,17 @@ namespace LearningAssistant.Forms.UserControls
             _panelDueCount.Controls.Add(_labelDueCount);
 
             _panelTodayCount.Dock = DockStyle.Left;
-            _panelTodayCount.Width = 120;
+            _panelTodayCount.Width = 140;
             _panelTodayCount.BackColor = Color.White;
             _panelTodayCount.Margin = new Padding(5);
+            _panelTodayCount.Paint += PanelTodayCount_Paint;
 
             _labelTodayCount.Dock = DockStyle.Top;
             _labelTodayCount.Font = new Font("微软雅黑", 20F, FontStyle.Bold);
             _labelTodayCount.ForeColor = Color.FromArgb(76, 175, 80);
             _labelTodayCount.TextAlign = ContentAlignment.MiddleCenter;
             _labelTodayCount.Text = "0";
-            _labelTodayCount.Height = 40;
+            _labelTodayCount.Height = 45;
 
             _labelTodayLabel.Dock = DockStyle.Fill;
             _labelTodayLabel.Font = new Font("微软雅黑", 8.5F);
@@ -151,16 +166,17 @@ namespace LearningAssistant.Forms.UserControls
             _panelTodayCount.Controls.Add(_labelTodayCount);
 
             _panelRetention.Dock = DockStyle.Left;
-            _panelRetention.Width = 120;
+            _panelRetention.Width = 140;
             _panelRetention.BackColor = Color.White;
             _panelRetention.Margin = new Padding(5);
+            _panelRetention.Paint += PanelRetention_Paint;
 
             _labelRetention.Dock = DockStyle.Top;
             _labelRetention.Font = new Font("微软雅黑", 20F, FontStyle.Bold);
             _labelRetention.ForeColor = Color.FromArgb(255, 152, 0);
             _labelRetention.TextAlign = ContentAlignment.MiddleCenter;
             _labelRetention.Text = "0%";
-            _labelRetention.Height = 40;
+            _labelRetention.Height = 45;
 
             _labelRetentionLabel.Dock = DockStyle.Fill;
             _labelRetentionLabel.Font = new Font("微软雅黑", 8.5F);
@@ -196,6 +212,27 @@ namespace LearningAssistant.Forms.UserControls
             _panelChart.Controls.Add(_miniLineChart);
             _panelChart.Controls.Add(_labelChartTitle);
 
+            _panelInsights.Dock = DockStyle.Top;
+            _panelInsights.Height = 70;
+            _panelInsights.BackColor = Color.FromArgb(250, 250, 252);
+            _panelInsights.Padding = new Padding(15, 5, 15, 8);
+
+            _labelInsightsTitle.Dock = DockStyle.Top;
+            _labelInsightsTitle.Font = new Font("微软雅黑", 8.5F, FontStyle.Bold);
+            _labelInsightsTitle.ForeColor = Color.FromArgb(102, 102, 102);
+            _labelInsightsTitle.Text = "💡 学习洞察";
+            _labelInsightsTitle.Height = 18;
+
+            _labelInsightsContent.Dock = DockStyle.Fill;
+            _labelInsightsContent.Font = new Font("微软雅黑", 8.5F);
+            _labelInsightsContent.ForeColor = Color.FromArgb(51, 51, 51);
+            _labelInsightsContent.Text = "正在分析学习数据...";
+            _labelInsightsContent.MaximumSize = new Size(400, 0);
+            _labelInsightsContent.AutoSize = true;
+
+            _panelInsights.Controls.Add(_labelInsightsContent);
+            _panelInsights.Controls.Add(_labelInsightsTitle);
+
             _panelContent.Dock = DockStyle.Fill;
             _panelContent.BackColor = Color.White;
             _panelContent.Padding = new Padding(15, 10, 15, 10);
@@ -228,11 +265,12 @@ namespace LearningAssistant.Forms.UserControls
             _panelContent.Controls.Add(_buttonStartReview);
 
             Controls.Add(_panelContent);
+            Controls.Add(_panelInsights);
             Controls.Add(_panelChart);
             Controls.Add(_panelStats);
             Controls.Add(_panelHeader);
 
-            Size = new Size(450, 550);
+            Size = new Size(450, 620);
             BackColor = Color.White;
             DoubleBuffered = true;
 
@@ -241,6 +279,7 @@ namespace LearningAssistant.Forms.UserControls
             _panelDueCount.ResumeLayout(false);
             _panelTodayCount.ResumeLayout(false);
             _panelRetention.ResumeLayout(false);
+            _panelInsights.ResumeLayout(false);
             _panelContent.ResumeLayout(false);
             ResumeLayout(false);
         }
@@ -351,6 +390,10 @@ namespace LearningAssistant.Forms.UserControls
             int todayCount = _spacedRepetitionService.GetTodayReviewCount(_userId);
             double retention = _spacedRepetitionService.CalculateRetentionRate(_userId);
 
+            _dueTotal = _dueItems.Count;
+            _todayTotal = todayCount;
+            _retentionRate = retention;
+
             _labelDueCount.Text = _dueItems.Count.ToString();
             _labelTodayCount.Text = todayCount.ToString();
             _labelRetention.Text = $"{retention:P0}";
@@ -358,7 +401,201 @@ namespace LearningAssistant.Forms.UserControls
             var trendData = GenerateMockTrendData(retention, 7);
             _miniLineChart.SetData(trendData);
 
+            UpdateInsights(retention, _dueItems.Count, todayCount);
+
             UpdateItemsList();
+
+            _panelDueCount.Invalidate();
+            _panelTodayCount.Invalidate();
+            _panelRetention.Invalidate();
+
+            if (_dueItems.Count == 0)
+            {
+                ShowEmptyState(todayCount > 0);
+            }
+            else
+            {
+                HideEmptyState();
+            }
+        }
+
+        private void PanelDueCount_Paint(object? sender, PaintEventArgs e)
+        {
+            if (sender is not Panel panel) return;
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            int ringSize = 50;
+            int x = panel.Width - ringSize - 12;
+            int y = (panel.Height - ringSize) / 2 - 5;
+
+            float progress = 0;
+            Color progressColor = Color.FromArgb(244, 67, 54);
+            Color bgColor = Color.FromArgb(240, 240, 245);
+
+            int target = Math.Max(_dueTotal + _todayTotal, 1);
+            if (target > 0)
+            {
+                progress = Math.Min((float)_dueTotal / target, 1.0f);
+            }
+
+            DrawMiniRing(g, x, y, ringSize, progress, progressColor, bgColor);
+        }
+
+        private void PanelTodayCount_Paint(object? sender, PaintEventArgs e)
+        {
+            if (sender is not Panel panel) return;
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            int ringSize = 50;
+            int x = panel.Width - ringSize - 12;
+            int y = (panel.Height - ringSize) / 2 - 5;
+
+            float progress = 0;
+            Color progressColor = Color.FromArgb(76, 175, 80);
+            Color bgColor = Color.FromArgb(240, 240, 245);
+
+            int target = Math.Max(_todayTotal + 5, 10);
+            if (target > 0)
+            {
+                progress = Math.Min((float)_todayTotal / target, 1.0f);
+            }
+
+            DrawMiniRing(g, x, y, ringSize, progress, progressColor, bgColor);
+        }
+
+        private void PanelRetention_Paint(object? sender, PaintEventArgs e)
+        {
+            if (sender is not Panel panel) return;
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            int ringSize = 50;
+            int x = panel.Width - ringSize - 12;
+            int y = (panel.Height - ringSize) / 2 - 5;
+
+            float progress = (float)_retentionRate;
+            Color progressColor = Color.FromArgb(255, 152, 0);
+            Color bgColor = Color.FromArgb(240, 240, 245);
+
+            DrawMiniRing(g, x, y, ringSize, progress, progressColor, bgColor);
+        }
+
+        private static void DrawMiniRing(Graphics g, int x, int y, int size, float progress, Color progressColor, Color bgColor)
+        {
+            float lineWidth = 4;
+            float radius = (size - lineWidth) / 2f;
+            float cx = x + size / 2f;
+            float cy = y + size / 2f;
+
+            var rect = new RectangleF(x + lineWidth / 2f, y + lineWidth / 2f, size - lineWidth, size - lineWidth);
+
+            using (var bgPen = new Pen(bgColor, lineWidth))
+            {
+                g.DrawArc(bgPen, rect, 0, 360);
+            }
+
+            if (progress > 0)
+            {
+                using var progressPen = new Pen(progressColor, lineWidth);
+                progressPen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                progressPen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                float sweepAngle = progress * 360;
+                g.DrawArc(progressPen, rect, -90, sweepAngle);
+            }
+        }
+
+        private void ShowEmptyState(bool hasReviewedToday)
+        {
+            if (_emptyState == null)
+            {
+                _emptyState = new EmptyStateView
+                {
+                    Dock = DockStyle.Fill
+                };
+                _emptyState.ActionClicked += OnEmptyStateActionClicked;
+                _panelContent.Controls.Add(_emptyState);
+            }
+
+            if (hasReviewedToday)
+            {
+                _emptyState.ShowReviewCompleted();
+            }
+            else
+            {
+                _emptyState.ShowNoReviewDue();
+            }
+
+            _emptyState.Visible = true;
+            _emptyState.BringToFront();
+            _labelListTitle.Visible = false;
+            _flowLayoutPanelItems.Visible = false;
+            _buttonStartReview.Visible = false;
+        }
+
+        private void HideEmptyState()
+        {
+            if (_emptyState != null)
+            {
+                _emptyState.Visible = false;
+            }
+            _labelListTitle.Visible = true;
+            _flowLayoutPanelItems.Visible = true;
+            _buttonStartReview.Visible = true;
+        }
+
+        private void OnEmptyStateActionClicked(object? sender, EventArgs e)
+        {
+            GoLearnClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void UpdateInsights(double retention, int dueCount, int todayReviewed)
+        {
+            var insights = GenerateInsights(retention, dueCount, todayReviewed);
+            _labelInsightsContent.Text = insights;
+        }
+
+        private static string GenerateInsights(double retention, int dueCount, int todayReviewed)
+        {
+            var insights = new List<string>();
+
+            if (retention >= 0.9)
+            {
+                insights.Add("🎉 记忆保持率优秀！继续保持。");
+            }
+            else if (retention >= 0.7)
+            {
+                insights.Add("👍 记忆保持率良好，坚持复习效果更佳。");
+            }
+            else if (retention >= 0.5)
+            {
+                insights.Add("📚 记忆保持率一般，建议增加复习频率。");
+            }
+            else
+            {
+                insights.Add("⚠️ 记忆保持率偏低，需要加强复习！");
+            }
+
+            if (dueCount > 10)
+            {
+                insights.Add($"待复习项较多（{dueCount}个），建议分批完成。");
+            }
+            else if (dueCount == 0)
+            {
+                insights.Add("今天没有待复习内容，可以学习新内容啦！");
+            }
+
+            if (todayReviewed >= 10)
+            {
+                insights.Add("今日已复习10+项，学习很棒！");
+            }
+            else if (todayReviewed == 0 && dueCount > 0)
+            {
+                insights.Add("今天还没开始复习，现在就开始吧！");
+            }
+
+            return string.Join(" ", insights.Take(2));
         }
 
         private static List<double> GenerateMockTrendData(double currentValue, int days)

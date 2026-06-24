@@ -92,7 +92,17 @@ namespace LearningAssistant.Forms.UserControls
         /// <summary>
         /// 权限不足
         /// </summary>
-        NoPermission
+        NoPermission,
+
+        /// <summary>
+        /// 复习已完成（今日复习已清空）- UI/UX优化规范
+        /// </summary>
+        ReviewCompleted,
+
+        /// <summary>
+        /// 无待复习内容 - UI/UX优化规范
+        /// </summary>
+        NoReviewDue
     }
 
     public class EmptyStateView : UserControl
@@ -415,6 +425,20 @@ namespace LearningAssistant.Forms.UserControls
                     _actionText = "";
                     break;
 
+                case EmptyStateType.ReviewCompleted:
+                    _icon = "🎉";
+                    _title = "今日复习已清空！";
+                    _description = "太棒了！你已完成所有到期的复习项。学习新内容将自动填充明天的复习队列。";
+                    _actionText = "立即学习新内容 →";
+                    break;
+
+                case EmptyStateType.NoReviewDue:
+                    _icon = "📚";
+                    _title = "暂无待复习内容";
+                    _description = "开始学习新内容，系统会自动安排复习时间。";
+                    _actionText = "去学习 →";
+                    break;
+
                 case EmptyStateType.Custom:
                 default:
                     break;
@@ -604,6 +628,32 @@ namespace LearningAssistant.Forms.UserControls
         public void ShowNoPermission()
         {
             SetState(EmptyStateType.NoPermission);
+        }
+
+        /// <summary>
+        /// 显示复习已完成空状态（UI/UX优化规范）
+        /// </summary>
+        public void ShowReviewCompleted(EventHandler? action = null)
+        {
+            SetState(EmptyStateType.ReviewCompleted);
+            if (action != null)
+            {
+                ActionClicked -= action;
+                ActionClicked += action;
+            }
+        }
+
+        /// <summary>
+        /// 显示暂无待复习空状态（UI/UX优化规范）
+        /// </summary>
+        public void ShowNoReviewDue(EventHandler? action = null)
+        {
+            SetState(EmptyStateType.NoReviewDue);
+            if (action != null)
+            {
+                ActionClicked -= action;
+                ActionClicked += action;
+            }
         }
 
         protected override void OnPaint(PaintEventArgs e)

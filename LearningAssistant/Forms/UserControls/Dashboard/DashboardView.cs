@@ -121,6 +121,8 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
                 Color.FromArgb(255, 193, 7));
             AddStatCard("🏆", "Lv.5", "当前等级", "距离Lv.6 30XP", StatCard.TrendDirection.None,
                 Color.FromArgb(76, 175, 80));
+            AddStatCard("🎯", "0/3", "今日挑战", "待完成", StatCard.TrendDirection.None,
+                Color.FromArgb(236, 72, 153));
 
             AddFeatureCard("📚", "开始学习", "打开学习内容", Color.FromArgb(99, 102, 241), Color.FromArgb(139, 92, 246));
             AddFeatureCard("📖", "PDF阅读", "打开PDF阅读器", Color.FromArgb(34, 197, 94), Color.FromArgb(16, 185, 129));
@@ -180,8 +182,8 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
                 Trend = trend,
                 TrendDir = direction,
                 AccentColor = accentColor,
-                Width = 150,
-                Height = 90
+                Width = 180,
+                Height = 100
             };
             _statCards.Add(card);
             _panelStats.Controls.Add(card);
@@ -212,6 +214,69 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             }
         }
 
+        public void UpdateDashboardStats(
+            int todayStudyMinutes,
+            int streakDays,
+            int totalXP,
+            int currentLevel,
+            int xpToNextLevel,
+            int completedChallenges,
+            int totalChallenges)
+        {
+            if (_statCards.Count >= 5)
+            {
+                var studyCard = _statCards[0];
+                if (todayStudyMinutes >= 60)
+                {
+                    int hours = todayStudyMinutes / 60;
+                    int mins = todayStudyMinutes % 60;
+                    studyCard.Value = hours > 0 && mins > 0 ? $"{hours}时{mins}分" : $"{hours}小时";
+                }
+                else
+                {
+                    studyCard.Value = $"{todayStudyMinutes}分钟";
+                }
+                studyCard.Label = "今日学习";
+                studyCard.Trend = todayStudyMinutes > 0 ? $"+{todayStudyMinutes}分" : "开始吧";
+                studyCard.TrendDir = todayStudyMinutes > 0 ? StatCard.TrendDirection.Up : StatCard.TrendDirection.None;
+
+                var streakCard = _statCards[1];
+                streakCard.Value = $"{streakDays}天";
+                streakCard.Label = "连续学习";
+                streakCard.Trend = streakDays > 0 ? $"已坚持{streakDays}天" : "第1天";
+                streakCard.TrendDir = streakDays > 0 ? StatCard.TrendDirection.Up : StatCard.TrendDirection.None;
+
+                var xpCard = _statCards[2];
+                xpCard.Value = $"{totalXP}";
+                xpCard.Label = "总经验值";
+                xpCard.Trend = "继续加油";
+                xpCard.TrendDir = StatCard.TrendDirection.Up;
+
+                var levelCard = _statCards[3];
+                levelCard.Value = $"Lv.{currentLevel}";
+                levelCard.Label = "当前等级";
+                levelCard.Trend = $"距下一级 {xpToNextLevel}XP";
+                levelCard.TrendDir = StatCard.TrendDirection.None;
+
+                var challengeCard = _statCards[4];
+                challengeCard.Value = $"{completedChallenges}/{totalChallenges}";
+                challengeCard.Label = "今日挑战";
+                challengeCard.Trend = completedChallenges >= totalChallenges ? "全部完成" : "进行中";
+                challengeCard.TrendDir = completedChallenges >= totalChallenges ? StatCard.TrendDirection.Up : StatCard.TrendDirection.None;
+            }
+        }
+
+        public void UpdateChallengeProgress(int completed, int total)
+        {
+            if (_statCards.Count >= 5)
+            {
+                var challengeCard = _statCards[4];
+                challengeCard.Value = $"{completed}/{total}";
+                challengeCard.Trend = completed >= total ? "已完成" : "进行中";
+                challengeCard.TrendDir = completed >= total ? StatCard.TrendDirection.Up : StatCard.TrendDirection.None;
+            }
+        }
+
         protected override void OnResize(EventArgs e)
         {
             base.OnResize(e);
@@ -236,7 +301,7 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
 
             _panelStats.Location = new Point(0, y);
             _panelStats.Width = Width;
-            _panelStats.Height = 100;
+            _panelStats.Height = 115;
             LayoutStatCards();
             y += _panelStats.Height + 16;
 
@@ -261,8 +326,8 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
         {
             int margin = 24;
             int spacing = 16;
-            int cardWidth = 150;
-            int cardHeight = 90;
+            int cardWidth = 180;
+            int cardHeight = 100;
 
             int totalWidth = Width - margin * 2;
             int cardsPerRow = Math.Max(1, (totalWidth + spacing) / (cardWidth + spacing));
@@ -273,7 +338,7 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
                 var card = _statCards[i];
                 card.Location = new Point(
                     margin + actualSpacing + i * (cardWidth + actualSpacing),
-                    5);
+                    8);
                 card.Size = new Size(cardWidth, cardHeight);
             }
         }

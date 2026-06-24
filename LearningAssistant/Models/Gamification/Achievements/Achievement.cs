@@ -11,6 +11,10 @@ namespace LearningAssistant.Models.User
         public bool IsUnlocked { get; set; }
         public DateTime? UnlockedAt { get; set; }
         public int DisplayOrder { get; set; }
+        /// <summary>
+        /// 是否为隐藏成就（未解锁时不显示具体信息）
+        /// </summary>
+        public bool IsHidden { get; set; }
     }
 
     public class AchievementRequirement
@@ -185,6 +189,30 @@ namespace LearningAssistant.Models.User
                     Category = AchievementCategory.Mastery,
                     Requirement = new AchievementRequirement { Type = AchievementType.FeynmanMaster, TargetValue = 50 },
                     DisplayOrder = 13
+                },
+
+                // 隐藏成就
+                new Achievement
+                {
+                    Id = "night_owl",
+                    Name = "夜猫子",
+                    Description = "在深夜时段（00:00-05:00）完成学习",
+                    Icon = "🌙",
+                    Category = AchievementCategory.Special,
+                    IsHidden = true,
+                    Requirement = new AchievementRequirement { Type = AchievementType.StudyDuration, TargetValue = 1 },
+                    DisplayOrder = 99
+                },
+                new Achievement
+                {
+                    Id = "easter_egg_hunter",
+                    Name = "彩蛋猎人",
+                    Description = "发现并解锁一个隐藏成就",
+                    Icon = "🥚",
+                    Category = AchievementCategory.Special,
+                    IsHidden = true,
+                    Requirement = new AchievementRequirement { Type = AchievementType.TotalItemsStudied, TargetValue = 1 },
+                    DisplayOrder = 100
                 }
             };
         }

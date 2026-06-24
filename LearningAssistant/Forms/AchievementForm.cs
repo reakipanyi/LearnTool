@@ -51,13 +51,18 @@ namespace LearningAssistant.Forms
 
         private void OnBadgeClicked(object? sender, Badge badge)
         {
-            string status = badge.IsUnlocked ? "✅ 已解锁" : "🔒 未解锁";
-            string progressText = badge.IsUnlocked
+            bool isHiddenLocked = badge.IsHidden && !badge.IsUnlocked;
+
+            string icon = isHiddenLocked ? "❓" : badge.Icon;
+            string name = isHiddenLocked ? "???" : badge.Name;
+            string description = isHiddenLocked ? "这是一个神秘成就，达成特定条件后自动解锁并揭晓。" : badge.Description;
+            string status = badge.IsUnlocked ? "✅ 已解锁" : (isHiddenLocked ? "🔮 隐藏成就" : "🔒 未解锁");
+            string progressText = badge.IsUnlocked || isHiddenLocked
                 ? ""
                 : $"\n\n进度: {(_gamificationService.GetBadgeProgress().TryGetValue(badge.Id, out var val) ? val : 0)} / {badge.Requirement.TargetValue}";
 
             MessageBox.Show(
-                $"{badge.Icon} {badge.Name}\n\n{badge.Description}\n\n{status}{progressText}",
+                $"{icon} {name}\n\n{description}\n\n{status}{progressText}",
                 "成就详情",
                 MessageBoxButtons.OK,
                 badge.IsUnlocked ? MessageBoxIcon.Information : MessageBoxIcon.Question);

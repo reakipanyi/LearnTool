@@ -80,6 +80,18 @@ namespace LearningAssistant.Views
         /// <param name="studyTimeSummary">学习时间摘要</param>
         void UpdateStreakInfo(int consecutiveDays, string studyTimeSummary);
 
+        /// <summary>
+        /// 更新 Dashboard 统计卡片数据
+        /// </summary>
+        /// <param name="todayStudyMinutes">今日学习分钟数</param>
+        /// <param name="streakDays">连续学习天数</param>
+        /// <param name="totalXP">总经验值</param>
+        /// <param name="currentLevel">当前等级</param>
+        /// <param name="xpToNextLevel">距下一级所需XP</param>
+        /// <param name="completedChallenges">已完成挑战数</param>
+        /// <param name="totalChallenges">总挑战数</param>
+        void UpdateDashboardStats(int todayStudyMinutes, int streakDays, int totalXP,
+            int currentLevel, int xpToNextLevel, int completedChallenges, int totalChallenges);
 
     }
 

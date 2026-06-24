@@ -136,15 +136,72 @@ namespace LearningAssistant.Forms.UserControls
             {
                 Text = text,
                 Tag = category,
-                Size = new Size(70, 28),
+                Size = new Size(78, 32),
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("微软雅黑", 9F),
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand,
+                TextAlign = ContentAlignment.MiddleCenter
             };
             btn.FlatAppearance.BorderSize = 0;
+            btn.Paint += FilterButton_Paint;
             btn.Click += FilterButton_Click;
             _filterButtons.Add(btn);
             _flowLayoutPanelFilters.Controls.Add(btn);
+        }
+
+        private void FilterButton_Paint(object? sender, PaintEventArgs e)
+        {
+            if (sender is not Button btn) return;
+            var isActive = (btn.Tag as BadgeCategory?) == _currentFilter;
+            var category = btn.Tag as BadgeCategory?;
+
+            if (isActive)
+            {
+                int lineWidth = 24;
+                int lineHeight = 3;
+                int x = (btn.Width - lineWidth) / 2;
+                int y = btn.Height - lineHeight - 2;
+
+                using var brush = new SolidBrush(Color.FromArgb(255, 152, 0));
+                e.Graphics.FillRectangle(brush, x, y, lineWidth, lineHeight);
+            }
+
+            int count = 0;
+            if (category.HasValue)
+            {
+                count = _allBadges.Count(b => b.Category == category.Value);
+            }
+            else
+            {
+                count = _allBadges.Count;
+            }
+
+            if (count > 0)
+            {
+                string countText = count.ToString();
+                var countFont = new Font("微软雅黑", 7.5F, FontStyle.Bold);
+                var textSize = e.Graphics.MeasureString(countText, countFont);
+                int badgeWidth = Math.Max(16, (int)textSize.Width + 6);
+                int badgeX = btn.Width - badgeWidth + 8;
+                int badgeY = 2;
+
+                using var badgeBrush = new SolidBrush(isActive ? Color.White : Color.FromArgb(255, 152, 0));
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                var badgeRect = new Rectangle(badgeX, badgeY, badgeWidth, 14);
+                using var path = new System.Drawing.Drawing2D.GraphicsPath();
+                path.AddArc(badgeRect.X, badgeRect.Y, badgeRect.Height, badgeRect.Height, 90, 180);
+                path.AddArc(badgeRect.Right - badgeRect.Height, badgeRect.Y, badgeRect.Height, badgeRect.Height, 270, 180);
+                path.CloseFigure();
+                e.Graphics.FillPath(badgeBrush, path);
+
+                using var textBrush = new SolidBrush(isActive ? Color.FromArgb(255, 152, 0) : Color.White);
+                var stringFormat = new StringFormat
+                {
+                    Alignment = StringAlignment.Center,
+                    LineAlignment = StringAlignment.Center
+                };
+                e.Graphics.DrawString(countText, countFont, textBrush, badgeRect, stringFormat);
+            }
         }
 
         private void FilterButton_Click(object? sender, EventArgs e)
@@ -178,10 +235,17 @@ namespace LearningAssistant.Forms.UserControls
                 : _allBadges;
 
             int unlockedCount = filtered.Count(b => b.IsUnlocked);
-            int totalCount = filtered.Count;
-            double progressPercent = totalCount > 0 ? (double)unlockedCount / totalCount * 100 : 0;
+            int visibleTotal = filtered.Count(b => !b.IsHidden || b.IsUnlocked);
+            int hiddenLockedCount = filtered.Count(b => b.IsHidden && !b.IsUnlocked);
+            double progressPercent = visibleTotal > 0 ? (double)unlockedCount / visibleTotal * 100 : 0;
 
-            _labelStats.Text = $"已解锁 {unlockedCount} / {totalCount} · 完成度 {progressPercent:F0}%";
+            string hiddenText = hiddenLockedCount > 0 ? $" · 隐藏成就 ?" : "";
+            _labelStats.Text = $"已解锁 {unlockedCount} / {visibleTotal} · 完成度 {progressPercent:F0}%{hiddenText}";
+
+            foreach (var btn in _filterButtons)
+            {
+                btn.Invalidate();
+            }
 
             if (filtered.Count == 0)
             {

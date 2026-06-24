@@ -35,6 +35,7 @@ namespace LearningAssistant.Forms.UserControls
         }
 
         public event EventHandler<Challenge>? ClaimClicked;
+        public event EventHandler<Challenge>? TaskClicked;
 
         public ChallengeCard()
         {
@@ -137,9 +138,15 @@ namespace LearningAssistant.Forms.UserControls
 
         private void OnCardClick()
         {
-            if (_challenge != null && _challenge.Completed && !_challenge.Claimed)
+            if (_challenge == null) return;
+
+            if (_challenge.Completed && !_challenge.Claimed)
             {
                 ClaimClicked?.Invoke(this, _challenge);
+            }
+            else
+            {
+                TaskClicked?.Invoke(this, _challenge);
             }
         }
 
@@ -166,7 +173,7 @@ namespace LearningAssistant.Forms.UserControls
             _labelIcon.Text = _challenge.Emoji;
             _labelName.Text = _challenge.Name;
             _labelDescription.Text = _challenge.Description;
-            _labelReward.Text = $"🎁 +{_challenge.Reward} XP";
+            _labelReward.Text = $"💰 +{_challenge.Reward} XP";
 
             int current = Math.Min(_challenge.Current, _challenge.Target);
             _labelProgress.Text = $"{current} / {_challenge.Target}";
@@ -278,6 +285,7 @@ namespace LearningAssistant.Forms.UserControls
 
             bool canClaim = _challenge?.Completed == true && !_challenge.Claimed;
             bool isClaimed = _challenge?.Claimed == true;
+            bool isCompleted = _challenge?.Completed == true;
 
             if (isClaimed)
             {
@@ -386,6 +394,17 @@ namespace LearningAssistant.Forms.UserControls
 
             UpdateTextColors();
             DrawClaimButton(g, canClaim, isClaimed, shadowOffset);
+
+            if (isClaimed)
+            {
+                using var overlayBrush = new SolidBrush(Color.FromArgb(90, 255, 255, 255));
+                g.FillPath(overlayBrush, cardPath);
+            }
+            else if (isCompleted && !canClaim)
+            {
+                using var overlayBrush = new SolidBrush(Color.FromArgb(40, 255, 255, 255));
+                g.FillPath(overlayBrush, cardPath);
+            }
         }
 
         private void DrawClaimButton(Graphics g, bool canClaim, bool isClaimed, int shadowOffset)

@@ -23,6 +23,9 @@ namespace LearningAssistant.Forms.Bookmark
         private TextBox _txtBookmarkUrl;
         private Label _lblBookmarkActions;
         private Button _btnEditBookmark;
+        private Label _lblVisitCount;
+        private Label _lblLastVisited;
+        private Label _lblCreatedAt;
         private Button _btnMoveBookmark;
         private Button _btnDeleteBookmark;
         private Button _btnClose;
@@ -63,6 +66,9 @@ namespace LearningAssistant.Forms.Bookmark
             _lblBookmarkActions = new Label();
             _btnEditBookmark = new Button();
             _btnClose = new Button();
+            _lblVisitCount = new Label();
+            _lblLastVisited = new Label();
+            _lblCreatedAt = new Label();
             _statusStrip = new StatusStrip();
             _lblStatus = new ToolStripStatusLabel();
             _panelLeft.SuspendLayout();
@@ -171,6 +177,9 @@ namespace LearningAssistant.Forms.Bookmark
             panel1.Controls.Add(_btnMoveBookmark);
             panel1.Controls.Add(_lblBookmarkActions);
             panel1.Controls.Add(_btnEditBookmark);
+            panel1.Controls.Add(_lblVisitCount);
+            panel1.Controls.Add(_lblLastVisited);
+            panel1.Controls.Add(_lblCreatedAt);
             panel1.Location = new Point(3, 41);
             panel1.Name = "panel1";
             panel1.Size = new Size(406, 522);
@@ -220,19 +229,42 @@ namespace LearningAssistant.Forms.Bookmark
             _txtBookmarkUrl.Size = new Size(380, 23);
             _txtBookmarkUrl.TabIndex = 4;
             // 
-            // _btnMoveBookmark
+            // _lblVisitCount
             // 
-            _btnMoveBookmark.Enabled = false;
-            _btnMoveBookmark.Location = new Point(131, 179);
-            _btnMoveBookmark.Name = "_btnMoveBookmark";
-            _btnMoveBookmark.Size = new Size(100, 32);
-            _btnMoveBookmark.TabIndex = 7;
-            _btnMoveBookmark.Text = "📂 移动分类";
-            _btnMoveBookmark.Click += BtnMoveBookmark_Click;
+            _lblVisitCount.AutoSize = true;
+            _lblVisitCount.Font = new Font("微软雅黑", 9F);
+            _lblVisitCount.ForeColor = Color.FromArgb(102, 102, 102);
+            _lblVisitCount.Location = new Point(21, 140);
+            _lblVisitCount.Name = "_lblVisitCount";
+            _lblVisitCount.Size = new Size(80, 17);
+            _lblVisitCount.TabIndex = 10;
+            _lblVisitCount.Text = "👁 访问次数: 0";
+            // 
+            // _lblLastVisited
+            // 
+            _lblLastVisited.AutoSize = true;
+            _lblLastVisited.Font = new Font("微软雅黑", 9F);
+            _lblLastVisited.ForeColor = Color.FromArgb(102, 102, 102);
+            _lblLastVisited.Location = new Point(160, 140);
+            _lblLastVisited.Name = "_lblLastVisited";
+            _lblLastVisited.Size = new Size(100, 17);
+            _lblLastVisited.TabIndex = 11;
+            _lblLastVisited.Text = "⏱ 最后访问: -";
+            // 
+            // _lblCreatedAt
+            // 
+            _lblCreatedAt.AutoSize = true;
+            _lblCreatedAt.Font = new Font("微软雅黑", 9F);
+            _lblCreatedAt.ForeColor = Color.FromArgb(102, 102, 102);
+            _lblCreatedAt.Location = new Point(21, 165);
+            _lblCreatedAt.Name = "_lblCreatedAt";
+            _lblCreatedAt.Size = new Size(100, 17);
+            _lblCreatedAt.TabIndex = 12;
+            _lblCreatedAt.Text = "📅 创建时间: -";
             // 
             // _lblBookmarkActions
             // 
-            _lblBookmarkActions.Location = new Point(21, 149);
+            _lblBookmarkActions.Location = new Point(21, 200);
             _lblBookmarkActions.Name = "_lblBookmarkActions";
             _lblBookmarkActions.Size = new Size(100, 20);
             _lblBookmarkActions.TabIndex = 5;
@@ -241,12 +273,32 @@ namespace LearningAssistant.Forms.Bookmark
             // _btnEditBookmark
             // 
             _btnEditBookmark.Enabled = false;
-            _btnEditBookmark.Location = new Point(21, 179);
+            _btnEditBookmark.Location = new Point(21, 230);
             _btnEditBookmark.Name = "_btnEditBookmark";
             _btnEditBookmark.Size = new Size(100, 32);
             _btnEditBookmark.TabIndex = 6;
             _btnEditBookmark.Text = "✏️ 编辑书签";
             _btnEditBookmark.Click += BtnEditBookmark_Click;
+            // 
+            // _btnMoveBookmark
+            // 
+            _btnMoveBookmark.Enabled = false;
+            _btnMoveBookmark.Location = new Point(131, 230);
+            _btnMoveBookmark.Name = "_btnMoveBookmark";
+            _btnMoveBookmark.Size = new Size(100, 32);
+            _btnMoveBookmark.TabIndex = 7;
+            _btnMoveBookmark.Text = "📂 移动分类";
+            _btnMoveBookmark.Click += BtnMoveBookmark_Click;
+            // 
+            // _btnDeleteBookmark
+            // 
+            _btnDeleteBookmark.Enabled = false;
+            _btnDeleteBookmark.Location = new Point(241, 230);
+            _btnDeleteBookmark.Name = "_btnDeleteBookmark";
+            _btnDeleteBookmark.Size = new Size(100, 32);
+            _btnDeleteBookmark.TabIndex = 8;
+            _btnDeleteBookmark.Text = "🗑️ 删除书签";
+            _btnDeleteBookmark.Click += BtnDeleteBookmark_Click;
             // 
             // _btnClose
             // 
@@ -354,6 +406,11 @@ namespace LearningAssistant.Forms.Bookmark
             {
                 _txtBookmarkTitle.Text = info.Bookmark.Title;
                 _txtBookmarkUrl.Text = info.Bookmark.Url;
+                _lblVisitCount.Text = $"👁 访问次数: {info.Bookmark.VisitCount}";
+                _lblLastVisited.Text = info.Bookmark.LastVisited != default
+                    ? $"⏱ 最后访问: {info.Bookmark.LastVisited:yyyy-MM-dd HH:mm}"
+                    : "⏱ 最后访问: -";
+                _lblCreatedAt.Text = $"📅 创建时间: {info.Bookmark.CreatedAt:yyyy-MM-dd}";
                 SetCategoryButtonsEnabled(false);
                 SetBookmarkButtonsEnabled(true);
             }
@@ -363,6 +420,9 @@ namespace LearningAssistant.Forms.Bookmark
         {
             _txtBookmarkTitle.Text = string.Empty;
             _txtBookmarkUrl.Text = string.Empty;
+            _lblVisitCount.Text = "👁 访问次数: 0";
+            _lblLastVisited.Text = "⏱ 最后访问: -";
+            _lblCreatedAt.Text = "📅 创建时间: -";
         }
 
         private void SetCategoryButtonsEnabled(bool enabled)

@@ -37,6 +37,8 @@ namespace LearningAssistant.Managers
     public class ThinkingStimulator : IThinkingStimulator
     {
         private readonly IAiQuestionService? _aiService;
+        private readonly IProgressiveHintStateService? _hintStateService;
+        private readonly string _userId = "default";
 
         #region 构造函数
 
@@ -50,10 +52,11 @@ namespace LearningAssistant.Managers
         /// <summary>
         /// 带 AI 服务的构造函数
         /// </summary>
-        /// <param name="aiService">AI 问答服务</param>
-        public ThinkingStimulator(IAiQuestionService? aiService)
+        public ThinkingStimulator(IAiQuestionService? aiService, IProgressiveHintStateService? hintStateService = null, string userId = "default")
         {
             _aiService = aiService;
+            _hintStateService = hintStateService;
+            _userId = userId;
         }
 
         #endregion
@@ -70,15 +73,45 @@ namespace LearningAssistant.Managers
         /// <param name="answer">正确答案</param>
         public void StartProgressiveHint(string content, string answer)
         {
-            // 根据内容类型自动生成多级提示
             var hints = GenerateHints(content, answer);
 
-            // 创建并显示渐进式提示对话框
-            var hintForm = new ProgressiveHintForm(content, answer, hints, (revealedAnswer) =>
+            ProgressiveHintForm? hintForm = null;
+
+            if (_hintStateService != null)
             {
-                // 答案被查看时的回调（可用于记录学习行为）
+                var savedProgress = _hintStateService.GetProgress(content, _userId);
+                if (savedProgress != null && savedProgress.ViewedHints.Count > 0)
+                {
+                    var viewedSet = new HashSet<int>(savedProgress.ViewedHints);
+                    hintForm = new ProgressiveHintForm(content, answer, hints,
+                        savedProgress.UserGuess,
+                        savedProgress.CurrentHintLevel,
+                        viewedSet,
+                        (revealedAnswer) =>
+                        {
+                            System.Diagnostics.Debug.WriteLine($"用户查看了答案: {revealedAnswer}");
+                        });
+                }
+            }
+
+            hintForm ??= new ProgressiveHintForm(content, answer, hints, (revealedAnswer) =>
+            {
                 System.Diagnostics.Debug.WriteLine($"用户查看了答案: {revealedAnswer}");
             });
+
+            hintForm.FormClosing += (s, e) =>
+            {
+                if (_hintStateService != null)
+                {
+                    var progress = new HintProgress
+                    {
+                        CurrentHintLevel = hintForm.CurrentHintLevel,
+                        ViewedHints = hintForm.ViewedHints.ToList(),
+                        UserGuess = hintForm.UserGuess
+                    };
+                    _hintStateService.SaveProgress(content, _userId, progress);
+                }
+            };
 
             hintForm.ShowDialog();
         }

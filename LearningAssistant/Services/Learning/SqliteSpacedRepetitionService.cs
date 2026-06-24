@@ -1,21 +1,78 @@
 using LearningAssistant.Common;
+using LearningAssistant.Common.Events;
 using LearningAssistant.Data.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Services.Learning
 {
-    public class SqliteSpacedRepetitionService : ISpacedRepetitionService
+    public class SqliteSpacedRepetitionService : ISpacedRepetitionService, IDisposable
     {
         private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
         private readonly ILogger<SqliteSpacedRepetitionService>? _logger;
+        private readonly IEventBus? _eventBus;
+        private bool _disposed = false;
 
         public SqliteSpacedRepetitionService(
             IDbContextFactory<AppDbContext> dbContextFactory,
-            ILogger<SqliteSpacedRepetitionService>? logger = null)
+            ILogger<SqliteSpacedRepetitionService>? logger = null,
+            IEventBus? eventBus = null)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _logger = logger;
+            _eventBus = eventBus;
+
+            SubscribeToEvents();
+        }
+
+        private void SubscribeToEvents()
+        {
+            if (_eventBus == null) return;
+
+            _eventBus.Subscribe<ItemLearnedEvent>(OnItemLearned);
+        }
+
+        private void UnsubscribeFromEvents()
+        {
+            if (_eventBus == null) return;
+
+            _eventBus.Unsubscribe<ItemLearnedEvent>(OnItemLearned);
+        }
+
+        private void OnItemLearned(ItemLearnedEvent evt)
+        {
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var existing = db.SpacedRepetitionItems
+                    .FirstOrDefault(i => i.UserId == evt.UserId && i.Content == evt.ItemContent && i.IsActive);
+
+                if (existing == null)
+                {
+                    var item = new ReviewItem
+                    {
+                        UserId = evt.UserId,
+                        Content = evt.ItemContent,
+                        Answer = evt.ItemContent,
+                        Interval = 0,
+                        Repetitions = 0,
+                        EFactor = 2.5,
+                        NextReviewDate = DateTime.Today.AddDays(1),
+                        CreatedAt = DateTime.Now,
+                        UpdatedAt = DateTime.Now
+                    };
+
+                    db.SpacedRepetitionItems.Add(item.ToEntity());
+                    db.SaveChanges();
+
+                    _logger?.LogInformation("自动加入间隔重复队列: {UserId}, {ItemContent}", 
+                        evt.UserId, evt.ItemContent.Length > 30 ? evt.ItemContent.Substring(0, 30) + "..." : evt.ItemContent);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "处理学习项完成事件失败: {ItemContent}", evt.ItemContent);
+            }
         }
 
         public ReviewResult CalculateNextReview(ReviewItem item, int quality)
@@ -256,6 +313,14 @@ namespace LearningAssistant.Services.Learning
                 _logger?.LogError(ex, "计算保持率失败: 用户 {UserId}", userId);
                 return 0;
             }
+        }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+
+            UnsubscribeFromEvents();
+            _disposed = true;
         }
     }
 

@@ -1,5 +1,14 @@
 namespace LearningAssistant.Models.User
 {
+    public enum ChallengeType
+    {
+        LearnItems,
+        ReviewItems,
+        WrongItems,
+        StudyTime,
+        Custom
+    }
+
     /// <summary>
     /// 每日挑战任务
     /// </summary>
@@ -14,6 +23,7 @@ namespace LearningAssistant.Models.User
         public int Reward { get; set; }
         public bool Completed { get; set; }
         public bool Claimed { get; set; }
+        public ChallengeType Type { get; set; }
 
         public Challenge() { }
 
@@ -28,6 +38,7 @@ namespace LearningAssistant.Models.User
             Reward = reward;
             Completed = false;
             Claimed = false;
+            Type = ChallengeType.Custom;
         }
     }
 }

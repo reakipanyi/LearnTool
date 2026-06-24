@@ -45,6 +45,14 @@ namespace LearningAssistant.Forms.UserControls
         private Label _labelTeachTip = null!;
         private bool _isAiFeedbackLoading = false;
 
+        private Button _buttonShowHistory = null!;
+        private Panel _panelHistory = null!;
+        private ComboBox _comboBoxHistory = null!;
+        private RichTextBox _richTextBoxHistoryContent = null!;
+        private Label _labelHistoryInfo = null!;
+        private bool _isHistoryPanelVisible = false;
+        private List<HistoryEntry> _historyEntries = new();
+
         private Panel _panelStepReview = null!;
         private Label _labelReviewTitle = null!;
         private FlowLayoutPanel _flowLayoutPanelQuestions = null!;
@@ -115,6 +123,9 @@ namespace LearningAssistant.Forms.UserControls
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string? AnalogyText => _textBoxAnalogy?.Text;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public string? AIFeedbackText => _richTextBoxAIFeedback?.Text;
+
         #endregion
 
         #region 事件
@@ -125,6 +136,8 @@ namespace LearningAssistant.Forms.UserControls
         public event EventHandler<string>? AIFeedbackRequested;
         public event EventHandler? GenerateSimplifiedRequested;
         public event EventHandler? GenerateAnalogyRequested;
+        public event EventHandler? VoiceInputRequested;
+        public event EventHandler<string>? HistoryRecordSelected;
 
         #endregion
 
@@ -316,7 +329,7 @@ namespace LearningAssistant.Forms.UserControls
             _richTextBoxTeachAnswer.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _richTextBoxTeachAnswer.Font = new Font("微软雅黑", 10F);
             _richTextBoxTeachAnswer.Location = new Point(5, 70);
-            _richTextBoxTeachAnswer.Size = new Size(320, 90);
+            _richTextBoxTeachAnswer.Size = new Size(320, 80);
             _richTextBoxTeachAnswer.BackColor = Color.White;
             _richTextBoxTeachAnswer.BorderStyle = BorderStyle.FixedSingle;
 
@@ -326,24 +339,102 @@ namespace LearningAssistant.Forms.UserControls
             _buttonAIFeedback.FlatStyle = FlatStyle.Flat;
             _buttonAIFeedback.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
             _buttonAIFeedback.ForeColor = Color.White;
-            _buttonAIFeedback.Location = new Point(5, 165);
-            _buttonAIFeedback.Size = new Size(140, 30);
+            _buttonAIFeedback.Location = new Point(5, 155);
+            _buttonAIFeedback.Size = new Size(120, 28);
             _buttonAIFeedback.Text = "🤖 获取AI反馈";
             _buttonAIFeedback.UseVisualStyleBackColor = false;
             _buttonAIFeedback.BackColor = Color.FromArgb(0, 120, 215);
             _buttonAIFeedback.Click += ButtonAIFeedback_Click;
 
+            var _buttonVoiceInput = new Button
+            {
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("微软雅黑", 9F, FontStyle.Bold),
+                ForeColor = Color.White,
+                Location = new Point(130, 155),
+                Size = new Size(100, 28),
+                Text = "🎤 语音输入",
+                UseVisualStyleBackColor = false,
+                BackColor = Color.FromArgb(233, 30, 99),
+                Cursor = Cursors.Hand
+            };
+            _buttonVoiceInput.FlatAppearance.BorderSize = 0;
+            _buttonVoiceInput.Click += (s, e) => VoiceInputRequested?.Invoke(this, EventArgs.Empty);
+            _panelStepTeach.Controls.Add(_buttonVoiceInput);
+
+            _buttonShowHistory = new Button
+            {
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("微软雅黑", 9F, FontStyle.Bold),
+                ForeColor = Color.White,
+                Location = new Point(235, 155),
+                Size = new Size(90, 28),
+                Text = "📜 历史版本",
+                UseVisualStyleBackColor = false,
+                BackColor = Color.FromArgb(255, 152, 0),
+                Cursor = Cursors.Hand
+            };
+            _buttonShowHistory.FlatAppearance.BorderSize = 0;
+            _buttonShowHistory.Click += ButtonShowHistory_Click;
+            _panelStepTeach.Controls.Add(_buttonShowHistory);
+
             //
             // _richTextBoxAIFeedback
             //
-            _richTextBoxAIFeedback.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            _richTextBoxAIFeedback.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _richTextBoxAIFeedback.Font = new Font("微软雅黑", 9F);
-            _richTextBoxAIFeedback.Location = new Point(5, 200);
-            _richTextBoxAIFeedback.Size = new Size(320, 60);
+            _richTextBoxAIFeedback.Location = new Point(5, 188);
+            _richTextBoxAIFeedback.Size = new Size(320, 55);
             _richTextBoxAIFeedback.BackColor = Color.FromArgb(248, 248, 252);
             _richTextBoxAIFeedback.BorderStyle = BorderStyle.FixedSingle;
             _richTextBoxAIFeedback.ReadOnly = true;
             _richTextBoxAIFeedback.Visible = false;
+
+            //
+            // _panelHistory
+            //
+            _panelHistory = new Panel
+            {
+                Location = new Point(5, 188),
+                Size = new Size(320, 75),
+                Visible = false,
+                BackColor = Color.White
+            };
+
+            _comboBoxHistory = new ComboBox
+            {
+                Location = new Point(0, 0),
+                Size = new Size(320, 24),
+                Font = new Font("微软雅黑", 9F),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                FlatStyle = FlatStyle.Flat
+            };
+            _comboBoxHistory.SelectedIndexChanged += ComboBoxHistory_SelectedIndexChanged;
+
+            _labelHistoryInfo = new Label
+            {
+                Location = new Point(0, 26),
+                Size = new Size(320, 18),
+                Font = new Font("微软雅黑", 8F),
+                ForeColor = Color.FromArgb(117, 117, 117)
+            };
+
+            _richTextBoxHistoryContent = new RichTextBox
+            {
+                Location = new Point(0, 46),
+                Size = new Size(320, 28),
+                Font = new Font("微软雅黑", 9F),
+                BackColor = Color.FromArgb(255, 248, 220),
+                BorderStyle = BorderStyle.FixedSingle,
+                ReadOnly = true,
+                Multiline = true,
+                ScrollBars = RichTextBoxScrollBars.Vertical
+            };
+
+            _panelHistory.Controls.Add(_richTextBoxHistoryContent);
+            _panelHistory.Controls.Add(_labelHistoryInfo);
+            _panelHistory.Controls.Add(_comboBoxHistory);
+            _panelStepTeach.Controls.Add(_panelHistory);
 
             //
             // _labelTeachTip
@@ -351,7 +442,7 @@ namespace LearningAssistant.Forms.UserControls
             _labelTeachTip.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             _labelTeachTip.Font = new Font("微软雅黑", 9F);
             _labelTeachTip.ForeColor = Color.FromArgb(117, 117, 117);
-            _labelTeachTip.Location = new Point(5, 265);
+            _labelTeachTip.Location = new Point(5, 268);
             _labelTeachTip.Size = new Size(320, 20);
             _labelTeachTip.Text = "💡 用最简单的语言，避免专业术语";
 
@@ -539,28 +630,104 @@ namespace LearningAssistant.Forms.UserControls
         private void CreateStepButtons()
         {
             string[] stepNames = { "学习", "教学", "复习", "简化" };
-            int buttonWidth = 65;
-            int startX = 10;
-            int y = 20;
+            int circleSize = 32;
+            int totalWidth = _panelSteps.ClientSize.Width - 40;
+            int spacing = totalWidth / 4;
+            int startX = 20;
+            int y = 18;
 
             for (int i = 0; i < 4; i++)
             {
+                int centerX = startX + i * spacing + spacing / 2;
+
                 var btn = new Button
                 {
-                    Text = $"{i + 1}. {stepNames[i]}",
-                    Size = new Size(buttonWidth, 24),
-                    Location = new Point(startX + i * (buttonWidth + 5), y),
-                    Font = new Font("微软雅黑", 8F, FontStyle.Bold),
+                    Size = new Size(circleSize, circleSize),
+                    Location = new Point(centerX - circleSize / 2, y),
+                    Font = new Font("微软雅黑", 10F, FontStyle.Bold),
                     FlatStyle = FlatStyle.Flat,
                     Tag = i + 1,
-                    BackColor = Color.FromArgb(240, 240, 240),
-                    ForeColor = Color.FromArgb(100, 100, 100),
-                    Cursor = Cursors.Hand
+                    BackColor = Color.FromArgb(230, 230, 230),
+                    ForeColor = Color.FromArgb(120, 120, 120),
+                    Cursor = Cursors.Hand,
+                    Text = $"{i + 1}",
+                    Name = $"stepButton{i}"
                 };
                 btn.FlatAppearance.BorderSize = 0;
+                btn.Region = new Region(new System.Drawing.Drawing2D.GraphicsPath(
+                    new PointF[]
+                    {
+                        new PointF(circleSize / 2f, 0),
+                        new PointF(circleSize, circleSize / 2f),
+                        new PointF(circleSize / 2f, circleSize),
+                        new PointF(0, circleSize / 2f)
+                    },
+                    new byte[]
+                    {
+                        (byte)System.Drawing.Drawing2D.PathPointType.Start,
+                        (byte)System.Drawing.Drawing2D.PathPointType.Line,
+                        (byte)System.Drawing.Drawing2D.PathPointType.Line,
+                        (byte)System.Drawing.Drawing2D.PathPointType.Line
+                    }));
                 btn.Click += StepButton_Click;
+                btn.Paint += StepButton_Paint;
                 _stepButtons[i] = btn;
                 _panelSteps.Controls.Add(btn);
+
+                var label = new Label
+                {
+                    Text = stepNames[i],
+                    Font = new Font("微软雅黑", 8.5F),
+                    ForeColor = Color.FromArgb(120, 120, 120),
+                    BackColor = Color.Transparent,
+                    AutoSize = true,
+                    Name = $"stepLabel{i}"
+                };
+                label.Location = new Point(centerX - label.PreferredWidth / 2, y + circleSize + 4);
+                _panelSteps.Controls.Add(label);
+
+                if (i < 3)
+                {
+                    var line = new Panel
+                    {
+                        Size = new Size(spacing - circleSize, 2),
+                        Location = new Point(centerX + circleSize / 2, y + circleSize / 2 - 1),
+                        BackColor = Color.FromArgb(220, 220, 220),
+                        Name = $"stepLine{i}"
+                    };
+                    _panelSteps.Controls.Add(line);
+                }
+            }
+
+            _stepProgressLabel.Location = new Point(_stepProgressLabel.Location.X, y + circleSize + 24);
+        }
+
+        private void StepButton_Paint(object? sender, PaintEventArgs e)
+        {
+            if (sender is not Button btn) return;
+            int stepIndex = int.Parse(btn.Name.Replace("stepButton", ""));
+            int currentStep = (int)_currentStep;
+            bool isPast = stepIndex < currentStep;
+
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            if (isPast)
+            {
+                int checkSize = 16;
+                int x = (btn.Width - checkSize) / 2;
+                int y = (btn.Height - checkSize) / 2;
+
+                using var pen = new Pen(Color.White, 2.5f);
+                pen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                pen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+
+                var points = new PointF[]
+                {
+                    new PointF(x + 3, y + checkSize / 2f),
+                    new PointF(x + checkSize / 2f - 1, y + checkSize - 4),
+                    new PointF(x + checkSize - 2, y + 3)
+                };
+                e.Graphics.DrawLines(pen, points);
             }
         }
 
@@ -595,6 +762,82 @@ namespace LearningAssistant.Forms.UserControls
             }
             _isAiFeedbackLoading = false;
             UpdateAIFeedbackButtonState();
+        }
+
+        public void AppendVoiceText(string text)
+        {
+            if (_richTextBoxTeachAnswer != null && !_richTextBoxTeachAnswer.IsDisposed)
+            {
+                if (!string.IsNullOrEmpty(_richTextBoxTeachAnswer.Text))
+                {
+                    _richTextBoxTeachAnswer.Text += " ";
+                }
+                _richTextBoxTeachAnswer.Text += text;
+            }
+        }
+
+        public void LoadHistoryRecords(List<HistoryEntry> entries)
+        {
+            _historyEntries = entries ?? new List<HistoryEntry>();
+            UpdateHistoryComboBox();
+        }
+
+        public void ClearHistory()
+        {
+            _historyEntries.Clear();
+            UpdateHistoryComboBox();
+        }
+
+        private void UpdateHistoryComboBox()
+        {
+            if (_comboBoxHistory == null || _comboBoxHistory.IsDisposed) return;
+
+            _comboBoxHistory.Items.Clear();
+            _comboBoxHistory.Items.Add("📜 选择历史版本对比...");
+
+            foreach (var entry in _historyEntries)
+            {
+                var displayText = string.IsNullOrWhiteSpace(entry.TeachAnswer)
+                    ? $"[{entry.Date:MM-dd HH:mm}] (无内容)"
+                    : $"[{entry.Date:MM-dd HH:mm}] {entry.TeachAnswer.Length}字";
+                _comboBoxHistory.Items.Add(new HistoryComboItem(entry.Id, displayText, entry));
+            }
+
+            _comboBoxHistory.SelectedIndex = 0;
+            _buttonShowHistory.Enabled = _historyEntries.Count > 0;
+            _buttonShowHistory.Text = _historyEntries.Count > 0 ? $"📜 历史({_historyEntries.Count})" : "📜 历史版本";
+        }
+
+        private void ButtonShowHistory_Click(object? sender, EventArgs e)
+        {
+            if (_historyEntries.Count == 0)
+            {
+                MessageBox.Show("暂无历史版本记录", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            _isHistoryPanelVisible = !_isHistoryPanelVisible;
+            _panelHistory.Visible = _isHistoryPanelVisible;
+            _richTextBoxAIFeedback.Visible = !_isHistoryPanelVisible && !string.IsNullOrEmpty(_richTextBoxAIFeedback.Text);
+            _buttonShowHistory.BackColor = _isHistoryPanelVisible ? Color.FromArgb(255, 183, 77) : Color.FromArgb(255, 152, 0);
+        }
+
+        private void ComboBoxHistory_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            if (_comboBoxHistory == null || _comboBoxHistory.IsDisposed) return;
+            if (_comboBoxHistory.SelectedIndex <= 0)
+            {
+                _richTextBoxHistoryContent.Clear();
+                _labelHistoryInfo.Text = "";
+                return;
+            }
+
+            if (_comboBoxHistory.SelectedItem is HistoryComboItem item)
+            {
+                _richTextBoxHistoryContent.Text = item.Entry.TeachAnswer;
+                _labelHistoryInfo.Text = $"📅 {item.Entry.Date:yyyy-MM-dd HH:mm}  ·  {(item.Entry.IsCompleted ? "✅ 已完成" : "📝 未完成")}";
+                HistoryRecordSelected?.Invoke(this, item.Entry.Id);
+            }
         }
 
         public void SetAIFeedbackLoading(bool isLoading)
@@ -746,6 +989,11 @@ namespace LearningAssistant.Forms.UserControls
             int stepIndex = (int)_currentStep;
             _stepProgressLabel.Text = $"第 {stepIndex} 步 / 共 4 步";
 
+            Color activeColor = Color.FromArgb(147, 112, 219);
+            Color pastColor = Color.FromArgb(186, 156, 238);
+            Color inactiveColor = Color.FromArgb(230, 230, 230);
+            Color inactiveTextColor = Color.FromArgb(120, 120, 120);
+
             for (int i = 0; i < 4; i++)
             {
                 if (_stepButtons[i] != null)
@@ -754,13 +1002,38 @@ namespace LearningAssistant.Forms.UserControls
                     bool isPast = (i + 1) < stepIndex;
 
                     _stepButtons[i].BackColor = isActive
-                        ? Color.FromArgb(147, 112, 219)
+                        ? activeColor
                         : isPast
-                            ? Color.FromArgb(186, 156, 238)
-                            : Color.FromArgb(240, 240, 240);
+                            ? pastColor
+                            : inactiveColor;
                     _stepButtons[i].ForeColor = (isActive || isPast)
                         ? Color.White
-                        : Color.FromArgb(100, 100, 100);
+                        : inactiveTextColor;
+                    _stepButtons[i].Invalidate();
+
+                    var label = _panelSteps.Controls[$"stepLabel{i}"] as Label;
+                    if (label != null)
+                    {
+                        label.ForeColor = isActive
+                            ? activeColor
+                            : isPast
+                                ? pastColor
+                                : inactiveTextColor;
+                        label.Font = isActive
+                            ? new Font("微软雅黑", 8.5F, FontStyle.Bold)
+                            : new Font("微软雅黑", 8.5F);
+                    }
+
+                    if (i < 3)
+                    {
+                        var line = _panelSteps.Controls[$"stepLine{i}"] as Panel;
+                        if (line != null)
+                        {
+                            line.BackColor = (i + 1) < stepIndex
+                                ? pastColor
+                                : Color.FromArgb(220, 220, 220);
+                        }
+                    }
                 }
             }
 
@@ -866,9 +1139,18 @@ namespace LearningAssistant.Forms.UserControls
             _richTextBoxTeachAnswer.ForeColor = isDark ? Color.White : colors.TextPrimary;
             _buttonAIFeedback.BackColor = Color.FromArgb(0, 120, 215);
             _buttonAIFeedback.ForeColor = Color.White;
+            _buttonShowHistory.BackColor = _isHistoryPanelVisible ? Color.FromArgb(255, 183, 77) : Color.FromArgb(255, 152, 0);
+            _buttonShowHistory.ForeColor = Color.White;
             _richTextBoxAIFeedback.BackColor = isDark ? Color.FromArgb(40, 40, 40) : Color.FromArgb(248, 248, 252);
             _richTextBoxAIFeedback.ForeColor = isDark ? Color.White : colors.TextPrimary;
             _labelTeachTip.ForeColor = colors.TextSecondary;
+
+            _panelHistory.BackColor = isDark ? Color.FromArgb(30, 30, 30) : Color.White;
+            _comboBoxHistory.BackColor = isDark ? Color.FromArgb(45, 45, 45) : Color.White;
+            _comboBoxHistory.ForeColor = isDark ? Color.White : colors.TextPrimary;
+            _richTextBoxHistoryContent.BackColor = isDark ? Color.FromArgb(50, 50, 40) : Color.FromArgb(255, 248, 220);
+            _richTextBoxHistoryContent.ForeColor = isDark ? Color.White : colors.TextPrimary;
+            _labelHistoryInfo.ForeColor = colors.TextSecondary;
 
             _panelStepReview.BackColor = isDark ? Color.FromArgb(30, 30, 30) : Color.White;
             _labelReviewTitle.ForeColor = isDark ? Color.White : colors.TextPrimary;
@@ -942,6 +1224,34 @@ namespace LearningAssistant.Forms.UserControls
                     _iconBox.Visible = false;
                 }
             }
+        }
+
+        #endregion
+
+        #region 历史记录数据结构
+
+        public class HistoryEntry
+        {
+            public string Id { get; set; } = string.Empty;
+            public string TeachAnswer { get; set; } = string.Empty;
+            public DateTime Date { get; set; }
+            public bool IsCompleted { get; set; }
+        }
+
+        private class HistoryComboItem
+        {
+            public string Id { get; }
+            public string DisplayText { get; }
+            public HistoryEntry Entry { get; }
+
+            public HistoryComboItem(string id, string displayText, HistoryEntry entry)
+            {
+                Id = id;
+                DisplayText = displayText;
+                Entry = entry;
+            }
+
+            public override string ToString() => DisplayText;
         }
 
         #endregion

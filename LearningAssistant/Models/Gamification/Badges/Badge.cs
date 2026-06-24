@@ -10,6 +10,10 @@ namespace LearningAssistant.Models.User
         public BadgeRequirement Requirement { get; set; } = new BadgeRequirement();
         public bool IsUnlocked { get; set; }
         public DateTime? UnlockedAt { get; set; }
+        /// <summary>
+        /// 是否为隐藏成就（未解锁时不显示具体信息）
+        /// </summary>
+        public bool IsHidden { get; set; }
 
         public BadgeRarity Rarity
         {
@@ -140,6 +144,26 @@ namespace LearningAssistant.Models.User
                     Icon = "🏅",
                     Category = BadgeCategory.Consistency,
                     Requirement = new BadgeRequirement { Type = BadgeType.ConsecutiveDays, TargetValue = 7 }
+                },
+                new Badge
+                {
+                    Id = "night_owl",
+                    Name = "夜猫子",
+                    Description = "在深夜时段（00:00-05:00）完成学习",
+                    Icon = "🌙",
+                    Category = BadgeCategory.Special,
+                    IsHidden = true,
+                    Requirement = new BadgeRequirement { Type = BadgeType.ConsecutiveDays, TargetValue = 1 }
+                },
+                new Badge
+                {
+                    Id = "easter_egg_master",
+                    Name = "彩蛋猎人",
+                    Description = "发现并解锁一个隐藏成就",
+                    Icon = "🥚",
+                    Category = BadgeCategory.Special,
+                    IsHidden = true,
+                    Requirement = new BadgeRequirement { Type = BadgeType.PerfectSession, TargetValue = 1 }
                 }
             };
         }

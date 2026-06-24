@@ -1,3 +1,4 @@
+using LearningAssistant;
 using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Forms.UserControls.Cards;
@@ -7,6 +8,7 @@ using LearningAssistant.Managers;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services.Cloud;
+using LearningAssistant.Services.Gamification;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 
@@ -162,6 +164,8 @@ namespace LearningAssistant.Forms
             {
                 card.CardClicked += this.FeatureCard_Clicked;
             }
+
+            RefreshDashboardChallengeProgress();
             sideNavigation.AddItems(new List<NavigationItem>
             {
                 new() { Key = "dashboard", Icon = "🏠", Text = "首页", Order = 0, Group = "main" },
@@ -250,10 +254,10 @@ namespace LearningAssistant.Forms
                     OpenSettingsClicked?.Invoke(this, EventArgs.Empty);
                     break;
                 case "challenges":
-                    MessageBox.Show("每日挑战功能开发中...", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    ShowChallengeForm();
                     break;
                 case "achievements":
-                    MessageBox.Show("成就徽章功能开发中...", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    ShowAchievementForm();
                     break;
             }
         }
@@ -284,7 +288,7 @@ namespace LearningAssistant.Forms
                         buttonExportErrorBook?.PerformClick();
                         break;
                     case "每日挑战":
-                        MessageBox.Show("每日挑战功能开发中...", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        ShowChallengeForm();
                         break;
                     case "学习统计":
                         buttonOpenStatistics?.PerformClick();
@@ -306,6 +310,54 @@ namespace LearningAssistant.Forms
         private void Presenter_OnOpenEditor(object? sender, EventArgs e)
         {
             _windowManager.OpenEditorWindow();
+        }
+
+        private void ShowChallengeForm()
+        {
+            try
+            {
+                var gamificationService = Program.GetRequiredService<IGamificationService>();
+                using var form = new ChallengeForm(gamificationService);
+                form.ShowDialog(this);
+                RefreshDashboardChallengeProgress();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"打开每日挑战失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void RefreshDashboardChallengeProgress()
+        {
+            try
+            {
+                var gamificationService = Program.GetService<IGamificationService>();
+                if (gamificationService != null)
+                {
+                    var challenges = gamificationService.GetDailyChallenges().ToList();
+                    int completed = challenges.Count(c => c.Completed);
+                    int total = challenges.Count;
+                    dashboardView?.UpdateChallengeProgress(completed, total);
+                }
+            }
+            catch
+            {
+                // 静默处理，不影响主界面加载
+            }
+        }
+
+        private void ShowAchievementForm()
+        {
+            try
+            {
+                var gamificationService = Program.GetRequiredService<IGamificationService>();
+                using var form = new AchievementForm(gamificationService);
+                form.ShowDialog(this);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"打开成就系统失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         #region IMainView Implementation
@@ -422,6 +474,22 @@ namespace LearningAssistant.Forms
                     panelStreakInfo.BackColor = Color.FromArgb(255, 248, 240);
                     panelStreakInfo.BorderStyle = BorderStyle.FixedSingle;
                 }
+            }
+        }
+
+        public void UpdateDashboardStats(int todayStudyMinutes, int streakDays, int totalXP,
+            int currentLevel, int xpToNextLevel, int completedChallenges, int totalChallenges)
+        {
+            if (dashboardView != null)
+            {
+                dashboardView.UpdateDashboardStats(
+                    todayStudyMinutes,
+                    streakDays,
+                    totalXP,
+                    currentLevel,
+                    xpToNextLevel,
+                    completedChallenges,
+                    totalChallenges);
             }
         }
 

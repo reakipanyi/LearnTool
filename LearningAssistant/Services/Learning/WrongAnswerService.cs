@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Common.Events;
 using LearningAssistant.Models.Learning;
 using LearningAssistant.Services.Persistence;
 using Microsoft.Extensions.Logging;
@@ -11,20 +12,65 @@ namespace LearningAssistant.Services.Learning
     /// 错题本服务实现
     /// 提供错题记录、分类、复习、统计等功能
     /// </summary>
-    public class WrongAnswerService : IWrongAnswerService
+    public class WrongAnswerService : IWrongAnswerService, IDisposable
     {
         private readonly IDataPersistenceService _persistenceService;
         private readonly ILogger<WrongAnswerService> _logger;
+        private readonly IEventBus? _eventBus;
         private readonly string _wrongAnswersDir;
+        private bool _disposed = false;
 
         public WrongAnswerService(
             IDataPersistenceService persistenceService,
-            ILogger<WrongAnswerService> logger)
+            ILogger<WrongAnswerService> logger,
+            IEventBus? eventBus = null)
         {
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _eventBus = eventBus;
             _wrongAnswersDir = Path.Combine(AppPaths.UsersDir, "wrong_answers");
             EnsureDirectoryExists();
+
+            SubscribeToEvents();
+        }
+
+        private void SubscribeToEvents()
+        {
+            if (_eventBus == null) return;
+
+            _eventBus.Subscribe<ItemWrongEvent>(OnItemWrong);
+        }
+
+        private void UnsubscribeFromEvents()
+        {
+            if (_eventBus == null) return;
+
+            _eventBus.Unsubscribe<ItemWrongEvent>(OnItemWrong);
+        }
+
+        private void OnItemWrong(ItemWrongEvent evt)
+        {
+            try
+            {
+                var item = new WrongAnswerItem
+                {
+                    Question = evt.ItemContent,
+                    CorrectAnswer = evt.CorrectAnswer,
+                    UserAnswer = evt.UserAnswer,
+                    Subject = evt.SubCategory,
+                    Category = evt.SubCategory
+                };
+
+                AddWrongAnswer(evt.UserId, item);
+
+                _logger.LogInformation("自动记录错题: {UserId}, {Question}", 
+                    evt.UserId, 
+                    evt.ItemContent.Length > 30 ? evt.ItemContent.Substring(0, 30) + "..." : evt.ItemContent);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "处理学习项答错事件失败: {ItemContent}", evt.ItemContent);
+            }
         }
 
         private void EnsureDirectoryExists()
@@ -819,6 +865,16 @@ namespace LearningAssistant.Services.Learning
             File.WriteAllText(path, json);
         }
 
+        #endregion
+
+        #region IDisposable
+        public void Dispose()
+        {
+            if (_disposed) return;
+
+            UnsubscribeFromEvents();
+            _disposed = true;
+        }
         #endregion
     }
 }

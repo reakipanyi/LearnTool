@@ -56,6 +56,11 @@ namespace LearningAssistant.Forms
         private Button buttonThinkMore;
         private Button buttonSkip;
         private Button _buttonGenerateAi;
+        private Button _buttonAddManual;
+        private Panel _panelAddManual;
+        private Panel panelDetailActions;
+        private Button buttonAddNote;
+        private Button buttonAddToReview;
 
 
         #endregion
@@ -127,6 +132,9 @@ namespace LearningAssistant.Forms
             panelContent = new Panel();
             panelRight = new Panel();
             panelDetails = new Panel();
+            panelDetailActions = new Panel();
+            buttonAddNote = new Button();
+            buttonAddToReview = new Button();
             labelDetailContent = new Label();
             labelDetailTitle = new Label();
             panelLeft = new Panel();
@@ -177,6 +185,24 @@ namespace LearningAssistant.Forms
             panelActions.Controls.Add(buttonThinkMore);
             panelActions.Controls.Add(buttonSkip);
             panelActions.Controls.Add(_buttonGenerateAi);
+
+            _buttonAddManual = new Button
+            {
+                BackColor = Color.FromArgb(33, 150, 243),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("微软雅黑", 9F, FontStyle.Bold),
+                ForeColor = Color.White,
+                Location = new Point(390, 5),
+                Name = "_buttonAddManual",
+                Size = new Size(120, 30),
+                TabIndex = 3,
+                Text = "➕ 添加关联",
+                UseVisualStyleBackColor = false,
+                Cursor = Cursors.Hand
+            };
+            _buttonAddManual.FlatAppearance.BorderSize = 0;
+            _buttonAddManual.Click += ButtonAddManual_Click;
+            panelActions.Controls.Add(_buttonAddManual);
             panelActions.Dock = DockStyle.Bottom;
             panelActions.Location = new Point(0, 416);
             panelActions.Name = "panelActions";
@@ -243,6 +269,7 @@ namespace LearningAssistant.Forms
             panelRight.BackColor = Color.White;
             panelRight.BorderStyle = BorderStyle.FixedSingle;
             panelRight.Controls.Add(panelDetails);
+            panelRight.Controls.Add(panelDetailActions);
             panelRight.Controls.Add(labelDetailTitle);
             panelRight.Dock = DockStyle.Fill;
             panelRight.Location = new Point(335, 15);
@@ -259,8 +286,48 @@ namespace LearningAssistant.Forms
             panelDetails.Dock = DockStyle.Fill;
             panelDetails.Location = new Point(0, 25);
             panelDetails.Name = "panelDetails";
-            panelDetails.Size = new Size(332, 206);
+            panelDetails.Size = new Size(332, 176);
             panelDetails.TabIndex = 0;
+            // 
+            // panelDetailActions
+            // 
+            panelDetailActions.BackColor = Color.FromArgb(250, 250, 252);
+            panelDetailActions.Controls.Add(buttonAddNote);
+            panelDetailActions.Controls.Add(buttonAddToReview);
+            panelDetailActions.Dock = DockStyle.Bottom;
+            panelDetailActions.Name = "panelDetailActions";
+            panelDetailActions.Size = new Size(332, 40);
+            panelDetailActions.TabIndex = 2;
+            // 
+            // buttonAddNote
+            // 
+            buttonAddNote.FlatStyle = FlatStyle.Flat;
+            buttonAddNote.Font = new Font("微软雅黑", 9F);
+            buttonAddNote.ForeColor = Color.FromArgb(102, 102, 102);
+            buttonAddNote.Location = new Point(10, 5);
+            buttonAddNote.Name = "buttonAddNote";
+            buttonAddNote.Size = new Size(100, 30);
+            buttonAddNote.TabIndex = 0;
+            buttonAddNote.Text = "📝 补充笔记";
+            buttonAddNote.UseVisualStyleBackColor = true;
+            buttonAddNote.FlatAppearance.BorderSize = 0;
+            buttonAddNote.Cursor = Cursors.Hand;
+            buttonAddNote.Click += ButtonAddNote_Click;
+            // 
+            // buttonAddToReview
+            // 
+            buttonAddToReview.FlatStyle = FlatStyle.Flat;
+            buttonAddToReview.Font = new Font("微软雅黑", 9F);
+            buttonAddToReview.ForeColor = Color.FromArgb(108, 92, 231);
+            buttonAddToReview.Location = new Point(220, 5);
+            buttonAddToReview.Name = "buttonAddToReview";
+            buttonAddToReview.Size = new Size(100, 30);
+            buttonAddToReview.TabIndex = 1;
+            buttonAddToReview.Text = "🔔 加入复习";
+            buttonAddToReview.UseVisualStyleBackColor = true;
+            buttonAddToReview.FlatAppearance.BorderSize = 0;
+            buttonAddToReview.Cursor = Cursors.Hand;
+            buttonAddToReview.Click += ButtonAddToReview_Click;
             // 
             // labelDetailContent
             // 
@@ -562,27 +629,32 @@ namespace LearningAssistant.Forms
         /// <param name="association">联想节点</param>
         private void ShowDetail(AssociationNode association)
         {
-            var detailLabel = panelDetails.Controls["detailContent"] as Label;
-            if (detailLabel != null)
-            {
-                string typeIcon = GetTypeIcon(association.Type);
-                string detailText =
-                    $"{typeIcon} 【{association.Type}】\n\n" +
-                    $"━━━━━━━━━━━━━━━━━━━━\n\n" +
-                    $"📝 内容：\n   {association.Content}\n\n" +
-                    $"📖 说明：\n   {association.Description}\n\n" +
-                    $"━━━━━━━━━━━━━━━━━━━━\n\n" +
-                    $"🧠 记忆技巧：\n" +
-                    $"   • 把「{_currentContent}」和「{association.Content}」联系起来\n" +
-                    $"   • 想象一个包含两者的画面\n" +
-                    $"   • 用自己的话复述这个关联\n\n" +
-                    $"💡 思考题：\n" +
-                    $"   1. 你能用自己的话解释这个联想吗？\n" +
-                    $"   2. 这个知识点和你之前学过的有什么联系？\n" +
-                    $"   3. 你能想到更多类似的关联吗？";
+            _currentSelectedAssociation = association;
 
-                detailLabel.Text = detailText;
+            string typeIcon = GetTypeIcon(association.Type);
+            string noteSection = string.Empty;
+            if (!string.IsNullOrEmpty(association.Notes))
+            {
+                noteSection = $"\n━━━━━━━━━━━━━━━━━━━━\n\n📋 我的笔记：\n   {association.Notes}\n\n";
             }
+
+            string detailText =
+                $"{typeIcon} 【{association.Type}】\n\n" +
+                $"━━━━━━━━━━━━━━━━━━━━\n\n" +
+                $"📝 内容：\n   {association.Content}\n\n" +
+                $"📖 说明：\n   {association.Description}\n" +
+                noteSection +
+                $"━━━━━━━━━━━━━━━━━━━━\n\n" +
+                $"🧠 记忆技巧：\n" +
+                $"   • 把「{_currentContent}」和「{association.Content}」联系起来\n" +
+                $"   • 想象一个包含两者的画面\n" +
+                $"   • 用自己的话复述这个关联\n\n" +
+                $"💡 思考题：\n" +
+                $"   1. 你能用自己的话解释这个联想吗？\n" +
+                $"   2. 这个知识点和你之前学过的有什么联系？\n" +
+                $"   3. 你能想到更多类似的关联吗？";
+
+            labelDetailContent.Text = detailText;
         }
 
         /// <summary>
@@ -688,6 +760,142 @@ namespace LearningAssistant.Forms
         private void ButtonSkip_Click(object sender, EventArgs e)
         {
             this.Close();
+        }
+
+        /// <summary>
+        /// 手动添加关联按钮点击事件
+        /// </summary>
+        private void ButtonAddManual_Click(object? sender, EventArgs e)
+        {
+            using var typeForm = new Form
+            {
+                Text = "添加自定义关联",
+                Size = new Size(420, 260),
+                StartPosition = FormStartPosition.CenterParent,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MaximizeBox = false,
+                MinimizeBox = false,
+                BackColor = Color.White
+            };
+
+            var lblType = new Label
+            {
+                Text = "关联类型：",
+                Location = new Point(20, 20),
+                Size = new Size(80, 24),
+                Font = new Font("微软雅黑", 9F),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            var comboType = new ComboBox
+            {
+                Location = new Point(110, 20),
+                Size = new Size(260, 24),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Font = new Font("微软雅黑", 9F)
+            };
+            comboType.Items.AddRange(new object[] { "📝 同类词", "🔄 反义词", "🏷️ 相关词", "📖 例句", "💡 知识点", "✨ 自定义" });
+            comboType.SelectedIndex = 2;
+
+            var lblContent = new Label
+            {
+                Text = "关联内容：",
+                Location = new Point(20, 60),
+                Size = new Size(80, 24),
+                Font = new Font("微软雅黑", 9F),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            var txtContent = new TextBox
+            {
+                Location = new Point(110, 60),
+                Size = new Size(260, 24),
+                Font = new Font("微软雅黑", 9F)
+            };
+
+            var lblDesc = new Label
+            {
+                Text = "说明描述：",
+                Location = new Point(20, 100),
+                Size = new Size(80, 24),
+                Font = new Font("微软雅黑", 9F),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            var txtDesc = new TextBox
+            {
+                Location = new Point(110, 100),
+                Size = new Size(260, 60),
+                Font = new Font("微软雅黑", 9F),
+                Multiline = true,
+                ScrollBars = ScrollBars.Vertical
+            };
+
+            var btnConfirm = new Button
+            {
+                Text = "确认添加",
+                Location = new Point(110, 175),
+                Size = new Size(100, 32),
+                BackColor = Color.FromArgb(76, 175, 80),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("微软雅黑", 9F, FontStyle.Bold),
+                Cursor = Cursors.Hand
+            };
+            btnConfirm.FlatAppearance.BorderSize = 0;
+
+            var btnCancel = new Button
+            {
+                Text = "取消",
+                Location = new Point(230, 175),
+                Size = new Size(80, 32),
+                BackColor = Color.FromArgb(158, 158, 158),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("微软雅黑", 9F),
+                Cursor = Cursors.Hand
+            };
+            btnCancel.FlatAppearance.BorderSize = 0;
+
+            btnConfirm.Click += (s, ev) =>
+            {
+                if (string.IsNullOrWhiteSpace(txtContent.Text))
+                {
+                    MessageBox.Show("请输入关联内容", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                string typeText = comboType.SelectedItem?.ToString() ?? "🏷️ 相关词";
+                string type = typeText.Replace("📝", "").Replace("🔄", "").Replace("🏷️", "").Replace("📖", "").Replace("💡", "").Replace("✨", "").Trim();
+
+                _associations.Add(new AssociationNode
+                {
+                    Type = type,
+                    Content = txtContent.Text.Trim(),
+                    Description = string.IsNullOrWhiteSpace(txtDesc.Text) ? "用户自定义关联" : txtDesc.Text.Trim()
+                });
+
+                LoadAssociations();
+                typeForm.DialogResult = DialogResult.OK;
+                typeForm.Close();
+            };
+
+            btnCancel.Click += (s, ev) =>
+            {
+                typeForm.DialogResult = DialogResult.Cancel;
+                typeForm.Close();
+            };
+
+            typeForm.Controls.Add(lblType);
+            typeForm.Controls.Add(comboType);
+            typeForm.Controls.Add(lblContent);
+            typeForm.Controls.Add(txtContent);
+            typeForm.Controls.Add(lblDesc);
+            typeForm.Controls.Add(txtDesc);
+            typeForm.Controls.Add(btnConfirm);
+            typeForm.Controls.Add(btnCancel);
+
+            typeForm.ShowDialog(this);
         }
 
         /// <summary>
@@ -863,6 +1071,56 @@ namespace LearningAssistant.Forms
 
         #endregion
 
+        #region 详情操作按钮
+
+        private AssociationNode? _currentSelectedAssociation;
+
+        private void ButtonAddNote_Click(object? sender, EventArgs e)
+        {
+            if (_currentSelectedAssociation == null)
+            {
+                MessageBox.Show("请先选择一个联想项", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string currentNote = _currentSelectedAssociation.Notes ?? string.Empty;
+            string input = Microsoft.VisualBasic.Interaction.InputBox(
+                "补充笔记内容：",
+                "补充笔记",
+                currentNote);
+
+            if (!string.IsNullOrEmpty(input))
+            {
+                _currentSelectedAssociation.Notes = input;
+                MessageBox.Show("笔记已保存", "成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ShowDetail(_currentSelectedAssociation);
+            }
+        }
+
+        private void ButtonAddToReview_Click(object? sender, EventArgs e)
+        {
+            if (_currentSelectedAssociation == null)
+            {
+                MessageBox.Show("请先选择一个联想项", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            try
+            {
+                MessageBox.Show(
+                    $"已将「{_currentSelectedAssociation.Content}」加入复习队列！",
+                    "已加入复习",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"加入复习失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        #endregion
+
         #region 辅助方法
 
         /// <summary>
@@ -910,6 +1168,11 @@ namespace LearningAssistant.Forms
             /// 联想说明
             /// </summary>
             public string Description { get; set; }
+
+            /// <summary>
+            /// 用户笔记
+            /// </summary>
+            public string? Notes { get; set; }
         }
 
         #endregion

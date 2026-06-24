@@ -40,10 +40,17 @@ namespace LearningAssistant.Forms
 
         private void SetAchievementData(Achievement achievement)
         {
+            bool isHidden = achievement.IsHidden;
             lblIcon.Text = achievement.Icon;
-            lblTitle.Text = "成就解锁！";
+            lblTitle.Text = isHidden ? "🔮 隐藏成就解锁！" : "成就解锁！";
             lblAchievementName.Text = achievement.Name;
-            lblDescription.Text = achievement.Description;
+            lblDescription.Text = isHidden ? $"【隐藏成就】{achievement.Description}" : achievement.Description;
+
+            if (isHidden)
+            {
+                lblTitle.ForeColor = Color.FromArgb(156, 39, 176);
+                BackColor = Color.FromArgb(250, 245, 255);
+            }
         }
 
         private void SetupAnimations()

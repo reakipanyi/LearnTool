@@ -19,6 +19,8 @@ namespace LearningAssistant.Forms.UserControls
         private bool _isHovered;
         private int _cornerRadius = 12;
         private int _shadowOffset = 4;
+        private float _unlockScale = 1.0f;
+        private readonly System.Windows.Forms.Timer _unlockAnimationTimer = new System.Windows.Forms.Timer();
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Badge? Badge
@@ -48,7 +50,12 @@ namespace LearningAssistant.Forms.UserControls
             get => _isUnlocked;
             set
             {
+                bool wasUnlocked = _isUnlocked;
                 _isUnlocked = value;
+                if (!wasUnlocked && value)
+                {
+                    StartUnlockAnimation();
+                }
                 Invalidate();
             }
         }
@@ -66,6 +73,9 @@ namespace LearningAssistant.Forms.UserControls
                 true);
             InitializeComponent();
             SetupHoverEffect();
+
+            _unlockAnimationTimer.Interval = 16;
+            _unlockAnimationTimer.Tick += OnUnlockAnimationTick;
         }
 
         private void InitializeComponent()
@@ -151,9 +161,11 @@ namespace LearningAssistant.Forms.UserControls
                 return;
             }
 
-            _labelIcon.Text = _isUnlocked ? _badge.Icon : "🔒";
-            _labelName.Text = _badge.Name;
-            _labelDescription.Text = _badge.Description;
+            bool isHiddenLocked = _badge.IsHidden && !_isUnlocked;
+
+            _labelIcon.Text = _isUnlocked ? _badge.Icon : (isHiddenLocked ? "❓" : "🔒");
+            _labelName.Text = isHiddenLocked ? "???" : _badge.Name;
+            _labelDescription.Text = isHiddenLocked ? "这是一个神秘成就，解锁后揭晓" : _badge.Description;
             _labelCategory.Text = GetCategoryText(_badge.Category);
 
             Invalidate();
@@ -196,6 +208,14 @@ namespace LearningAssistant.Forms.UserControls
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
+            if (_unlockScale != 1.0f)
+            {
+                float offsetX = (Width - Width * _unlockScale) / 2;
+                float offsetY = (Height - Height * _unlockScale) / 2;
+                g.TranslateTransform(offsetX, offsetY);
+                g.ScaleTransform(_unlockScale, _unlockScale);
+            }
+
             int shadowOffset = _isHovered ? 6 : 4;
             Rectangle cardRect = new(shadowOffset / 2, shadowOffset / 2,
                 Width - shadowOffset - 1, Height - shadowOffset - 1);
@@ -209,6 +229,8 @@ namespace LearningAssistant.Forms.UserControls
             }
 
             using var cardPath = GdiHelper.CreateRoundedRectPath(cardRect, _cornerRadius);
+
+            bool isHiddenLocked = _badge != null && _badge.IsHidden && !_isUnlocked;
 
             if (_isUnlocked && _badge != null)
             {
@@ -242,6 +264,20 @@ namespace LearningAssistant.Forms.UserControls
                     _badge.Rarity >= BadgeRarity.Legendary ? 2f : 1f);
                 g.DrawPath(borderPen, cardPath);
             }
+            else if (isHiddenLocked)
+            {
+                using var bgBrush = new LinearGradientBrush(
+                    cardRect,
+                    Color.FromArgb(45, 45, 55),
+                    Color.FromArgb(30, 30, 40),
+                    LinearGradientMode.Vertical);
+                g.FillPath(bgBrush, cardPath);
+
+                using var borderPen = new Pen(Color.FromArgb(80, 80, 95), 1.5f);
+                g.DrawPath(borderPen, cardPath);
+
+                DrawMysteryPattern(g, cardRect);
+            }
             else
             {
                 using var bgBrush = new LinearGradientBrush(
@@ -255,62 +291,73 @@ namespace LearningAssistant.Forms.UserControls
                 g.DrawPath(borderPen, cardPath);
             }
 
+            if (_badge != null && !isHiddenLocked)
+            {
+                DrawStarRating(g, cardRect, _badge.Rarity);
+            }
+
             int progressBarHeight = 6;
             int progressBarY = Height - 50 - shadowOffset / 2;
             int progressBarX = 20 + shadowOffset / 2;
             int progressBarWidth = Width - 40 - shadowOffset;
 
-            double progressPercent = 0;
-            if (_badge != null && _badge.Requirement.TargetValue > 0)
+
+            if (!isHiddenLocked)
             {
-                progressPercent = (double)Math.Min(_currentValue, _badge.Requirement.TargetValue) /
-                    _badge.Requirement.TargetValue;
-            }
-
-            Color progressStart, progressEnd;
-            Color progressBg;
-
-            if (_isUnlocked && _badge != null)
-            {
-                progressStart = Color.FromArgb(200, 255, 255, 255);
-                progressEnd = Color.White;
-                progressBg = Color.FromArgb(40, 255, 255, 255);
-            }
-            else
-            {
-                progressStart = Color.FromArgb(33, 150, 243);
-                progressEnd = Color.FromArgb(100, 181, 246);
-                progressBg = Color.FromArgb(230, 230, 235);
-            }
-
-            g.DrawGradientProgressBar(
-                new Rectangle(progressBarX, progressBarY, progressBarWidth, progressBarHeight),
-                progressBarHeight / 2,
-                progressPercent,
-                progressStart,
-                progressEnd,
-                progressBg);
-
-            if (!_isUnlocked && progressPercent > 0)
-            {
-                int percentVal = (int)(progressPercent * 100);
-                string percentText = $"{percentVal}%";
-                var percentFont = new Font("微软雅黑", 7.5F, FontStyle.Bold);
-                var percentColor = Color.FromArgb(102, 102, 102);
-
-                using var sf = new StringFormat
+                double progressPercent = 0;
+                if (_badge != null && _badge.Requirement.TargetValue > 0)
                 {
-                    Alignment = StringAlignment.Far,
-                    LineAlignment = StringAlignment.Near
-                };
-                using var brush = new SolidBrush(percentColor);
-                g.DrawString(percentText, percentFont, brush,
-                    new Rectangle(progressBarX, progressBarY - 16, progressBarWidth, 14), sf);
+                    progressPercent = (double)Math.Min(_currentValue, _badge.Requirement.TargetValue) /
+                        _badge.Requirement.TargetValue;
+                }
+
+                Color progressStart, progressEnd;
+                Color progressBg;
+
+                if (_isUnlocked && _badge != null)
+                {
+                    progressStart = Color.FromArgb(200, 255, 255, 255);
+                    progressEnd = Color.White;
+                    progressBg = Color.FromArgb(40, 255, 255, 255);
+                }
+                else
+                {
+                    progressStart = Color.FromArgb(33, 150, 243);
+                    progressEnd = Color.FromArgb(100, 181, 246);
+                    progressBg = Color.FromArgb(230, 230, 235);
+                }
+
+                g.DrawGradientProgressBar(
+                    new Rectangle(progressBarX, progressBarY, progressBarWidth, progressBarHeight),
+                    progressBarHeight / 2,
+                    progressPercent,
+                    progressStart,
+                    progressEnd,
+                    progressBg);
+
+                if (!_isUnlocked && progressPercent > 0)
+                {
+                    int percentVal = (int)(progressPercent * 100);
+                    string percentText = $"{percentVal}%";
+                    var percentFont = new Font("微软雅黑", 7.5F, FontStyle.Bold);
+                    var percentColor = Color.FromArgb(102, 102, 102);
+
+                    using var sf = new StringFormat
+                    {
+                        Alignment = StringAlignment.Far,
+                        LineAlignment = StringAlignment.Near
+                    };
+                    using var brush = new SolidBrush(percentColor);
+                    g.DrawString(percentText, percentFont, brush,
+                        new Rectangle(progressBarX, progressBarY - 16, progressBarWidth, 14), sf);
+                }
             }
 
             DrawStatusBadge(g, cardRect);
 
             UpdateTextColors();
+
+            g.ResetTransform();
         }
 
         private void DrawStatusBadge(Graphics g, Rectangle cardRect)
@@ -319,11 +366,19 @@ namespace LearningAssistant.Forms.UserControls
             Color badgeBackColor;
             Color badgeTextColor;
 
+            bool isHiddenLocked = _badge != null && _badge.IsHidden && !_isUnlocked;
+
             if (_isUnlocked)
             {
                 badgeText = "✓ 已解锁";
                 badgeBackColor = Color.FromArgb(120, 255, 255, 255);
                 badgeTextColor = Color.White;
+            }
+            else if (isHiddenLocked)
+            {
+                badgeText = "?";
+                badgeBackColor = Color.FromArgb(60, 60, 75);
+                badgeTextColor = Color.FromArgb(160, 160, 180);
             }
             else
             {
@@ -356,6 +411,8 @@ namespace LearningAssistant.Forms.UserControls
 
         private void UpdateTextColors()
         {
+            bool isHiddenLocked = _badge != null && _badge.IsHidden && !_isUnlocked;
+
             if (_isUnlocked)
             {
                 _labelIcon.ForeColor = Color.White;
@@ -363,6 +420,14 @@ namespace LearningAssistant.Forms.UserControls
                 _labelCategory.ForeColor = Color.FromArgb(220, 255, 255, 255);
                 _labelDescription.ForeColor = Color.FromArgb(200, 255, 255, 255);
                 _labelProgressText.ForeColor = Color.White;
+            }
+            else if (isHiddenLocked)
+            {
+                _labelIcon.ForeColor = Color.FromArgb(120, 120, 140);
+                _labelName.ForeColor = Color.FromArgb(160, 160, 180);
+                _labelCategory.ForeColor = Color.FromArgb(100, 100, 120);
+                _labelDescription.ForeColor = Color.FromArgb(120, 120, 140);
+                _labelProgressText.ForeColor = Color.FromArgb(100, 100, 120);
             }
             else
             {
@@ -375,12 +440,96 @@ namespace LearningAssistant.Forms.UserControls
 
             if (_badge != null)
             {
-                int target = _badge.Requirement.TargetValue;
-                int current = Math.Min(_currentValue, target);
-                _labelProgressText.Text = _isUnlocked
-                    ? "✓ 已解锁"
-                    : $"{current} / {target}";
+                if (isHiddenLocked)
+                {
+                    _labelProgressText.Text = "???";
+                }
+                else
+                {
+                    int target = _badge.Requirement.TargetValue;
+                    int current = Math.Min(_currentValue, target);
+                    _labelProgressText.Text = _isUnlocked
+                        ? "✓ 已解锁"
+                        : $"{current} / {target}";
+                }
             }
+        }
+
+        private void DrawMysteryPattern(Graphics g, Rectangle cardRect)
+        {
+            using var brush = new SolidBrush(Color.FromArgb(15, 255, 255, 255));
+            var rand = new Random(cardRect.GetHashCode());
+
+            for (int i = 0; i < 8; i++)
+            {
+                int x = cardRect.X + rand.Next(cardRect.Width);
+                int y = cardRect.Y + rand.Next(cardRect.Height);
+                int size = rand.Next(4, 10);
+                g.FillEllipse(brush, x, y, size, size);
+            }
+
+            using var qFont = new Font("Segoe UI Emoji", 14F);
+            using var qBrush = new SolidBrush(Color.FromArgb(20, 255, 255, 255));
+            for (int i = 0; i < 3; i++)
+            {
+                int x = cardRect.X + 20 + rand.Next(Math.Max(1, cardRect.Width - 40));
+                int y = cardRect.Y + 30 + rand.Next(Math.Max(1, cardRect.Height - 60));
+                g.DrawString("?", qFont, qBrush, x, y);
+            }
+        }
+
+        private void DrawStarRating(Graphics g, Rectangle cardRect, BadgeRarity rarity)
+        {
+            int starCount = (int)rarity + 1;
+            int maxStars = 5;
+            int starSize = 12;
+            int spacing = 2;
+            int totalWidth = maxStars * starSize + (maxStars - 1) * spacing;
+            int startX = cardRect.X + (cardRect.Width - totalWidth) / 2;
+            int y = cardRect.Y + 8;
+
+            Color activeColor = _isUnlocked
+                ? Color.FromArgb(255, 215, 0)
+                : Color.FromArgb(200, 200, 200);
+            Color inactiveColor = Color.FromArgb(220, 220, 220);
+
+            for (int i = 0; i < maxStars; i++)
+            {
+                bool isActive = i < starCount;
+                Color starColor = isActive ? activeColor : inactiveColor;
+                int x = startX + i * (starSize + spacing);
+
+                DrawStar(g, x, y, starSize, starColor);
+            }
+        }
+
+        private static void DrawStar(Graphics g, int x, int y, int size, Color color)
+        {
+            float cx = x + size / 2f;
+            float cy = y + size / 2f;
+            float outerR = size / 2f;
+            float innerR = outerR * 0.45f;
+
+            using var path = new GraphicsPath();
+            for (int i = 0; i < 5; i++)
+            {
+                float outerAngle = (i * 72 - 90) * (float)Math.PI / 180;
+                float innerAngle = ((i * 72) + 36 - 90) * (float)Math.PI / 180;
+
+                float outerX = cx + outerR * (float)Math.Cos(outerAngle);
+                float outerY = cy + outerR * (float)Math.Sin(outerAngle);
+                float innerX = cx + innerR * (float)Math.Cos(innerAngle);
+                float innerY = cy + innerR * (float)Math.Sin(innerAngle);
+
+                if (i == 0)
+                    path.AddLine(outerX, outerY, innerX, innerY);
+                else
+                    path.AddLine(innerX, innerY, outerX, outerY);
+            }
+            path.CloseFigure();
+
+            using var brush = new SolidBrush(color);
+            g.FillPath(brush, path);
         }
 
         private static GraphicsPath CreateRoundedRectPath(Rectangle rect, int radius)
@@ -468,6 +617,32 @@ namespace LearningAssistant.Forms.UserControls
                     GlowColor = Color.Gray
                 }
             };
+        }
+
+        private void StartUnlockAnimation()
+        {
+            _unlockScale = 1.15f;
+            _unlockAnimationTimer.Start();
+        }
+
+        private void OnUnlockAnimationTick(object? sender, EventArgs e)
+        {
+            _unlockScale -= 0.015f;
+            if (_unlockScale <= 1.0f)
+            {
+                _unlockScale = 1.0f;
+                _unlockAnimationTimer.Stop();
+            }
+            Invalidate();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _unlockAnimationTimer.Dispose();
+            }
+            base.Dispose(disposing);
         }
     }
 }

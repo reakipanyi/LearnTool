@@ -2,6 +2,7 @@ using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Forms.Bookmark;
 using LearningAssistant.Services.Cloud;
+using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Web;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.WebView2.Core;
@@ -21,6 +22,7 @@ namespace LearningAssistant.Forms
         private readonly ILogger? _logger;
         private readonly IWebBookmarkService? _webBookmarkService;
         private readonly IThemeService? _themeService;
+        private readonly IPendingContentService? _pendingContentService;
         private CoreWebView2Environment? _webViewEnvironment;
         private readonly Dictionary<TabPage, WebView2> _webViews = new();
         private string? _initialPrompt;
@@ -158,12 +160,14 @@ namespace LearningAssistant.Forms
         public WebView2BrowserForm(ICloudStorageService? cloudStorageService = null,
                                    ILogger? logger = null,
                                    IWebBookmarkService? webBookmarkService = null,
-                                   IThemeService? themeService = null)
+                                   IThemeService? themeService = null,
+                                   IPendingContentService? pendingContentService = null)
         {
             _cloudStorageService = cloudStorageService;
             _logger = logger;
             _webBookmarkService = webBookmarkService;
             _themeService = themeService;
+            _pendingContentService = pendingContentService;
             InitializeComponent();
             InitializeProviderButtonMappings();
             InitializeBookmarks();
@@ -317,7 +321,7 @@ namespace LearningAssistant.Forms
 
                 if (webView.CoreWebView2 != null)
                 {
-                    webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+                    webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
                     webView.CoreWebView2.Settings.IsWebMessageEnabled = true;
                     webView.CoreWebView2.Settings.IsScriptEnabled = true;
                     webView.CoreWebView2.Settings.AreDevToolsEnabled = true;
@@ -328,6 +332,7 @@ namespace LearningAssistant.Forms
                     webView.NavigationCompleted += WebView_NavigationCompleted;
                     webView.CoreWebView2.DocumentTitleChanged += CoreWebView2_DocumentTitleChanged;
                     webView.CoreWebView2.ProcessFailed += CoreWebView2_ProcessFailed;
+                    webView.CoreWebView2.ContextMenuRequested += CoreWebView2_ContextMenuRequested;
 
                     webView.CoreWebView2.Navigate(url);
                 }
@@ -355,6 +360,7 @@ namespace LearningAssistant.Forms
                     webView.NavigationCompleted -= WebView_NavigationCompleted;
                     webView.CoreWebView2.DocumentTitleChanged -= CoreWebView2_DocumentTitleChanged;
                     webView.CoreWebView2.ProcessFailed -= CoreWebView2_ProcessFailed;
+                    webView.CoreWebView2.ContextMenuRequested -= CoreWebView2_ContextMenuRequested;
                 }
                 webView.Dispose();
                 _webViews.Remove(tabPage);
@@ -501,6 +507,115 @@ namespace LearningAssistant.Forms
                     }
                 }
             }));
+        }
+
+        private void CoreWebView2_ContextMenuRequested(object? sender, CoreWebView2ContextMenuRequestedEventArgs e)
+        {
+            var webView = sender as CoreWebView2;
+            if (webView == null) return;
+
+            var menuItems = e.MenuItems;
+
+            var saveToCardItem = webView.Environment.CreateContextMenuItem(
+                "📝 保存为学习卡片",
+                null,
+                CoreWebView2ContextMenuItemKind.Command);
+
+            saveToCardItem.CustomItemSelected += async (s, args) =>
+            {
+                try
+                {
+                    string? selectionText = await webView.ExecuteScriptAsync("window.getSelection().toString()");
+                    if (!string.IsNullOrEmpty(selectionText))
+                    {
+                        selectionText = System.Text.Json.JsonSerializer.Deserialize<string>(selectionText);
+                    }
+                    SaveSelectedTextAsCard(selectionText ?? string.Empty, webView.Source);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "获取选中文本失败");
+                    MessageBox.Show("获取选中文本失败: " + ex.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            };
+
+            int insertIndex = 0;
+            for (int i = 0; i < menuItems.Count; i++)
+            {
+                if (menuItems[i].Kind == CoreWebView2ContextMenuItemKind.Separator)
+                {
+                    insertIndex = i + 1;
+                    break;
+                }
+            }
+            menuItems.Insert(insertIndex, saveToCardItem);
+        }
+
+        private void SaveSelectedTextAsCard(string selectedText, string? sourceUrl)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(selectedText))
+                {
+                    MessageBox.Show("请先选择要保存的文本", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                if (_pendingContentService == null)
+                {
+                    MessageBox.Show("待添加内容服务未初始化", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                string pageTitle = CurrentWebView?.CoreWebView2?.DocumentTitle ?? "网页剪藏";
+                string pageUrl = sourceUrl ?? CurrentWebView?.CoreWebView2?.Source ?? string.Empty;
+
+                using var form = new WebClippingSaveForm(selectedText.Trim(), pageTitle, pageUrl);
+                if (form.ShowDialog(this) == DialogResult.OK)
+                {
+                    string language = form.SelectedSubject == "英语" ? Constants.Language.English : Constants.Language.Chinese;
+                    string category = form.SelectedSubCategory;
+                    string content = form.Content.Trim();
+
+                    _pendingContentService.Add(content, language, category);
+
+                    _logger?.LogInformation("已保存划词内容为学习卡片，长度: {Length}, 分类: {Category}", content.Length, category);
+                    ShowBalloonTip("已保存", $"已将选中的 {content.Length} 个字符保存到「{category}」");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "保存划词内容失败");
+                MessageBox.Show($"保存失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private static string DetectLanguage(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return "中文综合";
+
+            int chineseCount = 0;
+            int englishCount = 0;
+
+            foreach (char c in text)
+            {
+                if (c >= '\u4e00' && c <= '\u9fff')
+                    chineseCount++;
+                else if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
+                    englishCount++;
+            }
+
+            if (chineseCount > englishCount)
+                return "中文综合";
+            else if (englishCount > chineseCount)
+                return "英语";
+            else
+                return "中文综合";
+        }
+
+        private void ShowBalloonTip(string title, string content)
+        {
+            MessageBox.Show(content, title, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         /// <summary>
@@ -1145,6 +1260,7 @@ namespace LearningAssistant.Forms
                         webView.NavigationCompleted -= WebView_NavigationCompleted;
                         webView.CoreWebView2.DocumentTitleChanged -= CoreWebView2_DocumentTitleChanged;
                         webView.CoreWebView2.ProcessFailed -= CoreWebView2_ProcessFailed;
+                        webView.CoreWebView2.ContextMenuRequested -= CoreWebView2_ContextMenuRequested;
                     }
                     webView.Dispose();
                 }

@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Services.Gamification
 {
-    public class GamificationService : IGamificationService
+    public class GamificationService : IGamificationService, IDisposable
     {
         private readonly ILogger<GamificationService>? _logger;
         private readonly IEventBus? _eventBus;
@@ -22,6 +22,8 @@ namespace LearningAssistant.Services.Gamification
         private int _quizCorrectCount;
         private int _favoriteCount;
         private int _noteCount;
+        private int _wrongCount;
+        private bool _disposed = false;
 
         #region Stats
         public int TodayLearnedCount => _statsManager.TodayLearnedCount;
@@ -65,6 +67,60 @@ namespace LearningAssistant.Services.Gamification
                 OnXPChanged,
                 OnLevelUp,
                 OnChallengeCompleted);
+
+            SubscribeToEvents();
+        }
+
+        private void SubscribeToEvents()
+        {
+            if (_eventBus == null) return;
+
+            _eventBus.Subscribe<ItemLearnedEvent>(OnItemLearned);
+            _eventBus.Subscribe<ItemWrongEvent>(OnItemWrong);
+        }
+
+        private void UnsubscribeFromEvents()
+        {
+            if (_eventBus == null) return;
+
+            _eventBus.Unsubscribe<ItemLearnedEvent>(OnItemLearned);
+            _eventBus.Unsubscribe<ItemWrongEvent>(OnItemWrong);
+        }
+
+        private void OnItemLearned(ItemLearnedEvent evt)
+        {
+            if (evt.UserId != _userId) return;
+
+            try
+            {
+                AddXP(10);
+                IncrementTodayLearned();
+                CheckBadgesAndChallenges();
+
+                _logger?.LogInformation("学习项完成事件处理: {ItemContent}, XP+10", evt.ItemContent);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "处理学习项完成事件失败");
+            }
+        }
+
+        private void OnItemWrong(ItemWrongEvent evt)
+        {
+            if (evt.UserId != _userId) return;
+
+            try
+            {
+                _wrongCount++;
+                CheckBadgesAndChallenges();
+
+                _logger?.LogInformation("学习项答错事件处理: {ItemContent}, 累计错题数: {WrongCount}", 
+                    evt.ItemContent, _wrongCount);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "处理学习项答错事件失败");
+            }
         }
 
         #region Stats Methods
@@ -282,7 +338,8 @@ namespace LearningAssistant.Services.Gamification
                             AchievementId = firstBadge.Id,
                             AchievementName = firstBadge.Name,
                             Description = firstBadge.Description,
-                            Icon = firstBadge.Icon
+                            Icon = firstBadge.Icon,
+                            IsHidden = firstBadge.IsHidden
                         });
                     });
                 }
@@ -316,6 +373,16 @@ namespace LearningAssistant.Services.Gamification
                     });
                 });
             }
+        }
+        #endregion
+
+        #region IDisposable
+        public void Dispose()
+        {
+            if (_disposed) return;
+
+            UnsubscribeFromEvents();
+            _disposed = true;
         }
         #endregion
     }

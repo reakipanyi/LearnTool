@@ -60,6 +60,11 @@ namespace LearningAssistant.Services.Web
         /// 切换用户并重新加载书签
         /// </summary>
         void SwitchUser(string userId);
+
+        /// <summary>
+        /// 记录书签访问（增加访问次数并更新最后访问时间）
+        /// </summary>
+        void IncrementVisit(string url);
     }
 
     public class WebBookmarkCategory
@@ -76,6 +81,7 @@ namespace LearningAssistant.Services.Web
         public string Icon { get; set; } = "🔗";
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public int VisitCount { get; set; }
+        public DateTime LastVisited { get; set; }
     }
 
     public class WebBookmarkData
@@ -198,6 +204,17 @@ namespace LearningAssistant.Services.Web
                 }
             }
             _logger?.LogWarning("未找到要更新的书签: {Url}", url);
+        }
+
+        public void IncrementVisit(string url)
+        {
+            var bookmark = GetBookmarkByUrl(url);
+            if (bookmark != null)
+            {
+                bookmark.VisitCount++;
+                bookmark.LastVisited = DateTime.Now;
+                SaveToFile();
+            }
         }
 
         public void SaveToFile()

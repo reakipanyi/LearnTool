@@ -133,7 +133,7 @@ namespace LearningAssistant.Forms.UserControls.Cards
                 true);
 
             BackColor = Color.Transparent;
-            Size = new Size(180, 100);
+            Size = new Size(200, 110);
             Cursor = Cursors.Hand;
             DoubleBuffered = true;
         }
@@ -164,6 +164,7 @@ namespace LearningAssistant.Forms.UserControls.Cards
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
             var shadowOffset = _isHovered ? 6 : 3;
             var shadowAlpha = _isHovered ? 40 : 20;
@@ -178,41 +179,67 @@ namespace LearningAssistant.Forms.UserControls.Cards
             using var cardPath = RoundedRect(cardRect, _cornerRadius);
             g.FillPath(cardBrush, cardPath);
 
+            int paddingLeft = 14;
+            int paddingTop = 14;
+            int iconBoxSize = 44;
+
             using var accentBrush = new SolidBrush(Color.FromArgb(20, _accentColor));
-            var accentRect = new Rectangle(12, 12, 48, 48);
+            var accentRect = new Rectangle(paddingLeft, paddingTop, iconBoxSize, iconBoxSize);
             using var accentPath = RoundedRect(accentRect, 10);
             g.FillPath(accentBrush, accentPath);
 
             var iconFont = new Font("Segoe UI Emoji", _iconSize / 2f);
             var iconSize = g.MeasureString(_icon, iconFont);
-            var iconX = 12 + (48 - iconSize.Width) / 2;
-            var iconY = 12 + (48 - iconSize.Height) / 2;
+            var iconX = paddingLeft + (iconBoxSize - iconSize.Width) / 2;
+            var iconY = paddingTop + (iconBoxSize - iconSize.Height) / 2;
 
             using var iconBrush = new SolidBrush(_accentColor);
             g.DrawString(_icon, iconFont, iconBrush, iconX, iconY);
 
+            int textX = paddingLeft + iconBoxSize + 12;
+            int textMaxWidth = Width - textX - 14;
+
             var valueFont = new Font("微软雅黑", _valueFontSize, FontStyle.Bold);
             var valueSize = g.MeasureString(_value, valueFont);
-            var valueX = 72;
-            var valueY = 15;
+            float valueY = paddingTop + 2;
 
             using var valueBrush = new SolidBrush(_textColor);
-            g.DrawString(_value, valueFont, valueBrush, valueX, valueY);
+            using var valueFormat = new StringFormat
+            {
+                FormatFlags = StringFormatFlags.NoWrap,
+                Trimming = StringTrimming.EllipsisCharacter
+            };
+            var valueRect = new RectangleF(textX, valueY, textMaxWidth, valueSize.Height);
+            g.DrawString(_value, valueFont, valueBrush, valueRect, valueFormat);
 
             var labelFont = new Font("微软雅黑", 9F);
             var labelSize = g.MeasureString(_label, labelFont);
-            var labelX = 72;
-            var labelY = valueY + valueSize.Height + 2;
+            float labelY = valueY + valueSize.Height + 6;
 
             using var labelBrush = new SolidBrush(_labelColor);
-            g.DrawString(_label, labelFont, labelBrush, labelX, labelY);
 
             if (!string.IsNullOrEmpty(_trend))
             {
                 var trendFont = new Font("微软雅黑", 8F, FontStyle.Bold);
-                var trendSize = g.MeasureString(_trend, trendFont);
-                var trendX = Width - (int)trendSize.Width - 12;
-                var trendY = Height - (int)trendSize.Height - 10;
+                var arrow = _trendDirection switch
+                {
+                    TrendDirection.Up => "↑ ",
+                    TrendDirection.Down => "↓ ",
+                    _ => ""
+                };
+                string trendText = arrow + _trend;
+                var trendSize = g.MeasureString(trendText, trendFont);
+
+                float labelMaxWidth = textMaxWidth - trendSize.Width - 10;
+                if (labelMaxWidth < 30) labelMaxWidth = 30;
+
+                var labelRect = new RectangleF(textX, labelY, labelMaxWidth, labelSize.Height);
+                using var labelFormat = new StringFormat
+                {
+                    FormatFlags = StringFormatFlags.NoWrap,
+                    Trimming = StringTrimming.EllipsisCharacter
+                };
+                g.DrawString(_label, labelFont, labelBrush, labelRect, labelFormat);
 
                 Color trendColor = _trendDirection switch
                 {
@@ -222,19 +249,25 @@ namespace LearningAssistant.Forms.UserControls.Cards
                 };
 
                 using var trendBrush = new SolidBrush(trendColor);
-                g.DrawString(_trend, trendFont, trendBrush, trendX, trendY);
-
-                var arrow = _trendDirection switch
+                float trendX = Width - 14 - trendSize.Width;
+                var trendRect = new RectangleF(trendX, labelY, trendSize.Width, trendSize.Height);
+                using var trendFormat = new StringFormat
                 {
-                    TrendDirection.Up => "↑",
-                    TrendDirection.Down => "↓",
-                    _ => "→"
+                    FormatFlags = StringFormatFlags.NoWrap,
+                    Alignment = StringAlignment.Far,
+                    Trimming = StringTrimming.EllipsisCharacter
                 };
-
-                if (_trendDirection != TrendDirection.None)
+                g.DrawString(trendText, trendFont, trendBrush, trendRect, trendFormat);
+            }
+            else
+            {
+                var labelRect = new RectangleF(textX, labelY, textMaxWidth, labelSize.Height);
+                using var labelFormat = new StringFormat
                 {
-                    g.DrawString(arrow, trendFont, trendBrush, trendX - 16, trendY);
-                }
+                    FormatFlags = StringFormatFlags.NoWrap,
+                    Trimming = StringTrimming.EllipsisCharacter
+                };
+                g.DrawString(_label, labelFont, labelBrush, labelRect, labelFormat);
             }
         }
 

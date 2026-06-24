@@ -27,6 +27,8 @@ namespace LearningAssistant.Services.Learning
             _eventBus.Subscribe<LearningSessionCompletedEvent>(OnLearningSessionCompleted);
             _eventBus.Subscribe<UserProfileUpdatedEvent>(OnUserProfileUpdated);
             _eventBus.Subscribe<FeynmanCompletedEvent>(OnFeynmanCompleted);
+            _eventBus.Subscribe<ItemLearnedEvent>(OnItemLearned);
+            _eventBus.Subscribe<ItemWrongEvent>(OnItemWrong);
         }
 
         private void UnsubscribeFromEvents()
@@ -35,6 +37,27 @@ namespace LearningAssistant.Services.Learning
             _eventBus.Unsubscribe<LearningSessionCompletedEvent>(OnLearningSessionCompleted);
             _eventBus.Unsubscribe<UserProfileUpdatedEvent>(OnUserProfileUpdated);
             _eventBus.Unsubscribe<FeynmanCompletedEvent>(OnFeynmanCompleted);
+            _eventBus.Unsubscribe<ItemLearnedEvent>(OnItemLearned);
+            _eventBus.Unsubscribe<ItemWrongEvent>(OnItemWrong);
+        }
+
+        private void OnItemLearned(ItemLearnedEvent evt)
+        {
+            if (_currentUserProfile != null && evt.UserId == _currentUserId)
+            {
+                _currentUserProfile.LearningProgress.TotalItemsStudied++;
+                _currentUserProfile.LearningProgress.TotalItemsMastered++;
+                CheckAndUnlockAchievements(_currentUserProfile, _currentUserProfile.LearningProgress);
+            }
+        }
+
+        private void OnItemWrong(ItemWrongEvent evt)
+        {
+            if (_currentUserProfile != null && evt.UserId == _currentUserId)
+            {
+                _currentUserProfile.LearningProgress.TotalItemsStudied++;
+                CheckAndUnlockAchievements(_currentUserProfile, _currentUserProfile.LearningProgress);
+            }
         }
 
         private void OnLearningItemCompleted(LearningItemCompletedEvent evt)
@@ -122,7 +145,8 @@ namespace LearningAssistant.Services.Learning
                     AchievementId = achievement.Id,
                     AchievementName = achievement.Name,
                     Description = achievement.Description,
-                    Icon = achievement.Icon
+                    Icon = achievement.Icon,
+                    IsHidden = achievement.IsHidden
                 });
             }
         }

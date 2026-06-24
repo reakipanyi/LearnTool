@@ -110,6 +110,7 @@ namespace LearningAssistant.Common
 
 
             services.AddSingleton<SpeechService>();
+            services.AddSingleton<FeynmanHistoryService>();
             services.AddSingleton<LearningReportService>();
             services.AddSingleton<IPdfContentLinkService, PdfContentLinkService>();
             services.AddSingleton<BaiduNetdiskService>(sp =>

@@ -154,6 +154,9 @@ namespace LearningAssistant.Forms
         private FeynmanLearningPanel? _feynmanPanel;
         private Panel? _feynmanContainerPanel;
         private bool _isFeynmanPanelVisible = false;
+        private readonly FeynmanHistoryService _feynmanHistoryService = new();
+        private SpeechService? _speechService;
+        private bool _isDictationActive = false;
         #endregion
 
         #region === 设计器生成 ===
@@ -1554,6 +1557,18 @@ namespace LearningAssistant.Forms
                 _gamificationService.CheckBadgeUnlock("learn", _totalLearnedCount);
                 UpdateChallengesProgress();
 
+                if (_eventBus != null && _currentItem != null)
+                {
+                    _eventBus.Publish(new ItemLearnedEvent
+                    {
+                        UserId = GetCurrentUserId(),
+                        ItemId = _currentItem.GetMainContent(),
+                        ItemContent = _currentItem.GetDisplayText(),
+                        SubCategory = _settings.SubCategory,
+                        LearnedAt = DateTime.Now
+                    });
+                }
+
                 _ = _encouragementService.PlayRandomKnownFeedbackAsync();
 
                 await Task.Delay(500);
@@ -1577,8 +1592,21 @@ namespace LearningAssistant.Forms
 
                 if (_currentItem != null)
                 {
-                    // 不认识按钮：强制显示答案（用于学习目的）
                     UpdateDetailState(true, true);
+
+                    if (_eventBus != null)
+                    {
+                        _eventBus.Publish(new ItemWrongEvent
+                        {
+                            UserId = GetCurrentUserId(),
+                            ItemId = _currentItem.GetMainContent(),
+                            ItemContent = _currentItem.GetDisplayText(),
+                            CorrectAnswer = _currentItem.GetDisplayText(),
+                            UserAnswer = string.Empty,
+                            SubCategory = _settings.SubCategory,
+                            WrongAt = DateTime.Now
+                        });
+                    }
                 }
 
                 _soundService?.PlayError();
@@ -1761,6 +1789,17 @@ namespace LearningAssistant.Forms
                 _feynmanPanel.SetQuestions(questions);
                 _feynmanPanel.GoToStep(FeynmanStep.Study);
 
+                // 加载历史记录
+                var historyRecords = _feynmanHistoryService.GetRecordsByContent(displayText, 5);
+                var entries = historyRecords.Select(r => new FeynmanLearningPanel.HistoryEntry
+                {
+                    Id = r.Id,
+                    TeachAnswer = r.TeachAnswer,
+                    Date = r.CompletedAt,
+                    IsCompleted = r.IsCompleted
+                }).ToList();
+                _feynmanPanel.LoadHistoryRecords(entries);
+
                 _themeService?.RegisterThemeable(_feynmanPanel);
             }
 
@@ -1798,6 +1837,7 @@ namespace LearningAssistant.Forms
             _feynmanPanel.AIFeedbackRequested += FeynmanPanel_AIFeedbackRequested;
             _feynmanPanel.GenerateSimplifiedRequested += FeynmanPanel_GenerateSimplifiedRequested;
             _feynmanPanel.GenerateAnalogyRequested += FeynmanPanel_GenerateAnalogyRequested;
+            _feynmanPanel.VoiceInputRequested += FeynmanPanel_VoiceInputRequested;
 
             _feynmanContainerPanel = new Panel
             {
@@ -1858,14 +1898,30 @@ namespace LearningAssistant.Forms
             _gamificationService.AddXP(50);
             _gamificationService.AddScore(100);
 
-            if (_currentItem != null && _eventBus != null)
+            if (_currentItem != null)
             {
-                _eventBus.Publish(eventData: new FeynmanCompletedEvent
+                var record = new Models.Learning.FeynmanHistoryRecord
                 {
-                    UserId = GetCurrentUserId(),
-                    ItemContent = _currentItem.GetDisplayText(),
-                    SubCategory = _settings.SubCategory
-                });
+                    ContentId = _currentItem.GetDisplayText(),
+                    ContentTitle = _currentItem.GetDisplayText(),
+                    TeachAnswer = _feynmanPanel?.TeachAnswer ?? string.Empty,
+                    AIFeedback = _feynmanPanel?.AIFeedbackText,
+                    SimplifiedText = _feynmanPanel?.SimplifiedText,
+                    AnalogyText = _feynmanPanel?.AnalogyText,
+                    IsCompleted = true
+                };
+                _feynmanHistoryService.SaveRecord(record);
+
+                if (_eventBus != null)
+                {
+                    _eventBus.Publish(eventData: new FeynmanCompletedEvent
+                    {
+                        UserId = GetCurrentUserId(),
+                        ItemContent = _currentItem.GetDisplayText(),
+                        SubCategory = _settings.SubCategory,
+                        SimplifiedText = record.SimplifiedText ?? string.Empty
+                    });
+                }
             }
 
             _gamificationService.Save();
@@ -1950,6 +2006,65 @@ namespace LearningAssistant.Forms
                 _logger.LogError(ex, "生成类比失败");
                 _feynmanPanel?.SetAnalogyText($"❌ 生成失败：{ex.Message}");
             }
+        }
+
+        private void FeynmanPanel_VoiceInputRequested(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (_isDictationActive)
+                {
+                    _speechService?.StopDictation();
+                    _isDictationActive = false;
+                    return;
+                }
+
+                _speechService ??= Program.GetService<SpeechService>();
+                if (_speechService == null)
+                {
+                    MessageBox.Show("语音服务未初始化", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                _speechService.DictationCompleted -= OnDictationCompleted;
+                _speechService.DictationCompleted += OnDictationCompleted;
+                _speechService.DictationError -= OnDictationError;
+                _speechService.DictationError += OnDictationError;
+
+                _speechService.StartDictation();
+                _isDictationActive = true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "启动语音输入失败");
+                MessageBox.Show($"启动语音输入失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                _isDictationActive = false;
+            }
+        }
+
+        private void OnDictationCompleted(object? sender, Services.Learning.DictationResultEventArgs e)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => OnDictationCompleted(sender, e)));
+                return;
+            }
+
+            if (e.Success && !string.IsNullOrWhiteSpace(e.Text))
+            {
+                _feynmanPanel?.AppendVoiceText(e.Text);
+            }
+        }
+
+        private void OnDictationError(object? sender, string e)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => OnDictationError(sender, e)));
+                return;
+            }
+
+            _logger.LogWarning("语音输入错误：{Error}", e);
         }
 
         private void ButtonExit_Click(object? sender, EventArgs e)
@@ -2552,6 +2667,16 @@ namespace LearningAssistant.Forms
                 _selectedForegroundBrush.Dispose();
                 _normalForegroundBrush.Dispose();
                 _selectedBorderPen.Dispose();
+
+                if (_speechService != null)
+                {
+                    _speechService.DictationCompleted -= OnDictationCompleted;
+                    _speechService.DictationError -= OnDictationError;
+                    if (_isDictationActive)
+                    {
+                        try { _speechService.StopDictation(); } catch { }
+                    }
+                }
             }
 
             _disposed = true;

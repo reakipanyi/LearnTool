@@ -2,6 +2,7 @@ using LearningAssistant.Common;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services.Cache;
+using LearningAssistant.Services.Gamification;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Persistence;
 using LearningAssistant.Services.TTS;
@@ -20,6 +21,7 @@ namespace LearningAssistant.Presenters
         private readonly ICacheService _cacheService;
         private readonly IWindowManager _windowManager;
         private readonly IDataPersistenceService _persistenceService;
+        private readonly IGamificationService _gamificationService;
 
         private PdfPresenter? _pdfPresenter;
         private IMainView? _view;
@@ -38,7 +40,8 @@ namespace LearningAssistant.Presenters
             ITTSService ttsService,
             ICacheService cacheService,
             IWindowManager windowManager,
-            IDataPersistenceService persistenceService)
+            IDataPersistenceService persistenceService,
+            IGamificationService gamificationService)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
@@ -48,6 +51,7 @@ namespace LearningAssistant.Presenters
             _cacheService = cacheService ?? throw new ArgumentNullException(nameof(cacheService));
             _windowManager = windowManager ?? throw new ArgumentNullException(nameof(windowManager));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
+            _gamificationService = gamificationService ?? throw new ArgumentNullException(nameof(gamificationService));
             _logger.LogInformation("MainPresenter initialized");
         }
 
@@ -117,11 +121,13 @@ namespace LearningAssistant.Presenters
         {
             try
             {
+                _gamificationService.Load(_currentUserId);
                 _currentUserProfile = _persistenceService.LoadUserProfile(_currentUserId);
                 if (_currentUserProfile != null)
                 {
                     _currentUserProfile.ResetDailyStats();
                     UpdateStreakInfo();
+                    UpdateDashboardStats();
                 }
             }
             catch (Exception ex)
@@ -150,6 +156,31 @@ namespace LearningAssistant.Presenters
                                      $"待学习 {totalUnknown} 个项目\n" +
                                      $"正确率 {accuracy:F1}%";
                 _view.ProgressSummary = progressSummary;
+            }
+        }
+
+        private void UpdateDashboardStats()
+        {
+            if (_currentUserProfile == null || _view == null) return;
+
+            try
+            {
+                var challenges = _gamificationService.GetDailyChallenges().ToList();
+                int completedChallenges = challenges.Count(c => c.Completed);
+                int totalChallenges = challenges.Count;
+
+                _view.UpdateDashboardStats(
+                    _currentUserProfile.TodayStudyTimeMinutes,
+                    _currentUserProfile.ConsecutiveStudyDays,
+                    _gamificationService.XP,
+                    _gamificationService.CurrentLevel,
+                    _gamificationService.XPToNextLevel,
+                    completedChallenges,
+                    totalChallenges);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "更新 Dashboard 统计数据失败");
             }
         }
 
