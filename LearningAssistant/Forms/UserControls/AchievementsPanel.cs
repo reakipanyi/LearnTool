@@ -136,7 +136,7 @@ namespace LearningAssistant.Forms.UserControls
             {
                 Text = text,
                 Tag = category,
-                Size = new Size(78, 32),
+                Size = new Size(78, 45),
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("微软雅黑", 9F),
                 Cursor = Cursors.Hand,

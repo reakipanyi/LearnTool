@@ -150,6 +150,111 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
+        public AnnotationStroke? RemoveLastStroke(string pdfPath, int pageIndex)
+        {
+            try
+            {
+                var annotation = LoadAnnotationData(pdfPath, pageIndex);
+                if (annotation != null && annotation.Strokes.Count > 0)
+                {
+                    var lastStroke = annotation.Strokes[annotation.Strokes.Count - 1];
+                    annotation.Strokes.RemoveAt(annotation.Strokes.Count - 1);
+                    annotation.UpdatedAt = DateTime.Now;
+                    SaveAnnotationData(pdfPath, pageIndex, annotation);
+                    return lastStroke;
+                }
+            }
+            catch
+            {
+            }
+            return null;
+        }
+
+        public void RemoveStrokeAt(string pdfPath, int pageIndex, int index)
+        {
+            try
+            {
+                var annotation = LoadAnnotationData(pdfPath, pageIndex);
+                if (annotation != null && index >= 0 && index < annotation.Strokes.Count)
+                {
+                    annotation.Strokes.RemoveAt(index);
+                    annotation.UpdatedAt = DateTime.Now;
+                    SaveAnnotationData(pdfPath, pageIndex, annotation);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        public void ClearAllStrokes(string pdfPath, int pageIndex)
+        {
+            try
+            {
+                var annotation = LoadAnnotationData(pdfPath, pageIndex);
+                if (annotation != null)
+                {
+                    annotation.Strokes.Clear();
+                    annotation.UpdatedAt = DateTime.Now;
+                    SaveAnnotationData(pdfPath, pageIndex, annotation);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        public void RemoveTextAt(string pdfPath, int pageIndex, int index)
+        {
+            try
+            {
+                var annotation = LoadAnnotationData(pdfPath, pageIndex);
+                if (annotation != null && index >= 0 && index < annotation.Texts.Count)
+                {
+                    annotation.Texts.RemoveAt(index);
+                    annotation.UpdatedAt = DateTime.Now;
+                    SaveAnnotationData(pdfPath, pageIndex, annotation);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        public void UpdateTextAt(string pdfPath, int pageIndex, int index, AnnotationText text)
+        {
+            try
+            {
+                var annotation = LoadAnnotationData(pdfPath, pageIndex);
+                if (annotation != null && index >= 0 && index < annotation.Texts.Count)
+                {
+                    annotation.Texts[index] = text;
+                    annotation.UpdatedAt = DateTime.Now;
+                    SaveAnnotationData(pdfPath, pageIndex, annotation);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        public void ClearAllTexts(string pdfPath, int pageIndex)
+        {
+            try
+            {
+                var annotation = LoadAnnotationData(pdfPath, pageIndex);
+                if (annotation != null)
+                {
+                    annotation.Texts.Clear();
+                    annotation.UpdatedAt = DateTime.Now;
+                    SaveAnnotationData(pdfPath, pageIndex, annotation);
+                }
+            }
+            catch
+            {
+            }
+        }
+
         public IEnumerable<AnnotationStroke> GetStrokes(string pdfPath, int pageIndex)
         {
             var annotation = LoadAnnotationData(pdfPath, pageIndex);

@@ -72,5 +72,52 @@ namespace LearningAssistant.Services.Pdf
         /// <param name="pageIndex">页码索引</param>
         /// <returns>笔划集合</returns>
         IEnumerable<AnnotationStroke> GetStrokes(string pdfPath, int pageIndex);
+
+        /// <summary>
+        /// 移除并返回最后一笔划（用于撤销）
+        /// </summary>
+        /// <param name="pdfPath">PDF文件路径</param>
+        /// <param name="pageIndex">页码索引</param>
+        /// <returns>被移除的笔划，若无则返回null</returns>
+        AnnotationStroke? RemoveLastStroke(string pdfPath, int pageIndex);
+
+        /// <summary>
+        /// 移除指定索引的笔划
+        /// </summary>
+        /// <param name="pdfPath">PDF文件路径</param>
+        /// <param name="pageIndex">页码索引</param>
+        /// <param name="index">笔划索引</param>
+        void RemoveStrokeAt(string pdfPath, int pageIndex, int index);
+
+        /// <summary>
+        /// 清除指定页面的所有笔划
+        /// </summary>
+        /// <param name="pdfPath">PDF文件路径</param>
+        /// <param name="pageIndex">页码索引</param>
+        void ClearAllStrokes(string pdfPath, int pageIndex);
+
+        /// <summary>
+        /// 移除指定索引的文字注解
+        /// </summary>
+        /// <param name="pdfPath">PDF文件路径</param>
+        /// <param name="pageIndex">页码索引</param>
+        /// <param name="index">文字注解索引</param>
+        void RemoveTextAt(string pdfPath, int pageIndex, int index);
+
+        /// <summary>
+        /// 更新指定索引的文字注解
+        /// </summary>
+        /// <param name="pdfPath">PDF文件路径</param>
+        /// <param name="pageIndex">页码索引</param>
+        /// <param name="index">文字注解索引</param>
+        /// <param name="text">新的文字注解对象</param>
+        void UpdateTextAt(string pdfPath, int pageIndex, int index, AnnotationText text);
+
+        /// <summary>
+        /// 清除指定页面的所有文字注解
+        /// </summary>
+        /// <param name="pdfPath">PDF文件路径</param>
+        /// <param name="pageIndex">页码索引</param>
+        void ClearAllTexts(string pdfPath, int pageIndex);
     }
 }

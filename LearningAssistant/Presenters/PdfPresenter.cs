@@ -20,7 +20,7 @@ namespace LearningAssistant.Presenters
         private readonly IAIService _aiService;
         private readonly IPdfTtsService _pdfTtsService;
         private readonly IPdfStudyIntegration _pdfStudyIntegration;
-        private readonly IExportService _ExportService;
+        private readonly IExportService _exportService;
         private readonly IAnnotationService _annotationService;
         private readonly IHighlightService _highlightService;
         private readonly IPdfService _pdfService;
@@ -52,7 +52,7 @@ namespace LearningAssistant.Presenters
             _aiService = aiService ?? throw new ArgumentNullException(nameof(aiService));
             _pdfTtsService = pdfTtsService ?? throw new ArgumentNullException(nameof(pdfTtsService));
             _pdfStudyIntegration = pdfStudyIntegration ?? throw new ArgumentNullException(nameof(pdfStudyIntegration));
-            _ExportService = exportService ?? throw new ArgumentNullException(nameof(ExportService));
+            _exportService = exportService ?? throw new ArgumentNullException(nameof(exportService));
             _annotationService = annotationService ?? throw new ArgumentNullException(nameof(annotationService));
             _highlightService = highlightService ?? throw new ArgumentNullException(nameof(highlightService));
             _pdfService = pdfService ?? throw new ArgumentNullException(nameof(pdfService));
@@ -145,9 +145,10 @@ namespace LearningAssistant.Presenters
             _pdfFileManager.LoadFolder(folder);
         }
 
+        [Obsolete("Use RenderPageAsync instead to avoid blocking calls")]
         public Bitmap? RenderPageToBitmap(int pageIndex, int width, int height)
         {
-            return _pdfRenderer.RenderPageAsync(pageIndex, width, height).GetAwaiter().GetResult();
+            return Task.Run(() => _pdfRenderer.RenderPageAsync(pageIndex, width, height)).GetAwaiter().GetResult();
         }
 
         public async Task<Bitmap?> RenderPageAsync(int pageIndex, int width, int height)
@@ -184,6 +185,18 @@ namespace LearningAssistant.Presenters
             finally
             {
                 _view?.SetLoadingState(false);
+            }
+        }
+
+        private async Task FireAndForgetWithLogging(Task task, string operationName)
+        {
+            try
+            {
+                await task;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in fire-and-forget operation: {OperationName}", operationName);
             }
         }
 
@@ -371,6 +384,108 @@ namespace LearningAssistant.Presenters
             _annotationService.ClearAnnotation(_pdfFileManager.CurrentFilePath, _pdfFileManager.CurrentPageIndex);
         }
 
+        public void UndoAnnotationStroke()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath)) return;
+                _annotationService.RemoveLastStroke(_pdfFileManager.CurrentFilePath, _pdfFileManager.CurrentPageIndex);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to undo annotation stroke");
+            }
+        }
+
+        public void RemoveAnnotation(PdfAnnotationItem annotation)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(annotation.PdfPath)) return;
+                
+                if (annotation.Type == AnnotationType.Stroke)
+                {
+                    var strokes = _annotationService.GetStrokes(annotation.PdfPath, annotation.PageIndex).ToList();
+                    for (int i = strokes.Count - 1; i >= 0; i--)
+                    {
+                        if (strokes[i].Id == annotation.Id)
+                        {
+                            _annotationService.RemoveStrokeAt(annotation.PdfPath, annotation.PageIndex, i);
+                            break;
+                        }
+                    }
+                }
+                else if (annotation.Type == AnnotationType.Text)
+                {
+                    var texts = _annotationService.GetTexts(annotation.PdfPath, annotation.PageIndex).ToList();
+                    for (int i = texts.Count - 1; i >= 0; i--)
+                    {
+                        if (texts[i].Id == annotation.Id)
+                        {
+                            _annotationService.RemoveTextAt(annotation.PdfPath, annotation.PageIndex, i);
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to remove annotation");
+            }
+        }
+
+        public void ClearAllAnnotations(string pdfPath)
+        {
+            try
+            {
+                for (int pageIndex = 0; pageIndex < PageCount; pageIndex++)
+                {
+                    _annotationService.ClearAllStrokes(pdfPath, pageIndex);
+                    _annotationService.ClearAllTexts(pdfPath, pageIndex);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to clear all annotations");
+            }
+        }
+
+        public void UpdateTextAnnotation(PdfAnnotationItem annotation, string newText, int colorArgb, float fontSize, string fontFamily)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(annotation.PdfPath)) return;
+
+                var texts = _annotationService.GetTexts(annotation.PdfPath, annotation.PageIndex).ToList();
+                for (int i = texts.Count - 1; i >= 0; i--)
+                {
+                    var text = texts[i];
+                    if (text.Content == annotation.Text &&
+                        text.ColorArgb == annotation.ColorArgb &&
+                        Math.Abs(text.NormalizedX - annotation.NormalizedX) < 0.001 &&
+                        Math.Abs(text.NormalizedY - annotation.NormalizedY) < 0.001)
+                    {
+                        var updatedText = new AnnotationText
+                        {
+                            Content = newText,
+                            NormalizedX = annotation.NormalizedX,
+                            NormalizedY = annotation.NormalizedY,
+                            ColorArgb = colorArgb,
+                            FontSize = fontSize,
+                            FontFamily = fontFamily,
+                            CreatedAt = text.CreatedAt
+                        };
+                        _annotationService.UpdateTextAt(annotation.PdfPath, annotation.PageIndex, i, updatedText);
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to update text annotation");
+            }
+        }
+
         public void AddAnnotationStroke(float[] normalizedPoints, int colorArgb, float thickness, int imageWidth, int imageHeight)
         {
             try
@@ -480,11 +595,11 @@ namespace LearningAssistant.Presenters
             var nextPage = _pdfFileManager.CurrentPageIndex + step;
             if (nextPage < _pdfRenderer.PageCount)
             {
-                _ = RenderPage(nextPage);
+                _ = FireAndForgetWithLogging(RenderPage(nextPage), "RenderPage");
             }
             else if (_pdfFileManager.CurrentPageIndex < _pdfRenderer.PageCount - 1)
             {
-                _ = RenderPage(_pdfRenderer.PageCount - 1);
+                _ = FireAndForgetWithLogging(RenderPage(_pdfRenderer.PageCount - 1), "RenderPage");
             }
         }
 
@@ -494,11 +609,11 @@ namespace LearningAssistant.Presenters
             var prevPage = _pdfFileManager.CurrentPageIndex - step;
             if (prevPage >= 0)
             {
-                _ = RenderPage(prevPage);
+                _ = FireAndForgetWithLogging(RenderPage(prevPage), "RenderPage");
             }
             else if (_pdfFileManager.CurrentPageIndex > 0)
             {
-                _ = RenderPage(0);
+                _ = FireAndForgetWithLogging(RenderPage(0), "RenderPage");
             }
         }
 
@@ -522,16 +637,18 @@ namespace LearningAssistant.Presenters
                 return;
             }
 
+            bool includeAnnotations = _view?.ShowConfirm("是否同时导出标注笔画？", "导出选项") ?? false;
+
             var saveFileName = $"高亮导出_{Path.GetFileNameWithoutExtension(_pdfFileManager.CurrentFilePath)}_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
             var savePath = _view?.ShowSaveFileDialog(saveFileName, "Excel文件 (*.xlsx)|*.xlsx");
             if (string.IsNullOrEmpty(savePath))
                 return;
 
-            _view?.ShowLoading("正在导出高亮...");
+            _view?.ShowLoading("正在导出...");
 
             try
             {
-                bool success = await _ExportService.ExportHighlightsToExcelAsync(
+                bool highlightSuccess = await _exportService.ExportHighlightsToExcelAsync(
                     savePath,
                     _pdfFileManager.CurrentFilePath,
                     _pdfFileManager.IsImageMode,
@@ -539,10 +656,43 @@ namespace LearningAssistant.Presenters
                     _pdfFileManager.IsImageMode ? null : _pdfService
                 );
 
-                if (success)
+                if (includeAnnotations)
+                {
+                    var allStrokes = new List<AnnotationStroke>();
+                    for (int pageIndex = 0; pageIndex < PageCount; pageIndex++)
+                    {
+                        var strokes = _annotationService.GetStrokes(_pdfFileManager.CurrentFilePath, pageIndex);
+                        foreach (var stroke in strokes)
+                        {
+                            stroke.PageIndex = pageIndex;
+                            allStrokes.Add(stroke);
+                        }
+                    }
+
+                    if (allStrokes.Count > 0)
+                    {
+                        var annotationSavePath = savePath.Replace(".xlsx", "_标注.xlsx");
+                        bool annotationSuccess = await _exportService.ExportAnnotationsToExcelAsync(
+                            allStrokes,
+                            _pdfFileManager.CurrentFilePath,
+                            annotationSavePath,
+                            _pdfFileManager.IsImageMode ? null : _pdfService,
+                            PageCount
+                        );
+                        if (!annotationSuccess && !highlightSuccess)
+                        {
+                            _view?.ShowMessage("导出失败，请重试", "错误");
+                        }
+                    }
+                }
+
+                if (highlightSuccess)
                 {
                     _logger?.LogInformation($"Successfully exported highlights to {savePath}");
-                    _view?.ShowMessage($"成功导出高亮到\n{savePath}", "导出成功");
+                    string message = "成功导出高亮";
+                    if (includeAnnotations)
+                        message += "和标注";
+                    _view?.ShowMessage($"{message}到\n{savePath}", "导出成功");
 
                     if (_view?.ShowConfirm("是否打开导出目录？", "导出成功") ?? false)
                     {
@@ -585,8 +735,8 @@ namespace LearningAssistant.Presenters
                 _pdfRenderer.Initialize(_pdfService, e.FilePath);
             }
 
-            _ = RenderAndDisplayCurrentPageAsync();
-            _ = _pdfRenderer.GenerateThumbnailsAsync();
+            _ = FireAndForgetWithLogging(RenderAndDisplayCurrentPageAsync(), "RenderAndDisplayCurrentPageAsync");
+            _ = FireAndForgetWithLogging(_pdfRenderer.GenerateThumbnailsAsync(), "GenerateThumbnailsAsync");
         }
 
         private void OnFolderLoaded(object? sender, FolderLoadedEventArgs e)
@@ -647,6 +797,11 @@ namespace LearningAssistant.Presenters
 
         private async void View_SpeakOriginal(object? sender, EventArgs e)
         {
+            await SpeakOriginalAsync();
+        }
+
+        private async Task SpeakOriginalAsync()
+        {
             try
             {
                 var text = _view?.GetOriginalText();
@@ -666,12 +821,17 @@ namespace LearningAssistant.Presenters
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in View_SpeakOriginal");
+                _logger.LogError(ex, "Error in SpeakOriginalAsync");
                 _view?.ShowError("朗读失败: " + ex.Message);
             }
         }
 
         private async void View_SpeakTranslation(object? sender, EventArgs e)
+        {
+            await SpeakTranslationAsync();
+        }
+
+        private async Task SpeakTranslationAsync()
         {
             try
             {
@@ -692,12 +852,17 @@ namespace LearningAssistant.Presenters
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in View_SpeakTranslation");
+                _logger.LogError(ex, "Error in SpeakTranslationAsync");
                 _view?.ShowError("朗读失败: " + ex.Message);
             }
         }
 
         private async void View_SpeakText(object? sender, string text)
+        {
+            await SpeakTextAsync(text);
+        }
+
+        private async Task SpeakTextAsync(string text)
         {
             try
             {
@@ -717,7 +882,7 @@ namespace LearningAssistant.Presenters
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in View_SpeakText");
+                _logger.LogError(ex, "Error in SpeakTextAsync");
                 _view?.ShowError("朗读失败: " + ex.Message);
             }
         }
@@ -727,10 +892,38 @@ namespace LearningAssistant.Presenters
 
         private void View_SelectOcrClicked(object? sender, EventArgs e)
         {
-            View_OcrSelectionComplete(sender, e);
+            _ = ProcessOcrSelectionAsync();
+        }
+
+        private async void View_OcrSelectionComplete(object? sender, EventArgs e)
+        {
+            await ProcessOcrSelectionAsync();
+        }
+
+        private async Task ProcessOcrSelectionAsync()
+        {
+            try
+            {
+                var img = _view?.GetCurrentImage() as Bitmap;
+                var selection = _view?.GetSelectionRect();
+                var displayRect = _view?.GetDisplayRect();
+                if (img != null && selection.HasValue)
+                {
+                    await OcrCropAndTranslateAsync(img, selection.Value, displayRect ?? Rectangle.Empty);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in ProcessOcrSelectionAsync");
+            }
         }
 
         private async void View_TranslateClicked(object? sender, EventArgs e)
+        {
+            await TranslateTextAsync();
+        }
+
+        private async Task TranslateTextAsync()
         {
             try
             {
@@ -749,7 +942,6 @@ namespace LearningAssistant.Presenters
                 }
                 else
                 {
-                    // 检查失败原因
                     if (!_pdfTranslationService.IsAvailable)
                     {
                         _view?.ShowWarning("翻译服务不可用，请检查API配置");
@@ -762,7 +954,7 @@ namespace LearningAssistant.Presenters
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error in View_TranslateClicked");
+                _logger.LogError(ex, "Error in TranslateTextAsync");
                 _view?.ShowError("翻译失败: " + ex.Message);
             }
             finally
@@ -792,6 +984,7 @@ namespace LearningAssistant.Presenters
 
         private void View_AiQuestionAsked(object? sender, EventArgs e)
         {
+            // TODO: Implement AI question functionality
         }
 
         public void Dispose()

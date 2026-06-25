@@ -30,8 +30,20 @@ namespace LearningAssistant.Services.Learning
         /// <param name="isImageMode">是否为图片模式</param>
         /// <param name="imageFiles">图片模式下的文件列表</param>
         /// <param name="pdfService">PDF服务实例（PDF模式时使用）</param>
+        /// <param name="includeAnnotations">是否包含标注</param>
         /// <returns>导出成功返回true</returns>
-        Task<bool> ExportHighlightsToExcelAsync(string outputPath, string sourcePath, bool isImageMode, List<string>? imageFiles = null, IPdfService? pdfService = null);
+        Task<bool> ExportHighlightsToExcelAsync(string outputPath, string sourcePath, bool isImageMode, List<string>? imageFiles = null, IPdfService? pdfService = null, bool includeAnnotations = false);
+
+        /// <summary>
+        /// 导出标注笔画到Excel文件
+        /// </summary>
+        /// <param name="strokes">标注笔画列表</param>
+        /// <param name="pdfPath">PDF路径</param>
+        /// <param name="outputPath">输出Excel文件路径</param>
+        /// <param name="pdfService">PDF服务实例</param>
+        /// <param name="pageCount">页数</param>
+        /// <returns>导出成功返回true</returns>
+        Task<bool> ExportAnnotationsToExcelAsync(List<AnnotationStroke> strokes, string pdfPath, string outputPath, IPdfService? pdfService = null, int pageCount = 0);
 
     }
 }

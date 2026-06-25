@@ -47,10 +47,10 @@ namespace LearningAssistant.Common
             return AppPaths.TranslationsDir;
         }
 
-        [Obsolete("建议使用 AppPaths.BookmarksDir")]
+        [Obsolete("建议使用 AppPaths.FileBookmarksDir")]
         public static string GetBookmarksDirectory()
         {
-            return AppPaths.BookmarksDir;
+            return AppPaths.FileBookmarksDir;
         }
 
         [Obsolete("建议使用 AppPaths.HighlightsDir")]

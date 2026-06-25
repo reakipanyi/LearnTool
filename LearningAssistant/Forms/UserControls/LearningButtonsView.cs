@@ -106,6 +106,72 @@ namespace LearningAssistant.Forms.UserControls
         public LearningButtonsView()
         {
             InitializeComponent();
+            ApplyRoundedStyles();
+        }
+
+        private void ApplyRoundedStyles()
+        {
+            ApplyRoundedStyle(_buttonKnown, 6);
+            ApplyRoundedStyle(_buttonUnknown, 6);
+            ApplyRoundedStyle(_buttonPronounce, 6);
+            ApplyRoundedStyle(_buttonFavorite, 6);
+            ApplyRoundedStyle(_buttonNote, 6);
+            ApplyRoundedStyle(_buttonExit, 6);
+            ApplyRoundedStyle(_buttonAIAsk, 6);
+            ApplyRoundedStyle(_buttonFeynman, 6);
+        }
+
+        private void ApplyRoundedStyle(Button button, int radius)
+        {
+            button.Paint += (sender, e) =>
+            {
+                if (sender is Button btn)
+                {
+                    using var path = new System.Drawing.Drawing2D.GraphicsPath();
+                    path.AddArc(0, 0, radius, radius, 180, 90);
+                    path.AddArc(btn.Width - radius, 0, radius, radius, 270, 90);
+                    path.AddArc(btn.Width - radius, btn.Height - radius, radius, radius, 0, 90);
+                    path.AddArc(0, btn.Height - radius, radius, radius, 90, 90);
+                    path.CloseAllFigures();
+                    btn.Region = new Region(path);
+                }
+            };
+
+            button.MouseEnter += (sender, e) =>
+            {
+                if (sender is Button btn)
+                {
+                    btn.FlatAppearance.MouseOverBackColor = ControlPaint.Light(btn.BackColor, 10);
+                }
+            };
+
+            button.MouseDown += (sender, e) =>
+            {
+                if (sender is Button btn)
+                {
+                    AnimateButton(btn, 0.95f);
+                }
+            };
+
+            button.MouseUp += (sender, e) =>
+            {
+                if (sender is Button btn)
+                {
+                    AnimateButton(btn, 1.0f);
+                }
+            };
+        }
+
+        private void AnimateButton(Button button, float scale)
+        {
+            if (button == null || button.IsDisposed) return;
+            var originalSize = button.Size;
+            int newWidth = (int)(originalSize.Width * scale);
+            int newHeight = (int)(originalSize.Height * scale);
+            int offsetX = (originalSize.Width - newWidth) / 2;
+            int offsetY = (originalSize.Height - newHeight) / 2;
+            button.Size = new Size(newWidth, newHeight);
+            button.Location = new Point(button.Location.X + offsetX, button.Location.Y + offsetY);
         }
 
         private void InitializeComponent()
@@ -120,6 +186,10 @@ namespace LearningAssistant.Forms.UserControls
             _buttonAIAsk = new Button();
             _buttonFeynman = new Button();
 
+            var separator1 = new Panel { Width = 1, Height = 30, BackColor = Color.FromArgb(200, 200, 200), Margin = new Padding(15, 7, 15, 7) };
+            var separator2 = new Panel { Width = 1, Height = 30, BackColor = Color.FromArgb(200, 200, 200), Margin = new Padding(15, 7, 15, 7) };
+            var separator3 = new Panel { Width = 1, Height = 30, BackColor = Color.FromArgb(200, 200, 200), Margin = new Padding(15, 7, 15, 7) };
+
             _buttonsPanel.SuspendLayout();
             SuspendLayout();
 
@@ -128,9 +198,12 @@ namespace LearningAssistant.Forms.UserControls
             //
             _buttonsPanel.Controls.Add(_buttonKnown);
             _buttonsPanel.Controls.Add(_buttonUnknown);
+            _buttonsPanel.Controls.Add(separator1);
             _buttonsPanel.Controls.Add(_buttonPronounce);
+            _buttonsPanel.Controls.Add(separator2);
             _buttonsPanel.Controls.Add(_buttonFavorite);
             _buttonsPanel.Controls.Add(_buttonNote);
+            _buttonsPanel.Controls.Add(separator3);
             _buttonsPanel.Controls.Add(_buttonExit);
             _buttonsPanel.Controls.Add(_buttonAIAsk);
             _buttonsPanel.Controls.Add(_buttonFeynman);

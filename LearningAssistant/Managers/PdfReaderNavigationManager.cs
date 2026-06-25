@@ -1,15 +1,19 @@
 using LearningAssistant.Models.Pdf;
 using Microsoft.Extensions.Logging;
-using System.Drawing;
 using System.Drawing.Drawing2D;
-using System.Windows.Forms;
 
 namespace LearningAssistant.Managers
 {
     public enum AnnotationToolMode
     {
+        None,
         Highlight,
+        Rectangle,
+        Ellipse,
+        Arrow,
         Pen,
+        Mosaic,
+        Strikethrough,
         Text
     }
 
@@ -59,8 +63,15 @@ namespace LearningAssistant.Managers
         private Graphics? _annotationGraphics;
         private List<PointF>? _currentStrokePoints;
         private Pen? _drawingPen;
-        private Color _penColor = Color.Red;
+        private Color _penColor = Color.Black;
         private float _penWidth = 3f;
+
+        private PointF? _shapeStartPoint;
+        private PointF? _shapeEndPoint;
+        private bool _isDrawingShape = false;
+
+        private readonly Stack<AnnotationStroke> _strokeUndoStack = new Stack<AnnotationStroke>();
+        private const int MaxUndoStackSize = 50;
 
         public int ZoomLevel => _zoomLevel;
         public bool IsLocked => _isLocked;
@@ -80,7 +91,7 @@ namespace LearningAssistant.Managers
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _form = form ?? throw new ArgumentNullException(nameof(form));
-            
+
             _drawingPen = new Pen(_penColor, _penWidth);
             _drawingPen.StartCap = LineCap.Round;
             _drawingPen.EndCap = LineCap.Round;
@@ -355,6 +366,29 @@ namespace LearningAssistant.Managers
                             _currentStrokePoints = new List<PointF>() { imgPt };
                             _form.PictureBoxPdf.Invalidate();
                             break;
+                        case AnnotationToolMode.Strikethrough:
+                            _logger.LogInformation("MouseDown Left: Starting strikethrough drawing at {X},{Y}", e.Location.X, e.Location.Y);
+                            _isDrawing = true;
+                            EnsureAnnotationBitmap();
+                            _selectStart = e.Location;
+                            _selectEnd = e.Location;
+                            var strikethroughImgPt = ClientToImage(e.Location);
+                            _currentStrokePoints = new List<PointF>() { strikethroughImgPt };
+                            _form.PictureBoxPdf.Invalidate();
+                            break;
+                        case AnnotationToolMode.Rectangle:
+                        case AnnotationToolMode.Ellipse:
+                        case AnnotationToolMode.Arrow:
+                        case AnnotationToolMode.Mosaic:
+                            _logger.LogInformation("MouseDown Left: Starting shape drawing ({Mode}) at {X},{Y}", _currentToolMode, e.Location.X, e.Location.Y);
+                            _isDrawingShape = true;
+                            EnsureAnnotationBitmap();
+                            _shapeStartPoint = ClientToImage(e.Location);
+                            _shapeEndPoint = _shapeStartPoint;
+                            _selectStart = e.Location;
+                            _selectEnd = e.Location;
+                            _form.PictureBoxPdf.Invalidate();
+                            break;
                         case AnnotationToolMode.Text:
                             _logger.LogInformation("MouseDown Left: Text tool clicked at {X},{Y}", e.Location.X, e.Location.Y);
                             AddTextCallback?.Invoke(e.Location);
@@ -384,7 +418,7 @@ namespace LearningAssistant.Managers
                     _lastClickTime = now;
                     _lastClickLocation = e.Location;
 
-                    if (_currentToolMode == AnnotationToolMode.Pen || _isDrawing)
+                    if (_currentToolMode == AnnotationToolMode.Pen || _currentToolMode == AnnotationToolMode.Strikethrough || _isDrawing)
                     {
                         _logger.LogInformation("MouseDown Right: Drawing mode, starting annotation");
                         _isDrawing = true;
@@ -393,6 +427,21 @@ namespace LearningAssistant.Managers
                         _selectEnd = e.Location;
                         var imgPt = ClientToImage(e.Location);
                         _currentStrokePoints = new List<PointF>() { imgPt };
+                        _form.PictureBoxPdf.Invalidate();
+                        return;
+                    }
+
+                    if (_currentToolMode == AnnotationToolMode.Rectangle ||
+                        _currentToolMode == AnnotationToolMode.Ellipse ||
+                        _currentToolMode == AnnotationToolMode.Arrow ||
+                        _currentToolMode == AnnotationToolMode.Mosaic)
+                    {
+                        _isDrawingShape = true;
+                        EnsureAnnotationBitmap();
+                        _shapeStartPoint = ClientToImage(e.Location);
+                        _shapeEndPoint = _shapeStartPoint;
+                        _selectStart = e.Location;
+                        _selectEnd = e.Location;
                         _form.PictureBoxPdf.Invalidate();
                         return;
                     }
@@ -455,6 +504,44 @@ namespace LearningAssistant.Managers
                     return;
                 }
 
+                if (_isDrawingShape)
+                {
+                    _selectEnd = e.Location;
+                    var endPt = ClientToImage(e.Location);
+
+                    if (_shapeStartPoint.HasValue && (Control.ModifierKeys & Keys.Shift) == Keys.Shift)
+                    {
+                        var startPt = _shapeStartPoint.Value;
+                        var dx = endPt.X - startPt.X;
+                        var dy = endPt.Y - startPt.Y;
+
+                        if (_currentToolMode == AnnotationToolMode.Rectangle ||
+                            _currentToolMode == AnnotationToolMode.Ellipse ||
+                            _currentToolMode == AnnotationToolMode.Mosaic)
+                        {
+                            var maxSide = Math.Max(Math.Abs(dx), Math.Abs(dy));
+                            endPt = new PointF(
+                                startPt.X + Math.Sign(dx) * maxSide,
+                                startPt.Y + Math.Sign(dy) * maxSide);
+                        }
+                        else if (_currentToolMode == AnnotationToolMode.Arrow)
+                        {
+                            if (Math.Abs(dx) > Math.Abs(dy))
+                            {
+                                endPt = new PointF(endPt.X, startPt.Y);
+                            }
+                            else
+                            {
+                                endPt = new PointF(startPt.X, endPt.Y);
+                            }
+                        }
+                    }
+
+                    _shapeEndPoint = endPt;
+                    _form.PictureBoxPdf.Invalidate();
+                    return;
+                }
+
                 if (_isSelecting)
                 {
                     _selectEnd = e.Location;
@@ -500,7 +587,16 @@ namespace LearningAssistant.Managers
                         if (_annotationBitmap != null && _currentStrokePoints != null && _currentStrokePoints.Count >= 2)
                         {
                             _annotationGraphics!.SmoothingMode = SmoothingMode.AntiAlias;
-                            _annotationGraphics.DrawLines(_drawingPen, _currentStrokePoints.ToArray());
+
+                            Color drawColor = _currentToolMode == AnnotationToolMode.Strikethrough ? Color.Red : _penColor;
+                            float drawWidth = _currentToolMode == AnnotationToolMode.Strikethrough ? 6f : _penWidth;
+
+                            using var drawPen = new Pen(drawColor, drawWidth);
+                            drawPen.StartCap = LineCap.Round;
+                            drawPen.EndCap = LineCap.Round;
+                            drawPen.LineJoin = LineJoin.Round;
+
+                            _annotationGraphics.DrawLines(drawPen, _currentStrokePoints.ToArray());
                             _form.Presenter?.SaveAnnotationForCurrentPage((Bitmap)_annotationBitmap.Clone());
                             var imgW = _annotationBitmap.Width;
                             var imgH = _annotationBitmap.Height;
@@ -510,7 +606,17 @@ namespace LearningAssistant.Managers
                                 pts.Add(pt.X / imgW);
                                 pts.Add(pt.Y / imgH);
                             }
-                            _form.Presenter?.AddAnnotationStroke(pts.ToArray(), _drawingPen.Color.ToArgb(), _drawingPen.Width, imgW, imgH);
+
+                            var stroke = new AnnotationStroke
+                            {
+                                Points = pts.ToArray(),
+                                ColorArgb = drawColor.ToArgb(),
+                                Thickness = drawWidth,
+                                CreatedAt = DateTime.Now
+                            };
+
+                            PushStrokeToUndoStack(stroke);
+                            _form.Presenter?.AddAnnotationStroke(pts.ToArray(), drawColor.ToArgb(), drawWidth, imgW, imgH);
                         }
                     }
                     catch (Exception ex)
@@ -518,6 +624,81 @@ namespace LearningAssistant.Managers
                         _logger.LogError(ex, "Error saving annotation");
                     }
                     finally { _currentStrokePoints = null; }
+                    _form.PictureBoxPdf.Invalidate();
+                    return;
+                }
+
+                if (_isDrawingShape)
+                {
+                    _isDrawingShape = false;
+                    try
+                    {
+                        if (_annotationBitmap != null && _shapeStartPoint.HasValue && _shapeEndPoint.HasValue)
+                        {
+                            _annotationGraphics!.SmoothingMode = SmoothingMode.AntiAlias;
+
+                            var startPt = _shapeStartPoint.Value;
+                            var endPt = _shapeEndPoint.Value;
+                            var rect = new RectangleF(
+                                Math.Min(startPt.X, endPt.X),
+                                Math.Min(startPt.Y, endPt.Y),
+                                Math.Abs(endPt.X - startPt.X),
+                                Math.Abs(endPt.Y - startPt.Y));
+
+                            using var drawPen = new Pen(_penColor, _penWidth);
+                            drawPen.StartCap = LineCap.Round;
+                            drawPen.EndCap = LineCap.Round;
+
+                            switch (_currentToolMode)
+                            {
+                                case AnnotationToolMode.Rectangle:
+                                    _annotationGraphics.DrawRectangle(drawPen, rect.X, rect.Y, rect.Width, rect.Height);
+                                    break;
+                                case AnnotationToolMode.Ellipse:
+                                    _annotationGraphics.DrawEllipse(drawPen, rect);
+                                    break;
+                                case AnnotationToolMode.Arrow:
+                                    drawPen.EndCap = LineCap.ArrowAnchor;
+                                    _annotationGraphics.DrawLine(drawPen, startPt, endPt);
+                                    break;
+                                case AnnotationToolMode.Mosaic:
+                                    ApplyMosaic(rect, 10);
+                                    break;
+                            }
+
+                            _form.Presenter?.SaveAnnotationForCurrentPage((Bitmap)_annotationBitmap.Clone());
+
+                            var imgW = _annotationBitmap.Width;
+                            var imgH = _annotationBitmap.Height;
+
+                            var strokePts = new List<float>
+                            {
+                                startPt.X / imgW, startPt.Y / imgH,
+                                endPt.X / imgW, endPt.Y / imgH
+                            };
+
+                            var stroke = new AnnotationStroke
+                            {
+                                Points = strokePts.ToArray(),
+                                ColorArgb = _penColor.ToArgb(),
+                                Thickness = _penWidth,
+                                ShapeType = _currentToolMode.ToString(),
+                                CreatedAt = DateTime.Now
+                            };
+
+                            PushStrokeToUndoStack(stroke);
+                            _form.Presenter?.AddAnnotationStroke(strokePts.ToArray(), _penColor.ToArgb(), _penWidth, imgW, imgH);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error saving shape annotation");
+                    }
+                    finally
+                    {
+                        _shapeStartPoint = null;
+                        _shapeEndPoint = null;
+                    }
                     _form.PictureBoxPdf.Invalidate();
                     return;
                 }
@@ -533,7 +714,7 @@ namespace LearningAssistant.Managers
 
                     var isHighlightMode = _currentToolMode == AnnotationToolMode.Highlight;
                     _logger.LogInformation("MouseUp: isHighlightMode={IsHighlightMode}", isHighlightMode);
-                    
+
                     if (isHighlightMode && _lastSelectionRect.HasValue)
                     {
                         _logger.LogInformation("MouseUp: Calling AddHighlightCallback");
@@ -742,11 +923,61 @@ namespace LearningAssistant.Managers
                             (int)(pt.Y * scaleY + imgRect.Y)));
                     }
 
-                    using var pen = new Pen(_penColor, _penWidth);
+                    Color drawColor = _currentToolMode == AnnotationToolMode.Strikethrough ? Color.Red : _penColor;
+                    float drawWidth = _currentToolMode == AnnotationToolMode.Strikethrough ? 4f : _penWidth;
+
+                    using var pen = new Pen(drawColor, drawWidth);
                     pen.StartCap = LineCap.Round;
                     pen.EndCap = LineCap.Round;
                     pen.LineJoin = LineJoin.Round;
                     g.DrawLines(pen, screenPoints.ToArray());
+                }
+
+                if (_isDrawingShape && _shapeStartPoint.HasValue && _shapeEndPoint.HasValue)
+                {
+                    var scaleX = (float)imgRect.Width / _form.CurrentPageImage.Width;
+                    var scaleY = (float)imgRect.Height / _form.CurrentPageImage.Height;
+
+                    var startPt = _shapeStartPoint.Value;
+                    var endPt = _shapeEndPoint.Value;
+                    var screenStart = new Point(
+                        (int)(startPt.X * scaleX + imgRect.X),
+                        (int)(startPt.Y * scaleY + imgRect.Y));
+                    var screenEnd = new Point(
+                        (int)(endPt.X * scaleX + imgRect.X),
+                        (int)(endPt.Y * scaleY + imgRect.Y));
+
+                    var rect = new Rectangle(
+                        Math.Min(screenStart.X, screenEnd.X),
+                        Math.Min(screenStart.Y, screenEnd.Y),
+                        Math.Abs(screenEnd.X - screenStart.X),
+                        Math.Abs(screenEnd.Y - screenStart.Y));
+
+                    using var pen = new Pen(_penColor, _penWidth);
+                    pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                    pen.StartCap = LineCap.Round;
+                    pen.EndCap = LineCap.Round;
+
+                    switch (_currentToolMode)
+                    {
+                        case AnnotationToolMode.Rectangle:
+                            g.DrawRectangle(pen, rect);
+                            break;
+                        case AnnotationToolMode.Ellipse:
+                            g.DrawEllipse(pen, rect);
+                            break;
+                        case AnnotationToolMode.Arrow:
+                            pen.EndCap = LineCap.ArrowAnchor;
+                            g.DrawLine(pen, screenStart, screenEnd);
+                            break;
+                        case AnnotationToolMode.Mosaic:
+                            {
+                                using var brush = new SolidBrush(Color.FromArgb(80, 128, 128, 128));
+                                g.FillRectangle(brush, rect);
+                                g.DrawRectangle(pen, rect);
+                                break;
+                            }
+                    }
                 }
             }
             catch (Exception ex)
@@ -773,9 +1004,21 @@ namespace LearningAssistant.Managers
                     return new PointF(clientPt.X, clientPt.Y);
                 }
 
-                var scaleX = (float)imgWidth / _form.PictureBoxPdf.ClientSize.Width;
-                var scaleY = (float)imgHeight / _form.PictureBoxPdf.ClientSize.Height;
-                return new PointF(clientPt.X * scaleX, clientPt.Y * scaleY);
+                var imgRect = _form.GetImageDisplayRect();
+                if (imgRect.Width <= 0 || imgRect.Height <= 0)
+                {
+                    var scaleX = (float)imgWidth / _form.PictureBoxPdf.ClientSize.Width;
+                    var scaleY = (float)imgHeight / _form.PictureBoxPdf.ClientSize.Height;
+                    return new PointF(clientPt.X * scaleX, clientPt.Y * scaleY);
+                }
+
+                float relX = (float)(clientPt.X - imgRect.X) / imgRect.Width;
+                float relY = (float)(clientPt.Y - imgRect.Y) / imgRect.Height;
+
+                relX = Math.Max(0, Math.Min(1, relX));
+                relY = Math.Max(0, Math.Min(1, relY));
+
+                return new PointF(relX * imgWidth, relY * imgHeight);
             }
             catch (Exception ex)
             {
@@ -837,6 +1080,84 @@ namespace LearningAssistant.Managers
             }
         }
 
+        private void PushStrokeToUndoStack(AnnotationStroke stroke)
+        {
+            if (_strokeUndoStack.Count >= MaxUndoStackSize)
+            {
+                var tempStack = new Stack<AnnotationStroke>();
+                for (int i = 0; i < MaxUndoStackSize - 1; i++)
+                {
+                    tempStack.Push(_strokeUndoStack.Pop());
+                }
+                _strokeUndoStack.Clear();
+                while (tempStack.Count > 0)
+                {
+                    _strokeUndoStack.Push(tempStack.Pop());
+                }
+            }
+            _strokeUndoStack.Push(stroke);
+        }
+
+        public bool CanUndoStroke()
+        {
+            return _strokeUndoStack.Count > 0;
+        }
+
+        public void UndoStroke()
+        {
+            if (_strokeUndoStack.Count == 0)
+                return;
+
+            var lastStroke = _strokeUndoStack.Pop();
+
+            try
+            {
+                if (_form.Presenter != null)
+                {
+                    _form.Presenter.UndoAnnotationStroke();
+                }
+
+                CleanupAnnotationBitmap();
+                LoadAnnotationsForCurrentPage();
+                _form.PictureBoxPdf.Invalidate();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error undoing stroke");
+            }
+        }
+
+        private void ApplyMosaic(RectangleF rect, int blockSize)
+        {
+            if (_annotationBitmap == null || _annotationGraphics == null) return;
+            if (rect.Width <= 0 || rect.Height <= 0) return;
+
+            try
+            {
+                int x = (int)Math.Max(0, rect.X);
+                int y = (int)Math.Max(0, rect.Y);
+                int w = (int)Math.Min(_annotationBitmap.Width - x, rect.Width);
+                int h = (int)Math.Min(_annotationBitmap.Height - y, rect.Height);
+
+                if (w <= 0 || h <= 0) return;
+
+                using var mosaicPen = new SolidBrush(Color.FromArgb(128, 128, 128));
+                for (int blockY = y; blockY < y + h; blockY += blockSize)
+                {
+                    for (int blockX = x; blockX < x + w; blockX += blockSize)
+                    {
+                        int bw = Math.Min(blockSize, x + w - blockX);
+                        int bh = Math.Min(blockSize, y + h - blockY);
+                        _annotationGraphics.FillRectangle(mosaicPen, blockX, blockY, bw, bh);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error applying mosaic");
+            }
+        }
+
         public void Dispose()
         {
             Dispose(true);
@@ -846,7 +1167,7 @@ namespace LearningAssistant.Managers
         protected virtual void Dispose(bool disposing)
         {
             if (_disposed) return;
-            
+
             if (disposing)
             {
                 try
@@ -876,7 +1197,7 @@ namespace LearningAssistant.Managers
                     _logger.LogWarning(ex, "Error disposing drawing pen");
                 }
             }
-            
+
             _disposed = true;
         }
     }

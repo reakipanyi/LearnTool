@@ -41,12 +41,35 @@ namespace LearningAssistant.Forms
 
         #region === 学习状态 ===
         private LearningItem? _currentItem;
-        private bool _isShowAnswer = false;      // 答题模式标志
-        private bool _answerRevealed = false;    // 答案是否已揭示
+        private bool _isShowAnswer = false;
+        private bool _answerRevealed = false;
         private bool _isFavorite = false;
         private bool _currentNoteCounted = false;
         private bool _disposed = false;
         private Settings _settings = new();
+        #endregion
+
+        #region === 导航按钮 ===
+        private Button _buttonPrevious = null!;
+        private Button _buttonNextNav = null!;
+        #endregion
+
+        #region === 进度可视化 ===
+        private CircularProgressControl _dailyGoalProgress = null!;
+        private const int DailyGoal = 30;
+        #endregion
+
+        #region === 笔记增强 ===
+        private Label _noteWordCountLabel = null!;
+        private ToolStrip _noteFormattingToolbar = null!;
+        #endregion
+
+        #region === 卡片展示 ===
+        private LearningCard _learningCard = null!;
+        #endregion
+
+        #region === AI历史 ===
+        private AIHistoryPanel _aiHistoryPanel = null!;
         #endregion
 
         #region === UI 状态 ===
@@ -704,10 +727,56 @@ namespace LearningAssistant.Forms
                 _currentItem = value;
                 if (_currentItem != null)
                 {
-                    // 切换学习项时，根据当前模式重置详情区状态
+                    UpdateLearningCard();
                     ResetDetailState();
                 }
             }
+        }
+
+        private void UpdateLearningCard()
+        {
+            if (_learningCard == null || _currentItem == null) return;
+
+            _learningCard.Title = _currentItem.GetMainContent();
+            _learningCard.Content = _currentItem.GetDisplayText();
+            _learningCard.Category = comboBoxSubCategory.Text;
+            _learningCard.Icon = GetSubjectIcon();
+            _learningCard.AccentColor = GetSubjectColor();
+            _learningCard.IsSelected = true;
+        }
+
+        private string GetSubjectIcon()
+        {
+            string subject = comboBoxSubject.Text;
+            return subject switch
+            {
+                "语文" => "📖",
+                "英语" => "🔤",
+                "数学" => "🔢",
+                "物理" => "⚛️",
+                "化学" => "🧪",
+                "历史" => "🏛️",
+                "地理" => "🌍",
+                "生物" => "🧬",
+                _ => "📚"
+            };
+        }
+
+        private Color GetSubjectColor()
+        {
+            string subject = comboBoxSubject.Text;
+            return subject switch
+            {
+                "语文" => Color.FromArgb(244, 67, 54),
+                "英语" => Color.FromArgb(33, 150, 243),
+                "数学" => Color.FromArgb(156, 39, 176),
+                "物理" => Color.FromArgb(0, 188, 212),
+                "化学" => Color.FromArgb(255, 152, 0),
+                "历史" => Color.FromArgb(76, 175, 80),
+                "地理" => Color.FromArgb(79, 109, 255),
+                "生物" => Color.FromArgb(96, 125, 139),
+                _ => Color.FromArgb(76, 175, 80)
+            };
         }
 
         /// <summary>
@@ -935,7 +1004,94 @@ namespace LearningAssistant.Forms
 
         public void ShowMessage(string msg)
         {
-            MessageBox.Show(msg);
+            ShowToast(msg, ToastType.Info);
+        }
+
+        public void ShowToast(string message, ToastType type = ToastType.Info, int duration = 3000)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => ShowToast(message, type, duration)));
+                return;
+            }
+
+            var toast = new ToastNotification(message, type);
+            toast.Show(this, duration);
+        }
+
+        private TextBox _searchTextBox = null!;
+        private Button _searchButton = null!;
+        private Panel _searchPanel = null!;
+
+        private void InitializeSearchBox()
+        {
+            _searchPanel = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 45,
+                BackColor = Color.White,
+                BorderStyle = BorderStyle.FixedSingle
+            };
+
+            _searchTextBox = new TextBox
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(10, 5, 5, 5),
+                Font = new Font("微软雅黑", 10F),
+                PlaceholderText = "🔍 搜索学习内容...",
+                Padding = new Padding(5)
+            };
+            _searchTextBox.TextChanged += SearchTextBox_TextChanged;
+            _searchTextBox.KeyDown += SearchTextBox_KeyDown;
+
+            _searchButton = new Button
+            {
+                Dock = DockStyle.Right,
+                Width = 80,
+                Text = "搜索",
+                Font = new Font("微软雅黑", 10F, FontStyle.Bold),
+                BackColor = Color.FromArgb(76, 175, 80),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                FlatAppearance.BorderSize = 0
+            };
+            ApplyRoundedStyle(_searchButton, 6);
+            _searchButton.Click += SearchButton_Click;
+
+            _searchPanel.Controls.Add(_searchButton);
+            _searchPanel.Controls.Add(_searchTextBox);
+
+            if (_listView != null && _listView.PanelList != null)
+            {
+                _listView.PanelList.Controls.Add(_searchPanel);
+                _listView.PanelList.Controls.SetChildIndex(_searchPanel, 0);
+            }
+        }
+
+        private void SearchTextBox_TextChanged(object? sender, EventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(_searchTextBox.Text))
+            {
+                _listView.FilterItems(string.Empty);
+            }
+        }
+
+        private void SearchTextBox_KeyDown(object? sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                _listView.FilterItems(_searchTextBox.Text.Trim());
+            }
+            else if (e.KeyCode == Keys.Escape)
+            {
+                _searchTextBox.Clear();
+                _listView.FilterItems(string.Empty);
+            }
+        }
+
+        private void SearchButton_Click(object? sender, EventArgs e)
+        {
+            _listView.FilterItems(_searchTextBox.Text.Trim());
         }
 
         public void EnableButtons(bool enabled)
@@ -1082,6 +1238,12 @@ namespace LearningAssistant.Forms
             _noteSaveTimer.Interval = 1000;
             _noteSaveTimer.Tick += NoteSaveTimer_Tick;
 
+            ApplyButtonStyles();
+
+            InitializeSearchBox();
+
+            InitializeNavigationButtons();
+
             if (flowLayoutPanelBadges != null)
             {
                 _gamificationService.SetBadgeUI(flowLayoutPanelBadges, _toolTip);
@@ -1109,6 +1271,333 @@ namespace LearningAssistant.Forms
                 _gamificationService.XP,
                 _gamificationService.XPToNextLevel,
                 _gamificationService.LevelTitle);
+        }
+
+        private void ApplyButtonStyles()
+        {
+            ApplyRoundedStyle(buttonKnown, 8);
+            ApplyRoundedStyle(buttonUnknown, 8);
+            ApplyRoundedStyle(buttonPronounce, 8);
+            ApplyRoundedStyle(buttonFavorite, 8);
+            ApplyRoundedStyle(buttonNote, 8);
+            ApplyRoundedStyle(buttonExit, 8);
+            ApplyRoundedStyle(buttonShowAnswer, 8);
+            ApplyRoundedStyle(buttonThemeToggle, 8);
+
+            foreach (Control ctrl in _buttonsView.ButtonsPanel.Controls)
+            {
+                if (ctrl is Button btn)
+                {
+                    ApplyRoundedStyle(btn, 8);
+                }
+            }
+        }
+
+        private void ApplyRoundedStyle(Button button, int radius = 8)
+        {
+            button.FlatStyle = FlatStyle.Flat;
+            button.FlatAppearance.BorderSize = 1;
+            button.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
+
+            button.Paint += (sender, e) =>
+            {
+                if (sender is Button btn)
+                {
+                    using var path = new System.Drawing.Drawing2D.GraphicsPath();
+                    path.AddArc(0, 0, radius, radius, 180, 90);
+                    path.AddArc(btn.Width - radius, 0, radius, radius, 270, 90);
+                    path.AddArc(btn.Width - radius, btn.Height - radius, radius, radius, 0, 90);
+                    path.AddArc(0, btn.Height - radius, radius, radius, 90, 90);
+                    path.CloseAllFigures();
+                    btn.Region = new Region(path);
+                }
+            };
+
+            button.MouseEnter += (sender, e) =>
+            {
+                if (sender is Button btn)
+                {
+                    btn.FlatAppearance.BorderColor = Color.FromArgb(150, 150, 150);
+                    btn.FlatAppearance.MouseOverBackColor = ControlPaint.Light(btn.BackColor, 10);
+                    AnimateButton(btn, 1.05f);
+                }
+            };
+
+            button.MouseLeave += (sender, e) =>
+            {
+                if (sender is Button btn)
+                {
+                    btn.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
+                    AnimateButton(btn, 1.0f);
+                }
+            };
+
+            button.MouseDown += (sender, e) =>
+            {
+                if (sender is Button btn)
+                {
+                    AnimateButton(btn, 0.95f);
+                }
+            };
+
+            button.MouseUp += (sender, e) =>
+            {
+                if (sender is Button btn)
+                {
+                    AnimateButton(btn, 1.0f);
+                }
+            };
+        }
+
+        private async void AnimateButton(Button button, float scale)
+        {
+            if (button == null || button.IsDisposed) return;
+
+            var originalSize = button.Size;
+            var originalLocation = button.Location;
+
+            int newWidth = (int)(originalSize.Width * scale);
+            int newHeight = (int)(originalSize.Height * scale);
+            int offsetX = (originalSize.Width - newWidth) / 2;
+            int offsetY = (originalSize.Height - newHeight) / 2;
+
+            button.Size = new Size(newWidth, newHeight);
+            button.Location = new Point(originalLocation.X + offsetX, originalLocation.Y + offsetY);
+        }
+
+        private void InitializeNavigationButtons()
+        {
+            _buttonPrevious = new Button
+            {
+                Text = "⏮ 上一项",
+                Font = new Font("微软雅黑", 11F, FontStyle.Bold),
+                BackColor = Color.FromArgb(108, 117, 125),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                FlatAppearance.BorderSize = 0,
+                Size = new Size(120, 45),
+                Margin = new Padding(5)
+            };
+            ApplyRoundedStyle(_buttonPrevious, 8);
+            _buttonPrevious.Click += ButtonPrevious_Click;
+
+            _buttonNextNav = new Button
+            {
+                Text = "下一项 ⏭",
+                Font = new Font("微软雅黑", 11F, FontStyle.Bold),
+                BackColor = Color.FromArgb(76, 175, 80),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                FlatAppearance.BorderSize = 0,
+                Size = new Size(120, 45),
+                Margin = new Padding(5)
+            };
+            ApplyRoundedStyle(_buttonNextNav, 8);
+            _buttonNextNav.Click += ButtonNextNav_Click;
+
+            _buttonsView.ButtonsPanel.Controls.Add(_buttonPrevious);
+            _buttonsView.ButtonsPanel.Controls.Add(_buttonNextNav);
+
+            InitializeDailyGoalProgress();
+        }
+
+        private void InitializeDailyGoalProgress()
+        {
+            _dailyGoalProgress = new CircularProgressControl
+            {
+                Size = new Size(100, 100),
+                MaxValue = DailyGoal,
+                CurrentValue = _gamificationService.TodayLearnedCount,
+                ProgressColor = Color.FromArgb(255, 152, 0),
+                TrackColor = Color.FromArgb(220, 220, 220),
+                TextColor = Color.Black
+            };
+
+            if (_statsView.PanelStatsContainer != null)
+            {
+                _dailyGoalProgress.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+                _dailyGoalProgress.Location = new Point(20, 20);
+                _statsView.PanelStatsContainer.Controls.Add(_dailyGoalProgress);
+            }
+
+            InitializeShortcutHint();
+        }
+
+        private Label _shortcutHintLabel = null!;
+
+        private void InitializeShortcutHint()
+        {
+            _shortcutHintLabel = new Label
+            {
+                Text = "快捷键: K(会了) | U(不会) | Space(发音) | Enter(下一项) | F4(费曼)",
+                Font = new Font("微软雅黑", 8F),
+                ForeColor = Color.Gray,
+                Dock = DockStyle.Bottom,
+                Padding = new Padding(10),
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+
+            if (_statsView.PanelStatsContainer != null)
+            {
+                _statsView.PanelStatsContainer.Controls.Add(_shortcutHintLabel);
+            }
+
+            InitializeNoteEnhancements();
+            InitializeLearningCard();
+        }
+
+        private void InitializeLearningCard()
+        {
+            _learningCard = new LearningCard
+            {
+                Dock = DockStyle.Top,
+                Margin = new Padding(10),
+                Height = 140
+            };
+
+            if (panelContent != null)
+            {
+                panelContent.Controls.Add(_learningCard);
+                panelContent.Controls.SetChildIndex(_learningCard, 0);
+            }
+
+            InitializeAIHistoryPanel();
+        }
+
+        private void InitializeAIHistoryPanel()
+        {
+            _aiHistoryPanel = new AIHistoryPanel
+            {
+                Dock = DockStyle.Right,
+                Width = 300,
+                Visible = false
+            };
+            _aiHistoryPanel.HistoryItemSelected += AIHistoryPanel_HistoryItemSelected;
+
+            Controls.Add(_aiHistoryPanel);
+        }
+
+        private void AIHistoryPanel_HistoryItemSelected(object? sender, AIHistoryEventArgs e)
+        {
+            ShowToast($"问题: {e.Item.Question}", ToastType.Info);
+        }
+
+        private void InitializeNoteEnhancements()
+        {
+            _noteWordCountLabel = new Label
+            {
+                Text = "字数: 0",
+                Font = new Font("微软雅黑", 8F),
+                ForeColor = Color.Gray,
+                Dock = DockStyle.Bottom,
+                Padding = new Padding(5),
+                TextAlign = ContentAlignment.MiddleRight
+            };
+
+            _noteFormattingToolbar = new ToolStrip
+            {
+                Dock = DockStyle.Top,
+                Height = 25,
+                BackColor = Color.White
+            };
+
+            var boldBtn = new ToolStripButton("B")
+            {
+                ToolTipText = "加粗",
+                Font = new Font("微软雅黑", 9F, FontStyle.Bold)
+            };
+            boldBtn.Click += (s, e) => ApplyNoteFormat(FontStyle.Bold);
+
+            var italicBtn = new ToolStripButton("I")
+            {
+                ToolTipText = "斜体",
+                Font = new Font("微软雅黑", 9F, FontStyle.Italic)
+            };
+            italicBtn.Click += (s, e) => ApplyNoteFormat(FontStyle.Italic);
+
+            var underlineBtn = new ToolStripButton("U")
+            {
+                ToolTipText = "下划线",
+                Font = new Font("微软雅黑", 9F, FontStyle.Underline)
+            };
+            underlineBtn.Click += (s, e) => ApplyNoteFormat(FontStyle.Underline);
+
+            _noteFormattingToolbar.Items.Add(boldBtn);
+            _noteFormattingToolbar.Items.Add(italicBtn);
+            _noteFormattingToolbar.Items.Add(underlineBtn);
+            _noteFormattingToolbar.Items.Add(new ToolStripSeparator());
+
+            var fontColorBtn = new ToolStripButton("A")
+            {
+                ToolTipText = "字体颜色"
+            };
+            fontColorBtn.Click += (s, e) => ChangeNoteFontColor();
+            _noteFormattingToolbar.Items.Add(fontColorBtn);
+
+            if (panelNotes != null)
+            {
+                panelNotes.Controls.Add(_noteWordCountLabel);
+                panelNotes.Controls.Add(_noteFormattingToolbar);
+            }
+
+            if (richTextBoxNotes != null)
+            {
+                richTextBoxNotes.TextChanged += RichTextBoxNotes_TextChangedEnhanced;
+            }
+        }
+
+        private void ApplyNoteFormat(FontStyle style)
+        {
+            if (richTextBoxNotes == null) return;
+
+            var currentFont = richTextBoxNotes.SelectionFont;
+            if (currentFont != null)
+            {
+                var newFont = new Font(currentFont, currentFont.Style ^ style);
+                richTextBoxNotes.SelectionFont = newFont;
+            }
+        }
+
+        private void ChangeNoteFontColor()
+        {
+            if (richTextBoxNotes == null) return;
+
+            using (var colorDialog = new ColorDialog())
+            {
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    richTextBoxNotes.SelectionColor = colorDialog.Color;
+                }
+            }
+        }
+
+        private void RichTextBoxNotes_TextChangedEnhanced(object? sender, EventArgs e)
+        {
+            if (_noteWordCountLabel != null && richTextBoxNotes != null)
+            {
+                int wordCount = richTextBoxNotes.Text.Length;
+                _noteWordCountLabel.Text = $"字数: {wordCount}";
+            }
+        }
+
+        private void UpdateDailyGoalProgress()
+        {
+            if (_dailyGoalProgress != null && !_dailyGoalProgress.IsDisposed)
+            {
+                _dailyGoalProgress.CurrentValue = _gamificationService.TodayLearnedCount;
+            }
+        }
+
+        private void ButtonPrevious_Click(object? sender, EventArgs e)
+        {
+            _soundService?.PlayNavigation();
+            ItemSelectedFromList?.Invoke(this, new ItemSelectedEventArgs(listBoxItems.SelectedIndex - 1));
+        }
+
+        private void ButtonNextNav_Click(object? sender, EventArgs e)
+        {
+            _soundService?.PlayNavigation();
+            NextClicked?.Invoke(this, EventArgs.Empty);
         }
 
         private void OnXPChanged(object? sender, XPChangedEventArgs e)
@@ -1259,7 +1748,37 @@ namespace LearningAssistant.Forms
 
             string text = listBox.Items[e.Index].ToString() ?? string.Empty;
 
-            e.Graphics.DrawString(text, e.Font, isSelected ? _selectedForegroundBrush : _normalForegroundBrush, e.Bounds, StringFormat.GenericDefault);
+            bool isFavorite = _listView.IsFavoriteItem(text);
+            bool isKnown = IsItemKnown(text);
+
+            int iconSize = 20;
+            int iconMargin = 8;
+            int textStartX = iconMargin + iconSize + 5;
+
+            if (isFavorite)
+            {
+                e.Graphics.DrawString("⭐", new Font("Arial", 10F), 
+                    isSelected ? _selectedForegroundBrush : new SolidBrush(Color.FromArgb(255, 152, 0)), 
+                    e.Bounds.X + iconMargin, e.Bounds.Y + (e.Bounds.Height - iconSize) / 2);
+                textStartX += iconSize;
+            }
+
+            if (isKnown)
+            {
+                e.Graphics.DrawString("✓", new Font("Arial", 10F), 
+                    isSelected ? _selectedForegroundBrush : new SolidBrush(Color.FromArgb(76, 175, 80)), 
+                    e.Bounds.X + textStartX - iconSize - 5, e.Bounds.Y + (e.Bounds.Height - iconSize) / 2);
+                textStartX += iconSize;
+            }
+
+            StringFormat format = new StringFormat
+            {
+                LineAlignment = StringAlignment.Center
+            };
+
+            e.Graphics.DrawString(text, e.Font, isSelected ? _selectedForegroundBrush : _normalForegroundBrush, 
+                new Rectangle(e.Bounds.X + textStartX, e.Bounds.Y, e.Bounds.Width - textStartX - iconMargin, e.Bounds.Height), 
+                format);
 
             if (isSelected)
             {
@@ -1267,6 +1786,23 @@ namespace LearningAssistant.Forms
             }
 
             e.DrawFocusRectangle();
+        }
+
+        private bool IsItemKnown(string itemText)
+        {
+            try
+            {
+                string errorBookPath = Path.Combine(AppPaths.UsersDir, GetCurrentUserId(), "error_book.json");
+                if (!File.Exists(errorBookPath)) return true;
+
+                string json = File.ReadAllText(errorBookPath);
+                var errorItems = JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
+                return !errorItems.Contains(itemText);
+            }
+            catch
+            {
+                return true;
+            }
         }
 
         private void ListBoxItems_SelectedIndexChanged(object? sender, EventArgs e)
@@ -1556,6 +2092,7 @@ namespace LearningAssistant.Forms
                 UpdateEncouragement();
                 _gamificationService.CheckBadgeUnlock("learn", _totalLearnedCount);
                 UpdateChallengesProgress();
+                UpdateDailyGoalProgress();
 
                 if (_eventBus != null && _currentItem != null)
                 {
@@ -1705,26 +2242,25 @@ namespace LearningAssistant.Forms
         {
             if (_currentItem == null)
             {
-                MessageBox.Show("请先选择一个学习内容", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ShowToast("请先选择一个学习内容", ToastType.Warning);
                 return;
             }
 
             try
             {
-                // 获取当前学习内容作为上下文
                 string context = _currentItem.GetMainContent();
                 string displayText = _currentItem.GetDisplayText();
 
-                // 构建AI提示词
                 string prompt = $"请解释以下内容：\n{displayText}\n\n原文：{context}";
 
-                // 使用AI面板服务显示AIAbilityPanel
+                _aiHistoryPanel?.AddHistoryItem(displayText, "AI回答中...");
+
                 _aiPanelPopupService.ShowAIAbilityPanel(this, prompt, null, context);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "打开AI问答窗口失败");
-                MessageBox.Show($"打开AI问答窗口失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                ShowToast($"打开AI问答窗口失败: {ex.Message}", ToastType.Error);
             }
         }
 
@@ -1823,9 +2359,6 @@ namespace LearningAssistant.Forms
             }
         }
 
-        /// <summary>
-        /// 创建费曼学习面板
-        /// </summary>
         private void CreateFeynmanPanel()
         {
             _feynmanPanel = new FeynmanLearningPanel
@@ -1842,15 +2375,17 @@ namespace LearningAssistant.Forms
             _feynmanContainerPanel = new Panel
             {
                 Dock = DockStyle.Right,
-                Width = 380,
+                Width = 420,
                 Name = "FeynmanPanelContainer",
-                BackColor = Color.White
+                BackColor = Color.White,
+                BorderStyle = BorderStyle.FixedSingle,
+                Padding = new Padding(0, 0, 0, 0)
             };
 
             var headerPanel = new Panel
             {
                 Dock = DockStyle.Top,
-                Height = 35,
+                Height = 45,
                 BackColor = Color.FromArgb(147, 112, 219)
             };
 
@@ -1859,8 +2394,8 @@ namespace LearningAssistant.Forms
                 Text = "🧠 费曼学习法",
                 Dock = DockStyle.Left,
                 ForeColor = Color.White,
-                Font = new Font("微软雅黑", 11F, FontStyle.Bold),
-                Padding = new Padding(15, 7, 0, 0),
+                Font = new Font("微软雅黑", 12F, FontStyle.Bold),
+                Padding = new Padding(20, 10, 0, 0),
                 AutoSize = true
             };
 
@@ -1868,20 +2403,40 @@ namespace LearningAssistant.Forms
             {
                 Text = "✕",
                 Dock = DockStyle.Right,
-                Width = 40,
+                Width = 45,
                 FlatStyle = FlatStyle.Flat,
                 ForeColor = Color.White,
-                Font = new Font("微软雅黑", 12F, FontStyle.Bold),
-                BackColor = Color.Transparent
+                Font = new Font("微软雅黑", 14F, FontStyle.Bold),
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand
             };
             closeButton.FlatAppearance.BorderSize = 0;
             closeButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(127, 92, 199);
             closeButton.Click += (s, e) => HideFeynmanPanel();
 
+            var gradientPanel = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 8,
+                BackColor = Color.White
+            };
+            gradientPanel.Paint += (sender, e) =>
+            {
+                using (var brush = new System.Drawing.Drawing2D.LinearGradientBrush(
+                    new Rectangle(0, 0, gradientPanel.Width, gradientPanel.Height),
+                    Color.FromArgb(147, 112, 219),
+                    Color.FromArgb(76, 175, 80),
+                    System.Drawing.Drawing2D.LinearGradientMode.Horizontal))
+                {
+                    e.Graphics.FillRectangle(brush, e.ClipRectangle);
+                }
+            };
+
             headerPanel.Controls.Add(titleLabel);
             headerPanel.Controls.Add(closeButton);
 
             _feynmanContainerPanel.Controls.Add(_feynmanPanel);
+            _feynmanContainerPanel.Controls.Add(gradientPanel);
             _feynmanContainerPanel.Controls.Add(headerPanel);
 
             Controls.Add(_feynmanContainerPanel);

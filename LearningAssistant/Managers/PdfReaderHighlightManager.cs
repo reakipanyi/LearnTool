@@ -1,6 +1,6 @@
-using LearningAssistant.Models;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.Pdf;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Drawing.Drawing2D;
 
@@ -13,6 +13,7 @@ namespace LearningAssistant.Managers
         private readonly Stack<HighlightUndoAction> _undoStack = new Stack<HighlightUndoAction>();
         private readonly IPdfReaderFormAccess _form;
         private bool _disposed = false;
+        private readonly IAnnotationService? _annotationService;
 
         private Bitmap? _highlightBitmap;
         private Graphics? _highlightGraphics;
@@ -25,6 +26,9 @@ namespace LearningAssistant.Managers
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _form = form ?? throw new ArgumentNullException(nameof(form));
             _highlightService = highlightService ?? throw new ArgumentNullException(nameof(highlightService));
+
+            var serviceProvider = (ServiceProvider?)form.Form?.Tag;
+            _annotationService = serviceProvider?.GetService<IAnnotationService>();
         }
 
         public void UpdateHighlightLayer()
@@ -368,13 +372,30 @@ namespace LearningAssistant.Managers
         public void BatchRemoveHighlights()
         {
             var highlights = _highlightService.GetHighlights(_form.CurrentPdfPath);
-            if (highlights == null || highlights.Count == 0)
+            int highlightCount = highlights?.Count ?? 0;
+
+            int strokeCount = 0;
+            int textCount = 0;
+            if (_annotationService != null)
             {
-                _form.ShowWarning("当前文档没有高亮可删除");
+                for (int pageIndex = 0; pageIndex < _form.Presenter?.PageCount; pageIndex++)
+                {
+                    var strokes = _annotationService.GetStrokes(_form.CurrentPdfPath, pageIndex);
+                    strokeCount += strokes.Count();
+                    var texts = _annotationService.GetTexts(_form.CurrentPdfPath, pageIndex);
+                    textCount += texts.Count();
+                }
+            }
+
+            int annotationCount = strokeCount + textCount;
+            if (highlightCount == 0 && annotationCount == 0)
+            {
+                _form.ShowWarning("当前文档没有标注可删除");
                 return;
             }
 
-            var result = _form.ShowConfirm($"确定要删除所有 {highlights.Count} 个高亮吗？", "确认删除");
+            var message = $"确定要删除所有 {highlightCount} 个高亮、{strokeCount} 个笔画和 {textCount} 个文字标注吗？";
+            var result = _form.ShowConfirm(message, "确认删除");
             if (!result) return;
 
             foreach (var highlight in highlights)
@@ -387,10 +408,19 @@ namespace LearningAssistant.Managers
                 _highlightService.RemoveHighlight(_form.CurrentPdfPath, highlight.Id);
             }
 
+            if (_annotationService != null)
+            {
+                for (int pageIndex = 0; pageIndex < _form.Presenter?.PageCount; pageIndex++)
+                {
+                    _annotationService.ClearAllStrokes(_form.CurrentPdfPath, pageIndex);
+                    _annotationService.ClearAllTexts(_form.CurrentPdfPath, pageIndex);
+                }
+            }
+
             RefreshHighlightList();
             UpdateHighlightLayer();
             _form.PictureBoxPdf?.Invalidate();
-            _form.ShowMessage($"已成功删除 {highlights.Count} 个高亮", "删除完成");
+            _form.ShowMessage($"已成功删除 {highlightCount} 个高亮、{strokeCount} 个笔画和 {textCount} 个文字标注", "删除完成");
         }
 
         public void UndoHighlight()
@@ -466,10 +496,55 @@ namespace LearningAssistant.Managers
             if (_form.ListBoxHighlights == null || string.IsNullOrEmpty(_form.CurrentPdfPath)) return;
 
             _form.ListBoxHighlights.Items.Clear();
+
             var highlights = _highlightService.GetHighlights(_form.CurrentPdfPath);
             foreach (var highlight in highlights)
             {
                 _form.ListBoxHighlights.Items.Add(highlight);
+            }
+
+            if (_annotationService != null)
+            {
+                for (int pageIndex = 0; pageIndex < _form.Presenter?.PageCount; pageIndex++)
+                {
+                    var strokes = _annotationService.GetStrokes(_form.CurrentPdfPath, pageIndex);
+                    foreach (var stroke in strokes)
+                    {
+                        var annotationItem = new PdfAnnotationItem
+                        {
+                            Id = stroke.Id,
+                            PdfPath = _form.CurrentPdfPath,
+                            PageIndex = pageIndex,
+                            Type = AnnotationType.Stroke,
+                            ColorArgb = stroke.ColorArgb,
+                            Thickness = stroke.Thickness,
+                            StrokePoints = stroke.Points,
+                            CreatedAt = stroke.CreatedAt
+                        };
+                        _form.ListBoxHighlights.Items.Add(annotationItem);
+
+                    }
+
+                    var texts = _annotationService.GetTexts(_form.CurrentPdfPath, pageIndex);
+                    foreach (var text in texts)
+                    {
+                        var annotationItem = new PdfAnnotationItem
+                        {
+                            Id = text.Id,
+                            PdfPath = _form.CurrentPdfPath,
+                            PageIndex = pageIndex,
+                            Type = AnnotationType.Text,
+                            NormalizedX = text.NormalizedX,
+                            NormalizedY = text.NormalizedY,
+                            ColorArgb = text.ColorArgb,
+                            Text = text.Content,
+                            FontSize = text.FontSize,
+                            FontFamily = text.FontFamily,
+                            CreatedAt = text.CreatedAt
+                        };
+                        _form.ListBoxHighlights.Items.Add(annotationItem);
+                    }
+                }
             }
         }
 

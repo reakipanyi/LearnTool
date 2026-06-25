@@ -87,6 +87,37 @@ namespace LearningAssistant.Forms.UserControls
         public LearningStatsView()
         {
             InitializeComponent();
+            ApplyButtonStyles();
+        }
+
+        private void ApplyButtonStyles()
+        {
+            ApplyFeatureButtonStyle(_buttonAchievements);
+            ApplyFeatureButtonStyle(_buttonChallenges);
+            ApplyFeatureButtonStyle(_buttonReview);
+        }
+
+        private void ApplyFeatureButtonStyle(Button button)
+        {
+            button.FlatAppearance.BorderSize = 0;
+            button.FlatStyle = FlatStyle.Flat;
+            button.Cursor = Cursors.Hand;
+
+            button.MouseEnter += (sender, e) =>
+            {
+                if (sender is Button btn)
+                {
+                    btn.BackColor = Color.FromArgb(240, 240, 240);
+                }
+            };
+
+            button.MouseLeave += (sender, e) =>
+            {
+                if (sender is Button btn)
+                {
+                    btn.BackColor = Color.Transparent;
+                }
+            };
         }
 
         private void InitializeComponent()
@@ -106,31 +137,27 @@ namespace LearningAssistant.Forms.UserControls
             _buttonReview = new Button();
             _labelBadges = new Label();
             _flowLayoutPanelBottomStats = new FlowLayoutPanel();
+
             _panelStatsContainer.SuspendLayout();
             _flowLayoutPanelFeatures.SuspendLayout();
             _flowLayoutPanelBottomStats.SuspendLayout();
             SuspendLayout();
-            // 
-            // _panelStatsContainer
-            // 
+
             _panelStatsContainer.Controls.Add(_levelBadge);
             _panelStatsContainer.Dock = DockStyle.Fill;
             _panelStatsContainer.Location = new Point(0, 98);
             _panelStatsContainer.Name = "_panelStatsContainer";
             _panelStatsContainer.Size = new Size(1095, 777);
             _panelStatsContainer.TabIndex = 0;
-            // 
-            // _levelBadge
-            // 
+            _panelStatsContainer.BackColor = Color.White;
+
             _levelBadge.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             _levelBadge.BackColor = Color.Transparent;
             _levelBadge.Location = new Point(966, 601);
             _levelBadge.Name = "_levelBadge";
             _levelBadge.Size = new Size(100, 136);
             _levelBadge.TabIndex = 8;
-            // 
-            // _labelStatistics
-            // 
+
             _labelStatistics.Dock = DockStyle.Top;
             _labelStatistics.Font = new Font("微软雅黑", 11F);
             _labelStatistics.ForeColor = Color.FromArgb(80, 100, 120);
@@ -139,56 +166,48 @@ namespace LearningAssistant.Forms.UserControls
             _labelStatistics.Size = new Size(1095, 55);
             _labelStatistics.TabIndex = 1;
             _labelStatistics.TextAlign = ContentAlignment.MiddleCenter;
-            // 
-            // _progressBar
-            // 
+
             _progressBar.BackColor = Color.FromArgb(240, 240, 240);
             _progressBar.Dock = DockStyle.Bottom;
-            _progressBar.ForeColor = Color.FromArgb(255, 140, 0);
+            _progressBar.ForeColor = Color.FromArgb(76, 175, 80);
             _progressBar.Location = new Point(0, 909);
             _progressBar.Name = "_progressBar";
-            _progressBar.Size = new Size(1095, 41);
+            _progressBar.Size = new Size(1095, 8);
             _progressBar.Style = ProgressBarStyle.Continuous;
             _progressBar.TabIndex = 0;
-            // 
-            // _labelStudyTime
-            // 
+
             _labelStudyTime.Font = new Font("微软雅黑", 9F);
             _labelStudyTime.ForeColor = Color.FromArgb(70, 90, 110);
             _labelStudyTime.Location = new Point(18, 3);
             _labelStudyTime.Name = "_labelStudyTime";
             _labelStudyTime.Size = new Size(120, 26);
             _labelStudyTime.TabIndex = 2;
-            // 
-            // _labelScore
-            // 
+            _labelStudyTime.TextAlign = ContentAlignment.MiddleCenter;
+
             _labelScore.Font = new Font("微软雅黑", 9F);
             _labelScore.ForeColor = Color.FromArgb(70, 90, 110);
             _labelScore.Location = new Point(144, 3);
             _labelScore.Name = "_labelScore";
             _labelScore.Size = new Size(120, 26);
             _labelScore.TabIndex = 3;
-            // 
-            // _labelTodayCount
-            // 
+            _labelScore.TextAlign = ContentAlignment.MiddleCenter;
+
             _labelTodayCount.Font = new Font("微软雅黑", 9F);
             _labelTodayCount.ForeColor = Color.FromArgb(70, 90, 110);
             _labelTodayCount.Location = new Point(270, 3);
             _labelTodayCount.Name = "_labelTodayCount";
             _labelTodayCount.Size = new Size(120, 26);
             _labelTodayCount.TabIndex = 4;
-            // 
-            // _labelStreak
-            // 
-            _labelStreak.Font = new Font("微软雅黑", 9F);
-            _labelStreak.ForeColor = Color.FromArgb(255, 140, 0);
+            _labelTodayCount.TextAlign = ContentAlignment.MiddleCenter;
+
+            _labelStreak.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            _labelStreak.ForeColor = Color.FromArgb(255, 152, 0);
             _labelStreak.Location = new Point(396, 3);
             _labelStreak.Name = "_labelStreak";
             _labelStreak.Size = new Size(100, 26);
             _labelStreak.TabIndex = 5;
-            // 
-            // _labelEncouragement
-            // 
+            _labelStreak.TextAlign = ContentAlignment.MiddleCenter;
+
             _labelEncouragement.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             _labelEncouragement.Font = new Font("微软雅黑", 10F, FontStyle.Italic);
             _labelEncouragement.ForeColor = Color.FromArgb(100, 150, 180);
@@ -197,9 +216,7 @@ namespace LearningAssistant.Forms.UserControls
             _labelEncouragement.Size = new Size(220, 26);
             _labelEncouragement.TabIndex = 6;
             _labelEncouragement.TextAlign = ContentAlignment.MiddleRight;
-            // 
-            // _flowLayoutPanelFeatures
-            // 
+
             _flowLayoutPanelFeatures.Controls.Add(_buttonAchievements);
             _flowLayoutPanelFeatures.Controls.Add(_buttonChallenges);
             _flowLayoutPanelFeatures.Controls.Add(_buttonReview);
@@ -211,9 +228,8 @@ namespace LearningAssistant.Forms.UserControls
             _flowLayoutPanelFeatures.Size = new Size(1095, 43);
             _flowLayoutPanelFeatures.TabIndex = 7;
             _flowLayoutPanelFeatures.WrapContents = false;
-            // 
-            // _buttonAchievements
-            // 
+            _flowLayoutPanelFeatures.BackColor = Color.White;
+
             _buttonAchievements.FlatAppearance.BorderSize = 0;
             _buttonAchievements.FlatStyle = FlatStyle.Flat;
             _buttonAchievements.Font = new Font("微软雅黑", 9F);
@@ -225,9 +241,7 @@ namespace LearningAssistant.Forms.UserControls
             _buttonAchievements.Text = "🏆 成就";
             _buttonAchievements.UseVisualStyleBackColor = false;
             _buttonAchievements.Click += ButtonAchievements_Click;
-            // 
-            // _buttonChallenges
-            // 
+
             _buttonChallenges.FlatAppearance.BorderSize = 0;
             _buttonChallenges.FlatStyle = FlatStyle.Flat;
             _buttonChallenges.Font = new Font("微软雅黑", 9F);
@@ -239,9 +253,7 @@ namespace LearningAssistant.Forms.UserControls
             _buttonChallenges.Text = "🎯 挑战";
             _buttonChallenges.UseVisualStyleBackColor = false;
             _buttonChallenges.Click += ButtonChallenges_Click;
-            // 
-            // _buttonReview
-            // 
+
             _buttonReview.FlatAppearance.BorderSize = 0;
             _buttonReview.FlatStyle = FlatStyle.Flat;
             _buttonReview.Font = new Font("微软雅黑", 9F);
@@ -253,9 +265,7 @@ namespace LearningAssistant.Forms.UserControls
             _buttonReview.Text = "🔔 复习";
             _buttonReview.UseVisualStyleBackColor = false;
             _buttonReview.Click += ButtonReview_Click;
-            // 
-            // _labelBadges
-            // 
+
             _labelBadges.AutoSize = true;
             _labelBadges.Font = new Font("Segoe UI Emoji", 16F);
             _labelBadges.Location = new Point(268, 3);
@@ -265,9 +275,7 @@ namespace LearningAssistant.Forms.UserControls
             _labelBadges.TabIndex = 4;
             _labelBadges.Text = "🏅🎖️";
             _labelBadges.TextAlign = ContentAlignment.MiddleRight;
-            // 
-            // _flowLayoutPanelBottomStats
-            // 
+
             _flowLayoutPanelBottomStats.Controls.Add(_labelStudyTime);
             _flowLayoutPanelBottomStats.Controls.Add(_labelScore);
             _flowLayoutPanelBottomStats.Controls.Add(_labelTodayCount);
@@ -280,9 +288,8 @@ namespace LearningAssistant.Forms.UserControls
             _flowLayoutPanelBottomStats.Size = new Size(1095, 34);
             _flowLayoutPanelBottomStats.TabIndex = 2;
             _flowLayoutPanelBottomStats.WrapContents = false;
-            // 
-            // LearningStatsView
-            // 
+            _flowLayoutPanelBottomStats.BackColor = Color.White;
+
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
             Controls.Add(_panelStatsContainer);

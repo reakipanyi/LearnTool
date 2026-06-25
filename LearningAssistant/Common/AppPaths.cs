@@ -107,7 +107,7 @@ namespace LearningAssistant.Common
         /// <summary>
         /// 书签目录
         /// </summary>
-        public static string BookmarksDir => Path.Combine(DataRoot, "bookmarks");
+        public static string FileBookmarksDir => Path.Combine(DataRoot, "FileBookmarks");
 
         /// <summary>
         /// 高亮目录
@@ -153,7 +153,7 @@ namespace LearningAssistant.Common
         /// <summary>
         /// 网页书签路径
         /// </summary>
-        public static string WebBookmarksPath => Path.Combine(ConfigDir, "WebBookmarks.json");
+        public static string WebBookmarksPath => Path.Combine(DataRoot, "WebBookmarks.json");
 
         /// <summary>
         /// 科目模板配置路径
@@ -219,7 +219,7 @@ namespace LearningAssistant.Common
             EnsureDirectoryExists(ExportsDir);
             EnsureDirectoryExists(AnnotationsDir);
             EnsureDirectoryExists(TranslationsDir);
-            EnsureDirectoryExists(BookmarksDir);
+            EnsureDirectoryExists(FileBookmarksDir);
             EnsureDirectoryExists(HighlightsDir);
             EnsureDirectoryExists(ThumbnailsDir);
             EnsureDirectoryExists(AudioDir);
@@ -261,7 +261,7 @@ namespace LearningAssistant.Common
         public static string GetPdfBookmarkPath(string pdfPath)
         {
             var fileName = SanitizeFileName(Path.GetFileNameWithoutExtension(pdfPath));
-            return Path.Combine(BookmarksDir, $"{fileName}_bookmarks.json");
+            return Path.Combine(FileBookmarksDir, $"{fileName}_bookmarks.json");
         }
 
         /// <summary>
