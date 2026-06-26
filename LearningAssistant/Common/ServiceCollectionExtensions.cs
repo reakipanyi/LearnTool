@@ -2,6 +2,7 @@ using LearningAssistant.Common.Events;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Data.Database;
 using LearningAssistant.Forms;
+using LearningAssistant.Forms.Notes;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
@@ -338,9 +339,10 @@ namespace LearningAssistant.Common
                 var reportService = sp.GetRequiredService<LearningReportService>();
                 var quoteService = sp.GetRequiredService<QuoteService>();
                 var goalService = sp.GetRequiredService<ILearningGoalService>();
+                var wrongAnswerService = sp.GetRequiredService<IWrongAnswerService>();
                 var logger = sp.GetService<ILogger<LearningManagementForm>>();
                 var themeService = sp.GetService<IThemeService>();
-                return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService, goalService, logger, themeService);
+                return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService, goalService, wrongAnswerService, logger, themeService);
             });
 
             services.AddScoped<WrongAnswerForm>(sp =>
@@ -349,6 +351,14 @@ namespace LearningAssistant.Common
                 var logger = sp.GetService<ILogger<WrongAnswerForm>>();
                 var themeService = sp.GetService<IThemeService>();
                 return new WrongAnswerForm(wrongAnswerService, logger, themeService);
+            });
+
+            services.AddScoped<NotesForm>(sp =>
+            {
+                var noteService = sp.GetRequiredService<INoteService>();
+                var logger = sp.GetService<ILogger<NotesForm>>();
+                var themeService = sp.GetService<IThemeService>();
+                return new NotesForm(noteService, logger, themeService);
             });
 
             services.AddScoped<ISettingView>(sp => sp.GetRequiredService<SettingForm>());

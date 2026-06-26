@@ -359,7 +359,7 @@ namespace LearningAssistant.Forms.UserControls
                 Cursor = Cursors.Hand
             };
             _buttonVoiceInput.FlatAppearance.BorderSize = 0;
-            _buttonVoiceInput.Click += (s, e) => VoiceInputRequested?.Invoke(this, EventArgs.Empty);
+            _buttonVoiceInput.Click += ButtonVoiceInput_Click;
             _panelStepTeach.Controls.Add(_buttonVoiceInput);
 
             _buttonShowHistory = new Button
@@ -966,6 +966,11 @@ namespace LearningAssistant.Forms.UserControls
             }
 
             AIFeedbackRequested?.Invoke(this, userAnswer);
+        }
+
+        private void ButtonVoiceInput_Click(object? sender, EventArgs e)
+        {
+            VoiceInputRequested?.Invoke(this, EventArgs.Empty);
         }
 
         private void ButtonGenerateSimplified_Click(object? sender, EventArgs e)

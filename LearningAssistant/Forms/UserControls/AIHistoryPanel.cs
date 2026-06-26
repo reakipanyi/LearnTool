@@ -1,63 +1,70 @@
-using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Windows.Forms;
-
 namespace LearningAssistant.Forms.UserControls
 {
     public class AIHistoryPanel : Panel
     {
+        #region 控件字段
         private readonly ListBox _historyList;
         private readonly Button _clearButton;
         private readonly Label _titleLabel;
         private readonly List<AIHistoryItem> _historyItems = new();
+        #endregion
+
+        #region 全局复用字体（Dispose统一销毁，避免GDI泄漏）
+        private readonly Font _fontTitle = new Font("微软雅黑", 12F, FontStyle.Bold);
+        private readonly Font _fontListMain = new Font("微软雅黑", 10F);
+        private readonly Font _fontListTime = new Font("微软雅黑", 8F);
+        private readonly Font _fontBtnClear = new Font("微软雅黑", 9F);
+        #endregion
+
+        public event EventHandler<AIHistoryEventArgs>? HistoryItemSelected;
 
         public AIHistoryPanel()
         {
-            BackColor = Color.White;
-            BorderStyle = BorderStyle.FixedSingle;
-            Padding = new Padding(10);
+            // 基础面板样式
+            this.BackColor = Color.White;
+            this.BorderStyle = BorderStyle.FixedSingle;
+            this.Padding = new Padding(10);
 
-            _titleLabel = new Label
-            {
-                Text = "🤖 AI问答历史",
-                Font = new Font("微软雅黑", 12F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(33, 33, 33),
-                Dock = DockStyle.Top,
-                Padding = new Padding(5, 5, 5, 10)
-            };
+            // 1. 创建所有子控件
+            this._titleLabel = new Label();
+            this._historyList = new ListBox();
+            this._clearButton = new Button();
 
-            _historyList = new ListBox
-            {
-                Dock = DockStyle.Fill,
-                Font = new Font("微软雅黑", 10F),
-                ForeColor = Color.FromArgb(66, 66, 66),
-                BackColor = Color.FromArgb(248, 248, 248),
-                BorderStyle = BorderStyle.None,
-                ItemHeight = 40
-            };
-            _historyList.DrawMode = DrawMode.OwnerDrawFixed;
-            _historyList.DrawItem += HistoryList_DrawItem;
-            _historyList.SelectedIndexChanged += HistoryList_SelectedIndexChanged;
+            // 2. 标题标签配置
+            this._titleLabel.Text = "🤖 AI问答历史";
+            this._titleLabel.Font = _fontTitle;
+            this._titleLabel.ForeColor = Color.FromArgb(33, 33, 33);
+            this._titleLabel.Dock = DockStyle.Top;
+            this._titleLabel.Padding = new Padding(5, 5, 5, 10);
 
-            _clearButton = new Button
-            {
-                Text = "清空历史",
-                Font = new Font("微软雅黑", 9F),
-                BackColor = Color.FromArgb(244, 67, 54),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                FlatAppearance.BorderSize = 0,
-                Dock = DockStyle.Bottom,
-                Height = 30
-            };
-            _clearButton.Click += ClearButton_Click;
+            // 3. 历史列表配置
+            this._historyList.Dock = DockStyle.Fill;
+            this._historyList.Font = _fontListMain;
+            this._historyList.ForeColor = Color.FromArgb(66, 66, 66);
+            this._historyList.BackColor = Color.FromArgb(248, 248, 248);
+            this._historyList.BorderStyle = BorderStyle.None;
+            this._historyList.ItemHeight = 40;
+            this._historyList.DrawMode = DrawMode.OwnerDrawFixed;
+            this._historyList.DrawItem += HistoryList_DrawItem;
+            this._historyList.SelectedIndexChanged += HistoryList_SelectedIndexChanged;
 
-            Controls.Add(_clearButton);
-            Controls.Add(_historyList);
-            Controls.Add(_titleLabel);
+            // 4. 清空按钮配置
+            this._clearButton.Text = "清空历史";
+            this._clearButton.Font = _fontBtnClear;
+            this._clearButton.BackColor = Color.FromArgb(244, 67, 54);
+            this._clearButton.ForeColor = Color.White;
+            this._clearButton.FlatStyle = FlatStyle.Flat;
+            this._clearButton.Dock = DockStyle.Bottom;
+            this._clearButton.Height = 30;
+            this._clearButton.Click += ClearButton_Click;
+
+            // 5. 按Dock层级倒序添加（Bottom -> Fill -> Top）
+            this.Controls.Add(this._clearButton);
+            this.Controls.Add(this._historyList);
+            this.Controls.Add(this._titleLabel);
         }
 
+        /// <summary>添加历史记录，最多保留20条</summary>
         public void AddHistoryItem(string question, string answer)
         {
             var item = new AIHistoryItem
@@ -77,28 +84,33 @@ namespace LearningAssistant.Forms.UserControls
             }
         }
 
+        /// <summary>列表自定义绘制（复用全局字体，不再临时new Font）</summary>
         private void HistoryList_DrawItem(object? sender, DrawItemEventArgs e)
         {
-            if (sender is not ListBox listBox || e.Index < 0) return;
+            if (sender is not ListBox listBox || e.Index < 0)
+                return;
 
             e.DrawBackground();
-
             var item = listBox.Items[e.Index] as AIHistoryItem;
-            if (item == null) return;
+            if (item == null)
+                return;
 
             bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
             Brush textBrush = isSelected ? Brushes.White : Brushes.Black;
             Brush subTextBrush = isSelected ? Brushes.LightGray : Brushes.Gray;
 
-            string questionPreview = item.Question.Length > 30 ? item.Question.Substring(0, 30) + "..." : item.Question;
+            string questionPreview = item.Question.Length > 30
+                ? item.Question.Substring(0, 30) + "..."
+                : item.Question;
             string timeStr = item.Timestamp.ToShortTimeString();
 
-            e.Graphics.DrawString(questionPreview, new Font("微软雅黑", 10F, FontStyle.Bold), textBrush, e.Bounds.X + 10, e.Bounds.Y + 5);
-            e.Graphics.DrawString(timeStr, new Font("微软雅黑", 8F), subTextBrush, e.Bounds.X + 10, e.Bounds.Y + 25);
+            e.Graphics.DrawString(questionPreview, _fontListMain, textBrush, e.Bounds.X + 10, e.Bounds.Y + 5);
+            e.Graphics.DrawString(timeStr, _fontListTime, subTextBrush, e.Bounds.X + 10, e.Bounds.Y + 25);
 
             if (isSelected)
             {
-                e.Graphics.DrawRectangle(new Pen(Color.White, 2), e.Bounds.X, e.Bounds.Y, e.Bounds.Width - 1, e.Bounds.Height - 1);
+                using Pen pen = new Pen(Color.White, 2);
+                e.Graphics.DrawRectangle(pen, e.Bounds.X, e.Bounds.Y, e.Bounds.Width - 1, e.Bounds.Height - 1);
             }
 
             e.DrawFocusRectangle();
@@ -118,7 +130,19 @@ namespace LearningAssistant.Forms.UserControls
             _historyList.Items.Clear();
         }
 
-        public event EventHandler<AIHistoryEventArgs>? HistoryItemSelected;
+        #region 释放字体资源，防止GDI句柄泄漏
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _fontTitle?.Dispose();
+                _fontListMain?.Dispose();
+                _fontListTime?.Dispose();
+                _fontBtnClear?.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+        #endregion
     }
 
     public class AIHistoryItem

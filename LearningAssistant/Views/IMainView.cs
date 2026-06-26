@@ -90,8 +90,11 @@ namespace LearningAssistant.Views
         /// <param name="xpToNextLevel">距下一级所需XP</param>
         /// <param name="completedChallenges">已完成挑战数</param>
         /// <param name="totalChallenges">总挑战数</param>
+        /// <param name="noteCount">笔记总数</param>
+        /// <param name="todayNewNotes">今日新增笔记数</param>
         void UpdateDashboardStats(int todayStudyMinutes, int streakDays, int totalXP,
-            int currentLevel, int xpToNextLevel, int completedChallenges, int totalChallenges);
+            int currentLevel, int xpToNextLevel, int completedChallenges, int totalChallenges,
+            int noteCount = 0, int todayNewNotes = 0);
 
     }
 

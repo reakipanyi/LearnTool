@@ -204,6 +204,14 @@ namespace LearningAssistant.Managers
             UpdateDisplay();
         }
 
+        private void OnClaimRewardClick(object? sender, EventArgs e)
+        {
+            if (sender is Button claimBtn && claimBtn.Tag is Challenge challenge)
+            {
+                ClaimReward(challenge);
+            }
+        }
+
         /// <summary>
         /// 更新挑战显示
         /// </summary>
@@ -256,10 +264,10 @@ namespace LearningAssistant.Managers
                     {
                         Text = "领取",
                         Size = new Size(50, 20),
-                        Location = new Point(95, 45)
+                        Location = new Point(95, 45),
+                        Tag = challenge
                     };
-                    var challengeCopy = challenge;
-                    claimBtn.Click += (s, e) => ClaimReward(challengeCopy);
+                    claimBtn.Click += OnClaimRewardClick;
                     panel.Controls.Add(claimBtn);
                 }
 

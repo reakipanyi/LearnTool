@@ -375,6 +375,24 @@ namespace LearningAssistant.Forms
             }
         }
 
+        private void CloseTabItem_Click(object? sender, EventArgs e)
+        {
+            if (sender is ToolStripItem item && item.Tag is TabPage tabPage)
+            {
+                CloseTab(tabPage);
+            }
+        }
+
+        private void CloseOtherItem_Click(object? sender, EventArgs e)
+        {
+            if (sender is ToolStripItem item && item.Tag is TabPage tabPage)
+            {
+                var tabsToClose = tabControl.TabPages.Cast<TabPage>().Where(t => t != tabPage).ToList();
+                foreach (var tab in tabsToClose)
+                    CloseTab(tab);
+            }
+        }
+
         /// <summary>
         /// 新窗口请求处理 - 在新标签页打开
         /// </summary>
@@ -685,17 +703,14 @@ namespace LearningAssistant.Forms
             menu.Items.Add(new ToolStripSeparator());
 
             var closeTabItem = new ToolStripMenuItem("关闭此标签页");
-            closeTabItem.Click += (s, e) => CloseTab(tabPage);
+            closeTabItem.Tag = tabPage;
+            closeTabItem.Click += CloseTabItem_Click;
             closeTabItem.Enabled = tabControl.TabCount > 1;
             menu.Items.Add(closeTabItem);
 
             var closeOtherItem = new ToolStripMenuItem("关闭其他标签页");
-            closeOtherItem.Click += (s, e) =>
-            {
-                var tabsToClose = tabControl.TabPages.Cast<TabPage>().Where(t => t != tabPage).ToList();
-                foreach (var tab in tabsToClose)
-                    CloseTab(tab);
-            };
+            closeOtherItem.Tag = tabPage;
+            closeOtherItem.Click += CloseOtherItem_Click;
             closeOtherItem.Enabled = tabControl.TabCount > 1;
             menu.Items.Add(closeOtherItem);
 

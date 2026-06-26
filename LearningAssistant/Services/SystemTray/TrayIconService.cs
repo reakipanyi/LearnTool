@@ -59,11 +59,11 @@ namespace LearningAssistant.Services.SystemTray
             _contextMenu = new ContextMenuStrip();
 
             var showItem = new ToolStripMenuItem("显示主窗口");
-            showItem.Click += (s, e) => ShowMainWindow();
+            showItem.Click += OnShowMainWindowClick;
             _contextMenu.Items.Add(showItem);
 
             var hideItem = new ToolStripMenuItem("隐藏到托盘");
-            hideItem.Click += (s, e) => HideToTray();
+            hideItem.Click += OnHideToTrayClick;
             _contextMenu.Items.Add(hideItem);
 
             _contextMenu.Items.Add(new ToolStripSeparator());
@@ -314,6 +314,16 @@ namespace LearningAssistant.Services.SystemTray
                 HideToTray();
                 ShowNotification("程序已最小化到托盘", "程序正在后台运行，点击托盘图标可重新打开");
             }
+        }
+
+        private void OnShowMainWindowClick(object? sender, EventArgs e)
+        {
+            ShowMainWindow();
+        }
+
+        private void OnHideToTrayClick(object? sender, EventArgs e)
+        {
+            HideToTray();
         }
 
         private void OnExitClick(object? sender, EventArgs e)

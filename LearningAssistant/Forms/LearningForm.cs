@@ -3,6 +3,7 @@ using LearningAssistant.Common.Events;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Forms.UserControls;
 using LearningAssistant.Managers;
+using LearningAssistant.Models.Config;
 using LearningAssistant.Models.Learning;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services;
@@ -114,8 +115,6 @@ namespace LearningAssistant.Forms
 
         #region === 控件访问器 ===
         private Panel panelContent => _contentView.PanelContent;
-        private ListBox listBoxDisplay => _contentView.ListBoxDisplay;
-        private Label labelContent => _contentView.LabelContent;
         private Label labelStatistics => _statsView.LabelStatistics;
         private ListBox listBoxItems => _listView.ListBoxItems;
         private Label labelListStatus => _listView.LabelListStatus;
@@ -313,18 +312,6 @@ namespace LearningAssistant.Forms
             if (_buttonsView != null && _buttonsView.ButtonsPanel != null)
             {
                 _buttonsView.ButtonsPanel.BackColor = colors.Background;
-            }
-
-            if (listBoxDisplay != null)
-            {
-                listBoxDisplay.ForeColor = colors.TextPrimary;
-                listBoxDisplay.BackColor = colors.Surface;
-            }
-
-            if (labelContent != null)
-            {
-                labelContent.ForeColor = colors.TextPrimary;
-                labelContent.BackColor = colors.Surface;
             }
 
             if (buttonKnown != null)
@@ -655,42 +642,11 @@ namespace LearningAssistant.Forms
         {
             set
             {
-                labelContent.Text = value;
-                AdjustFontSizeBasedOnContent(value);
-                // 注意：不在此处调用 ResetDetailState，由 CurrentItem 统一管理状态
+                if (_learningCard != null)
+                {
+                    _learningCard.Title = value;
+                }
             }
-        }
-
-        private void AdjustFontSizeBasedOnContent(string content)
-        {
-            if (string.IsNullOrEmpty(content))
-                return;
-
-            int charCount = content.Length;
-            float fontSize;
-
-            if (charCount <= 2)
-            {
-                fontSize = 80F;
-            }
-            else if (charCount <= 4)
-            {
-                fontSize = 72F;
-            }
-            else if (charCount <= 8)
-            {
-                fontSize = 64F;
-            }
-            else if (charCount <= 15)
-            {
-                fontSize = 56F;
-            }
-            else
-            {
-                fontSize = 48F;
-            }
-
-            labelContent.Font = new Font("微软雅黑", fontSize, FontStyle.Bold, GraphicsUnit.Point, 134);
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -698,10 +654,9 @@ namespace LearningAssistant.Forms
         {
             set
             {
-                // 仅更新内容，由 CurrentItem 统一管理状态
-                if (!string.IsNullOrEmpty(value))
+                if (_learningCard != null && !string.IsNullOrEmpty(value))
                 {
-                    UpdateDetailContent(value);
+                    _learningCard.Content = value;
                 }
             }
         }
@@ -711,10 +666,9 @@ namespace LearningAssistant.Forms
         {
             set
             {
-                // 仅更新内容，由 CurrentItem 统一管理状态
-                if (!string.IsNullOrEmpty(value))
+                if (_learningCard != null && !string.IsNullOrEmpty(value))
                 {
-                    UpdateDetailContent(value);
+                    _learningCard.Content = value;
                 }
             }
         }
@@ -1019,81 +973,6 @@ namespace LearningAssistant.Forms
             toast.Show(this, duration);
         }
 
-        private TextBox _searchTextBox = null!;
-        private Button _searchButton = null!;
-        private Panel _searchPanel = null!;
-
-        private void InitializeSearchBox()
-        {
-            _searchPanel = new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = 45,
-                BackColor = Color.White,
-                BorderStyle = BorderStyle.FixedSingle
-            };
-
-            _searchTextBox = new TextBox
-            {
-                Dock = DockStyle.Fill,
-                Margin = new Padding(10, 5, 5, 5),
-                Font = new Font("微软雅黑", 10F),
-                PlaceholderText = "🔍 搜索学习内容...",
-                Padding = new Padding(5)
-            };
-            _searchTextBox.TextChanged += SearchTextBox_TextChanged;
-            _searchTextBox.KeyDown += SearchTextBox_KeyDown;
-
-            _searchButton = new Button
-            {
-                Dock = DockStyle.Right,
-                Width = 80,
-                Text = "搜索",
-                Font = new Font("微软雅黑", 10F, FontStyle.Bold),
-                BackColor = Color.FromArgb(76, 175, 80),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                FlatAppearance.BorderSize = 0
-            };
-            ApplyRoundedStyle(_searchButton, 6);
-            _searchButton.Click += SearchButton_Click;
-
-            _searchPanel.Controls.Add(_searchButton);
-            _searchPanel.Controls.Add(_searchTextBox);
-
-            if (_listView != null && _listView.PanelList != null)
-            {
-                _listView.PanelList.Controls.Add(_searchPanel);
-                _listView.PanelList.Controls.SetChildIndex(_searchPanel, 0);
-            }
-        }
-
-        private void SearchTextBox_TextChanged(object? sender, EventArgs e)
-        {
-            if (string.IsNullOrWhiteSpace(_searchTextBox.Text))
-            {
-                _listView.FilterItems(string.Empty);
-            }
-        }
-
-        private void SearchTextBox_KeyDown(object? sender, KeyEventArgs e)
-        {
-            if (e.KeyCode == Keys.Enter)
-            {
-                _listView.FilterItems(_searchTextBox.Text.Trim());
-            }
-            else if (e.KeyCode == Keys.Escape)
-            {
-                _searchTextBox.Clear();
-                _listView.FilterItems(string.Empty);
-            }
-        }
-
-        private void SearchButton_Click(object? sender, EventArgs e)
-        {
-            _listView.FilterItems(_searchTextBox.Text.Trim());
-        }
-
         public void EnableButtons(bool enabled)
         {
             buttonKnown.Enabled = enabled;
@@ -1240,8 +1119,6 @@ namespace LearningAssistant.Forms
 
             ApplyButtonStyles();
 
-            InitializeSearchBox();
-
             InitializeNavigationButtons();
 
             if (flowLayoutPanelBadges != null)
@@ -1280,7 +1157,7 @@ namespace LearningAssistant.Forms
             ApplyRoundedStyle(buttonPronounce, 8);
             ApplyRoundedStyle(buttonFavorite, 8);
             ApplyRoundedStyle(buttonNote, 8);
-            ApplyRoundedStyle(buttonExit, 8);
+            //ApplyRoundedStyle(buttonExit, 8);
             ApplyRoundedStyle(buttonShowAnswer, 8);
             ApplyRoundedStyle(buttonThemeToggle, 8);
 
@@ -1318,8 +1195,16 @@ namespace LearningAssistant.Forms
                 if (sender is Button btn)
                 {
                     btn.FlatAppearance.BorderColor = Color.FromArgb(150, 150, 150);
-                    btn.FlatAppearance.MouseOverBackColor = ControlPaint.Light(btn.BackColor, 10);
-                    AnimateButton(btn, 1.05f);
+
+                    float brightness = (btn.BackColor.R * 0.299f + btn.BackColor.G * 0.587f + btn.BackColor.B * 0.114f) / 255f;
+                    if (brightness > 0.6f)
+                    {
+                        btn.FlatAppearance.MouseOverBackColor = ControlPaint.Dark(btn.BackColor, 10);
+                    }
+                    else
+                    {
+                        btn.FlatAppearance.MouseOverBackColor = ControlPaint.Light(btn.BackColor, 10);
+                    }
                 }
             };
 
@@ -1328,41 +1213,8 @@ namespace LearningAssistant.Forms
                 if (sender is Button btn)
                 {
                     btn.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
-                    AnimateButton(btn, 1.0f);
                 }
             };
-
-            button.MouseDown += (sender, e) =>
-            {
-                if (sender is Button btn)
-                {
-                    AnimateButton(btn, 0.95f);
-                }
-            };
-
-            button.MouseUp += (sender, e) =>
-            {
-                if (sender is Button btn)
-                {
-                    AnimateButton(btn, 1.0f);
-                }
-            };
-        }
-
-        private async void AnimateButton(Button button, float scale)
-        {
-            if (button == null || button.IsDisposed) return;
-
-            var originalSize = button.Size;
-            var originalLocation = button.Location;
-
-            int newWidth = (int)(originalSize.Width * scale);
-            int newHeight = (int)(originalSize.Height * scale);
-            int offsetX = (originalSize.Width - newWidth) / 2;
-            int offsetY = (originalSize.Height - newHeight) / 2;
-
-            button.Size = new Size(newWidth, newHeight);
-            button.Location = new Point(originalLocation.X + offsetX, originalLocation.Y + offsetY);
         }
 
         private void InitializeNavigationButtons()
@@ -1374,7 +1226,6 @@ namespace LearningAssistant.Forms
                 BackColor = Color.FromArgb(108, 117, 125),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
-                FlatAppearance.BorderSize = 0,
                 Size = new Size(120, 45),
                 Margin = new Padding(5)
             };
@@ -1388,7 +1239,6 @@ namespace LearningAssistant.Forms
                 BackColor = Color.FromArgb(76, 175, 80),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
-                FlatAppearance.BorderSize = 0,
                 Size = new Size(120, 45),
                 Margin = new Padding(5)
             };
@@ -1397,6 +1247,20 @@ namespace LearningAssistant.Forms
 
             _buttonsView.ButtonsPanel.Controls.Add(_buttonPrevious);
             _buttonsView.ButtonsPanel.Controls.Add(_buttonNextNav);
+
+            Button buttonEdit = new Button
+            {
+                Text = "✏️ 编辑",
+                Font = new Font("微软雅黑", 11F, FontStyle.Bold),
+                BackColor = Color.FromArgb(52, 152, 219),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Size = new Size(100, 45),
+                Margin = new Padding(5)
+            };
+            ApplyRoundedStyle(buttonEdit, 8);
+            buttonEdit.Click += ButtonEdit_Click;
+            _buttonsView.ButtonsPanel.Controls.Add(buttonEdit);
 
             InitializeDailyGoalProgress();
         }
@@ -1450,10 +1314,11 @@ namespace LearningAssistant.Forms
         {
             _learningCard = new LearningCard
             {
-                Dock = DockStyle.Top,
+                Dock = DockStyle.Fill,
                 Margin = new Padding(10),
-                Height = 140
+                Height = 220
             };
+            _learningCard.Click += ContentArea_Click;
 
             if (panelContent != null)
             {
@@ -1506,21 +1371,21 @@ namespace LearningAssistant.Forms
                 ToolTipText = "加粗",
                 Font = new Font("微软雅黑", 9F, FontStyle.Bold)
             };
-            boldBtn.Click += (s, e) => ApplyNoteFormat(FontStyle.Bold);
+            boldBtn.Click += BoldBtn_Click;
 
             var italicBtn = new ToolStripButton("I")
             {
                 ToolTipText = "斜体",
                 Font = new Font("微软雅黑", 9F, FontStyle.Italic)
             };
-            italicBtn.Click += (s, e) => ApplyNoteFormat(FontStyle.Italic);
+            italicBtn.Click += ItalicBtn_Click;
 
             var underlineBtn = new ToolStripButton("U")
             {
                 ToolTipText = "下划线",
                 Font = new Font("微软雅黑", 9F, FontStyle.Underline)
             };
-            underlineBtn.Click += (s, e) => ApplyNoteFormat(FontStyle.Underline);
+            underlineBtn.Click += UnderlineBtn_Click;
 
             _noteFormattingToolbar.Items.Add(boldBtn);
             _noteFormattingToolbar.Items.Add(italicBtn);
@@ -1531,7 +1396,7 @@ namespace LearningAssistant.Forms
             {
                 ToolTipText = "字体颜色"
             };
-            fontColorBtn.Click += (s, e) => ChangeNoteFontColor();
+            fontColorBtn.Click += FontColorBtn_Click;
             _noteFormattingToolbar.Items.Add(fontColorBtn);
 
             if (panelNotes != null)
@@ -1544,6 +1409,26 @@ namespace LearningAssistant.Forms
             {
                 richTextBoxNotes.TextChanged += RichTextBoxNotes_TextChangedEnhanced;
             }
+        }
+
+        private void BoldBtn_Click(object? sender, EventArgs e)
+        {
+            ApplyNoteFormat(FontStyle.Bold);
+        }
+
+        private void ItalicBtn_Click(object? sender, EventArgs e)
+        {
+            ApplyNoteFormat(FontStyle.Italic);
+        }
+
+        private void UnderlineBtn_Click(object? sender, EventArgs e)
+        {
+            ApplyNoteFormat(FontStyle.Underline);
+        }
+
+        private void FontColorBtn_Click(object? sender, EventArgs e)
+        {
+            ChangeNoteFontColor();
         }
 
         private void ApplyNoteFormat(FontStyle style)
@@ -1757,16 +1642,16 @@ namespace LearningAssistant.Forms
 
             if (isFavorite)
             {
-                e.Graphics.DrawString("⭐", new Font("Arial", 10F), 
-                    isSelected ? _selectedForegroundBrush : new SolidBrush(Color.FromArgb(255, 152, 0)), 
+                e.Graphics.DrawString("⭐", new Font("Arial", 10F),
+                    isSelected ? _selectedForegroundBrush : new SolidBrush(Color.FromArgb(255, 152, 0)),
                     e.Bounds.X + iconMargin, e.Bounds.Y + (e.Bounds.Height - iconSize) / 2);
                 textStartX += iconSize;
             }
 
             if (isKnown)
             {
-                e.Graphics.DrawString("✓", new Font("Arial", 10F), 
-                    isSelected ? _selectedForegroundBrush : new SolidBrush(Color.FromArgb(76, 175, 80)), 
+                e.Graphics.DrawString("✓", new Font("Arial", 10F),
+                    isSelected ? _selectedForegroundBrush : new SolidBrush(Color.FromArgb(76, 175, 80)),
                     e.Bounds.X + textStartX - iconSize - 5, e.Bounds.Y + (e.Bounds.Height - iconSize) / 2);
                 textStartX += iconSize;
             }
@@ -1776,8 +1661,8 @@ namespace LearningAssistant.Forms
                 LineAlignment = StringAlignment.Center
             };
 
-            e.Graphics.DrawString(text, e.Font, isSelected ? _selectedForegroundBrush : _normalForegroundBrush, 
-                new Rectangle(e.Bounds.X + textStartX, e.Bounds.Y, e.Bounds.Width - textStartX - iconMargin, e.Bounds.Height), 
+            e.Graphics.DrawString(text, e.Font, isSelected ? _selectedForegroundBrush : _normalForegroundBrush,
+                new Rectangle(e.Bounds.X + textStartX, e.Bounds.Y, e.Bounds.Width - textStartX - iconMargin, e.Bounds.Height),
                 format);
 
             if (isSelected)
@@ -1880,37 +1765,15 @@ namespace LearningAssistant.Forms
         private void ListBoxDisplay_Click(object? sender, EventArgs e) => ContentArea_Click(sender, e);
 
         /// <summary>
-        /// 更新详情区内容
-        /// </summary>
-        /// <param name="text">要显示的文本</param>
-        private void UpdateDetailContent(string text)
-        {
-            if (listBoxDisplay == null) return;
-
-            listBoxDisplay.Items.Clear();
-            if (string.IsNullOrEmpty(text)) return;
-
-            string[] lines = text.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-            foreach (string line in lines)
-            {
-                string trimmedLine = line.Trim();
-                if (!string.IsNullOrEmpty(trimmedLine))
-                {
-                    listBoxDisplay.Items.Add(trimmedLine);
-                }
-            }
-        }
-
-        /// <summary>
         /// 统一更新详情区状态
         /// </summary>
         /// <param name="visible">是否可见</param>
         /// <param name="showAnswer">是否显示答案（答题模式下）</param>
         private void UpdateDetailState(bool visible, bool showAnswer = true)
         {
-            if (listBoxDisplay == null) return;
+            if (_learningCard == null) return;
 
-            listBoxDisplay.Visible = visible;
+            _learningCard.Visible = visible;
 
             if (visible && _currentItem != null)
             {
@@ -1920,18 +1783,18 @@ namespace LearningAssistant.Forms
                     _answerRevealed = showAnswer;
                     if (_answerRevealed)
                     {
-                        UpdateDetailContent(_currentItem.GetDisplayText()); // 显示完整答案
+                        _learningCard.Content = _currentItem.GetDisplayText();
                     }
                     else
                     {
-                        UpdateDetailContent(_currentItem.GetDisplayStruct()); // 只显示结构（问题）
+                        _learningCard.Content = _currentItem.GetDisplayStruct();
                     }
                 }
                 else
                 {
                     // 学习模式：显示完整内容
                     _answerRevealed = true;
-                    UpdateDetailContent(_currentItem.GetDisplayText());
+                    _learningCard.Content = _currentItem.GetDisplayText();
                 }
             }
         }
@@ -2347,6 +2210,11 @@ namespace LearningAssistant.Forms
             }
         }
 
+        private void CloseButton_Click(object? sender, EventArgs e)
+        {
+            HideFeynmanPanel();
+        }
+
         /// <summary>
         /// 隐藏费曼学习面板
         /// </summary>
@@ -2412,7 +2280,7 @@ namespace LearningAssistant.Forms
             };
             closeButton.FlatAppearance.BorderSize = 0;
             closeButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(127, 92, 199);
-            closeButton.Click += (s, e) => HideFeynmanPanel();
+            closeButton.Click += CloseButton_Click;
 
             var gradientPanel = new Panel
             {
@@ -2628,6 +2496,31 @@ namespace LearningAssistant.Forms
             ExitClicked?.Invoke(this, EventArgs.Empty);
         }
 
+        private void ButtonEdit_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                var logger = Program.GetService<ILogger<ContentEditorForm>>();
+                var appConfig = Program.GetService<AppConfig>();
+                var aiPanelPopupService = Program.GetService<IAIPanelPopupService>();
+                var themeService = Program.GetService<IThemeService>();
+
+                if (logger == null || appConfig == null || aiPanelPopupService == null || themeService == null)
+                {
+                    MessageBox.Show("无法加载内容编辑器所需的服务", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                var editorForm = new ContentEditorForm(logger, appConfig, aiPanelPopupService, themeService);
+                editorForm.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "打开内容编辑器失败");
+                MessageBox.Show($"打开内容编辑器失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         private void ButtonAchievements_Click(object? sender, EventArgs e)
         {
             try
@@ -2698,11 +2591,13 @@ namespace LearningAssistant.Forms
         private void ButtonRevealAnswer_Click(object? sender, EventArgs e)
         {
             _answerRevealed = true;
-            listBoxDisplay.Visible = true;
-
-            if (_currentItem != null)
+            if (_learningCard != null)
             {
-                UpdateDetailContent(_currentItem.GetDisplayText());
+                _learningCard.Visible = true;
+                if (_currentItem != null)
+                {
+                    _learningCard.Content = _currentItem.GetDisplayText();
+                }
             }
         }
 

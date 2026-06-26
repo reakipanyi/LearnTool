@@ -17,6 +17,9 @@ namespace LearningAssistant.Forms.UserControls
         private Button _buttonNote = null!;
         private Button _buttonExit = null!;
         private Button _buttonAIAsk = null!;
+        private Panel separator1;
+        private Panel separator2;
+        private Panel separator3;
         private Button _buttonFeynman = null!;
 
         #endregion
@@ -179,23 +182,20 @@ namespace LearningAssistant.Forms.UserControls
             _buttonsPanel = new FlowLayoutPanel();
             _buttonKnown = new Button();
             _buttonUnknown = new Button();
+            separator1 = new Panel();
             _buttonPronounce = new Button();
+            separator2 = new Panel();
             _buttonFavorite = new Button();
             _buttonNote = new Button();
+            separator3 = new Panel();
             _buttonExit = new Button();
             _buttonAIAsk = new Button();
             _buttonFeynman = new Button();
-
-            var separator1 = new Panel { Width = 1, Height = 30, BackColor = Color.FromArgb(200, 200, 200), Margin = new Padding(15, 7, 15, 7) };
-            var separator2 = new Panel { Width = 1, Height = 30, BackColor = Color.FromArgb(200, 200, 200), Margin = new Padding(15, 7, 15, 7) };
-            var separator3 = new Panel { Width = 1, Height = 30, BackColor = Color.FromArgb(200, 200, 200), Margin = new Padding(15, 7, 15, 7) };
-
             _buttonsPanel.SuspendLayout();
             SuspendLayout();
-
-            //
+            // 
             // _buttonsPanel
-            //
+            // 
             _buttonsPanel.Controls.Add(_buttonKnown);
             _buttonsPanel.Controls.Add(_buttonUnknown);
             _buttonsPanel.Controls.Add(separator1);
@@ -208,16 +208,15 @@ namespace LearningAssistant.Forms.UserControls
             _buttonsPanel.Controls.Add(_buttonAIAsk);
             _buttonsPanel.Controls.Add(_buttonFeynman);
             _buttonsPanel.Dock = DockStyle.Fill;
-            _buttonsPanel.Location = new Point(3, 645);
-            _buttonsPanel.Name = "buttonsFlowLayoutPanel";
-            _buttonsPanel.Padding = new Padding(10, 5, 10, 5);
-            _buttonsPanel.Size = new Size(1089, 65);
+            _buttonsPanel.Location = new Point(0, 0);
+            _buttonsPanel.Name = "_buttonsPanel";
+            _buttonsPanel.Padding = new Padding(10, 6, 10, 6);
+            _buttonsPanel.Size = new Size(1448, 80);
             _buttonsPanel.TabIndex = 0;
             _buttonsPanel.WrapContents = false;
-
-            //
+            // 
             // _buttonKnown
-            //
+            // 
             _buttonKnown.BackColor = Color.FromArgb(76, 175, 80);
             _buttonKnown.FlatAppearance.BorderSize = 0;
             _buttonKnown.FlatAppearance.MouseDownBackColor = Color.FromArgb(66, 155, 70);
@@ -225,18 +224,17 @@ namespace LearningAssistant.Forms.UserControls
             _buttonKnown.FlatStyle = FlatStyle.Flat;
             _buttonKnown.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonKnown.ForeColor = Color.White;
-            _buttonKnown.Location = new Point(15, 10);
-            _buttonKnown.Margin = new Padding(5);
-            _buttonKnown.Name = "buttonKnown";
-            _buttonKnown.Size = new Size(130, 45);
+            _buttonKnown.Location = new Point(15, 12);
+            _buttonKnown.Margin = new Padding(5, 6, 5, 6);
+            _buttonKnown.Name = "_buttonKnown";
+            _buttonKnown.Size = new Size(130, 51);
             _buttonKnown.TabIndex = 0;
             _buttonKnown.Text = "✅ 会了 [K/1]";
             _buttonKnown.UseVisualStyleBackColor = false;
             _buttonKnown.Click += ButtonKnown_Click;
-
-            //
+            // 
             // _buttonUnknown
-            //
+            // 
             _buttonUnknown.BackColor = Color.FromArgb(244, 67, 54);
             _buttonUnknown.FlatAppearance.BorderSize = 0;
             _buttonUnknown.FlatAppearance.MouseDownBackColor = Color.FromArgb(234, 57, 44);
@@ -244,19 +242,24 @@ namespace LearningAssistant.Forms.UserControls
             _buttonUnknown.FlatStyle = FlatStyle.Flat;
             _buttonUnknown.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonUnknown.ForeColor = Color.White;
-            _buttonUnknown.Location = new Point(155, 10);
-            _buttonUnknown.Margin = new Padding(5);
-            _buttonUnknown.Name = "buttonUnknown";
-            _buttonUnknown.Size = new Size(130, 45);
+            _buttonUnknown.Location = new Point(155, 12);
+            _buttonUnknown.Margin = new Padding(5, 6, 5, 6);
+            _buttonUnknown.Name = "_buttonUnknown";
+            _buttonUnknown.Size = new Size(130, 51);
             _buttonUnknown.TabIndex = 1;
             _buttonUnknown.Text = "❌ 不会 [U/2]";
             _buttonUnknown.UseVisualStyleBackColor = false;
             _buttonUnknown.Click += ButtonUnknown_Click;
-
-
-            //
+            // 
+            // separator1
+            // 
+            separator1.Location = new Point(293, 9);
+            separator1.Name = "separator1";
+            separator1.Size = new Size(33, 51);
+            separator1.TabIndex = 2;
+            // 
             // _buttonPronounce
-            //
+            // 
             _buttonPronounce.BackColor = Color.FromArgb(0, 188, 212);
             _buttonPronounce.FlatAppearance.BorderSize = 0;
             _buttonPronounce.FlatAppearance.MouseDownBackColor = Color.FromArgb(0, 178, 202);
@@ -264,18 +267,24 @@ namespace LearningAssistant.Forms.UserControls
             _buttonPronounce.FlatStyle = FlatStyle.Flat;
             _buttonPronounce.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonPronounce.ForeColor = Color.White;
-            _buttonPronounce.Location = new Point(295, 10);
-            _buttonPronounce.Margin = new Padding(5);
-            _buttonPronounce.Name = "buttonPronounce";
-            _buttonPronounce.Size = new Size(140, 45);
+            _buttonPronounce.Location = new Point(334, 12);
+            _buttonPronounce.Margin = new Padding(5, 6, 5, 6);
+            _buttonPronounce.Name = "_buttonPronounce";
+            _buttonPronounce.Size = new Size(130, 51);
             _buttonPronounce.TabIndex = 2;
             _buttonPronounce.Text = "🔊 发音 [Space]";
             _buttonPronounce.UseVisualStyleBackColor = false;
             _buttonPronounce.Click += ButtonPronounce_Click;
-
-            //
+            // 
+            // separator2
+            // 
+            separator2.Location = new Point(472, 9);
+            separator2.Name = "separator2";
+            separator2.Size = new Size(33, 51);
+            separator2.TabIndex = 3;
+            // 
             // _buttonFavorite
-            //
+            // 
             _buttonFavorite.BackColor = Color.FromArgb(255, 193, 7);
             _buttonFavorite.FlatAppearance.BorderSize = 0;
             _buttonFavorite.FlatAppearance.MouseDownBackColor = Color.FromArgb(245, 183, 0);
@@ -283,18 +292,17 @@ namespace LearningAssistant.Forms.UserControls
             _buttonFavorite.FlatStyle = FlatStyle.Flat;
             _buttonFavorite.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonFavorite.ForeColor = Color.White;
-            _buttonFavorite.Location = new Point(605, 10);
-            _buttonFavorite.Margin = new Padding(5);
-            _buttonFavorite.Name = "buttonFavorite";
-            _buttonFavorite.Size = new Size(105, 45);
+            _buttonFavorite.Location = new Point(513, 12);
+            _buttonFavorite.Margin = new Padding(5, 6, 5, 6);
+            _buttonFavorite.Name = "_buttonFavorite";
+            _buttonFavorite.Size = new Size(130, 51);
             _buttonFavorite.TabIndex = 4;
             _buttonFavorite.Text = "⭐ 收藏";
             _buttonFavorite.UseVisualStyleBackColor = false;
             _buttonFavorite.Click += ButtonFavorite_Click;
-
-            //
+            // 
             // _buttonNote
-            //
+            // 
             _buttonNote.BackColor = Color.FromArgb(76, 175, 80);
             _buttonNote.FlatAppearance.BorderSize = 0;
             _buttonNote.FlatAppearance.MouseDownBackColor = Color.FromArgb(66, 155, 70);
@@ -302,18 +310,24 @@ namespace LearningAssistant.Forms.UserControls
             _buttonNote.FlatStyle = FlatStyle.Flat;
             _buttonNote.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonNote.ForeColor = Color.White;
-            _buttonNote.Location = new Point(720, 10);
-            _buttonNote.Margin = new Padding(5);
-            _buttonNote.Name = "buttonNote";
-            _buttonNote.Size = new Size(105, 45);
+            _buttonNote.Location = new Point(653, 12);
+            _buttonNote.Margin = new Padding(5, 6, 5, 6);
+            _buttonNote.Name = "_buttonNote";
+            _buttonNote.Size = new Size(130, 51);
             _buttonNote.TabIndex = 5;
             _buttonNote.Text = "📝 笔记";
             _buttonNote.UseVisualStyleBackColor = false;
             _buttonNote.Click += ButtonNote_Click;
-
-            //
+            // 
+            // separator3
+            // 
+            separator3.Location = new Point(791, 9);
+            separator3.Name = "separator3";
+            separator3.Size = new Size(33, 51);
+            separator3.TabIndex = 6;
+            // 
             // _buttonExit
-            //
+            // 
             _buttonExit.BackColor = Color.FromArgb(108, 117, 125);
             _buttonExit.FlatAppearance.BorderSize = 0;
             _buttonExit.FlatAppearance.MouseDownBackColor = Color.FromArgb(98, 107, 115);
@@ -321,18 +335,17 @@ namespace LearningAssistant.Forms.UserControls
             _buttonExit.FlatStyle = FlatStyle.Flat;
             _buttonExit.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonExit.ForeColor = Color.White;
-            _buttonExit.Location = new Point(675, 10);
-            _buttonExit.Margin = new Padding(5);
-            _buttonExit.Name = "buttonExit";
-            _buttonExit.Size = new Size(105, 45);
+            _buttonExit.Location = new Point(832, 12);
+            _buttonExit.Margin = new Padding(5, 6, 5, 6);
+            _buttonExit.Name = "_buttonExit";
+            _buttonExit.Size = new Size(130, 51);
             _buttonExit.TabIndex = 5;
             _buttonExit.Text = "🏠 返回";
             _buttonExit.UseVisualStyleBackColor = false;
             _buttonExit.Click += ButtonExit_Click;
-
-            //
+            // 
             // _buttonAIAsk
-            //
+            // 
             _buttonAIAsk.BackColor = Color.FromArgb(0, 120, 215);
             _buttonAIAsk.FlatAppearance.BorderSize = 0;
             _buttonAIAsk.FlatAppearance.MouseDownBackColor = Color.FromArgb(0, 110, 205);
@@ -340,18 +353,17 @@ namespace LearningAssistant.Forms.UserControls
             _buttonAIAsk.FlatStyle = FlatStyle.Flat;
             _buttonAIAsk.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonAIAsk.ForeColor = Color.White;
-            _buttonAIAsk.Location = new Point(950, 10);
-            _buttonAIAsk.Margin = new Padding(5);
-            _buttonAIAsk.Name = "buttonAIAsk";
-            _buttonAIAsk.Size = new Size(105, 45);
+            _buttonAIAsk.Location = new Point(972, 12);
+            _buttonAIAsk.Margin = new Padding(5, 6, 5, 6);
+            _buttonAIAsk.Name = "_buttonAIAsk";
+            _buttonAIAsk.Size = new Size(130, 51);
             _buttonAIAsk.TabIndex = 7;
             _buttonAIAsk.Text = "🤖 AI问答";
             _buttonAIAsk.UseVisualStyleBackColor = false;
             _buttonAIAsk.Click += ButtonAIAsk_Click;
-
-            //
+            // 
             // _buttonFeynman
-            //
+            // 
             _buttonFeynman.BackColor = Color.FromArgb(147, 112, 219);
             _buttonFeynman.FlatAppearance.BorderSize = 0;
             _buttonFeynman.FlatAppearance.MouseDownBackColor = Color.FromArgb(137, 102, 209);
@@ -359,19 +371,22 @@ namespace LearningAssistant.Forms.UserControls
             _buttonFeynman.FlatStyle = FlatStyle.Flat;
             _buttonFeynman.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonFeynman.ForeColor = Color.White;
-            _buttonFeynman.Location = new Point(1065, 10);
-            _buttonFeynman.Margin = new Padding(5);
-            _buttonFeynman.Name = "buttonFeynman";
-            _buttonFeynman.Size = new Size(105, 45);
+            _buttonFeynman.Location = new Point(1112, 12);
+            _buttonFeynman.Margin = new Padding(5, 6, 5, 6);
+            _buttonFeynman.Name = "_buttonFeynman";
+            _buttonFeynman.Size = new Size(130, 51);
             _buttonFeynman.TabIndex = 8;
-            _buttonFeynman.Text = "🧠 费曼";
+            _buttonFeynman.Text = "\U0001f9e0 费曼";
             _buttonFeynman.UseVisualStyleBackColor = false;
             _buttonFeynman.Click += ButtonFeynman_Click;
-            AutoScaleDimensions = new SizeF(7F, 15F);
+            // 
+            // LearningButtonsView
+            // 
+            AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
-            Controls.Add(_buttonsPanel);  // 关键：将 _buttonsPanel 添加到 Controls
+            Controls.Add(_buttonsPanel);
             Name = "LearningButtonsView";
-            Size = new Size(1095, 71);
+            Size = new Size(1448, 80);
             _buttonsPanel.ResumeLayout(false);
             ResumeLayout(false);
         }

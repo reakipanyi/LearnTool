@@ -91,31 +91,31 @@ namespace LearningAssistant.Forms.UserControls
             _labelIcon.Font = new Font("Segoe UI Emoji", 32F);
             _labelIcon.TextAlign = ContentAlignment.MiddleCenter;
             _labelIcon.BackColor = Color.Transparent;
-            _labelIcon.Click += (s, e) => CardClicked?.Invoke(this, e);
+            _labelIcon.Click += OnCardClicked;
             _labelIcon.Cursor = Cursors.Hand;
 
             _labelName.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             _labelName.TextAlign = ContentAlignment.MiddleCenter;
             _labelName.BackColor = Color.Transparent;
-            _labelName.Click += (s, e) => CardClicked?.Invoke(this, e);
+            _labelName.Click += OnCardClicked;
             _labelName.Cursor = Cursors.Hand;
 
             _labelCategory.Font = new Font("微软雅黑", 7.5F);
             _labelCategory.TextAlign = ContentAlignment.MiddleCenter;
             _labelCategory.BackColor = Color.Transparent;
-            _labelCategory.Click += (s, e) => CardClicked?.Invoke(this, e);
+            _labelCategory.Click += OnCardClicked;
             _labelCategory.Cursor = Cursors.Hand;
 
             _labelDescription.Font = new Font("微软雅黑", 8F);
             _labelDescription.TextAlign = ContentAlignment.MiddleCenter;
             _labelDescription.BackColor = Color.Transparent;
-            _labelDescription.Click += (s, e) => CardClicked?.Invoke(this, e);
+            _labelDescription.Click += OnCardClicked;
             _labelDescription.Cursor = Cursors.Hand;
 
             _labelProgressText.Font = new Font("微软雅黑", 8F, FontStyle.Bold);
             _labelProgressText.TextAlign = ContentAlignment.MiddleCenter;
             _labelProgressText.BackColor = Color.Transparent;
-            _labelProgressText.Click += (s, e) => CardClicked?.Invoke(this, e);
+            _labelProgressText.Click += OnCardClicked;
             _labelProgressText.Cursor = Cursors.Hand;
 
             Controls.Add(_labelProgressText);
@@ -129,9 +129,14 @@ namespace LearningAssistant.Forms.UserControls
             DoubleBuffered = true;
             Cursor = Cursors.Hand;
 
-            Click += (s, e) => CardClicked?.Invoke(this, e);
+            Click += OnCardClicked;
 
             ResumeLayout(false);
+        }
+
+        private void OnCardClicked(object? sender, EventArgs e)
+        {
+            CardClicked?.Invoke(this, e);
         }
 
         private void SetupHoverEffect()

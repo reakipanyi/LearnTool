@@ -318,6 +318,23 @@ namespace LearningAssistant.Forms.UserControls
             _labelListStatus.Text = text;
         }
 
+        /// <summary>
+        /// 按关键字筛选列表项
+        /// </summary>
+        public void FilterItems(string keyword)
+        {
+            _searchKeyword = keyword?.Trim() ?? string.Empty;
+            UpdateFilteredItems();
+        }
+
+        /// <summary>
+        /// 检查指定项是否为收藏项
+        /// </summary>
+        public bool IsFavoriteItem(string itemText)
+        {
+            return _favoriteItems.Contains(itemText);
+        }
+
         #endregion
 
         #region Private Methods
@@ -334,7 +351,9 @@ namespace LearningAssistant.Forms.UserControls
 
             if (_showFavoritesOnly)
             {
-                filtered = filtered.Where(item => _favoriteItems.Contains(item));
+                filtered = filtered.Where(item => 
+                    _favoriteItems.Contains(item) || 
+                    _favoriteItems.Any(fav => fav.EndsWith($"]{item}")));
             }
 
             var selectedItem = _listBoxItems.SelectedItem?.ToString();

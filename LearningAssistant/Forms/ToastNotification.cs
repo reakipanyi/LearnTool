@@ -1,7 +1,3 @@
-using System;
-using System.Drawing;
-using System.Windows.Forms;
-
 namespace LearningAssistant.Forms
 {
     public enum ToastType
@@ -14,10 +10,11 @@ namespace LearningAssistant.Forms
 
     public class ToastNotification : Form
     {
-        private readonly Label _iconLabel;
-        private readonly Label _messageLabel;
-        private readonly Panel _iconPanel;
-        private readonly System.Windows.Forms.Timer _fadeTimer;
+        private Label _iconLabel;
+        private Label _messageLabel;
+        private Panel _iconPanel;
+
+        private System.Windows.Forms.Timer _fadeTimer;
 
         public ToastNotification(string message, ToastType type)
         {

@@ -66,13 +66,13 @@ namespace LearningAssistant.Forms.UserControls
             _labelIcon.TextAlign = ContentAlignment.MiddleCenter;
             _labelIcon.BackColor = Color.Transparent;
             _labelIcon.Cursor = Cursors.Hand;
-            _labelIcon.Click += (s, e) => OnCardClick();
+            _labelIcon.Click += OnCardClick;
 
             _labelName.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             _labelName.TextAlign = ContentAlignment.MiddleLeft;
             _labelName.BackColor = Color.Transparent;
             _labelName.Cursor = Cursors.Hand;
-            _labelName.Click += (s, e) => OnCardClick();
+            _labelName.Click += OnCardClick;
 
             _labelReward.Font = new Font("微软雅黑", 8.5F, FontStyle.Bold);
             _labelReward.TextAlign = ContentAlignment.MiddleRight;
@@ -116,7 +116,7 @@ namespace LearningAssistant.Forms.UserControls
             DoubleBuffered = true;
             Cursor = Cursors.Hand;
 
-            Click += (s, e) => OnCardClick();
+            Click += OnCardClick;
 
             ResumeLayout(false);
         }
@@ -136,7 +136,7 @@ namespace LearningAssistant.Forms.UserControls
             };
         }
 
-        private void OnCardClick()
+        private void OnCardClick(object? sender, EventArgs e)
         {
             if (_challenge == null) return;
 
@@ -424,13 +424,13 @@ namespace LearningAssistant.Forms.UserControls
                 Color.FromArgb(255, 193, 7),
                 Color.FromArgb(255, 111, 0),
                 LinearGradientMode.Vertical);
-            g.FillPath(buttonBrush, buttonPath);
+            //g.FillPath(buttonBrush, cardPath);
 
             using var buttonShadowPath = GdiHelper.CreateRoundedRectPath(
                 new Rectangle(buttonX + 1, buttonY + 2, buttonWidth, buttonHeight),
                 buttonHeight / 2);
             using var buttonShadowBrush = new SolidBrush(Color.FromArgb(30, 0, 0, 0));
-            g.FillPath(buttonShadowBrush, buttonShadowPath);
+            //g.FillPath(buttonShadowBrush, cardPath);
 
             using var sf = new StringFormat
             {

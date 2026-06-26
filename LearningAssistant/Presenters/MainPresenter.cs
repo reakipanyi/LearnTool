@@ -22,6 +22,7 @@ namespace LearningAssistant.Presenters
         private readonly IWindowManager _windowManager;
         private readonly IDataPersistenceService _persistenceService;
         private readonly IGamificationService _gamificationService;
+        private readonly INoteService _noteService;
 
         private PdfPresenter? _pdfPresenter;
         private IMainView? _view;
@@ -41,7 +42,8 @@ namespace LearningAssistant.Presenters
             ICacheService cacheService,
             IWindowManager windowManager,
             IDataPersistenceService persistenceService,
-            IGamificationService gamificationService)
+            IGamificationService gamificationService,
+            INoteService noteService)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
@@ -52,6 +54,7 @@ namespace LearningAssistant.Presenters
             _windowManager = windowManager ?? throw new ArgumentNullException(nameof(windowManager));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _gamificationService = gamificationService ?? throw new ArgumentNullException(nameof(gamificationService));
+            _noteService = noteService ?? throw new ArgumentNullException(nameof(noteService));
             _logger.LogInformation("MainPresenter initialized");
         }
 
@@ -169,6 +172,18 @@ namespace LearningAssistant.Presenters
                 int completedChallenges = challenges.Count(c => c.Completed);
                 int totalChallenges = challenges.Count;
 
+                int noteCount = 0;
+                int todayNewNotes = 0;
+                try
+                {
+                    var allNotes = _noteService.GetNotes(_currentUserId);
+                    noteCount = allNotes.Count;
+                    todayNewNotes = allNotes.Count(n => n.CreatedAt.Date == DateTime.Today);
+                }
+                catch
+                {
+                }
+
                 _view.UpdateDashboardStats(
                     _currentUserProfile.TodayStudyTimeMinutes,
                     _currentUserProfile.ConsecutiveStudyDays,
@@ -176,7 +191,9 @@ namespace LearningAssistant.Presenters
                     _gamificationService.CurrentLevel,
                     _gamificationService.XPToNextLevel,
                     completedChallenges,
-                    totalChallenges);
+                    totalChallenges,
+                    noteCount,
+                    todayNewNotes);
             }
             catch (Exception ex)
             {

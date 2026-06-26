@@ -123,13 +123,15 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
                 Color.FromArgb(76, 175, 80));
             AddStatCard("🎯", "0/3", "今日挑战", "待完成", StatCard.TrendDirection.None,
                 Color.FromArgb(236, 72, 153));
+            AddStatCard("📝", "0", "笔记数", "查看全部", StatCard.TrendDirection.None,
+                Color.FromArgb(33, 150, 243));
 
             AddFeatureCard("📚", "开始学习", "打开学习内容", Color.FromArgb(99, 102, 241), Color.FromArgb(139, 92, 246));
             AddFeatureCard("📖", "PDF阅读", "打开PDF阅读器", Color.FromArgb(34, 197, 94), Color.FromArgb(16, 185, 129));
             AddFeatureCard("📝", "错题本", "复习错题", Color.FromArgb(249, 115, 22), Color.FromArgb(239, 68, 68));
             AddFeatureCard("🎯", "每日挑战", "完成每日任务", Color.FromArgb(236, 72, 153), Color.FromArgb(219, 39, 119));
             AddFeatureCard("📊", "学习统计", "查看学习数据", Color.FromArgb(14, 165, 233), Color.FromArgb(59, 130, 246));
-            AddFeatureCard("⭐", "收藏夹", "我的收藏", Color.FromArgb(245, 158, 11), Color.FromArgb(249, 115, 22));
+            AddFeatureCard("📒", "笔记", "管理学习笔记", Color.FromArgb(156, 39, 176), Color.FromArgb(103, 58, 183));
 
             InitializeRecommendPanel();
         }
@@ -221,9 +223,11 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             int currentLevel,
             int xpToNextLevel,
             int completedChallenges,
-            int totalChallenges)
+            int totalChallenges,
+            int noteCount = 0,
+            int todayNewNotes = 0)
         {
-            if (_statCards.Count >= 5)
+            if (_statCards.Count >= 6)
             {
                 var studyCard = _statCards[0];
                 if (todayStudyMinutes >= 60)
@@ -263,6 +267,12 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
                 challengeCard.Label = "今日挑战";
                 challengeCard.Trend = completedChallenges >= totalChallenges ? "全部完成" : "进行中";
                 challengeCard.TrendDir = completedChallenges >= totalChallenges ? StatCard.TrendDirection.Up : StatCard.TrendDirection.None;
+
+                var notesCard = _statCards[5];
+                notesCard.Value = $"{noteCount}";
+                notesCard.Label = "笔记数";
+                notesCard.Trend = todayNewNotes > 0 ? $"今日+{todayNewNotes}" : "查看全部";
+                notesCard.TrendDir = todayNewNotes > 0 ? StatCard.TrendDirection.Up : StatCard.TrendDirection.None;
             }
         }
 

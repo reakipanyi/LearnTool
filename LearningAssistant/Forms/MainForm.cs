@@ -175,11 +175,9 @@ namespace LearningAssistant.Forms
                 new() { Key = "challenges", Icon = "🎯", Text = "每日挑战", Order = 4, Group = "main" },
                 new() { Key = "achievements", Icon = "🏆", Text = "成就徽章", Order = 5, Group = "main" },
                 new() { Key = "notes", Icon = "📝", Text = "笔记", Order = 6, Group = "tools" },
-                new() { Key = "favorites", Icon = "⭐", Text = "收藏夹", Order = 7, Group = "tools" },
-                new() { Key = "wrongbook", Icon = "📕", Text = "错题本", Order = 8, Group = "tools" },
-                new() { Key = "pomodoro", Icon = "🍅", Text = "番茄钟", Order = 9, Group = "tools" },
-                new() { Key = "browser", Icon = "🌐", Text = "浏览器", Order = 10, Group = "tools" },
-                new() { Key = "editor", Icon = "✏️", Text = "模板编辑", Order = 11, Group = "tools" },
+                new() { Key = "wrongbook", Icon = "📕", Text = "错题本", Order = 7, Group = "tools" },
+                new() { Key = "browser", Icon = "🌐", Text = "浏览器", Order = 8, Group = "tools" },
+                new() { Key = "editor", Icon = "✏️", Text = "模板编辑", Order = 9, Group = "tools" },
                 new() { Key = "settings", Icon = "⚙️", Text = "设置", Order = 99, Group = "system" }
             });
 
@@ -233,16 +231,10 @@ namespace LearningAssistant.Forms
                     buttonOpenStatistics?.PerformClick();
                     break;
                 case "notes":
-                    MessageBox.Show("笔记功能开发中...", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    break;
-                case "favorites":
-                    MessageBox.Show("收藏夹功能开发中...", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    _windowManager.OpenNotesWindow();
                     break;
                 case "wrongbook":
                     buttonExportErrorBook?.PerformClick();
-                    break;
-                case "pomodoro":
-                    MessageBox.Show("番茄钟功能开发中...", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     break;
                 case "browser":
                     ButtonWebView2Browser_Click(null, EventArgs.Empty);
@@ -293,8 +285,8 @@ namespace LearningAssistant.Forms
                     case "学习统计":
                         buttonOpenStatistics?.PerformClick();
                         break;
-                    case "收藏夹":
-                        MessageBox.Show("收藏夹功能开发中...", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    case "笔记":
+                        _windowManager.OpenNotesWindow();
                         break;
                 }
             }
@@ -478,7 +470,8 @@ namespace LearningAssistant.Forms
         }
 
         public void UpdateDashboardStats(int todayStudyMinutes, int streakDays, int totalXP,
-            int currentLevel, int xpToNextLevel, int completedChallenges, int totalChallenges)
+            int currentLevel, int xpToNextLevel, int completedChallenges, int totalChallenges,
+            int noteCount = 0, int todayNewNotes = 0)
         {
             if (dashboardView != null)
             {
@@ -489,7 +482,9 @@ namespace LearningAssistant.Forms
                     currentLevel,
                     xpToNextLevel,
                     completedChallenges,
-                    totalChallenges);
+                    totalChallenges,
+                    noteCount,
+                    todayNewNotes);
             }
         }
 

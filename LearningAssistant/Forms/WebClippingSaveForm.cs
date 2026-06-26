@@ -146,16 +146,7 @@ namespace LearningAssistant.Forms
             _buttonSave.Size = new Size(100, 36);
             _buttonSave.FlatAppearance.BorderSize = 0;
             _buttonSave.Cursor = Cursors.Hand;
-            _buttonSave.Click += (s, e) =>
-            {
-                if (string.IsNullOrWhiteSpace(_textBoxContent.Text))
-                {
-                    MessageBox.Show("内容不能为空", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-                DialogResult = DialogResult.OK;
-                Close();
-            };
+            _buttonSave.Click += ButtonSave_Click;
 
             _buttonCancel.Text = "取消";
             _buttonCancel.FlatStyle = FlatStyle.Flat;
@@ -166,11 +157,7 @@ namespace LearningAssistant.Forms
             _buttonCancel.Size = new Size(90, 36);
             _buttonCancel.FlatAppearance.BorderSize = 0;
             _buttonCancel.Cursor = Cursors.Hand;
-            _buttonCancel.Click += (s, e) =>
-            {
-                DialogResult = DialogResult.Cancel;
-                Close();
-            };
+            _buttonCancel.Click += ButtonCancel_Click;
 
             Controls.Add(_buttonCancel);
             Controls.Add(_buttonSave);
@@ -223,6 +210,23 @@ namespace LearningAssistant.Forms
                 if (_comboBoxSubCategory.Items.Count > 0)
                     _comboBoxSubCategory.SelectedIndex = 0;
             }
+        }
+
+        private void ButtonSave_Click(object? sender, EventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(_textBoxContent.Text))
+            {
+                MessageBox.Show("内容不能为空", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            DialogResult = DialogResult.OK;
+            Close();
+        }
+
+        private void ButtonCancel_Click(object? sender, EventArgs e)
+        {
+            DialogResult = DialogResult.Cancel;
+            Close();
         }
     }
 }

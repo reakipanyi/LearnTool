@@ -294,7 +294,7 @@ namespace LearningAssistant.Forms.UserControls
             _buttonAction.Cursor = Cursors.Hand;
             _buttonAction.Size = new Size(120, 32);
             _buttonAction.FlatAppearance.BorderSize = 0;
-            _buttonAction.Click += (s, e) => ActionClicked?.Invoke(this, EventArgs.Empty);
+            _buttonAction.Click += ButtonAction_Click;
 
             Controls.Add(_buttonAction);
             Controls.Add(_labelDescription);
@@ -307,6 +307,11 @@ namespace LearningAssistant.Forms.UserControls
             DoubleBuffered = true;
 
             ResumeLayout(false);
+        }
+
+        private void ButtonAction_Click(object? sender, EventArgs e)
+        {
+            ActionClicked?.Invoke(this, EventArgs.Empty);
         }
 
         private void ApplyPreset()

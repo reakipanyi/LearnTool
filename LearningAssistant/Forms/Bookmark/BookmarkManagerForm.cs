@@ -727,11 +727,7 @@ namespace LearningAssistant.Forms.Bookmark
                 Location = new Point(220, 85),
                 DialogResult = DialogResult.OK
             };
-            _btnOk.Click += (s, e) =>
-            {
-                InputText = _textBox.Text;
-                DialogResult = DialogResult.OK;
-            };
+            _btnOk.Click += AcceptInput_Click;
 
             _btnCancel = new Button
             {
@@ -756,6 +752,12 @@ namespace LearningAssistant.Forms.Bookmark
             MaximizeBox = false;
             MinimizeBox = false;
             ShowInTaskbar = false;
+        }
+
+        private void AcceptInput_Click(object? sender, EventArgs e)
+        {
+            InputText = _textBox.Text;
+            DialogResult = DialogResult.OK;
         }
     }
 
@@ -838,25 +840,7 @@ namespace LearningAssistant.Forms.Bookmark
                 Location = new Point(220, 210),
                 DialogResult = DialogResult.OK
             };
-            _btnOk.Click += (s, e) =>
-            {
-                if (string.IsNullOrWhiteSpace(_txtTitle.Text))
-                {
-                    MessageBox.Show("标题不能为空", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    DialogResult = DialogResult.None;
-                    return;
-                }
-                if (string.IsNullOrWhiteSpace(_txtUrl.Text))
-                {
-                    MessageBox.Show("URL 不能为空", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    DialogResult = DialogResult.None;
-                    return;
-                }
-                BookmarkTitle = _txtTitle.Text.Trim();
-                BookmarkUrl = _txtUrl.Text.Trim();
-                BookmarkIcon = string.IsNullOrWhiteSpace(_txtIcon.Text) ? "🔗" : _txtIcon.Text.Trim();
-                DialogResult = DialogResult.OK;
-            };
+            _btnOk.Click += SaveBookmark_Click;
 
             _btnCancel = new Button
             {
@@ -886,6 +870,26 @@ namespace LearningAssistant.Forms.Bookmark
             MaximizeBox = false;
             MinimizeBox = false;
             ShowInTaskbar = false;
+        }
+
+        private void SaveBookmark_Click(object? sender, EventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(_txtTitle.Text))
+            {
+                MessageBox.Show("标题不能为空", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                DialogResult = DialogResult.None;
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(_txtUrl.Text))
+            {
+                MessageBox.Show("URL 不能为空", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                DialogResult = DialogResult.None;
+                return;
+            }
+            BookmarkTitle = _txtTitle.Text.Trim();
+            BookmarkUrl = _txtUrl.Text.Trim();
+            BookmarkIcon = string.IsNullOrWhiteSpace(_txtIcon.Text) ? "🔗" : _txtIcon.Text.Trim();
+            DialogResult = DialogResult.OK;
         }
     }
 
@@ -936,11 +940,7 @@ namespace LearningAssistant.Forms.Bookmark
                 Location = new Point(220, 105),
                 DialogResult = DialogResult.OK
             };
-            _btnOk.Click += (s, e) =>
-            {
-                SelectedCategory = _comboBox.Text;
-                DialogResult = DialogResult.OK;
-            };
+            _btnOk.Click += ConfirmCategorySelection_Click;
 
             _btnCancel = new Button
             {
@@ -965,6 +965,12 @@ namespace LearningAssistant.Forms.Bookmark
             MaximizeBox = false;
             MinimizeBox = false;
             ShowInTaskbar = false;
+        }
+
+        private void ConfirmCategorySelection_Click(object? sender, EventArgs e)
+        {
+            SelectedCategory = _comboBox.Text;
+            DialogResult = DialogResult.OK;
         }
     }
 }

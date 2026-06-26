@@ -628,6 +628,31 @@ namespace LearningAssistant.Presenters
             _pdfFileManager.LoadLastSessionAndRestore();
         }
 
+        public void ExportHighlights()
+        {
+            ExportHighlightsToExcel();
+        }
+
+        public void PrintPdf()
+        {
+            _logger.LogWarning("PrintPdf not yet implemented");
+        }
+
+        public void SearchText(string text)
+        {
+            _logger.LogWarning("SearchText not yet implemented: {Text}", text);
+        }
+
+        public void ZoomIn()
+        {
+            _logger.LogWarning("ZoomIn not yet implemented");
+        }
+
+        public void ZoomOut()
+        {
+            _logger.LogWarning("ZoomOut not yet implemented");
+        }
+
         public async void ExportHighlightsToExcel()
         {
             if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath))
@@ -893,11 +918,6 @@ namespace LearningAssistant.Presenters
         private void View_SelectOcrClicked(object? sender, EventArgs e)
         {
             _ = ProcessOcrSelectionAsync();
-        }
-
-        private async void View_OcrSelectionComplete(object? sender, EventArgs e)
-        {
-            await ProcessOcrSelectionAsync();
         }
 
         private async Task ProcessOcrSelectionAsync()
