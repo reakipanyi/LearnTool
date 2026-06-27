@@ -1,6 +1,7 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
 using LearningAssistant.Models.Learning;
+using LearningAssistant.Services.Persistence;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
@@ -8,21 +9,23 @@ namespace LearningAssistant.Services.Learning
 {
     /// <summary>
     /// 笔记服务实现
-    /// 使用JSON文件持久化笔记数据
+    /// 使用IDataPersistenceService持久化笔记数据
     /// </summary>
     public class NoteService : INoteService
     {
         private readonly ILogger<NoteService> _logger;
         private readonly IEventBus? _eventBus;
+        private readonly IDataPersistenceService _persistenceService;
         private readonly string _notesDir;
         private readonly object _lock = new object();
-        private string _userId = "default";
 
         public NoteService(
             ILogger<NoteService> logger,
+            IDataPersistenceService persistenceService,
             IEventBus? eventBus = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _eventBus = eventBus;
             _notesDir = Path.Combine(AppPaths.UsersDir, "notes");
             EnsureDirectoryExists();
@@ -46,11 +49,8 @@ namespace LearningAssistant.Services.Learning
             try
             {
                 var path = GetUserNotesPath(userId);
-                if (!File.Exists(path))
-                    return new List<NoteItem>();
-
-                var json = File.ReadAllText(path);
-                return JsonSerializer.Deserialize<List<NoteItem>>(json) ?? new List<NoteItem>();
+                var result = _persistenceService.LoadJsonFile<List<NoteItem>>(path);
+                return result ?? new List<NoteItem>();
             }
             catch (Exception ex)
             {
@@ -64,11 +64,7 @@ namespace LearningAssistant.Services.Learning
             try
             {
                 var path = GetUserNotesPath(userId);
-                var json = JsonSerializer.Serialize(notes, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
-                File.WriteAllText(path, json);
+                _persistenceService.SaveJsonFile(path, notes);
             }
             catch (Exception ex)
             {
@@ -91,23 +87,19 @@ namespace LearningAssistant.Services.Learning
                     note.UpdatedAt = DateTime.Now;
                     notes.Add(note);
                     SaveNotes(userId, notes);
-                    _logger.LogInformation($"笔记已添加: {note.Title}");
+                    _logger.LogInformation("笔记已添加: {Title}", note.Title);
 
-                    _userId = userId;
                     // 发布笔记添加事件
                     if (_eventBus != null)
                     {
-                        _ = Task.Run(async () =>
+                        _eventBus.Publish(new NoteAddedEvent
                         {
-                            await _eventBus.PublishAsync(new NoteAddedEvent
-                            {
-                                UserId = userId,
-                                NoteId = note.Id,
-                                NoteTitle = note.Title,
-                                RelatedType = note.RelatedType,
-                                RelatedItemId = note.RelatedItemId,
-                                AddedAt = DateTime.Now
-                            });
+                            UserId = userId,
+                            NoteId = note.Id,
+                            NoteTitle = note.Title,
+                            RelatedType = note.RelatedType,
+                            RelatedItemId = note.RelatedItemId,
+                            AddedAt = DateTime.Now
                         });
                     }
                 }
@@ -424,12 +416,107 @@ namespace LearningAssistant.Services.Learning
                 }
 
                 File.WriteAllText(filePath, content);
-                _logger.LogInformation($"笔记已导出: {filePath}");
+                _logger.LogInformation("笔记已导出: {FilePath}", filePath);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "导出笔记失败");
                 throw;
+            }
+        }
+
+        /// <inheritdoc/>
+        public (List<NoteItem> items, int total) GetNotesPaged(string userId, int page, int pageSize, string category = "", string tag = "")
+        {
+            try
+            {
+                var allNotes = LoadNotes(userId);
+
+                // 应用筛选
+                if (!string.IsNullOrWhiteSpace(category))
+                {
+                    allNotes = allNotes.Where(n => n.Category.Equals(category, StringComparison.OrdinalIgnoreCase)).ToList();
+                }
+
+                if (!string.IsNullOrWhiteSpace(tag))
+                {
+                    allNotes = allNotes.Where(n => n.Tags != null && n.Tags.Contains(tag)).ToList();
+                }
+
+                int total = allNotes.Count;
+                var pagedNotes = allNotes
+                    .OrderByDescending(n => n.UpdatedAt)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToList();
+
+                return (pagedNotes, total);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "分页获取笔记失败");
+                return (new List<NoteItem>(), 0);
+            }
+        }
+
+        /// <inheritdoc/>
+        public void BatchDelete(string userId, List<string> noteIds)
+        {
+            if (string.IsNullOrWhiteSpace(userId) || noteIds == null || noteIds.Count == 0)
+                return;
+
+            lock (_lock)
+            {
+                try
+                {
+                    var notes = LoadNotes(userId);
+                    var toRemove = notes.Where(n => noteIds.Contains(n.Id)).ToList();
+                    notes.RemoveAll(n => noteIds.Contains(n.Id));
+                    SaveNotes(userId, notes);
+                    _logger.LogInformation("批量删除笔记: {Count} 条", toRemove.Count);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "批量删除笔记失败");
+                    throw;
+                }
+            }
+        }
+
+        /// <inheritdoc/>
+        public void BatchMove(string userId, List<string> noteIds, string targetCategory)
+        {
+            if (string.IsNullOrWhiteSpace(userId) || noteIds == null || noteIds.Count == 0)
+                return;
+
+            lock (_lock)
+            {
+                try
+                {
+                    var notes = LoadNotes(userId);
+                    bool changed = false;
+
+                    foreach (var note in notes)
+                    {
+                        if (noteIds.Contains(note.Id))
+                        {
+                            note.Category = targetCategory;
+                            note.UpdatedAt = DateTime.Now;
+                            changed = true;
+                        }
+                    }
+
+                    if (changed)
+                    {
+                        SaveNotes(userId, notes);
+                        _logger.LogInformation("批量移动笔记到分类 {Category}: {Count} 条", targetCategory, noteIds.Count);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "批量移动笔记失败");
+                    throw;
+                }
             }
         }
 

@@ -68,4 +68,9 @@
 	<ItemGroup>
 		<Folder Include="Data\" />
 	</ItemGroup>
+	<ItemGroup>
+	  <Compile Update="Forms\UserControls\LearningProcessStatsView.cs">
+	    <SubType>UserControl</SubType>
+	  </Compile>
+	</ItemGroup>
 </Project>

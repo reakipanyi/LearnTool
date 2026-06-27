@@ -1114,17 +1114,15 @@ namespace LearningAssistant.Forms.Notes
 
             try
             {
-                foreach (var noteId in _selectedNoteIds.ToList())
-                {
-                    _noteService.DeleteNote(_userId, noteId);
-                    _allNotes.RemoveAll(n => n.Id == noteId);
-                }
+                var noteIds = _selectedNoteIds.ToList();
+                _noteService.BatchDelete(_userId, noteIds);
+                _allNotes.RemoveAll(n => noteIds.Contains(n.Id));
 
                 LoadCategories();
                 LoadTags();
                 ApplyFilters();
                 ExitBatchMode();
-                MessageBox.Show($"成功删除 {_selectedNoteIds.Count} 篇笔记", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show($"成功删除 {noteIds.Count} 篇笔记", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
@@ -1188,16 +1186,17 @@ namespace LearningAssistant.Forms.Notes
                 string targetCategory = comboBox.SelectedItem.ToString()!;
                 try
                 {
-                    int movedCount = 0;
-                    foreach (var noteId in _selectedNoteIds.ToList())
+                    var noteIds = _selectedNoteIds.ToList();
+                    _noteService.BatchMove(_userId, noteIds, targetCategory);
+
+                    // 更新本地缓存
+                    foreach (var noteId in noteIds)
                     {
                         var note = _allNotes.FirstOrDefault(n => n.Id == noteId);
                         if (note != null)
                         {
                             note.Category = targetCategory;
                             note.UpdatedAt = DateTime.Now;
-                            _noteService.UpdateNote(_userId, note);
-                            movedCount++;
                         }
                     }
 
@@ -1206,7 +1205,7 @@ namespace LearningAssistant.Forms.Notes
                     ApplyFilters();
                     ExitBatchMode();
                     form.DialogResult = DialogResult.OK;
-                    MessageBox.Show($"成功将 {movedCount} 篇笔记移动到「{targetCategory}」", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show($"成功将 {noteIds.Count} 篇笔记移动到「{targetCategory}」", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {

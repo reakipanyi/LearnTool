@@ -1,12 +1,21 @@
+using LearningAssistant.Common;
+using LearningAssistant.Common.Themes;
+
 namespace LearningAssistant.Forms.UserControls
 {
-    public class AIHistoryPanel : Panel
+    public class AIHistoryPanel : Panel, IThemeable
     {
         #region 控件字段
         private readonly ListBox _historyList;
         private readonly Button _clearButton;
         private readonly Label _titleLabel;
         private readonly List<AIHistoryItem> _historyItems = new();
+        #endregion
+
+        #region 状态字段
+        private ThemeMode _currentTheme = ThemeMode.Light;
+        private int _hoveredIndex = -1;
+        private Color _clearButtonOriginalColor = Color.FromArgb(244, 67, 54);
         #endregion
 
         #region 全局复用字体（Dispose统一销毁，避免GDI泄漏）
@@ -43,10 +52,13 @@ namespace LearningAssistant.Forms.UserControls
             this._historyList.ForeColor = Color.FromArgb(66, 66, 66);
             this._historyList.BackColor = Color.FromArgb(248, 248, 248);
             this._historyList.BorderStyle = BorderStyle.None;
-            this._historyList.ItemHeight = 40;
+            this._historyList.ItemHeight = 44;
             this._historyList.DrawMode = DrawMode.OwnerDrawFixed;
+            this._historyList.Cursor = Cursors.Hand;
             this._historyList.DrawItem += HistoryList_DrawItem;
             this._historyList.SelectedIndexChanged += HistoryList_SelectedIndexChanged;
+            this._historyList.MouseMove += HistoryList_MouseMove;
+            this._historyList.MouseLeave += HistoryList_MouseLeave;
 
             // 4. 清空按钮配置
             this._clearButton.Text = "清空历史";
@@ -54,15 +66,39 @@ namespace LearningAssistant.Forms.UserControls
             this._clearButton.BackColor = Color.FromArgb(244, 67, 54);
             this._clearButton.ForeColor = Color.White;
             this._clearButton.FlatStyle = FlatStyle.Flat;
+            this._clearButton.FlatAppearance.BorderSize = 0;
             this._clearButton.Dock = DockStyle.Bottom;
-            this._clearButton.Height = 30;
+            this._clearButton.Height = 32;
+            this._clearButton.Cursor = Cursors.Hand;
             this._clearButton.Click += ClearButton_Click;
+            this._clearButton.MouseEnter += ClearButton_MouseEnter;
+            this._clearButton.MouseLeave += ClearButton_MouseLeave;
 
             // 5. 按Dock层级倒序添加（Bottom -> Fill -> Top）
             this.Controls.Add(this._clearButton);
             this.Controls.Add(this._historyList);
             this.Controls.Add(this._titleLabel);
         }
+
+        #region IThemeable 实现
+        public void ApplyTheme(ThemeColors colors)
+        {
+            _currentTheme = colors.ThemeMode;
+            bool isDark = colors.ThemeMode == ThemeMode.Dark;
+
+            this.BackColor = isDark ? colors.Surface : Color.White;
+            _titleLabel.ForeColor = isDark ? colors.TextPrimary : Color.FromArgb(33, 33, 33);
+            _historyList.BackColor = isDark ? colors.SurfaceElevated : Color.FromArgb(248, 248, 248);
+            _historyList.ForeColor = isDark ? colors.TextPrimary : Color.FromArgb(66, 66, 66);
+
+            _clearButtonOriginalColor = isDark
+                ? Color.FromArgb(200, 60, 60)
+                : Color.FromArgb(244, 67, 54);
+            _clearButton.BackColor = _clearButtonOriginalColor;
+
+            _historyList.Invalidate();
+        }
+        #endregion
 
         /// <summary>添加历史记录，最多保留20条</summary>
         public void AddHistoryItem(string question, string answer)
@@ -90,30 +126,91 @@ namespace LearningAssistant.Forms.UserControls
             if (sender is not ListBox listBox || e.Index < 0)
                 return;
 
-            e.DrawBackground();
             var item = listBox.Items[e.Index] as AIHistoryItem;
             if (item == null)
                 return;
 
             bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-            Brush textBrush = isSelected ? Brushes.White : Brushes.Black;
-            Brush subTextBrush = isSelected ? Brushes.LightGray : Brushes.Gray;
+            bool isHovered = e.Index == _hoveredIndex;
+            bool isDark = _currentTheme == ThemeMode.Dark;
+
+            Color backColor;
+            Color textColor;
+            Color subTextColor;
+            Color borderColor;
+
+            if (isSelected)
+            {
+                backColor = isDark
+                    ? Color.FromArgb(70, 130, 200)
+                    : Color.FromArgb(33, 150, 243);
+                textColor = Color.White;
+                subTextColor = Color.FromArgb(220, 220, 220);
+                borderColor = Color.Transparent;
+            }
+            else if (isHovered)
+            {
+                backColor = isDark
+                    ? Color.FromArgb(55, 55, 60)
+                    : Color.FromArgb(240, 240, 245);
+                textColor = isDark ? Color.FromArgb(250, 250, 250) : Color.FromArgb(33, 33, 33);
+                subTextColor = isDark ? Color.FromArgb(160, 160, 160) : Color.FromArgb(120, 120, 120);
+                borderColor = isDark ? Color.FromArgb(70, 70, 80) : Color.FromArgb(220, 220, 230);
+            }
+            else
+            {
+                backColor = isDark
+                    ? Color.FromArgb(40, 40, 45)
+                    : Color.FromArgb(248, 248, 248);
+                textColor = isDark ? Color.FromArgb(230, 230, 230) : Color.FromArgb(66, 66, 66);
+                subTextColor = isDark ? Color.FromArgb(140, 140, 140) : Color.Gray;
+                borderColor = Color.Transparent;
+            }
+
+            using (var backBrush = new SolidBrush(backColor))
+            {
+                e.Graphics.FillRectangle(backBrush, e.Bounds);
+            }
+
+            if (borderColor != Color.Transparent)
+            {
+                using var pen = new Pen(borderColor, 1);
+                var rect = new Rectangle(e.Bounds.X, e.Bounds.Y, e.Bounds.Width - 1, e.Bounds.Height - 1);
+                e.Graphics.DrawRectangle(pen, rect);
+            }
 
             string questionPreview = item.Question.Length > 30
                 ? item.Question.Substring(0, 30) + "..."
                 : item.Question;
-            string timeStr = item.Timestamp.ToShortTimeString();
+            string timeStr = item.Timestamp.ToString("MM-dd HH:mm");
 
-            e.Graphics.DrawString(questionPreview, _fontListMain, textBrush, e.Bounds.X + 10, e.Bounds.Y + 5);
-            e.Graphics.DrawString(timeStr, _fontListTime, subTextBrush, e.Bounds.X + 10, e.Bounds.Y + 25);
+            using var textBrush = new SolidBrush(textColor);
+            using var subTextBrush = new SolidBrush(subTextColor);
 
-            if (isSelected)
-            {
-                using Pen pen = new Pen(Color.White, 2);
-                e.Graphics.DrawRectangle(pen, e.Bounds.X, e.Bounds.Y, e.Bounds.Width - 1, e.Bounds.Height - 1);
-            }
+            e.Graphics.DrawString("💬", _fontListMain, textBrush, e.Bounds.X + 10, e.Bounds.Y + 10);
+            e.Graphics.DrawString(questionPreview, _fontListMain, textBrush, e.Bounds.X + 35, e.Bounds.Y + 8);
+            e.Graphics.DrawString($"⏰ {timeStr}", _fontListTime, subTextBrush, e.Bounds.X + 35, e.Bounds.Y + 28);
 
             e.DrawFocusRectangle();
+        }
+
+        private void HistoryList_MouseMove(object? sender, MouseEventArgs e)
+        {
+            int hoverIndex = _historyList.IndexFromPoint(e.Location);
+            if (hoverIndex != _hoveredIndex && hoverIndex >= 0)
+            {
+                _hoveredIndex = hoverIndex;
+                _historyList.Invalidate();
+            }
+        }
+
+        private void HistoryList_MouseLeave(object? sender, EventArgs e)
+        {
+            if (_hoveredIndex >= 0)
+            {
+                _hoveredIndex = -1;
+                _historyList.Invalidate();
+            }
         }
 
         private void HistoryList_SelectedIndexChanged(object? sender, EventArgs e)
@@ -128,6 +225,16 @@ namespace LearningAssistant.Forms.UserControls
         {
             _historyItems.Clear();
             _historyList.Items.Clear();
+        }
+
+        private void ClearButton_MouseEnter(object? sender, EventArgs e)
+        {
+            _clearButton.BackColor = ThemeHelper.GetHoverColor(_clearButtonOriginalColor, -25);
+        }
+
+        private void ClearButton_MouseLeave(object? sender, EventArgs e)
+        {
+            _clearButton.BackColor = _clearButtonOriginalColor;
         }
 
         #region 释放字体资源，防止GDI句柄泄漏

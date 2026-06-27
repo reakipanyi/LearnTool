@@ -33,11 +33,11 @@ namespace LearningAssistant.Managers
                 true);
             DoubleBuffered = true;
             BackColor = Color.FromArgb(245, 245, 245);
-            Size = new Size(50, 50);
+            Size = new Size(60, 60);
             ForeColor = Color.FromArgb(66, 133, 244);
 
             _timer = new System.Windows.Forms.Timer();
-            _timer.Interval = 30;
+            _timer.Interval = 25;
             _timer.Tick += Timer_Tick;
         }
 
@@ -76,30 +76,31 @@ namespace LearningAssistant.Managers
 
             var centerX = Width / 2f;
             var centerY = Height / 2f;
-            var radius = Math.Min(centerX, centerY) - 5;
+            var radius = Math.Min(centerX, centerY) - 4;
 
-            // 绘制旋转的外圈圆点
+            using var bgBrush = new SolidBrush(Color.FromArgb(200, BackColor));
+            g.FillEllipse(bgBrush, centerX - radius, centerY - radius, radius * 2, radius * 2);
+
             g.TranslateTransform(centerX, centerY);
             g.RotateTransform(_angle);
 
-            for (int i = 0; i < 8; i++)
+            for (int i = 0; i < 10; i++)
             {
-                var alpha = (255 - i * 25);
+                var alpha = (255 - i * 22);
                 var color = Color.FromArgb(alpha, ForeColor);
                 using var brush = new SolidBrush(color);
 
-                var angle = i * 45;
-                var x = (float)(Math.Cos(angle * Math.PI / 180) * radius * 0.7);
-                var y = (float)(Math.Sin(angle * Math.PI / 180) * radius * 0.7);
+                var angle = i * 36;
+                var x = (float)(Math.Cos(angle * Math.PI / 180) * radius * 0.65);
+                var y = (float)(Math.Sin(angle * Math.PI / 180) * radius * 0.65);
 
-                g.FillEllipse(brush, x - 4, y - 4, 8, 8);
+                var dotSize = 5f + (10 - i) * 0.3f;
+                g.FillEllipse(brush, x - dotSize / 2, y - dotSize / 2, dotSize, dotSize);
             }
 
-            // 重置变换
             g.ResetTransform();
 
-            // 绘制中心图标（AI机器人图标）
-            DrawCenterIcon(g, centerX, centerY, radius * 0.5f);
+            DrawCenterIcon(g, centerX, centerY, radius * 0.45f);
         }
 
         private void DrawCenterIcon(Graphics g, float centerX, float centerY, float iconSize)

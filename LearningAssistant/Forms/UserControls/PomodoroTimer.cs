@@ -1,4 +1,5 @@
 using LearningAssistant.Common.UI;
+using LearningAssistant.Models.Pomodoro;
 using LearningAssistant.Services.Learning;
 using System.ComponentModel;
 using System.Drawing.Drawing2D;

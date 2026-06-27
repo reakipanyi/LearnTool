@@ -415,15 +415,22 @@ namespace LearningAssistant.Services.Gamification
                 {
                     _ = Task.Run(async () =>
                     {
-                        await _eventBus.PublishAsync(new AchievementUnlockedEvent
+                        try
                         {
-                            UserId = _userId,
-                            AchievementId = firstBadge.Id,
-                            AchievementName = firstBadge.Name,
-                            Description = firstBadge.Description,
-                            Icon = firstBadge.Icon,
-                            IsHidden = firstBadge.IsHidden
-                        });
+                            await _eventBus.PublishAsync(new AchievementUnlockedEvent
+                            {
+                                UserId = _userId,
+                                AchievementId = firstBadge.Id,
+                                AchievementName = firstBadge.Name,
+                                Description = firstBadge.Description,
+                                Icon = firstBadge.Icon,
+                                IsHidden = firstBadge.IsHidden
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogError(ex, "发布成就解锁事件失败");
+                        }
                     });
                 }
             }
@@ -458,10 +465,17 @@ namespace LearningAssistant.Services.Gamification
             {
                 _ = Task.Run(async () =>
                 {
-                    await _eventBus.PublishAsync(new UserProfileUpdatedEvent
+                    try
                     {
-                        UserId = _userId
-                    });
+                        await _eventBus.PublishAsync(new UserProfileUpdatedEvent
+                        {
+                            UserId = _userId
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogError(ex, "发布用户统计更新事件失败");
+                    }
                 });
             }
         }

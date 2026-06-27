@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using LearningAssistant.Forms.UserControls;
 using System.Windows.Forms;
 
@@ -33,6 +34,9 @@ namespace LearningAssistant.Services
         #region 字段
 
         private readonly Dictionary<Form, Panel> _panelContainers = new();
+        private readonly Dictionary<Form, Button> _closeButtons = new();
+        private readonly Color _closeButtonNormalColor = Color.FromArgb(240, 240, 240);
+        private readonly Color _closeButtonHoverColor = Color.FromArgb(220, 220, 220);
 
         #endregion
 
@@ -90,7 +94,7 @@ namespace LearningAssistant.Services
                     aiPanel.PromptText = prompt;
 
                 var urlToUse = !string.IsNullOrEmpty(aiUrl) ? aiUrl : aiPanel.CurrentAIUrl;
-                aiPanel.OpenWebView(urlToUse, prompt);
+                _ = aiPanel.OpenWebViewAsync(urlToUse, prompt);
             }
         }
 
@@ -104,7 +108,7 @@ namespace LearningAssistant.Services
             _panelContainers[parent] = containerPanel;
 
             var finalUrl = !string.IsNullOrEmpty(aiUrl) ? aiUrl : aiAbilityPanel.CurrentAIUrl;
-            aiAbilityPanel.OpenWebView(finalUrl, prompt);
+            _ = aiAbilityPanel.OpenWebViewAsync(finalUrl, prompt);
 
             parent.FormClosed += ParentFormClosedHandler;
         }
@@ -138,17 +142,24 @@ namespace LearningAssistant.Services
 
             var closeButton = new Button
             {
-                Text = "✕ 关闭",
+                Text = "✕ 关闭面板",
                 Dock = DockStyle.Top,
-                Height = 30,
-                BackColor = Color.FromArgb(240, 240, 240),
+                Height = 34,
+                BackColor = _closeButtonNormalColor,
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("微软雅黑", 9F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(60, 60, 60)
+                ForeColor = Color.FromArgb(60, 60, 60),
+                Cursor = Cursors.Hand,
+                TextAlign = ContentAlignment.MiddleRight,
+                Padding = new Padding(0, 0, 15, 0)
             };
             closeButton.FlatAppearance.BorderSize = 0;
+            closeButton.MouseEnter += (s, args) => closeButton.BackColor = _closeButtonHoverColor;
+            closeButton.MouseLeave += (s, args) => closeButton.BackColor = _closeButtonNormalColor;
             closeButton.Click += (s, args) => HideAIAbilityPanel(parent);
             containerPanel.Controls.Add(closeButton);
+
+            _closeButtons[parent] = closeButton;
 
             return containerPanel;
         }
@@ -174,6 +185,7 @@ namespace LearningAssistant.Services
                     // 忽略 dispose 过程中的异常，确保后续清理继续执行
                 }
                 _panelContainers.Remove(parent);
+                _closeButtons.Remove(parent);
                 parent.FormClosed -= ParentFormClosedHandler;
             }
         }

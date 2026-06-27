@@ -10,6 +10,7 @@ namespace LearningAssistant.Managers
         Bitmap? SecondPageImage { get; set; }
         bool IsDualPage { get; }
         bool IsTranslationEnabled { get; set; }
+        bool IsNightMode { get; }
 
         PictureBox PictureBoxPdf { get; }
         PdfPresenter? Presenter { get; set; }
@@ -57,6 +58,10 @@ namespace LearningAssistant.Managers
         Panel? PageTransitionOverlay { get; }
         System.Windows.Forms.Timer? PageTransitionTimer { get; }
         Button? ButtonLockView { get; }
+
+        Panel? StatusBar { get; }
+        Label? StatusLabelLeft { get; }
+        Label? StatusLabelRight { get; }
 
         Color BackColor { get; set; }
 

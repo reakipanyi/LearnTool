@@ -37,15 +37,15 @@ namespace LearningAssistant.Models.Pdf
 
             if (!string.IsNullOrEmpty(Note))
             {
-                return $"{fileName} P{pageNum} - {colorName} ({Note})";
+                var displayNote = Note.Length > 40 ? Note.Substring(0, 40) + "..." : Note;
+                return $"{colorName}·P{pageNum} [{displayNote}]";
             }
             if (!string.IsNullOrEmpty(Text))
             {
-                // 显示更长的OCR文本（最多50个字符）
-                var displayText = Text.Length > 50 ? Text.Substring(0, 50) + "..." : Text;
-                return $"{fileName} P{pageNum} - {colorName}: {displayText}";
+                var displayText = Text.Length > 40 ? Text.Substring(0, 40) + "..." : Text;
+                return $"{colorName}·P{pageNum} {displayText}";
             }
-            return $"{fileName} P{pageNum} - {colorName} (无OCR文本)";
+            return $"{colorName}·P{pageNum} (无文本)";
         }
 
         private string GetColorName(HighlightColor color)

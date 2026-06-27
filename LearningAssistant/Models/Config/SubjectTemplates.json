@@ -7,7 +7,7 @@
       "templates": {
         "识字": {
           "name": "识字",
-          "fields": ["Character", "Pinyin", "Meaning", "StrokeCount", "Radical", "StrokeOrder", "Words"],
+          "fields": ["Character", "Pinyin", "Meaning", "StrokeCount", "Radical", "StrokeOrder", "Words", "SimilarCharacters", "Synonyms", "Antonyms", "CommonMistakes", "ExampleSentence", "CharacterLevel", "Structure", "CharacterFormation", "OtherPronunciations"],
           "fieldNames": {
             "Character": "汉字",
             "Pinyin": "拼音",
@@ -15,7 +15,16 @@
             "StrokeCount": "笔画数",
             "Radical": "部首",
             "StrokeOrder": "笔顺",
-            "Words": "组词"
+            "Words": "组词",
+            "SimilarCharacters": "形近字",
+            "Synonyms": "近义词",
+            "Antonyms": "反义词",
+            "CommonMistakes": "易错点",
+            "ExampleSentence": "例句",
+            "CharacterLevel": "字级",
+            "Structure": "结构",
+            "CharacterFormation": "造字法",
+            "OtherPronunciations": "其他读音"
           },
           "sample": {
             "Character": "学",
@@ -24,7 +33,16 @@
             "StrokeCount": 8,
             "Radical": "子",
             "StrokeOrder": "点 横 横 竖 撇 捺",
-            "Words": "学习、学校、学生"
+            "Words": "学习、学校、学生",
+            "SimilarCharacters": "子、字",
+            "Synonyms": "学、习",
+            "Antonyms": "忘",
+            "CommonMistakes": "注意第三笔是竖不是撇",
+            "ExampleSentence": "我们要好好学习。",
+            "CharacterLevel": "一级",
+            "Structure": "上下结构",
+            "CharacterFormation": "会意",
+            "OtherPronunciations": ""
           }
         },
         "成语": {
@@ -61,20 +79,40 @@
         },
         "诗词": {
           "name": "诗词",
-          "fields": ["Title", "Author", "Dynasty", "Verses", "Annotation"],
+          "fields": ["Title", "Author", "Dynasty", "Verses", "Annotation", "Translation", "Appreciation", "CreationBackground", "FamousLines", "RhetoricalDevices", "Theme", "AuthorIntro", "PoemType", "RelatedPoems", "DifficultyLevel"],
           "fieldNames": {
             "Title": "标题",
             "Author": "作者",
             "Dynasty": "朝代",
             "Verses": "诗句",
-            "Annotation": "注释"
+            "Annotation": "注释",
+            "Translation": "译文",
+            "Appreciation": "赏析",
+            "CreationBackground": "创作背景",
+            "FamousLines": "名句",
+            "RhetoricalDevices": "修辞手法",
+            "Theme": "主题思想",
+            "AuthorIntro": "作者简介",
+            "PoemType": "诗歌类型",
+            "RelatedPoems": "相关诗词",
+            "DifficultyLevel": "难度等级"
           },
           "sample": {
             "Title": "静夜思",
             "Author": "李白",
             "Dynasty": "唐",
             "Verses": "床前明月光，疑是地上霜。举头望明月，低头思故乡。",
-            "Annotation": "这首诗表达了诗人对故乡的思念之情。"
+            "Annotation": "这首诗表达了诗人对故乡的思念之情。",
+            "Translation": "月光洒在床前，让人误以为是霜。抬头望着天上的月亮，低头思念起故乡。",
+            "Appreciation": "诗人运用比喻手法，将月光比作霜，形象地描绘了夜景，表达了深深的思乡之情。",
+            "CreationBackground": "唐玄宗开元十四年，李白在扬州旅舍所作。",
+            "FamousLines": "举头望明月，低头思故乡",
+            "RhetoricalDevices": "比喻、对偶",
+            "Theme": "思乡",
+            "AuthorIntro": "李白（701-762），唐代伟大的浪漫主义诗人。",
+            "PoemType": "五言绝句",
+            "RelatedPoems": "《月下独酌》《把酒问月》",
+            "DifficultyLevel": 1
           }
         },
         "语文综合": {
@@ -102,14 +140,26 @@
       "templates": {
         "英语单词": {
           "name": "英语单词",
-          "fields": ["Word", "Phonetic", "PartOfSpeech", "SyllableBreakdown", "Meaning", "Example"],
+          "fields": ["Word", "Phonetic", "PartOfSpeech", "SyllableBreakdown", "Meaning", "Example", "Synonyms", "Antonyms", "WordForms", "WordRootAffix", "Collocations", "Phrases", "SynonymAnalysis", "UkPhonetic", "UsPhonetic", "VocabularyLevel", "Etymology", "ConfusableWords"],
           "fieldNames": {
             "Word": "单词",
             "Phonetic": "音标",
             "PartOfSpeech": "词性",
             "SyllableBreakdown": "音节拼读",
             "Meaning": "释义",
-            "Example": "例句"
+            "Example": "例句",
+            "Synonyms": "近义词",
+            "Antonyms": "反义词",
+            "WordForms": "词形变化",
+            "WordRootAffix": "词根词缀",
+            "Collocations": "常见搭配",
+            "Phrases": "常用短语",
+            "SynonymAnalysis": "同义词辨析",
+            "UkPhonetic": "英式音标",
+            "UsPhonetic": "美式音标",
+            "VocabularyLevel": "词汇等级",
+            "Etymology": "词源",
+            "ConfusableWords": "易混词"
           },
           "sample": {
             "Word": "learn",
@@ -117,7 +167,19 @@
             "PartOfSpeech": "v.",
             "SyllableBreakdown": "l-ea-rn",
             "Meaning": "学习",
-            "Example": "I learn English every day."
+            "Example": "I learn English every day.",
+            "Synonyms": "study, acquire",
+            "Antonyms": "forget, ignore",
+            "WordForms": "learned/learnt, learning, learns",
+            "WordRootAffix": "learn (学习)",
+            "Collocations": "learn from, learn by heart",
+            "Phrases": "learn the ropes, learn one's lesson",
+            "SynonymAnalysis": "learn侧重于通过学习获得知识或技能，study更强调深入研究",
+            "UkPhonetic": "/lɜːn/",
+            "UsPhonetic": "/lɜːrn/",
+            "VocabularyLevel": "CET4",
+            "Etymology": "古英语leornian",
+            "ConfusableWords": "learn/learn"
           }
         },
         "英语短语": {

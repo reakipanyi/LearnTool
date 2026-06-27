@@ -28,7 +28,7 @@ namespace LearningAssistant.Services.Pdf
                     pen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
                     pen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
                     pen.LineJoin = System.Drawing.Drawing2D.LineJoin.Round;
-                    
+
                     if (stroke.Points.Length >= 4)
                     {
                         var points = new List<PointF>();
@@ -40,7 +40,48 @@ namespace LearningAssistant.Services.Pdf
                         }
                         if (points.Count >= 2)
                         {
-                            g.DrawLines(pen, points.ToArray());
+                            var shapeType = stroke.ShapeType?.ToString();
+                            if (shapeType == "Rectangle" && points.Count >= 2)
+                            {
+                                var rect = new RectangleF(
+                                    Math.Min(points[0].X, points[1].X),
+                                    Math.Min(points[0].Y, points[1].Y),
+                                    Math.Abs(points[1].X - points[0].X),
+                                    Math.Abs(points[1].Y - points[0].Y));
+                                pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                                g.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
+                            }
+                            else if (shapeType == "Ellipse" && points.Count >= 2)
+                            {
+                                var rect = new RectangleF(
+                                    Math.Min(points[0].X, points[1].X),
+                                    Math.Min(points[0].Y, points[1].Y),
+                                    Math.Abs(points[1].X - points[0].X),
+                                    Math.Abs(points[1].Y - points[0].Y));
+                                pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                                g.DrawEllipse(pen, rect);
+                            }
+                            else if (shapeType == "Arrow" && points.Count >= 2)
+                            {
+                                pen.EndCap = System.Drawing.Drawing2D.LineCap.ArrowAnchor;
+                                g.DrawLine(pen, points[0], points[1]);
+                            }
+                            else if (shapeType == "Mosaic" && points.Count >= 2)
+                            {
+                                var rect = new RectangleF(
+                                    Math.Min(points[0].X, points[1].X),
+                                    Math.Min(points[0].Y, points[1].Y),
+                                    Math.Abs(points[1].X - points[0].X),
+                                    Math.Abs(points[1].Y - points[0].Y));
+                                using var brush = new SolidBrush(Color.FromArgb(80, 128, 128, 128));
+                                g.FillRectangle(brush, rect);
+                                pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                                g.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
+                            }
+                            else
+                            {
+                                g.DrawLines(pen, points.ToArray());
+                            }
                         }
                     }
                 }

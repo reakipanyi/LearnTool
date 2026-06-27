@@ -1,28 +1,65 @@
 
 namespace LearningAssistant.Models.Learning
 {
+    /// <summary>
+    /// 通用学科学习项
+    /// 适用于数学、物理、化学、历史、地理、生物等各学科的知识点学习
+    /// </summary>
     public class GeneralSubjectItem : LearningItem
     {
+        /// <summary>
+        /// 科目（数学、物理、化学、历史、地理、生物等）
+        /// </summary>
         public string Subject { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 分类/章节
+        /// </summary>
         public string Category { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 主要内容
+        /// </summary>
         public string Content { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 主题/标题
+        /// </summary>
         public string Topic { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 要点/重点
+        /// </summary>
         public string KeyPoints { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 例题
+        /// </summary>
         public string Example { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 问题
+        /// </summary>
         public string Question { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 答案
+        /// </summary>
         public string Answer { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 解析
+        /// </summary>
         public string Analysis { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 备注
+        /// </summary>
         public string Note { get; set; } = string.Empty;
 
+        /// <summary>
+        /// 难度等级（1-5）
+        /// </summary>
         public int DifficultyLevel { get; set; } = 1;
 
         /// <summary>

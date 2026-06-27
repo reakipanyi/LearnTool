@@ -24,6 +24,11 @@ namespace LearningAssistant.Services.Learning
         List<WrongAnswerItem> GetWrongAnswers(string userId, string subject = "", string category = "");
 
         /// <summary>
+        /// 按学科和分类获取错题
+        /// </summary>
+        List<WrongAnswerItem> GetBySubjectCategory(string userId, string subject, string category);
+
+        /// <summary>
         /// 获取复习用错题
         /// </summary>
         List<WrongAnswerItem> GetWrongAnswersForReview(string userId, int count = 10);

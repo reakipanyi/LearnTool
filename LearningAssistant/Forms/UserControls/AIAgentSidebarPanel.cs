@@ -66,6 +66,8 @@ namespace LearningAssistant.Forms.UserControls
         private ThemeMode _currentTheme = ThemeMode.Light;
         private string _currentLearningItem = string.Empty;
         private string _currentCategory = string.Empty;
+        private readonly Dictionary<Button, Color> _tabButtonOriginalColors = new();
+        private readonly Dictionary<Button, Color> _contentButtonOriginalColors = new();
         #endregion
 
         #region 属性
@@ -328,7 +330,30 @@ namespace LearningAssistant.Forms.UserControls
                 Tag = mode
             };
             btn.Click += new EventHandler(TabButton_Click);
+            btn.MouseEnter += TabButton_MouseEnter;
+            btn.MouseLeave += TabButton_MouseLeave;
+            _tabButtonOriginalColors[btn] = Color.White;
             return btn;
+        }
+
+        private void TabButton_MouseEnter(object? sender, EventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is AIAgentMode mode && mode != _currentMode)
+            {
+                btn.BackColor = _currentTheme == ThemeMode.Dark
+                    ? Color.FromArgb(55, 55, 55)
+                    : Color.FromArgb(240, 240, 245);
+            }
+        }
+
+        private void TabButton_MouseLeave(object? sender, EventArgs e)
+        {
+            if (sender is Button btn && btn.Tag is AIAgentMode mode && mode != _currentMode)
+            {
+                btn.BackColor = _currentTheme == ThemeMode.Dark
+                    ? Color.FromArgb(30, 30, 30)
+                    : Color.White;
+            }
         }
 
         /// <summary>问答面板</summary>
@@ -377,7 +402,8 @@ namespace LearningAssistant.Forms.UserControls
                 Multiline = true,
                 Font = _fontInputText,
                 BorderStyle = BorderStyle.FixedSingle,
-                PlaceholderText = $"请输入关于「{CurrentLearningItem}」的问题..."
+                PlaceholderText = $"请输入关于「{CurrentLearningItem}」的问题...",
+                Cursor = Cursors.IBeam
             };
 
             Button btnAsk = new Button
@@ -394,6 +420,7 @@ namespace LearningAssistant.Forms.UserControls
                 Margin = new Padding(0, 10, 0, 0)
             };
             btnAsk.Click += ChatAskButton_Click;
+            AddContentButtonHoverEffect(btnAsk, ThemeHelper.BrandColors.Primary);
 
             panel.Controls.Add(btnAsk);
             panel.Controls.Add(_textBoxChatQuestion);
@@ -401,6 +428,19 @@ namespace LearningAssistant.Forms.UserControls
             panel.Controls.Add(labelExample);
             panel.Controls.Add(labelTip);
             return panel;
+        }
+
+        private void AddContentButtonHoverEffect(Button button, Color baseColor)
+        {
+            _contentButtonOriginalColors[button] = baseColor;
+            button.MouseEnter += (s, e) =>
+            {
+                button.BackColor = ThemeHelper.GetHoverColor(baseColor, -20);
+            };
+            button.MouseLeave += (s, e) =>
+            {
+                button.BackColor = baseColor;
+            };
         }
 
         /// <summary>费曼学习面板</summary>
@@ -437,6 +477,7 @@ namespace LearningAssistant.Forms.UserControls
                 Margin = new Padding(0, 20, 0, 0)
             };
             btnStart.Click += FeynmanStartButton_Click;
+            AddContentButtonHoverEffect(btnStart, ThemeHelper.BrandColors.Primary);
 
             Label labelStep = new Label
             {
@@ -489,6 +530,7 @@ namespace LearningAssistant.Forms.UserControls
                 Margin = new Padding(0, 20, 0, 0)
             };
             btnStart.Click += HintsStartButton_Click;
+            AddContentButtonHoverEffect(btnStart, ThemeHelper.WarningColors.Main);
 
             Label labelHintLevel = new Label
             {
@@ -541,6 +583,7 @@ namespace LearningAssistant.Forms.UserControls
                 Margin = new Padding(0, 20, 0, 0)
             };
             btnView.Click += AssociationViewButton_Click;
+            AddContentButtonHoverEffect(btnView, ThemeHelper.SuccessColors.Main);
 
             Label labelAssocTip = new Label
             {
@@ -618,8 +661,9 @@ namespace LearningAssistant.Forms.UserControls
         /// <summary>重置标签按钮默认样式</summary>
         private void ResetTabButtonStyle(Button button)
         {
-            button.BackColor = Color.White;
-            button.ForeColor = Color.FromArgb(60, 60, 60);
+            bool isDark = _currentTheme == ThemeMode.Dark;
+            button.BackColor = isDark ? Color.FromArgb(30, 30, 30) : Color.White;
+            button.ForeColor = isDark ? Color.FromArgb(220, 220, 220) : Color.FromArgb(60, 60, 60);
         }
 
         /// <summary>切换显示对应模式面板</summary>
@@ -650,13 +694,43 @@ namespace LearningAssistant.Forms.UserControls
             _currentTheme = colors.ThemeMode;
             bool isDark = colors.ThemeMode == ThemeMode.Dark;
 
-            BackColor = isDark ? Color.FromArgb(30, 30, 30) : Color.White;
-            _panelHeader.BackColor = isDark ? Color.FromArgb(50, 50, 50) : ThemeHelper.BrandColors.Primary;
-            _panelTabs.BackColor = isDark ? Color.FromArgb(35, 35, 35) : Color.FromArgb(245, 245, 250);
-            _panelContext.BackColor = isDark ? Color.FromArgb(40, 40, 40) : Color.FromArgb(248, 248, 252);
-            _labelContext.ForeColor = isDark ? Color.FromArgb(176, 176, 176) : Color.FromArgb(102, 102, 102);
+            BackColor = isDark ? colors.Surface : Color.White;
+            _panelHeader.BackColor = isDark ? colors.SurfaceElevated : ThemeHelper.BrandColors.Primary;
+            _panelTabs.BackColor = isDark ? colors.Background : Color.FromArgb(245, 245, 250);
+            _panelContext.BackColor = isDark ? colors.SurfaceElevated : Color.FromArgb(248, 248, 252);
+            _labelContext.ForeColor = isDark ? colors.TextSecondary : Color.FromArgb(102, 102, 102);
+            _panelContent.BackColor = isDark ? colors.Surface : Color.White;
 
+            ApplyThemeToContentPanels(colors);
             UpdateTabDisplay();
+        }
+
+        private void ApplyThemeToContentPanels(ThemeColors colors)
+        {
+            bool isDark = colors.ThemeMode == ThemeMode.Dark;
+
+            var contentPanels = new[] { _panelChatContent, _panelFeynmanContent, _panelHintsContent, _panelAssociationContent };
+            foreach (var panel in contentPanels)
+            {
+                if (panel == null) continue;
+                panel.BackColor = isDark ? colors.Surface : Color.White;
+
+                foreach (Control ctrl in panel.Controls)
+                {
+                    if (ctrl is Label lbl)
+                    {
+                        if (lbl.Font.Bold)
+                            lbl.ForeColor = isDark ? colors.TextPrimary : Color.FromArgb(60, 60, 60);
+                        else
+                            lbl.ForeColor = isDark ? colors.TextSecondary : Color.FromArgb(102, 102, 102);
+                    }
+                    else if (ctrl is TextBox txt)
+                    {
+                        txt.BackColor = isDark ? colors.SurfaceElevated : Color.White;
+                        txt.ForeColor = isDark ? colors.TextPrimary : Color.Black;
+                    }
+                }
+            }
         }
         #endregion
 

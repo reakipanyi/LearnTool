@@ -169,10 +169,15 @@ namespace LearningAssistant.Forms
             _themeService = themeService;
             _pendingContentService = pendingContentService;
             InitializeComponent();
+            WindowState = FormWindowState.Maximized;
             InitializeProviderButtonMappings();
             InitializeBookmarks();
             Load += WebView2BrowserForm_Load;
             FormClosing += WebView2BrowserForm_FormClosing;
+
+            tabControl.DrawMode = TabDrawMode.OwnerDrawFixed;
+            tabControl.SizeMode = TabSizeMode.Normal;
+            tabControl.DrawItem += TabControl_DrawItem;
 
             _themeService?.RegisterThemeable(this);
         }
@@ -330,6 +335,7 @@ namespace LearningAssistant.Forms
 
                     webView.CoreWebView2.NewWindowRequested += CoreWebView2_NewWindowRequested;
                     webView.NavigationCompleted += WebView_NavigationCompleted;
+                    webView.CoreWebView2.NavigationStarting += CoreWebView2_NavigationStarting;
                     webView.CoreWebView2.DocumentTitleChanged += CoreWebView2_DocumentTitleChanged;
                     webView.CoreWebView2.ProcessFailed += CoreWebView2_ProcessFailed;
                     webView.CoreWebView2.ContextMenuRequested += CoreWebView2_ContextMenuRequested;
@@ -358,6 +364,7 @@ namespace LearningAssistant.Forms
                 {
                     webView.CoreWebView2.NewWindowRequested -= CoreWebView2_NewWindowRequested;
                     webView.NavigationCompleted -= WebView_NavigationCompleted;
+                    webView.CoreWebView2.NavigationStarting -= CoreWebView2_NavigationStarting;
                     webView.CoreWebView2.DocumentTitleChanged -= CoreWebView2_DocumentTitleChanged;
                     webView.CoreWebView2.ProcessFailed -= CoreWebView2_ProcessFailed;
                     webView.CoreWebView2.ContextMenuRequested -= CoreWebView2_ContextMenuRequested;
@@ -484,6 +491,40 @@ namespace LearningAssistant.Forms
         }
 
         /// <summary>
+        /// 导航开始处理 - 显示加载进度
+        /// </summary>
+        private void CoreWebView2_NavigationStarting(object? sender, CoreWebView2NavigationStartingEventArgs e)
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+
+            var webView = sender as CoreWebView2;
+            if (webView == null) return;
+
+            var webViewCtrl = _webViews.FirstOrDefault(kvp => kvp.Value.CoreWebView2 == webView).Value;
+            if (webViewCtrl != null && webViewCtrl.Tag is TabPage tabPage && tabPage == tabControl.SelectedTab)
+            {
+                BeginInvoke(new Action(() =>
+                {
+                    if (IsDisposed) return;
+                    ShowLoadingProgress(true);
+                }));
+            }
+        }
+
+        private void ShowLoadingProgress(bool show)
+        {
+            if (progressBarLoading != null)
+            {
+                progressBarLoading.Visible = show;
+            }
+            if (lblLoadingStatus != null)
+            {
+                lblLoadingStatus.Visible = show;
+                lblLoadingStatus.Text = show ? "加载中..." : "";
+            }
+        }
+
+        /// <summary>
         /// 导航完成处理
         /// </summary>
         private void WebView_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
@@ -504,6 +545,7 @@ namespace LearningAssistant.Forms
             BeginInvoke(new Action(async () =>
             {
                 if (IsDisposed) return;
+                ShowLoadingProgress(false);
                 if (CurrentWebView != null)
                 {
                     txtUrl.Text = CurrentWebView.Source?.ToString() ?? string.Empty;
@@ -659,8 +701,80 @@ namespace LearningAssistant.Forms
             }
         }
 
+        private void TabControl_DrawItem(object? sender, DrawItemEventArgs e)
+        {
+            if (sender is not TabControl tabControl || e.Index < 0 || e.Index >= tabControl.TabCount)
+                return;
+
+            var tabPage = tabControl.TabPages[e.Index];
+            var isSelected = tabControl.SelectedIndex == e.Index;
+            var tabRect = tabControl.GetTabRect(e.Index);
+
+            var colors = _currentThemeMode == ThemeMode.Dark 
+                ? ThemeService.GetColors(ThemeMode.Dark) 
+                : ThemeService.GetColors(ThemeMode.Light);
+
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+            var tabWidth = tabRect.Width;
+            var tabHeight = tabRect.Height;
+            var cornerRadius = 6;
+
+            var path = new System.Drawing.Drawing2D.GraphicsPath();
+            path.AddLine(tabRect.Left + cornerRadius, tabRect.Top, tabRect.Right - cornerRadius, tabRect.Top);
+            path.AddArc(tabRect.Right - cornerRadius * 2, tabRect.Top, cornerRadius * 2, cornerRadius * 2, -90, 90);
+            path.AddLine(tabRect.Right, tabRect.Top + cornerRadius, tabRect.Right, tabRect.Bottom);
+            path.AddLine(tabRect.Right, tabRect.Bottom, tabRect.Left, tabRect.Bottom);
+            path.AddLine(tabRect.Left, tabRect.Bottom, tabRect.Left, tabRect.Top + cornerRadius);
+            path.AddArc(tabRect.Left, tabRect.Top, cornerRadius * 2, cornerRadius * 2, 90, 90);
+            path.CloseFigure();
+
+            if (isSelected)
+            {
+                using var brush = new SolidBrush(colors.Background);
+                e.Graphics.FillPath(brush, path);
+
+                using var borderPen = new Pen(colors.Primary, 2);
+                e.Graphics.DrawPath(borderPen, path);
+            }
+            else
+            {
+                using var brush = new SolidBrush(colors.Surface);
+                e.Graphics.FillPath(brush, path);
+
+                using var borderPen = new Pen(colors.Divider);
+                e.Graphics.DrawPath(borderPen, path);
+            }
+            path.Dispose();
+
+            string tabText = tabPage.Text;
+            if (tabText.Length > 20)
+                tabText = tabText.Substring(0, 20) + "...";
+
+            var textColor = isSelected ? colors.TextPrimary : colors.TextSecondary;
+            using var textBrush = new SolidBrush(textColor);
+            using var font = new Font("Microsoft YaHei", 9f);
+
+            var textRect = new Rectangle(tabRect.Left + 8, tabRect.Top + 2, tabWidth - 32, tabHeight - 4);
+            var format = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center };
+            e.Graphics.DrawString(tabText, font, textBrush, textRect, format);
+
+            var closeRect = new Rectangle(tabRect.Right - 20, tabRect.Top + 4, 14, 14);
+            var closePath = new System.Drawing.Drawing2D.GraphicsPath();
+            closePath.AddEllipse(closeRect);
+
+            var closeColor = isSelected ? colors.TextSecondary : colors.TextDisabled;
+            using var closeBrush = new SolidBrush(closeColor);
+            e.Graphics.FillPath(closeBrush, closePath);
+            closePath.Dispose();
+
+            using var closePen = new Pen(isSelected ? colors.TextPrimary : colors.TextSecondary, 1.5f);
+            e.Graphics.DrawLine(closePen, closeRect.Left + 4, closeRect.Top + 4, closeRect.Right - 4, closeRect.Bottom - 4);
+            e.Graphics.DrawLine(closePen, closeRect.Right - 4, closeRect.Top + 4, closeRect.Left + 4, closeRect.Bottom - 4);
+        }
+
         /// <summary>
-        /// 标签页鼠标点击 - 处理中键关闭
+        /// 标签页鼠标点击 - 处理中键关闭和关闭按钮点击
         /// </summary>
         private void TabControl_MouseDown(object? sender, MouseEventArgs e)
         {
@@ -672,6 +786,22 @@ namespace LearningAssistant.Forms
                     {
                         CloseTab(tabControl.TabPages[i]);
                         break;
+                    }
+                }
+            }
+            else if (e.Button == MouseButtons.Left)
+            {
+                for (int i = 0; i < tabControl.TabCount; i++)
+                {
+                    var tabRect = tabControl.GetTabRect(i);
+                    if (tabRect.Contains(e.Location))
+                    {
+                        var closeRect = new Rectangle(tabRect.Right - 20, tabRect.Top + 4, 14, 14);
+                        if (closeRect.Contains(e.Location))
+                        {
+                            CloseTab(tabControl.TabPages[i]);
+                            break;
+                        }
                     }
                 }
             }
@@ -1273,6 +1403,7 @@ namespace LearningAssistant.Forms
                     {
                         webView.CoreWebView2.NewWindowRequested -= CoreWebView2_NewWindowRequested;
                         webView.NavigationCompleted -= WebView_NavigationCompleted;
+                        webView.CoreWebView2.NavigationStarting -= CoreWebView2_NavigationStarting;
                         webView.CoreWebView2.DocumentTitleChanged -= CoreWebView2_DocumentTitleChanged;
                         webView.CoreWebView2.ProcessFailed -= CoreWebView2_ProcessFailed;
                         webView.CoreWebView2.ContextMenuRequested -= CoreWebView2_ContextMenuRequested;
@@ -1310,14 +1441,19 @@ namespace LearningAssistant.Forms
 
             if (tabControl != null)
             {
-                if (colors.ThemeMode == ThemeMode.Dark)
-                {
-                    tabControl.BackColor = colors.Surface;
-                }
-                else
-                {
-                    tabControl.BackColor = SystemColors.Control;
-                }
+                tabControl.BackColor = colors.ThemeMode == ThemeMode.Dark ? colors.Background : SystemColors.Control;
+                tabControl.Invalidate();
+            }
+
+            if (progressBarLoading != null)
+            {
+                progressBarLoading.ForeColor = colors.Primary;
+                progressBarLoading.BackColor = colors.Background;
+            }
+
+            if (lblLoadingStatus != null)
+            {
+                lblLoadingStatus.ForeColor = colors.TextSecondary;
             }
 
             ApplyWebView2ThemeAsync(colors.ThemeMode == ThemeMode.Dark);
@@ -1375,6 +1511,8 @@ namespace LearningAssistant.Forms
         private ToolStripButton btnZoomIn;
         private ToolStripSeparator toolStripSeparatorTools;
         private ToolStripButton btnScreenshot;
+        private ToolStripProgressBar progressBarLoading;
+        private ToolStripLabel lblLoadingStatus;
 
         private void InitializeComponent()
         {
@@ -1404,13 +1542,15 @@ namespace LearningAssistant.Forms
             btnZoomIn = new ToolStripButton();
             toolStripSeparatorTools = new ToolStripSeparator();
             btnScreenshot = new ToolStripButton();
+            progressBarLoading = new ToolStripProgressBar();
+            lblLoadingStatus = new ToolStripLabel();
             tabControl = new TabControl();
             toolStrip.SuspendLayout();
             SuspendLayout();
             // 
             // toolStrip
             // 
-            toolStrip.Items.AddRange(new ToolStripItem[] { btnBack, btnForward, btnRefresh, btnNewTab, comboBoxBookmarks, btnAddBookmark, btnManageBookmarks, toolStripSeparatorZoom, btnZoomOut, lblZoom, btnZoomIn, txtUrl, btnGo, toolStripSeparatorProvider, btnProviderDoubao, btnProviderDeepseek, btnProviderZhipu, btnProviderQwen, btnProviderSpark, btnProviderWenxin, toolStripSeparator, btnOpenNetdisk, toolStripSeparatorTools, btnScreenshot, btnOpenInBrowser });
+            toolStrip.Items.AddRange(new ToolStripItem[] { btnBack, btnForward, btnRefresh, btnNewTab, comboBoxBookmarks, btnAddBookmark, btnManageBookmarks, toolStripSeparatorZoom, btnZoomOut, lblZoom, btnZoomIn, txtUrl, btnGo, toolStripSeparatorProvider, btnProviderDoubao, btnProviderDeepseek, btnProviderZhipu, btnProviderQwen, btnProviderSpark, btnProviderWenxin, toolStripSeparator, btnOpenNetdisk, toolStripSeparatorTools, btnScreenshot, btnOpenInBrowser, progressBarLoading, lblLoadingStatus });
             toolStrip.Location = new Point(0, 0);
             toolStrip.Name = "toolStrip";
             toolStrip.Size = new Size(1160, 25);
@@ -1635,6 +1775,21 @@ namespace LearningAssistant.Forms
             btnScreenshot.ToolTipText = "截取当前页面";
             btnScreenshot.Click += btnScreenshot_Click;
             // 
+            // progressBarLoading
+            // 
+            progressBarLoading.Name = "progressBarLoading";
+            progressBarLoading.Size = new Size(120, 18);
+            progressBarLoading.Visible = false;
+            progressBarLoading.Style = ProgressBarStyle.Marquee;
+            progressBarLoading.MarqueeAnimationSpeed = 30;
+            // 
+            // lblLoadingStatus
+            // 
+            lblLoadingStatus.Name = "lblLoadingStatus";
+            lblLoadingStatus.Size = new Size(80, 22);
+            lblLoadingStatus.Text = "";
+            lblLoadingStatus.Visible = false;
+            // 
             // tabControl
             // 
             tabControl.Dock = DockStyle.Fill;
@@ -1677,6 +1832,10 @@ namespace LearningAssistant.Forms
         {
             using var brush = new SolidBrush(_colors.Surface);
             e.Graphics.FillRectangle(brush, e.AffectedBounds);
+            
+            using var borderPen = new Pen(_colors.Divider);
+            e.Graphics.DrawLine(borderPen, e.AffectedBounds.Left, e.AffectedBounds.Bottom - 1, 
+                e.AffectedBounds.Right, e.AffectedBounds.Bottom - 1);
         }
 
         protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
@@ -1690,11 +1849,31 @@ namespace LearningAssistant.Forms
 
         protected override void OnRenderButtonBackground(ToolStripItemRenderEventArgs e)
         {
+            var rect = e.Item.ContentRectangle;
+            rect.Inflate(-1, -1);
+
             if (e.Item.Selected || e.Item.Pressed)
             {
                 using var brush = new SolidBrush(_colors.PrimaryLight);
-                e.Graphics.FillRectangle(brush, e.Item.ContentRectangle);
+                e.Graphics.FillRectangle(brush, rect);
             }
+        }
+
+        protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
+        {
+            var rect = e.Item.ContentRectangle;
+            var centerY = rect.Y + rect.Height / 2;
+            
+            using var pen = new Pen(_colors.Divider);
+            e.Graphics.DrawLine(pen, rect.X + 4, centerY, rect.X + rect.Width - 4, centerY);
+        }
+
+        protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
+        {
+        }
+
+        protected override void OnRenderLabelBackground(ToolStripItemRenderEventArgs e)
+        {
         }
     }
 

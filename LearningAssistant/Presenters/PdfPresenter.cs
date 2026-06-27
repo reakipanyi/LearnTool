@@ -402,7 +402,7 @@ namespace LearningAssistant.Presenters
             try
             {
                 if (string.IsNullOrEmpty(annotation.PdfPath)) return;
-                
+
                 if (annotation.Type == AnnotationType.Stroke)
                 {
                     var strokes = _annotationService.GetStrokes(annotation.PdfPath, annotation.PageIndex).ToList();
@@ -486,7 +486,7 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        public void AddAnnotationStroke(float[] normalizedPoints, int colorArgb, float thickness, int imageWidth, int imageHeight)
+        public void AddAnnotationStroke(float[] normalizedPoints, int colorArgb, float thickness, int imageWidth, int imageHeight, string? shapeType = null)
         {
             try
             {
@@ -510,7 +510,8 @@ namespace LearningAssistant.Presenters
                 {
                     Points = pts.ToArray(),
                     ColorArgb = colorArgb,
-                    Thickness = thickness
+                    Thickness = thickness,
+                    ShapeType = shapeType
                 };
                 _annotationService.AddStroke(_pdfFileManager.CurrentFilePath, _pdfFileManager.CurrentPageIndex, stroke);
             }
@@ -541,12 +542,12 @@ namespace LearningAssistant.Presenters
                 var pageSize = _pdfService.GetPageSize(_pdfFileManager.CurrentPageIndex);
                 float pageW = pageSize.Width > 0 ? pageSize.Width : imageWidth;
                 float pageH = pageSize.Height > 0 ? pageSize.Height : imageHeight;
-                
+
                 var imgX = normalizedX * imageWidth;
                 var imgY = normalizedY * imageHeight;
                 var pageX = imgX * (pageW / Math.Max(1, (float)imageWidth));
                 var pageY = imgY * (pageH / Math.Max(1, (float)imageHeight));
-                
+
                 var annotationText = new AnnotationText
                 {
                     NormalizedX = pageX / pageW,
@@ -571,10 +572,10 @@ namespace LearningAssistant.Presenters
                 if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath)) return null;
                 var pageSize = _pdfService.GetPageSize(_pdfFileManager.CurrentPageIndex);
                 return _annotationService.LoadAnnotation(
-                    _pdfFileManager.CurrentFilePath, 
-                    _pdfFileManager.CurrentPageIndex, 
-                    targetWidth, 
-                    targetHeight, 
+                    _pdfFileManager.CurrentFilePath,
+                    _pdfFileManager.CurrentPageIndex,
+                    targetWidth,
+                    targetHeight,
                     pageSize);
             }
             catch (Exception ex)
@@ -587,6 +588,50 @@ namespace LearningAssistant.Presenters
         public void RememberCurrentPageForCurrentFile(int pageIndex)
         {
             _pdfFileManager.CurrentPageIndex = pageIndex;
+        }
+
+        public IEnumerable<AnnotationStroke> GetCurrentPageStrokes()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath))
+                    return Enumerable.Empty<AnnotationStroke>();
+
+                return _annotationService.GetStrokes(_pdfFileManager.CurrentFilePath, _pdfFileManager.CurrentPageIndex);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get strokes for current page");
+                return Enumerable.Empty<AnnotationStroke>();
+            }
+        }
+
+        public void RemoveStrokeAtCurrentPage(int index)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath)) return;
+
+                _annotationService.RemoveStrokeAt(_pdfFileManager.CurrentFilePath, _pdfFileManager.CurrentPageIndex, index);
+                _logger.LogInformation("Removed stroke at index {Index} from page {PageIndex}", index, _pdfFileManager.CurrentPageIndex);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to remove stroke at index {Index}", index);
+            }
+        }
+
+        public (float Width, float Height) GetPageSize()
+        {
+            try
+            {
+                var pageSize = _pdfService.GetPageSize(_pdfFileManager.CurrentPageIndex);
+                return (pageSize.Width, pageSize.Height);
+            }
+            catch
+            {
+                return (0, 0);
+            }
         }
 
         public void NextPage()
@@ -630,7 +675,7 @@ namespace LearningAssistant.Presenters
 
         public void ExportHighlights()
         {
-            ExportHighlightsToExcel();
+            _ = ExportHighlightsToExcelAsync();
         }
 
         public void PrintPdf()
@@ -653,7 +698,7 @@ namespace LearningAssistant.Presenters
             _logger.LogWarning("ZoomOut not yet implemented");
         }
 
-        public async void ExportHighlightsToExcel()
+        public async Task ExportHighlightsToExcelAsync()
         {
             if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath))
             {
@@ -1006,6 +1051,8 @@ namespace LearningAssistant.Presenters
         {
             // TODO: Implement AI question functionality
         }
+
+
 
         public void Dispose()
         {

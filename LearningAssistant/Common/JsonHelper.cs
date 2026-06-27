@@ -40,12 +40,12 @@ namespace LearningAssistant.Common
             }
             catch (JsonException ex)
             {
-                System.Diagnostics.Debug.WriteLine($"JSON parse error in {filePath}: {ex.Message}");
+                System.Diagnostics.Trace.TraceWarning($"JSON parse error in {filePath}: {ex.Message}");
                 return default;
             }
             catch (IOException ex)
             {
-                System.Diagnostics.Debug.WriteLine($"IO error reading {filePath}: {ex.Message}");
+                System.Diagnostics.Trace.TraceWarning($"IO error reading {filePath}: {ex.Message}");
                 return default;
             }
         }

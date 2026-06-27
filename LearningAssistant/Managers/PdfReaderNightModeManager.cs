@@ -42,6 +42,7 @@ namespace LearningAssistant.Managers
                 ApplyNightModeToMainForm();
                 ApplyNightModeToTabPageTranslate();
                 ApplyNightModeToBookmarksAndHighlights();
+                ApplyNightModeToStatusBar();
                 UpdateThumbnailsBackground();
             }
             catch (Exception ex)
@@ -176,6 +177,29 @@ namespace LearningAssistant.Managers
                 button.BackColor = SystemColors.Control;
                 button.ForeColor = SystemColors.ControlText;
             }
+        }
+
+        private void ApplyNightModeToStatusBar()
+        {
+            if (_form.StatusBar == null) return;
+
+            if (_isNightMode)
+            {
+                _form.StatusBar.BackColor = Color.FromArgb(35, 35, 35);
+            }
+            else
+            {
+                _form.StatusBar.BackColor = Color.White;
+            }
+
+            ApplyStatusLabelNightMode(_form.StatusLabelLeft);
+            ApplyStatusLabelNightMode(_form.StatusLabelRight);
+        }
+
+        private void ApplyStatusLabelNightMode(Label? label)
+        {
+            if (label == null) return;
+            label.ForeColor = _isNightMode ? Color.FromArgb(180, 180, 180) : Color.FromArgb(153, 153, 153);
         }
 
         public void UpdateThumbnailsBackground()

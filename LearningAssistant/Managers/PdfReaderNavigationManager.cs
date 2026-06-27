@@ -1,3 +1,4 @@
+using LearningAssistant.Forms;
 using LearningAssistant.Models.Pdf;
 using Microsoft.Extensions.Logging;
 using System.Drawing.Drawing2D;
@@ -7,6 +8,7 @@ namespace LearningAssistant.Managers
     public enum AnnotationToolMode
     {
         None,
+        Select,
         Highlight,
         Rectangle,
         Ellipse,
@@ -73,6 +75,12 @@ namespace LearningAssistant.Managers
         private readonly Stack<AnnotationStroke> _strokeUndoStack = new Stack<AnnotationStroke>();
         private const int MaxUndoStackSize = 50;
 
+        private AnnotationStroke? _selectedStroke;
+        private int _selectedStrokeIndex = -1;
+        private bool _isSelectingStroke = false;
+        private PointF? _dragOffset;
+        private const float HitTestThreshold = 25f;
+
         public int ZoomLevel => _zoomLevel;
         public bool IsLocked => _isLocked;
         public Rectangle? LastSelectionRect => _lastSelectionRect ?? _pendingHighlightRect;
@@ -105,6 +113,15 @@ namespace LearningAssistant.Managers
             _isDrawing = false;
             _isSelecting = false;
             _currentStrokePoints = null;
+            _selectedStroke = null;
+            _selectedStrokeIndex = -1;
+            _isSelectingStroke = false;
+
+            if (_form.PictureBoxPdf != null)
+            {
+                _form.PictureBoxPdf.Cursor = mode == AnnotationToolMode.Select ? Cursors.Hand : Cursors.Default;
+            }
+
             _form.PictureBoxPdf.Invalidate();
         }
 
@@ -298,11 +315,15 @@ namespace LearningAssistant.Managers
             _isAnimating = true;
             _transitionStep = 0;
             _transitionFadeOut = true;
+
+            bool isNightMode = _form.IsNightMode;
+
             _form.PageTransitionOverlay.Visible = true;
-            _form.PageTransitionOverlay.BackColor = Color.White;
+            _form.PageTransitionOverlay.BackColor = isNightMode ? Color.FromArgb(30, 30, 30) : Color.White;
 
             if (_form.PageTransitionTimer != null)
             {
+                _form.PageTransitionTimer.Interval = 25;
                 _form.PageTransitionTimer.Start();
             }
         }
@@ -313,20 +334,26 @@ namespace LearningAssistant.Managers
 
             _transitionStep++;
 
+            bool isNightMode = _form.IsNightMode;
+
+            int baseR = isNightMode ? 30 : 255;
+            int baseG = isNightMode ? 30 : 255;
+            int baseB = isNightMode ? 30 : 255;
+
             if (_transitionFadeOut)
             {
-                int alpha = 255 - (_transitionStep * 25);
+                int alpha = 255 - (_transitionStep * 30);
                 if (alpha <= 0)
                 {
                     alpha = 0;
                     _transitionFadeOut = false;
                     _transitionStep = 0;
                 }
-                _form.PageTransitionOverlay.BackColor = Color.FromArgb(alpha, 255, 255, 255);
+                _form.PageTransitionOverlay.BackColor = Color.FromArgb(alpha, baseR, baseG, baseB);
             }
             else
             {
-                int alpha = _transitionStep * 25;
+                int alpha = _transitionStep * 30;
                 if (alpha >= 255)
                 {
                     alpha = 255;
@@ -335,7 +362,7 @@ namespace LearningAssistant.Managers
                     _form.PageTransitionOverlay.Visible = false;
                     return;
                 }
-                _form.PageTransitionOverlay.BackColor = Color.FromArgb(alpha, 255, 255, 255);
+                _form.PageTransitionOverlay.BackColor = Color.FromArgb(alpha, baseR, baseG, baseB);
             }
         }
 
@@ -349,6 +376,10 @@ namespace LearningAssistant.Managers
                 {
                     switch (_currentToolMode)
                     {
+                        case AnnotationToolMode.Select:
+                            _logger.LogInformation("MouseDown Left: Select mode, checking for stroke hit at {X},{Y}", e.Location.X, e.Location.Y);
+                            HandleSelectModeClick(e.Location);
+                            return;
                         case AnnotationToolMode.Highlight:
                             _logger.LogInformation("MouseDown Left: Starting highlight selection at {X},{Y}", e.Location.X, e.Location.Y);
                             _isDrawingShape = true;
@@ -711,7 +742,7 @@ namespace LearningAssistant.Managers
                                 };
 
                                 PushStrokeToUndoStack(stroke);
-                                _form.Presenter?.AddAnnotationStroke(strokePts.ToArray(), _penColor.ToArgb(), _penWidth, imgW, imgH);
+                                _form.Presenter?.AddAnnotationStroke(strokePts.ToArray(), _penColor.ToArgb(), _penWidth, imgW, imgH, _currentToolMode.ToString());
                             }
                         }
                     }
@@ -919,11 +950,190 @@ namespace LearningAssistant.Managers
                 {
                     EnsureAnnotationBitmap();
                 }
+
+                _selectedStroke = null;
+                _selectedStrokeIndex = -1;
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error loading annotations for current page");
             }
+        }
+
+        private void HandleSelectModeClick(Point clientPoint)
+        {
+            if (_form.CurrentPageImage == null) return;
+
+            var imgPoint = ClientToImage(clientPoint);
+            var strokes = GetCurrentPageStrokes();
+
+            _logger.LogInformation("Select mode click: client={ClientX},{ClientY}, img={ImgX},{ImgY}, strokes count={Count}",
+                clientPoint.X, clientPoint.Y, imgPoint.X, imgPoint.Y, strokes.Count);
+
+            _selectedStroke = null;
+            _selectedStrokeIndex = -1;
+
+            for (int i = strokes.Count - 1; i >= 0; i--)
+            {
+                var stroke = strokes[i];
+                if (HitTestStroke(stroke, imgPoint))
+                {
+                    _selectedStroke = stroke;
+                    _selectedStrokeIndex = i;
+                    _isSelectingStroke = true;
+                    _dragOffset = imgPoint;
+                    _logger.LogInformation("Selected stroke at index {Index}, type={ShapeType}", i, stroke.ShapeType);
+                    break;
+                }
+            }
+
+            if (_selectedStroke == null)
+            {
+                _logger.LogInformation("No stroke hit - click at {X},{Y}", imgPoint.X, imgPoint.Y);
+            }
+
+            _form.PictureBoxPdf.Invalidate();
+        }
+
+        private bool HitTestStroke(AnnotationStroke stroke, PointF imgPoint)
+        {
+            if (stroke.Points == null || stroke.Points.Length < 4) return false;
+
+            if (_form.CurrentPageImage == null) return false;
+            int imgWidth = _form.CurrentPageImage.Width;
+            int imgHeight = _form.CurrentPageImage.Height;
+
+            var pageSize = _form.Presenter?.GetPageSize() ?? (0f, 0f);
+            float pageWidth = pageSize.Width > 0 ? pageSize.Width : imgWidth;
+            float pageHeight = pageSize.Height > 0 ? pageSize.Height : imgHeight;
+
+            float scaleX = (float)imgWidth / pageWidth;
+            float scaleY = (float)imgHeight / pageHeight;
+
+            string shapeType = stroke.ShapeType ?? string.Empty;
+            float hitThreshold = Math.Max(stroke.Thickness, HitTestThreshold);
+
+            switch (shapeType)
+            {
+                case "Rectangle":
+                case "Ellipse":
+                    {
+                        float x1 = stroke.Points[0] * pageWidth * scaleX;
+                        float y1 = stroke.Points[1] * pageHeight * scaleY;
+                        float x2 = stroke.Points[2] * pageWidth * scaleX;
+                        float y2 = stroke.Points[3] * pageHeight * scaleY;
+
+                        float left = Math.Min(x1, x2);
+                        float right = Math.Max(x1, x2);
+                        float top = Math.Min(y1, y2);
+                        float bottom = Math.Max(y1, y2);
+
+                        bool nearLeftEdge = Math.Abs(imgPoint.X - left) < hitThreshold && imgPoint.Y >= top - hitThreshold && imgPoint.Y <= bottom + hitThreshold;
+                        bool nearRightEdge = Math.Abs(imgPoint.X - right) < hitThreshold && imgPoint.Y >= top - hitThreshold && imgPoint.Y <= bottom + hitThreshold;
+                        bool nearTopEdge = Math.Abs(imgPoint.Y - top) < hitThreshold && imgPoint.X >= left - hitThreshold && imgPoint.X <= right + hitThreshold;
+                        bool nearBottomEdge = Math.Abs(imgPoint.Y - bottom) < hitThreshold && imgPoint.X >= left - hitThreshold && imgPoint.X <= right + hitThreshold;
+
+                        return nearLeftEdge || nearRightEdge || nearTopEdge || nearBottomEdge;
+                    }
+                case "Mosaic":
+                    {
+                        float x1 = stroke.Points[0] * pageWidth * scaleX;
+                        float y1 = stroke.Points[1] * pageHeight * scaleY;
+                        float x2 = stroke.Points[2] * pageWidth * scaleX;
+                        float y2 = stroke.Points[3] * pageHeight * scaleY;
+
+                        float left = Math.Min(x1, x2);
+                        float right = Math.Max(x1, x2);
+                        float top = Math.Min(y1, y2);
+                        float bottom = Math.Max(y1, y2);
+
+                        return imgPoint.X >= left && imgPoint.X <= right && imgPoint.Y >= top && imgPoint.Y <= bottom;
+                    }
+                case "Arrow":
+                case "Pen":
+                case "Strikethrough":
+                default:
+                    {
+                        for (int i = 0; i < stroke.Points.Length - 3; i += 2)
+                        {
+                            float x1 = stroke.Points[i] * pageWidth * scaleX;
+                            float y1 = stroke.Points[i + 1] * pageHeight * scaleY;
+                            float x2 = stroke.Points[i + 2] * pageWidth * scaleX;
+                            float y2 = stroke.Points[i + 3] * pageHeight * scaleY;
+
+                            float distance = PointToLineDistance(imgPoint.X, imgPoint.Y, x1, y1, x2, y2);
+                            if (distance < hitThreshold)
+                            {
+                                return true;
+                            }
+                        }
+                        return false;
+                    }
+            }
+        }
+
+        private float PointToLineDistance(float px, float py, float x1, float y1, float x2, float y2)
+        {
+            float A = px - x1;
+            float B = py - y1;
+            float C = x2 - x1;
+            float D = y2 - y1;
+
+            float dot = A * C + B * D;
+            float lenSq = C * C + D * D;
+            float param = -1;
+
+            if (lenSq != 0)
+                param = dot / lenSq;
+
+            float xx, yy;
+
+            if (param < 0)
+            {
+                xx = x1;
+                yy = y1;
+            }
+            else if (param > 1)
+            {
+                xx = x2;
+                yy = y2;
+            }
+            else
+            {
+                xx = x1 + param * C;
+                yy = y1 + param * D;
+            }
+
+            float dx = px - xx;
+            float dy = py - yy;
+            return (float)Math.Sqrt(dx * dx + dy * dy);
+        }
+
+        private List<AnnotationStroke> GetCurrentPageStrokes()
+        {
+            if (_form.Presenter == null) return new List<AnnotationStroke>();
+            return _form.Presenter.GetCurrentPageStrokes().ToList();
+        }
+
+        public void DeleteSelectedStroke()
+        {
+            if (_selectedStrokeIndex < 0 || _form.Presenter == null) return;
+
+            _form.Presenter.RemoveStrokeAtCurrentPage(_selectedStrokeIndex);
+            _selectedStroke = null;
+            _selectedStrokeIndex = -1;
+            _isSelectingStroke = false;
+
+            LoadAnnotationsForCurrentPage();
+            _form.PictureBoxPdf.Invalidate();
+        }
+
+        public void ClearSelection()
+        {
+            _selectedStroke = null;
+            _selectedStrokeIndex = -1;
+            _isSelectingStroke = false;
+            _form.PictureBoxPdf.Invalidate();
         }
 
         public void DrawAnnotations(Graphics g, Rectangle imgRect)
@@ -1013,11 +1223,84 @@ namespace LearningAssistant.Managers
                             }
                     }
                 }
+
+                if (_selectedStroke != null && _currentToolMode == AnnotationToolMode.Select)
+                {
+                    DrawSelectedStroke(g, imgRect);
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error drawing annotations");
             }
+        }
+
+        private void DrawSelectedStroke(Graphics g, Rectangle imgRect)
+        {
+            if (_selectedStroke == null || _selectedStroke.Points == null || _selectedStroke.Points.Length < 4) return;
+            if (_form.CurrentPageImage == null) return;
+
+            int imgWidth = _form.CurrentPageImage.Width;
+            int imgHeight = _form.CurrentPageImage.Height;
+
+            var pageSize = _form.Presenter?.GetPageSize() ?? (0f, 0f);
+            float pageWidth = pageSize.Width > 0 ? pageSize.Width : imgWidth;
+            float pageHeight = pageSize.Height > 0 ? pageSize.Height : imgHeight;
+
+            float imgScaleX = (float)imgWidth / pageWidth;
+            float imgScaleY = (float)imgHeight / pageHeight;
+
+            float screenScaleX = (float)imgRect.Width / imgWidth;
+            float screenScaleY = (float)imgRect.Height / imgHeight;
+
+            string shapeType = _selectedStroke.ShapeType ?? string.Empty;
+            var selectionPen = new Pen(Color.FromArgb(255, 0, 120, 255), 2);
+            selectionPen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+
+            switch (shapeType)
+            {
+                case "Rectangle":
+                case "Ellipse":
+                case "Mosaic":
+                    {
+                        float imgX1 = _selectedStroke.Points[0] * pageWidth * imgScaleX;
+                        float imgY1 = _selectedStroke.Points[1] * pageHeight * imgScaleY;
+                        float imgX2 = _selectedStroke.Points[2] * pageWidth * imgScaleX;
+                        float imgY2 = _selectedStroke.Points[3] * pageHeight * imgScaleY;
+
+                        float left = Math.Min(imgX1, imgX2) * screenScaleX + imgRect.X;
+                        float right = Math.Max(imgX1, imgX2) * screenScaleX + imgRect.X;
+                        float top = Math.Min(imgY1, imgY2) * screenScaleY + imgRect.Y;
+                        float bottom = Math.Max(imgY1, imgY2) * screenScaleY + imgRect.Y;
+
+                        var rect = new RectangleF(left - 5, top - 5, right - left + 10, bottom - top + 10);
+                        g.DrawRectangle(selectionPen, rect.X, rect.Y, rect.Width, rect.Height);
+                        break;
+                    }
+                case "Arrow":
+                case "Pen":
+                case "Strikethrough":
+                default:
+                    {
+                        var screenPoints = new List<PointF>();
+                        for (int i = 0; i < _selectedStroke.Points.Length - 1; i += 2)
+                        {
+                            float imgX = _selectedStroke.Points[i] * pageWidth * imgScaleX;
+                            float imgY = _selectedStroke.Points[i + 1] * pageHeight * imgScaleY;
+                            screenPoints.Add(new PointF(
+                                imgX * screenScaleX + imgRect.X,
+                                imgY * screenScaleY + imgRect.Y));
+                        }
+
+                        if (screenPoints.Count >= 2)
+                        {
+                            g.DrawLines(selectionPen, screenPoints.ToArray());
+                        }
+                        break;
+                    }
+            }
+
+            selectionPen.Dispose();
         }
 
         private PointF ClientToImage(Point clientPt)

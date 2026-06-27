@@ -121,5 +121,31 @@ namespace LearningAssistant.Services.Learning
         /// <param name="filePath">导出文件路径</param>
         /// <param name="format">导出格式（txt、md等）</param>
         void ExportNotes(string userId, string filePath, string format = "txt");
+
+        /// <summary>
+        /// 分页获取笔记
+        /// </summary>
+        /// <param name="userId">用户ID</param>
+        /// <param name="page">页码（从1开始）</param>
+        /// <param name="pageSize">每页数量</param>
+        /// <param name="category">分类筛选</param>
+        /// <param name="tag">标签筛选</param>
+        /// <returns>分页后的笔记列表</returns>
+        (List<NoteItem> items, int total) GetNotesPaged(string userId, int page, int pageSize, string category = "", string tag = "");
+
+        /// <summary>
+        /// 批量删除笔记
+        /// </summary>
+        /// <param name="userId">用户ID</param>
+        /// <param name="noteIds">要删除的笔记ID列表</param>
+        void BatchDelete(string userId, List<string> noteIds);
+
+        /// <summary>
+        /// 批量移动笔记到指定分类
+        /// </summary>
+        /// <param name="userId">用户ID</param>
+        /// <param name="noteIds">要移动的笔记ID列表</param>
+        /// <param name="targetCategory">目标分类</param>
+        void BatchMove(string userId, List<string> noteIds, string targetCategory);
     }
 }

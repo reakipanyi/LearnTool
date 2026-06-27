@@ -93,6 +93,19 @@ namespace LearningAssistant.Forms.UserControls.Navigation
 
             Width = _expandedWidth;
             BackColor = Color.FromArgb(248, 248, 252);
+
+            if (DesignMode)
+            {
+                AddItems(new[]
+                {
+                    new NavigationItem { Key = "dashboard", Text = "📊 仪表盘", Icon = "📊", Group = "学习", Order = 1 },
+                    new NavigationItem { Key = "learn", Text = "📚 学习", Icon = "📚", Group = "学习", Order = 2 },
+                    new NavigationItem { Key = "review", Text = "🔄 复习", Icon = "🔄", Group = "学习", Order = 3 },
+                    new NavigationItem { Key = "stats", Text = "📈 统计", Icon = "📈", Group = "数据", Order = 4 },
+                    new NavigationItem { Key = "notes", Text = "📝 笔记", Icon = "📝", Group = "数据", Order = 5 },
+                    new NavigationItem { Key = "settings", Text = "⚙️ 设置", Icon = "⚙️", Group = "系统", Order = 6 }
+                });
+            }
         }
 
         public void AddItem(NavigationItem item)

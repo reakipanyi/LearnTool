@@ -168,7 +168,7 @@ namespace LearningAssistant.Views
         /// </summary>
         /// <param name="text">要发音的文本</param>
         /// <param name="language">语言代码</param>
-        void PlayPronunciation(string text, string language);
+        Task PlayPronunciationAsync(string text, string language);
 
 
         /// <summary>

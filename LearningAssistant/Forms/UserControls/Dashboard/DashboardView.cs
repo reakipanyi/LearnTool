@@ -92,17 +92,20 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
 
             _panelStats = new Panel
             {
-                BackColor = Color.Transparent
+                BackColor = Color.Transparent,
+                AutoScroll = true
             };
 
             _panelFeatures = new Panel
             {
-                BackColor = Color.Transparent
+                BackColor = Color.Transparent,
+                AutoScroll = true
             };
 
             _panelRecommend = new Panel
             {
-                BackColor = Color.Transparent
+                BackColor = Color.Transparent,
+                AutoScroll = true
             };
 
             Controls.Add(_labelWelcome);
@@ -171,7 +174,8 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             var cardPanel = new Panel
             {
                 Dock = DockStyle.Fill,
-                BackColor = Color.Transparent
+                BackColor = Color.Transparent,
+                AutoScroll = true
             };
 
             int y = 5;
@@ -198,7 +202,6 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             }
 
             _panelRecommend.Controls.Add(cardPanel);
-            _panelRecommend.Height = Math.Min(y + 10, 200);
         }
 
         private void ShowEmptyRecommend()
@@ -385,7 +388,7 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
 
             _panelRecommend.Location = new Point(0, y);
             _panelRecommend.Width = Width;
-            _panelRecommend.Height = 120;
+            _panelRecommend.Height = 220;
             y += _panelRecommend.Height + 16;
 
             _labelFeaturesTitle.Location = new Point(marginLeft, y);

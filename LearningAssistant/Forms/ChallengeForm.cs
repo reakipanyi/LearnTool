@@ -25,11 +25,9 @@ namespace LearningAssistant.Forms
         private TabControl _tabControl;
         private TabPage _tabToday;
         private TabPage _tabHistory;
-        private TabPage _tabAchievements;
         private ChallengesPanel _challengesPanel;
         private Panel _historyPanel;
         private Panel _statsPanel;
-        private Panel _achievementsPanel;
         private System.Windows.Forms.Timer? _countdownTimer;
 
         private ChallengeHistoryStats _historyStats = new();
@@ -97,22 +95,18 @@ namespace LearningAssistant.Forms
             labelPerfectDays = new Label();
             labelTotalXP = new Label();
             labelStreak = new Label();
-            _tabAchievements = new TabPage();
-            _achievementsPanel = new Panel();
             _challengesPanel = new ChallengesPanel();
             _tabControl.SuspendLayout();
             _tabToday.SuspendLayout();
             panelHeader.SuspendLayout();
             _tabHistory.SuspendLayout();
             _statsPanel.SuspendLayout();
-            _tabAchievements.SuspendLayout();
             SuspendLayout();
             // 
             // _tabControl
             // 
             _tabControl.Controls.Add(_tabToday);
             _tabControl.Controls.Add(_tabHistory);
-            _tabControl.Controls.Add(_tabAchievements);
             _tabControl.Dock = DockStyle.Fill;
             _tabControl.Font = new Font("微软雅黑", 10F, FontStyle.Regular, GraphicsUnit.Point, 134);
             _tabControl.Location = new Point(0, 0);
@@ -183,25 +177,6 @@ namespace LearningAssistant.Forms
             _tabHistory.Size = new Size(192, 68);
             _tabHistory.TabIndex = 1;
             _tabHistory.Text = "📜 历史记录";
-            // 
-            // _tabAchievements
-            // 
-            _tabAchievements.BackColor = Color.White;
-            _tabAchievements.Controls.Add(_achievementsPanel);
-            _tabAchievements.Location = new Point(4, 28);
-            _tabAchievements.Name = "_tabAchievements";
-            _tabAchievements.Size = new Size(526, 429);
-            _tabAchievements.TabIndex = 2;
-            _tabAchievements.Text = "🏆 成就徽章";
-            // 
-            // _achievementsPanel
-            // 
-            _achievementsPanel.BackColor = Color.White;
-            _achievementsPanel.Dock = DockStyle.Fill;
-            _achievementsPanel.Location = new Point(0, 0);
-            _achievementsPanel.Name = "_achievementsPanel";
-            _achievementsPanel.Size = new Size(526, 429);
-            _achievementsPanel.TabIndex = 0;
             // 
             // _historyPanel
             // 
@@ -299,14 +274,12 @@ namespace LearningAssistant.Forms
             _tabHistory.ResumeLayout(false);
             _statsPanel.ResumeLayout(false);
             _statsPanel.PerformLayout();
-            _tabAchievements.ResumeLayout(false);
             ResumeLayout(false);
         }
         private void LoadData()
         {
             _challengesPanel.RefreshData();
             LoadHistoryStats();
-            LoadAchievements();
         }
 
         private void LoadHistoryStats()
@@ -355,149 +328,6 @@ namespace LearningAssistant.Forms
                         break;
                 }
             }
-        }
-
-        private void LoadAchievements()
-        {
-            if (_achievementsPanel == null) return;
-
-            try
-            {
-                _achievementsPanel.Controls.Clear();
-
-                var badges = _gamificationService.GetAllBadges().ToList();
-                var unlockedCount = badges.Count(b => b.IsUnlocked);
-                var totalCount = badges.Count;
-
-                var headerPanel = new Panel
-                {
-                    Dock = DockStyle.Top,
-                    Height = 60,
-                    BackColor = Color.FromArgb(250, 250, 252)
-                };
-
-                var titleLabel = new Label
-                {
-                    Text = $"🏆 成就徽章",
-                    Font = new Font("微软雅黑", 14F, FontStyle.Bold),
-                    ForeColor = Color.FromArgb(33, 33, 33),
-                    Location = new Point(15, 10)
-                };
-
-                var countLabel = new Label
-                {
-                    Text = $"已解锁: {unlockedCount} / {totalCount}",
-                    Font = new Font("微软雅黑", 10F),
-                    ForeColor = Color.FromArgb(100, 100, 100),
-                    Location = new Point(15, 35)
-                };
-
-                headerPanel.Controls.Add(titleLabel);
-                headerPanel.Controls.Add(countLabel);
-                _achievementsPanel.Controls.Add(headerPanel);
-
-                var flowPanel = new FlowLayoutPanel
-                {
-                    Dock = DockStyle.Fill,
-                    AutoScroll = true,
-                    Padding = new Padding(15),
-                    WrapContents = true
-                };
-
-                foreach (var badge in badges)
-                {
-                    var badgeCard = CreateBadgeCard(badge);
-                    flowPanel.Controls.Add(badgeCard);
-                }
-
-                _achievementsPanel.Controls.Add(flowPanel);
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "加载成就徽章失败");
-            }
-        }
-
-        private Panel CreateBadgeCard(Models.User.Badge badge)
-        {
-            var panel = new Panel
-            {
-                Size = new Size(120, 140),
-                Margin = new Padding(8),
-                BackColor = badge.IsUnlocked ? Color.FromArgb(255, 248, 225) : Color.FromArgb(245, 245, 248),
-                Cursor = badge.IsUnlocked ? Cursors.Hand : Cursors.Default
-            };
-
-            panel.Paint += (s, e) =>
-            {
-                if (e == null) return;
-                var g = e.Graphics;
-                g.SmoothingMode = SmoothingMode.AntiAlias;
-
-                var rect = new Rectangle(0, 0, panel.Width - 1, panel.Height - 1);
-                using var borderPen = new Pen(badge.IsUnlocked ? Color.FromArgb(255, 152, 0) : Color.FromArgb(220, 220, 225), 1);
-                using var path = RoundedRect(rect, 8);
-                g.DrawPath(borderPen, path);
-            };
-
-            var iconLabel = new Label
-            {
-                Text = badge.IsUnlocked ? badge.Icon : "🔒",
-                Font = new Font("Segoe UI Emoji", 28F),
-                Location = new Point(35, 15),
-                Size = new Size(50, 40),
-                TextAlign = ContentAlignment.MiddleCenter,
-                ForeColor = badge.IsUnlocked ? Color.FromArgb(255, 152, 0) : Color.FromArgb(180, 180, 180)
-            };
-
-            var nameLabel = new Label
-            {
-                Text = badge.Name,
-                Font = new Font("微软雅黑", 9F, FontStyle.Bold),
-                Location = new Point(10, 60),
-                Size = new Size(100, 20),
-                TextAlign = ContentAlignment.MiddleCenter,
-                ForeColor = badge.IsUnlocked ? Color.FromArgb(33, 33, 33) : Color.FromArgb(150, 150, 150)
-            };
-
-            var descLabel = new Label
-            {
-                Text = badge.Description,
-                Font = new Font("微软雅黑", 7F),
-                Location = new Point(5, 85),
-                Size = new Size(110, 30),
-                TextAlign = ContentAlignment.MiddleCenter,
-                ForeColor = badge.IsUnlocked ? Color.FromArgb(100, 100, 100) : Color.FromArgb(180, 180, 180)
-            };
-
-            var statusLabel = new Label
-            {
-                Text = badge.IsUnlocked ? "✓ 已解锁" : "未解锁",
-                Font = new Font("微软雅黑", 7F),
-                Location = new Point(5, 115),
-                Size = new Size(110, 15),
-                TextAlign = ContentAlignment.MiddleCenter,
-                ForeColor = badge.IsUnlocked ? Color.FromArgb(76, 175, 80) : Color.FromArgb(180, 180, 180)
-            };
-
-            panel.Controls.Add(iconLabel);
-            panel.Controls.Add(nameLabel);
-            panel.Controls.Add(descLabel);
-            panel.Controls.Add(statusLabel);
-
-            if (badge.IsUnlocked)
-            {
-                panel.MouseEnter += (s, e) =>
-                {
-                    panel.BackColor = Color.FromArgb(255, 240, 200);
-                };
-                panel.MouseLeave += (s, e) =>
-                {
-                    panel.BackColor = Color.FromArgb(255, 248, 225);
-                };
-            }
-
-            return panel;
         }
 
         private void HistoryPanel_Paint(object? sender, PaintEventArgs e)
@@ -716,11 +546,6 @@ namespace LearningAssistant.Forms
             if (_tabHistory != null)
             {
                 _tabHistory.BackColor = colors.Surface;
-            }
-
-            if (_tabAchievements != null)
-            {
-                _tabAchievements.BackColor = colors.Surface;
             }
 
             if (_challengesPanel != null)

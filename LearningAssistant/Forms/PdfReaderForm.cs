@@ -403,7 +403,7 @@ namespace LearningAssistant.Forms
 
         private void ButtonExportHighlights_Click(object? sender, EventArgs e)
         {
-            _presenter?.ExportHighlightsToExcel();
+            _ = _presenter?.ExportHighlightsToExcelAsync();
         }
 
         private void ButtonBatchRemoveHighlight_Click(object? sender, EventArgs e)
@@ -2363,7 +2363,7 @@ namespace LearningAssistant.Forms
             }
         }
 
-        public async void ResetZoom()
+        public void ResetZoom()
         {
             _navigationManager?.ResetZoom();
         }

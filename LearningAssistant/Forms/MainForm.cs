@@ -34,6 +34,7 @@ namespace LearningAssistant.Forms
             Services.Web.IWebBookmarkService webBookmarkService)
         {
             InitializeComponent();
+            WindowState = FormWindowState.Maximized;
             _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
             _windowManager = windowManager ?? throw new ArgumentNullException(nameof(windowManager));
             _appConfig = appConfig ?? throw new ArgumentNullException(nameof(appConfig));

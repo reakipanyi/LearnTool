@@ -13,9 +13,9 @@ namespace LearningAssistant.Models.Pomodoro
         Idle,
 
         /// <summary>
-        /// 工作中
+        /// 学习中/工作中
         /// </summary>
-        Working,
+        Studying,
 
         /// <summary>
         /// 短休息
@@ -272,5 +272,98 @@ namespace LearningAssistant.Models.Pomodoro
         /// </summary>
         [JsonIgnore]
         public string DateDisplay => Date.ToString("MM/dd");
+    }
+
+    /// <summary>
+    /// 番茄钟设置
+    /// </summary>
+    public class PomodoroSettings
+    {
+        /// <summary>
+        /// 学习时长（分钟）
+        /// </summary>
+        public int StudyMinutes { get; set; } = 25;
+
+        /// <summary>
+        /// 短休息时长（分钟）
+        /// </summary>
+        public int ShortBreakMinutes { get; set; } = 5;
+
+        /// <summary>
+        /// 长休息时长（分钟）
+        /// </summary>
+        public int LongBreakMinutes { get; set; } = 15;
+
+        /// <summary>
+        /// 长休息间隔（完成几个番茄后长休息）
+        /// </summary>
+        public int LongBreakInterval { get; set; } = 4;
+
+        /// <summary>
+        /// 是否自动开始休息
+        /// </summary>
+        public bool AutoStartBreak { get; set; } = true;
+
+        /// <summary>
+        /// 是否自动开始学习
+        /// </summary>
+        public bool AutoStartStudy { get; set; } = false;
+
+        /// <summary>
+        /// 是否播放声音
+        /// </summary>
+        public bool PlaySound { get; set; } = true;
+
+        /// <summary>
+        /// 是否显示通知
+        /// </summary>
+        public bool ShowNotification { get; set; } = true;
+    }
+
+    /// <summary>
+    /// 番茄钟状态变更事件参数
+    /// </summary>
+    public class PomodoroStateChangedEventArgs : EventArgs
+    {
+        /// <summary>
+        /// 旧状态
+        /// </summary>
+        public PomodoroState OldState { get; set; }
+
+        /// <summary>
+        /// 新状态
+        /// </summary>
+        public PomodoroState NewState { get; set; }
+
+        /// <summary>
+        /// 持续时间
+        /// </summary>
+        public TimeSpan Duration { get; set; }
+    }
+
+    /// <summary>
+    /// 番茄钟每日统计
+    /// </summary>
+    public class PomodoroDailyStats
+    {
+        /// <summary>
+        /// 完成番茄数
+        /// </summary>
+        public int CompletedPomodoros { get; set; }
+
+        /// <summary>
+        /// 总学习分钟数
+        /// </summary>
+        public int TotalStudyMinutes { get; set; }
+
+        /// <summary>
+        /// 总休息分钟数
+        /// </summary>
+        public int TotalBreakMinutes { get; set; }
+
+        /// <summary>
+        /// 日期
+        /// </summary>
+        public DateTime Date { get; set; }
     }
 }

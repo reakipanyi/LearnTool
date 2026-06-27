@@ -180,7 +180,12 @@ namespace LearningAssistant.Common
                 return new StudyEngine(contentLoaderService, progressManager, studyListProcessor, analyticsService, persistenceService);
             });
 
-            services.AddSingleton<ILearningAnalyticsService, LearningAnalyticsService>();
+            services.AddSingleton<ILearningAnalyticsService>(sp =>
+            {
+                var logger = sp.GetService<ILogger<LearningAnalyticsService>>();
+                var persistenceService = sp.GetService<IDataPersistenceService>();
+                return new LearningAnalyticsService(logger, persistenceService);
+            });
             services.AddSingleton<ILearningReminderService, LearningReminderService>();
             services.AddSingleton<IPendingContentService, PendingContentService>();
             services.AddSingleton<DataMigrationService>();
@@ -193,7 +198,7 @@ namespace LearningAssistant.Common
             services.AddSingleton<IEnhancedReminderService, EnhancedReminderService>();
             services.AddSingleton<IEncouragementService, EncouragementService>();
             services.AddSingleton<IAchievementService, AchievementService>();
-            services.AddScoped<IGamificationService, GamificationService>();
+            services.AddSingleton<IGamificationService, GamificationService>();
             services.AddSingleton<ILearningGoalService>(sp =>
             {
                 var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
@@ -223,8 +228,9 @@ namespace LearningAssistant.Common
             services.AddSingleton<INoteService>(sp =>
             {
                 var logger = sp.GetRequiredService<ILogger<NoteService>>();
+                var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
                 var eventBus = sp.GetService<IEventBus>();
-                return new NoteService(logger, eventBus);
+                return new NoteService(logger, persistenceService, eventBus);
             });
             services.AddSingleton<ILearningPathService, LearningPathService>();
             services.AddSingleton<ILearningRecommendationService, LearningRecommendationService>();
@@ -232,7 +238,8 @@ namespace LearningAssistant.Common
             {
                 var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
                 var logger = sp.GetService<ILogger<PomodoroService>>();
-                return new PomodoroService(persistenceService, logger);
+                var eventBus = sp.GetService<IEventBus>();
+                return new PomodoroService(persistenceService, logger, eventBus);
             });
             services.AddSingleton<IDataImportService, DataImportService>();
 

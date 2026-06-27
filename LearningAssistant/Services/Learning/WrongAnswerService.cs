@@ -129,7 +129,7 @@ namespace LearningAssistant.Services.Learning
                     var items = LoadWrongAnswers(userId);
 
                     var existing = items.FirstOrDefault(i =>
-                        i.Question == item.Question && i.Subject == item.Subject);
+                        i.Question == item.Question && i.Subject == item.Subject && i.Category == item.Category);
 
                     if (existing != null)
                     {
@@ -137,6 +137,14 @@ namespace LearningAssistant.Services.Learning
                         existing.Mastery = MasteryLevel.NotMastered;
                         existing.LastWrongAt = DateTime.Now;
                         existing.LastReviewAt = DateTime.Now;
+                        
+                        if (!string.IsNullOrEmpty(item.CorrectAnswer) && 
+                            !string.Equals(existing.CorrectAnswer, item.CorrectAnswer, StringComparison.OrdinalIgnoreCase))
+                        {
+                            _logger.LogWarning("用户 {UserId} 错题正确答案被更新: {Question}", userId, item.Question);
+                            existing.CorrectAnswer = item.CorrectAnswer;
+                        }
+                        
                         _logger.LogInformation("用户 {UserId} 错题已存在，错误次数+1: {Question}", userId, item.Question);
                     }
                     else
@@ -238,6 +246,11 @@ namespace LearningAssistant.Services.Learning
                 _logger.LogError(ex, "获取复习错题失败: {UserId}", userId);
                 return new List<WrongAnswerItem>();
             }
+        }
+
+        public List<WrongAnswerItem> GetBySubjectCategory(string userId, string subject, string category)
+        {
+            return GetWrongAnswers(userId, subject, category);
         }
 
         public void MarkAsReviewed(string userId, string itemId, bool remembered)

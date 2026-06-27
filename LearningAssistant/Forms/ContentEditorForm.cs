@@ -23,6 +23,10 @@ namespace LearningAssistant.Forms
         private Panel topPanel;
         private Panel gridPanel;
         private FlowLayoutPanel buttonPanel;
+        private StatusStrip statusStrip;
+        private ToolStripStatusLabel statusLabelCount;
+        private ToolStripStatusLabel statusLabelDirty;
+        private ToolStripStatusLabel statusLabelCategory;
 
         private Panel groupBoxSubject;
         private ComboBox comboBoxSubject;
@@ -32,6 +36,8 @@ namespace LearningAssistant.Forms
         private TabPage tabPage1;
         private TabPage tabPage2;
         private bool _disposed = false;
+        private readonly Dictionary<string, Color> _buttonOriginalColors = new();
+        private Button buttonLoadPending;
 
         public ContentEditorForm(ILogger<ContentEditorForm> logger, AppConfig appConfig, IAIPanelPopupService aiPanelPopupService, IThemeService themeService, Services.Learning.IPendingContentService? pendingContentService = null)
         {
@@ -41,6 +47,7 @@ namespace LearningAssistant.Forms
             _themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
             _pendingContentService = pendingContentService;
             InitializeComponent();
+            WindowState = FormWindowState.Maximized;
 
             InitSubjectComboBox();
 
@@ -99,6 +106,7 @@ namespace LearningAssistant.Forms
             {
                 dataGridView.DataSource = value;
                 ApplyChineseColumnHeaders();
+                UpdateStatusCount();
             }
         }
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -141,6 +149,22 @@ namespace LearningAssistant.Forms
             MessageBox.Show(msg);
         }
 
+        private void UpdateStatusCount()
+        {
+            if (statusStrip == null || statusLabelCount == null) return;
+            var count = dataGridView.RowCount;
+            if (dataGridView.AllowUserToAddRows) count--;
+            statusLabelCount.Text = $"📊 共 {count} 条";
+            statusLabelCategory.Text = $"📁 {SelectedSubject} / {SelectedSubCategory}";
+        }
+
+        private void UpdateDirtyStatus(bool isDirty)
+        {
+            if (statusStrip == null || statusLabelDirty == null) return;
+            statusLabelDirty.Text = isDirty ? "● 未保存" : "✓ 已保存";
+            statusLabelDirty.ForeColor = isDirty ? ThemeHelper.Colors.Error : ThemeHelper.Colors.Success;
+        }
+
         public void SetInitialLanguage(string language)
         {
             if (language == Constants.Language.Chinese)
@@ -181,6 +205,7 @@ namespace LearningAssistant.Forms
             {
                 comboBoxSubCategory.SelectedIndex = 0;
             }
+            UpdateStatusCount();
         }
 
         private static readonly Dictionary<string, Dictionary<string, string>> CategoryColumnHeaders = new()
@@ -190,7 +215,11 @@ namespace LearningAssistant.Forms
                 {
                     { "Character", "汉字" }, { "Pinyin", "拼音" }, { "Meaning", "释义" },
                     { "StrokeCount", "笔画数" }, { "Radical", "部首" }, { "StrokeOrder", "笔顺" },
-                    { "Words", "组词" }
+                    { "Words", "组词" }, { "SimilarCharacters", "形近字" }, { "Synonyms", "近义词" },
+                    { "Antonyms", "反义词" }, { "CommonMistakes", "易错点" }, { "ExampleSentence", "例句" },
+                    { "CharacterLevel", "字级" }, { "Structure", "结构" }, { "CharacterFormation", "造字法" },
+                    { "OtherPronunciations", "其他读音" }, { "Id", "ID" }, { "CreatedAt", "创建时间" },
+                    { "UpdatedAt", "更新时间" }
                 }
             },
             {
@@ -225,7 +254,9 @@ namespace LearningAssistant.Forms
                 Constants.SubCategory.EnglishWord, new Dictionary<string, string>
                 {
                     { "Word", "单词" }, { "Phonetic", "音标" }, { "PartOfSpeech", "词性" },
-                    { "SyllableBreakdown", "音节拼读" }, { "Meaning", "中文释义" }, { "Example", "例句" }
+                    { "SyllableBreakdown", "音节拼读" }, { "Meaning", "中文释义" }, { "Example", "例句" },
+                    { "Synonyms", "近义词" }, { "Antonyms", "反义词" }, { "Id", "ID" },
+                    { "CreatedAt", "创建时间" }, { "UpdatedAt", "更新时间" }
                 }
             },
             {
@@ -250,195 +281,202 @@ namespace LearningAssistant.Forms
             {
                 Constants.SubCategory.MathFormula, new Dictionary<string, string>
                 {
-                    { "Name", "公式名称" }, { "Formula", "公式表达式" }, { "Description", "公式说明" },
-                    { "Conditions", "适用条件" }, { "Example", "应用举例" },
-                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                    { "Topic", "公式名称" }, { "Content", "公式表达式" }, { "KeyPoints", "公式说明" },
+                    { "Principle", "适用条件" }, { "Example", "应用举例" },
+                    { "Applications", "应用场景" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.MathExample, new Dictionary<string, string>
                 {
-                    { "Title", "例题标题" }, { "Problem", "题目描述" }, { "Solution", "解答过程" },
-                    { "KeySteps", "关键步骤" }, { "Analysis", "方法总结" },
-                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                    { "Topic", "例题标题" }, { "Content", "题目描述" }, { "Analysis", "解答过程" },
+                    { "KeyPoints", "关键步骤" }, { "Example", "方法总结" },
+                    { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.MathConcept, new Dictionary<string, string>
                 {
-                    { "Name", "概念名称" }, { "Definition", "定义" }, { "Properties", "性质" },
-                    { "Example", "举例说明" }, { "Notes", "注意事项" },
-                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                    { "Topic", "概念名称" }, { "Content", "定义" }, { "KeyPoints", "性质" },
+                    { "Example", "举例说明" }, { "Note", "注意事项" },
+                    { "Applications", "应用" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.MathComprehensive, new Dictionary<string, string>
                 {
-                    { "Title", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" },
-                    { "Example", "典型例题" }, { "Explanation", "答案解析" },
-                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                    { "Topic", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" },
+                    { "Example", "典型例题" }, { "Analysis", "答案解析" },
+                    { "Question", "问题" }, { "Answer", "答案" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.PhysicsLaw, new Dictionary<string, string>
                 {
-                    { "Name", "定律名称" }, { "Statement", "定律内容" }, { "Formula", "公式" },
-                    { "Conditions", "适用条件" }, { "Application", "应用场景" },
-                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                    { "Topic", "定律名称" }, { "Content", "定律内容" }, { "KeyPoints", "公式" },
+                    { "Principle", "适用条件" }, { "Applications", "应用场景" },
+                    { "Example", "实例" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.PhysicsExperiment, new Dictionary<string, string>
                 {
-                    { "Name", "实验名称" }, { "Purpose", "实验目的" }, { "Equipment", "实验器材" },
-                    { "Procedure", "实验步骤" }, { "Conclusion", "实验结论" },
-                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                    { "Topic", "实验名称" }, { "Content", "实验目的" }, { "KeyPoints", "实验器材" },
+                    { "ExperimentSteps", "实验步骤" }, { "Analysis", "实验结论" },
+                    { "Example", "实例" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.PhysicsDerivation, new Dictionary<string, string>
                 {
-                    { "Name", "公式名称" }, { "Formula", "推导结果" }, { "DerivationSteps", "推导步骤" },
-                    { "Conditions", "前提条件" }, { "Example", "应用实例" },
-                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                    { "Topic", "公式名称" }, { "Content", "推导结果" }, { "KeyPoints", "推导步骤" },
+                    { "Principle", "前提条件" }, { "Example", "应用实例" },
+                    { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.PhysicsComprehensive, new Dictionary<string, string>
                 {
-                    { "Title", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" },
-                    { "Example", "典型例题" }, { "Explanation", "答案解析" },
-                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                    { "Topic", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" },
+                    { "Example", "典型例题" }, { "Analysis", "答案解析" },
+                    { "Question", "问题" }, { "Answer", "答案" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.ChemistryEquation, new Dictionary<string, string>
                 {
-                    { "Name", "反应名称" }, { "Reactants", "反应物" }, { "Products", "生成物" },
-                    { "Equation", "化学方程式" }, { "Conditions", "反应条件" },
-                    { "Phenomenon", "反应现象" }, { "Tags", "标签" }
+                    { "Topic", "反应名称" }, { "Content", "化学方程式" }, { "KeyPoints", "反应条件" },
+                    { "Principle", "反应原理" }, { "Example", "反应现象" },
+                    { "Applications", "应用" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.ChemistryElement, new Dictionary<string, string>
                 {
-                    { "Name", "元素名称" }, { "Symbol", "元素符号" }, { "AtomicNumber", "原子序数" },
-                    { "Properties", "元素性质" }, { "Uses", "主要用途" },
-                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                    { "Topic", "元素名称" }, { "Content", "元素符号" }, { "KeyPoints", "原子序数" },
+                    { "Principle", "元素性质" }, { "Applications", "主要用途" },
+                    { "Example", "实例" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.ChemistryExperiment, new Dictionary<string, string>
                 {
-                    { "Name", "实验名称" }, { "Purpose", "实验目的" }, { "Equipment", "实验器材" },
-                    { "Procedure", "操作步骤" }, { "Phenomenon", "实验现象" },
-                    { "Conclusion", "实验结论" }, { "Tags", "标签" }
+                    { "Topic", "实验名称" }, { "Content", "实验目的" }, { "KeyPoints", "实验器材" },
+                    { "ExperimentSteps", "操作步骤" }, { "Analysis", "实验现象" },
+                    { "Example", "实例" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.ChemistryComprehensive, new Dictionary<string, string>
                 {
-                    { "Title", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" },
-                    { "Example", "典型例题" }, { "Explanation", "答案解析" },
-                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                    { "Topic", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" },
+                    { "Example", "典型例题" }, { "Analysis", "答案解析" },
+                    { "Question", "问题" }, { "Answer", "答案" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.HistoryEvent, new Dictionary<string, string>
                 {
-                    { "Name", "事件名称" }, { "Time", "发生时间" }, { "Location", "发生地点" },
-                    { "Background", "历史背景" }, { "Process", "事件经过" },
-                    { "Impact", "历史影响" }, { "Tags", "标签" }
+                    { "Topic", "事件名称" }, { "TimePeriod", "发生时间" }, { "RelatedPlaces", "发生地点" },
+                    { "Background", "历史背景" }, { "Content", "事件经过" },
+                    { "Impact", "历史影响" }, { "RelatedPeople", "相关人物" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.HistoryPerson, new Dictionary<string, string>
                 {
-                    { "Name", "人物姓名" }, { "Dynasty", "所处朝代" }, { "Lifetime", "生卒年月" },
-                    { "Achievements", "主要成就" }, { "Evaluation", "历史评价" },
-                    { "Works", "代表作品" }, { "Tags", "标签" }
+                    { "Topic", "人物姓名" }, { "TimePeriod", "所处朝代" }, { "Content", "生卒年月" },
+                    { "KeyPoints", "主要成就" }, { "Analysis", "历史评价" },
+                    { "Example", "代表作品" }, { "RelatedPlaces", "相关地点" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.HistoryTimeline, new Dictionary<string, string>
                 {
-                    { "Era", "时代名称" }, { "TimePeriod", "时间范围" }, { "KeyEvents", "重要事件" },
-                    { "Characteristics", "时代特征" }, { "ImportantFigures", "重要人物" },
-                    { "Notes", "备注" }, { "Tags", "标签" }
+                    { "Topic", "时代名称" }, { "TimePeriod", "时间范围" }, { "KeyPoints", "重要事件" },
+                    { "Content", "时代特征" }, { "RelatedPeople", "重要人物" },
+                    { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.HistoryComprehensive, new Dictionary<string, string>
                 {
-                    { "Title", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" },
-                    { "Example", "典型例题" }, { "Explanation", "答案解析" },
-                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                    { "Topic", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" },
+                    { "Example", "典型例题" }, { "Analysis", "答案解析" },
+                    { "Question", "问题" }, { "Answer", "答案" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.GeographyKnowledge, new Dictionary<string, string>
                 {
-                    { "Name", "地理名称" }, { "Category", "地理分类" }, { "Description", "地理描述" },
-                    { "Distribution", "分布地区" }, { "Features", "主要特征" },
-                    { "Notes", "备注" }, { "Tags", "标签" }
+                    { "Topic", "地理名称" }, { "Category", "地理分类" }, { "Content", "地理描述" },
+                    { "RelatedPlaces", "分布地区" }, { "KeyPoints", "主要特征" },
+                    { "Example", "实例" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.GeographyMap, new Dictionary<string, string>
                 {
-                    { "Name", "地图名称" }, { "Region", "所属地区" }, { "Features", "地理特征" },
-                    { "KeyLocations", "重要地点" }, { "ReadingTips", "读图技巧" },
-                    { "Notes", "备注" }, { "Tags", "标签" }
+                    { "Topic", "地图名称" }, { "RelatedPlaces", "所属地区" }, { "Content", "地理特征" },
+                    { "KeyPoints", "重要地点" }, { "Example", "读图技巧" },
+                    { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.GeographyClimate, new Dictionary<string, string>
                 {
-                    { "Type", "气候类型" }, { "Distribution", "分布地区" }, { "Characteristics", "气候特征" },
-                    { "Causes", "形成原因" }, { "Vegetation", "植被类型" },
-                    { "Tags", "标签" }
+                    { "Topic", "气候类型" }, { "RelatedPlaces", "分布地区" }, { "Content", "气候特征" },
+                    { "Principle", "形成原因" }, { "KeyPoints", "植被类型" },
+                    { "Example", "实例" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.GeographyComprehensive, new Dictionary<string, string>
                 {
-                    { "Title", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" },
-                    { "Example", "典型例题" }, { "Explanation", "答案解析" },
-                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                    { "Topic", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" },
+                    { "Example", "典型例题" }, { "Analysis", "答案解析" },
+                    { "Question", "问题" }, { "Answer", "答案" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.BiologyConcept, new Dictionary<string, string>
                 {
-                    { "Name", "概念名称" }, { "Definition", "定义" }, { "Classification", "分类" },
-                    { "Features", "主要特征" }, { "Function", "功能作用" },
-                    { "Example", "实例" }, { "Tags", "标签" }
+                    { "Topic", "概念名称" }, { "Content", "定义" }, { "Category", "分类" },
+                    { "KeyPoints", "主要特征" }, { "Applications", "功能作用" },
+                    { "Example", "实例" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.BiologyExperiment, new Dictionary<string, string>
                 {
-                    { "Name", "实验名称" }, { "Purpose", "实验目的" }, { "Materials", "实验材料" },
-                    { "Steps", "实验步骤" }, { "Result", "实验结果" },
-                    { "Conclusion", "实验结论" }, { "Tags", "标签" }
+                    { "Topic", "实验名称" }, { "Content", "实验目的" }, { "KeyPoints", "实验材料" },
+                    { "ExperimentSteps", "实验步骤" }, { "Analysis", "实验结果" },
+                    { "Example", "实例" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.BiologyPhenomenon, new Dictionary<string, string>
                 {
-                    { "Name", "现象名称" }, { "Description", "现象描述" }, { "Type", "现象类型" },
-                    { "Causes", "产生原因" }, { "Examples", "常见实例" },
-                    { "Significance", "生物意义" }, { "Tags", "标签" }
+                    { "Topic", "现象名称" }, { "Content", "现象描述" }, { "Category", "现象类型" },
+                    { "Principle", "产生原因" }, { "Example", "常见实例" },
+                    { "Impact", "生物意义" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             },
             {
                 Constants.SubCategory.BiologyComprehensive, new Dictionary<string, string>
                 {
-                    { "Title", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" },
-                    { "Example", "典型例题" }, { "Explanation", "答案解析" },
-                    { "Difficulty", "难度等级" }, { "Tags", "标签" }
+                    { "Topic", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" },
+                    { "Example", "典型例题" }, { "Analysis", "答案解析" },
+                    { "Question", "问题" }, { "Answer", "答案" }, { "Note", "备注" }, { "Tags", "标签" }
                 }
             }
+        };
+
+        private static readonly Dictionary<string, string> CommonColumnHeaders = new()
+        {
+            { "Id", "ID" }, { "CreatedAt", "创建时间" }, { "UpdatedAt", "更新时间" },
+            { "Synonyms", "近义词" }, { "Antonyms", "反义词" }, { "CommonMistakes", "易错点" },
+            { "ExampleSentence", "例句" }, { "OtherPronunciations", "其他读音" }
         };
 
         private string GetChineseColumnName(string columnName)
@@ -449,6 +487,27 @@ namespace LearningAssistant.Forms
                 headers.TryGetValue(columnName, out var chineseName))
             {
                 return chineseName;
+            }
+            if (CommonColumnHeaders.TryGetValue(columnName, out var commonName))
+            {
+                return commonName;
+            }
+            return columnName;
+        }
+
+        private string GetEnglishColumnName(string columnName)
+        {
+            var subCategory = SelectedSubCategory;
+            if (!string.IsNullOrEmpty(subCategory) &&
+                CategoryColumnHeaders.TryGetValue(subCategory, out var headers))
+            {
+                foreach (var pair in headers)
+                {
+                    if (pair.Value == columnName)
+                    {
+                        return pair.Key;
+                    }
+                }
             }
             return columnName;
         }
@@ -466,7 +525,6 @@ namespace LearningAssistant.Forms
             {
                 if (json.TrimStart().StartsWith("["))
                 {
-                    // 直接将 JSON 数组转换为 DataTable
                     var jsonArray = JsonConvert.DeserializeObject<JArray>(json);
                     if (jsonArray.Count > 0)
                     {
@@ -474,14 +532,13 @@ namespace LearningAssistant.Forms
                         var firstItem = jsonArray[0] as JObject;
                         if (firstItem != null)
                         {
-                            // 从第一个对象添加列，所有列都使用 string 类型以避免类型不匹配
                             foreach (var prop in firstItem.Properties())
                             {
-                                var column = dataTable.Columns.Add(prop.Name, typeof(string));
-                                column.Caption = GetChineseColumnName(prop.Name);
+                                var englishName = GetEnglishColumnName(prop.Name);
+                                var column = dataTable.Columns.Add(englishName, typeof(string));
+                                column.Caption = GetChineseColumnName(englishName);
                             }
 
-                            // 添加所有行
                             foreach (var item in jsonArray)
                             {
                                 var obj = item as JObject;
@@ -490,9 +547,10 @@ namespace LearningAssistant.Forms
                                     var row = dataTable.NewRow();
                                     foreach (var prop in obj.Properties())
                                     {
-                                        if (dataTable.Columns.Contains(prop.Name))
+                                        var englishName = GetEnglishColumnName(prop.Name);
+                                        if (dataTable.Columns.Contains(englishName))
                                         {
-                                            row[prop.Name] = ConvertJTokenToString(prop.Value);
+                                            row[englishName] = ConvertJTokenToString(prop.Value);
                                         }
                                     }
                                     dataTable.Rows.Add(row);
@@ -509,13 +567,18 @@ namespace LearningAssistant.Forms
                     var dataTable = new DataTable();
                     foreach (var prop in obj.Properties())
                     {
-                        var column = dataTable.Columns.Add(prop.Name, typeof(string));
-                        column.Caption = GetChineseColumnName(prop.Name);
+                        var englishName = GetEnglishColumnName(prop.Name);
+                        var column = dataTable.Columns.Add(englishName, typeof(string));
+                        column.Caption = GetChineseColumnName(englishName);
                     }
                     DataRow row = dataTable.NewRow();
                     foreach (var prop in obj.Properties())
                     {
-                        row[prop.Name] = ConvertJTokenToString(prop.Value);
+                        var englishName = GetEnglishColumnName(prop.Name);
+                        if (dataTable.Columns.Contains(englishName))
+                        {
+                            row[englishName] = ConvertJTokenToString(prop.Value);
+                        }
                     }
                     dataTable.Rows.Add(row);
                     dataGridView.DataSource = dataTable;
@@ -536,8 +599,29 @@ namespace LearningAssistant.Forms
                 foreach (DataGridViewColumn column in dataGridView.Columns)
                 {
                     column.HeaderText = GetChineseColumnName(column.Name);
+                    if (column.Name is "Id" or "CreatedAt" or "UpdatedAt")
+                    {
+                        column.Visible = false;
+                    }
+                    column.MinimumWidth = 60;
                 }
             }
+        }
+
+        private void DataGridView_RowPostPaint(object? sender, DataGridViewRowPostPaintEventArgs e)
+        {
+            var grid = sender as DataGridView;
+            if (grid == null) return;
+
+            var rowIndex = (e.RowIndex + 1).ToString();
+            var centerFormat = new StringFormat
+            {
+                Alignment = StringAlignment.Center,
+                LineAlignment = StringAlignment.Center
+            };
+
+            var headerBounds = new Rectangle(e.RowBounds.Left, e.RowBounds.Top, grid.RowHeadersWidth, e.RowBounds.Height);
+            e.Graphics.DrawString(rowIndex, grid.Font, SystemBrushes.ControlText, headerBounds, centerFormat);
         }
         /// <summary>
         /// 将 JToken 转换为安全的字符串，特别处理数组和对象
@@ -609,11 +693,15 @@ namespace LearningAssistant.Forms
         private void DataGridView_CellEndEdit(object? sender, DataGridViewCellEventArgs e)
         {
             GridCellEndEdit?.Invoke(this, EventArgs.Empty);
+            UpdateDirtyStatus(true);
+            UpdateStatusCount();
         }
 
         private void DataGridView_RowsAdded(object? sender, DataGridViewRowsAddedEventArgs e)
         {
             GridRowsAdded?.Invoke(this, EventArgs.Empty);
+            UpdateDirtyStatus(true);
+            UpdateStatusCount();
         }
 
         private void ComboBoxSubject_SelectedIndexChanged(object? sender, EventArgs e)
@@ -635,11 +723,30 @@ namespace LearningAssistant.Forms
         private void ButtonSave_Click(object? sender, EventArgs e)
         {
             TemplateSaveClicked?.Invoke(this, EventArgs.Empty);
+            UpdateDirtyStatus(false);
+            UpdateStatusCount();
         }
 
         private void ButtonDelete_Click(object? sender, EventArgs e)
         {
-            TemplateDeleteClicked?.Invoke(this, EventArgs.Empty);
+            var selectedCount = dataGridView.SelectedRows.Count;
+            if (selectedCount == 0)
+            {
+                ShowMessage("请在列表中选择要删除的条目");
+                return;
+            }
+
+            var result = MessageBox.Show(
+                $"确定要删除选中的 {selectedCount} 条记录吗？\n此操作不可撤销。",
+                "确认删除",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
+
+            if (result == DialogResult.Yes)
+            {
+                TemplateDeleteClicked?.Invoke(this, EventArgs.Empty);
+            }
         }
 
         private void ButtonImport_Click(object? sender, EventArgs e)
@@ -655,6 +762,36 @@ namespace LearningAssistant.Forms
         private void DataGridView_SelectionChanged(object sender, EventArgs e)
         {
             ItemSelected?.Invoke(this, EventArgs.Empty);
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            switch (keyData)
+            {
+                case Keys.Control | Keys.S:
+                    ButtonSave_Click(this, EventArgs.Empty);
+                    return true;
+                case Keys.Control | Keys.N:
+                    ButtonAdd_Click(this, EventArgs.Empty);
+                    return true;
+                case Keys.Delete:
+                    if (dataGridView.Focused && dataGridView.SelectedRows.Count > 0)
+                    {
+                        ButtonDelete_Click(this, EventArgs.Empty);
+                        return true;
+                    }
+                    break;
+                case Keys.Control | Keys.O:
+                    ButtonImport_Click(this, EventArgs.Empty);
+                    return true;
+                case Keys.Control | Keys.E:
+                    ButtonExport_Click(this, EventArgs.Empty);
+                    return true;
+                case Keys.F5:
+                    ButtonGenerateAI_Click(this, EventArgs.Empty);
+                    return true;
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
         }
         private void ButtonGenerateAI_Click(object? sender, EventArgs e)
         {
@@ -812,16 +949,18 @@ namespace LearningAssistant.Forms
             // 
             // textBoxJson
             // 
+            textBoxJson.AcceptsTab = true;
             textBoxJson.BackColor = Color.White;
             textBoxJson.BorderStyle = BorderStyle.FixedSingle;
             textBoxJson.Dock = DockStyle.Fill;
-            textBoxJson.Font = new Font("微软雅黑", 10F);
+            textBoxJson.Font = new Font("Consolas", 10F);
             textBoxJson.Location = new Point(3, 3);
             textBoxJson.Multiline = true;
             textBoxJson.Name = "textBoxJson";
             textBoxJson.ScrollBars = ScrollBars.Both;
             textBoxJson.Size = new Size(1198, 605);
             textBoxJson.TabIndex = 2;
+            textBoxJson.WordWrap = false;
             // 
             // buttonAdd
             // 
@@ -928,7 +1067,7 @@ namespace LearningAssistant.Forms
             //
             // buttonLoadPending
             //
-            var buttonLoadPending = new Button();
+            buttonLoadPending = new Button();
             buttonLoadPending.BackColor = Color.FromArgb(255, 152, 0);
             buttonLoadPending.FlatAppearance.BorderSize = 0;
             buttonLoadPending.FlatStyle = FlatStyle.Flat;
@@ -943,6 +1082,29 @@ namespace LearningAssistant.Forms
             buttonLoadPending.Click += ButtonLoadPending_Click;
             buttonLoadPending.MouseEnter += Button_HoverEnter;
             buttonLoadPending.MouseLeave += Button_HoverLeave;
+            // 
+            // statusStrip
+            // 
+            statusStrip = new StatusStrip();
+            statusLabelCount = new ToolStripStatusLabel();
+            statusLabelDirty = new ToolStripStatusLabel();
+            statusLabelCategory = new ToolStripStatusLabel();
+            statusStrip.SizingGrip = false;
+            statusStrip.BackColor = Color.FromArgb(245, 240, 230);
+            statusStrip.Items.AddRange(new ToolStripItem[] {
+                statusLabelCategory,
+                new ToolStripStatusLabel { Spring = true },
+                statusLabelCount,
+                new ToolStripStatusLabel("  |  "),
+                statusLabelDirty
+            });
+            statusLabelCount.Text = "📊 共 0 条";
+            statusLabelCount.ForeColor = Color.FromArgb(70, 90, 110);
+            statusLabelDirty.Text = "✓ 已保存";
+            statusLabelDirty.ForeColor = ThemeHelper.Colors.Success;
+            statusLabelCategory.Text = "📁 -";
+            statusLabelCategory.ForeColor = Color.FromArgb(70, 90, 110);
+            statusStrip.Dock = DockStyle.Fill;
             // 
             // dataGridView
             // 
@@ -960,6 +1122,15 @@ namespace LearningAssistant.Forms
             dataGridView.CellEndEdit += DataGridView_CellEndEdit;
             dataGridView.RowsAdded += DataGridView_RowsAdded;
             dataGridView.SelectionChanged += DataGridView_SelectionChanged;
+            dataGridView.RowPostPaint += DataGridView_RowPostPaint;
+            dataGridView.RowHeadersWidthSizeMode = DataGridViewRowHeadersWidthSizeMode.AutoSizeToAllHeaders;
+            dataGridView.AlternatingRowsDefaultCellStyle = new DataGridViewCellStyle
+            {
+                BackColor = Color.FromArgb(250, 248, 243)
+            };
+            dataGridView.RowTemplate.Height = 32;
+            dataGridView.ColumnHeadersHeight = 36;
+            dataGridView.EnableHeadersVisualStyles = false;
             // 
             // mainPanel
             // 
@@ -969,13 +1140,15 @@ namespace LearningAssistant.Forms
             mainPanel.Controls.Add(topPanel, 0, 0);
             mainPanel.Controls.Add(gridPanel, 0, 1);
             mainPanel.Controls.Add(buttonPanel, 0, 2);
+            mainPanel.Controls.Add(statusStrip, 0, 3);
             mainPanel.Dock = DockStyle.Fill;
             mainPanel.Location = new Point(0, 0);
             mainPanel.Name = "mainPanel";
-            mainPanel.RowCount = 3;
+            mainPanel.RowCount = 4;
             mainPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
             mainPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             mainPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 73F));
+            mainPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));
             mainPanel.Size = new Size(1218, 766);
             mainPanel.TabIndex = 0;
             // 
@@ -1166,6 +1339,16 @@ namespace LearningAssistant.Forms
                 buttonPanel.BackColor = colors.Background;
             }
 
+            if (statusStrip != null)
+            {
+                statusStrip.BackColor = colors.ThemeMode == ThemeMode.Dark ? colors.Surface : Color.FromArgb(245, 240, 230);
+                statusStrip.ForeColor = colors.TextPrimary;
+                if (statusLabelCount != null)
+                    statusLabelCount.ForeColor = colors.TextPrimary;
+                if (statusLabelCategory != null)
+                    statusLabelCategory.ForeColor = colors.TextPrimary;
+            }
+
             if (tabControl1 != null)
             {
                 tabControl1.BackColor = colors.Surface;
@@ -1188,6 +1371,9 @@ namespace LearningAssistant.Forms
                 dataGridView.DefaultCellStyle.ForeColor = colors.TextPrimary;
                 dataGridView.DefaultCellStyle.SelectionBackColor = colors.Primary;
                 dataGridView.DefaultCellStyle.SelectionForeColor = Color.White;
+                dataGridView.AlternatingRowsDefaultCellStyle.BackColor = colors.ThemeMode == ThemeMode.Dark
+                    ? Color.FromArgb(40, 40, 40)
+                    : Color.FromArgb(250, 248, 243);
                 dataGridView.ColumnHeadersDefaultCellStyle.BackColor = colors.ThemeMode == ThemeMode.Dark ? colors.Surface : Color.FromArgb(245, 245, 245);
                 dataGridView.ColumnHeadersDefaultCellStyle.ForeColor = colors.TextPrimary;
                 dataGridView.GridColor = colors.ThemeMode == ThemeMode.Dark ? colors.Divider : Color.FromArgb(224, 224, 224);
@@ -1199,6 +1385,8 @@ namespace LearningAssistant.Forms
                 textBoxJson.BackColor = colors.Surface;
                 textBoxJson.ForeColor = colors.TextPrimary;
             }
+
+            _buttonOriginalColors.Clear();
 
             foreach (Control control in Controls)
             {
@@ -1255,10 +1443,11 @@ namespace LearningAssistant.Forms
         {
             if (sender is Button button)
             {
-                button.BackColor = Color.FromArgb(
-                    Math.Min(255, (int)button.BackColor.R + 25),
-                    Math.Min(255, (int)button.BackColor.G + 25),
-                    Math.Min(255, (int)button.BackColor.B + 25));
+                if (!_buttonOriginalColors.ContainsKey(button.Name))
+                {
+                    _buttonOriginalColors[button.Name] = button.BackColor;
+                }
+                button.BackColor = ThemeHelper.GetHoverColor(button.BackColor, -20);
                 button.Cursor = Cursors.Hand;
             }
         }
@@ -1267,17 +1456,10 @@ namespace LearningAssistant.Forms
         {
             if (sender is Button button)
             {
-                var originalColor = button.Name switch
+                if (_buttonOriginalColors.TryGetValue(button.Name, out var originalColor))
                 {
-                    "buttonAdd" => ThemeHelper.Colors.Orange,
-                    "buttonSave" => ThemeHelper.Colors.Success,
-                    "buttonDelete" => ThemeHelper.Colors.Error,
-                    "buttonImport" => ThemeHelper.Colors.SoftBlue,
-                    "buttonExport" => ThemeHelper.Colors.Purple,
-                    "buttonGenerateAI" => Color.FromArgb(96, 125, 139),
-                    _ => SystemColors.Control
-                };
-                button.BackColor = originalColor;
+                    button.BackColor = originalColor;
+                }
             }
         }
     }

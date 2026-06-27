@@ -18,6 +18,8 @@ namespace LearningAssistant.Forms.UserControls
         private readonly PromptHistoryService _historyService = new();
         private readonly Dictionary<string, RadioButton> _radioButtons = new();
         private readonly Dictionary<string, Button> _quickActionButtons = new();
+        private readonly Dictionary<string, Color> _quickActionOriginalColors = new();
+        private readonly Dictionary<Button, Color> _toolButtonOriginalColors = new();
 
         private WebView2? _webView;
         private bool _isWebViewInitialized = false;
@@ -25,6 +27,8 @@ namespace LearningAssistant.Forms.UserControls
         private string? _pendingUrl;
         private string? _currentContext;
         private ThemeMode _currentTheme = ThemeMode.Light;
+        private string _statusMessage = "就绪";
+        private int _hoveredSuggestionIndex = -1;
 
         private Panel _panelTop;
         private Panel _panelRadioButtons;
@@ -104,43 +108,59 @@ namespace LearningAssistant.Forms.UserControls
         {
             var isDark = colors.ThemeMode == ThemeMode.Dark;
 
-            _panelTop.BackColor = isDark ? Color.FromArgb(40, 40, 40) : Color.FromArgb(245, 245, 245);
-            _panelRadioButtons.BackColor = isDark ? Color.FromArgb(45, 45, 45) : Color.FromArgb(245, 245, 245);
-            _panelQuickActions.BackColor = isDark ? Color.FromArgb(45, 45, 45) : Color.FromArgb(250, 250, 250);
-            _panelBrowser.BackColor = isDark ? Color.FromArgb(30, 30, 30) : Color.White;
+            _panelTop.BackColor = isDark ? colors.Surface : Color.FromArgb(245, 245, 245);
+            _panelRadioButtons.BackColor = isDark ? colors.SurfaceElevated : Color.FromArgb(245, 245, 245);
+            _panelQuickActions.BackColor = isDark ? colors.Surface : Color.FromArgb(250, 250, 250);
+            _panelBrowser.BackColor = isDark ? colors.Background : Color.White;
 
-            _textBoxPrompt.BackColor = isDark ? Color.FromArgb(50, 50, 50) : Color.White;
-            _textBoxPrompt.ForeColor = isDark ? Color.White : Color.Black;
-            _comboBoxHistory.BackColor = isDark ? Color.FromArgb(50, 50, 50) : Color.White;
-            _comboBoxHistory.ForeColor = isDark ? Color.White : Color.Black;
-            _listBoxSuggestions.BackColor = isDark ? Color.FromArgb(50, 50, 50) : Color.FromArgb(250, 250, 250);
-            _listBoxSuggestions.ForeColor = isDark ? Color.White : Color.Black;
-            _labelStatus.ForeColor = isDark ? Color.Gray : Color.Gray;
+            _textBoxPrompt.BackColor = isDark ? colors.SurfaceElevated : Color.White;
+            _textBoxPrompt.ForeColor = isDark ? colors.TextPrimary : Color.Black;
+            _comboBoxHistory.BackColor = isDark ? colors.SurfaceElevated : Color.White;
+            _comboBoxHistory.ForeColor = isDark ? colors.TextPrimary : Color.Black;
+            _listBoxSuggestions.BackColor = isDark ? colors.SurfaceElevated : Color.FromArgb(250, 250, 250);
+            _listBoxSuggestions.ForeColor = isDark ? colors.TextPrimary : Color.Black;
+            _labelStatus.ForeColor = isDark ? colors.TextSecondary : Color.Gray;
+            _labelStatus.BackColor = isDark ? colors.Surface : Color.FromArgb(245, 245, 245);
+
+            foreach (var kvp in _radioButtons)
+            {
+                kvp.Value.ForeColor = isDark ? colors.TextPrimary : Color.Black;
+                kvp.Value.BackColor = isDark ? colors.SurfaceElevated : Color.FromArgb(245, 245, 245);
+            }
 
             foreach (var kvp in _quickActionButtons)
             {
                 var config = QuickActionDefinitions.DefaultActions.FirstOrDefault(a => a.Key == kvp.Key);
                 if (config != null)
                 {
-                    kvp.Value.BackColor = isDark ? config.DarkColor : config.LightColor;
+                    var baseColor = isDark ? config.DarkColor : config.LightColor;
+                    kvp.Value.BackColor = baseColor;
                     kvp.Value.ForeColor = Color.White;
+                    _quickActionOriginalColors[kvp.Key] = baseColor;
                 }
             }
 
-            ApplyToolButtonTheme(_buttonClear, isDark, Color.FromArgb(100, 50, 50), Color.FromArgb(240, 240, 240));
-            ApplyToolButtonTheme(_buttonCopy, isDark, Color.FromArgb(50, 100, 50), Color.FromArgb(240, 240, 240));
-            ApplyToolButtonTheme(_buttonFavorite, isDark, Color.FromArgb(120, 80, 30), Color.FromArgb(255, 200, 100));
-            ApplyToolButtonTheme(_buttonExportHistory, isDark, Color.FromArgb(50, 80, 120), Color.FromArgb(100, 150, 200));
+            var clearColor = isDark ? Color.FromArgb(180, 70, 70) : Color.FromArgb(230, 100, 100);
+            var copyColor = isDark ? Color.FromArgb(70, 140, 70) : Color.FromArgb(100, 180, 100);
+            var favoriteColor = isDark ? Color.FromArgb(180, 140, 50) : Color.FromArgb(255, 193, 7);
+            var exportColor = isDark ? Color.FromArgb(70, 110, 160) : Color.FromArgb(100, 150, 200);
+            var sendColor = isDark ? Color.FromArgb(60, 120, 200) : Color.DodgerBlue;
 
-            _buttonSend.BackColor = isDark ? Color.FromArgb(60, 120, 200) : Color.DodgerBlue;
-            _buttonSend.ForeColor = Color.White;
+            ApplyToolButtonTheme(_buttonClear, clearColor);
+            ApplyToolButtonTheme(_buttonCopy, copyColor);
+            ApplyToolButtonTheme(_buttonFavorite, favoriteColor);
+            ApplyToolButtonTheme(_buttonExportHistory, exportColor);
+            ApplyToolButtonTheme(_buttonSend, sendColor);
+
+            UpdateStatusText();
         }
 
-        private void ApplyToolButtonTheme(Button button, bool isDark, Color darkColor, Color lightColor)
+        private void ApplyToolButtonTheme(Button button, Color backColor)
         {
             if (button == null || button.IsDisposed) return;
-            button.BackColor = isDark ? darkColor : lightColor;
-            button.ForeColor = isDark ? Color.White : Color.FromArgb(100, 100, 100);
+            button.BackColor = backColor;
+            button.ForeColor = Color.White;
+            _toolButtonOriginalColors[button] = backColor;
         }
         #endregion
 
@@ -151,7 +171,7 @@ namespace LearningAssistant.Forms.UserControls
             ApplyTheme(colors);
         }
 
-        public async void OpenWebView(string url, string? prompt = null)
+        public async Task OpenWebViewAsync(string url, string? prompt = null)
         {
             _pendingUrl = url;
             _pendingPrompt = prompt;
@@ -239,9 +259,12 @@ namespace LearningAssistant.Forms.UserControls
         private void SetupStatusLabel()
         {
             _labelStatus.Dock = DockStyle.Bottom;
-            _labelStatus.Height = 22;
-            _labelStatus.Text = "就绪";
+            _labelStatus.Height = 24;
+            _labelStatus.Text = "🤖 就绪 | 当前: 豆包";
             _labelStatus.ForeColor = Color.Gray;
+            _labelStatus.Font = new Font("微软雅黑", 9F);
+            _labelStatus.Padding = new Padding(8, 3, 8, 3);
+            _labelStatus.TextAlign = ContentAlignment.MiddleLeft;
         }
 
         private void SetupTopPanel()
@@ -252,19 +275,21 @@ namespace LearningAssistant.Forms.UserControls
             _panelTop.Dock = DockStyle.Top;
             _panelTop.Location = new Point(0, 0);
             _panelTop.Name = "_panelTop";
-            _panelTop.Size = new Size(1263, 134);
+            _panelTop.Size = new Size(1263, 136);
             _panelTop.TabIndex = 1;
         }
 
         private void SetupPromptTextBox()
         {
             _textBoxPrompt.Font = new Font("微软雅黑", 10F);
-            _textBoxPrompt.Location = new Point(163, 36);
+            _textBoxPrompt.Location = new Point(163, 34);
             _textBoxPrompt.Margin = new Padding(5);
             _textBoxPrompt.Name = "_textBoxPrompt";
-            _textBoxPrompt.PlaceholderText = "输入提示词或问题...";
-            _textBoxPrompt.Size = new Size(683, 25);
+            _textBoxPrompt.PlaceholderText = "输入提示词或问题... (Ctrl+Enter发送, Esc清空)";
+            _textBoxPrompt.Size = new Size(683, 28);
             _textBoxPrompt.TabIndex = 0;
+            _textBoxPrompt.BorderStyle = BorderStyle.FixedSingle;
+            _textBoxPrompt.Cursor = Cursors.IBeam;
         }
 
         private void SetupHistoryComboBox()
@@ -272,11 +297,12 @@ namespace LearningAssistant.Forms.UserControls
             _comboBoxHistory.DropDownStyle = ComboBoxStyle.DropDownList;
             _comboBoxHistory.Font = new Font("微软雅黑", 9F);
             _comboBoxHistory.FormattingEnabled = true;
-            _comboBoxHistory.Location = new Point(5, 66);
+            _comboBoxHistory.Location = new Point(5, 68);
             _comboBoxHistory.MaxDropDownItems = 10;
             _comboBoxHistory.Name = "_comboBoxHistory";
-            _comboBoxHistory.Size = new Size(150, 25);
+            _comboBoxHistory.Size = new Size(150, 28);
             _comboBoxHistory.TabIndex = 3;
+            _comboBoxHistory.Cursor = Cursors.Hand;
         }
 
         private void SetupToolsPanel()
@@ -286,14 +312,14 @@ namespace LearningAssistant.Forms.UserControls
             _panelTools.Controls.Add(_buttonFavorite);
             _panelTools.Controls.Add(_buttonExportHistory);
             _panelTools.Controls.Add(_buttonSend);
-            _panelTools.Location = new Point(854, 26);
+            _panelTools.Location = new Point(854, 25);
             _panelTools.Name = "_panelTools";
-            _panelTools.Size = new Size(417, 45);
+            _panelTools.Size = new Size(417, 48);
             _panelTools.TabIndex = 4;
 
             SetupToolButton(_buttonClear, "🗑️ 清空", 0, Color.FromArgb(230, 100, 100));
             SetupToolButton(_buttonCopy, "📋 复制", 66, Color.FromArgb(100, 180, 100));
-            SetupToolButton(_buttonFavorite, "⭐收藏", 132, Color.FromArgb(255, 200, 100));
+            SetupToolButton(_buttonFavorite, "⭐ 收藏", 132, Color.FromArgb(255, 193, 7));
             SetupToolButton(_buttonExportHistory, "📤 导出", 198, Color.FromArgb(100, 150, 200));
             SetupToolButton(_buttonSend, "➤ 发送", 264, Color.DodgerBlue);
         }
@@ -303,14 +329,16 @@ namespace LearningAssistant.Forms.UserControls
             button.BackColor = backColor;
             button.FlatAppearance.BorderSize = 0;
             button.FlatStyle = FlatStyle.Flat;
-            button.Font = new Font("微软雅黑", 8F);
+            button.Font = new Font("微软雅黑", 9F);
             button.ForeColor = Color.White;
-            button.Location = new Point(locationX, 5);
+            button.Location = new Point(locationX, 4);
             button.Name = button.Text;
-            button.Size = new Size(61, 30);
+            button.Size = new Size(61, 32);
             button.TabIndex = 0;
             button.Text = text;
             button.UseVisualStyleBackColor = false;
+            button.Cursor = Cursors.Hand;
+            _toolButtonOriginalColors[button] = backColor;
         }
 
         private void SetupSuggestionsListBox()
@@ -319,11 +347,16 @@ namespace LearningAssistant.Forms.UserControls
             _listBoxSuggestions.BorderStyle = BorderStyle.FixedSingle;
             _listBoxSuggestions.Font = new Font("微软雅黑", 9F);
             _listBoxSuggestions.FormattingEnabled = true;
-            _listBoxSuggestions.Location = new Point(163, 61);
+            _listBoxSuggestions.Location = new Point(163, 63);
             _listBoxSuggestions.Name = "_listBoxSuggestions";
-            _listBoxSuggestions.Size = new Size(683, 138);
+            _listBoxSuggestions.Size = new Size(683, 140);
             _listBoxSuggestions.TabIndex = 5;
             _listBoxSuggestions.Visible = false;
+            _listBoxSuggestions.Cursor = Cursors.Hand;
+            _listBoxSuggestions.ItemHeight = 28;
+            _listBoxSuggestions.DrawMode = DrawMode.OwnerDrawFixed;
+            _listBoxSuggestions.DrawItem += SuggestionsList_DrawItem;
+            _listBoxSuggestions.MouseMove += SuggestionsList_MouseMove;
         }
 
         private void SetupQuickActionsPanel()
@@ -374,18 +407,22 @@ namespace LearningAssistant.Forms.UserControls
         private void CreateRadioButtons()
         {
             int xPos = 5;
-            int spacing = 85;
+            int spacing = 95;
 
             foreach (var provider in AiConfig.Providers)
             {
                 var radio = new RadioButton();
                 radio.Text = GetShortProviderName(provider.Value.Name);
-                radio.Location = new Point(xPos, 3);
-                radio.Size = new Size(Math.Min(spacing - 10, GetTextWidth(radio.Text) + 20), 22);
+                radio.Location = new Point(xPos, 2);
+                radio.Size = new Size(Math.Min(spacing - 10, GetTextWidth(radio.Text) + 24), 24);
                 radio.Font = new Font("微软雅黑", 9F);
                 radio.FlatStyle = FlatStyle.Flat;
+                radio.FlatAppearance.BorderSize = 0;
+                radio.Cursor = Cursors.Hand;
                 radio.Tag = provider.Key;
                 radio.CheckedChanged += RadioButton_CheckedChanged;
+                radio.MouseEnter += RadioButton_MouseEnter;
+                radio.MouseLeave += RadioButton_MouseLeave;
 
                 _radioButtons[provider.Key] = radio;
                 _panelRadioButtons.Controls.Add(radio);
@@ -393,6 +430,26 @@ namespace LearningAssistant.Forms.UserControls
 
                 if (_radioButtons.Count == 1)
                     radio.Checked = true;
+            }
+        }
+
+        private void RadioButton_MouseEnter(object? sender, EventArgs e)
+        {
+            if (sender is RadioButton radio && !radio.Checked)
+            {
+                radio.ForeColor = _currentTheme == ThemeMode.Dark
+                    ? Color.FromArgb(140, 180, 240)
+                    : Color.FromArgb(40, 100, 200);
+            }
+        }
+
+        private void RadioButton_MouseLeave(object? sender, EventArgs e)
+        {
+            if (sender is RadioButton radio && !radio.Checked)
+            {
+                radio.ForeColor = _currentTheme == ThemeMode.Dark
+                    ? Color.FromArgb(250, 250, 250)
+                    : Color.Black;
             }
         }
 
@@ -409,16 +466,20 @@ namespace LearningAssistant.Forms.UserControls
                 button.ForeColor = Color.White;
                 button.Location = new Point(xPos, 3);
                 button.Name = $"_button{config.Key}";
-                button.Size = new Size(config.Width, 24);
+                button.Size = new Size(config.Width, 26);
                 button.TabIndex = _quickActionButtons.Count;
                 button.Text = config.DisplayText;
                 button.UseVisualStyleBackColor = false;
                 button.Tag = config.Key;
+                button.Cursor = Cursors.Hand;
                 button.Click += QuickActionButton_Click;
+                button.MouseEnter += QuickActionButton_MouseEnter;
+                button.MouseLeave += QuickActionButton_MouseLeave;
 
                 _quickActionButtons[config.Key] = button;
+                _quickActionOriginalColors[config.Key] = config.LightColor;
                 _panelQuickActions.Controls.Add(button);
-                xPos += config.Width + 2;
+                xPos += config.Width + 3;
             }
         }
 
@@ -426,6 +487,8 @@ namespace LearningAssistant.Forms.UserControls
         {
             _textBoxPrompt.KeyDown += TextBoxPrompt_KeyDown;
             _textBoxPrompt.TextChanged += TextBoxPrompt_TextChanged;
+            _textBoxPrompt.GotFocus += TextBoxPrompt_GotFocus;
+            _textBoxPrompt.LostFocus += TextBoxPrompt_LostFocus;
             _comboBoxHistory.SelectedIndexChanged += ComboBoxHistory_SelectedIndexChanged;
             _listBoxSuggestions.SelectedIndexChanged += ListBoxSuggestions_SelectedIndexChanged;
             _buttonClear.Click += ButtonClear_Click;
@@ -433,6 +496,30 @@ namespace LearningAssistant.Forms.UserControls
             _buttonFavorite.Click += ButtonFavorite_Click;
             _buttonExportHistory.Click += ButtonExportHistory_Click;
             _buttonSend.Click += ButtonSend_Click;
+
+            AddToolButtonHoverEffect(_buttonClear);
+            AddToolButtonHoverEffect(_buttonCopy);
+            AddToolButtonHoverEffect(_buttonFavorite);
+            AddToolButtonHoverEffect(_buttonExportHistory);
+            AddToolButtonHoverEffect(_buttonSend);
+        }
+
+        private void AddToolButtonHoverEffect(Button button)
+        {
+            button.MouseEnter += (s, e) =>
+            {
+                if (_toolButtonOriginalColors.TryGetValue(button, out var originalColor))
+                {
+                    button.BackColor = ThemeHelper.GetHoverColor(originalColor, -25);
+                }
+            };
+            button.MouseLeave += (s, e) =>
+            {
+                if (_toolButtonOriginalColors.TryGetValue(button, out var originalColor))
+                {
+                    button.BackColor = originalColor;
+                }
+            };
         }
         #endregion
 
@@ -447,6 +534,108 @@ namespace LearningAssistant.Forms.UserControls
                     var context = GetContextWithPrompt();
                     _textBoxPrompt.Text = config.PromptTemplate.Replace("{context}", context);
                 }
+            }
+        }
+
+        private void QuickActionButton_MouseEnter(object? sender, EventArgs e)
+        {
+            if (sender is Button button && button.Tag is string key && _quickActionOriginalColors.TryGetValue(key, out var originalColor))
+            {
+                button.BackColor = ThemeHelper.GetHoverColor(originalColor, -25);
+            }
+        }
+
+        private void QuickActionButton_MouseLeave(object? sender, EventArgs e)
+        {
+            if (sender is Button button && button.Tag is string key && _quickActionOriginalColors.TryGetValue(key, out var originalColor))
+            {
+                button.BackColor = originalColor;
+            }
+        }
+
+        private void TextBoxPrompt_GotFocus(object? sender, EventArgs e)
+        {
+            _textBoxPrompt.BackColor = _currentTheme == ThemeMode.Dark
+                ? Color.FromArgb(60, 60, 60)
+                : Color.White;
+        }
+
+        private void TextBoxPrompt_LostFocus(object? sender, EventArgs e)
+        {
+            _textBoxPrompt.BackColor = _currentTheme == ThemeMode.Dark
+                ? Color.FromArgb(50, 50, 50)
+                : Color.White;
+        }
+
+        private void SuggestionsList_DrawItem(object? sender, DrawItemEventArgs e)
+        {
+            if (e.Index < 0 || _listBoxSuggestions.Items.Count == 0) return;
+
+            e.DrawBackground();
+            var item = _listBoxSuggestions.Items[e.Index]?.ToString();
+            if (string.IsNullOrEmpty(item)) return;
+
+            bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            bool isHovered = e.Index == _hoveredSuggestionIndex;
+
+            Color backColor;
+            Color textColor;
+            Color subTextColor;
+
+            if (isSelected)
+            {
+                backColor = _currentTheme == ThemeMode.Dark
+                    ? Color.FromArgb(60, 120, 200)
+                    : Color.DodgerBlue;
+                textColor = Color.White;
+                subTextColor = Color.FromArgb(220, 220, 220);
+            }
+            else if (isHovered)
+            {
+                backColor = _currentTheme == ThemeMode.Dark
+                    ? Color.FromArgb(55, 55, 55)
+                    : Color.FromArgb(240, 240, 240);
+                textColor = _currentTheme == ThemeMode.Dark ? Color.White : Color.Black;
+                subTextColor = _currentTheme == ThemeMode.Dark ? Color.Gray : Color.Gray;
+            }
+            else
+            {
+                backColor = _currentTheme == ThemeMode.Dark
+                    ? Color.FromArgb(50, 50, 50)
+                    : Color.FromArgb(250, 250, 250);
+                textColor = _currentTheme == ThemeMode.Dark ? Color.White : Color.Black;
+                subTextColor = _currentTheme == ThemeMode.Dark ? Color.Gray : Color.Gray;
+            }
+
+            using (var brush = new SolidBrush(backColor))
+            {
+                e.Graphics.FillRectangle(brush, e.Bounds);
+            }
+
+            var parts = item.Split(':', 2);
+            string keyText = parts.Length > 0 ? parts[0].Trim() : item;
+            string descText = parts.Length > 1 ? parts[1].Trim() : "";
+
+            using var keyBrush = new SolidBrush(textColor);
+            using var descBrush = new SolidBrush(subTextColor);
+            using var font = new Font("微软雅黑", 9F);
+            using var smallFont = new Font("微软雅黑", 8F);
+
+            e.Graphics.DrawString(keyText, font, keyBrush, e.Bounds.X + 10, e.Bounds.Y + 5);
+            if (!string.IsNullOrEmpty(descText))
+            {
+                string truncatedDesc = descText.Length > 30 ? descText.Substring(0, 30) + "..." : descText;
+                e.Graphics.DrawString(truncatedDesc, smallFont, descBrush, e.Bounds.X + 10, e.Bounds.Y + 16);
+            }
+        }
+
+        private void SuggestionsList_MouseMove(object? sender, MouseEventArgs e)
+        {
+            int hoverIndex = _listBoxSuggestions.IndexFromPoint(e.Location);
+            if (hoverIndex != _hoveredSuggestionIndex)
+            {
+                _hoveredSuggestionIndex = hoverIndex;
+                _listBoxSuggestions.Invalidate();
             }
         }
 
@@ -491,7 +680,7 @@ namespace LearningAssistant.Forms.UserControls
                     }
                 }
 
-                OpenWebView(CurrentAIUrl, prompt);
+                _ = OpenWebViewAsync(CurrentAIUrl, prompt);
             }
             catch (Exception ex)
             {
@@ -889,8 +1078,15 @@ namespace LearningAssistant.Forms.UserControls
 
         private void SetStatus(string message)
         {
-            if (_labelStatus != null && !_labelStatus.IsDisposed)
-                _labelStatus.Text = message;
+            _statusMessage = message;
+            UpdateStatusText();
+        }
+
+        private void UpdateStatusText()
+        {
+            if (_labelStatus == null || _labelStatus.IsDisposed) return;
+            string providerName = GetSelectedProviderName();
+            _labelStatus.Text = $"🤖 {_statusMessage} | 当前: {providerName}";
         }
 
         private void ShowError(string message)

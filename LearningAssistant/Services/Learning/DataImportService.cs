@@ -552,39 +552,97 @@ namespace LearningAssistant.Services.Learning
                     var value = values[i].Trim();
 
                     switch (header)
-                    {
-                        case "topic":
-                        case "主题":
-                        case "标题":
-                            item.Topic = value;
-                            break;
-                        case "content":
-                        case "内容":
-                            item.Content = value;
-                            break;
-                        case "keypoints":
-                        case "要点":
-                        case "知识点":
-                            item.KeyPoints = value;
-                            break;
-                        case "example":
-                        case "例子":
-                        case "例题":
-                            item.Example = value;
-                            break;
-                        case "question":
-                        case "问题":
-                            item.Question = value;
-                            break;
-                        case "answer":
-                        case "答案":
-                            item.Answer = value;
-                            break;
-                        case "analysis":
-                        case "解析":
-                            item.Analysis = value;
-                            break;
-                    }
+                        {
+                            case "topic":
+                            case "主题":
+                            case "标题":
+                                item.Topic = value;
+                                break;
+                            case "content":
+                            case "内容":
+                                item.Content = value;
+                                break;
+                            case "keypoints":
+                            case "要点":
+                            case "知识点":
+                                item.KeyPoints = value;
+                                break;
+                            case "example":
+                            case "例子":
+                            case "例题":
+                                item.Example = value;
+                                break;
+                            case "question":
+                            case "问题":
+                                item.Question = value;
+                                break;
+                            case "answer":
+                            case "答案":
+                                item.Answer = value;
+                                break;
+                            case "analysis":
+                            case "解析":
+                                item.Analysis = value;
+                                break;
+                            case "note":
+                            case "备注":
+                                item.Note = value;
+                                break;
+                            case "timeperiod":
+                            case "时间":
+                            case "时期":
+                            case "年代":
+                                item.TimePeriod = value;
+                                break;
+                            case "relatedpeople":
+                            case "人物":
+                            case "相关人物":
+                                item.RelatedPeople = value;
+                                break;
+                            case "relatedplaces":
+                            case "地点":
+                            case "相关地点":
+                                item.RelatedPlaces = value;
+                                break;
+                            case "background":
+                            case "背景":
+                                item.Background = value;
+                                break;
+                            case "impact":
+                            case "影响":
+                            case "意义":
+                                item.Impact = value;
+                                break;
+                            case "principle":
+                            case "原理":
+                                item.Principle = value;
+                                break;
+                            case "experimentsteps":
+                            case "实验步骤":
+                                item.ExperimentSteps = value;
+                                break;
+                            case "applications":
+                            case "应用":
+                                item.Applications = value;
+                                break;
+                            case "furtherreading":
+                            case "延伸阅读":
+                                item.FurtherReading = value;
+                                break;
+                            case "funfact":
+                            case "趣味知识":
+                            case "冷知识":
+                                item.FunFact = value;
+                                break;
+                            case "imagedescription":
+                            case "图片描述":
+                                item.ImageDescription = value;
+                                break;
+                            case "tags":
+                            case "标签":
+                                item.Tags = value;
+                                break;
+                        }
                 }
             }
             else if (values.Length >= 2)
@@ -651,8 +709,24 @@ namespace LearningAssistant.Services.Learning
                 fields["Content"] = i => ((GeneralSubjectItem)i).Content;
                 fields["KeyPoints"] = i => ((GeneralSubjectItem)i).KeyPoints;
                 fields["Example"] = i => ((GeneralSubjectItem)i).Example;
+                fields["Question"] = i => ((GeneralSubjectItem)i).Question;
+                fields["Answer"] = i => ((GeneralSubjectItem)i).Answer;
+                fields["Analysis"] = i => ((GeneralSubjectItem)i).Analysis;
+                fields["Note"] = i => ((GeneralSubjectItem)i).Note;
                 fields["Subject"] = i => ((GeneralSubjectItem)i).Subject;
                 fields["Category"] = i => ((GeneralSubjectItem)i).Category;
+                fields["TimePeriod"] = i => ((GeneralSubjectItem)i).TimePeriod;
+                fields["RelatedPeople"] = i => ((GeneralSubjectItem)i).RelatedPeople;
+                fields["RelatedPlaces"] = i => ((GeneralSubjectItem)i).RelatedPlaces;
+                fields["Background"] = i => ((GeneralSubjectItem)i).Background;
+                fields["Impact"] = i => ((GeneralSubjectItem)i).Impact;
+                fields["Principle"] = i => ((GeneralSubjectItem)i).Principle;
+                fields["ExperimentSteps"] = i => ((GeneralSubjectItem)i).ExperimentSteps;
+                fields["Applications"] = i => ((GeneralSubjectItem)i).Applications;
+                fields["FurtherReading"] = i => ((GeneralSubjectItem)i).FurtherReading;
+                fields["FunFact"] = i => ((GeneralSubjectItem)i).FunFact;
+                fields["ImageDescription"] = i => ((GeneralSubjectItem)i).ImageDescription;
+                fields["Tags"] = i => ((GeneralSubjectItem)i).Tags;
             }
             else
             {

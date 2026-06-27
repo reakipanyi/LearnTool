@@ -1121,21 +1121,10 @@ namespace LearningAssistant.Forms
 
             try
             {
-                int successCount = 0;
-                foreach (var id in _selectedIds)
-                {
-                    try
-                    {
-                        _wrongAnswerService.MarkAsMastered(_userId, id);
-                        successCount++;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger?.LogWarning(ex, "标记错题已掌握失败, Id: {Id}", id);
-                    }
-                }
+                var itemIds = _selectedIds.ToList();
+                _wrongAnswerService.BatchUpdateMastery(_userId, itemIds, MasteryLevel.Mastered);
 
-                MessageBox.Show($"已成功标记 {successCount} 道错题为已掌握", "操作完成",
+                MessageBox.Show($"已成功标记 {itemIds.Count} 道错题为已掌握", "操作完成",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
 
                 _selectedIds.Clear();
@@ -1161,21 +1150,10 @@ namespace LearningAssistant.Forms
 
             try
             {
-                int successCount = 0;
-                foreach (var id in _selectedIds)
-                {
-                    try
-                    {
-                        _wrongAnswerService.RemoveWrongAnswer(_userId, id);
-                        successCount++;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger?.LogWarning(ex, "删除错题失败, Id: {Id}", id);
-                    }
-                }
+                var itemIds = _selectedIds.ToList();
+                _wrongAnswerService.BatchRemove(_userId, itemIds);
 
-                MessageBox.Show($"已成功删除 {successCount} 道错题", "操作完成",
+                MessageBox.Show($"已成功删除 {itemIds.Count} 道错题", "操作完成",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
 
                 _selectedIds.Clear();

@@ -42,11 +42,8 @@ namespace LearningAssistant.Forms.UserControls
             this._contentLabel = new Label();
             this._categoryLabel = new Label();
 
-            // 仅运行时初始化子控件，设计器跳过防止加载异常
-            if (!DesignMode)
-            {
-                InitChildControls();
-            }
+            // 初始化子控件（设计器和运行时都需要）
+            InitChildControls();
 
             // 卡片基础样式
             this.Height = 280;

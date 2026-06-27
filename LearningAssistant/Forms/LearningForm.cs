@@ -48,11 +48,12 @@ namespace LearningAssistant.Forms
         private bool _currentNoteCounted = false;
         private bool _disposed = false;
         private Settings _settings = new();
-        #endregion
-
-        #region === 导航按钮 ===
-        private Button _buttonPrevious = null!;
-        private Button _buttonNextNav = null!;
+        private bool _autoPlayEnabled = false;
+        private readonly System.Windows.Forms.Timer _autoPlayTimer = new System.Windows.Forms.Timer();
+        private int _autoPlayDelaySeconds = 5;
+        private HashSet<string>? _cachedFavorites;
+        private DateTime _favoritesCacheTime = DateTime.MinValue;
+        private static readonly TimeSpan FavoritesCacheDuration = TimeSpan.FromSeconds(10);
         #endregion
 
         #region === 进度可视化 ===
@@ -103,6 +104,8 @@ namespace LearningAssistant.Forms
         private readonly SolidBrush _selectedForegroundBrush = new SolidBrush(Color.White);
         private readonly SolidBrush _normalForegroundBrush = new SolidBrush(Color.Black);
         private readonly Pen _selectedBorderPen = new Pen(Color.White, 2);
+        private readonly SolidBrush _hoverBackgroundBrush = new SolidBrush(Color.FromArgb(232, 245, 233));
+        private int _hoverIndex = -1;
         #endregion
 
         #region === 子视图实例 ===
@@ -110,28 +113,28 @@ namespace LearningAssistant.Forms
         private LearningContentView _contentView = null!;
         private LearningButtonsView _buttonsView = null!;
         private LearningStatsView _statsView = null!;
+        private LearningStatsButtonView _statsButtonView = null!;
+        private LearningProcessStatsView _statsProgressView = null!;
         private LearningSettingsView _settingsView = null!;
         #endregion
 
         #region === 控件访问器 ===
         private Panel panelContent => _contentView.PanelContent;
-        private Label labelStatistics => _statsView.LabelStatistics;
         private ListBox listBoxItems => _listView.ListBoxItems;
         private Label labelListStatus => _listView.LabelListStatus;
         private Panel panelConfig => _settingsView.PanelConfig;
-        private Panel panelStats => _statsView.PanelStatsContainer;
         private Label labelStudyTime => _statsView.LabelStudyTime;
         private Label labelScore => _statsView.LabelScore;
         private Label labelTodayCount => _statsView.LabelTodayCount;
         private Label labelStreak => _statsView.LabelStreak;
         private Label labelEncouragement => _statsView.LabelEncouragement;
-        private ProgressBar progressBar1 => _statsView.ProgressBar;
+        private ProgressBar progressBar1 => _statsProgressView.ProgressBar;
+        private Label labelStatistics => _statsProgressView.LabelStatistics;
         private Panel panelQuizMode => _settingsView.PanelQuizMode;
         private Button buttonShowAnswer => _settingsView.ButtonShowAnswer;
         private Label labelQuizHint => _settingsView.LabelQuizHint;
         private Button buttonThemeToggle => _settingsView.ButtonThemeToggle;
         private CheckBox checkBoxVoice => _settingsView.CheckBoxVoice;
-        private FlowLayoutPanel pronunciationFlowLayoutPanel => _settingsView.PronunciationFlowLayoutPanel;
         private RadioButton radioOriginal => _settingsView.RadioOriginal;
         private RadioButton radioExplanation => _settingsView.RadioExplanation;
         private RadioButton radioBoth => _settingsView.RadioBoth;
@@ -179,6 +182,7 @@ namespace LearningAssistant.Forms
         private readonly FeynmanHistoryService _feynmanHistoryService = new();
         private SpeechService? _speechService;
         private bool _isDictationActive = false;
+        private LevelBadge _levelBadge;
         #endregion
 
         #region === 设计器生成 ===
@@ -203,6 +207,7 @@ namespace LearningAssistant.Forms
             IUserSessionService? userSessionService = null)
         {
             InitializeComponent();
+            WindowState = FormWindowState.Maximized;
             _aiQuestionService = aiQuestionService ?? throw new ArgumentNullException(nameof(aiQuestionService));
             _ttsService = ttsService ?? throw new ArgumentNullException(nameof(ttsService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -241,6 +246,9 @@ namespace LearningAssistant.Forms
             // 笔记保存计时器
             _noteSaveTimer.Tick += NoteSaveTimer_Tick;
 
+            // 自动播放计时器
+            _autoPlayTimer.Interval = 5000;
+            _autoPlayTimer.Tick += AutoPlayTimer_Tick;
 
         }
         #endregion
@@ -273,12 +281,10 @@ namespace LearningAssistant.Forms
 
             _listView.SelectedIndexChanged += ListBoxItems_SelectedIndexChanged;
 
-            _statsView.AchievementsClicked += ButtonAchievements_Click;
-            _statsView.ChallengesClicked += ButtonChallenges_Click;
-            _statsView.ReviewClicked += ButtonReview_Click;
+            _statsButtonView.AchievementsClicked += ButtonAchievements_Click;
+            _statsButtonView.ChallengesClicked += ButtonChallenges_Click;
+            _statsButtonView.ReviewClicked += ButtonReview_Click;
         }
-
-
 
         public void ApplyTheme(ThemeColors colors)
         {
@@ -294,10 +300,6 @@ namespace LearningAssistant.Forms
                 panelConfig.BackColor = colors.Surface;
             }
 
-            if (panelStats != null)
-            {
-                panelStats.BackColor = colors.Surface;
-            }
 
             if (panelQuizMode != null)
             {
@@ -380,6 +382,20 @@ namespace LearningAssistant.Forms
             {
                 richTextBoxNotes.ForeColor = colors.TextPrimary;
                 richTextBoxNotes.BackColor = colors.Surface;
+            }
+
+            if (_noteFormattingToolbar != null)
+            {
+                _noteFormattingToolbar.BackColor = colors.Surface;
+                _noteFormattingToolbar.ForeColor = colors.TextPrimary;
+                _noteFormattingToolbar.Renderer = new ToolStripProfessionalRenderer(
+                    new ThemeColorTable(colors));
+            }
+
+            if (_noteWordCountLabel != null)
+            {
+                _noteWordCountLabel.ForeColor = colors.TextSecondary;
+                _noteWordCountLabel.BackColor = colors.Surface;
             }
 
             foreach (Control control in Controls)
@@ -470,11 +486,46 @@ namespace LearningAssistant.Forms
                 {
                     _ttsService.StopAsync().GetAwaiter().GetResult();
                 }
+
+                ShowStudySessionSummary();
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Failed to stop TTS service");
             }
+        }
+
+        private void ShowStudySessionSummary()
+        {
+            if (_totalLearnedCount == 0 && _favoriteCount == 0 && _noteCount == 0)
+                return;
+
+            int correctCount = _quizCorrectCount;
+            int wrongCount = Math.Max(0, _totalLearnedCount - correctCount);
+            string accuracy = _totalLearnedCount > 0
+                ? $"{(correctCount * 100.0 / _totalLearnedCount):F1}%"
+                : "N/A";
+
+            // 计算进度条
+            int progressBarWidth = 30;
+            int filledCount = _totalLearnedCount > 0 ? Math.Min(correctCount, progressBarWidth) : 0;
+            string progressBar = new string('█', filledCount) + new string('░', progressBarWidth - filledCount);
+
+            string summary = $"📚 本次学习总结\n" +
+                           $"{"─".PadRight(28, '─')}\n" +
+                           $"⏱️ 学习时长: {_studyDuration.Hours:D2}:{_studyDuration.Minutes:D2}:{_studyDuration.Seconds:D2}\n" +
+                           $"\n" +
+                           $"📈 学习进度:\n" +
+                           $"[{progressBar}] {accuracy}\n" +
+                           $"   ✅ 学会了: {correctCount} 项\n" +
+                           $"   ❌ 不会的: {wrongCount} 项\n" +
+                           $"\n" +
+                           $"⭐ 收藏了: {_favoriteCount} 项\n" +
+                           $"📝 添加笔记: {_noteCount} 条\n" +
+                           $"{"─".PadRight(28, '─')}\n" +
+                           $"继续加油，保持学习热情！💪";
+
+            MessageBox.Show(summary, "学习总结", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void LoadSettings()
@@ -980,7 +1031,7 @@ namespace LearningAssistant.Forms
             buttonPronounce.Enabled = enabled;
         }
 
-        public async void PlayPronunciation(string text, string language)
+        public async Task PlayPronunciationAsync(string text, string language)
         {
             try
             {
@@ -999,31 +1050,77 @@ namespace LearningAssistant.Forms
 
         private void InitializeComponent()
         {
-            // ========== 创建子视图（它们内部已创建所有子控件）==========
             _listView = new LearningListView();
             _contentView = new LearningContentView();
             _buttonsView = new LearningButtonsView();
             _statsView = new LearningStatsView();
+            _statsProgressView = new LearningProcessStatsView();
+            _statsButtonView = new LearningStatsButtonView();
             _settingsView = new LearningSettingsView();
-
-            // ========== 仅创建独立控件（不是子视图覆盖的）==========
             mainTableLayoutPanel = new TableLayoutPanel();
             middlePanel = new Panel();
             middleTableLayoutPanel = new TableLayoutPanel();
-
-
-            // ========== SuspendLayout（仅对独立控件）==========
-            panelStats.SuspendLayout();
             mainTableLayoutPanel.SuspendLayout();
             middlePanel.SuspendLayout();
             middleTableLayoutPanel.SuspendLayout();
             SuspendLayout();
-
-            // ========== 子视图已在其构造函数中完成所有初始化，此处仅设置布局引用 ==========
-
-            //
+            // 
+            // _listView
+            // 
+            _listView.Location = new Point(0, 0);
+            _listView.Name = "_listView";
+            _listView.Size = new Size(260, 981);
+            _listView.TabIndex = 0;
+            // 
+            // _contentView
+            // 
+            _contentView.Location = new Point(0, 0);
+            _contentView.Name = "_contentView";
+            _contentView.Size = new Size(954, 225);
+            _contentView.TabIndex = 0;
+            // 
+            // _buttonsView
+            // 
+            _buttonsView.Location = new Point(3, 648);
+            _buttonsView.Name = "_buttonsView";
+            _buttonsView.Size = new Size(1089, 66);
+            _buttonsView.TabIndex = 0;
+            // 
+            // _statsView
+            // 
+            _statsView.Dock = DockStyle.Fill;
+            _statsView.Location = new Point(3, 797);
+            _statsView.Name = "_statsView";
+            _statsView.Size = new Size(1089, 38);
+            _statsView.TabIndex = 9;
+            // 
+            // _statsProgressView
+            // 
+            _statsProgressView.Dock = DockStyle.Fill;
+            _statsProgressView.Location = new Point(3, 753);
+            _statsProgressView.Name = "_statsProgressView";
+            _statsProgressView.Size = new Size(1089, 38);
+            _statsProgressView.TabIndex = 1;
+            // 
+            // _statsButtonView
+            // 
+            _statsButtonView.BackColor = Color.White;
+            _statsButtonView.Dock = DockStyle.Fill;
+            _statsButtonView.Location = new Point(3, 3);
+            _statsButtonView.Name = "_statsButtonView";
+            _statsButtonView.Padding = new Padding(10, 4, 10, 4);
+            _statsButtonView.Size = new Size(1089, 42);
+            _statsButtonView.TabIndex = 0;
+            // 
+            // _settingsView
+            // 
+            _settingsView.Location = new Point(0, 0);
+            _settingsView.Name = "_settingsView";
+            _settingsView.Size = new Size(220, 837);
+            _settingsView.TabIndex = 0;
+            // 
             // mainTableLayoutPanel
-            //
+            // 
             mainTableLayoutPanel.ColumnCount = 3;
             mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 266F));
             mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
@@ -1038,49 +1135,41 @@ namespace LearningAssistant.Forms
             mainTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             mainTableLayoutPanel.Size = new Size(1587, 844);
             mainTableLayoutPanel.TabIndex = 0;
-
-            //
+            // 
             // middlePanel
-            //
-            middlePanel.BackColor = Color.FromArgb(250, 245, 235);
+            // 
             middlePanel.Controls.Add(middleTableLayoutPanel);
             middlePanel.Dock = DockStyle.Fill;
             middlePanel.Location = new Point(269, 3);
             middlePanel.Name = "middlePanel";
             middlePanel.Size = new Size(1095, 838);
             middlePanel.TabIndex = 20;
-
-            //
+            // 
             // middleTableLayoutPanel
-            //
+            // 
             middleTableLayoutPanel.ColumnCount = 1;
             middleTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            middleTableLayoutPanel.Controls.Add(_contentView.PanelContent, 0, 0);
-            middleTableLayoutPanel.Controls.Add(_contentView.PanelNotes, 0, 1);
-            middleTableLayoutPanel.Controls.Add(_buttonsView.ButtonsPanel, 0, 2);
-            middleTableLayoutPanel.Controls.Add(_statsView, 0, 3);
+            middleTableLayoutPanel.Controls.Add(_statsButtonView, 0, 0);
+            middleTableLayoutPanel.Controls.Add(_contentView.PanelContent, 0, 1);
+            middleTableLayoutPanel.Controls.Add(_contentView.PanelNotes, 0, 2);
+            middleTableLayoutPanel.Controls.Add(_buttonsView.ButtonsPanel, 0, 3);
+            middleTableLayoutPanel.Controls.Add(_statsProgressView, 0, 4);
+            middleTableLayoutPanel.Controls.Add(_statsView, 0, 5);
             middleTableLayoutPanel.Dock = DockStyle.Fill;
             middleTableLayoutPanel.Location = new Point(0, 0);
             middleTableLayoutPanel.Name = "middleTableLayoutPanel";
-            middleTableLayoutPanel.RowCount = 4;
+            middleTableLayoutPanel.RowCount = 6;
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
             middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 0F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 71F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 170F));
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 91F));
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
             middleTableLayoutPanel.Size = new Size(1095, 838);
             middleTableLayoutPanel.TabIndex = 0;
-
-
-
-            //
-            // _confettiTimer
-            //
-            _confettiTimer.Interval = 16;
-            _confettiTimer.Tick += ConfettiTimer_Tick;
-
-            //
+            // 
             // LearningForm
-            //
+            // 
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.FromArgb(250, 245, 235);
@@ -1091,13 +1180,9 @@ namespace LearningAssistant.Forms
             Name = "LearningForm";
             Text = "✨ 学习模式 ✨";
             TransparencyKey = Color.FromArgb(255, 0, 255);
-
-            panelStats.ResumeLayout(false);
             mainTableLayoutPanel.ResumeLayout(false);
             middlePanel.ResumeLayout(false);
             middleTableLayoutPanel.ResumeLayout(false);
-            pronunciationFlowLayoutPanel.ResumeLayout(false);
-            pronunciationFlowLayoutPanel.PerformLayout();
             ResumeLayout(false);
         }
         #endregion
@@ -1118,6 +1203,8 @@ namespace LearningAssistant.Forms
             _noteSaveTimer.Tick += NoteSaveTimer_Tick;
 
             ApplyButtonStyles();
+
+            InitializeButtonTooltips();
 
             InitializeNavigationButtons();
 
@@ -1143,13 +1230,34 @@ namespace LearningAssistant.Forms
             UpdateEncouragement();
             _gamificationService.UpdateAllDisplays();
 
-            _statsView.UpdateLevel(
+            UpdateLevel(
                 _gamificationService.CurrentLevel,
                 _gamificationService.XP,
                 _gamificationService.XPToNextLevel,
                 _gamificationService.LevelTitle);
         }
 
+
+
+        /// <summary>
+        /// 更新等级信息
+        /// </summary>
+        public void UpdateLevel(int level, int currentXP, int xpToNextLevel, string levelTitle)
+        {
+            if (_levelBadge == null) return;
+            _levelBadge.Level = level;
+            _levelBadge.LevelTitle = levelTitle;
+            _levelBadge.SetXP(currentXP, xpToNextLevel);
+        }
+
+        /// <summary>
+        /// 触发升级动画
+        /// </summary>
+        public void TriggerLevelUp(int newLevel, string newTitle)
+        {
+            if (_levelBadge == null) return;
+            _levelBadge.TriggerLevelUp(newLevel, newTitle);
+        }
         private void ApplyButtonStyles()
         {
             ApplyRoundedStyle(buttonKnown, 8);
@@ -1170,11 +1278,41 @@ namespace LearningAssistant.Forms
             }
         }
 
+        private void InitializeButtonTooltips()
+        {
+            _toolTip.InitialDelay = 300;
+            _toolTip.AutoPopDelay = 6000;
+            _toolTip.ShowAlways = true;
+
+            _toolTip.SetToolTip(_buttonsView.ButtonPrevious, "上一项 (← / PageUp / Home)");
+            _toolTip.SetToolTip(_buttonsView.ButtonNext, "下一项 (Enter / → / PageDown / End)");
+            _toolTip.SetToolTip(_buttonsView.ButtonKnown, "标记为已知 (1 / K)");
+            _toolTip.SetToolTip(_buttonsView.ButtonUnknown, "标记为未知 (2 / U)");
+            _toolTip.SetToolTip(_buttonsView.ButtonPronounce, "播放发音 (Space)");
+            _toolTip.SetToolTip(_buttonsView.ButtonFavorite, "收藏/取消收藏 (3 / F)");
+            _toolTip.SetToolTip(_buttonsView.ButtonNote, "打开笔记 (4 / N)");
+            _toolTip.SetToolTip(_buttonsView.ButtonEdit, "编辑内容 (5 / E)");
+            _toolTip.SetToolTip(_buttonsView.ButtonExit, "退出学习 (Esc)");
+            _toolTip.SetToolTip(_buttonsView.ButtonAIAsk, "AI 问答 (F6)");
+            _toolTip.SetToolTip(_buttonsView.ButtonFeynman, "费曼学习法 (F7)");
+
+            _toolTip.SetToolTip(buttonShowAnswer, "切换学习/答题模式 (F3)");
+
+            _toolTip.SetToolTip(labelEncouragement,
+                "鼓励语，每隔几句学习内容自动更新一次");
+            _toolTip.SetToolTip(labelDailyGoal,
+                $"每日目标: {DailyGoal}项 | 当前进度: {_gamificationService?.TodayLearnedCount ?? 0}项\n" +
+                "快捷键: F8 开启/关闭自动播放");
+        }
+
         private void ApplyRoundedStyle(Button button, int radius = 8)
         {
             button.FlatStyle = FlatStyle.Flat;
             button.FlatAppearance.BorderSize = 1;
             button.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
+            button.FlatAppearance.MouseOverBackColor = Color.Transparent;
+            button.FlatAppearance.MouseDownBackColor = Color.Transparent;
+            button.FlatAppearance.CheckedBackColor = Color.Transparent;
 
             button.Paint += (sender, e) =>
             {
@@ -1194,16 +1332,19 @@ namespace LearningAssistant.Forms
             {
                 if (sender is Button btn)
                 {
-                    btn.FlatAppearance.BorderColor = Color.FromArgb(150, 150, 150);
+                    // 悬停时边框变为主题色
+                    btn.FlatAppearance.BorderColor = Color.FromArgb(76, 175, 80);
+                    btn.FlatAppearance.BorderSize = 2;
 
+                    // 根据按钮背景色亮度调整悬停效果
                     float brightness = (btn.BackColor.R * 0.299f + btn.BackColor.G * 0.587f + btn.BackColor.B * 0.114f) / 255f;
                     if (brightness > 0.6f)
                     {
-                        btn.FlatAppearance.MouseOverBackColor = ControlPaint.Dark(btn.BackColor, 10);
+                        btn.FlatAppearance.MouseOverBackColor = ControlPaint.Dark(btn.BackColor, 15);
                     }
                     else
                     {
-                        btn.FlatAppearance.MouseOverBackColor = ControlPaint.Light(btn.BackColor, 10);
+                        btn.FlatAppearance.MouseOverBackColor = ControlPaint.Light(btn.BackColor, 15);
                     }
                 }
             };
@@ -1213,69 +1354,36 @@ namespace LearningAssistant.Forms
                 if (sender is Button btn)
                 {
                     btn.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
+                    btn.FlatAppearance.BorderSize = 1;
+                    btn.FlatAppearance.MouseOverBackColor = Color.Transparent;
+                }
+            };
+
+            button.MouseDown += (sender, e) =>
+            {
+                if (sender is Button btn && e.Button == MouseButtons.Left)
+                {
+                    btn.FlatAppearance.BorderColor = Color.FromArgb(56, 142, 60);
+                    btn.FlatAppearance.BorderSize = 2;
+                    btn.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(btn.BackColor, 20);
+                }
+            };
+
+            button.MouseUp += (sender, e) =>
+            {
+                if (sender is Button btn)
+                {
+                    btn.FlatAppearance.BorderColor = Color.FromArgb(76, 175, 80);
+                    btn.FlatAppearance.BorderSize = 2;
                 }
             };
         }
 
         private void InitializeNavigationButtons()
         {
-            _buttonPrevious = new Button
-            {
-                Text = "⏮ 上一项",
-                Font = new Font("微软雅黑", 11F, FontStyle.Bold),
-                BackColor = Color.FromArgb(108, 117, 125),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Size = new Size(120, 45),
-                Margin = new Padding(5)
-            };
-            ApplyRoundedStyle(_buttonPrevious, 8);
-            _buttonPrevious.Click += ButtonPrevious_Click;
-
-            _buttonNextNav = new Button
-            {
-                Text = "下一项 ⏭",
-                Font = new Font("微软雅黑", 11F, FontStyle.Bold),
-                BackColor = Color.FromArgb(76, 175, 80),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Size = new Size(120, 45),
-                Margin = new Padding(5)
-            };
-            ApplyRoundedStyle(_buttonNextNav, 8);
-            _buttonNextNav.Click += ButtonNextNav_Click;
-
-            _buttonsView.ButtonsPanel.Controls.Add(_buttonPrevious);
-            _buttonsView.ButtonsPanel.Controls.Add(_buttonNextNav);
-
-            Button buttonEdit = new Button
-            {
-                Text = "✏️ 编辑",
-                Font = new Font("微软雅黑", 11F, FontStyle.Bold),
-                BackColor = Color.FromArgb(52, 152, 219),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Size = new Size(100, 45),
-                Margin = new Padding(5)
-            };
-            ApplyRoundedStyle(buttonEdit, 8);
-            buttonEdit.Click += ButtonEdit_Click;
-            _buttonsView.ButtonsPanel.Controls.Add(buttonEdit);
-
-            Button buttonNote = new Button
-            {
-                Text = "📝 笔记",
-                Font = new Font("微软雅黑", 11F, FontStyle.Bold),
-                BackColor = Color.FromArgb(156, 39, 176),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Size = new Size(100, 45),
-                Margin = new Padding(5)
-            };
-            ApplyRoundedStyle(buttonNote, 8);
-            buttonNote.Click += ButtonNote_Click;
-            _buttonsView.ButtonsPanel.Controls.Add(buttonNote);
-
+            _buttonsView.PreviousClicked += ButtonPrevious_Click;
+            _buttonsView.NextClicked += ButtonNextNav_Click;
+            _buttonsView.EditClicked += ButtonEdit_Click;
             InitializeDailyGoalProgress();
         }
 
@@ -1291,34 +1399,17 @@ namespace LearningAssistant.Forms
                 TextColor = Color.Black
             };
 
-            if (_statsView.PanelStatsContainer != null)
-            {
-                _dailyGoalProgress.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-                _dailyGoalProgress.Location = new Point(20, 20);
-                _statsView.PanelStatsContainer.Controls.Add(_dailyGoalProgress);
-            }
+
+            _dailyGoalProgress.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            _dailyGoalProgress.Location = new Point(20, 20);
 
             InitializeShortcutHint();
         }
 
-        private Label _shortcutHintLabel = null!;
 
         private void InitializeShortcutHint()
         {
-            _shortcutHintLabel = new Label
-            {
-                Text = "快捷键: K(会了) | U(不会) | Space(发音) | Enter(下一项) | F4(费曼)",
-                Font = new Font("微软雅黑", 8F),
-                ForeColor = Color.Gray,
-                Dock = DockStyle.Bottom,
-                Padding = new Padding(10),
-                TextAlign = ContentAlignment.MiddleCenter
-            };
 
-            if (_statsView.PanelStatsContainer != null)
-            {
-                _statsView.PanelStatsContainer.Controls.Add(_shortcutHintLabel);
-            }
 
             InitializeNoteEnhancements();
             InitializeLearningCard();
@@ -1507,7 +1598,7 @@ namespace LearningAssistant.Forms
                 return;
             }
 
-            _statsView.UpdateLevel(
+            UpdateLevel(
                 _gamificationService.CurrentLevel,
                 _gamificationService.XP,
                 _gamificationService.XPToNextLevel,
@@ -1529,7 +1620,7 @@ namespace LearningAssistant.Forms
 
             _soundService?.PlaySuccess();
             StartConfetti();
-            _statsView.TriggerLevelUp(e.NewLevel, e.LevelTitle);
+            TriggerLevelUp(e.NewLevel, e.LevelTitle);
             MessageBox.Show($"🎉 恭喜升级！\n\n你现在是「{e.LevelTitle}」级别！", "升级成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
@@ -1572,17 +1663,31 @@ namespace LearningAssistant.Forms
         {
             try
             {
+                if (_cachedFavorites != null && DateTime.Now - _favoritesCacheTime < FavoritesCacheDuration)
+                {
+                    _listView.SetFavoriteItems(_cachedFavorites);
+                    return;
+                }
+
                 string favoritesPath = GetUserFavoritesPath();
                 if (File.Exists(favoritesPath))
                 {
                     string json = File.ReadAllText(favoritesPath);
                     var favorites = JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
-                    _listView.SetFavoriteItems(new HashSet<string>(favorites));
+                    _cachedFavorites = new HashSet<string>(favorites);
+                    _favoritesCacheTime = DateTime.Now;
+                    _listView.SetFavoriteItems(_cachedFavorites);
                 }
             }
             catch
             {
             }
+        }
+
+        private void InvalidateFavoritesCache()
+        {
+            _cachedFavorites = null;
+            _favoritesCacheTime = DateTime.MinValue;
         }
 
         private void UpdateListStatus(int totalItems, int currentIndex)
@@ -1621,10 +1726,48 @@ namespace LearningAssistant.Forms
             if (enable)
             {
                 listBoxItems.DrawItem += ListBoxItems_DrawItem;
+                listBoxItems.MouseMove += ListBoxItems_MouseMove;
+                listBoxItems.MouseLeave += ListBoxItems_MouseLeave;
             }
             else
             {
                 listBoxItems.DrawItem -= ListBoxItems_DrawItem;
+                listBoxItems.MouseMove -= ListBoxItems_MouseMove;
+                listBoxItems.MouseLeave -= ListBoxItems_MouseLeave;
+            }
+        }
+
+        private void ListBoxItems_MouseMove(object? sender, MouseEventArgs e)
+        {
+            if (listBoxItems == null) return;
+
+            int index = listBoxItems.IndexFromPoint(e.Location);
+            if (index != _hoverIndex)
+            {
+                int oldIndex = _hoverIndex;
+                _hoverIndex = index;
+
+                if (oldIndex >= 0 && oldIndex < listBoxItems.Items.Count)
+                {
+                    listBoxItems.Invalidate(listBoxItems.GetItemRectangle(oldIndex));
+                }
+                if (index >= 0 && index < listBoxItems.Items.Count)
+                {
+                    listBoxItems.Invalidate(listBoxItems.GetItemRectangle(index));
+                }
+            }
+        }
+
+        private void ListBoxItems_MouseLeave(object? sender, EventArgs e)
+        {
+            if (_hoverIndex >= 0 && listBoxItems != null)
+            {
+                int oldIndex = _hoverIndex;
+                _hoverIndex = -1;
+                if (oldIndex < listBoxItems.Items.Count)
+                {
+                    listBoxItems.Invalidate(listBoxItems.GetItemRectangle(oldIndex));
+                }
             }
         }
 
@@ -1636,10 +1779,15 @@ namespace LearningAssistant.Forms
             e.DrawBackground();
 
             bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            bool isHovered = e.Index == _hoverIndex && !isSelected;
 
             if (isSelected)
             {
                 e.Graphics.FillRectangle(_selectedBackgroundBrush, e.Bounds);
+            }
+            else if (isHovered)
+            {
+                e.Graphics.FillRectangle(_hoverBackgroundBrush, e.Bounds);
             }
 
             string text = listBox.Items[e.Index].ToString() ?? string.Empty;
@@ -1763,6 +1911,8 @@ namespace LearningAssistant.Forms
         /// </summary>
         private void ContentArea_Click(object? sender, EventArgs e)
         {
+            _ = PlayCardClickAnimationAsync();
+
             if (_isShowAnswer)
             {
                 // 答题模式：切换答案显示状态
@@ -1772,6 +1922,29 @@ namespace LearningAssistant.Forms
             {
                 // 学习模式：直接显示完整内容
                 UpdateDetailState(true, true);
+            }
+        }
+
+        private async Task PlayCardClickAnimationAsync()
+        {
+            if (_learningCard == null || _disposed) return;
+
+            var originalMargin = _learningCard.Margin;
+            var shrinkMargin = new Padding(
+                originalMargin.Left + 5,
+                originalMargin.Top + 3,
+                originalMargin.Right + 5,
+                originalMargin.Bottom + 3);
+
+            try
+            {
+                _learningCard.Margin = shrinkMargin;
+                await Task.Delay(60);
+                if (_disposed || _learningCard == null) return;
+                _learningCard.Margin = originalMargin;
+            }
+            catch
+            {
             }
         }
 
@@ -2054,14 +2227,14 @@ namespace LearningAssistant.Forms
                 Controls.Add(_floatingText);
             }
 
-            var badgeRect = _statsView.LevelBadge.RectangleToScreen(
-                new Rectangle(0, 0, _statsView.LevelBadge.Width, _statsView.LevelBadge.Height));
+            var badgeRect = _levelBadge.RectangleToScreen(
+                new Rectangle(0, 0, _levelBadge.Width, _levelBadge.Height));
             var formPoint = PointToClient(badgeRect.Location);
 
             _floatingText.Text = $"+{xpGained} XP";
             _floatingText.TextColor = Color.FromArgb(255, 152, 0);
             _floatingText.ShowAt(this,
-                formPoint.X + _statsView.LevelBadge.Width / 2 - 40,
+                formPoint.X + _levelBadge.Width / 2 - 40,
                 formPoint.Y,
                 $"+{xpGained} XP");
         }
@@ -2511,14 +2684,25 @@ namespace LearningAssistant.Forms
                 var appConfig = Program.GetService<AppConfig>();
                 var aiPanelPopupService = Program.GetService<IAIPanelPopupService>();
                 var themeService = Program.GetService<IThemeService>();
+                var contentLoaderService = Program.GetService<Services.Learning.IContentLoaderService>();
+                var aiQuestionService = Program.GetService<Services.AI.IAiQuestionService>();
 
-                if (logger == null || appConfig == null || aiPanelPopupService == null || themeService == null)
+                if (logger == null || appConfig == null || aiPanelPopupService == null || themeService == null ||
+                    contentLoaderService == null || aiQuestionService == null)
                 {
                     MessageBox.Show("无法加载内容编辑器所需的服务", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
                 var editorForm = new ContentEditorForm(logger, appConfig, aiPanelPopupService, themeService);
+                var presenterLogger = Program.GetService<ILogger<Presenters.ContentEditorPresenter>>();
+                if (presenterLogger == null)
+                {
+                    MessageBox.Show("无法获取Presenter日志服务", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+                var presenter = new Presenters.ContentEditorPresenter(presenterLogger, editorForm, contentLoaderService, aiQuestionService);
+                editorForm.SetPresenter(presenter);
                 editorForm.ShowDialog();
             }
             catch (Exception ex)
@@ -2648,10 +2832,13 @@ namespace LearningAssistant.Forms
 
         private void ButtonShowAnswer_Click(object? sender, EventArgs e)
         {
-            // 直接切换显示内容，不联动 RadioButton，不刷新列表
+            ToggleAnswerDisplay();
+        }
+
+        private void ToggleAnswerDisplay()
+        {
             if (_isShowAnswer)
             {
-                // 当前是答题模式，切换到学习模式
                 _isShowAnswer = false;
                 UpdateDetailState(true, true);
                 buttonShowAnswer.BackColor = Color.FromArgb(255, 193, 7);
@@ -2660,13 +2847,45 @@ namespace LearningAssistant.Forms
             }
             else
             {
-                // 当前是学习模式，切换到答题模式
                 _isShowAnswer = true;
                 UpdateDetailState(true, false);
                 buttonShowAnswer.BackColor = Color.FromArgb(76, 175, 80);
                 buttonShowAnswer.Text = "📖 学习模式";
                 labelQuizHint.Text = "答案已隐藏";
             }
+        }
+
+        private void ToggleAutoPlay()
+        {
+            _autoPlayEnabled = !_autoPlayEnabled;
+            if (_autoPlayEnabled)
+            {
+                _autoPlayTimer.Start();
+                UpdateAutoPlayStatus(true);
+                ShowToast($"▶️ 自动播放已开启，每隔 {_autoPlayDelaySeconds} 秒自动切换", ToastType.Info, 2000);
+            }
+            else
+            {
+                _autoPlayTimer.Stop();
+                UpdateAutoPlayStatus(false);
+                ShowToast("⏸️ 自动播放已暂停", ToastType.Info, 1500);
+            }
+        }
+
+        private void UpdateAutoPlayStatus(bool enabled)
+        {
+            var statusText = enabled
+                ? $"下一项 (Enter / → / PageDown / End)\n▶️ 自动播放中 ({_autoPlayDelaySeconds}s) - F8关闭"
+                : "下一项 (Enter / → / PageDown / End)";
+            _toolTip.SetToolTip(_buttonsView.ButtonNext, statusText);
+        }
+
+        private void AutoPlayTimer_Tick(object? sender, EventArgs e)
+        {
+            if (!_autoPlayEnabled || _disposed)
+                return;
+
+            NextClicked?.Invoke(this, EventArgs.Empty);
         }
 
         private void ButtonThemeToggle_Click(object? sender, EventArgs e)
@@ -2695,11 +2914,13 @@ namespace LearningAssistant.Forms
                 _gamificationService.RecordFavorite();
                 _gamificationService.CheckBadgeUnlock("favorite", _favoriteCount);
                 UpdateChallengesProgress();
+                ShowToast("⭐ 已收藏", ToastType.Success, 1500);
             }
             else
             {
                 _favoriteCount = Math.Max(0, _favoriteCount - 1);
                 RemoveFavorite();
+                ShowToast("💔 已取消收藏", ToastType.Info, 1200);
             }
 
             UpdateFavoriteButton();
@@ -2728,6 +2949,7 @@ namespace LearningAssistant.Forms
                     File.WriteAllText(favoritesPath, json);
                 }
 
+                InvalidateFavoritesCache();
                 LoadFavoritesToListView();
             }
             catch (Exception ex)
@@ -2757,6 +2979,7 @@ namespace LearningAssistant.Forms
                         File.WriteAllText(favoritesPath, newJson);
                     }
 
+                    InvalidateFavoritesCache();
                     LoadFavoritesToListView();
                 }
             }
@@ -3041,6 +3264,38 @@ namespace LearningAssistant.Forms
                     _soundService?.PlayError();
                     MarkAsUnknownClicked?.Invoke(this, EventArgs.Empty);
                     return true;
+                case Keys.D3:
+                case Keys.F:
+                    ButtonFavorite_Click(this, EventArgs.Empty);
+                    return true;
+                case Keys.D4:
+                case Keys.N:
+                    ButtonNote_Click(this, EventArgs.Empty);
+                    return true;
+                case Keys.D5:
+                case Keys.E:
+                    ButtonEdit_Click(this, EventArgs.Empty);
+                    return true;
+                case Keys.Left:
+                case Keys.PageUp:
+                    ButtonPrevious_Click(this, EventArgs.Empty);
+                    return true;
+                case Keys.Right:
+                case Keys.PageDown:
+                    ButtonNextNav_Click(this, EventArgs.Empty);
+                    return true;
+                case Keys.Home:
+                    JumpToItem(0);
+                    return true;
+                case Keys.End:
+                    if (listBoxItems != null && listBoxItems.Items.Count > 0)
+                    {
+                        JumpToItem(listBoxItems.Items.Count - 1);
+                    }
+                    return true;
+                case Keys.R:
+                    JumpToRandomItem();
+                    return true;
                 case Keys.Escape:
                     ExitClicked?.Invoke(this, EventArgs.Empty);
                     Close();
@@ -3051,14 +3306,152 @@ namespace LearningAssistant.Forms
                 case Keys.F2:
                     StartAssociationLearning();
                     return true;
+                case Keys.F3:
+                    ToggleAnswerDisplay();
+                    return true;
                 case Keys.F4:
                     ShowFeynmanQuestions();
                     return true;
                 case Keys.F5:
                     ShowDailyThinkingTask();
                     return true;
+                case Keys.F6:
+                    ButtonAIAsk_Click(this, EventArgs.Empty);
+                    return true;
+                case Keys.F7:
+                    ButtonFeynman_Click(this, EventArgs.Empty);
+                    return true;
+                case Keys.F8:
+                    ToggleAutoPlay();
+                    return true;
+                case Keys.F9:
+                    ShowJumpToDialog();
+                    return true;
+                case Keys.F10:
+                    ShowShortcutHelp();
+                    return true;
                 default:
                     return false;
+            }
+        }
+
+        private void ShowShortcutHelp()
+        {
+            string helpText =
+                "⌨️  快捷键帮助\n\n" +
+                "━━━━━ 学习操作 ━━━━━\n" +
+                "  1 / K   → 标记为已知\n" +
+                "  2 / U   → 标记为未知\n" +
+                "  Space   → 播放发音\n" +
+                "  3 / F   → 收藏/取消收藏\n" +
+                "  4 / N   → 打开笔记\n" +
+                "  5 / E   → 编辑内容\n\n" +
+                "━━━━━ 导航操作 ━━━━━\n" +
+                "  ← / PageUp  → 上一项\n" +
+                "  → / PageDown → 下一项\n" +
+                "  Enter       → 下一项\n" +
+                "  Home        → 跳到第一项\n" +
+                "  End         → 跳到最后一项\n" +
+                "  R           → 随机跳转\n" +
+                "  ↑ / ↓       → 列表上下选择\n" +
+                "  F9          → 跳转到指定序号\n\n" +
+                "━━━━━ 功能按键 ━━━━━\n" +
+                "  F1     → 渐进式提示\n" +
+                "  F2     → 联想学习\n" +
+                "  F3     → 切换学习/答题模式\n" +
+                "  F4     → 费曼学习法\n" +
+                "  F5     → 每日思考任务\n" +
+                "  F6     → AI 问答\n" +
+                "  F7     → 费曼学习面板\n" +
+                "  F8     → 自动播放开关\n" +
+                "  F10    → 快捷键帮助（本窗口）\n" +
+                "  Esc    → 退出学习\n\n" +
+                "提示：鼠标悬停在按钮上也可查看快捷键";
+
+            MessageBox.Show(helpText, "快捷键大全", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void JumpToItem(int index)
+        {
+            if (listBoxItems == null || listBoxItems.Items.Count == 0) return;
+            if (index < 0) index = 0;
+            if (index >= listBoxItems.Items.Count) index = listBoxItems.Items.Count - 1;
+
+            listBoxItems.SelectedIndex = index;
+            listBoxItems.TopIndex = Math.Max(0, index - 5);
+            _soundService?.PlayNavigation();
+        }
+
+        private void JumpToRandomItem()
+        {
+            if (listBoxItems == null || listBoxItems.Items.Count <= 1) return;
+
+            Random rnd = new Random();
+            int newIndex;
+            do
+            {
+                newIndex = rnd.Next(listBoxItems.Items.Count);
+            } while (newIndex == listBoxItems.SelectedIndex && listBoxItems.Items.Count > 1);
+
+            JumpToItem(newIndex);
+        }
+
+        private void ShowJumpToDialog()
+        {
+            if (listBoxItems == null || listBoxItems.Items.Count == 0) return;
+
+            using var form = new Form();
+            form.Text = "跳转到";
+            form.FormBorderStyle = FormBorderStyle.FixedDialog;
+            form.StartPosition = FormStartPosition.CenterParent;
+            form.MaximizeBox = false;
+            form.MinimizeBox = false;
+            form.Width = 300;
+            form.Height = 150;
+
+            var label = new Label
+            {
+                Text = $"输入序号 (1 - {listBoxItems.Items.Count}):",
+                Location = new Point(20, 20),
+                AutoSize = true
+            };
+
+            var textBox = new TextBox
+            {
+                Location = new Point(20, 50),
+                Width = 240,
+                Text = (listBoxItems.SelectedIndex + 1).ToString()
+            };
+
+            var okButton = new Button
+            {
+                Text = "确定",
+                DialogResult = DialogResult.OK,
+                Location = new Point(110, 85),
+                Width = 70
+            };
+
+            var cancelButton = new Button
+            {
+                Text = "取消",
+                DialogResult = DialogResult.Cancel,
+                Location = new Point(190, 85),
+                Width = 70
+            };
+
+            form.Controls.Add(label);
+            form.Controls.Add(textBox);
+            form.Controls.Add(okButton);
+            form.Controls.Add(cancelButton);
+            form.AcceptButton = okButton;
+            form.CancelButton = cancelButton;
+
+            if (form.ShowDialog(this) == DialogResult.OK)
+            {
+                if (int.TryParse(textBox.Text, out int target) && target >= 1 && target <= listBoxItems.Items.Count)
+                {
+                    JumpToItem(target - 1);
+                }
             }
         }
 
@@ -3083,6 +3476,9 @@ namespace LearningAssistant.Forms
 
                 _noteSaveTimer?.Stop();
                 _noteSaveTimer?.Dispose();
+
+                _autoPlayTimer?.Stop();
+                _autoPlayTimer?.Dispose();
 
                 _gameTimer?.Stop();
                 _gameTimer?.Dispose();
@@ -3140,16 +3536,25 @@ namespace LearningAssistant.Forms
                     _listView.SelectedIndexChanged -= ListBoxItems_SelectedIndexChanged;
                 }
 
+                if (listBoxItems != null)
+                {
+                    listBoxItems.MouseMove -= ListBoxItems_MouseMove;
+                    listBoxItems.MouseLeave -= ListBoxItems_MouseLeave;
+                }
+
                 _listView?.Dispose();
                 _contentView?.Dispose();
                 _buttonsView?.Dispose();
                 _statsView?.Dispose();
+                _statsProgressView?.Dispose();
+                _statsButtonView?.Dispose();
                 _settingsView?.Dispose();
 
                 _selectedBackgroundBrush.Dispose();
                 _selectedForegroundBrush.Dispose();
                 _normalForegroundBrush.Dispose();
                 _selectedBorderPen.Dispose();
+                _hoverBackgroundBrush.Dispose();
 
                 if (_speechService != null)
                 {
@@ -3164,6 +3569,29 @@ namespace LearningAssistant.Forms
 
             _disposed = true;
             base.Dispose(disposing);
+        }
+
+        private class ThemeColorTable : ProfessionalColorTable
+        {
+            private readonly ThemeColors _colors;
+
+            public ThemeColorTable(ThemeColors colors)
+            {
+                _colors = colors;
+            }
+
+            public override Color ToolStripGradientBegin => _colors.Surface;
+            public override Color ToolStripGradientMiddle => _colors.Surface;
+            public override Color ToolStripGradientEnd => _colors.Surface;
+            public override Color ToolStripBorder => _colors.Divider;
+            public override Color ButtonSelectedBorder => _colors.Divider;
+            public override Color ButtonSelectedHighlight => _colors.Accent;
+            public override Color ButtonSelectedHighlightBorder => _colors.Accent;
+            public override Color ButtonPressedHighlight => ControlPaint.Dark(_colors.Accent, 20);
+            public override Color ButtonPressedHighlightBorder => ControlPaint.Dark(_colors.Accent, 30);
+            public override Color MenuBorder => _colors.Divider;
+            public override Color SeparatorDark => _colors.Divider;
+            public override Color SeparatorLight => _colors.Surface;
         }
     }
 }

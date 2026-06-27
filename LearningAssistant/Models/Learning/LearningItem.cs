@@ -6,22 +6,12 @@ namespace LearningAssistant.Models.Learning
     /// </summary>
     public abstract class LearningItem
     {
-        /*
-        /// <summary>
-        /// 唯一标识符
-        /// </summary>
         public string Id { get; set; } = string.Empty;
-        
-        /// <summary>
-        /// 创建时间
-        /// </summary>
+
         public DateTime CreatedAt { get; set; } = DateTime.Now;
-        
-        /// <summary>
-        /// 更新时间
-        /// </summary>
+
         public DateTime UpdatedAt { get; set; } = DateTime.Now;
-        */
+
         /// <summary>
         /// 获取主要内容（如单词、短语等）
         /// </summary>

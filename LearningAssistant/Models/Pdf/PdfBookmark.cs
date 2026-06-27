@@ -11,8 +11,8 @@ namespace LearningAssistant.Models.Pdf
         {
             var pageNum = PageIndex + 1;
             return !string.IsNullOrEmpty(Title)
-                ? $"{Title}"
-                : $"P{pageNum}";
+                ? $"P{pageNum} · {Title}"
+                : $"第 {pageNum} 页";
         }
     }
 }
