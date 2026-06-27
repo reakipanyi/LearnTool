@@ -96,6 +96,35 @@ namespace LearningAssistant.Services.Learning
         /// 停止提醒检查
         /// </summary>
         void Stop();
+
+        /// <summary>
+        /// 获取今天应触发的提醒
+        /// </summary>
+        /// <param name="userId">用户ID</param>
+        /// <returns>今天应触发的提醒列表</returns>
+        List<Reminder> GetRemindersDueToday(string userId);
+
+        /// <summary>
+        /// 获取提醒模板列表
+        /// </summary>
+        /// <returns>预定义的提醒模板</returns>
+        List<ReminderTemplate> GetReminderTemplates();
+
+        /// <summary>
+        /// 从模板创建提醒
+        /// </summary>
+        /// <param name="userId">用户ID</param>
+        /// <param name="template">提醒模板</param>
+        /// <returns>创建的提醒对象（未保存）</returns>
+        Reminder CreateFromTemplate(string userId, ReminderTemplate template);
+
+        /// <summary>
+        /// 智能添加提醒 - 根据学习统计建议最佳提醒时间
+        /// </summary>
+        /// <param name="userId">用户ID</param>
+        /// <param name="title">提醒标题</param>
+        /// <param name="repeatType">重复类型</param>
+        void AddSmartReminder(string userId, string title, ReminderRepeatType repeatType);
     }
 
     /// <summary>
@@ -107,6 +136,18 @@ namespace LearningAssistant.Services.Learning
         /// 被触发的提醒对象
         /// </summary>
         public Reminder Reminder { get; set; } = null!;
+    }
+
+    /// <summary>
+    /// 提醒模板 - 预定义的提醒配置
+    /// </summary>
+    public class ReminderTemplate
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public TimeSpan Time { get; set; }
+        public ReminderRepeatType RepeatType { get; set; }
+        public string Description { get; set; } = string.Empty;
     }
 
     /// <summary>

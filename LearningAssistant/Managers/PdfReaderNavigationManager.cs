@@ -78,11 +78,13 @@ namespace LearningAssistant.Managers
         private AnnotationStroke? _selectedStroke;
         private int _selectedStrokeIndex = -1;
         private bool _isSelectingStroke = false;
+        private bool _isDraggingStroke = false;
         private PointF? _dragOffset;
         private const float HitTestThreshold = 25f;
 
         public int ZoomLevel => _zoomLevel;
         public bool IsLocked => _isLocked;
+        public bool HasSelectedStroke => _selectedStroke != null && _selectedStrokeIndex >= 0;
         public Rectangle? LastSelectionRect => _lastSelectionRect ?? _pendingHighlightRect;
         public Point ImageOffset => _imageOffset;
         public AnnotationToolMode CurrentToolMode => _currentToolMode;

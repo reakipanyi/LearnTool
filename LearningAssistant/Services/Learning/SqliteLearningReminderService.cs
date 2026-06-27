@@ -17,6 +17,7 @@ namespace LearningAssistant.Services.Learning
         private const int MinTriggerIntervalMinutes = 5;
         
         private readonly IDbContextFactory<AppDbContext> _dbFactory;
+        private readonly ILearningAnalyticsService? _analyticsService;
         private readonly ILogger<SqliteLearningReminderService>? _logger;
         private System.Timers.Timer? _checkTimer;
         private bool _disposed = false;
@@ -25,9 +26,11 @@ namespace LearningAssistant.Services.Learning
 
         public SqliteLearningReminderService(
             IDbContextFactory<AppDbContext> dbFactory,
+            ILearningAnalyticsService? analyticsService = null,
             ILogger<SqliteLearningReminderService>? logger = null)
         {
             _dbFactory = dbFactory ?? throw new ArgumentNullException(nameof(dbFactory));
+            _analyticsService = analyticsService;
             _logger = logger;
             
             try
@@ -399,6 +402,161 @@ namespace LearningAssistant.Services.Learning
                 _logger?.LogError(ex, "停止提醒检查定时器失败");
                 throw;
             }
+        }
+
+        /// <summary>
+        /// 获取今天应触发的提醒
+        /// </summary>
+        public List<Reminder> GetRemindersDueToday(string userId)
+        {
+            try
+            {
+                var today = DateTime.Today;
+                var reminders = GetUserReminders(userId).Where(r => r.Enabled).ToList();
+                return reminders.Where(r => IsDueToday(r, today)).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "获取今日提醒失败: {UserId}", userId);
+                return new List<Reminder>();
+            }
+        }
+
+        /// <summary>
+        /// 获取提醒模板列表
+        /// </summary>
+        public List<ReminderTemplate> GetReminderTemplates()
+        {
+            return new List<ReminderTemplate>
+            {
+                new ReminderTemplate
+                {
+                    Name = "晨间学习",
+                    Title = "早上好！开始学习吧",
+                    Time = TimeSpan.FromHours(8),
+                    RepeatType = ReminderRepeatType.Workday,
+                    Description = "工作日早上8点提醒"
+                },
+                new ReminderTemplate
+                {
+                    Name = "午后复习",
+                    Title = "该复习啦！",
+                    Time = TimeSpan.FromHours(14),
+                    RepeatType = ReminderRepeatType.Daily,
+                    Description = "每天下午2点复习提醒"
+                },
+                new ReminderTemplate
+                {
+                    Name = "晚间学习",
+                    Title = "晚上好！别忘了学习",
+                    Time = TimeSpan.FromHours(20),
+                    RepeatType = ReminderRepeatType.Daily,
+                    Description = "每天晚上8点学习提醒"
+                },
+                new ReminderTemplate
+                {
+                    Name = "周末复习",
+                    Title = "周末愉快！别忘了复习",
+                    Time = TimeSpan.FromHours(10),
+                    RepeatType = ReminderRepeatType.Weekend,
+                    Description = "周末上午10点复习"
+                }
+            };
+        }
+
+        /// <summary>
+        /// 从模板创建提醒
+        /// </summary>
+        public Reminder CreateFromTemplate(string userId, ReminderTemplate template)
+        {
+            return new Reminder
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                Title = template.Title,
+                Time = template.Time,
+                RepeatType = template.RepeatType,
+                Enabled = true,
+                CreatedAt = DateTime.Now
+            };
+        }
+
+        /// <summary>
+        /// 智能添加提醒 - 根据学习统计建议最佳提醒时间
+        /// </summary>
+        public void AddSmartReminder(string userId, string title, ReminderRepeatType repeatType)
+        {
+            var suggestedTime = GetSuggestedReminderTime(userId);
+
+            var reminder = new Reminder
+            {
+                Id = Guid.NewGuid(),
+                UserId = userId,
+                Title = title,
+                Time = suggestedTime,
+                RepeatType = repeatType,
+                Enabled = true,
+                CreatedAt = DateTime.Now
+            };
+
+            AddReminder(reminder);
+            _logger?.LogInformation("智能添加提醒: {Title}, 建议时间: {Time}", title, suggestedTime);
+        }
+
+        /// <summary>
+        /// 检查提醒是否在今天应触发
+        /// </summary>
+        private bool IsDueToday(Reminder reminder, DateTime today)
+        {
+            switch (reminder.RepeatType)
+            {
+                case ReminderRepeatType.Daily:
+                    return true;
+                case ReminderRepeatType.Workday:
+                    return today.DayOfWeek != DayOfWeek.Saturday && today.DayOfWeek != DayOfWeek.Sunday;
+                case ReminderRepeatType.Weekend:
+                    return today.DayOfWeek == DayOfWeek.Saturday || today.DayOfWeek == DayOfWeek.Sunday;
+                case ReminderRepeatType.Once:
+                    return reminder.CreatedAt.Date == today.Date;
+                case ReminderRepeatType.Weekly:
+                    return today.DayOfWeek == reminder.CreatedAt.DayOfWeek;
+                default:
+                    return true;
+            }
+        }
+
+        /// <summary>
+        /// 根据学习统计获取建议提醒时间
+        /// </summary>
+        private TimeSpan GetSuggestedReminderTime(string userId)
+        {
+            try
+            {
+                if (_analyticsService != null)
+                {
+                    var stats = _analyticsService.GetDailyStatistics(userId, DateTime.Today);
+                    var streak = _analyticsService.GetStudyStreak(userId);
+
+                    // 有学习习惯的用户建议晚间学习
+                    if (streak > 0)
+                    {
+                        return TimeSpan.FromHours(20);
+                    }
+
+                    // 今日学习时间较短的用户建议下午学习
+                    if (stats.TotalMinutes < 30)
+                    {
+                        return TimeSpan.FromHours(15);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "获取建议提醒时间失败，使用默认时间");
+            }
+
+            // 默认晚间8点
+            return TimeSpan.FromHours(20);
         }
 
         private void CheckReminders(object? state)

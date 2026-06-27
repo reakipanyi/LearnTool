@@ -81,13 +81,6 @@ namespace LearningAssistant.Services.Learning
         int GetTotalLearnedItems(string userId, DateTime startDate);
 
         /// <summary>
-        /// 获取连续学习天数
-        /// </summary>
-        /// <param name="userId">用户ID</param>
-        /// <returns>连续学习天数</returns>
-        int GetConsecutiveDays(string userId);
-
-        /// <summary>
         /// 获取指定日期以来的正确率
         /// </summary>
         /// <param name="userId">用户ID</param>
@@ -150,6 +143,13 @@ namespace LearningAssistant.Services.Learning
         /// 周数
         /// </summary>
         public int WeekNumber { get; set; }
+
+        // === 内部存储字段（合并自 DailyRecord） ===
+        public int ItemsLearned { get; set; }
+        public int ItemsReviewed { get; set; }
+        public int CorrectCount { get; set; }
+        public int WrongCount { get; set; }
+        public int TimeSpentMinutes { get; set; }
     }
 
     /// <summary>

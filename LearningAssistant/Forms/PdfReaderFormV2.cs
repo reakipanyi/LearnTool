@@ -207,6 +207,7 @@ namespace LearningAssistant.Forms
         private ToolStripMenuItem menuItemZoomOut;
         private ToolStripMenuItem menuItemResetZoom;
         private ToolStripMenuItem menuItemExport;
+        private ToolStripMenuItem menuItemDelete;
         private SplitContainer _splitContainerMain;
 
 
@@ -360,6 +361,7 @@ namespace LearningAssistant.Forms
 
         public bool IsDualPage => _isDualPage;
         public bool IsNightMode => _nightModeManager?.IsNightMode ?? false;
+        public bool HasSelectedStroke => _navigationManager?.HasSelectedStroke ?? false;
 
         public PictureBox PictureBoxPdf => _pictureBoxPdf;
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -2336,6 +2338,22 @@ namespace LearningAssistant.Forms
             }
         }
 
+        private void ContextMenuPdf_Opening(object? sender, System.ComponentModel.CancelEventArgs e)
+        {
+            bool hasSelection = _navigationManager?.HasSelectedStroke ?? false;
+            menuItemDelete.Visible = hasSelection;
+            if (hasSelection)
+            {
+                menuItemDelete.Text = "删除标注 (Del)";
+            }
+        }
+
+        private void MenuItemDelete_Click(object? sender, EventArgs e)
+        {
+            _navigationManager?.DeleteSelectedStroke();
+            RefreshHighlightList();
+        }
+
         private void PictureBoxPdf_MouseWheel(object? sender, MouseEventArgs e)
         {
             try
@@ -2504,6 +2522,7 @@ namespace LearningAssistant.Forms
             menuItemZoomOut = new ToolStripMenuItem();
             menuItemResetZoom = new ToolStripMenuItem();
             menuItemExport = new ToolStripMenuItem();
+            menuItemDelete = new ToolStripMenuItem();
             _ocrPanel = new Panel();
             _ocrPictureBox = new PictureBox();
             _ocrCloseButton = new Button();
@@ -3235,9 +3254,10 @@ namespace LearningAssistant.Forms
             // 
             // _contextMenuPdf
             // 
-            _contextMenuPdf.Items.AddRange(new ToolStripItem[] { menuItemCopy, menuItemSearch, menuItemHighlight, menuItemRectangle, menuItemText, menuItemZoomIn, menuItemZoomOut, menuItemResetZoom, menuItemExport });
+            _contextMenuPdf.Items.AddRange(new ToolStripItem[] { menuItemCopy, menuItemSearch, menuItemHighlight, menuItemRectangle, menuItemText, menuItemDelete, menuItemZoomIn, menuItemZoomOut, menuItemResetZoom, menuItemExport });
             _contextMenuPdf.Name = "_contextMenuPdf";
             _contextMenuPdf.Size = new Size(137, 202);
+            _contextMenuPdf.Opening += ContextMenuPdf_Opening;
             // 
             // menuItemCopy
             // 
@@ -3301,6 +3321,13 @@ namespace LearningAssistant.Forms
             menuItemExport.Size = new Size(136, 22);
             menuItemExport.Text = "导出当前页";
             menuItemExport.Click += MenuItemExport_Click;
+            // 
+            // menuItemDelete
+            // 
+            menuItemDelete.Name = "menuItemDelete";
+            menuItemDelete.Size = new Size(136, 22);
+            menuItemDelete.Text = "删除标注";
+            menuItemDelete.Click += MenuItemDelete_Click;
             // 
             // _ocrPanel
             // 

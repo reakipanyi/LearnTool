@@ -186,16 +186,20 @@ namespace LearningAssistant.Common
                 var persistenceService = sp.GetService<IDataPersistenceService>();
                 return new LearningAnalyticsService(logger, persistenceService);
             });
-            services.AddSingleton<ILearningReminderService, LearningReminderService>();
+            services.AddSingleton<ILearningReminderService>(sp =>
+            {
+                var dbFactory = sp.GetRequiredService<Microsoft.EntityFrameworkCore.IDbContextFactory<Data.Database.AppDbContext>>();
+                var analyticsService = sp.GetService<ILearningAnalyticsService>();
+                var logger = sp.GetService<ILogger<SqliteLearningReminderService>>();
+                return new SqliteLearningReminderService(dbFactory, analyticsService, logger);
+            });
             services.AddSingleton<IPendingContentService, PendingContentService>();
-            services.AddSingleton<DataMigrationService>();
             services.AddSingleton<ISpacedRepetitionService, SqliteSpacedRepetitionService>();
             services.AddSingleton<IHighlightSyncService, HighlightSyncService>();
             services.AddSingleton<ILearningChartService, LearningChartService>();
             services.AddSingleton<Services.Web.IWebBookmarkService, Services.Web.WebBookmarkService>();
             services.AddSingleton<ISoundService>(sp => new SoundService(sp.GetService<ITTSService>()));
             services.AddSingleton<IAdvancedSpeechService, AdvancedSpeechService>();
-            services.AddSingleton<IEnhancedReminderService, EnhancedReminderService>();
             services.AddSingleton<IEncouragementService, EncouragementService>();
             services.AddSingleton<IAchievementService, AchievementService>();
             services.AddSingleton<IGamificationService, GamificationService>();

@@ -232,6 +232,105 @@ namespace LearningAssistant.Data.Database
         public int CorrectCount { get; set; } = 0;
 
         public bool IsActive { get; set; } = true;
+
+        public double Stability { get; set; } = 0;
+
+        public double Difficulty { get; set; } = 5;
+
+        public double Retrievability { get; set; } = 1;
+
+        public int LearningStage { get; set; } = 0;
+
+        public DateTime? LastReviewDate { get; set; }
+
+        public int ReviewCount { get; set; } = 0;
+
+        public int CorrectStreak { get; set; } = 0;
+
+        public List<ReviewLogEntity> ReviewLogs { get; set; } = new List<ReviewLogEntity>();
+    }
+
+    /// <summary>
+    /// 复习日志实体 - 记录每次复习详情，用于 FSRS 机器学习
+    /// </summary>
+    public class ReviewLogEntity
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Required]
+        [MaxLength(100)]
+        public string UserId { get; set; } = string.Empty;
+
+        [Required]
+        public Guid ContentId { get; set; }
+
+        [Required]
+        public int Rating { get; set; }
+
+        public int Interval { get; set; }
+
+        public double? EaseFactor { get; set; }
+
+        public double? Stability { get; set; }
+
+        public double? Difficulty { get; set; }
+
+        [Required]
+        public DateTime ReviewTime { get; set; } = DateTime.Now;
+
+        public int Duration { get; set; }
+
+        [MaxLength(20)]
+        public string? AlgorithmType { get; set; }
+
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+
+        public SpacedRepetitionItemEntity? SpacedRepetitionItem { get; set; }
+    }
+
+    /// <summary>
+    /// 学习项状态实体 - 替代 CategoryProgress 中的 JSON 存储
+    /// </summary>
+    public class LearningItemStateEntity
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Required]
+        [MaxLength(100)]
+        public string UserId { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(100)]
+        public string CategoryName { get; set; } = string.Empty;
+
+        [Required]
+        public string Content { get; set; } = string.Empty;
+
+        public bool IsKnown { get; set; } = false;
+
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+
+        public DateTime UpdatedAt { get; set; } = DateTime.Now;
+    }
+
+    /// <summary>
+    /// 提醒重复日期实体 - 替代 Reminder 中的 RepeatDaysJson
+    /// </summary>
+    public class ReminderRepeatDayEntity
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Required]
+        public Guid ReminderId { get; set; }
+
+        public int DayOfWeek { get; set; }
+
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+
+        public ReminderEntity? Reminder { get; set; }
     }
 
     /// <summary>

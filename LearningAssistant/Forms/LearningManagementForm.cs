@@ -252,7 +252,7 @@ namespace LearningAssistant.Forms
                 var totalMinutes = _analyticsService.GetTotalStudyMinutes(_userId, GetTimeRangeStart());
                 var totalItems = _analyticsService.GetTotalLearnedItems(_userId, GetTimeRangeStart());
                 var accuracy = _analyticsService.GetAccuracyRate(_userId, GetTimeRangeStart());
-                var streak = _analyticsService.GetConsecutiveDays(_userId);
+                var streak = _analyticsService.GetStudyStreak(_userId);
 
                 sb.AppendLine($"| 学习时长 | {totalMinutes}分钟 |");
                 sb.AppendLine($"| 学习项目 | {totalItems}个 |");

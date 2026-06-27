@@ -14,6 +14,9 @@ namespace LearningAssistant.Data.Database
         public DbSet<ReminderEntity> Reminders { get; set; }
         public DbSet<SpacedRepetitionItemEntity> SpacedRepetitionItems { get; set; }
         public DbSet<AppSessionEntity> AppSessions { get; set; }
+        public DbSet<ReviewLogEntity> ReviewLogs { get; set; }
+        public DbSet<LearningItemStateEntity> LearningItemStates { get; set; }
+        public DbSet<ReminderRepeatDayEntity> ReminderRepeatDays { get; set; }
 
         private readonly string _dbPath;
 
@@ -128,6 +131,64 @@ namespace LearningAssistant.Data.Database
 
             modelBuilder.Entity<SpacedRepetitionItemEntity>()
                 .HasIndex(s => s.IsActive);
+
+            modelBuilder.Entity<SpacedRepetitionItemEntity>()
+                .HasIndex(s => s.LearningStage);
+
+            modelBuilder.Entity<SpacedRepetitionItemEntity>()
+                .HasMany(s => s.ReviewLogs)
+                .WithOne(r => r.SpacedRepetitionItem)
+                .HasForeignKey(r => r.ContentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // 复习日志配置
+            modelBuilder.Entity<ReviewLogEntity>()
+                .HasKey(r => r.Id);
+
+            modelBuilder.Entity<ReviewLogEntity>()
+                .HasIndex(r => r.UserId);
+
+            modelBuilder.Entity<ReviewLogEntity>()
+                .HasIndex(r => r.ContentId);
+
+            modelBuilder.Entity<ReviewLogEntity>()
+                .HasIndex(r => r.ReviewTime);
+
+            modelBuilder.Entity<ReviewLogEntity>()
+                .HasIndex(r => r.AlgorithmType);
+
+            // 学习项状态配置
+            modelBuilder.Entity<LearningItemStateEntity>()
+                .HasKey(l => l.Id);
+
+            modelBuilder.Entity<LearningItemStateEntity>()
+                .HasIndex(l => l.UserId);
+
+            modelBuilder.Entity<LearningItemStateEntity>()
+                .HasIndex(l => l.CategoryName);
+
+            modelBuilder.Entity<LearningItemStateEntity>()
+                .HasIndex(l => l.IsKnown);
+
+            modelBuilder.Entity<LearningItemStateEntity>()
+                .HasIndex(l => new { l.UserId, l.CategoryName, l.Content })
+                .IsUnique();
+
+            // 提醒重复日期配置
+            modelBuilder.Entity<ReminderRepeatDayEntity>()
+                .HasKey(r => r.Id);
+
+            modelBuilder.Entity<ReminderRepeatDayEntity>()
+                .HasIndex(r => r.ReminderId);
+
+            modelBuilder.Entity<ReminderRepeatDayEntity>()
+                .HasIndex(r => r.DayOfWeek);
+
+            modelBuilder.Entity<ReminderRepeatDayEntity>()
+                .HasOne(r => r.Reminder)
+                .WithMany()
+                .HasForeignKey(r => r.ReminderId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             // 会话状态配置
             modelBuilder.Entity<AppSessionEntity>()

@@ -304,5 +304,118 @@ namespace LearningAssistant.Data.Database
             entity.SnoozeCount = reminder.SnoozeCount;
             entity.DismissCount = reminder.DismissCount;
         }
+
+        public static SpacedRepetitionItemEntity ToEntity(this ReviewItem item)
+        {
+            return new SpacedRepetitionItemEntity
+            {
+                Id = item.Id,
+                UserId = item.UserId,
+                Content = item.Content,
+                Answer = item.Answer,
+                Interval = item.Interval,
+                Repetitions = item.Repetitions,
+                EFactor = item.EFactor,
+                NextReviewDate = item.NextReviewDate,
+                CreatedAt = item.CreatedAt,
+                UpdatedAt = item.UpdatedAt,
+                WrongCount = item.WrongCount,
+                CorrectCount = item.CorrectCount,
+                IsActive = item.IsActive,
+                Stability = item.Stability,
+                Difficulty = item.Difficulty,
+                Retrievability = item.Retrievability,
+                LearningStage = item.LearningStage,
+                LastReviewDate = item.LastReviewDate,
+                ReviewCount = item.ReviewCount,
+                CorrectStreak = item.CorrectStreak
+            };
+        }
+
+        public static ReviewItem ToModel(this SpacedRepetitionItemEntity entity)
+        {
+            return new ReviewItem
+            {
+                Id = entity.Id,
+                UserId = entity.UserId,
+                Content = entity.Content,
+                Answer = entity.Answer,
+                Interval = entity.Interval,
+                Repetitions = entity.Repetitions,
+                EFactor = entity.EFactor,
+                NextReviewDate = entity.NextReviewDate,
+                CreatedAt = entity.CreatedAt,
+                UpdatedAt = entity.UpdatedAt,
+                WrongCount = entity.WrongCount,
+                CorrectCount = entity.CorrectCount,
+                IsActive = entity.IsActive,
+                Stability = entity.Stability,
+                Difficulty = entity.Difficulty,
+                Retrievability = entity.Retrievability,
+                LearningStage = entity.LearningStage,
+                LastReviewDate = entity.LastReviewDate,
+                ReviewCount = entity.ReviewCount,
+                CorrectStreak = entity.CorrectStreak
+            };
+        }
+
+        public static void UpdateFromModel(this SpacedRepetitionItemEntity entity, ReviewItem item)
+        {
+            entity.Content = item.Content;
+            entity.Answer = item.Answer;
+            entity.Interval = item.Interval;
+            entity.Repetitions = item.Repetitions;
+            entity.EFactor = item.EFactor;
+            entity.NextReviewDate = item.NextReviewDate;
+            entity.UpdatedAt = item.UpdatedAt;
+            entity.WrongCount = item.WrongCount;
+            entity.CorrectCount = item.CorrectCount;
+            entity.IsActive = item.IsActive;
+            entity.Stability = item.Stability;
+            entity.Difficulty = item.Difficulty;
+            entity.Retrievability = item.Retrievability;
+            entity.LearningStage = item.LearningStage;
+            entity.LastReviewDate = item.LastReviewDate;
+            entity.ReviewCount = item.ReviewCount;
+            entity.CorrectStreak = item.CorrectStreak;
+        }
+
+        public static ReviewLogEntity ToEntity(this ReviewLog log)
+        {
+            return new ReviewLogEntity
+            {
+                Id = log.Id,
+                UserId = log.UserId,
+                ContentId = log.ContentId,
+                Rating = log.Rating,
+                Interval = log.Interval,
+                EaseFactor = log.EaseFactor,
+                Stability = log.Stability,
+                Difficulty = log.Difficulty,
+                ReviewTime = log.ReviewTime,
+                Duration = log.Duration,
+                AlgorithmType = log.AlgorithmType,
+                CreatedAt = log.CreatedAt
+            };
+        }
+
+        public static ReviewLog ToModel(this ReviewLogEntity entity)
+        {
+            return new ReviewLog
+            {
+                Id = entity.Id,
+                UserId = entity.UserId,
+                ContentId = entity.ContentId,
+                Rating = entity.Rating,
+                Interval = entity.Interval,
+                EaseFactor = entity.EaseFactor,
+                Stability = entity.Stability,
+                Difficulty = entity.Difficulty,
+                ReviewTime = entity.ReviewTime,
+                Duration = entity.Duration,
+                AlgorithmType = entity.AlgorithmType,
+                CreatedAt = entity.CreatedAt
+            };
+        }
     }
 }

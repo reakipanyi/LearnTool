@@ -377,6 +377,8 @@ namespace LearningAssistant.Presenters
 
         public void TogglePenMode(bool enabled)
         {
+            // TODO: 实现画笔模式切换
+            _logger.LogDebug("TogglePenMode called with enabled={Enabled}", enabled);
         }
 
         public void ClearAnnotationsCurrentPage()
@@ -680,22 +682,30 @@ namespace LearningAssistant.Presenters
 
         public void PrintPdf()
         {
+            // TODO: 实现PDF打印功能
             _logger.LogWarning("PrintPdf not yet implemented");
+            throw new NotImplementedException("PDF打印功能尚未实现");
         }
 
         public void SearchText(string text)
         {
+            // TODO: 实现PDF文本搜索
             _logger.LogWarning("SearchText not yet implemented: {Text}", text);
+            throw new NotImplementedException("PDF文本搜索功能尚未实现");
         }
 
         public void ZoomIn()
         {
+            // TODO: 实现PDF放大功能
             _logger.LogWarning("ZoomIn not yet implemented");
+            throw new NotImplementedException("PDF放大功能尚未实现");
         }
 
         public void ZoomOut()
         {
+            // TODO: 实现PDF缩小功能
             _logger.LogWarning("ZoomOut not yet implemented");
+            throw new NotImplementedException("PDF缩小功能尚未实现");
         }
 
         public async Task ExportHighlightsToExcelAsync()
@@ -1049,7 +1059,9 @@ namespace LearningAssistant.Presenters
 
         private void View_AiQuestionAsked(object? sender, EventArgs e)
         {
-            // TODO: Implement AI question functionality
+            // TODO: 实现AI问答功能
+            _logger.LogWarning("AI question functionality not yet implemented");
+            _view?.ShowMessage("AI问答功能尚未实现", "提示");
         }
 
 

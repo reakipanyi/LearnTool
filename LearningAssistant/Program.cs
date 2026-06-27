@@ -137,7 +137,6 @@ namespace LearningAssistant
             DisposeService<ILearningReminderService>("提醒服务");
             DisposeService<SpeechService>("语音服务");
             DisposeService<IAdvancedSpeechService>("高级语音服务");
-            DisposeService<IEnhancedReminderService>("增强提醒服务");
             DisposeService<Services.Cloud.BaiduNetdiskService>("百度网盘服务");
 
             try

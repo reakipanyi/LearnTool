@@ -78,7 +78,7 @@ namespace LearningAssistant.Services.Learning
 
             var today = DateTime.Today;
 
-            var dailyRecord = userData.DailyRecords.GetOrAdd(today, _ => new DailyRecord());
+            var dailyRecord = userData.DailyRecords.GetOrAdd(today, _ => new DailyStatistics { Date = today });
 
             switch (activityType)
             {
@@ -174,12 +174,6 @@ namespace LearningAssistant.Services.Learning
             return total;
         }
 
-        public int GetConsecutiveDays(string userId)
-        {
-            EnsureLoaded();
-            return GetStudyStreak(userId);
-        }
-
         public double GetAccuracyRate(string userId, DateTime startDate)
         {
             EnsureLoaded();
@@ -258,22 +252,23 @@ namespace LearningAssistant.Services.Learning
         public DailyStatistics GetDailyStatistics(string userId, DateTime date)
         {
             EnsureLoaded();
-            var stats = new DailyStatistics { Date = date, UserId = userId };
 
             if (_userAnalytics.TryGetValue(userId, out var userData))
             {
                 if (userData.DailyRecords.TryGetValue(date, out var record))
                 {
-                    stats.TotalItems = record.ItemsLearned;
-                    stats.TotalMinutes = record.TimeSpentMinutes;
-                    stats.CorrectRate = record.CorrectCount + record.WrongCount > 0 
+                    record.UserId = userId;
+                    record.CategoryBreakdown = new Dictionary<string, int>(userData.CategoryStats);
+                    record.TotalItems = record.ItemsLearned;
+                    record.TotalMinutes = record.TimeSpentMinutes;
+                    record.CorrectRate = record.CorrectCount + record.WrongCount > 0 
                         ? (double)record.CorrectCount / (record.CorrectCount + record.WrongCount) 
                         : 0;
+                    return record;
                 }
-                stats.CategoryBreakdown = new Dictionary<string, int>(userData.CategoryStats);
             }
 
-            return stats;
+            return new DailyStatistics { Date = date, UserId = userId };
         }
 
         public WeeklyStatistics GetWeeklyStatistics(string userId, int year, int weekNumber)
@@ -384,19 +379,7 @@ namespace LearningAssistant.Services.Learning
     {
         public string UserId { get; set; } = string.Empty;
         public DateTime LastLearningDate { get; set; }
-        public ConcurrentDictionary<DateTime, DailyRecord> DailyRecords { get; set; } = new ConcurrentDictionary<DateTime, DailyRecord>();
+        public ConcurrentDictionary<DateTime, DailyStatistics> DailyRecords { get; set; } = new ConcurrentDictionary<DateTime, DailyStatistics>();
         public ConcurrentDictionary<string, int> CategoryStats { get; set; } = new ConcurrentDictionary<string, int>();
-    }
-
-    /// <summary>
-    /// 每日记录
-    /// </summary>
-    public class DailyRecord
-    {
-        public int ItemsLearned { get; set; }
-        public int ItemsReviewed { get; set; }
-        public int CorrectCount { get; set; }
-        public int WrongCount { get; set; }
-        public int TimeSpentMinutes { get; set; }
     }
 }
