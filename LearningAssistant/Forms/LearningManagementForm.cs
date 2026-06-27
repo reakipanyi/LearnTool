@@ -2,6 +2,7 @@ using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Forms.UserControls;
 using LearningAssistant.Forms.UserControls.Cards;
+using LearningAssistant.Forms.UserControls.Charts;
 using LearningAssistant.Models.Learning;
 using LearningAssistant.Services.Learning;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,7 @@ namespace LearningAssistant.Forms
         private readonly QuoteService _quoteService;
         private readonly ILearningGoalService _goalService;
         private readonly IWrongAnswerService _wrongAnswerService;
+        private readonly ISpacedRepetitionService? _spacedRepetitionService;
         private readonly ILogger<LearningManagementForm>? _logger;
         private readonly IThemeService? _themeService;
         private readonly IUserSessionService? _userSessionService;
@@ -29,15 +31,24 @@ namespace LearningAssistant.Forms
         private StatCard? _cardItems;
         private StatCard? _cardAccuracy;
         private StatCard? _cardStreak;
+        private StatCard? _cardRetention;
 
-        private Panel? _panelTrendChart;
-        private Panel? _panelCategoryProgress;
+        private LearningTrendChart? _chartTrend;
+        private CategoryProgressChart? _chartCategory;
+        private ForgettingCurveChart? _chartForgettingCurve;
+        private ReviewDistributionChart? _chartRating;
         private Panel? _panelWrongStats;
+        private Panel? _panelHeatmap;
+        private Panel? _panelAlgorithm;
         private GoalCalendarView? _calendarView;
+        private ComboBox? _cmbAlgorithm;
 
         private List<DailyStatistics>? _cachedTrendData;
         private Dictionary<string, int>? _cachedCategoryStats;
         private List<WrongAnswerItem>? _cachedWrongAnswers;
+        private Dictionary<int, double>? _cachedForgettingCurve;
+        private ReviewEfficiencyStats? _cachedEfficiencyStats;
+        private List<HeatmapData>? _cachedHeatmapData;
 
         public LearningManagementForm(
             ILearningAnalyticsService analyticsService,
@@ -46,6 +57,7 @@ namespace LearningAssistant.Forms
             QuoteService quoteService,
             ILearningGoalService goalService,
             IWrongAnswerService wrongAnswerService,
+            ISpacedRepetitionService? spacedRepetitionService = null,
             ILogger<LearningManagementForm>? logger = null,
             IThemeService? themeService = null,
             IUserSessionService? userSessionService = null,
@@ -58,6 +70,7 @@ namespace LearningAssistant.Forms
             _quoteService = quoteService ?? throw new ArgumentNullException(nameof(quoteService));
             _goalService = goalService ?? throw new ArgumentNullException(nameof(goalService));
             _wrongAnswerService = wrongAnswerService ?? throw new ArgumentNullException(nameof(wrongAnswerService));
+            _spacedRepetitionService = spacedRepetitionService;
             _logger = logger;
             _themeService = themeService;
             _userSessionService = userSessionService;
@@ -77,6 +90,8 @@ namespace LearningAssistant.Forms
                 LoadTrendChart();
                 LoadCategoryProgress();
                 LoadWrongAnswerStats();
+                LoadForgettingCurve();
+                LoadHeatmap();
                 LoadCalendar();
                 _logger?.LogDebug("学习统计数据加载完成");
             }
@@ -132,6 +147,15 @@ namespace LearningAssistant.Forms
                 _cardStreak.Trend = streak > 0 ? "继续加油" : "开始学习吧";
                 _cardStreak.TrendDir = StatCard.TrendDirection.None;
             }
+
+            // 加载记忆保留率
+            if (_cardRetention != null)
+            {
+                double retentionRate = _analyticsService.CalculateRetentionRate(_userId);
+                _cardRetention.Value = $"{retentionRate * 100:F0}%";
+                _cardRetention.Trend = retentionRate >= 0.9 ? "掌握良好" : (retentionRate >= 0.7 ? "正常范围" : "建议复习");
+                _cardRetention.TrendDir = retentionRate >= 0.7 ? StatCard.TrendDirection.Up : StatCard.TrendDirection.Down;
+            }
         }
 
         private void GetDateRange(out DateTime startDate, out DateTime endDate)
@@ -160,13 +184,26 @@ namespace LearningAssistant.Forms
             DateTime startDate, endDate;
             GetDateRange(out startDate, out endDate);
             _cachedTrendData = _analyticsService.GetLearningTrend(_userId, startDate, endDate);
-            _panelTrendChart?.Invalidate();
+
+            if (_chartTrend != null && _cachedTrendData != null)
+            {
+                var labels = _cachedTrendData.Select(s => $"{s.Date.Month}/{s.Date.Day}").ToList();
+                var values = _cachedTrendData.Select(s => (double)s.TotalItems).ToList();
+                var accuracyValues = _cachedTrendData.Select(s => s.CorrectRate * 100).ToList();
+                _chartTrend.UpdateDataWithLabels(labels, values, accuracyValues);
+            }
         }
 
         private void LoadCategoryProgress()
         {
             _cachedCategoryStats = _analyticsService.GetCategoryStats(_userId);
-            _panelCategoryProgress?.Invalidate();
+
+            if (_chartCategory != null && _cachedCategoryStats != null)
+            {
+                var categories = _cachedCategoryStats.Keys.Take(6).ToList();
+                var progress = _cachedCategoryStats.Values.Take(6).Select(v => (double)v).ToList();
+                _chartCategory.UpdateData(categories, progress);
+            }
         }
 
         private void LoadWrongAnswerStats()
@@ -182,6 +219,42 @@ namespace LearningAssistant.Forms
                 _calendarView.GoalService = _goalService;
                 _calendarView.CurrentUserId = _userId;
                 _calendarView.CurrentMonth = DateTime.Today;
+            }
+        }
+
+        private void LoadForgettingCurve()
+        {
+            try
+            {
+                _cachedForgettingCurve = _analyticsService.GenerateForgettingCurve(_userId, 30);
+                _cachedEfficiencyStats = _analyticsService.GetReviewEfficiencyStats(_userId);
+
+                if (_chartForgettingCurve != null && _cachedForgettingCurve != null)
+                {
+                    _chartForgettingCurve.UpdateCurve(_cachedForgettingCurve);
+                }
+
+                if (_chartRating != null && _cachedEfficiencyStats != null)
+                {
+                    _chartRating.UpdateData(_cachedEfficiencyStats.RatingDistribution);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "加载遗忘曲线数据失败");
+            }
+        }
+
+        private void LoadHeatmap()
+        {
+            try
+            {
+                _cachedHeatmapData = _analyticsService.GetWeeklyHeatmap(_userId, 12);
+                _panelHeatmap?.Invalidate();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "加载热力图数据失败");
             }
         }
 
@@ -204,6 +277,93 @@ namespace LearningAssistant.Forms
                 bool isActive = btn.Tag?.ToString() == _currentTimeRange;
                 btn.BackColor = isActive ? Color.FromArgb(63, 81, 181) : Color.FromArgb(240, 240, 245);
                 btn.ForeColor = isActive ? Color.White : Color.FromArgb(60, 60, 60);
+            }
+        }
+
+        private void CmbAlgorithm_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            if (_cmbAlgorithm == null || _spacedRepetitionService == null) return;
+
+            string selectedAlgorithm = _cmbAlgorithm.SelectedItem?.ToString() ?? "SM-2";
+            _spacedRepetitionService.SetAlgorithm(selectedAlgorithm);
+            _logger?.LogInformation("用户切换学习算法: {Algorithm}", selectedAlgorithm);
+            MessageBox.Show($"已切换到 {selectedAlgorithm} 算法\n新复习将使用此算法计算间隔。",
+                "算法切换", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private void BtnCompareAlgorithm_Click(object? sender, EventArgs e)
+        {
+            if (_spacedRepetitionService == null)
+            {
+                MessageBox.Show("算法服务不可用", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                var comparison = _spacedRepetitionService.CompareAlgorithms(_userId);
+
+                var sb = new StringBuilder();
+                sb.AppendLine("📊 算法对比报告");
+                sb.AppendLine("═".PadRight(40, '═'));
+                sb.AppendLine();
+                sb.AppendLine($"推荐算法: {comparison.RecommendedAlgorithm}");
+                sb.AppendLine($"推荐理由: {comparison.Reason}");
+                sb.AppendLine();
+
+                foreach (var kvp in comparison.AlgorithmStats)
+                {
+                    var stats = kvp.Value;
+                    sb.AppendLine($"【{stats.AlgorithmType}】");
+                    sb.AppendLine($"  总复习次数: {stats.TotalReviews}");
+                    sb.AppendLine($"  正确次数: {stats.CorrectReviews}");
+                    sb.AppendLine($"  正确率: {stats.AccuracyRate:F1}%");
+                    sb.AppendLine($"  平均间隔: {stats.AverageInterval:F1}天");
+                    sb.AppendLine($"  一致性评分: {stats.ConsistencyScore:F1}");
+                    sb.AppendLine();
+                }
+
+                MessageBox.Show(sb.ToString(), "算法对比", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "算法对比失败");
+                MessageBox.Show($"算法对比失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void BtnRecommendAlgorithm_Click(object? sender, EventArgs e)
+        {
+            if (_spacedRepetitionService == null)
+            {
+                MessageBox.Show("算法服务不可用", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                string recommended = _spacedRepetitionService.GetAdaptiveRecommendation(_userId);
+
+                var result = MessageBox.Show(
+                    $"根据您的学习数据，系统推荐使用【{recommended}】算法。\n\n是否切换到该算法？",
+                    "算法推荐",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+
+                if (result == DialogResult.Yes)
+                {
+                    _spacedRepetitionService.SetAlgorithm(recommended);
+                    if (_cmbAlgorithm != null)
+                    {
+                        _cmbAlgorithm.SelectedItem = recommended;
+                    }
+                    MessageBox.Show($"已切换到 {recommended} 算法", "切换成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "获取算法推荐失败");
+                MessageBox.Show($"获取推荐失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -532,6 +692,224 @@ namespace LearningAssistant.Forms
             }
         }
 
+        private void PanelForgettingCurve_Paint(object? sender, PaintEventArgs e)
+        {
+            if (e == null || _panelForgettingCurve == null) return;
+
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
+
+            var rect = _panelForgettingCurve.ClientRectangle;
+            int paddingLeft = 15;
+            int paddingTop = 35;
+
+            using var titleFont = new Font("微软雅黑", 10F, FontStyle.Bold);
+            using var titleBrush = new SolidBrush(Color.FromArgb(33, 33, 33));
+            g.DrawString("📉 遗忘曲线与复习效率", titleFont, titleBrush, paddingLeft, 10);
+
+            try
+            {
+                var curve = _cachedForgettingCurve;
+                var stats = _cachedEfficiencyStats;
+
+                if (curve != null && curve.Count > 0)
+                {
+                    int chartLeft = paddingLeft + 50;
+                    int chartTop = paddingTop + 10;
+                    int chartWidth = rect.Width - chartLeft - 30;
+                    int chartHeight = rect.Height - chartTop - 30;
+
+                    using var axisPen = new Pen(Color.FromArgb(200, 200, 200), 1);
+                    using var curvePen = new Pen(Color.FromArgb(156, 39, 176), 2);
+                    using var pointBrush = new SolidBrush(Color.FromArgb(156, 39, 176));
+                    using var labelFont = new Font("微软雅黑", 8F);
+                    using var labelBrush = new SolidBrush(Color.FromArgb(100, 100, 100));
+
+                    g.DrawLine(axisPen, chartLeft, chartTop + chartHeight, chartLeft + chartWidth, chartTop + chartHeight);
+                    g.DrawLine(axisPen, chartLeft, chartTop, chartLeft, chartTop + chartHeight);
+
+                    int maxDays = curve.Keys.Max();
+                    var points = new List<PointF>();
+                    foreach (var kvp in curve.OrderBy(x => x.Key))
+                    {
+                        float x = chartLeft + (kvp.Key / (float)maxDays) * chartWidth;
+                        float y = chartTop + chartHeight - (float)(kvp.Value * chartHeight);
+                        points.Add(new PointF(x, y));
+                    }
+
+                    if (points.Count > 1)
+                    {
+                        using var curvePath = new System.Drawing.Drawing2D.GraphicsPath();
+                        curvePath.AddLines(points.ToArray());
+                        g.DrawPath(curvePen, curvePath);
+
+                        foreach (var pt in points.Where((p, i) => i % 5 == 0))
+                        {
+                            g.FillEllipse(pointBrush, pt.X - 3, pt.Y - 3, 6, 6);
+                        }
+                    }
+
+                    g.DrawString("0天", labelFont, labelBrush, chartLeft - 15, chartTop + chartHeight + 5);
+                    g.DrawString($"{maxDays}天", labelFont, labelBrush, chartLeft + chartWidth - 20, chartTop + chartHeight + 5);
+                    g.DrawString("100%", labelFont, labelBrush, chartLeft - 25, chartTop - 5);
+                    g.DrawString("0%", labelFont, labelBrush, chartLeft - 15, chartTop + chartHeight);
+                }
+
+                if (stats != null)
+                {
+                    int infoX = rect.Width - 200;
+                    int infoY = paddingTop;
+
+                    using var statFont = new Font("微软雅黑", 9F);
+                    using var labelBrush = new SolidBrush(Color.FromArgb(100, 100, 100));
+                    using var valueBrush = new SolidBrush(Color.FromArgb(33, 33, 33));
+
+                    g.DrawString("复习统计:", statFont, labelBrush, infoX, infoY);
+                    infoY += 20;
+
+                    g.DrawString($"总复习: {stats.TotalReviews}次", statFont, valueBrush, infoX, infoY);
+                    infoY += 18;
+                    g.DrawString($"正确: {stats.TotalCorrect}次", statFont, valueBrush, infoX, infoY);
+                    infoY += 18;
+                    g.DrawString($"用时/题: {stats.ReviewTimePerCard:F1}秒", statFont, valueBrush, infoX, infoY);
+                    infoY += 18;
+                    g.DrawString($"使用算法: {stats.MostUsedAlgorithm}", statFont, valueBrush, infoX, infoY);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "绘制遗忘曲线面板失败");
+            }
+        }
+
+        private void PanelHeatmap_Paint(object? sender, PaintEventArgs e)
+        {
+            if (e == null || _panelHeatmap == null) return;
+
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
+
+            var rect = _panelHeatmap.ClientRectangle;
+
+            using var titleFont = new Font("微软雅黑", 10F, FontStyle.Bold);
+            using var labelFont = new Font("微软雅黑", 8F);
+            using var titleBrush = new SolidBrush(Color.FromArgb(33, 33, 33));
+            using var labelBrush = new SolidBrush(Color.FromArgb(100, 100, 100));
+
+            g.DrawString("📊 学习热力图（近12周）", titleFont, titleBrush, 15, 10);
+
+            string[] dayLabels = { "周一", "", "周三", "", "周五", "", "周日" };
+            for (int i = 0; i < dayLabels.Length; i++)
+            {
+                int y = 35 + i * 15;
+                if (dayLabels[i] != "")
+                {
+                    g.DrawString(dayLabels[i], labelFont, labelBrush, 15, y);
+                }
+            }
+
+            try
+            {
+                var heatmap = _cachedHeatmapData;
+                if (heatmap != null && heatmap.Count > 0)
+                {
+                    int startX = 55;
+                    int startY = 35;
+                    int cellSize = 13;
+                    int cellGap = 2;
+
+                    Color[] levelColors = {
+                        Color.FromArgb(235, 237, 240),
+                        Color.FromArgb(155, 233, 168),
+                        Color.FromArgb(64, 196, 99),
+                        Color.FromArgb(48, 161, 78),
+                        Color.FromArgb(31, 111, 56)
+                    };
+
+                    var groupedByWeek = heatmap.GroupBy(h => h.Week).OrderBy(g => g.Key).ToList();
+                    int weekIndex = 0;
+
+                    foreach (var week in groupedByWeek)
+                    {
+                        int x = startX + weekIndex * (cellSize + cellGap);
+
+                        foreach (var day in week.OrderBy(d => d.DayOfWeek))
+                        {
+                            int y = startY + (day.DayOfWeek == 0 ? 6 : day.DayOfWeek - 1) * cellSize;
+                            var cellRect = new Rectangle(x, y, cellSize, cellSize);
+
+                            using var cellBrush = new SolidBrush(levelColors[day.Level]);
+                            g.FillRectangle(cellBrush, cellRect);
+                        }
+
+                        if (weekIndex % 4 == 0)
+                        {
+                            int month = week.First().Date.Month;
+                            g.DrawString($"{month}月", labelFont, labelBrush, x, startY - 15);
+                        }
+
+                        weekIndex++;
+                    }
+
+                    using var legendFont = new Font("微软雅黑", 8F);
+                    int legendX = startX + groupedByWeek.Count * (cellSize + cellGap) + 20;
+                    g.DrawString("少", legendFont, labelBrush, legendX, startY);
+                    for (int i = 0; i < levelColors.Length; i++)
+                    {
+                        using var brush = new SolidBrush(levelColors[i]);
+                        g.FillRectangle(brush, legendX + 20 + i * (cellSize + 2), startY, cellSize, cellSize);
+                    }
+                    g.DrawString("多", legendFont, labelBrush, legendX + 20 + levelColors.Length * (cellSize + 2) + 5, startY);
+                }
+                else
+                {
+                    g.DrawString("暂无学习数据", labelFont, labelBrush, 200, 80);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "绘制热力图面板失败");
+            }
+        }
+
+        private string _heatmapTooltip = "";
+        private Point _lastHeatmapMousePos;
+
+        private void PanelHeatmap_MouseMove(object? sender, MouseEventArgs e)
+        {
+            if (_panelHeatmap == null || _cachedHeatmapData == null || _cachedHeatmapData.Count == 0)
+                return;
+
+            int startX = 55;
+            int startY = 35;
+            int cellSize = 13;
+            int cellGap = 2;
+
+            int col = (e.X - startX) / (cellSize + cellGap);
+            int row = (e.Y - startY) / cellSize;
+
+            if (col < 0 || row < 0 || row > 6) return;
+
+            var groupedByWeek = _cachedHeatmapData
+                .GroupBy(h => h.Week)
+                .OrderBy(g => g.Key)
+                .ToList();
+
+            if (col >= groupedByWeek.Count) return;
+
+            int dayOfWeek = row == 0 ? 1 : (row == 6 ? 0 : row + 1);
+            var dayData = groupedByWeek[col].FirstOrDefault(d => d.DayOfWeek == dayOfWeek);
+
+            if (dayData != null)
+            {
+                _heatmapTooltip = $"{dayData.Date:yyyy-MM-dd}: {dayData.Count}次复习";
+                _lastHeatmapMousePos = e.Location;
+                _panelHeatmap.Invalidate();
+            }
+        }
+
         private static GraphicsPath RoundedRect(Rectangle rect, int radius)
         {
             var path = new GraphicsPath();
@@ -740,24 +1118,30 @@ namespace LearningAssistant.Forms
             this._cardStreak.AccentColor = Color.FromArgb(244, 67, 54);
             this._cardStreak.CardColor = Color.White;
 
+            this._cardRetention = new StatCard();
+            this._cardRetention.Location = new Point(0, 0);
+            this._cardRetention.Size = new Size(200, 110);
+            this._cardRetention.Icon = "🧠";
+            this._cardRetention.Value = "0%";
+            this._cardRetention.Label = "记忆保留率";
+            this._cardRetention.AccentColor = Color.FromArgb(156, 39, 176);
+            this._cardRetention.CardColor = Color.White;
+
             this.panelCards.Controls.Add(this._cardMinutes);
             this.panelCards.Controls.Add(this._cardItems);
             this.panelCards.Controls.Add(this._cardAccuracy);
             this.panelCards.Controls.Add(this._cardStreak);
+            this.panelCards.Controls.Add(this._cardRetention);
 
-            // 趋势图表面板
-            this._panelTrendChart = new Panel();
-            this._panelTrendChart.Location = new Point(15, 140);
-            this._panelTrendChart.Size = new Size(855, 180);
-            this._panelTrendChart.BackColor = Color.White;
-            this._panelTrendChart.Paint += new PaintEventHandler(this.PanelTrendChart_Paint);
+            // 趋势图表
+            this._chartTrend = new LearningTrendChart();
+            this._chartTrend.Location = new Point(15, 140);
+            this._chartTrend.Size = new Size(855, 180);
 
-            // 分类进度面板
-            this._panelCategoryProgress = new Panel();
-            this._panelCategoryProgress.Location = new Point(15, 335);
-            this._panelCategoryProgress.Size = new Size(520, 200);
-            this._panelCategoryProgress.BackColor = Color.White;
-            this._panelCategoryProgress.Paint += new PaintEventHandler(this.PanelCategoryProgress_Paint);
+            // 分类进度图表
+            this._chartCategory = new CategoryProgressChart();
+            this._chartCategory.Location = new Point(15, 335);
+            this._chartCategory.Size = new Size(520, 200);
 
             // 错题统计面板
             this._panelWrongStats = new Panel();
@@ -766,9 +1150,70 @@ namespace LearningAssistant.Forms
             this._panelWrongStats.BackColor = Color.White;
             this._panelWrongStats.Paint += new PaintEventHandler(this.PanelWrongStats_Paint);
 
+            // 遗忘曲线图
+            this._chartForgettingCurve = new ForgettingCurveChart();
+            this._chartForgettingCurve.Location = new Point(15, 550);
+            this._chartForgettingCurve.Size = new Size(520, 180);
+
+            // 评分分布图
+            this._chartRating = new ReviewDistributionChart();
+            this._chartRating.Location = new Point(550, 550);
+            this._chartRating.Size = new Size(320, 180);
+
+            // 算法切换面板
+            this._panelAlgorithm = new Panel();
+            this._panelAlgorithm.Location = new Point(880, 15);
+            this._panelAlgorithm.Size = new Size(300, 80);
+            this._panelAlgorithm.BackColor = Color.White;
+
+            Label lblAlgorithm = new Label();
+            lblAlgorithm.Text = "🧠 学习算法";
+            lblAlgorithm.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            lblAlgorithm.Location = new Point(10, 10);
+            lblAlgorithm.AutoSize = true;
+
+            this._cmbAlgorithm = new ComboBox();
+            this._cmbAlgorithm.Location = new Point(10, 35);
+            this._cmbAlgorithm.Size = new Size(140, 25);
+            this._cmbAlgorithm.DropDownStyle = ComboBoxStyle.DropDownList;
+            this._cmbAlgorithm.Items.AddRange(new object[] { "SM-2", "FSRS" });
+            this._cmbAlgorithm.SelectedIndex = 0;
+            this._cmbAlgorithm.SelectedIndexChanged += new EventHandler(this.CmbAlgorithm_SelectedIndexChanged);
+
+            Button btnCompare = new Button();
+            btnCompare.Text = "📊 对比";
+            btnCompare.Location = new Point(160, 35);
+            btnCompare.Size = new Size(60, 25);
+            btnCompare.FlatStyle = FlatStyle.Flat;
+            btnCompare.BackColor = Color.FromArgb(33, 150, 243);
+            btnCompare.ForeColor = Color.White;
+            btnCompare.Click += new EventHandler(this.BtnCompareAlgorithm_Click);
+
+            Button btnRecommend = new Button();
+            btnRecommend.Text = "✨ 推荐";
+            btnRecommend.Location = new Point(225, 35);
+            btnRecommend.Size = new Size(60, 25);
+            btnRecommend.FlatStyle = FlatStyle.Flat;
+            btnRecommend.BackColor = Color.FromArgb(76, 175, 80);
+            btnRecommend.ForeColor = Color.White;
+            btnRecommend.Click += new EventHandler(this.BtnRecommendAlgorithm_Click);
+
+            this._panelAlgorithm.Controls.Add(lblAlgorithm);
+            this._panelAlgorithm.Controls.Add(this._cmbAlgorithm);
+            this._panelAlgorithm.Controls.Add(btnCompare);
+            this._panelAlgorithm.Controls.Add(btnRecommend);
+
+            // 热力图面板
+            this._panelHeatmap = new Panel();
+            this._panelHeatmap.Location = new Point(15, 740);
+            this._panelHeatmap.Size = new Size(855, 160);
+            this._panelHeatmap.BackColor = Color.White;
+            this._panelHeatmap.Paint += new PaintEventHandler(this.PanelHeatmap_Paint);
+            this._panelHeatmap.MouseMove += new MouseEventHandler(this.PanelHeatmap_MouseMove);
+
             // 日历面板
             this.panelCalendar = new Panel();
-            this.panelCalendar.Location = new Point(15, 550);
+            this.panelCalendar.Location = new Point(15, 910);
             this.panelCalendar.Size = new Size(855, 320);
             this.panelCalendar.BackColor = Color.White;
 
@@ -789,9 +1234,13 @@ namespace LearningAssistant.Forms
 
             // 内容面板装载所有子模块
             this.panelContent.Controls.Add(this.panelCards);
-            this.panelContent.Controls.Add(this._panelTrendChart);
-            this.panelContent.Controls.Add(this._panelCategoryProgress);
+            this.panelContent.Controls.Add(this._chartTrend);
+            this.panelContent.Controls.Add(this._chartCategory);
             this.panelContent.Controls.Add(this._panelWrongStats);
+            this.panelContent.Controls.Add(this._chartForgettingCurve);
+            this.panelContent.Controls.Add(this._chartRating);
+            this.panelContent.Controls.Add(this._panelAlgorithm);
+            this.panelContent.Controls.Add(this._panelHeatmap);
             this.panelContent.Controls.Add(this.panelCalendar);
             #endregion
 
@@ -807,19 +1256,31 @@ namespace LearningAssistant.Forms
             int width = this.ClientSize.Width - 30;
             if (width < 400) width = 400;
 
-            if (_panelTrendChart != null)
-                _panelTrendChart.Width = width;
+            if (_chartTrend != null)
+                _chartTrend.Width = width;
 
-            if (_panelCategoryProgress != null)
+            if (_chartCategory != null)
             {
-                _panelCategoryProgress.Width = (int)(width * 0.6) - 10;
+                _chartCategory.Width = (int)(width * 0.6) - 10;
             }
 
             if (_panelWrongStats != null)
             {
                 _panelWrongStats.Width = (int)(width * 0.4) - 10;
-                if (_panelCategoryProgress != null)
-                    _panelWrongStats.Left = _panelCategoryProgress.Right + 20;
+                if (_chartCategory != null)
+                    _panelWrongStats.Left = _chartCategory.Right + 20;
+            }
+
+            if (_chartForgettingCurve != null)
+            {
+                _chartForgettingCurve.Width = (int)(width * 0.6) - 10;
+            }
+
+            if (_chartRating != null)
+            {
+                _chartRating.Width = (int)(width * 0.4) - 10;
+                if (_chartForgettingCurve != null)
+                    _chartRating.Left = _chartForgettingCurve.Right + 20;
             }
         }
 
@@ -832,18 +1293,19 @@ namespace LearningAssistant.Forms
             if (_cardAccuracy != null) _cardAccuracy.CardColor = colors.Surface;
             if (_cardStreak != null) _cardStreak.CardColor = colors.Surface;
 
-            if (_panelTrendChart != null)
-                _panelTrendChart.BackColor = colors.Surface;
-            if (_panelCategoryProgress != null)
-                _panelCategoryProgress.BackColor = colors.Surface;
+            if (_chartTrend != null)
+                _chartTrend.BackColor = colors.Surface;
+            if (_chartCategory != null)
+                _chartCategory.BackColor = colors.Surface;
+            if (_chartForgettingCurve != null)
+                _chartForgettingCurve.BackColor = colors.Surface;
+            if (_chartRating != null)
+                _chartRating.BackColor = colors.Surface;
             if (_panelWrongStats != null)
                 _panelWrongStats.BackColor = colors.Surface;
 
             if (_calendarView != null)
                 _calendarView.BackColor = colors.Surface;
-
-            _panelTrendChart?.Invalidate();
-            _panelCategoryProgress?.Invalidate();
             _panelWrongStats?.Invalidate();
         }
 

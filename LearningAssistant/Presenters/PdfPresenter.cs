@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Common.Events;
 using LearningAssistant.Forms;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.AI;
@@ -24,6 +25,7 @@ namespace LearningAssistant.Presenters
         private readonly IAnnotationService _annotationService;
         private readonly IHighlightService _highlightService;
         private readonly IPdfService _pdfService;
+        private readonly IEventBus? _eventBus;
 
         private string _currentUserId = "Guest";
         private string _currentLanguage = Constants.Language.English;
@@ -42,7 +44,8 @@ namespace LearningAssistant.Presenters
             IExportService exportService,
             IAnnotationService annotationService,
             IHighlightService highlightService,
-            IPdfService pdfService)
+            IPdfService pdfService,
+            IEventBus? eventBus = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _pdfRenderer = pdfRenderer ?? throw new ArgumentNullException(nameof(pdfRenderer));
@@ -56,8 +59,10 @@ namespace LearningAssistant.Presenters
             _annotationService = annotationService ?? throw new ArgumentNullException(nameof(annotationService));
             _highlightService = highlightService ?? throw new ArgumentNullException(nameof(highlightService));
             _pdfService = pdfService ?? throw new ArgumentNullException(nameof(pdfService));
+            _eventBus = eventBus;
 
             SubscribeToServiceEvents();
+            SubscribeToEventBus();
             _logger.LogInformation("PdfPresenter initialized");
         }
 
@@ -75,6 +80,38 @@ namespace LearningAssistant.Presenters
             _pdfFileManager.FolderLoaded -= OnFolderLoaded;
             _pdfRenderer.ThumbnailGenerated -= OnThumbnailGenerated;
             _pdfStudyIntegration.WordAdded -= OnWordAdded;
+        }
+
+        private void SubscribeToEventBus()
+        {
+            if (_eventBus != null)
+            {
+                _eventBus.Subscribe<SendToPdfSearchEvent>(OnSendToPdfSearch);
+                _eventBus.Subscribe<PDFHighlightEvent>(OnPdfHighlight);
+            }
+        }
+
+        private void UnsubscribeFromEventBus()
+        {
+            if (_eventBus != null)
+            {
+                _eventBus.Unsubscribe<SendToPdfSearchEvent>(OnSendToPdfSearch);
+                _eventBus.Unsubscribe<PDFHighlightEvent>(OnPdfHighlight);
+            }
+        }
+
+        private void OnSendToPdfSearch(SendToPdfSearchEvent @event)
+        {
+            _logger.LogInformation("Received SendToPdfSearchEvent: {SearchText}", @event.SearchText);
+            if (!string.IsNullOrEmpty(@event.SearchText))
+            {
+                SearchText(@event.SearchText);
+            }
+        }
+
+        private void OnPdfHighlight(PDFHighlightEvent @event)
+        {
+            _logger.LogInformation("Received PDFHighlightEvent: {HighlightedText}", @event.HighlightedText);
         }
 
         public void SetCurrentUserAndConfig(string userId, string language, string subCategory)
@@ -1070,6 +1107,7 @@ namespace LearningAssistant.Presenters
         {
             UnsubscribeFromEvents();
             UnsubscribeFromServiceEvents();
+            UnsubscribeFromEventBus();
             _pdfRenderer.Dispose();
             _logger.LogInformation("PdfPresenter disposed");
         }

@@ -359,7 +359,10 @@ namespace LearningAssistant.Services.Hotkeys
                 ("new_note", "新建笔记", "笔记", Keys.N, true, false, false, false, "快速新建笔记"),
                 ("screenshot", "截图", "工具", Keys.A, true, false, true, true, "启动截图工具"),
                 ("show_main_window", "显示主窗口", "系统", Keys.M, true, true, false, true, "显示或隐藏主窗口"),
-                ("quick_word", "快速查词", "工具", Keys.W, true, true, false, true, "快速查询单词")
+                ("quick_word", "快速查词", "工具", Keys.W, true, true, false, true, "快速查询单词"),
+                ("pomodoro_start_pause", "番茄钟开始/暂停", "番茄钟", Keys.S, true, true, false, true, "开始或暂停番茄钟"),
+                ("pomodoro_reset", "番茄钟重置", "番茄钟", Keys.R, true, true, false, true, "重置番茄钟"),
+                ("pomodoro_skip", "番茄钟跳过", "番茄钟", Keys.K, true, true, false, true, "跳过当前阶段")
             };
 
             foreach (var (id, name, category, key, ctrl, alt, shift, global, desc) in defaultHotkeys)

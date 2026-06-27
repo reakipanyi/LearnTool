@@ -38,6 +38,7 @@ namespace LearningAssistant.Presenters
         private readonly ILearningSettingsManager _settingsManager;
         private readonly ILearningView _view;
         private readonly IEventBus? _eventBus;
+        private readonly ISpacedRepetitionService? _spacedRepetitionService;
 
         private CancellationTokenSource? _cts;
         private string _currentExplanation = "";
@@ -59,7 +60,8 @@ namespace LearningAssistant.Presenters
             IWindowManager windowManager,
             ILearningSettingsManager settingsManager,
             ILearningView view,
-            IEventBus? eventBus = null)
+            IEventBus? eventBus = null,
+            ISpacedRepetitionService? spacedRepetitionService = null)
         {
             _logger = logger;
             _studyEngine = studyEngine;
@@ -71,6 +73,7 @@ namespace LearningAssistant.Presenters
             _settingsManager = settingsManager;
             _view = view;
             _eventBus = eventBus;
+            _spacedRepetitionService = spacedRepetitionService;
             _cts = new CancellationTokenSource();
         }
 
@@ -237,20 +240,76 @@ namespace LearningAssistant.Presenters
             _studyEngine.MarkCurrentAsKnown();
             SaveProgress();
 
-            if (currentItem != null && _eventBus != null)
+            if (currentItem != null)
             {
-                _eventBus.Publish(new ItemLearnedEvent
+                SyncToSpacedRepetition(currentItem.GetMainContent(), currentItem.GetDisplayText(), true);
+
+                if (_eventBus != null)
                 {
-                    UserId = _currentUserId,
-                    ItemId = currentItem.GetMainContent(),
-                    ItemContent = currentItem.GetMainContent(),
-                    SubCategory = _currentSubCategory,
-                    LearnedAt = DateTime.Now
-                });
-                _logger.LogInformation("Published ItemLearnedEvent for user {UserId}, item {ItemContent}", _currentUserId, currentItem.GetMainContent());
+                    _eventBus.Publish(new ItemLearnedEvent
+                    {
+                        UserId = _currentUserId,
+                        ItemId = currentItem.GetMainContent(),
+                        ItemContent = currentItem.GetMainContent(),
+                        SubCategory = _currentSubCategory,
+                        LearnedAt = DateTime.Now
+                    });
+                    _logger.LogInformation("Published ItemLearnedEvent for user {UserId}, item {ItemContent}", _currentUserId, currentItem.GetMainContent());
+                }
             }
 
             await MoveToNextAsync();
+        }
+
+        private void SyncToSpacedRepetition(string content, string answer, bool isKnown)
+        {
+            if (_spacedRepetitionService == null) return;
+            if (string.IsNullOrWhiteSpace(content)) return;
+
+            try
+            {
+                var allItems = _spacedRepetitionService.GetAllItems(_currentUserId);
+                var existingItem = allItems.FirstOrDefault(i =>
+                    string.Equals(i.Content.Trim(), content.Trim(), StringComparison.OrdinalIgnoreCase));
+
+                if (isKnown)
+                {
+                    if (existingItem != null)
+                    {
+                        _spacedRepetitionService.CalculateNextReview(existingItem, 4);
+                    }
+                    else
+                    {
+                        var newItem = _spacedRepetitionService.CreateNewItem(_currentUserId, content, answer);
+                        newItem.Category = _currentSubCategory;
+                        newItem.Subject = _currentSubject;
+                        _spacedRepetitionService.UpdateItem(newItem);
+                        _spacedRepetitionService.CalculateNextReview(newItem, 4);
+                    }
+                }
+                else
+                {
+                    if (existingItem != null)
+                    {
+                        _spacedRepetitionService.CalculateNextReview(existingItem, 2);
+                    }
+                    else
+                    {
+                        var newItem = _spacedRepetitionService.CreateNewItem(_currentUserId, content, answer);
+                        newItem.Category = _currentSubCategory;
+                        newItem.Subject = _currentSubject;
+                        _spacedRepetitionService.UpdateItem(newItem);
+                        _spacedRepetitionService.CalculateNextReview(newItem, 2);
+                    }
+                }
+
+                _logger.LogDebug("同步到间隔重复系统: 用户 {UserId}, 内容 {Content}, 已知 {IsKnown}",
+                    _currentUserId, content.Substring(0, Math.Min(20, content.Length)), isKnown);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "同步到间隔重复系统失败: {Content}", content);
+            }
         }
 
         public async Task MarkAsUnknownAsync()
@@ -259,19 +318,24 @@ namespace LearningAssistant.Presenters
             _studyEngine.MarkCurrentAsUnknown();
             SaveProgress();
 
-            if (currentItem != null && _eventBus != null)
+            if (currentItem != null)
             {
-                _eventBus.Publish(new ItemWrongEvent
+                SyncToSpacedRepetition(currentItem.GetMainContent(), currentItem.GetDisplayText(), false);
+
+                if (_eventBus != null)
                 {
-                    UserId = _currentUserId,
-                    ItemId = currentItem.GetMainContent(),
-                    ItemContent = currentItem.GetMainContent(),
-                    CorrectAnswer = currentItem.GetDisplayText(),
-                    UserAnswer = "",
-                    SubCategory = _currentSubCategory,
-                    WrongAt = DateTime.Now
-                });
-                _logger.LogInformation("Published ItemWrongEvent for user {UserId}, item {ItemContent}", _currentUserId, currentItem.GetMainContent());
+                    _eventBus.Publish(new ItemWrongEvent
+                    {
+                        UserId = _currentUserId,
+                        ItemId = currentItem.GetMainContent(),
+                        ItemContent = currentItem.GetMainContent(),
+                        CorrectAnswer = currentItem.GetDisplayText(),
+                        UserAnswer = "",
+                        SubCategory = _currentSubCategory,
+                        WrongAt = DateTime.Now
+                    });
+                    _logger.LogInformation("Published ItemWrongEvent for user {UserId}, item {ItemContent}", _currentUserId, currentItem.GetMainContent());
+                }
             }
 
             await MoveToNextAsync();
@@ -460,11 +524,24 @@ namespace LearningAssistant.Presenters
             var item = _studyEngine.GetCurrentItem();
             if (item != null)
             {
-                OnSendToPdfQuestion?.Invoke(this, new SendToPdfEventArgs
+                if (_eventBus != null)
                 {
-                    Text = item.GetMainContent(),
-                    Language = _currentSubject
-                });
+                    _eventBus.Publish(new SendToPdfSearchEvent
+                    {
+                        UserId = _currentUserId,
+                        SearchText = item.GetMainContent(),
+                        Language = _currentSubject
+                    });
+                    _logger.LogInformation("Published SendToPdfSearchEvent for text: {Text}", item.GetMainContent());
+                }
+                else
+                {
+                    OnSendToPdfQuestion?.Invoke(this, new SendToPdfEventArgs
+                    {
+                        Text = item.GetMainContent(),
+                        Language = _currentSubject
+                    });
+                }
             }
         }
 

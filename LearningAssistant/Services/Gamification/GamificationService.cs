@@ -202,6 +202,20 @@ namespace LearningAssistant.Services.Gamification
             PublishStatsChangedEvent();
         }
 
+        public Task AddXpAsync(int xp, string reason = "")
+        {
+            AddXP(xp);
+            _logger?.LogDebug("添加经验值: {XP}, 原因: {Reason}", xp, reason);
+            return Task.CompletedTask;
+        }
+
+        public Task AddScoreAsync(int points, string reason = "")
+        {
+            AddScore(points);
+            _logger?.LogDebug("添加积分: {Points}, 原因: {Reason}", points, reason);
+            return Task.CompletedTask;
+        }
+
         public void IncrementTodayLearned()
         {
             _statsManager.IncrementLearnedCount();

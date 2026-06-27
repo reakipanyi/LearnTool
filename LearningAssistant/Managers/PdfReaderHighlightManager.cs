@@ -1,3 +1,4 @@
+using LearningAssistant.Common.Events;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.Pdf;
 using Microsoft.Extensions.DependencyInjection;
@@ -14,6 +15,7 @@ namespace LearningAssistant.Managers
         private readonly IPdfReaderFormAccess _form;
         private bool _disposed = false;
         private readonly IAnnotationService? _annotationService;
+        private readonly IEventBus? _eventBus;
 
         private Bitmap? _highlightBitmap;
         private Graphics? _highlightGraphics;
@@ -29,6 +31,7 @@ namespace LearningAssistant.Managers
 
             var serviceProvider = (ServiceProvider?)form.Form?.Tag;
             _annotationService = serviceProvider?.GetService<IAnnotationService>();
+            _eventBus = serviceProvider?.GetService<IEventBus>();
         }
 
         public void UpdateHighlightLayer()
@@ -275,6 +278,19 @@ namespace LearningAssistant.Managers
                     {
                         _form.OnTranslateClicked();
                     }
+                }
+
+                if (_eventBus != null && !string.IsNullOrEmpty(ocrText))
+                {
+                    _eventBus.Publish(new PDFHighlightEvent
+                    {
+                        UserId = "default",
+                        PdfFileName = Path.GetFileName(currentPdfPath),
+                        HighlightedText = ocrText,
+                        SourceUrl = currentPdfPath,
+                        HighlightedAt = DateTime.Now
+                    });
+                    _logger.LogInformation("Published PDFHighlightEvent for text: {Text}", ocrText.Substring(0, Math.Min(30, ocrText.Length)));
                 }
             }
             catch (Exception ex)

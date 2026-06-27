@@ -16,11 +16,14 @@ using LearningAssistant.Services.DragDrop;
 using LearningAssistant.Services.Feedback;
 using LearningAssistant.Services.Gamification;
 using LearningAssistant.Services.Hotkeys;
+using LearningAssistant.Services.KnowledgeGraph;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Migration;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Services.Persistence;
+using LearningAssistant.Services.Quiz;
 using LearningAssistant.Services.Recovery;
+using LearningAssistant.Services.Speech;
 using LearningAssistant.Services.SystemTray;
 using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
@@ -134,6 +137,7 @@ namespace LearningAssistant.Common
             services.AddSingleton<IAIServiceFactory, AIServiceFactory>();
             services.AddSingleton<IAIService, FallbackAIService>();
             services.AddSingleton<IPromptTemplateService, PromptTemplateService>();
+            services.AddSingleton<IConversationContextService, ConversationContextService>();
 
             return services;
         }
@@ -195,6 +199,7 @@ namespace LearningAssistant.Common
             });
             services.AddSingleton<IPendingContentService, PendingContentService>();
             services.AddSingleton<ISpacedRepetitionService, SqliteSpacedRepetitionService>();
+            services.AddSingleton<LearningDataExportService>();
             services.AddSingleton<IHighlightSyncService, HighlightSyncService>();
             services.AddSingleton<ILearningChartService, LearningChartService>();
             services.AddSingleton<Services.Web.IWebBookmarkService, Services.Web.WebBookmarkService>();
@@ -265,9 +270,43 @@ namespace LearningAssistant.Common
                 var settingsManager = sp.GetRequiredService<ILearningSettingsManager>();
                 var view = sp.GetRequiredService<ILearningView>();
                 var eventBus = sp.GetService<IEventBus>();
+                var spacedRepetitionService = sp.GetService<ISpacedRepetitionService>();
                 return new LearningFlowHandler(logger, studyEngine, aiService, ttsService, contentLoaderService,
-                    exportService, windowManager, settingsManager, view, eventBus);
+                    exportService, windowManager, settingsManager, view, eventBus, spacedRepetitionService);
             });
+
+            return services;
+        }
+
+        /// <summary>
+        /// 添加学习增强服务（测验、语音回忆、知识图谱）
+        /// </summary>
+        public static IServiceCollection AddLearningEnhancementServices(this IServiceCollection services)
+        {
+            // 测验引擎
+            services.AddSingleton<IQuizEngineService, QuizEngineService>();
+
+            // 语音服务
+            services.AddSingleton<IWebSpeechService, WebSpeechService>();
+
+            // 语音回忆
+            services.AddSingleton<IVoiceRecallService>(sp =>
+            {
+                var speechService = sp.GetRequiredService<IWebSpeechService>();
+                var aiService = sp.GetRequiredService<IAiQuestionService>();
+                var logger = sp.GetService<ILogger<VoiceRecallService>>();
+                return new VoiceRecallService(speechService, aiService, logger);
+            });
+
+            // 知识图谱
+            services.AddSingleton<IKnowledgeGraphService>(sp =>
+            {
+                var aiService = sp.GetRequiredService<IAiQuestionService>();
+                var logger = sp.GetService<ILogger<KnowledgeGraphService>>();
+                return new KnowledgeGraphService(aiService, logger);
+            });
+
+            services.AddSingleton<KnowledgeGraphEventSubscriber>();
 
             return services;
         }
@@ -330,9 +369,10 @@ namespace LearningAssistant.Common
                 var annotationService = sp.GetRequiredService<IAnnotationService>();
                 var highlightService = sp.GetRequiredService<IHighlightService>();
                 var pdfService = sp.GetRequiredService<IPdfService>();
+                var eventBus = sp.GetService<IEventBus>();
                 return new PdfPresenter(logger, pdfRenderer, pdfFileManager, pdfOcrService, pdfTranslationService,
                     aiService, pdfTtsService, pdfStudyIntegration, exportService,
-                    annotationService, highlightService, pdfService);
+                    annotationService, highlightService, pdfService, eventBus);
             });
 
             services.AddScoped<MainForm>(sp =>
@@ -344,10 +384,49 @@ namespace LearningAssistant.Common
                 var themeService = sp.GetRequiredService<IThemeService>();
                 var logger = sp.GetRequiredService<ILogger<MainForm>>();
                 var webBookmarkService = sp.GetRequiredService<Services.Web.IWebBookmarkService>();
-                return new MainForm(presenter, windowManager, appConfig, cloudStorageService, themeService, logger, webBookmarkService);
+                var trayIconService = sp.GetRequiredService<ITrayIconService>();
+                var hotkeyService = sp.GetRequiredService<IHotkeyService>();
+                var pomodoroService = sp.GetRequiredService<IPomodoroService>();
+                var conversationContextService = sp.GetService<IConversationContextService>();
+                var spacedRepetitionService = sp.GetService<ISpacedRepetitionService>();
+                var knowledgeGraphService = sp.GetService<IKnowledgeGraphService>();
+                var userSessionService = sp.GetService<IUserSessionService>();
+                return new MainForm(presenter, windowManager, appConfig, cloudStorageService, themeService, logger, webBookmarkService, trayIconService, hotkeyService, pomodoroService, conversationContextService, spacedRepetitionService, knowledgeGraphService, userSessionService);
             });
             services.AddScoped<SettingForm>();
-            services.AddScoped<LearningForm>();
+            services.AddScoped<LearningForm>(sp =>
+            {
+                var aiQuestionService = sp.GetRequiredService<IAiQuestionService>();
+                var ttsService = sp.GetRequiredService<ITTSService>();
+                var logger = sp.GetRequiredService<ILogger<LearningForm>>();
+                var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+                var soundService = sp.GetRequiredService<ISoundService>();
+                var themeService = sp.GetRequiredService<IThemeService>();
+                var aiPanelPopupService = sp.GetRequiredService<IAIPanelPopupService>();
+                var encouragementService = sp.GetRequiredService<IEncouragementService>();
+                var thinkingStimulator = sp.GetService<IThinkingStimulator>();
+                var achievementService = sp.GetService<IAchievementService>();
+                var spacedRepetitionService = sp.GetService<ISpacedRepetitionService>();
+                var gamificationService = sp.GetService<IGamificationService>();
+                var eventBus = sp.GetService<IEventBus>();
+                var userSessionService = sp.GetService<IUserSessionService>();
+                var conversationContextService = sp.GetService<IConversationContextService>();
+                var pomodoroService = sp.GetService<IPomodoroService>();
+                return new LearningForm(aiQuestionService, ttsService, logger, loggerFactory, soundService,
+                    themeService, aiPanelPopupService, encouragementService, thinkingStimulator,
+                    achievementService, spacedRepetitionService, gamificationService, eventBus,
+                    userSessionService, conversationContextService, pomodoroService);
+            });
+            services.AddScoped<LearningHubForm>(sp =>
+            {
+                var spacedRepetitionService = sp.GetService<ISpacedRepetitionService>();
+                var conversationContextService = sp.GetService<IConversationContextService>();
+                var userSessionService = sp.GetService<IUserSessionService>();
+                var knowledgeGraphService = sp.GetService<IKnowledgeGraphService>();
+                var voiceRecallService = sp.GetService<IVoiceRecallService>();
+                var logger = sp.GetService<ILogger<LearningHubForm>>();
+                return new LearningHubForm(spacedRepetitionService, conversationContextService, userSessionService, knowledgeGraphService, voiceRecallService, logger);
+            });
             //services.AddScoped<PdfReaderForm>();
             services.AddScoped<PdfReaderFormV2>();
             services.AddScoped<ResultForm>(sp =>
@@ -372,10 +451,11 @@ namespace LearningAssistant.Common
                 var quoteService = sp.GetRequiredService<QuoteService>();
                 var goalService = sp.GetRequiredService<ILearningGoalService>();
                 var wrongAnswerService = sp.GetRequiredService<IWrongAnswerService>();
+                var spacedRepetitionService = sp.GetService<ISpacedRepetitionService>();
                 var logger = sp.GetService<ILogger<LearningManagementForm>>();
                 var themeService = sp.GetService<IThemeService>();
                 var userSessionService = sp.GetService<IUserSessionService>();
-                return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService, goalService, wrongAnswerService, logger, themeService, userSessionService);
+                return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService, goalService, wrongAnswerService, spacedRepetitionService, logger, themeService, userSessionService);
             });
 
             services.AddScoped<WrongAnswerForm>(sp =>

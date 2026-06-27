@@ -84,6 +84,38 @@ namespace LearningAssistant.Services.Persistence
         /// 将内存缓存数据持久化到磁盘
         /// </summary>
         void PersistCache();
+
+        // ========== LearningItemStates 表操作方法 ==========
+
+        /// <summary>
+        /// 获取用户指定分类的已知项列表
+        /// </summary>
+        List<string> GetKnownItems(string userId, string categoryName);
+
+        /// <summary>
+        /// 获取用户指定分类的未知项列表
+        /// </summary>
+        List<string> GetUnknownItems(string userId, string categoryName);
+
+        /// <summary>
+        /// 添加或更新学习项状态
+        /// </summary>
+        void UpsertLearningItemState(string userId, string categoryName, string content, bool isKnown);
+
+        /// <summary>
+        /// 批量添加或更新学习项状态
+        /// </summary>
+        void UpsertLearningItemStates(string userId, string categoryName, IEnumerable<string> contents, bool isKnown);
+
+        /// <summary>
+        /// 删除学习项状态
+        /// </summary>
+        void DeleteLearningItemState(string userId, string categoryName, string content);
+
+        /// <summary>
+        /// 同步 CategoryProgress 中的 KnownItems/UnknownItems 到 LearningItemStates 表
+        /// </summary>
+        void SyncCategoryProgressToLearningItemStates(string userId, string categoryName, List<string> knownItems, List<string> unknownItems);
     }
 
     /// <summary>

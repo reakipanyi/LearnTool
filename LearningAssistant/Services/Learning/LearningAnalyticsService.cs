@@ -5,7 +5,9 @@ using System.IO;
 using System.Linq;
 using System.Globalization;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 using LearningAssistant.Common;
+using LearningAssistant.Data.Database;
 using LearningAssistant.Services.Persistence;
 
 namespace LearningAssistant.Services.Learning
@@ -19,15 +21,22 @@ namespace LearningAssistant.Services.Learning
         private readonly string _analyticsFilePath;
         private readonly IDataPersistenceService? _persistenceService;
         private readonly ILogger<LearningAnalyticsService>? _logger;
+        private readonly IDbContextFactory<AppDbContext>? _dbContextFactory;
+        private readonly ISpacedRepetitionAlgorithm? _sm2Algorithm;
+        private readonly ISpacedRepetitionAlgorithm? _fsrsAlgorithm;
         private bool _isLoaded = false;
 
         public LearningAnalyticsService(
             ILogger<LearningAnalyticsService>? logger = null,
-            IDataPersistenceService? persistenceService = null)
+            IDataPersistenceService? persistenceService = null,
+            IDbContextFactory<AppDbContext>? dbContextFactory = null)
         {
             _logger = logger;
             _persistenceService = persistenceService;
+            _dbContextFactory = dbContextFactory;
             _analyticsFilePath = AppPaths.AnalyticsPath;
+            _sm2Algorithm = new SM2Algorithm();
+            _fsrsAlgorithm = new FSRSAlgorithm();
         }
 
         private void EnsureLoaded()
@@ -74,34 +83,59 @@ namespace LearningAssistant.Services.Learning
                 return;
             }
 
-            var userData = _userAnalytics.GetOrAdd(userId, _ => new UserAnalyticsData { UserId = userId });
-
-            var today = DateTime.Today;
-
-            var dailyRecord = userData.DailyRecords.GetOrAdd(today, _ => new DailyStatistics { Date = today });
-
-            switch (activityType)
+            if (count <= 0)
             {
-                case "Learn":
-                    dailyRecord.ItemsLearned += count;
-                    break;
-                case "Review":
-                    dailyRecord.ItemsReviewed += count;
-                    break;
-                case "Correct":
-                    dailyRecord.CorrectCount += count;
-                    break;
-                case "Wrong":
-                    dailyRecord.WrongCount += count;
-                    break;
+                _logger?.LogDebug("尝试记录无效数量的活动: {Count}", count);
+                return;
             }
 
-            userData.CategoryStats.AddOrUpdate(subCategory, count, (_, existing) => existing + count);
+            if (string.IsNullOrWhiteSpace(activityType))
+            {
+                _logger?.LogWarning("尝试记录空类型的活动");
+                return;
+            }
 
-            userData.LastLearningDate = today;
+            try
+            {
+                var userData = _userAnalytics.GetOrAdd(userId, _ => new UserAnalyticsData { UserId = userId });
 
-            SaveAnalytics();
-            _logger?.LogDebug("记录活动: {UserId}, 类型: {ActivityType}, 分类: {Category}, 数量: {Count}", userId, activityType, subCategory, count);
+                var today = DateTime.Today;
+
+                var dailyRecord = userData.DailyRecords.GetOrAdd(today, _ => new DailyStatistics { Date = today });
+
+                switch (activityType)
+                {
+                    case "Learn":
+                        dailyRecord.ItemsLearned += count;
+                        break;
+                    case "Review":
+                        dailyRecord.ItemsReviewed += count;
+                        break;
+                    case "Correct":
+                        dailyRecord.CorrectCount += count;
+                        break;
+                    case "Wrong":
+                        dailyRecord.WrongCount += count;
+                        break;
+                    default:
+                        _logger?.LogDebug("未知的活动类型: {ActivityType}", activityType);
+                        break;
+                }
+
+                if (!string.IsNullOrWhiteSpace(subCategory))
+                {
+                    userData.CategoryStats.AddOrUpdate(subCategory, count, (_, existing) => existing + count);
+                }
+
+                userData.LastLearningDate = today;
+
+                SaveAnalytics();
+                _logger?.LogDebug("记录活动: {UserId}, 类型: {ActivityType}, 分类: {Category}, 数量: {Count}", userId, activityType, subCategory, count);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "记录活动失败: {UserId}, 类型: {ActivityType}, 数量: {Count}", userId, activityType, count);
+            }
         }
 
         public Dictionary<string, int> GetCategoryStats(string userId)
@@ -197,25 +231,38 @@ namespace LearningAssistant.Services.Learning
 
         public void SaveAnalytics()
         {
-            try
+            const int maxRetries = 3;
+            const int retryDelayMs = 500;
+
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
-                if (_persistenceService != null)
+                try
                 {
-                    var data = _userAnalytics.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-                    _persistenceService.SaveJsonFile(_analyticsFilePath, data);
-                    _logger?.LogDebug("保存分析数据成功(通过IDataPersistenceService)，用户数: {Count}", _userAnalytics.Count);
+                    if (_persistenceService != null)
+                    {
+                        var data = _userAnalytics.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                        _persistenceService.SaveJsonFile(_analyticsFilePath, data);
+                        _logger?.LogDebug("保存分析数据成功(通过IDataPersistenceService)，用户数: {Count}", _userAnalytics.Count);
+                    }
+                    else
+                    {
+                        // 兼容旧代码：直接使用文件保存
+                        var data = _userAnalytics.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+                        JsonHelper.SaveToFile(_analyticsFilePath, data);
+                        _logger?.LogDebug("保存分析数据成功(通过JsonHelper)，用户数: {Count}", _userAnalytics.Count);
+                    }
+                    return; // 成功后直接返回
                 }
-                else
+                catch (IOException ex) when (attempt < maxRetries)
                 {
-                    // 兼容旧代码：直接使用文件保存
-                    var data = _userAnalytics.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-                    JsonHelper.SaveToFile(_analyticsFilePath, data);
-                    _logger?.LogDebug("保存分析数据成功(通过JsonHelper)，用户数: {Count}", _userAnalytics.Count);
+                    _logger?.LogWarning(ex, "保存分析数据失败(尝试 {Attempt}/{MaxRetries})，{Delay}ms后重试", attempt, maxRetries, retryDelayMs);
+                    Thread.Sleep(retryDelayMs);
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "保存分析数据失败: {Path}", _analyticsFilePath);
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "保存分析数据失败: {Path}", _analyticsFilePath);
+                    return; // 非IO异常直接返回，避免无限重试
+                }
             }
         }
 
@@ -368,7 +415,254 @@ namespace LearningAssistant.Services.Learning
             
             return firstDayOfYear.AddDays((weekNumber - 1) * 7);
         }
-        
+
+        #endregion
+
+        #region 间隔重复统计分析
+
+        public double CalculateRetentionRate(string userId)
+        {
+            if (_dbContextFactory == null)
+            {
+                _logger?.LogWarning("数据库上下文未注入，无法计算保留率");
+                return 0.5;
+            }
+
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var items = db.SpacedRepetitionItems
+                    .Where(i => i.UserId == userId && i.IsActive && i.LastReviewDate.HasValue)
+                    .ToList();
+
+                if (items.Count == 0) return 0.5;
+
+                double totalRetention = 0;
+                int validCount = 0;
+
+                foreach (var item in items)
+                {
+                    if (item.LastReviewDate.HasValue)
+                    {
+                        var daysSinceReview = (DateTime.Now - item.LastReviewDate.Value).TotalDays;
+                        double retention;
+
+                        if (item.AlgorithmType == "FSRS" && item.Stability > 0)
+                        {
+                            retention = _fsrsAlgorithm?.PredictRetention(item.Stability, item.Difficulty, (int)daysSinceReview) ?? 0.5;
+                        }
+                        else
+                        {
+                            retention = _sm2Algorithm?.PredictRetention(item.Interval, item.EFactor, (int)daysSinceReview) ?? 0.5;
+                        }
+
+                        totalRetention += retention;
+                        validCount++;
+                    }
+                }
+
+                return validCount > 0 ? totalRetention / validCount : 0.5;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "计算保留率失败: {UserId}", userId);
+                return 0.5;
+            }
+        }
+
+        public Dictionary<int, double> GenerateForgettingCurve(string userId, int days = 30)
+        {
+            var curve = new Dictionary<int, double>();
+
+            if (_dbContextFactory == null)
+            {
+                for (int i = 0; i <= days; i++)
+                {
+                    curve[i] = Math.Exp(-i / 10.0);
+                }
+                return curve;
+            }
+
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var items = db.SpacedRepetitionItems
+                    .Where(i => i.UserId == userId && i.IsActive)
+                    .ToList();
+
+                if (items.Count == 0)
+                {
+                    for (int i = 0; i <= days; i++)
+                    {
+                        curve[i] = Math.Exp(-i / 10.0);
+                    }
+                    return curve;
+                }
+
+                double avgStability = items.Where(i => i.Stability > 0).Average(i => i.Stability);
+                if (avgStability <= 0) avgStability = 10;
+
+                double avgDifficulty = items.Where(i => i.Difficulty > 0).Average(i => i.Difficulty);
+                if (avgDifficulty <= 0) avgDifficulty = 5;
+
+                for (int day = 0; day <= days; day++)
+                {
+                    double retention = _fsrsAlgorithm?.PredictRetention(avgStability, avgDifficulty, day) ??
+                                      _sm2Algorithm?.PredictRetention(avgStability, avgDifficulty, day) ??
+                                      Math.Exp(-day / avgStability);
+                    curve[day] = Math.Round(retention * 100) / 100;
+                }
+
+                return curve;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "生成遗忘曲线失败: {UserId}", userId);
+                for (int i = 0; i <= days; i++)
+                {
+                    curve[i] = Math.Exp(-i / 10.0);
+                }
+                return curve;
+            }
+        }
+
+        public Dictionary<DateTime, int> PredictFutureWorkload(string userId, int days = 30)
+        {
+            var workload = new Dictionary<DateTime, int>();
+
+            if (_dbContextFactory == null)
+            {
+                var today = DateTime.Today;
+                for (int i = 0; i < days; i++)
+                {
+                    workload[today.AddDays(i)] = 0;
+                }
+                return workload;
+            }
+
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var items = db.SpacedRepetitionItems
+                    .Where(i => i.UserId == userId && i.IsActive)
+                    .ToList();
+
+                var today = DateTime.Today;
+                for (int i = 0; i < days; i++)
+                {
+                    var targetDate = today.AddDays(i);
+                    int count = items.Count(i => i.NextReviewDate.Date <= targetDate.Date);
+                    workload[targetDate] = count;
+                }
+
+                return workload;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "预测复习工作量失败: {UserId}", userId);
+                return workload;
+            }
+        }
+
+        public ReviewEfficiencyStats GetReviewEfficiencyStats(string userId)
+        {
+            var stats = new ReviewEfficiencyStats();
+
+            if (_dbContextFactory == null)
+            {
+                return stats;
+            }
+
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var logs = db.ReviewLogs
+                    .Where(r => r.UserId == userId)
+                    .ToList();
+
+                if (logs.Count == 0) return stats;
+
+                stats.TotalReviews = logs.Count;
+                stats.TotalCorrect = logs.Count(l => l.Rating >= 3);
+                stats.TotalWrong = logs.Count(l => l.Rating < 3);
+                stats.AverageStability = logs.Where(l => l.Stability.HasValue).Average(l => l.Stability!.Value);
+                stats.AverageDifficulty = logs.Where(l => l.Difficulty.HasValue).Average(l => l.Difficulty!.Value);
+
+                stats.RatingDistribution = logs
+                    .GroupBy(l => l.Rating)
+                    .ToDictionary(g => g.Key, g => g.Count());
+
+                stats.RetentionRate = CalculateRetentionRate(userId);
+
+                int totalDuration = logs.Sum(l => l.Duration);
+                stats.ReviewTimePerCard = logs.Count > 0 ? (double)totalDuration / logs.Count / 1000 : 0;
+
+                stats.MostUsedAlgorithm = logs
+                    .GroupBy(l => l.AlgorithmType ?? "SM-2")
+                    .OrderByDescending(g => g.Count())
+                    .FirstOrDefault()?.Key ?? "SM-2";
+
+                return stats;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "获取复习效率统计失败: {UserId}", userId);
+                return stats;
+            }
+        }
+
+        public List<HeatmapData> GetWeeklyHeatmap(string userId, int weeks = 12)
+        {
+            var heatmap = new List<HeatmapData>();
+
+            if (_dbContextFactory == null)
+            {
+                return heatmap;
+            }
+
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var endDate = DateTime.Today;
+                var startDate = endDate.AddDays(-weeks * 7);
+
+                var reviewLogs = db.ReviewLogs
+                    .Where(r => r.UserId == userId && r.ReviewTime >= startDate && r.ReviewTime <= endDate)
+                    .ToList();
+
+                var reviewCounts = reviewLogs
+                    .GroupBy(r => r.ReviewTime.Date)
+                    .ToDictionary(g => g.Key, g => g.Count());
+
+                int maxCount = reviewCounts.Values.Max();
+                if (maxCount == 0) maxCount = 1;
+
+                for (int i = 0; i < weeks * 7; i++)
+                {
+                    var date = startDate.AddDays(i);
+                    int count = reviewCounts.GetValueOrDefault(date, 0);
+                    int level = count == 0 ? 0 : (count < maxCount * 0.25 ? 1 : (count < maxCount * 0.5 ? 2 : (count < maxCount * 0.75 ? 3 : 4)));
+
+                    heatmap.Add(new HeatmapData
+                    {
+                        Year = date.Year,
+                        Week = System.Globalization.ISOWeek.GetWeekOfYear(date),
+                        DayOfWeek = (int)date.DayOfWeek,
+                        Date = date,
+                        Count = count,
+                        Level = level
+                    });
+                }
+
+                return heatmap;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "获取热力图数据失败: {UserId}", userId);
+                return heatmap;
+            }
+        }
+
         #endregion
     }
 

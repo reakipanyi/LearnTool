@@ -87,6 +87,20 @@ namespace LearningAssistant.Services.SystemTray
         void SetTooltip(string text);
 
         /// <summary>
+        /// 获取托盘右键菜单
+        /// </summary>
+        /// <returns>ContextMenuStrip 对象</returns>
+        ContextMenuStrip? GetContextMenu();
+
+        /// <summary>
+        /// 更新菜单项文本
+        /// </summary>
+        /// <param name="oldText">原文本</param>
+        /// <param name="newText">新文本</param>
+        /// <param name="enabled">是否启用</param>
+        void UpdateMenuItem(string oldText, string newText, bool enabled = true);
+
+        /// <summary>
         /// 清理资源
         /// </summary>
         void Cleanup();

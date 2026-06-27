@@ -56,6 +56,8 @@
 		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.8" />
 		<!-- Excel export -->
+		<!-- Charting -->
+		<PackageReference Include="ScottPlot.WinForms" Version="4.1.74" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Update="appsettings.json">

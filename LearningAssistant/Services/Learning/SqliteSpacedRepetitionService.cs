@@ -7,18 +7,97 @@ using Microsoft.Extensions.Logging;
 namespace LearningAssistant.Services.Learning
 {
     /// <summary>
-    /// 间隔重复学习服务接口 - 基于SM-2算法实现科学的复习间隔
+    /// 间隔重复学习服务接口 - 基于SM-2/FSRS算法实现科学的复习间隔
     /// </summary>
     public interface ISpacedRepetitionService
     {
+        /// <summary>
+        /// 计算下次复习间隔
+        /// </summary>
         ReviewResult CalculateNextReview(ReviewItem item, int quality);
+
+        /// <summary>
+        /// 计算下次复习间隔（使用指定算法）
+        /// </summary>
+        ReviewResult CalculateNextReview(ReviewItem item, int quality, string algorithmType);
+
+        /// <summary>
+        /// 计算下次复习间隔（带复习耗时）
+        /// </summary>
+        /// <param name="item">复习项</param>
+        /// <param name="quality">评分 (0-5)</param>
+        /// <param name="durationMs">复习耗时（毫秒）</param>
+        ReviewResult CalculateNextReview(ReviewItem item, int quality, int durationMs);
+
+        /// <summary>
+        /// 创建新的复习项
+        /// </summary>
         ReviewItem CreateNewItem(string userId, string content, string answer = "");
+
+        /// <summary>
+        /// 获取待复习项列表
+        /// </summary>
         List<ReviewItem> GetItemsDueForReview(string userId, DateTime? date = null);
+
+        /// <summary>
+        /// 更新复习项
+        /// </summary>
         void UpdateItem(ReviewItem item);
+
+        /// <summary>
+        /// 获取用户所有复习项
+        /// </summary>
         List<ReviewItem> GetAllItems(string userId);
+
+        /// <summary>
+        /// 删除复习项
+        /// </summary>
         void DeleteItem(Guid itemId);
+
+        /// <summary>
+        /// 获取今日复习数量
+        /// </summary>
         int GetTodayReviewCount(string userId);
+
+        /// <summary>
+        /// 计算记忆保留率
+        /// </summary>
         double CalculateRetentionRate(string userId);
+
+        /// <summary>
+        /// 获取可用的算法列表
+        /// </summary>
+        List<string> GetAvailableAlgorithms();
+
+        /// <summary>
+        /// 切换算法
+        /// </summary>
+        void SetAlgorithm(string algorithmType);
+
+        /// <summary>
+        /// 获取当前算法类型
+        /// </summary>
+        string GetCurrentAlgorithm();
+
+        /// <summary>
+        /// 对比两种算法的效果
+        /// </summary>
+        AlgorithmComparisonResult CompareAlgorithms(string userId);
+
+        /// <summary>
+        /// 获取自适应推荐算法
+        /// </summary>
+        string GetAdaptiveRecommendation(string userId);
+
+        /// <summary>
+        /// 获取复习日志（用于分析）
+        /// </summary>
+        List<ReviewLog> GetReviewLogs(string userId, int days = 30);
+
+        /// <summary>
+        /// 获取推荐复习时间（基于遗忘曲线）
+        /// </summary>
+        DateTime GetRecommendedReviewTime(string userId);
     }
 
     /// <summary>
@@ -41,6 +120,12 @@ namespace LearningAssistant.Services.Learning
         public int CorrectCount { get; set; } = 0;
         public int CorrectStreak { get; set; } = 0;
         public bool IsActive { get; set; } = true;
+        public double Stability { get; set; } = 0;
+        public double Difficulty { get; set; } = 5;
+        public double Retrievability { get; set; } = 1;
+        public int LearningStage { get; set; } = 0;
+        public DateTime? LastReviewDate { get; set; }
+        public int ReviewCount { get; set; } = 0;
 
         public string Question
         {
@@ -48,7 +133,11 @@ namespace LearningAssistant.Services.Learning
             set => Content = value;
         }
 
-        public double Difficulty => EFactor < 2.3 ? 3 : EFactor < 2.5 ? 2 : 1;
+        public string? AlgorithmType { get; set; }
+
+        public string? Category { get; set; }
+
+        public string? Subject { get; set; }
     }
 
     /// <summary>
@@ -62,6 +151,23 @@ namespace LearningAssistant.Services.Learning
         public double NewEFactor { get; set; }
         public DateTime NextReviewDate { get; set; }
         public string Message { get; set; } = string.Empty;
+        public int Duration { get; set; }
+    }
+
+    public class ReviewLog
+    {
+        public int Id { get; set; }
+        public string UserId { get; set; } = string.Empty;
+        public Guid ContentId { get; set; }
+        public int Rating { get; set; }
+        public int Interval { get; set; }
+        public double? EaseFactor { get; set; }
+        public double? Stability { get; set; }
+        public double? Difficulty { get; set; }
+        public DateTime ReviewTime { get; set; } = DateTime.Now;
+        public int Duration { get; set; }
+        public string? AlgorithmType { get; set; }
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
     }
 
     public class SqliteSpacedRepetitionService : ISpacedRepetitionService, IDisposable
@@ -70,6 +176,9 @@ namespace LearningAssistant.Services.Learning
         private readonly ILogger<SqliteSpacedRepetitionService>? _logger;
         private readonly IEventBus? _eventBus;
         private bool _disposed = false;
+
+        private ISpacedRepetitionAlgorithm _currentAlgorithm;
+        private readonly Dictionary<string, ISpacedRepetitionAlgorithm> _algorithms;
 
         public SqliteSpacedRepetitionService(
             IDbContextFactory<AppDbContext> dbContextFactory,
@@ -80,7 +189,33 @@ namespace LearningAssistant.Services.Learning
             _logger = logger;
             _eventBus = eventBus;
 
+            _algorithms = new Dictionary<string, ISpacedRepetitionAlgorithm>
+            {
+                ["SM-2"] = new SM2Algorithm(),
+                ["FSRS"] = new FSRSAlgorithm()
+            };
+            _currentAlgorithm = _algorithms["SM-2"];
+
             SubscribeToEvents();
+        }
+
+        public List<string> GetAvailableAlgorithms()
+        {
+            return new List<string>(_algorithms.Keys);
+        }
+
+        public void SetAlgorithm(string algorithmType)
+        {
+            if (_algorithms.TryGetValue(algorithmType, out var algorithm))
+            {
+                _currentAlgorithm = algorithm;
+                _logger?.LogInformation("切换间隔重复算法: {AlgorithmType}", algorithmType);
+            }
+            else
+            {
+                _logger?.LogWarning("未知的算法类型: {AlgorithmType}，使用默认 SM-2", algorithmType);
+                _currentAlgorithm = _algorithms["SM-2"];
+            }
         }
 
         private void SubscribeToEvents()
@@ -135,74 +270,96 @@ namespace LearningAssistant.Services.Learning
 
         public ReviewResult CalculateNextReview(ReviewItem item, int quality)
         {
-            var result = new ReviewResult();
+            return CalculateNextReview(item, quality, _currentAlgorithm.AlgorithmType);
+        }
 
-            if (quality < 0 || quality > 5)
+        public ReviewResult CalculateNextReview(ReviewItem item, int quality, int durationMs)
+        {
+            var result = CalculateNextReview(item, quality, _currentAlgorithm.AlgorithmType);
+            result.Duration = durationMs;
+            return result;
+        }
+
+        public ReviewResult CalculateNextReview(ReviewItem item, int quality, string algorithmType)
+        {
+            ISpacedRepetitionAlgorithm algorithm;
+            if (!_algorithms.TryGetValue(algorithmType, out var algo))
             {
-                result.ShouldReview = true;
-                result.Message = "质量评分无效，需要重新学习";
-                _logger?.LogWarning("无效的质量评分: {Quality}", quality);
-                return result;
+                algo = _currentAlgorithm;
             }
+            algorithm = algo;
 
-            double newEFactor = Math.Max(1.3, item.EFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02)));
+            var algorithmResult = algorithm.Calculate(item, quality);
 
-            int newInterval;
-            int newRepetitions;
-
-            if (quality < 3)
+            var result = new ReviewResult
             {
-                newRepetitions = 0;
-                newInterval = 1;
-                result.Message = "需要重新学习";
-            }
-            else
-            {
-                if (item.Repetitions == 0)
-                {
-                    newInterval = 1;
-                }
-                else if (item.Repetitions == 1)
-                {
-                    newInterval = 6;
-                }
-                else
-                {
-                    newInterval = (int)Math.Round(item.Interval * newEFactor);
-                }
+                ShouldReview = algorithmResult.ShouldReview,
+                NewInterval = algorithmResult.NewInterval,
+                NewRepetitions = algorithmResult.NewRepetitions,
+                NewEFactor = algorithmResult.NewEFactor,
+                NextReviewDate = DateTime.Today.AddDays(algorithmResult.NewInterval),
+                Message = algorithmResult.Message
+            };
 
-                newRepetitions = item.Repetitions + 1;
-                result.Message = quality == 5 ? "完美！下次复习将在 {0} 天后" : "继续加油！下次复习将在 {0} 天后";
-            }
-
-            var nextReview = DateTime.Today.AddDays(newInterval);
-
-            result.ShouldReview = false;
-            result.NewInterval = newInterval;
-            result.NewRepetitions = newRepetitions;
-            result.NewEFactor = newEFactor;
-            result.NextReviewDate = nextReview;
-
-            item.Interval = newInterval;
-            item.Repetitions = newRepetitions;
-            item.EFactor = newEFactor;
-            item.NextReviewDate = nextReview;
+            item.Interval = algorithmResult.NewInterval;
+            item.Repetitions = algorithmResult.NewRepetitions;
+            item.EFactor = algorithmResult.NewEFactor;
+            item.Stability = algorithmResult.NewStability;
+            item.Difficulty = algorithmResult.NewDifficulty;
+            item.NextReviewDate = result.NextReviewDate;
+            item.LastReviewDate = DateTime.Now;
             item.UpdatedAt = DateTime.Now;
+            item.ReviewCount++;
+            item.LearningStage = item.Repetitions >= 2 ? 2 : (item.Repetitions > 0 ? 1 : 0);
 
             if (quality >= 3)
             {
                 item.CorrectCount++;
+                item.CorrectStreak++;
             }
             else
             {
                 item.WrongCount++;
+                item.CorrectStreak = 0;
             }
 
             UpdateItem(item);
-            _logger?.LogInformation("计算复习结果: 用户 {UserId}, 间隔 {Interval} 天, 重复次数 {Repetitions}, EF {EFactor}",
-                item.UserId, newInterval, newRepetitions, newEFactor);
+            SaveReviewLog(item, quality, algorithm.AlgorithmType, result.Duration);
+            _logger?.LogInformation("计算复习结果 [{AlgorithmType}]: 用户 {UserId}, 间隔 {Interval} 天, 重复次数 {Repetitions}",
+                algorithm.AlgorithmType, item.UserId, algorithmResult.NewInterval, algorithmResult.NewRepetitions);
 
             return result;
+        }
+
+        private void SaveReviewLog(ReviewItem item, int rating, string algorithmType, int duration = 0)
+        {
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var log = new ReviewLogEntity
+                {
+                    UserId = item.UserId,
+                    ContentId = item.Id,
+                    Rating = rating,
+                    Interval = item.Interval,
+                    EaseFactor = item.EFactor,
+                    Stability = item.Stability,
+                    Difficulty = item.Difficulty,
+                    ReviewTime = DateTime.Now,
+                    Duration = duration,
+                    AlgorithmType = algorithmType,
+                    CreatedAt = DateTime.Now
+                };
+
+                db.ReviewLogs.Add(log);
+                db.SaveChanges();
+                _logger?.LogDebug("保存复习日志: ContentId {ContentId}, Rating {Rating}, Algorithm {Algorithm}",
+                    item.Id, rating, algorithmType);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "保存复习日志失败: ContentId {ContentId}", item.Id);
+            }
         }
 
         public ReviewItem CreateNewItem(string userId, string content, string answer = "")
@@ -373,6 +530,216 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
+        public string GetCurrentAlgorithm()
+        {
+            return _currentAlgorithm.AlgorithmType;
+        }
+
+        public AlgorithmComparisonResult CompareAlgorithms(string userId)
+        {
+            var result = new AlgorithmComparisonResult();
+
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var logs = db.ReviewLogs
+                    .Where(r => r.UserId == userId)
+                    .OrderByDescending(r => r.ReviewTime)
+                    .Take(100)
+                    .ToList();
+
+                if (logs.Count < 10)
+                {
+                    result.RecommendedAlgorithm = "SM-2";
+                    result.Reason = "复习数据不足，使用稳定的 SM-2 算法";
+                    result.AlgorithmStats["SM-2"] = new AlgorithmStats { AlgorithmType = "SM-2" };
+                    result.AlgorithmStats["FSRS"] = new AlgorithmStats { AlgorithmType = "FSRS" };
+                    return result;
+                }
+
+                var sm2Logs = logs.Where(l => l.AlgorithmType == "SM-2" || string.IsNullOrEmpty(l.AlgorithmType)).ToList();
+                var fsrsLogs = logs.Where(l => l.AlgorithmType == "FSRS").ToList();
+
+                result.AlgorithmStats["SM-2"] = CalculateAlgorithmStats(sm2Logs, _algorithms["SM-2"]);
+                result.AlgorithmStats["FSRS"] = CalculateAlgorithmStats(fsrsLogs, _algorithms["FSRS"]);
+
+                double sm2Score = CalculateAlgorithmScore(result.AlgorithmStats["SM-2"]);
+                double fsrsScore = CalculateAlgorithmScore(result.AlgorithmStats["FSRS"]);
+
+                if (fsrsLogs.Count >= 10 && fsrsScore > sm2Score * 1.1)
+                {
+                    result.RecommendedAlgorithm = "FSRS";
+                    result.RecommendedScore = fsrsScore;
+                    result.Reason = "FSRS 在您的复习数据上表现更优";
+                }
+                else if (sm2Logs.Count >= 10 && sm2Score >= fsrsScore)
+                {
+                    result.RecommendedAlgorithm = "SM-2";
+                    result.RecommendedScore = sm2Score;
+                    result.Reason = "SM-2 算法稳定可靠";
+                }
+                else
+                {
+                    result.RecommendedAlgorithm = _currentAlgorithm.AlgorithmType;
+                    result.RecommendedScore = _currentAlgorithm.AlgorithmType == "FSRS" ? fsrsScore : sm2Score;
+                    result.Reason = "继续使用当前算法";
+                }
+
+                _logger?.LogInformation("算法对比完成: 用户 {UserId}, 推荐 {Algorithm}", userId, result.RecommendedAlgorithm);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "算法对比失败: 用户 {UserId}", userId);
+                result.RecommendedAlgorithm = "SM-2";
+                result.Reason = "分析失败，使用默认 SM-2 算法";
+            }
+
+            return result;
+        }
+
+        private AlgorithmStats CalculateAlgorithmStats(List<ReviewLogEntity> logs, ISpacedRepetitionAlgorithm algorithm)
+        {
+            var stats = new AlgorithmStats
+            {
+                AlgorithmType = algorithm.AlgorithmType,
+                TotalReviews = logs.Count
+            };
+
+            if (logs.Count == 0)
+            {
+                stats.AccuracyRate = algorithm.AccuracyScore * 100;
+                stats.RetentionRate = algorithm.RecommendedRetention * 100;
+                return stats;
+            }
+
+            stats.CorrectReviews = logs.Count(l => l.Rating >= 3);
+            stats.AccuracyRate = logs.Count > 0 ? (double)stats.CorrectReviews / logs.Count * 100 : 0;
+
+            if (logs.Any(l => l.Interval > 0))
+            {
+                stats.AverageInterval = logs.Where(l => l.Interval > 0).Average(l => l.Interval);
+            }
+
+            stats.RetentionRate = stats.AccuracyRate;
+
+            if (logs.Count >= 5)
+            {
+                var intervals = logs.Where(l => l.Interval > 0).Select(l => (double)l.Interval).ToList();
+                if (intervals.Count >= 2)
+                {
+                    double mean = intervals.Average();
+                    double variance = intervals.Sum(x => Math.Pow(x - mean, 2)) / intervals.Count;
+                    double stdDev = Math.Sqrt(variance);
+                    stats.ConsistencyScore = Math.Max(0, 100 - stdDev * 2);
+                }
+            }
+            else
+            {
+                stats.ConsistencyScore = algorithm.AccuracyScore * 100;
+            }
+
+            return stats;
+        }
+
+        private double CalculateAlgorithmScore(AlgorithmStats stats)
+        {
+            double accuracyWeight = 0.4;
+            double retentionWeight = 0.3;
+            double consistencyWeight = 0.2;
+            double efficiencyWeight = 0.1;
+
+            double efficiencyScore = stats.TotalReviews > 0 ? Math.Min(100, stats.AverageInterval * 5) : 50;
+
+            return stats.AccuracyRate * accuracyWeight +
+                   stats.RetentionRate * retentionWeight +
+                   stats.ConsistencyScore * consistencyWeight +
+                   efficiencyScore * efficiencyWeight;
+        }
+
+        public string GetAdaptiveRecommendation(string userId)
+        {
+            var comparison = CompareAlgorithms(userId);
+            return comparison.RecommendedAlgorithm;
+        }
+
+        public List<ReviewLog> GetReviewLogs(string userId, int days = 30)
+        {
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var startDate = DateTime.Now.AddDays(-days);
+
+                var logs = db.ReviewLogs
+                    .Where(r => r.UserId == userId && r.ReviewTime >= startDate)
+                    .OrderByDescending(r => r.ReviewTime)
+                    .ToList();
+
+                return logs.Select(l => new ReviewLog
+                {
+                    Id = l.Id,
+                    UserId = l.UserId,
+                    ContentId = l.ContentId,
+                    Rating = l.Rating,
+                    Interval = l.Interval,
+                    EaseFactor = l.EaseFactor,
+                    Stability = l.Stability,
+                    Difficulty = l.Difficulty,
+                    ReviewTime = l.ReviewTime,
+                    Duration = l.Duration,
+                    AlgorithmType = l.AlgorithmType,
+                    CreatedAt = l.CreatedAt
+                }).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "获取复习日志失败: 用户 {UserId}", userId);
+                return new List<ReviewLog>();
+            }
+        }
+
+        public DateTime GetRecommendedReviewTime(string userId)
+        {
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var dueItems = db.SpacedRepetitionItems
+                    .Where(i => i.UserId == userId && i.IsActive && i.NextReviewDate <= DateTime.Today.AddDays(1))
+                    .OrderBy(i => i.NextReviewDate)
+                    .Take(10)
+                    .ToList();
+
+                if (dueItems.Count == 0)
+                {
+                    return DateTime.Today.AddHours(20);
+                }
+
+                int overdueCount = dueItems.Count(i => i.NextReviewDate < DateTime.Today);
+                if (overdueCount > 20)
+                {
+                    return DateTime.Now.AddMinutes(5);
+                }
+
+                var avgInterval = dueItems.Where(i => i.Interval > 0).Average(i => i.Interval);
+                if (avgInterval < 3)
+                {
+                    return DateTime.Today.AddHours(10);
+                }
+                else if (avgInterval < 7)
+                {
+                    return DateTime.Today.AddHours(14);
+                }
+                else
+                {
+                    return DateTime.Today.AddHours(20);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "获取推荐复习时间失败: 用户 {UserId}", userId);
+                return DateTime.Today.AddHours(20);
+            }
+        }
+
         public void Dispose()
         {
             if (_disposed) return;
@@ -382,60 +749,4 @@ namespace LearningAssistant.Services.Learning
         }
     }
 
-    public static class SpacedRepetitionMappingExtensions
-    {
-        public static SpacedRepetitionItemEntity ToEntity(this ReviewItem item)
-        {
-            return new SpacedRepetitionItemEntity
-            {
-                Id = item.Id,
-                UserId = item.UserId,
-                Content = item.Content,
-                Answer = item.Answer,
-                Interval = item.Interval,
-                Repetitions = item.Repetitions,
-                EFactor = item.EFactor,
-                NextReviewDate = item.NextReviewDate,
-                CreatedAt = item.CreatedAt,
-                UpdatedAt = item.UpdatedAt,
-                WrongCount = item.WrongCount,
-                CorrectCount = item.CorrectCount,
-                IsActive = item.IsActive
-            };
-        }
-
-        public static ReviewItem ToModel(this SpacedRepetitionItemEntity entity)
-        {
-            return new ReviewItem
-            {
-                Id = entity.Id,
-                UserId = entity.UserId,
-                Content = entity.Content,
-                Answer = entity.Answer,
-                Interval = entity.Interval,
-                Repetitions = entity.Repetitions,
-                EFactor = entity.EFactor,
-                NextReviewDate = entity.NextReviewDate,
-                CreatedAt = entity.CreatedAt,
-                UpdatedAt = entity.UpdatedAt,
-                WrongCount = entity.WrongCount,
-                CorrectCount = entity.CorrectCount,
-                IsActive = entity.IsActive
-            };
-        }
-
-        public static void UpdateFromModel(this SpacedRepetitionItemEntity entity, ReviewItem item)
-        {
-            entity.Content = item.Content;
-            entity.Answer = item.Answer;
-            entity.Interval = item.Interval;
-            entity.Repetitions = item.Repetitions;
-            entity.EFactor = item.EFactor;
-            entity.NextReviewDate = item.NextReviewDate;
-            entity.UpdatedAt = item.UpdatedAt;
-            entity.WrongCount = item.WrongCount;
-            entity.CorrectCount = item.CorrectCount;
-            entity.IsActive = item.IsActive;
-        }
-    }
 }

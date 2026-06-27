@@ -34,6 +34,7 @@ namespace LearningAssistant
                 .AddAIServices()
                 .AddPdfServices()
                 .AddLearningServices()
+                .AddLearningEnhancementServices()  // 测验、语音回忆、知识图谱
                 .AddDatabaseServices()
                 .AddFormServices();
 

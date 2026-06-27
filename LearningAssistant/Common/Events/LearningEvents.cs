@@ -132,6 +132,20 @@ namespace LearningAssistant.Common.Events
         public DateTime HighlightedAt { get; set; } = DateTime.Now;
     }
 
+    /// <summary>
+    /// 发送文本到PDF搜索事件 - SendToPdfSearch
+    /// 触发源：学习页点击"发送到PDF问题"
+    /// 下游动作：
+    /// 1. PDF阅读器搜索并高亮匹配文本
+    /// 2. 自动定位到匹配页面
+    /// </summary>
+    public class SendToPdfSearchEvent : ApplicationEventBase
+    {
+        public string UserId { get; set; } = string.Empty;
+        public string SearchText { get; set; } = string.Empty;
+        public string Language { get; set; } = string.Empty;
+    }
+
     // ==========================================
     // 挑战相关事件
     // ==========================================

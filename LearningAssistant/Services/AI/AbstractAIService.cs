@@ -183,6 +183,12 @@ namespace LearningAssistant.Services.AI
                 if (string.IsNullOrEmpty(_config.ApiKey))
                     return string.Empty;
 
+                // 检查是否是未加密的原始密钥（长度小于64的短字符串）
+                if (_config.ApiKey.Length < 64)
+                {
+                    return _config.ApiKey;
+                }
+
                 try
                 {
                     // 使用安全的配置管理器解密
@@ -190,9 +196,8 @@ namespace LearningAssistant.Services.AI
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "API密钥解密失败，尝试使用原始密钥");
-                    // 如果解密失败，可能是未加密的密钥，直接返回
-                    return _config.ApiKey;
+                    _logger.LogError(ex, "API密钥解密失败，请检查密钥配置");
+                    return string.Empty;
                 }
             }
         }

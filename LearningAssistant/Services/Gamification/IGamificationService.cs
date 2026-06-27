@@ -18,6 +18,9 @@ namespace LearningAssistant.Services.Gamification
 
         void AddScore(int points);
         void AddXP(int xp);
+
+        Task AddXpAsync(int xp, string reason = "");
+        Task AddScoreAsync(int points, string reason = "");
         void IncrementTodayLearned();
         void UpdateStudyDuration(TimeSpan duration);
         void CheckStreak();

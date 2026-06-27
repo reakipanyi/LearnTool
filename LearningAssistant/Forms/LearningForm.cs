@@ -36,8 +36,11 @@ namespace LearningAssistant.Forms
         private readonly IGamificationService _gamificationService;
         private readonly IEventBus? _eventBus;
         private readonly IUserSessionService? _userSessionService;
+        private readonly IPomodoroService? _pomodoroService;
         private readonly ConfettiManager _confettiManager;
         private readonly EncouragementManager _encouragementManager;
+        private readonly IConversationContextService? _conversationContextService;
+        private MentorAIPanel? _mentorPanel;
         #endregion
 
         #region === 学习状态 ===
@@ -204,7 +207,9 @@ namespace LearningAssistant.Forms
             ISpacedRepetitionService? spacedRepetitionService = null,
             IGamificationService? gamificationService = null,
             IEventBus? eventBus = null,
-            IUserSessionService? userSessionService = null)
+            IUserSessionService? userSessionService = null,
+            IConversationContextService? conversationContextService = null,
+            IPomodoroService? pomodoroService = null)
         {
             InitializeComponent();
             WindowState = FormWindowState.Maximized;
@@ -221,6 +226,8 @@ namespace LearningAssistant.Forms
             _spacedRepetitionService = spacedRepetitionService;
             _eventBus = eventBus;
             _userSessionService = userSessionService;
+            _conversationContextService = conversationContextService;
+            _pomodoroService = pomodoroService;
             _gamificationService = gamificationService ?? new GamificationService(
                 _loggerFactory,
                 null);
@@ -228,6 +235,12 @@ namespace LearningAssistant.Forms
             _gamificationService.BadgesUnlocked += OnBadgesUnlocked;
             _gamificationService.LevelUp += OnLevelUp;
             _gamificationService.XPChanged += OnXPChanged;
+
+            if (_pomodoroService != null)
+            {
+                _pomodoroService.PomodoroCompleted += PomodoroService_PomodoroCompleted;
+                _pomodoroService.StateChanged += PomodoroService_StateChanged;
+            }
 
             _encouragementManager = new EncouragementManager();
 
@@ -1432,6 +1445,40 @@ namespace LearningAssistant.Forms
             }
 
             InitializeAIHistoryPanel();
+            InitializeMentorPanel();
+        }
+
+        private void InitializeMentorPanel()
+        {
+            if (_conversationContextService == null) return;
+
+            _mentorPanel = new MentorAIPanel
+            {
+                Dock = DockStyle.Right,
+                Width = 350,
+                Visible = false,
+                ContextService = _conversationContextService
+            };
+
+            Controls.Add(_mentorPanel);
+        }
+
+        public void ToggleMentorPanel()
+        {
+            if (_mentorPanel == null)
+            {
+                InitializeMentorPanel();
+            }
+
+            if (_mentorPanel != null)
+            {
+                _mentorPanel.Visible = !_mentorPanel.Visible;
+
+                if (_mentorPanel.Visible && _currentItem != null)
+                {
+                    _mentorPanel.SetLearningContext(_currentItem.Content);
+                }
+            }
         }
 
         private void InitializeAIHistoryPanel()
@@ -1628,6 +1675,45 @@ namespace LearningAssistant.Forms
         {
             _studyDuration = _studyDuration.Add(TimeSpan.FromSeconds(1));
             _gamificationService.UpdateStudyDuration(_studyDuration);
+        }
+
+        private void PomodoroService_PomodoroCompleted(object? sender, int completedCount)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => PomodoroService_PomodoroCompleted(sender, completedCount)));
+                return;
+            }
+
+            _logger.LogInformation("番茄钟完成: 累计 {Count} 个", completedCount);
+            ShowMessage($"🍅 恭喜完成第 {completedCount} 个番茄钟！", "番茄钟完成");
+        }
+
+        private void PomodoroService_StateChanged(object? sender, Services.Learning.PomodoroStateChangedEventArgs e)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => PomodoroService_StateChanged(sender, e)));
+                return;
+            }
+
+            _logger.LogInformation("番茄钟状态变更: {OldState} -> {NewState}", e.OldState, e.NewState);
+
+            switch (e.NewState)
+            {
+                case Services.Learning.PomodoroState.Studying:
+                    break;
+                case Services.Learning.PomodoroState.ShortBreak:
+                    ShowMessage("⏸️ 短休息时间到了！休息一下吧~", "休息提醒");
+                    break;
+                case Services.Learning.PomodoroState.LongBreak:
+                    ShowMessage("🛌 长休息时间到了！好好放松一下~", "休息提醒");
+                    break;
+                case Services.Learning.PomodoroState.Paused:
+                    break;
+                case Services.Learning.PomodoroState.Idle:
+                    break;
+            }
         }
 
         #endregion
@@ -2291,22 +2377,7 @@ namespace LearningAssistant.Forms
                 return;
             }
 
-            try
-            {
-                string context = _currentItem.GetMainContent();
-                string displayText = _currentItem.GetDisplayText();
-
-                string prompt = $"请解释以下内容：\n{displayText}\n\n原文：{context}";
-
-                _aiHistoryPanel?.AddHistoryItem(displayText, "AI回答中...");
-
-                _aiPanelPopupService.ShowAIAbilityPanel(this, prompt, null, context);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "打开AI问答窗口失败");
-                ShowToast($"打开AI问答窗口失败: {ex.Message}", ToastType.Error);
-            }
+            ToggleMentorPanel();
         }
 
         /// <summary>

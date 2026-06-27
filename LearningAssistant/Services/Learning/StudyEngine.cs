@@ -49,12 +49,15 @@ namespace LearningAssistant.Services.Learning
         {
             ValidateInitializeParameters(userId, language, subCategory);
 
-            _state.UserId = userId;
-            _state.Language = language;
-            _state.SubCategory = subCategory;
-            _state.WordBankFile = wordBankFile;
-            _state.CurrentMode = mode == Constants.LearningMode.Quick ? Constants.LearningMode.Quick : Constants.LearningMode.Study;
-            _state.CurrentSortOrder = sortOrder;
+            lock (_stateLock)
+            {
+                _state.UserId = userId;
+                _state.Language = language;
+                _state.SubCategory = subCategory;
+                _state.WordBankFile = wordBankFile;
+                _state.CurrentMode = mode == Constants.LearningMode.Quick ? Constants.LearningMode.Quick : Constants.LearningMode.Study;
+                _state.CurrentSortOrder = sortOrder;
+            }
 
             LoadAllItems(subCategory, wordBankFile);
 
@@ -98,30 +101,36 @@ namespace LearningAssistant.Services.Learning
         private void SyncProgressState()
         {
             var progressState = _progressManager.GetProgressState();
-            _state.KnownItems = progressState.KnownItems.ToList();
-            _state.UnknownItems = progressState.UnknownItems.ToList();
-            _state.CorrectCount = progressState.CorrectCount;
-            _state.TotalCount = progressState.TotalCount;
-            _state.StudyModeIndex = progressState.StudyModeIndex;
-            _state.QuickModeIndex = progressState.QuickModeIndex;
+            lock (_stateLock)
+            {
+                _state.KnownItems = progressState.KnownItems.ToList();
+                _state.UnknownItems = progressState.UnknownItems.ToList();
+                _state.CorrectCount = progressState.CorrectCount;
+                _state.TotalCount = progressState.TotalCount;
+                _state.StudyModeIndex = progressState.StudyModeIndex;
+                _state.QuickModeIndex = progressState.QuickModeIndex;
+            }
         }
 
         private void BuildStudyItems()
         {
-            _studyItems.Clear();
+            lock (_stateLock)
+            {
+                _studyItems.Clear();
 
-            if (_state.CurrentMode == Constants.LearningMode.Quick)
-            {
-                _studyItems = _studyListProcessor.ProcessItems(new List<LearningItem>(_allItems), _state.CurrentSortOrder);
-                _state.QuickModeIndex = Math.Min(_state.QuickModeIndex, _studyItems.Count - 1);
-            }
-            else
-            {
-                BuildStudyModeItems();
+                if (_state.CurrentMode == Constants.LearningMode.Quick)
+                {
+                    _studyItems = _studyListProcessor.ProcessItems(new List<LearningItem>(_allItems), _state.CurrentSortOrder);
+                    _state.QuickModeIndex = Math.Min(_state.QuickModeIndex, _studyItems.Count - 1);
+                }
+                else
+                {
+                    BuildStudyModeItemsInternal();
+                }
             }
         }
 
-        private void BuildStudyModeItems()
+        private void BuildStudyModeItemsInternal()
         {
             if (_state.UnknownItems.Any())
             {
@@ -137,11 +146,19 @@ namespace LearningAssistant.Services.Learning
             }
             else
             {
-                ResetAndStartNew();
+                ResetAndStartNewInternal();
             }
         }
 
         private void ResetAndStartNew()
+        {
+            lock (_stateLock)
+            {
+                ResetAndStartNewInternal();
+            }
+        }
+
+        private void ResetAndStartNewInternal()
         {
             _studyItems = _studyListProcessor.RemoveDuplicates(new List<LearningItem>(_allItems));
             _state.KnownItems.Clear();
@@ -155,111 +172,146 @@ namespace LearningAssistant.Services.Learning
 
         private void ValidateIndex()
         {
-            int currentIndex = CurrentIndex;
-            if (currentIndex >= _studyItems.Count)
+            lock (_stateLock)
             {
-                if (_state.CurrentMode == Constants.LearningMode.Quick)
-                    _state.QuickModeIndex = Math.Max(0, _studyItems.Count - 1);
-                else
-                    _state.StudyModeIndex = Math.Max(0, _studyItems.Count - 1);
-            }
-            if (currentIndex < 0)
-            {
-                if (_state.CurrentMode == Constants.LearningMode.Quick)
-                    _state.QuickModeIndex = 0;
-                else
-                    _state.StudyModeIndex = 0;
+                int currentIndex = _state.CurrentMode == Constants.LearningMode.Quick
+                    ? _state.QuickModeIndex
+                    : _state.StudyModeIndex;
+
+                if (currentIndex >= _studyItems.Count)
+                {
+                    if (_state.CurrentMode == Constants.LearningMode.Quick)
+                        _state.QuickModeIndex = Math.Max(0, _studyItems.Count - 1);
+                    else
+                        _state.StudyModeIndex = Math.Max(0, _studyItems.Count - 1);
+                }
+                if (currentIndex < 0)
+                {
+                    if (_state.CurrentMode == Constants.LearningMode.Quick)
+                        _state.QuickModeIndex = 0;
+                    else
+                        _state.StudyModeIndex = 0;
+                }
             }
         }
 
         public LearningItem? GetCurrentItem()
         {
-            if (string.IsNullOrWhiteSpace(_state.UserId))
-                return null;
+            lock (_stateLock)
+            {
+                if (string.IsNullOrWhiteSpace(_state.UserId))
+                    return null;
 
-            int index = CurrentIndex;
-            return index >= 0 && index < _studyItems.Count ? _studyItems[index] : null;
+                int index = _state.CurrentMode == Constants.LearningMode.Quick
+                    ? _state.QuickModeIndex
+                    : _state.StudyModeIndex;
+                return index >= 0 && index < _studyItems.Count ? _studyItems[index] : null;
+            }
         }
 
         public bool HasNext()
         {
-            if (string.IsNullOrWhiteSpace(_state.UserId))
-                return false;
+            lock (_stateLock)
+            {
+                if (string.IsNullOrWhiteSpace(_state.UserId))
+                    return false;
 
-            int index = CurrentIndex;
-            return index < _studyItems.Count - 1;
+                int index = _state.CurrentMode == Constants.LearningMode.Quick
+                    ? _state.QuickModeIndex
+                    : _state.StudyModeIndex;
+                return index < _studyItems.Count - 1;
+            }
         }
 
         public void MoveNext()
         {
-            if (string.IsNullOrWhiteSpace(_state.UserId))
-                return;
-
-            int index = CurrentIndex;
-            if (index < _studyItems.Count - 1)
+            lock (_stateLock)
             {
-                if (_state.CurrentMode == Constants.LearningMode.Quick)
-                    _state.QuickModeIndex++;
-                else
-                    _state.StudyModeIndex++;
+                if (string.IsNullOrWhiteSpace(_state.UserId))
+                    return;
+
+                int index = _state.CurrentMode == Constants.LearningMode.Quick
+                    ? _state.QuickModeIndex
+                    : _state.StudyModeIndex;
+
+                if (index < _studyItems.Count - 1)
+                {
+                    if (_state.CurrentMode == Constants.LearningMode.Quick)
+                        _state.QuickModeIndex++;
+                    else
+                        _state.StudyModeIndex++;
+                }
             }
         }
 
         public void SetCurrentIndex(int index)
         {
-            if (string.IsNullOrWhiteSpace(_state.UserId))
-                return;
-
-            if (index >= 0 && index < _studyItems.Count)
+            lock (_stateLock)
             {
-                if (_state.CurrentMode == Constants.LearningMode.Quick)
-                    _state.QuickModeIndex = index;
-                else
-                    _state.StudyModeIndex = index;
+                if (string.IsNullOrWhiteSpace(_state.UserId))
+                    return;
+
+                if (index >= 0 && index < _studyItems.Count)
+                {
+                    if (_state.CurrentMode == Constants.LearningMode.Quick)
+                        _state.QuickModeIndex = index;
+                    else
+                        _state.StudyModeIndex = index;
+                }
             }
         }
 
         public void MarkCurrentAsKnown()
         {
-            if (string.IsNullOrWhiteSpace(_state.UserId))
-                return;
+            lock (_stateLock)
+            {
+                if (string.IsNullOrWhiteSpace(_state.UserId))
+                    return;
 
-            var item = GetCurrentItem();
-            if (item == null)
-                return;
+                var item = GetCurrentItemInternal();
+                if (item == null)
+                    return;
 
-            string content = item.GetMainContent();
-            if (!_state.KnownItems.Contains(content))
-                _state.KnownItems.Add(content);
-            if (_state.UnknownItems.Contains(content))
-                _state.UnknownItems.Remove(content);
+                string content = item.GetMainContent();
+                if (!_state.KnownItems.Contains(content))
+                    _state.KnownItems.Add(content);
+                if (_state.UnknownItems.Contains(content))
+                    _state.UnknownItems.Remove(content);
 
-            _state.CorrectCount++;
-            _state.TotalCount++;
+                _state.CorrectCount++;
+                _state.TotalCount++;
 
-            SaveProgress();
-            RecordActivity("Learn");
-            RecordActivity("Correct");
+                var userId = _state.UserId;
+                var subCategory = _state.SubCategory;
+                SaveProgressInternal();
+                RecordActivityInternal(userId, subCategory, "Learn");
+                RecordActivityInternal(userId, subCategory, "Correct");
+            }
         }
 
         public void MarkCurrentAsUnknown()
         {
-            if (string.IsNullOrWhiteSpace(_state.UserId))
-                return;
+            lock (_stateLock)
+            {
+                if (string.IsNullOrWhiteSpace(_state.UserId))
+                    return;
 
-            var item = GetCurrentItem();
-            if (item == null)
-                return;
+                var item = GetCurrentItemInternal();
+                if (item == null)
+                    return;
 
-            string content = item.GetMainContent();
-            if (!_state.UnknownItems.Contains(content))
-                _state.UnknownItems.Add(content);
+                string content = item.GetMainContent();
+                if (!_state.UnknownItems.Contains(content))
+                    _state.UnknownItems.Add(content);
 
-            _state.TotalCount++;
+                _state.TotalCount++;
 
-            SaveProgress();
-            RecordActivity("Learn");
-            RecordActivity("Wrong");
+                var userId = _state.UserId;
+                var subCategory = _state.SubCategory;
+                SaveProgressInternal();
+                RecordActivityInternal(userId, subCategory, "Learn");
+                RecordActivityInternal(userId, subCategory, "Wrong");
+            }
         }
 
         public int MarkItemsAsKnown(IEnumerable<string> contents)
@@ -267,29 +319,34 @@ namespace LearningAssistant.Services.Learning
             if (string.IsNullOrWhiteSpace(_state.UserId) || contents == null)
                 return 0;
 
-            int count = 0;
-            foreach (var content in contents)
+            lock (_stateLock)
             {
-                if (string.IsNullOrWhiteSpace(content))
-                    continue;
-
-                if (!_state.KnownItems.Contains(content))
+                int count = 0;
+                foreach (var content in contents)
                 {
-                    _state.KnownItems.Add(content);
-                }
-                _state.UnknownItems.Remove(content);
-                count++;
-            }
+                    if (string.IsNullOrWhiteSpace(content))
+                        continue;
 
-            if (count > 0)
-            {
-                _state.CorrectCount += count;
-                _state.TotalCount += count;
-                SaveProgress();
-                RecordActivity("Learn");
-                RecordActivity("Correct");
+                    if (!_state.KnownItems.Contains(content))
+                    {
+                        _state.KnownItems.Add(content);
+                    }
+                    _state.UnknownItems.Remove(content);
+                    count++;
+                }
+
+                if (count > 0)
+                {
+                    _state.CorrectCount += count;
+                    _state.TotalCount += count;
+                    var userId = _state.UserId;
+                    var subCategory = _state.SubCategory;
+                    SaveProgressInternal();
+                    RecordActivityInternal(userId, subCategory, "Learn");
+                    RecordActivityInternal(userId, subCategory, "Correct");
+                }
+                return count;
             }
-            return count;
         }
 
         public int MarkItemsAsUnknown(IEnumerable<string> contents)
@@ -297,27 +354,50 @@ namespace LearningAssistant.Services.Learning
             if (string.IsNullOrWhiteSpace(_state.UserId) || contents == null)
                 return 0;
 
-            int count = 0;
-            foreach (var content in contents)
+            lock (_stateLock)
             {
-                if (string.IsNullOrWhiteSpace(content))
-                    continue;
-
-                if (!_state.UnknownItems.Contains(content))
+                int count = 0;
+                foreach (var content in contents)
                 {
-                    _state.UnknownItems.Add(content);
-                }
-                count++;
-            }
+                    if (string.IsNullOrWhiteSpace(content))
+                        continue;
 
-            if (count > 0)
-            {
-                _state.TotalCount += count;
-                SaveProgress();
-                RecordActivity("Learn");
-                RecordActivity("Wrong");
+                    if (!_state.UnknownItems.Contains(content))
+                    {
+                        _state.UnknownItems.Add(content);
+                    }
+                    count++;
+                }
+
+                if (count > 0)
+                {
+                    _state.TotalCount += count;
+                    var userId = _state.UserId;
+                    var subCategory = _state.SubCategory;
+                    SaveProgressInternal();
+                    RecordActivityInternal(userId, subCategory, "Learn");
+                    RecordActivityInternal(userId, subCategory, "Wrong");
+                }
+                return count;
             }
-            return count;
+        }
+
+        private LearningItem? GetCurrentItemInternal()
+        {
+            int index = _state.CurrentMode == Constants.LearningMode.Quick
+                ? _state.QuickModeIndex
+                : _state.StudyModeIndex;
+            return index >= 0 && index < _studyItems.Count ? _studyItems[index] : null;
+        }
+
+        private void SaveProgressInternal()
+        {
+            _progressManager.SaveProgress(_state.UserId, _state.SubCategory, _state);
+        }
+
+        private void RecordActivityInternal(string userId, string subCategory, string activityType)
+        {
+            _analyticsService?.RecordActivity(userId, activityType, subCategory);
         }
 
         private void RecordActivity(string activityType)
@@ -337,37 +417,89 @@ namespace LearningAssistant.Services.Learning
 
         public void SaveProgress()
         {
-            _progressManager.SaveProgress(_state.UserId, _state.SubCategory, _state);
+            lock (_stateLock)
+            {
+                SaveProgressInternal();
+            }
         }
 
         public void ResetProgress()
         {
-            _state.KnownItems.Clear();
-            _state.UnknownItems.Clear();
-            _state.StudyModeIndex = 0;
-            _state.QuickModeIndex = 0;
-            _state.CorrectCount = 0;
-            _state.TotalCount = 0;
-            _progressManager.ResetProgress();
-            SaveProgress();
+            lock (_stateLock)
+            {
+                _state.KnownItems.Clear();
+                _state.UnknownItems.Clear();
+                _state.StudyModeIndex = 0;
+                _state.QuickModeIndex = 0;
+                _state.CorrectCount = 0;
+                _state.TotalCount = 0;
+                _progressManager.ResetProgress();
+                SaveProgressInternal();
+            }
         }
 
         public List<LearningItem> GetUnknownItems()
         {
-            return _studyItems.Where(item => _state.UnknownItems.Contains(item.GetMainContent())).ToList();
+            lock (_stateLock)
+            {
+                return _studyItems.Where(item => _state.UnknownItems.Contains(item.GetMainContent())).ToList();
+            }
         }
 
         public List<LearningItem> GetAllItems()
         {
-            return _studyItems.ToList();
+            lock (_stateLock)
+            {
+                return _studyItems.ToList();
+            }
         }
 
         public void ApplySettings(string mode, string sortOrder)
         {
-            _state.CurrentMode = mode == Constants.LearningMode.Quick ? Constants.LearningMode.Quick : Constants.LearningMode.Study;
-            _state.CurrentSortOrder = sortOrder;
-            BuildStudyItems();
-            ValidateIndex();
+            lock (_stateLock)
+            {
+                _state.CurrentMode = mode == Constants.LearningMode.Quick ? Constants.LearningMode.Quick : Constants.LearningMode.Study;
+                _state.CurrentSortOrder = sortOrder;
+                BuildStudyItemsInternal();
+                ValidateIndexInternal();
+            }
+        }
+
+        private void BuildStudyItemsInternal()
+        {
+            _studyItems.Clear();
+
+            if (_state.CurrentMode == Constants.LearningMode.Quick)
+            {
+                _studyItems = _studyListProcessor.ProcessItems(new List<LearningItem>(_allItems), _state.CurrentSortOrder);
+                _state.QuickModeIndex = Math.Min(_state.QuickModeIndex, _studyItems.Count - 1);
+            }
+            else
+            {
+                BuildStudyModeItemsInternal();
+            }
+        }
+
+        private void ValidateIndexInternal()
+        {
+            int currentIndex = _state.CurrentMode == Constants.LearningMode.Quick
+                ? _state.QuickModeIndex
+                : _state.StudyModeIndex;
+
+            if (currentIndex >= _studyItems.Count)
+            {
+                if (_state.CurrentMode == Constants.LearningMode.Quick)
+                    _state.QuickModeIndex = Math.Max(0, _studyItems.Count - 1);
+                else
+                    _state.StudyModeIndex = Math.Max(0, _studyItems.Count - 1);
+            }
+            if (currentIndex < 0)
+            {
+                if (_state.CurrentMode == Constants.LearningMode.Quick)
+                    _state.QuickModeIndex = 0;
+                else
+                    _state.StudyModeIndex = 0;
+            }
         }
 
         public void AddUnknownItem(string content, string subCategory)

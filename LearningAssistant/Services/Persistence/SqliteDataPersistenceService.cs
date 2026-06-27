@@ -310,5 +310,231 @@ namespace LearningAssistant.Services.Persistence
                 LearningProgress = new LearningProgress()
             };
         }
+
+        // ========== LearningItemStates 表操作方法实现 ==========
+
+        public List<string> GetKnownItems(string userId, string categoryName)
+        {
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                return db.LearningItemStates
+                    .Where(s => s.UserId == userId && s.CategoryName == categoryName && s.IsKnown)
+                    .Select(s => s.Content)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to get known items for user {UserId}, category {CategoryName}", userId, categoryName);
+                return new List<string>();
+            }
+        }
+
+        public List<string> GetUnknownItems(string userId, string categoryName)
+        {
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                return db.LearningItemStates
+                    .Where(s => s.UserId == userId && s.CategoryName == categoryName && !s.IsKnown)
+                    .Select(s => s.Content)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to get unknown items for user {UserId}, category {CategoryName}", userId, categoryName);
+                return new List<string>();
+            }
+        }
+
+        public void UpsertLearningItemState(string userId, string categoryName, string content, bool isKnown)
+        {
+            if (string.IsNullOrWhiteSpace(content)) return;
+
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var existing = db.LearningItemStates
+                    .FirstOrDefault(s => s.UserId == userId && s.CategoryName == categoryName && s.Content == content);
+
+                if (existing != null)
+                {
+                    existing.IsKnown = isKnown;
+                    existing.UpdatedAt = DateTime.Now;
+                }
+                else
+                {
+                    db.LearningItemStates.Add(new LearningItemStateEntity
+                    {
+                        UserId = userId,
+                        CategoryName = categoryName,
+                        Content = content,
+                        IsKnown = isKnown,
+                        CreatedAt = DateTime.Now,
+                        UpdatedAt = DateTime.Now
+                    });
+                }
+
+                db.SaveChanges();
+                _logger?.LogDebug("Upserted learning item state: user {UserId}, category {CategoryName}, content {Content}, isKnown {IsKnown}",
+                    userId, categoryName, content.Length > 20 ? content.Substring(0, 20) + "..." : content, isKnown);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to upsert learning item state for user {UserId}, content {Content}", userId, content);
+            }
+        }
+
+        public void UpsertLearningItemStates(string userId, string categoryName, IEnumerable<string> contents, bool isKnown)
+        {
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var contentList = contents.Where(c => !string.IsNullOrWhiteSpace(c)).ToList();
+
+                if (contentList.Count == 0)
+                    return;
+
+                // 批量查询已存在的记录
+                var existingContents = db.LearningItemStates
+                    .Where(s => s.UserId == userId && s.CategoryName == categoryName && contentList.Contains(s.Content))
+                    .Select(s => s.Content)
+                    .ToHashSet();
+
+                var now = DateTime.Now;
+                var entitiesToAdd = new List<LearningItemStateEntity>();
+                var entitiesToUpdate = new List<LearningItemStateEntity>();
+
+                foreach (var content in contentList)
+                {
+                    if (existingContents.Contains(content))
+                    {
+                        // 标记为需要更新
+                        entitiesToUpdate.Add(new LearningItemStateEntity
+                        {
+                            UserId = userId,
+                            CategoryName = categoryName,
+                            Content = content,
+                            IsKnown = isKnown,
+                            UpdatedAt = now
+                        });
+                    }
+                    else
+                    {
+                        entitiesToAdd.Add(new LearningItemStateEntity
+                        {
+                            UserId = userId,
+                            CategoryName = categoryName,
+                            Content = content,
+                            IsKnown = isKnown,
+                            CreatedAt = now,
+                            UpdatedAt = now
+                        });
+                    }
+                }
+
+                // 批量更新
+                if (entitiesToUpdate.Count > 0)
+                {
+                    foreach (var entity in entitiesToUpdate)
+                    {
+                        var existing = db.LearningItemStates
+                            .FirstOrDefault(s => s.UserId == entity.UserId &&
+                                               s.CategoryName == entity.CategoryName &&
+                                               s.Content == entity.Content);
+                        if (existing != null)
+                        {
+                            existing.IsKnown = entity.IsKnown;
+                            existing.UpdatedAt = entity.UpdatedAt;
+                        }
+                    }
+                }
+
+                // 批量添加
+                if (entitiesToAdd.Count > 0)
+                {
+                    db.LearningItemStates.AddRange(entitiesToAdd);
+                }
+
+                db.SaveChanges();
+                _logger?.LogDebug("Batch upserted {Count} learning item states for user {UserId}, category {CategoryName}",
+                    contentList.Count, userId, categoryName);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to batch upsert learning item states for user {UserId}, category {CategoryName}",
+                    userId, categoryName);
+            }
+        }
+
+        public void DeleteLearningItemState(string userId, string categoryName, string content)
+        {
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var existing = db.LearningItemStates
+                    .FirstOrDefault(s => s.UserId == userId && s.CategoryName == categoryName && s.Content == content);
+
+                if (existing != null)
+                {
+                    db.LearningItemStates.Remove(existing);
+                    db.SaveChanges();
+                    _logger?.LogDebug("Deleted learning item state: user {UserId}, category {CategoryName}, content {Content}",
+                        userId, categoryName, content);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to delete learning item state for user {UserId}, content {Content}", userId, content);
+            }
+        }
+
+        public void SyncCategoryProgressToLearningItemStates(string userId, string categoryName, List<string> knownItems, List<string> unknownItems)
+        {
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+
+                var existingStates = db.LearningItemStates
+                    .Where(s => s.UserId == userId && s.CategoryName == categoryName)
+                    .ToList();
+
+                db.LearningItemStates.RemoveRange(existingStates);
+
+                foreach (var content in knownItems.Where(c => !string.IsNullOrWhiteSpace(c)))
+                {
+                    db.LearningItemStates.Add(new LearningItemStateEntity
+                    {
+                        UserId = userId,
+                        CategoryName = categoryName,
+                        Content = content,
+                        IsKnown = true,
+                        CreatedAt = DateTime.Now,
+                        UpdatedAt = DateTime.Now
+                    });
+                }
+
+                foreach (var content in unknownItems.Where(c => !string.IsNullOrWhiteSpace(c)))
+                {
+                    db.LearningItemStates.Add(new LearningItemStateEntity
+                    {
+                        UserId = userId,
+                        CategoryName = categoryName,
+                        Content = content,
+                        IsKnown = false,
+                        CreatedAt = DateTime.Now,
+                        UpdatedAt = DateTime.Now
+                    });
+                }
+
+                db.SaveChanges();
+                _logger?.LogInformation("Synced category progress to LearningItemStates: user {UserId}, category {CategoryName}, known {KnownCount}, unknown {UnknownCount}",
+                    userId, categoryName, knownItems.Count, unknownItems.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to sync category progress for user {UserId}, category {CategoryName}", userId, categoryName);
+            }
+        }
     }
 }

@@ -97,6 +97,46 @@ namespace LearningAssistant.Services.Learning
         /// 从持久化存储加载分析数据
         /// </summary>
         void LoadAnalytics();
+
+        // ========== 间隔重复统计分析（基于 ReviewLog）==========
+        
+        /// <summary>
+        /// 计算当前记忆保留率
+        /// </summary>
+        /// <param name="userId">用户ID</param>
+        /// <returns>保留率 (0-1)</returns>
+        double CalculateRetentionRate(string userId);
+
+        /// <summary>
+        /// 生成遗忘曲线数据
+        /// </summary>
+        /// <param name="userId">用户ID</param>
+        /// <param name="days">预测天数</param>
+        /// <returns>天数到保留率的映射</returns>
+        Dictionary<int, double> GenerateForgettingCurve(string userId, int days = 30);
+
+        /// <summary>
+        /// 预测未来复习工作量
+        /// </summary>
+        /// <param name="userId">用户ID</param>
+        /// <param name="days">预测天数</param>
+        /// <returns>日期到复习数量的映射</returns>
+        Dictionary<DateTime, int> PredictFutureWorkload(string userId, int days = 30);
+
+        /// <summary>
+        /// 获取复习效率统计
+        /// </summary>
+        /// <param name="userId">用户ID</param>
+        /// <returns>复习效率统计</returns>
+        ReviewEfficiencyStats GetReviewEfficiencyStats(string userId);
+
+        /// <summary>
+        /// 获取学习热力图数据
+        /// </summary>
+        /// <param name="userId">用户ID</param>
+        /// <param name="weeks">周数</param>
+        /// <returns>周热力图数据</returns>
+        List<HeatmapData> GetWeeklyHeatmap(string userId, int weeks = 12);
     }
 
     /// <summary>
@@ -232,5 +272,34 @@ namespace LearningAssistant.Services.Learning
         /// 用户ID
         /// </summary>
         public string UserId { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// 复习效率统计
+    /// </summary>
+    public class ReviewEfficiencyStats
+    {
+        public int TotalReviews { get; set; }
+        public int TotalCorrect { get; set; }
+        public int TotalWrong { get; set; }
+        public double AverageStability { get; set; }
+        public double AverageDifficulty { get; set; }
+        public double RetentionRate { get; set; }
+        public double ReviewTimePerCard { get; set; }
+        public string MostUsedAlgorithm { get; set; } = "SM-2";
+        public Dictionary<int, int> RatingDistribution { get; set; } = new Dictionary<int, int>();
+    }
+
+    /// <summary>
+    /// 热力图数据
+    /// </summary>
+    public class HeatmapData
+    {
+        public int Year { get; set; }
+        public int Week { get; set; }
+        public int DayOfWeek { get; set; }
+        public DateTime Date { get; set; }
+        public int Count { get; set; }
+        public int Level { get; set; }
     }
 }

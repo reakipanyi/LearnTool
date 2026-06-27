@@ -3,11 +3,17 @@ using LearningAssistant.Common.Themes;
 using LearningAssistant.Forms.UserControls.Cards;
 using LearningAssistant.Forms.UserControls.Dashboard;
 using LearningAssistant.Forms.UserControls.Navigation;
+using LearningAssistant.Forms.UserControls;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services.Cloud;
 using LearningAssistant.Services.Gamification;
+using LearningAssistant.Services.Hotkeys;
+using LearningAssistant.Services.Learning;
+using LearningAssistant.Services.SystemTray;
+using LearningAssistant.Services.AI;
+using LearningAssistant.Services.KnowledgeGraph;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 
@@ -22,6 +28,16 @@ namespace LearningAssistant.Forms
         private readonly IThemeService _themeService;
         private readonly ILogger<MainForm> _logger;
         private readonly Services.Web.IWebBookmarkService _webBookmarkService;
+        private readonly ITrayIconService _trayIconService;
+        private readonly IHotkeyService _hotkeyService;
+        private readonly IPomodoroService _pomodoroService;
+        private PomodoroTrayIntegration? _pomodoroTrayIntegration;
+        private readonly IConversationContextService? _conversationContextService;
+        private readonly ISpacedRepetitionService? _spacedRepetitionService;
+        private readonly IKnowledgeGraphService? _knowledgeGraphService;
+        private readonly IUserSessionService? _userSessionService;
+        private MentorAIPanel? _mentorPanel;
+        private KnowledgeGraphView? _knowledgeGraphView;
 
 
         public MainForm(
@@ -31,7 +47,14 @@ namespace LearningAssistant.Forms
             ICloudStorageService cloudStorageService,
             IThemeService themeService,
             ILogger<MainForm> logger,
-            Services.Web.IWebBookmarkService webBookmarkService)
+            Services.Web.IWebBookmarkService webBookmarkService,
+            ITrayIconService trayIconService,
+            IHotkeyService hotkeyService,
+            IPomodoroService pomodoroService,
+            IConversationContextService? conversationContextService = null,
+            ISpacedRepetitionService? spacedRepetitionService = null,
+            IKnowledgeGraphService? knowledgeGraphService = null,
+            IUserSessionService? userSessionService = null)
         {
             InitializeComponent();
             WindowState = FormWindowState.Maximized;
@@ -42,6 +65,13 @@ namespace LearningAssistant.Forms
             _themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _webBookmarkService = webBookmarkService ?? throw new ArgumentNullException(nameof(webBookmarkService));
+            _trayIconService = trayIconService ?? throw new ArgumentNullException(nameof(trayIconService));
+            _hotkeyService = hotkeyService ?? throw new ArgumentNullException(nameof(hotkeyService));
+            _pomodoroService = pomodoroService ?? throw new ArgumentNullException(nameof(pomodoroService));
+            _conversationContextService = conversationContextService;
+            _spacedRepetitionService = spacedRepetitionService;
+            _knowledgeGraphService = knowledgeGraphService;
+            _userSessionService = userSessionService;
 
             Load += MainForm_Load;
 
@@ -158,6 +188,15 @@ namespace LearningAssistant.Forms
             _presenter.OnOpenSettings += Presenter_OnOpenSettings;
             _presenter.OnOpenEditor += Presenter_OnOpenEditor;
 
+            // 初始化系统托盘
+            InitializeTray();
+
+            // 初始化番茄钟托盘集成
+            InitializePomodoroTray();
+
+            // 初始化全局快捷键
+            InitializeGlobalHotkeys();
+
             // 绑定FeatureCard点击
             foreach (FeatureCard card in this.dashboardView.Controls.OfType<Panel>()
                 .SelectMany(p => p.Controls.OfType<FeatureCard>()))
@@ -171,16 +210,186 @@ namespace LearningAssistant.Forms
                 new() { Key = "dashboard", Icon = "🏠", Text = "首页", Order = 0, Group = "main" },
                 new() { Key = "learning", Icon = "📚", Text = "学习", Order = 1, Group = "main" },
                 new() { Key = "pdf", Icon = "📖", Text = "PDF阅读", Order = 2, Group = "main" },
-                new() { Key = "statistics", Icon = "📊", Text = "学习统计", Order = 3, Group = "main" },
-                new() { Key = "challenges", Icon = "🎯", Text = "每日挑战", Order = 4, Group = "main" },
-                new() { Key = "achievements", Icon = "🏆", Text = "成就徽章", Order = 5, Group = "main" },
-                new() { Key = "notes", Icon = "📝", Text = "笔记", Order = 6, Group = "tools" },
-                new() { Key = "wrongbook", Icon = "📕", Text = "错题本", Order = 7, Group = "tools" },
-                new() { Key = "browser", Icon = "🌐", Text = "浏览器", Order = 8, Group = "tools" },
-                new() { Key = "editor", Icon = "✏️", Text = "模板编辑", Order = 9, Group = "tools" },
+                new() { Key = "mentor", Icon = "🤖", Text = "AI导师", Order = 3, Group = "main" },
+                new() { Key = "flashcard", Icon = "🧠", Text = "闪卡复习", Order = 4, Group = "main" },
+                new() { Key = "statistics", Icon = "📊", Text = "学习统计", Order = 5, Group = "main" },
+                new() { Key = "challenges", Icon = "🎯", Text = "每日挑战", Order = 6, Group = "main" },
+                new() { Key = "achievements", Icon = "🏆", Text = "成就徽章", Order = 7, Group = "main" },
+                new() { Key = "notes", Icon = "📝", Text = "笔记", Order = 8, Group = "tools" },
+                new() { Key = "wrongbook", Icon = "📕", Text = "错题本", Order = 9, Group = "tools" },
+                new() { Key = "graph", Icon = "🌐", Text = "知识图谱", Order = 10, Group = "tools" },
+                new() { Key = "browser", Icon = "🌐", Text = "浏览器", Order = 11, Group = "tools" },
+                new() { Key = "editor", Icon = "✏️", Text = "模板编辑", Order = 12, Group = "tools" },
                 new() { Key = "settings", Icon = "⚙️", Text = "设置", Order = 99, Group = "system" }
             });
 
+        }
+
+        /// <summary>
+        /// 初始化系统托盘
+        /// </summary>
+        private void InitializeTray()
+        {
+            try
+            {
+                _trayIconService.Initialize(this);
+                _trayIconService.Show();
+                _trayIconService.TrayDoubleClick += TrayIconService_TrayDoubleClick;
+                _logger.LogInformation("系统托盘已初始化");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "初始化系统托盘失败");
+            }
+        }
+
+        /// <summary>
+        /// 初始化番茄钟托盘集成
+        /// </summary>
+        private void InitializePomodoroTray()
+        {
+            try
+            {
+                _pomodoroTrayIntegration = new PomodoroTrayIntegration(
+                    _pomodoroService,
+                    _trayIconService,
+                    _hotkeyService,
+                    Program.GetRequiredService<ILogger<PomodoroTrayIntegration>>());
+
+                _pomodoroTrayIntegration.Initialize();
+                _pomodoroTrayIntegration.PomodoroCompleted += PomodoroTrayIntegration_PomodoroCompleted;
+
+                _logger.LogInformation("番茄钟托盘集成已初始化");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "初始化番茄钟托盘集成失败");
+            }
+        }
+
+        /// <summary>
+        /// 初始化全局快捷键
+        /// </summary>
+        private void InitializeGlobalHotkeys()
+        {
+            try
+            {
+                // 设置窗口句柄以接收全局快捷键消息
+                HotkeyService.SetWindowHandle(this.Handle);
+
+                // 注册番茄钟快捷键处理
+                RegisterPomodoroHotkeyHandlers();
+
+                _logger.LogInformation("全局快捷键已初始化");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "初始化全局快捷键失败");
+            }
+        }
+
+        /// <summary>
+        /// 注册番茄钟快捷键处理
+        /// </summary>
+        private void RegisterPomodoroHotkeyHandlers()
+        {
+            // 番茄钟开始/暂停
+            var startPauseHotkey = _hotkeyService.GetHotkey("pomodoro_start_pause");
+            if (startPauseHotkey != null)
+            {
+                _hotkeyService.RegisterHotkey("pomodoro_start_pause", startPauseHotkey, (s, e) =>
+                {
+                    TogglePomodoroStartPause();
+                });
+            }
+
+            // 番茄钟重置
+            var resetHotkey = _hotkeyService.GetHotkey("pomodoro_reset");
+            if (resetHotkey != null)
+            {
+                _hotkeyService.RegisterHotkey("pomodoro_reset", resetHotkey, (s, e) =>
+                {
+                    _pomodoroService.Reset();
+                    _trayIconService.ShowNotification("番茄钟已重置", "番茄钟已重置为初始状态", 3000);
+                });
+            }
+
+            // 番茄钟跳过
+            var skipHotkey = _hotkeyService.GetHotkey("pomodoro_skip");
+            if (skipHotkey != null)
+            {
+                _hotkeyService.RegisterHotkey("pomodoro_skip", skipHotkey, (s, e) =>
+                {
+                    _pomodoroService.Skip();
+                    _trayIconService.ShowNotification("阶段已跳过", "当前阶段已跳过", 3000);
+                });
+            }
+        }
+
+        /// <summary>
+        /// 切换番茄钟开始/暂停
+        /// </summary>
+        private void TogglePomodoroStartPause()
+        {
+            var state = _pomodoroService.CurrentState;
+
+            if (state == Models.Pomodoro.PomodoroState.Idle)
+            {
+                _pomodoroService.Start();
+                _trayIconService.ShowNotification("番茄钟已开始", "开始专注学习！", 3000);
+            }
+            else if (state == Models.Pomodoro.PomodoroState.Paused)
+            {
+                _pomodoroService.Resume();
+                _trayIconService.ShowNotification("番茄钟已恢复", "继续专注学习", 3000);
+            }
+            else
+            {
+                _pomodoroService.Pause();
+                _trayIconService.ShowNotification("番茄钟已暂停", "学习已暂停", 3000);
+            }
+        }
+
+        /// <summary>
+        /// 托盘图标双击事件处理
+        /// </summary>
+        private void TrayIconService_TrayDoubleClick(object? sender, EventArgs e)
+        {
+            if (this.Visible)
+            {
+                _trayIconService.HideToTray();
+            }
+            else
+            {
+                _trayIconService.ShowMainWindow();
+            }
+        }
+
+        /// <summary>
+        /// 番茄钟完成事件处理
+        /// </summary>
+        private void PomodoroTrayIntegration_PomodoroCompleted(object? sender, PomodoroTrayIntegration.PomodoroCompletedEventArgs e)
+        {
+            // 更新 Dashboard 显示
+            RefreshDashboardChallengeProgress();
+
+            // 显示成就通知（如果有）
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var gamificationService = Program.GetService<IGamificationService>();
+                    if (gamificationService != null)
+                    {
+                        // 完成番茄钟奖励
+                        await gamificationService.AddXpAsync(10, "完成番茄钟");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "番茄钟奖励处理失败");
+                }
+            });
         }
 
 
@@ -224,9 +433,15 @@ namespace LearningAssistant.Forms
                 case "pdf":
                     _windowManager.OpenPdfReaderWindow();
                     break;
-                //case "pdfV1":
-                //    _windowManager.OpenPdfReaderWindowV1();
-                //    break;
+                case "mentor":
+                    ShowMentorPanel();
+                    break;
+                case "flashcard":
+                    OpenFlashcardReview();
+                    break;
+                case "graph":
+                    ShowKnowledgeGraph();
+                    break;
                 case "statistics":
                     buttonOpenStatistics?.PerformClick();
                     break;
@@ -262,6 +477,90 @@ namespace LearningAssistant.Forms
             panelContent.Controls.Add(dashboardView);
             dashboardView.BringToFront();
             Text = "🏠 学习助手 - 首页";
+        }
+
+        private void ShowMentorPanel()
+        {
+            if (_conversationContextService == null)
+            {
+                ShowMessage("AI导师服务未配置");
+                return;
+            }
+
+            if (_mentorPanel == null)
+            {
+                _mentorPanel = new MentorAIPanel
+                {
+                    Dock = DockStyle.Fill,
+                    ContextService = _conversationContextService
+                };
+            }
+
+            panelContent.Controls.Clear();
+            panelContent.Controls.Add(_mentorPanel);
+            _mentorPanel.BringToFront();
+            Text = "🤖 学习助手 - AI导师";
+        }
+
+        private void OpenFlashcardReview()
+        {
+            if (_spacedRepetitionService == null || _userSessionService == null)
+            {
+                ShowMessage("闪卡复习服务未配置");
+                return;
+            }
+
+            try
+            {
+                var form = new FlashcardReviewForm(
+                    _spacedRepetitionService,
+                    _conversationContextService!,
+                    _userSessionService);
+
+                form.ShowDialog(this);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "打开闪卡复习失败");
+                ShowMessage("打开闪卡复习失败");
+            }
+        }
+
+        private void ShowKnowledgeGraph()
+        {
+            if (_knowledgeGraphService == null || _userSessionService == null)
+            {
+                ShowMessage("知识图谱服务未配置");
+                return;
+            }
+
+            if (_knowledgeGraphView == null)
+            {
+                _knowledgeGraphView = new KnowledgeGraphView
+                {
+                    Dock = DockStyle.Fill
+                };
+                _knowledgeGraphView.SetService(_knowledgeGraphService);
+                _knowledgeGraphView.SetUserId(_userSessionService.GetCurrentUserId());
+                _knowledgeGraphView.GraphLoaded += OnGraphLoaded;
+            }
+
+            panelContent.Controls.Clear();
+            panelContent.Controls.Add(_knowledgeGraphView);
+            _knowledgeGraphView.BringToFront();
+            Text = "🌐 学习助手 - 知识图谱";
+
+            _ = _knowledgeGraphView.LoadGraphAsync();
+        }
+
+        private void OnGraphLoaded(object? sender, EventArgs e)
+        {
+            _logger.LogInformation("知识图谱加载完成");
+        }
+
+        private void ShowMessage(string message)
+        {
+            MessageBox.Show(message, "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void FeatureCard_Clicked(object? sender, EventArgs e)
@@ -1071,6 +1370,12 @@ namespace LearningAssistant.Forms
                 _fontLogoEmoji?.Dispose();
                 _fontTopTitle?.Dispose();
                 _fontIconBtn?.Dispose();
+
+                // 清理番茄钟托盘集成
+                _pomodoroTrayIntegration?.Dispose();
+
+                // 清理系统托盘
+                _trayIconService?.Cleanup();
 
                 if (_presenter != null)
                 {

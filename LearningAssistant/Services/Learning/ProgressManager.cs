@@ -29,7 +29,7 @@ namespace LearningAssistant.Services.Learning
 
         public ProgressManager(IDataPersistenceService persistenceService)
         {
-            _persistenceService = persistenceService;
+            _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
         }
 
         public ProgressState GetProgressState()
@@ -39,17 +39,40 @@ namespace LearningAssistant.Services.Learning
 
         public void LoadProgress(string userId, string subCategory)
         {
-            var profile = _persistenceService.LoadUserProfile(userId);
-            var progress = profile.LearningProgress;
+            // 优先从 LearningItemStates 表加载（新的 SQLite 存储）
+            var knownItems = _persistenceService.GetKnownItems(userId, subCategory);
+            var unknownItems = _persistenceService.GetUnknownItems(userId, subCategory);
 
-            if (progress.CategoryProgresses.TryGetValue(subCategory, out var categoryProgress))
+            // 如果新表没有数据，尝试从 CategoryProgress 的 JSON 字段加载（兼容旧数据）
+            if (knownItems.Count == 0 && unknownItems.Count == 0)
             {
-                _currentState.KnownItems = categoryProgress.KnownItems.ToList();
-                _currentState.UnknownItems = categoryProgress.UnknownItems.ToList();
-                _currentState.CorrectCount = categoryProgress.CorrectCount;
-                _currentState.TotalCount = categoryProgress.TotalTestCount;
-                _currentState.StudyModeIndex = categoryProgress.LastResumeIndex;
-                _currentState.QuickModeIndex = categoryProgress.QuickTestResumeIndex;
+                var profile = _persistenceService.LoadUserProfile(userId);
+                var progress = profile.LearningProgress;
+
+                if (progress.CategoryProgresses.TryGetValue(subCategory, out var categoryProgress))
+                {
+                    knownItems = categoryProgress.KnownItems.ToList();
+                    unknownItems = categoryProgress.UnknownItems.ToList();
+
+                    // 如果从 CategoryProgress 加载了数据，同步到 LearningItemStates 表
+                    if (knownItems.Count > 0 || unknownItems.Count > 0)
+                    {
+                        _persistenceService.SyncCategoryProgressToLearningItemStates(userId, subCategory, knownItems, unknownItems);
+                    }
+                }
+            }
+
+            _currentState.KnownItems = knownItems;
+            _currentState.UnknownItems = unknownItems;
+
+            // 从 CategoryProgress 加载统计和索引信息
+            var userProfile = _persistenceService.LoadUserProfile(userId);
+            if (userProfile.LearningProgress.CategoryProgresses.TryGetValue(subCategory, out var catProgress))
+            {
+                _currentState.CorrectCount = catProgress.CorrectCount;
+                _currentState.TotalCount = catProgress.TotalTestCount;
+                _currentState.StudyModeIndex = catProgress.LastResumeIndex;
+                _currentState.QuickModeIndex = catProgress.QuickTestResumeIndex;
             }
             else
             {
@@ -68,6 +91,10 @@ namespace LearningAssistant.Services.Learning
                 progress.CategoryProgresses[subCategory] = categoryProgress;
             }
 
+            // 同步到 LearningItemStates 表（新存储）
+            _persistenceService.SyncCategoryProgressToLearningItemStates(userId, subCategory, state.KnownItems, state.UnknownItems);
+
+            // 同时保留 CategoryProgress 的 JSON 字段（向后兼容）
             categoryProgress.KnownItems = state.KnownItems;
             categoryProgress.UnknownItems = state.UnknownItems;
             categoryProgress.LastStudyMode = state.CurrentMode;
@@ -78,7 +105,6 @@ namespace LearningAssistant.Services.Learning
             categoryProgress.LastTestDate = DateTime.Now;
 
             progress.LastStudyTime = DateTime.Now;
-            // TotalItemsStudied / TotalItemsMastered 改为计算属性，无需手动同步
 
             profile.UpdateStudyRecord();
             profile.IncrementTodayItems();
@@ -88,33 +114,35 @@ namespace LearningAssistant.Services.Learning
 
         public void AddUnknownItem(string userId, string content, string subCategory)
         {
-            var profile = _persistenceService.LoadUserProfile(userId);
+            // 使用 LearningItemStates 表
+            var knownItems = _persistenceService.GetKnownItems(userId, subCategory);
+            var unknownItems = _persistenceService.GetUnknownItems(userId, subCategory);
 
-            if (!profile.LearningProgress.CategoryProgresses.TryGetValue(subCategory, out var catProgress))
+            if (!knownItems.Contains(content) && !unknownItems.Contains(content))
             {
-                catProgress = new CategoryProgress { CategoryName = subCategory };
-                profile.LearningProgress.CategoryProgresses[subCategory] = catProgress;
-            }
-
-            if (!catProgress.KnownItems.Contains(content) && !catProgress.UnknownItems.Contains(content))
-            {
-                catProgress.UnknownItems.Add(content);
+                _persistenceService.UpsertLearningItemState(userId, subCategory, content, false);
                 if (!_currentState.UnknownItems.Contains(content))
                     _currentState.UnknownItems.Add(content);
             }
-            else if (catProgress.KnownItems.Contains(content))
+            else if (knownItems.Contains(content))
             {
-                catProgress.KnownItems.Remove(content);
-                if (!catProgress.UnknownItems.Contains(content))
-                {
-                    catProgress.UnknownItems.Add(content);
-                }
+                _persistenceService.UpsertLearningItemState(userId, subCategory, content, false);
                 _currentState.KnownItems.Remove(content);
                 if (!_currentState.UnknownItems.Contains(content))
                     _currentState.UnknownItems.Add(content);
-            }
 
-            _persistenceService.SaveUserProfile(profile);
+                // 同时更新 CategoryProgress（向后兼容）
+                var profile = _persistenceService.LoadUserProfile(userId);
+                if (profile.LearningProgress.CategoryProgresses.TryGetValue(subCategory, out var catProgress))
+                {
+                    catProgress.KnownItems.Remove(content);
+                    if (!catProgress.UnknownItems.Contains(content))
+                    {
+                        catProgress.UnknownItems.Add(content);
+                    }
+                    _persistenceService.SaveUserProfile(profile);
+                }
+            }
         }
 
         public void ResetProgress()

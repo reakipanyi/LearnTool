@@ -194,7 +194,7 @@ namespace LearningAssistant.Services.Migration
                 }
 
                 // 3. 迁移会话数据
-                ReportProgress(90, "正在迁移会话数据...");
+                ReportProgress(80, "正在迁移会话数据...");
                 try
                 {
                     if (MigrateSessionData())
@@ -207,6 +207,36 @@ namespace LearningAssistant.Services.Migration
                 {
                     _logger?.LogError(ex, "Failed to migrate session data");
                     result.Errors.Add($"迁移会话数据失败: {ex.Message}");
+                }
+
+                // 4. 迁移学习项状态数据（从 CategoryProgress 的 JSON 字段）
+                ReportProgress(85, "正在迁移学习项状态数据...");
+                try
+                {
+                    if (MigrateLearningItemStates())
+                    {
+                        _logger?.LogInformation("Learning item states migrated successfully");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Failed to migrate learning item states");
+                    result.Errors.Add($"迁移学习项状态数据失败: {ex.Message}");
+                }
+
+                // 5. 迁移提醒重复日期数据（从 Reminder 的 JSON 字段）
+                ReportProgress(95, "正在迁移提醒重复日期数据...");
+                try
+                {
+                    if (MigrateReminderRepeatDays())
+                    {
+                        _logger?.LogInformation("Reminder repeat days migrated successfully");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Failed to migrate reminder repeat days");
+                    result.Errors.Add($"迁移提醒重复日期数据失败: {ex.Message}");
                 }
 
                 ReportProgress(100, "迁移完成!");
@@ -359,6 +389,138 @@ namespace LearningAssistant.Services.Migration
                 _logger?.LogWarning(ex, "Failed to load user profile from JSON: {UserId}", userId);
                 return null;
             }
+        }
+
+        /// <summary>
+        /// 迁移学习项状态数据（从 CategoryProgress 的 KnownItemsJson/UnknownItemsJson）
+        /// </summary>
+        private bool MigrateLearningItemStates()
+        {
+            using var db = _dbContextFactory.CreateDbContext();
+
+            if (db.LearningItemStates.Any())
+            {
+                _logger?.LogInformation("Learning item states already exist, skipping");
+                return true;
+            }
+
+            var categoryProgresses = db.CategoryProgresses.ToList();
+            if (categoryProgresses.Count == 0)
+            {
+                _logger?.LogInformation("No category progress data to migrate");
+                return false;
+            }
+
+            var totalStates = 0;
+            foreach (var cp in categoryProgresses)
+            {
+                try
+                {
+                    var knownItems = JsonHelper.Deserialize<List<string>>(cp.KnownItemsJson) ?? new List<string>();
+                    var unknownItems = JsonHelper.Deserialize<List<string>>(cp.UnknownItemsJson) ?? new List<string>();
+
+                    foreach (var content in knownItems)
+                    {
+                        if (!string.IsNullOrWhiteSpace(content))
+                        {
+                            db.LearningItemStates.Add(new LearningItemStateEntity
+                            {
+                                UserId = cp.UserId,
+                                CategoryName = cp.CategoryName,
+                                Content = content,
+                                IsKnown = true,
+                                CreatedAt = DateTime.Now,
+                                UpdatedAt = DateTime.Now
+                            });
+                            totalStates++;
+                        }
+                    }
+
+                    foreach (var content in unknownItems)
+                    {
+                        if (!string.IsNullOrWhiteSpace(content))
+                        {
+                            db.LearningItemStates.Add(new LearningItemStateEntity
+                            {
+                                UserId = cp.UserId,
+                                CategoryName = cp.CategoryName,
+                                Content = content,
+                                IsKnown = false,
+                                CreatedAt = DateTime.Now,
+                                UpdatedAt = DateTime.Now
+                            });
+                            totalStates++;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Failed to migrate learning item states for category {Category}", cp.CategoryName);
+                }
+            }
+
+            if (totalStates > 0)
+            {
+                db.SaveChanges();
+                _logger?.LogInformation("Migrated {Count} learning item states", totalStates);
+            }
+
+            return totalStates > 0;
+        }
+
+        /// <summary>
+        /// 迁移提醒重复日期数据（从 Reminder 的 RepeatDaysJson）
+        /// </summary>
+        private bool MigrateReminderRepeatDays()
+        {
+            using var db = _dbContextFactory.CreateDbContext();
+
+            if (db.ReminderRepeatDays.Any())
+            {
+                _logger?.LogInformation("Reminder repeat days already exist, skipping");
+                return true;
+            }
+
+            var reminders = db.Reminders.Where(r => !string.IsNullOrEmpty(r.RepeatDaysJson)).ToList();
+            if (reminders.Count == 0)
+            {
+                _logger?.LogInformation("No reminder repeat days data to migrate");
+                return false;
+            }
+
+            var totalDays = 0;
+            foreach (var reminder in reminders)
+            {
+                try
+                {
+                    var repeatDays = JsonHelper.Deserialize<List<DayOfWeek>>(reminder.RepeatDaysJson);
+                    if (repeatDays != null)
+                    {
+                        foreach (var day in repeatDays)
+                        {
+                            db.ReminderRepeatDays.Add(new ReminderRepeatDayEntity
+                            {
+                                ReminderId = reminder.Id,
+                                DayOfWeek = (int)day,
+                                CreatedAt = DateTime.Now
+                            });
+                            totalDays++;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Failed to migrate repeat days for reminder {Id}", reminder.Id);
+                }
+            }
+
+            if (totalDays > 0)
+            {
+                db.SaveChanges();
+                _logger?.LogInformation("Migrated {Count} reminder repeat days", totalDays);
+            }
+
+            return totalDays > 0;
         }
 
         private void ReportProgress(int percentage, string message)

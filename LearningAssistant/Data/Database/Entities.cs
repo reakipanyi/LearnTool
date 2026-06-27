@@ -247,6 +247,15 @@ namespace LearningAssistant.Data.Database
 
         public int CorrectStreak { get; set; } = 0;
 
+        [MaxLength(20)]
+        public string? AlgorithmType { get; set; }
+
+        [MaxLength(100)]
+        public string? Category { get; set; }
+
+        [MaxLength(50)]
+        public string? Subject { get; set; }
+
         public List<ReviewLogEntity> ReviewLogs { get; set; } = new List<ReviewLogEntity>();
     }
 

@@ -237,6 +237,29 @@ namespace LearningAssistant.Services.SystemTray
         }
 
         /// <inheritdoc/>
+        public ContextMenuStrip? GetContextMenu()
+        {
+            return _contextMenu;
+        }
+
+        /// <inheritdoc/>
+        public void UpdateMenuItem(string oldText, string newText, bool enabled = true)
+        {
+            if (_contextMenu == null)
+                return;
+
+            for (int i = 0; i < _contextMenu.Items.Count; i++)
+            {
+                if (_contextMenu.Items[i] is ToolStripMenuItem item && item.Text == oldText)
+                {
+                    item.Text = newText;
+                    item.Enabled = enabled;
+                    break;
+                }
+            }
+        }
+
+        /// <inheritdoc/>
         public void Cleanup()
         {
             try

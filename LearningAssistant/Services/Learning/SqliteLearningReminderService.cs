@@ -56,9 +56,20 @@ namespace LearningAssistant.Services.Learning
                 _logger?.LogDebug("添加提醒: {Title}", reminder.Title);
                 
                 using var db = _dbFactory.CreateDbContext();
+                
+                // 检查是否已存在
+                if (db.Reminders.Any(r => r.Id == reminder.Id))
+                {
+                    _logger?.LogWarning("提醒已存在: {ReminderId}", reminder.Id);
+                    return;
+                }
+                
                 var entity = reminder.ToEntity();
                 db.Reminders.Add(entity);
                 db.SaveChanges();
+                
+                // 保存 RepeatDays 到 ReminderRepeatDays 表
+                SaveRepeatDays(db, reminder.Id, reminder.RepeatDays);
                 
                 _logger?.LogInformation("提醒添加成功: {ReminderId}", reminder.Id);
             }
@@ -79,6 +90,10 @@ namespace LearningAssistant.Services.Learning
                 var entity = db.Reminders.FirstOrDefault(r => r.Id == reminderId);
                 if (entity != null)
                 {
+                    // 先删除关联的 RepeatDays
+                    var repeatDays = db.ReminderRepeatDays.Where(r => r.ReminderId == reminderId);
+                    db.ReminderRepeatDays.RemoveRange(repeatDays);
+                    
                     db.Reminders.Remove(entity);
                     db.SaveChanges();
                     _logger?.LogInformation("提醒删除成功: {ReminderId}", reminderId);
@@ -108,6 +123,12 @@ namespace LearningAssistant.Services.Learning
                 if (entity != null)
                 {
                     entity.UpdateFromModel(reminder);
+                    
+                    // 更新 RepeatDays 表
+                    var existingRepeatDays = db.ReminderRepeatDays.Where(r => r.ReminderId == reminder.Id);
+                    db.ReminderRepeatDays.RemoveRange(existingRepeatDays);
+                    SaveRepeatDays(db, reminder.Id, reminder.RepeatDays);
+                    
                     db.SaveChanges();
                     _logger?.LogInformation("提醒更新成功: {ReminderId}", reminder.Id);
                 }
@@ -130,11 +151,19 @@ namespace LearningAssistant.Services.Learning
                 _logger?.LogDebug("获取用户提醒列表: {UserId}", userId);
                 
                 using var db = _dbFactory.CreateDbContext();
-                var reminders = db.Reminders
+                var reminderEntities = db.Reminders
                     .Where(r => r.UserId == userId)
                     .OrderBy(r => r.CreatedAt)
-                    .Select(r => r.ToModel())
                     .ToList();
+                
+                var reminders = new List<Reminder>();
+                foreach (var entity in reminderEntities)
+                {
+                    var reminder = entity.ToModel();
+                    // 从 ReminderRepeatDays 表加载 RepeatDays
+                    reminder.RepeatDays = LoadRepeatDays(db, reminder.Id);
+                    reminders.Add(reminder);
+                }
                 
                 _logger?.LogDebug("获取到 {Count} 个提醒", reminders.Count);
                 return reminders;
@@ -154,11 +183,18 @@ namespace LearningAssistant.Services.Learning
                 
                 var typeStr = type.ToString();
                 using var db = _dbFactory.CreateDbContext();
-                var reminders = db.Reminders
+                var reminderEntities = db.Reminders
                     .Where(r => r.UserId == userId && r.Type == typeStr)
                     .OrderBy(r => r.CreatedAt)
-                    .Select(r => r.ToModel())
                     .ToList();
+                
+                var reminders = new List<Reminder>();
+                foreach (var entity in reminderEntities)
+                {
+                    var reminder = entity.ToModel();
+                    reminder.RepeatDays = LoadRepeatDays(db, reminder.Id);
+                    reminders.Add(reminder);
+                }
                 
                 _logger?.LogDebug("获取到 {Count} 个 {Type} 类型的提醒", reminders.Count, type);
                 return reminders;
@@ -311,6 +347,7 @@ namespace LearningAssistant.Services.Learning
                 foreach (var entity in enabledReminders)
                 {
                     var reminder = entity.ToModel();
+                    reminder.RepeatDays = LoadRepeatDays(db, reminder.Id);
                     if (ShouldTriggerReminder(reminder, now, within))
                     {
                         upcoming.Add(reminder);
@@ -576,6 +613,7 @@ namespace LearningAssistant.Services.Learning
                 foreach (var entity in enabledReminders)
                 {
                     var reminder = entity.ToModel();
+                    reminder.RepeatDays = LoadRepeatDays(db, reminder.Id);
                     if (ShouldTriggerReminder(reminder, now, TimeSpan.FromMinutes(CheckIntervalMinutes)))
                     {
                         // 检查是否今天已经触发过
@@ -643,6 +681,31 @@ namespace LearningAssistant.Services.Learning
         protected virtual void OnReminderTriggered(Reminder reminder)
         {
             ReminderTriggered?.Invoke(this, new ReminderTriggeredEventArgs { Reminder = reminder });
+        }
+
+        private void SaveRepeatDays(AppDbContext db, Guid reminderId, List<DayOfWeek>? repeatDays)
+        {
+            if (repeatDays == null || repeatDays.Count == 0) return;
+
+            foreach (var day in repeatDays)
+            {
+                db.ReminderRepeatDays.Add(new ReminderRepeatDayEntity
+                {
+                    ReminderId = reminderId,
+                    DayOfWeek = (int)day,
+                    CreatedAt = DateTime.Now
+                });
+            }
+        }
+
+        private List<DayOfWeek>? LoadRepeatDays(AppDbContext db, Guid reminderId)
+        {
+            var repeatDays = db.ReminderRepeatDays
+                .Where(r => r.ReminderId == reminderId)
+                .Select(r => (DayOfWeek)r.DayOfWeek)
+                .ToList();
+
+            return repeatDays.Count > 0 ? repeatDays : null;
         }
 
         public void Dispose()

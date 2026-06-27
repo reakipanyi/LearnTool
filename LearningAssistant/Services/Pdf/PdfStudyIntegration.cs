@@ -36,7 +36,15 @@ namespace LearningAssistant.Services.Pdf
             try
             {
                 string cleanWord = word.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ").Trim();
+                
                 _studyEngine.Initialize(_currentUserId, _currentLanguage, _currentSubCategory, "", "", "");
+                
+                if (IsWordAlreadyExists(cleanWord))
+                {
+                    _logger.LogInformation("Word already exists in learning list: {Word}", cleanWord);
+                    return false;
+                }
+                
                 _studyEngine.AddUnknownItem(cleanWord, _currentSubCategory);
                 
                 WordAdded?.Invoke(this, new WordAddedEventArgs
@@ -45,11 +53,46 @@ namespace LearningAssistant.Services.Pdf
                     Language = _currentLanguage
                 });
                 
+                _logger.LogInformation("Added word to learning list: {Word}", cleanWord);
                 return true;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to add word to learning list: {Word}", word);
+                return false;
+            }
+        }
+
+        private bool IsWordAlreadyExists(string word)
+        {
+            try
+            {
+                var allItems = _studyEngine.GetAllItems();
+                if (allItems.Any(item => 
+                    string.Equals(item.GetMainContent().Trim(), word.Trim(), StringComparison.OrdinalIgnoreCase)))
+                {
+                    return true;
+                }
+
+                var knownItems = _studyEngine.KnownItems;
+                if (knownItems.Any(item => 
+                    string.Equals(item.Trim(), word.Trim(), StringComparison.OrdinalIgnoreCase)))
+                {
+                    return true;
+                }
+
+                var unknownItems = _studyEngine.UnknownItems;
+                if (unknownItems.Any(item => 
+                    string.Equals(item.Trim(), word.Trim(), StringComparison.OrdinalIgnoreCase)))
+                {
+                    return true;
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to check if word exists: {Word}", word);
                 return false;
             }
         }

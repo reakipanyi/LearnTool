@@ -144,10 +144,7 @@ namespace LearningAssistant.Forms
         public event EventHandler? GridRowsAdded;
 
         public event EventHandler? ItemSelected;
-        public void ShowMessage(string msg)
-        {
-            MessageBox.Show(msg);
-        }
+
 
         private void UpdateStatusCount()
         {

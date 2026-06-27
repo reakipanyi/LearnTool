@@ -77,14 +77,10 @@ namespace LearningAssistant.Managers
 
         private AnnotationStroke? _selectedStroke;
         private int _selectedStrokeIndex = -1;
-        private bool _isSelectingStroke = false;
-        private bool _isDraggingStroke = false;
-        private PointF? _dragOffset;
         private const float HitTestThreshold = 25f;
 
         public int ZoomLevel => _zoomLevel;
         public bool IsLocked => _isLocked;
-        public bool HasSelectedStroke => _selectedStroke != null && _selectedStrokeIndex >= 0;
         public Rectangle? LastSelectionRect => _lastSelectionRect ?? _pendingHighlightRect;
         public Point ImageOffset => _imageOffset;
         public AnnotationToolMode CurrentToolMode => _currentToolMode;
@@ -117,7 +113,6 @@ namespace LearningAssistant.Managers
             _currentStrokePoints = null;
             _selectedStroke = null;
             _selectedStrokeIndex = -1;
-            _isSelectingStroke = false;
 
             if (_form.PictureBoxPdf != null)
             {
@@ -972,9 +967,6 @@ namespace LearningAssistant.Managers
             _logger.LogInformation("Select mode click: client={ClientX},{ClientY}, img={ImgX},{ImgY}, strokes count={Count}",
                 clientPoint.X, clientPoint.Y, imgPoint.X, imgPoint.Y, strokes.Count);
 
-            _selectedStroke = null;
-            _selectedStrokeIndex = -1;
-
             for (int i = strokes.Count - 1; i >= 0; i--)
             {
                 var stroke = strokes[i];
@@ -982,19 +974,15 @@ namespace LearningAssistant.Managers
                 {
                     _selectedStroke = stroke;
                     _selectedStrokeIndex = i;
-                    _isSelectingStroke = true;
-                    _dragOffset = imgPoint;
-                    _logger.LogInformation("Selected stroke at index {Index}, type={ShapeType}", i, stroke.ShapeType);
-                    break;
+                    _logger.LogInformation("Selected stroke at index {Index}, type={ShapeType}, deleting...", i, stroke.ShapeType);
+                    DeleteSelectedStroke();
+                    return;
                 }
             }
 
-            if (_selectedStroke == null)
-            {
-                _logger.LogInformation("No stroke hit - click at {X},{Y}", imgPoint.X, imgPoint.Y);
-            }
-
-            _form.PictureBoxPdf.Invalidate();
+            _selectedStroke = null;
+            _selectedStrokeIndex = -1;
+            _logger.LogInformation("No stroke hit - click at {X},{Y}", imgPoint.X, imgPoint.Y);
         }
 
         private bool HitTestStroke(AnnotationStroke stroke, PointF imgPoint)
@@ -1124,7 +1112,6 @@ namespace LearningAssistant.Managers
             _form.Presenter.RemoveStrokeAtCurrentPage(_selectedStrokeIndex);
             _selectedStroke = null;
             _selectedStrokeIndex = -1;
-            _isSelectingStroke = false;
 
             LoadAnnotationsForCurrentPage();
             _form.PictureBoxPdf.Invalidate();
@@ -1134,7 +1121,6 @@ namespace LearningAssistant.Managers
         {
             _selectedStroke = null;
             _selectedStrokeIndex = -1;
-            _isSelectingStroke = false;
             _form.PictureBoxPdf.Invalidate();
         }
 
@@ -1225,84 +1211,11 @@ namespace LearningAssistant.Managers
                             }
                     }
                 }
-
-                if (_selectedStroke != null && _currentToolMode == AnnotationToolMode.Select)
-                {
-                    DrawSelectedStroke(g, imgRect);
-                }
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error drawing annotations");
             }
-        }
-
-        private void DrawSelectedStroke(Graphics g, Rectangle imgRect)
-        {
-            if (_selectedStroke == null || _selectedStroke.Points == null || _selectedStroke.Points.Length < 4) return;
-            if (_form.CurrentPageImage == null) return;
-
-            int imgWidth = _form.CurrentPageImage.Width;
-            int imgHeight = _form.CurrentPageImage.Height;
-
-            var pageSize = _form.Presenter?.GetPageSize() ?? (0f, 0f);
-            float pageWidth = pageSize.Width > 0 ? pageSize.Width : imgWidth;
-            float pageHeight = pageSize.Height > 0 ? pageSize.Height : imgHeight;
-
-            float imgScaleX = (float)imgWidth / pageWidth;
-            float imgScaleY = (float)imgHeight / pageHeight;
-
-            float screenScaleX = (float)imgRect.Width / imgWidth;
-            float screenScaleY = (float)imgRect.Height / imgHeight;
-
-            string shapeType = _selectedStroke.ShapeType ?? string.Empty;
-            var selectionPen = new Pen(Color.FromArgb(255, 0, 120, 255), 2);
-            selectionPen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
-
-            switch (shapeType)
-            {
-                case "Rectangle":
-                case "Ellipse":
-                case "Mosaic":
-                    {
-                        float imgX1 = _selectedStroke.Points[0] * pageWidth * imgScaleX;
-                        float imgY1 = _selectedStroke.Points[1] * pageHeight * imgScaleY;
-                        float imgX2 = _selectedStroke.Points[2] * pageWidth * imgScaleX;
-                        float imgY2 = _selectedStroke.Points[3] * pageHeight * imgScaleY;
-
-                        float left = Math.Min(imgX1, imgX2) * screenScaleX + imgRect.X;
-                        float right = Math.Max(imgX1, imgX2) * screenScaleX + imgRect.X;
-                        float top = Math.Min(imgY1, imgY2) * screenScaleY + imgRect.Y;
-                        float bottom = Math.Max(imgY1, imgY2) * screenScaleY + imgRect.Y;
-
-                        var rect = new RectangleF(left - 5, top - 5, right - left + 10, bottom - top + 10);
-                        g.DrawRectangle(selectionPen, rect.X, rect.Y, rect.Width, rect.Height);
-                        break;
-                    }
-                case "Arrow":
-                case "Pen":
-                case "Strikethrough":
-                default:
-                    {
-                        var screenPoints = new List<PointF>();
-                        for (int i = 0; i < _selectedStroke.Points.Length - 1; i += 2)
-                        {
-                            float imgX = _selectedStroke.Points[i] * pageWidth * imgScaleX;
-                            float imgY = _selectedStroke.Points[i + 1] * pageHeight * imgScaleY;
-                            screenPoints.Add(new PointF(
-                                imgX * screenScaleX + imgRect.X,
-                                imgY * screenScaleY + imgRect.Y));
-                        }
-
-                        if (screenPoints.Count >= 2)
-                        {
-                            g.DrawLines(selectionPen, screenPoints.ToArray());
-                        }
-                        break;
-                    }
-            }
-
-            selectionPen.Dispose();
         }
 
         private PointF ClientToImage(Point clientPt)
