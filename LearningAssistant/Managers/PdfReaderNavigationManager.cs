@@ -351,7 +351,10 @@ namespace LearningAssistant.Managers
                     {
                         case AnnotationToolMode.Highlight:
                             _logger.LogInformation("MouseDown Left: Starting highlight selection at {X},{Y}", e.Location.X, e.Location.Y);
-                            _isSelecting = true;
+                            _isDrawingShape = true;
+                            EnsureAnnotationBitmap();
+                            _shapeStartPoint = ClientToImage(e.Location);
+                            _shapeEndPoint = _shapeStartPoint;
                             _selectStart = e.Location;
                             _selectEnd = e.Location;
                             _form.PictureBoxPdf.Invalidate();
@@ -635,8 +638,6 @@ namespace LearningAssistant.Managers
                     {
                         if (_annotationBitmap != null && _shapeStartPoint.HasValue && _shapeEndPoint.HasValue)
                         {
-                            _annotationGraphics!.SmoothingMode = SmoothingMode.AntiAlias;
-
                             var startPt = _shapeStartPoint.Value;
                             var endPt = _shapeEndPoint.Value;
                             var rect = new RectangleF(
@@ -645,49 +646,73 @@ namespace LearningAssistant.Managers
                                 Math.Abs(endPt.X - startPt.X),
                                 Math.Abs(endPt.Y - startPt.Y));
 
-                            using var drawPen = new Pen(_penColor, _penWidth);
-                            drawPen.StartCap = LineCap.Round;
-                            drawPen.EndCap = LineCap.Round;
-
-                            switch (_currentToolMode)
+                            if (_currentToolMode == AnnotationToolMode.Highlight)
                             {
-                                case AnnotationToolMode.Rectangle:
-                                    _annotationGraphics.DrawRectangle(drawPen, rect.X, rect.Y, rect.Width, rect.Height);
-                                    break;
-                                case AnnotationToolMode.Ellipse:
-                                    _annotationGraphics.DrawEllipse(drawPen, rect);
-                                    break;
-                                case AnnotationToolMode.Arrow:
-                                    drawPen.EndCap = LineCap.ArrowAnchor;
-                                    _annotationGraphics.DrawLine(drawPen, startPt, endPt);
-                                    break;
-                                case AnnotationToolMode.Mosaic:
-                                    ApplyMosaic(rect, 10);
-                                    break;
+                                if (rect.Width > 0 && rect.Height > 0)
+                                {
+                                    var imgRect = _form.GetImageDisplayRect();
+                                    float scaleX = (float)imgRect.Width / _form.CurrentPageImage!.Width;
+                                    float scaleY = (float)imgRect.Height / _form.CurrentPageImage.Height;
+
+                                    var screenRect = new Rectangle(
+                                        (int)(rect.X * scaleX + imgRect.X),
+                                        (int)(rect.Y * scaleY + imgRect.Y),
+                                        (int)(rect.Width * scaleX),
+                                        (int)(rect.Height * scaleY));
+
+                                    AddHighlightCallback?.Invoke(screenRect);
+                                }
                             }
-
-                            _form.Presenter?.SaveAnnotationForCurrentPage((Bitmap)_annotationBitmap.Clone());
-
-                            var imgW = _annotationBitmap.Width;
-                            var imgH = _annotationBitmap.Height;
-
-                            var strokePts = new List<float>
+                            else
                             {
-                                startPt.X / imgW, startPt.Y / imgH,
-                                endPt.X / imgW, endPt.Y / imgH
-                            };
+                                _annotationGraphics!.SmoothingMode = SmoothingMode.AntiAlias;
 
-                            var stroke = new AnnotationStroke
-                            {
-                                Points = strokePts.ToArray(),
-                                ColorArgb = _penColor.ToArgb(),
-                                Thickness = _penWidth,
-                                ShapeType = _currentToolMode.ToString(),
-                                CreatedAt = DateTime.Now
-                            };
+                                using var drawPen = new Pen(_penColor, _penWidth);
+                                drawPen.StartCap = LineCap.Round;
+                                drawPen.EndCap = LineCap.Round;
 
-                            PushStrokeToUndoStack(stroke);
-                            _form.Presenter?.AddAnnotationStroke(strokePts.ToArray(), _penColor.ToArgb(), _penWidth, imgW, imgH);
+                                switch (_currentToolMode)
+                                {
+                                    case AnnotationToolMode.Rectangle:
+                                        drawPen.DashStyle = DashStyle.Dash;
+                                        _annotationGraphics.DrawRectangle(drawPen, rect.X, rect.Y, rect.Width, rect.Height);
+                                        break;
+                                    case AnnotationToolMode.Ellipse:
+                                        drawPen.DashStyle = DashStyle.Dash;
+                                        _annotationGraphics.DrawEllipse(drawPen, rect);
+                                        break;
+                                    case AnnotationToolMode.Arrow:
+                                        drawPen.EndCap = LineCap.ArrowAnchor;
+                                        _annotationGraphics.DrawLine(drawPen, startPt, endPt);
+                                        break;
+                                    case AnnotationToolMode.Mosaic:
+                                        ApplyMosaic(rect, 10);
+                                        break;
+                                }
+
+                                _form.Presenter?.SaveAnnotationForCurrentPage((Bitmap)_annotationBitmap.Clone());
+
+                                var imgW = _annotationBitmap.Width;
+                                var imgH = _annotationBitmap.Height;
+
+                                var strokePts = new List<float>
+                                {
+                                    startPt.X / imgW, startPt.Y / imgH,
+                                    endPt.X / imgW, endPt.Y / imgH
+                                };
+
+                                var stroke = new AnnotationStroke
+                                {
+                                    Points = strokePts.ToArray(),
+                                    ColorArgb = _penColor.ToArgb(),
+                                    Thickness = _penWidth,
+                                    ShapeType = _currentToolMode.ToString(),
+                                    CreatedAt = DateTime.Now
+                                };
+
+                                PushStrokeToUndoStack(stroke);
+                                _form.Presenter?.AddAnnotationStroke(strokePts.ToArray(), _penColor.ToArgb(), _penWidth, imgW, imgH);
+                            }
                         }
                     }
                     catch (Exception ex)
@@ -960,6 +985,15 @@ namespace LearningAssistant.Managers
 
                     switch (_currentToolMode)
                     {
+                        case AnnotationToolMode.Highlight:
+                            {
+                                var highlightColor = Color.FromArgb(120, 255, 255, 0);
+                                using var brush = new SolidBrush(highlightColor);
+                                g.FillRectangle(brush, rect);
+                                using var highlightPen = new Pen(Color.FromArgb(180, 255, 150, 0), 2);
+                                g.DrawRectangle(highlightPen, rect);
+                                break;
+                            }
                         case AnnotationToolMode.Rectangle:
                             g.DrawRectangle(pen, rect);
                             break;

@@ -20,6 +20,7 @@ namespace LearningAssistant.Services.Gamification
         private string _userId = "default";
         private TimeSpan _studyDuration;
         private int _quizCorrectCount;
+        private int _quizTotalCount;
         private int _favoriteCount;
         private int _noteCount;
         private int _wrongCount;
@@ -112,6 +113,7 @@ namespace LearningAssistant.Services.Gamification
             try
             {
                 _wrongCount++;
+                _quizTotalCount++;
                 CheckBadgesAndChallenges();
 
                 _logger?.LogInformation("学习项答错事件处理: {ItemContent}, 累计错题数: {WrongCount}", 
@@ -158,6 +160,13 @@ namespace LearningAssistant.Services.Gamification
         public void RecordQuizCorrect()
         {
             _quizCorrectCount++;
+            _quizTotalCount++;
+            CheckBadgesAndChallenges();
+        }
+
+        public void RecordQuizWrong()
+        {
+            _quizTotalCount++;
             CheckBadgesAndChallenges();
         }
 
@@ -170,6 +179,12 @@ namespace LearningAssistant.Services.Gamification
         public void RecordNote()
         {
             _noteCount++;
+            CheckBadgesAndChallenges();
+        }
+
+        public void RecordWrongReview()
+        {
+            _wrongCount++;
             CheckBadgesAndChallenges();
         }
 
@@ -186,7 +201,12 @@ namespace LearningAssistant.Services.Gamification
             _challengeManager.SetLearningData(
                 _statsManager.TodayLearnedCount,
                 _quizCorrectCount,
-                _favoriteCount);
+                _favoriteCount,
+                (int)_studyDuration.TotalMinutes,
+                _statsManager.StreakDays,
+                _wrongCount,
+                _noteCount,
+                _quizTotalCount);
             _challengeManager.UpdateProgress();
         }
         #endregion
@@ -359,6 +379,14 @@ namespace LearningAssistant.Services.Gamification
                     RewardScore = completed.Reward
                 });
             }
+
+            _badgeManager.CheckUnlock(
+                _statsManager.TotalLearnedCount,
+                _statsManager.StreakDays,
+                _statsManager.TodayLearnedCount,
+                _quizCorrectCount,
+                _favoriteCount,
+                _noteCount);
         }
 
         private void PublishStatsChangedEvent()

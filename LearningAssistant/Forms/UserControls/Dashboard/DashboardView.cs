@@ -1,17 +1,16 @@
 using LearningAssistant.Forms.UserControls.Cards;
+using LearningAssistant.Models.Learning;
 using System.ComponentModel;
 using System.Drawing.Drawing2D;
+using CardRecommendation = LearningAssistant.Forms.UserControls.Cards.RecommendationCard;
 
 namespace LearningAssistant.Forms.UserControls.Dashboard
 {
-    /// <summary>
-    /// 仪表盘视图控件
-    /// 包含数据概览卡片、今日推荐、功能入口等
-    /// </summary>
     public class DashboardView : UserControl
     {
         private readonly List<StatCard> _statCards = new();
         private readonly List<FeatureCard> _featureCards = new();
+        private readonly List<CardRecommendation> _recommendCards = new();
         private Label _labelWelcome = null!;
         private Label _labelSubtitle = null!;
         private Label _labelStatsTitle = null!;
@@ -21,6 +20,8 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
         private Panel _panelRecommend = null!;
         private Label _labelRecommendTitle = null!;
         private string _userName = "同学";
+
+        public event EventHandler<LearningRecommendation>? RecommendationClicked;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string UserName
@@ -126,18 +127,87 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             AddStatCard("📝", "0", "笔记数", "查看全部", StatCard.TrendDirection.None,
                 Color.FromArgb(33, 150, 243));
 
+            // 学习核心
             AddFeatureCard("📚", "开始学习", "打开学习内容", Color.FromArgb(99, 102, 241), Color.FromArgb(139, 92, 246));
             AddFeatureCard("📖", "PDF阅读", "打开PDF阅读器", Color.FromArgb(34, 197, 94), Color.FromArgb(16, 185, 129));
-            AddFeatureCard("📝", "错题本", "复习错题", Color.FromArgb(249, 115, 22), Color.FromArgb(239, 68, 68));
+
+            // 游戏化
             AddFeatureCard("🎯", "每日挑战", "完成每日任务", Color.FromArgb(236, 72, 153), Color.FromArgb(219, 39, 119));
-            AddFeatureCard("📊", "学习统计", "查看学习数据", Color.FromArgb(14, 165, 233), Color.FromArgb(59, 130, 246));
+            AddFeatureCard("🏆", "成就徽章", "查看成就", Color.FromArgb(255, 193, 7), Color.FromArgb(251, 146, 60));
+
+            // 工具辅助
             AddFeatureCard("📒", "笔记", "管理学习笔记", Color.FromArgb(156, 39, 176), Color.FromArgb(103, 58, 183));
+            AddFeatureCard("📝", "错题本", "复习错题", Color.FromArgb(249, 115, 22), Color.FromArgb(239, 68, 68));
+
+            // 数据分析
+            AddFeatureCard("📊", "学习统计", "查看学习数据", Color.FromArgb(14, 165, 233), Color.FromArgb(59, 130, 246));
+            AddFeatureCard("⚙️", "设置", "应用设置", Color.FromArgb(108, 117, 125), Color.FromArgb(75, 85, 99));
 
             InitializeRecommendPanel();
         }
 
         private void InitializeRecommendPanel()
         {
+            var cardPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent
+            };
+
+            _panelRecommend.Controls.Add(cardPanel);
+        }
+
+        public void UpdateRecommendations(List<LearningRecommendation> recommendations)
+        {
+            _recommendCards.Clear();
+            _panelRecommend.Controls.Clear();
+
+            if (recommendations == null || recommendations.Count == 0)
+            {
+                ShowEmptyRecommend();
+                return;
+            }
+
+            var cardPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent
+            };
+
+            int y = 5;
+            int cardWidth = this.Width - 50;
+            if (cardWidth < 300) cardWidth = 300;
+
+            foreach (var rec in recommendations.Take(5))
+            {
+                var card = new CardRecommendation
+                {
+                    Title = rec.Title,
+                    Reason = rec.Reason,
+                    Type = rec.Type,
+                    EstimatedMinutes = rec.EstimatedMinutes,
+                    Priority = rec.Priority,
+                    Location = new Point(25, y),
+                    Width = cardWidth,
+                    Height = 65
+                };
+                card.Click += (s, e) => RecommendationClicked?.Invoke(this, rec);
+                _recommendCards.Add(card);
+                cardPanel.Controls.Add(card);
+                y += card.Height + 8;
+            }
+
+            _panelRecommend.Controls.Add(cardPanel);
+            _panelRecommend.Height = Math.Min(y + 10, 200);
+        }
+
+        private void ShowEmptyRecommend()
+        {
+            var cardPanel = new Panel
+            {
+                Dock = DockStyle.Fill
+            };
+
             var recommendLabel = new Label
             {
                 AutoSize = true,
@@ -152,11 +222,6 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
                 AutoSize = true,
                 Font = new Font("Segoe UI Emoji", 28F),
                 Text = "💡"
-            };
-
-            var cardPanel = new Panel
-            {
-                Dock = DockStyle.Fill
             };
 
             cardPanel.Controls.Add(recommendLabel);

@@ -20,10 +20,10 @@ namespace LearningAssistant.Forms.UserControls
         #endregion
 
         #region 全局复用字体（Dispose统一销毁，防止GDI句柄泄漏）
-        private readonly Font _fontIcon = new Font("Arial", 24F);
-        private readonly Font _fontTitle = new Font("微软雅黑", 36F, FontStyle.Bold);
-        private readonly Font _fontContent = new Font("微软雅黑", 11F);
-        private readonly Font _fontCategoryTag = new Font("微软雅黑", 9F);
+        private readonly Font _fontIcon = new Font("Arial", 24F, FontStyle.Regular, GraphicsUnit.Point, 0);
+        private readonly Font _fontTitle = new Font("微软雅黑", 42F, FontStyle.Bold, GraphicsUnit.Point, 134);
+        private readonly Font _fontContent = new Font("微软雅黑", 18F, FontStyle.Regular, GraphicsUnit.Point, 134);
+        private readonly Font _fontCategoryTag = new Font("微软雅黑", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
         #endregion
 
         public LearningCard()
@@ -31,7 +31,8 @@ namespace LearningAssistant.Forms.UserControls
             // 开启双缓冲抗锯齿绘制
             this.SetStyle(ControlStyles.OptimizedDoubleBuffer
                 | ControlStyles.AllPaintingInWmPaint
-                | ControlStyles.UserPaint, true);
+                | ControlStyles.UserPaint
+                | ControlStyles.ResizeRedraw, true);
 
             // 1. 实例化所有子控件
             this._accentBar = new Panel();
@@ -41,16 +42,38 @@ namespace LearningAssistant.Forms.UserControls
             this._contentLabel = new Label();
             this._categoryLabel = new Label();
 
-            // 2. 左侧色条
+            // 仅运行时初始化子控件，设计器跳过防止加载异常
+            if (!DesignMode)
+            {
+                InitChildControls();
+            }
+
+            // 卡片基础样式
+            this.Height = 280;
+            this.MinimumSize = new Size(120, 160); // 限制最小尺寸，hover缩放不会过小
+            this.BackColor = Color.White;
+            this.BorderStyle = BorderStyle.None;
+            this.Padding = new Padding(0);
+
+            // 绑定绘制、鼠标、尺寸变更事件
+            this.MouseEnter += LearningCard_MouseEnter;
+            this.MouseLeave += LearningCard_MouseLeave;
+            this.Paint += LearningCard_Paint;
+            this.Resize += (s, e) => this.Invalidate();
+        }
+
+        /// <summary>子控件布局初始化（抽离，最小改动修正Dock顺序）</summary>
+        private void InitChildControls()
+        {
+            // 2. 左侧色条 Dock.Left 优先添加
             this._accentBar.Dock = DockStyle.Left;
             this._accentBar.Width = 4;
             this._accentBar.BackColor = Color.FromArgb(76, 175, 80);
 
-            // 3. 图标容器
-            this._iconPanel.Width = 50;
-            this._iconPanel.Height = 50;
-            this._iconPanel.Margin = new Padding(10, 10, 0, 10);
+            // 3. 图标容器 左停靠，移除写死宽高冲突
             this._iconPanel.Dock = DockStyle.Left;
+            this._iconPanel.Width = 60;
+            this._iconPanel.Margin = new Padding(10, 10, 0, 10);
 
             // 图标文字
             this._iconLabel.Text = "📚";
@@ -59,26 +82,7 @@ namespace LearningAssistant.Forms.UserControls
             this._iconLabel.TextAlign = ContentAlignment.MiddleCenter;
             this._iconPanel.Controls.Add(this._iconLabel);
 
-            // 标题标签
-            this._titleLabel.Font = _fontTitle;
-            this._titleLabel.ForeColor = Color.FromArgb(33, 33, 33);
-            this._titleLabel.Dock = DockStyle.Fill;
-            this._titleLabel.Padding = new Padding(15, 10, 15, 10);
-            this._titleLabel.AutoSize = false;
-            this._titleLabel.TextAlign = ContentAlignment.MiddleCenter;
-            this._titleLabel.UseMnemonic = false;
-
-            // 内容描述
-            this._contentLabel.Font = _fontContent;
-            this._contentLabel.ForeColor = Color.FromArgb(100, 100, 100);
-            this._contentLabel.Dock = DockStyle.Bottom;
-            this._contentLabel.Padding = new Padding(15, 5, 15, 10);
-            this._contentLabel.AutoSize = false;
-            this._contentLabel.TextAlign = ContentAlignment.TopCenter;
-            this._contentLabel.UseMnemonic = false;
-            this._contentLabel.Height = 120;
-
-            // 分类标签
+            // 分类标签 Dock.Right 次优先添加
             this._categoryLabel.Font = _fontCategoryTag;
             this._categoryLabel.ForeColor = Color.White;
             this._categoryLabel.BackColor = Color.FromArgb(108, 117, 125);
@@ -88,23 +92,31 @@ namespace LearningAssistant.Forms.UserControls
             this._categoryLabel.Margin = new Padding(0, 10, 15, 0);
             this._categoryLabel.TextAlign = ContentAlignment.MiddleCenter;
 
-            // 按Dock层级倒序添加控件
+            // 内容描述 Dock.Bottom
+            this._contentLabel.Font = _fontContent;
+            this._contentLabel.ForeColor = Color.FromArgb(100, 100, 100);
+            this._contentLabel.Dock = DockStyle.Bottom;
+            this._contentLabel.Padding = new Padding(15, 5, 15, 10);
+            this._contentLabel.AutoSize = false;
+            this._contentLabel.TextAlign = ContentAlignment.TopCenter;
+            this._contentLabel.UseMnemonic = false;
+            this._contentLabel.Height = 180; // 缩小高度，给标题留出空间
+
+            // 标题标签 DockStyle.Fill 最后添加（填充剩余区域）
+            this._titleLabel.Font = _fontTitle;
+            this._titleLabel.ForeColor = Color.FromArgb(33, 33, 33);
+            this._titleLabel.Dock = DockStyle.Fill;
+            this._titleLabel.Padding = new Padding(15, 10, 15, 10);
+            this._titleLabel.AutoSize = false;
+            this._titleLabel.TextAlign = ContentAlignment.MiddleCenter;
+            this._titleLabel.UseMnemonic = false;
+
+            // Dock标准添加顺序：Left → Right → Bottom → Fill
             this.Controls.Add(this._accentBar);
-            this.Controls.Add(this._categoryLabel);
-            this.Controls.Add(this._titleLabel);
-            this.Controls.Add(this._contentLabel);
             this.Controls.Add(this._iconPanel);
-
-            // 卡片基础样式
-            this.Height = 280;
-            this.BackColor = Color.White;
-            this.BorderStyle = BorderStyle.None;
-            this.Padding = new Padding(0);
-
-            // 绑定绘制与鼠标事件
-            this.MouseEnter += LearningCard_MouseEnter;
-            this.MouseLeave += LearningCard_MouseLeave;
-            this.Paint += LearningCard_Paint;
+            this.Controls.Add(this._categoryLabel);
+            this.Controls.Add(this._contentLabel);
+            this.Controls.Add(this._titleLabel);
         }
 
         #region 对外公开属性
@@ -156,60 +168,58 @@ namespace LearningAssistant.Forms.UserControls
         #endregion
 
         #region 鼠标交互
-        private void LearningCard_MouseEnter(object? sender, EventArgs e)
+        private void LearningCard_MouseEnter(object sender, EventArgs e)
         {
             _isHovered = true;
             AnimateScale(1.02f);
             this.Invalidate();
         }
 
-        private void LearningCard_MouseLeave(object? sender, EventArgs e)
+        private void LearningCard_MouseLeave(object sender, EventArgs e)
         {
             _isHovered = false;
             AnimateScale(1.0f);
             this.Invalidate();
         }
 
-        /// <summary>缩放动画逻辑</summary>
+        /// <summary>缩放动画逻辑（增加最小尺寸保护，防止卡片过小）</summary>
         private void AnimateScale(float scale)
         {
-            int newWidth = (int)(this.Width * scale);
-            int newHeight = (int)(this.Height * scale);
-            int offsetX = (this.Width - newWidth) / 2;
-            int offsetY = (this.Height - newHeight) / 2;
+            int targetW = Math.Max((int)(this.Width * scale), this.MinimumSize.Width);
+            int targetH = Math.Max((int)(this.Height * scale), this.MinimumSize.Height);
+            int offsetX = (this.Width - targetW) / 2;
+            int offsetY = (this.Height - targetH) / 2;
 
-            this.Size = new Size(newWidth, newHeight);
+            this.Size = new Size(targetW, targetH);
             this.Location = new Point(this.Location.X + offsetX, this.Location.Y + offsetY);
         }
         #endregion
 
         #region 圆角自定义绘制
-        private void LearningCard_Paint(object? sender, PaintEventArgs e)
+        private void LearningCard_Paint(object sender, PaintEventArgs e)
         {
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             int radius = 8;
+            Rectangle rect = this.ClientRectangle;
 
             // 圆角裁剪区域
             using (GraphicsPath path = new GraphicsPath())
             {
-                path.AddArc(0, 0, radius, radius, 180, 90);
-                path.AddArc(this.Width - radius, 0, radius, radius, 270, 90);
-                path.AddArc(this.Width - radius, this.Height - radius, radius, radius, 0, 90);
-                path.AddArc(0, this.Height - radius, radius, radius, 90, 90);
+                path.AddArc(rect.X, rect.Y, radius, radius, 180, 90);
+                path.AddArc(rect.Right - radius, rect.Y, radius, radius, 270, 90);
+                path.AddArc(rect.Right - radius, rect.Bottom - radius, radius, radius, 0, 90);
+                path.AddArc(rect.X, rect.Bottom - radius, radius, radius, 90, 90);
                 path.CloseAllFigures();
                 this.Region = new Region(path);
-            }
 
-            // 悬浮/选中描边
-            if (_isHovered || _isSelected)
-            {
-                using (Pen pen = new Pen(Color.FromArgb(76, 175, 80), 2))
+                // 悬浮/选中描边
+                if (_isHovered || _isSelected)
                 {
-                    g.DrawArc(pen, 0, 0, radius, radius, 180, 90);
-                    g.DrawArc(pen, this.Width - radius, 0, radius, radius, 270, 90);
-                    g.DrawArc(pen, this.Width - radius, this.Height - radius, radius, radius, 0, 90);
-                    g.DrawArc(pen, 0, this.Height - radius, radius, radius, 90, 90);
+                    using (Pen pen = new Pen(Color.FromArgb(76, 175, 80), 2))
+                    {
+                        g.DrawPath(pen, path);
+                    }
                 }
             }
 
@@ -218,7 +228,7 @@ namespace LearningAssistant.Forms.UserControls
             {
                 using (SolidBrush brush = new SolidBrush(Color.FromArgb(5, 76, 175, 80)))
                 {
-                    g.FillRectangle(brush, this.ClientRectangle);
+                    g.FillRectangle(brush, rect);
                 }
             }
 
@@ -227,7 +237,7 @@ namespace LearningAssistant.Forms.UserControls
             {
                 using (SolidBrush brush = new SolidBrush(Color.FromArgb(10, 76, 175, 80)))
                 {
-                    g.FillRectangle(brush, this.ClientRectangle);
+                    g.FillRectangle(brush, rect);
                 }
             }
         }
@@ -242,6 +252,7 @@ namespace LearningAssistant.Forms.UserControls
                 _fontTitle?.Dispose();
                 _fontContent?.Dispose();
                 _fontCategoryTag?.Dispose();
+                this.Region?.Dispose();
             }
             base.Dispose(disposing);
         }

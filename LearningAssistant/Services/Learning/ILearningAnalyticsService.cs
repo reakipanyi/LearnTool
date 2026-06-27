@@ -65,6 +65,37 @@ namespace LearningAssistant.Services.Learning
         int GetStudyStreak(string userId);
 
         /// <summary>
+        /// 获取指定日期以来的总学习时长（分钟）
+        /// </summary>
+        /// <param name="userId">用户ID</param>
+        /// <param name="startDate">开始日期</param>
+        /// <returns>总学习分钟数</returns>
+        int GetTotalStudyMinutes(string userId, DateTime startDate);
+
+        /// <summary>
+        /// 获取指定日期以来的总学习项目数
+        /// </summary>
+        /// <param name="userId">用户ID</param>
+        /// <param name="startDate">开始日期</param>
+        /// <returns>总学习项目数</returns>
+        int GetTotalLearnedItems(string userId, DateTime startDate);
+
+        /// <summary>
+        /// 获取连续学习天数
+        /// </summary>
+        /// <param name="userId">用户ID</param>
+        /// <returns>连续学习天数</returns>
+        int GetConsecutiveDays(string userId);
+
+        /// <summary>
+        /// 获取指定日期以来的正确率
+        /// </summary>
+        /// <param name="userId">用户ID</param>
+        /// <param name="startDate">开始日期</param>
+        /// <returns>正确率（0-100）</returns>
+        double GetAccuracyRate(string userId, DateTime startDate);
+
+        /// <summary>
         /// 保存分析数据到持久化存储
         /// </summary>
         void SaveAnalytics();

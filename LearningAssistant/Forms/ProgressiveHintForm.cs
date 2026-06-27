@@ -104,6 +104,7 @@ namespace LearningAssistant.Forms
             LoadHints();
             labelContent.Text = question;
 
+            labelHintStatus.Text = $"提示等级：0/{_maxHints}";
             _originalTextBoxBackColor = textBoxGuess.BackColor;
             _originalGuessResultColor = labelGuessResult.ForeColor;
         }
@@ -125,241 +126,219 @@ namespace LearningAssistant.Forms
         #region Windows Form Designer generated code
         private void InitializeComponent()
         {
-            this.panelMain = new Panel();
-            this.buttonRevealAnswer = new Button();
-            this.panelHints = new Panel();
-            this._labelHintContent = new Label();
-            this.labelHintStatus = new Label();
-            this.hintButtonsPanel = new FlowLayoutPanel();
-            this.labelHintsTitle = new Label();
-            this._panelStepIndicator = new Panel();
-            this._labelStepIndicator = new Label();
-            this.labelGuessResult = new Label();
-            this.buttonSubmitGuess = new Button();
-            this.textBoxGuess = new TextBox();
-            this.labelGuess = new Label();
-            this.labelContent = new Label();
-            this.labelQuestionTitle = new Label();
-            this.labelTitle = new Label();
-            this.panelMain.SuspendLayout();
-            this._panelStepIndicator.SuspendLayout();
-            this.panelHints.SuspendLayout();
-            this.SuspendLayout();
-
+            panelMain = new Panel();
+            buttonRevealAnswer = new Button();
+            panelHints = new Panel();
+            _labelHintContent = new Label();
+            labelHintStatus = new Label();
+            hintButtonsPanel = new FlowLayoutPanel();
+            labelHintsTitle = new Label();
+            _panelStepIndicator = new Panel();
+            _labelStepIndicator = new Label();
+            labelGuessResult = new Label();
+            buttonSubmitGuess = new Button();
+            textBoxGuess = new TextBox();
+            labelGuess = new Label();
+            labelContent = new Label();
+            labelQuestionTitle = new Label();
+            labelTitle = new Label();
+            panelMain.SuspendLayout();
+            panelHints.SuspendLayout();
+            _panelStepIndicator.SuspendLayout();
+            SuspendLayout();
             // 
             // panelMain
             // 
-            this.panelMain.Dock = DockStyle.Fill;
-            this.panelMain.BackColor = Color.White;
-            this.panelMain.Padding = new Padding(20);
-            this.panelMain.Controls.Add(this.buttonRevealAnswer);
-            this.panelMain.Controls.Add(this.panelHints);
-            this.panelMain.Controls.Add(this.labelHintStatus);
-            this.panelMain.Controls.Add(this.hintButtonsPanel);
-            this.panelMain.Controls.Add(this.labelHintsTitle);
-            this.panelMain.Controls.Add(this._panelStepIndicator);
-            this.panelMain.Controls.Add(this.labelGuessResult);
-            this.panelMain.Controls.Add(this.buttonSubmitGuess);
-            this.panelMain.Controls.Add(this.textBoxGuess);
-            this.panelMain.Controls.Add(this.labelGuess);
-            this.panelMain.Controls.Add(this.labelContent);
-            this.panelMain.Controls.Add(this.labelQuestionTitle);
-            this.panelMain.Controls.Add(this.labelTitle);
-            this.panelMain.Name = "panelMain";
-            this.panelMain.TabIndex = 0;
-
-            // 
-            // labelTitle
-            // 
-            this.labelTitle.Text = "🤔 先思考，再看提示";
-            this.labelTitle.Font = _fontTitleLarge;
-            this.labelTitle.ForeColor = Color.FromArgb(108, 92, 231);
-            this.labelTitle.Dock = DockStyle.Top;
-            this.labelTitle.Height = 40;
-            this.labelTitle.TextAlign = ContentAlignment.MiddleLeft;
-            this.labelTitle.Name = "labelTitle";
-            this.labelTitle.TabIndex = 0;
-
-            // 
-            // labelQuestionTitle
-            // 
-            this.labelQuestionTitle.Text = "📖 题目：";
-            this.labelQuestionTitle.Font = _fontSubTitle;
-            this.labelQuestionTitle.Location = new Point(20, 60);
-            this.labelQuestionTitle.AutoSize = true;
-            this.labelQuestionTitle.Name = "labelQuestionTitle";
-            this.labelQuestionTitle.TabIndex = 1;
-
-            // 
-            // labelContent
-            // 
-            this.labelContent.Font = _fontQuestion;
-            this.labelContent.ForeColor = Color.FromArgb(50, 50, 50);
-            this.labelContent.Location = new Point(20, 90);
-            this.labelContent.Size = new Size(540, 60);
-            this.labelContent.TextAlign = ContentAlignment.TopLeft;
-            this.labelContent.Name = "labelContent";
-            this.labelContent.TabIndex = 2;
-
-            // 
-            // labelGuess
-            // 
-            this.labelGuess.Text = "✏️ 你的猜测：";
-            this.labelGuess.Font = _fontSubTitle;
-            this.labelGuess.Location = new Point(20, 160);
-            this.labelGuess.AutoSize = true;
-            this.labelGuess.Name = "labelGuess";
-            this.labelGuess.TabIndex = 3;
-
-            // 
-            // textBoxGuess
-            // 
-            this.textBoxGuess.Location = new Point(20, 190);
-            this.textBoxGuess.Size = new Size(400, 35);
-            this.textBoxGuess.Font = _fontInput;
-            this.textBoxGuess.PlaceholderText = "先自己想想，写下答案...";
-            this.textBoxGuess.BorderStyle = BorderStyle.FixedSingle;
-            this.textBoxGuess.Name = "textBoxGuess";
-            this.textBoxGuess.TabIndex = 4;
-
-            // 
-            // buttonSubmitGuess
-            // 
-            this.buttonSubmitGuess.Text = "提交猜测";
-            this.buttonSubmitGuess.Location = new Point(430, 190);
-            this.buttonSubmitGuess.Size = new Size(100, 35);
-            this.buttonSubmitGuess.BackColor = Color.FromArgb(108, 92, 231);
-            this.buttonSubmitGuess.ForeColor = Color.White;
-            this.buttonSubmitGuess.FlatStyle = FlatStyle.Flat;
-            this.buttonSubmitGuess.Font = _fontBtnBold;
-            this.buttonSubmitGuess.Cursor = Cursors.Hand;
-            this.buttonSubmitGuess.FlatAppearance.BorderSize = 0;
-            this.buttonSubmitGuess.Click += new EventHandler(this.ButtonSubmitGuess_Click);
-            this.buttonSubmitGuess.Name = "buttonSubmitGuess";
-            this.buttonSubmitGuess.TabIndex = 5;
-
-            // 
-            // labelGuessResult
-            // 
-            this.labelGuessResult.Location = new Point(20, 230);
-            this.labelGuessResult.Size = new Size(510, 30);
-            this.labelGuessResult.Font = _fontNormal;
-            this.labelGuessResult.ForeColor = Color.FromArgb(100, 100, 100);
-            this.labelGuessResult.Name = "labelGuessResult";
-            this.labelGuessResult.TabIndex = 6;
-
-            // 
-            // _panelStepIndicator
-            // 
-            this._panelStepIndicator.Location = new Point(20, 265);
-            this._panelStepIndicator.Size = new Size(200, 20);
-            this._panelStepIndicator.Controls.Add(this._labelStepIndicator);
-            this._panelStepIndicator.Name = "_panelStepIndicator";
-            this._panelStepIndicator.TabIndex = 7;
-
-            // 
-            // _labelStepIndicator
-            // 
-            this._labelStepIndicator.Dock = DockStyle.Left;
-            this._labelStepIndicator.Text = "●○○○";
-            this._labelStepIndicator.Font = _fontStepDot;
-            this._labelStepIndicator.ForeColor = Color.FromArgb(108, 92, 231);
-            this._labelStepIndicator.AutoSize = true;
-            this._labelStepIndicator.Name = "_labelStepIndicator";
-            this._labelStepIndicator.TabIndex = 0;
-
-            // 
-            // labelHintsTitle
-            // 
-            this.labelHintsTitle.Text = "💡 提示（由弱到强）：";
-            this.labelHintsTitle.Font = _fontSubTitle;
-            this.labelHintsTitle.Location = new Point(20, 295);
-            this.labelHintsTitle.AutoSize = true;
-            this.labelHintsTitle.Name = "labelHintsTitle";
-            this.labelHintsTitle.TabIndex = 8;
-
-            // 
-            // hintButtonsPanel
-            // 
-            this.hintButtonsPanel.Location = new Point(20, 325);
-            this.hintButtonsPanel.Size = new Size(540, 50);
-            this.hintButtonsPanel.FlowDirection = FlowDirection.LeftToRight;
-            this.hintButtonsPanel.WrapContents = false;
-            this.hintButtonsPanel.AutoScroll = true;
-            this.hintButtonsPanel.Name = "hintButtonsPanel";
-            this.hintButtonsPanel.TabIndex = 9;
-
-            // 
-            // labelHintStatus
-            // 
-            this.labelHintStatus.Text = $"提示等级：0/{_maxHints}";
-            this.labelHintStatus.Location = new Point(20, 380);
-            this.labelHintStatus.Size = new Size(540, 20);
-            this.labelHintStatus.Font = _fontSmallTip;
-            this.labelHintStatus.ForeColor = Color.FromArgb(120, 120, 120);
-            this.labelHintStatus.Name = "labelHintStatus";
-            this.labelHintStatus.TabIndex = 10;
-
-            // 
-            // panelHints
-            // 
-            this.panelHints.Location = new Point(20, 405);
-            this.panelHints.Size = new Size(540, 100);
-            this.panelHints.BackColor = Color.FromArgb(255, 253, 230);
-            this.panelHints.BorderStyle = BorderStyle.FixedSingle;
-            this.panelHints.AutoScroll = true;
-            this.panelHints.Controls.Add(this._labelHintContent);
-            this.panelHints.Name = "panelHints";
-            this.panelHints.TabIndex = 11;
-
-            // 
-            // _labelHintContent
-            // 
-            this._labelHintContent.Dock = DockStyle.Fill;
-            this._labelHintContent.Font = _fontNormal;
-            this._labelHintContent.ForeColor = Color.FromArgb(80, 80, 80);
-            this._labelHintContent.Padding = new Padding(10);
-            this._labelHintContent.Text = "点击上方按钮查看提示";
-            this._labelHintContent.Name = "_labelHintContent";
-            this._labelHintContent.TabIndex = 0;
-
+            panelMain.BackColor = Color.White;
+            panelMain.Controls.Add(buttonRevealAnswer);
+            panelMain.Controls.Add(panelHints);
+            panelMain.Controls.Add(labelHintStatus);
+            panelMain.Controls.Add(hintButtonsPanel);
+            panelMain.Controls.Add(labelHintsTitle);
+            panelMain.Controls.Add(_panelStepIndicator);
+            panelMain.Controls.Add(labelGuessResult);
+            panelMain.Controls.Add(buttonSubmitGuess);
+            panelMain.Controls.Add(textBoxGuess);
+            panelMain.Controls.Add(labelGuess);
+            panelMain.Controls.Add(labelContent);
+            panelMain.Controls.Add(labelQuestionTitle);
+            panelMain.Controls.Add(labelTitle);
+            panelMain.Dock = DockStyle.Fill;
+            panelMain.Location = new Point(0, 0);
+            panelMain.Name = "panelMain";
+            panelMain.Padding = new Padding(20);
+            panelMain.Size = new Size(584, 541);
+            panelMain.TabIndex = 0;
             // 
             // buttonRevealAnswer
             // 
-            this.buttonRevealAnswer.Text = "🤔 我还是想不出来...";
-            this.buttonRevealAnswer.Location = new Point(20, 510);
-            this.buttonRevealAnswer.Size = new Size(540, 35);
-            this.buttonRevealAnswer.BackColor = Color.FromArgb(255, 193, 7);
-            this.buttonRevealAnswer.ForeColor = Color.White;
-            this.buttonRevealAnswer.FlatStyle = FlatStyle.Flat;
-            this.buttonRevealAnswer.Font = _fontBtnBold;
-            this.buttonRevealAnswer.Cursor = Cursors.Hand;
-            this.buttonRevealAnswer.FlatAppearance.BorderSize = 0;
-            this.buttonRevealAnswer.Click += new EventHandler(this.ButtonRevealAnswer_Click);
-            this.buttonRevealAnswer.Name = "buttonRevealAnswer";
-            this.buttonRevealAnswer.TabIndex = 12;
-
+            buttonRevealAnswer.BackColor = Color.FromArgb(255, 193, 7);
+            buttonRevealAnswer.Cursor = Cursors.Hand;
+            buttonRevealAnswer.FlatAppearance.BorderSize = 0;
+            buttonRevealAnswer.FlatStyle = FlatStyle.Flat;
+            buttonRevealAnswer.ForeColor = Color.White;
+            buttonRevealAnswer.Location = new Point(20, 510);
+            buttonRevealAnswer.Name = "buttonRevealAnswer";
+            buttonRevealAnswer.Size = new Size(540, 35);
+            buttonRevealAnswer.TabIndex = 12;
+            buttonRevealAnswer.Text = "🤔 我还是想不出来...";
+            buttonRevealAnswer.UseVisualStyleBackColor = false;
+            buttonRevealAnswer.Click += ButtonRevealAnswer_Click;
+            // 
+            // panelHints
+            // 
+            panelHints.AutoScroll = true;
+            panelHints.BackColor = Color.FromArgb(255, 253, 230);
+            panelHints.BorderStyle = BorderStyle.FixedSingle;
+            panelHints.Controls.Add(_labelHintContent);
+            panelHints.Location = new Point(20, 405);
+            panelHints.Name = "panelHints";
+            panelHints.Size = new Size(540, 100);
+            panelHints.TabIndex = 11;
+            // 
+            // _labelHintContent
+            // 
+            _labelHintContent.Dock = DockStyle.Fill;
+            _labelHintContent.ForeColor = Color.FromArgb(80, 80, 80);
+            _labelHintContent.Location = new Point(0, 0);
+            _labelHintContent.Name = "_labelHintContent";
+            _labelHintContent.Padding = new Padding(10);
+            _labelHintContent.Size = new Size(538, 98);
+            _labelHintContent.TabIndex = 0;
+            _labelHintContent.Text = "点击上方按钮查看提示";
+            // 
+            // labelHintStatus
+            // 
+            labelHintStatus.ForeColor = Color.FromArgb(120, 120, 120);
+            labelHintStatus.Location = new Point(20, 380);
+            labelHintStatus.Name = "labelHintStatus";
+            labelHintStatus.Size = new Size(540, 20);
+            labelHintStatus.TabIndex = 10;
+            labelHintStatus.Text = "提示等级：0/0";
+            // 
+            // hintButtonsPanel
+            // 
+            hintButtonsPanel.AutoScroll = true;
+            hintButtonsPanel.Location = new Point(20, 325);
+            hintButtonsPanel.Name = "hintButtonsPanel";
+            hintButtonsPanel.Size = new Size(540, 50);
+            hintButtonsPanel.TabIndex = 9;
+            hintButtonsPanel.WrapContents = false;
+            // 
+            // labelHintsTitle
+            // 
+            labelHintsTitle.AutoSize = true;
+            labelHintsTitle.Location = new Point(20, 295);
+            labelHintsTitle.Name = "labelHintsTitle";
+            labelHintsTitle.Size = new Size(132, 17);
+            labelHintsTitle.TabIndex = 8;
+            labelHintsTitle.Text = "💡 提示（由弱到强）：";
+            // 
+            // _panelStepIndicator
+            // 
+            _panelStepIndicator.Controls.Add(_labelStepIndicator);
+            _panelStepIndicator.Location = new Point(20, 265);
+            _panelStepIndicator.Name = "_panelStepIndicator";
+            _panelStepIndicator.Size = new Size(200, 20);
+            _panelStepIndicator.TabIndex = 7;
+            // 
+            // _labelStepIndicator
+            // 
+            _labelStepIndicator.AutoSize = true;
+            _labelStepIndicator.Dock = DockStyle.Left;
+            _labelStepIndicator.ForeColor = Color.FromArgb(108, 92, 231);
+            _labelStepIndicator.Location = new Point(0, 0);
+            _labelStepIndicator.Name = "_labelStepIndicator";
+            _labelStepIndicator.Size = new Size(37, 17);
+            _labelStepIndicator.TabIndex = 0;
+            _labelStepIndicator.Text = "●○○○";
+            // 
+            // labelGuessResult
+            // 
+            labelGuessResult.ForeColor = Color.FromArgb(100, 100, 100);
+            labelGuessResult.Location = new Point(20, 230);
+            labelGuessResult.Name = "labelGuessResult";
+            labelGuessResult.Size = new Size(510, 30);
+            labelGuessResult.TabIndex = 6;
+            // 
+            // buttonSubmitGuess
+            // 
+            buttonSubmitGuess.BackColor = Color.FromArgb(108, 92, 231);
+            buttonSubmitGuess.Cursor = Cursors.Hand;
+            buttonSubmitGuess.FlatAppearance.BorderSize = 0;
+            buttonSubmitGuess.FlatStyle = FlatStyle.Flat;
+            buttonSubmitGuess.ForeColor = Color.White;
+            buttonSubmitGuess.Location = new Point(430, 190);
+            buttonSubmitGuess.Name = "buttonSubmitGuess";
+            buttonSubmitGuess.Size = new Size(100, 35);
+            buttonSubmitGuess.TabIndex = 5;
+            buttonSubmitGuess.Text = "提交猜测";
+            buttonSubmitGuess.UseVisualStyleBackColor = false;
+            buttonSubmitGuess.Click += ButtonSubmitGuess_Click;
+            // 
+            // textBoxGuess
+            // 
+            textBoxGuess.BorderStyle = BorderStyle.FixedSingle;
+            textBoxGuess.Location = new Point(20, 190);
+            textBoxGuess.Name = "textBoxGuess";
+            textBoxGuess.PlaceholderText = "先自己想想，写下答案...";
+            textBoxGuess.Size = new Size(400, 23);
+            textBoxGuess.TabIndex = 4;
+            // 
+            // labelGuess
+            // 
+            labelGuess.AutoSize = true;
+            labelGuess.Location = new Point(20, 160);
+            labelGuess.Name = "labelGuess";
+            labelGuess.Size = new Size(88, 17);
+            labelGuess.TabIndex = 3;
+            labelGuess.Text = "✏️ 你的猜测：";
+            // 
+            // labelContent
+            // 
+            labelContent.ForeColor = Color.FromArgb(50, 50, 50);
+            labelContent.Location = new Point(20, 90);
+            labelContent.Name = "labelContent";
+            labelContent.Size = new Size(540, 60);
+            labelContent.TabIndex = 2;
+            // 
+            // labelQuestionTitle
+            // 
+            labelQuestionTitle.AutoSize = true;
+            labelQuestionTitle.Location = new Point(20, 60);
+            labelQuestionTitle.Name = "labelQuestionTitle";
+            labelQuestionTitle.Size = new Size(64, 17);
+            labelQuestionTitle.TabIndex = 1;
+            labelQuestionTitle.Text = "📖 题目：";
+            // 
+            // labelTitle
+            // 
+            labelTitle.Dock = DockStyle.Top;
+            labelTitle.ForeColor = Color.FromArgb(108, 92, 231);
+            labelTitle.Location = new Point(20, 20);
+            labelTitle.Name = "labelTitle";
+            labelTitle.Size = new Size(544, 40);
+            labelTitle.TabIndex = 0;
+            labelTitle.Text = "🤔 先思考，再看提示";
+            labelTitle.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // ProgressiveHintForm
             // 
-            this.Text = "💡 渐进式思考";
-            this.Size = new Size(600, 580);
-            this.StartPosition = FormStartPosition.CenterParent;
-            this.BackColor = Color.FromArgb(250, 248, 245);
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
-            this.Controls.Add(this.panelMain);
-            this.Name = "ProgressiveHintForm";
-
-            this.panelMain.ResumeLayout(false);
-            this.panelMain.PerformLayout();
-            this._panelStepIndicator.ResumeLayout(false);
-            this._panelStepIndicator.PerformLayout();
-            this.panelHints.ResumeLayout(false);
-            this.panelHints.PerformLayout();
-            this.ResumeLayout(false);
-            this.PerformLayout();
+            BackColor = Color.FromArgb(250, 248, 245);
+            ClientSize = new Size(584, 541);
+            Controls.Add(panelMain);
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            Name = "ProgressiveHintForm";
+            StartPosition = FormStartPosition.CenterParent;
+            Text = "💡 渐进式思考";
+            panelMain.ResumeLayout(false);
+            panelMain.PerformLayout();
+            panelHints.ResumeLayout(false);
+            _panelStepIndicator.ResumeLayout(false);
+            _panelStepIndicator.PerformLayout();
+            ResumeLayout(false);
         }
         #endregion
 

@@ -136,7 +136,7 @@ namespace LearningAssistant.Forms.UserControls
             {
                 Text = text,
                 Tag = category,
-                Size = new Size(78, 45),
+                Size = new Size(78, 35),
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("微软雅黑", 9F),
                 Cursor = Cursors.Hand,
@@ -178,11 +178,11 @@ namespace LearningAssistant.Forms.UserControls
 
             if (count > 0)
             {
-                string countText = count.ToString();
+                string countText = $"{count.ToString()}";
                 var countFont = new Font("微软雅黑", 7.5F, FontStyle.Bold);
                 var textSize = e.Graphics.MeasureString(countText, countFont);
                 int badgeWidth = Math.Max(16, (int)textSize.Width + 6);
-                int badgeX = btn.Width - badgeWidth + 8;
+                int badgeX = btn.Width - badgeWidth;
                 int badgeY = 2;
 
                 using var badgeBrush = new SolidBrush(isActive ? Color.White : Color.FromArgb(255, 152, 0));

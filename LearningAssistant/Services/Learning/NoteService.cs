@@ -1,6 +1,5 @@
 using LearningAssistant.Common;
 using LearningAssistant.Models.Learning;
-using LearningAssistant.Services.Persistence;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
@@ -12,16 +11,13 @@ namespace LearningAssistant.Services.Learning
     /// </summary>
     public class NoteService : INoteService
     {
-        private readonly IDataPersistenceService _persistenceService;
         private readonly ILogger<NoteService> _logger;
         private readonly string _notesDir;
         private readonly object _lock = new object();
 
         public NoteService(
-            IDataPersistenceService persistenceService,
             ILogger<NoteService> logger)
         {
-            _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _notesDir = Path.Combine(AppPaths.UsersDir, "notes");
             EnsureDirectoryExists();
@@ -183,8 +179,8 @@ namespace LearningAssistant.Services.Learning
 
                 if (!string.IsNullOrWhiteSpace(tag))
                 {
-                    notes = notes.Where(n => !string.IsNullOrWhiteSpace(n.Tags) &&
-                        n.Tags.Split(',').Any(t => t.Trim().Equals(tag, StringComparison.OrdinalIgnoreCase))).ToList();
+                    notes = notes.Where(n => n.Tags != null &&
+                        n.Tags.Any(t => t.Equals(tag, StringComparison.OrdinalIgnoreCase))).ToList();
                 }
 
                 return notes.OrderByDescending(n => n.UpdatedAt).ToList();
@@ -210,7 +206,7 @@ namespace LearningAssistant.Services.Learning
                 return notes.Where(n =>
                     (!string.IsNullOrWhiteSpace(n.Title) && n.Title.ToLower().Contains(keyword)) ||
                     (!string.IsNullOrWhiteSpace(n.Content) && n.Content.ToLower().Contains(keyword)) ||
-                    (!string.IsNullOrWhiteSpace(n.Tags) && n.Tags.ToLower().Contains(keyword))
+                    (n.Tags != null && n.Tags.Any(t => t.ToLower().Contains(keyword)))
                 ).OrderByDescending(n => n.UpdatedAt).ToList();
             }
             catch (Exception ex)
@@ -306,12 +302,14 @@ namespace LearningAssistant.Services.Learning
                 var allTags = new HashSet<string>();
                 foreach (var note in notes)
                 {
-                    if (!string.IsNullOrWhiteSpace(note.Tags))
+                    if (note.Tags != null)
                     {
-                        var tags = note.Tags.Split(',').Select(t => t.Trim()).Where(t => !string.IsNullOrWhiteSpace(t));
-                        foreach (var tag in tags)
+                        foreach (var tag in note.Tags)
                         {
-                            allTags.Add(tag);
+                            if (!string.IsNullOrWhiteSpace(tag))
+                            {
+                                allTags.Add(tag);
+                            }
                         }
                     }
                 }
@@ -431,8 +429,8 @@ namespace LearningAssistant.Services.Learning
                 lines.Add($"【标题】{note.Title}");
                 if (!string.IsNullOrWhiteSpace(note.Category))
                     lines.Add($"【分类】{note.Category}");
-                if (!string.IsNullOrWhiteSpace(note.Tags))
-                    lines.Add($"【标签】{note.Tags}");
+                if (note.Tags != null && note.Tags.Count > 0)
+                    lines.Add($"【标签】{string.Join(", ", note.Tags)}");
                 lines.Add($"【创建时间】{note.CreatedAt:yyyy-MM-dd HH:mm}");
                 lines.Add($"【更新时间】{note.UpdatedAt:yyyy-MM-dd HH:mm}");
                 if (note.IsFavorite)
@@ -467,8 +465,8 @@ namespace LearningAssistant.Services.Learning
 
                 if (!string.IsNullOrWhiteSpace(note.Category))
                     lines.Add($"- **分类**: {note.Category}");
-                if (!string.IsNullOrWhiteSpace(note.Tags))
-                    lines.Add($"- **标签**: {note.Tags}");
+                if (note.Tags != null && note.Tags.Count > 0)
+                    lines.Add($"- **标签**: {string.Join(", ", note.Tags)}");
                 lines.Add($"- **创建时间**: {note.CreatedAt:yyyy-MM-dd HH:mm}");
                 lines.Add($"- **更新时间**: {note.UpdatedAt:yyyy-MM-dd HH:mm}");
                 if (note.IsFavorite)

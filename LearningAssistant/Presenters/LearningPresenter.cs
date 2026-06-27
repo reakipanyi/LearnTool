@@ -97,7 +97,7 @@ namespace LearningAssistant.Presenters
             await _flowHandler.InitializeAsync(userId, language, subCategory, wordBankFile, continueMode);
         }
 
-        private async void View_MarkAsKnownClicked(object? sender, EventArgs e)
+        private void View_MarkAsKnownClicked(object? sender, EventArgs e)
         {
             try
             {
@@ -109,7 +109,7 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        private async void View_MarkAsUnknownClicked(object? sender, EventArgs e)
+        private void View_MarkAsUnknownClicked(object? sender, EventArgs e)
         {
             try
             {
@@ -121,7 +121,7 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        private async void View_PronounceClicked(object? sender, EventArgs e)
+        private void View_PronounceClicked(object? sender, EventArgs e)
         {
             try
             {
@@ -133,7 +133,7 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        private async void View_NextClicked(object? sender, EventArgs e)
+        private void View_NextClicked(object? sender, EventArgs e)
         {
             try
             {
@@ -173,7 +173,14 @@ namespace LearningAssistant.Presenters
 
         private async void View_ItemSelectedFromList(object? sender, ItemSelectedEventArgs e)
         {
-            await _flowHandler.HandleItemSelectedAsync(e.Index);
+            try
+            {
+                await _flowHandler.HandleItemSelectedAsync(e.Index);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "从列表选择项失败, Index: {Index}", e.Index);
+            }
         }
 
         private void HandleSendToPdfQuestion(string text, string language)

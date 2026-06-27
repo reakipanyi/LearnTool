@@ -12,6 +12,7 @@ namespace LearningAssistant.Services.Learning
         private readonly IStudyListProcessor _studyListProcessor;
         private readonly ILearningAnalyticsService? _analyticsService;
         private readonly IDataPersistenceService _persistenceService;
+        private readonly object _stateLock = new object();
 
         private readonly StudyEngineState _state = new StudyEngineState();
         private List<LearningItem> _allItems = [];
@@ -275,16 +276,15 @@ namespace LearningAssistant.Services.Learning
                 if (!_state.KnownItems.Contains(content))
                 {
                     _state.KnownItems.Add(content);
-                    count++;
                 }
                 _state.UnknownItems.Remove(content);
+                count++;
             }
 
             if (count > 0)
             {
                 _state.CorrectCount += count;
                 _state.TotalCount += count;
-                // 批量操作只持久化一次
                 SaveProgress();
                 RecordActivity("Learn");
                 RecordActivity("Correct");
@@ -306,8 +306,8 @@ namespace LearningAssistant.Services.Learning
                 if (!_state.UnknownItems.Contains(content))
                 {
                     _state.UnknownItems.Add(content);
-                    count++;
                 }
+                count++;
             }
 
             if (count > 0)
@@ -377,15 +377,21 @@ namespace LearningAssistant.Services.Learning
             if (string.IsNullOrWhiteSpace(subCategory))
                 throw new ArgumentException("subCategory cannot be null or empty", nameof(subCategory));
 
-            try
+            lock (_stateLock)
             {
-                _progressManager.AddUnknownItem(_state.UserId, content, subCategory);
-                SyncProgressState();
-            }
-            catch (Exception ex)
-            {
-                _analyticsService?.RecordActivity(_state.UserId, "Error", $"AddUnknownItem failed: {ex.Message}");
-                throw;
+                if (string.IsNullOrWhiteSpace(_state.UserId))
+                    throw new InvalidOperationException("StudyEngine 未初始化，请先调用 Initialize 方法");
+
+                try
+                {
+                    _progressManager.AddUnknownItem(_state.UserId, content, subCategory);
+                    SyncProgressState();
+                }
+                catch (Exception ex)
+                {
+                    _analyticsService?.RecordActivity(_state.UserId, "Error", $"AddUnknownItem failed: {ex.Message}");
+                    throw;
+                }
             }
         }
 
@@ -394,6 +400,9 @@ namespace LearningAssistant.Services.Learning
         public string GetProgressSummary(string userId, string language, string subCategory)
         {
             var profile = _persistenceService.LoadUserProfile(userId);
+            if (profile?.LearningProgress == null)
+                return $"玩家: 未知\n品类: {language} > {subCategory}\n暂无学习数据";
+
             var progress = profile.LearningProgress;
 
             int totalKnown = 0;
@@ -419,6 +428,9 @@ namespace LearningAssistant.Services.Learning
         public int GetKnownCount(string userId, string subCategory)
         {
             var profile = _persistenceService.LoadUserProfile(userId);
+            if (profile?.LearningProgress == null)
+                return 0;
+
             if (profile.LearningProgress.CategoryProgresses.TryGetValue(subCategory, out var catProgress))
             {
                 return catProgress.KnownItems.Count;
@@ -429,6 +441,9 @@ namespace LearningAssistant.Services.Learning
         public int GetUnknownCount(string userId, string subCategory)
         {
             var profile = _persistenceService.LoadUserProfile(userId);
+            if (profile?.LearningProgress == null)
+                return 0;
+
             if (profile.LearningProgress.CategoryProgresses.TryGetValue(subCategory, out var catProgress))
             {
                 return catProgress.UnknownItems.Count;
@@ -439,6 +454,9 @@ namespace LearningAssistant.Services.Learning
         public double GetAccuracy(string userId, string subCategory)
         {
             var profile = _persistenceService.LoadUserProfile(userId);
+            if (profile?.LearningProgress == null)
+                return 0;
+
             if (profile.LearningProgress.CategoryProgresses.TryGetValue(subCategory, out var catProgress) &&
                 catProgress.TotalTestCount > 0)
             {
@@ -450,6 +468,9 @@ namespace LearningAssistant.Services.Learning
         List<string> IStudyEngine.GetUnknownItems(string userId)
         {
             var profile = _persistenceService.LoadUserProfile(userId);
+            if (profile?.LearningProgress == null)
+                return new List<string>();
+
             var allUnknownItems = new List<string>();
 
             foreach (var catProgress in profile.LearningProgress.CategoryProgresses.Values)

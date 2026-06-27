@@ -99,7 +99,7 @@ namespace LearningAssistant.Forms
 
         private Panel _toolbarGroupNav;
         private Panel _toolbarGroupView;
-        private ToolStrip _toolbarGroupViewZoom;
+        //private ToolStrip _toolbarGroupViewZoom;
         private Panel _toolbarGroupMode;
         private Panel _toolbarGroupTools;
         private Button _buttonZoomOut;
@@ -107,7 +107,7 @@ namespace LearningAssistant.Forms
         private Button _buttonResetView;
         private Button _buttonRotate;
         private Button _buttonLockView;
-        private ToolStripDropDownButton? _buttonZoomPreset;
+        //private ToolStripDropDownButton? _buttonZoomPreset;
         private Button _buttonDualPage;
         private Button _buttonFullscreen;
         private Button _buttonHighlightMode;
@@ -2245,8 +2245,8 @@ namespace LearningAssistant.Forms
             _buttonResetView = new Button();
             _buttonRotate = new Button();
             _buttonLockView = new Button();
-            _toolbarGroupViewZoom = new ToolStrip();
-            _buttonZoomPreset = new ToolStripDropDownButton();
+            //_toolbarGroupViewZoom = new ToolStrip();
+            //_buttonZoomPreset = new ToolStripDropDownButton();
             _toolbarGroupMode = new Panel();
             _buttonNightMode = new Button();
             _buttonDualPage = new Button();
@@ -2345,7 +2345,7 @@ namespace LearningAssistant.Forms
             _toolbarGroupNav.SuspendLayout();
             _toolbarGroupView.SuspendLayout();
             ((ISupportInitialize)_trackBarZoom).BeginInit();
-            _toolbarGroupViewZoom.SuspendLayout();
+            //_toolbarGroupViewZoom.SuspendLayout();
             _toolbarGroupMode.SuspendLayout();
             _toolbarGroupTools.SuspendLayout();
             _panelAnnotationOptions.SuspendLayout();
@@ -2409,7 +2409,7 @@ namespace LearningAssistant.Forms
             _panelNavigation.BackColor = Color.White;
             _panelNavigation.Controls.Add(_toolbarGroupNav);
             _panelNavigation.Controls.Add(_toolbarGroupView);
-            _panelNavigation.Controls.Add(_toolbarGroupViewZoom);
+            //_panelNavigation.Controls.Add(_toolbarGroupViewZoom);
             _panelNavigation.Controls.Add(_toolbarGroupMode);
             _panelNavigation.Controls.Add(_toolbarGroupTools);
             _panelNavigation.Controls.Add(_loadingIndicator);
@@ -2600,21 +2600,21 @@ namespace LearningAssistant.Forms
             // 
             // _toolbarGroupViewZoom
             // 
-            _toolbarGroupViewZoom.Dock = DockStyle.Left;
-            _toolbarGroupViewZoom.GripStyle = ToolStripGripStyle.Hidden;
-            _toolbarGroupViewZoom.LayoutStyle = ToolStripLayoutStyle.VerticalStackWithOverflow;
-            _toolbarGroupViewZoom.Items.AddRange(new ToolStripItem[] { _buttonZoomPreset });
-            _toolbarGroupViewZoom.Location = new Point(538, 8);
-            _toolbarGroupViewZoom.Name = "_toolbarGroupViewZoom";
-            _toolbarGroupViewZoom.Size = new Size(60, 64);
-            _toolbarGroupViewZoom.TabIndex = 8;
-            // 
-            // _buttonZoomPreset
-            // 
-            _buttonZoomPreset.Name = "_buttonZoomPreset";
-            _buttonZoomPreset.Size = new Size(55, 28);
-            _buttonZoomPreset.Text = "预设";
-            _buttonZoomPreset.TextAlign = ContentAlignment.MiddleCenter;
+            //_toolbarGroupViewZoom.Dock = DockStyle.Left;
+            //_toolbarGroupViewZoom.GripStyle = ToolStripGripStyle.Hidden;
+            //_toolbarGroupViewZoom.LayoutStyle = ToolStripLayoutStyle.VerticalStackWithOverflow;
+            //_toolbarGroupViewZoom.Items.AddRange(new ToolStripItem[] { _buttonZoomPreset });
+            //_toolbarGroupViewZoom.Location = new Point(538, 8);
+            //_toolbarGroupViewZoom.Name = "_toolbarGroupViewZoom";
+            //_toolbarGroupViewZoom.Size = new Size(60, 64);
+            //_toolbarGroupViewZoom.TabIndex = 8;
+            //// 
+            //// _buttonZoomPreset
+            //// 
+            //_buttonZoomPreset.Name = "_buttonZoomPreset";
+            //_buttonZoomPreset.Size = new Size(55, 28);
+            //_buttonZoomPreset.Text = "预设";
+            //_buttonZoomPreset.TextAlign = ContentAlignment.MiddleCenter;
             // 
             // _toolbarGroupMode
             // 
@@ -2733,7 +2733,7 @@ namespace LearningAssistant.Forms
             _buttonArrowMode.Name = "_buttonArrowMode";
             _buttonArrowMode.Size = new Size(32, 32);
             _buttonArrowMode.TabIndex = 3;
-            _buttonArrowMode.Text = "↗";
+            _buttonArrowMode.Text = "━";
             _buttonArrowMode.UseVisualStyleBackColor = false;
             _buttonArrowMode.Click += ButtonArrowMode_Click;
             // 
@@ -3654,8 +3654,8 @@ namespace LearningAssistant.Forms
             _toolbarGroupView.ResumeLayout(false);
             _toolbarGroupView.PerformLayout();
             ((ISupportInitialize)_trackBarZoom).EndInit();
-            _toolbarGroupViewZoom.ResumeLayout(false);
-            _toolbarGroupViewZoom.PerformLayout();
+            //_toolbarGroupViewZoom.ResumeLayout(false);
+            //_toolbarGroupViewZoom.PerformLayout();
             _toolbarGroupMode.ResumeLayout(false);
             _toolbarGroupTools.ResumeLayout(false);
             _panelAnnotationOptions.ResumeLayout(false);

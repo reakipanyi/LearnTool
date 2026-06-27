@@ -1,7 +1,5 @@
-using System;
-using System.Drawing;
+using System.ComponentModel;
 using System.Drawing.Drawing2D;
-using System.Windows.Forms;
 
 namespace LearningAssistant.Forms.UserControls
 {
@@ -25,6 +23,7 @@ namespace LearningAssistant.Forms.UserControls
             DoubleBuffered = true;
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int CurrentValue
         {
             get => _currentValue;
@@ -36,6 +35,7 @@ namespace LearningAssistant.Forms.UserControls
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int MaxValue
         {
             get => _maxValue;
@@ -48,6 +48,7 @@ namespace LearningAssistant.Forms.UserControls
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string LabelText
         {
             get => _labelText;
@@ -58,6 +59,7 @@ namespace LearningAssistant.Forms.UserControls
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Color ProgressColor
         {
             get => _progressColor;
@@ -68,6 +70,7 @@ namespace LearningAssistant.Forms.UserControls
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Color TrackColor
         {
             get => _backColor;
@@ -78,6 +81,7 @@ namespace LearningAssistant.Forms.UserControls
             }
         }
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Color TextColor
         {
             get => _foreColor;
@@ -107,7 +111,7 @@ namespace LearningAssistant.Forms.UserControls
             int lineWidth = 8;
 
             Rectangle outerRect = new Rectangle(centerX - radius, centerY - radius, radius * 2, radius * 2);
-            Rectangle innerRect = new Rectangle(centerX - radius + lineWidth, centerY - radius + lineWidth, 
+            Rectangle innerRect = new Rectangle(centerX - radius + lineWidth, centerY - radius + lineWidth,
                                                (radius - lineWidth) * 2, (radius - lineWidth) * 2);
 
             using (Pen trackPen = new Pen(_backColor, lineWidth))
@@ -120,7 +124,7 @@ namespace LearningAssistant.Forms.UserControls
             if (_currentValue > 0)
             {
                 float angle = (_currentValue * 360.0f) / _maxValue;
-                
+
                 using (LinearGradientBrush brush = new LinearGradientBrush(
                     new Point(centerX - radius, centerY - radius),
                     new Point(centerX + radius, centerY + radius),

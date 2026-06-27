@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -13,7 +14,8 @@ namespace LearningAssistant.Services.Learning
     /// </summary>
     public class LearningAnalyticsService : ILearningAnalyticsService
     {
-        private Dictionary<string, UserAnalyticsData> _userAnalytics = new Dictionary<string, UserAnalyticsData>();
+        private readonly ConcurrentDictionary<string, UserAnalyticsData> _userAnalytics = new ConcurrentDictionary<string, UserAnalyticsData>();
+        private readonly object _dailyRecordsLock = new object();
         private readonly string _analyticsFilePath;
         private readonly ILogger<LearningAnalyticsService>? _logger;
 
@@ -32,48 +34,47 @@ namespace LearningAssistant.Services.Learning
                 return;
             }
 
-            if (!_userAnalytics.ContainsKey(userId))
-            {
-                _userAnalytics[userId] = new UserAnalyticsData { UserId = userId };
-                _logger?.LogInformation("创建新用户分析数据: {UserId}", userId);
-            }
+            // 使用 GetOrAdd 线程安全地获取或创建用户数据
+            var userData = _userAnalytics.GetOrAdd(userId, _ => new UserAnalyticsData { UserId = userId });
 
             var today = DateTime.Today;
-            var userData = _userAnalytics[userId];
 
-            // 更新每日记录
-            if (!userData.DailyRecords.ContainsKey(today))
+            // 更新每日记录（需要加锁保护内部字典）
+            lock (_dailyRecordsLock)
             {
-                userData.DailyRecords[today] = new DailyRecord();
-            }
+                if (!userData.DailyRecords.ContainsKey(today))
+                {
+                    userData.DailyRecords[today] = new DailyRecord();
+                }
 
-            var dailyRecord = userData.DailyRecords[today];
-            
-            switch (activityType)
-            {
-                case "Learn":
-                    dailyRecord.ItemsLearned += count;
-                    break;
-                case "Review":
-                    dailyRecord.ItemsReviewed += count;
-                    break;
-                case "Correct":
-                    dailyRecord.CorrectCount += count;
-                    break;
-                case "Wrong":
-                    dailyRecord.WrongCount += count;
-                    break;
-            }
+                var dailyRecord = userData.DailyRecords[today];
+                
+                switch (activityType)
+                {
+                    case "Learn":
+                        dailyRecord.ItemsLearned += count;
+                        break;
+                    case "Review":
+                        dailyRecord.ItemsReviewed += count;
+                        break;
+                    case "Correct":
+                        dailyRecord.CorrectCount += count;
+                        break;
+                    case "Wrong":
+                        dailyRecord.WrongCount += count;
+                        break;
+                }
 
-            // 更新分类统计
-            if (!userData.CategoryStats.ContainsKey(subCategory))
-            {
-                userData.CategoryStats[subCategory] = 0;
-            }
-            userData.CategoryStats[subCategory] += count;
+                // 更新分类统计
+                if (!userData.CategoryStats.ContainsKey(subCategory))
+                {
+                    userData.CategoryStats[subCategory] = 0;
+                }
+                userData.CategoryStats[subCategory] += count;
 
-            // 更新最后学习日期
-            userData.LastLearningDate = today;
+                // 更新最后学习日期
+                userData.LastLearningDate = today;
+            }
 
             SaveAnalytics();
             _logger?.LogDebug("记录活动: {UserId}, 类型: {ActivityType}, 分类: {Category}, 数量: {Count}", userId, activityType, subCategory, count);
@@ -98,19 +99,88 @@ namespace LearningAssistant.Services.Learning
 
             while (true)
             {
-                if (userData.DailyRecords.TryGetValue(checkDate, out var record) && 
-                    record.ItemsLearned > 0)
+                lock (_dailyRecordsLock)
                 {
-                    streak++;
-                    checkDate = checkDate.AddDays(-1);
-                }
-                else
-                {
-                    break;
+                    if (userData.DailyRecords.TryGetValue(checkDate, out var record) && 
+                        (record.ItemsLearned > 0 || record.ItemsReviewed > 0))
+                    {
+                        streak++;
+                        checkDate = checkDate.AddDays(-1);
+                    }
+                    else
+                    {
+                        break;
+                    }
                 }
             }
 
             return streak;
+        }
+
+        public int GetTotalStudyMinutes(string userId, DateTime startDate)
+        {
+            if (!_userAnalytics.TryGetValue(userId, out var userData))
+                return 0;
+
+            int total = 0;
+            lock (_dailyRecordsLock)
+            {
+                for (var date = startDate.Date; date <= DateTime.Today; date = date.AddDays(1))
+                {
+                    if (userData.DailyRecords.TryGetValue(date, out var record))
+                    {
+                        total += record.TimeSpentMinutes;
+                    }
+                }
+            }
+            return total;
+        }
+
+        public int GetTotalLearnedItems(string userId, DateTime startDate)
+        {
+            if (!_userAnalytics.TryGetValue(userId, out var userData))
+                return 0;
+
+            int total = 0;
+            lock (_dailyRecordsLock)
+            {
+                for (var date = startDate.Date; date <= DateTime.Today; date = date.AddDays(1))
+                {
+                    if (userData.DailyRecords.TryGetValue(date, out var record))
+                    {
+                        total += record.ItemsLearned;
+                    }
+                }
+            }
+            return total;
+        }
+
+        public int GetConsecutiveDays(string userId)
+        {
+            return GetStudyStreak(userId);
+        }
+
+        public double GetAccuracyRate(string userId, DateTime startDate)
+        {
+            if (!_userAnalytics.TryGetValue(userId, out var userData))
+                return 0;
+
+            int correctCount = 0;
+            int totalCount = 0;
+
+            lock (_dailyRecordsLock)
+            {
+                for (var date = startDate.Date; date <= DateTime.Today; date = date.AddDays(1))
+                {
+                    if (userData.DailyRecords.TryGetValue(date, out var record))
+                    {
+                        correctCount += record.CorrectCount;
+                        totalCount += record.CorrectCount + record.WrongCount;
+                    }
+                }
+            }
+
+            return totalCount > 0 ? (double)correctCount / totalCount * 100 : 0;
         }
 
         public void SaveAnalytics()
@@ -135,7 +205,10 @@ namespace LearningAssistant.Services.Learning
                     var loaded = JsonHelper.LoadFromFile<Dictionary<string, UserAnalyticsData>>(_analyticsFilePath);
                     if (loaded != null)
                     {
-                        _userAnalytics = loaded;
+                        foreach (var kvp in loaded)
+                        {
+                            _userAnalytics.TryAdd(kvp.Key, kvp.Value);
+                        }
                         _logger?.LogInformation("加载分析数据成功，用户数: {Count}", _userAnalytics.Count);
                     }
                 }
@@ -147,7 +220,7 @@ namespace LearningAssistant.Services.Learning
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "加载分析数据失败: {Path}", _analyticsFilePath);
-                _userAnalytics = new Dictionary<string, UserAnalyticsData>();
+                // 保持 ConcurrentDictionary 为空
             }
         }
         
@@ -157,14 +230,19 @@ namespace LearningAssistant.Services.Learning
         {
             var stats = new DailyStatistics { Date = date, UserId = userId };
 
-            if (_userAnalytics.TryGetValue(userId, out var userData) && 
-                userData.DailyRecords.TryGetValue(date, out var record))
+            if (_userAnalytics.TryGetValue(userId, out var userData))
             {
-                stats.TotalItems = record.ItemsLearned;
-                stats.TotalMinutes = record.TimeSpentMinutes;
-                stats.CorrectRate = record.CorrectCount + record.WrongCount > 0 
-                    ? (double)record.CorrectCount / (record.CorrectCount + record.WrongCount) 
-                    : 0;
+                lock (_dailyRecordsLock)
+                {
+                    if (userData.DailyRecords.TryGetValue(date, out var record))
+                    {
+                        stats.TotalItems = record.ItemsLearned;
+                        stats.TotalMinutes = record.TimeSpentMinutes;
+                        stats.CorrectRate = record.CorrectCount + record.WrongCount > 0 
+                            ? (double)record.CorrectCount / (record.CorrectCount + record.WrongCount) 
+                            : 0;
+                    }
+                }
                 stats.CategoryBreakdown = new Dictionary<string, int>(userData.CategoryStats);
             }
 
@@ -189,13 +267,16 @@ namespace LearningAssistant.Services.Learning
                 // 计算平均正确率
                 var correctCount = 0;
                 var totalCount = 0;
-                for (int i = 0; i < 7; i++)
+                lock (_dailyRecordsLock)
                 {
-                    var date = startDate.AddDays(i);
-                    if (userData.DailyRecords.TryGetValue(date, out var record))
+                    for (int i = 0; i < 7; i++)
                     {
-                        correctCount += record.CorrectCount;
-                        totalCount += record.CorrectCount + record.WrongCount;
+                        var date = startDate.AddDays(i);
+                        if (userData.DailyRecords.TryGetValue(date, out var record))
+                        {
+                            correctCount += record.CorrectCount;
+                            totalCount += record.CorrectCount + record.WrongCount;
+                        }
                     }
                 }
                 weeklyStats.CorrectRate = totalCount > 0 ? (double)correctCount / totalCount : 0;
@@ -225,13 +306,16 @@ namespace LearningAssistant.Services.Learning
                 // 计算平均正确率
                 var correctCount = 0;
                 var totalCount = 0;
-                for (int i = 0; i < daysInMonth; i++)
+                lock (_dailyRecordsLock)
                 {
-                    var date = startDate.AddDays(i);
-                    if (userData.DailyRecords.TryGetValue(date, out var record))
+                    for (int i = 0; i < daysInMonth; i++)
                     {
-                        correctCount += record.CorrectCount;
-                        totalCount += record.CorrectCount + record.WrongCount;
+                        var date = startDate.AddDays(i);
+                        if (userData.DailyRecords.TryGetValue(date, out var record))
+                        {
+                            correctCount += record.CorrectCount;
+                            totalCount += record.CorrectCount + record.WrongCount;
+                        }
                     }
                 }
                 monthlyStats.CorrectRate = totalCount > 0 ? (double)correctCount / totalCount : 0;

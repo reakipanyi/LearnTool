@@ -1,4 +1,3 @@
-using LearningAssistant;
 using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Forms.UserControls.Cards;
@@ -282,13 +281,35 @@ namespace LearningAssistant.Forms
                     case "每日挑战":
                         ShowChallengeForm();
                         break;
+                    case "成就徽章":
+                        ShowAchievementForm();
+                        break;
                     case "学习统计":
                         buttonOpenStatistics?.PerformClick();
                         break;
                     case "笔记":
                         _windowManager.OpenNotesWindow();
                         break;
+                    case "设置":
+                        _windowManager.OpenSettingsWindow();
+                        break;
                 }
+            }
+        }
+
+        private void ShowAchievementForm()
+        {
+            try
+            {
+                var gamificationService = Program.GetRequiredService<IGamificationService>();
+                var form = new AchievementForm(gamificationService);
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.ShowDialog(this);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "打开成就窗口失败");
+                MessageBox.Show($"打开成就窗口失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -338,19 +359,6 @@ namespace LearningAssistant.Forms
             }
         }
 
-        private void ShowAchievementForm()
-        {
-            try
-            {
-                var gamificationService = Program.GetRequiredService<IGamificationService>();
-                using var form = new AchievementForm(gamificationService);
-                form.ShowDialog(this);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"打开成就系统失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
 
         #region IMainView Implementation
 
@@ -485,6 +493,14 @@ namespace LearningAssistant.Forms
                     totalChallenges,
                     noteCount,
                     todayNewNotes);
+            }
+        }
+
+        public void UpdateRecommendations(List<Models.Learning.LearningRecommendation> recommendations)
+        {
+            if (dashboardView != null)
+            {
+                dashboardView.UpdateRecommendations(recommendations);
             }
         }
 
@@ -741,7 +757,7 @@ namespace LearningAssistant.Forms
             statusStrip1.Items.AddRange(new ToolStripItem[] { toolStripStatusLabel });
             statusStrip1.Location = new Point(0, 690);
             statusStrip1.Name = "statusStrip1";
-            statusStrip1.Size = new Size(1259, 22);
+            statusStrip1.Size = new Size(1593, 22);
             statusStrip1.TabIndex = 2;
             // 
             // toolStripStatusLabel
@@ -765,7 +781,7 @@ namespace LearningAssistant.Forms
             // 
             splitContainerMain.Panel2.Controls.Add(panelContent);
             splitContainerMain.Panel2.Controls.Add(panelTopBar);
-            splitContainerMain.Size = new Size(1259, 690);
+            splitContainerMain.Size = new Size(1593, 690);
             splitContainerMain.SplitterDistance = 121;
             splitContainerMain.SplitterWidth = 1;
             splitContainerMain.TabIndex = 1;
@@ -787,7 +803,7 @@ namespace LearningAssistant.Forms
             panelContent.Dock = DockStyle.Fill;
             panelContent.Location = new Point(0, 56);
             panelContent.Name = "panelContent";
-            panelContent.Size = new Size(1137, 634);
+            panelContent.Size = new Size(1471, 634);
             panelContent.TabIndex = 1;
             // 
             // dashboardView
@@ -796,7 +812,7 @@ namespace LearningAssistant.Forms
             dashboardView.Dock = DockStyle.Fill;
             dashboardView.Location = new Point(0, 0);
             dashboardView.Name = "dashboardView";
-            dashboardView.Size = new Size(1137, 634);
+            dashboardView.Size = new Size(1471, 634);
             dashboardView.TabIndex = 0;
             // 
             // panelTopBar
@@ -811,7 +827,7 @@ namespace LearningAssistant.Forms
             panelTopBar.Location = new Point(0, 0);
             panelTopBar.Name = "panelTopBar";
             panelTopBar.Padding = new Padding(16, 0, 16, 0);
-            panelTopBar.Size = new Size(1137, 56);
+            panelTopBar.Size = new Size(1471, 56);
             panelTopBar.TabIndex = 0;
             panelTopBar.Resize += PanelTopBar_Resize;
             // 
@@ -885,7 +901,7 @@ namespace LearningAssistant.Forms
             AutoScaleDimensions = new SizeF(10F, 21F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.FromArgb(250, 245, 235);
-            ClientSize = new Size(1259, 712);
+            ClientSize = new Size(1593, 712);
             Controls.Add(splitContainerMain);
             Controls.Add(statusStrip1);
             Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
@@ -1051,6 +1067,10 @@ namespace LearningAssistant.Forms
         {
             if (disposing)
             {
+                _fontLogoEmoji?.Dispose();
+                _fontTopTitle?.Dispose();
+                _fontIconBtn?.Dispose();
+
                 if (_presenter != null)
                 {
                     _presenter.OnOpenSettings -= Presenter_OnOpenSettings;

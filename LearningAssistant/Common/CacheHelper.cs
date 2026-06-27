@@ -22,8 +22,14 @@ namespace LearningAssistant.Common
             {
                 if (!item.IsExpired)
                 {
-                    value = (T)item.Value;
-                    return true;
+                    // 安全类型转换：检查实际类型是否匹配
+                    if (item.Value is T typedValue)
+                    {
+                        value = typedValue;
+                        return true;
+                    }
+                    // 类型不匹配时返回 false
+                    return false;
                 }
                 _cache.TryRemove(key, out _);
             }

@@ -96,6 +96,8 @@ namespace LearningAssistant.Views
             int currentLevel, int xpToNextLevel, int completedChallenges, int totalChallenges,
             int noteCount = 0, int todayNewNotes = 0);
 
+        void UpdateRecommendations(List<LearningAssistant.Models.Learning.LearningRecommendation> recommendations);
+
     }
 
     /// <summary>

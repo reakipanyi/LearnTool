@@ -76,6 +76,13 @@ namespace LearningAssistant.Services.Learning
         void SnoozeReminder(Guid reminderId, TimeSpan snoozeTime);
 
         /// <summary>
+        /// 获取学习建议列表
+        /// </summary>
+        /// <param name="userId">用户ID</param>
+        /// <returns>学习建议列表</returns>
+        List<string> GetLearningRecommendations(string userId);
+
+        /// <summary>
         /// 提醒触发事件 - 当提醒时间到达时触发
         /// </summary>
         event EventHandler<ReminderTriggeredEventArgs>? ReminderTriggered;

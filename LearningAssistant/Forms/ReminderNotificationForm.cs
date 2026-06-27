@@ -271,7 +271,7 @@ namespace LearningAssistant.Forms
             labelIcon.Font = new Font("Segoe UI Emoji", 36F);
             labelIcon.Location = new Point(25, 20);
             labelIcon.Name = "labelIcon";
-            labelIcon.Size = new Size(88, 65);
+            labelIcon.Size = new Size(88, 64);
             labelIcon.TabIndex = 0;
             labelIcon.Text = "📚";
             // 
@@ -279,7 +279,7 @@ namespace LearningAssistant.Forms
             // 
             labelTitle.Font = new Font("微软雅黑", 14F, FontStyle.Bold);
             labelTitle.ForeColor = Color.FromArgb(33, 33, 33);
-            labelTitle.Location = new Point(100, 22);
+            labelTitle.Location = new Point(115, 22);
             labelTitle.Name = "labelTitle";
             labelTitle.Size = new Size(300, 30);
             labelTitle.TabIndex = 1;
@@ -289,7 +289,7 @@ namespace LearningAssistant.Forms
             // 
             labelMessage.Font = new Font("微软雅黑", 10.5F);
             labelMessage.ForeColor = Color.FromArgb(90, 90, 90);
-            labelMessage.Location = new Point(100, 52);
+            labelMessage.Location = new Point(115, 52);
             labelMessage.Name = "labelMessage";
             labelMessage.Size = new Size(300, 45);
             labelMessage.TabIndex = 2;
@@ -299,7 +299,7 @@ namespace LearningAssistant.Forms
             // 
             labelTime.Font = new Font("微软雅黑", 9F);
             labelTime.ForeColor = Color.FromArgb(160, 160, 160);
-            labelTime.Location = new Point(100, 95);
+            labelTime.Location = new Point(115, 95);
             labelTime.Name = "labelTime";
             labelTime.Size = new Size(300, 20);
             labelTime.TabIndex = 3;

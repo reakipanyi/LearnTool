@@ -369,16 +369,16 @@ namespace LearningAssistant.Presenters
             _contentLoaderService = contentLoaderService ?? throw new ArgumentNullException(nameof(contentLoaderService));
             _aiQuestionService = aiQuestionService ?? throw new ArgumentNullException(nameof(aiQuestionService));
 
-            _view.SubjectChanged += (_, _) => OnSubjectChanged();
-            _view.LanguageChanged += (_, _) => OnLanguageChanged();
-            _view.SubCategoryChanged += (_, _) => OnSubCategoryChanged();
-            _view.TemplateAddClicked += (_, _) => OnTemplateAddClicked();
-            _view.TemplateSaveClicked += (_, _) => OnTemplateSaveClicked();
-            _view.TemplateDeleteClicked += (_, _) => OnTemplateDeleteClicked();
-            _view.ImportClicked += (_, _) => OnImportClicked();
-            _view.ExportClicked += (_, _) => OnExportClicked();
-            _view.GridCellEndEdit += (_, _) => OnGridValueChanged();
-            _view.GridRowsAdded += (_, _) => OnGridValueChanged();
+            _view.SubjectChanged += OnSubjectChanged;
+            _view.LanguageChanged += OnLanguageChanged;
+            _view.SubCategoryChanged += OnSubCategoryChanged;
+            _view.TemplateAddClicked += OnTemplateAddClicked;
+            _view.TemplateSaveClicked += OnTemplateSaveClicked;
+            _view.TemplateDeleteClicked += OnTemplateDeleteClicked;
+            _view.ImportClicked += OnImportClicked;
+            _view.ExportClicked += OnExportClicked;
+            _view.GridCellEndEdit += OnGridValueChanged;
+            _view.GridRowsAdded += OnGridRowsAdded;
 
             _logger.LogInformation("ContentEditorPresenter initialized");
         }
@@ -396,7 +396,7 @@ namespace LearningAssistant.Presenters
         /// <summary>
         /// 学科切换事件处理方法
         /// </summary>
-        private void OnSubjectChanged()
+        private void OnSubjectChanged(object? sender, EventArgs e)
         {
             if (CheckAndSaveUnsavedChanges())
             {
@@ -408,7 +408,7 @@ namespace LearningAssistant.Presenters
         /// <summary>
         /// 语言切换事件处理方法（兼容旧版）
         /// </summary>
-        private void OnLanguageChanged()
+        private void OnLanguageChanged(object? sender, EventArgs e)
         {
             // 学科变更事件已经处理了，这里不做额外处理
         }
@@ -416,7 +416,7 @@ namespace LearningAssistant.Presenters
         /// <summary>
         /// 子类别切换事件处理方法
         /// </summary>
-        private void OnSubCategoryChanged()
+        private void OnSubCategoryChanged(object? sender, EventArgs e)
         {
             if (CheckAndSaveUnsavedChanges())
             {
@@ -513,7 +513,7 @@ namespace LearningAssistant.Presenters
         /// <summary>
         /// 添加模板事件处理方法，显示当前类别的JSON模板
         /// </summary>
-        private void OnTemplateAddClicked()
+        private void OnTemplateAddClicked(object? sender, EventArgs e)
         {
             if (!CheckAndSaveUnsavedChanges()) return;
             _view.CurrentEditItemJson = GetTemplateJson(_view.SelectedSubCategory);
@@ -522,7 +522,7 @@ namespace LearningAssistant.Presenters
         /// <summary>
         /// 保存事件处理方法，将JSON内容保存到当前类别
         /// </summary>
-        private void OnTemplateSaveClicked()
+        private void OnTemplateSaveClicked(object? sender, EventArgs e)
         {
             var json = _view.CurrentEditItemJson;
             var category = _view.SelectedSubCategory;
@@ -656,7 +656,7 @@ namespace LearningAssistant.Presenters
         /// <summary>
         /// 删除选中条目事件处理方法
         /// </summary>
-        private void OnTemplateDeleteClicked()
+        private void OnTemplateDeleteClicked(object? sender, EventArgs e)
         {
             var selectedIndices = _view.SelectedRowIndices;
             var category = _view.SelectedSubCategory;
@@ -692,7 +692,13 @@ namespace LearningAssistant.Presenters
         /// <summary>
         /// 网格数据变更事件处理方法
         /// </summary>
-        private void OnGridValueChanged()
+        private void OnGridValueChanged(object? sender, EventArgs e)
+        {
+            _isDirty = true;
+            UpdateJsonFromGrid();
+        }
+
+        private void OnGridRowsAdded(object? sender, EventArgs e)
         {
             _isDirty = true;
             UpdateJsonFromGrid();
@@ -716,7 +722,7 @@ namespace LearningAssistant.Presenters
         /// <summary>
         /// 导入事件处理方法，从JSON文件导入数据
         /// </summary>
-        private void OnImportClicked()
+        private void OnImportClicked(object? sender, EventArgs e)
         {
             if (!CheckAndSaveUnsavedChanges()) return;
 
@@ -726,8 +732,9 @@ namespace LearningAssistant.Presenters
             try
             {
                 var content = File.ReadAllText(dialog.FileName);
-                var importedItems = JsonConvert.DeserializeObject<List<LearningItem>>(content,
-                    new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.Auto });
+                // 使用安全的自定义 Converter 替代 TypeNameHandling.Auto，防止 RCE 攻击
+                var converter = new LearningItemJsonConverter();
+                var importedItems = JsonConvert.DeserializeObject<List<LearningItem>>(content, converter);
 
                 if (importedItems?.Count > 0)
                 {
@@ -765,7 +772,7 @@ namespace LearningAssistant.Presenters
         /// <summary>
         /// 导出事件处理方法，将数据导出为JSON文件
         /// </summary>
-        private void OnExportClicked()
+        private void OnExportClicked(object? sender, EventArgs e)
         {
             using var dialog = new SaveFileDialog { Filter = "JSON文件 (*.json)|*.json" };
             if (dialog.ShowDialog() != DialogResult.OK) return;
@@ -773,8 +780,9 @@ namespace LearningAssistant.Presenters
             try
             {
                 var items = _contentLoaderService.LoadItems(_view.SelectedSubCategory);
-                var json = JsonConvert.SerializeObject(items, Formatting.Indented,
-                    new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.Auto });
+                // 使用安全的自定义 Converter 替代 TypeNameHandling.Auto
+                var converter = new LearningItemListJsonConverter();
+                var json = JsonConvert.SerializeObject(items, Formatting.Indented, converter);
 
                 if (!string.IsNullOrEmpty(json))
                 {
@@ -878,7 +886,7 @@ namespace LearningAssistant.Presenters
         private bool CheckAndSaveUnsavedChanges()
         {
             if (!_isDirty) return true;
-            OnTemplateSaveClicked();
+            OnTemplateSaveClicked(this, EventArgs.Empty);
             return true;
         }
 
@@ -887,20 +895,18 @@ namespace LearningAssistant.Presenters
         /// </summary>
         public void Dispose()
         {
+            OnTemplateSaveClicked(this, EventArgs.Empty);
 
-            OnTemplateSaveClicked();
-
-
-            _view.SubjectChanged -= (_, _) => OnSubjectChanged();
-            _view.LanguageChanged -= (_, _) => OnLanguageChanged();
-            _view.SubCategoryChanged -= (_, _) => OnSubCategoryChanged();
-            _view.TemplateAddClicked -= (_, _) => OnTemplateAddClicked();
-            _view.TemplateSaveClicked -= (_, _) => OnTemplateSaveClicked();
-            _view.TemplateDeleteClicked -= (_, _) => OnTemplateDeleteClicked();
-            _view.ImportClicked -= (_, _) => OnImportClicked();
-            _view.ExportClicked -= (_, _) => OnExportClicked();
-            _view.GridCellEndEdit -= (_, _) => OnGridValueChanged();
-            _view.GridRowsAdded -= (_, _) => OnGridValueChanged();
+            _view.SubjectChanged -= OnSubjectChanged;
+            _view.LanguageChanged -= OnLanguageChanged;
+            _view.SubCategoryChanged -= OnSubCategoryChanged;
+            _view.TemplateAddClicked -= OnTemplateAddClicked;
+            _view.TemplateSaveClicked -= OnTemplateSaveClicked;
+            _view.TemplateDeleteClicked -= OnTemplateDeleteClicked;
+            _view.ImportClicked -= OnImportClicked;
+            _view.ExportClicked -= OnExportClicked;
+            _view.GridCellEndEdit -= OnGridValueChanged;
+            _view.GridRowsAdded -= OnGridRowsAdded;
 
             _logger.LogInformation("ContentEditorPresenter disposed");
         }

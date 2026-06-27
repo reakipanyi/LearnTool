@@ -23,6 +23,7 @@ namespace LearningAssistant.Presenters
         private readonly IDataPersistenceService _persistenceService;
         private readonly IGamificationService _gamificationService;
         private readonly INoteService _noteService;
+        private readonly ILearningRecommendationService _recommendationService;
 
         private PdfPresenter? _pdfPresenter;
         private IMainView? _view;
@@ -43,7 +44,8 @@ namespace LearningAssistant.Presenters
             IWindowManager windowManager,
             IDataPersistenceService persistenceService,
             IGamificationService gamificationService,
-            INoteService noteService)
+            INoteService noteService,
+            ILearningRecommendationService recommendationService)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
@@ -55,6 +57,7 @@ namespace LearningAssistant.Presenters
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _gamificationService = gamificationService ?? throw new ArgumentNullException(nameof(gamificationService));
             _noteService = noteService ?? throw new ArgumentNullException(nameof(noteService));
+            _recommendationService = recommendationService ?? throw new ArgumentNullException(nameof(recommendationService));
             _logger.LogInformation("MainPresenter initialized");
         }
 
@@ -194,10 +197,27 @@ namespace LearningAssistant.Presenters
                     totalChallenges,
                     noteCount,
                     todayNewNotes);
+
+                UpdateRecommendations();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "更新 Dashboard 统计数据失败");
+            }
+        }
+
+        private void UpdateRecommendations()
+        {
+            if (_view == null) return;
+
+            try
+            {
+                var recommendations = _recommendationService.GetDailyRecommendations(_currentUserId, 5);
+                _view.UpdateRecommendations(recommendations);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "获取推荐数据失败");
             }
         }
 

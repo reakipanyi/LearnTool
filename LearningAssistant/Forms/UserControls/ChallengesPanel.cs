@@ -1,6 +1,7 @@
 using LearningAssistant.Models.User;
 using LearningAssistant.Services.Gamification;
 using System.ComponentModel;
+using System.Drawing.Drawing2D;
 
 namespace LearningAssistant.Forms.UserControls
 {
@@ -19,6 +20,7 @@ namespace LearningAssistant.Forms.UserControls
         private List<Challenge> _challenges = new();
         private readonly IGamificationService? _gamificationService;
         private FloatingText? _floatingText;
+        private ConfettiControl? _confettiControl;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public List<Challenge> Challenges
@@ -33,6 +35,7 @@ namespace LearningAssistant.Forms.UserControls
 
         public event EventHandler<Challenge>? ClaimRewardClicked;
         public event EventHandler<Challenge>? TaskClicked;
+        public event EventHandler<(int completed, int total)>? StatsUpdated;
 
         public ChallengesPanel()
         {
@@ -138,6 +141,9 @@ namespace LearningAssistant.Forms.UserControls
             _progressRing.Progress = (float)completePercent;
             _progressRing.CenterText = $"{(int)(completePercent * 100)}%";
 
+            // 触发统计更新事件
+            StatsUpdated?.Invoke(this, (completedCount, totalCount));
+
             if (_challenges.Count == 0)
             {
                 ShowEmptyState();
@@ -148,15 +154,133 @@ namespace LearningAssistant.Forms.UserControls
 
             foreach (var challenge in _challenges)
             {
-                var card = new ChallengeCard
-                {
-                    Challenge = challenge,
-                    Margin = new Padding(5)
-                };
-                card.ClaimClicked += OnClaimClicked;
-                card.TaskClicked += OnTaskClicked;
+                var card = CreateChallengeCard(challenge);
                 _flowLayoutPanelCards.Controls.Add(card);
             }
+        }
+
+        private Panel CreateChallengeCard(Challenge challenge)
+        {
+            Panel panel = new Panel
+            {
+                Size = new Size(250, 80),
+                BackColor = challenge.Completed ? Color.FromArgb(230, 255, 230) : Color.FromArgb(250, 250, 252),
+                Margin = new Padding(5)
+            };
+
+            // 绘制圆角边框
+            panel.Paint += (s, e) =>
+            {
+                if (e == null) return;
+                var g = e.Graphics;
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                using var borderPen = new Pen(challenge.Completed ? Color.FromArgb(76, 175, 80) : Color.FromArgb(230, 230, 235), 1);
+                var rect = new Rectangle(0, 0, panel.Width - 1, panel.Height - 1);
+                using var path = RoundedRect(rect, 8);
+                g.DrawPath(borderPen, path);
+            };
+
+            // 图标和名称
+            Label labelName = new Label
+            {
+                Text = $"{challenge.Emoji} {challenge.Name}",
+                Location = new Point(15, 12),
+                Size = new Size(200, 20),
+                Font = new Font("微软雅黑", 10F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(33, 33, 33)
+            };
+
+            // 进度
+            ProgressBar progress = new ProgressBar
+            {
+                Location = new Point(15, 38),
+                Size = new Size(150, 18),
+                Maximum = Math.Max(1, challenge.Target),
+                Value = Math.Min(challenge.Current, challenge.Target),
+                Style = ProgressBarStyle.Continuous
+            };
+
+            // 进度文本
+            Label labelProgress = new Label
+            {
+                Text = $"{challenge.Current}/{challenge.Target}",
+                Location = new Point(170, 38),
+                Size = new Size(60, 18),
+                Font = new Font("微软雅黑", 9F),
+                ForeColor = Color.FromArgb(100, 100, 100),
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            // XP奖励
+            Label labelReward = new Label
+            {
+                Text = $"+{challenge.Reward} XP",
+                Location = new Point(180, 12),
+                Size = new Size(60, 20),
+                Font = new Font("微软雅黑", 9F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(255, 152, 0),
+                TextAlign = ContentAlignment.MiddleRight
+            };
+
+            panel.Controls.Add(labelName);
+            panel.Controls.Add(progress);
+            panel.Controls.Add(labelProgress);
+            panel.Controls.Add(labelReward);
+
+            // 领取按钮或状态
+            if (challenge.Completed && !challenge.Claimed)
+            {
+                Button claimBtn = new Button
+                {
+                    Text = "领取奖励",
+                    Size = new Size(70, 28),
+                    Location = new Point(175, 45),
+                    BackColor = Color.FromArgb(255, 152, 0),
+                    ForeColor = Color.White,
+                    FlatStyle = FlatStyle.Flat,
+                    Font = new Font("微软雅黑", 9F, FontStyle.Bold),
+                    Cursor = Cursors.Hand,
+                    Tag = challenge
+                };
+                claimBtn.FlatAppearance.BorderSize = 0;
+                claimBtn.Click += (s, e) =>
+                {
+                    if (s is Button btn && btn.Tag is Challenge ch)
+                    {
+                        OnClaimClicked(this, ch);
+                    }
+                };
+                panel.Controls.Add(claimBtn);
+            }
+            else if (challenge.Claimed)
+            {
+                Label labelClaimed = new Label
+            {
+                    Text = "✓ 已领取",
+                    Location = new Point(180, 45),
+                    Size = new Size(55, 28),
+                    Font = new Font("微软雅黑", 9F),
+                    ForeColor = Color.FromArgb(76, 175, 80),
+                    TextAlign = ContentAlignment.MiddleCenter
+                };
+                panel.Controls.Add(labelClaimed);
+            }
+
+            return panel;
+        }
+
+        private static GraphicsPath RoundedRect(Rectangle rect, int radius)
+        {
+            var path = new GraphicsPath();
+            var r = radius;
+
+            path.AddArc(rect.X, rect.Y, r, r, 180, 90);
+            path.AddArc(rect.X + rect.Width - r, rect.Y, r, r, 270, 90);
+            path.AddArc(rect.X + rect.Width - r, rect.Y + rect.Height - r, r, r, 0, 90);
+            path.AddArc(rect.X, rect.Y + rect.Height - r, r, r, 90, 90);
+            path.CloseFigure();
+
+            return path;
         }
 
         private void ShowEmptyState()
@@ -191,7 +315,7 @@ namespace LearningAssistant.Forms.UserControls
             {
                 _gamificationService.ClaimChallengeReward(challenge.Id);
 
-                if (sender is ChallengeCard card)
+                if (sender is Panel card)
                 {
                     ShowRewardFloatingText(card, challenge.Reward);
                 }
@@ -205,7 +329,7 @@ namespace LearningAssistant.Forms.UserControls
             TaskClicked?.Invoke(this, challenge);
         }
 
-        private void ShowRewardFloatingText(ChallengeCard card, int reward)
+        private void ShowRewardFloatingText(Panel card, int reward)
         {
             if (_floatingText == null)
             {
@@ -213,16 +337,25 @@ namespace LearningAssistant.Forms.UserControls
                 Controls.Add(_floatingText);
             }
 
+            if (_confettiControl == null)
+            {
+                _confettiControl = new ConfettiControl();
+                Controls.Add(_confettiControl);
+            }
+
             var cardRect = card.RectangleToScreen(
                 new Rectangle(0, 0, card.Width, card.Height));
             var panelPoint = PointToClient(cardRect.Location);
 
-            _floatingText.Text = $"+{reward} XP";
+            // 显示XP浮动文字
             _floatingText.TextColor = Color.FromArgb(255, 152, 0);
             _floatingText.ShowAt(this,
                 panelPoint.X + card.Width / 2 - 40,
                 panelPoint.Y + card.Height / 2 - 15,
                 $"+{reward} XP");
+
+            // 显示彩带动画
+            _confettiControl.StartCelebration();
         }
 
         public void RefreshData()

@@ -65,12 +65,11 @@ namespace LearningAssistant.Data.Database
     /// </summary>
     public class CategoryProgressEntity
     {
-        [Key]
+        // 注意：复合主键 (UserId, CategoryName) 在 AppDbContext.OnModelCreating 中配置
         [Required(ErrorMessage = "用户 ID 不能为空")]
         [MaxLength(100, ErrorMessage = "用户 ID 长度不能超过 100 个字符")]
         public string UserId { get; set; } = string.Empty;
 
-        [Key]
         [Required(ErrorMessage = "分类名称不能为空")]
         [MaxLength(100, ErrorMessage = "分类名称长度不能超过 100 个字符")]
         public string CategoryName { get; set; } = string.Empty;

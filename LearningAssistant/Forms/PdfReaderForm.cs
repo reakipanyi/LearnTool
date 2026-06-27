@@ -2387,29 +2387,9 @@ namespace LearningAssistant.Forms
                 {
                     var imgRect = GetImageDisplayRect();
                     e.Graphics.DrawImage(_currentPageImage, imgRect);
-                }
 
-                // 使用 _navigationManager 的状态
-                if (_navigationManager != null && _navigationManager.LastSelectionRect.HasValue)
-                {
-                    var isHighlightMode = _navigationManager.IsHighlightModeCallback?.Invoke() ?? true;
-                    var rect = _navigationManager.LastSelectionRect.Value;
-
-                    if (isHighlightMode)
-                    {
-                        var color = HighlightService.GetHighlightColor(_highlightManager?.CurrentHighlightColor ?? _currentHighlightColor);
-                        using var brush = new SolidBrush(Color.FromArgb(color.A, color.R, color.G, color.B));
-                        e.Graphics.FillRectangle(brush, rect);
-                        using var pen = new Pen(Color.FromArgb(color.A + 50, color.R, color.G, color.B), 2);
-                        e.Graphics.DrawRectangle(pen, rect);
-                    }
-                    else
-                    {
-                        using var brush = new SolidBrush(Color.FromArgb(80, Color.Yellow));
-                        e.Graphics.FillRectangle(brush, rect);
-                        using var pen = new Pen(Color.Orange, 2);
-                        e.Graphics.DrawRectangle(pen, rect);
-                    }
+                    // 绘制注释（包括高亮选择框和其他图形）
+                    _navigationManager?.DrawAnnotations(e.Graphics, imgRect);
                 }
 
                 if (!string.IsNullOrEmpty(_currentPdfPath) && _currentPageImage != null)

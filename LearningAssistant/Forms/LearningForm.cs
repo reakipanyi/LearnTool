@@ -459,7 +459,7 @@ namespace LearningAssistant.Forms
         }
 
 
-        private async void LearningForm_FormClosing(object? sender, FormClosingEventArgs e)
+        private void LearningForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
             SaveSettings();
             try
@@ -468,7 +468,7 @@ namespace LearningAssistant.Forms
 
                 if (_ttsService != null)
                 {
-                    await _ttsService.StopAsync();
+                    _ttsService.StopAsync().GetAwaiter().GetResult();
                 }
             }
             catch (Exception ex)
@@ -1262,6 +1262,20 @@ namespace LearningAssistant.Forms
             buttonEdit.Click += ButtonEdit_Click;
             _buttonsView.ButtonsPanel.Controls.Add(buttonEdit);
 
+            Button buttonNote = new Button
+            {
+                Text = "📝 笔记",
+                Font = new Font("微软雅黑", 11F, FontStyle.Bold),
+                BackColor = Color.FromArgb(156, 39, 176),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Size = new Size(100, 45),
+                Margin = new Padding(5)
+            };
+            ApplyRoundedStyle(buttonNote, 8);
+            buttonNote.Click += ButtonNote_Click;
+            _buttonsView.ButtonsPanel.Controls.Add(buttonNote);
+
             InitializeDailyGoalProgress();
         }
 
@@ -1507,19 +1521,16 @@ namespace LearningAssistant.Forms
 
         private void OnLevelUp(object? sender, LevelUpEventArgs e)
         {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => OnLevelUp(sender, e)));
+                return;
+            }
+
             _soundService?.PlaySuccess();
             StartConfetti();
             _statsView.TriggerLevelUp(e.NewLevel, e.LevelTitle);
-            string levelTitle = e.LevelTitle;
-            if (InvokeRequired)
-            {
-                Invoke(new Action(() =>
-                    MessageBox.Show($"🎉 恭喜升级！\n\n你现在是「{levelTitle}」级别！", "升级成功", MessageBoxButtons.OK, MessageBoxIcon.Information)));
-            }
-            else
-            {
-                MessageBox.Show($"🎉 恭喜升级！\n\n你现在是「{levelTitle}」级别！", "升级成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
+            MessageBox.Show($"🎉 恭喜升级！\n\n你现在是「{e.LevelTitle}」级别！", "升级成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void StudyTimer_Tick(object? sender, EventArgs e)
@@ -1640,23 +1651,27 @@ namespace LearningAssistant.Forms
             int iconMargin = 8;
             int textStartX = iconMargin + iconSize + 5;
 
+            using var iconFont = new Font("Arial", 10F);
+            using var favoriteBrush = new SolidBrush(Color.FromArgb(255, 152, 0));
+            using var knownBrush = new SolidBrush(Color.FromArgb(76, 175, 80));
+
             if (isFavorite)
             {
-                e.Graphics.DrawString("⭐", new Font("Arial", 10F),
-                    isSelected ? _selectedForegroundBrush : new SolidBrush(Color.FromArgb(255, 152, 0)),
+                e.Graphics.DrawString("⭐", iconFont,
+                    isSelected ? _selectedForegroundBrush : favoriteBrush,
                     e.Bounds.X + iconMargin, e.Bounds.Y + (e.Bounds.Height - iconSize) / 2);
                 textStartX += iconSize;
             }
 
             if (isKnown)
             {
-                e.Graphics.DrawString("✓", new Font("Arial", 10F),
-                    isSelected ? _selectedForegroundBrush : new SolidBrush(Color.FromArgb(76, 175, 80)),
+                e.Graphics.DrawString("✓", iconFont,
+                    isSelected ? _selectedForegroundBrush : knownBrush,
                     e.Bounds.X + textStartX - iconSize - 5, e.Bounds.Y + (e.Bounds.Height - iconSize) / 2);
                 textStartX += iconSize;
             }
 
-            StringFormat format = new StringFormat
+            using var format = new StringFormat
             {
                 LineAlignment = StringAlignment.Center
             };
@@ -2520,6 +2535,44 @@ namespace LearningAssistant.Forms
                 MessageBox.Show($"打开内容编辑器失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+        /*
+        private async void ButtonNote_Click(object? sender, EventArgs e)
+        {
+            if (panelNotes.Visible)
+            {
+                await AnimateNotesPanel(false);
+            }
+            else
+            {
+                LoadNotes();
+                await AnimateNotesPanel(true);
+            }
+        }*/
+        private void ButtonNote_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                var noteService = Program.GetService<INoteService>();
+                if (noteService == null)
+                {
+                    MessageBox.Show("无法加载笔记服务", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                string currentContent = _learningCard?.Title ?? string.Empty;
+                string currentCategory = comboBoxSubCategory.Text ?? "学习笔记";
+
+                using var addNoteForm = new Notes.AddNoteForm(noteService, GetCurrentUserId());
+                addNoteForm.Category = currentCategory;
+                addNoteForm.Title = currentContent;
+                addNoteForm.ShowDialog(this);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "打开笔记窗口失败");
+                MessageBox.Show($"打开笔记窗口失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
 
         private void ButtonAchievements_Click(object? sender, EventArgs e)
         {
@@ -2778,18 +2831,6 @@ namespace LearningAssistant.Forms
             return $"[{subCategory}]{content}";
         }
 
-        private async void ButtonNote_Click(object? sender, EventArgs e)
-        {
-            if (panelNotes.Visible)
-            {
-                await AnimateNotesPanel(false);
-            }
-            else
-            {
-                LoadNotes();
-                await AnimateNotesPanel(true);
-            }
-        }
 
         private async Task AnimateNotesPanel(bool show)
         {

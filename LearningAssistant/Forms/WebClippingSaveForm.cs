@@ -1,6 +1,3 @@
-using LearningAssistant.Common;
-using System.ComponentModel;
-
 namespace LearningAssistant.Forms
 {
     public partial class WebClippingSaveForm : Form
@@ -47,6 +44,8 @@ namespace LearningAssistant.Forms
             _pageTitle = pageTitle;
             _pageUrl = pageUrl;
             InitializeComponent();
+            _labelSourceValue.Text = string.IsNullOrEmpty(_pageTitle) ? "未知页面" : _pageTitle;
+            _labelUrlValue.Text = string.IsNullOrEmpty(_pageUrl) ? "-" : _pageUrl;
             InitializeSubjects();
         }
 
@@ -117,7 +116,7 @@ namespace LearningAssistant.Forms
             _labelSource.Location = new Point(20, 235);
             _labelSource.Size = new Size(60, 20);
 
-            _labelSourceValue.Text = string.IsNullOrEmpty(_pageTitle) ? "未知页面" : _pageTitle;
+            _labelSourceValue.Text = "未知页面";
             _labelSourceValue.Font = new Font("微软雅黑", 8.5F);
             _labelSourceValue.ForeColor = Color.FromArgb(153, 153, 153);
             _labelSourceValue.Location = new Point(80, 237);
@@ -130,7 +129,6 @@ namespace LearningAssistant.Forms
             _labelUrl.Location = new Point(20, 260);
             _labelUrl.Size = new Size(60, 20);
 
-            _labelUrlValue.Text = string.IsNullOrEmpty(_pageUrl) ? "-" : _pageUrl;
             _labelUrlValue.Font = new Font("微软雅黑", 8.5F);
             _labelUrlValue.ForeColor = Color.FromArgb(153, 153, 153);
             _labelUrlValue.Location = new Point(80, 262);

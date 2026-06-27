@@ -34,7 +34,7 @@ namespace LearningAssistant.Models.Learning
         /// <summary>
         /// 标签，多个用逗号分隔
         /// </summary>
-        public string Tags { get; set; } = string.Empty;
+        public List<string> Tags { get; set; } = new List<string>();
 
         /// <summary>
         /// 关联的学习内容类型（汉字、单词、诗词等）

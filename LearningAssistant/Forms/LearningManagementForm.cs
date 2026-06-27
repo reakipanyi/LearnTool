@@ -2,10 +2,12 @@ using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Forms.UserControls;
 using LearningAssistant.Forms.UserControls.Cards;
+using LearningAssistant.Models.Learning;
 using LearningAssistant.Services.Learning;
 using Microsoft.Extensions.Logging;
+using System.ComponentModel;
 using System.Drawing.Drawing2D;
-using System.Globalization;
+using System.Text;
 
 namespace LearningAssistant.Forms
 {
@@ -32,6 +34,10 @@ namespace LearningAssistant.Forms
         private Panel? _panelWrongStats;
         private GoalCalendarView? _calendarView;
 
+        private List<DailyStatistics>? _cachedTrendData;
+        private Dictionary<string, int>? _cachedCategoryStats;
+        private List<WrongAnswerItem>? _cachedWrongAnswers;
+
         public LearningManagementForm(
             ILearningAnalyticsService analyticsService,
             ILearningReminderService reminderService,
@@ -44,12 +50,12 @@ namespace LearningAssistant.Forms
             string? userId = null)
         {
             InitializeComponent();
-            _analyticsService = analyticsService;
-            _reminderService = reminderService;
-            _reportService = reportService;
-            _quoteService = quoteService;
-            _goalService = goalService;
-            _wrongAnswerService = wrongAnswerService;
+            _analyticsService = analyticsService ?? throw new ArgumentNullException(nameof(analyticsService));
+            _reminderService = reminderService ?? throw new ArgumentNullException(nameof(reminderService));
+            _reportService = reportService ?? throw new ArgumentNullException(nameof(reportService));
+            _quoteService = quoteService ?? throw new ArgumentNullException(nameof(quoteService));
+            _goalService = goalService ?? throw new ArgumentNullException(nameof(goalService));
+            _wrongAnswerService = wrongAnswerService ?? throw new ArgumentNullException(nameof(wrongAnswerService));
             _logger = logger;
             _themeService = themeService;
             _userId = userId ?? Environment.UserName;
@@ -148,16 +154,21 @@ namespace LearningAssistant.Forms
 
         private void LoadTrendChart()
         {
+            DateTime startDate, endDate;
+            GetDateRange(out startDate, out endDate);
+            _cachedTrendData = _analyticsService.GetLearningTrend(_userId, startDate, endDate);
             _panelTrendChart?.Invalidate();
         }
 
         private void LoadCategoryProgress()
         {
+            _cachedCategoryStats = _analyticsService.GetCategoryStats(_userId);
             _panelCategoryProgress?.Invalidate();
         }
 
         private void LoadWrongAnswerStats()
         {
+            _cachedWrongAnswers = _wrongAnswerService.GetWrongAnswers(_userId);
             _panelWrongStats?.Invalidate();
         }
 
@@ -193,6 +204,140 @@ namespace LearningAssistant.Forms
             }
         }
 
+        private void BtnExport_Click(object? sender, EventArgs e)
+        {
+            using var dialog = new SaveFileDialog
+            {
+                Filter = "Markdown文件|*.md|文本文件|*.txt",
+                FileName = $"学习统计报告_{DateTime.Now:yyyyMMdd}.md",
+                DefaultExt = "md"
+            };
+
+            if (dialog.ShowDialog() != DialogResult.OK) return;
+
+            try
+            {
+                ExportReport(dialog.FileName);
+                MessageBox.Show("报告导出成功！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "导出报告失败");
+                MessageBox.Show($"导出失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void ExportReport(string filePath)
+        {
+            var sb = new StringBuilder();
+
+            sb.AppendLine("# 📊 学习统计报告");
+            sb.AppendLine();
+            sb.AppendLine($"**生成时间**: {DateTime.Now:yyyy-MM-dd HH:mm}");
+            sb.AppendLine($"**时间范围**: {_currentTimeRange}");
+            sb.AppendLine($"**用户**: {_userId}");
+            sb.AppendLine();
+
+            // 统计概览
+            sb.AppendLine("## 📈 统计概览");
+            sb.AppendLine();
+            sb.AppendLine("| 指标 | 数值 |");
+            sb.AppendLine("|------|------|");
+
+            try
+            {
+                var totalMinutes = _analyticsService.GetTotalStudyMinutes(_userId, GetTimeRangeStart());
+                var totalItems = _analyticsService.GetTotalLearnedItems(_userId, GetTimeRangeStart());
+                var accuracy = _analyticsService.GetAccuracyRate(_userId, GetTimeRangeStart());
+                var streak = _analyticsService.GetConsecutiveDays(_userId);
+
+                sb.AppendLine($"| 学习时长 | {totalMinutes}分钟 |");
+                sb.AppendLine($"| 学习项目 | {totalItems}个 |");
+                sb.AppendLine($"| 正确率 | {accuracy:F1}% |");
+                sb.AppendLine($"| 连续学习 | {streak}天 |");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "生成统计概览失败");
+                sb.AppendLine("| 学习时长 | - |");
+                sb.AppendLine("| 学习项目 | - |");
+                sb.AppendLine("| 正确率 | - |");
+                sb.AppendLine("| 连续学习 | - |");
+            }
+            sb.AppendLine();
+
+            // 错题统计
+            sb.AppendLine("## 📕 错题统计");
+            sb.AppendLine();
+            try
+            {
+                var wrongAnswers = _wrongAnswerService.GetWrongAnswers(_userId, 0, 100);
+                var totalWrong = wrongAnswers.Count;
+                var mastered = wrongAnswers.Count(w => w.IsMastered);
+                var pending = totalWrong - mastered;
+
+                sb.AppendLine($"- 总错题数: {totalWrong}");
+                sb.AppendLine($"- 已掌握: {mastered}");
+                sb.AppendLine($"- 待复习: {pending}");
+                sb.AppendLine();
+
+                if (wrongAnswers.Any())
+                {
+                    sb.AppendLine("### 分类分布");
+                    sb.AppendLine();
+                    var byCategory = wrongAnswers.GroupBy(w => w.Subject ?? "通用")
+                        .Select(g => new { Category = g.Key, Count = g.Count() })
+                        .OrderByDescending(x => x.Count);
+
+                    foreach (var cat in byCategory.Take(5))
+                    {
+                        sb.AppendLine($"- {cat.Category}: {cat.Count}题");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "生成错题统计失败");
+                sb.AppendLine("- 暂无错题数据");
+            }
+            sb.AppendLine();
+
+            // 学习建议
+            sb.AppendLine("## 💡 学习建议");
+            sb.AppendLine();
+            try
+            {
+                var recommendations = _reminderService.GetLearningRecommendations(_userId);
+                foreach (var rec in recommendations.Take(3))
+                {
+                    sb.AppendLine($"- {rec}");
+                }
+            }
+            catch
+            {
+                sb.AppendLine("- 继续保持学习习惯");
+                sb.AppendLine("- 定期复习错题");
+                sb.AppendLine("- 逐步拓展学习范围");
+            }
+
+            sb.AppendLine();
+            sb.AppendLine("---");
+            sb.AppendLine("*本报告由学习助手自动生成*");
+
+            File.WriteAllText(filePath, sb.ToString(), Encoding.UTF8);
+        }
+
+        private DateTime GetTimeRangeStart()
+        {
+            return _currentTimeRange switch
+            {
+                "今日" => DateTime.Today,
+                "本周" => DateTime.Today.AddDays(-(int)DateTime.Today.DayOfWeek),
+                "本月" => new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1),
+                _ => DateTime.MinValue
+            };
+        }
+
         private void PanelTrendChart_Paint(object? sender, PaintEventArgs e)
         {
             if (e == null || _panelTrendChart == null) return;
@@ -216,7 +361,7 @@ namespace LearningAssistant.Forms
 
             DateTime startDate, endDate;
             GetDateRange(out startDate, out endDate);
-            var trendData = _analyticsService.GetLearningTrend(_userId, startDate, endDate);
+            var trendData = _cachedTrendData ?? new List<DailyStatistics>();
 
             if (trendData.Count == 0) return;
 
@@ -264,7 +409,7 @@ namespace LearningAssistant.Forms
             using var titleBrush = new SolidBrush(Color.FromArgb(33, 33, 33));
             g.DrawString("📚 各分类学习情况", titleFont, titleBrush, paddingLeft, 10);
 
-            var categoryStats = _analyticsService.GetCategoryStats(_userId);
+            var categoryStats = _cachedCategoryStats ?? new Dictionary<string, int>();
             if (categoryStats.Count == 0)
             {
                 using var emptyFont = new Font("微软雅黑", 9F);
@@ -341,7 +486,7 @@ namespace LearningAssistant.Forms
 
             try
             {
-                var wrongAnswers = _wrongAnswerService.GetWrongAnswers(_userId);
+                var wrongAnswers = _cachedWrongAnswers ?? new List<WrongAnswerItem>();
                 int total = wrongAnswers.Count;
                 int mastered = wrongAnswers.Count(w => w.IsMastered);
                 int review = total - mastered;
@@ -378,7 +523,10 @@ namespace LearningAssistant.Forms
                 using var todayBrush = new SolidBrush(Color.FromArgb(156, 39, 176));
                 g.DrawString(today.ToString(), statFont, todayBrush, paddingLeft + 70, y);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "绘制错题统计面板失败");
+            }
         }
 
         private static GraphicsPath RoundedRect(Rectangle rect, int radius)
@@ -395,228 +543,262 @@ namespace LearningAssistant.Forms
             return path;
         }
 
+
+        #region 窗体控件字段（和拖拽生成格式完全一致，设计器可识别）
+        private IContainer components = null;
+        private ComponentResourceManager resources;
+
+        // 顶部头部面板
+        private Panel panelHeader;
+        private Label labelTitle;
+        private Button btnToday;
+        private Button btnWeek;
+        private Button btnMonth;
+        private Button btnAll;
+        private Button btnExport;
+
+        // 主体内容面板
+        private Panel panelContent;
+
+        // 统计卡片区域
+        private Panel panelCards;
+
+        // 日历区域
+        private Panel panelCalendar;
+        private Label labelCalendarTitle;
+
+        private List<Button> _timeRangeButtons = new();
+        #endregion
+
         private void InitializeComponent()
         {
-            this.SuspendLayout();
+            this.components = new Container();
+            this.resources = new ComponentResourceManager(typeof(LearningManagementForm));
+            this._timeRangeButtons = new List<Button>();
 
+            // 基础窗体配置
+            this.SuspendLayout();
+            // 
+            // LearningManagementForm
+            // 
             this.Text = "📊 学习统计";
             this.Size = new Size(900, 650);
             this.StartPosition = FormStartPosition.CenterParent;
             this.BackColor = Color.FromArgb(245, 245, 250);
-            this.Font = new Font("微软雅黑", 9F);
+            this.Font = new Font("微软雅黑", 9F, FontStyle.Regular, GraphicsUnit.Point, 134);
             this.MinimumSize = new Size(800, 550);
+            this.Resize += new EventHandler(this.LearningManagementForm_Resize);
 
-            Panel panelHeader = new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = 50,
-                BackColor = Color.White
-            };
+            #region 1. 顶部 Header 区域
+            // panelHeader
+            this.panelHeader = new Panel();
+            this.panelHeader.Dock = DockStyle.Top;
+            this.panelHeader.Height = 50;
+            this.panelHeader.BackColor = Color.White;
 
-            Label labelTitle = new Label
-            {
-                Text = "📊 学习统计仪表板",
-                Font = new Font("微软雅黑", 14F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(33, 33, 33),
-                Location = new Point(20, 12),
-                AutoSize = true
-            };
+            // labelTitle
+            this.labelTitle = new Label();
+            this.labelTitle.Text = "📊 学习统计仪表板";
+            this.labelTitle.Font = new Font("微软雅黑", 14F, FontStyle.Bold, GraphicsUnit.Point, 134);
+            this.labelTitle.ForeColor = Color.FromArgb(33, 33, 33);
+            this.labelTitle.Location = new Point(20, 12);
+            this.labelTitle.AutoSize = true;
 
-            Button btnToday = new Button
-            {
-                Text = "今日",
-                Tag = "今日",
-                Location = new Point(550, 12),
-                Size = new Size(60, 28),
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = new Font("微软雅黑", 9F),
-                BackColor = Color.FromArgb(240, 240, 245),
-                ForeColor = Color.FromArgb(60, 60, 60)
-            };
-            btnToday.FlatAppearance.BorderSize = 0;
-            btnToday.Click += BtnTimeRange_Click;
+            // btnToday
+            this.btnToday = new Button();
+            this.btnToday.Text = "今日";
+            this.btnToday.Tag = "今日";
+            this.btnToday.Location = new Point(550, 12);
+            this.btnToday.Size = new Size(60, 28);
+            this.btnToday.FlatStyle = FlatStyle.Flat;
+            this.btnToday.Cursor = Cursors.Hand;
+            this.btnToday.Font = new Font("微软雅黑", 9F, FontStyle.Regular, GraphicsUnit.Point, 134);
+            this.btnToday.BackColor = Color.FromArgb(240, 240, 245);
+            this.btnToday.ForeColor = Color.FromArgb(60, 60, 60);
+            this.btnToday.FlatAppearance.BorderSize = 0;
+            this.btnToday.Click += new EventHandler(this.BtnTimeRange_Click);
 
-            Button btnWeek = new Button
-            {
-                Text = "本周",
-                Tag = "本周",
-                Location = new Point(615, 12),
-                Size = new Size(60, 28),
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = new Font("微软雅黑", 9F),
-                BackColor = Color.FromArgb(63, 81, 181),
-                ForeColor = Color.White
-            };
-            btnWeek.FlatAppearance.BorderSize = 0;
-            btnWeek.Click += BtnTimeRange_Click;
+            // btnWeek
+            this.btnWeek = new Button();
+            this.btnWeek.Text = "本周";
+            this.btnWeek.Tag = "本周";
+            this.btnWeek.Location = new Point(615, 12);
+            this.btnWeek.Size = new Size(60, 28);
+            this.btnWeek.FlatStyle = FlatStyle.Flat;
+            this.btnWeek.Cursor = Cursors.Hand;
+            this.btnWeek.Font = new Font("微软雅黑", 9F, FontStyle.Regular, GraphicsUnit.Point, 134);
+            this.btnWeek.BackColor = Color.FromArgb(63, 81, 181);
+            this.btnWeek.ForeColor = Color.White;
+            this.btnWeek.FlatAppearance.BorderSize = 0;
+            this.btnWeek.Click += new EventHandler(this.BtnTimeRange_Click);
 
-            Button btnMonth = new Button
-            {
-                Text = "本月",
-                Tag = "本月",
-                Location = new Point(680, 12),
-                Size = new Size(60, 28),
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = new Font("微软雅黑", 9F),
-                BackColor = Color.FromArgb(240, 240, 245),
-                ForeColor = Color.FromArgb(60, 60, 60)
-            };
-            btnMonth.FlatAppearance.BorderSize = 0;
-            btnMonth.Click += BtnTimeRange_Click;
+            // btnMonth
+            this.btnMonth = new Button();
+            this.btnMonth.Text = "本月";
+            this.btnMonth.Tag = "本月";
+            this.btnMonth.Location = new Point(680, 12);
+            this.btnMonth.Size = new Size(60, 28);
+            this.btnMonth.FlatStyle = FlatStyle.Flat;
+            this.btnMonth.Cursor = Cursors.Hand;
+            this.btnMonth.Font = new Font("微软雅黑", 9F, FontStyle.Regular, GraphicsUnit.Point, 134);
+            this.btnMonth.BackColor = Color.FromArgb(240, 240, 245);
+            this.btnMonth.ForeColor = Color.FromArgb(60, 60, 60);
+            this.btnMonth.FlatAppearance.BorderSize = 0;
+            this.btnMonth.Click += new EventHandler(this.BtnTimeRange_Click);
 
-            Button btnAll = new Button
-            {
-                Text = "全部",
-                Tag = "全部",
-                Location = new Point(745, 12),
-                Size = new Size(60, 28),
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = new Font("微软雅黑", 9F),
-                BackColor = Color.FromArgb(240, 240, 245),
-                ForeColor = Color.FromArgb(60, 60, 60)
-            };
-            btnAll.FlatAppearance.BorderSize = 0;
-            btnAll.Click += BtnTimeRange_Click;
+            // btnAll
+            this.btnAll = new Button();
+            this.btnAll.Text = "全部";
+            this.btnAll.Tag = "全部";
+            this.btnAll.Location = new Point(745, 12);
+            this.btnAll.Size = new Size(60, 28);
+            this.btnAll.FlatStyle = FlatStyle.Flat;
+            this.btnAll.Cursor = Cursors.Hand;
+            this.btnAll.Font = new Font("微软雅黑", 9F, FontStyle.Regular, GraphicsUnit.Point, 134);
+            this.btnAll.BackColor = Color.FromArgb(240, 240, 245);
+            this.btnAll.ForeColor = Color.FromArgb(60, 60, 60);
+            this.btnAll.FlatAppearance.BorderSize = 0;
+            this.btnAll.Click += new EventHandler(this.BtnTimeRange_Click);
 
-            _timeRangeButtons = new List<Button> { btnToday, btnWeek, btnMonth, btnAll };
+            // btnExport 导出按钮
+            this.btnExport = new Button();
+            this.btnExport.Text = "📤 导出";
+            this.btnExport.Location = new Point(810, 12);
+            this.btnExport.Size = new Size(70, 28);
+            this.btnExport.FlatStyle = FlatStyle.Flat;
+            this.btnExport.Cursor = Cursors.Hand;
+            this.btnExport.Font = new Font("微软雅黑", 9F, FontStyle.Bold, GraphicsUnit.Point, 134);
+            this.btnExport.BackColor = Color.FromArgb(76, 175, 80);
+            this.btnExport.ForeColor = Color.White;
+            this.btnExport.FlatAppearance.BorderSize = 0;
+            this.btnExport.Click += new EventHandler(this.BtnExport_Click);
 
-            panelHeader.Controls.Add(labelTitle);
-            panelHeader.Controls.Add(btnToday);
-            panelHeader.Controls.Add(btnWeek);
-            panelHeader.Controls.Add(btnMonth);
-            panelHeader.Controls.Add(btnAll);
+            // 按钮集合赋值
+            this._timeRangeButtons.Add(this.btnToday);
+            this._timeRangeButtons.Add(this.btnWeek);
+            this._timeRangeButtons.Add(this.btnMonth);
+            this._timeRangeButtons.Add(this.btnAll);
 
-            Panel panelContent = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = Color.FromArgb(245, 245, 250),
-                AutoScroll = true
-            };
+            // Header 添加子控件（从上到下顺序和拖拽一致）
+            this.panelHeader.Controls.Add(this.labelTitle);
+            this.panelHeader.Controls.Add(this.btnToday);
+            this.panelHeader.Controls.Add(this.btnWeek);
+            this.panelHeader.Controls.Add(this.btnMonth);
+            this.panelHeader.Controls.Add(this.btnAll);
+            this.panelHeader.Controls.Add(this.btnExport);
+            #endregion
 
-            Panel panelCards = new Panel
-            {
-                Location = new Point(15, 15),
-                Size = new Size(855, 110),
-                BackColor = Color.Transparent
-            };
+            #region 2. 主体内容面板 panelContent
+            this.panelContent = new Panel();
+            this.panelContent.Dock = DockStyle.Fill;
+            this.panelContent.BackColor = Color.FromArgb(245, 245, 250);
+            this.panelContent.AutoScroll = true;
 
-            _cardMinutes = new StatCard
-            {
-                Location = new Point(0, 0),
-                Size = new Size(200, 110),
-                Icon = "⏱️",
-                Value = "0分",
-                Label = "学习时长",
-                AccentColor = Color.FromArgb(33, 150, 243),
-                CardColor = Color.White
-            };
+            // panelCards 卡片容器
+            this.panelCards = new Panel();
+            this.panelCards.Location = new Point(15, 15);
+            this.panelCards.Size = new Size(855, 110);
+            this.panelCards.BackColor = Color.Transparent;
 
-            _cardItems = new StatCard
-            {
-                Location = new Point(215, 0),
-                Size = new Size(200, 110),
-                Icon = "📚",
-                Value = "0个",
-                Label = "已学词汇",
-                AccentColor = Color.FromArgb(76, 175, 80),
-                CardColor = Color.White
-            };
+            // 自定义统计卡片 StatCard
+            this._cardMinutes = new StatCard();
+            this._cardMinutes.Location = new Point(0, 0);
+            this._cardMinutes.Size = new Size(200, 110);
+            this._cardMinutes.Icon = "⏱️";
+            this._cardMinutes.Value = "0分";
+            this._cardMinutes.Label = "学习时长";
+            this._cardMinutes.AccentColor = Color.FromArgb(33, 150, 243);
+            this._cardMinutes.CardColor = Color.White;
 
-            _cardAccuracy = new StatCard
-            {
-                Location = new Point(430, 0),
-                Size = new Size(200, 110),
-                Icon = "🎯",
-                Value = "0%",
-                Label = "正确率",
-                AccentColor = Color.FromArgb(255, 152, 0),
-                CardColor = Color.White
-            };
+            this._cardItems = new StatCard();
+            this._cardItems.Location = new Point(215, 0);
+            this._cardItems.Size = new Size(200, 110);
+            this._cardItems.Icon = "📚";
+            this._cardItems.Value = "0个";
+            this._cardItems.Label = "已学词汇";
+            this._cardItems.AccentColor = Color.FromArgb(76, 175, 80);
+            this._cardItems.CardColor = Color.White;
 
-            _cardStreak = new StatCard
-            {
-                Location = new Point(645, 0),
-                Size = new Size(200, 110),
-                Icon = "🔥",
-                Value = "0天",
-                Label = "连续天数",
-                AccentColor = Color.FromArgb(244, 67, 54),
-                CardColor = Color.White
-            };
+            this._cardAccuracy = new StatCard();
+            this._cardAccuracy.Location = new Point(430, 0);
+            this._cardAccuracy.Size = new Size(200, 110);
+            this._cardAccuracy.Icon = "🎯";
+            this._cardAccuracy.Value = "0%";
+            this._cardAccuracy.Label = "正确率";
+            this._cardAccuracy.AccentColor = Color.FromArgb(255, 152, 0);
+            this._cardAccuracy.CardColor = Color.White;
 
-            panelCards.Controls.Add(_cardMinutes);
-            panelCards.Controls.Add(_cardItems);
-            panelCards.Controls.Add(_cardAccuracy);
-            panelCards.Controls.Add(_cardStreak);
+            this._cardStreak = new StatCard();
+            this._cardStreak.Location = new Point(645, 0);
+            this._cardStreak.Size = new Size(200, 110);
+            this._cardStreak.Icon = "🔥";
+            this._cardStreak.Value = "0天";
+            this._cardStreak.Label = "连续天数";
+            this._cardStreak.AccentColor = Color.FromArgb(244, 67, 54);
+            this._cardStreak.CardColor = Color.White;
 
-            _panelTrendChart = new Panel
-            {
-                Location = new Point(15, 140),
-                Size = new Size(855, 180),
-                BackColor = Color.White
-            };
-            _panelTrendChart.Paint += PanelTrendChart_Paint;
+            this.panelCards.Controls.Add(this._cardMinutes);
+            this.panelCards.Controls.Add(this._cardItems);
+            this.panelCards.Controls.Add(this._cardAccuracy);
+            this.panelCards.Controls.Add(this._cardStreak);
 
-            _panelCategoryProgress = new Panel
-            {
-                Location = new Point(15, 335),
-                Size = new Size(520, 200),
-                BackColor = Color.White
-            };
-            _panelCategoryProgress.Paint += PanelCategoryProgress_Paint;
+            // 趋势图表面板
+            this._panelTrendChart = new Panel();
+            this._panelTrendChart.Location = new Point(15, 140);
+            this._panelTrendChart.Size = new Size(855, 180);
+            this._panelTrendChart.BackColor = Color.White;
+            this._panelTrendChart.Paint += new PaintEventHandler(this.PanelTrendChart_Paint);
 
-            _panelWrongStats = new Panel
-            {
-                Location = new Point(550, 335),
-                Size = new Size(320, 200),
-                BackColor = Color.White
-            };
-            _panelWrongStats.Paint += PanelWrongStats_Paint;
+            // 分类进度面板
+            this._panelCategoryProgress = new Panel();
+            this._panelCategoryProgress.Location = new Point(15, 335);
+            this._panelCategoryProgress.Size = new Size(520, 200);
+            this._panelCategoryProgress.BackColor = Color.White;
+            this._panelCategoryProgress.Paint += new PaintEventHandler(this.PanelCategoryProgress_Paint);
 
-            Panel panelCalendar = new Panel
-            {
-                Location = new Point(15, 550),
-                Size = new Size(855, 320),
-                BackColor = Color.White
-            };
+            // 错题统计面板
+            this._panelWrongStats = new Panel();
+            this._panelWrongStats.Location = new Point(550, 335);
+            this._panelWrongStats.Size = new Size(320, 200);
+            this._panelWrongStats.BackColor = Color.White;
+            this._panelWrongStats.Paint += new PaintEventHandler(this.PanelWrongStats_Paint);
 
-            Label labelCalendarTitle = new Label
-            {
-                Text = "📅 打卡日历（本月）",
-                Font = new Font("微软雅黑", 10F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(33, 33, 33),
-                Location = new Point(15, 10),
-                AutoSize = true
-            };
+            // 日历面板
+            this.panelCalendar = new Panel();
+            this.panelCalendar.Location = new Point(15, 550);
+            this.panelCalendar.Size = new Size(855, 320);
+            this.panelCalendar.BackColor = Color.White;
 
-            _calendarView = new GoalCalendarView
-            {
-                Location = new Point(15, 40),
-                Size = new Size(350, 260),
-                BackColor = Color.White
-            };
+            this.labelCalendarTitle = new Label();
+            this.labelCalendarTitle.Text = "📅 打卡日历（本月）";
+            this.labelCalendarTitle.Font = new Font("微软雅黑", 10F, FontStyle.Bold, GraphicsUnit.Point, 134);
+            this.labelCalendarTitle.ForeColor = Color.FromArgb(33, 33, 33);
+            this.labelCalendarTitle.Location = new Point(15, 10);
+            this.labelCalendarTitle.AutoSize = true;
 
-            panelCalendar.Controls.Add(labelCalendarTitle);
-            panelCalendar.Controls.Add(_calendarView);
+            this._calendarView = new GoalCalendarView();
+            this._calendarView.Location = new Point(15, 40);
+            this._calendarView.Size = new Size(350, 260);
+            this._calendarView.BackColor = Color.White;
 
-            panelContent.Controls.Add(panelCards);
-            panelContent.Controls.Add(_panelTrendChart);
-            panelContent.Controls.Add(_panelCategoryProgress);
-            panelContent.Controls.Add(_panelWrongStats);
-            panelContent.Controls.Add(panelCalendar);
+            this.panelCalendar.Controls.Add(this.labelCalendarTitle);
+            this.panelCalendar.Controls.Add(this._calendarView);
 
-            this.Controls.Add(panelContent);
-            this.Controls.Add(panelHeader);
+            // 内容面板装载所有子模块
+            this.panelContent.Controls.Add(this.panelCards);
+            this.panelContent.Controls.Add(this._panelTrendChart);
+            this.panelContent.Controls.Add(this._panelCategoryProgress);
+            this.panelContent.Controls.Add(this._panelWrongStats);
+            this.panelContent.Controls.Add(this.panelCalendar);
+            #endregion
 
+            // 窗体顶层控件添加（顺序和拖拽一致，后加的层级在上）
+            this.Controls.Add(this.panelContent);
+            this.Controls.Add(this.panelHeader);
+
+            // 标准布局恢复（VS自动生成固定写法）
             this.ResumeLayout(false);
-
-            this.Resize += LearningManagementForm_Resize;
         }
-
         private void LearningManagementForm_Resize(object? sender, EventArgs e)
         {
             int width = this.ClientSize.Width - 30;
@@ -662,6 +844,44 @@ namespace LearningAssistant.Forms
             _panelWrongStats?.Invalidate();
         }
 
-        private List<Button> _timeRangeButtons = new();
+        #region IDisposable Support
+        private bool _disposed = false;
+
+        protected override void Dispose(bool disposing)
+        {
+            if (_disposed) return;
+
+            if (disposing)
+            {
+                // 注销主题服务
+                _themeService?.UnregisterThemeable(this);
+
+                // 注销事件订阅
+                Resize -= LearningManagementForm_Resize;
+                if (btnToday != null) btnToday.Click -= BtnTimeRange_Click;
+                if (btnWeek != null) btnWeek.Click -= BtnTimeRange_Click;
+                if (btnMonth != null) btnMonth.Click -= BtnTimeRange_Click;
+                if (btnAll != null) btnAll.Click -= BtnTimeRange_Click;
+                if (btnExport != null) btnExport.Click -= BtnExport_Click;
+
+                if (_panelTrendChart != null)
+                    _panelTrendChart.Paint -= PanelTrendChart_Paint;
+                if (_panelCategoryProgress != null)
+                    _panelCategoryProgress.Paint -= PanelCategoryProgress_Paint;
+                if (_panelWrongStats != null)
+                    _panelWrongStats.Paint -= PanelWrongStats_Paint;
+
+                // 释放组件
+                if (components != null)
+                {
+                    components.Dispose();
+                    components = null;
+                }
+            }
+
+            _disposed = true;
+            base.Dispose(disposing);
+        }
+        #endregion
     }
 }

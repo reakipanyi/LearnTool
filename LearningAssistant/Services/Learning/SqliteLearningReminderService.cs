@@ -276,6 +276,21 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
+        public List<string> GetLearningRecommendations(string userId)
+        {
+            var recommendations = new List<string>
+            {
+                "继续保持学习习惯，每天进步一点点",
+                "定期复习错题，巩固薄弱知识点",
+                "合理安排学习时间，注意劳逸结合",
+                "尝试不同的学习方法，找到最适合自己的",
+                "设定明确的学习目标，保持学习动力",
+                "多做练习，在实践中加深理解",
+                "逐步拓展学习范围，开阔知识面"
+            };
+            return recommendations;
+        }
+
         public List<Reminder> GetUpcomingReminders(TimeSpan within)
         {
             try

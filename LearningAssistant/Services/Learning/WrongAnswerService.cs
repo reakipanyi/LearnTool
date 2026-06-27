@@ -18,6 +18,7 @@ namespace LearningAssistant.Services.Learning
         private readonly ILogger<WrongAnswerService> _logger;
         private readonly IEventBus? _eventBus;
         private readonly string _wrongAnswersDir;
+        private readonly object _lock = new object();
         private bool _disposed = false;
 
         public WrongAnswerService(
@@ -95,39 +96,42 @@ namespace LearningAssistant.Services.Learning
             if (item == null)
                 throw new ArgumentNullException(nameof(item));
 
-            try
+            lock (_lock)
             {
-                var items = LoadWrongAnswers(userId);
-
-                var existing = items.FirstOrDefault(i =>
-                    i.Question == item.Question && i.Subject == item.Subject);
-
-                if (existing != null)
+                try
                 {
-                    existing.WrongCount++;
-                    existing.Mastery = MasteryLevel.NotMastered;
-                    existing.LastWrongAt = DateTime.Now;
-                    existing.LastReviewAt = DateTime.Now;
-                    _logger.LogInformation("用户 {UserId} 错题已存在，错误次数+1: {Question}", userId, item.Question);
-                }
-                else
-                {
-                    item.Id = Guid.NewGuid().ToString();
-                    item.UserId = userId;
-                    item.FirstWrongAt = DateTime.Now;
-                    item.LastWrongAt = DateTime.Now;
-                    item.AddedAt = DateTime.Now;
-                    item.IsActive = true;
-                    items.Add(item);
-                    _logger.LogInformation("用户 {UserId} 添加错题: {Question}", userId, item.Question);
-                }
+                    var items = LoadWrongAnswers(userId);
 
-                SaveWrongAnswers(userId, items);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "添加错题失败: {UserId}", userId);
-                throw;
+                    var existing = items.FirstOrDefault(i =>
+                        i.Question == item.Question && i.Subject == item.Subject);
+
+                    if (existing != null)
+                    {
+                        existing.WrongCount++;
+                        existing.Mastery = MasteryLevel.NotMastered;
+                        existing.LastWrongAt = DateTime.Now;
+                        existing.LastReviewAt = DateTime.Now;
+                        _logger.LogInformation("用户 {UserId} 错题已存在，错误次数+1: {Question}", userId, item.Question);
+                    }
+                    else
+                    {
+                        item.Id = Guid.NewGuid().ToString();
+                        item.UserId = userId;
+                        item.FirstWrongAt = DateTime.Now;
+                        item.LastWrongAt = DateTime.Now;
+                        item.AddedAt = DateTime.Now;
+                        item.IsActive = true;
+                        items.Add(item);
+                        _logger.LogInformation("用户 {UserId} 添加错题: {Question}", userId, item.Question);
+                    }
+
+                    SaveWrongAnswers(userId, items);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "添加错题失败: {UserId}", userId);
+                    throw;
+                }
             }
         }
 
@@ -138,21 +142,24 @@ namespace LearningAssistant.Services.Learning
             if (string.IsNullOrWhiteSpace(itemId))
                 throw new ArgumentException("错题ID不能为空", nameof(itemId));
 
-            try
+            lock (_lock)
             {
-                var items = LoadWrongAnswers(userId);
-                var item = items.FirstOrDefault(i => i.Id == itemId);
-                if (item != null)
+                try
                 {
-                    items.Remove(item);
-                    SaveWrongAnswers(userId, items);
-                    _logger.LogInformation("用户 {UserId} 删除错题: {Question}", userId, item.Question);
+                    var items = LoadWrongAnswers(userId);
+                    var item = items.FirstOrDefault(i => i.Id == itemId);
+                    if (item != null)
+                    {
+                        items.Remove(item);
+                        SaveWrongAnswers(userId, items);
+                        _logger.LogInformation("用户 {UserId} 删除错题: {Question}", userId, item.Question);
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "删除错题失败: {UserId} - {ItemId}", userId, itemId);
-                throw;
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "删除错题失败: {UserId} - {ItemId}", userId, itemId);
+                    throw;
+                }
             }
         }
 
@@ -365,9 +372,9 @@ namespace LearningAssistant.Services.Learning
                 {
                     var keyword = filter.Keyword.ToLower();
                     items = items.Where(i =>
-                        i.Question.ToLower().Contains(keyword) ||
-                        i.CorrectAnswer.ToLower().Contains(keyword) ||
-                        i.Explanation.ToLower().Contains(keyword));
+                        (i.Question ?? string.Empty).ToLower().Contains(keyword) ||
+                        (i.CorrectAnswer ?? string.Empty).ToLower().Contains(keyword) ||
+                        (i.Explanation ?? string.Empty).ToLower().Contains(keyword));
                 }
 
                 if (filter.MinWrongCount.HasValue)
@@ -447,20 +454,23 @@ namespace LearningAssistant.Services.Learning
             if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(itemId))
                 return;
 
-            try
+            lock (_lock)
             {
-                var items = LoadWrongAnswers(userId);
-                var item = items.FirstOrDefault(i => i.Id == itemId);
-                if (item != null)
+                try
                 {
-                    item.Mastery = mastery;
-                    SaveWrongAnswers(userId, items);
-                    _logger.LogInformation("用户 {UserId} 更新错题掌握程度: {Question} - {Mastery}", userId, item.Question, mastery);
+                    var items = LoadWrongAnswers(userId);
+                    var item = items.FirstOrDefault(i => i.Id == itemId);
+                    if (item != null)
+                    {
+                        item.Mastery = mastery;
+                        SaveWrongAnswers(userId, items);
+                        _logger.LogInformation("用户 {UserId} 更新错题掌握程度: {Question} - {Mastery}", userId, item.Question, mastery);
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "更新掌握程度失败: {UserId} - {ItemId}", userId, itemId);
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "更新掌握程度失败: {UserId} - {ItemId}", userId, itemId);
+                }
             }
         }
 
@@ -469,30 +479,33 @@ namespace LearningAssistant.Services.Learning
             if (string.IsNullOrWhiteSpace(userId) || itemIds == null || itemIds.Count == 0)
                 return;
 
-            try
+            lock (_lock)
             {
-                var items = LoadWrongAnswers(userId);
-                bool changed = false;
-
-                foreach (var itemId in itemIds)
+                try
                 {
-                    var item = items.FirstOrDefault(i => i.Id == itemId);
-                    if (item != null && item.Mastery != mastery)
+                    var items = LoadWrongAnswers(userId);
+                    bool changed = false;
+
+                    foreach (var itemId in itemIds)
                     {
-                        item.Mastery = mastery;
-                        changed = true;
+                        var item = items.FirstOrDefault(i => i.Id == itemId);
+                        if (item != null && item.Mastery != mastery)
+                        {
+                            item.Mastery = mastery;
+                            changed = true;
+                        }
+                    }
+
+                    if (changed)
+                    {
+                        SaveWrongAnswers(userId, items);
+                        _logger.LogInformation("用户 {UserId} 批量更新掌握程度: {Count} 道题 - {Mastery}", userId, itemIds.Count, mastery);
                     }
                 }
-
-                if (changed)
+                catch (Exception ex)
                 {
-                    SaveWrongAnswers(userId, items);
-                    _logger.LogInformation("用户 {UserId} 批量更新掌握程度: {Count} 道题 - {Mastery}", userId, itemIds.Count, mastery);
+                    _logger.LogError(ex, "批量更新掌握程度失败: {UserId}", userId);
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "批量更新掌握程度失败: {UserId}", userId);
             }
         }
 
@@ -501,17 +514,20 @@ namespace LearningAssistant.Services.Learning
             if (string.IsNullOrWhiteSpace(userId) || itemIds == null || itemIds.Count == 0)
                 return;
 
-            try
+            lock (_lock)
             {
-                var items = LoadWrongAnswers(userId);
-                var toRemove = items.Where(i => itemIds.Contains(i.Id)).ToList();
-                items.RemoveAll(i => itemIds.Contains(i.Id));
-                SaveWrongAnswers(userId, items);
-                _logger.LogInformation("用户 {UserId} 批量删除错题: {Count} 道", userId, toRemove.Count);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "批量删除错题失败: {UserId}", userId);
+                try
+                {
+                    var items = LoadWrongAnswers(userId);
+                    var toRemove = items.Where(i => itemIds.Contains(i.Id)).ToList();
+                    items.RemoveAll(i => itemIds.Contains(i.Id));
+                    SaveWrongAnswers(userId, items);
+                    _logger.LogInformation("用户 {UserId} 批量删除错题: {Count} 道", userId, toRemove.Count);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "批量删除错题失败: {UserId}", userId);
+                }
             }
         }
 
@@ -841,11 +857,26 @@ namespace LearningAssistant.Services.Learning
                 var json = File.ReadAllText(path);
                 var items = JsonSerializer.Deserialize<List<WrongAnswerItem>>(json) ?? new List<WrongAnswerItem>();
 
+                bool needsMigration = false;
                 foreach (var item in items)
                 {
                     if (item.TagsList.Count == 0 && !string.IsNullOrWhiteSpace(item.Tags))
                     {
                         item.TagsList = item.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+                        needsMigration = true;
+                    }
+                }
+
+                if (needsMigration)
+                {
+                    try
+                    {
+                        SaveWrongAnswers(userId, items);
+                        _logger.LogInformation("用户 {UserId} 错题标签数据已迁移并保存", userId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "迁移后保存错题数据失败: {UserId}", userId);
                     }
                 }
 
@@ -868,13 +899,30 @@ namespace LearningAssistant.Services.Learning
         #endregion
 
         #region IDisposable
+
         public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
         {
             if (_disposed) return;
 
-            UnsubscribeFromEvents();
+            if (disposing)
+            {
+                UnsubscribeFromEvents();
+            }
+
             _disposed = true;
         }
+
+        ~WrongAnswerService()
+        {
+            Dispose(false);
+        }
+
         #endregion
     }
 }

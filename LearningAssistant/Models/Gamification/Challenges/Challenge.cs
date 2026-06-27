@@ -2,11 +2,16 @@ namespace LearningAssistant.Models.User
 {
     public enum ChallengeType
     {
-        LearnItems,
-        ReviewItems,
-        WrongItems,
-        StudyTime,
-        Custom
+        LearnItems,      // 学习项数
+        ReviewItems,     // 复习项数
+        WrongItems,      // 错题复习数
+        StudyTime,       // 学习时长
+        Accuracy,        // 正确率
+        Streak,          // 连续天数
+        Notes,           // 笔记数
+        Favorites,       // 收藏数
+        PerfectDay,      // 完美一天
+        Custom           // 自定义
     }
 
     /// <summary>

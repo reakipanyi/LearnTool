@@ -1,6 +1,7 @@
 using LearningAssistant.Forms.UserControls;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services.Feedback;
+using System.ComponentModel;
 
 namespace LearningAssistant.Forms
 {
@@ -21,6 +22,12 @@ namespace LearningAssistant.Forms
         public AchievementNotificationForm(Achievement achievement)
         {
             InitializeComponent();
+
+            // 关键：仅运行时创建圆角区域，设计器跳过避免报错
+            if (!DesignMode)
+            {
+                this.Region = Region.FromHrgn(CreateRoundRectRgn(0, 0, this.Width, this.Height, 10, 10));
+            }
             SetAchievementData(achievement);
             SetupAnimations();
             _soundService = new SoundService();
@@ -29,6 +36,11 @@ namespace LearningAssistant.Forms
         public AchievementNotificationForm(Achievement achievement, ISoundService soundService)
         {
             InitializeComponent();
+            // 关键：仅运行时创建圆角区域，设计器跳过避免报错
+            if (!DesignMode)
+            {
+                this.Region = Region.FromHrgn(CreateRoundRectRgn(0, 0, this.Width, this.Height, 10, 10));
+            }
             SetAchievementData(achievement);
             SetupAnimations();
             _soundService = soundService ?? new SoundService();
@@ -145,100 +157,104 @@ namespace LearningAssistant.Forms
 
         #region Windows Form Designer generated code
 
+        #region 窗体控件字段（设计器识别必备）
+
+        private Label lblIcon = null!;
+        private Label lblTitle = null!;
+        private Label lblAchievementName = null!;
+        private Label lblDescription = null!;
+
+        private IContainer components;
+        private Panel mainPanel;
+        private TableLayoutPanel contentPanel;
+
+        #endregion
+
+
         private void InitializeComponent()
         {
+            this.components = new Container();
             this.SuspendLayout();
 
+            // AchievementNotifyForm
             this.BackColor = Color.White;
             this.FormBorderStyle = FormBorderStyle.None;
             this.Size = new Size(380, 120);
             this.StartPosition = FormStartPosition.Manual;
             this.ShowInTaskbar = false;
             this.TopMost = true;
-            this.Opacity = 0;
+            this.Opacity = 0D;
 
-            var mainPanel = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = Color.White,
-                Padding = new Padding(15)
-            };
+            // mainPanel
+            this.mainPanel = new Panel();
+            this.mainPanel.Dock = DockStyle.Fill;
+            this.mainPanel.BackColor = Color.White;
+            this.mainPanel.Padding = new Padding(15);
 
-            var contentPanel = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 2,
-                RowCount = 3,
-                BackColor = Color.Transparent
-            };
+            // contentPanel
+            this.contentPanel = new TableLayoutPanel();
+            this.contentPanel.Dock = DockStyle.Fill;
+            this.contentPanel.ColumnCount = 2;
+            this.contentPanel.RowCount = 3;
+            this.contentPanel.BackColor = Color.Transparent;
+            this.contentPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 60F));
+            this.contentPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            this.contentPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 25F));
+            this.contentPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
+            this.contentPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
-            contentPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 60));
-            contentPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            // lblIcon
+            this.lblIcon = new Label();
+            this.lblIcon.Text = "🏆";
+            this.lblIcon.Dock = DockStyle.Fill;
+            this.lblIcon.TextAlign = ContentAlignment.MiddleCenter;
+            this.lblIcon.Font = new Font("Segoe UI Emoji", 32F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            this.lblIcon.BackColor = Color.Transparent;
 
-            contentPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 25));
-            contentPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-            contentPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            // lblTitle
+            this.lblTitle = new Label();
+            this.lblTitle.Text = "成就解锁！";
+            this.lblTitle.Dock = DockStyle.Fill;
+            this.lblTitle.TextAlign = ContentAlignment.BottomLeft;
+            this.lblTitle.Font = new Font("Microsoft YaHei", 10F, FontStyle.Bold, GraphicsUnit.Point, 134);
+            this.lblTitle.ForeColor = Color.FromArgb(255, 152, 0);
+            this.lblTitle.BackColor = Color.Transparent;
 
-            lblIcon = new Label
-            {
-                Text = "🏆",
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Font = new Font("Segoe UI Emoji", 32, FontStyle.Regular),
-                BackColor = Color.Transparent
-            };
+            // lblAchievementName
+            this.lblAchievementName = new Label();
+            this.lblAchievementName.Dock = DockStyle.Fill;
+            this.lblAchievementName.TextAlign = ContentAlignment.MiddleLeft;
+            this.lblAchievementName.Font = new Font("Microsoft YaHei", 14F, FontStyle.Bold, GraphicsUnit.Point, 134);
+            this.lblAchievementName.ForeColor = Color.FromArgb(33, 33, 33);
+            this.lblAchievementName.BackColor = Color.Transparent;
 
-            lblTitle = new Label
-            {
-                Text = "成就解锁！",
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.BottomLeft,
-                Font = new Font("Microsoft YaHei", 10, FontStyle.Bold),
-                ForeColor = Color.FromArgb(255, 152, 0),
-                BackColor = Color.Transparent
-            };
+            // lblDescription
+            this.lblDescription = new Label();
+            this.lblDescription.Dock = DockStyle.Fill;
+            this.lblDescription.TextAlign = ContentAlignment.TopLeft;
+            this.lblDescription.Font = new Font("Microsoft YaHei", 9F, FontStyle.Regular, GraphicsUnit.Point, 134);
+            this.lblDescription.ForeColor = Color.FromArgb(117, 117, 117);
+            this.lblDescription.BackColor = Color.Transparent;
 
-            lblAchievementName = new Label
-            {
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Microsoft YaHei", 14, FontStyle.Bold),
-                ForeColor = Color.FromArgb(33, 33, 33),
-                BackColor = Color.Transparent
-            };
+            // 表格布局挂载控件
+            this.contentPanel.Controls.Add(this.lblIcon, 0, 0);
+            this.contentPanel.SetRowSpan(this.lblIcon, 3);
+            this.contentPanel.Controls.Add(this.lblTitle, 1, 0);
+            this.contentPanel.Controls.Add(this.lblAchievementName, 1, 1);
+            this.contentPanel.Controls.Add(this.lblDescription, 1, 2);
 
-            lblDescription = new Label
-            {
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.TopLeft,
-                Font = new Font("Microsoft YaHei", 9),
-                ForeColor = Color.FromArgb(117, 117, 117),
-                BackColor = Color.Transparent
-            };
-
-            contentPanel.Controls.Add(lblIcon, 0, 0);
-            contentPanel.SetRowSpan(lblIcon, 3);
-            contentPanel.Controls.Add(lblTitle, 1, 0);
-            contentPanel.Controls.Add(lblAchievementName, 1, 1);
-            contentPanel.Controls.Add(lblDescription, 1, 2);
-
-            mainPanel.Controls.Add(contentPanel);
-            this.Controls.Add(mainPanel);
-
-            this.Region = System.Drawing.Region.FromHrgn(
-                CreateRoundRectRgn(0, 0, this.Width, this.Height, 10, 10)
-            );
+            this.mainPanel.Controls.Add(this.contentPanel);
+            this.Controls.Add(this.mainPanel);
 
             this.ResumeLayout(false);
+
         }
+
 
         [System.Runtime.InteropServices.DllImport("gdi32.dll")]
         private static extern IntPtr CreateRoundRectRgn(int x1, int y1, int x2, int y2, int cx, int cy);
 
-        private Label lblIcon = null!;
-        private Label lblTitle = null!;
-        private Label lblAchievementName = null!;
-        private Label lblDescription = null!;
+
 
         #endregion
     }

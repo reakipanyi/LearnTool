@@ -361,6 +361,17 @@ namespace LearningAssistant.Common
                 return new NotesForm(noteService, logger, themeService);
             });
 
+            services.AddScoped<ChallengeForm>(sp =>
+            {
+                var gamificationService = sp.GetRequiredService<IGamificationService>();
+                var analyticsService = sp.GetService<ILearningAnalyticsService>();
+                var noteService = sp.GetService<INoteService>();
+                var wrongAnswerService = sp.GetService<IWrongAnswerService>();
+                var logger = sp.GetService<ILogger<ChallengeForm>>();
+                var themeService = sp.GetService<IThemeService>();
+                return new ChallengeForm(gamificationService, analyticsService, noteService, wrongAnswerService, logger, themeService);
+            });
+
             services.AddScoped<ISettingView>(sp => sp.GetRequiredService<SettingForm>());
             services.AddScoped<ILearningView>(sp => sp.GetRequiredService<LearningForm>());
             services.AddScoped<IPdfView>(sp => sp.GetRequiredService<PdfReaderFormV2>());

@@ -3,6 +3,7 @@ using LearningAssistant.Common.Themes;
 using LearningAssistant.Models.Learning;
 using LearningAssistant.Services.Learning;
 using Microsoft.Extensions.Logging;
+using System.ComponentModel;
 using System.Drawing.Drawing2D;
 
 namespace LearningAssistant.Forms
@@ -80,205 +81,97 @@ namespace LearningAssistant.Forms
             LoadCategories();
         }
 
+
+        #region 窗体控件字段（和设计器自动生成格式保持一致）
+        private IContainer components = null;
+        private SplitContainer splitContainerMain;
+        private SplitContainer splitContainerDetail;
+        private Panel panelList;
+        private ListBox listBoxWrongAnswers;
+        #endregion
+
         private void InitializeComponent()
         {
-            this.SuspendLayout();
-
-            this.Text = "📕 错题本";
-            this.Size = new Size(1000, 600);
-            this.StartPosition = FormStartPosition.CenterParent;
-            this.BackColor = Color.FromArgb(245, 245, 250);
-            this.Font = new Font("微软雅黑", 9F);
-            this.MinimumSize = new Size(800, 500);
-
-            SplitContainer splitContainerMain = new SplitContainer
-            {
-                Dock = DockStyle.Fill,
-                Orientation = Orientation.Vertical,
-                SplitterDistance = 220,
-                SplitterWidth = 1,
-                BackColor = Color.FromArgb(230, 230, 240)
-            };
-
-            panelSidebar = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = Color.White
-            };
-
-            int sidebarY = 12;
-
-            labelSearchTitle = new Label
-            {
-                Text = "🔍 搜索",
-                Font = new Font("微软雅黑", 11F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(33, 33, 33),
-                Location = new Point(12, sidebarY),
-                AutoSize = true
-            };
-            sidebarY += 30;
-
-            textBoxSearch = new TextBox
-            {
-                Location = new Point(12, sidebarY),
-                Size = new Size(196, 28),
-                BorderStyle = BorderStyle.FixedSingle,
-                Font = new Font("微软雅黑", 10F),
-                PlaceholderText = "搜索题目..."
-            };
-            textBoxSearch.TextChanged += TextBoxSearch_TextChanged;
-            sidebarY += 36;
-
-            labelCategoryTitle = new Label
-            {
-                Text = "📂 分类筛选",
-                Font = new Font("微软雅黑", 11F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(33, 33, 33),
-                Location = new Point(12, sidebarY),
-                AutoSize = true
-            };
-            sidebarY += 30;
-
-            listBoxCategories = new ListBox
-            {
-                Location = new Point(12, sidebarY),
-                Size = new Size(196, 150),
-                BorderStyle = BorderStyle.None,
-                BackColor = Color.White,
-                ForeColor = Color.FromArgb(50, 50, 50),
-                Font = new Font("微软雅黑", 10F),
-                Cursor = Cursors.Hand
-            };
-            listBoxCategories.SelectedIndexChanged += ListBoxCategories_SelectedIndexChanged;
-            sidebarY += 160;
-
-            labelStatusTitle = new Label
-            {
-                Text = "🏷️ 状态筛选",
-                Font = new Font("微软雅黑", 11F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(33, 33, 33),
-                Location = new Point(12, sidebarY),
-                AutoSize = true
-            };
-            sidebarY += 30;
-
-            radioStatusAll = new RadioButton
-            {
-                Text = "● 全部",
-                Location = new Point(16, sidebarY),
-                AutoSize = true,
-                Font = new Font("微软雅黑", 9F),
-                ForeColor = Color.FromArgb(50, 50, 50),
-                Checked = true
-            };
-            radioStatusAll.CheckedChanged += RadioStatus_CheckedChanged;
-            sidebarY += 26;
-
-            radioStatusReview = new RadioButton
-            {
-                Text = "○ 待复习",
-                Location = new Point(16, sidebarY),
-                AutoSize = true,
-                Font = new Font("微软雅黑", 9F),
-                ForeColor = Color.FromArgb(50, 50, 50)
-            };
-            radioStatusReview.CheckedChanged += RadioStatus_CheckedChanged;
-            sidebarY += 26;
-
-            radioStatusMastered = new RadioButton
-            {
-                Text = "○ 已掌握",
-                Location = new Point(16, sidebarY),
-                AutoSize = true,
-                Font = new Font("微软雅黑", 9F),
-                ForeColor = Color.FromArgb(50, 50, 50)
-            };
-            radioStatusMastered.CheckedChanged += RadioStatus_CheckedChanged;
-            sidebarY += 40;
-
-            panelBottomActions = new Panel
-            {
-                Dock = DockStyle.Bottom,
-                Height = 50,
-                BackColor = Color.FromArgb(248, 248, 252)
-            };
-
-            buttonBatchMode = new Button
-            {
-                Text = "☑ 批量操作",
-                Location = new Point(12, 10),
-                Size = new Size(95, 30),
-                BackColor = Color.FromArgb(240, 240, 245),
-                ForeColor = Color.FromArgb(60, 60, 60),
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = new Font("微软雅黑", 9F)
-            };
-            buttonBatchMode.FlatAppearance.BorderSize = 0;
-            buttonBatchMode.Click += ButtonBatchMode_Click;
-
-            buttonStartReview = new Button
-            {
-                Text = "📖 开始复习",
-                Location = new Point(113, 10),
-                Size = new Size(95, 30),
-                BackColor = Color.FromArgb(63, 81, 181),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = new Font("微软雅黑", 9F, FontStyle.Bold)
-            };
-            buttonStartReview.FlatAppearance.BorderSize = 0;
-            buttonStartReview.Click += ButtonStartReview_Click;
-
-            labelSelectedCount = new Label
-            {
-                Text = "已选择 0 项",
-                Location = new Point(12, 15),
-                AutoSize = true,
-                Font = new Font("微软雅黑", 9F),
-                ForeColor = Color.FromArgb(60, 60, 60),
-                Visible = false
-            };
-
-            buttonBatchMastered = new Button
-            {
-                Text = "✅ 标记已掌握",
-                Location = new Point(100, 10),
-                Size = new Size(100, 30),
-                BackColor = Color.FromArgb(76, 175, 80),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = new Font("微软雅黑", 9F, FontStyle.Bold),
-                Visible = false,
-                Enabled = false
-            };
-            buttonBatchMastered.FlatAppearance.BorderSize = 0;
-            buttonBatchMastered.Click += ButtonBatchMastered_Click;
-
-            buttonBatchDelete = new Button
-            {
-                Text = "🗑️ 批量删除",
-                Location = new Point(208, 10),
-                Size = new Size(95, 30),
-                BackColor = Color.FromArgb(244, 67, 54),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = new Font("微软雅黑", 9F, FontStyle.Bold),
-                Visible = false,
-                Enabled = false
-            };
-            buttonBatchDelete.FlatAppearance.BorderSize = 0;
-            buttonBatchDelete.Click += ButtonBatchDelete_Click;
-
-            panelBottomActions.Controls.Add(buttonBatchMode);
-            panelBottomActions.Controls.Add(buttonStartReview);
-            panelBottomActions.Controls.Add(labelSelectedCount);
-            panelBottomActions.Controls.Add(buttonBatchMastered);
-            panelBottomActions.Controls.Add(buttonBatchDelete);
-
+            splitContainerMain = new SplitContainer();
+            panelSidebar = new Panel();
+            labelSearchTitle = new Label();
+            textBoxSearch = new TextBox();
+            labelCategoryTitle = new Label();
+            listBoxCategories = new ListBox();
+            labelStatusTitle = new Label();
+            radioStatusAll = new RadioButton();
+            radioStatusReview = new RadioButton();
+            radioStatusMastered = new RadioButton();
+            panelBottomActions = new Panel();
+            buttonBatchMode = new Button();
+            buttonStartReview = new Button();
+            labelSelectedCount = new Label();
+            buttonBatchMastered = new Button();
+            buttonBatchDelete = new Button();
+            panelMain = new Panel();
+            splitContainerDetail = new SplitContainer();
+            panelList = new Panel();
+            listBoxWrongAnswers = new ListBox();
+            panelDetail = new Panel();
+            labelQuestion = new Label();
+            textBoxQuestion = new TextBox();
+            labelCorrectAnswer = new Label();
+            textBoxCorrectAnswer = new TextBox();
+            labelUserAnswer = new Label();
+            textBoxUserAnswer = new TextBox();
+            labelExplanation = new Label();
+            textBoxExplanation = new TextBox();
+            labelDetailStats = new Label();
+            panelDetailButtons = new Panel();
+            buttonMarkMastered = new Button();
+            buttonDelete = new Button();
+            buttonExport = new Button();
+            buttonClose = new Button();
+            panelStatsBar = new Panel();
+            labelStatTotal = new Label();
+            labelStatReview = new Label();
+            labelStatMastered = new Label();
+            labelStatAccuracy = new Label();
+            labelStatToday = new Label();
+            ((ISupportInitialize)splitContainerMain).BeginInit();
+            splitContainerMain.Panel1.SuspendLayout();
+            splitContainerMain.Panel2.SuspendLayout();
+            splitContainerMain.SuspendLayout();
+            panelSidebar.SuspendLayout();
+            panelBottomActions.SuspendLayout();
+            panelMain.SuspendLayout();
+            ((ISupportInitialize)splitContainerDetail).BeginInit();
+            splitContainerDetail.Panel1.SuspendLayout();
+            splitContainerDetail.Panel2.SuspendLayout();
+            splitContainerDetail.SuspendLayout();
+            panelList.SuspendLayout();
+            panelDetail.SuspendLayout();
+            panelDetailButtons.SuspendLayout();
+            panelStatsBar.SuspendLayout();
+            SuspendLayout();
+            // 
+            // splitContainerMain
+            // 
+            splitContainerMain.BackColor = Color.FromArgb(230, 230, 240);
+            splitContainerMain.Dock = DockStyle.Fill;
+            splitContainerMain.Location = new Point(0, 0);
+            splitContainerMain.Name = "splitContainerMain";
+            // 
+            // splitContainerMain.Panel1
+            // 
+            splitContainerMain.Panel1.Controls.Add(panelSidebar);
+            // 
+            // splitContainerMain.Panel2
+            // 
+            splitContainerMain.Panel2.Controls.Add(panelMain);
+            splitContainerMain.Size = new Size(1032, 561);
+            splitContainerMain.SplitterDistance = 286;
+            splitContainerMain.SplitterWidth = 1;
+            splitContainerMain.TabIndex = 0;
+            // 
+            // panelSidebar
+            // 
+            panelSidebar.BackColor = Color.White;
             panelSidebar.Controls.Add(labelSearchTitle);
             panelSidebar.Controls.Add(textBoxSearch);
             panelSidebar.Controls.Add(labelCategoryTitle);
@@ -288,274 +181,262 @@ namespace LearningAssistant.Forms
             panelSidebar.Controls.Add(radioStatusReview);
             panelSidebar.Controls.Add(radioStatusMastered);
             panelSidebar.Controls.Add(panelBottomActions);
-
-            panelMain = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = Color.FromArgb(248, 248, 252)
-            };
-
-            panelStatsBar = new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = 60,
-                BackColor = Color.White
-            };
-
-            labelStatTotal = new Label
-            {
-                Text = "📊 总错题: 0",
-                Location = new Point(20, 18),
-                AutoSize = true,
-                Font = new Font("微软雅黑", 10F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(33, 33, 33)
-            };
-
-            labelStatReview = new Label
-            {
-                Text = "⏳ 待复习: 0",
-                Location = new Point(140, 18),
-                AutoSize = true,
-                Font = new Font("微软雅黑", 10F),
-                ForeColor = Color.FromArgb(244, 67, 54)
-            };
-
-            labelStatMastered = new Label
-            {
-                Text = "✅ 已掌握: 0",
-                Location = new Point(260, 18),
-                AutoSize = true,
-                Font = new Font("微软雅黑", 10F),
-                ForeColor = Color.FromArgb(76, 175, 80)
-            };
-
-            labelStatAccuracy = new Label
-            {
-                Text = "🎯 正确率: 0%",
-                Location = new Point(380, 18),
-                AutoSize = true,
-                Font = new Font("微软雅黑", 10F),
-                ForeColor = Color.FromArgb(33, 150, 243)
-            };
-
-            labelStatToday = new Label
-            {
-                Text = "📅 今日新增: 0",
-                Location = new Point(500, 18),
-                AutoSize = true,
-                Font = new Font("微软雅黑", 10F),
-                ForeColor = Color.FromArgb(156, 39, 176)
-            };
-
-            panelStatsBar.Controls.Add(labelStatTotal);
-            panelStatsBar.Controls.Add(labelStatReview);
-            panelStatsBar.Controls.Add(labelStatMastered);
-            panelStatsBar.Controls.Add(labelStatAccuracy);
-            panelStatsBar.Controls.Add(labelStatToday);
-
-            SplitContainer splitContainerDetail = new SplitContainer
-            {
-                Dock = DockStyle.Fill,
-                Orientation = Orientation.Horizontal,
-                SplitterDistance = 200,
-                SplitterWidth = 1,
-                BackColor = Color.FromArgb(230, 230, 240)
-            };
-
-            Panel panelList = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = Color.FromArgb(248, 248, 252)
-            };
-
-            ListBox listBoxWrongAnswers = new ListBox
-            {
-                Dock = DockStyle.Fill,
-                BorderStyle = BorderStyle.None,
-                BackColor = Color.FromArgb(248, 248, 252),
-                ForeColor = Color.FromArgb(50, 50, 50),
-                Font = new Font("微软雅黑", 10F),
-                ItemHeight = 48,
-                Cursor = Cursors.Hand,
-                DrawMode = DrawMode.OwnerDrawFixed
-            };
-            listBoxWrongAnswers.SelectedIndexChanged += ListBoxWrongAnswers_SelectedIndexChanged;
-            listBoxWrongAnswers.DrawItem += ListBoxWrongAnswers_DrawItem;
-            listBoxWrongAnswers.Name = "listBoxWrongAnswers";
-
+            panelSidebar.Dock = DockStyle.Fill;
+            panelSidebar.Location = new Point(0, 0);
+            panelSidebar.Name = "panelSidebar";
+            panelSidebar.Size = new Size(286, 561);
+            panelSidebar.TabIndex = 0;
+            // 
+            // labelSearchTitle
+            // 
+            labelSearchTitle.AutoSize = true;
+            labelSearchTitle.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            labelSearchTitle.ForeColor = Color.FromArgb(33, 33, 33);
+            labelSearchTitle.Location = new Point(12, 12);
+            labelSearchTitle.Name = "labelSearchTitle";
+            labelSearchTitle.Size = new Size(59, 19);
+            labelSearchTitle.TabIndex = 0;
+            labelSearchTitle.Text = "🔍 搜索";
+            // 
+            // textBoxSearch
+            // 
+            textBoxSearch.BorderStyle = BorderStyle.FixedSingle;
+            textBoxSearch.Font = new Font("微软雅黑", 10F);
+            textBoxSearch.Location = new Point(12, 42);
+            textBoxSearch.Name = "textBoxSearch";
+            textBoxSearch.PlaceholderText = "搜索题目...";
+            textBoxSearch.Size = new Size(196, 25);
+            textBoxSearch.TabIndex = 1;
+            textBoxSearch.TextChanged += TextBoxSearch_TextChanged;
+            // 
+            // labelCategoryTitle
+            // 
+            labelCategoryTitle.AutoSize = true;
+            labelCategoryTitle.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            labelCategoryTitle.ForeColor = Color.FromArgb(33, 33, 33);
+            labelCategoryTitle.Location = new Point(12, 78);
+            labelCategoryTitle.Name = "labelCategoryTitle";
+            labelCategoryTitle.Size = new Size(89, 19);
+            labelCategoryTitle.TabIndex = 2;
+            labelCategoryTitle.Text = "📂 分类筛选";
+            // 
+            // listBoxCategories
+            // 
+            listBoxCategories.BackColor = Color.White;
+            listBoxCategories.BorderStyle = BorderStyle.None;
+            listBoxCategories.Cursor = Cursors.Hand;
+            listBoxCategories.Font = new Font("微软雅黑", 10F);
+            listBoxCategories.ForeColor = Color.FromArgb(50, 50, 50);
+            listBoxCategories.Location = new Point(12, 108);
+            listBoxCategories.Name = "listBoxCategories";
+            listBoxCategories.Size = new Size(196, 133);
+            listBoxCategories.TabIndex = 3;
+            listBoxCategories.SelectedIndexChanged += ListBoxCategories_SelectedIndexChanged;
+            // 
+            // labelStatusTitle
+            // 
+            labelStatusTitle.AutoSize = true;
+            labelStatusTitle.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            labelStatusTitle.ForeColor = Color.FromArgb(33, 33, 33);
+            labelStatusTitle.Location = new Point(12, 268);
+            labelStatusTitle.Name = "labelStatusTitle";
+            labelStatusTitle.Size = new Size(89, 19);
+            labelStatusTitle.TabIndex = 4;
+            labelStatusTitle.Text = "🏷️ 状态筛选";
+            // 
+            // radioStatusAll
+            // 
+            radioStatusAll.AutoSize = true;
+            radioStatusAll.Checked = true;
+            radioStatusAll.Font = new Font("微软雅黑", 9F);
+            radioStatusAll.ForeColor = Color.FromArgb(50, 50, 50);
+            radioStatusAll.Location = new Point(16, 298);
+            radioStatusAll.Name = "radioStatusAll";
+            radioStatusAll.Size = new Size(62, 21);
+            radioStatusAll.TabIndex = 5;
+            radioStatusAll.TabStop = true;
+            radioStatusAll.Text = "● 全部";
+            radioStatusAll.CheckedChanged += RadioStatus_CheckedChanged;
+            // 
+            // radioStatusReview
+            // 
+            radioStatusReview.AutoSize = true;
+            radioStatusReview.Font = new Font("微软雅黑", 9F);
+            radioStatusReview.ForeColor = Color.FromArgb(50, 50, 50);
+            radioStatusReview.Location = new Point(16, 324);
+            radioStatusReview.Name = "radioStatusReview";
+            radioStatusReview.Size = new Size(73, 21);
+            radioStatusReview.TabIndex = 6;
+            radioStatusReview.Text = "○ 待复习";
+            radioStatusReview.CheckedChanged += RadioStatus_CheckedChanged;
+            // 
+            // radioStatusMastered
+            // 
+            radioStatusMastered.AutoSize = true;
+            radioStatusMastered.Font = new Font("微软雅黑", 9F);
+            radioStatusMastered.ForeColor = Color.FromArgb(50, 50, 50);
+            radioStatusMastered.Location = new Point(16, 350);
+            radioStatusMastered.Name = "radioStatusMastered";
+            radioStatusMastered.Size = new Size(73, 21);
+            radioStatusMastered.TabIndex = 7;
+            radioStatusMastered.Text = "○ 已掌握";
+            radioStatusMastered.CheckedChanged += RadioStatus_CheckedChanged;
+            // 
+            // panelBottomActions
+            // 
+            panelBottomActions.BackColor = Color.FromArgb(248, 248, 252);
+            panelBottomActions.Controls.Add(buttonBatchMode);
+            panelBottomActions.Controls.Add(buttonStartReview);
+            panelBottomActions.Controls.Add(labelSelectedCount);
+            panelBottomActions.Controls.Add(buttonBatchMastered);
+            panelBottomActions.Controls.Add(buttonBatchDelete);
+            panelBottomActions.Dock = DockStyle.Bottom;
+            panelBottomActions.Location = new Point(0, 511);
+            panelBottomActions.Name = "panelBottomActions";
+            panelBottomActions.Size = new Size(286, 50);
+            panelBottomActions.TabIndex = 8;
+            // 
+            // buttonBatchMode
+            // 
+            buttonBatchMode.BackColor = Color.FromArgb(240, 240, 245);
+            buttonBatchMode.Cursor = Cursors.Hand;
+            buttonBatchMode.FlatAppearance.BorderSize = 0;
+            buttonBatchMode.FlatStyle = FlatStyle.Flat;
+            buttonBatchMode.Font = new Font("微软雅黑", 9F);
+            buttonBatchMode.ForeColor = Color.FromArgb(60, 60, 60);
+            buttonBatchMode.Location = new Point(12, 10);
+            buttonBatchMode.Name = "buttonBatchMode";
+            buttonBatchMode.Size = new Size(95, 30);
+            buttonBatchMode.TabIndex = 0;
+            buttonBatchMode.Text = "☑ 批量操作";
+            buttonBatchMode.UseVisualStyleBackColor = false;
+            buttonBatchMode.Click += ButtonBatchMode_Click;
+            // 
+            // buttonStartReview
+            // 
+            buttonStartReview.BackColor = Color.FromArgb(63, 81, 181);
+            buttonStartReview.Cursor = Cursors.Hand;
+            buttonStartReview.FlatAppearance.BorderSize = 0;
+            buttonStartReview.FlatStyle = FlatStyle.Flat;
+            buttonStartReview.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            buttonStartReview.ForeColor = Color.White;
+            buttonStartReview.Location = new Point(113, 10);
+            buttonStartReview.Name = "buttonStartReview";
+            buttonStartReview.Size = new Size(95, 30);
+            buttonStartReview.TabIndex = 1;
+            buttonStartReview.Text = "📖 开始复习";
+            buttonStartReview.UseVisualStyleBackColor = false;
+            buttonStartReview.Click += ButtonStartReview_Click;
+            // 
+            // labelSelectedCount
+            // 
+            labelSelectedCount.AutoSize = true;
+            labelSelectedCount.Font = new Font("微软雅黑", 9F);
+            labelSelectedCount.ForeColor = Color.FromArgb(60, 60, 60);
+            labelSelectedCount.Location = new Point(12, 15);
+            labelSelectedCount.Name = "labelSelectedCount";
+            labelSelectedCount.Size = new Size(71, 17);
+            labelSelectedCount.TabIndex = 2;
+            labelSelectedCount.Text = "已选择 0 项";
+            labelSelectedCount.Visible = false;
+            // 
+            // buttonBatchMastered
+            // 
+            buttonBatchMastered.BackColor = Color.FromArgb(76, 175, 80);
+            buttonBatchMastered.Cursor = Cursors.Hand;
+            buttonBatchMastered.Enabled = false;
+            buttonBatchMastered.FlatAppearance.BorderSize = 0;
+            buttonBatchMastered.FlatStyle = FlatStyle.Flat;
+            buttonBatchMastered.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            buttonBatchMastered.ForeColor = Color.White;
+            buttonBatchMastered.Location = new Point(100, 10);
+            buttonBatchMastered.Name = "buttonBatchMastered";
+            buttonBatchMastered.Size = new Size(100, 30);
+            buttonBatchMastered.TabIndex = 3;
+            buttonBatchMastered.Text = "✅ 标记已掌握";
+            buttonBatchMastered.UseVisualStyleBackColor = false;
+            buttonBatchMastered.Visible = false;
+            buttonBatchMastered.Click += ButtonBatchMastered_Click;
+            // 
+            // buttonBatchDelete
+            // 
+            buttonBatchDelete.BackColor = Color.FromArgb(244, 67, 54);
+            buttonBatchDelete.Cursor = Cursors.Hand;
+            buttonBatchDelete.Enabled = false;
+            buttonBatchDelete.FlatAppearance.BorderSize = 0;
+            buttonBatchDelete.FlatStyle = FlatStyle.Flat;
+            buttonBatchDelete.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            buttonBatchDelete.ForeColor = Color.White;
+            buttonBatchDelete.Location = new Point(208, 10);
+            buttonBatchDelete.Name = "buttonBatchDelete";
+            buttonBatchDelete.Size = new Size(95, 30);
+            buttonBatchDelete.TabIndex = 4;
+            buttonBatchDelete.Text = "🗑️ 批量删除";
+            buttonBatchDelete.UseVisualStyleBackColor = false;
+            buttonBatchDelete.Visible = false;
+            buttonBatchDelete.Click += ButtonBatchDelete_Click;
+            // 
+            // panelMain
+            // 
+            panelMain.BackColor = Color.FromArgb(248, 248, 252);
+            panelMain.Controls.Add(splitContainerDetail);
+            panelMain.Controls.Add(panelStatsBar);
+            panelMain.Dock = DockStyle.Fill;
+            panelMain.Location = new Point(0, 0);
+            panelMain.Name = "panelMain";
+            panelMain.Size = new Size(745, 561);
+            panelMain.TabIndex = 0;
+            // 
+            // splitContainerDetail
+            // 
+            splitContainerDetail.BackColor = Color.FromArgb(230, 230, 240);
+            splitContainerDetail.Dock = DockStyle.Fill;
+            splitContainerDetail.Location = new Point(0, 60);
+            splitContainerDetail.Name = "splitContainerDetail";
+            splitContainerDetail.Orientation = Orientation.Horizontal;
+            // 
+            // splitContainerDetail.Panel1
+            // 
+            splitContainerDetail.Panel1.Controls.Add(panelList);
+            // 
+            // splitContainerDetail.Panel2
+            // 
+            splitContainerDetail.Panel2.Controls.Add(panelDetail);
+            splitContainerDetail.Size = new Size(745, 501);
+            splitContainerDetail.SplitterDistance = 25;
+            splitContainerDetail.SplitterWidth = 1;
+            splitContainerDetail.TabIndex = 0;
+            // 
+            // panelList
+            // 
+            panelList.BackColor = Color.FromArgb(248, 248, 252);
             panelList.Controls.Add(listBoxWrongAnswers);
-
-            panelDetail = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = Color.White
-            };
-
-            labelQuestion = new Label
-            {
-                Text = "❌ 题目:",
-                Font = new Font("微软雅黑", 10F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(33, 33, 33),
-                Location = new Point(20, 15),
-                AutoSize = true
-            };
-
-            textBoxQuestion = new TextBox
-            {
-                Location = new Point(20, 40),
-                Size = new Size(700, 50),
-                Multiline = true,
-                ReadOnly = true,
-                ScrollBars = ScrollBars.Vertical,
-                Font = new Font("微软雅黑", 10F),
-                BorderStyle = BorderStyle.FixedSingle,
-                BackColor = Color.FromArgb(250, 250, 252)
-            };
-
-            labelCorrectAnswer = new Label
-            {
-                Text = "✅ 正确答案:",
-                Font = new Font("微软雅黑", 10F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(76, 175, 80),
-                Location = new Point(20, 100),
-                AutoSize = true
-            };
-
-            textBoxCorrectAnswer = new TextBox
-            {
-                Location = new Point(20, 125),
-                Size = new Size(700, 40),
-                Multiline = true,
-                ReadOnly = true,
-                ScrollBars = ScrollBars.Vertical,
-                Font = new Font("微软雅黑", 10F),
-                ForeColor = Color.FromArgb(76, 175, 80),
-                BorderStyle = BorderStyle.FixedSingle,
-                BackColor = Color.FromArgb(250, 250, 252)
-            };
-
-            labelUserAnswer = new Label
-            {
-                Text = "❌ 你的答案:",
-                Font = new Font("微软雅黑", 10F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(244, 67, 54),
-                Location = new Point(20, 175),
-                AutoSize = true
-            };
-
-            textBoxUserAnswer = new TextBox
-            {
-                Location = new Point(20, 200),
-                Size = new Size(700, 40),
-                Multiline = true,
-                ReadOnly = true,
-                ScrollBars = ScrollBars.Vertical,
-                Font = new Font("微软雅黑", 10F),
-                ForeColor = Color.FromArgb(244, 67, 54),
-                BorderStyle = BorderStyle.FixedSingle,
-                BackColor = Color.FromArgb(250, 250, 252)
-            };
-
-            labelExplanation = new Label
-            {
-                Text = "📝 解析:",
-                Font = new Font("微软雅黑", 10F, FontStyle.Bold),
-                ForeColor = Color.FromArgb(33, 33, 33),
-                Location = new Point(20, 250),
-                AutoSize = true
-            };
-
-            textBoxExplanation = new TextBox
-            {
-                Location = new Point(20, 275),
-                Size = new Size(700, 80),
-                Multiline = true,
-                ReadOnly = true,
-                ScrollBars = ScrollBars.Vertical,
-                Font = new Font("微软雅黑", 10F),
-                BorderStyle = BorderStyle.FixedSingle,
-                BackColor = Color.FromArgb(250, 250, 252)
-            };
-
-            labelDetailStats = new Label
-            {
-                Text = "",
-                Font = new Font("微软雅黑", 9F),
-                ForeColor = Color.FromArgb(150, 150, 150),
-                Location = new Point(20, 365),
-                AutoSize = true
-            };
-
-            panelDetailButtons = new Panel
-            {
-                Location = new Point(20, 395),
-                Size = new Size(700, 40),
-                BackColor = Color.Transparent
-            };
-
-            buttonMarkMastered = new Button
-            {
-                Text = "✅ 已掌握",
-                Location = new Point(0, 0),
-                Size = new Size(100, 35),
-                BackColor = Color.FromArgb(76, 175, 80),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = new Font("微软雅黑", 9F, FontStyle.Bold),
-                Enabled = false
-            };
-            buttonMarkMastered.FlatAppearance.BorderSize = 0;
-            buttonMarkMastered.Click += ButtonMarkMastered_Click;
-
-            buttonDelete = new Button
-            {
-                Text = "🗑️ 删除",
-                Location = new Point(108, 0),
-                Size = new Size(80, 35),
-                BackColor = Color.FromArgb(244, 67, 54),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = new Font("微软雅黑", 9F, FontStyle.Bold),
-                Enabled = false
-            };
-            buttonDelete.FlatAppearance.BorderSize = 0;
-            buttonDelete.Click += ButtonDelete_Click;
-
-            buttonExport = new Button
-            {
-                Text = "📤 导出",
-                Location = new Point(540, 0),
-                Size = new Size(70, 35),
-                BackColor = Color.FromArgb(33, 150, 243),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = new Font("微软雅黑", 9F, FontStyle.Bold)
-            };
-            buttonExport.FlatAppearance.BorderSize = 0;
-            buttonExport.Click += ButtonExport_Click;
-
-            buttonClose = new Button
-            {
-                Text = "关闭",
-                Location = new Point(620, 0),
-                Size = new Size(80, 35),
-                BackColor = Color.Gray,
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand,
-                Font = new Font("微软雅黑", 9F)
-            };
-            buttonClose.FlatAppearance.BorderSize = 0;
-            buttonClose.Click += ButtonClose_Click;
-
-            panelDetailButtons.Controls.Add(buttonMarkMastered);
-            panelDetailButtons.Controls.Add(buttonDelete);
-            panelDetailButtons.Controls.Add(buttonExport);
-            panelDetailButtons.Controls.Add(buttonClose);
-
+            panelList.Dock = DockStyle.Fill;
+            panelList.Location = new Point(0, 0);
+            panelList.Name = "panelList";
+            panelList.Size = new Size(745, 25);
+            panelList.TabIndex = 0;
+            // 
+            // listBoxWrongAnswers
+            // 
+            listBoxWrongAnswers.BackColor = Color.FromArgb(248, 248, 252);
+            listBoxWrongAnswers.BorderStyle = BorderStyle.None;
+            listBoxWrongAnswers.Cursor = Cursors.Hand;
+            listBoxWrongAnswers.Dock = DockStyle.Fill;
+            listBoxWrongAnswers.DrawMode = DrawMode.OwnerDrawFixed;
+            listBoxWrongAnswers.Font = new Font("微软雅黑", 10F);
+            listBoxWrongAnswers.ForeColor = Color.FromArgb(50, 50, 50);
+            listBoxWrongAnswers.ItemHeight = 48;
+            listBoxWrongAnswers.Location = new Point(0, 0);
+            listBoxWrongAnswers.Name = "listBoxWrongAnswers";
+            listBoxWrongAnswers.Size = new Size(745, 25);
+            listBoxWrongAnswers.TabIndex = 0;
+            listBoxWrongAnswers.DrawItem += ListBoxWrongAnswers_DrawItem;
+            listBoxWrongAnswers.SelectedIndexChanged += ListBoxWrongAnswers_SelectedIndexChanged;
+            // 
+            // panelDetail
+            // 
+            panelDetail.BackColor = Color.White;
             panelDetail.Controls.Add(labelQuestion);
             panelDetail.Controls.Add(textBoxQuestion);
             panelDetail.Controls.Add(labelCorrectAnswer);
@@ -566,27 +447,300 @@ namespace LearningAssistant.Forms
             panelDetail.Controls.Add(textBoxExplanation);
             panelDetail.Controls.Add(labelDetailStats);
             panelDetail.Controls.Add(panelDetailButtons);
-
-            splitContainerDetail.Panel1.Controls.Add(panelList);
-            splitContainerDetail.Panel2.Controls.Add(panelDetail);
-
-            panelMain.Controls.Add(splitContainerDetail);
-            panelMain.Controls.Add(panelStatsBar);
-
-            splitContainerMain.Panel1.Controls.Add(panelSidebar);
-            splitContainerMain.Panel2.Controls.Add(panelMain);
-
-            this.Controls.Add(splitContainerMain);
-
-            splitContainerMain.SplitterDistance = 220;
-            splitContainerDetail.SplitterDistance = 200;
-
-            this.listBoxWrongAnswers = listBoxWrongAnswers;
-
-            this.ResumeLayout(false);
-
-            this.Resize += WrongAnswerForm_Resize;
+            panelDetail.Dock = DockStyle.Fill;
+            panelDetail.Location = new Point(0, 0);
+            panelDetail.Name = "panelDetail";
+            panelDetail.Size = new Size(745, 475);
+            panelDetail.TabIndex = 0;
+            // 
+            // labelQuestion
+            // 
+            labelQuestion.AutoSize = true;
+            labelQuestion.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            labelQuestion.ForeColor = Color.FromArgb(33, 33, 33);
+            labelQuestion.Location = new Point(20, 15);
+            labelQuestion.Name = "labelQuestion";
+            labelQuestion.Size = new Size(65, 19);
+            labelQuestion.TabIndex = 0;
+            labelQuestion.Text = "❌ 题目:";
+            // 
+            // textBoxQuestion
+            // 
+            textBoxQuestion.BackColor = Color.FromArgb(250, 250, 252);
+            textBoxQuestion.BorderStyle = BorderStyle.FixedSingle;
+            textBoxQuestion.Font = new Font("微软雅黑", 10F);
+            textBoxQuestion.Location = new Point(20, 40);
+            textBoxQuestion.Multiline = true;
+            textBoxQuestion.Name = "textBoxQuestion";
+            textBoxQuestion.ReadOnly = true;
+            textBoxQuestion.ScrollBars = ScrollBars.Vertical;
+            textBoxQuestion.Size = new Size(700, 50);
+            textBoxQuestion.TabIndex = 1;
+            // 
+            // labelCorrectAnswer
+            // 
+            labelCorrectAnswer.AutoSize = true;
+            labelCorrectAnswer.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            labelCorrectAnswer.ForeColor = Color.FromArgb(76, 175, 80);
+            labelCorrectAnswer.Location = new Point(20, 100);
+            labelCorrectAnswer.Name = "labelCorrectAnswer";
+            labelCorrectAnswer.Size = new Size(93, 19);
+            labelCorrectAnswer.TabIndex = 2;
+            labelCorrectAnswer.Text = "✅ 正确答案:";
+            // 
+            // textBoxCorrectAnswer
+            // 
+            textBoxCorrectAnswer.BackColor = Color.FromArgb(250, 250, 252);
+            textBoxCorrectAnswer.BorderStyle = BorderStyle.FixedSingle;
+            textBoxCorrectAnswer.Font = new Font("微软雅黑", 10F);
+            textBoxCorrectAnswer.ForeColor = Color.FromArgb(76, 175, 80);
+            textBoxCorrectAnswer.Location = new Point(20, 125);
+            textBoxCorrectAnswer.Multiline = true;
+            textBoxCorrectAnswer.Name = "textBoxCorrectAnswer";
+            textBoxCorrectAnswer.ReadOnly = true;
+            textBoxCorrectAnswer.ScrollBars = ScrollBars.Vertical;
+            textBoxCorrectAnswer.Size = new Size(700, 40);
+            textBoxCorrectAnswer.TabIndex = 3;
+            // 
+            // labelUserAnswer
+            // 
+            labelUserAnswer.AutoSize = true;
+            labelUserAnswer.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            labelUserAnswer.ForeColor = Color.FromArgb(244, 67, 54);
+            labelUserAnswer.Location = new Point(20, 175);
+            labelUserAnswer.Name = "labelUserAnswer";
+            labelUserAnswer.Size = new Size(93, 19);
+            labelUserAnswer.TabIndex = 4;
+            labelUserAnswer.Text = "❌ 你的答案:";
+            // 
+            // textBoxUserAnswer
+            // 
+            textBoxUserAnswer.BackColor = Color.FromArgb(250, 250, 252);
+            textBoxUserAnswer.BorderStyle = BorderStyle.FixedSingle;
+            textBoxUserAnswer.Font = new Font("微软雅黑", 10F);
+            textBoxUserAnswer.ForeColor = Color.FromArgb(244, 67, 54);
+            textBoxUserAnswer.Location = new Point(20, 200);
+            textBoxUserAnswer.Multiline = true;
+            textBoxUserAnswer.Name = "textBoxUserAnswer";
+            textBoxUserAnswer.ReadOnly = true;
+            textBoxUserAnswer.ScrollBars = ScrollBars.Vertical;
+            textBoxUserAnswer.Size = new Size(700, 40);
+            textBoxUserAnswer.TabIndex = 5;
+            // 
+            // labelExplanation
+            // 
+            labelExplanation.AutoSize = true;
+            labelExplanation.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            labelExplanation.ForeColor = Color.FromArgb(33, 33, 33);
+            labelExplanation.Location = new Point(20, 250);
+            labelExplanation.Name = "labelExplanation";
+            labelExplanation.Size = new Size(65, 19);
+            labelExplanation.TabIndex = 6;
+            labelExplanation.Text = "📝 解析:";
+            // 
+            // textBoxExplanation
+            // 
+            textBoxExplanation.BackColor = Color.FromArgb(250, 250, 252);
+            textBoxExplanation.BorderStyle = BorderStyle.FixedSingle;
+            textBoxExplanation.Font = new Font("微软雅黑", 10F);
+            textBoxExplanation.Location = new Point(20, 275);
+            textBoxExplanation.Multiline = true;
+            textBoxExplanation.Name = "textBoxExplanation";
+            textBoxExplanation.ReadOnly = true;
+            textBoxExplanation.ScrollBars = ScrollBars.Vertical;
+            textBoxExplanation.Size = new Size(700, 80);
+            textBoxExplanation.TabIndex = 7;
+            // 
+            // labelDetailStats
+            // 
+            labelDetailStats.AutoSize = true;
+            labelDetailStats.Font = new Font("微软雅黑", 9F);
+            labelDetailStats.ForeColor = Color.FromArgb(150, 150, 150);
+            labelDetailStats.Location = new Point(20, 365);
+            labelDetailStats.Name = "labelDetailStats";
+            labelDetailStats.Size = new Size(0, 17);
+            labelDetailStats.TabIndex = 8;
+            // 
+            // panelDetailButtons
+            // 
+            panelDetailButtons.BackColor = Color.Transparent;
+            panelDetailButtons.Controls.Add(buttonMarkMastered);
+            panelDetailButtons.Controls.Add(buttonDelete);
+            panelDetailButtons.Controls.Add(buttonExport);
+            panelDetailButtons.Controls.Add(buttonClose);
+            panelDetailButtons.Location = new Point(20, 395);
+            panelDetailButtons.Name = "panelDetailButtons";
+            panelDetailButtons.Size = new Size(700, 40);
+            panelDetailButtons.TabIndex = 9;
+            // 
+            // buttonMarkMastered
+            // 
+            buttonMarkMastered.BackColor = Color.FromArgb(76, 175, 80);
+            buttonMarkMastered.Cursor = Cursors.Hand;
+            buttonMarkMastered.Enabled = false;
+            buttonMarkMastered.FlatAppearance.BorderSize = 0;
+            buttonMarkMastered.FlatStyle = FlatStyle.Flat;
+            buttonMarkMastered.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            buttonMarkMastered.ForeColor = Color.White;
+            buttonMarkMastered.Location = new Point(0, 0);
+            buttonMarkMastered.Name = "buttonMarkMastered";
+            buttonMarkMastered.Size = new Size(100, 35);
+            buttonMarkMastered.TabIndex = 0;
+            buttonMarkMastered.Text = "✅ 已掌握";
+            buttonMarkMastered.UseVisualStyleBackColor = false;
+            buttonMarkMastered.Click += ButtonMarkMastered_Click;
+            // 
+            // buttonDelete
+            // 
+            buttonDelete.BackColor = Color.FromArgb(244, 67, 54);
+            buttonDelete.Cursor = Cursors.Hand;
+            buttonDelete.Enabled = false;
+            buttonDelete.FlatAppearance.BorderSize = 0;
+            buttonDelete.FlatStyle = FlatStyle.Flat;
+            buttonDelete.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            buttonDelete.ForeColor = Color.White;
+            buttonDelete.Location = new Point(108, 0);
+            buttonDelete.Name = "buttonDelete";
+            buttonDelete.Size = new Size(80, 35);
+            buttonDelete.TabIndex = 1;
+            buttonDelete.Text = "🗑️ 删除";
+            buttonDelete.UseVisualStyleBackColor = false;
+            buttonDelete.Click += ButtonDelete_Click;
+            // 
+            // buttonExport
+            // 
+            buttonExport.BackColor = Color.FromArgb(33, 150, 243);
+            buttonExport.Cursor = Cursors.Hand;
+            buttonExport.FlatAppearance.BorderSize = 0;
+            buttonExport.FlatStyle = FlatStyle.Flat;
+            buttonExport.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            buttonExport.ForeColor = Color.White;
+            buttonExport.Location = new Point(540, 0);
+            buttonExport.Name = "buttonExport";
+            buttonExport.Size = new Size(70, 35);
+            buttonExport.TabIndex = 2;
+            buttonExport.Text = "📤 导出";
+            buttonExport.UseVisualStyleBackColor = false;
+            buttonExport.Click += ButtonExport_Click;
+            // 
+            // buttonClose
+            // 
+            buttonClose.BackColor = Color.Gray;
+            buttonClose.Cursor = Cursors.Hand;
+            buttonClose.FlatAppearance.BorderSize = 0;
+            buttonClose.FlatStyle = FlatStyle.Flat;
+            buttonClose.Font = new Font("微软雅黑", 9F);
+            buttonClose.ForeColor = Color.White;
+            buttonClose.Location = new Point(620, 0);
+            buttonClose.Name = "buttonClose";
+            buttonClose.Size = new Size(80, 35);
+            buttonClose.TabIndex = 3;
+            buttonClose.Text = "关闭";
+            buttonClose.UseVisualStyleBackColor = false;
+            buttonClose.Click += ButtonClose_Click;
+            // 
+            // panelStatsBar
+            // 
+            panelStatsBar.BackColor = Color.White;
+            panelStatsBar.Controls.Add(labelStatTotal);
+            panelStatsBar.Controls.Add(labelStatReview);
+            panelStatsBar.Controls.Add(labelStatMastered);
+            panelStatsBar.Controls.Add(labelStatAccuracy);
+            panelStatsBar.Controls.Add(labelStatToday);
+            panelStatsBar.Dock = DockStyle.Top;
+            panelStatsBar.Location = new Point(0, 0);
+            panelStatsBar.Name = "panelStatsBar";
+            panelStatsBar.Size = new Size(745, 60);
+            panelStatsBar.TabIndex = 1;
+            // 
+            // labelStatTotal
+            // 
+            labelStatTotal.AutoSize = true;
+            labelStatTotal.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            labelStatTotal.ForeColor = Color.FromArgb(33, 33, 33);
+            labelStatTotal.Location = new Point(20, 18);
+            labelStatTotal.Name = "labelStatTotal";
+            labelStatTotal.Size = new Size(91, 19);
+            labelStatTotal.TabIndex = 0;
+            labelStatTotal.Text = "📊 总错题: 0";
+            // 
+            // labelStatReview
+            // 
+            labelStatReview.AutoSize = true;
+            labelStatReview.Font = new Font("微软雅黑", 10F);
+            labelStatReview.ForeColor = Color.FromArgb(244, 67, 54);
+            labelStatReview.Location = new Point(140, 18);
+            labelStatReview.Name = "labelStatReview";
+            labelStatReview.Size = new Size(84, 20);
+            labelStatReview.TabIndex = 1;
+            labelStatReview.Text = "⏳ 待复习: 0";
+            // 
+            // labelStatMastered
+            // 
+            labelStatMastered.AutoSize = true;
+            labelStatMastered.Font = new Font("微软雅黑", 10F);
+            labelStatMastered.ForeColor = Color.FromArgb(76, 175, 80);
+            labelStatMastered.Location = new Point(260, 18);
+            labelStatMastered.Name = "labelStatMastered";
+            labelStatMastered.Size = new Size(89, 20);
+            labelStatMastered.TabIndex = 2;
+            labelStatMastered.Text = "✅ 已掌握: 0";
+            // 
+            // labelStatAccuracy
+            // 
+            labelStatAccuracy.AutoSize = true;
+            labelStatAccuracy.Font = new Font("微软雅黑", 10F);
+            labelStatAccuracy.ForeColor = Color.FromArgb(33, 150, 243);
+            labelStatAccuracy.Location = new Point(380, 18);
+            labelStatAccuracy.Name = "labelStatAccuracy";
+            labelStatAccuracy.Size = new Size(101, 20);
+            labelStatAccuracy.TabIndex = 3;
+            labelStatAccuracy.Text = "🎯 正确率: 0%";
+            // 
+            // labelStatToday
+            // 
+            labelStatToday.AutoSize = true;
+            labelStatToday.Font = new Font("微软雅黑", 10F);
+            labelStatToday.ForeColor = Color.FromArgb(156, 39, 176);
+            labelStatToday.Location = new Point(500, 18);
+            labelStatToday.Name = "labelStatToday";
+            labelStatToday.Size = new Size(102, 20);
+            labelStatToday.TabIndex = 4;
+            labelStatToday.Text = "📅 今日新增: 0";
+            // 
+            // WrongAnswerForm
+            // 
+            BackColor = Color.FromArgb(245, 245, 250);
+            ClientSize = new Size(1032, 561);
+            Controls.Add(splitContainerMain);
+            Font = new Font("微软雅黑", 9F, FontStyle.Regular, GraphicsUnit.Point, 134);
+            MinimumSize = new Size(800, 500);
+            Name = "WrongAnswerForm";
+            StartPosition = FormStartPosition.CenterParent;
+            Text = "📕 错题本";
+            Resize += WrongAnswerForm_Resize;
+            splitContainerMain.Panel1.ResumeLayout(false);
+            splitContainerMain.Panel2.ResumeLayout(false);
+            ((ISupportInitialize)splitContainerMain).EndInit();
+            splitContainerMain.ResumeLayout(false);
+            panelSidebar.ResumeLayout(false);
+            panelSidebar.PerformLayout();
+            panelBottomActions.ResumeLayout(false);
+            panelBottomActions.PerformLayout();
+            panelMain.ResumeLayout(false);
+            splitContainerDetail.Panel1.ResumeLayout(false);
+            splitContainerDetail.Panel2.ResumeLayout(false);
+            ((ISupportInitialize)splitContainerDetail).EndInit();
+            splitContainerDetail.ResumeLayout(false);
+            panelList.ResumeLayout(false);
+            panelDetail.ResumeLayout(false);
+            panelDetail.PerformLayout();
+            panelDetailButtons.ResumeLayout(false);
+            panelStatsBar.ResumeLayout(false);
+            panelStatsBar.PerformLayout();
+            ResumeLayout(false);
         }
+
 
         private void WrongAnswerForm_Resize(object? sender, EventArgs e)
         {
@@ -972,7 +1126,10 @@ namespace LearningAssistant.Forms
                         _wrongAnswerService.MarkAsMastered(_userId, id);
                         successCount++;
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "标记错题已掌握失败, Id: {Id}", id);
+                    }
                 }
 
                 MessageBox.Show($"已成功标记 {successCount} 道错题为已掌握", "操作完成",
@@ -1009,7 +1166,10 @@ namespace LearningAssistant.Forms
                         _wrongAnswerService.RemoveWrongAnswer(_userId, id);
                         successCount++;
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "删除错题失败, Id: {Id}", id);
+                    }
                 }
 
                 MessageBox.Show($"已成功删除 {successCount} 道错题", "操作完成",
@@ -1209,7 +1369,10 @@ namespace LearningAssistant.Forms
                 {
                     _wrongAnswerService.MarkAsMastered(_userId, items[currentIndex].Id);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "复习模式标记已掌握失败");
+                }
 
                 currentIndex++;
                 if (currentIndex >= items.Count)
@@ -1310,8 +1473,55 @@ namespace LearningAssistant.Forms
             if (labelDetailStats != null) labelDetailStats.ForeColor = colors.TextSecondary;
         }
 
-        #region Designer generated fields
-        private ListBox listBoxWrongAnswers;
+        #region IDisposable Support
+        private bool _disposed = false;
+
+        protected override void Dispose(bool disposing)
+        {
+            if (_disposed) return;
+
+            if (disposing)
+            {
+                // 注销主题服务
+                _themeService?.UnregisterThemeable(this);
+
+                // 注销事件订阅
+                if (textBoxSearch != null) textBoxSearch.TextChanged -= TextBoxSearch_TextChanged;
+                if (listBoxCategories != null) listBoxCategories.SelectedIndexChanged -= ListBoxCategories_SelectedIndexChanged;
+                if (radioStatusAll != null) radioStatusAll.CheckedChanged -= RadioStatus_CheckedChanged;
+                if (radioStatusReview != null) radioStatusReview.CheckedChanged -= RadioStatus_CheckedChanged;
+                if (radioStatusMastered != null) radioStatusMastered.CheckedChanged -= RadioStatus_CheckedChanged;
+                if (buttonBatchMode != null) buttonBatchMode.Click -= ButtonBatchMode_Click;
+                if (buttonStartReview != null) buttonStartReview.Click -= ButtonStartReview_Click;
+                if (buttonBatchMastered != null) buttonBatchMastered.Click -= ButtonBatchMastered_Click;
+                if (buttonBatchDelete != null) buttonBatchDelete.Click -= ButtonBatchDelete_Click;
+                if (listBoxWrongAnswers != null)
+                {
+                    listBoxWrongAnswers.DrawItem -= ListBoxWrongAnswers_DrawItem;
+                    listBoxWrongAnswers.SelectedIndexChanged -= ListBoxWrongAnswers_SelectedIndexChanged;
+                }
+                if (buttonMarkMastered != null) buttonMarkMastered.Click -= ButtonMarkMastered_Click;
+                if (buttonDelete != null) buttonDelete.Click -= ButtonDelete_Click;
+                if (buttonExport != null) buttonExport.Click -= ButtonExport_Click;
+                if (buttonClose != null) buttonClose.Click -= ButtonClose_Click;
+                Resize -= WrongAnswerForm_Resize;
+
+                // 关闭复习窗体
+                if (_reviewForm != null && !_reviewForm.IsDisposed)
+                {
+                    _reviewForm.Close();
+                    _reviewForm.Dispose();
+                    _reviewForm = null;
+                }
+
+                // 释放组件
+                components?.Dispose();
+            }
+
+            _disposed = true;
+            base.Dispose(disposing);
+        }
         #endregion
+
     }
 }
