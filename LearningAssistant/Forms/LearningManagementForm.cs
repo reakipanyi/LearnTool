@@ -21,6 +21,7 @@ namespace LearningAssistant.Forms
         private readonly IWrongAnswerService _wrongAnswerService;
         private readonly ILogger<LearningManagementForm>? _logger;
         private readonly IThemeService? _themeService;
+        private readonly IUserSessionService? _userSessionService;
         private readonly string _userId;
 
         private string _currentTimeRange = "本周";
@@ -47,6 +48,7 @@ namespace LearningAssistant.Forms
             IWrongAnswerService wrongAnswerService,
             ILogger<LearningManagementForm>? logger = null,
             IThemeService? themeService = null,
+            IUserSessionService? userSessionService = null,
             string? userId = null)
         {
             InitializeComponent();
@@ -58,7 +60,8 @@ namespace LearningAssistant.Forms
             _wrongAnswerService = wrongAnswerService ?? throw new ArgumentNullException(nameof(wrongAnswerService));
             _logger = logger;
             _themeService = themeService;
-            _userId = userId ?? Environment.UserName;
+            _userSessionService = userSessionService;
+            _userId = userId ?? userSessionService?.CurrentUserId ?? Environment.UserName;
 
             _themeService?.RegisterThemeable(this);
 

@@ -230,9 +230,9 @@ namespace LearningAssistant.Common
             services.AddSingleton<ILearningRecommendationService, LearningRecommendationService>();
             services.AddSingleton<IPomodoroService>(sp =>
             {
+                var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
                 var logger = sp.GetService<ILogger<PomodoroService>>();
-                var eventBus = sp.GetService<IEventBus>();
-                return new PomodoroService(logger, eventBus);
+                return new PomodoroService(persistenceService, logger);
             });
             services.AddSingleton<IDataImportService, DataImportService>();
 
@@ -363,7 +363,8 @@ namespace LearningAssistant.Common
                 var wrongAnswerService = sp.GetRequiredService<IWrongAnswerService>();
                 var logger = sp.GetService<ILogger<LearningManagementForm>>();
                 var themeService = sp.GetService<IThemeService>();
-                return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService, goalService, wrongAnswerService, logger, themeService);
+                var userSessionService = sp.GetService<IUserSessionService>();
+                return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService, goalService, wrongAnswerService, logger, themeService, userSessionService);
             });
 
             services.AddScoped<WrongAnswerForm>(sp =>
@@ -371,7 +372,8 @@ namespace LearningAssistant.Common
                 var wrongAnswerService = sp.GetRequiredService<IWrongAnswerService>();
                 var logger = sp.GetService<ILogger<WrongAnswerForm>>();
                 var themeService = sp.GetService<IThemeService>();
-                return new WrongAnswerForm(wrongAnswerService, logger, themeService);
+                var userSessionService = sp.GetService<IUserSessionService>();
+                return new WrongAnswerForm(wrongAnswerService, logger, themeService, userSessionService);
             });
 
             services.AddScoped<NotesForm>(sp =>
@@ -379,7 +381,8 @@ namespace LearningAssistant.Common
                 var noteService = sp.GetRequiredService<INoteService>();
                 var logger = sp.GetService<ILogger<NotesForm>>();
                 var themeService = sp.GetService<IThemeService>();
-                return new NotesForm(noteService, logger, themeService);
+                var userSessionService = sp.GetService<IUserSessionService>();
+                return new NotesForm(noteService, logger, themeService, userSessionService);
             });
 
             services.AddScoped<ChallengeForm>(sp =>
@@ -390,7 +393,8 @@ namespace LearningAssistant.Common
                 var wrongAnswerService = sp.GetService<IWrongAnswerService>();
                 var logger = sp.GetService<ILogger<ChallengeForm>>();
                 var themeService = sp.GetService<IThemeService>();
-                return new ChallengeForm(gamificationService, analyticsService, noteService, wrongAnswerService, logger, themeService);
+                var userSessionService = sp.GetService<IUserSessionService>();
+                return new ChallengeForm(gamificationService, analyticsService, noteService, wrongAnswerService, logger, themeService, userSessionService);
             });
 
             services.AddScoped<ISettingView>(sp => sp.GetRequiredService<SettingForm>());

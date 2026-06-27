@@ -13,6 +13,7 @@ namespace LearningAssistant.Forms
         private readonly IWrongAnswerService _wrongAnswerService;
         private readonly ILogger<WrongAnswerForm>? _logger;
         private readonly IThemeService? _themeService;
+        private readonly IUserSessionService? _userSessionService;
         private readonly string _userId;
         private List<WrongAnswerItem> _allItems = new();
         private List<WrongAnswerItem> _filteredItems = new();
@@ -68,12 +69,14 @@ namespace LearningAssistant.Forms
             IWrongAnswerService wrongAnswerService,
             ILogger<WrongAnswerForm>? logger = null,
             IThemeService? themeService = null,
+            IUserSessionService? userSessionService = null,
             string? userId = null)
         {
             _wrongAnswerService = wrongAnswerService ?? throw new ArgumentNullException(nameof(wrongAnswerService));
             _logger = logger;
             _themeService = themeService;
-            _userId = userId ?? Environment.UserName;
+            _userSessionService = userSessionService;
+            _userId = userId ?? userSessionService?.CurrentUserId ?? Environment.UserName;
 
             InitializeComponent();
             _themeService?.RegisterThemeable(this);

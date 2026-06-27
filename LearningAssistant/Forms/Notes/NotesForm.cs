@@ -12,6 +12,7 @@ namespace LearningAssistant.Forms.Notes
         private readonly INoteService _noteService;
         private readonly ILogger<NotesForm>? _logger;
         private readonly IThemeService? _themeService;
+        private readonly IUserSessionService? _userSessionService;
         private readonly string _userId;
         private List<NoteItem> _allNotes = new();
         private List<NoteItem> _filteredNotes = new();
@@ -70,12 +71,14 @@ namespace LearningAssistant.Forms.Notes
             INoteService noteService,
             ILogger<NotesForm>? logger = null,
             IThemeService? themeService = null,
+            IUserSessionService? userSessionService = null,
             string? userId = null)
         {
             _noteService = noteService ?? throw new ArgumentNullException(nameof(noteService));
             _logger = logger;
             _themeService = themeService;
-            _userId = userId ?? Environment.UserName;
+            _userSessionService = userSessionService;
+            _userId = userId ?? userSessionService?.CurrentUserId ?? Environment.UserName;
 
             InitializeComponent();
             _themeService?.RegisterThemeable(this);

@@ -19,6 +19,7 @@ namespace LearningAssistant.Forms
         private readonly IWrongAnswerService? _wrongAnswerService;
         private readonly ILogger<ChallengeForm>? _logger;
         private readonly IThemeService? _themeService;
+        private readonly IUserSessionService? _userSessionService;
         private readonly string _userId;
 
         private TabControl _tabControl;
@@ -40,6 +41,7 @@ namespace LearningAssistant.Forms
             IWrongAnswerService? wrongAnswerService = null,
             ILogger<ChallengeForm>? logger = null,
             IThemeService? themeService = null,
+            IUserSessionService? userSessionService = null,
             string? userId = null)
         {
             _gamificationService = gamificationService;
@@ -48,7 +50,8 @@ namespace LearningAssistant.Forms
             _wrongAnswerService = wrongAnswerService;
             _logger = logger;
             _themeService = themeService;
-            _userId = userId ?? Environment.UserName;
+            _userSessionService = userSessionService;
+            _userId = userId ?? userSessionService?.CurrentUserId ?? Environment.UserName;
 
             InitializeComponent();
             _themeService?.RegisterThemeable(this);
