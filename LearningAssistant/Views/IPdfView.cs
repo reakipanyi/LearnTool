@@ -326,6 +326,32 @@ namespace LearningAssistant.Views
         /// </summary>
         void RaiseAiQuestionAsked();
 
+        /// <summary>
+        /// 获取当前缩放级别（百分比）
+        /// </summary>
+        int GetZoomLevel();
+
+        /// <summary>
+        /// 设置缩放级别
+        /// </summary>
+        /// <param name="level">缩放级别（百分比，如100表示100%）</param>
+        void SetZoomLevel(int level);
+
+        /// <summary>
+        /// 放大
+        /// </summary>
+        void ZoomIn();
+
+        /// <summary>
+        /// 缩小
+        /// </summary>
+        void ZoomOut();
+
+        /// <summary>
+        /// 重置缩放为100%
+        /// </summary>
+        void ResetZoom();
+
     }
 
     /// <summary>

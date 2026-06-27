@@ -54,5 +54,14 @@ namespace LearningAssistant.Services.Pdf
         /// <param name="pageNumber">页码（从1开始）</param>
         /// <returns>页面文本内容</returns>
         string ExtractText(string pdfPath, int pageNumber);
+
+        /// <summary>
+        /// 打印PDF文档
+        /// </summary>
+        /// <param name="printDialog">是否显示打印对话框</param>
+        /// <param name="fromPage">起始页码（从0开始）</param>
+        /// <param name="toPage">结束页码（从0开始，-1表示到最后一页）</param>
+        /// <returns>打印是否成功</returns>
+        bool Print(bool printDialog = true, int fromPage = 0, int toPage = -1);
     }
 }

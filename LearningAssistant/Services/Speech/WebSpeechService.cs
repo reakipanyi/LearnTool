@@ -304,6 +304,11 @@ namespace LearningAssistant.Services.Speech
 
         #endregion
 
+        public void OnRecognitionResult(SpeechRecognitionResult result)
+        {
+            RecognitionResult?.Invoke(this, result);
+        }
+
         #region 辅助方法
 
         private static async Task ExecuteScriptAsync(string script)
@@ -378,7 +383,7 @@ namespace LearningAssistant.Services.Speech
                             if (element.TryGetProperty("error", out var errElement))
                                 result.Error = errElement.GetString();
                         }
-                        service.RecognitionResult?.Invoke(service, result);
+                        service.OnRecognitionResult(result);
                     }
                 }
                 catch (Exception ex)

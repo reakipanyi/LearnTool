@@ -636,7 +636,7 @@ namespace LearningAssistant.Forms
                 }
                 int currentPage = _currentPageIndex + 1;
                 double progress = totalPages > 0 ? (double)currentPage / totalPages * 100 : 0;
-                
+
                 string fileName = string.Empty;
                 if (!string.IsNullOrEmpty(_currentPdfPath))
                 {
@@ -646,7 +646,7 @@ namespace LearningAssistant.Forms
                         fileName = fileName.Substring(0, 27) + "...";
                     }
                 }
-                
+
                 if (!string.IsNullOrEmpty(fileName))
                 {
                     _statusLabelLeft.Text = $"{fileName}  ·  第 {currentPage} 页 / 共 {totalPages} 页  ·  阅读进度 {progress:F0}%";
@@ -661,7 +661,7 @@ namespace LearningAssistant.Forms
                 string mode = GetCurrentToolModeText();
                 string dualPage = _isDualPage ? "双页" : "单页";
                 string zoom = $"{CurrentZoomLevel}%";
-                
+
                 int highlightCount = 0;
                 try
                 {
@@ -671,7 +671,7 @@ namespace LearningAssistant.Forms
                     }
                 }
                 catch { }
-                
+
                 string highlightInfo = highlightCount > 0 ? $"  ·  标注 {highlightCount}" : string.Empty;
                 _statusLabelRight.Text = $"缩放 {zoom}  ·  {mode}  ·  {dualPage}{highlightInfo}";
             }
@@ -1547,6 +1547,41 @@ namespace LearningAssistant.Forms
                 MessageBox.Show("AI面板服务未初始化", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
+
+        public int GetZoomLevel()
+        {
+            return _navigationManager?.ZoomLevel ?? _zoomLevel;
+        }
+
+        public void SetZoomLevel(int level)
+        {
+            int clampedLevel = Math.Max(50, Math.Min(200, level));
+            _navigationManager?.Zoom(clampedLevel);
+            _trackBarZoom.Value = clampedLevel;
+            _zoomLevel = clampedLevel;
+            UpdateStatusBar();
+        }
+
+        public void ZoomIn()
+        {
+            int currentLevel = GetZoomLevel();
+            int newLevel = Math.Min(200, currentLevel + 10);
+            if (newLevel != currentLevel)
+            {
+                SetZoomLevel(newLevel);
+            }
+        }
+
+        public void ZoomOut()
+        {
+            int currentLevel = GetZoomLevel();
+            int newLevel = Math.Max(50, currentLevel - 10);
+            if (newLevel != currentLevel)
+            {
+                SetZoomLevel(newLevel);
+            }
+        }
+
 
         public event EventHandler? FileSelected;
         public event EventHandler? PageChanged;

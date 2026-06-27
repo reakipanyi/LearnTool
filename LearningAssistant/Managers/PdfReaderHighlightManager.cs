@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.Pdf;
@@ -284,7 +285,7 @@ namespace LearningAssistant.Managers
                 {
                     _eventBus.Publish(new PDFHighlightEvent
                     {
-                        UserId = "default",
+                        UserId = AppPaths.GetCurrentUserId(),
                         PdfFileName = Path.GetFileName(currentPdfPath),
                         HighlightedText = ocrText,
                         SourceUrl = currentPdfPath,

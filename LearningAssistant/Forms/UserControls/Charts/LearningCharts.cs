@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Windows.Forms;
 using ScottPlot;
 
 namespace LearningAssistant.Forms.UserControls.Charts
@@ -17,12 +15,11 @@ namespace LearningAssistant.Forms.UserControls.Charts
             Size = new System.Drawing.Size(520, 200);
             Dock = DockStyle.Fill;
 
-            Plot.Title("📈 学习趋势", size: 12, color: System.Drawing.Color.FromArgb(33, 33, 33));
+            Plot.Title("学习趋势", fontName: null, color: System.Drawing.Color.FromArgb(33, 33, 33));
             Plot.XLabel("日期");
             Plot.YLabel("学习数量");
-            Plot.Grid(true);
-            Plot.Background.Color = System.Drawing.Color.White;
-            Plot.Style(Style.Gray1);
+            Plot.Grid(enable: true);
+            Plot.Style(figureBackground: System.Drawing.Color.White, dataBackground: System.Drawing.Color.White);
 
             Font = new System.Drawing.Font("微软雅黑", 9F);
         }
@@ -31,23 +28,23 @@ namespace LearningAssistant.Forms.UserControls.Charts
         {
             Plot.Clear();
 
-            var scatter = Plot.Add.Scatter(xValues.ToArray(), yValues.ToArray());
+            var scatter = Plot.AddScatter(xValues.ToArray(), yValues.ToArray());
             scatter.Color = System.Drawing.Color.FromArgb(63, 81, 181);
             scatter.LineWidth = 2;
             scatter.MarkerSize = 5;
-            scatter.MarkerShape = MarkerShape.FilledCircle;
+            scatter.MarkerShape = MarkerShape.filledCircle;
 
             if (accuracyValues != null && accuracyValues.Count > 0)
             {
-                var accuracyScatter = Plot.Add.Scatter(xValues.ToArray(), accuracyValues.ToArray());
+                var accuracyScatter = Plot.AddScatter(xValues.ToArray(), accuracyValues.ToArray());
                 accuracyScatter.Color = System.Drawing.Color.FromArgb(76, 175, 80);
                 accuracyScatter.LineWidth = 2;
                 accuracyScatter.MarkerSize = 4;
-                accuracyScatter.MarkerShape = MarkerShape.FilledSquare;
+                accuracyScatter.MarkerShape = MarkerShape.filledSquare;
             }
 
-            Plot.Axes.AutoScale();
-            Plot.Axes.SetLimitsY(0, null);
+            Plot.AxisAuto();
+            Plot.SetAxisLimitsY(0, double.MaxValue);
             Refresh();
         }
 
@@ -61,8 +58,8 @@ namespace LearningAssistant.Forms.UserControls.Charts
 
             UpdateData(xValues, yValues, accuracyValues);
 
-            Plot.XTicks(labels.ToArray());
-            Plot.Axes.AutoScale();
+            Plot.XTicks(xValues.ToArray(), labels.ToArray());
+            Plot.AxisAuto();
             Refresh();
         }
     }
@@ -80,12 +77,11 @@ namespace LearningAssistant.Forms.UserControls.Charts
             Size = new System.Drawing.Size(600, 160);
             Dock = DockStyle.Fill;
 
-            Plot.Title("📉 遗忘曲线", size: 12, color: System.Drawing.Color.FromArgb(33, 33, 33));
+            Plot.Title("遗忘曲线", fontName: null, color: System.Drawing.Color.FromArgb(33, 33, 33));
             Plot.XLabel("天数");
             Plot.YLabel("记忆保留率 (%)");
-            Plot.Grid(true);
-            Plot.Background.Color = System.Drawing.Color.White;
-            Plot.Style(Style.Gray1);
+            Plot.Grid(enable: true);
+            Plot.Style(figureBackground: System.Drawing.Color.White, dataBackground: System.Drawing.Color.White);
 
             Font = new System.Drawing.Font("微软雅黑", 9F);
         }
@@ -103,15 +99,14 @@ namespace LearningAssistant.Forms.UserControls.Charts
                 yValues.Add(kvp.Value * 100);
             }
 
-            var scatter = Plot.Add.Scatter(xValues.ToArray(), yValues.ToArray());
+            var scatter = Plot.AddScatter(xValues.ToArray(), yValues.ToArray());
             scatter.Color = System.Drawing.Color.FromArgb(156, 39, 176);
             scatter.LineWidth = 2;
             scatter.MarkerSize = 3;
-            scatter.MarkerShape = MarkerShape.FilledCircle;
+            scatter.MarkerShape = MarkerShape.filledCircle;
 
-            Plot.Axes.SetLimitsY(0, 100);
-            Plot.Axes.AutoScaleX();
-            Plot.Axes.Tighten();
+            Plot.SetAxisLimitsY(0, 100);
+            Plot.AxisAutoX();
             Refresh();
         }
     }
@@ -129,10 +124,9 @@ namespace LearningAssistant.Forms.UserControls.Charts
             Size = new System.Drawing.Size(520, 180);
             Dock = DockStyle.Fill;
 
-            Plot.Title("📊 分类进度", size: 12, color: System.Drawing.Color.FromArgb(33, 33, 33));
-            Plot.Grid(true);
-            Plot.Background.Color = System.Drawing.Color.White;
-            Plot.Style(Style.Gray1);
+            Plot.Title("分类进度", fontName: null, color: System.Drawing.Color.FromArgb(33, 33, 33));
+            Plot.Grid(enable: true);
+            Plot.Style(figureBackground: System.Drawing.Color.White, dataBackground: System.Drawing.Color.White);
 
             Font = new System.Drawing.Font("微软雅黑", 9F);
         }
@@ -151,21 +145,20 @@ namespace LearningAssistant.Forms.UserControls.Charts
                 System.Drawing.Color.FromArgb(33, 150, 243)
             };
 
+            for (int i = 0; i < categories.Count && i < progressValues.Count; i++)
+            {
+                var bar = Plot.AddBar(progressValues[i], i);
+                bar.FillColor = colors[i % colors.Length];
+            }
+
             var xValues = new List<double>();
             for (int i = 0; i < categories.Count; i++)
             {
                 xValues.Add(i);
             }
 
-            var bar = Plot.Add.Bar(xValues.ToArray(), progressValues.ToArray());
-            for (int i = 0; i < bar.Bars.Count; i++)
-            {
-                bar.Bars[i].FillColor = colors[i % colors.Length];
-            }
-
-            Plot.XTicks(categories.ToArray());
-            Plot.Axes.SetLimitsY(0, 100);
-            Plot.Axes.Tighten();
+            Plot.XTicks(xValues.ToArray(), categories.ToArray());
+            Plot.SetAxisLimitsY(0, 100);
             Refresh();
         }
     }
@@ -183,10 +176,9 @@ namespace LearningAssistant.Forms.UserControls.Charts
             Size = new System.Drawing.Size(300, 160);
             Dock = DockStyle.Fill;
 
-            Plot.Title("⭐ 评分分布", size: 12, color: System.Drawing.Color.FromArgb(33, 33, 33));
-            Plot.Grid(true);
-            Plot.Background.Color = System.Drawing.Color.White;
-            Plot.Style(Style.Gray1);
+            Plot.Title("评分分布", fontName: null, color: System.Drawing.Color.FromArgb(33, 33, 33));
+            Plot.Grid(enable: true);
+            Plot.Style(figureBackground: System.Drawing.Color.White, dataBackground: System.Drawing.Color.White);
 
             Font = new System.Drawing.Font("微软雅黑", 9F);
         }
@@ -206,23 +198,16 @@ namespace LearningAssistant.Forms.UserControls.Charts
             };
 
             var xValues = new List<double>();
-            var yValues = new List<double>();
 
             for (int i = 1; i <= 5; i++)
             {
                 xValues.Add(i);
-                yValues.Add(ratingDistribution.GetValueOrDefault(i, 0));
+                var bar = Plot.AddBar(ratingDistribution.GetValueOrDefault(i, 0), i);
+                bar.FillColor = colors[i - 1];
             }
 
-            var bar = Plot.Add.Bar(xValues.ToArray(), yValues.ToArray());
-            for (int i = 0; i < bar.Bars.Count; i++)
-            {
-                bar.Bars[i].FillColor = colors[i];
-            }
-
-            Plot.XTicks(labels);
-            Plot.Axes.SetLimitsY(0, null);
-            Plot.Axes.Tighten();
+            Plot.XTicks(xValues.ToArray(), labels);
+            Plot.SetAxisLimitsY(0, double.MaxValue);
             Refresh();
         }
     }

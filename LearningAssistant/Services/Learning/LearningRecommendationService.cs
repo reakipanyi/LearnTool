@@ -239,7 +239,7 @@ namespace LearningAssistant.Services.Learning
                 {
                     try
                     {
-                        var weakNodes = _knowledgeGraphService.GetWeakNodesAsync(userId, Math.Min(count, 5)).Result;
+                        var weakNodes = Task.Run(() => _knowledgeGraphService.GetWeakNodesAsync(userId, Math.Min(count, 5))).GetAwaiter().GetResult();
                         foreach (var node in weakNodes)
                         {
                             recommendations.Add(new LearningRecommendation

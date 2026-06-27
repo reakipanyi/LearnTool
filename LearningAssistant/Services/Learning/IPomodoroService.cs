@@ -27,5 +27,6 @@ namespace LearningAssistant.Services.Learning
         void UpdateSettings(PomodoroSettings settings);
 
         PomodoroDailyStats GetTodayStats();
+        PomodoroStatistics GetStatistics();
     }
 }

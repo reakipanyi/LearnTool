@@ -31,6 +31,7 @@ namespace LearningAssistant.Common.Events
         public string ItemId { get; set; } = string.Empty;
         public string ItemContent { get; set; } = string.Empty;
         public string SubCategory { get; set; } = string.Empty;
+        public string LearningType { get; set; } = string.Empty;
         public DateTime LearnedAt { get; set; } = DateTime.Now;
     }
 
@@ -50,6 +51,7 @@ namespace LearningAssistant.Common.Events
         public string CorrectAnswer { get; set; } = string.Empty;
         public string UserAnswer { get; set; } = string.Empty;
         public string SubCategory { get; set; } = string.Empty;
+        public string LearningType { get; set; } = string.Empty;
         public DateTime WrongAt { get; set; } = DateTime.Now;
     }
     public class LearningItemCompletedEvent : ApplicationEventBase

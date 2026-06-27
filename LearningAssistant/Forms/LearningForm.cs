@@ -239,7 +239,7 @@ namespace LearningAssistant.Forms
 
             if (_pomodoroService != null)
             {
-                _pomodoroService.PomodoroCompleted += PomodoroService_PomodoroCompleted;
+                _pomodoroService.SessionCompleted += PomodoroService_SessionCompleted;
                 _pomodoroService.StateChanged += PomodoroService_StateChanged;
             }
 
@@ -1026,6 +1026,11 @@ namespace LearningAssistant.Forms
             ShowToast(msg, ToastType.Info);
         }
 
+        public void ShowMessage(string msg, string title)
+        {
+            ShowToast(msg, ToastType.Info);
+        }
+
         public void ShowToast(string message, ToastType type = ToastType.Info, int duration = 3000)
         {
             if (InvokeRequired)
@@ -1477,7 +1482,7 @@ namespace LearningAssistant.Forms
 
                 if (_mentorPanel.Visible && _currentItem != null)
                 {
-                    _mentorPanel.SetLearningContext(_currentItem.Content);
+                    _mentorPanel.SetLearningContext(_currentItem.GetMainContent());
                 }
             }
         }
@@ -1678,14 +1683,15 @@ namespace LearningAssistant.Forms
             _gamificationService.UpdateStudyDuration(_studyDuration);
         }
 
-        private void PomodoroService_PomodoroCompleted(object? sender, int completedCount)
+        private void PomodoroService_SessionCompleted(object? sender, EventArgs e)
         {
             if (InvokeRequired)
             {
-                Invoke(new Action(() => PomodoroService_PomodoroCompleted(sender, completedCount)));
+                Invoke(new Action(() => PomodoroService_SessionCompleted(sender, e)));
                 return;
             }
 
+            var completedCount = _pomodoroService?.CompletedPomodoros ?? 0;
             _logger.LogInformation("番茄钟完成: 累计 {Count} 个", completedCount);
             ShowMessage($"🍅 恭喜完成第 {completedCount} 个番茄钟！", "番茄钟完成");
         }

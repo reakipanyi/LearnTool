@@ -719,9 +719,32 @@ namespace LearningAssistant.Presenters
 
         public void PrintPdf()
         {
-            // TODO: 实现PDF打印功能
-            _logger.LogWarning("PrintPdf not yet implemented");
-            throw new NotImplementedException("PDF打印功能尚未实现");
+            if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath))
+            {
+                _view?.ShowMessage("请先打开一个PDF文件", "提示");
+                return;
+            }
+
+            if (_pdfFileManager.IsImageMode)
+            {
+                _view?.ShowMessage("图片模式暂不支持打印", "提示");
+                return;
+            }
+
+            try
+            {
+                _logger.LogInformation("Printing PDF: {FilePath}", _pdfFileManager.CurrentFilePath);
+                bool success = _pdfService.Print();
+                if (success)
+                {
+                    _logger.LogInformation("PDF print job sent successfully");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to print PDF");
+                _view?.ShowError("打印失败：" + ex.Message);
+            }
         }
 
         public void SearchText(string text)
@@ -733,16 +756,14 @@ namespace LearningAssistant.Presenters
 
         public void ZoomIn()
         {
-            // TODO: 实现PDF放大功能
-            _logger.LogWarning("ZoomIn not yet implemented");
-            throw new NotImplementedException("PDF放大功能尚未实现");
+            _view?.ZoomIn();
+            _logger.LogDebug("ZoomIn called");
         }
 
         public void ZoomOut()
         {
-            // TODO: 实现PDF缩小功能
-            _logger.LogWarning("ZoomOut not yet implemented");
-            throw new NotImplementedException("PDF缩小功能尚未实现");
+            _view?.ZoomOut();
+            _logger.LogDebug("ZoomOut called");
         }
 
         public async Task ExportHighlightsToExcelAsync()
@@ -1096,9 +1117,8 @@ namespace LearningAssistant.Presenters
 
         private void View_AiQuestionAsked(object? sender, EventArgs e)
         {
-            // TODO: 实现AI问答功能
-            _logger.LogWarning("AI question functionality not yet implemented");
-            _view?.ShowMessage("AI问答功能尚未实现", "提示");
+            _logger.LogInformation("AI question button clicked");
+            _view?.RaiseAiQuestionAsked();
         }
 
 

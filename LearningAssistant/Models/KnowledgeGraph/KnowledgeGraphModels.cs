@@ -284,9 +284,10 @@ namespace LearningAssistant.Models.KnowledgeGraph
         /// </summary>
         public KnowledgeGraphDto ToDto()
         {
-            return new KnowledgeGraphDto
+            var dto = new KnowledgeGraphDto();
+            foreach (var n in Nodes)
             {
-                Nodes = Nodes.Select(n => new
+                dto.Nodes.Add(new
                 {
                     id = n.Id,
                     label = n.Label,
@@ -295,8 +296,11 @@ namespace LearningAssistant.Models.KnowledgeGraph
                     size = n.GetSize(),
                     masteryLevel = n.MasteryLevel,
                     description = n.Description
-                }).ToList(),
-                links = Edges.Select(e => new
+                });
+            }
+            foreach (var e in Edges)
+            {
+                dto.Links.Add(new
                 {
                     source = e.Source,
                     target = e.Target,
@@ -304,8 +308,9 @@ namespace LearningAssistant.Models.KnowledgeGraph
                     label = e.Label,
                     color = e.GetColor(),
                     strength = e.Strength
-                }).ToList()
-            };
+                });
+            }
+            return dto;
         }
     }
 

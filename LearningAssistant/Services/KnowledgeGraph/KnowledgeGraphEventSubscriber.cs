@@ -4,11 +4,12 @@ using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Services.KnowledgeGraph
 {
-    public class KnowledgeGraphEventSubscriber
+    public class KnowledgeGraphEventSubscriber : IDisposable
     {
         private readonly ILogger<KnowledgeGraphEventSubscriber> _logger;
         private readonly IKnowledgeGraphService _knowledgeGraphService;
         private readonly IEventBus _eventBus;
+        private bool _disposed = false;
 
         public KnowledgeGraphEventSubscriber(
             ILogger<KnowledgeGraphEventSubscriber> logger,
@@ -32,10 +33,23 @@ namespace LearningAssistant.Services.KnowledgeGraph
 
         public void Dispose()
         {
-            _eventBus.Unsubscribe<ItemLearnedEvent>(OnItemLearned);
-            _eventBus.Unsubscribe<ItemWrongEvent>(OnItemWrong);
-            _eventBus.Unsubscribe<PDFHighlightEvent>(OnPdfHighlight);
-            _logger.LogInformation("KnowledgeGraphEventSubscriber disposed");
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_disposed) return;
+
+            if (disposing)
+            {
+                _eventBus.Unsubscribe<ItemLearnedEvent>(OnItemLearned);
+                _eventBus.Unsubscribe<ItemWrongEvent>(OnItemWrong);
+                _eventBus.Unsubscribe<PDFHighlightEvent>(OnPdfHighlight);
+                _logger.LogInformation("KnowledgeGraphEventSubscriber disposed");
+            }
+
+            _disposed = true;
         }
 
         private async void OnItemLearned(ItemLearnedEvent @event)

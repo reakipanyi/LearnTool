@@ -1,4 +1,5 @@
 using PdfiumViewer;
+using System.Drawing.Printing;
 
 namespace LearningAssistant.Services.Pdf
 {
@@ -136,6 +137,52 @@ namespace LearningAssistant.Services.Pdf
             catch
             {
                 return string.Empty;
+            }
+        }
+
+        public bool Print(bool printDialog = true, int fromPage = 0, int toPage = -1)
+        {
+            lock (_lockObj)
+            {
+                if (_pdf == null)
+                    return false;
+
+                try
+                {
+                    using var printDoc = _pdf.CreatePrintDocument();
+                    printDoc.DocumentName = "PDF Document";
+
+                    if (fromPage > 0 || (toPage >= 0 && toPage < PageCount))
+                    {
+                        printDoc.PrinterSettings.FromPage = fromPage + 1;
+                        printDoc.PrinterSettings.ToPage = (toPage < 0 ? PageCount : toPage + 1);
+                        printDoc.PrinterSettings.PrintRange = PrintRange.SomePages;
+                    }
+
+                    if (printDialog)
+                    {
+                        using var dialog = new PrintDialog();
+                        dialog.Document = printDoc;
+                        dialog.UseEXDialog = true;
+                        dialog.AllowSomePages = true;
+
+                        if (dialog.ShowDialog() == DialogResult.OK)
+                        {
+                            printDoc.Print();
+                            return true;
+                        }
+                        return false;
+                    }
+                    else
+                    {
+                        printDoc.Print();
+                        return true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw new InvalidOperationException("Failed to print PDF.", ex);
+                }
             }
         }
 

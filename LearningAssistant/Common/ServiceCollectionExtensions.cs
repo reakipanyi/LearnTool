@@ -443,8 +443,9 @@ namespace LearningAssistant.Common
                 var userSessionService = sp.GetService<IUserSessionService>();
                 var knowledgeGraphService = sp.GetService<IKnowledgeGraphService>();
                 var voiceRecallService = sp.GetService<IVoiceRecallService>();
+                var learningAnalyticsService = sp.GetService<ILearningAnalyticsService>();
                 var logger = sp.GetService<ILogger<LearningHubForm>>();
-                return new LearningHubForm(spacedRepetitionService, conversationContextService, userSessionService, knowledgeGraphService, voiceRecallService, logger);
+                return new LearningHubForm(spacedRepetitionService, conversationContextService, userSessionService, knowledgeGraphService, voiceRecallService, learningAnalyticsService, logger);
             });
             //services.AddScoped<PdfReaderForm>();
             services.AddScoped<PdfReaderFormV2>();

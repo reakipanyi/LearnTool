@@ -218,7 +218,7 @@ namespace LearningAssistant.Models.Quiz
         /// <summary>
         /// 用时（秒）
         /// </summary>
-        public int ElapsedSeconds => (int)(EndTime ?? DateTime.Now - StartTime).TotalSeconds;
+        public int ElapsedSeconds => (int)((EndTime ?? DateTime.Now) - StartTime).TotalSeconds;
 
         /// <summary>
         /// 获取当前题目
