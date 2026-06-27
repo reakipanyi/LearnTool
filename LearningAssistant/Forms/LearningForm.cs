@@ -5,6 +5,7 @@ using LearningAssistant.Forms.UserControls;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Models.Learning;
+using LearningAssistant.Models.Pomodoro;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services;
 using LearningAssistant.Services.AI;
@@ -1689,7 +1690,7 @@ namespace LearningAssistant.Forms
             ShowMessage($"🍅 恭喜完成第 {completedCount} 个番茄钟！", "番茄钟完成");
         }
 
-        private void PomodoroService_StateChanged(object? sender, Services.Learning.PomodoroStateChangedEventArgs e)
+        private void PomodoroService_StateChanged(object? sender, PomodoroStateChangedEventArgs e)
         {
             if (InvokeRequired)
             {
@@ -1701,17 +1702,17 @@ namespace LearningAssistant.Forms
 
             switch (e.NewState)
             {
-                case Services.Learning.PomodoroState.Studying:
+                case PomodoroState.Studying:
                     break;
-                case Services.Learning.PomodoroState.ShortBreak:
+                case PomodoroState.ShortBreak:
                     ShowMessage("⏸️ 短休息时间到了！休息一下吧~", "休息提醒");
                     break;
-                case Services.Learning.PomodoroState.LongBreak:
+                case PomodoroState.LongBreak:
                     ShowMessage("🛌 长休息时间到了！好好放松一下~", "休息提醒");
                     break;
-                case Services.Learning.PomodoroState.Paused:
+                case PomodoroState.Paused:
                     break;
-                case Services.Learning.PomodoroState.Idle:
+                case PomodoroState.Idle:
                     break;
             }
         }

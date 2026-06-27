@@ -11,6 +11,7 @@ namespace LearningAssistant.Forms.UserControls.Cards
     {
         private string _icon = "📚";
         private string _title = "功能名称";
+        private string _subtitle = string.Empty;
         private string _description = "功能描述";
         private Color _startColor = Color.FromArgb(99, 102, 241);
         private Color _endColor = Color.FromArgb(139, 92, 246);
@@ -40,11 +41,27 @@ namespace LearningAssistant.Forms.UserControls.Cards
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         [Category("Appearance")]
+        public string Subtitle
+        {
+            get => _subtitle;
+            set { _subtitle = value; Invalidate(); }
+        }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        [Category("Appearance")]
         [DefaultValue("功能描述")]
         public string Description
         {
             get => _description;
             set { _description = value; Invalidate(); }
+        }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        [Category("Appearance")]
+        public Color PrimaryColor
+        {
+            get => _startColor;
+            set { _startColor = value; Invalidate(); }
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
