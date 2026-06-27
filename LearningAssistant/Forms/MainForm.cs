@@ -483,7 +483,7 @@ namespace LearningAssistant.Forms
         {
             if (_conversationContextService == null)
             {
-                ShowMessage("AI导师服务未配置");
+                ShowMessageLocal("AI导师服务未配置");
                 return;
             }
 
@@ -506,7 +506,7 @@ namespace LearningAssistant.Forms
         {
             if (_spacedRepetitionService == null || _userSessionService == null)
             {
-                ShowMessage("闪卡复习服务未配置");
+                ShowMessageLocal("闪卡复习服务未配置");
                 return;
             }
 
@@ -522,7 +522,7 @@ namespace LearningAssistant.Forms
             catch (Exception ex)
             {
                 _logger.LogError(ex, "打开闪卡复习失败");
-                ShowMessage("打开闪卡复习失败");
+                ShowMessageLocal("打开闪卡复习失败");
             }
         }
 
@@ -530,7 +530,7 @@ namespace LearningAssistant.Forms
         {
             if (_knowledgeGraphService == null || _userSessionService == null)
             {
-                ShowMessage("知识图谱服务未配置");
+                ShowMessageLocal("知识图谱服务未配置");
                 return;
             }
 
@@ -541,7 +541,7 @@ namespace LearningAssistant.Forms
                     Dock = DockStyle.Fill
                 };
                 _knowledgeGraphView.SetService(_knowledgeGraphService);
-                _knowledgeGraphView.SetUserId(_userSessionService.GetCurrentUserId());
+                _knowledgeGraphView.SetUserId(_userSessionService.CurrentUserId);
                 _knowledgeGraphView.GraphLoaded += OnGraphLoaded;
             }
 
@@ -558,7 +558,7 @@ namespace LearningAssistant.Forms
             _logger.LogInformation("知识图谱加载完成");
         }
 
-        private void ShowMessage(string message)
+        private void ShowMessageLocal(string message)
         {
             MessageBox.Show(message, "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }

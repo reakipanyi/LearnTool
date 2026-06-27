@@ -4,10 +4,7 @@ using LearningAssistant.Services.AI;
 using LearningAssistant.Services.KnowledgeGraph;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Quiz;
-using LearningAssistant.Services.Speech;
 using Microsoft.Extensions.Logging;
-using System.Windows.Forms;
-using System.Drawing;
 
 namespace LearningAssistant.Forms
 {
@@ -114,6 +111,7 @@ namespace LearningAssistant.Forms
                 Color.FromArgb(244, 67, 54),
                 6,
                 OnStatsClick);
+
 
             mainLayout.Controls.Add(flashcardCard, 0, 0);
             mainLayout.Controls.Add(mentorCard, 1, 0);
@@ -336,7 +334,7 @@ namespace LearningAssistant.Forms
                 Dock = DockStyle.Fill
             };
             _graphView.SetService(graphService);
-            _graphView.SetUserId(userSessionService.GetCurrentUserId());
+            _graphView.SetUserId(userSessionService.CurrentUserId);
 
             Controls.Add(_graphView);
 

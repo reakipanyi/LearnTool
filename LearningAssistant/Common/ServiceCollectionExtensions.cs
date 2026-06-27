@@ -13,6 +13,7 @@ using LearningAssistant.Services.Backup.Providers;
 using LearningAssistant.Services.Cache;
 using LearningAssistant.Services.Cloud;
 using LearningAssistant.Services.DragDrop;
+using LearningAssistant.Services.Favorites;
 using LearningAssistant.Services.Feedback;
 using LearningAssistant.Services.Gamification;
 using LearningAssistant.Services.Hotkeys;
@@ -241,8 +242,25 @@ namespace LearningAssistant.Common
                 var eventBus = sp.GetService<IEventBus>();
                 return new NoteService(logger, persistenceService, eventBus);
             });
+            services.AddSingleton<IFavoritesService>(sp =>
+            {
+                var logger = sp.GetService<ILogger<FavoritesService>>();
+                var eventBus = sp.GetService<IEventBus>();
+                return new FavoritesService(logger, eventBus);
+            });
             services.AddSingleton<ILearningPathService, LearningPathService>();
-            services.AddSingleton<ILearningRecommendationService, LearningRecommendationService>();
+            services.AddSingleton<ILearningRecommendationService>(sp =>
+            {
+                var spacedRepetitionService = sp.GetRequiredService<ISpacedRepetitionService>();
+                var wrongAnswerService = sp.GetRequiredService<IWrongAnswerService>();
+                var analyticsService = sp.GetRequiredService<ILearningAnalyticsService>();
+                var learningPathService = sp.GetRequiredService<ILearningPathService>();
+                var logger = sp.GetService<ILogger<LearningRecommendationService>>();
+                var knowledgeGraphService = sp.GetService<IKnowledgeGraphService>();
+                var pomodoroService = sp.GetService<IPomodoroService>();
+                return new LearningRecommendationService(spacedRepetitionService, wrongAnswerService, analyticsService,
+                    learningPathService, logger, knowledgeGraphService, pomodoroService);
+            });
             services.AddSingleton<IPomodoroService>(sp =>
             {
                 var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
@@ -307,6 +325,7 @@ namespace LearningAssistant.Common
             });
 
             services.AddSingleton<KnowledgeGraphEventSubscriber>();
+            services.AddSingleton<FavoritesEventSubscriber>();
 
             return services;
         }

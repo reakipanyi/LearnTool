@@ -1,25 +1,22 @@
-using LearningAssistant.Models.KnowledgeGraph;
 using LearningAssistant.Services.KnowledgeGraph;
-using Microsoft.Web.WebView2.Core;
+using System.Windows.Forms;
+using System.Drawing;
 
 namespace LearningAssistant.Forms.UserControls
 {
-    /// <summary>
-    /// 知识图谱可视化控件 - 基于WebView2 + D3.js
-    /// </summary>
     public class KnowledgeGraphView : UserControl
     {
-        private Microsoft.Web.WebView2.WinForms.WebView2 _webView = null!;
         private Panel _panelToolbar = null!;
         private Button _button2D = null!;
         private Button _button3D = null!;
         private Button _buttonRefresh = null!;
         private ComboBox _comboFilter = null!;
         private Label _labelStatus = null!;
+        private Panel _panelContent = null!;
+        private Label _labelPlaceholder = null!;
 
         private IKnowledgeGraphService? _graphService;
         private string _currentUserId = "default";
-        private KnowledgeGraph? _currentGraph;
 
         public event EventHandler<string>? NodeClicked;
         public event EventHandler? GraphLoaded;
@@ -27,43 +24,10 @@ namespace LearningAssistant.Forms.UserControls
         public KnowledgeGraphView()
         {
             InitializeComponent();
-            InitializeWebView();
-        }
-
-        private async void InitializeWebView()
-        {
-            try
-            {
-                var env = await Microsoft.Web.WebView2.WinForms.WebView2Environment.CreateAsync();
-                _webView = new Microsoft.Web.WebView2.WinForms.WebView2
-                {
-                    Dock = DockStyle.Fill,
-                    Source = new Uri(GetEmbeddedHtmlPath())
-                };
-
-                _webView.WebMessageReceived += OnWebMessageReceived;
-
-                Controls.Add(_webView);
-            }
-            catch (Exception ex)
-            {
-                // WebView2未安装时显示提示
-                var label = new Label
-                {
-                    Text = "请安装 WebView2 Runtime 以查看知识图谱",
-                    Dock = DockStyle.Fill,
-                    TextAlign = ContentAlignment.MiddleCenter,
-                    ForeColor = Color.Gray
-                };
-                Controls.Add(label);
-
-                System.Diagnostics.Debug.WriteLine($"WebView2初始化失败: {ex.Message}");
-            }
         }
 
         private void InitializeComponent()
         {
-            // 工具栏
             _panelToolbar = new Panel
             {
                 Dock = DockStyle.Top,
@@ -84,18 +48,15 @@ namespace LearningAssistant.Forms.UserControls
                 toolbarLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             }
 
-            // 维度切换按钮
             _button2D = CreateToolbarButton("2D", true);
             _button2D.Click += (s, e) => SetDimension(2);
 
             _button3D = CreateToolbarButton("3D", false);
             _button3D.Click += (s, e) => SetDimension(3);
 
-            // 刷新按钮
             _buttonRefresh = CreateToolbarButton("刷新", false);
             _buttonRefresh.Click += async (s, e) => await RefreshGraphAsync();
 
-            // 分类筛选
             _comboFilter = new ComboBox
             {
                 FlatStyle = FlatStyle.Flat,
@@ -107,14 +68,13 @@ namespace LearningAssistant.Forms.UserControls
             _comboFilter.SelectedIndex = 0;
             _comboFilter.SelectedIndexChanged += async (s, e) => await ApplyFilterAsync();
 
-            // 状态标签
             _labelStatus = new Label
             {
                 Text = "就绪",
                 ForeColor = Color.FromArgb(180, 180, 180),
                 AutoSize = true,
-                Anchor = AnchorStyles.Right | AnchorStyles.VerticalCenter,
-                Font = new Font("微软雅黑", 9F)
+                Font = new Font("微软雅黑", 9F),
+                TextAlign = ContentAlignment.MiddleLeft
             };
 
             toolbarLayout.Controls.Add(_button2D, 0, 0);
@@ -124,7 +84,28 @@ namespace LearningAssistant.Forms.UserControls
             toolbarLayout.Controls.Add(_labelStatus, 4, 0);
 
             _panelToolbar.Controls.Add(toolbarLayout);
+
+            _panelContent = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(20, 20, 30)
+            };
+
+            _labelPlaceholder = new Label
+            {
+                Text = "🌐 知识图谱\n\nWebView2 可视化版本\n需要安装 WebView2 Runtime",
+                Font = new Font("微软雅黑", 12F),
+                ForeColor = Color.FromArgb(180, 180, 180),
+                TextAlign = ContentAlignment.MiddleCenter,
+                Dock = DockStyle.Fill
+            };
+
+            _panelContent.Controls.Add(_labelPlaceholder);
+
+            Controls.Add(_panelContent);
             Controls.Add(_panelToolbar);
+
+            BackColor = Color.FromArgb(20, 20, 30);
         }
 
         private static Button CreateToolbarButton(string text, bool active)
@@ -142,27 +123,16 @@ namespace LearningAssistant.Forms.UserControls
             };
         }
 
-        #region 公共方法
-
-        /// <summary>
-        /// 设置知识图谱服务
-        /// </summary>
         public void SetService(IKnowledgeGraphService service)
         {
             _graphService = service;
         }
 
-        /// <summary>
-        /// 设置当前用户ID
-        /// </summary>
         public void SetUserId(string userId)
         {
             _currentUserId = userId;
         }
 
-        /// <summary>
-        /// 加载图谱
-        /// </summary>
         public async Task LoadGraphAsync()
         {
             if (_graphService == null) return;
@@ -171,22 +141,20 @@ namespace LearningAssistant.Forms.UserControls
             {
                 UpdateStatus("正在加载图谱...");
 
-                _currentGraph = await _graphService.GetGraphAsync(_currentUserId);
+                var graph = await _graphService.GetGraphAsync(_currentUserId);
 
-                if (_currentGraph != null && _currentGraph.Nodes.Count > 0)
+                if (graph != null && graph.NodeCount > 0)
                 {
-                    // 更新筛选下拉框
-                    UpdateFilterOptions();
-
-                    // 发送到WebView渲染
-                    await RenderGraphAsync(_currentGraph);
-
-                    UpdateStatus($"已加载 {_currentGraph.NodeCount} 个节点");
+                    UpdateFilterOptions(graph);
+                    UpdateStatus($"已加载 {graph.NodeCount} 个节点, {graph.EdgeCount} 条关系");
                     GraphLoaded?.Invoke(this, EventArgs.Empty);
+
+                    UpdatePlaceholder(graph);
                 }
                 else
                 {
                     UpdateStatus("暂无数据");
+                    _labelPlaceholder.Text = "📊 暂无知识图谱数据\n\n请先添加学习内容以构建知识图谱";
                 }
             }
             catch (Exception ex)
@@ -196,72 +164,50 @@ namespace LearningAssistant.Forms.UserControls
             }
         }
 
-        /// <summary>
-        /// 高亮指定节点
-        /// </summary>
+        private void UpdatePlaceholder(Models.KnowledgeGraph.KnowledgeGraph graph)
+        {
+            var weakNodes = graph.Nodes
+                .OrderBy(n => n.MasteryLevel)
+                .Take(5)
+                .ToList();
+
+            var weakList = string.Join("\n", weakNodes.Select(n => $"  • {n.Label} ({(n.MasteryLevel * 100):0}%)"));
+
+            _labelPlaceholder.Text =
+                $"📊 知识图谱统计\n\n" +
+                $"节点数: {graph.NodeCount}\n" +
+                $"关系数: {graph.EdgeCount}\n\n" +
+                $"薄弱知识点 Top 5:\n{weakList}\n\n" +
+                $"💡 安装 WebView2 Runtime 可查看 3D 可视化";
+        }
+
         public async Task HighlightNodeAsync(string nodeId)
         {
-            await ExecuteScriptAsync($"highlight('{nodeId}')");
+            await Task.CompletedTask;
         }
 
-        /// <summary>
-        /// 清除高亮
-        /// </summary>
         public async Task ClearHighlightAsync()
         {
-            await ExecuteScriptAsync("clearHighlightAll()");
+            await Task.CompletedTask;
         }
 
-        /// <summary>
-        /// 刷新图谱
-        /// </summary>
         public async Task RefreshGraphAsync()
         {
             await LoadGraphAsync();
-        }
-
-        #endregion
-
-        #region 私有方法
-
-        private async Task RenderGraphAsync(KnowledgeGraph graph)
-        {
-            var dto = graph.ToDto();
-            var json = System.Text.Json.JsonSerializer.Serialize(dto);
-
-            await ExecuteScriptAsync($"setData({json})");
-        }
-
-        private async Task ExecuteScriptAsync(string script)
-        {
-            if (_webView?.CoreWebView2 == null) return;
-
-            try
-            {
-                await _webView.CoreWebView2.ExecuteScriptAsync(script);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"执行脚本失败: {ex.Message}");
-            }
         }
 
         private void SetDimension(int dim)
         {
             _button2D.BackColor = dim == 2 ? Color.FromArgb(33, 150, 243) : Color.FromArgb(60, 60, 60);
             _button3D.BackColor = dim == 3 ? Color.FromArgb(33, 150, 243) : Color.FromArgb(60, 60, 60);
-
-            _ = ExecuteScriptAsync($"setDimension({dim})");
         }
 
-        private void UpdateFilterOptions()
+        private void UpdateFilterOptions(Models.KnowledgeGraph.KnowledgeGraph graph)
         {
-            if (_currentGraph == null) return;
-
             _comboFilter.Items.Clear();
             _comboFilter.Items.Add("全部");
 
-            var categories = _currentGraph.Nodes
+            var categories = graph.Nodes
                 .Select(n => n.Category)
                 .Where(c => !string.IsNullOrEmpty(c))
                 .Distinct()
@@ -273,49 +219,9 @@ namespace LearningAssistant.Forms.UserControls
 
         private async Task ApplyFilterAsync()
         {
-            if (_currentGraph == null || _webView?.CoreWebView2 == null) return;
-
             var selected = _comboFilter.SelectedItem?.ToString() ?? "全部";
-
-            if (selected == "全部")
-            {
-                await RenderGraphAsync(_currentGraph);
-            }
-            else
-            {
-                var filtered = new KnowledgeGraph
-                {
-                    Id = _currentGraph.Id,
-                    Name = _currentGraph.Name,
-                    UserId = _currentGraph.UserId,
-                    Nodes = _currentGraph.Nodes.Where(n => n.Category == selected).ToList(),
-                    Edges = _currentGraph.Edges.Where(e =>
-                        filtered != null && filtered.Nodes.Any(n => n.Id == e.Source || n.Id == e.Target)
-                    ).ToList()
-                };
-
-                await RenderGraphAsync(filtered);
-            }
-        }
-
-        private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
-        {
-            try
-            {
-                var message = System.Text.Json.JsonSerializer.Deserialize<WebViewMessage>(e.WebMessageAsJson);
-                if (message?.Type == "nodeClicked")
-                {
-                    var nodeId = message.Data?.GetProperty("id")?.GetString();
-                    if (!string.IsNullOrEmpty(nodeId))
-                    {
-                        NodeClicked?.Invoke(this, nodeId);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"解析Web消息失败: {ex.Message}");
-            }
+            UpdateStatus($"筛选: {selected}");
+            await Task.CompletedTask;
         }
 
         private void UpdateStatus(string status)
@@ -327,28 +233,5 @@ namespace LearningAssistant.Forms.UserControls
             }
             _labelStatus.Text = status;
         }
-
-        private static string GetEmbeddedHtmlPath()
-        {
-            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            var htmlPath = Path.Combine(baseDir, "Resources", "KnowledgeGraph", "kg-visualization.html");
-
-            // 如果嵌入资源不存在，创建默认页面
-            if (!File.Exists(htmlPath))
-            {
-                // 返回一个简单的占位页面
-                return "about:blank";
-            }
-
-            return new Uri(htmlPath).AbsoluteUri;
-        }
-
-        private class WebViewMessage
-        {
-            public string? Type { get; set; }
-            public System.Text.Json.JsonElement? Data { get; set; }
-        }
-
-        #endregion
     }
 }

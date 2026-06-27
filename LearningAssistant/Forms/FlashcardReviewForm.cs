@@ -382,7 +382,7 @@ namespace LearningAssistant.Forms
 
         private void LoadReviewQueue()
         {
-            var userId = _userSessionService.GetCurrentUserId();
+            var userId = _userSessionService.CurrentUserId;
             _reviewQueue = _spacedRepetitionService.GetItemsDueForReview(userId);
             _currentIndex = 0;
             _isAnswerShown = false;
@@ -487,7 +487,7 @@ namespace LearningAssistant.Forms
             _panelButtons.Visible = false;
             _panelComplete.Visible = true;
 
-            var userId = _userSessionService.GetCurrentUserId();
+            var userId = _userSessionService.CurrentUserId;
             var retention = _spacedRepetitionService.CalculateRetentionRate(userId);
             var todayCount = _spacedRepetitionService.GetTodayReviewCount(userId);
 
@@ -505,7 +505,7 @@ namespace LearningAssistant.Forms
 
         private void UpdateStats()
         {
-            var userId = _userSessionService.GetCurrentUserId();
+            var userId = _userSessionService.CurrentUserId;
             var retention = _spacedRepetitionService.CalculateRetentionRate(userId);
 
             _labelDueCount.Text = $"待复习: {_reviewQueue.Count}";

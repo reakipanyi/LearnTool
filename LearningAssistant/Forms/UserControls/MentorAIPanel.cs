@@ -289,7 +289,7 @@ namespace LearningAssistant.Forms.UserControls
                 _contextService?.SwitchPersona(item.Type);
 
                 // 更新标题
-                _labelTitle.Text = $"{item.Icon} {item.Name}";
+                _labelTitle.Text = $"{item.Icon} {item.DisplayName}";
                 PersonaChanged?.Invoke(this, item.Type);
             }
         }

@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Common.Events;
 using LearningAssistant.Models.Favorites;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
@@ -11,13 +12,15 @@ namespace LearningAssistant.Services.Favorites
     public class FavoritesService : IFavoritesService
     {
         private readonly ILogger<FavoritesService>? _logger;
+        private readonly IEventBus? _eventBus;
         private List<FavoriteFolder> _folders = new();
         private List<FavoriteItem> _items = new();
         private string _dataFilePath => AppPaths.GetUserFavoritesPath();
 
-        public FavoritesService(ILogger<FavoritesService>? logger = null)
+        public FavoritesService(ILogger<FavoritesService>? logger = null, IEventBus? eventBus = null)
         {
             _logger = logger;
+            _eventBus = eventBus;
             LoadData();
         }
 
@@ -147,6 +150,17 @@ namespace LearningAssistant.Services.Favorites
             _items.Add(item);
             SaveChanges();
             _logger?.LogDebug("添加收藏: {Title}", title);
+
+            if (_eventBus != null && !string.IsNullOrEmpty(content))
+            {
+                _eventBus.Publish(new FavoriteAddedEvent
+                {
+                    UserId = AppPaths.GetCurrentUserId(),
+                    ItemId = item.Id,
+                    ItemContent = content
+                });
+            }
+
             return item;
         }
 

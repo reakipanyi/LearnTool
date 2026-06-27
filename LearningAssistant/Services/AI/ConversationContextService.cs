@@ -65,7 +65,7 @@ namespace LearningAssistant.Services.AI
             if (string.IsNullOrWhiteSpace(userMessage))
                 return string.Empty;
 
-            var userId = _userSessionService.GetCurrentUserId();
+            var userId = _userSessionService.CurrentUserId;
             var session = GetOrCreateSession(userId);
 
             var turn = new ConversationTurn
@@ -131,7 +131,7 @@ namespace LearningAssistant.Services.AI
         /// </summary>
         public void SwitchPersona(MentorPersonaType personaType)
         {
-            var userId = _userSessionService.GetCurrentUserId();
+            var userId = _userSessionService.CurrentUserId;
             var session = GetOrCreateSession(userId);
 
             if (session.Persona.Type != personaType)
@@ -146,7 +146,7 @@ namespace LearningAssistant.Services.AI
         /// </summary>
         public void SetLearningContext(string context)
         {
-            var userId = _userSessionService.GetCurrentUserId();
+            var userId = _userSessionService.CurrentUserId;
             var session = GetOrCreateSession(userId);
 
             session.LearningContext = context;

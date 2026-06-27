@@ -503,13 +503,13 @@ namespace LearningAssistant.Forms
 
         private void PanelTrendChart_Paint(object? sender, PaintEventArgs e)
         {
-            if (e == null || _panelTrendChart == null) return;
+            if (e == null || _chartTrend == null) return;
 
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
 
-            var rect = _panelTrendChart.ClientRectangle;
+            var rect = _chartTrend.ClientRectangle;
             int paddingLeft = 50;
             int paddingRight = 20;
             int paddingTop = 20;
@@ -556,13 +556,13 @@ namespace LearningAssistant.Forms
 
         private void PanelCategoryProgress_Paint(object? sender, PaintEventArgs e)
         {
-            if (e == null || _panelCategoryProgress == null) return;
+            if (e == null || _chartCategory == null) return;
 
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
 
-            var rect = _panelCategoryProgress.ClientRectangle;
+            var rect = _chartCategory.ClientRectangle;
             int paddingLeft = 15;
             int paddingRight = 15;
             int paddingTop = 35;
@@ -694,13 +694,13 @@ namespace LearningAssistant.Forms
 
         private void PanelForgettingCurve_Paint(object? sender, PaintEventArgs e)
         {
-            if (e == null || _panelForgettingCurve == null) return;
+            if (e == null || _chartForgettingCurve == null) return;
 
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
 
-            var rect = _panelForgettingCurve.ClientRectangle;
+            var rect = _chartForgettingCurve.ClientRectangle;
             int paddingLeft = 15;
             int paddingTop = 35;
 
@@ -1329,10 +1329,10 @@ namespace LearningAssistant.Forms
                 if (btnAll != null) btnAll.Click -= BtnTimeRange_Click;
                 if (btnExport != null) btnExport.Click -= BtnExport_Click;
 
-                if (_panelTrendChart != null)
-                    _panelTrendChart.Paint -= PanelTrendChart_Paint;
-                if (_panelCategoryProgress != null)
-                    _panelCategoryProgress.Paint -= PanelCategoryProgress_Paint;
+                if (_chartTrend != null)
+                    _chartTrend.Paint -= PanelTrendChart_Paint;
+                if (_chartCategory != null)
+                    _chartCategory.Paint -= PanelCategoryProgress_Paint;
                 if (_panelWrongStats != null)
                     _panelWrongStats.Paint -= PanelWrongStats_Paint;
 

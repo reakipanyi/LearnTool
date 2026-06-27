@@ -1311,6 +1311,11 @@ namespace LearningAssistant.Forms
             base.Dispose(disposing);
         }
 
+        public void ShowMessage(string msg)
+        {
+            MessageBox.Show(msg, "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
         public void ApplyTheme(ThemeColors colors)
         {
             BackColor = colors.Background;
