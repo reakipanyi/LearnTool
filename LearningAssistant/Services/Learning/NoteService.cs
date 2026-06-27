@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Common.Events;
 using LearningAssistant.Models.Learning;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
@@ -12,13 +13,17 @@ namespace LearningAssistant.Services.Learning
     public class NoteService : INoteService
     {
         private readonly ILogger<NoteService> _logger;
+        private readonly IEventBus? _eventBus;
         private readonly string _notesDir;
         private readonly object _lock = new object();
+        private string _userId = "default";
 
         public NoteService(
-            ILogger<NoteService> logger)
+            ILogger<NoteService> logger,
+            IEventBus? eventBus = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _eventBus = eventBus;
             _notesDir = Path.Combine(AppPaths.UsersDir, "notes");
             EnsureDirectoryExists();
         }
@@ -87,6 +92,24 @@ namespace LearningAssistant.Services.Learning
                     notes.Add(note);
                     SaveNotes(userId, notes);
                     _logger.LogInformation($"笔记已添加: {note.Title}");
+
+                    _userId = userId;
+                    // 发布笔记添加事件
+                    if (_eventBus != null)
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            await _eventBus.PublishAsync(new NoteAddedEvent
+                            {
+                                UserId = userId,
+                                NoteId = note.Id,
+                                NoteTitle = note.Title,
+                                RelatedType = note.RelatedType,
+                                RelatedItemId = note.RelatedItemId,
+                                AddedAt = DateTime.Now
+                            });
+                        });
+                    }
                 }
                 catch (Exception ex)
                 {

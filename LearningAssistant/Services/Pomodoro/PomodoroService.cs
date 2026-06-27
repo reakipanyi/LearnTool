@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Common.Events;
 using LearningAssistant.Models.Pomodoro;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
@@ -15,6 +16,8 @@ namespace LearningAssistant.Services.Pomodoro
         private readonly ILogger<PomodoroService>? _logger;
         private readonly Timer _timer;
         private readonly SynchronizationContext? _syncContext;
+        private readonly IEventBus? _eventBus;
+        private readonly string _userId = "default";
         private PomodoroConfig _config;
         private List<PomodoroRecord> _records = new();
         private PomodoroState _currentState = PomodoroState.Idle;
@@ -46,9 +49,11 @@ namespace LearningAssistant.Services.Pomodoro
         private string DataFilePath => Path.Combine(AppPaths.GetUserDir(), "pomodoro_records.json");
         private string ConfigFilePath => Path.Combine(AppPaths.ConfigDir, "PomodoroSettings.json");
 
-        public PomodoroService(ILogger<PomodoroService>? logger = null)
+        public PomodoroService(ILogger<PomodoroService>? logger = null, IEventBus? eventBus = null, string userId = "default")
         {
             _logger = logger;
+            _eventBus = eventBus;
+            _userId = userId;
             _syncContext = SynchronizationContext.Current;
             _config = LoadConfig();
             _records = LoadRecords();
@@ -310,6 +315,22 @@ namespace LearningAssistant.Services.Pomodoro
                 _completedCount++;
                 RaiseEvent(PomodoroCompleted, _completedCount);
                 _logger?.LogInformation("番茄钟完成: 第 {Count} 个", _completedCount);
+
+                // 发布番茄钟完成事件
+                if (_eventBus != null)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        await _eventBus.PublishAsync(new PomodoroCompletedEvent
+                        {
+                            UserId = _userId,
+                            DurationMinutes = _config.WorkDuration,
+                            TaskName = _currentTask,
+                            CompletedCount = _completedCount,
+                            CompletedAt = DateTime.Now
+                        });
+                    });
+                }
 
                 if (_config.AutoStartNext)
                 {

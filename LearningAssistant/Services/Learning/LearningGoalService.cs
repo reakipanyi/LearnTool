@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Common.Events;
 using LearningAssistant.Models.Learning;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services.Persistence;
@@ -11,24 +12,60 @@ namespace LearningAssistant.Services.Learning
     /// 学习目标服务实现
     /// 提供目标设置、进度追踪、连续达成统计等功能
     /// </summary>
-    public class LearningGoalService : ILearningGoalService
+    public class LearningGoalService : ILearningGoalService, IDisposable
     {
         private readonly IDataPersistenceService _persistenceService;
         private readonly ILogger<LearningGoalService> _logger;
+        private readonly IEventBus? _eventBus;
         private readonly string _goalsDir;
         private readonly HashSet<string> _completedGoalsToday = new();
+        private string _userId = "default";
 
         public event EventHandler<GoalType>? GoalCompleted;
         public event EventHandler? AllGoalsCompleted;
 
         public LearningGoalService(
             IDataPersistenceService persistenceService,
-            ILogger<LearningGoalService> logger)
+            ILogger<LearningGoalService> logger,
+            IEventBus? eventBus = null)
         {
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _eventBus = eventBus;
             _goalsDir = Path.Combine(AppPaths.UsersDir, "goals");
             EnsureDirectoryExists();
+
+            SubscribeToEvents();
+        }
+
+        private void SubscribeToEvents()
+        {
+            if (_eventBus == null) return;
+
+            _eventBus.Subscribe<PomodoroCompletedEvent>(OnPomodoroCompleted);
+            _eventBus.Subscribe<ItemLearnedEvent>(OnItemLearned);
+        }
+
+        private void UnsubscribeFromEvents()
+        {
+            if (_eventBus == null) return;
+
+            _eventBus.Unsubscribe<PomodoroCompletedEvent>(OnPomodoroCompleted);
+            _eventBus.Unsubscribe<ItemLearnedEvent>(OnItemLearned);
+        }
+
+        private void OnPomodoroCompleted(PomodoroCompletedEvent evt)
+        {
+            _userId = evt.UserId;
+            UpdateStudyMinutes(evt.UserId, evt.DurationMinutes);
+            _logger?.LogInformation("番茄钟完成事件处理: 用户 {UserId}, 时长 {Duration} 分钟", evt.UserId, evt.DurationMinutes);
+        }
+
+        private void OnItemLearned(ItemLearnedEvent evt)
+        {
+            _userId = evt.UserId;
+            IncrementStudyItems(evt.UserId, 1);
+            _logger?.LogInformation("学习项完成事件处理: 用户 {UserId}", evt.UserId);
         }
 
         private void EnsureDirectoryExists()
@@ -672,6 +709,15 @@ namespace LearningAssistant.Services.Learning
                     CreatedAt = DateTime.Now
                 }
             };
+        }
+
+        #endregion
+
+        #region IDisposable
+
+        public void Dispose()
+        {
+            UnsubscribeFromEvents();
         }
 
         #endregion

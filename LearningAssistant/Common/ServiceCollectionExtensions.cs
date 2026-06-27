@@ -194,7 +194,13 @@ namespace LearningAssistant.Common
             services.AddSingleton<IEncouragementService, EncouragementService>();
             services.AddSingleton<IAchievementService, AchievementService>();
             services.AddScoped<IGamificationService, GamificationService>();
-            services.AddSingleton<ILearningGoalService, LearningGoalService>();
+            services.AddSingleton<ILearningGoalService>(sp =>
+            {
+                var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
+                var logger = sp.GetRequiredService<ILogger<LearningGoalService>>();
+                var eventBus = sp.GetService<IEventBus>();
+                return new LearningGoalService(persistenceService, logger, eventBus);
+            });
             services.AddSingleton<FavoritesBackupProvider>();
             services.AddSingleton<StudyStatsBackupProvider>();
             services.AddSingleton<LearningGoalsBackupProvider>();
@@ -214,10 +220,20 @@ namespace LearningAssistant.Common
                 return backupService;
             });
             services.AddSingleton<IWrongAnswerService, WrongAnswerService>();
-            services.AddSingleton<INoteService, NoteService>();
+            services.AddSingleton<INoteService>(sp =>
+            {
+                var logger = sp.GetRequiredService<ILogger<NoteService>>();
+                var eventBus = sp.GetService<IEventBus>();
+                return new NoteService(logger, eventBus);
+            });
             services.AddSingleton<ILearningPathService, LearningPathService>();
             services.AddSingleton<ILearningRecommendationService, LearningRecommendationService>();
-            services.AddSingleton<IPomodoroService, PomodoroService>();
+            services.AddSingleton<IPomodoroService>(sp =>
+            {
+                var logger = sp.GetService<ILogger<PomodoroService>>();
+                var eventBus = sp.GetService<IEventBus>();
+                return new PomodoroService(logger, eventBus);
+            });
             services.AddSingleton<IDataImportService, DataImportService>();
 
             services.AddScoped<ILearningSettingsManager, LearningSettingsManager>();

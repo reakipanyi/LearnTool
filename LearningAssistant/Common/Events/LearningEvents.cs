@@ -280,5 +280,47 @@ namespace LearningAssistant.Common.Events
     {
         public string UserId { get; set; } = string.Empty;
     }
+
+    // ==========================================
+    // 番茄钟相关事件
+    // ==========================================
+
+    /// <summary>
+    /// 番茄钟完成事件 - PomodoroCompleted
+    /// 触发源：番茄钟完成1个工作周期
+    /// 下游动作：
+    /// 1. 更新学习时长目标进度
+    /// 2. XP+25（完成一个番茄钟）
+    /// 3. 检查"专注达人"成就
+    /// </summary>
+    public class PomodoroCompletedEvent : ApplicationEventBase
+    {
+        public string UserId { get; set; } = string.Empty;
+        public int DurationMinutes { get; set; }
+        public string? TaskName { get; set; }
+        public int CompletedCount { get; set; }
+        public DateTime CompletedAt { get; set; } = DateTime.Now;
+    }
+
+    // ==========================================
+    // 笔记相关事件
+    // ==========================================
+
+    /// <summary>
+    /// 笔记添加事件 - NoteAdded
+    /// 触发源：用户添加新笔记
+    /// 下游动作：
+    /// 1. XP+15（记录笔记）
+    /// 2. 更新学习目标进度
+    /// </summary>
+    public class NoteAddedEvent : ApplicationEventBase
+    {
+        public string UserId { get; set; } = string.Empty;
+        public string NoteId { get; set; } = string.Empty;
+        public string NoteTitle { get; set; } = string.Empty;
+        public string? RelatedType { get; set; }
+        public string? RelatedItemId { get; set; }
+        public DateTime AddedAt { get; set; } = DateTime.Now;
+    }
 }
 

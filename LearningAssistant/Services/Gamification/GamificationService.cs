@@ -79,6 +79,8 @@ namespace LearningAssistant.Services.Gamification
             _eventBus.Subscribe<ItemLearnedEvent>(OnItemLearned);
             _eventBus.Subscribe<ItemWrongEvent>(OnItemWrong);
             _eventBus.Subscribe<FeynmanCompletedEvent>(OnFeynmanCompleted);
+            _eventBus.Subscribe<PomodoroCompletedEvent>(OnPomodoroCompleted);
+            _eventBus.Subscribe<NoteAddedEvent>(OnNoteAdded);
         }
 
         private void UnsubscribeFromEvents()
@@ -88,6 +90,8 @@ namespace LearningAssistant.Services.Gamification
             _eventBus.Unsubscribe<ItemLearnedEvent>(OnItemLearned);
             _eventBus.Unsubscribe<ItemWrongEvent>(OnItemWrong);
             _eventBus.Unsubscribe<FeynmanCompletedEvent>(OnFeynmanCompleted);
+            _eventBus.Unsubscribe<PomodoroCompletedEvent>(OnPomodoroCompleted);
+            _eventBus.Unsubscribe<NoteAddedEvent>(OnNoteAdded);
         }
 
         private void OnItemLearned(ItemLearnedEvent evt)
@@ -142,6 +146,45 @@ namespace LearningAssistant.Services.Gamification
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "处理费曼学习完成事件失败");
+            }
+        }
+
+        private void OnPomodoroCompleted(PomodoroCompletedEvent evt)
+        {
+            if (evt.UserId != _userId) return;
+
+            try
+            {
+                AddXP(25);
+                AddScore(50);
+                _studyDuration += TimeSpan.FromMinutes(evt.DurationMinutes);
+                CheckBadgesAndChallenges();
+
+                _logger?.LogInformation("番茄钟完成事件处理: Task={TaskName}, XP+25, Score+50, Duration={Duration}min", 
+                    evt.TaskName, evt.DurationMinutes);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "处理番茄钟完成事件失败");
+            }
+        }
+
+        private void OnNoteAdded(NoteAddedEvent evt)
+        {
+            if (evt.UserId != _userId) return;
+
+            try
+            {
+                AddXP(15);
+                AddScore(30);
+                _noteCount++;
+                CheckBadgesAndChallenges();
+
+                _logger?.LogInformation("笔记添加事件处理: {NoteTitle}, XP+15, Score+30", evt.NoteTitle);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "处理笔记添加事件失败");
             }
         }
 
