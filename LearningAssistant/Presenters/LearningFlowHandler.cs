@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Common.Events;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Learning;
 using LearningAssistant.Services.AI;
@@ -36,6 +37,7 @@ namespace LearningAssistant.Presenters
         private readonly IWindowManager _windowManager;
         private readonly ILearningSettingsManager _settingsManager;
         private readonly ILearningView _view;
+        private readonly IEventBus? _eventBus;
 
         private CancellationTokenSource? _cts;
         private string _currentExplanation = "";
@@ -44,6 +46,7 @@ namespace LearningAssistant.Presenters
         private string _currentSubject = "";
         private string _currentSubCategory = "";
         private int _autoPronunciationCount = 0;
+        private readonly DateTime _sessionStartTime = DateTime.Now;
         private const int MaxAutoPronunciationCount = 5;
 
         public LearningFlowHandler(
@@ -55,7 +58,8 @@ namespace LearningAssistant.Presenters
             IExportService exportService,
             IWindowManager windowManager,
             ILearningSettingsManager settingsManager,
-            ILearningView view)
+            ILearningView view,
+            IEventBus? eventBus = null)
         {
             _logger = logger;
             _studyEngine = studyEngine;
@@ -66,6 +70,7 @@ namespace LearningAssistant.Presenters
             _windowManager = windowManager;
             _settingsManager = settingsManager;
             _view = view;
+            _eventBus = eventBus;
             _cts = new CancellationTokenSource();
         }
 
@@ -228,15 +233,47 @@ namespace LearningAssistant.Presenters
 
         public async Task MarkAsKnownAsync()
         {
+            var currentItem = _studyEngine.GetCurrentItem();
             _studyEngine.MarkCurrentAsKnown();
             SaveProgress();
+
+            if (currentItem != null && _eventBus != null)
+            {
+                _eventBus.Publish(new ItemLearnedEvent
+                {
+                    UserId = _currentUserId,
+                    ItemId = currentItem.GetMainContent(),
+                    ItemContent = currentItem.GetMainContent(),
+                    SubCategory = _currentSubCategory,
+                    LearnedAt = DateTime.Now
+                });
+                _logger.LogInformation("Published ItemLearnedEvent for user {UserId}, item {ItemContent}", _currentUserId, currentItem.GetMainContent());
+            }
+
             await MoveToNextAsync();
         }
 
         public async Task MarkAsUnknownAsync()
         {
+            var currentItem = _studyEngine.GetCurrentItem();
             _studyEngine.MarkCurrentAsUnknown();
             SaveProgress();
+
+            if (currentItem != null && _eventBus != null)
+            {
+                _eventBus.Publish(new ItemWrongEvent
+                {
+                    UserId = _currentUserId,
+                    ItemId = currentItem.GetMainContent(),
+                    ItemContent = currentItem.GetMainContent(),
+                    CorrectAnswer = currentItem.GetDisplayText(),
+                    UserAnswer = "",
+                    SubCategory = _currentSubCategory,
+                    WrongAt = DateTime.Now
+                });
+                _logger.LogInformation("Published ItemWrongEvent for user {UserId}, item {ItemContent}", _currentUserId, currentItem.GetMainContent());
+            }
+
             await MoveToNextAsync();
         }
 
@@ -291,6 +328,8 @@ namespace LearningAssistant.Presenters
                     _view.CurrentContent = "学习已完成!";
                     _view.Statistics = "恭喜完成所有内容！";
                     _view.EnableButtons(false);
+
+                    PublishSessionCompleted();
                 }
             }
             catch (OperationCanceledException)
@@ -301,6 +340,25 @@ namespace LearningAssistant.Presenters
             {
                 _logger.LogError(ex, "Error in MoveToNext");
             }
+        }
+
+        private void PublishSessionCompleted()
+        {
+            if (_eventBus == null) return;
+
+            var stats = _studyEngine.GetStatistics();
+            var sessionDuration = DateTime.Now - _sessionStartTime;
+
+            _eventBus.Publish(new LearningSessionCompletedEvent
+            {
+                UserId = _currentUserId,
+                TotalItems = _studyEngine.TotalCount,
+                CorrectCount = stats.CorrectCount,
+                Accuracy = stats.AccuracyRate,
+                SubCategory = _currentSubCategory,
+                Duration = sessionDuration
+            });
+            _logger.LogInformation("Published LearningSessionCompletedEvent for user {UserId}, duration {Duration}", _currentUserId, sessionDuration);
         }
 
         public async Task HandleItemSelectedAsync(int index)

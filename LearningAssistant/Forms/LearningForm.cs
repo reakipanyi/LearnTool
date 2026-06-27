@@ -1956,19 +1956,13 @@ namespace LearningAssistant.Forms
                     _celebrationCounter = 0;
                 }
 
-                int points = _isShowAnswer && !_answerRevealed ? 20 : 10;
-                _gamificationService.AddScore(points);
-                _gamificationService.IncrementTodayLearned();
-
                 _totalLearnedCount++;
                 if (_isShowAnswer && !_answerRevealed)
                 {
                     _quizCorrectCount++;
-                    _gamificationService.RecordQuizCorrect();
                 }
 
                 UpdateEncouragement();
-                _gamificationService.CheckBadgeUnlock("learn", _totalLearnedCount);
                 UpdateChallengesProgress();
                 UpdateDailyGoalProgress();
 
@@ -2333,8 +2327,6 @@ namespace LearningAssistant.Forms
         private void FeynmanPanel_Completed(object? sender, EventArgs e)
         {
             _soundService?.PlaySuccess();
-            _gamificationService.AddXP(50);
-            _gamificationService.AddScore(100);
 
             if (_currentItem != null)
             {

@@ -221,7 +221,11 @@ namespace LearningAssistant.Common
             services.AddSingleton<IDataImportService, DataImportService>();
 
             services.AddScoped<ILearningSettingsManager, LearningSettingsManager>();
-            services.AddScoped<ILearningEventMediator, LearningEventMediator>();
+            services.AddScoped<ILearningEventMediator>(sp =>
+            {
+                var eventBus = sp.GetService<IEventBus>();
+                return new LearningEventMediator(eventBus);
+            });
             services.AddScoped<ILearningFlowHandler>(sp =>
             {
                 var logger = sp.GetRequiredService<ILogger<LearningFlowHandler>>();
@@ -233,8 +237,9 @@ namespace LearningAssistant.Common
                 var windowManager = sp.GetRequiredService<IWindowManager>();
                 var settingsManager = sp.GetRequiredService<ILearningSettingsManager>();
                 var view = sp.GetRequiredService<ILearningView>();
+                var eventBus = sp.GetService<IEventBus>();
                 return new LearningFlowHandler(logger, studyEngine, aiService, ttsService, contentLoaderService,
-                    exportService, windowManager, settingsManager, view);
+                    exportService, windowManager, settingsManager, view, eventBus);
             });
 
             return services;

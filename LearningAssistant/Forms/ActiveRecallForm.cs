@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 using LearningAssistant.Common;
+using LearningAssistant.Common.Events;
 using LearningAssistant.Services.Learning;
 
 namespace LearningAssistant.Forms
@@ -53,6 +54,16 @@ namespace LearningAssistant.Forms
         /// </summary>
         private System.Windows.Forms.Timer _transitionTimer;
 
+        /// <summary>
+        /// 用户ID
+        /// </summary>
+        private readonly string _userId = "default";
+
+        /// <summary>
+        /// 事件总线
+        /// </summary>
+        private readonly IEventBus? _eventBus;
+
         // UI 控件
         private Panel panelMain;
         private Label labelQuestion;
@@ -81,6 +92,15 @@ namespace LearningAssistant.Forms
             _reviewQueue = new List<ReviewItem>();
             InitializeComponent();
             this.FormClosing += ActiveRecallForm_FormClosing;
+        }
+
+        /// <summary>
+        /// 初始化主动回忆训练器（带事件总线）
+        /// </summary>
+        public ActiveRecallForm(IEventBus? eventBus, string userId = "default") : this()
+        {
+            _eventBus = eventBus;
+            _userId = userId;
         }
 
         /// <summary>
@@ -444,27 +464,40 @@ namespace LearningAssistant.Forms
             bool isCorrect = CheckIfCorrect(userAnswer, item.Answer);
 
             if (isCorrect)
-            {
-                // 答案正确
-                _correctCount++;
-                labelResult.Text = $"🎉 正确！\n答案：{item.Answer}";
-                labelResult.ForeColor = Color.Green;
-                textBoxAnswer.BackColor = Color.FromArgb(200, 255, 200);  // 绿色背景
+                {
+                    // 答案正确
+                    _correctCount++;
+                    labelResult.Text = $"🎉 正确！\n答案：{item.Answer}";
+                    labelResult.ForeColor = Color.Green;
+                    textBoxAnswer.BackColor = Color.FromArgb(200, 255, 200);  // 绿色背景
 
-                // 更新复习计划（间隔重复）
-                item.NextReviewDate = DateTime.Now.AddDays(1);
-                item.CorrectStreak++;
-            }
-            else
-            {
-                // 答案错误
-                labelResult.Text = $"❌ 再想想...\n提示：{item.Hint}\n答案：{item.Answer}";
-                labelResult.ForeColor = Color.Red;
-                textBoxAnswer.BackColor = Color.FromArgb(255, 230, 230);  // 红色背景
+                    // 更新复习计划（间隔重复）
+                    item.NextReviewDate = DateTime.Now.AddDays(1);
+                    item.CorrectStreak++;
+                }
+                else
+                {
+                    // 答案错误
+                    labelResult.Text = $"❌ 再想想...\n提示：{item.Hint}\n答案：{item.Answer}";
+                    labelResult.ForeColor = Color.Red;
+                    textBoxAnswer.BackColor = Color.FromArgb(255, 230, 230);  // 红色背景
 
-                // 重置连续正确次数
-                item.CorrectStreak = 0;
-            }
+                    // 重置连续正确次数
+                    item.CorrectStreak = 0;
+                }
+
+                // 发布复习完成事件
+                if (_eventBus != null)
+                {
+                    _eventBus.Publish(new ReviewDoneEvent
+                    {
+                        UserId = _userId,
+                        ItemId = item.Id.ToString(),
+                        ItemContent = item.Content,
+                        WasCorrect = isCorrect,
+                        ReviewedAt = DateTime.Now
+                    });
+                }
 
             // 更新统计显示
             UpdateStats();

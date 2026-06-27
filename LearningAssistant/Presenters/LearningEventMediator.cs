@@ -1,3 +1,5 @@
+using LearningAssistant.Common.Events;
+
 namespace LearningAssistant.Presenters
 {
     public interface ILearningEventMediator
@@ -47,6 +49,13 @@ namespace LearningAssistant.Presenters
         public event EventHandler? OpenStatistics;
         public event EventHandler? ExportErrorBook;
 
+        private readonly IEventBus? _eventBus;
+
+        public LearningEventMediator(IEventBus? eventBus = null)
+        {
+            _eventBus = eventBus;
+        }
+
         public void RaiseMarkAsKnown()
         {
             MarkAsKnown?.Invoke(this, new MarkAsKnownEventArgs());
@@ -75,6 +84,17 @@ namespace LearningAssistant.Presenters
         public void RaiseSendToPdfQuestion(string text, string language)
         {
             SendToPdfQuestion?.Invoke(this, new SendToPdfEventArgs { Text = text, Language = language });
+
+            if (_eventBus != null && !string.IsNullOrWhiteSpace(text))
+            {
+                _eventBus.Publish(new PDFHighlightEvent
+                {
+                    UserId = "current",
+                    HighlightedText = text,
+                    SourceUrl = "",
+                    Tags = language
+                });
+            }
         }
 
         public void RaiseSettingsChanged()

@@ -40,6 +40,7 @@ namespace LearningAssistant.Services.Learning
             if (_eventBus == null) return;
 
             _eventBus.Subscribe<ItemWrongEvent>(OnItemWrong);
+            _eventBus.Subscribe<ReviewDoneEvent>(OnReviewDone);
         }
 
         private void UnsubscribeFromEvents()
@@ -47,6 +48,7 @@ namespace LearningAssistant.Services.Learning
             if (_eventBus == null) return;
 
             _eventBus.Unsubscribe<ItemWrongEvent>(OnItemWrong);
+            _eventBus.Unsubscribe<ReviewDoneEvent>(OnReviewDone);
         }
 
         private void OnItemWrong(ItemWrongEvent evt)
@@ -71,6 +73,30 @@ namespace LearningAssistant.Services.Learning
             catch (Exception ex)
             {
                 _logger.LogError(ex, "处理学习项答错事件失败: {ItemContent}", evt.ItemContent);
+            }
+        }
+
+        private void OnReviewDone(ReviewDoneEvent evt)
+        {
+            try
+            {
+                if (!evt.WasCorrect) return;
+
+                var wrongAnswers = GetWrongAnswers(evt.UserId);
+                var matchedItem = wrongAnswers.FirstOrDefault(i => 
+                    i.Question.Equals(evt.ItemContent, StringComparison.OrdinalIgnoreCase));
+
+                if (matchedItem != null)
+                {
+                    RemoveWrongAnswer(evt.UserId, matchedItem.Id);
+                    _logger.LogInformation("复习正确，自动移除错题: {UserId}, {Question}", 
+                        evt.UserId, 
+                        evt.ItemContent.Length > 30 ? evt.ItemContent.Substring(0, 30) + "..." : evt.ItemContent);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "处理复习完成事件失败: {ItemContent}", evt.ItemContent);
             }
         }
 

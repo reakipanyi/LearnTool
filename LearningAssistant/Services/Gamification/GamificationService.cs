@@ -78,6 +78,7 @@ namespace LearningAssistant.Services.Gamification
 
             _eventBus.Subscribe<ItemLearnedEvent>(OnItemLearned);
             _eventBus.Subscribe<ItemWrongEvent>(OnItemWrong);
+            _eventBus.Subscribe<FeynmanCompletedEvent>(OnFeynmanCompleted);
         }
 
         private void UnsubscribeFromEvents()
@@ -86,6 +87,7 @@ namespace LearningAssistant.Services.Gamification
 
             _eventBus.Unsubscribe<ItemLearnedEvent>(OnItemLearned);
             _eventBus.Unsubscribe<ItemWrongEvent>(OnItemWrong);
+            _eventBus.Unsubscribe<FeynmanCompletedEvent>(OnFeynmanCompleted);
         }
 
         private void OnItemLearned(ItemLearnedEvent evt)
@@ -122,6 +124,24 @@ namespace LearningAssistant.Services.Gamification
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "处理学习项答错事件失败");
+            }
+        }
+
+        private void OnFeynmanCompleted(FeynmanCompletedEvent evt)
+        {
+            if (evt.UserId != _userId) return;
+
+            try
+            {
+                AddXP(50);
+                AddScore(100);
+                CheckBadgesAndChallenges();
+
+                _logger?.LogInformation("费曼学习完成事件处理: {ItemContent}, XP+50, Score+100", evt.ItemContent);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "处理费曼学习完成事件失败");
             }
         }
 
