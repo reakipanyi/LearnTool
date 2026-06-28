@@ -172,22 +172,34 @@ namespace LearningAssistant.Managers
 
         private async Task AddHighlightFromSelectionAsync(Rectangle selectionRect)
         {
+            Bitmap? pageImageCopy = null;
+            int targetPageIndex = 0;
+            Rectangle imgRect = Rectangle.Empty;
+            string currentPdfPath = string.Empty;
+            HighlightColor currentHighlightColor = CurrentHighlightColor;
+
             try
             {
-                var currentPdfPath = _form.CurrentPdfPath;
-                var currentHighlightColor = CurrentHighlightColor;
-
+                // 在异步操作开始前捕获所有必要状态，避免竞态条件
+                currentPdfPath = _form.CurrentPdfPath;
+                
                 var centerPoint = new Point(selectionRect.X + selectionRect.Width / 2, selectionRect.Y + selectionRect.Height / 2);
-                var (targetPageIndex, imgRect, targetPageImage) = _form.GetPageAtPoint(centerPoint);
+                var (pageIndex, rect, pageImage) = _form.GetPageAtPoint(centerPoint);
+                
+                targetPageIndex = pageIndex;
+                imgRect = rect;
 
                 _logger.LogInformation("AddHighlightFromSelectionAsync: PdfPath={Path}, PageIndex={Page}, ImageSize={Width}x{Height}",
-                    currentPdfPath, targetPageIndex, targetPageImage?.Width, targetPageImage?.Height);
+                    currentPdfPath, targetPageIndex, pageImage?.Width, pageImage?.Height);
 
-                if (targetPageImage == null || string.IsNullOrEmpty(currentPdfPath))
+                if (pageImage == null || string.IsNullOrEmpty(currentPdfPath))
                 {
                     _logger.LogWarning("AddHighlightFromSelectionAsync: targetPageImage or currentPdfPath is null");
                     return;
                 }
+
+                // 创建图片副本，防止异步操作期间原始图片被释放
+                pageImageCopy = new Bitmap(pageImage);
 
                 _logger.LogInformation("AddHighlightFromSelectionAsync: imgRect={X},{Y} {Width}x{Height}",
                     imgRect.X, imgRect.Y, imgRect.Width, imgRect.Height);
@@ -198,8 +210,8 @@ namespace LearningAssistant.Managers
                     return;
                 }
 
-                int originalWidth = targetPageImage.Width;
-                int originalHeight = targetPageImage.Height;
+                int originalWidth = pageImageCopy.Width;
+                int originalHeight = pageImageCopy.Height;
 
                 float scaleX = (float)originalWidth / imgRect.Width;
                 float scaleY = (float)originalHeight / imgRect.Height;
@@ -225,7 +237,8 @@ namespace LearningAssistant.Managers
                     return;
                 }
 
-                string ocrText = await GetOcrTextFromSelectionAsync(selectionRect, targetPageImage);
+                // 使用图片副本进行OCR识别
+                string ocrText = await GetOcrTextFromSelectionAsync(selectionRect, pageImageCopy, imgRect);
 
                 if (string.IsNullOrEmpty(ocrText))
                 {
@@ -268,9 +281,14 @@ namespace LearningAssistant.Managers
                 });
 
                 _logger.LogInformation("AddHighlightFromSelectionAsync: RefreshHighlightList and UpdateHighlightLayer");
-                RefreshHighlightList();
-                UpdateHighlightLayer();
-                _form.PictureBoxPdf?.Invalidate();
+                
+                // 检查当前页面是否仍然是目标页面，防止页面已切换
+                if (_form.CurrentPdfPath == currentPdfPath && _form.CurrentPageIndex == targetPageIndex)
+                {
+                    RefreshHighlightList();
+                    UpdateHighlightLayer();
+                    _form.PictureBoxPdf?.Invalidate();
+                }
 
                 if (!string.IsNullOrEmpty(ocrText) && _form.TextBoxOriginal != null)
                 {
@@ -298,9 +316,14 @@ namespace LearningAssistant.Managers
             {
                 _logger.LogError(ex, "Error adding highlight from selection");
             }
+            finally
+            {
+                // 释放图片副本
+                pageImageCopy?.Dispose();
+            }
         }
 
-        private async Task<string> GetOcrTextFromSelectionAsync(Rectangle selectionRect, Bitmap currentPageImage)
+        private async Task<string> GetOcrTextFromSelectionAsync(Rectangle selectionRect, Bitmap currentPageImage, Rectangle imgRect)
         {
             if (currentPageImage == null || _form.Presenter == null) return string.Empty;
 
@@ -310,7 +333,6 @@ namespace LearningAssistant.Managers
                 return string.Empty;
             }
 
-            var imgRect = _form.GetImageDisplayRect();
             if (imgRect.Width <= 0 || imgRect.Height <= 0) return string.Empty;
 
             float scaleX = (float)currentPageImage.Width / imgRect.Width;

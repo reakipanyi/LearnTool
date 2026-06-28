@@ -23,8 +23,8 @@ namespace LearningAssistant.Services.Pdf
         /// <param name="pageIndex">页码索引（从0开始）</param>
         /// <param name="width">渲染宽度（像素）</param>
         /// <param name="height">渲染高度（像素）</param>
-        /// <returns>渲染后的Bitmap图像对象</returns>
-        Bitmap RenderPage(int pageIndex, int width, int height);
+        /// <returns>渲染后的Bitmap图像对象，失败时返回null</returns>
+        Bitmap? RenderPage(int pageIndex, int width, int height);
 
         /// <summary>
         /// 获取指定页面的原始尺寸

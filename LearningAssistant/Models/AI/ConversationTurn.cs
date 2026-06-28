@@ -64,6 +64,26 @@ namespace LearningAssistant.Models.AI
         /// <summary>
         /// 诊断分析
         /// </summary>
-        Diagnosis
+        Diagnosis,
+
+        /// <summary>
+        /// 激励鼓励
+        /// </summary>
+        Motivation,
+
+        /// <summary>
+        /// 学习规划
+        /// </summary>
+        Planning,
+
+        /// <summary>
+        /// 知识关联
+        /// </summary>
+        KnowledgeLink,
+
+        /// <summary>
+        /// 错题分析
+        /// </summary>
+        ErrorAnalysis
     }
 }

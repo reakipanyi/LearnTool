@@ -2,6 +2,8 @@ namespace LearningAssistant.Common
 {
     public static class Constants
     {
+        public static string DefaultUserId = "Guest";
+
         public static class Subject
         {
             public const string Chinese = "语文";

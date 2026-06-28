@@ -97,6 +97,11 @@ namespace LearningAssistant.Services.Learning
         public bool ShouldReview { get; set; }
 
         /// <summary>
+        /// 学习阶段（用于FSRS学习阶段管理）
+        /// </summary>
+        public int LearningStage { get; set; } = -1;
+
+        /// <summary>
         /// 消息提示
         /// </summary>
         public string Message { get; set; } = string.Empty;
