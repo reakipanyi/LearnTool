@@ -23,7 +23,6 @@ namespace LearningAssistant.Common
         /// </summary>
         public static string DataRoot => Path.Combine(AssemblyDir, "AppData");
 
-
         /// <summary>
         /// OCR 数据目录（只读）
         /// </summary>

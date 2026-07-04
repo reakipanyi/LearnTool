@@ -475,7 +475,8 @@ namespace LearningAssistant.Forms
             treeViewFiles.Nodes.Clear();
             foreach (var file in files)
             {
-                treeViewFiles.Nodes.Add(file);
+                var node = treeViewFiles.Nodes.Add(Path.GetFileName(file));
+                node.Tag = file;
             }
         }
 
@@ -811,7 +812,7 @@ namespace LearningAssistant.Forms
 
         public string GetSelectedFile()
         {
-            return treeViewFiles.SelectedNode?.Text ?? string.Empty;
+            return treeViewFiles.SelectedNode?.Tag as string ?? treeViewFiles.SelectedNode?.Text ?? string.Empty;
         }
 
         public string GetPageText()

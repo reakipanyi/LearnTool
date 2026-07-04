@@ -159,7 +159,6 @@ namespace LearningAssistant.Services.Pdf
 
             _lastFolderPath = folderPath;
             var pdfFiles = Directory.EnumerateFiles(folderPath, "*.pdf", SearchOption.AllDirectories)
-                                   .Select(f => Path.GetFileName(f))
                                    .ToList();
 
             var imageFiles = Directory.EnumerateFiles(folderPath, "*.jpg", SearchOption.AllDirectories)
@@ -167,7 +166,6 @@ namespace LearningAssistant.Services.Pdf
                                      .Concat(Directory.EnumerateFiles(folderPath, "*.png", SearchOption.AllDirectories))
                                      .Concat(Directory.EnumerateFiles(folderPath, "*.bmp", SearchOption.AllDirectories))
                                      .Concat(Directory.EnumerateFiles(folderPath, "*.gif", SearchOption.AllDirectories))
-                                     .Select(f => Path.GetFileName(f))
                                      .ToList();
 
             var allFiles = pdfFiles.Concat(imageFiles).ToList();

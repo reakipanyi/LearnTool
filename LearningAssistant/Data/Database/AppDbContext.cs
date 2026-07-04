@@ -27,17 +27,7 @@ namespace LearningAssistant.Data.Database
         public DbSet<FavoriteItemEntity> FavoriteItems { get; set; }
         public DbSet<PomodoroSettingsEntity> PomodoroSettings { get; set; }
         public DbSet<PomodoroRecordEntity> PomodoroRecords { get; set; }
-        public DbSet<NoteEntity> Notes { get; set; }
         public DbSet<WrongAnswerEntity> WrongAnswers { get; set; }
-        public DbSet<UserLearningPreferenceEntity> UserLearningPreferences { get; set; }
-        public DbSet<ConversationHistoryEntity> ConversationHistories { get; set; }
-        public DbSet<KnowledgeNodeEntity> KnowledgeNodes { get; set; }
-        public DbSet<KnowledgeEdgeEntity> KnowledgeEdges { get; set; }
-        public DbSet<LearningPathEntity> LearningPaths { get; set; }
-        public DbSet<PendingContentEntity> PendingContents { get; set; }
-        public DbSet<FeynmanHistoryEntity> FeynmanHistories { get; set; }
-        public DbSet<HintProgressEntity> HintProgresses { get; set; }
-        public DbSet<RecommendationFeedbackEntity> RecommendationFeedbacks { get; set; }
 
         private readonly string _dbPath;
 
@@ -318,22 +308,6 @@ namespace LearningAssistant.Data.Database
             modelBuilder.Entity<PomodoroRecordEntity>()
                 .HasIndex(p => p.Type);
 
-            // 笔记配置
-            modelBuilder.Entity<NoteEntity>()
-                .HasKey(n => n.Id);
-
-            modelBuilder.Entity<NoteEntity>()
-                .HasIndex(n => n.UserId);
-
-            modelBuilder.Entity<NoteEntity>()
-                .HasIndex(n => n.Category);
-
-            modelBuilder.Entity<NoteEntity>()
-                .HasIndex(n => n.IsFavorite);
-
-            modelBuilder.Entity<NoteEntity>()
-                .HasIndex(n => n.UpdatedAt);
-
             // 错题本配置
             modelBuilder.Entity<WrongAnswerEntity>()
                 .HasKey(w => w.Id);
@@ -352,113 +326,6 @@ namespace LearningAssistant.Data.Database
 
             modelBuilder.Entity<WrongAnswerEntity>()
                 .HasIndex(w => w.NextReviewAt);
-
-            // 用户学习偏好配置
-            modelBuilder.Entity<UserLearningPreferenceEntity>()
-                .HasKey(u => u.Id);
-
-            modelBuilder.Entity<UserLearningPreferenceEntity>()
-                .HasIndex(u => u.UserId)
-                .IsUnique();
-
-            // AI对话历史配置
-            modelBuilder.Entity<ConversationHistoryEntity>()
-                .HasKey(c => c.Id);
-
-            modelBuilder.Entity<ConversationHistoryEntity>()
-                .HasIndex(c => c.UserId);
-
-            modelBuilder.Entity<ConversationHistoryEntity>()
-                .HasIndex(c => c.SessionId);
-
-            modelBuilder.Entity<ConversationHistoryEntity>()
-                .HasIndex(c => c.Timestamp);
-
-            modelBuilder.Entity<ConversationHistoryEntity>()
-                .HasIndex(c => c.Topic);
-
-            // 知识图谱节点配置
-            modelBuilder.Entity<KnowledgeNodeEntity>()
-                .HasKey(n => n.Id);
-
-            modelBuilder.Entity<KnowledgeNodeEntity>()
-                .HasIndex(n => n.UserId);
-
-            modelBuilder.Entity<KnowledgeNodeEntity>()
-                .HasIndex(n => n.Name);
-
-            modelBuilder.Entity<KnowledgeNodeEntity>()
-                .HasIndex(n => n.Category);
-
-            modelBuilder.Entity<KnowledgeNodeEntity>()
-                .HasIndex(n => n.MasteryLevel);
-
-            // 知识图谱关系配置
-            modelBuilder.Entity<KnowledgeEdgeEntity>()
-                .HasKey(e => e.Id);
-
-            modelBuilder.Entity<KnowledgeEdgeEntity>()
-                .HasIndex(e => e.UserId);
-
-            modelBuilder.Entity<KnowledgeEdgeEntity>()
-                .HasIndex(e => e.SourceNodeId);
-
-            modelBuilder.Entity<KnowledgeEdgeEntity>()
-                .HasIndex(e => e.TargetNodeId);
-
-            // 学习路径配置
-            modelBuilder.Entity<LearningPathEntity>()
-                .HasKey(l => l.Id);
-
-            modelBuilder.Entity<LearningPathEntity>()
-                .HasIndex(l => l.UserId);
-
-            modelBuilder.Entity<LearningPathEntity>()
-                .HasIndex(l => l.Priority);
-
-            modelBuilder.Entity<PendingContentEntity>()
-                .HasKey(p => p.Id);
-
-            modelBuilder.Entity<PendingContentEntity>()
-                .HasIndex(p => p.UserId);
-
-            modelBuilder.Entity<PendingContentEntity>()
-                .HasIndex(p => p.AddedAt);
-
-            modelBuilder.Entity<FeynmanHistoryEntity>()
-                .HasKey(f => f.Id);
-
-            modelBuilder.Entity<FeynmanHistoryEntity>()
-                .HasIndex(f => f.UserId);
-
-            modelBuilder.Entity<FeynmanHistoryEntity>()
-                .HasIndex(f => f.ContentId);
-
-            modelBuilder.Entity<FeynmanHistoryEntity>()
-                .HasIndex(f => f.CompletedAt);
-
-            modelBuilder.Entity<HintProgressEntity>()
-                .HasKey(h => h.Id);
-
-            modelBuilder.Entity<HintProgressEntity>()
-                .HasIndex(h => h.UserId);
-
-            modelBuilder.Entity<HintProgressEntity>()
-                .HasIndex(h => new { h.UserId, h.ContentId })
-                .IsUnique();
-
-            modelBuilder.Entity<HintProgressEntity>()
-                .HasIndex(h => h.LastAccessed);
-
-            modelBuilder.Entity<RecommendationFeedbackEntity>()
-                .HasKey(r => r.Id);
-
-            modelBuilder.Entity<RecommendationFeedbackEntity>()
-                .HasIndex(r => r.UserId);
-
-            modelBuilder.Entity<RecommendationFeedbackEntity>()
-                .HasIndex(r => new { r.UserId, r.RecommendationId })
-                .IsUnique();
         }
 
         /// <summary>
