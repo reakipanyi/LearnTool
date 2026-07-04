@@ -100,7 +100,8 @@ namespace LearningAssistant.Common
             services.AddSingleton<ITTSService>(sp =>
             {
                 var ttsConfig = sp.GetRequiredService<TtsConfig>();
-                return new QwenTtsService(ttsConfig.ApiKey, ttsConfig.BaseUrl);
+                var logger = sp.GetService<ILogger<QwenTtsService>>();
+                return new QwenTtsService(ttsConfig.ApiKey, ttsConfig.BaseUrl, logger);
             });
 
             services.AddSingleton<ExportService>();

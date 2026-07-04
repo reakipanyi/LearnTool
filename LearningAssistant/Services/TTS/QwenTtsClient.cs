@@ -1,3 +1,4 @@
+using LearningAssistant.Services.Utils;
 using System.Text;
 using System.Text.Json;
 
@@ -15,14 +16,34 @@ namespace LearningAssistant.Services.TTS
         };
 
         private readonly HttpClient _httpClient;
-        private readonly string _apiKey;
+        private readonly string? _encryptedApiKey;
+        private string? _decryptedApiKey;
         private readonly string _endpoint;
         private bool _disposed = false;
 
         /// <summary>
         /// 客户端是否可用（检查 API Key 是否配置）
         /// </summary>
-        public bool Available => !string.IsNullOrWhiteSpace(_apiKey);
+        public bool Available => !string.IsNullOrWhiteSpace(DecryptedApiKey);
+
+        private string? DecryptedApiKey
+        {
+            get
+            {
+                if (_decryptedApiKey != null) return _decryptedApiKey;
+
+                try
+                {
+                    _decryptedApiKey = SecureConfigManager.Decrypt(_encryptedApiKey);
+                }
+                catch
+                {
+                    _decryptedApiKey = _encryptedApiKey;
+                }
+
+                return _decryptedApiKey;
+            }
+        }
 
         /// <summary>
         /// 初始化 Qwen3-TTS 客户端
@@ -42,7 +63,7 @@ namespace LearningAssistant.Services.TTS
         /// <param name="useSharedClient">是否使用共享HttpClient</param>
         public QwenTtsClient(string? apiKey, string? endpoint, bool useSharedClient)
         {
-            _apiKey = apiKey ?? Environment.GetEnvironmentVariable("QWEN_TTS_KEY");
+            _encryptedApiKey = apiKey ?? Environment.GetEnvironmentVariable("QWEN_TTS_KEY");
             _endpoint = endpoint ?? "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
             _httpClient = useSharedClient ? _sharedHttpClient : new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
         }
@@ -94,7 +115,7 @@ namespace LearningAssistant.Services.TTS
 
             // 2. 添加认证头 (Bearer Token) [citation:3]
             _httpClient.DefaultRequestHeaders.Clear();
-            _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_apiKey}");
+            _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {DecryptedApiKey}");
 
             // 3. 发送 POST 请求
             using var response = await _httpClient.PostAsync(_endpoint, content).ConfigureAwait(false);

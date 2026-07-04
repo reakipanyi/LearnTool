@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using Microsoft.Extensions.Logging;
 using System.Media;
 using System.Security.Cryptography;
 using System.Text;
@@ -8,21 +9,24 @@ namespace LearningAssistant.Services.TTS
     public class QwenTtsService : ITTSService
     {
         private readonly QwenTtsClient? _client;
+        private readonly ILogger<QwenTtsService>? _logger;
         private const long MaxCacheSizeBytes = 100 * 1024 * 1024; // 100MB 缓存上限
 
         private SoundPlayer? _currentPlayer;
         private bool _stopRequested = false;
         private readonly object _playerLock = new object();
 
-        public QwenTtsService(string? apiKey, string? endpoint)
+        public QwenTtsService(string? apiKey, string? endpoint, ILogger<QwenTtsService>? logger = null)
         {
+            _logger = logger;
             try
             {
                 _client = new QwenTtsClient(apiKey, endpoint);
                 CleanupOldCache();
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "Failed to initialize QwenTtsService");
                 _client = null;
             }
         }
@@ -47,14 +51,12 @@ namespace LearningAssistant.Services.TTS
             if (string.IsNullOrWhiteSpace(text)) return null;
             if (_client == null || !_client.Available) return null;
 
-            // 先停止之前的播放
             StopPlayback();
 
             try
             {
                 Directory.CreateDirectory(AppPaths.GetUserTtsCacheDir());
 
-                // create deterministic filename based on SHA1 of text + language + speed
                 string path = GetCacheFilePath(text, language, speed);
 
                 if (File.Exists(path))
@@ -63,7 +65,6 @@ namespace LearningAssistant.Services.TTS
                 }
                 else
                 {
-                    // 转换语言代码为完整语言名称
                     string lang = language switch
                     {
                         "zh" => "Chinese",
@@ -76,15 +77,15 @@ namespace LearningAssistant.Services.TTS
                     await File.WriteAllBytesAsync(path, wav).ConfigureAwait(false);
                 }
 
-                // 使用异步播放，支持停止
                 await PlayAudioAsync(path);
 
                 return path;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "TTS speak failed for text: {Text}", text.Length > 50 ? text.Substring(0, 50) + "..." : text);
                 StopPlayback();
-                return null;
+                throw;
             }
         }
 
@@ -145,7 +146,6 @@ namespace LearningAssistant.Services.TTS
             {
                 var fmt = string.IsNullOrWhiteSpace(format) ? "wav" : format;
 
-                // 转换语言代码为完整语言名称
                 string lang = language switch
                 {
                     "zh" => "Chinese",
@@ -156,9 +156,10 @@ namespace LearningAssistant.Services.TTS
                 var bytes = await _client.SynthesizeAsync(text: text, voice: "Cherry", language: lang, speed: speed ?? 1.0f, format: fmt).ConfigureAwait(false);
                 return bytes;
             }
-            catch
+            catch (Exception ex)
             {
-                return null;
+                _logger?.LogError(ex, "TTS speak stream failed for text: {Text}", text.Length > 50 ? text.Substring(0, 50) + "..." : text);
+                throw;
             }
         }
 

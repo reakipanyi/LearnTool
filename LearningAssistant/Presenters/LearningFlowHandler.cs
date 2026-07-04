@@ -222,19 +222,30 @@ namespace LearningAssistant.Presenters
         {
             if (_ttsService == null || !_ttsService.Available) return;
 
-            var scope = _view.PronunciationScope;
-            string lang = _currentSubject == SubjectType.Chinese ? "zh" : "en";
-
-            if (scope == PronunciationScope.Original || scope == PronunciationScope.Both)
+            try
             {
-                string text = item.GetMainContent();
-                await _ttsService.SpeakAsync(text, lang);
-                await Task.Delay(500, cancellationToken);
+                var scope = _view.PronunciationScope;
+                string lang = _currentSubject == SubjectType.Chinese ? "zh" : "en";
+
+                if (scope == PronunciationScope.Original || scope == PronunciationScope.Both)
+                {
+                    string text = item.GetMainContent();
+                    await _ttsService.SpeakAsync(text, lang);
+                    await Task.Delay(500, cancellationToken);
+                }
+
+                if ((scope == PronunciationScope.Explanation || scope == PronunciationScope.Both) && !string.IsNullOrWhiteSpace(explanation))
+                {
+                    await _ttsService.SpeakAsync(explanation, lang);
+                }
             }
-
-            if ((scope == PronunciationScope.Explanation || scope == PronunciationScope.Both) && !string.IsNullOrWhiteSpace(explanation))
+            catch (OperationCanceledException)
             {
-                await _ttsService.SpeakAsync(explanation, lang);
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to play pronunciation");
             }
         }
 

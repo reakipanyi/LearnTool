@@ -207,6 +207,11 @@ namespace LearningAssistant.Forms
         private ToolStripMenuItem menuItemZoomOut;
         private ToolStripMenuItem menuItemResetZoom;
         private ToolStripMenuItem menuItemExport;
+        private ToolStripSeparator menuItemRotationSeparator;
+        private ToolStripMenuItem menuItemRotateLeft;
+        private ToolStripMenuItem menuItemRotateRight;
+        private ToolStripMenuItem menuItemResetRotation;
+        private ToolTip _toolTip;
         private TextBox _textBoxFilter;
         private List<string> _allFiles = new List<string>();
         private SplitContainer _splitContainerMain;
@@ -846,6 +851,37 @@ namespace LearningAssistant.Forms
             _rotationAngle = (_rotationAngle + 90) % 360;
             _presenter?.RenderPage(_currentPageIndex);
             ShowToast($"已旋转 {_rotationAngle}°");
+        }
+
+        private void ButtonRotate_MouseDown(object? sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Right)
+            {
+                _rotationAngle = (_rotationAngle + 270) % 360;
+                _presenter?.RenderPage(_currentPageIndex);
+                ShowToast($"已旋转 {_rotationAngle}°");
+            }
+        }
+
+        private void MenuItemRotateLeft_Click(object? sender, EventArgs e)
+        {
+            _rotationAngle = (_rotationAngle + 270) % 360;
+            _presenter?.RenderPage(_currentPageIndex);
+            ShowToast($"已旋转 {_rotationAngle}°");
+        }
+
+        private void MenuItemRotateRight_Click(object? sender, EventArgs e)
+        {
+            _rotationAngle = (_rotationAngle + 90) % 360;
+            _presenter?.RenderPage(_currentPageIndex);
+            ShowToast($"已旋转 {_rotationAngle}°");
+        }
+
+        private void MenuItemResetRotation_Click(object? sender, EventArgs e)
+        {
+            _rotationAngle = 0;
+            _presenter?.RenderPage(_currentPageIndex);
+            ShowToast("已重置旋转");
         }
 
         private Bitmap RotateBitmap(Bitmap bitmap, int angle)
@@ -2642,6 +2678,11 @@ namespace LearningAssistant.Forms
             menuItemZoomOut = new ToolStripMenuItem();
             menuItemResetZoom = new ToolStripMenuItem();
             menuItemExport = new ToolStripMenuItem();
+            menuItemRotationSeparator = new ToolStripSeparator();
+            menuItemRotateLeft = new ToolStripMenuItem();
+            menuItemRotateRight = new ToolStripMenuItem();
+            menuItemResetRotation = new ToolStripMenuItem();
+            _toolTip = new ToolTip(components);
             _ocrPanel = new Panel();
             _ocrPictureBox = new PictureBox();
             _ocrCloseButton = new Button();
@@ -2936,6 +2977,8 @@ namespace LearningAssistant.Forms
             _buttonRotate.Text = "↻";
             _buttonRotate.UseVisualStyleBackColor = false;
             _buttonRotate.Click += ButtonRotate_Click;
+            _buttonRotate.MouseDown += ButtonRotate_MouseDown;
+            _toolTip.SetToolTip(_buttonRotate, "顺时针旋转90°（右键逆时针旋转）");
             // 
             // _buttonLockView
             // 
@@ -3373,7 +3416,7 @@ namespace LearningAssistant.Forms
             // 
             // _contextMenuPdf
             // 
-            _contextMenuPdf.Items.AddRange(new ToolStripItem[] { menuItemCopy, menuItemSearch, menuItemHighlight, menuItemRectangle, menuItemText, menuItemZoomIn, menuItemZoomOut, menuItemResetZoom, menuItemExport });
+            _contextMenuPdf.Items.AddRange(new ToolStripItem[] { menuItemCopy, menuItemSearch, menuItemHighlight, menuItemRectangle, menuItemText, menuItemZoomIn, menuItemZoomOut, menuItemResetZoom, menuItemExport, menuItemRotationSeparator, menuItemRotateLeft, menuItemRotateRight, menuItemResetRotation });
             _contextMenuPdf.Name = "_contextMenuPdf";
             _contextMenuPdf.Size = new Size(137, 202);
             // 
@@ -3439,6 +3482,27 @@ namespace LearningAssistant.Forms
             menuItemExport.Size = new Size(136, 22);
             menuItemExport.Text = "导出当前页";
             menuItemExport.Click += MenuItemExport_Click;
+            //
+            // menuItemRotateLeft
+            //
+            menuItemRotateLeft.Name = "menuItemRotateLeft";
+            menuItemRotateLeft.Size = new Size(136, 22);
+            menuItemRotateLeft.Text = "向左旋转90°";
+            menuItemRotateLeft.Click += MenuItemRotateLeft_Click;
+            //
+            // menuItemRotateRight
+            //
+            menuItemRotateRight.Name = "menuItemRotateRight";
+            menuItemRotateRight.Size = new Size(136, 22);
+            menuItemRotateRight.Text = "向右旋转90°";
+            menuItemRotateRight.Click += MenuItemRotateRight_Click;
+            //
+            // menuItemResetRotation
+            //
+            menuItemResetRotation.Name = "menuItemResetRotation";
+            menuItemResetRotation.Size = new Size(136, 22);
+            menuItemResetRotation.Text = "重置旋转";
+            menuItemResetRotation.Click += MenuItemResetRotation_Click;
             // 
             // _ocrPanel
             // 
