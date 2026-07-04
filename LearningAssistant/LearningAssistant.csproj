@@ -40,6 +40,8 @@
 		<Content Include="icon.ico" />
 	</ItemGroup>
 	<ItemGroup>
+		<PackageReference Include="KokoroSharp" Version="0.6.7" />
+		<PackageReference Include="KokoroSharp.CPU" Version="0.6.7" />
 		<PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2646.30" />
 		<PackageReference Include="EPPlus" Version="8.6.0" />
 		<PackageReference Include="EPPlus.Interfaces" Version="8.4.0" />

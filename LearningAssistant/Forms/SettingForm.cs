@@ -1,5 +1,6 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
+using LearningAssistant.Models.Config;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel;
@@ -92,6 +93,14 @@ namespace LearningAssistant.Forms
             set => checkBoxTtsEnabled.Checked = value;
         }
 
+        private string _ttsProvider = TtsProviders.KokoroSharp;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public string TtsProvider
+        {
+            get => _ttsProvider;
+            set => _ttsProvider = value ?? TtsProviders.KokoroSharp;
+        }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string TtsApiKey

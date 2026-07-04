@@ -133,6 +133,14 @@ namespace LearningAssistant.Views
         void AddThumbnail(int pageIndex, Image thumbnail);
 
         /// <summary>
+        /// 添加缩略图（带所属目录路径，用于图片模式按目录分组展示）
+        /// </summary>
+        /// <param name="pageIndex">页面索引</param>
+        /// <param name="thumbnail">缩略图</param>
+        /// <param name="directoryPath">所属目录路径，为空时不分组</param>
+        void AddThumbnail(int pageIndex, Image thumbnail, string directoryPath);
+
+        /// <summary>
         /// 高亮指定页面的缩略图
         /// </summary>
         /// <param name="pageIndex">页面索引</param>

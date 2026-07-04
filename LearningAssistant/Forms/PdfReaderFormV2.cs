@@ -145,6 +145,9 @@ namespace LearningAssistant.Forms
         private bool _isImageMode = false;
         private string _currentLanguage = "chi_sim";
 
+        // 图片模式下，缩略图按目录分组展示时，记录已创建的目录分组标题
+        private readonly Dictionary<string, Label> _thumbnailDirectoryHeaders = new Dictionary<string, Label>(StringComparer.OrdinalIgnoreCase);
+
 
         private Bitmap? _currentPageImage;
         private Bitmap? _secondPageImage;
@@ -1331,6 +1334,7 @@ namespace LearningAssistant.Forms
 
         public void ClearThumbnails()
         {
+            _thumbnailDirectoryHeaders.Clear();
             if (_flowLayoutPanelThumbnails != null)
             {
                 foreach (Control control in _flowLayoutPanelThumbnails.Controls)
@@ -1343,7 +1347,24 @@ namespace LearningAssistant.Forms
 
         public void AddThumbnail(int pageIndex, Image thumbnail)
         {
+            // PDF 模式：directoryPath 为空，保持原有行为不分组
+            AddThumbnail(pageIndex, thumbnail, string.Empty);
+        }
+
+        public void AddThumbnail(int pageIndex, Image thumbnail, string directoryPath)
+        {
             if (_flowLayoutPanelThumbnails == null || thumbnail == null) return;
+
+            // 图片模式下，按目录分组：每个新目录前插入一个分组标题
+            if (!string.IsNullOrEmpty(directoryPath))
+            {
+                if (!_thumbnailDirectoryHeaders.TryGetValue(directoryPath, out _))
+                {
+                    var header = CreateThumbnailDirectoryHeader(directoryPath);
+                    _flowLayoutPanelThumbnails.Controls.Add(header);
+                    _thumbnailDirectoryHeaders[directoryPath] = header;
+                }
+            }
 
             var panel = new Panel();
             panel.Size = new Size(110, 150);
@@ -1387,6 +1408,35 @@ namespace LearningAssistant.Forms
             panel.DoubleClick += Thumbnail_Click;
 
             _flowLayoutPanelThumbnails.Controls.Add(panel);
+        }
+
+        /// <summary>
+        /// 创建图片模式缩略图分组的目录标题。
+        /// 宽度占满一行，确保下一个缩略图自动换行到新行。
+        /// </summary>
+        private Label CreateThumbnailDirectoryHeader(string directoryPath)
+        {
+            var header = new Label();
+            header.Text = "📁 " + Path.GetFileName(directoryPath);
+            header.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
+            header.TextAlign = ContentAlignment.MiddleLeft;
+            header.Padding = new Padding(8, 4, 8, 4);
+            header.Margin = new Padding(6, 6, 6, 2);
+            header.Height = 28;
+            header.AutoSize = false;
+            // 标记为目录分组标题，便于夜间模式管理器识别
+            header.Tag = "DirectoryHeader";
+
+            bool isNightMode = _nightModeManager?.IsNightMode ?? _isNightMode;
+            header.BackColor = isNightMode ? Color.FromArgb(60, 60, 60) : Color.FromArgb(230, 230, 230);
+            header.ForeColor = isNightMode ? Color.White : Color.FromArgb(64, 64, 64);
+
+            // 宽度设为面板内容区宽度，强制下一个缩略图换行
+            int panelWidth = _flowLayoutPanelThumbnails?.ClientSize.Width ?? 0;
+            if (panelWidth <= 0) panelWidth = 280;
+            header.Width = Math.Max(200, panelWidth - 12);
+
+            return header;
         }
 
         public void HighlightThumbnail(int pageIndex)

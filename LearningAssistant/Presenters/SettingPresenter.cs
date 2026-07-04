@@ -32,7 +32,9 @@ namespace LearningAssistant.Presenters
 
         private void LoadConfigToView()
         {
-            _view.TTSEnabled = !string.IsNullOrWhiteSpace(_config.TtsConfig.ApiKey);
+            _view.TTSEnabled = !string.IsNullOrWhiteSpace(_config.TtsConfig.ApiKey) ||
+                               _config.TtsConfig.Provider.Equals(TtsProviders.KokoroSharp, StringComparison.OrdinalIgnoreCase);
+            _view.TtsProvider = _config.TtsConfig.Provider;
             _view.TtsApiKey = _config.TtsConfig.ApiKey;
             _view.TtsVoice = _config.TtsConfig.Voice;
             _view.TTSSpeed = (int)(_config.TtsConfig.Speed * 100);
@@ -52,6 +54,7 @@ namespace LearningAssistant.Presenters
             {
                 _logger.LogInformation("Saving settings");
 
+                _config.TtsConfig.Provider = _view.TtsProvider;
                 _config.TtsConfig.ApiKey = _view.TTSEnabled ? _view.TtsApiKey : "";
                 _config.TtsConfig.Voice = _view.TtsVoice;
                 _config.TtsConfig.Speed = _view.TTSSpeed / 100f;

@@ -897,7 +897,8 @@ namespace LearningAssistant.Presenters
 
         private void OnThumbnailGenerated(object? sender, ThumbnailGeneratedEventArgs e)
         {
-            _view?.AddThumbnail(e.PageIndex, e.Thumbnail);
+            // 图片模式下传入 DirectoryPath 以便按目录分组展示，PDF 模式 DirectoryPath 为空
+            _view?.AddThumbnail(e.PageIndex, e.Thumbnail, e.DirectoryPath);
         }
 
         private void OnWordAdded(object? sender, WordAddedEventArgs e)

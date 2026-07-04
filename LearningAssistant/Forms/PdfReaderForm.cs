@@ -726,6 +726,12 @@ namespace LearningAssistant.Forms
 
         public void AddThumbnail(int pageIndex, Image thumbnail)
         {
+            AddThumbnail(pageIndex, thumbnail, string.Empty);
+        }
+
+        public void AddThumbnail(int pageIndex, Image thumbnail, string directoryPath)
+        {
+            // V1 不支持目录分组，忽略 directoryPath 参数
             if (flowLayoutPanelThumbnails == null || thumbnail == null) return;
 
             var panel = new Panel();

@@ -94,5 +94,10 @@ namespace LearningAssistant.Services.Pdf
         /// 生成的缩略图
         /// </summary>
         public Bitmap? Thumbnail { get; set; }
+
+        /// <summary>
+        /// 缩略图所属目录路径（图片模式下用于按目录分组；PDF 模式为空字符串）
+        /// </summary>
+        public string DirectoryPath { get; set; } = string.Empty;
     }
 }

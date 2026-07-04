@@ -259,12 +259,14 @@ namespace LearningAssistant.Services.Pdf
             _imageFiles.Clear();
             var imageExtensions = new[] { ".jpg", ".jpeg", ".png", ".bmp", ".gif" };
 
+            // 递归加载子目录图片，便于按目录分组展示缩略图
             foreach (var ext in imageExtensions)
             {
-                _imageFiles.AddRange(Directory.EnumerateFiles(folder, "*" + ext));
+                _imageFiles.AddRange(Directory.EnumerateFiles(folder, "*" + ext, SearchOption.AllDirectories));
             }
 
-            _imageFiles.Sort();
+            // 按目录（分组）+ 文件名排序，保证同目录图片相邻
+            _imageFiles.Sort(StringComparer.OrdinalIgnoreCase);
 
             int initialIndex = _imageFiles.IndexOf(firstImagePath);
             if (initialIndex >= 0)

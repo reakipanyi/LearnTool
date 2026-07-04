@@ -409,7 +409,10 @@ namespace LearningAssistant.Services.Pdf
                         ThumbnailGenerated?.Invoke(this, new ThumbnailGeneratedEventArgs
                         {
                             PageIndex = i,
-                            Thumbnail = thumbnail
+                            Thumbnail = thumbnail,
+                            DirectoryPath = _isImageMode && i >= 0 && i < _imageFiles.Count
+                                ? (Path.GetDirectoryName(_imageFiles[i]) ?? string.Empty)
+                                : string.Empty
                         });
                     }
                     catch (Exception ex)

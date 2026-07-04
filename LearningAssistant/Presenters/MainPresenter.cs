@@ -218,7 +218,7 @@ namespace LearningAssistant.Presenters
 
         private void UpdateStatus()
         {
-            string ttsStatus = _ttsService.Available ? "QwenTTS 在线" : "TTS 未配置";
+            string ttsStatus = _ttsService.Available ? "TTS 就绪" : "TTS 加载中";
             string aiStatus = "AI服务就绪";
             string cacheStatus = $"缓存: {_cacheService.Count} 条";
             _view.StatusText = $"{ttsStatus} | {aiStatus} | {cacheStatus}";

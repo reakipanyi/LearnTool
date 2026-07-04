@@ -219,6 +219,12 @@ namespace LearningAssistant.Managers
                         }
                     }
                 }
+                // 图片模式下的目录分组标题（Tag 标记为 "DirectoryHeader"）
+                else if (control is Label headerLabel && headerLabel.Tag is string tag && tag == "DirectoryHeader")
+                {
+                    headerLabel.BackColor = _isNightMode ? Color.FromArgb(60, 60, 60) : Color.FromArgb(230, 230, 230);
+                    headerLabel.ForeColor = _isNightMode ? Color.White : Color.FromArgb(64, 64, 64);
+                }
             }
         }
 

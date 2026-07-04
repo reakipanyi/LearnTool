@@ -11,6 +11,11 @@ namespace LearningAssistant.Views
         bool TTSEnabled { get; set; }
 
         /// <summary>
+        /// TTS提供商
+        /// </summary>
+        string TtsProvider { get; set; }
+
+        /// <summary>
         /// TTS API密钥
         /// </summary>
         string TtsApiKey { get; set; }

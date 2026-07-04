@@ -26,6 +26,7 @@ using LearningAssistant.Views;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System;
 
 namespace LearningAssistant.Common
 {
@@ -100,8 +101,20 @@ namespace LearningAssistant.Common
             services.AddSingleton<ITTSService>(sp =>
             {
                 var ttsConfig = sp.GetRequiredService<TtsConfig>();
-                var logger = sp.GetService<ILogger<QwenTtsService>>();
-                return new QwenTtsService(ttsConfig.ApiKey, ttsConfig.BaseUrl, logger);
+                var provider = (ttsConfig.Provider ?? string.Empty).ToLowerInvariant();
+
+                switch (provider)
+                {
+                    case TtsProviders.Qwen:
+                        var qwenLogger = sp.GetService<ILogger<QwenTtsService>>();
+                        return new QwenTtsService(ttsConfig.ApiKey, ttsConfig.BaseUrl, qwenLogger);
+                    case TtsProviders.KokoroSharp:
+                    default:
+                        var kokoroLogger = sp.GetService<ILogger<KokoroSharpTtsService>>();
+                        var kokoroService = new KokoroSharpTtsService(ttsConfig, kokoroLogger);
+                        kokoroService.StartBackgroundInitialization();
+                        return kokoroService;
+                }
             });
 
             services.AddSingleton<ExportService>();
