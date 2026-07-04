@@ -500,7 +500,7 @@ namespace LearningAssistant.Forms
                     .FirstOrDefault(n => n.Tag is string tag && tag == _currentPdfPath);
                 if (currentNode != null)
                 {
-                    currentNode.Selected = true;
+                    treeViewFiles.SelectedNode = currentNode;
                     currentNode.EnsureVisible();
                 }
             }
@@ -1608,8 +1608,8 @@ namespace LearningAssistant.Forms
             // 
             // tabPageFiles
             // 
-            tabPageFiles.Controls.Add(treeViewFiles);
             tabPageFiles.Controls.Add(_textBoxFilter);
+            tabPageFiles.Controls.Add(treeViewFiles);
             tabPageFiles.Location = new Point(4, 26);
             tabPageFiles.Name = "tabPageFiles";
             tabPageFiles.Padding = new Padding(3);

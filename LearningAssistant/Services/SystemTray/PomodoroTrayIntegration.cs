@@ -4,6 +4,7 @@ using LearningAssistant.Services.Hotkeys;
 using LearningAssistant.Services.Learning;
 using Microsoft.Extensions.Logging;
 using System.Drawing;
+using System.Runtime.InteropServices;
 
 namespace LearningAssistant.Services.SystemTray
 {
@@ -21,6 +22,14 @@ namespace LearningAssistant.Services.SystemTray
 
         private bool _isInitialized;
         private bool _hotkeysRegistered;
+
+        // 图标缓存：避免每秒重复创建导致 GDI 句柄泄漏
+        private readonly Dictionary<PomodoroState, Icon> _iconCache = new();
+        private PomodoroState? _lastIconState;
+
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool DestroyIcon(IntPtr hIcon);
 
         // 托盘菜单项文本（用于状态更新）
         private const string MenuStartPause = "🍅 开始番茄钟";
@@ -329,10 +338,18 @@ namespace LearningAssistant.Services.SystemTray
         /// </summary>
         private void UpdateTrayIconColor(PomodoroState state)
         {
+            // 状态未变化时跳过重建，避免每秒重复创建图标导致 GDI 句柄泄漏
+            if (_lastIconState == state && _iconCache.TryGetValue(state, out var cached) && cached != null)
+            {
+                return;
+            }
+
             try
             {
                 var iconColor = GetStateColor(state);
                 var icon = CreateColoredIcon(iconColor);
+                _iconCache[state] = icon;
+                _lastIconState = state;
                 _trayIconService.SetIcon(icon);
             }
             catch (Exception ex)
@@ -358,29 +375,49 @@ namespace LearningAssistant.Services.SystemTray
         /// </summary>
         private static Icon CreateColoredIcon(Color color)
         {
-            using var bitmap = new Bitmap(32, 32);
-            using var graphics = Graphics.FromImage(bitmap);
+            var bitmap = new Bitmap(32, 32);
+            try
+            {
+                using var graphics = Graphics.FromImage(bitmap);
 
-            graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            graphics.Clear(Color.Transparent);
+                graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                graphics.Clear(Color.Transparent);
 
-            // 绘制圆形番茄图标
-            var radius = 14;
-            var center = new Point(16, 16);
-            using var brush = new SolidBrush(color);
-            graphics.FillEllipse(brush, center.X - radius, center.Y - radius, radius * 2, radius * 2);
+                // 绘制圆形番茄图标
+                var radius = 14;
+                var center = new Point(16, 16);
+                using var brush = new SolidBrush(color);
+                graphics.FillEllipse(brush, center.X - radius, center.Y - radius, radius * 2, radius * 2);
 
-            // 绘制顶部叶子
-            using var leafBrush = new SolidBrush(Color.FromArgb(76, 175, 80));
-            var leafPath = new System.Drawing.Drawing2D.GraphicsPath();
-            leafPath.AddArc(12, 2, 8, 8, 180, 180);
-            graphics.FillPath(leafBrush, leafPath);
+                // 绘制顶部叶子
+                using var leafBrush = new SolidBrush(Color.FromArgb(76, 175, 80));
+                var leafPath = new System.Drawing.Drawing2D.GraphicsPath();
+                leafPath.AddArc(12, 2, 8, 8, 180, 180);
+                graphics.FillPath(leafBrush, leafPath);
 
-            // 添加高光效果
-            using var highlightBrush = new SolidBrush(Color.FromArgb(100, Color.White));
-            graphics.FillEllipse(highlightBrush, center.X - radius + 4, center.Y - radius + 4, 8, 8);
+                // 添加高光效果
+                using var highlightBrush = new SolidBrush(Color.FromArgb(100, Color.White));
+                graphics.FillEllipse(highlightBrush, center.X - radius + 4, center.Y - radius + 4, 8, 8);
 
-            return Icon.FromHandle(bitmap.GetHicon());
+                // 使用 Icon 构造函数创建托管副本，避免 HIcon 句柄泄漏
+                // （Icon.FromHandle 不接管句柄所有权，需要手动 DestroyIcon）
+                var hicon = bitmap.GetHicon();
+                try
+                {
+                    var tmpIcon = Icon.FromHandle(hicon);
+                    var clonedIcon = (Icon)tmpIcon.Clone();
+                    tmpIcon.Dispose();
+                    return clonedIcon;
+                }
+                finally
+                {
+                    DestroyIcon(hicon);
+                }
+            }
+            finally
+            {
+                bitmap.Dispose();
+            }
         }
 
         #endregion
@@ -435,6 +472,14 @@ namespace LearningAssistant.Services.SystemTray
 
                 _isInitialized = false;
             }
+
+            // 释放缓存的图标资源
+            foreach (var icon in _iconCache.Values)
+            {
+                icon?.Dispose();
+            }
+            _iconCache.Clear();
+            _lastIconState = null;
         }
     }
 }

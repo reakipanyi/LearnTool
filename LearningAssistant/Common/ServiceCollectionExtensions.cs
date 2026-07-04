@@ -6,6 +6,7 @@ using LearningAssistant.Managers;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
+using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Backup;
 using LearningAssistant.Services.Backup.Providers;
 using LearningAssistant.Services.Cache;
@@ -320,6 +321,8 @@ namespace LearningAssistant.Common
                 var pdfFileManager = sp.GetRequiredService<IPdfFileManager>();
                 var pdfOcrService = sp.GetRequiredService<IPdfOcrService>();
                 var pdfTranslationService = sp.GetRequiredService<IPdfTranslationService>();
+                var aiService = sp.GetService<IAIService>();
+                var pdfTtsService = sp.GetService<IPdfTtsService>();
                 var pdfStudyIntegration = sp.GetRequiredService<IPdfStudyIntegration>();
                 var exportService = sp.GetRequiredService<IExportService>();
                 var annotationService = sp.GetRequiredService<IAnnotationService>();
@@ -327,7 +330,7 @@ namespace LearningAssistant.Common
                 var pdfService = sp.GetRequiredService<IPdfService>();
                 var eventBus = sp.GetService<IEventBus>();
                 return new PdfPresenter(logger, pdfRenderer, pdfFileManager, pdfOcrService, pdfTranslationService,
-                    null, null, pdfStudyIntegration, exportService,
+                    aiService, pdfTtsService, pdfStudyIntegration, exportService,
                     annotationService, highlightService, pdfService, eventBus);
             });
 

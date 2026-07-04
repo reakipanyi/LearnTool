@@ -207,6 +207,8 @@ namespace LearningAssistant.Forms
         private ToolStripMenuItem menuItemZoomOut;
         private ToolStripMenuItem menuItemResetZoom;
         private ToolStripMenuItem menuItemExport;
+        private TextBox _textBoxFilter;
+        private List<string> _allFiles = new List<string>();
         private SplitContainer _splitContainerMain;
 
 
@@ -1009,21 +1011,116 @@ namespace LearningAssistant.Forms
 
         public void SetFileList(IEnumerable<string> files)
         {
+            _allFiles = files.ToList();
+            _textBoxFilter.Clear();
+            UpdateFileListDisplay();
+        }
+
+        private void UpdateFileListDisplay()
+        {
             _treeViewFiles.Nodes.Clear();
+            string filter = _textBoxFilter?.Text?.Trim() ?? string.Empty;
+            
+            var filteredFiles = string.IsNullOrEmpty(filter)
+                ? _allFiles
+                : _allFiles.Where(f => Path.GetFileName(f).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+            
+            if (filteredFiles.Any())
+            {
+                string commonRoot = FindCommonRootDirectory(filteredFiles);
+                BuildTreeViewHierarchy(_treeViewFiles.Nodes, filteredFiles, commonRoot);
+            }
+            
+            if (!string.IsNullOrEmpty(_currentPdfPath))
+            {
+                var currentNode = FindNodeByTag(_treeViewFiles.Nodes, _currentPdfPath);
+                if (currentNode != null)
+                {
+                    _treeViewFiles.SelectedNode = currentNode;
+                    currentNode.EnsureVisible();
+                }
+            }
+        }
+
+        private static string FindCommonRootDirectory(IEnumerable<string> files)
+        {
+            var paths = files.Select(f => Path.GetDirectoryName(f) ?? string.Empty).Distinct().ToList();
+            if (paths.Count == 0) return string.Empty;
+            if (paths.Count == 1) return paths[0];
+            
+            string commonRoot = paths[0];
+            foreach (var path in paths.Skip(1))
+            {
+                while (!path.StartsWith(commonRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    commonRoot = Path.GetDirectoryName(commonRoot) ?? string.Empty;
+                    if (string.IsNullOrEmpty(commonRoot)) break;
+                }
+            }
+            return commonRoot;
+        }
+
+        private static void BuildTreeViewHierarchy(TreeNodeCollection nodes, IEnumerable<string> files, string commonRoot)
+        {
+            var folderNodes = new Dictionary<string, TreeNode>(StringComparer.OrdinalIgnoreCase);
+            
             foreach (var file in files)
             {
-                var node = _treeViewFiles.Nodes.Add(Path.GetFileName(file));
-                node.Tag = file;
+                string fileName = Path.GetFileName(file);
+                string dirPath = Path.GetDirectoryName(file) ?? string.Empty;
+                
+                TreeNodeCollection targetNodes = nodes;
+                
+                if (!string.IsNullOrEmpty(commonRoot) && 
+                    dirPath.StartsWith(commonRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    string relativeDir = dirPath.Substring(commonRoot.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    
+                    if (!string.IsNullOrEmpty(relativeDir))
+                    {
+                        string[] parts = relativeDir.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+                        string currentPath = commonRoot;
+                        
+                        foreach (var part in parts)
+                        {
+                            currentPath = Path.Combine(currentPath, part);
+                            
+                            if (!folderNodes.TryGetValue(currentPath, out var folderNode))
+                            {
+                                folderNode = targetNodes.Add(part);
+                                folderNode.ImageKey = "Folder";
+                                folderNode.SelectedImageKey = "Folder";
+                                folderNodes[currentPath] = folderNode;
+                            }
+                            targetNodes = folderNode.Nodes;
+                        }
+                    }
+                }
+                
+                var fileNode = targetNodes.Add(fileName);
+                fileNode.Tag = file;
             }
+        }
+
+        private static TreeNode? FindNodeByTag(TreeNodeCollection nodes, string tag)
+        {
+            foreach (TreeNode node in nodes)
+            {
+                if (node.Tag is string s && s == tag)
+                    return node;
+                
+                var found = FindNodeByTag(node.Nodes, tag);
+                if (found != null)
+                    return found;
+            }
+            return null;
         }
 
         public void SetImageList(IEnumerable<string> imageFiles)
         {
-            _treeViewFiles.Nodes.Clear();
-            foreach (var file in imageFiles)
-            {
-                _treeViewFiles.Nodes.Add(Path.GetFileName(file));
-            }
+            _allFiles = imageFiles.ToList();
+            _textBoxFilter.Clear();
+            UpdateFileListDisplay();
         }
 
         public void SetPageCount(int count)
@@ -1329,7 +1426,7 @@ namespace LearningAssistant.Forms
 
         public string GetSelectedFile()
         {
-            return _treeViewFiles.SelectedNode?.Tag as string ?? _treeViewFiles.SelectedNode?.Text ?? string.Empty;
+            return _treeViewFiles.SelectedNode?.Tag as string ?? string.Empty;
         }
 
         public string GetPageText()
@@ -2444,6 +2541,11 @@ namespace LearningAssistant.Forms
             FileSelected?.Invoke(this, EventArgs.Empty);
         }
 
+        private void TextBoxFilter_TextChanged(object? sender, EventArgs e)
+        {
+            UpdateFileListDisplay();
+        }
+
         private void ButtonTranslate_Click(object? sender, EventArgs e)
         {
             TranslateClicked?.Invoke(this, EventArgs.Empty);
@@ -2501,6 +2603,7 @@ namespace LearningAssistant.Forms
             _buttonDualPage = new Button();
             _buttonFullscreen = new Button();
             _toolbarGroupTools = new Panel();
+            _buttonSelectMode = new Button();
             _buttonHighlightMode = new Button();
             _buttonRectangleMode = new Button();
             _buttonEllipseMode = new Button();
@@ -2509,8 +2612,6 @@ namespace LearningAssistant.Forms
             _buttonMosaicMode = new Button();
             _buttonTextMode = new Button();
             _buttonUndoAnnotation = new Button();
-            _buttonClearAllAnnotations = new Button();
-            _buttonSelectMode = new Button();
             _buttonAskAi = new Button();
             _buttonOpenFolder = new Button();
             _panelAnnotationOptions = new Panel();
@@ -2525,6 +2626,7 @@ namespace LearningAssistant.Forms
             _buttonColorRed = new Button();
             _buttonColorBlack = new Button();
             _buttonColorWhite = new Button();
+            _buttonClearAllAnnotations = new Button();
             _loadingIndicator = new LoadingIndicator();
             _statusBar = new Panel();
             _statusLabelLeft = new Label();
@@ -2587,6 +2689,7 @@ namespace LearningAssistant.Forms
             _toastLabel = new Label();
             _buttonTranslationToggle = new Button();
             _pageTransitionTimer = new System.Windows.Forms.Timer(components);
+            _textBoxFilter = new TextBox();
             ((ISupportInitialize)_splitContainerMain).BeginInit();
             _splitContainerMain.Panel1.SuspendLayout();
             _splitContainerMain.Panel2.SuspendLayout();
@@ -2680,7 +2783,7 @@ namespace LearningAssistant.Forms
             _toolbarGroupNav.Controls.Add(_buttonNext);
             _toolbarGroupNav.Controls.Add(_progressBarPage);
             _toolbarGroupNav.Dock = DockStyle.Left;
-            _toolbarGroupNav.Location = new Point(859, 8);
+            _toolbarGroupNav.Location = new Point(919, 8);
             _toolbarGroupNav.Name = "_toolbarGroupNav";
             _toolbarGroupNav.Size = new Size(280, 64);
             _toolbarGroupNav.TabIndex = 0;
@@ -2755,7 +2858,7 @@ namespace LearningAssistant.Forms
             _toolbarGroupView.Controls.Add(_buttonRotate);
             _toolbarGroupView.Controls.Add(_buttonLockView);
             _toolbarGroupView.Dock = DockStyle.Left;
-            _toolbarGroupView.Location = new Point(538, 8);
+            _toolbarGroupView.Location = new Point(598, 8);
             _toolbarGroupView.Name = "_toolbarGroupView";
             _toolbarGroupView.Size = new Size(321, 64);
             _toolbarGroupView.TabIndex = 1;
@@ -2853,7 +2956,7 @@ namespace LearningAssistant.Forms
             _toolbarGroupMode.Controls.Add(_buttonDualPage);
             _toolbarGroupMode.Controls.Add(_buttonFullscreen);
             _toolbarGroupMode.Dock = DockStyle.Left;
-            _toolbarGroupMode.Location = new Point(408, 8);
+            _toolbarGroupMode.Location = new Point(468, 8);
             _toolbarGroupMode.Name = "_toolbarGroupMode";
             _toolbarGroupMode.Size = new Size(130, 64);
             _toolbarGroupMode.TabIndex = 2;
@@ -2911,6 +3014,7 @@ namespace LearningAssistant.Forms
             _toolbarGroupTools.Controls.Add(_buttonAskAi);
             _toolbarGroupTools.Controls.Add(_buttonOpenFolder);
             _toolbarGroupTools.Controls.Add(_panelAnnotationOptions);
+            _toolbarGroupTools.Controls.Add(_buttonClearAllAnnotations);
             _toolbarGroupTools.Dock = DockStyle.Left;
             _toolbarGroupTools.Location = new Point(8, 8);
             _toolbarGroupTools.Name = "_toolbarGroupTools";
@@ -3033,21 +3137,6 @@ namespace LearningAssistant.Forms
             _buttonUndoAnnotation.Text = "↩";
             _buttonUndoAnnotation.UseVisualStyleBackColor = false;
             _buttonUndoAnnotation.Click += ButtonUndoAnnotation_Click;
-            // 
-            // _buttonClearAllAnnotations
-            // 
-            _buttonClearAllAnnotations = new Button();
-            _buttonClearAllAnnotations.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
-            _buttonClearAllAnnotations.FlatStyle = FlatStyle.Flat;
-            _buttonClearAllAnnotations.Font = new Font("Microsoft YaHei UI", 10F);
-            _buttonClearAllAnnotations.Location = new Point(352, 2);
-            _buttonClearAllAnnotations.Name = "_buttonClearAllAnnotations";
-            _buttonClearAllAnnotations.Size = new Size(32, 32);
-            _buttonClearAllAnnotations.TabIndex = 8;
-            _buttonClearAllAnnotations.Text = "🗑";
-            _buttonClearAllAnnotations.UseVisualStyleBackColor = false;
-            _buttonClearAllAnnotations.Click += ButtonClearAllAnnotations_Click;
-            _toolbarGroupTools.Controls.Add(_buttonClearAllAnnotations);
             // 
             // _buttonAskAi
             // 
@@ -3210,6 +3299,19 @@ namespace LearningAssistant.Forms
             _buttonColorWhite.TabIndex = 5;
             _buttonColorWhite.UseVisualStyleBackColor = false;
             _buttonColorWhite.Click += ButtonColorWhite_Click;
+            // 
+            // _buttonClearAllAnnotations
+            // 
+            _buttonClearAllAnnotations.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _buttonClearAllAnnotations.FlatStyle = FlatStyle.Flat;
+            _buttonClearAllAnnotations.Font = new Font("Microsoft YaHei UI", 10F);
+            _buttonClearAllAnnotations.Location = new Point(352, 2);
+            _buttonClearAllAnnotations.Name = "_buttonClearAllAnnotations";
+            _buttonClearAllAnnotations.Size = new Size(32, 32);
+            _buttonClearAllAnnotations.TabIndex = 8;
+            _buttonClearAllAnnotations.Text = "🗑";
+            _buttonClearAllAnnotations.UseVisualStyleBackColor = false;
+            _buttonClearAllAnnotations.Click += ButtonClearAllAnnotations_Click;
             // 
             // _loadingIndicator
             // 
@@ -3421,6 +3523,7 @@ namespace LearningAssistant.Forms
             // _tabPageFiles
             // 
             _tabPageFiles.Controls.Add(_treeViewFiles);
+            _tabPageFiles.Controls.Add(_textBoxFilter);
             _tabPageFiles.Location = new Point(4, 26);
             _tabPageFiles.Name = "_tabPageFiles";
             _tabPageFiles.Padding = new Padding(3);
@@ -3431,11 +3534,11 @@ namespace LearningAssistant.Forms
             // 
             // _treeViewFiles
             // 
+            _treeViewFiles.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             _treeViewFiles.BorderStyle = BorderStyle.None;
-            _treeViewFiles.Dock = DockStyle.Fill;
-            _treeViewFiles.Location = new Point(3, 3);
+            _treeViewFiles.Location = new Point(3, 29);
             _treeViewFiles.Name = "_treeViewFiles";
-            _treeViewFiles.Size = new Size(316, 864);
+            _treeViewFiles.Size = new Size(316, 838);
             _treeViewFiles.TabIndex = 0;
             _treeViewFiles.AfterSelect += TreeViewFiles_AfterSelect;
             // 
@@ -3890,6 +3993,19 @@ namespace LearningAssistant.Forms
             _buttonTranslationToggle.UseVisualStyleBackColor = false;
             _buttonTranslationToggle.Click += ButtonTranslationToggle_Click;
             // 
+            // _textBoxFilter
+            // 
+            _textBoxFilter.BorderStyle = BorderStyle.FixedSingle;
+            _textBoxFilter.Dock = DockStyle.Top;
+            _textBoxFilter.Font = new Font("Microsoft YaHei UI", 10F);
+            _textBoxFilter.Location = new Point(3, 3);
+            _textBoxFilter.Name = "_textBoxFilter";
+            _textBoxFilter.Size = new Size(316, 24);
+            _textBoxFilter.TabIndex = 1;
+            _textBoxFilter.TextAlign = HorizontalAlignment.Left;
+            _textBoxFilter.PlaceholderText = "🔍 搜索文件...";
+            _textBoxFilter.TextChanged += TextBoxFilter_TextChanged;
+            // 
             // PdfReaderFormV2
             // 
             AllowDrop = true;
@@ -3928,6 +4044,7 @@ namespace LearningAssistant.Forms
             _panelLeftContainer.ResumeLayout(false);
             _tabControlLeft.ResumeLayout(false);
             _tabPageFiles.ResumeLayout(false);
+            _tabPageFiles.PerformLayout();
             _tabPageThumbnails.ResumeLayout(false);
             _panelThumbnails.ResumeLayout(false);
             _tabPageTranslate.ResumeLayout(false);

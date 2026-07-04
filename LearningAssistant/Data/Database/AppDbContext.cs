@@ -17,14 +17,7 @@ namespace LearningAssistant.Data.Database
         public DbSet<ReviewLogEntity> ReviewLogs { get; set; }
         public DbSet<LearningItemStateEntity> LearningItemStates { get; set; }
         public DbSet<ReminderRepeatDayEntity> ReminderRepeatDays { get; set; }
-        public DbSet<BadgeUnlockEntity> BadgeUnlocks { get; set; }
         public DbSet<StudyStatsEntity> StudyStats { get; set; }
-        public DbSet<DailyChallengeEntity> DailyChallenges { get; set; }
-        public DbSet<ChallengeHistoryEntity> ChallengeHistories { get; set; }
-        public DbSet<LearningGoalEntity> LearningGoals { get; set; }
-        public DbSet<DailyGoalRecordEntity> DailyGoalRecords { get; set; }
-        public DbSet<FavoriteFolderEntity> FavoriteFolders { get; set; }
-        public DbSet<FavoriteItemEntity> FavoriteItems { get; set; }
         public DbSet<PomodoroSettingsEntity> PomodoroSettings { get; set; }
         public DbSet<PomodoroRecordEntity> PomodoroRecords { get; set; }
         public DbSet<WrongAnswerEntity> WrongAnswers { get; set; }
@@ -208,17 +201,6 @@ namespace LearningAssistant.Data.Database
             modelBuilder.Entity<AppSessionEntity>()
                 .HasIndex(a => a.LastAccessTime);
 
-            // 徽章解锁配置
-            modelBuilder.Entity<BadgeUnlockEntity>()
-                .HasKey(b => b.Id);
-
-            modelBuilder.Entity<BadgeUnlockEntity>()
-                .HasIndex(b => b.UserId);
-
-            modelBuilder.Entity<BadgeUnlockEntity>()
-                .HasIndex(b => new { b.UserId, b.BadgeId })
-                .IsUnique();
-
             // 学习统计配置
             modelBuilder.Entity<StudyStatsEntity>()
                 .HasKey(s => s.Id);
@@ -226,66 +208,6 @@ namespace LearningAssistant.Data.Database
             modelBuilder.Entity<StudyStatsEntity>()
                 .HasIndex(s => s.UserId)
                 .IsUnique();
-
-            // 每日挑战配置
-            modelBuilder.Entity<DailyChallengeEntity>()
-                .HasKey(d => d.Id);
-
-            modelBuilder.Entity<DailyChallengeEntity>()
-                .HasIndex(d => new { d.UserId, d.Date })
-                .IsUnique();
-
-            // 挑战历史配置
-            modelBuilder.Entity<ChallengeHistoryEntity>()
-                .HasKey(c => c.Id);
-
-            modelBuilder.Entity<ChallengeHistoryEntity>()
-                .HasIndex(c => c.UserId);
-
-            modelBuilder.Entity<ChallengeHistoryEntity>()
-                .HasIndex(c => c.Date);
-
-            // 学习目标配置
-            modelBuilder.Entity<LearningGoalEntity>()
-                .HasKey(g => g.Id);
-
-            modelBuilder.Entity<LearningGoalEntity>()
-                .HasIndex(g => new { g.UserId, g.GoalType })
-                .IsUnique();
-
-            // 每日目标记录配置
-            modelBuilder.Entity<DailyGoalRecordEntity>()
-                .HasKey(r => r.Id);
-
-            modelBuilder.Entity<DailyGoalRecordEntity>()
-                .HasIndex(r => new { r.UserId, r.Date })
-                .IsUnique();
-
-            // 收藏夹文件夹配置
-            modelBuilder.Entity<FavoriteFolderEntity>()
-                .HasKey(f => f.Id);
-
-            modelBuilder.Entity<FavoriteFolderEntity>()
-                .HasIndex(f => f.UserId);
-
-            modelBuilder.Entity<FavoriteFolderEntity>()
-                .HasIndex(f => f.ParentId);
-
-            // 收藏项配置
-            modelBuilder.Entity<FavoriteItemEntity>()
-                .HasKey(f => f.Id);
-
-            modelBuilder.Entity<FavoriteItemEntity>()
-                .HasIndex(f => f.UserId);
-
-            modelBuilder.Entity<FavoriteItemEntity>()
-                .HasIndex(f => f.FolderId);
-
-            modelBuilder.Entity<FavoriteItemEntity>()
-                .HasIndex(f => f.ItemType);
-
-            modelBuilder.Entity<FavoriteItemEntity>()
-                .HasIndex(f => f.IsPinned);
 
             // 番茄钟设置配置
             modelBuilder.Entity<PomodoroSettingsEntity>()
@@ -351,10 +273,7 @@ namespace LearningAssistant.Data.Database
         {
             try
             {
-                RepairBadgeUnlocksTable();
                 RepairStudyStatsTable();
-                RepairDailyChallengesTable();
-                RepairChallengeHistoriesTable();
                 RepairLearningItemStatesTable();
                 RepairWrongAnswersTable();
                 RepairReviewLogsTable();
@@ -365,20 +284,6 @@ namespace LearningAssistant.Data.Database
                 Console.WriteLine($"Schema修复失败: {ex.Message}");
                 throw;
             }
-        }
-
-        private void RepairBadgeUnlocksTable()
-        {
-            var sql = @"CREATE TABLE IF NOT EXISTS BadgeUnlocks (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                UserId TEXT NOT NULL,
-                BadgeId TEXT NOT NULL,
-                UnlockedAt TEXT NOT NULL
-            );";
-            Database.ExecuteSqlRaw(sql);
-
-            sql = @"CREATE UNIQUE INDEX IF NOT EXISTS IX_BadgeUnlocks_UserId_BadgeId ON BadgeUnlocks(UserId, BadgeId);";
-            Database.ExecuteSqlRaw(sql);
         }
 
         private void RepairStudyStatsTable()
@@ -397,42 +302,6 @@ namespace LearningAssistant.Data.Database
             Database.ExecuteSqlRaw(sql);
 
             sql = @"CREATE UNIQUE INDEX IF NOT EXISTS IX_StudyStats_UserId ON StudyStats(UserId);";
-            Database.ExecuteSqlRaw(sql);
-        }
-
-        private void RepairDailyChallengesTable()
-        {
-            var sql = @"CREATE TABLE IF NOT EXISTS DailyChallenges (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                UserId TEXT NOT NULL,
-                Date TEXT NOT NULL,
-                ChallengesJson TEXT NOT NULL,
-                UpdatedAt TEXT NOT NULL
-            );";
-            Database.ExecuteSqlRaw(sql);
-
-            sql = @"CREATE UNIQUE INDEX IF NOT EXISTS IX_DailyChallenges_UserId_Date ON DailyChallenges(UserId, Date);";
-            Database.ExecuteSqlRaw(sql);
-        }
-
-        private void RepairChallengeHistoriesTable()
-        {
-            var sql = @"CREATE TABLE IF NOT EXISTS ChallengeHistories (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                UserId TEXT NOT NULL,
-                Date TEXT NOT NULL,
-                CompletedCount INTEGER NOT NULL DEFAULT 0,
-                TotalCount INTEGER NOT NULL DEFAULT 0,
-                ClaimedCount INTEGER NOT NULL DEFAULT 0,
-                TotalXP INTEGER NOT NULL DEFAULT 0,
-                ChallengesJson TEXT NOT NULL
-            );";
-            Database.ExecuteSqlRaw(sql);
-
-            sql = @"CREATE INDEX IF NOT EXISTS IX_ChallengeHistories_UserId ON ChallengeHistories(UserId);";
-            Database.ExecuteSqlRaw(sql);
-
-            sql = @"CREATE INDEX IF NOT EXISTS IX_ChallengeHistories_Date ON ChallengeHistories(Date);";
             Database.ExecuteSqlRaw(sql);
         }
 

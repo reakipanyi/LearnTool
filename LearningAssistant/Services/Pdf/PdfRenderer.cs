@@ -247,23 +247,23 @@ namespace LearningAssistant.Services.Pdf
                 }
 
                 if (shouldRender)
-                {
-                    try
                     {
-                        var bmp = RenderPageToBitmap(p, renderW, renderH);
-                        if (bmp == null) continue;
-
-                        lock (_renderLock)
+                        try
                         {
-                            var key = GetRenderCacheKey(p);
-                            if (!_renderCache.ContainsKey(key))
+                            var bmp = RenderPageToBitmap(p, renderW, renderH);
+                            if (bmp == null) continue;
+
+                            lock (_renderLock)
                             {
-                                _renderCache[key] = (Bitmap)bmp.Clone();
-                                UpdateCacheAccessOrder(key);
+                                var key = GetRenderCacheKey(p);
+                                if (!_renderCache.ContainsKey(key))
+                                {
+                                    _renderCache[key] = CreateDeepCopy(bmp);
+                                    UpdateCacheAccessOrder(key);
+                                }
+                                _preRenderingPages.Remove(p);
                             }
-                            _preRenderingPages.Remove(p);
                         }
-                    }
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "Failed to pre-render page {PageIndex}", p);
@@ -351,7 +351,7 @@ namespace LearningAssistant.Services.Pdf
             {
                 if (_thumbnailCache.TryGetValue(pageIndex, out var cached))
                 {
-                    return (Bitmap)cached.Clone();
+                    return CreateDeepCopy(cached);
                 }
             }
 
@@ -362,7 +362,7 @@ namespace LearningAssistant.Services.Pdf
                 {
                     if (!_thumbnailCache.ContainsKey(pageIndex))
                     {
-                        _thumbnailCache[pageIndex] = (Bitmap)thumbnail.Clone();
+                        _thumbnailCache[pageIndex] = CreateDeepCopy(thumbnail);
                     }
                 }
             }
