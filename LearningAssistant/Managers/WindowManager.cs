@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Forms;
 using LearningAssistant.Presenters;
@@ -138,13 +139,18 @@ namespace LearningAssistant.Managers
 
                 if (!string.IsNullOrEmpty(language))
                 {
-                    // 设置语言选择
-                    form.SetInitialLanguage(language);
+                    if (SubjectSubCategoryMapping.TryParseSubject(language, out var subject))
+                    {
+                        form.SetInitialSubject(subject);
+                    }
                 }
 
                 if (!string.IsNullOrEmpty(subCategory))
                 {
-                    form.SetInitialSubCategory(subCategory);
+                    if (SubjectSubCategoryMapping.TryParseSubCategory(subCategory, out var subCat))
+                    {
+                        form.SetInitialSubCategory(subCat);
+                    }
                 }
 
                 form.StartPosition = FormStartPosition.CenterParent;

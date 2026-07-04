@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using LearningAssistant.Models.Learning;
 using Newtonsoft.Json;
 
@@ -10,7 +11,8 @@ namespace LearningAssistant.Common
         {
             WriteIndented = true,
             PropertyNameCaseInsensitive = true,
-            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            Converters = { new JsonStringEnumConverter() }
         };
 
         private static readonly JsonSerializerSettings _learningItemSettings = new JsonSerializerSettings

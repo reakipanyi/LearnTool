@@ -926,61 +926,59 @@ namespace LearningAssistant.Forms
             }
         }
 
-        public string CurrentMode => radioStudyMode.Checked ? Constants.LearningMode.Study : Constants.LearningMode.Quick;
+        public LearningModeType CurrentMode => radioStudyMode.Checked ? LearningModeType.Study : LearningModeType.QuickReview;
 
-        public string LearningMode => radioStudyMode.Checked ? Constants.LearningMode.Study : Constants.LearningMode.Quick;
+        public LearningModeType LearningMode => radioStudyMode.Checked ? LearningModeType.Study : LearningModeType.QuickReview;
 
-        public string SortOrder => radioSequential.Checked ? "Sequential" : "Random";
+        public SortOrderType SortOrder => radioSequential.Checked ? SortOrderType.Sequential : SortOrderType.Random;
 
-        public string Subject => comboBoxSubject.Text;
-
-        public string Language
+        public SubjectType Subject
         {
             get
             {
-                if (Subject == Constants.Subject.Chinese) return Constants.Language.Chinese;
-                if (Subject == Constants.Subject.English) return Constants.Language.English;
-                return Constants.Language.Chinese;
+                var subjectStr = comboBoxSubject.Text;
+                return SubjectSubCategoryMapping.TryParseSubject(subjectStr, out var subject) ? subject : SubjectType.Chinese;
             }
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public string SubCategory
+        public SubCategoryType SubCategory
         {
-            get => comboBoxSubCategory.Text;
+            get
+            {
+                var subCategoryStr = comboBoxSubCategory.Text;
+                return SubjectSubCategoryMapping.TryParseSubCategory(subCategoryStr, out var subCategory) ? subCategory : SubCategoryType.ChineseCharacter;
+            }
             set
             {
-                var index = comboBoxSubCategory.Items.IndexOf(value);
+                var index = comboBoxSubCategory.Items.IndexOf(value.ToString());
                 if (index >= 0)
                 {
                     comboBoxSubCategory.SelectedIndex = index;
                 }
                 else
                 {
-                    comboBoxSubCategory.Text = value;
+                    comboBoxSubCategory.Text = value.ToString();
                 }
             }
         }
 
 
-        public void RefreshSubCategories(List<string> subCategories)
+        public void RefreshSubCategories(List<SubCategoryType> subCategories)
         {
-            // 暂时取消订阅事件，避免触发SettingsChanged
             comboBoxSubCategory.SelectedIndexChanged -= ComboBoxSubCategory_SelectedIndexChanged;
 
             comboBoxSubCategory.Items.Clear();
             foreach (var cat in subCategories)
             {
-                comboBoxSubCategory.Items.Add(cat);
+                comboBoxSubCategory.Items.Add(cat.ToString());
             }
 
-            // 自动选择第一个子分类（在重新订阅事件之前，避免触发不必要的SettingsChanged）
             if (comboBoxSubCategory.Items.Count > 0)
             {
                 comboBoxSubCategory.SelectedIndex = 0;
             }
 
-            // 重新订阅事件
             comboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
         }
 

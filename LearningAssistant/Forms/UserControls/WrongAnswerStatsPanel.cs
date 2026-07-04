@@ -159,11 +159,11 @@ namespace LearningAssistant.Forms.UserControls
                 foreach (var (subject, count) in _stats.SubjectStats.Take(6))
                 {
                     var nameRect = new Rectangle(rect.X + 15, y, 110, 20);
-                    TextRenderer.DrawText(g, subject,
-                        new Font("微软雅黑", 8.5F),
-                        nameRect,
-                        Color.FromArgb(80, 80, 80),
-                        TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+                        TextRenderer.DrawText(g, subject.ToString(),
+                            new Font("微软雅黑", 8.5F),
+                            nameRect,
+                            Color.FromArgb(80, 80, 80),
+                            TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
 
                     int barWidth = (int)((double)count / maxCount * barMaxWidth);
                     var barBgRect = new Rectangle(rect.X + 130, y + 4, barMaxWidth, 14);

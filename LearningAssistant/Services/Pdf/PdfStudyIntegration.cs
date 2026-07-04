@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Models.Learning;
 using LearningAssistant.Services.Learning;
 using Microsoft.Extensions.Logging;
 
@@ -37,7 +38,10 @@ namespace LearningAssistant.Services.Pdf
             {
                 string cleanWord = word.Replace("\r\n", " ").Replace("\n", " ").Replace("\r", " ").Trim();
                 
-                _studyEngine.Initialize(_currentUserId, _currentLanguage, _currentSubCategory, "", "", "");
+                SubjectSubCategoryMapping.TryParseSubject(_currentLanguage, out var subject);
+                SubjectSubCategoryMapping.TryParseSubCategory(_currentSubCategory, out var subCategory);
+                var context = new LearningContext(_currentUserId, subject, subCategory);
+                _studyEngine.Initialize(context);
                 
                 if (IsWordAlreadyExists(cleanWord))
                 {
@@ -45,7 +49,7 @@ namespace LearningAssistant.Services.Pdf
                     return false;
                 }
                 
-                _studyEngine.AddUnknownItem(cleanWord, _currentSubCategory);
+                _studyEngine.AddUnknownItem(cleanWord, subCategory);
                 
                 WordAdded?.Invoke(this, new WordAddedEventArgs
                 {

@@ -71,7 +71,8 @@ namespace LearningAssistant.Services.Favorites
                     return;
                 }
 
-                var subCategory = InferSubCategory(cleanContent);
+                var subCategoryStr = InferSubCategory(cleanContent);
+                SubjectSubCategoryMapping.TryParseSubCategory(subCategoryStr, out var subCategory);
                 _studyEngine.AddUnknownItem(cleanContent, subCategory);
                 _logger.LogInformation("Added favorite item to study engine: {ItemContent}, SubCategory: {SubCategory}", cleanContent, subCategory);
             }

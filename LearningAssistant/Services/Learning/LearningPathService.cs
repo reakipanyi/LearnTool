@@ -468,15 +468,16 @@ namespace LearningAssistant.Services.Learning
 
                 foreach (var group in subjectGroups)
                 {
-                    if (string.IsNullOrWhiteSpace(group.Key))
+                    if (group.Key == SubjectType.Unknown)
                         continue;
 
+                    var subjectStr = group.Key.ToString();
                     weakPoints.Add(new LearningRecommendation
                     {
                         Type = "weakpoint",
-                        Title = $"{group.Key}薄弱点加强",
-                        Reason = $"{group.Key}有{group.Count()}道错题待掌握",
-                        ContentType = group.Key,
+                        Title = $"{subjectStr}薄弱点加强",
+                        Reason = $"{subjectStr}有{group.Count()}道错题待掌握",
+                        ContentType = subjectStr,
                         Priority = group.Count(),
                         EstimatedMinutes = group.Count() * 3
                     });

@@ -1,5 +1,6 @@
 using LearningAssistant.Common;
 using LearningAssistant.Managers;
+using LearningAssistant.Models.Learning;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services.Cache;
 using LearningAssistant.Services.Gamification;
@@ -326,8 +327,11 @@ namespace LearningAssistant.Presenters
                     var accuracy = totalTest > 0 ? (double)totalCorrect / totalTest * 100 : 0;
 
                     // 获取总词汇量
-                    var totalItems = _contentLoaderService.LoadItems(
-                        progress.CategoryProgresses.Keys.FirstOrDefault() ?? "中文", "").Count;
+                    var firstCategory = progress.CategoryProgresses.Keys.FirstOrDefault();
+                    SubjectSubCategoryMapping.TryParseSubCategory(firstCategory ?? "ChineseCharacter", out var subCategory);
+                    var subject = SubjectSubCategoryMapping.GetSubject(subCategory);
+                    var context = new LearningContext(userId, subject, subCategory);
+                    var totalItems = _contentLoaderService.LoadItems(context).Count;
 
                     comparisonData.Add(new Views.UserComparisonData
                     {

@@ -493,6 +493,17 @@ namespace LearningAssistant.Forms
                 var node = treeViewFiles.Nodes.Add(Path.GetFileName(file));
                 node.Tag = file;
             }
+            
+            if (!string.IsNullOrEmpty(_currentPdfPath))
+            {
+                var currentNode = treeViewFiles.Nodes.Cast<TreeNode>()
+                    .FirstOrDefault(n => n.Tag is string tag && tag == _currentPdfPath);
+                if (currentNode != null)
+                {
+                    currentNode.Selected = true;
+                    currentNode.EnsureVisible();
+                }
+            }
         }
 
         public void SetImageList(IEnumerable<string> imageFiles)

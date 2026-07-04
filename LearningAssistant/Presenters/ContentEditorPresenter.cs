@@ -370,7 +370,6 @@ namespace LearningAssistant.Presenters
             _aiQuestionService = aiQuestionService ?? throw new ArgumentNullException(nameof(aiQuestionService));
 
             _view.SubjectChanged += OnSubjectChanged;
-            _view.LanguageChanged += OnLanguageChanged;
             _view.SubCategoryChanged += OnSubCategoryChanged;
             _view.TemplateAddClicked += OnTemplateAddClicked;
             _view.TemplateSaveClicked += OnTemplateSaveClicked;
@@ -405,17 +404,6 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        /// <summary>
-        /// 语言切换事件处理方法（兼容旧版）
-        /// </summary>
-        private void OnLanguageChanged(object? sender, EventArgs e)
-        {
-            // 学科变更事件已经处理了，这里不做额外处理
-        }
-
-        /// <summary>
-        /// 子类别切换事件处理方法
-        /// </summary>
         private void OnSubCategoryChanged(object? sender, EventArgs e)
         {
             if (CheckAndSaveUnsavedChanges())
@@ -424,24 +412,20 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        /// <summary>
-        /// 根据当前语言加载子类别列表
-        /// </summary>
         private void LoadSubCategories()
         {
             var subject = _view.SelectedSubject;
-            var subCategories = _contentLoaderService.GetSubCategoriesBySubject(subject);
+            var subCategories = _contentLoaderService.GetSubCategories(subject);
             _view.RefreshSubCategories(subCategories);
         }
 
-        /// <summary>
-        /// 加载当前类别的数据项
-        /// </summary>
         private void LoadItems()
         {
-            var category = _view.SelectedSubCategory;
-            var items = _contentLoaderService.LoadItems(category);
-            _view.ItemData = ConvertToDataTable(items, category);
+            var subject = _view.SelectedSubject;
+            var subCategory = _view.SelectedSubCategory;
+            var context = new LearningContext("default_user", subject, subCategory);
+            var items = _contentLoaderService.LoadItems(context);
+            _view.ItemData = ConvertToDataTable(items, subCategory.ToString());
             _isDirty = false;
         }
 
@@ -646,7 +630,7 @@ namespace LearningAssistant.Presenters
         private void OnTemplateAddClicked(object? sender, EventArgs e)
         {
             if (!CheckAndSaveUnsavedChanges()) return;
-            _view.CurrentEditItemJson = GetTemplateJson(_view.SelectedSubCategory);
+            _view.CurrentEditItemJson = GetTemplateJson(_view.SelectedSubCategory.ToString());
         }
 
         /// <summary>
@@ -663,12 +647,6 @@ namespace LearningAssistant.Presenters
                 return;
             }
 
-            if (string.IsNullOrEmpty(category))
-            {
-                _view.ShowMessage("请选择一个类别！");
-                return;
-            }
-
             try
             {
                 SaveFromJson(json, category);
@@ -682,26 +660,22 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        /// <summary>
-        /// 从JSON字符串解析并保存数据项
-        /// </summary>
-        /// <param name="json">JSON字符串</param>
-        /// <param name="category">目标类别</param>
-        private void SaveFromJson(string json, string category)
+        private void SaveFromJson(string json, SubCategoryType category)
         {
-            var items = ParseJsonToItems(json, category);
+            var items = ParseJsonToItems(json, category.ToString());
             if (items.Count == 0)
             {
                 _view.ShowMessage("JSON为空或解析失败！");
                 return;
             }
-            var itemsOld = _contentLoaderService.LoadItems(category);
+            var subject = _view.SelectedSubject;
+            var context = new LearningContext("default_user", subject, category);
+            var itemsOld = _contentLoaderService.LoadItems(context);
 
             foreach (var newItem in items)
             {
-                newItem.Subject = category.StartsWith("English") ? SubjectType.English : SubjectType.Chinese;
-                if (Enum.TryParse(category, out SubCategoryType subCategory))
-                    newItem.SubCategory = subCategory;
+                newItem.Subject = subject;
+                newItem.SubCategory = category;
 
                 var newMainContent = newItem.GetMainContent().Trim().ToLower();
                 var existingIndex = itemsOld.FindIndex(item =>
@@ -718,7 +692,7 @@ namespace LearningAssistant.Presenters
                 }
             }
 
-            _contentLoaderService.SaveItems(category, itemsOld);
+            _contentLoaderService.SaveItems(context, itemsOld);
             _logger.LogInformation("Successfully saved {Count} items to category {Category}", itemsOld.Count, category);
         }
 
@@ -874,19 +848,15 @@ namespace LearningAssistant.Presenters
                 return;
             }
 
-            if (string.IsNullOrEmpty(category))
-            {
-                _view.ShowMessage("请选择一个类别！");
-                return;
-            }
-
             try
             {
-                var items = _contentLoaderService.LoadItems(category);
+                var subject = _view.SelectedSubject;
+                var context = new LearningContext("default_user", subject, category);
+                var items = _contentLoaderService.LoadItems(context);
                 foreach (var index in selectedIndices.OrderByDescending(i => i).Where(i => i >= 0 && i < items.Count))
                     items.RemoveAt(index);
 
-                _contentLoaderService.SaveItems(category, items);
+                _contentLoaderService.SaveItems(context, items);
                 _view.ClearEditForm();
                 LoadItems();
             }
@@ -950,7 +920,10 @@ namespace LearningAssistant.Presenters
 
                 if (importedItems?.Count > 0)
                 {
-                    var existingItems = _contentLoaderService.LoadItems(_view.SelectedSubCategory);
+                    var subject = _view.SelectedSubject;
+                    var subCategory = _view.SelectedSubCategory;
+                    var context = new LearningContext("default_user", subject, subCategory);
+                    var existingItems = _contentLoaderService.LoadItems(context);
 
                     foreach (var newItem in importedItems)
                     {
@@ -969,7 +942,7 @@ namespace LearningAssistant.Presenters
                         }
                     }
 
-                    _contentLoaderService.SaveItems(_view.SelectedSubCategory, existingItems);
+                    _contentLoaderService.SaveItems(context, existingItems);
                     LoadItems();
                     _logger.LogInformation("Successfully imported {Count} items from {FilePath}", importedItems.Count, dialog.FileName);
                 }
@@ -996,7 +969,10 @@ namespace LearningAssistant.Presenters
 
             try
             {
-                var items = _contentLoaderService.LoadItems(_view.SelectedSubCategory);
+                var subject = _view.SelectedSubject;
+                var subCategory = _view.SelectedSubCategory;
+                var context = new LearningContext("default_user", subject, subCategory);
+                var items = _contentLoaderService.LoadItems(context);
                 // 使用安全的自定义 Converter 替代 TypeNameHandling.Auto
                 var converter = new LearningItemListJsonConverter();
                 var json = JsonConvert.SerializeObject(items, Formatting.Indented, converter);
@@ -1115,7 +1091,6 @@ namespace LearningAssistant.Presenters
             OnTemplateSaveClicked(this, EventArgs.Empty);
 
             _view.SubjectChanged -= OnSubjectChanged;
-            _view.LanguageChanged -= OnLanguageChanged;
             _view.SubCategoryChanged -= OnSubCategoryChanged;
             _view.TemplateAddClicked -= OnTemplateAddClicked;
             _view.TemplateSaveClicked -= OnTemplateSaveClicked;

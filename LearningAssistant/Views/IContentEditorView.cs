@@ -1,27 +1,12 @@
+using LearningAssistant.Common;
 using System.Data;
 
 namespace LearningAssistant.Views
 {
-    /// <summary>
-    /// 内容编辑器视图接口 - 提供学习内容编辑界面的显示和交互功能
-    /// 支持模板管理、导入导出、AI生成等功能
-    /// </summary>
     public interface IContentEditorView
     {
-        /// <summary>
-        /// 当前选中的语言（兼容旧版）
-        /// </summary>
-        string SelectedLanguage { get; }
-
-        /// <summary>
-        /// 当前选中的学科
-        /// </summary>
-        string SelectedSubject { get; }
-
-        /// <summary>
-        /// 当前选中的子类别
-        /// </summary>
-        string SelectedSubCategory { get; }
+        SubjectType SelectedSubject { get; }
+        SubCategoryType SelectedSubCategory { get; }
 
         /// <summary>
         /// 学习项数据表
@@ -44,19 +29,7 @@ namespace LearningAssistant.Views
         /// </summary>
         List<int> SelectedRowIndices { get; }
 
-        /// <summary>
-        /// 语言变更事件（兼容旧版）
-        /// </summary>
-        event EventHandler? LanguageChanged;
-
-        /// <summary>
-        /// 学科变更事件
-        /// </summary>
         event EventHandler? SubjectChanged;
-
-        /// <summary>
-        /// 子类别变更事件
-        /// </summary>
         event EventHandler? SubCategoryChanged;
 
         /// <summary>
@@ -106,61 +79,14 @@ namespace LearningAssistant.Views
         /// <param name="msg">消息内容</param>
         void ShowMessage(string msg);
 
-        /// <summary>
-        /// 刷新子类别列表
-        /// </summary>
-        /// <param name="subCategories">子类别列表</param>
-        void RefreshSubCategories(IEnumerable<string> subCategories);
-
-        /// <summary>
-        /// 刷新树形视图
-        /// </summary>
-        /// <param name="nodes">树节点集合</param>
+        void RefreshSubCategories(List<SubCategoryType> subCategories);
         void RefreshTreeView(TreeNodeCollection nodes);
-
-        /// <summary>
-        /// 加载学习项进行编辑
-        /// </summary>
-        /// <param name="item">学习项对象</param>
         void LoadItemForEdit(dynamic item);
-
-        /// <summary>
-        /// 清空编辑表单
-        /// </summary>
         void ClearEditForm();
-
-        /// <summary>
-        /// 更新学习项列表显示
-        /// </summary>
         void UpdateItemList();
-
-        /// <summary>
-        /// 追加JSON内容
-        /// </summary>
-        /// <param name="json">JSON字符串</param>
         void AppendJson(string json);
-
-        /// <summary>
-        /// 从JSON更新网格数据
-        /// </summary>
         void UpdateGridFromJson();
-
-        /// <summary>
-        /// 设置初始语言（兼容旧版）
-        /// </summary>
-        /// <param name="language">语言代码</param>
-        void SetInitialLanguage(string language);
-
-        /// <summary>
-        /// 设置初始学科
-        /// </summary>
-        /// <param name="subject">学科名称</param>
-        void SetInitialSubject(string subject);
-
-        /// <summary>
-        /// 设置初始子类别
-        /// </summary>
-        /// <param name="subCategory">子类别</param>
-        void SetInitialSubCategory(string subCategory);
+        void SetInitialSubject(SubjectType subject);
+        void SetInitialSubCategory(SubCategoryType subCategory);
     }
 }

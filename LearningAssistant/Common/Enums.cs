@@ -3,18 +3,27 @@ namespace LearningAssistant.Common
 {
     public enum SubjectType
     {
+        Unknown,
         Chinese,
-        English
+        English,
+        Math,
+        Physics,
+        Chemistry,
+        History,
+        Geography,
+        Biology
     }
 
     public enum LearningModeType
     {
         Study,
-        Quick
+        Quick,
+        QuickReview
     }
 
     public enum SubCategoryType
     {
+        Unknown,
         ChineseCharacter,
         ChinesePhrase,
         ChineseIdiom,
@@ -23,7 +32,31 @@ namespace LearningAssistant.Common
         EnglishWord,
         EnglishPhrase,
         EnglishSentence,
-        EnglishComprehensive
+        EnglishComprehensive,
+        MathFormula,
+        MathExample,
+        MathConcept,
+        MathComprehensive,
+        PhysicsLaw,
+        PhysicsExperiment,
+        PhysicsDerivation,
+        PhysicsComprehensive,
+        ChemistryEquation,
+        ChemistryElement,
+        ChemistryExperiment,
+        ChemistryComprehensive,
+        HistoryEvent,
+        HistoryPerson,
+        HistoryTimeline,
+        HistoryComprehensive,
+        GeographyKnowledge,
+        GeographyMap,
+        GeographyClimate,
+        GeographyComprehensive,
+        BiologyConcept,
+        BiologyExperiment,
+        BiologyPhenomenon,
+        BiologyComprehensive
     }
 
     public enum SortOrderType

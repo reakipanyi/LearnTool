@@ -60,8 +60,8 @@ namespace LearningAssistant.Services.Learning
                     Question = evt.ItemContent,
                     CorrectAnswer = evt.CorrectAnswer,
                     UserAnswer = evt.UserAnswer,
-                    Subject = evt.SubCategory,
-                    Category = evt.SubCategory
+                    Subject = SubjectType.English,
+                    Category = SubCategoryType.EnglishWord
                 };
 
                 AddWrongAnswer(evt.UserId, item);
@@ -197,7 +197,35 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        public List<WrongAnswerItem> GetWrongAnswers(string userId, string subject = "", string category = "")
+        public List<WrongAnswerItem> GetWrongAnswers(string userId, SubjectType? subject = null, SubCategoryType? category = null)
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+                return new List<WrongAnswerItem>();
+
+            try
+            {
+                var items = LoadWrongAnswers(userId).Where(i => i.IsActive).ToList();
+
+                if (subject.HasValue)
+                {
+                    items = items.Where(i => i.Subject == subject.Value).ToList();
+                }
+
+                if (category.HasValue)
+                {
+                    items = items.Where(i => i.Category == category.Value).ToList();
+                }
+
+                return items.OrderByDescending(i => i.AddedAt).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "获取错题列表失败: {UserId}", userId);
+                return new List<WrongAnswerItem>();
+            }
+        }
+
+        private List<WrongAnswerItem> GetWrongAnswersLegacy(string userId, string subject = "", string category = "")
         {
             if (string.IsNullOrWhiteSpace(userId))
                 return new List<WrongAnswerItem>();
@@ -208,12 +236,12 @@ namespace LearningAssistant.Services.Learning
 
                 if (!string.IsNullOrWhiteSpace(subject))
                 {
-                    items = items.Where(i => i.Subject.Equals(subject, StringComparison.OrdinalIgnoreCase)).ToList();
+                    items = items.Where(i => i.Subject.ToString().Equals(subject, StringComparison.OrdinalIgnoreCase)).ToList();
                 }
 
                 if (!string.IsNullOrWhiteSpace(category))
                 {
-                    items = items.Where(i => i.Category.Equals(category, StringComparison.OrdinalIgnoreCase)).ToList();
+                    items = items.Where(i => i.Category.ToString().Equals(category, StringComparison.OrdinalIgnoreCase)).ToList();
                 }
 
                 return items.OrderByDescending(i => i.AddedAt).ToList();
@@ -248,7 +276,7 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        public List<WrongAnswerItem> GetBySubjectCategory(string userId, string subject, string category)
+        public List<WrongAnswerItem> GetBySubjectCategory(string userId, SubjectType subject, SubCategoryType category)
         {
             return GetWrongAnswers(userId, subject, category);
         }
@@ -392,14 +420,14 @@ namespace LearningAssistant.Services.Learning
             {
                 var items = LoadWrongAnswers(userId).Where(i => i.IsActive).AsQueryable();
 
-                if (!string.IsNullOrWhiteSpace(filter.Subject))
+                if (filter.Subject.HasValue)
                 {
-                    items = items.Where(i => i.Subject.Equals(filter.Subject, StringComparison.OrdinalIgnoreCase));
+                    items = items.Where(i => i.Subject == filter.Subject.Value);
                 }
 
-                if (!string.IsNullOrWhiteSpace(filter.Category))
+                if (filter.Category.HasValue)
                 {
-                    items = items.Where(i => i.Category.Equals(filter.Category, StringComparison.OrdinalIgnoreCase));
+                    items = items.Where(i => i.Category == filter.Category.Value);
                 }
 
                 if (filter.Mastery.HasValue)
@@ -671,7 +699,7 @@ namespace LearningAssistant.Services.Learning
                     .GroupBy(i => i.Subject)
                     .Select(g => new { Subject = g.Key, Count = g.Count() })
                     .OrderByDescending(x => x.Count)
-                    .ToDictionary(x => string.IsNullOrWhiteSpace(x.Subject) ? "未分类" : x.Subject, x => x.Count);
+                    .ToDictionary(x => x.Subject, x => x.Count);
 
                 stats.TopWrongItems = items
                     .OrderByDescending(i => i.WrongCount)
@@ -689,15 +717,15 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        public List<string> GetSubjects(string userId)
+        public List<SubjectType> GetSubjects(string userId)
         {
             if (string.IsNullOrWhiteSpace(userId))
-                return new List<string>();
+                return new List<SubjectType>();
 
             try
             {
                 return LoadWrongAnswers(userId)
-                    .Where(i => i.IsActive && !string.IsNullOrWhiteSpace(i.Subject))
+                    .Where(i => i.IsActive)
                     .Select(i => i.Subject)
                     .Distinct()
                     .OrderBy(s => s)
@@ -706,26 +734,21 @@ namespace LearningAssistant.Services.Learning
             catch (Exception ex)
             {
                 _logger.LogError(ex, "获取学科列表失败: {UserId}", userId);
-                return new List<string>();
+                return new List<SubjectType>();
             }
         }
 
-        public List<string> GetCategories(string userId, string subject)
+        public List<SubCategoryType> GetCategories(string userId, SubjectType subject)
         {
             if (string.IsNullOrWhiteSpace(userId))
-                return new List<string>();
+                return new List<SubCategoryType>();
 
             try
             {
-                var items = LoadWrongAnswers(userId).Where(i => i.IsActive);
-
-                if (!string.IsNullOrWhiteSpace(subject))
-                {
-                    items = items.Where(i => i.Subject.Equals(subject, StringComparison.OrdinalIgnoreCase));
-                }
+                var items = LoadWrongAnswers(userId)
+                    .Where(i => i.IsActive && i.Subject == subject);
 
                 return items
-                    .Where(i => !string.IsNullOrWhiteSpace(i.Category))
                     .Select(i => i.Category)
                     .Distinct()
                     .OrderBy(c => c)
@@ -734,7 +757,7 @@ namespace LearningAssistant.Services.Learning
             catch (Exception ex)
             {
                 _logger.LogError(ex, "获取分类列表失败: {UserId}", userId);
-                return new List<string>();
+                return new List<SubCategoryType>();
             }
         }
 
@@ -763,7 +786,7 @@ namespace LearningAssistant.Services.Learning
                 var groupedBySubject = items.GroupBy(i => i.Subject);
                 foreach (var group in groupedBySubject)
                 {
-                    var subjectName = string.IsNullOrWhiteSpace(group.Key) ? "未分类" : group.Key;
+                    var subjectName = group.Key.ToString();
                     sb.AppendLine($"## 📚 {subjectName}");
                     sb.AppendLine();
 
@@ -775,11 +798,8 @@ namespace LearningAssistant.Services.Learning
                         sb.AppendLine($"{item.MasteryIcon} **{item.MasteryText}** | 错误 {item.WrongCount} 次 | 复习 {item.ReviewCount} 次");
                         sb.AppendLine();
 
-                        if (!string.IsNullOrWhiteSpace(item.Category))
-                        {
-                            sb.AppendLine($"**分类:** {item.Category}");
-                            sb.AppendLine();
-                        }
+                        sb.AppendLine($"**分类:** {item.Category}");
+                        sb.AppendLine();
 
                         sb.AppendLine("**题目：**");
                         sb.AppendLine();

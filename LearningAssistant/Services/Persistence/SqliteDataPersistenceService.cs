@@ -313,8 +313,9 @@ namespace LearningAssistant.Services.Persistence
 
         // ========== LearningItemStates 表操作方法实现 ==========
 
-        public List<string> GetKnownItems(string userId, string categoryName)
+        public List<string> GetKnownItems(string userId, SubCategoryType category)
         {
+            var categoryName = category.ToString();
             try
             {
                 using var db = _dbContextFactory.CreateDbContext();
@@ -325,13 +326,14 @@ namespace LearningAssistant.Services.Persistence
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Failed to get known items for user {UserId}, category {CategoryName}", userId, categoryName);
+                _logger?.LogError(ex, "Failed to get known items for user {UserId}, category {Category}", userId, category);
                 return new List<string>();
             }
         }
 
-        public List<string> GetUnknownItems(string userId, string categoryName)
+        public List<string> GetUnknownItems(string userId, SubCategoryType category)
         {
+            var categoryName = category.ToString();
             try
             {
                 using var db = _dbContextFactory.CreateDbContext();
@@ -342,15 +344,16 @@ namespace LearningAssistant.Services.Persistence
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Failed to get unknown items for user {UserId}, category {CategoryName}", userId, categoryName);
+                _logger?.LogError(ex, "Failed to get unknown items for user {UserId}, category {Category}", userId, category);
                 return new List<string>();
             }
         }
 
-        public void UpsertLearningItemState(string userId, string categoryName, string content, bool isKnown)
+        public void UpsertLearningItemState(string userId, SubCategoryType category, string content, bool isKnown)
         {
             if (string.IsNullOrWhiteSpace(content)) return;
 
+            var categoryName = category.ToString();
             try
             {
                 using var db = _dbContextFactory.CreateDbContext();
@@ -376,8 +379,8 @@ namespace LearningAssistant.Services.Persistence
                 }
 
                 db.SaveChanges();
-                _logger?.LogDebug("Upserted learning item state: user {UserId}, category {CategoryName}, content {Content}, isKnown {IsKnown}",
-                    userId, categoryName, content.Length > 20 ? content.Substring(0, 20) + "..." : content, isKnown);
+                _logger?.LogDebug("Upserted learning item state: user {UserId}, category {Category}, content {Content}, isKnown {IsKnown}",
+                    userId, category, content.Length > 20 ? content.Substring(0, 20) + "..." : content, isKnown);
             }
             catch (Exception ex)
             {
@@ -385,8 +388,9 @@ namespace LearningAssistant.Services.Persistence
             }
         }
 
-        public void UpsertLearningItemStates(string userId, string categoryName, IEnumerable<string> contents, bool isKnown)
+        public void UpsertLearningItemStates(string userId, SubCategoryType category, IEnumerable<string> contents, bool isKnown)
         {
+            var categoryName = category.ToString();
             try
             {
                 using var db = _dbContextFactory.CreateDbContext();
@@ -395,7 +399,6 @@ namespace LearningAssistant.Services.Persistence
                 if (contentList.Count == 0)
                     return;
 
-                // 批量查询已存在的记录
                 var existingContents = db.LearningItemStates
                     .Where(s => s.UserId == userId && s.CategoryName == categoryName && contentList.Contains(s.Content))
                     .Select(s => s.Content)
@@ -409,7 +412,6 @@ namespace LearningAssistant.Services.Persistence
                 {
                     if (existingContents.Contains(content))
                     {
-                        // 标记为需要更新
                         entitiesToUpdate.Add(new LearningItemStateEntity
                         {
                             UserId = userId,
@@ -433,7 +435,6 @@ namespace LearningAssistant.Services.Persistence
                     }
                 }
 
-                // 批量更新
                 if (entitiesToUpdate.Count > 0)
                 {
                     foreach (var entity in entitiesToUpdate)
@@ -450,25 +451,25 @@ namespace LearningAssistant.Services.Persistence
                     }
                 }
 
-                // 批量添加
                 if (entitiesToAdd.Count > 0)
                 {
                     db.LearningItemStates.AddRange(entitiesToAdd);
                 }
 
                 db.SaveChanges();
-                _logger?.LogDebug("Batch upserted {Count} learning item states for user {UserId}, category {CategoryName}",
-                    contentList.Count, userId, categoryName);
+                _logger?.LogDebug("Batch upserted {Count} learning item states for user {UserId}, category {Category}",
+                    contentList.Count, userId, category);
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Failed to batch upsert learning item states for user {UserId}, category {CategoryName}",
-                    userId, categoryName);
+                _logger?.LogError(ex, "Failed to batch upsert learning item states for user {UserId}, category {Category}",
+                    userId, category);
             }
         }
 
-        public void DeleteLearningItemState(string userId, string categoryName, string content)
+        public void DeleteLearningItemState(string userId, SubCategoryType category, string content)
         {
+            var categoryName = category.ToString();
             try
             {
                 using var db = _dbContextFactory.CreateDbContext();
@@ -479,8 +480,8 @@ namespace LearningAssistant.Services.Persistence
                 {
                     db.LearningItemStates.Remove(existing);
                     db.SaveChanges();
-                    _logger?.LogDebug("Deleted learning item state: user {UserId}, category {CategoryName}, content {Content}",
-                        userId, categoryName, content);
+                    _logger?.LogDebug("Deleted learning item state: user {UserId}, category {Category}, content {Content}",
+                        userId, category, content);
                 }
             }
             catch (Exception ex)
@@ -489,8 +490,9 @@ namespace LearningAssistant.Services.Persistence
             }
         }
 
-        public void SyncCategoryProgressToLearningItemStates(string userId, string categoryName, List<string> knownItems, List<string> unknownItems)
+        public void SyncCategoryProgressToLearningItemStates(string userId, SubCategoryType category, List<string> knownItems, List<string> unknownItems)
         {
+            var categoryName = category.ToString();
             try
             {
                 using var db = _dbContextFactory.CreateDbContext();
@@ -528,12 +530,12 @@ namespace LearningAssistant.Services.Persistence
                 }
 
                 db.SaveChanges();
-                _logger?.LogInformation("Synced category progress to LearningItemStates: user {UserId}, category {CategoryName}, known {KnownCount}, unknown {UnknownCount}",
-                    userId, categoryName, knownItems.Count, unknownItems.Count);
+                _logger?.LogInformation("Synced category progress to LearningItemStates: user {UserId}, category {Category}, known {KnownCount}, unknown {UnknownCount}",
+                    userId, category, knownItems.Count, unknownItems.Count);
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Failed to sync category progress for user {UserId}, category {CategoryName}", userId, categoryName);
+                _logger?.LogError(ex, "Failed to sync category progress for user {UserId}, category {Category}", userId, category);
             }
         }
     }

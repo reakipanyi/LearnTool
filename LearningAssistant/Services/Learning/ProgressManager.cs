@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services.Persistence;
 
@@ -5,10 +6,10 @@ namespace LearningAssistant.Services.Learning
 {
     public interface IProgressManager
     {
-        void LoadProgress(string userId, string subCategory);
-        void SaveProgress(string userId, string subCategory, StudyEngineState state);
+        void LoadProgress(string userId, SubCategoryType subCategory);
+        void SaveProgress(string userId, SubCategoryType subCategory, StudyEngineState state);
         ProgressState GetProgressState();
-        void AddUnknownItem(string userId, string content, string subCategory);
+        void AddUnknownItem(string userId, string content, SubCategoryType subCategory);
         void ResetProgress();
     }
 
@@ -37,24 +38,22 @@ namespace LearningAssistant.Services.Learning
             return _currentState;
         }
 
-        public void LoadProgress(string userId, string subCategory)
+        public void LoadProgress(string userId, SubCategoryType subCategory)
         {
-            // 优先从 LearningItemStates 表加载（新的 SQLite 存储）
             var knownItems = _persistenceService.GetKnownItems(userId, subCategory);
             var unknownItems = _persistenceService.GetUnknownItems(userId, subCategory);
 
-            // 如果新表没有数据，尝试从 CategoryProgress 的 JSON 字段加载（兼容旧数据）
             if (knownItems.Count == 0 && unknownItems.Count == 0)
             {
                 var profile = _persistenceService.LoadUserProfile(userId);
                 var progress = profile.LearningProgress;
+                var subCategoryStr = subCategory.ToString();
 
-                if (progress.CategoryProgresses.TryGetValue(subCategory, out var categoryProgress))
+                if (progress.CategoryProgresses.TryGetValue(subCategoryStr, out var categoryProgress))
                 {
                     knownItems = categoryProgress.KnownItems.ToList();
                     unknownItems = categoryProgress.UnknownItems.ToList();
 
-                    // 如果从 CategoryProgress 加载了数据，同步到 LearningItemStates 表
                     if (knownItems.Count > 0 || unknownItems.Count > 0)
                     {
                         _persistenceService.SyncCategoryProgressToLearningItemStates(userId, subCategory, knownItems, unknownItems);
@@ -65,9 +64,9 @@ namespace LearningAssistant.Services.Learning
             _currentState.KnownItems = knownItems;
             _currentState.UnknownItems = unknownItems;
 
-            // 从 CategoryProgress 加载统计和索引信息
             var userProfile = _persistenceService.LoadUserProfile(userId);
-            if (userProfile.LearningProgress.CategoryProgresses.TryGetValue(subCategory, out var catProgress))
+            var subCatStr = subCategory.ToString();
+            if (userProfile.LearningProgress.CategoryProgresses.TryGetValue(subCatStr, out var catProgress))
             {
                 _currentState.CorrectCount = catProgress.CorrectCount;
                 _currentState.TotalCount = catProgress.TotalTestCount;
@@ -80,24 +79,23 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        public void SaveProgress(string userId, string subCategory, StudyEngineState state)
+        public void SaveProgress(string userId, SubCategoryType subCategory, StudyEngineState state)
         {
             var profile = _persistenceService.LoadUserProfile(userId);
             var progress = profile.LearningProgress;
+            var subCategoryStr = subCategory.ToString();
 
-            if (!progress.CategoryProgresses.TryGetValue(subCategory, out var categoryProgress))
+            if (!progress.CategoryProgresses.TryGetValue(subCategoryStr, out var categoryProgress))
             {
-                categoryProgress = new CategoryProgress { CategoryName = subCategory };
-                progress.CategoryProgresses[subCategory] = categoryProgress;
+                categoryProgress = new CategoryProgress { CategoryName = subCategoryStr };
+                progress.CategoryProgresses[subCategoryStr] = categoryProgress;
             }
 
-            // 同步到 LearningItemStates 表（新存储）
             _persistenceService.SyncCategoryProgressToLearningItemStates(userId, subCategory, state.KnownItems, state.UnknownItems);
 
-            // 同时保留 CategoryProgress 的 JSON 字段（向后兼容）
             categoryProgress.KnownItems = state.KnownItems;
             categoryProgress.UnknownItems = state.UnknownItems;
-            categoryProgress.LastStudyMode = state.CurrentMode;
+            categoryProgress.LastStudyMode = state.CurrentMode.ToString();
             categoryProgress.LastResumeIndex = state.StudyModeIndex;
             categoryProgress.QuickTestResumeIndex = state.QuickModeIndex;
             categoryProgress.TotalTestCount = state.TotalCount;
@@ -112,9 +110,8 @@ namespace LearningAssistant.Services.Learning
             _persistenceService.SaveUserProfile(profile);
         }
 
-        public void AddUnknownItem(string userId, string content, string subCategory)
+        public void AddUnknownItem(string userId, string content, SubCategoryType subCategory)
         {
-            // 使用 LearningItemStates 表
             var knownItems = _persistenceService.GetKnownItems(userId, subCategory);
             var unknownItems = _persistenceService.GetUnknownItems(userId, subCategory);
 
@@ -131,9 +128,9 @@ namespace LearningAssistant.Services.Learning
                 if (!_currentState.UnknownItems.Contains(content))
                     _currentState.UnknownItems.Add(content);
 
-                // 同时更新 CategoryProgress（向后兼容）
                 var profile = _persistenceService.LoadUserProfile(userId);
-                if (profile.LearningProgress.CategoryProgresses.TryGetValue(subCategory, out var catProgress))
+                var subCategoryStr = subCategory.ToString();
+                if (profile.LearningProgress.CategoryProgresses.TryGetValue(subCategoryStr, out var catProgress))
                 {
                     catProgress.KnownItems.Remove(content);
                     if (!catProgress.UnknownItems.Contains(content))

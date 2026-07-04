@@ -57,14 +57,14 @@ namespace LearningAssistant.Services.Learning
         public void SaveLearningConfig(LearningConfig config)
         {
             var session = _persistenceService.LoadSession();
-            session.Language = config.Language;
-            session.SubCategory = config.SubCategory;
-            session.Mode = config.Mode;
+            session.LastSubject = config.Subject;
+            session.LastSubCategory = config.SubCategory;
+            session.LastMode = config.Mode;
             session.WordBankFile = config.WordBankFile;
-            session.SortOrder = config.SortOrder;
+            session.LastSortOrder = config.SortOrder;
             session.LastAccessTime = DateTime.Now;
             _persistenceService.SaveSession(session);
-            _logger.LogInformation($"Learning config saved: Language={config.Language}, SubCategory={config.SubCategory}, Mode={config.Mode}");
+            _logger.LogInformation($"Learning config saved: Subject={config.Subject}, SubCategory={config.SubCategory}, Mode={config.Mode}");
         }
 
         public LearningConfig LoadLearningConfig()
@@ -72,11 +72,11 @@ namespace LearningAssistant.Services.Learning
             var session = _persistenceService.LoadSession();
             return new LearningConfig
             {
-                Language = session.Language,
-                SubCategory = session.SubCategory,
-                Mode = session.Mode,
+                Subject = session.LastSubject,
+                SubCategory = session.LastSubCategory,
+                Mode = session.LastMode,
                 WordBankFile = session.WordBankFile,
-                SortOrder = session.SortOrder
+                SortOrder = session.LastSortOrder
             };
         }
     }

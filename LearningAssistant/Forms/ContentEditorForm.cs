@@ -86,19 +86,23 @@ namespace LearningAssistant.Forms
 
 
 
-        public string SelectedSubject => comboBoxSubject.SelectedItem?.ToString() ?? "";
-
-        public string SelectedLanguage
+        public SubjectType SelectedSubject
         {
             get
             {
-                if (SelectedSubject == Constants.Subject.Chinese) return Constants.Language.Chinese;
-                if (SelectedSubject == Constants.Subject.English) return Constants.Language.English;
-                return Constants.Language.Chinese;
+                var subjectStr = comboBoxSubject.SelectedItem?.ToString() ?? "";
+                return SubjectSubCategoryMapping.TryParseSubject(subjectStr, out var subject) ? subject : SubjectType.Chinese;
             }
         }
 
-        public string SelectedSubCategory => comboBoxSubCategory.SelectedItem?.ToString() ?? "";
+        public SubCategoryType SelectedSubCategory
+        {
+            get
+            {
+                var subCategoryStr = comboBoxSubCategory.SelectedItem?.ToString() ?? "";
+                return SubjectSubCategoryMapping.TryParseSubCategory(subCategoryStr, out var subCategory) ? subCategory : SubCategoryType.ChineseCharacter;
+            }
+        }
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public DataTable ItemData
         {
@@ -131,7 +135,6 @@ namespace LearningAssistant.Forms
 
         public List<int> SelectedRowIndices => dataGridView.SelectedRows.Cast<DataGridViewRow>().Select(row => row.Index).ToList();
 
-        public event EventHandler? LanguageChanged;
         public event EventHandler? SubjectChanged;
         public event EventHandler? SubCategoryChanged;
         public event EventHandler? TemplateAddClicked;
@@ -162,41 +165,29 @@ namespace LearningAssistant.Forms
             statusLabelDirty.ForeColor = isDirty ? ThemeHelper.Colors.Error : ThemeHelper.Colors.Success;
         }
 
-        public void SetInitialLanguage(string language)
+        public void SetInitialSubject(SubjectType subject)
         {
-            if (language == Constants.Language.Chinese)
-            {
-                SetInitialSubject(Constants.Subject.Chinese);
-            }
-            else if (language == Constants.Language.English)
-            {
-                SetInitialSubject(Constants.Subject.English);
-            }
-        }
-
-        public void SetInitialSubject(string subject)
-        {
-            var index = comboBoxSubject.Items.IndexOf(subject);
+            var index = comboBoxSubject.Items.IndexOf(subject.ToString());
             if (index >= 0)
             {
                 comboBoxSubject.SelectedIndex = index;
             }
         }
 
-        public void SetInitialSubCategory(string subCategory)
+        public void SetInitialSubCategory(SubCategoryType subCategory)
         {
-            if (comboBoxSubCategory.Items.Contains(subCategory))
+            if (comboBoxSubCategory.Items.Contains(subCategory.ToString()))
             {
-                comboBoxSubCategory.SelectedItem = subCategory;
+                comboBoxSubCategory.SelectedItem = subCategory.ToString();
             }
         }
 
-        public void RefreshSubCategories(IEnumerable<string> subCategories)
+        public void RefreshSubCategories(List<SubCategoryType> subCategories)
         {
             comboBoxSubCategory.Items.Clear();
-            foreach (string subCategory in subCategories)
+            foreach (var subCategory in subCategories)
             {
-                comboBoxSubCategory.Items.Add(subCategory);
+                comboBoxSubCategory.Items.Add(subCategory.ToString());
             }
             if (comboBoxSubCategory.Items.Count > 0)
             {
@@ -478,7 +469,7 @@ namespace LearningAssistant.Forms
 
         private string GetChineseColumnName(string columnName)
         {
-            var subCategory = SelectedSubCategory;
+            var subCategory = SelectedSubCategory.ToString();
             if (!string.IsNullOrEmpty(subCategory) &&
                 CategoryColumnHeaders.TryGetValue(subCategory, out var headers) &&
                 headers.TryGetValue(columnName, out var chineseName))
@@ -494,7 +485,7 @@ namespace LearningAssistant.Forms
 
         private string GetEnglishColumnName(string columnName)
         {
-            var subCategory = SelectedSubCategory;
+            var subCategory = SelectedSubCategory.ToString();
             if (!string.IsNullOrEmpty(subCategory) &&
                 CategoryColumnHeaders.TryGetValue(subCategory, out var headers))
             {
@@ -704,7 +695,6 @@ namespace LearningAssistant.Forms
         private void ComboBoxSubject_SelectedIndexChanged(object? sender, EventArgs e)
         {
             SubjectChanged?.Invoke(this, EventArgs.Empty);
-            LanguageChanged?.Invoke(this, EventArgs.Empty);
         }
 
         private void ComboBoxSubCategory_SelectedIndexChanged(object? sender, EventArgs e)

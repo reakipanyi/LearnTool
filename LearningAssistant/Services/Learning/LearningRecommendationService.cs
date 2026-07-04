@@ -287,7 +287,7 @@ namespace LearningAssistant.Services.Learning
 
                 foreach (var wa in wrongAnswers)
                 {
-                    var category = string.IsNullOrWhiteSpace(wa.Subject) ? "通用" : wa.Subject;
+                    var category = wa.Subject == SubjectType.Unknown ? "通用" : wa.Subject.ToString();
                     if (!categoryWrongCounts.ContainsKey(category))
                     {
                         categoryWrongCounts[category] = 0;

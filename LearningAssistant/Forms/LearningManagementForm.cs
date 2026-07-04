@@ -448,7 +448,7 @@ namespace LearningAssistant.Forms
                 {
                     sb.AppendLine("### 分类分布");
                     sb.AppendLine();
-                    var byCategory = wrongAnswers.GroupBy(w => w.Subject ?? "通用")
+                    var byCategory = wrongAnswers.GroupBy(w => w.Subject == SubjectType.Unknown ? "通用" : w.Subject.ToString())
                         .Select(g => new { Category = g.Key, Count = g.Count() })
                         .OrderByDescending(x => x.Count);
 

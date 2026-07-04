@@ -1,162 +1,56 @@
+using LearningAssistant.Common;
 using System.Text.Json.Serialization;
 
 namespace LearningAssistant.Models.Learning
 {
-    /// <summary>
-    /// 掌握程度
-    /// </summary>
     public enum MasteryLevel
     {
-        /// <summary>
-        /// 未掌握
-        /// </summary>
         NotMastered = 0,
-
-        /// <summary>
-        /// 模糊/不确定
-        /// </summary>
         Fuzzy = 1,
-
-        /// <summary>
-        /// 已掌握
-        /// </summary>
         Mastered = 2
     }
 
-    /// <summary>
-    /// 错题筛选条件
-    /// </summary>
     public class WrongAnswerFilter
     {
-        /// <summary>
-        /// 学科
-        /// </summary>
-        public string? Subject { get; set; }
-
-        /// <summary>
-        /// 子类别
-        /// </summary>
-        public string? Category { get; set; }
-
-        /// <summary>
-        /// 掌握程度
-        /// </summary>
+        public SubjectType? Subject { get; set; }
+        public SubCategoryType? Category { get; set; }
         public MasteryLevel? Mastery { get; set; }
-
-        /// <summary>
-        /// 搜索关键词
-        /// </summary>
         public string? Keyword { get; set; }
-
-        /// <summary>
-        /// 最少错误次数
-        /// </summary>
         public int? MinWrongCount { get; set; }
-
-        /// <summary>
-        /// 开始日期
-        /// </summary>
         public DateTime? FromDate { get; set; }
-
-        /// <summary>
-        /// 结束日期
-        /// </summary>
         public DateTime? ToDate { get; set; }
-
-        /// <summary>
-        /// 标签
-        /// </summary>
         public List<string>? Tags { get; set; }
-
-        /// <summary>
-        /// 跳过的记录数（分页用）
-        /// </summary>
         public int? Skip { get; set; }
-
-        /// <summary>
-        /// 取的记录数（分页用）
-        /// </summary>
         public int? Take { get; set; }
     }
 
-    /// <summary>
-    /// 错题统计信息
-    /// </summary>
     public class WrongAnswerStats
     {
-        /// <summary>
-        /// 总错题数
-        /// </summary>
         public int TotalCount { get; set; }
-
-        /// <summary>
-        /// 未掌握数
-        /// </summary>
         public int NotMasteredCount { get; set; }
-
-        /// <summary>
-        /// 模糊数
-        /// </summary>
         public int FuzzyCount { get; set; }
-
-        /// <summary>
-        /// 已掌握数
-        /// </summary>
         public int MasteredCount { get; set; }
-
-        /// <summary>
-        /// 总错误次数
-        /// </summary>
         public int TotalWrongCount { get; set; }
-
-        /// <summary>
-        /// 学科统计
-        /// </summary>
-        public Dictionary<string, int> SubjectStats { get; set; } = new();
-
-        /// <summary>
-        /// 错误次数 Top 10
-        /// </summary>
+        public Dictionary<SubjectType, int> SubjectStats { get; set; } = new();
         public List<WrongAnswerItem> TopWrongItems { get; set; } = new();
-
-        /// <summary>
-        /// 标签统计
-        /// </summary>
         public Dictionary<string, int> TagStats { get; set; } = new();
 
-        /// <summary>
-        /// 掌握率
-        /// </summary>
         [JsonIgnore]
         public double MasteryRate => TotalCount > 0
             ? (double)MasteredCount / TotalCount * 100
             : 0;
     }
 
-    /// <summary>
-    /// 错题记录
-    /// </summary>
     public class WrongAnswerItem
     {
-        /// <summary>
-        /// ID
-        /// </summary>
         public string Id { get; set; } = Guid.NewGuid().ToString();
-
-        /// <summary>
-        /// 用户ID
-        /// </summary>
         public string UserId { get; set; } = string.Empty;
 
-        /// <summary>
-        /// 学科
-        /// </summary>
-        public string Subject { get; set; } = string.Empty;
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public SubjectType Subject { get; set; }
 
-        /// <summary>
-        /// 分类/子类别
-        /// </summary>
-        public string Category { get; set; } = string.Empty;
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public SubCategoryType Category { get; set; }
 
         /// <summary>
         /// 题目内容

@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using LearningAssistant.Common.UI;
 using LearningAssistant.Models.Learning;
 using System.ComponentModel;
@@ -154,9 +155,9 @@ namespace LearningAssistant.Forms.UserControls
                 new SolidBrush(Color.FromArgb(239, 83, 80)),
                 wrongRect);
 
-            var subjectText = string.IsNullOrWhiteSpace(_wrongAnswer.Subject)
+            var subjectText = _wrongAnswer.Subject == SubjectType.Unknown
                 ? "未分类"
-                : _wrongAnswer.Subject;
+                : _wrongAnswer.Subject.ToString();
             using var subjectFont = new Font("微软雅黑", 8F);
             var subjectSize = g.MeasureString(subjectText, subjectFont);
             g.DrawString(subjectText, subjectFont,
@@ -195,13 +196,13 @@ namespace LearningAssistant.Forms.UserControls
 
             var bottomY = contentRect.Bottom - 22;
 
-            if (!string.IsNullOrWhiteSpace(_wrongAnswer.Category))
+            if (_wrongAnswer.Category != SubCategoryType.Unknown)
             {
                 var categoryRect = new Rectangle(contentRect.X + leftPadding, bottomY, 70, 18);
                 using var categoryPath = GdiHelper.CreateRoundedRectPath(categoryRect, 4);
                 using var categoryBrush = new SolidBrush(Color.FromArgb(227, 242, 253));
                 g.FillPath(categoryBrush, categoryPath);
-                TextRenderer.DrawText(g, $"📂 {_wrongAnswer.Category}",
+                TextRenderer.DrawText(g, $"📂 {_wrongAnswer.Category.ToString()}",
                     new Font("微软雅黑", 7.5F),
                     categoryRect,
                     Color.FromArgb(33, 150, 243),

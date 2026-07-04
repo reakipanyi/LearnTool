@@ -8,41 +8,41 @@ namespace LearningAssistant.Services.Learning
     {
         private readonly ILogger<ContentLoaderService> _logger;
 
-        private readonly Dictionary<string, string> _categoryFileMap = new Dictionary<string, string>
+        private readonly Dictionary<SubCategoryType, string> _categoryFileMap = new Dictionary<SubCategoryType, string>
         {
-            { Constants.SubCategory.ChineseCharacter, Constants.FileName.ChineseCharacter },
-            { Constants.SubCategory.ChineseIdiom, Constants.FileName.ChineseIdiom },
-            { Constants.SubCategory.ChinesePhrase, Constants.FileName.ChinesePhrase },
-            { Constants.SubCategory.ChinesePoem, Constants.FileName.ChinesePoem },
-            { Constants.SubCategory.ChineseComprehensive, Constants.FileName.ChineseComprehensive },
-            { Constants.SubCategory.EnglishWord, Constants.FileName.EnglishWord },
-            { Constants.SubCategory.EnglishPhrase, Constants.FileName.EnglishPhrase },
-            { Constants.SubCategory.EnglishSentence, Constants.FileName.EnglishSentence },
-            { Constants.SubCategory.EnglishComprehensive, Constants.FileName.EnglishComprehensive },
-            { Constants.SubCategory.MathFormula, Constants.FileName.MathFormula },
-            { Constants.SubCategory.MathExample, Constants.FileName.MathExample },
-            { Constants.SubCategory.MathConcept, Constants.FileName.MathConcept },
-            { Constants.SubCategory.MathComprehensive, Constants.FileName.MathComprehensive },
-            { Constants.SubCategory.PhysicsLaw, Constants.FileName.PhysicsLaw },
-            { Constants.SubCategory.PhysicsExperiment, Constants.FileName.PhysicsExperiment },
-            { Constants.SubCategory.PhysicsDerivation, Constants.FileName.PhysicsDerivation },
-            { Constants.SubCategory.PhysicsComprehensive, Constants.FileName.PhysicsComprehensive },
-            { Constants.SubCategory.ChemistryEquation, Constants.FileName.ChemistryEquation },
-            { Constants.SubCategory.ChemistryElement, Constants.FileName.ChemistryElement },
-            { Constants.SubCategory.ChemistryExperiment, Constants.FileName.ChemistryExperiment },
-            { Constants.SubCategory.ChemistryComprehensive, Constants.FileName.ChemistryComprehensive },
-            { Constants.SubCategory.HistoryEvent, Constants.FileName.HistoryEvent },
-            { Constants.SubCategory.HistoryPerson, Constants.FileName.HistoryPerson },
-            { Constants.SubCategory.HistoryTimeline, Constants.FileName.HistoryTimeline },
-            { Constants.SubCategory.HistoryComprehensive, Constants.FileName.HistoryComprehensive },
-            { Constants.SubCategory.GeographyKnowledge, Constants.FileName.GeographyKnowledge },
-            { Constants.SubCategory.GeographyMap, Constants.FileName.GeographyMap },
-            { Constants.SubCategory.GeographyClimate, Constants.FileName.GeographyClimate },
-            { Constants.SubCategory.GeographyComprehensive, Constants.FileName.GeographyComprehensive },
-            { Constants.SubCategory.BiologyConcept, Constants.FileName.BiologyConcept },
-            { Constants.SubCategory.BiologyExperiment, Constants.FileName.BiologyExperiment },
-            { Constants.SubCategory.BiologyPhenomenon, Constants.FileName.BiologyPhenomenon },
-            { Constants.SubCategory.BiologyComprehensive, Constants.FileName.BiologyComprehensive }
+            { SubCategoryType.ChineseCharacter, Constants.FileName.ChineseCharacter },
+            { SubCategoryType.ChineseIdiom, Constants.FileName.ChineseIdiom },
+            { SubCategoryType.ChinesePhrase, Constants.FileName.ChinesePhrase },
+            { SubCategoryType.ChinesePoem, Constants.FileName.ChinesePoem },
+            { SubCategoryType.ChineseComprehensive, Constants.FileName.ChineseComprehensive },
+            { SubCategoryType.EnglishWord, Constants.FileName.EnglishWord },
+            { SubCategoryType.EnglishPhrase, Constants.FileName.EnglishPhrase },
+            { SubCategoryType.EnglishSentence, Constants.FileName.EnglishSentence },
+            { SubCategoryType.EnglishComprehensive, Constants.FileName.EnglishComprehensive },
+            { SubCategoryType.MathFormula, Constants.FileName.MathFormula },
+            { SubCategoryType.MathExample, Constants.FileName.MathExample },
+            { SubCategoryType.MathConcept, Constants.FileName.MathConcept },
+            { SubCategoryType.MathComprehensive, Constants.FileName.MathComprehensive },
+            { SubCategoryType.PhysicsLaw, Constants.FileName.PhysicsLaw },
+            { SubCategoryType.PhysicsExperiment, Constants.FileName.PhysicsExperiment },
+            { SubCategoryType.PhysicsDerivation, Constants.FileName.PhysicsDerivation },
+            { SubCategoryType.PhysicsComprehensive, Constants.FileName.PhysicsComprehensive },
+            { SubCategoryType.ChemistryEquation, Constants.FileName.ChemistryEquation },
+            { SubCategoryType.ChemistryElement, Constants.FileName.ChemistryElement },
+            { SubCategoryType.ChemistryExperiment, Constants.FileName.ChemistryExperiment },
+            { SubCategoryType.ChemistryComprehensive, Constants.FileName.ChemistryComprehensive },
+            { SubCategoryType.HistoryEvent, Constants.FileName.HistoryEvent },
+            { SubCategoryType.HistoryPerson, Constants.FileName.HistoryPerson },
+            { SubCategoryType.HistoryTimeline, Constants.FileName.HistoryTimeline },
+            { SubCategoryType.HistoryComprehensive, Constants.FileName.HistoryComprehensive },
+            { SubCategoryType.GeographyKnowledge, Constants.FileName.GeographyKnowledge },
+            { SubCategoryType.GeographyMap, Constants.FileName.GeographyMap },
+            { SubCategoryType.GeographyClimate, Constants.FileName.GeographyClimate },
+            { SubCategoryType.GeographyComprehensive, Constants.FileName.GeographyComprehensive },
+            { SubCategoryType.BiologyConcept, Constants.FileName.BiologyConcept },
+            { SubCategoryType.BiologyExperiment, Constants.FileName.BiologyExperiment },
+            { SubCategoryType.BiologyPhenomenon, Constants.FileName.BiologyPhenomenon },
+            { SubCategoryType.BiologyComprehensive, Constants.FileName.BiologyComprehensive }
         };
 
         public ContentLoaderService(ILogger<ContentLoaderService> logger)
@@ -50,18 +50,18 @@ namespace LearningAssistant.Services.Learning
             _logger = logger;
         }
 
-        public List<LearningItem> LoadItems(string subCategory, string wordBankFile = "")
+        public List<LearningItem> LoadItems(LearningContext context)
         {
             try
             {
-                string filePath = GetFilePath(subCategory, wordBankFile);
-                
+                string filePath = GetFilePath(context.SubCategory, context.WordBankFile);
+
                 if (!IsPathSafe(filePath))
                 {
                     _logger.LogWarning("Path traversal detected: {FilePath}", filePath);
                     return new List<LearningItem>();
                 }
-                
+
                 if (!File.Exists(filePath))
                 {
                     _logger.LogWarning("File not found: {FilePath}", filePath);
@@ -75,8 +75,7 @@ namespace LearningAssistant.Services.Learning
                 {
                     if (item.SubCategory == 0)
                     {
-                        if (Enum.TryParse(subCategory, out SubCategoryType subCategoryType))
-                            item.SubCategory = subCategoryType;
+                        item.SubCategory = context.SubCategory;
                     }
                 }
 
@@ -84,113 +83,28 @@ namespace LearningAssistant.Services.Learning
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to load items for subCategory: {SubCategory}", subCategory);
+                _logger.LogError(ex, "Failed to load items for subCategory: {SubCategory}", context.SubCategory);
                 return new List<LearningItem>();
             }
         }
 
-        public void SaveItems(string subCategory, List<LearningItem> items, string wordBankFile = "")
+        public void SaveItems(LearningContext context, List<LearningItem> items)
         {
             try
             {
-                string filePath = GetFilePath(subCategory, wordBankFile);
+                string filePath = GetFilePath(context.SubCategory, context.WordBankFile);
                 JsonHelper.SaveToFile(filePath, items);
                 _logger.LogInformation("Saved {Count} items to {FilePath}", items.Count, filePath);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to save items for subCategory: {SubCategory}", subCategory);
+                _logger.LogError(ex, "Failed to save items for subCategory: {SubCategory}", context.SubCategory);
             }
         }
 
-        public List<string> GetSubCategories(string language)
+        public List<SubCategoryType> GetSubCategories(SubjectType subject)
         {
-            if (language == Constants.Language.Chinese)
-            {
-                return new List<string>
-                {
-                    Constants.SubCategory.ChineseCharacter,
-                    Constants.SubCategory.ChineseIdiom,
-                    Constants.SubCategory.ChinesePhrase,
-                    Constants.SubCategory.ChinesePoem,
-                    Constants.SubCategory.ChineseComprehensive
-                };
-            }
-            else
-            {
-                return new List<string>
-                {
-                    Constants.SubCategory.EnglishWord,
-                    Constants.SubCategory.EnglishPhrase,
-                    Constants.SubCategory.EnglishSentence,
-                    Constants.SubCategory.EnglishComprehensive
-                };
-            }
-        }
-
-        public List<string> GetSubCategoriesBySubject(string subject)
-        {
-            return subject switch
-            {
-                Constants.Subject.Chinese => new List<string>
-                {
-                    Constants.SubCategory.ChineseCharacter,
-                    Constants.SubCategory.ChineseIdiom,
-                    Constants.SubCategory.ChinesePhrase,
-                    Constants.SubCategory.ChinesePoem,
-                    Constants.SubCategory.ChineseComprehensive
-                },
-                Constants.Subject.English => new List<string>
-                {
-                    Constants.SubCategory.EnglishWord,
-                    Constants.SubCategory.EnglishPhrase,
-                    Constants.SubCategory.EnglishSentence,
-                    Constants.SubCategory.EnglishComprehensive
-                },
-                Constants.Subject.Math => new List<string>
-                {
-                    Constants.SubCategory.MathFormula,
-                    Constants.SubCategory.MathExample,
-                    Constants.SubCategory.MathConcept,
-                    Constants.SubCategory.MathComprehensive
-                },
-                Constants.Subject.Physics => new List<string>
-                {
-                    Constants.SubCategory.PhysicsLaw,
-                    Constants.SubCategory.PhysicsExperiment,
-                    Constants.SubCategory.PhysicsDerivation,
-                    Constants.SubCategory.PhysicsComprehensive
-                },
-                Constants.Subject.Chemistry => new List<string>
-                {
-                    Constants.SubCategory.ChemistryEquation,
-                    Constants.SubCategory.ChemistryElement,
-                    Constants.SubCategory.ChemistryExperiment,
-                    Constants.SubCategory.ChemistryComprehensive
-                },
-                Constants.Subject.History => new List<string>
-                {
-                    Constants.SubCategory.HistoryEvent,
-                    Constants.SubCategory.HistoryPerson,
-                    Constants.SubCategory.HistoryTimeline,
-                    Constants.SubCategory.HistoryComprehensive
-                },
-                Constants.Subject.Geography => new List<string>
-                {
-                    Constants.SubCategory.GeographyKnowledge,
-                    Constants.SubCategory.GeographyMap,
-                    Constants.SubCategory.GeographyClimate,
-                    Constants.SubCategory.GeographyComprehensive
-                },
-                Constants.Subject.Biology => new List<string>
-                {
-                    Constants.SubCategory.BiologyConcept,
-                    Constants.SubCategory.BiologyExperiment,
-                    Constants.SubCategory.BiologyPhenomenon,
-                    Constants.SubCategory.BiologyComprehensive
-                },
-                _ => new List<string>()
-            };
+            return SubjectSubCategoryMapping.GetSubCategories(subject);
         }
 
         public List<string> GetAllSubjects()
@@ -208,12 +122,13 @@ namespace LearningAssistant.Services.Learning
             };
         }
 
-        public List<string> GetWordBankFiles(string subCategory)
+        public List<string> GetWordBankFiles(SubCategoryType subCategory)
         {
             try
             {
                 var dataDir = AppPaths.DataDir;
                 var defaultFile = _categoryFileMap.GetValueOrDefault(subCategory, "");
+                var subCategoryStr = subCategory.ToString();
 
                 var categoryPrefix = GetCategoryFilePrefix(subCategory);
 
@@ -237,31 +152,26 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        private string GetCategoryFilePrefix(string subCategory)
+        private string GetCategoryFilePrefix(SubCategoryType subCategory)
         {
             return subCategory switch
             {
-                Constants.SubCategory.ChineseCharacter => "识字",
-                Constants.SubCategory.ChinesePhrase => "短语",
-                Constants.SubCategory.ChineseIdiom => "成语",
-                Constants.SubCategory.ChinesePoem => "诗词",
-                Constants.SubCategory.ChineseComprehensive => "语文综合",
-                Constants.SubCategory.EnglishWord => "英语单词",
-                Constants.SubCategory.EnglishPhrase => "英语短语",
-                Constants.SubCategory.EnglishSentence => "英语句子",
-                Constants.SubCategory.EnglishComprehensive => "英语综合",
+                SubCategoryType.ChineseCharacter => "识字",
+                SubCategoryType.ChinesePhrase => "短语",
+                SubCategoryType.ChineseIdiom => "成语",
+                SubCategoryType.ChinesePoem => "诗词",
+                SubCategoryType.ChineseComprehensive => "语文综合",
+                SubCategoryType.EnglishWord => "英语单词",
+                SubCategoryType.EnglishPhrase => "英语短语",
+                SubCategoryType.EnglishSentence => "英语句子",
+                SubCategoryType.EnglishComprehensive => "英语综合",
                 _ => ""
             };
         }
 
-        public string GetDefaultWordBankFile(string subCategory)
+        public string GetDefaultWordBankFile(SubCategoryType subCategory)
         {
             return _categoryFileMap.GetValueOrDefault(subCategory, "");
-        }
-
-        public Type GetItemType(string subCategory)
-        {
-            return typeof(LearningItem);
         }
 
         public void SaveUserContent(UserContent content)
@@ -270,7 +180,7 @@ namespace LearningAssistant.Services.Learning
             {
                 var userContentDir = Path.Combine(AppPaths.DataDir, "UserContent");
                 Directory.CreateDirectory(userContentDir);
-                
+
                 var filePath = Path.Combine(userContentDir, $"{content.UserId}_{content.Id}.json");
                 JsonHelper.SaveToFile(filePath, content);
                 _logger.LogInformation("Saved user content: {Title}", content.Title);
@@ -281,7 +191,7 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        private string GetFilePath(string subCategory, string wordBankFile)
+        private string GetFilePath(SubCategoryType subCategory, string wordBankFile)
         {
             if (!string.IsNullOrWhiteSpace(wordBankFile))
             {

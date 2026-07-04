@@ -18,15 +18,15 @@ namespace LearningAssistant.Services.Learning
         private List<LearningItem> _allItems = [];
         private List<LearningItem> _studyItems = [];
 
-        public int CurrentIndex => _state.CurrentMode == Constants.LearningMode.Quick
+        public int CurrentIndex => _state.CurrentMode == LearningModeType.Quick
             ? _state.QuickModeIndex
             : _state.StudyModeIndex;
 
         public int TotalCount => _studyItems.Count;
         public IReadOnlyList<string> KnownItems => _state.KnownItems.AsReadOnly();
         public IReadOnlyList<string> UnknownItems => _state.UnknownItems.AsReadOnly();
-        public string CurrentMode => _state.CurrentMode;
-        public string CurrentSortOrder => _state.CurrentSortOrder;
+        public LearningModeType CurrentMode => _state.CurrentMode;
+        public SortOrderType CurrentSortOrder => _state.CurrentSortOrder;
         public bool HasSavedProgress => _state.KnownItems.Count > 0 || _state.UnknownItems.Count > 0;
 
         public StudyEngine(
@@ -43,27 +43,25 @@ namespace LearningAssistant.Services.Learning
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
         }
 
-        public void Initialize(string userId, string language, string subCategory, string wordBankFile, 
-                              string mode = Constants.LearningMode.Study, string sortOrder = Constants.SortOrder.Sequential, 
-                              bool continueMode = true)
+        public void Initialize(LearningContext context, bool continueMode = true)
         {
-            ValidateInitializeParameters(userId, language, subCategory);
+            ValidateInitializeParameters(context);
 
             lock (_stateLock)
             {
-                _state.UserId = userId;
-                _state.Language = language;
-                _state.SubCategory = subCategory;
-                _state.WordBankFile = wordBankFile;
-                _state.CurrentMode = mode == Constants.LearningMode.Quick ? Constants.LearningMode.Quick : Constants.LearningMode.Study;
-                _state.CurrentSortOrder = sortOrder;
+                _state.UserId = context.UserId;
+                _state.Subject = context.Subject;
+                _state.SubCategory = context.SubCategory;
+                _state.WordBankFile = context.WordBankFile;
+                _state.CurrentMode = context.Mode == LearningModeType.Quick ? LearningModeType.Quick : LearningModeType.Study;
+                _state.CurrentSortOrder = context.SortOrder;
             }
 
-            LoadAllItems(subCategory, wordBankFile);
+            LoadAllItems(context);
 
             if (continueMode)
             {
-                _progressManager.LoadProgress(userId, subCategory);
+                _progressManager.LoadProgress(context.UserId, context.SubCategory);
                 SyncProgressState();
             }
             else
@@ -75,20 +73,16 @@ namespace LearningAssistant.Services.Learning
             ValidateIndex();
         }
 
-        private void ValidateInitializeParameters(string userId, string language, string subCategory)
+        private void ValidateInitializeParameters(LearningContext context)
         {
-            if (string.IsNullOrWhiteSpace(userId))
-                throw new ArgumentException("userId cannot be null or empty", nameof(userId));
-            if (string.IsNullOrWhiteSpace(language))
-                throw new ArgumentException("language cannot be null or empty", nameof(language));
-            if (string.IsNullOrWhiteSpace(subCategory))
-                throw new ArgumentException("subCategory cannot be null or empty", nameof(subCategory));
+            if (string.IsNullOrWhiteSpace(context.UserId))
+                throw new ArgumentException("UserId cannot be null or empty", nameof(context));
         }
 
-        private void LoadAllItems(string subCategory, string wordBankFile)
+        private void LoadAllItems(LearningContext context)
         {
             _allItems.Clear();
-            var items = _contentLoaderService.LoadItems(subCategory, wordBankFile);
+            var items = _contentLoaderService.LoadItems(context);
             foreach (var item in items)
             {
                 if (item is LearningItem learningItem)
@@ -118,7 +112,7 @@ namespace LearningAssistant.Services.Learning
             {
                 _studyItems.Clear();
 
-                if (_state.CurrentMode == Constants.LearningMode.Quick)
+                if (_state.CurrentMode == LearningModeType.Quick)
                 {
                     _studyItems = _studyListProcessor.ProcessItems(new List<LearningItem>(_allItems), _state.CurrentSortOrder);
                     _state.QuickModeIndex = Math.Min(_state.QuickModeIndex, _studyItems.Count - 1);
@@ -137,9 +131,9 @@ namespace LearningAssistant.Services.Learning
                 _studyItems = _allItems.Where(item => _state.UnknownItems.Contains(item.GetMainContent())).ToList();
                 _studyItems = _studyListProcessor.RemoveDuplicates(_studyItems);
 
-                if (_state.CurrentSortOrder == Constants.SortOrder.Random)
+                if (_state.CurrentSortOrder == SortOrderType.Random)
                 {
-                    _studyItems = _studyListProcessor.ProcessItems(_studyItems, Constants.SortOrder.Random);
+                    _studyItems = _studyListProcessor.ProcessItems(_studyItems, SortOrderType.Random);
                 }
 
                 _state.StudyModeIndex = Math.Min(_state.StudyModeIndex, _studyItems.Count - 1);
@@ -174,20 +168,20 @@ namespace LearningAssistant.Services.Learning
         {
             lock (_stateLock)
             {
-                int currentIndex = _state.CurrentMode == Constants.LearningMode.Quick
+                int currentIndex = _state.CurrentMode == LearningModeType.Quick
                     ? _state.QuickModeIndex
                     : _state.StudyModeIndex;
 
                 if (currentIndex >= _studyItems.Count)
                 {
-                    if (_state.CurrentMode == Constants.LearningMode.Quick)
+                    if (_state.CurrentMode == LearningModeType.Quick)
                         _state.QuickModeIndex = Math.Max(0, _studyItems.Count - 1);
                     else
                         _state.StudyModeIndex = Math.Max(0, _studyItems.Count - 1);
                 }
                 if (currentIndex < 0)
                 {
-                    if (_state.CurrentMode == Constants.LearningMode.Quick)
+                    if (_state.CurrentMode == LearningModeType.Quick)
                         _state.QuickModeIndex = 0;
                     else
                         _state.StudyModeIndex = 0;
@@ -202,7 +196,7 @@ namespace LearningAssistant.Services.Learning
                 if (string.IsNullOrWhiteSpace(_state.UserId))
                     return null;
 
-                int index = _state.CurrentMode == Constants.LearningMode.Quick
+                int index = _state.CurrentMode == LearningModeType.Quick
                     ? _state.QuickModeIndex
                     : _state.StudyModeIndex;
                 return index >= 0 && index < _studyItems.Count ? _studyItems[index] : null;
@@ -216,7 +210,7 @@ namespace LearningAssistant.Services.Learning
                 if (string.IsNullOrWhiteSpace(_state.UserId))
                     return false;
 
-                int index = _state.CurrentMode == Constants.LearningMode.Quick
+                int index = _state.CurrentMode == LearningModeType.Quick
                     ? _state.QuickModeIndex
                     : _state.StudyModeIndex;
                 return index < _studyItems.Count - 1;
@@ -230,13 +224,13 @@ namespace LearningAssistant.Services.Learning
                 if (string.IsNullOrWhiteSpace(_state.UserId))
                     return;
 
-                int index = _state.CurrentMode == Constants.LearningMode.Quick
+                int index = _state.CurrentMode == LearningModeType.Quick
                     ? _state.QuickModeIndex
                     : _state.StudyModeIndex;
 
                 if (index < _studyItems.Count - 1)
                 {
-                    if (_state.CurrentMode == Constants.LearningMode.Quick)
+                    if (_state.CurrentMode == LearningModeType.Quick)
                         _state.QuickModeIndex++;
                     else
                         _state.StudyModeIndex++;
@@ -253,7 +247,7 @@ namespace LearningAssistant.Services.Learning
 
                 if (index >= 0 && index < _studyItems.Count)
                 {
-                    if (_state.CurrentMode == Constants.LearningMode.Quick)
+                    if (_state.CurrentMode == LearningModeType.Quick)
                         _state.QuickModeIndex = index;
                     else
                         _state.StudyModeIndex = index;
@@ -384,7 +378,7 @@ namespace LearningAssistant.Services.Learning
 
         private LearningItem? GetCurrentItemInternal()
         {
-            int index = _state.CurrentMode == Constants.LearningMode.Quick
+            int index = _state.CurrentMode == LearningModeType.Quick
                 ? _state.QuickModeIndex
                 : _state.StudyModeIndex;
             return index >= 0 && index < _studyItems.Count ? _studyItems[index] : null;
@@ -395,14 +389,14 @@ namespace LearningAssistant.Services.Learning
             _progressManager.SaveProgress(_state.UserId, _state.SubCategory, _state);
         }
 
-        private void RecordActivityInternal(string userId, string subCategory, string activityType)
+        private void RecordActivityInternal(string userId, SubCategoryType subCategory, string activityType)
         {
-            _analyticsService?.RecordActivity(userId, activityType, subCategory);
+            _analyticsService?.RecordActivity(userId, activityType, subCategory.ToString());
         }
 
         private void RecordActivity(string activityType)
         {
-            _analyticsService?.RecordActivity(_state.UserId, activityType, _state.SubCategory);
+            _analyticsService?.RecordActivity(_state.UserId, activityType, _state.SubCategory.ToString());
         }
 
         public StudyStatistics GetStatistics()
@@ -454,11 +448,11 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        public void ApplySettings(string mode, string sortOrder)
+        public void ApplySettings(LearningModeType mode, SortOrderType sortOrder)
         {
             lock (_stateLock)
             {
-                _state.CurrentMode = mode == Constants.LearningMode.Quick ? Constants.LearningMode.Quick : Constants.LearningMode.Study;
+                _state.CurrentMode = mode == LearningModeType.Quick ? LearningModeType.Quick : LearningModeType.Study;
                 _state.CurrentSortOrder = sortOrder;
                 BuildStudyItemsInternal();
                 ValidateIndexInternal();
@@ -469,7 +463,7 @@ namespace LearningAssistant.Services.Learning
         {
             _studyItems.Clear();
 
-            if (_state.CurrentMode == Constants.LearningMode.Quick)
+            if (_state.CurrentMode == LearningModeType.Quick)
             {
                 _studyItems = _studyListProcessor.ProcessItems(new List<LearningItem>(_allItems), _state.CurrentSortOrder);
                 _state.QuickModeIndex = Math.Min(_state.QuickModeIndex, _studyItems.Count - 1);
@@ -482,32 +476,30 @@ namespace LearningAssistant.Services.Learning
 
         private void ValidateIndexInternal()
         {
-            int currentIndex = _state.CurrentMode == Constants.LearningMode.Quick
+            int currentIndex = _state.CurrentMode == LearningModeType.Quick
                 ? _state.QuickModeIndex
                 : _state.StudyModeIndex;
 
             if (currentIndex >= _studyItems.Count)
             {
-                if (_state.CurrentMode == Constants.LearningMode.Quick)
+                if (_state.CurrentMode == LearningModeType.Quick)
                     _state.QuickModeIndex = Math.Max(0, _studyItems.Count - 1);
                 else
                     _state.StudyModeIndex = Math.Max(0, _studyItems.Count - 1);
             }
             if (currentIndex < 0)
             {
-                if (_state.CurrentMode == Constants.LearningMode.Quick)
+                if (_state.CurrentMode == LearningModeType.Quick)
                     _state.QuickModeIndex = 0;
                 else
                     _state.StudyModeIndex = 0;
             }
         }
 
-        public void AddUnknownItem(string content, string subCategory)
+        public void AddUnknownItem(string content, SubCategoryType subCategory)
         {
             if (string.IsNullOrWhiteSpace(content))
                 throw new ArgumentException("content cannot be null or empty", nameof(content));
-            if (string.IsNullOrWhiteSpace(subCategory))
-                throw new ArgumentException("subCategory cannot be null or empty", nameof(subCategory));
 
             lock (_stateLock)
             {
@@ -527,13 +519,11 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        // ========== 进度查询方法（原IProgressService功能）==========
-
-        public string GetProgressSummary(string userId, string language, string subCategory)
+        public string GetProgressSummary(string userId, SubjectType subject, SubCategoryType subCategory)
         {
             var profile = _persistenceService.LoadUserProfile(userId);
             if (profile?.LearningProgress == null)
-                return $"玩家: 未知\n品类: {language} > {subCategory}\n暂无学习数据";
+                return $"玩家: 未知\n品类: {subject} > {subCategory}\n暂无学习数据";
 
             var progress = profile.LearningProgress;
 
@@ -541,7 +531,8 @@ namespace LearningAssistant.Services.Learning
             int totalUnknown = 0;
             double accuracy = 0;
 
-            if (progress.CategoryProgresses.TryGetValue(subCategory, out var catProgress))
+            var subCategoryStr = subCategory.ToString();
+            if (progress.CategoryProgresses.TryGetValue(subCategoryStr, out var catProgress))
             {
                 totalKnown = catProgress.KnownItems.Count;
                 totalUnknown = catProgress.UnknownItems.Count;
@@ -552,44 +543,47 @@ namespace LearningAssistant.Services.Learning
             }
 
             return $"玩家: {profile.UserName}\n" +
-                $"品类: {language} > {subCategory}\n" +
+                $"品类: {subject} > {subCategory}\n" +
                 $"已掌握: {totalKnown} | 未掌握: {totalUnknown}\n" +
                 $"正确率: {accuracy:F1}%";
         }
 
-        public int GetKnownCount(string userId, string subCategory)
+        public int GetKnownCount(string userId, SubCategoryType subCategory)
         {
             var profile = _persistenceService.LoadUserProfile(userId);
             if (profile?.LearningProgress == null)
                 return 0;
 
-            if (profile.LearningProgress.CategoryProgresses.TryGetValue(subCategory, out var catProgress))
+            var subCategoryStr = subCategory.ToString();
+            if (profile.LearningProgress.CategoryProgresses.TryGetValue(subCategoryStr, out var catProgress))
             {
                 return catProgress.KnownItems.Count;
             }
             return 0;
         }
 
-        public int GetUnknownCount(string userId, string subCategory)
+        public int GetUnknownCount(string userId, SubCategoryType subCategory)
         {
             var profile = _persistenceService.LoadUserProfile(userId);
             if (profile?.LearningProgress == null)
                 return 0;
 
-            if (profile.LearningProgress.CategoryProgresses.TryGetValue(subCategory, out var catProgress))
+            var subCategoryStr = subCategory.ToString();
+            if (profile.LearningProgress.CategoryProgresses.TryGetValue(subCategoryStr, out var catProgress))
             {
                 return catProgress.UnknownItems.Count;
             }
             return 0;
         }
 
-        public double GetAccuracy(string userId, string subCategory)
+        public double GetAccuracy(string userId, SubCategoryType subCategory)
         {
             var profile = _persistenceService.LoadUserProfile(userId);
             if (profile?.LearningProgress == null)
                 return 0;
 
-            if (profile.LearningProgress.CategoryProgresses.TryGetValue(subCategory, out var catProgress) &&
+            var subCategoryStr = subCategory.ToString();
+            if (profile.LearningProgress.CategoryProgresses.TryGetValue(subCategoryStr, out var catProgress) &&
                 catProgress.TotalTestCount > 0)
             {
                 return (double)catProgress.CorrectCount / catProgress.TotalTestCount * 100;

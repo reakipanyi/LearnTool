@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using LearningAssistant.Models.Learning;
 using LearningAssistant.Services.Learning.SortStrategies;
 
@@ -5,7 +6,7 @@ namespace LearningAssistant.Services.Learning
 {
     public interface IStudyListProcessor
     {
-        List<LearningItem> ProcessItems(List<LearningItem> items, string sortOrder);
+        List<LearningItem> ProcessItems(List<LearningItem> items, SortOrderType sortOrder);
         List<LearningItem> RemoveDuplicates(List<LearningItem> items);
     }
 
@@ -18,10 +19,10 @@ namespace LearningAssistant.Services.Learning
             _sortStrategyFactory = sortStrategyFactory;
         }
 
-        public List<LearningItem> ProcessItems(List<LearningItem> items, string sortOrder)
+        public List<LearningItem> ProcessItems(List<LearningItem> items, SortOrderType sortOrder)
         {
             var processed = RemoveDuplicates(items);
-            var strategy = _sortStrategyFactory.GetStrategy(sortOrder);
+            var strategy = _sortStrategyFactory.GetStrategy(sortOrder.ToString());
             strategy.Sort(processed);
             return processed;
         }

@@ -44,8 +44,8 @@ namespace LearningAssistant.Presenters
         private string _currentExplanation = "";
         private bool _isLoading = false;
         private string _currentUserId = "";
-        private string _currentSubject = "";
-        private string _currentSubCategory = "";
+        private SubjectType _currentSubject = SubjectType.Chinese;
+        private SubCategoryType _currentSubCategory = SubCategoryType.ChineseCharacter;
         private int _autoPronunciationCount = 0;
         private readonly DateTime _sessionStartTime = DateTime.Now;
         private const int MaxAutoPronunciationCount = 5;
@@ -94,38 +94,42 @@ namespace LearningAssistant.Presenters
         private async Task InitializeCore(string userId, string language, string subCategory, string wordBankFile, bool continueMode)
         {
             _currentUserId = userId;
-            // 使用视图上当前选择的学科（已从设置加载），而不是外部传入的语言参数
             _currentSubject = _view.Subject;
 
-            subCategory = await LoadSubCategoriesAsync(_currentSubject, subCategory);
-            _currentSubCategory = subCategory;
+            var selectedSubCategory = await LoadSubCategoriesAsync(_currentSubject, subCategory);
+            _currentSubCategory = selectedSubCategory;
 
-            _studyEngine.Initialize(userId, _currentSubject, subCategory, wordBankFile, _view.LearningMode, _view.SortOrder, continueMode);
+            var context = new LearningContext(userId, _currentSubject, selectedSubCategory, wordBankFile, _view.LearningMode, _view.SortOrder);
+            _studyEngine.Initialize(context, continueMode);
             UpdateLearningList();
             await DisplayCurrentItemAsync();
         }
 
-        private async Task<string> LoadSubCategoriesAsync(string subject, string subCategory)
+        private async Task<SubCategoryType> LoadSubCategoriesAsync(SubjectType subject, string subCategory)
         {
             try
             {
-                var subCategories = _contentLoaderService.GetSubCategoriesBySubject(subject);
+                var subCategories = _contentLoaderService.GetSubCategories(subject);
                 _view.RefreshSubCategories(subCategories);
 
-                if (string.IsNullOrEmpty(subCategory) || !subCategories.Contains(subCategory))
+                if (string.IsNullOrEmpty(subCategory) || !subCategories.Any(s => s.ToString().Equals(subCategory, StringComparison.OrdinalIgnoreCase)))
                 {
                     return _view.SubCategory;
                 }
                 else
                 {
-                    _view.SubCategory = subCategory;
-                    return subCategory;
+                    if (SubjectSubCategoryMapping.TryParseSubCategory(subCategory, out var parsedSubCat))
+                    {
+                        _view.SubCategory = parsedSubCat;
+                        return parsedSubCat;
+                    }
+                    return _view.SubCategory;
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load subcategories");
-                return subCategory;
+                return _view.SubCategory;
             }
         }
 
@@ -219,7 +223,7 @@ namespace LearningAssistant.Presenters
             if (_ttsService == null || !_ttsService.Available) return;
 
             var scope = _view.PronunciationScope;
-            string lang = _currentSubject == Constants.Subject.Chinese ? "zh" : "en";
+            string lang = _currentSubject == SubjectType.Chinese ? "zh" : "en";
 
             if (scope == PronunciationScope.Original || scope == PronunciationScope.Both)
             {
@@ -251,7 +255,7 @@ namespace LearningAssistant.Presenters
                         UserId = _currentUserId,
                         ItemId = currentItem.GetMainContent(),
                         ItemContent = currentItem.GetMainContent(),
-                        SubCategory = _currentSubCategory,
+                        SubCategory = _currentSubCategory.ToString(),
                         LearnedAt = DateTime.Now
                     });
                     _logger.LogInformation("Published ItemLearnedEvent for user {UserId}, item {ItemContent}", _currentUserId, currentItem.GetMainContent());
@@ -281,8 +285,8 @@ namespace LearningAssistant.Presenters
                     else
                     {
                         var newItem = _spacedRepetitionService.CreateNewItem(_currentUserId, content, answer);
-                        newItem.Category = _currentSubCategory;
-                        newItem.Subject = _currentSubject;
+                        newItem.Category = _currentSubCategory.ToString();
+                        newItem.Subject = _currentSubject.ToString();
                         _spacedRepetitionService.UpdateItem(newItem);
                         _spacedRepetitionService.CalculateNextReview(newItem, 4);
                     }
@@ -296,8 +300,8 @@ namespace LearningAssistant.Presenters
                     else
                     {
                         var newItem = _spacedRepetitionService.CreateNewItem(_currentUserId, content, answer);
-                        newItem.Category = _currentSubCategory;
-                        newItem.Subject = _currentSubject;
+                        newItem.Category = _currentSubCategory.ToString();
+                        newItem.Subject = _currentSubject.ToString();
                         _spacedRepetitionService.UpdateItem(newItem);
                         _spacedRepetitionService.CalculateNextReview(newItem, 2);
                     }
@@ -331,7 +335,7 @@ namespace LearningAssistant.Presenters
                         ItemContent = currentItem.GetMainContent(),
                         CorrectAnswer = currentItem.GetDisplayText(),
                         UserAnswer = "",
-                        SubCategory = _currentSubCategory,
+                        SubCategory = _currentSubCategory.ToString(),
                         WrongAt = DateTime.Now
                     });
                     _logger.LogInformation("Published ItemWrongEvent for user {UserId}, item {ItemContent}", _currentUserId, currentItem.GetMainContent());
@@ -419,7 +423,7 @@ namespace LearningAssistant.Presenters
                 TotalItems = _studyEngine.TotalCount,
                 CorrectCount = stats.CorrectCount,
                 Accuracy = stats.AccuracyRate,
-                SubCategory = _currentSubCategory,
+                SubCategory = _currentSubCategory.ToString(),
                 Duration = sessionDuration
             });
             _logger.LogInformation("Published LearningSessionCompletedEvent for user {UserId}, duration {Duration}", _currentUserId, sessionDuration);
@@ -451,10 +455,10 @@ namespace LearningAssistant.Presenters
             {
                 _logger.LogInformation("Settings changed");
 
-                string newSubject = _view.Subject;
-                string newSubCategory = _view.SubCategory;
-                string newMode = _view.LearningMode;
-                string newSortOrder = _view.SortOrder;
+                var newSubject = _view.Subject;
+                var newSubCategory = _view.SubCategory;
+                var newMode = _view.LearningMode;
+                var newSortOrder = _view.SortOrder;
 
                 bool subjectChanged = newSubject != _currentSubject;
                 bool subCategoryChanged = newSubCategory != _currentSubCategory;
@@ -464,7 +468,7 @@ namespace LearningAssistant.Presenters
                 if (subjectChanged)
                 {
                     _currentSubject = newSubject;
-                    var subCategories = _contentLoaderService.GetSubCategoriesBySubject(newSubject);
+                    var subCategories = _contentLoaderService.GetSubCategories(newSubject);
                     _view.RefreshSubCategories(subCategories);
 
                     if (subCategories.Count > 0)
@@ -481,7 +485,8 @@ namespace LearningAssistant.Presenters
                 if (subjectChanged || subCategoryChanged)
                 {
                     string userId = string.IsNullOrWhiteSpace(_currentUserId) ? "default" : _currentUserId;
-                    _studyEngine.Initialize(userId, _currentSubject, _currentSubCategory, "", newMode, newSortOrder, true);
+                    var context = new LearningContext(userId, _currentSubject, _currentSubCategory, "", newMode, newSortOrder);
+                    _studyEngine.Initialize(context, true);
                 }
                 else if (modeChanged || sortChanged)
                 {
@@ -530,7 +535,7 @@ namespace LearningAssistant.Presenters
                     {
                         UserId = _currentUserId,
                         SearchText = item.GetMainContent(),
-                        Language = _currentSubject
+                        Language = _currentSubject.ToString()
                     });
                     _logger.LogInformation("Published SendToPdfSearchEvent for text: {Text}", item.GetMainContent());
                 }
@@ -539,7 +544,7 @@ namespace LearningAssistant.Presenters
                     OnSendToPdfQuestion?.Invoke(this, new SendToPdfEventArgs
                     {
                         Text = item.GetMainContent(),
-                        Language = _currentSubject
+                        Language = _currentSubject.ToString()
                     });
                 }
             }

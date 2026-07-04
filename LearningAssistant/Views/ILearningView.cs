@@ -1,105 +1,32 @@
+using LearningAssistant.Common;
 using LearningAssistant.Managers;
 
 namespace LearningAssistant.Views
 {
-    /// <summary>
-    /// 发音范围枚举 - 控制哪些内容需要发音
-    /// </summary>
     public enum PronunciationScope
     {
-        /// <summary>
-        /// 仅原文发音
-        /// </summary>
         Original,
-
-        /// <summary>
-        /// 仅解释发音
-        /// </summary>
         Explanation,
-
-        /// <summary>
-        /// 两者都发音
-        /// </summary>
         Both
     }
 
-    /// <summary>
-    /// 学习视图接口 - 提供学习界面的显示和交互功能
-    /// </summary>
     public interface ILearningView
     {
-        /// <summary>
-        /// 当前学习内容
-        /// </summary>
         string CurrentContent { set; }
-
-        /// <summary>
-        /// 当前显示文本（带格式）
-        /// </summary>
         string CurrentDisplayText { set; }
         string CurrentDisplayStruct { set; }
-
-        /// <summary>
-        /// 当前学习项
-        /// </summary>
         Models.Learning.LearningItem? CurrentItem { set; }
-
-
-        /// <summary>
-        /// 统计信息文本
-        /// </summary>
         string Statistics { set; }
-
-        /// <summary>
-        /// 当前进度值
-        /// </summary>
         int ProgressValue { set; }
-
-        /// <summary>
-        /// 进度最大值
-        /// </summary>
         int ProgressMax { set; }
-
-        /// <summary>
-        /// 是否启用语音
-        /// </summary>
         bool IsVoiceEnabled { get; set; }
-
-
-        /// <summary>
-        /// 发音范围
-        /// </summary>
         PronunciationScope PronunciationScope { get; set; }
 
-        /// <summary>
-        /// 当前学习模式
-        /// </summary>
-        string CurrentMode { get; }
-
-        /// <summary>
-        /// 学习模式（Study/Test）
-        /// </summary>
-        string LearningMode { get; }
-
-        /// <summary>
-        /// 排序方式
-        /// </summary>
-        string SortOrder { get; }
-
-        /// <summary>
-        /// 学习语言（兼容旧版）
-        /// </summary>
-        string Language { get; }
-
-        /// <summary>
-        /// 学习学科
-        /// </summary>
-        string Subject { get; }
-
-        /// <summary>
-        /// 当前子类别
-        /// </summary>
-        string SubCategory { get; set; }
+        LearningModeType CurrentMode { get; }
+        LearningModeType LearningMode { get; }
+        SortOrderType SortOrder { get; }
+        SubjectType Subject { get; }
+        SubCategoryType SubCategory { get; set; }
 
         /// <summary>
         /// 标记为已知点击事件
@@ -184,11 +111,7 @@ namespace LearningAssistant.Views
         /// <param name="currentIndex">当前索引</param>
         void UpdateLearningListSelection(int currentIndex);
 
-        /// <summary>
-        /// 刷新子类别列表
-        /// </summary>
-        /// <param name="subCategories">子类别列表</param>
-        void RefreshSubCategories(List<string> subCategories);
+        void RefreshSubCategories(List<SubCategoryType> subCategories);
 
         /// <summary>
         /// 设置加载状态

@@ -18,7 +18,7 @@ namespace LearningAssistant.Forms
         private List<WrongAnswerItem> _allItems = new();
         private List<WrongAnswerItem> _filteredItems = new();
         private WrongAnswerItem? _currentItem;
-        private string _currentSubject = "全部";
+        private SubjectType? _currentSubject = null;
         private string _currentStatus = "全部";
         private bool _isBatchMode = false;
         private HashSet<string> _selectedIds = new();
@@ -874,9 +874,9 @@ namespace LearningAssistant.Forms
         {
             IEnumerable<WrongAnswerItem> query = _allItems;
 
-            if (_currentSubject != "全部")
+            if (_currentSubject.HasValue)
             {
-                query = query.Where(i => i.Subject == _currentSubject);
+                query = query.Where(i => i.Subject == _currentSubject.Value);
             }
 
             if (_currentStatus == "待复习")
@@ -893,7 +893,7 @@ namespace LearningAssistant.Forms
             {
                 query = query.Where(i =>
                     i.Question.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    i.Subject.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0);
+                    i.Subject.ToString().IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0);
             }
 
             _filteredItems = query.OrderByDescending(i => i.AddedAt).ToList();
@@ -933,11 +933,13 @@ namespace LearningAssistant.Forms
 
             if (selected == "📋 全部")
             {
-                _currentSubject = "全部";
+                _currentSubject = null;
             }
             else
             {
-                _currentSubject = selected.Replace("📁 ", "").Trim();
+                var subjectStr = selected.Replace("📁 ", "").Trim();
+                SubjectSubCategoryMapping.TryParseSubject(subjectStr, out var subject);
+                _currentSubject = subject;
             }
 
             ApplyFilters();
