@@ -47,6 +47,8 @@ namespace LearningAssistant.Forms
         private Button? _buttonRemoveHighlight;
         private Button? _buttonBatchRemoveHighlight;
         private Button? _buttonExportHighlights;
+        private TextBox? _textBoxFilter;
+        private List<string> _allFiles = new List<string>();
 
         private TabPage? _tabPageBookmarksAndHighlights;
 
@@ -472,8 +474,21 @@ namespace LearningAssistant.Forms
 
         public void SetFileList(IEnumerable<string> files)
         {
+            _allFiles = files.ToList();
+            _textBoxFilter?.Clear();
+            UpdateFileListDisplay();
+        }
+
+        private void UpdateFileListDisplay()
+        {
             treeViewFiles.Nodes.Clear();
-            foreach (var file in files)
+            string filter = _textBoxFilter?.Text?.Trim() ?? string.Empty;
+            
+            var filteredFiles = string.IsNullOrEmpty(filter)
+                ? _allFiles
+                : _allFiles.Where(f => Path.GetFileName(f).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0);
+            
+            foreach (var file in filteredFiles)
             {
                 var node = treeViewFiles.Nodes.Add(Path.GetFileName(file));
                 node.Tag = file;
@@ -482,11 +497,9 @@ namespace LearningAssistant.Forms
 
         public void SetImageList(IEnumerable<string> imageFiles)
         {
-            treeViewFiles.Nodes.Clear();
-            foreach (var file in imageFiles)
-            {
-                treeViewFiles.Nodes.Add(Path.GetFileName(file));
-            }
+            _allFiles = imageFiles.ToList();
+            _textBoxFilter?.Clear();
+            UpdateFileListDisplay();
         }
 
         public void SetPageCount(int count)
@@ -1585,6 +1598,7 @@ namespace LearningAssistant.Forms
             // tabPageFiles
             // 
             tabPageFiles.Controls.Add(treeViewFiles);
+            tabPageFiles.Controls.Add(_textBoxFilter);
             tabPageFiles.Location = new Point(4, 26);
             tabPageFiles.Name = "tabPageFiles";
             tabPageFiles.Padding = new Padding(3);
@@ -1593,12 +1607,23 @@ namespace LearningAssistant.Forms
             tabPageFiles.Text = "📁 目录";
             tabPageFiles.UseVisualStyleBackColor = true;
             // 
+            // _textBoxFilter
+            // 
+            _textBoxFilter = new TextBox();
+            _textBoxFilter.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            _textBoxFilter.Location = new Point(3, 3);
+            _textBoxFilter.Name = "_textBoxFilter";
+            _textBoxFilter.Size = new Size(326, 23);
+            _textBoxFilter.TabIndex = 1;
+            _textBoxFilter.PlaceholderText = "🔍 搜索文件...";
+            _textBoxFilter.TextChanged += TextBoxFilter_TextChanged;
+            // 
             // treeViewFiles
             // 
-            treeViewFiles.Dock = DockStyle.Fill;
-            treeViewFiles.Location = new Point(3, 3);
+            treeViewFiles.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            treeViewFiles.Location = new Point(3, 32);
             treeViewFiles.Name = "treeViewFiles";
-            treeViewFiles.Size = new Size(326, 777);
+            treeViewFiles.Size = new Size(326, 748);
             treeViewFiles.TabIndex = 0;
             treeViewFiles.AfterSelect += TreeViewFiles_AfterSelect;
             // 
@@ -2018,6 +2043,11 @@ namespace LearningAssistant.Forms
         private void TreeViewFiles_AfterSelect(object? sender, TreeViewEventArgs e)
         {
             FileSelected?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void TextBoxFilter_TextChanged(object? sender, EventArgs e)
+        {
+            UpdateFileListDisplay();
         }
 
         private void PictureBoxPdf_MouseDown(object? sender, MouseEventArgs e)

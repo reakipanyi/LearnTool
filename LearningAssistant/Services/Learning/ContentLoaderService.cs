@@ -1,49 +1,12 @@
-
-using Microsoft.Extensions.Logging;
 using LearningAssistant.Common;
 using LearningAssistant.Models.Learning;
+using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Services.Learning
 {
     public class ContentLoaderService : IContentLoaderService
     {
         private readonly ILogger<ContentLoaderService> _logger;
-        private readonly Dictionary<string, Type> _categoryTypeMap = new Dictionary<string, Type>
-        {
-            { Constants.SubCategory.ChineseCharacter, typeof(ChineseCharacter) },
-            { Constants.SubCategory.ChinesePhrase, typeof(ChinesePhrase) },
-            { Constants.SubCategory.ChineseIdiom, typeof(ChineseIdiom) },
-            { Constants.SubCategory.ChinesePoem, typeof(ChinesePoem) },
-            { Constants.SubCategory.ChineseComprehensive, typeof(ChineseComprehensive) },
-            { Constants.SubCategory.EnglishWord, typeof(EnglishWord) },
-            { Constants.SubCategory.EnglishPhrase, typeof(EnglishPhrase) },
-            { Constants.SubCategory.EnglishSentence, typeof(EnglishSentence) },
-            { Constants.SubCategory.EnglishComprehensive, typeof(EnglishComprehensive) },
-            { Constants.SubCategory.MathFormula, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.MathExample, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.MathConcept, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.MathComprehensive, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.PhysicsLaw, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.PhysicsExperiment, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.PhysicsDerivation, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.PhysicsComprehensive, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.ChemistryEquation, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.ChemistryElement, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.ChemistryExperiment, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.ChemistryComprehensive, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.HistoryEvent, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.HistoryPerson, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.HistoryTimeline, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.HistoryComprehensive, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.GeographyKnowledge, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.GeographyMap, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.GeographyClimate, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.GeographyComprehensive, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.BiologyConcept, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.BiologyExperiment, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.BiologyPhenomenon, typeof(GeneralSubjectItem) },
-            { Constants.SubCategory.BiologyComprehensive, typeof(GeneralSubjectItem) }
-        };
 
         private readonly Dictionary<string, string> _categoryFileMap = new Dictionary<string, string>
         {
@@ -105,24 +68,19 @@ namespace LearningAssistant.Services.Learning
                     return new List<LearningItem>();
                 }
 
-                var itemType = GetItemType(subCategory);
                 var json = File.ReadAllText(filePath);
+                var items = JsonHelper.DeserializeLearningItems(json);
 
-                var listType = typeof(List<>).MakeGenericType(itemType);
-                var items = System.Text.Json.JsonSerializer.Deserialize(json, listType,
-                    new System.Text.Json.JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true,
-                        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-                    });
-
-                if (items == null)
+                foreach (var item in items)
                 {
-                    _logger.LogWarning("No items loaded from file: {FilePath}", filePath);
-                    return new List<LearningItem>();
+                    if (item.SubCategory == 0)
+                    {
+                        if (Enum.TryParse(subCategory, out SubCategoryType subCategoryType))
+                            item.SubCategory = subCategoryType;
+                    }
                 }
 
-                return ((System.Collections.IList)items).Cast<LearningItem>().ToList();
+                return items;
             }
             catch (Exception ex)
             {
@@ -303,7 +261,7 @@ namespace LearningAssistant.Services.Learning
 
         public Type GetItemType(string subCategory)
         {
-            return _categoryTypeMap.GetValueOrDefault(subCategory, typeof(LearningItem));
+            return typeof(LearningItem);
         }
 
         public void SaveUserContent(UserContent content)
@@ -345,7 +303,5 @@ namespace LearningAssistant.Services.Learning
                 return false;
             }
         }
-
     }
 }
-

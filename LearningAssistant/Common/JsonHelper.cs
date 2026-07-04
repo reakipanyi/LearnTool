@@ -1,4 +1,6 @@
 using System.Text.Json;
+using LearningAssistant.Models.Learning;
+using Newtonsoft.Json;
 
 namespace LearningAssistant.Common
 {
@@ -11,9 +13,15 @@ namespace LearningAssistant.Common
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
 
+        private static readonly JsonSerializerSettings _learningItemSettings = new JsonSerializerSettings
+        {
+            Formatting = Formatting.Indented,
+            Converters = { new LearningItemListJsonConverter() }
+        };
+
         public static string Serialize<T>(T obj)
         {
-            return JsonSerializer.Serialize(obj, _options);
+            return System.Text.Json.JsonSerializer.Serialize(obj, _options);
         }
 
         public static T? Deserialize<T>(string json)
@@ -21,7 +29,7 @@ namespace LearningAssistant.Common
             if (string.IsNullOrWhiteSpace(json))
                 return default;
             
-            return JsonSerializer.Deserialize<T>(json, _options);
+            return System.Text.Json.JsonSerializer.Deserialize<T>(json, _options);
         }
 
         public static T? LoadFromFile<T>(string filePath)
@@ -38,7 +46,7 @@ namespace LearningAssistant.Common
             {
                 return default;
             }
-            catch (JsonException ex)
+            catch (System.Text.Json.JsonException ex)
             {
                 System.Diagnostics.Trace.TraceWarning($"JSON parse error in {filePath}: {ex.Message}");
                 return default;
@@ -75,6 +83,34 @@ namespace LearningAssistant.Common
             
             var json = System.Text.Encoding.UTF8.GetString(bytes);
             return Deserialize<T>(json);
+        }
+
+        public static List<LearningItem> DeserializeLearningItems(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+                return new List<LearningItem>();
+
+            try
+            {
+                return JsonConvert.DeserializeObject<List<LearningItem>>(json, _learningItemSettings) 
+                       ?? new List<LearningItem>();
+            }
+            catch (Exception)
+            {
+                return new List<LearningItem>();
+            }
+        }
+
+        public static void SaveToFile(string filePath, List<LearningItem> items)
+        {
+            var directory = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                AppPaths.EnsureDirectoryExists(directory);
+            }
+            
+            var json = JsonConvert.SerializeObject(items, _learningItemSettings);
+            File.WriteAllText(filePath, json);
         }
     }
 }

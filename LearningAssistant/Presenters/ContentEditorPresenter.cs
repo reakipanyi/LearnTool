@@ -511,26 +511,129 @@ namespace LearningAssistant.Presenters
                 return table;
             }
 
-            var properties = items[0].GetType().GetProperties();
-            foreach (var prop in properties)
+            var allColumns = new HashSet<string>();
+            if (CategoryTemplates.TryGetValue(category, out var template2))
             {
-                var column = table.Columns.Add(prop.Name, typeof(string));
-                column.Caption = GetChineseColumnName(prop.Name, category);
+                foreach (var key in template2.Keys)
+                    allColumns.Add(key);
+            }
+
+            foreach (var item in items)
+            {
+                allColumns.Add("Id");
+                allColumns.Add("CreatedAt");
+                allColumns.Add("UpdatedAt");
+
+                if (!string.IsNullOrWhiteSpace(item.MainContent))
+                {
+                    if (category.StartsWith("English"))
+                        allColumns.Add("Word");
+                    else if (category.StartsWith("Chinese"))
+                        allColumns.Add(category.Contains("Character") ? "Character" : category.Contains("Idiom") ? "Idiom" : category.Contains("Poem") ? "Title" : "Phrase");
+                }
+
+                if (item.Meaning != null)
+                    allColumns.Add("Meaning");
+                if (item.Example != null)
+                {
+                    allColumns.Add("Example");
+                    if (!string.IsNullOrWhiteSpace(item.Example.Translation))
+                        allColumns.Add("ExampleTranslation");
+                }
+                if (item.Pronunciation != null)
+                {
+                    allColumns.Add("Phonetic");
+                    if (!string.IsNullOrWhiteSpace(item.Pronunciation.UkPhonetic))
+                        allColumns.Add("UkPhonetic");
+                    if (!string.IsNullOrWhiteSpace(item.Pronunciation.UsPhonetic))
+                        allColumns.Add("UsPhonetic");
+                }
+                if (item.CharacterFeatures != null)
+                {
+                    allColumns.Add("StrokeCount");
+                    allColumns.Add("Radical");
+                    allColumns.Add("Structure");
+                }
+                if (item.WordFeatures != null)
+                {
+                    allColumns.Add("PartOfSpeech");
+                    allColumns.Add("WordForms");
+                    allColumns.Add("Collocations");
+                    allColumns.Add("SyllableBreakdown");
+                }
+            }
+
+            foreach (var col in allColumns)
+            {
+                var column = table.Columns.Add(col, typeof(string));
+                column.Caption = GetChineseColumnName(col, category);
             }
 
             foreach (var item in items)
             {
                 var row = table.NewRow();
-                foreach (var prop in properties)
+                row["Id"] = item.Id;
+                row["CreatedAt"] = item.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss");
+                row["UpdatedAt"] = item.UpdatedAt.ToString("yyyy-MM-dd HH:mm:ss");
+
+                if (category.StartsWith("English"))
+                    row["Word"] = item.MainContent;
+                else if (category.StartsWith("Chinese"))
                 {
-                    var value = prop.GetValue(item);
-                    row[prop.Name] = value switch
-                    {
-                        List<string> list => list.Count > 0 ? string.Join(", ", list) : "",
-                        null => "",
-                        _ => value.ToString() ?? ""
-                    };
+                    if (category.Contains("Character"))
+                        row["Character"] = item.MainContent;
+                    else if (category.Contains("Idiom"))
+                        row["Idiom"] = item.MainContent;
+                    else if (category.Contains("Poem"))
+                        row["Title"] = item.MainContent;
+                    else
+                        row["Phrase"] = item.MainContent;
                 }
+
+                if (item.Meaning != null)
+                    row["Meaning"] = item.Meaning.Content;
+                if (item.Example != null)
+                {
+                    row["Example"] = item.Example.Content;
+                    if (!string.IsNullOrWhiteSpace(item.Example.Translation))
+                        row["ExampleTranslation"] = item.Example.Translation;
+                }
+                if (item.Pronunciation != null)
+                {
+                    row["Phonetic"] = item.Pronunciation.Main;
+                    if (!string.IsNullOrWhiteSpace(item.Pronunciation.UkPhonetic))
+                        row["UkPhonetic"] = item.Pronunciation.UkPhonetic;
+                    if (!string.IsNullOrWhiteSpace(item.Pronunciation.UsPhonetic))
+                        row["UsPhonetic"] = item.Pronunciation.UsPhonetic;
+                }
+                if (item.CharacterFeatures != null)
+                {
+                    row["StrokeCount"] = item.CharacterFeatures.StrokeCount;
+                    row["Radical"] = item.CharacterFeatures.Radical;
+                    row["Structure"] = item.CharacterFeatures.Structure;
+                }
+                if (item.WordFeatures != null)
+                {
+                    row["PartOfSpeech"] = item.WordFeatures.PartOfSpeech;
+                    row["WordForms"] = item.WordFeatures.WordForms;
+                    row["Collocations"] = item.WordFeatures.Collocations;
+                    row["SyllableBreakdown"] = item.WordFeatures.SyllableBreakdown;
+                }
+
+                try
+                {
+                    var props = JsonConvert.DeserializeObject<Dictionary<string, object>>(item.ExtendedProperties);
+                    if (props != null)
+                    {
+                        foreach (var prop in props)
+                        {
+                            if (table.Columns.Contains(prop.Key))
+                                row[prop.Key] = prop.Value?.ToString() ?? "";
+                        }
+                    }
+                }
+                catch { }
+
                 table.Rows.Add(row);
             }
 
@@ -596,6 +699,10 @@ namespace LearningAssistant.Presenters
 
             foreach (var newItem in items)
             {
+                newItem.Subject = category.StartsWith("English") ? SubjectType.English : SubjectType.Chinese;
+                if (Enum.TryParse(category, out SubCategoryType subCategory))
+                    newItem.SubCategory = subCategory;
+
                 var newMainContent = newItem.GetMainContent().Trim().ToLower();
                 var existingIndex = itemsOld.FindIndex(item =>
                     item.GetMainContent().Trim().ToLower() == newMainContent);
@@ -623,9 +730,6 @@ namespace LearningAssistant.Presenters
         /// <returns>解析后的对象列表</returns>
         private List<LearningItem> ParseJsonToItems(string json, string category)
         {
-            var items = new List<LearningItem>();
-            var itemType = _contentLoaderService.GetItemType(category);
-
             if (!json.TrimStart().StartsWith("[")) json = $"[{json}]";
 
             try
@@ -651,20 +755,7 @@ namespace LearningAssistant.Presenters
                 _logger.LogWarning(ex, "Failed to convert Chinese column names to English, proceeding with original JSON");
             }
 
-            var listType = typeof(List<>).MakeGenericType(itemType);
-            var data = System.Text.Json.JsonSerializer.Deserialize(json, listType,
-                new System.Text.Json.JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true,
-                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-                });
-            var importedItems = ((System.Collections.IList)data).Cast<LearningItem>().ToList();
-            foreach (var item in importedItems)
-            {
-                items.Add(item);
-            }
-
-            return items;
+            return JsonHelper.DeserializeLearningItems(json);
         }
 
         /// <summary>
@@ -675,18 +766,83 @@ namespace LearningAssistant.Presenters
         /// <returns>转换后的对象列表</returns>
         private List<LearningItem> ConvertDataTableToItems(DataTable table, string category)
         {
-            var itemType = _contentLoaderService.GetItemType(category);
-            return table.Rows.Cast<DataRow>().Select(row =>
+            var items = new List<LearningItem>();
+
+            foreach (DataRow row in table.Rows)
             {
-                var jsonObj = new JObject();
+                var item = new LearningItem
+                {
+                    Id = row["Id"]?.ToString() ?? Guid.NewGuid().ToString(),
+                    CreatedAt = DateTime.TryParse(row["CreatedAt"]?.ToString(), out var createdAt) ? createdAt : DateTime.Now,
+                    UpdatedAt = DateTime.Now,
+                    Subject = category.StartsWith("English") ? SubjectType.English : SubjectType.Chinese
+                };
+
+                if (Enum.TryParse(category, out SubCategoryType subCategory))
+                    item.SubCategory = subCategory;
+
+                if (category.StartsWith("English"))
+                    item.MainContent = row["Word"]?.ToString() ?? "";
+                else if (category.StartsWith("Chinese"))
+                {
+                    if (category.Contains("Character"))
+                        item.MainContent = row["Character"]?.ToString() ?? "";
+                    else if (category.Contains("Idiom"))
+                        item.MainContent = row["Idiom"]?.ToString() ?? "";
+                    else if (category.Contains("Poem"))
+                        item.MainContent = row["Title"]?.ToString() ?? "";
+                    else
+                        item.MainContent = row["Phrase"]?.ToString() ?? "";
+                }
+
+                var meaning = row["Meaning"]?.ToString();
+                if (!string.IsNullOrWhiteSpace(meaning))
+                    item.Meaning = Models.Learning.ValueObjects.Meaning.Create(meaning);
+
+                var example = row["Example"]?.ToString();
+                var exampleTranslation = row["ExampleTranslation"]?.ToString();
+                if (!string.IsNullOrWhiteSpace(example))
+                    item.Example = Models.Learning.ValueObjects.Example.Create(example, exampleTranslation);
+
+                var phonetic = row["Phonetic"]?.ToString();
+                var ukPhonetic = row["UkPhonetic"]?.ToString();
+                var usPhonetic = row["UsPhonetic"]?.ToString();
+                if (!string.IsNullOrWhiteSpace(phonetic))
+                    item.Pronunciation = Models.Learning.ValueObjects.Pronunciation.Create(phonetic, ukPhonetic, usPhonetic);
+
+                var strokeCount = row["StrokeCount"]?.ToString();
+                var radical = row["Radical"]?.ToString();
+                var structure = row["Structure"]?.ToString();
+                if (!string.IsNullOrWhiteSpace(strokeCount) || !string.IsNullOrWhiteSpace(radical))
+                    item.CharacterFeatures = Models.Learning.ValueObjects.CharacterFeatures.Create(strokeCount, radical, structure);
+
+                var partOfSpeech = row["PartOfSpeech"]?.ToString();
+                var wordForms = row["WordForms"]?.ToString();
+                var collocations = row["Collocations"]?.ToString();
+                var syllableBreakdown = row["SyllableBreakdown"]?.ToString();
+                if (!string.IsNullOrWhiteSpace(partOfSpeech) || !string.IsNullOrWhiteSpace(wordForms))
+                    item.WordFeatures = Models.Learning.ValueObjects.WordFeatures.Create(partOfSpeech, wordForms, collocations, syllableBreakdown);
+
+                var extendedProps = new Dictionary<string, object>();
                 foreach (DataColumn col in table.Columns)
                 {
+                    var colName = col.ColumnName;
+                    if (new[] { "Id", "CreatedAt", "UpdatedAt", "Word", "Character", "Idiom", "Phrase", "Title",
+                        "Meaning", "Example", "ExampleTranslation", "Phonetic", "UkPhonetic", "UsPhonetic",
+                        "StrokeCount", "Radical", "Structure", "PartOfSpeech", "WordForms", "Collocations",
+                        "SyllableBreakdown" }.Contains(colName))
+                        continue;
+
                     var value = row[col]?.ToString();
-                    var englishName = GetEnglishColumnName(col.ColumnName, category);
-                    jsonObj[englishName] = TryParseAsList(value) ?? value ?? "";
+                    if (!string.IsNullOrWhiteSpace(value))
+                        extendedProps[colName] = value;
                 }
-                return jsonObj.ToObject(itemType);
-            }).Where(item => item != null).Cast<LearningItem>().ToList();
+                item.ExtendedProperties = JsonConvert.SerializeObject(extendedProps);
+
+                items.Add(item);
+            }
+
+            return items;
         }
 
         /// <summary>

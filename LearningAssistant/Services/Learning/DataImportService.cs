@@ -1,15 +1,13 @@
 using LearningAssistant.Common;
 using LearningAssistant.Models.Learning;
+using LearningAssistant.Models.Learning.ValueObjects;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
 using System.Text;
-using System.Text.Json;
+using Newtonsoft.Json;
 
 namespace LearningAssistant.Services.Learning
 {
-    /// <summary>
-    /// 学习数据导入导出服务实现
-    /// </summary>
     public class DataImportService : IDataImportService
     {
         private readonly ILogger<DataImportService>? _logger;
@@ -19,7 +17,6 @@ namespace LearningAssistant.Services.Learning
             _logger = logger;
         }
 
-        /// <inheritdoc/>
         public ImportResult ImportFromCsv(string filePath, ImportOptions options)
         {
             var result = new ImportResult
@@ -91,7 +88,6 @@ namespace LearningAssistant.Services.Learning
             return result;
         }
 
-        /// <inheritdoc/>
         public ImportResult ImportFromAnki(string filePath, ImportOptions options)
         {
             var result = new ImportResult
@@ -173,7 +169,6 @@ namespace LearningAssistant.Services.Learning
             return result;
         }
 
-        /// <inheritdoc/>
         public ImportResult ImportFromJson(string filePath, ImportOptions options)
         {
             var result = new ImportResult
@@ -191,7 +186,7 @@ namespace LearningAssistant.Services.Learning
                 }
 
                 var json = File.ReadAllText(filePath);
-                var items = JsonSerializer.Deserialize<List<LearningItem>>(json);
+                var items = JsonHelper.DeserializeLearningItems(json);
 
                 if (items == null || items.Count == 0)
                 {
@@ -215,7 +210,6 @@ namespace LearningAssistant.Services.Learning
             return result;
         }
 
-        /// <inheritdoc/>
         public bool ExportToCsv(string filePath, List<LearningItem> items, ExportOptions options)
         {
             try
@@ -229,8 +223,7 @@ namespace LearningAssistant.Services.Learning
                     return true;
                 }
 
-                var firstItem = items[0];
-                var fields = GetItemFields(firstItem);
+                var fields = GetItemFields();
 
                 if (options.IncludeHeader)
                 {
@@ -258,16 +251,11 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        /// <inheritdoc/>
         public bool ExportToJson(string filePath, List<LearningItem> items, ExportOptions options)
         {
             try
             {
-                var json = JsonSerializer.Serialize(items, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                });
-                File.WriteAllText(filePath, json);
+                JsonHelper.SaveToFile(filePath, items);
                 _logger?.LogInformation($"JSON导出完成: {items.Count}条 -> {filePath}");
                 return true;
             }
@@ -278,7 +266,6 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        /// <inheritdoc/>
         public List<string[]> PreviewCsv(string filePath, int rowCount = 5)
         {
             try
@@ -303,7 +290,6 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        /// <inheritdoc/>
         public List<string> GetSupportedContentTypes()
         {
             return new List<string>
@@ -319,7 +305,6 @@ namespace LearningAssistant.Services.Learning
             };
         }
 
-        /// <inheritdoc/>
         public List<string> GetContentTypeFields(string contentType)
         {
             return contentType switch
@@ -336,7 +321,7 @@ namespace LearningAssistant.Services.Learning
             };
         }
 
-        #region 私有方法
+        #region Private Methods
 
         private string[] ParseCsvLine(string line, string delimiter)
         {
@@ -425,14 +410,26 @@ namespace LearningAssistant.Services.Learning
             {
                 "englishword" => ParseEnglishWord(values, headers, options),
                 "chinesecharacter" => ParseChineseCharacter(values, headers, options),
-                "general" or "generalsubject" => ParseGeneralSubject(values, headers, options),
                 _ => ParseGeneralSubject(values, headers, options)
             };
         }
 
-        private EnglishWord ParseEnglishWord(string[] values, string[] headers, ImportOptions options)
+        private LearningItem ParseEnglishWord(string[] values, string[] headers, ImportOptions options)
         {
-            var word = new EnglishWord();
+            var item = new LearningItem
+            {
+                Id = Guid.NewGuid().ToString(),
+                Subject = SubjectType.English,
+                SubCategory = SubCategoryType.EnglishWord,
+                CreatedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now
+            };
+
+            string word = string.Empty;
+            string phonetic = string.Empty;
+            string meaning = string.Empty;
+            string example = string.Empty;
+            string partOfSpeech = string.Empty;
 
             if (headers.Length > 0 && values.Length > 0)
             {
@@ -445,44 +442,66 @@ namespace LearningAssistant.Services.Learning
                     {
                         case "word":
                         case "单词":
-                            word.Word = value;
+                            word = value;
                             break;
                         case "phonetic":
                         case "音标":
-                            word.Phonetic = value;
+                            phonetic = value;
                             break;
                         case "meaning":
                         case "释义":
                         case "意思":
-                            word.Meaning = value;
+                            meaning = value;
                             break;
                         case "example":
                         case "例句":
-                            word.Example = value;
+                            example = value;
                             break;
                         case "partofspeech":
                         case "词性":
-                            word.PartOfSpeech = value;
+                            partOfSpeech = value;
                             break;
                     }
                 }
             }
             else if (values.Length >= 2)
             {
-                word.Word = values[0].Trim();
-                word.Meaning = values[1].Trim();
+                word = values[0].Trim();
+                meaning = values[1].Trim();
                 if (values.Length >= 3)
-                    word.Phonetic = values[2].Trim();
+                    phonetic = values[2].Trim();
                 if (values.Length >= 4)
-                    word.Example = values[3].Trim();
+                    example = values[3].Trim();
             }
 
-            return word;
+            item.MainContent = word;
+            item.Meaning = Meaning.Create(meaning);
+            item.Pronunciation = Pronunciation.Create(phonetic);
+            item.WordFeatures = WordFeatures.Create(partOfSpeech);
+
+            if (!string.IsNullOrWhiteSpace(example))
+                item.Example = Example.Create(example);
+
+            return item;
         }
 
-        private ChineseCharacter ParseChineseCharacter(string[] values, string[] headers, ImportOptions options)
+        private LearningItem ParseChineseCharacter(string[] values, string[] headers, ImportOptions options)
         {
-            var character = new ChineseCharacter();
+            var item = new LearningItem
+            {
+                Id = Guid.NewGuid().ToString(),
+                Subject = SubjectType.Chinese,
+                SubCategory = SubCategoryType.ChineseCharacter,
+                CreatedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now
+            };
+
+            string character = string.Empty;
+            string pinyin = string.Empty;
+            string meaning = string.Empty;
+            string strokeCount = string.Empty;
+            string radical = string.Empty;
+            string words = string.Empty;
 
             if (headers.Length > 0 && values.Length > 0)
             {
@@ -496,53 +515,70 @@ namespace LearningAssistant.Services.Learning
                         case "character":
                         case "汉字":
                         case "字":
-                            character.Character = value;
+                            character = value;
                             break;
                         case "pinyin":
                         case "拼音":
-                            character.Pinyin = value;
+                            pinyin = value;
                             break;
                         case "meaning":
                         case "释义":
                         case "意思":
-                            character.Meaning = value;
+                            meaning = value;
                             break;
                         case "strokecount":
                         case "笔画":
                         case "笔画数":
-                            character.StrokeCount = value;
+                            strokeCount = value;
                             break;
                         case "radical":
                         case "部首":
-                            character.Radical = value;
+                            radical = value;
                             break;
                         case "words":
                         case "组词":
-                            character.Words = value;
+                            words = value;
                             break;
                     }
                 }
             }
             else if (values.Length >= 2)
             {
-                character.Character = values[0].Trim();
-                character.Pinyin = values[1].Trim();
+                character = values[0].Trim();
+                pinyin = values[1].Trim();
                 if (values.Length >= 3)
-                    character.Meaning = values[2].Trim();
+                    meaning = values[2].Trim();
                 if (values.Length >= 4)
-                    character.Words = values[3].Trim();
+                    words = values[3].Trim();
             }
 
-            return character;
+            item.MainContent = character;
+            item.Meaning = Meaning.Create(meaning);
+            item.Pronunciation = Pronunciation.Create(pinyin);
+            item.CharacterFeatures = CharacterFeatures.Create(strokeCount, radical, "");
+
+            if (!string.IsNullOrWhiteSpace(words))
+                item.SetExtendedProperty("Words", words);
+
+            return item;
         }
 
-        private GeneralSubjectItem ParseGeneralSubject(string[] values, string[] headers, ImportOptions options)
+        private LearningItem ParseGeneralSubject(string[] values, string[] headers, ImportOptions options)
         {
-            var item = new GeneralSubjectItem
+            var item = new LearningItem
             {
-                Subject = options.Subject,
-                Category = options.Category
+                Id = Guid.NewGuid().ToString(),
+                CreatedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now
             };
+
+            if (Enum.TryParse(options.Subject, out SubjectType subject))
+                item.Subject = subject;
+            if (Enum.TryParse(options.Category, out SubCategoryType subCategory))
+                item.SubCategory = subCategory;
+
+            string topic = string.Empty;
+            string content = string.Empty;
 
             if (headers.Length > 0 && values.Length > 0)
             {
@@ -552,106 +588,107 @@ namespace LearningAssistant.Services.Learning
                     var value = values[i].Trim();
 
                     switch (header)
-                        {
-                            case "topic":
-                            case "主题":
-                            case "标题":
-                                item.Topic = value;
-                                break;
-                            case "content":
-                            case "内容":
-                                item.Content = value;
-                                break;
-                            case "keypoints":
-                            case "要点":
-                            case "知识点":
-                                item.KeyPoints = value;
-                                break;
-                            case "example":
-                            case "例子":
-                            case "例题":
-                                item.Example = value;
-                                break;
-                            case "question":
-                            case "问题":
-                                item.Question = value;
-                                break;
-                            case "answer":
-                            case "答案":
-                                item.Answer = value;
-                                break;
-                            case "analysis":
-                            case "解析":
-                                item.Analysis = value;
-                                break;
-                            case "note":
-                            case "备注":
-                                item.Note = value;
-                                break;
-                            case "timeperiod":
-                            case "时间":
-                            case "时期":
-                            case "年代":
-                                item.TimePeriod = value;
-                                break;
-                            case "relatedpeople":
-                            case "人物":
-                            case "相关人物":
-                                item.RelatedPeople = value;
-                                break;
-                            case "relatedplaces":
-                            case "地点":
-                            case "相关地点":
-                                item.RelatedPlaces = value;
-                                break;
-                            case "background":
-                            case "背景":
-                                item.Background = value;
-                                break;
-                            case "impact":
-                            case "影响":
-                            case "意义":
-                                item.Impact = value;
-                                break;
-                            case "principle":
-                            case "原理":
-                                item.Principle = value;
-                                break;
-                            case "experimentsteps":
-                            case "实验步骤":
-                                item.ExperimentSteps = value;
-                                break;
-                            case "applications":
-                            case "应用":
-                                item.Applications = value;
-                                break;
-                            case "furtherreading":
-                            case "延伸阅读":
-                                item.FurtherReading = value;
-                                break;
-                            case "funfact":
-                            case "趣味知识":
-                            case "冷知识":
-                                item.FunFact = value;
-                                break;
-                            case "imagedescription":
-                            case "图片描述":
-                                item.ImageDescription = value;
-                                break;
-                            case "tags":
-                            case "标签":
-                                item.Tags = value;
-                                break;
-                        }
+                    {
+                        case "topic":
+                        case "主题":
+                        case "标题":
+                            topic = value;
+                            break;
+                        case "content":
+                        case "内容":
+                            content = value;
+                            break;
+                        case "keypoints":
+                        case "要点":
+                        case "知识点":
+                            item.SetExtendedProperty("KeyPoints", value);
+                            break;
+                        case "example":
+                        case "例子":
+                        case "例题":
+                            item.Example = Example.Create(value);
+                            break;
+                        case "question":
+                        case "问题":
+                            item.SetExtendedProperty("Question", value);
+                            break;
+                        case "answer":
+                        case "答案":
+                            item.SetExtendedProperty("Answer", value);
+                            break;
+                        case "analysis":
+                        case "解析":
+                            item.SetExtendedProperty("Analysis", value);
+                            break;
+                        case "note":
+                        case "备注":
+                            item.SetExtendedProperty("Note", value);
+                            break;
+                        case "timeperiod":
+                        case "时间":
+                        case "时期":
+                        case "年代":
+                            item.SetExtendedProperty("TimePeriod", value);
+                            break;
+                        case "relatedpeople":
+                        case "人物":
+                        case "相关人物":
+                            item.SetExtendedProperty("RelatedPeople", value);
+                            break;
+                        case "relatedplaces":
+                        case "地点":
+                        case "相关地点":
+                            item.SetExtendedProperty("RelatedPlaces", value);
+                            break;
+                        case "background":
+                        case "背景":
+                            item.SetExtendedProperty("Background", value);
+                            break;
+                        case "impact":
+                        case "影响":
+                        case "意义":
+                            item.SetExtendedProperty("Impact", value);
+                            break;
+                        case "principle":
+                        case "原理":
+                            item.SetExtendedProperty("Principle", value);
+                            break;
+                        case "experimentsteps":
+                        case "实验步骤":
+                            item.SetExtendedProperty("ExperimentSteps", value);
+                            break;
+                        case "applications":
+                        case "应用":
+                            item.SetExtendedProperty("Applications", value);
+                            break;
+                        case "furtherreading":
+                        case "延伸阅读":
+                            item.SetExtendedProperty("FurtherReading", value);
+                            break;
+                        case "funfact":
+                        case "趣味知识":
+                        case "冷知识":
+                            item.SetExtendedProperty("FunFact", value);
+                            break;
+                        case "imagedescription":
+                        case "图片描述":
+                            item.SetExtendedProperty("ImageDescription", value);
+                            break;
+                        case "tags":
+                        case "标签":
+                            item.SetExtendedProperty("Tags", value);
+                            break;
+                    }
                 }
             }
             else if (values.Length >= 2)
             {
-                item.Topic = values[0].Trim();
-                item.Content = values[1].Trim();
-                if (values.Length >= 3)
-                    item.KeyPoints = values[2].Trim();
+                topic = values[0].Trim();
+                content = values[1].Trim();
             }
+
+            item.MainContent = topic;
+            item.Meaning = Meaning.Create(content);
 
             return item;
         }
@@ -660,87 +697,62 @@ namespace LearningAssistant.Services.Learning
         {
             var contentType = options.ContentType.ToLower();
 
-            return contentType switch
+            var item = new LearningItem
             {
-                "englishword" => new EnglishWord
-                {
-                    Word = front,
-                    Meaning = back
-                },
-                "chinesecharacter" => new ChineseCharacter
-                {
-                    Character = front,
-                    Meaning = back
-                },
-                _ => new GeneralSubjectItem
-                {
-                    Topic = front,
-                    Content = back,
-                    Subject = options.Subject,
-                    Category = options.Category
-                }
+                Id = Guid.NewGuid().ToString(),
+                CreatedAt = DateTime.Now,
+                UpdatedAt = DateTime.Now
             };
+
+            switch (contentType)
+            {
+                case "englishword":
+                    item.Subject = SubjectType.English;
+                    item.SubCategory = SubCategoryType.EnglishWord;
+                    item.MainContent = front;
+                    item.Meaning = Meaning.Create(back);
+                    break;
+                case "chinesecharacter":
+                    item.Subject = SubjectType.Chinese;
+                    item.SubCategory = SubCategoryType.ChineseCharacter;
+                    item.MainContent = front;
+                    item.Meaning = Meaning.Create(back);
+                    break;
+                default:
+                    if (Enum.TryParse(options.Subject, out SubjectType subject))
+                        item.Subject = subject;
+                    if (Enum.TryParse(options.Category, out SubCategoryType subCategory))
+                        item.SubCategory = subCategory;
+                    item.MainContent = front;
+                    item.Meaning = Meaning.Create(back);
+                    break;
+            }
+
+            return item;
         }
 
-        private Dictionary<string, Func<LearningItem, string>> GetItemFields(LearningItem item)
+        private Dictionary<string, Func<LearningItem, string>> GetItemFields()
         {
             var fields = new Dictionary<string, Func<LearningItem, string>>();
 
-            if (item is EnglishWord word)
-            {
-                fields["Word"] = i => ((EnglishWord)i).Word;
-                fields["Phonetic"] = i => ((EnglishWord)i).Phonetic;
-                fields["Meaning"] = i => ((EnglishWord)i).Meaning;
-                fields["Example"] = i => ((EnglishWord)i).Example;
-                fields["PartOfSpeech"] = i => ((EnglishWord)i).PartOfSpeech;
-            }
-            else if (item is ChineseCharacter character)
-            {
-                fields["Character"] = i => ((ChineseCharacter)i).Character;
-                fields["Pinyin"] = i => ((ChineseCharacter)i).Pinyin;
-                fields["Meaning"] = i => ((ChineseCharacter)i).Meaning;
-                fields["StrokeCount"] = i => ((ChineseCharacter)i).StrokeCount;
-                fields["Radical"] = i => ((ChineseCharacter)i).Radical;
-                fields["Words"] = i => ((ChineseCharacter)i).Words ?? string.Empty;
-            }
-            else if (item is GeneralSubjectItem general)
-            {
-                fields["Topic"] = i => ((GeneralSubjectItem)i).Topic;
-                fields["Content"] = i => ((GeneralSubjectItem)i).Content;
-                fields["KeyPoints"] = i => ((GeneralSubjectItem)i).KeyPoints;
-                fields["Example"] = i => ((GeneralSubjectItem)i).Example;
-                fields["Question"] = i => ((GeneralSubjectItem)i).Question;
-                fields["Answer"] = i => ((GeneralSubjectItem)i).Answer;
-                fields["Analysis"] = i => ((GeneralSubjectItem)i).Analysis;
-                fields["Note"] = i => ((GeneralSubjectItem)i).Note;
-                fields["Subject"] = i => ((GeneralSubjectItem)i).Subject;
-                fields["Category"] = i => ((GeneralSubjectItem)i).Category;
-                fields["TimePeriod"] = i => ((GeneralSubjectItem)i).TimePeriod;
-                fields["RelatedPeople"] = i => ((GeneralSubjectItem)i).RelatedPeople;
-                fields["RelatedPlaces"] = i => ((GeneralSubjectItem)i).RelatedPlaces;
-                fields["Background"] = i => ((GeneralSubjectItem)i).Background;
-                fields["Impact"] = i => ((GeneralSubjectItem)i).Impact;
-                fields["Principle"] = i => ((GeneralSubjectItem)i).Principle;
-                fields["ExperimentSteps"] = i => ((GeneralSubjectItem)i).ExperimentSteps;
-                fields["Applications"] = i => ((GeneralSubjectItem)i).Applications;
-                fields["FurtherReading"] = i => ((GeneralSubjectItem)i).FurtherReading;
-                fields["FunFact"] = i => ((GeneralSubjectItem)i).FunFact;
-                fields["ImageDescription"] = i => ((GeneralSubjectItem)i).ImageDescription;
-                fields["Tags"] = i => ((GeneralSubjectItem)i).Tags;
-            }
-            else
-            {
-                fields["MainContent"] = i => i.GetMainContent();
-                fields["DisplayText"] = i => i.GetDisplayText();
-            }
+            fields["MainContent"] = i => i.MainContent;
+            fields["Meaning"] = i => i.Meaning?.Content ?? string.Empty;
+            fields["Pronunciation"] = i => i.Pronunciation?.Main ?? string.Empty;
+            fields["Example"] = i => i.Example?.Content ?? string.Empty;
+            fields["ExampleTranslation"] = i => i.Example?.Translation ?? string.Empty;
+            fields["PartOfSpeech"] = i => i.WordFeatures?.PartOfSpeech ?? string.Empty;
+            fields["WordForms"] = i => i.WordFeatures?.WordForms ?? string.Empty;
+            fields["StrokeCount"] = i => i.CharacterFeatures?.StrokeCount ?? string.Empty;
+            fields["Radical"] = i => i.CharacterFeatures?.Radical ?? string.Empty;
+            fields["Structure"] = i => i.CharacterFeatures?.Structure ?? string.Empty;
+            fields["Subject"] = i => i.Subject.ToString();
+            fields["SubCategory"] = i => i.SubCategory.ToString();
 
             return fields;
         }
 
         private void SaveImportedItems(List<LearningItem> items, ImportOptions options)
         {
-            // 这里可以添加将导入的数据保存到用户内容库的逻辑
-            // 目前先记录日志
             _logger?.LogInformation($"已导入 {items.Count} 条 {options.ContentType} 数据");
         }
 

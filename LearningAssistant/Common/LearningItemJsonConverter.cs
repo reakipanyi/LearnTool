@@ -1,176 +1,142 @@
 using LearningAssistant.Models.Learning;
+using LearningAssistant.Models.Learning.Status;
+using LearningAssistant.Models.Learning.ValueObjects;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using System.Reflection;
 
 namespace LearningAssistant.Common
 {
-    /// <summary>
-    /// LearningItem 多态序列化和反序列化转换器
-    /// 替代不安全的 TypeNameHandling.Auto，防止远程代码执行攻击
-    /// </summary>
     public class LearningItemJsonConverter : JsonConverter<LearningItem>
     {
-        /// <summary>
-        /// 类型标识属性名
-        /// </summary>
         private const string TypePropertyName = "$type";
 
-        /// <summary>
-        /// 允许的类型白名单
-        /// </summary>
-        private static readonly Dictionary<string, Type> AllowedTypes = new(StringComparer.OrdinalIgnoreCase)
-        {
-            { "EnglishWord", typeof(EnglishWord) },
-            { "EnglishPhrase", typeof(EnglishPhrase) },
-            { "EnglishSentence", typeof(EnglishSentence) },
-            { "EnglishComprehensive", typeof(EnglishComprehensive) },
-            { "ChineseCharacter", typeof(ChineseCharacter) },
-            { "ChinesePhrase", typeof(ChinesePhrase) },
-            { "ChineseIdiom", typeof(ChineseIdiom) },
-            { "ChinesePoem", typeof(ChinesePoem) },
-            { "ChineseComprehensive", typeof(ChineseComprehensive) },
-            { "GrammarRule", typeof(GrammarRule) },
-            { "GeneralSubjectItem", typeof(GeneralSubjectItem) }
-        };
-
-        /// <summary>
-        /// 注册的子类型（从外部程序集加载的类型）
-        /// </summary>
-        private static readonly Dictionary<string, Type> RegisteredSubTypes = new(StringComparer.OrdinalIgnoreCase);
-
-        /// <summary>
-        /// 注册自定义子类型
-        /// </summary>
-        /// <param name="typeName">类型名称</param>
-        /// <param name="type">类型</param>
-        public static void RegisterSubType(string typeName, Type type)
-        {
-            if (typeof(LearningItem).IsAssignableFrom(type))
-            {
-                RegisteredSubTypes[typeName] = type;
-            }
-        }
-
-        /// <summary>
-        /// 清除注册的类型
-        /// </summary>
-        public static void ClearRegisteredSubTypes()
-        {
-            RegisteredSubTypes.Clear();
-        }
-
-        /// <summary>
-        /// 获取所有允许的类型
-        /// </summary>
-        private static Dictionary<string, Type> GetAllAllowedTypes()
-        {
-            var result = new Dictionary<string, Type>(AllowedTypes, StringComparer.OrdinalIgnoreCase);
-            foreach (var kvp in RegisteredSubTypes)
-            {
-                result[kvp.Key] = kvp.Value;
-            }
-            return result;
-        }
-
-        /// <inheritdoc/>
-        public override LearningItem? ReadJson(JsonReader reader, Type objectType, LearningItem? existingValue, bool hasExistingValue, JsonSerializer serializer)
+        public override LearningItem? ReadJson(JsonReader reader, Type objectType, LearningItem? existingValue, 
+                                                bool hasExistingValue, JsonSerializer serializer)
         {
             if (reader.TokenType == JsonToken.Null)
                 return null;
 
             if (reader.TokenType != JsonToken.StartObject)
-            {
                 throw new JsonException($"Expected StartObject token, got {reader.TokenType}");
-            }
 
             JObject jsonObject = JObject.Load(reader);
+            var item = new LearningItem();
 
-            // 获取类型标识
-            string? typeName = null;
-            JToken? typeToken = jsonObject[TypePropertyName];
+            item.Id = jsonObject["Id"]?.ToString() ?? Guid.NewGuid().ToString();
+            item.CreatedAt = jsonObject["CreatedAt"]?.ToObject<DateTime>() ?? DateTime.Now;
+            item.UpdatedAt = jsonObject["UpdatedAt"]?.ToObject<DateTime>() ?? DateTime.Now;
 
-            if (typeToken != null)
+            if (Enum.TryParse(jsonObject["Subject"]?.ToString(), out SubjectType subject))
+                item.Subject = subject;
+
+            if (Enum.TryParse(jsonObject["SubCategory"]?.ToString(), out SubCategoryType subCategory))
+                item.SubCategory = subCategory;
+
+            item.MainContent = jsonObject["MainContent"]?.ToString() ?? 
+                              jsonObject["Word"]?.ToString() ?? 
+                              jsonObject["Character"]?.ToString() ?? 
+                              jsonObject["Phrase"]?.ToString() ?? 
+                              jsonObject["Sentence"]?.ToString() ??
+                              jsonObject["Idiom"]?.ToString() ??
+                              jsonObject["Poem"]?.ToString() ??
+                              jsonObject["Title"]?.ToString() ??
+                              jsonObject["Rule"]?.ToString() ?? string.Empty;
+
+            var meaningContent = jsonObject["Meaning"]?.ToString() ?? 
+                                jsonObject["ChineseMeaning"]?.ToString() ?? 
+                                jsonObject["Content"]?.ToString() ?? 
+                                jsonObject["Explanation"]?.ToString() ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(meaningContent))
+                item.Meaning = Models.Learning.ValueObjects.Meaning.Create(meaningContent);
+
+            var exampleContent = jsonObject["Example"]?.ToString() ?? string.Empty;
+            var exampleTranslation = jsonObject["ExampleTranslation"]?.ToString();
+            if (!string.IsNullOrWhiteSpace(exampleContent))
+                item.Example = Models.Learning.ValueObjects.Example.Create(exampleContent, exampleTranslation);
+
+            var pronunciation = jsonObject["Phonetic"]?.ToString() ?? 
+                               jsonObject["Pinyin"]?.ToString() ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(pronunciation))
             {
-                typeName = typeToken.ToString();
-            }
-            else
-            {
-                // 尝试从 JSON 结构自动推断类型
-                typeName = InferTypeFromProperties(jsonObject);
-            }
-
-            if (string.IsNullOrEmpty(typeName))
-            {
-                throw new JsonException("无法确定 LearningItem 的具体类型，缺少类型标识或可推断的属性");
-            }
-
-            var allTypes = GetAllAllowedTypes();
-
-            // 尝试使用完整类型名（如 "LearningAssistant.Models.Learning.EnglishWord"）
-            if (!allTypes.ContainsKey(typeName))
-            {
-                // 尝试从完整类型名中提取短名称
-                var shortName = typeName;
-                if (typeName.Contains('.'))
-                {
-                    shortName = typeName.Substring(typeName.LastIndexOf('.') + 1);
-                }
-                if (!allTypes.ContainsKey(shortName))
-                {
-                    throw new JsonException($"类型 '{typeName}' 不在允许的类型白名单中。允许的类型: {string.Join(", ", allTypes.Keys)}");
-                }
-                typeName = shortName;
-            }
-
-            if (!allTypes.TryGetValue(typeName, out var targetType))
-            {
-                throw new JsonException($"类型 '{typeName}' 不在允许的类型白名单中");
-            }
-
-            // 创建目标类型的实例
-            var instance = Activator.CreateInstance(targetType);
-            if (instance == null)
-            {
-                throw new JsonException($"无法创建类型 '{typeName}' 的实例");
+                item.Pronunciation = Models.Learning.ValueObjects.Pronunciation.Create(
+                    pronunciation,
+                    jsonObject["UkPhonetic"]?.ToString(),
+                    jsonObject["UsPhonetic"]?.ToString()
+                );
             }
 
-            // 使用 JsonSerializer 填充属性
-            using var jsonReader = jsonObject.CreateReader();
-            serializer.Populate(jsonReader, instance);
+            if (jsonObject.ContainsKey("StrokeCount") || jsonObject.ContainsKey("Radical"))
+            {
+                item.CharacterFeatures = Models.Learning.ValueObjects.CharacterFeatures.Create(
+                    jsonObject["StrokeCount"]?.ToString() ?? string.Empty,
+                    jsonObject["Radical"]?.ToString() ?? string.Empty,
+                    jsonObject["Structure"]?.ToString() ?? string.Empty
+                );
+            }
 
-            return (LearningItem)instance;
+            if (jsonObject.ContainsKey("PartOfSpeech") || jsonObject.ContainsKey("WordForms"))
+            {
+                item.WordFeatures = Models.Learning.ValueObjects.WordFeatures.Create(
+                    jsonObject["PartOfSpeech"]?.ToString() ?? string.Empty,
+                    jsonObject["WordForms"]?.ToString() ?? string.Empty,
+                    jsonObject["Collocations"]?.ToString() ?? string.Empty,
+                    jsonObject["SyllableBreakdown"]?.ToString() ?? string.Empty
+                );
+            }
+
+            if (Enum.TryParse(jsonObject["Status"]?.ToString(), out LearningStatus status))
+                item.Status = status;
+
+            item.ReviewCount = jsonObject["ReviewCount"]?.ToObject<int>() ?? 0;
+            item.LastReviewedAt = jsonObject["LastReviewedAt"]?.ToObject<DateTime?>();
+
+            var extendedProps = new Dictionary<string, object>();
+            foreach (var prop in jsonObject)
+            {
+                if (!IsStandardProperty(prop.Key))
+                    extendedProps[prop.Key] = prop.Value.ToObject<object>() ?? string.Empty;
+            }
+            item.ExtendedProperties = JsonConvert.SerializeObject(extendedProps);
+
+            var typeName = jsonObject[TypePropertyName]?.ToString();
+            if (!string.IsNullOrEmpty(typeName) && item.SubCategory == 0)
+            {
+                item.SubCategory = InferSubCategoryFromTypeName(typeName);
+            }
+
+            return item;
         }
 
-        /// <summary>
-        /// 从 JSON 属性推断具体类型
-        /// </summary>
-        private static string? InferTypeFromProperties(JObject jsonObject)
+        private static bool IsStandardProperty(string key)
         {
-            // 根据特定属性推断类型
-            if (jsonObject.ContainsKey("Word"))
-                return "EnglishWord";
-            if (jsonObject.ContainsKey("Character"))
-                return "ChineseCharacter";
-            if (jsonObject.ContainsKey("Phrase"))
-                return "EnglishPhrase";
-            if (jsonObject.ContainsKey("Sentence"))
-                return "EnglishSentence";
-            if (jsonObject.ContainsKey("Idiom"))
-                return "ChineseIdiom";
-            if (jsonObject.ContainsKey("Poem"))
-                return "ChinesePoem";
-            if (jsonObject.ContainsKey("Questions"))
-                return "ChineseComprehensive"; // 或 EnglishComprehensive
-            if (jsonObject.ContainsKey("Rule"))
-                return "GrammarRule";
-            if (jsonObject.ContainsKey("Title"))
-                return "GeneralSubjectItem";
-
-            return null;
+            var standardProps = new[] { "Id", "CreatedAt", "UpdatedAt", "Subject", "SubCategory", 
+                                       "MainContent", "Meaning", "Example", "Phonetic", "Pinyin",
+                                       "UkPhonetic", "UsPhonetic", "StrokeCount", "Radical", 
+                                       "Structure", "PartOfSpeech", "WordForms", "Collocations", 
+                                       "SyllableBreakdown", "Word", "Character", "Phrase", "Sentence",
+                                       "Idiom", "Poem", "Title", "Rule", "Questions",
+                                       "ChineseMeaning", "ExampleTranslation", "Content", "Explanation",
+                                       "$type", "Status", "ReviewCount", "LastReviewedAt" };
+            return standardProps.Contains(key, StringComparer.OrdinalIgnoreCase);
         }
 
-        /// <inheritdoc/>
+        private static SubCategoryType InferSubCategoryFromTypeName(string typeName)
+        {
+            return typeName switch
+            {
+                "EnglishWord" => SubCategoryType.EnglishWord,
+                "EnglishPhrase" => SubCategoryType.EnglishPhrase,
+                "EnglishSentence" => SubCategoryType.EnglishSentence,
+                "EnglishComprehensive" => SubCategoryType.EnglishComprehensive,
+                "ChineseCharacter" => SubCategoryType.ChineseCharacter,
+                "ChinesePhrase" => SubCategoryType.ChinesePhrase,
+                "ChineseIdiom" => SubCategoryType.ChineseIdiom,
+                "ChinesePoem" => SubCategoryType.ChinesePoem,
+                "ChineseComprehensive" => SubCategoryType.ChineseComprehensive,
+                _ => SubCategoryType.ChineseCharacter
+            };
+        }
+
         public override void WriteJson(JsonWriter writer, LearningItem? value, JsonSerializer serializer)
         {
             if (value == null)
@@ -179,54 +145,103 @@ namespace LearningAssistant.Common
                 return;
             }
 
-            // 创建 JObject 并添加类型标识
-            JObject jsonObject = new JObject();
+            writer.WriteStartObject();
+            writer.WritePropertyName("Id");
+            writer.WriteValue(value.Id);
+            writer.WritePropertyName("CreatedAt");
+            writer.WriteValue(value.CreatedAt);
+            writer.WritePropertyName("UpdatedAt");
+            writer.WriteValue(value.UpdatedAt);
+            writer.WritePropertyName("Subject");
+            writer.WriteValue(value.Subject.ToString());
+            writer.WritePropertyName("SubCategory");
+            writer.WriteValue(value.SubCategory.ToString());
+            writer.WritePropertyName("MainContent");
+            writer.WriteValue(value.MainContent);
 
-            // 获取类型短名称
-            var typeName = value.GetType().Name;
-            jsonObject[TypePropertyName] = typeName;
-
-            // 序列化所有属性
-            foreach (var property in value.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            if (value.Meaning != null)
             {
-                if (property.Name == nameof(LearningItem.GetType) ||
-                    property.Name == nameof(LearningItem.GetHashCode) ||
-                    property.Name == nameof(LearningItem.Equals) ||
-                    property.Name == nameof(LearningItem.ToString))
-                {
-                    continue;
-                }
+                writer.WritePropertyName("Meaning");
+                writer.WriteValue(value.Meaning.Content);
+            }
 
-                var propertyValue = property.GetValue(value);
-                if (propertyValue != null)
+            if (value.Example != null)
+            {
+                writer.WritePropertyName("Example");
+                writer.WriteValue(value.Example.Content);
+                if (!string.IsNullOrWhiteSpace(value.Example.Translation))
                 {
-                    jsonObject[property.Name] = JToken.FromObject(propertyValue, serializer);
+                    writer.WritePropertyName("ExampleTranslation");
+                    writer.WriteValue(value.Example.Translation);
                 }
             }
 
-            jsonObject.WriteTo(writer);
+            if (value.Pronunciation != null)
+            {
+                writer.WritePropertyName("Phonetic");
+                writer.WriteValue(value.Pronunciation.Main);
+                if (!string.IsNullOrWhiteSpace(value.Pronunciation.UkPhonetic))
+                {
+                    writer.WritePropertyName("UkPhonetic");
+                    writer.WriteValue(value.Pronunciation.UkPhonetic);
+                }
+                if (!string.IsNullOrWhiteSpace(value.Pronunciation.UsPhonetic))
+                {
+                    writer.WritePropertyName("UsPhonetic");
+                    writer.WriteValue(value.Pronunciation.UsPhonetic);
+                }
+            }
+
+            if (value.CharacterFeatures != null)
+            {
+                writer.WritePropertyName("StrokeCount");
+                writer.WriteValue(value.CharacterFeatures.StrokeCount);
+                writer.WritePropertyName("Radical");
+                writer.WriteValue(value.CharacterFeatures.Radical);
+                writer.WritePropertyName("Structure");
+                writer.WriteValue(value.CharacterFeatures.Structure);
+            }
+
+            if (value.WordFeatures != null)
+            {
+                writer.WritePropertyName("PartOfSpeech");
+                writer.WriteValue(value.WordFeatures.PartOfSpeech);
+                writer.WritePropertyName("WordForms");
+                writer.WriteValue(value.WordFeatures.WordForms);
+                writer.WritePropertyName("Collocations");
+                writer.WriteValue(value.WordFeatures.Collocations);
+                writer.WritePropertyName("SyllableBreakdown");
+                writer.WriteValue(value.WordFeatures.SyllableBreakdown);
+            }
+
+            writer.WritePropertyName("Status");
+            writer.WriteValue(value.Status.ToString());
+            writer.WritePropertyName("ReviewCount");
+            writer.WriteValue(value.ReviewCount);
+            if (value.LastReviewedAt.HasValue)
+            {
+                writer.WritePropertyName("LastReviewedAt");
+                writer.WriteValue(value.LastReviewedAt.Value);
+            }
+
+            writer.WritePropertyName("ExtendedProperties");
+            writer.WriteRawValue(value.ExtendedProperties);
+
+            writer.WriteEndObject();
         }
-
-
     }
 
-    /// <summary>
-    /// LearningItem 列表的 JsonConverter
-    /// </summary>
     public class LearningItemListJsonConverter : JsonConverter<List<LearningItem>>
     {
         private readonly LearningItemJsonConverter _itemConverter = new LearningItemJsonConverter();
 
-        /// <inheritdoc/>
         public override List<LearningItem>? ReadJson(JsonReader reader, Type objectType, List<LearningItem>? existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
             if (reader.TokenType == JsonToken.Null)
                 return null;
 
             if (reader.TokenType != JsonToken.StartArray)
-            {
                 throw new JsonException($"Expected StartArray token, got {reader.TokenType}");
-            }
 
             var result = new List<LearningItem>();
 
@@ -248,7 +263,6 @@ namespace LearningAssistant.Common
             return result;
         }
 
-        /// <inheritdoc/>
         public override void WriteJson(JsonWriter writer, List<LearningItem>? value, JsonSerializer serializer)
         {
             if (value == null)
