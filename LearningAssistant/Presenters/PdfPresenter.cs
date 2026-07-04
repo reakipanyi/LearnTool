@@ -18,8 +18,8 @@ namespace LearningAssistant.Presenters
         private readonly IPdfFileManager _pdfFileManager;
         private readonly IPdfOcrService _pdfOcrService;
         private readonly IPdfTranslationService _pdfTranslationService;
-        private readonly IAIService _aiService;
-        private readonly IPdfTtsService _pdfTtsService;
+        private readonly IAIService? _aiService;
+        private readonly IPdfTtsService? _pdfTtsService;
         private readonly IPdfStudyIntegration _pdfStudyIntegration;
         private readonly IExportService _exportService;
         private readonly IAnnotationService _annotationService;
@@ -27,7 +27,7 @@ namespace LearningAssistant.Presenters
         private readonly IPdfService _pdfService;
         private readonly IEventBus? _eventBus;
 
-        private string _currentUserId = "Guest";
+        private string _currentUserId = "Default";
         private string _currentLanguage = Constants.Language.English;
         private string _currentSubCategory = Constants.SubCategory.EnglishWord;
 
@@ -38,8 +38,8 @@ namespace LearningAssistant.Presenters
             IPdfFileManager pdfFileManager,
             IPdfOcrService pdfOcrService,
             IPdfTranslationService pdfTranslationService,
-            IAIService aiService,
-            IPdfTtsService pdfTtsService,
+            IAIService? aiService,
+            IPdfTtsService? pdfTtsService,
             IPdfStudyIntegration pdfStudyIntegration,
             IExportService exportService,
             IAnnotationService annotationService,
@@ -52,8 +52,8 @@ namespace LearningAssistant.Presenters
             _pdfFileManager = pdfFileManager ?? throw new ArgumentNullException(nameof(pdfFileManager));
             _pdfOcrService = pdfOcrService ?? throw new ArgumentNullException(nameof(pdfOcrService));
             _pdfTranslationService = pdfTranslationService ?? throw new ArgumentNullException(nameof(pdfTranslationService));
-            _aiService = aiService ?? throw new ArgumentNullException(nameof(aiService));
-            _pdfTtsService = pdfTtsService ?? throw new ArgumentNullException(nameof(pdfTtsService));
+            _aiService = aiService;
+            _pdfTtsService = pdfTtsService;
             _pdfStudyIntegration = pdfStudyIntegration ?? throw new ArgumentNullException(nameof(pdfStudyIntegration));
             _exportService = exportService ?? throw new ArgumentNullException(nameof(exportService));
             _annotationService = annotationService ?? throw new ArgumentNullException(nameof(annotationService));
@@ -301,7 +301,7 @@ namespace LearningAssistant.Presenters
 
         public bool IsTTSServiceAvailable()
         {
-            return _pdfTtsService != null && _pdfTtsService.IsAvailable;
+            return _pdfTtsService?.IsAvailable ?? false;
         }
 
         public async Task OcrCropAndTranslateAsync(Bitmap img, Rectangle selRect, Rectangle imgDisplayRect)
@@ -399,16 +399,29 @@ namespace LearningAssistant.Presenters
 
         public async Task SpeakTextAsync(string text, string language, float speed)
         {
+            if (_pdfTtsService == null)
+            {
+                _view?.ShowWarning("TTS服务不可用");
+                return;
+            }
             await _pdfTtsService.SpeakTextAsync(text, language, speed);
         }
 
         public async Task<string> GetAiAnswerAsync(string question, string context = "", CancellationToken cancellationToken = default)
         {
+            if (_aiService == null)
+            {
+                return "AI服务不可用";
+            }
             return await _aiService.AskQuestionAsync(question, context, cancellationToken);
         }
 
         public async Task<string> GenerateAiContentAsync(string prompt, CancellationToken cancellationToken = default)
         {
+            if (_aiService == null)
+            {
+                return "AI服务不可用";
+            }
             return await _aiService.AskQuestionAsync(prompt, "", cancellationToken);
         }
 
@@ -949,7 +962,7 @@ namespace LearningAssistant.Presenters
                     return;
                 }
 
-                if (!_pdfTtsService.IsAvailable)
+                if (_pdfTtsService == null || !_pdfTtsService.IsAvailable)
                 {
                     _view?.ShowWarning("朗读服务不可用，请检查TTS配置");
                     return;
@@ -980,7 +993,7 @@ namespace LearningAssistant.Presenters
                     return;
                 }
 
-                if (!_pdfTtsService.IsAvailable)
+                if (_pdfTtsService == null || !_pdfTtsService.IsAvailable)
                 {
                     _view?.ShowWarning("朗读服务不可用，请检查TTS配置");
                     return;
@@ -1010,7 +1023,7 @@ namespace LearningAssistant.Presenters
                     return;
                 }
 
-                if (!_pdfTtsService.IsAvailable)
+                if (_pdfTtsService == null || !_pdfTtsService.IsAvailable)
                 {
                     _view?.ShowWarning("朗读服务不可用，请检查TTS配置");
                     return;

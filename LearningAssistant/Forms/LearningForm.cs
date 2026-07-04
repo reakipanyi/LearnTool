@@ -23,15 +23,14 @@ namespace LearningAssistant.Forms
     public partial class LearningForm : Form, ILearningView, IThemeable
     {
         #region === 依赖服务 ===
-        private readonly IAiQuestionService _aiQuestionService;
-        private readonly ITTSService _ttsService;
+        private readonly IAiQuestionService? _aiQuestionService;
+        private readonly ITTSService? _ttsService;
         private readonly ILogger<LearningForm> _logger;
         private readonly ILoggerFactory _loggerFactory;
-        private readonly ISoundService _soundService;
+        private readonly ISoundService? _soundService;
         private readonly IThemeService _themeService;
         private readonly IAIPanelPopupService? _aiPanelPopupService;
         private readonly IEncouragementService _encouragementService;
-        private readonly IThinkingStimulator? _thinkingStimulator;
         private readonly IAchievementService? _achievementService;
         private readonly ISpacedRepetitionService? _spacedRepetitionService;
         private readonly IGamificationService _gamificationService;
@@ -40,8 +39,6 @@ namespace LearningAssistant.Forms
         private readonly IPomodoroService? _pomodoroService;
         private readonly ConfettiManager _confettiManager;
         private readonly EncouragementManager _encouragementManager;
-        private readonly IConversationContextService? _conversationContextService;
-        private MentorAIPanel? _mentorPanel;
         #endregion
 
         #region === 学习状态 ===
@@ -195,39 +192,35 @@ namespace LearningAssistant.Forms
 
         #region === 构造函数 ===
         public LearningForm(
-            IAiQuestionService aiQuestionService,
-            ITTSService ttsService,
+            IAiQuestionService? aiQuestionService,
+            ITTSService? ttsService,
             ILogger<LearningForm> logger,
             ILoggerFactory loggerFactory,
-            ISoundService soundService,
+            ISoundService? soundService,
             IThemeService themeService,
-            IAIPanelPopupService aiPanelPopupService,
+            IAIPanelPopupService? aiPanelPopupService,
             IEncouragementService encouragementService,
-            IThinkingStimulator? thinkingStimulator = null,
             IAchievementService? achievementService = null,
             ISpacedRepetitionService? spacedRepetitionService = null,
             IGamificationService? gamificationService = null,
             IEventBus? eventBus = null,
             IUserSessionService? userSessionService = null,
-            IConversationContextService? conversationContextService = null,
             IPomodoroService? pomodoroService = null)
         {
             InitializeComponent();
             WindowState = FormWindowState.Maximized;
-            _aiQuestionService = aiQuestionService ?? throw new ArgumentNullException(nameof(aiQuestionService));
-            _ttsService = ttsService ?? throw new ArgumentNullException(nameof(ttsService));
+            _aiQuestionService = aiQuestionService;
+            _ttsService = ttsService;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
-            _soundService = soundService ?? throw new ArgumentNullException(nameof(soundService));
+            _soundService = soundService;
             _themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
-            _aiPanelPopupService = aiPanelPopupService ?? throw new ArgumentNullException(nameof(aiPanelPopupService));
+            _aiPanelPopupService = aiPanelPopupService;
             _encouragementService = encouragementService ?? throw new ArgumentNullException(nameof(encouragementService));
-            _thinkingStimulator = thinkingStimulator;
             _achievementService = achievementService;
             _spacedRepetitionService = spacedRepetitionService;
             _eventBus = eventBus;
             _userSessionService = userSessionService;
-            _conversationContextService = conversationContextService;
             _pomodoroService = pomodoroService;
             _gamificationService = gamificationService ?? new GamificationService(
                 _loggerFactory,
@@ -1456,35 +1449,11 @@ namespace LearningAssistant.Forms
 
         private void InitializeMentorPanel()
         {
-            if (_conversationContextService == null) return;
-
-            _mentorPanel = new MentorAIPanel
-            {
-                Dock = DockStyle.Right,
-                Width = 350,
-                Visible = false,
-                ContextService = _conversationContextService
-            };
-
-            Controls.Add(_mentorPanel);
         }
 
         public void ToggleMentorPanel()
         {
-            if (_mentorPanel == null)
-            {
-                InitializeMentorPanel();
-            }
-
-            if (_mentorPanel != null)
-            {
-                _mentorPanel.Visible = !_mentorPanel.Visible;
-
-                if (_mentorPanel.Visible && _currentItem != null)
-                {
-                    _mentorPanel.SetLearningContext(_currentItem.GetMainContent());
-                }
-            }
+            MessageBox.Show("AI导师功能已移除", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void InitializeAIHistoryPanel()
@@ -1963,34 +1932,22 @@ namespace LearningAssistant.Forms
 
         public void StartProgressiveHint()
         {
-            if (_currentItem == null || _thinkingStimulator == null) return;
-            var content = _currentItem.GetMainContent();
-            var answer = _currentItem.GetDisplayText();
-            _thinkingStimulator.StartProgressiveHint(content, answer);
+            MessageBox.Show("渐进式提示功能已移除", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         public void StartAssociationLearning()
         {
-            if (_currentItem == null || _thinkingStimulator == null) return;
-            var content = _currentItem.GetMainContent();
-            _thinkingStimulator.StartAssociationLearning(content);
+            MessageBox.Show("联想学习功能已移除", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         public void ShowFeynmanQuestions()
         {
-            if (_currentItem == null || _thinkingStimulator == null) return;
-
-            if (!_isFeynmanPanelVisible)
-            {
-                ShowFeynmanPanel();
-            }
-
-            _feynmanPanel?.GoToStep(FeynmanStep.Review);
+            MessageBox.Show("费曼学习功能已移除", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         public void ShowDailyThinkingTask()
         {
-            _thinkingStimulator?.ShowDailyThinkingTask();
+            MessageBox.Show("每日思考任务功能已移除", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         #endregion
@@ -2429,45 +2386,7 @@ namespace LearningAssistant.Forms
         /// </summary>
         private void ShowFeynmanPanel()
         {
-            if (_currentItem == null || _thinkingStimulator == null)
-                return;
-
-            if (_feynmanContainerPanel == null)
-            {
-                CreateFeynmanPanel();
-            }
-
-            if (_feynmanPanel != null && _currentItem != null)
-            {
-                var content = _currentItem.GetMainContent();
-                var displayText = _currentItem.GetDisplayText();
-                var questions = _thinkingStimulator.CreateFeynmanQuestions(content);
-
-                _feynmanPanel.Content = content;
-                _feynmanPanel.DisplayText = displayText;
-                _feynmanPanel.SetQuestions(questions);
-                _feynmanPanel.GoToStep(FeynmanStep.Study);
-
-                // 加载历史记录
-                var historyRecords = _feynmanHistoryService.GetRecordsByContent(displayText, 5);
-                var entries = historyRecords.Select(r => new FeynmanLearningPanel.HistoryEntry
-                {
-                    Id = r.Id,
-                    TeachAnswer = r.TeachAnswer,
-                    Date = r.CompletedAt,
-                    IsCompleted = r.IsCompleted
-                }).ToList();
-                _feynmanPanel.LoadHistoryRecords(entries);
-
-                _themeService?.RegisterThemeable(_feynmanPanel);
-            }
-
-            if (_feynmanContainerPanel != null)
-            {
-                _feynmanContainerPanel.Visible = true;
-                _feynmanContainerPanel.BringToFront();
-                _isFeynmanPanelVisible = true;
-            }
+            MessageBox.Show("费曼学习功能已移除", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void CloseButton_Click(object? sender, EventArgs e)
@@ -2804,28 +2723,7 @@ namespace LearningAssistant.Forms
         }*/
         private void ButtonNote_Click(object? sender, EventArgs e)
         {
-            try
-            {
-                var noteService = Program.GetService<INoteService>();
-                if (noteService == null)
-                {
-                    MessageBox.Show("无法加载笔记服务", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
 
-                string currentContent = _learningCard?.Title ?? string.Empty;
-                string currentCategory = comboBoxSubCategory.Text ?? "学习笔记";
-
-                using var addNoteForm = new Notes.AddNoteForm(noteService, GetCurrentUserId());
-                addNoteForm.Category = currentCategory;
-                addNoteForm.Title = currentContent;
-                addNoteForm.ShowDialog(this);
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "打开笔记窗口失败");
-                MessageBox.Show($"打开笔记窗口失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
         }
 
         private void ButtonAchievements_Click(object? sender, EventArgs e)

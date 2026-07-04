@@ -8,7 +8,7 @@ namespace LearningAssistant.Services.Learning
     {
         private readonly ILogger<UserSessionService> _logger;
         private readonly IDataPersistenceService _persistenceService;
-        private string _currentUserId = "Guest";
+        private string _currentUserId = "Default";
 
         public string CurrentUserId => _currentUserId;
 
@@ -43,8 +43,8 @@ namespace LearningAssistant.Services.Learning
             var users = _persistenceService.GetUserIds();
             if (!users.Any())
             {
-                _persistenceService.CreateUserProfile("Guest", "访客");
-                users = new List<string> { "Guest" };
+                _persistenceService.CreateUserProfile("Default", "访客");
+                users = new List<string> { "Default" };
             }
             return users.ToList();
         }

@@ -276,17 +276,17 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
-        private Bitmap CreateDeepCopy(Bitmap source)
+        private Bitmap? CreateDeepCopy(Bitmap? source)
         {
             if (source == null)
                 return null;
 
-            using (var ms = new MemoryStream())
+            var copy = new Bitmap(source.Width, source.Height, source.PixelFormat);
+            using (var graphics = Graphics.FromImage(copy))
             {
-                source.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-                ms.Seek(0, SeekOrigin.Begin);
-                return new Bitmap(ms);
+                graphics.DrawImage(source, 0, 0);
             }
+            return copy;
         }
 
         private Bitmap? RenderPageToBitmap(int pageIndex, int renderW, int renderH)
@@ -371,6 +371,11 @@ namespace LearningAssistant.Services.Pdf
 
         public async Task GenerateThumbnailsAsync()
         {
+            await GenerateVisibleThumbnailsAsync(0);
+        }
+
+        public async Task GenerateVisibleThumbnailsAsync(int currentPage, int visibleCount = 5)
+        {
             if (_isGeneratingThumbnails) return;
             _isGeneratingThumbnails = true;
             var currentCts = _thumbnailCts;
@@ -379,13 +384,14 @@ namespace LearningAssistant.Services.Pdf
             {
                 if (_pdfService == null && !_isImageMode)
                 {
-                    _logger.LogWarning("GenerateThumbnailsAsync: _pdfService is null");
+                    _logger.LogWarning("GenerateVisibleThumbnailsAsync: _pdfService is null");
                     return;
                 }
 
-                var totalPages = PageCount;
+                int start = Math.Max(0, currentPage - visibleCount);
+                int end = Math.Min(PageCount - 1, currentPage + visibleCount);
 
-                for (int i = 0; i < totalPages; i++)
+                for (int i = start; i <= end; i++)
                 {
                     try
                     {

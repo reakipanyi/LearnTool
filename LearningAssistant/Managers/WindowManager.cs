@@ -1,6 +1,5 @@
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Forms;
-using LearningAssistant.Forms.Notes;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services.Cloud;
 using LearningAssistant.Services.Web;
@@ -254,18 +253,6 @@ namespace LearningAssistant.Managers
         {
             _logger.LogInformation("Opening notes window");
 
-            try
-            {
-                using var scope = _serviceProvider.CreateScope();
-                var form = scope.ServiceProvider.GetRequiredService<NotesForm>();
-                form.StartPosition = FormStartPosition.CenterParent;
-                form.ShowDialog();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to open notes window");
-                throw;
-            }
         }
 
         public void OpenAIWebViewWindow(string? initialPrompt = null)

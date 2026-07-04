@@ -30,8 +30,8 @@ namespace LearningAssistant.Presenters
     {
         private readonly ILogger<LearningFlowHandler> _logger;
         private readonly IStudyEngine _studyEngine;
-        private readonly IAIService _aiService;
-        private readonly ITTSService _ttsService;
+        private readonly IAIService? _aiService;
+        private readonly ITTSService? _ttsService;
         private readonly IContentLoaderService _contentLoaderService;
         private readonly IExportService _exportService;
         private readonly IWindowManager _windowManager;
@@ -53,8 +53,8 @@ namespace LearningAssistant.Presenters
         public LearningFlowHandler(
             ILogger<LearningFlowHandler> logger,
             IStudyEngine studyEngine,
-            IAIService aiService,
-            ITTSService ttsService,
+            IAIService? aiService,
+            ITTSService? ttsService,
             IContentLoaderService contentLoaderService,
             IExportService exportService,
             IWindowManager windowManager,
@@ -216,7 +216,7 @@ namespace LearningAssistant.Presenters
 
         private async Task PlayPronunciationAsync(LearningItem item, string explanation, CancellationToken cancellationToken)
         {
-            if (!_ttsService.Available) return;
+            if (_ttsService == null || !_ttsService.Available) return;
 
             var scope = _view.PronunciationScope;
             string lang = _currentSubject == Constants.Subject.Chinese ? "zh" : "en";

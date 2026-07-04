@@ -7,13 +7,10 @@ using LearningAssistant.Forms.UserControls;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
-using LearningAssistant.Services.Cloud;
 using LearningAssistant.Services.Gamification;
 using LearningAssistant.Services.Hotkeys;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.SystemTray;
-using LearningAssistant.Services.AI;
-using LearningAssistant.Services.KnowledgeGraph;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 
@@ -24,7 +21,6 @@ namespace LearningAssistant.Forms
         private readonly MainPresenter _presenter;
         private readonly IWindowManager _windowManager;
         private readonly AppConfig _appConfig;
-        private readonly ICloudStorageService _cloudStorageService;
         private readonly IThemeService _themeService;
         private readonly ILogger<MainForm> _logger;
         private readonly Services.Web.IWebBookmarkService _webBookmarkService;
@@ -32,28 +28,21 @@ namespace LearningAssistant.Forms
         private readonly IHotkeyService _hotkeyService;
         private readonly IPomodoroService _pomodoroService;
         private PomodoroTrayIntegration? _pomodoroTrayIntegration;
-        private readonly IConversationContextService? _conversationContextService;
         private readonly ISpacedRepetitionService? _spacedRepetitionService;
-        private readonly IKnowledgeGraphService? _knowledgeGraphService;
         private readonly IUserSessionService? _userSessionService;
-        private MentorAIPanel? _mentorPanel;
-        private KnowledgeGraphView? _knowledgeGraphView;
 
 
         public MainForm(
             MainPresenter presenter,
             IWindowManager windowManager,
             AppConfig appConfig,
-            ICloudStorageService cloudStorageService,
             IThemeService themeService,
             ILogger<MainForm> logger,
             Services.Web.IWebBookmarkService webBookmarkService,
             ITrayIconService trayIconService,
             IHotkeyService hotkeyService,
             IPomodoroService pomodoroService,
-            IConversationContextService? conversationContextService = null,
             ISpacedRepetitionService? spacedRepetitionService = null,
-            IKnowledgeGraphService? knowledgeGraphService = null,
             IUserSessionService? userSessionService = null)
         {
             InitializeComponent();
@@ -61,16 +50,13 @@ namespace LearningAssistant.Forms
             _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
             _windowManager = windowManager ?? throw new ArgumentNullException(nameof(windowManager));
             _appConfig = appConfig ?? throw new ArgumentNullException(nameof(appConfig));
-            _cloudStorageService = cloudStorageService ?? throw new ArgumentNullException(nameof(cloudStorageService));
             _themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _webBookmarkService = webBookmarkService ?? throw new ArgumentNullException(nameof(webBookmarkService));
             _trayIconService = trayIconService ?? throw new ArgumentNullException(nameof(trayIconService));
             _hotkeyService = hotkeyService ?? throw new ArgumentNullException(nameof(hotkeyService));
             _pomodoroService = pomodoroService ?? throw new ArgumentNullException(nameof(pomodoroService));
-            _conversationContextService = conversationContextService;
             _spacedRepetitionService = spacedRepetitionService;
-            _knowledgeGraphService = knowledgeGraphService;
             _userSessionService = userSessionService;
 
             Load += MainForm_Load;
@@ -481,25 +467,7 @@ namespace LearningAssistant.Forms
 
         private void ShowMentorPanel()
         {
-            if (_conversationContextService == null)
-            {
-                ShowMessageLocal("AI导师服务未配置");
-                return;
-            }
-
-            if (_mentorPanel == null)
-            {
-                _mentorPanel = new MentorAIPanel
-                {
-                    Dock = DockStyle.Fill,
-                    ContextService = _conversationContextService
-                };
-            }
-
-            panelContent.Controls.Clear();
-            panelContent.Controls.Add(_mentorPanel);
-            _mentorPanel.BringToFront();
-            Text = "🤖 学习助手 - AI导师";
+            ShowMessageLocal("AI导师功能已移除");
         }
 
         private void OpenFlashcardReview()
@@ -514,7 +482,7 @@ namespace LearningAssistant.Forms
             {
                 var form = new FlashcardReviewForm(
                     _spacedRepetitionService,
-                    _conversationContextService!,
+                    null,
                     _userSessionService);
 
                 form.ShowDialog(this);
@@ -528,34 +496,7 @@ namespace LearningAssistant.Forms
 
         private void ShowKnowledgeGraph()
         {
-            if (_knowledgeGraphService == null || _userSessionService == null)
-            {
-                ShowMessageLocal("知识图谱服务未配置");
-                return;
-            }
-
-            if (_knowledgeGraphView == null)
-            {
-                _knowledgeGraphView = new KnowledgeGraphView
-                {
-                    Dock = DockStyle.Fill
-                };
-                _knowledgeGraphView.SetService(_knowledgeGraphService);
-                _knowledgeGraphView.SetUserId(_userSessionService.CurrentUserId);
-                _knowledgeGraphView.GraphLoaded += OnGraphLoaded;
-            }
-
-            panelContent.Controls.Clear();
-            panelContent.Controls.Add(_knowledgeGraphView);
-            _knowledgeGraphView.BringToFront();
-            Text = "🌐 学习助手 - 知识图谱";
-
-            _ = _knowledgeGraphView.LoadGraphAsync();
-        }
-
-        private void OnGraphLoaded(object? sender, EventArgs e)
-        {
-            _logger.LogInformation("知识图谱加载完成");
+            ShowMessageLocal("知识图谱功能已移除");
         }
 
         private void ShowMessageLocal(string message)
@@ -1294,51 +1235,22 @@ namespace LearningAssistant.Forms
 
         private void ButtonWebView2Browser_Click(object? sender, EventArgs e)
         {
-            try
-            {
-                var form = new WebView2BrowserForm(_cloudStorageService, _logger, _webBookmarkService, _themeService);
-                form.Show();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"打开 WebView2 浏览器失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+            ShowMessageLocal("Web浏览器功能已移除");
         }
 
         private void ButtonAIWebView_Click(object? sender, EventArgs e)
         {
-            _windowManager.OpenAIWebViewWindow();
+            ShowMessageLocal("AI浏览功能已移除");
         }
-
-
 
         private void OnBaiduNetdiskAuthCompleted(bool success)
         {
-            if (success)
-            {
-                ShowBaiduNetdiskFiles();
-            }
+            ShowMessageLocal("云存储功能已移除");
         }
 
-        private async void ShowBaiduNetdiskFiles()
+        private void ShowBaiduNetdiskFiles()
         {
-            try
-            {
-                var files = await _cloudStorageService.ListFilesAsync("/");
-                if (files != null && files.Count > 0)
-                {
-                    var fileList = string.Join("\n", files.Select(f => $"{(f.IsFolder ? "[文件夹]" : "[文件]")} {f.Name}"));
-                    MessageBox.Show($"百度网盘根目录文件列表:\n\n{fileList}", "百度网盘文件", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-                else
-                {
-                    MessageBox.Show("百度网盘根目录为空或获取文件列表失败", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"获取文件列表失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+            ShowMessageLocal("云存储功能已移除");
         }
 
         private void ToolStripMenuItemNewUser_Click(object? sender, EventArgs e)

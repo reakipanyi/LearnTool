@@ -22,13 +22,12 @@ namespace LearningAssistant.Presenters
         private readonly IWindowManager _windowManager;
         private readonly IDataPersistenceService _persistenceService;
         private readonly IGamificationService _gamificationService;
-        private readonly INoteService _noteService;
         private readonly ILearningRecommendationService _recommendationService;
 
         private PdfPresenter? _pdfPresenter;
         private IMainView? _view;
 
-        private string _currentUserId = "Guest";
+        private string _currentUserId = "Default";
         private UserProfile? _currentUserProfile;
 
         public event EventHandler? OnOpenSettings;
@@ -44,7 +43,6 @@ namespace LearningAssistant.Presenters
             IWindowManager windowManager,
             IDataPersistenceService persistenceService,
             IGamificationService gamificationService,
-            INoteService noteService,
             ILearningRecommendationService recommendationService)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -56,7 +54,6 @@ namespace LearningAssistant.Presenters
             _windowManager = windowManager ?? throw new ArgumentNullException(nameof(windowManager));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _gamificationService = gamificationService ?? throw new ArgumentNullException(nameof(gamificationService));
-            _noteService = noteService ?? throw new ArgumentNullException(nameof(noteService));
             _recommendationService = recommendationService ?? throw new ArgumentNullException(nameof(recommendationService));
             _logger.LogInformation("MainPresenter initialized");
         }
@@ -177,15 +174,6 @@ namespace LearningAssistant.Presenters
 
                 int noteCount = 0;
                 int todayNewNotes = 0;
-                try
-                {
-                    var allNotes = _noteService.GetNotes(_currentUserId);
-                    noteCount = allNotes.Count;
-                    todayNewNotes = allNotes.Count(n => n.CreatedAt.Date == DateTime.Today);
-                }
-                catch
-                {
-                }
 
                 _view.UpdateDashboardStats(
                     _currentUserProfile.TodayStudyTimeMinutes,

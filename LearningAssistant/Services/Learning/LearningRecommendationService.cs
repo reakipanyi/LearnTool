@@ -1,6 +1,5 @@
 using LearningAssistant.Common;
 using LearningAssistant.Models.Learning;
-using LearningAssistant.Services.KnowledgeGraph;
 using LearningAssistant.Services.Persistence;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
@@ -13,7 +12,6 @@ namespace LearningAssistant.Services.Learning
         private readonly IWrongAnswerService _wrongAnswerService;
         private readonly ILearningAnalyticsService _analyticsService;
         private readonly ILearningPathService _learningPathService;
-        private readonly IKnowledgeGraphService? _knowledgeGraphService;
         private readonly IPomodoroService? _pomodoroService;
         private readonly ILogger<LearningRecommendationService> _logger;
         private readonly string _feedbackDir;
@@ -27,14 +25,12 @@ namespace LearningAssistant.Services.Learning
             ILearningAnalyticsService analyticsService,
             ILearningPathService learningPathService,
             ILogger<LearningRecommendationService> logger,
-            IKnowledgeGraphService? knowledgeGraphService = null,
             IPomodoroService? pomodoroService = null)
         {
             _spacedRepetitionService = spacedRepetitionService ?? throw new ArgumentNullException(nameof(spacedRepetitionService));
             _wrongAnswerService = wrongAnswerService ?? throw new ArgumentNullException(nameof(wrongAnswerService));
             _analyticsService = analyticsService ?? throw new ArgumentNullException(nameof(analyticsService));
             _learningPathService = learningPathService ?? throw new ArgumentNullException(nameof(learningPathService));
-            _knowledgeGraphService = knowledgeGraphService;
             _pomodoroService = pomodoroService;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _feedbackDir = Path.Combine(AppPaths.UsersDir, "recommendation_feedback");
@@ -233,30 +229,6 @@ namespace LearningAssistant.Services.Learning
                         Priority = 4,
                         EstimatedMinutes = 10
                     });
-                }
-
-                if (_knowledgeGraphService != null)
-                {
-                    try
-                    {
-                        var weakNodes = Task.Run(() => _knowledgeGraphService.GetWeakNodesAsync(userId, Math.Min(count, 5))).GetAwaiter().GetResult();
-                        foreach (var node in weakNodes)
-                        {
-                            recommendations.Add(new LearningRecommendation
-                            {
-                                Type = "weakpoint",
-                                Title = $"巩固知识: {node.Label}",
-                                Reason = $"知识图谱检测到掌握度较低 ({Math.Round(node.MasteryLevel * 100)}%)，建议复习",
-                                ContentType = node.Category,
-                                Priority = (int)(node.MasteryLevel * 10),
-                                EstimatedMinutes = 5
-                            });
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "从知识图谱获取薄弱节点失败");
-                    }
                 }
 
                 if (_pomodoroService != null)

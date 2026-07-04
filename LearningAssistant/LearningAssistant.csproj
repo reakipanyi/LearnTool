@@ -11,8 +11,11 @@
 		<NoWarn>NU1510;NU1603</NoWarn>
 	</PropertyGroup>
 	<ItemGroup>
+	  <Compile Remove="Forms\Notes\**" />
 	  <Compile Remove="tessdata\**" />
+	  <EmbeddedResource Remove="Forms\Notes\**" />
 	  <EmbeddedResource Remove="tessdata\**" />
+	  <None Remove="Forms\Notes\**" />
 	  <None Remove="tessdata\**" />
 	</ItemGroup>
 	<ItemGroup>

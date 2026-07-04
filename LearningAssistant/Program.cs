@@ -31,10 +31,9 @@ namespace LearningAssistant
                 .AddConfigurationServices(configuration)
                 .AddLoggingServices()
                 .AddCoreServices(configuration)
-                .AddAIServices()
                 .AddPdfServices()
                 .AddLearningServices()
-                .AddLearningEnhancementServices()  // 测验、语音回忆、知识图谱
+                .AddLearningEnhancementServices()
                 .AddDatabaseServices()
                 .AddFormServices();
 
@@ -136,9 +135,6 @@ namespace LearningAssistant
         private static void Application_ApplicationExit(object? sender, EventArgs e)
         {
             DisposeService<ILearningReminderService>("提醒服务");
-            DisposeService<SpeechService>("语音服务");
-            DisposeService<IAdvancedSpeechService>("高级语音服务");
-            DisposeService<Services.Cloud.BaiduNetdiskService>("百度网盘服务");
 
             try
             {
