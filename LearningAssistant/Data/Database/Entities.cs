@@ -6,19 +6,11 @@ namespace LearningAssistant.Data.Database
     /// <summary>
     /// 用户配置实体
     /// </summary>
-    public class UserProfileEntity
+    public class UserProfileEntity : UserEntityBase
     {
-        [Key]
-        [Required(ErrorMessage = "用户 ID 不能为空")]
-        [MaxLength(100, ErrorMessage = "用户 ID 长度不能超过 100 个字符")]
-        public string UserId { get; set; } = string.Empty;
-
         [Required(ErrorMessage = "用户名不能为空")]
         [MaxLength(50, ErrorMessage = "用户名长度不能超过 50 个字符")]
         public string UserName { get; set; } = string.Empty;
-
-        [Required]
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
 
         [Required]
         public DateTime LastLoginTime { get; set; } = DateTime.Now;
@@ -63,13 +55,8 @@ namespace LearningAssistant.Data.Database
     /// <summary>
     /// 分类进度实体
     /// </summary>
-    public class CategoryProgressEntity
+    public class CategoryProgressEntity : UserEntityBase
     {
-        // 注意：复合主键 (UserId, CategoryName) 在 AppDbContext.OnModelCreating 中配置
-        [Required(ErrorMessage = "用户 ID 不能为空")]
-        [MaxLength(100, ErrorMessage = "用户 ID 长度不能超过 100 个字符")]
-        public string UserId { get; set; } = string.Empty;
-
         [Required(ErrorMessage = "分类名称不能为空")]
         [MaxLength(100, ErrorMessage = "分类名称长度不能超过 100 个字符")]
         public string CategoryName { get; set; } = string.Empty;
@@ -118,14 +105,10 @@ namespace LearningAssistant.Data.Database
     /// <summary>
     /// 学习记录实体
     /// </summary>
-    public class LearningRecordEntity
+    public class LearningRecordEntity : UserEntityBase
     {
         [Key]
         public int Id { get; set; }
-
-        [Required(ErrorMessage = "用户 ID 不能为空")]
-        [MaxLength(100, ErrorMessage = "用户 ID 长度不能超过 100 个字符")]
-        public string UserId { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "活动类型不能为空")]
         [MaxLength(50, ErrorMessage = "活动类型长度不能超过 50 个字符")]
@@ -147,14 +130,10 @@ namespace LearningAssistant.Data.Database
     /// <summary>
     /// 提醒实体
     /// </summary>
-    public class ReminderEntity
+    public class ReminderEntity : UserEntityBase
     {
         [Key]
         public Guid Id { get; set; } = Guid.NewGuid();
-
-        [Required(ErrorMessage = "用户 ID 不能为空")]
-        [MaxLength(100, ErrorMessage = "用户 ID 长度不能超过 100 个字符")]
-        public string UserId { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "提醒类型不能为空")]
         [MaxLength(50, ErrorMessage = "提醒类型长度不能超过 50 个字符")]
@@ -180,12 +159,6 @@ namespace LearningAssistant.Data.Database
 
         public DateTime? LastTriggered { get; set; }
 
-        [Required]
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
-
-        [Required]
-        public DateTime UpdatedAt { get; set; } = DateTime.Now;
-
         public int TriggerCount { get; set; }
 
         public int OpenCount { get; set; }
@@ -201,14 +174,10 @@ namespace LearningAssistant.Data.Database
     /// <summary>
     /// 间隔重复复习项实体
     /// </summary>
-    public class SpacedRepetitionItemEntity
+    public class SpacedRepetitionItemEntity : UserEntityBase
     {
         [Key]
         public Guid Id { get; set; }
-
-        [Required]
-        [MaxLength(100)]
-        public string UserId { get; set; } = string.Empty;
 
         [Required]
         public string Content { get; set; } = string.Empty;
@@ -223,15 +192,9 @@ namespace LearningAssistant.Data.Database
 
         public DateTime NextReviewDate { get; set; } = DateTime.Now;
 
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
-
-        public DateTime UpdatedAt { get; set; } = DateTime.Now;
-
         public int WrongCount { get; set; } = 0;
 
         public int CorrectCount { get; set; } = 0;
-
-        public bool IsActive { get; set; } = true;
 
         public double Stability { get; set; } = 0;
 
@@ -262,14 +225,10 @@ namespace LearningAssistant.Data.Database
     /// <summary>
     /// 复习日志实体 - 记录每次复习详情，用于 FSRS 机器学习
     /// </summary>
-    public class ReviewLogEntity
+    public class ReviewLogEntity : UserEntityBase
     {
         [Key]
         public int Id { get; set; }
-
-        [Required]
-        [MaxLength(100)]
-        public string UserId { get; set; } = string.Empty;
 
         [Required]
         public Guid ContentId { get; set; }
@@ -293,22 +252,16 @@ namespace LearningAssistant.Data.Database
         [MaxLength(20)]
         public string? AlgorithmType { get; set; }
 
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
-
         public SpacedRepetitionItemEntity? SpacedRepetitionItem { get; set; }
     }
 
     /// <summary>
     /// 学习项状态实体 - 替代 CategoryProgress 中的 JSON 存储
     /// </summary>
-    public class LearningItemStateEntity
+    public class LearningItemStateEntity : UserEntityBase
     {
         [Key]
         public int Id { get; set; }
-
-        [Required]
-        [MaxLength(100)]
-        public string UserId { get; set; } = string.Empty;
 
         [Required]
         [MaxLength(100)]
@@ -318,16 +271,12 @@ namespace LearningAssistant.Data.Database
         public string Content { get; set; } = string.Empty;
 
         public bool IsKnown { get; set; } = false;
-
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
-
-        public DateTime UpdatedAt { get; set; } = DateTime.Now;
     }
 
     /// <summary>
     /// 提醒重复日期实体 - 替代 Reminder 中的 RepeatDaysJson
     /// </summary>
-    public class ReminderRepeatDayEntity
+    public class ReminderRepeatDayEntity : AuditableEntityBase
     {
         [Key]
         public int Id { get; set; }
@@ -337,15 +286,13 @@ namespace LearningAssistant.Data.Database
 
         public int DayOfWeek { get; set; }
 
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
-
         public ReminderEntity? Reminder { get; set; }
     }
 
     /// <summary>
     /// 应用会话状态实体
     /// </summary>
-    public class AppSessionEntity
+    public class AppSessionEntity : AuditableEntityBase
     {
         [Key]
         [MaxLength(100)]
@@ -355,7 +302,733 @@ namespace LearningAssistant.Data.Database
         public string SessionDataJson { get; set; } = string.Empty;
 
         public DateTime LastAccessTime { get; set; } = DateTime.Now;
+    }
 
-        public DateTime UpdatedAt { get; set; } = DateTime.Now;
+    /// <summary>
+    /// 徽章解锁记录实体
+    /// </summary>
+    public class BadgeUnlockEntity : UserEntityBase
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Required]
+        [MaxLength(100)]
+        public string BadgeId { get; set; } = string.Empty;
+
+        public DateTime UnlockedAt { get; set; } = DateTime.Now;
+    }
+
+    /// <summary>
+    /// 学习统计实体
+    /// </summary>
+    public class StudyStatsEntity : UserEntityBase
+    {
+        [Key]
+        public int Id { get; set; }
+
+        public int TodayLearnedCount { get; set; }
+
+        public int StreakDays { get; set; }
+
+        public int TotalScore { get; set; }
+
+        public int TotalLearnedCount { get; set; }
+
+        public int XP { get; set; }
+
+        public DateTime LastStudyDate { get; set; } = DateTime.MinValue;
+    }
+
+    /// <summary>
+    /// 每日挑战实体
+    /// </summary>
+    public class DailyChallengeEntity : UserEntityBase
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Required]
+        [MaxLength(20)]
+        public string Date { get; set; } = string.Empty;
+
+        [Required]
+        public string ChallengesJson { get; set; } = "[]";
+    }
+
+    /// <summary>
+    /// 挑战历史记录实体
+    /// </summary>
+    public class ChallengeHistoryEntity : UserEntityBase
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Required]
+        [MaxLength(20)]
+        public string Date { get; set; } = string.Empty;
+
+        public int CompletedCount { get; set; }
+
+        public int TotalCount { get; set; }
+
+        public int ClaimedCount { get; set; }
+
+        public int TotalXP { get; set; }
+
+        public string ChallengesJson { get; set; } = "[]";
+    }
+
+    /// <summary>
+    /// 学习目标设置实体
+    /// </summary>
+    public class LearningGoalEntity : UserEntityBase
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Required]
+        [MaxLength(50)]
+        public string GoalType { get; set; } = string.Empty;
+
+        public int TargetValue { get; set; }
+
+        [MaxLength(20)]
+        public string? Unit { get; set; }
+
+        public bool Enabled { get; set; }
+    }
+
+    /// <summary>
+    /// 每日目标记录实体
+    /// </summary>
+    public class DailyGoalRecordEntity : UserEntityBase
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Required]
+        public DateTime Date { get; set; }
+
+        public string ProgressJson { get; set; } = "{}";
+
+        public string CompletedJson { get; set; } = "{}";
+
+        public bool AllCompleted { get; set; }
+    }
+
+    /// <summary>
+    /// 收藏夹文件夹实体
+    /// </summary>
+    public class FavoriteFolderEntity : UserEntityBase
+    {
+        [Key]
+        [MaxLength(100)]
+        public string Id { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(200)]
+        public string Name { get; set; } = string.Empty;
+
+        [MaxLength(100)]
+        public string? ParentId { get; set; }
+
+        public int OrderIndex { get; set; }
+
+        [MaxLength(50)]
+        public string? Icon { get; set; }
+    }
+
+    /// <summary>
+    /// 收藏项实体
+    /// </summary>
+    public class FavoriteItemEntity : UserEntityBase
+    {
+        [Key]
+        [MaxLength(100)]
+        public string Id { get; set; } = string.Empty;
+
+        [MaxLength(100)]
+        public string? FolderId { get; set; }
+
+        [MaxLength(50)]
+        public string ItemType { get; set; } = "Text";
+
+        [Required]
+        [MaxLength(500)]
+        public string Title { get; set; } = string.Empty;
+
+        [MaxLength(1000)]
+        public string? Description { get; set; }
+
+        public string Content { get; set; } = string.Empty;
+
+        public string? Answer { get; set; }
+
+        [MaxLength(200)]
+        public string? Subject { get; set; }
+
+        [MaxLength(200)]
+        public string? SubCategory { get; set; }
+
+        public string? ExtraData { get; set; }
+
+        [MaxLength(200)]
+        public string? Tags { get; set; }
+
+        public bool IsPinned { get; set; }
+
+        public int OrderIndex { get; set; }
+    }
+
+    /// <summary>
+    /// 番茄钟设置实体
+    /// </summary>
+    public class PomodoroSettingsEntity : UserEntityBase
+    {
+        [Key]
+        public int Id { get; set; }
+
+        public int StudyMinutes { get; set; } = 25;
+
+        public int ShortBreakMinutes { get; set; } = 5;
+
+        public int LongBreakMinutes { get; set; } = 15;
+
+        public int LongBreakInterval { get; set; } = 4;
+
+        public bool AutoStartBreak { get; set; }
+
+        public bool AutoStartStudy { get; set; }
+
+        public bool PlaySound { get; set; } = true;
+
+        public bool ShowNotification { get; set; } = true;
+    }
+
+    /// <summary>
+    /// 番茄钟记录实体
+    /// </summary>
+    public class PomodoroRecordEntity : UserEntityBase
+    {
+        [Key]
+        [MaxLength(100)]
+        public string Id { get; set; } = string.Empty;
+
+        public DateTime StartTime { get; set; }
+
+        public DateTime EndTime { get; set; }
+
+        [MaxLength(50)]
+        public string Type { get; set; } = string.Empty;
+
+        public int DurationSeconds { get; set; }
+
+        public int PlannedDurationSeconds { get; set; }
+
+        public bool Completed { get; set; }
+
+        [MaxLength(500)]
+        public string? Task { get; set; }
+
+        public int InterruptionCount { get; set; }
+    }
+
+    /// <summary>
+    /// 笔记实体
+    /// </summary>
+    public class NoteEntity : UserEntityBase
+    {
+        [Key]
+        [MaxLength(100)]
+        public string Id { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(500)]
+        public string Title { get; set; } = string.Empty;
+
+        public string Content { get; set; } = string.Empty;
+
+        [MaxLength(200)]
+        public string Category { get; set; } = string.Empty;
+
+        [MaxLength(200)]
+        public string? Tags { get; set; }
+
+        [MaxLength(100)]
+        public string RelatedType { get; set; } = string.Empty;
+
+        [MaxLength(100)]
+        public string RelatedItemId { get; set; } = string.Empty;
+
+        [MaxLength(500)]
+        public string RelatedItemTitle { get; set; } = string.Empty;
+
+        public int Importance { get; set; } = 3;
+
+        public bool IsFavorite { get; set; }
+
+        public DateTime? LastReviewedAt { get; set; }
+
+        public int ReviewCount { get; set; }
+
+        [MaxLength(50)]
+        public string Color { get; set; } = string.Empty;
+
+        [MaxLength(500)]
+        public string Source { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// 错题本实体
+    /// </summary>
+    public class WrongAnswerEntity : UserEntityBase
+    {
+        [Key]
+        [MaxLength(100)]
+        public string Id { get; set; } = string.Empty;
+
+        [MaxLength(200)]
+        public string Subject { get; set; } = string.Empty;
+
+        [MaxLength(200)]
+        public string Category { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(1000)]
+        public string Question { get; set; } = string.Empty;
+
+        [MaxLength(1000)]
+        public string CorrectAnswer { get; set; } = string.Empty;
+
+        [MaxLength(1000)]
+        public string UserAnswer { get; set; } = string.Empty;
+
+        public string Explanation { get; set; } = string.Empty;
+
+        public DateTime AddedAt { get; set; } = DateTime.Now;
+
+        public DateTime? LastReviewAt { get; set; }
+
+        public int ReviewCount { get; set; }
+
+        public int WrongCount { get; set; } = 1;
+
+        public int CorrectCount { get; set; }
+
+        public double Difficulty { get; set; } = 0.5;
+
+        public int MasteryLevel { get; set; }
+
+        [MaxLength(200)]
+        public string? Tags { get; set; }
+
+        public DateTime? NextReviewAt { get; set; }
+
+        public DateTime FirstWrongAt { get; set; } = DateTime.Now;
+
+        public DateTime LastWrongAt { get; set; } = DateTime.Now;
+
+        public string Notes { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// 用户学习偏好实体 - 用于AI导师个性化
+    /// </summary>
+    public class UserLearningPreferenceEntity : UserEntityBase
+    {
+        [Key]
+        public int Id { get; set; }
+
+        /// <summary>
+        /// 常用导师角色
+        /// </summary>
+        [MaxLength(50)]
+        public string PreferredPersona { get; set; } = "Tutor";
+
+        /// <summary>
+        /// 学习风格偏好（视觉/听觉/读写/动手）
+        /// </summary>
+        [MaxLength(50)]
+        public string LearningStyle { get; set; } = "Visual";
+
+        /// <summary>
+        /// 难度偏好（简单/适中/困难）
+        /// </summary>
+        [MaxLength(50)]
+        public string DifficultyPreference { get; set; } = "Medium";
+
+        /// <summary>
+        /// 学习时段偏好
+        /// </summary>
+        [MaxLength(50)]
+        public string PreferredStudyTime { get; set; } = "Morning";
+
+        /// <summary>
+        /// 学习目标
+        /// </summary>
+        [MaxLength(500)]
+        public string? LearningGoals { get; set; }
+
+        /// <summary>
+        /// 兴趣领域（JSON数组）
+        /// </summary>
+        public string? InterestAreas { get; set; }
+
+        /// <summary>
+        /// 弱项学科（JSON数组）
+        /// </summary>
+        public string? WeakSubjects { get; set; }
+
+        /// <summary>
+        /// AI对话历史摘要（用于长期记忆）
+        /// </summary>
+        public string? ConversationSummary { get; set; }
+
+        /// <summary>
+        /// 常问问题主题（JSON数组）
+        /// </summary>
+        public string? FrequentTopics { get; set; }
+
+        /// <summary>
+        /// 激励风格偏好（温和/激励/严肃）
+        /// </summary>
+        [MaxLength(50)]
+        public string MotivationStyle { get; set; } = "Gentle";
+
+        /// <summary>
+        /// 语言偏好（中文/英文）
+        /// </summary>
+        [MaxLength(50)]
+        public string LanguagePreference { get; set; } = "Chinese";
+
+        /// <summary>
+        /// 对话总次数
+        /// </summary>
+        public int TotalConversations { get; set; }
+
+        /// <summary>
+        /// 最近对话时间
+        /// </summary>
+        public DateTime? LastConversationAt { get; set; }
+    }
+
+    /// <summary>
+    /// AI对话历史实体 - 用于长期记忆
+    /// </summary>
+    public class ConversationHistoryEntity : UserEntityBase
+    {
+        [Key]
+        [MaxLength(100)]
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+
+        /// <summary>
+        /// 会话ID
+        /// </summary>
+        [MaxLength(100)]
+        public string SessionId { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 导师角色
+        /// </summary>
+        [MaxLength(50)]
+        public string PersonaType { get; set; } = "Tutor";
+
+        /// <summary>
+        /// 用户消息
+        /// </summary>
+        public string UserMessage { get; set; } = string.Empty;
+
+        /// <summary>
+        /// AI回复
+        /// </summary>
+        public string AiResponse { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 学习主题（自动提取）
+        /// </summary>
+        [MaxLength(200)]
+        public string? Topic { get; set; }
+
+        /// <summary>
+        /// 关联的知识节点（JSON数组）
+        /// </summary>
+        public string? RelatedKnowledgeNodes { get; set; }
+
+        /// <summary>
+        /// 对话类型
+        /// </summary>
+        [MaxLength(50)]
+        public string ConversationType { get; set; } = "QA";
+
+        /// <summary>
+        /// 用户满意度（可选评分）
+        /// </summary>
+        public int? UserRating { get; set; }
+
+        /// <summary>
+        /// 是否有帮助
+        /// </summary>
+        public bool? WasHelpful { get; set; }
+
+        /// <summary>
+        /// 对话时间
+        /// </summary>
+        public DateTime Timestamp { get; set; } = DateTime.Now;
+
+        /// <summary>
+        /// 对话时长（秒）
+        /// </summary>
+        public int DurationSeconds { get; set; }
+    }
+
+    /// <summary>
+    /// 知识图谱节点实体
+    /// </summary>
+    public class KnowledgeNodeEntity : UserEntityBase
+    {
+        [Key]
+        [MaxLength(100)]
+        public string Id { get; set; } = Guid.NewGuid().ToString();
+
+        [Required]
+        [MaxLength(200)]
+        public string Name { get; set; } = string.Empty;
+
+        [MaxLength(100)]
+        public string Category { get; set; } = string.Empty;
+
+        public double MasteryLevel { get; set; }
+
+        public int ReviewCount { get; set; }
+
+        public double AccuracyRate { get; set; }
+
+        public double Importance { get; set; } = 1.0;
+
+        [MaxLength(500)]
+        public string? Description { get; set; }
+
+        [MaxLength(500)]
+        public string? ContentId { get; set; }
+
+        /// <summary>
+        /// 节点可视化位置X
+        /// </summary>
+        public double? PositionX { get; set; }
+
+        /// <summary>
+        /// 节点可视化位置Y
+        /// </summary>
+        public double? PositionY { get; set; }
+
+        /// <summary>
+        /// 节点样式（JSON）
+        /// </summary>
+        [MaxLength(500)]
+        public string? Style { get; set; }
+
+        /// <summary>
+        /// 标签（JSON数组）
+        /// </summary>
+        [MaxLength(500)]
+        public string? Tags { get; set; }
+
+        /// <summary>
+        /// 来源（笔记/错题/手动）
+        /// </summary>
+        [MaxLength(50)]
+        public string Source { get; set; } = "Manual";
+
+        public DateTime? LastReviewedAt { get; set; }
+    }
+
+    /// <summary>
+    /// 知识图谱关系实体
+    /// </summary>
+    public class KnowledgeEdgeEntity : UserEntityBase
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Required]
+        [MaxLength(100)]
+        public string SourceNodeId { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(100)]
+        public string TargetNodeId { get; set; } = string.Empty;
+
+        [MaxLength(50)]
+        public string RelationType { get; set; } = "Related";
+
+        public double Strength { get; set; } = 1.0;
+
+        [MaxLength(500)]
+        public string? Description { get; set; }
+
+        /// <summary>
+        /// 关系来源（AI分析/手动）
+        /// </summary>
+        [MaxLength(50)]
+        public string Source { get; set; } = "Manual";
+
+        public DateTime LastWrongAt { get; set; } = DateTime.Now;
+
+        /// <summary>
+        /// 笔记/备注
+        /// </summary>
+        public string Notes { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// 学习路径推荐实体（知识图谱推荐）
+    /// </summary>
+    public class LearningPathRecommendationEntity : UserEntityBase
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [MaxLength(100)]
+        public string? TargetNodeId { get; set; }
+
+        [MaxLength(500)]
+        public string PathNodes { get; set; } = string.Empty;
+
+        public int Priority { get; set; }
+
+        public double EstimatedDifficulty { get; set; }
+
+        public int EstimatedDays { get; set; }
+
+        [MaxLength(500)]
+        public string? Recommendation { get; set; }
+
+        public DateTime? CompletedAt { get; set; }
+
+        public bool IsCompleted { get; set; }
+    }
+
+    /// <summary>
+    /// 学习路径实体
+    /// </summary>
+    public class LearningPathEntity : UserEntityBase
+    {
+        [Key]
+        [MaxLength(100)]
+        public string Id { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(200)]
+        public string Name { get; set; } = string.Empty;
+
+        public string Description { get; set; } = string.Empty;
+
+        [MaxLength(500)]
+        public string Goal { get; set; } = string.Empty;
+
+        [MaxLength(50)]
+        public string PathType { get; set; } = "custom";
+
+        [MaxLength(100)]
+        public string Domain { get; set; } = string.Empty;
+
+        [MaxLength(50)]
+        public string Level { get; set; } = "初级";
+
+        public string ItemsJson { get; set; } = "[]";
+
+        public int TotalEstimatedMinutes { get; set; }
+
+        public int Priority { get; set; } = 5;
+
+        public DateTime? StartDate { get; set; }
+
+        public DateTime? TargetDate { get; set; }
+    }
+
+    /// <summary>
+    /// 待学内容实体
+    /// </summary>
+    public class PendingContentEntity : UserEntityBase
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Required]
+        public string Content { get; set; } = string.Empty;
+
+        [MaxLength(50)]
+        public string Language { get; set; } = "Chinese";
+
+        [MaxLength(100)]
+        public string Category { get; set; } = string.Empty;
+
+        public DateTime AddedAt { get; set; } = DateTime.Now;
+    }
+
+    /// <summary>
+    /// 费曼学习历史实体
+    /// </summary>
+    public class FeynmanHistoryEntity : UserEntityBase
+    {
+        [Key]
+        [MaxLength(100)]
+        public string Id { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(500)]
+        public string ContentId { get; set; } = string.Empty;
+
+        [MaxLength(500)]
+        public string ContentTitle { get; set; } = string.Empty;
+
+        public string TeachAnswer { get; set; } = string.Empty;
+
+        public string? AIFeedback { get; set; }
+
+        public string? SimplifiedText { get; set; }
+
+        public string? AnalogyText { get; set; }
+
+        public DateTime CompletedAt { get; set; } = DateTime.Now;
+
+        public bool IsCompleted { get; set; }
+    }
+
+    /// <summary>
+    /// 渐进式提示状态实体
+    /// </summary>
+    public class HintProgressEntity : UserEntityBase
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Required]
+        [MaxLength(500)]
+        public string ContentId { get; set; } = string.Empty;
+
+        public int CurrentHintLevel { get; set; }
+
+        public string ViewedHintsJson { get; set; } = "[]";
+
+        public string UserGuess { get; set; } = string.Empty;
+
+        public DateTime LastAccessed { get; set; } = DateTime.Now;
+    }
+
+    /// <summary>
+    /// 推荐反馈实体
+    /// </summary>
+    public class RecommendationFeedbackEntity : UserEntityBase
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Required]
+        [MaxLength(100)]
+        public string RecommendationId { get; set; } = string.Empty;
+
+        public bool IsInterested { get; set; }
     }
 }

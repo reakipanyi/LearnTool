@@ -17,6 +17,27 @@ namespace LearningAssistant.Data.Database
         public DbSet<ReviewLogEntity> ReviewLogs { get; set; }
         public DbSet<LearningItemStateEntity> LearningItemStates { get; set; }
         public DbSet<ReminderRepeatDayEntity> ReminderRepeatDays { get; set; }
+        public DbSet<BadgeUnlockEntity> BadgeUnlocks { get; set; }
+        public DbSet<StudyStatsEntity> StudyStats { get; set; }
+        public DbSet<DailyChallengeEntity> DailyChallenges { get; set; }
+        public DbSet<ChallengeHistoryEntity> ChallengeHistories { get; set; }
+        public DbSet<LearningGoalEntity> LearningGoals { get; set; }
+        public DbSet<DailyGoalRecordEntity> DailyGoalRecords { get; set; }
+        public DbSet<FavoriteFolderEntity> FavoriteFolders { get; set; }
+        public DbSet<FavoriteItemEntity> FavoriteItems { get; set; }
+        public DbSet<PomodoroSettingsEntity> PomodoroSettings { get; set; }
+        public DbSet<PomodoroRecordEntity> PomodoroRecords { get; set; }
+        public DbSet<NoteEntity> Notes { get; set; }
+        public DbSet<WrongAnswerEntity> WrongAnswers { get; set; }
+        public DbSet<UserLearningPreferenceEntity> UserLearningPreferences { get; set; }
+        public DbSet<ConversationHistoryEntity> ConversationHistories { get; set; }
+        public DbSet<KnowledgeNodeEntity> KnowledgeNodes { get; set; }
+        public DbSet<KnowledgeEdgeEntity> KnowledgeEdges { get; set; }
+        public DbSet<LearningPathEntity> LearningPaths { get; set; }
+        public DbSet<PendingContentEntity> PendingContents { get; set; }
+        public DbSet<FeynmanHistoryEntity> FeynmanHistories { get; set; }
+        public DbSet<HintProgressEntity> HintProgresses { get; set; }
+        public DbSet<RecommendationFeedbackEntity> RecommendationFeedbacks { get; set; }
 
         private readonly string _dbPath;
 
@@ -196,6 +217,248 @@ namespace LearningAssistant.Data.Database
 
             modelBuilder.Entity<AppSessionEntity>()
                 .HasIndex(a => a.LastAccessTime);
+
+            // 徽章解锁配置
+            modelBuilder.Entity<BadgeUnlockEntity>()
+                .HasKey(b => b.Id);
+
+            modelBuilder.Entity<BadgeUnlockEntity>()
+                .HasIndex(b => b.UserId);
+
+            modelBuilder.Entity<BadgeUnlockEntity>()
+                .HasIndex(b => new { b.UserId, b.BadgeId })
+                .IsUnique();
+
+            // 学习统计配置
+            modelBuilder.Entity<StudyStatsEntity>()
+                .HasKey(s => s.Id);
+
+            modelBuilder.Entity<StudyStatsEntity>()
+                .HasIndex(s => s.UserId)
+                .IsUnique();
+
+            // 每日挑战配置
+            modelBuilder.Entity<DailyChallengeEntity>()
+                .HasKey(d => d.Id);
+
+            modelBuilder.Entity<DailyChallengeEntity>()
+                .HasIndex(d => new { d.UserId, d.Date })
+                .IsUnique();
+
+            // 挑战历史配置
+            modelBuilder.Entity<ChallengeHistoryEntity>()
+                .HasKey(c => c.Id);
+
+            modelBuilder.Entity<ChallengeHistoryEntity>()
+                .HasIndex(c => c.UserId);
+
+            modelBuilder.Entity<ChallengeHistoryEntity>()
+                .HasIndex(c => c.Date);
+
+            // 学习目标配置
+            modelBuilder.Entity<LearningGoalEntity>()
+                .HasKey(g => g.Id);
+
+            modelBuilder.Entity<LearningGoalEntity>()
+                .HasIndex(g => new { g.UserId, g.GoalType })
+                .IsUnique();
+
+            // 每日目标记录配置
+            modelBuilder.Entity<DailyGoalRecordEntity>()
+                .HasKey(r => r.Id);
+
+            modelBuilder.Entity<DailyGoalRecordEntity>()
+                .HasIndex(r => new { r.UserId, r.Date })
+                .IsUnique();
+
+            // 收藏夹文件夹配置
+            modelBuilder.Entity<FavoriteFolderEntity>()
+                .HasKey(f => f.Id);
+
+            modelBuilder.Entity<FavoriteFolderEntity>()
+                .HasIndex(f => f.UserId);
+
+            modelBuilder.Entity<FavoriteFolderEntity>()
+                .HasIndex(f => f.ParentId);
+
+            // 收藏项配置
+            modelBuilder.Entity<FavoriteItemEntity>()
+                .HasKey(f => f.Id);
+
+            modelBuilder.Entity<FavoriteItemEntity>()
+                .HasIndex(f => f.UserId);
+
+            modelBuilder.Entity<FavoriteItemEntity>()
+                .HasIndex(f => f.FolderId);
+
+            modelBuilder.Entity<FavoriteItemEntity>()
+                .HasIndex(f => f.ItemType);
+
+            modelBuilder.Entity<FavoriteItemEntity>()
+                .HasIndex(f => f.IsPinned);
+
+            // 番茄钟设置配置
+            modelBuilder.Entity<PomodoroSettingsEntity>()
+                .HasKey(p => p.Id);
+
+            modelBuilder.Entity<PomodoroSettingsEntity>()
+                .HasIndex(p => p.UserId)
+                .IsUnique();
+
+            // 番茄钟记录配置
+            modelBuilder.Entity<PomodoroRecordEntity>()
+                .HasKey(p => p.Id);
+
+            modelBuilder.Entity<PomodoroRecordEntity>()
+                .HasIndex(p => p.UserId);
+
+            modelBuilder.Entity<PomodoroRecordEntity>()
+                .HasIndex(p => p.StartTime);
+
+            modelBuilder.Entity<PomodoroRecordEntity>()
+                .HasIndex(p => p.Type);
+
+            // 笔记配置
+            modelBuilder.Entity<NoteEntity>()
+                .HasKey(n => n.Id);
+
+            modelBuilder.Entity<NoteEntity>()
+                .HasIndex(n => n.UserId);
+
+            modelBuilder.Entity<NoteEntity>()
+                .HasIndex(n => n.Category);
+
+            modelBuilder.Entity<NoteEntity>()
+                .HasIndex(n => n.IsFavorite);
+
+            modelBuilder.Entity<NoteEntity>()
+                .HasIndex(n => n.UpdatedAt);
+
+            // 错题本配置
+            modelBuilder.Entity<WrongAnswerEntity>()
+                .HasKey(w => w.Id);
+
+            modelBuilder.Entity<WrongAnswerEntity>()
+                .HasIndex(w => w.UserId);
+
+            modelBuilder.Entity<WrongAnswerEntity>()
+                .HasIndex(w => w.Category);
+
+            modelBuilder.Entity<WrongAnswerEntity>()
+                .HasIndex(w => w.IsActive);
+
+            modelBuilder.Entity<WrongAnswerEntity>()
+                .HasIndex(w => w.MasteryLevel);
+
+            modelBuilder.Entity<WrongAnswerEntity>()
+                .HasIndex(w => w.NextReviewAt);
+
+            // 用户学习偏好配置
+            modelBuilder.Entity<UserLearningPreferenceEntity>()
+                .HasKey(u => u.Id);
+
+            modelBuilder.Entity<UserLearningPreferenceEntity>()
+                .HasIndex(u => u.UserId)
+                .IsUnique();
+
+            // AI对话历史配置
+            modelBuilder.Entity<ConversationHistoryEntity>()
+                .HasKey(c => c.Id);
+
+            modelBuilder.Entity<ConversationHistoryEntity>()
+                .HasIndex(c => c.UserId);
+
+            modelBuilder.Entity<ConversationHistoryEntity>()
+                .HasIndex(c => c.SessionId);
+
+            modelBuilder.Entity<ConversationHistoryEntity>()
+                .HasIndex(c => c.Timestamp);
+
+            modelBuilder.Entity<ConversationHistoryEntity>()
+                .HasIndex(c => c.Topic);
+
+            // 知识图谱节点配置
+            modelBuilder.Entity<KnowledgeNodeEntity>()
+                .HasKey(n => n.Id);
+
+            modelBuilder.Entity<KnowledgeNodeEntity>()
+                .HasIndex(n => n.UserId);
+
+            modelBuilder.Entity<KnowledgeNodeEntity>()
+                .HasIndex(n => n.Name);
+
+            modelBuilder.Entity<KnowledgeNodeEntity>()
+                .HasIndex(n => n.Category);
+
+            modelBuilder.Entity<KnowledgeNodeEntity>()
+                .HasIndex(n => n.MasteryLevel);
+
+            // 知识图谱关系配置
+            modelBuilder.Entity<KnowledgeEdgeEntity>()
+                .HasKey(e => e.Id);
+
+            modelBuilder.Entity<KnowledgeEdgeEntity>()
+                .HasIndex(e => e.UserId);
+
+            modelBuilder.Entity<KnowledgeEdgeEntity>()
+                .HasIndex(e => e.SourceNodeId);
+
+            modelBuilder.Entity<KnowledgeEdgeEntity>()
+                .HasIndex(e => e.TargetNodeId);
+
+            // 学习路径配置
+            modelBuilder.Entity<LearningPathEntity>()
+                .HasKey(l => l.Id);
+
+            modelBuilder.Entity<LearningPathEntity>()
+                .HasIndex(l => l.UserId);
+
+            modelBuilder.Entity<LearningPathEntity>()
+                .HasIndex(l => l.Priority);
+
+            modelBuilder.Entity<PendingContentEntity>()
+                .HasKey(p => p.Id);
+
+            modelBuilder.Entity<PendingContentEntity>()
+                .HasIndex(p => p.UserId);
+
+            modelBuilder.Entity<PendingContentEntity>()
+                .HasIndex(p => p.AddedAt);
+
+            modelBuilder.Entity<FeynmanHistoryEntity>()
+                .HasKey(f => f.Id);
+
+            modelBuilder.Entity<FeynmanHistoryEntity>()
+                .HasIndex(f => f.UserId);
+
+            modelBuilder.Entity<FeynmanHistoryEntity>()
+                .HasIndex(f => f.ContentId);
+
+            modelBuilder.Entity<FeynmanHistoryEntity>()
+                .HasIndex(f => f.CompletedAt);
+
+            modelBuilder.Entity<HintProgressEntity>()
+                .HasKey(h => h.Id);
+
+            modelBuilder.Entity<HintProgressEntity>()
+                .HasIndex(h => h.UserId);
+
+            modelBuilder.Entity<HintProgressEntity>()
+                .HasIndex(h => new { h.UserId, h.ContentId })
+                .IsUnique();
+
+            modelBuilder.Entity<HintProgressEntity>()
+                .HasIndex(h => h.LastAccessed);
+
+            modelBuilder.Entity<RecommendationFeedbackEntity>()
+                .HasKey(r => r.Id);
+
+            modelBuilder.Entity<RecommendationFeedbackEntity>()
+                .HasIndex(r => r.UserId);
+
+            modelBuilder.Entity<RecommendationFeedbackEntity>()
+                .HasIndex(r => new { r.UserId, r.RecommendationId })
+                .IsUnique();
         }
 
         /// <summary>
@@ -211,6 +474,211 @@ namespace LearningAssistant.Data.Database
             {
                 Console.WriteLine($"数据库创建失败: {ex.Message}");
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// 修复数据库Schema，添加缺失的表和列
+        /// </summary>
+        public void RepairSchema()
+        {
+            try
+            {
+                RepairBadgeUnlocksTable();
+                RepairStudyStatsTable();
+                RepairDailyChallengesTable();
+                RepairChallengeHistoriesTable();
+                RepairLearningItemStatesTable();
+                RepairWrongAnswersTable();
+                RepairReviewLogsTable();
+                RepairSpacedRepetitionItemsColumn();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Schema修复失败: {ex.Message}");
+                throw;
+            }
+        }
+
+        private void RepairBadgeUnlocksTable()
+        {
+            var sql = @"CREATE TABLE IF NOT EXISTS BadgeUnlocks (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                UserId TEXT NOT NULL,
+                BadgeId TEXT NOT NULL,
+                UnlockedAt TEXT NOT NULL
+            );";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE UNIQUE INDEX IF NOT EXISTS IX_BadgeUnlocks_UserId_BadgeId ON BadgeUnlocks(UserId, BadgeId);";
+            Database.ExecuteSqlRaw(sql);
+        }
+
+        private void RepairStudyStatsTable()
+        {
+            var sql = @"CREATE TABLE IF NOT EXISTS StudyStats (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                UserId TEXT NOT NULL,
+                TodayLearnedCount INTEGER NOT NULL DEFAULT 0,
+                StreakDays INTEGER NOT NULL DEFAULT 0,
+                TotalScore INTEGER NOT NULL DEFAULT 0,
+                TotalLearnedCount INTEGER NOT NULL DEFAULT 0,
+                XP INTEGER NOT NULL DEFAULT 0,
+                LastStudyDate TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL
+            );";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE UNIQUE INDEX IF NOT EXISTS IX_StudyStats_UserId ON StudyStats(UserId);";
+            Database.ExecuteSqlRaw(sql);
+        }
+
+        private void RepairDailyChallengesTable()
+        {
+            var sql = @"CREATE TABLE IF NOT EXISTS DailyChallenges (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                UserId TEXT NOT NULL,
+                Date TEXT NOT NULL,
+                ChallengesJson TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL
+            );";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE UNIQUE INDEX IF NOT EXISTS IX_DailyChallenges_UserId_Date ON DailyChallenges(UserId, Date);";
+            Database.ExecuteSqlRaw(sql);
+        }
+
+        private void RepairChallengeHistoriesTable()
+        {
+            var sql = @"CREATE TABLE IF NOT EXISTS ChallengeHistories (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                UserId TEXT NOT NULL,
+                Date TEXT NOT NULL,
+                CompletedCount INTEGER NOT NULL DEFAULT 0,
+                TotalCount INTEGER NOT NULL DEFAULT 0,
+                ClaimedCount INTEGER NOT NULL DEFAULT 0,
+                TotalXP INTEGER NOT NULL DEFAULT 0,
+                ChallengesJson TEXT NOT NULL
+            );";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_ChallengeHistories_UserId ON ChallengeHistories(UserId);";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_ChallengeHistories_Date ON ChallengeHistories(Date);";
+            Database.ExecuteSqlRaw(sql);
+        }
+
+        private void RepairLearningItemStatesTable()
+        {
+            var sql = @"CREATE TABLE IF NOT EXISTS LearningItemStates (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                UserId TEXT NOT NULL,
+                CategoryName TEXT NOT NULL,
+                Content TEXT NOT NULL,
+                IsKnown INTEGER NOT NULL DEFAULT 0,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL
+            );";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_LearningItemStates_UserId ON LearningItemStates(UserId);";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_LearningItemStates_CategoryName ON LearningItemStates(CategoryName);";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_LearningItemStates_IsKnown ON LearningItemStates(IsKnown);";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE UNIQUE INDEX IF NOT EXISTS IX_LearningItemStates_UserId_CategoryName_Content ON LearningItemStates(UserId, CategoryName, Content);";
+            Database.ExecuteSqlRaw(sql);
+        }
+
+        private void RepairWrongAnswersTable()
+        {
+            var sql = @"CREATE TABLE IF NOT EXISTS WrongAnswers (
+                Id TEXT PRIMARY KEY,
+                UserId TEXT NOT NULL,
+                Subject TEXT NOT NULL,
+                Category TEXT NOT NULL,
+                Question TEXT NOT NULL,
+                CorrectAnswer TEXT NOT NULL,
+                UserAnswer TEXT NOT NULL,
+                Explanation TEXT NOT NULL,
+                AddedAt TEXT NOT NULL,
+                LastReviewAt TEXT,
+                ReviewCount INTEGER NOT NULL DEFAULT 0,
+                WrongCount INTEGER NOT NULL DEFAULT 1,
+                CorrectCount INTEGER NOT NULL DEFAULT 0,
+                Difficulty REAL NOT NULL DEFAULT 0.5,
+                MasteryLevel INTEGER NOT NULL DEFAULT 0,
+                Tags TEXT,
+                NextReviewAt TEXT,
+                FirstWrongAt TEXT NOT NULL,
+                LastWrongAt TEXT NOT NULL,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                Notes TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL
+            );";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_WrongAnswers_UserId ON WrongAnswers(UserId);";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_WrongAnswers_Category ON WrongAnswers(Category);";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_WrongAnswers_IsActive ON WrongAnswers(IsActive);";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_WrongAnswers_MasteryLevel ON WrongAnswers(MasteryLevel);";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_WrongAnswers_NextReviewAt ON WrongAnswers(NextReviewAt);";
+            Database.ExecuteSqlRaw(sql);
+        }
+
+        private void RepairReviewLogsTable()
+        {
+            var sql = @"CREATE TABLE IF NOT EXISTS ReviewLogs (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                UserId TEXT NOT NULL,
+                ContentId TEXT NOT NULL,
+                Rating INTEGER NOT NULL,
+                Interval INTEGER NOT NULL DEFAULT 0,
+                EaseFactor REAL,
+                Stability REAL,
+                Difficulty REAL,
+                ReviewTime TEXT NOT NULL,
+                Duration INTEGER NOT NULL DEFAULT 0,
+                AlgorithmType TEXT,
+                CreatedAt TEXT NOT NULL
+            );";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_ReviewLogs_UserId ON ReviewLogs(UserId);";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_ReviewLogs_ContentId ON ReviewLogs(ContentId);";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_ReviewLogs_ReviewTime ON ReviewLogs(ReviewTime);";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_ReviewLogs_AlgorithmType ON ReviewLogs(AlgorithmType);";
+            Database.ExecuteSqlRaw(sql);
+        }
+
+        private void RepairSpacedRepetitionItemsColumn()
+        {
+            try
+            {
+                var sql = @"ALTER TABLE SpacedRepetitionItems ADD COLUMN AlgorithmType TEXT;";
+                Database.ExecuteSqlRaw(sql);
+            }
+            catch (Exception)
+            {
             }
         }
     }
