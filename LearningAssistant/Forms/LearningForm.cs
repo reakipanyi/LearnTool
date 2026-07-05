@@ -1430,8 +1430,7 @@ namespace LearningAssistant.Forms
             _learningCard = new LearningCard
             {
                 Dock = DockStyle.Fill,
-                Margin = new Padding(10),
-                Height = 220
+                Margin = new Padding(10)
             };
             _learningCard.Click += ContentArea_Click;
 

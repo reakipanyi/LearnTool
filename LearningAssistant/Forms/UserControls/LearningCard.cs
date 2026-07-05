@@ -7,11 +7,11 @@ namespace LearningAssistant.Forms.UserControls
     {
         #region 控件字段
         private readonly Panel _accentBar;
-        private readonly Panel _iconPanel;
         private readonly Label _iconLabel;
         private readonly Label _titleLabel;
         private readonly Label _contentLabel;
         private readonly Label _categoryLabel;
+        private readonly TableLayoutPanel _innerLayout;
         #endregion
 
         #region 状态字段
@@ -20,100 +20,89 @@ namespace LearningAssistant.Forms.UserControls
         #endregion
 
         #region 全局复用字体（Dispose统一销毁，防止GDI句柄泄漏）
-        private readonly Font _fontIcon = new Font("Arial", 24F, FontStyle.Regular, GraphicsUnit.Point, 0);
-        private readonly Font _fontTitle = new Font("微软雅黑", 42F, FontStyle.Bold, GraphicsUnit.Point, 134);
-        private readonly Font _fontContent = new Font("微软雅黑", 18F, FontStyle.Regular, GraphicsUnit.Point, 134);
+        private readonly Font _fontIcon = new Font("Arial", 20F, FontStyle.Regular, GraphicsUnit.Point, 0);
+        private readonly Font _fontTitle = new Font("微软雅黑", 48F, FontStyle.Bold, GraphicsUnit.Point, 134);
+        private readonly Font _fontContent = new Font("微软雅黑", 16F, FontStyle.Regular, GraphicsUnit.Point, 134);
         private readonly Font _fontCategoryTag = new Font("微软雅黑", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
         #endregion
 
         public LearningCard()
         {
-            // 开启双缓冲抗锯齿绘制
             this.SetStyle(ControlStyles.OptimizedDoubleBuffer
                 | ControlStyles.AllPaintingInWmPaint
                 | ControlStyles.UserPaint
                 | ControlStyles.ResizeRedraw, true);
 
-            // 1. 实例化所有子控件
             this._accentBar = new Panel();
-            this._iconPanel = new Panel();
             this._iconLabel = new Label();
             this._titleLabel = new Label();
             this._contentLabel = new Label();
             this._categoryLabel = new Label();
+            this._innerLayout = new TableLayoutPanel();
 
-            // 初始化子控件（设计器和运行时都需要）
             InitChildControls();
 
-            // 卡片基础样式
-            this.Height = 280;
-            this.MinimumSize = new Size(120, 160); // 限制最小尺寸，hover缩放不会过小
+            this.MinimumSize = new Size(120, 160);
             this.BackColor = Color.White;
             this.BorderStyle = BorderStyle.None;
             this.Padding = new Padding(0);
 
-            // 绑定绘制、鼠标、尺寸变更事件
             this.MouseEnter += LearningCard_MouseEnter;
             this.MouseLeave += LearningCard_MouseLeave;
             this.Paint += LearningCard_Paint;
             this.Resize += (s, e) => this.Invalidate();
         }
 
-        /// <summary>子控件布局初始化（抽离，最小改动修正Dock顺序）</summary>
         private void InitChildControls()
         {
-            // 2. 左侧色条 Dock.Left 优先添加
-            this._accentBar.Dock = DockStyle.Left;
-            this._accentBar.Width = 4;
-            this._accentBar.BackColor = Color.FromArgb(76, 175, 80);
+            _accentBar.Dock = DockStyle.Left;
+            _accentBar.Width = 4;
+            _accentBar.BackColor = Color.FromArgb(76, 175, 80);
 
-            // 3. 图标容器 左停靠，移除写死宽高冲突
-            this._iconPanel.Dock = DockStyle.Left;
-            this._iconPanel.Width = 60;
-            this._iconPanel.Margin = new Padding(10, 10, 0, 10);
+            _innerLayout.ColumnCount = 1;
+            _innerLayout.RowCount = 3;
+            _innerLayout.Dock = DockStyle.Fill;
+            _innerLayout.Padding = new Padding(15, 10, 15, 10);
+            _innerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
+            _innerLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            _innerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 250F));
 
-            // 图标文字
-            this._iconLabel.Text = "📚";
-            this._iconLabel.Font = _fontIcon;
-            this._iconLabel.Dock = DockStyle.Fill;
-            this._iconLabel.TextAlign = ContentAlignment.MiddleCenter;
-            this._iconPanel.Controls.Add(this._iconLabel);
+            _iconLabel.Text = "📚";
+            _iconLabel.Font = _fontIcon;
+            _iconLabel.TextAlign = ContentAlignment.MiddleCenter;
+            _iconLabel.Dock = DockStyle.Fill;
 
-            // 分类标签 Dock.Right 次优先添加
-            this._categoryLabel.Font = _fontCategoryTag;
-            this._categoryLabel.ForeColor = Color.White;
-            this._categoryLabel.BackColor = Color.FromArgb(108, 117, 125);
-            this._categoryLabel.Dock = DockStyle.Right;
-            this._categoryLabel.Padding = new Padding(8, 4, 8, 4);
-            this._categoryLabel.AutoSize = true;
-            this._categoryLabel.Margin = new Padding(0, 10, 15, 0);
-            this._categoryLabel.TextAlign = ContentAlignment.MiddleCenter;
+            _titleLabel.Font = _fontTitle;
+            _titleLabel.ForeColor = Color.FromArgb(33, 33, 33);
+            _titleLabel.Dock = DockStyle.Fill;
+            _titleLabel.TextAlign = ContentAlignment.MiddleCenter;
+            _titleLabel.UseMnemonic = false;
+            _titleLabel.AutoSize = false;
 
-            // 内容描述 Dock.Bottom
-            this._contentLabel.Font = _fontContent;
-            this._contentLabel.ForeColor = Color.FromArgb(100, 100, 100);
-            this._contentLabel.Dock = DockStyle.Bottom;
-            this._contentLabel.Padding = new Padding(15, 5, 15, 10);
-            this._contentLabel.AutoSize = false;
-            this._contentLabel.TextAlign = ContentAlignment.TopCenter;
-            this._contentLabel.UseMnemonic = false;
-            this._contentLabel.Height = 180; // 缩小高度，给标题留出空间
+            _contentLabel.Font = _fontContent;
+            _contentLabel.ForeColor = Color.Black;
+            _contentLabel.Dock = DockStyle.Fill;
+            _contentLabel.TextAlign = ContentAlignment.TopLeft;
+            _contentLabel.UseMnemonic = false;
+            _contentLabel.AutoSize = false;
+            _contentLabel.Padding = new Padding(0, 5, 0, 0);
 
-            // 标题标签 DockStyle.Fill 最后添加（填充剩余区域）
-            this._titleLabel.Font = _fontTitle;
-            this._titleLabel.ForeColor = Color.FromArgb(33, 33, 33);
-            this._titleLabel.Dock = DockStyle.Fill;
-            this._titleLabel.Padding = new Padding(15, 10, 15, 10);
-            this._titleLabel.AutoSize = false;
-            this._titleLabel.TextAlign = ContentAlignment.MiddleCenter;
-            this._titleLabel.UseMnemonic = false;
+            _categoryLabel.Font = _fontCategoryTag;
+            _categoryLabel.ForeColor = Color.White;
+            _categoryLabel.BackColor = Color.FromArgb(108, 117, 125);
+            _categoryLabel.Dock = DockStyle.Right;
+            _categoryLabel.Padding = new Padding(8, 4, 8, 4);
+            _categoryLabel.AutoSize = true;
+            _categoryLabel.Margin = new Padding(0, 5, 15, 0);
+            _categoryLabel.TextAlign = ContentAlignment.TopCenter;
 
-            // Dock标准添加顺序：Left → Right → Bottom → Fill
-            this.Controls.Add(this._accentBar);
-            this.Controls.Add(this._iconPanel);
-            this.Controls.Add(this._categoryLabel);
-            this.Controls.Add(this._contentLabel);
-            this.Controls.Add(this._titleLabel);
+            _innerLayout.Controls.Add(_iconLabel, 0, 0);
+            _innerLayout.Controls.Add(_titleLabel, 0, 1);
+            _innerLayout.Controls.Add(_contentLabel, 0, 2);
+
+            this.Controls.Add(_accentBar);
+            this.Controls.Add(_categoryLabel);
+            this.Controls.Add(_innerLayout);
         }
 
         #region 对外公开属性
@@ -249,6 +238,7 @@ namespace LearningAssistant.Forms.UserControls
                 _fontTitle?.Dispose();
                 _fontContent?.Dispose();
                 _fontCategoryTag?.Dispose();
+                _innerLayout?.Dispose();
                 this.Region?.Dispose();
             }
             base.Dispose(disposing);

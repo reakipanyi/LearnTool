@@ -397,7 +397,7 @@ namespace LearningAssistant.Forms
         [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public bool AutoSpeakAfterOcr
         {
-            get => _checkBoxAutoSpeak.Checked;
+            get => _checkBoxAutoSpeak?.Checked ?? false;
             set => _checkBoxAutoSpeak.Checked = value;
         }
 
@@ -405,7 +405,7 @@ namespace LearningAssistant.Forms
         [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public bool AutoTranslateAfterOcr
         {
-            get => _checkBoxAutoTranslate.Checked;
+            get => _checkBoxAutoTranslate?.Checked ?? false;
             set => _checkBoxAutoTranslate.Checked = value;
         }
 

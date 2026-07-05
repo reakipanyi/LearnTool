@@ -418,26 +418,12 @@ namespace LearningAssistant.Presenters
 
                 if (autoSpeak && _pdfTtsService != null)
                 {
-                    _ = AutoSpeakAsync(original);
+                    _ = FireAndForgetWithLogging(TryAutoSpeakAsync(original), "AutoSpeakAsync");
                 }
             }
             else
             {
                 _view?.ShowWarning("未识别到文字，请尝试调整选择区域");
-            }
-        }
-
-        private async Task AutoSpeakAsync(string text)
-        {
-            try
-            {
-                _logger?.LogInformation("AutoSpeakAsync: start, text length={Len}", text.Length);
-                await _pdfTtsService!.SpeakTextAsync(text);
-                _logger?.LogInformation("AutoSpeakAsync: completed");
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "AutoSpeak failed");
             }
         }
 

@@ -96,7 +96,7 @@ namespace LearningAssistant.Forms.UserControls
             _flowLayoutPanelBottomStats.Dock = DockStyle.Fill;
             _flowLayoutPanelBottomStats.Location = new Point(10, 4);
             _flowLayoutPanelBottomStats.Name = "_flowLayoutPanelBottomStats";
-            _flowLayoutPanelBottomStats.Size = new Size(373, 70);
+            _flowLayoutPanelBottomStats.Size = new Size(443, 32);
             _flowLayoutPanelBottomStats.TabIndex = 0;
             // 
             // LearningStatsButtonView
@@ -107,7 +107,7 @@ namespace LearningAssistant.Forms.UserControls
             Controls.Add(_flowLayoutPanelBottomStats);
             Name = "LearningStatsButtonView";
             Padding = new Padding(10, 4, 10, 4);
-            Size = new Size(393, 78);
+            Size = new Size(463, 40);
             _flowLayoutPanelBottomStats.ResumeLayout(false);
             ResumeLayout(false);
         }

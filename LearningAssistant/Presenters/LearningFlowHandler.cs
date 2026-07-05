@@ -95,6 +95,7 @@ namespace LearningAssistant.Presenters
         {
             _currentUserId = userId;
             _currentSubject = _view.Subject;
+            _autoPronunciationCount = 0;
 
             var selectedSubCategory = await LoadSubCategoriesAsync(_currentSubject, subCategory);
             _currentSubCategory = selectedSubCategory;
@@ -157,8 +158,6 @@ namespace LearningAssistant.Presenters
             _isLoading = true;
             try
             {
-                _currentExplanation = "";
-
                 var item = _studyEngine.GetCurrentItem();
                 if (item == null)
                 {
@@ -168,6 +167,8 @@ namespace LearningAssistant.Presenters
                     _logger.LogInformation("Learning session completed");
                     return;
                 }
+
+                _currentExplanation = item.Meaning?.Content ?? "";
 
                 // 立即更新视图内容，确保列表选中项和内容同步
                 _view.CurrentContent = item.GetMainContent();
@@ -465,6 +466,7 @@ namespace LearningAssistant.Presenters
             try
             {
                 _logger.LogInformation("Settings changed");
+                _autoPronunciationCount = 0;
 
                 var newSubject = _view.Subject;
                 var newSubCategory = _view.SubCategory;

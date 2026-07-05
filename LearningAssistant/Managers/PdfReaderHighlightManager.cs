@@ -125,7 +125,7 @@ namespace LearningAssistant.Managers
                 return;
             }
 
-            int alpha1 = Math.Max(0, color.A - 0);
+            int alpha1 = color.A;
             int alpha2 = Math.Max(0, color.A - 20);
             int alpha3 = Math.Min(255, color.A + 120);
 

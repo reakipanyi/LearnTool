@@ -2,7 +2,7 @@ namespace LearningAssistant.Models.User
 {
     public class Settings
     {
-        public bool IsVoiceEnabled { get; set; } = false; // 默认不发音
+        public bool IsVoiceEnabled { get; set; } = true; // 默认发音
         public int PronunciationScope { get; set; } = 0; // 0=原文, 1=释义, 2=两者
         public bool IsAIExplanationEnabled { get; set; } = false; // AI 释义开关，默认关闭
         public string LearningMode { get; set; } = "Study"; // 学习模式：Study 或 Quick
