@@ -11,6 +11,8 @@ namespace LearningAssistant.Managers
         bool IsDualPage { get; }
         bool IsTranslationEnabled { get; set; }
         bool IsNightMode { get; }
+        bool AutoSpeakAfterOcr { get; }
+        bool AutoTranslateAfterOcr { get; }
 
         PictureBox PictureBoxPdf { get; }
         PdfPresenter? Presenter { get; set; }

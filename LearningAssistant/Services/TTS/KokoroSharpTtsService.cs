@@ -75,6 +75,7 @@ namespace LearningAssistant.Services.TTS
                     CleanupOldCache();
                     _isInitialized = true;
                     _logger?.LogInformation("KokoroSharp TTS initialized successfully with voice: {Voice}", _defaultVoice?.Name ?? "af_heart");
+                    _ = WarmupAsync();
                 }
                 catch (Exception ex)
                 {
@@ -83,6 +84,25 @@ namespace LearningAssistant.Services.TTS
                     _defaultVoice = null;
                     _isInitialized = false;
                 }
+            }
+        }
+
+        private async Task WarmupAsync()
+        {
+            try
+            {
+                _logger?.LogInformation("KokoroSharp TTS warmup starting...");
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                int[] tokens = Tokenizer.Tokenize("Hello.", "a", preprocess: true);
+                var job = KokoroJob.Create(tokens, _defaultVoice, 1.0f, OnComplete: (_) => { });
+                _tts?.EnqueueJob(job);
+                await Task.Delay(50);
+                sw.Stop();
+                _logger?.LogInformation("KokoroSharp TTS warmup completed in {Elapsed}ms", sw.ElapsedMilliseconds);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "KokoroSharp TTS warmup failed");
             }
         }
 
@@ -159,9 +179,18 @@ namespace LearningAssistant.Services.TTS
 
         public async Task<string?> SpeakAsync(string text, string? language = null, float? speed = null)
         {
-            if (string.IsNullOrWhiteSpace(text)) return null;
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                _logger?.LogWarning("SpeakAsync: text is empty");
+                return null;
+            }
             EnsureInitialized();
-            if (!Available) return null;
+            if (!Available)
+            {
+                _logger?.LogWarning("SpeakAsync: not available after EnsureInitialized (isInit={IsInit}, hasTts={HasTts}, hasVoice={HasVoice})", 
+                    _isInitialized, _tts != null, _defaultVoice != null);
+                return null;
+            }
 
             StopPlayback();
 
@@ -174,17 +203,27 @@ namespace LearningAssistant.Services.TTS
                 if (File.Exists(path))
                 {
                     File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
+                    _logger?.LogInformation("SpeakAsync: using cached audio");
+                    await PlayAudioAsync(path);
+                    return path;
                 }
-                else
+
+                _logger?.LogInformation("SpeakAsync: synthesizing new audio, text length={Len}", text.Length);
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+
+                float actualSpeed = speed ?? _config.Speed;
+                var wavBytes = await SynthesizeAndPlayStreamAsync(text, language, actualSpeed).ConfigureAwait(false);
+                
+                sw.Stop();
+                _logger?.LogInformation("SpeakAsync: total synthesis time {Elapsed}ms", sw.ElapsedMilliseconds);
+
+                if (wavBytes == null || wavBytes.Length == 0)
                 {
-                    var wavBytes = await SynthesizeToWavAsync(text, language, speed ?? _config.Speed).ConfigureAwait(false);
-                    if (wavBytes == null || wavBytes.Length == 0)
-                        return null;
-
-                    await File.WriteAllBytesAsync(path, wavBytes).ConfigureAwait(false);
+                    _logger?.LogWarning("SpeakAsync: synthesis returned empty result");
+                    return null;
                 }
 
-                await PlayAudioAsync(path);
+                await File.WriteAllBytesAsync(path, wavBytes).ConfigureAwait(false);
 
                 return path;
             }
@@ -220,6 +259,141 @@ namespace LearningAssistant.Services.TTS
             }
         }
 
+        private async Task<byte[]?> SynthesizeAndPlayStreamAsync(string text, string? language, float speed)
+        {
+            if (_tts == null || _defaultVoice == null) return null;
+
+            float safeSpeed = speed;
+            if (safeSpeed <= 0 || float.IsNaN(safeSpeed) || float.IsInfinity(safeSpeed))
+            {
+                _logger?.LogWarning("Invalid speed value: {Speed}, using default 1.0", speed);
+                safeSpeed = 1.0f;
+            }
+            else if (safeSpeed < 0.5f)
+            {
+                safeSpeed = 0.5f;
+            }
+            else if (safeSpeed > 2.0f)
+            {
+                safeSpeed = 2.0f;
+            }
+
+            var voice = _defaultVoice;
+            if (!string.IsNullOrWhiteSpace(language))
+            {
+                var langVoice = GetVoiceForLanguage(language);
+                if (langVoice != null)
+                    voice = langVoice;
+            }
+
+            string langCode = voice.GetLangCode();
+            string trimmedText = text.Trim();
+
+            var segments = SplitTextIntoSegments(trimmedText, langCode);
+            if (segments.Count == 0)
+                return null;
+
+            if (segments.Count == 1)
+            {
+                var tokens = Tokenizer.Tokenize(segments[0], langCode, preprocess: true);
+                var wavBytes = await SynthesizeTokensToWavAsync(tokens, voice, safeSpeed).ConfigureAwait(false);
+                if (wavBytes != null && wavBytes.Length > 0)
+                {
+                    await PlayAudioFromBytesAsync(wavBytes).ConfigureAwait(false);
+                }
+                return wavBytes;
+            }
+
+            _logger?.LogInformation("Streaming synthesize & play: {SegmentCount} segments", segments.Count);
+            var allSamples = new List<float>();
+            var segmentWavFiles = new List<string>();
+            int currentPlayIndex = 0;
+            bool playStarted = false;
+            var allReadyTcs = new TaskCompletionSource<bool>();
+            var segmentResults = new byte[segments.Count][];
+            int completedCount = 0;
+
+            for (int i = 0; i < segments.Count; i++)
+            {
+                int idx = i;
+                var tokens = Tokenizer.Tokenize(segments[idx], langCode, preprocess: true);
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var wav = await SynthesizeTokensToWavAsync(tokens, voice, safeSpeed).ConfigureAwait(false);
+                        segmentResults[idx] = wav ?? Array.Empty<byte>();
+                    }
+                    catch
+                    {
+                        segmentResults[idx] = Array.Empty<byte>();
+                    }
+                    finally
+                    {
+                        Interlocked.Increment(ref completedCount);
+                        if (Volatile.Read(ref completedCount) >= segments.Count)
+                        {
+                            allReadyTcs.TrySetResult(true);
+                        }
+                    }
+                });
+            }
+
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (currentPlayIndex < segments.Count)
+            {
+                if (segmentResults[currentPlayIndex] != null)
+                {
+                    var wavBytes = segmentResults[currentPlayIndex];
+                    if (wavBytes.Length > 0)
+                    {
+                        var samples = ExtractPcmFloatFromWav(wavBytes);
+                        allSamples.AddRange(samples);
+
+                        if (!playStarted)
+                        {
+                            playStarted = true;
+                            sw.Stop();
+                            _logger?.LogInformation("First segment ready in {Elapsed}ms, starting playback", sw.ElapsedMilliseconds);
+                        }
+
+                        await PlayAudioFromBytesAsync(wavBytes).ConfigureAwait(false);
+
+                        if (_stopRequested)
+                            break;
+                    }
+                    currentPlayIndex++;
+                }
+                else
+                {
+                    if (Volatile.Read(ref completedCount) >= segments.Count)
+                        break;
+                    await Task.Delay(20).ConfigureAwait(false);
+                }
+            }
+
+            if (allSamples.Count == 0)
+                return null;
+
+            return ConvertPcmFloatToWav(allSamples.ToArray(), 24000, 1);
+        }
+
+        private async Task PlayAudioFromBytesAsync(byte[] wavBytes)
+        {
+            if (wavBytes == null || wavBytes.Length == 0 || _stopRequested) return;
+
+            string tempFile = Path.Combine(AppPaths.GetUserTtsCacheDir(), $"_temp_{Guid.NewGuid():N}.wav");
+            try
+            {
+                await File.WriteAllBytesAsync(tempFile, wavBytes).ConfigureAwait(false);
+                await PlayAudioAsync(tempFile).ConfigureAwait(false);
+            }
+            finally
+            {
+                try { File.Delete(tempFile); } catch { }
+            }
+        }
+
         private async Task<byte[]?> SynthesizeToWavAsync(string text, string? language, float speed)
         {
             if (_tts == null || _defaultVoice == null) return null;
@@ -238,6 +412,9 @@ namespace LearningAssistant.Services.TTS
             {
                 safeSpeed = 2.0f;
             }
+
+            _logger?.LogInformation("SynthesizeToWavAsync: inputSpeed={InputSpeed}, safeSpeed={SafeSpeed}, configSpeed={ConfigSpeed}", 
+                speed, safeSpeed, _config.Speed);
 
             var voice = _defaultVoice;
             if (!string.IsNullOrWhiteSpace(language))

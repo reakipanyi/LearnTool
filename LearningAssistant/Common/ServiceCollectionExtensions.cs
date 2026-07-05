@@ -126,10 +126,19 @@ namespace LearningAssistant.Common
         }
 
         /// <summary>
-        /// 添加 AI 相关服务（已移除，按需启用）
+        /// 添加 AI 相关服务
         /// </summary>
         public static IServiceCollection AddAIServices(this IServiceCollection services)
         {
+            services.AddSingleton<IAIServiceFactory, AIServiceFactory>();
+            services.AddSingleton<IAIService>(sp =>
+            {
+                var config = sp.GetRequiredService<AiConfig>();
+                var factory = sp.GetRequiredService<IAIServiceFactory>();
+                var logger = sp.GetRequiredService<ILogger<FallbackAIService>>();
+                return new FallbackAIService(config, factory, logger);
+            });
+            services.AddSingleton<IAiQuestionService, AiQuestionService>();
             return services;
         }
 

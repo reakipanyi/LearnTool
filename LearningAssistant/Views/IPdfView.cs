@@ -360,6 +360,16 @@ namespace LearningAssistant.Views
         /// </summary>
         void ResetZoom();
 
+        /// <summary>
+        /// OCR识别后是否自动朗读
+        /// </summary>
+        bool AutoSpeakAfterOcr { get; set; }
+
+        /// <summary>
+        /// OCR识别后是否自动翻译
+        /// </summary>
+        bool AutoTranslateAfterOcr { get; set; }
+
     }
 
     /// <summary>

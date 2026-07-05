@@ -293,9 +293,14 @@ namespace LearningAssistant.Managers
                 if (!string.IsNullOrEmpty(ocrText) && _form.TextBoxOriginal != null)
                 {
                     _form.TextBoxOriginal.Text = ocrText;
-                    if (_form.IsTranslationEnabled)
+                    if (_form.AutoTranslateAfterOcr)
                     {
                         _form.OnTranslateClicked();
+                    }
+
+                    if (_form.AutoSpeakAfterOcr)
+                    {
+                        _ = _form.Presenter?.TryAutoSpeakAsync(ocrText);
                     }
                 }
 

@@ -31,6 +31,7 @@ namespace LearningAssistant
                 .AddConfigurationServices(configuration)
                 .AddLoggingServices()
                 .AddCoreServices(configuration)
+                .AddAIServices()
                 .AddPdfServices()
                 .AddLearningServices()
                 .AddLearningEnhancementServices()

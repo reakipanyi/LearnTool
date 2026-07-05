@@ -321,8 +321,16 @@ namespace LearningAssistant.Presenters
 
             if (selRect.Width <= 0 || selRect.Height <= 0)
             {
-                var result = await _pdfTranslationService.OcrAndTranslateAsync(img);
-                UpdateOcrResult(result.Original, result.Translation);
+                if (_view?.AutoTranslateAfterOcr == true)
+                {
+                    var result = await _pdfTranslationService.OcrAndTranslateAsync(img);
+                    UpdateOcrResult(result.Original, result.Translation);
+                }
+                else
+                {
+                    var original = await OcrBitmapAsync(img);
+                    UpdateOcrResult(original, null);
+                }
                 return;
             }
 
@@ -373,8 +381,21 @@ namespace LearningAssistant.Presenters
 
             try
             {
-                var result = await _pdfTranslationService.OcrAndTranslateAsync(img, intRect);
-                UpdateOcrResult(result.Original, result.Translation);
+                if (_view?.AutoTranslateAfterOcr == true)
+                {
+                    var result = await _pdfTranslationService.OcrAndTranslateAsync(img, intRect);
+                    UpdateOcrResult(result.Original, result.Translation);
+                }
+                else
+                {
+                    using var cropped = new Bitmap(intRect.Width, intRect.Height);
+                    using (var g = Graphics.FromImage(cropped))
+                    {
+                        g.DrawImage(img, new Rectangle(0, 0, intRect.Width, intRect.Height), intRect, GraphicsUnit.Pixel);
+                    }
+                    var original = await OcrBitmapAsync(cropped);
+                    UpdateOcrResult(original, null);
+                }
             }
             catch (Exception ex)
             {
@@ -389,11 +410,34 @@ namespace LearningAssistant.Presenters
             {
                 _view?.SetOcrResultText(original);
                 _view?.SetOriginalText(original);
-                _view?.SetTranslationText(translation ?? "翻译失败");
+                _view?.SetTranslationText(translation ?? "");
+
+                bool autoSpeak = _view?.AutoSpeakAfterOcr ?? false;
+                _logger?.LogInformation("UpdateOcrResult: AutoSpeakAfterOcr={AutoSpeak}, TtsService={HasTts}, TextLength={TextLen}", 
+                    autoSpeak, _pdfTtsService != null, original.Length);
+
+                if (autoSpeak && _pdfTtsService != null)
+                {
+                    _ = AutoSpeakAsync(original);
+                }
             }
             else
             {
                 _view?.ShowWarning("未识别到文字，请尝试调整选择区域");
+            }
+        }
+
+        private async Task AutoSpeakAsync(string text)
+        {
+            try
+            {
+                _logger?.LogInformation("AutoSpeakAsync: start, text length={Len}", text.Length);
+                await _pdfTtsService!.SpeakTextAsync(text);
+                _logger?.LogInformation("AutoSpeakAsync: completed");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "AutoSpeak failed");
             }
         }
 
@@ -405,6 +449,25 @@ namespace LearningAssistant.Presenters
                 return;
             }
             await _pdfTtsService.SpeakTextAsync(text, language, speed);
+        }
+
+        /// <summary>
+        /// 自动朗读（用于高亮识别后），不弹窗，静默处理错误
+        /// </summary>
+        public async Task TryAutoSpeakAsync(string text)
+        {
+            try
+            {
+                if (_pdfTtsService == null || string.IsNullOrWhiteSpace(text))
+                    return;
+                _logger?.LogInformation("TryAutoSpeakAsync: start, text length={Len}", text.Length);
+                await _pdfTtsService.SpeakTextAsync(text);
+                _logger?.LogInformation("TryAutoSpeakAsync: completed");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "TryAutoSpeakAsync failed");
+            }
         }
 
         public async Task<string> GetAiAnswerAsync(string question, string context = "", CancellationToken cancellationToken = default)
@@ -1000,7 +1063,7 @@ namespace LearningAssistant.Presenters
                     return;
                 }
 
-                await _pdfTtsService.SpeakTextAsync(text, "zh", 1.0f);
+                await _pdfTtsService.SpeakTextAsync(text, "zh", -1f);
             }
             catch (Exception ex)
             {

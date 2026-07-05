@@ -65,6 +65,7 @@ namespace LearningAssistant.Forms
         private Button _buttonTranslate;
         private Button _buttonSpeakTranslation;
         private Button _buttonAddToLearningContent;
+        private CheckBox _checkBoxAutoSpeak;
         private Panel _panelNavigation;
         private Button _buttonPrev;
         private TextBox _textBoxPage;
@@ -217,6 +218,7 @@ namespace LearningAssistant.Forms
         private ToolTip _toolTip;
         private TextBox _textBoxFilter;
         private List<string> _allFiles = new List<string>();
+        private CheckBox _checkBoxAutoTranslate;
         private SplitContainer _splitContainerMain;
 
 
@@ -303,11 +305,7 @@ namespace LearningAssistant.Forms
             if (sender is Button button)
             {
                 bool isNightMode = _nightModeManager?.IsNightMode ?? false;
-                if (button == _buttonAskAi)
-                {
-                    button.BackColor = Color.FromArgb(0, 120, 215);
-                }
-                else if (isNightMode)
+                if (isNightMode)
                 {
                     button.BackColor = Color.FromArgb(45, 45, 45);
                 }
@@ -394,6 +392,22 @@ namespace LearningAssistant.Forms
         public Button? ButtonTranslate => _buttonTranslate;
         public Button? ButtonSpeakOriginal => _buttonSpeakOriginal;
         public Button? ButtonSpeakTranslation => _buttonSpeakTranslation;
+
+        [System.ComponentModel.Browsable(false)]
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public bool AutoSpeakAfterOcr
+        {
+            get => _checkBoxAutoSpeak.Checked;
+            set => _checkBoxAutoSpeak.Checked = value;
+        }
+
+        [System.ComponentModel.Browsable(false)]
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public bool AutoTranslateAfterOcr
+        {
+            get => _checkBoxAutoTranslate.Checked;
+            set => _checkBoxAutoTranslate.Checked = value;
+        }
 
         public TabPage? TabPageBookmarksAndHighlights => _tabPageBookmarksAndHighlights;
         public GroupBox? GroupBoxBookmarks => _groupBoxBookmarks;
@@ -1059,17 +1073,17 @@ namespace LearningAssistant.Forms
         {
             _treeViewFiles.Nodes.Clear();
             string filter = _textBoxFilter?.Text?.Trim() ?? string.Empty;
-            
+
             var filteredFiles = string.IsNullOrEmpty(filter)
                 ? _allFiles
                 : _allFiles.Where(f => Path.GetFileName(f).IndexOf(filter, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
-            
+
             if (filteredFiles.Any())
             {
                 string commonRoot = FindCommonRootDirectory(filteredFiles);
                 BuildTreeViewHierarchy(_treeViewFiles.Nodes, filteredFiles, commonRoot);
             }
-            
+
             if (!string.IsNullOrEmpty(_currentPdfPath))
             {
                 var currentNode = FindNodeByTag(_treeViewFiles.Nodes, _currentPdfPath);
@@ -1086,7 +1100,7 @@ namespace LearningAssistant.Forms
             var paths = files.Select(f => Path.GetDirectoryName(f) ?? string.Empty).Distinct().ToList();
             if (paths.Count == 0) return string.Empty;
             if (paths.Count == 1) return paths[0];
-            
+
             string commonRoot = paths[0];
             foreach (var path in paths.Skip(1))
             {
@@ -1102,28 +1116,28 @@ namespace LearningAssistant.Forms
         private static void BuildTreeViewHierarchy(TreeNodeCollection nodes, IEnumerable<string> files, string commonRoot)
         {
             var folderNodes = new Dictionary<string, TreeNode>(StringComparer.OrdinalIgnoreCase);
-            
+
             foreach (var file in files)
             {
                 string fileName = Path.GetFileName(file);
                 string dirPath = Path.GetDirectoryName(file) ?? string.Empty;
-                
+
                 TreeNodeCollection targetNodes = nodes;
-                
-                if (!string.IsNullOrEmpty(commonRoot) && 
+
+                if (!string.IsNullOrEmpty(commonRoot) &&
                     dirPath.StartsWith(commonRoot, StringComparison.OrdinalIgnoreCase))
                 {
                     string relativeDir = dirPath.Substring(commonRoot.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                    
+
                     if (!string.IsNullOrEmpty(relativeDir))
                     {
                         string[] parts = relativeDir.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
                         string currentPath = commonRoot;
-                        
+
                         foreach (var part in parts)
                         {
                             currentPath = Path.Combine(currentPath, part);
-                            
+
                             if (!folderNodes.TryGetValue(currentPath, out var folderNode))
                             {
                                 folderNode = targetNodes.Add(part);
@@ -1135,7 +1149,7 @@ namespace LearningAssistant.Forms
                         }
                     }
                 }
-                
+
                 var fileNode = targetNodes.Add(fileName);
                 fileNode.Tag = file;
             }
@@ -1147,7 +1161,7 @@ namespace LearningAssistant.Forms
             {
                 if (node.Tag is string s && s == tag)
                     return node;
-                
+
                 var found = FindNodeByTag(node.Nodes, tag);
                 if (found != null)
                     return found;
@@ -2732,7 +2746,6 @@ namespace LearningAssistant.Forms
             menuItemRotateLeft = new ToolStripMenuItem();
             menuItemRotateRight = new ToolStripMenuItem();
             menuItemResetRotation = new ToolStripMenuItem();
-            _toolTip = new ToolTip(components);
             _ocrPanel = new Panel();
             _ocrPictureBox = new PictureBox();
             _ocrCloseButton = new Button();
@@ -2742,6 +2755,7 @@ namespace LearningAssistant.Forms
             _tabControlLeft = new TabControl();
             _tabPageFiles = new TabPage();
             _treeViewFiles = new TreeView();
+            _textBoxFilter = new TextBox();
             _tabPageThumbnails = new TabPage();
             _panelThumbnails = new Panel();
             _flowLayoutPanelThumbnails = new FlowLayoutPanel();
@@ -2752,6 +2766,7 @@ namespace LearningAssistant.Forms
             _buttonAddToLearningContent = new Button();
             _textBoxOriginal = new TextBox();
             _buttonSpeakOriginal = new Button();
+            _checkBoxAutoSpeak = new CheckBox();
             _labelTranslation = new Label();
             _labelOriginal = new Label();
             _buttonTranslate = new Button();
@@ -2776,11 +2791,12 @@ namespace LearningAssistant.Forms
             _buttonPanel = new FlowLayoutPanel();
             _buttonAddBookmark = new Button();
             _buttonRemoveBookmark = new Button();
+            _toolTip = new ToolTip(components);
             _buttonStrikethroughMode = new Button();
             _toastLabel = new Label();
             _buttonTranslationToggle = new Button();
             _pageTransitionTimer = new System.Windows.Forms.Timer(components);
-            _textBoxFilter = new TextBox();
+            _checkBoxAutoTranslate = new CheckBox();
             ((ISupportInitialize)_splitContainerMain).BeginInit();
             _splitContainerMain.Panel1.SuspendLayout();
             _splitContainerMain.Panel2.SuspendLayout();
@@ -3025,10 +3041,10 @@ namespace LearningAssistant.Forms
             _buttonRotate.Size = new Size(28, 32);
             _buttonRotate.TabIndex = 5;
             _buttonRotate.Text = "↻";
+            _toolTip.SetToolTip(_buttonRotate, "顺时针旋转90°（右键逆时针旋转）");
             _buttonRotate.UseVisualStyleBackColor = false;
             _buttonRotate.Click += ButtonRotate_Click;
             _buttonRotate.MouseDown += ButtonRotate_MouseDown;
-            _toolTip.SetToolTip(_buttonRotate, "顺时针旋转90°（右键逆时针旋转）");
             // 
             // _buttonLockView
             // 
@@ -3468,89 +3484,94 @@ namespace LearningAssistant.Forms
             // 
             _contextMenuPdf.Items.AddRange(new ToolStripItem[] { menuItemCopy, menuItemSearch, menuItemHighlight, menuItemRectangle, menuItemText, menuItemZoomIn, menuItemZoomOut, menuItemResetZoom, menuItemExport, menuItemRotationSeparator, menuItemRotateLeft, menuItemRotateRight, menuItemResetRotation });
             _contextMenuPdf.Name = "_contextMenuPdf";
-            _contextMenuPdf.Size = new Size(137, 202);
+            _contextMenuPdf.Size = new Size(144, 274);
             // 
             // menuItemCopy
             // 
             menuItemCopy.Name = "menuItemCopy";
-            menuItemCopy.Size = new Size(136, 22);
+            menuItemCopy.Size = new Size(143, 22);
             menuItemCopy.Text = "复制";
             menuItemCopy.Click += MenuItemCopy_Click;
             // 
             // menuItemSearch
             // 
             menuItemSearch.Name = "menuItemSearch";
-            menuItemSearch.Size = new Size(136, 22);
+            menuItemSearch.Size = new Size(143, 22);
             menuItemSearch.Text = "搜索";
             menuItemSearch.Click += MenuItemSearch_Click;
             // 
             // menuItemHighlight
             // 
             menuItemHighlight.Name = "menuItemHighlight";
-            menuItemHighlight.Size = new Size(136, 22);
+            menuItemHighlight.Size = new Size(143, 22);
             menuItemHighlight.Text = "高亮标注";
             menuItemHighlight.Click += MenuItemHighlight_Click;
             // 
             // menuItemRectangle
             // 
             menuItemRectangle.Name = "menuItemRectangle";
-            menuItemRectangle.Size = new Size(136, 22);
+            menuItemRectangle.Size = new Size(143, 22);
             menuItemRectangle.Text = "矩形标注";
             menuItemRectangle.Click += MenuItemRectangle_Click;
             // 
             // menuItemText
             // 
             menuItemText.Name = "menuItemText";
-            menuItemText.Size = new Size(136, 22);
+            menuItemText.Size = new Size(143, 22);
             menuItemText.Text = "文字注解";
             menuItemText.Click += MenuItemText_Click;
             // 
             // menuItemZoomIn
             // 
             menuItemZoomIn.Name = "menuItemZoomIn";
-            menuItemZoomIn.Size = new Size(136, 22);
+            menuItemZoomIn.Size = new Size(143, 22);
             menuItemZoomIn.Text = "放大";
             menuItemZoomIn.Click += MenuItemZoomIn_Click;
             // 
             // menuItemZoomOut
             // 
             menuItemZoomOut.Name = "menuItemZoomOut";
-            menuItemZoomOut.Size = new Size(136, 22);
+            menuItemZoomOut.Size = new Size(143, 22);
             menuItemZoomOut.Text = "缩小";
             menuItemZoomOut.Click += MenuItemZoomOut_Click;
             // 
             // menuItemResetZoom
             // 
             menuItemResetZoom.Name = "menuItemResetZoom";
-            menuItemResetZoom.Size = new Size(136, 22);
+            menuItemResetZoom.Size = new Size(143, 22);
             menuItemResetZoom.Text = "重置缩放";
             menuItemResetZoom.Click += MenuItemResetZoom_Click;
             // 
             // menuItemExport
             // 
             menuItemExport.Name = "menuItemExport";
-            menuItemExport.Size = new Size(136, 22);
+            menuItemExport.Size = new Size(143, 22);
             menuItemExport.Text = "导出当前页";
             menuItemExport.Click += MenuItemExport_Click;
-            //
+            // 
+            // menuItemRotationSeparator
+            // 
+            menuItemRotationSeparator.Name = "menuItemRotationSeparator";
+            menuItemRotationSeparator.Size = new Size(140, 6);
+            // 
             // menuItemRotateLeft
-            //
+            // 
             menuItemRotateLeft.Name = "menuItemRotateLeft";
-            menuItemRotateLeft.Size = new Size(136, 22);
+            menuItemRotateLeft.Size = new Size(143, 22);
             menuItemRotateLeft.Text = "向左旋转90°";
             menuItemRotateLeft.Click += MenuItemRotateLeft_Click;
-            //
+            // 
             // menuItemRotateRight
-            //
+            // 
             menuItemRotateRight.Name = "menuItemRotateRight";
-            menuItemRotateRight.Size = new Size(136, 22);
+            menuItemRotateRight.Size = new Size(143, 22);
             menuItemRotateRight.Text = "向右旋转90°";
             menuItemRotateRight.Click += MenuItemRotateRight_Click;
-            //
+            // 
             // menuItemResetRotation
-            //
+            // 
             menuItemResetRotation.Name = "menuItemResetRotation";
-            menuItemResetRotation.Size = new Size(136, 22);
+            menuItemResetRotation.Size = new Size(143, 22);
             menuItemResetRotation.Text = "重置旋转";
             menuItemResetRotation.Click += MenuItemResetRotation_Click;
             // 
@@ -3656,6 +3677,18 @@ namespace LearningAssistant.Forms
             _treeViewFiles.TabIndex = 0;
             _treeViewFiles.AfterSelect += TreeViewFiles_AfterSelect;
             // 
+            // _textBoxFilter
+            // 
+            _textBoxFilter.BorderStyle = BorderStyle.FixedSingle;
+            _textBoxFilter.Dock = DockStyle.Top;
+            _textBoxFilter.Font = new Font("Microsoft YaHei UI", 10F);
+            _textBoxFilter.Location = new Point(3, 3);
+            _textBoxFilter.Name = "_textBoxFilter";
+            _textBoxFilter.PlaceholderText = "🔍 搜索文件...";
+            _textBoxFilter.Size = new Size(316, 24);
+            _textBoxFilter.TabIndex = 1;
+            _textBoxFilter.TextChanged += TextBoxFilter_TextChanged;
+            // 
             // _tabPageThumbnails
             // 
             _tabPageThumbnails.Controls.Add(_panelThumbnails);
@@ -3706,6 +3739,8 @@ namespace LearningAssistant.Forms
             _groupBoxProgress.Controls.Add(_buttonAddToLearningContent);
             _groupBoxProgress.Controls.Add(_textBoxOriginal);
             _groupBoxProgress.Controls.Add(_buttonSpeakOriginal);
+            _groupBoxProgress.Controls.Add(_checkBoxAutoTranslate);
+            _groupBoxProgress.Controls.Add(_checkBoxAutoSpeak);
             _groupBoxProgress.Controls.Add(_labelTranslation);
             _groupBoxProgress.Controls.Add(_labelOriginal);
             _groupBoxProgress.Controls.Add(_buttonTranslate);
@@ -3779,10 +3814,22 @@ namespace LearningAssistant.Forms
             _buttonSpeakOriginal.UseVisualStyleBackColor = false;
             _buttonSpeakOriginal.Click += ButtonSpeakOriginal_Click;
             // 
+            // _checkBoxAutoSpeak
+            // 
+            _checkBoxAutoSpeak.AutoSize = true;
+            _checkBoxAutoSpeak.Checked = true;
+            _checkBoxAutoSpeak.CheckState = CheckState.Checked;
+            _checkBoxAutoSpeak.Location = new Point(102, 22);
+            _checkBoxAutoSpeak.Name = "_checkBoxAutoSpeak";
+            _checkBoxAutoSpeak.Size = new Size(107, 21);
+            _checkBoxAutoSpeak.TabIndex = 8;
+            _checkBoxAutoSpeak.Text = "🔊 识别后朗读";
+            _checkBoxAutoSpeak.UseVisualStyleBackColor = true;
+            // 
             // _labelTranslation
             // 
             _labelTranslation.AutoSize = true;
-            _labelTranslation.Location = new Point(10, 295);
+            _labelTranslation.Location = new Point(10, 284);
             _labelTranslation.Name = "_labelTranslation";
             _labelTranslation.Size = new Size(44, 17);
             _labelTranslation.TabIndex = 2;
@@ -3791,7 +3838,7 @@ namespace LearningAssistant.Forms
             // _labelOriginal
             // 
             _labelOriginal.AutoSize = true;
-            _labelOriginal.Location = new Point(10, 25);
+            _labelOriginal.Location = new Point(10, 24);
             _labelOriginal.Name = "_labelOriginal";
             _labelOriginal.Size = new Size(44, 17);
             _labelOriginal.TabIndex = 1;
@@ -3802,11 +3849,11 @@ namespace LearningAssistant.Forms
             _buttonTranslate.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             _buttonTranslate.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonTranslate.FlatStyle = FlatStyle.Flat;
-            _buttonTranslate.Location = new Point(144, 275);
+            _buttonTranslate.Location = new Point(229, 277);
             _buttonTranslate.Name = "_buttonTranslate";
-            _buttonTranslate.Size = new Size(160, 30);
+            _buttonTranslate.Size = new Size(70, 30);
             _buttonTranslate.TabIndex = 0;
-            _buttonTranslate.Text = "🌐 翻译选中内容";
+            _buttonTranslate.Text = "🌐 翻译";
             _buttonTranslate.UseVisualStyleBackColor = false;
             _buttonTranslate.Click += ButtonTranslate_Click;
             // 
@@ -4107,18 +4154,15 @@ namespace LearningAssistant.Forms
             _buttonTranslationToggle.UseVisualStyleBackColor = false;
             _buttonTranslationToggle.Click += ButtonTranslationToggle_Click;
             // 
-            // _textBoxFilter
+            // _checkBoxAutoTranslate
             // 
-            _textBoxFilter.BorderStyle = BorderStyle.FixedSingle;
-            _textBoxFilter.Dock = DockStyle.Top;
-            _textBoxFilter.Font = new Font("Microsoft YaHei UI", 10F);
-            _textBoxFilter.Location = new Point(3, 3);
-            _textBoxFilter.Name = "_textBoxFilter";
-            _textBoxFilter.Size = new Size(316, 24);
-            _textBoxFilter.TabIndex = 1;
-            _textBoxFilter.TextAlign = HorizontalAlignment.Left;
-            _textBoxFilter.PlaceholderText = "🔍 搜索文件...";
-            _textBoxFilter.TextChanged += TextBoxFilter_TextChanged;
+            _checkBoxAutoTranslate.AutoSize = true;
+            _checkBoxAutoTranslate.Location = new Point(102, 282);
+            _checkBoxAutoTranslate.Name = "_checkBoxAutoTranslate";
+            _checkBoxAutoTranslate.Size = new Size(107, 21);
+            _checkBoxAutoTranslate.TabIndex = 8;
+            _checkBoxAutoTranslate.Text = "🌐 识别后翻译";
+            _checkBoxAutoTranslate.UseVisualStyleBackColor = true;
             // 
             // PdfReaderFormV2
             // 
