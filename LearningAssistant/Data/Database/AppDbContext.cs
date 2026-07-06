@@ -53,7 +53,7 @@ namespace LearningAssistant.Data.Database
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"创建数据库目录失败: {ex.Message}");
+                System.Diagnostics.Trace.TraceError($"创建数据库目录失败: {ex.Message}");
             }
 
             var connectionString = $"Data Source={_dbPath};Cache=Shared;Pooling=True;";
@@ -261,7 +261,7 @@ namespace LearningAssistant.Data.Database
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"数据库创建失败: {ex.Message}");
+                System.Diagnostics.Trace.TraceError($"数据库创建失败: {ex.Message}");
                 throw;
             }
         }
@@ -281,7 +281,7 @@ namespace LearningAssistant.Data.Database
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Schema修复失败: {ex.Message}");
+                System.Diagnostics.Trace.TraceError($"Schema修复失败: {ex.Message}");
                 throw;
             }
         }
@@ -413,8 +413,9 @@ namespace LearningAssistant.Data.Database
                 var sql = @"ALTER TABLE SpacedRepetitionItems ADD COLUMN AlgorithmType TEXT;";
                 Database.ExecuteSqlRaw(sql);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                System.Diagnostics.Trace.TraceWarning($"添加AlgorithmType列失败（可能已存在）: {ex.Message}");
             }
         }
     }

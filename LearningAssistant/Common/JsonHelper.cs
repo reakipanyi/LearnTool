@@ -97,8 +97,9 @@ namespace LearningAssistant.Common
                 return JsonConvert.DeserializeObject<List<LearningItem>>(json, _learningItemSettings) 
                        ?? new List<LearningItem>();
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                System.Diagnostics.Trace.TraceWarning($"反序列化学习项失败: {ex.Message}");
                 return new List<LearningItem>();
             }
         }

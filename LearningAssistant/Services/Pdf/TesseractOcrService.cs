@@ -1,5 +1,6 @@
 using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
+using Microsoft.Extensions.Logging;
 using Tesseract;
 
 namespace LearningAssistant.Services.Pdf
@@ -8,6 +9,7 @@ namespace LearningAssistant.Services.Pdf
     {
         private TesseractEngine? _engine;
         private readonly OcrConfig _config;
+        private readonly ILogger<TesseractOcrService>? _logger;
         private bool _initialized = false;
         private string? _initErrorMessage;
         private string _currentLanguage = "eng";
@@ -15,9 +17,10 @@ namespace LearningAssistant.Services.Pdf
         private bool _enablePreprocessing = true;
 
 
-        public TesseractOcrService(OcrConfig config)
+        public TesseractOcrService(OcrConfig config, ILogger<TesseractOcrService>? logger = null)
         {
             _config = config;
+            _logger = logger;
             _currentLanguage = string.IsNullOrWhiteSpace(_config.Language) ? "eng" : _config.Language;
             InitializeEngine();
         }
@@ -125,8 +128,9 @@ namespace LearningAssistant.Services.Pdf
                     using var page = _engine.Process(pix);
                     return page.GetText() ?? string.Empty;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _logger?.LogError(ex, "OCR识别失败");
                     return string.Empty;
                 }
             });
@@ -200,7 +204,7 @@ namespace LearningAssistant.Services.Pdf
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"OCR识别异常: {ex.Message}");
+                    _logger?.LogError(ex, "OCR识别异常");
                     return string.Empty;
                 }
             });

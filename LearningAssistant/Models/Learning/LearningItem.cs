@@ -73,7 +73,10 @@ namespace LearningAssistant.Models.Learning
                 if (props?.TryGetValue(key, out var value) == true)
                     return JsonConvert.DeserializeObject<T>(value.ToString() ?? "");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning($"获取扩展属性失败 [key={key}]: {ex.Message}");
+            }
             return defaultValue;
         }
 

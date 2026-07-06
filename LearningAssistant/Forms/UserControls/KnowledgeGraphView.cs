@@ -160,7 +160,7 @@ namespace LearningAssistant.Forms.UserControls
             catch (Exception ex)
             {
                 UpdateStatus($"加载失败: {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"加载图谱失败: {ex}");
+                System.Diagnostics.Trace.TraceError($"加载图谱失败: {ex}");
             }
         }
 

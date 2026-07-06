@@ -185,8 +185,19 @@ namespace LearningAssistant.Presenters
 
                 if (_view.IsVoiceEnabled && _autoPronunciationCount < MaxAutoPronunciationCount)
                 {
-                    await PlayPronunciationAsync(item, _currentExplanation, _cts.Token);
-                    _autoPronunciationCount++;
+                    if (_ttsService == null)
+                    {
+                        _logger.LogWarning("TTS service is null, cannot play pronunciation");
+                    }
+                    else if (!_ttsService.Available)
+                    {
+                        _logger.LogWarning("TTS service is not available");
+                    }
+                    else
+                    {
+                        await PlayPronunciationAsync(item, _currentExplanation, _cts.Token);
+                        _autoPronunciationCount++;
+                    }
                 }
             }
             catch (OperationCanceledException)
@@ -228,20 +239,29 @@ namespace LearningAssistant.Presenters
                 var scope = _view.PronunciationScope;
                 string lang = _currentSubject == SubjectType.Chinese ? "zh" : "en";
 
+                _logger.LogInformation("Playing pronunciation - Scope: {Scope}, Language: {Lang}, Text: {Text}, Explanation: {Explanation}", 
+                    scope, lang, item.GetMainContent(), explanation);
+
                 if (scope == PronunciationScope.Original || scope == PronunciationScope.Both)
                 {
                     string text = item.GetMainContent();
+                    _logger.LogInformation("Speaking original text: {Text}", text);
                     await _ttsService.SpeakAsync(text, lang);
-                    await Task.Delay(500, cancellationToken);
+                    if (!cancellationToken.IsCancellationRequested)
+                    {
+                        await Task.Delay(500, cancellationToken);
+                    }
                 }
 
-                if ((scope == PronunciationScope.Explanation || scope == PronunciationScope.Both) && !string.IsNullOrWhiteSpace(explanation))
+                if ((scope == PronunciationScope.Explanation || scope == PronunciationScope.Both) && !string.IsNullOrWhiteSpace(explanation) && !cancellationToken.IsCancellationRequested)
                 {
+                    _logger.LogInformation("Speaking explanation: {Explanation}", explanation);
                     await _ttsService.SpeakAsync(explanation, lang);
                 }
             }
             catch (OperationCanceledException)
             {
+                _logger.LogDebug("PlayPronunciationAsync was cancelled");
                 throw;
             }
             catch (Exception ex)
@@ -378,7 +398,7 @@ namespace LearningAssistant.Presenters
                 var item = _studyEngine.GetCurrentItem();
                 if (item != null)
                 {
-                    await PlayPronunciationAsync(item, _currentExplanation, _cts.Token);
+                    await PlayPronunciationAsync(item, _currentExplanation, CancellationToken.None);
                 }
             }
             catch (OperationCanceledException)

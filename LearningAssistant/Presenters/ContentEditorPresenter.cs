@@ -616,7 +616,10 @@ namespace LearningAssistant.Presenters
                         }
                     }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "解析学习项扩展属性失败");
+                }
 
                 table.Rows.Add(row);
             }

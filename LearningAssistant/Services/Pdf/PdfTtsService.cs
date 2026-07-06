@@ -1,3 +1,4 @@
+using KidWinApp.Services;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Services.TTS;
 using Microsoft.Extensions.Logging;
@@ -30,11 +31,30 @@ namespace LearningAssistant.Services.Pdf
         public async Task SpeakTextAsync(string text, float speed = -1f)
         {
             float actualSpeed = speed > 0 ? speed : _ttsConfig.Speed;
-            bool isChinese = text.Any(c => c >= 0x4E00 && c <= 0x9FFF);
-            string lang = isChinese ? "zh" : "en";
+            string lang = DetectTextLanguage(text);
             _logger.LogInformation("PdfTtsService.SpeakTextAsync: paramSpeed={ParamSpeed}, actualSpeed={ActualSpeed}, lang={Lang}, configSpeed={ConfigSpeed}", 
                 speed, actualSpeed, lang, _ttsConfig.Speed);
             await _ttsService.SpeakAsync(text, lang, actualSpeed);
+        }
+
+        private string DetectTextLanguage(string text)
+        {
+            var langType = StringLanguageDetector.DetectLanguage(text);
+            return langType switch
+            {
+                LanguageType.Chinese => "zh",
+                LanguageType.English => "en",
+                LanguageType.Mixed => DetectPrimaryLanguage(text),
+                _ => "en"
+            };
+        }
+
+        private string DetectPrimaryLanguage(string text)
+        {
+            var result = StringLanguageDetector.DetailedDetect(text);
+            if (result.ChineseCount > result.EnglishCount)
+                return "zh";
+            return "en";
         }
     }
 }

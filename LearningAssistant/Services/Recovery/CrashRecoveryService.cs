@@ -221,17 +221,18 @@ namespace LearningAssistant.Services.Recovery
                 foreach (var infoFile in infoFiles)
                 {
                     try
-                    {
-                        var json = File.ReadAllText(infoFile);
-                        var snapshot = JsonSerializer.Deserialize<AutoSaveSnapshot>(json);
-                        if (snapshot != null && File.Exists(snapshot.FilePath))
                         {
-                            snapshots.Add(snapshot);
+                            var json = File.ReadAllText(infoFile);
+                            var snapshot = JsonSerializer.Deserialize<AutoSaveSnapshot>(json);
+                            if (snapshot != null && File.Exists(snapshot.FilePath))
+                            {
+                                snapshots.Add(snapshot);
+                            }
                         }
-                    }
-                    catch
-                    {
-                    }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogWarning(ex, "无法读取快照信息文件: {File}", infoFile);
+                        }
                 }
 
                 return snapshots;
@@ -417,8 +418,9 @@ namespace LearningAssistant.Services.Recovery
                             File.Delete(infoFile);
                         }
                     }
-                    catch
+                    catch (Exception ex)
                     {
+                        _logger?.LogDebug(ex, "清理旧快照文件失败: {File}", snapshot.FilePath);
                     }
                 }
 

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -6,53 +7,44 @@ using LearningAssistant.Models.Config;
 
 namespace LearningAssistant.Services.Pdf
 {
-    /// <summary>
-    /// 百度翻译服务（整合优化版）
-    /// </summary>
     public class BaiduTranslationService : ITranslationService, IDisposable
     {
         #region 配置与常量
         private readonly TranslationConfig _config;
         private readonly HttpClient _httpClient;
+        private readonly ILogger<BaiduTranslationService>? _logger;
         private const int MaxTextLength = 6000;
+        private const int DefaultSegmentLength = 5000;
         private bool _disposed;
         private string? _decryptedAppId;
         private string? _decryptedSecret;
         #endregion
 
         #region 构造函数
-        public BaiduTranslationService(TranslationConfig config)
+        public BaiduTranslationService(TranslationConfig config, ILogger<BaiduTranslationService>? logger = null)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
+            _logger = logger;
 
-            // 性能优化 HttpClientHandler
             var handler = new HttpClientHandler
             {
-                // 解决SSL验证问题
                 ServerCertificateCustomValidationCallback = (_, _, _, _) => true,
-                // 关闭自动代理检测，提升速度
                 UseProxy = false,
-                // 连接复用
                 MaxConnectionsPerServer = 10,
-                // 关闭自动重定向
                 AllowAutoRedirect = false
             };
 
             _httpClient = new HttpClient(handler)
             {
                 BaseAddress = new Uri("https://fanyi-api.baidu.com/"),
-                Timeout = TimeSpan.FromSeconds(35)
+                Timeout = TimeSpan.FromSeconds(_config.TimeoutSeconds > 0 ? _config.TimeoutSeconds : 35)
             };
 
-            // 请求头优化
             _httpClient.DefaultRequestHeaders.ConnectionClose = false;
         }
         #endregion
 
         #region 公开属性
-        /// <summary>
-        /// 服务是否可用（配置是否完整）
-        /// </summary>
         public bool IsAvailable =>
             !string.IsNullOrWhiteSpace(DecryptedAppId) &&
             !string.IsNullOrWhiteSpace(DecryptedSecret);
@@ -67,9 +59,9 @@ namespace LearningAssistant.Services.Pdf
                 {
                     _decryptedAppId = Services.Utils.SecureConfigManager.Decrypt(_config.BaiduAppId);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // 解密失败，直接使用原始值（可能是未加密的）
+                    _logger?.LogWarning(ex, "解密BaiduAppId失败，使用原始值");
                     _decryptedAppId = _config.BaiduAppId;
                 }
                 
@@ -87,9 +79,9 @@ namespace LearningAssistant.Services.Pdf
                 {
                     _decryptedSecret = Services.Utils.SecureConfigManager.Decrypt(_config.BaiduSecret);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // 解密失败，直接使用原始值（可能是未加密的）
+                    _logger?.LogWarning(ex, "解密BaiduSecret失败，使用原始值");
                     _decryptedSecret = _config.BaiduSecret;
                 }
                 
@@ -99,151 +91,191 @@ namespace LearningAssistant.Services.Pdf
         #endregion
 
         #region 核心翻译方法
-        /// <summary>
-        /// 异步翻译文本（自动清理非法字符、超长校验）
-        /// </summary>
-        /// <param name="text">待翻译文本</param>
-        /// <param name="from">源语种</param>
-        /// <param name="to">目标语种</param>
-        /// <returns>翻译结果</returns>
         public async Task<string?> TranslateAsync(string text, string from = "auto", string to = "zh")
         {
-            // 1. 基础校验
             if (!IsAvailable)
             {
-                Console.WriteLine("翻译失败：AppId 或 Secret 未配置");
+                _logger?.LogWarning("翻译失败：AppId 或 Secret 未配置");
                 return null;
             }
 
-            // 2. 清理非法字符 + 格式化
             text = ClearTranslateUnusableChars(text);
             if (string.IsNullOrWhiteSpace(text))
             {
-                Console.WriteLine("待翻译文本为空");
+                _logger?.LogDebug("待翻译文本为空");
                 return null;
             }
 
-            // 3. 超长校验
             if (text.Length > MaxTextLength)
             {
-                Console.WriteLine($"文本超长：{text.Length}，最大支持 {MaxTextLength} 字符");
-                return null;
+                _logger?.LogInformation("文本超长：{Length}，最大支持 {MaxLength} 字符，开始分段翻译", text.Length, MaxTextLength);
+                return await TranslateLongTextAsync(text, from, to);
             }
 
             try
             {
-                // 4. 生成签名参数
-                var salt = DateTime.Now.Ticks.ToString();
-                var sign = CalculateSign(text, salt);
-
-                var parameters = new Dictionary<string, string>
-                {
-                    { "q", text },
-                    { "from", from },
-                    { "to", to },
-                    { "appid", DecryptedAppId },
-                    { "salt", salt },
-                    { "sign", sign }
-                };
-
-                // 5. 发送请求
-                using var content = new FormUrlEncodedContent(parameters);
-                content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/x-www-form-urlencoded")
-                {
-                    CharSet = "UTF-8"
-                };
-
-                Console.WriteLine("开始请求百度翻译API...");
-                using var cts = new CancellationTokenSource(30000); // 30秒超时
-                var response = await _httpClient.PostAsync(
-                    "api/trans/vip/translate",
-                    content,
-                    cts.Token);
-
-                response.EnsureSuccessStatusCode();
-                var json = await response.Content.ReadAsStringAsync(cts.Token);
-                Console.WriteLine($"API响应：{json}");
-
-                // 6. 解析结果（原生 System.Text.Json）
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-
-                // 错误码判断
-                if (root.TryGetProperty("error_code", out var errorCode))
-                {
-                    var errorMsg = root.TryGetProperty("error_msg", out var msg)
-                        ? msg.GetString()
-                        : "未知错误";
-                    Console.WriteLine($"翻译API错误：{errorCode.GetString()} - {errorMsg}");
-                    return null;
-                }
-
-                // 提取翻译结果
-                if (root.TryGetProperty("trans_result", out var transResult) &&
-                    transResult.ValueKind == JsonValueKind.Array)
-                {
-                    var sb = new StringBuilder();
-                    foreach (var item in transResult.EnumerateArray())
-                    {
-                        if (item.TryGetProperty("dst", out var dst))
-                        {
-                            sb.AppendLine(dst.GetString());
-                        }
-                    }
-                    return sb.ToString().Trim();
-                }
-
-                Console.WriteLine("未获取到翻译结果");
-                return null;
+                return await TranslateSingleSegmentAsync(text, from, to);
             }
             catch (HttpRequestException ex)
             {
-                Console.WriteLine($"HTTP请求异常：{ex.Message}");
+                _logger?.LogError(ex, "HTTP请求异常");
                 return null;
             }
             catch (TaskCanceledException)
             {
-                Console.WriteLine("翻译请求超时");
+                _logger?.LogWarning("翻译请求超时");
                 return null;
             }
             catch (JsonException ex)
             {
-                Console.WriteLine($"JSON解析失败：{ex.Message}");
+                _logger?.LogError(ex, "JSON解析失败");
                 return null;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"翻译异常：{ex.Message}");
+                _logger?.LogError(ex, "翻译异常");
                 return null;
             }
+        }
+
+        private async Task<string?> TranslateLongTextAsync(string text, string from, string to)
+        {
+            var segments = SplitTextIntoSegments(text, DefaultSegmentLength);
+            _logger?.LogInformation("文本分段完成，共 {Count} 段", segments.Count);
+
+            var results = new StringBuilder();
+            int successCount = 0;
+
+            for (int i = 0; i < segments.Count; i++)
+            {
+                try
+                {
+                    var segmentResult = await TranslateSingleSegmentAsync(segments[i], from, to);
+                    if (!string.IsNullOrWhiteSpace(segmentResult))
+                    {
+                        results.Append(segmentResult);
+                        successCount++;
+                    }
+
+                    if (i < segments.Count - 1)
+                    {
+                        await Task.Delay(500);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "翻译第 {Index} 段失败", i + 1);
+                }
+            }
+
+            _logger?.LogInformation("分段翻译完成，成功 {Success} / {Total} 段", successCount, segments.Count);
+            return results.Length > 0 ? results.ToString().Trim() : null;
+        }
+
+        private List<string> SplitTextIntoSegments(string text, int maxLength)
+        {
+            var segments = new List<string>();
+            int start = 0;
+
+            while (start < text.Length)
+            {
+                int end = Math.Min(start + maxLength, text.Length);
+
+                if (end < text.Length)
+                {
+                    int lastPunctuation = text.LastIndexOfAny(new[] { '。', '！', '？', '.', '!', '?', '；', ';', '\n', '\r' }, end, end - start);
+                    if (lastPunctuation > start)
+                    {
+                        end = lastPunctuation + 1;
+                    }
+                }
+
+                segments.Add(text.Substring(start, end - start).Trim());
+                start = end;
+            }
+
+            return segments;
+        }
+
+        private async Task<string?> TranslateSingleSegmentAsync(string text, string from, string to)
+        {
+            var salt = DateTime.Now.Ticks.ToString();
+            var sign = CalculateSign(text, salt);
+
+            var parameters = new Dictionary<string, string>
+            {
+                { "q", text },
+                { "from", from },
+                { "to", to },
+                { "appid", DecryptedAppId },
+                { "salt", salt },
+                { "sign", sign }
+            };
+
+            using var content = new FormUrlEncodedContent(parameters);
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/x-www-form-urlencoded")
+            {
+                CharSet = "UTF-8"
+            };
+
+            _logger?.LogDebug("开始请求百度翻译API...");
+            var timeoutSeconds = _config.TimeoutSeconds > 0 ? _config.TimeoutSeconds : 30;
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+            var response = await _httpClient.PostAsync(
+                "api/trans/vip/translate",
+                content,
+                cts.Token);
+
+            response.EnsureSuccessStatusCode();
+            var json = await response.Content.ReadAsStringAsync(cts.Token);
+            _logger?.LogTrace("API响应：{Json}", json);
+
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("error_code", out var errorCode))
+            {
+                var errorMsg = root.TryGetProperty("error_msg", out var msg)
+                    ? msg.GetString()
+                    : "未知错误";
+                _logger?.LogWarning("翻译API错误：{ErrorCode} - {ErrorMessage}", errorCode.GetString(), errorMsg);
+                return null;
+            }
+
+            if (root.TryGetProperty("trans_result", out var transResult) &&
+                transResult.ValueKind == JsonValueKind.Array)
+            {
+                var sb = new StringBuilder();
+                foreach (var item in transResult.EnumerateArray())
+                {
+                    if (item.TryGetProperty("dst", out var dst))
+                    {
+                        sb.AppendLine(dst.GetString());
+                    }
+                }
+                return sb.ToString().Trim();
+            }
+
+            _logger?.LogDebug("未获取到翻译结果");
+            return null;
         }
         #endregion
 
         #region 工具方法
-        /// <summary>
-        /// 清理翻译不可用字符，保留中英文、数字、标点、空格
-        /// </summary>
         private static string ClearTranslateUnusableChars(string inputText)
         {
             if (string.IsNullOrEmpty(inputText))
                 return string.Empty;
 
-            // 保留：中文、英文、数字、中英文逗号句号、空格
             var pattern = @"[^\u4e00-\u9fa5a-zA-Z0-9，。,.\s]";
             var result = Regex.Replace(inputText, pattern, string.Empty);
 
-            // 清除换行
             result = Regex.Replace(result, @"\r\n|\n|\r", string.Empty);
-
-            // 合并连续空格
             result = Regex.Replace(result, @"\s+", " ");
 
             return result.Trim();
         }
 
-        /// <summary>
-        /// 计算百度翻译签名（MD5）
-        /// </summary>
         private string CalculateSign(string text, string salt)
         {
             var signStr = $"{DecryptedAppId}{text}{salt}{DecryptedSecret}";

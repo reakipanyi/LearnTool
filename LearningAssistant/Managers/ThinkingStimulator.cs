@@ -89,14 +89,14 @@ namespace LearningAssistant.Managers
                         viewedSet,
                         (revealedAnswer) =>
                         {
-                            System.Diagnostics.Debug.WriteLine($"用户查看了答案: {revealedAnswer}");
+                            System.Diagnostics.Trace.TraceInformation($"用户查看了答案: {revealedAnswer}");
                         });
                 }
             }
 
             hintForm ??= new ProgressiveHintForm(content, answer, hints, (revealedAnswer) =>
             {
-                System.Diagnostics.Debug.WriteLine($"用户查看了答案: {revealedAnswer}");
+                System.Diagnostics.Trace.TraceInformation($"用户查看了答案: {revealedAnswer}");
             });
 
             hintForm.FormClosing += (s, e) =>

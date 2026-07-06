@@ -388,7 +388,7 @@ namespace LearningAssistant.Services.Speech
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"解析语音消息失败: {ex.Message}");
+                    System.Diagnostics.Trace.TraceError($"解析语音消息失败: {ex.Message}");
                 }
             };
         }

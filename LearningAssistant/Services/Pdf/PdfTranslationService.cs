@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using System.Drawing.Drawing2D;
 
 namespace LearningAssistant.Services.Pdf
 {
@@ -23,6 +24,14 @@ namespace LearningAssistant.Services.Pdf
                 return null;
 
             return await _translationService.TranslateAsync(text);
+        }
+
+        public async Task<string?> TranslateAsync(string text, string targetLanguage)
+        {
+            if (!_translationService.IsAvailable)
+                return null;
+
+            return await _translationService.TranslateAsync(text, "auto", targetLanguage);
         }
 
         public async Task<(string? Original, string? Translation)> OcrAndTranslateAsync(Bitmap image)
@@ -66,7 +75,7 @@ namespace LearningAssistant.Services.Pdf
                     return (null, null);
                 }
 
-                using var cropped = image.Clone(region, image.PixelFormat);
+                using var cropped = CropImage(image, region);
                 var recognizedText = await _ocrService.RecognizeTextAsync(cropped);
                 
                 if (string.IsNullOrWhiteSpace(recognizedText))
@@ -80,6 +89,18 @@ namespace LearningAssistant.Services.Pdf
                 _logger.LogError(ex, "OCR and translate with region failed");
                 return (null, null);
             }
+        }
+
+        private static Bitmap CropImage(Bitmap source, Rectangle region)
+        {
+            var cropped = new Bitmap(region.Width, region.Height);
+            using var graphics = Graphics.FromImage(cropped);
+            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            graphics.SmoothingMode = SmoothingMode.HighQuality;
+            graphics.DrawImage(source, new Rectangle(0, 0, region.Width, region.Height),
+                              region, GraphicsUnit.Pixel);
+            return cropped;
         }
     }
 }

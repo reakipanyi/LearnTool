@@ -6,6 +6,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading.Tasks;
 using System.Web;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
 namespace DotnetSpider.Sample.samples
@@ -14,12 +15,14 @@ namespace DotnetSpider.Sample.samples
     {
         private readonly HttpClient _httpClient;
         private readonly string _accessToken;
+        private readonly ILogger<BaiduPanApiClient>? _logger;
         private const string BaseUrl = "https://pan.baidu.com";
 
         // 构造函数初始化
-        public BaiduPanApiClient(string accessToken)
+        public BaiduPanApiClient(string accessToken, ILogger<BaiduPanApiClient>? logger = null)
         {
             _accessToken = accessToken ?? throw new ArgumentNullException(nameof(accessToken));
+            _logger = logger;
             _httpClient = new HttpClient { BaseAddress = new Uri(BaseUrl) };
             _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("pan.baidu.com");
             _httpClient.Timeout = TimeSpan.FromSeconds(30);
@@ -470,7 +473,7 @@ namespace DotnetSpider.Sample.samples
                     if (DateTime.Now - _lastRequestTime < TimeSpan.FromMilliseconds(rateLimitDelay))
                     {
                         var delay = TimeSpan.FromMilliseconds(rateLimitDelay) - (DateTime.Now - _lastRequestTime);
-                        Console.WriteLine($"触发限流，延迟{delay.TotalMilliseconds:F0}ms后执行请求");
+                        _logger?.LogDebug("触发限流，延迟{Delay}ms后执行请求", delay.TotalMilliseconds);
                         await Task.Delay(delay);
                     }
 
@@ -483,7 +486,7 @@ namespace DotnetSpider.Sample.samples
                     {
                         retryCount++;
                         var retryAfter = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(10);
-                        Console.WriteLine($"命中接口频控（429），{retryAfter.TotalSeconds:F0}秒后重试（第{retryCount}/{maxRetryCount}次）");
+                        _logger?.LogWarning("命中接口频控（429），{RetryAfter}秒后重试（第{RetryCount}/{MaxRetryCount}次）", retryAfter.TotalSeconds, retryCount, maxRetryCount);
                         await Task.Delay(retryAfter);
                         continue;
                     }
@@ -499,43 +502,37 @@ namespace DotnetSpider.Sample.samples
                     return result;
                 }
                 catch (HttpRequestException ex)
-                {
-                    retryCount++;
-                    // 过滤频控相关异常信息
-                    var errorMsg = ex.Message.Contains("429") ? "接口频控限制" : "HTTP请求异常";
-                    Console.WriteLine($"{errorMsg}，{ex.Message}，{maxRetryCount - retryCount + 1}次重试机会");
+            {
+                retryCount++;
+                var errorMsg = ex.Message.Contains("429") ? "接口频控限制" : "HTTP请求异常";
+                _logger?.LogWarning(ex, "{ErrorMsg}，{Remaining}次重试机会", errorMsg, maxRetryCount - retryCount + 1);
 
-                    if (retryCount > maxRetryCount)
-                        throw new Exception($"HTTP请求异常（已重试{maxRetryCount}次）：{ex.Message}", ex);
+                if (retryCount > maxRetryCount)
+                    throw new Exception($"HTTP请求异常（已重试{maxRetryCount}次）：{ex.Message}", ex);
 
-                    // 重试延迟：指数退避（1s, 2s, 4s...）
-                    var retryDelay = TimeSpan.FromSeconds(Math.Pow(3, retryCount));
-                    await Task.Delay(retryDelay);
-                }
+                var retryDelay = TimeSpan.FromSeconds(Math.Pow(3, retryCount));
+                await Task.Delay(retryDelay);
+            }
                 catch (JsonException ex)
                 {
                     if (ex.Message.Contains("\"errno\": 20012,") || ex.Message.Contains("\"errno\": 31034,"))
                     {
-                        // 过滤频控相关异常信息
                         var errorMsg = ex.Message.Contains("\"errno\": 20012,") || ex.Message.Contains("\"errno\": 31034,") ? "接口频控限制" : "HTTP请求异常";
-                        Console.WriteLine($"{errorMsg}，{ex.Message}，{maxRetryCount - retryCount + 1}次重试机会");
+                        _logger?.LogWarning(ex, "{ErrorMsg}，{Remaining}次重试机会", errorMsg, maxRetryCount - retryCount + 1);
 
                         if (retryCount > maxRetryCount)
                             throw new Exception($"HTTP请求异常（已重试{maxRetryCount}次）：{ex.Message}", ex);
 
-                        // 重试延迟：指数退避（1s, 2s, 4s...）
                         var retryDelay = TimeSpan.FromSeconds(Math.Pow(2, retryCount));
                         await Task.Delay(retryDelay);
                     }
                     else
-                        // JSON解析失败不重试（响应格式问题，重试无效）
                         throw new Exception("JSON解析失败（响应格式异常）", ex);
                 }
                 catch (Exception ex)
                 {
                     retryCount++;
-                    // 业务异常或其他未知异常，允许重试
-                    Console.WriteLine($"接口调用失败：{ex.Message}，{maxRetryCount - retryCount + 1}次重试机会");
+                    _logger?.LogWarning(ex, "接口调用失败，{Remaining}次重试机会", maxRetryCount - retryCount + 1);
 
                     if (retryCount > maxRetryCount)
                         throw new Exception($"接口调用失败（已重试{maxRetryCount}次）：{ex.Message}", ex);
@@ -578,7 +575,7 @@ namespace DotnetSpider.Sample.samples
                     if (timeSinceLastRequest < TimeSpan.FromMilliseconds(rateLimitDelay))
                     {
                         var delayMs = rateLimitDelay - (int)timeSinceLastRequest.TotalMilliseconds;
-                        Console.WriteLine($"[POST限流] 距离上次请求仅{timeSinceLastRequest.TotalMilliseconds:F0}ms，延迟{delayMs}ms执行");
+                        _logger?.LogDebug("[POST限流] 距离上次请求仅{TimeSinceLastRequest}ms，延迟{DelayMs}ms执行", timeSinceLastRequest.TotalMilliseconds, delayMs);
                         await Task.Delay(delayMs);
                     }
 
@@ -591,11 +588,9 @@ namespace DotnetSpider.Sample.samples
                     if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
                     {
                         retryCount++;
-                        // 优先使用接口返回的重试延迟，无则默认10秒
                         var retryAfter = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromSeconds(10);
-                        Console.WriteLine($"[POST频控] 命中429 TooManyRequests，{retryAfter.TotalSeconds:F0}秒后重试（剩余{maxRetryCount - retryCount}次）");
+                        _logger?.LogWarning("[POST频控] 命中429 TooManyRequests，{RetryAfter}秒后重试（剩余{Remaining}次）", retryAfter.TotalSeconds, maxRetryCount - retryCount);
 
-                        // 重置请求体（避免重试时流已关闭）
                         requestContent = CloneHttpContent(content);
                         await Task.Delay(retryAfter);
                         continue;
@@ -618,43 +613,37 @@ namespace DotnetSpider.Sample.samples
                 {
                     retryCount++;
                     var errorType = ex.Message.Contains("429") ? "频控限制" : "HTTP异常";
-                    Console.WriteLine($"[POST失败] {errorType}：{ex.Message}（剩余{maxRetryCount - retryCount}次重试）");
+                    _logger?.LogWarning(ex, "[POST失败] {ErrorType}：{Message}（剩余{Remaining}次重试）", errorType, ex.Message, maxRetryCount - retryCount);
 
-                    // 达到最大重试次数则抛出最终异常
                     if (retryCount > maxRetryCount)
                     {
                         throw new Exception($"POST请求失败（已重试{maxRetryCount}次）：{ex.Message}", ex);
                     }
 
-                    // 指数退避重试（1s→2s→4s）
                     var retryDelay = TimeSpan.FromSeconds(Math.Pow(2, retryCount));
-                    requestContent = CloneHttpContent(content); // 重置请求体
+                    requestContent = CloneHttpContent(content);
                     await Task.Delay(retryDelay);
                 }
                 catch (JsonException ex)
                 {
-
                     if (ex.Message.Contains("\"errno\": 20012,") || ex.Message.Contains("\"errno\": 31034,"))
                     {
-                        // 过滤频控相关异常信息
                         var errorMsg = ex.Message.Contains("\"errno\": 20012,") || ex.Message.Contains("\"errno\": 31034,") ? "接口频控限制" : "HTTP请求异常";
-                        Console.WriteLine($"{errorMsg}，{ex.Message}，{maxRetryCount - retryCount + 1}次重试机会");
+                        _logger?.LogWarning(ex, "{ErrorMsg}，{Message}，{Remaining}次重试机会", errorMsg, ex.Message, maxRetryCount - retryCount + 1);
 
                         if (retryCount > maxRetryCount)
                             throw new Exception($"HTTP请求异常（已重试{maxRetryCount}次）：{ex.Message}", ex);
 
-                        // 重试延迟：指数退避（1s, 2s, 4s...）
                         var retryDelay = TimeSpan.FromSeconds(Math.Pow(2, retryCount));
                         await Task.Delay(retryDelay);
                     }
                     else
-                        // JSON解析失败不重试（响应格式问题，重试无意义）
                         throw new Exception($"POST响应JSON解析失败：{ex.Message}", ex);
                 }
                 catch (Exception ex)
                 {
                     retryCount++;
-                    Console.WriteLine($"[POST异常] 未知错误：{ex.Message}（剩余{maxRetryCount - retryCount}次重试）");
+                    _logger?.LogWarning(ex, "[POST异常] 未知错误：{Message}（剩余{Remaining}次重试）", ex.Message, maxRetryCount - retryCount);
 
                     if (retryCount > maxRetryCount)
                     {

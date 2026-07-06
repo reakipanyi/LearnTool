@@ -154,7 +154,7 @@ namespace LearningAssistant.Services.Learning
                 _editedContents.Add(content);
             }
 
-            System.Diagnostics.Debug.WriteLine($"内容已编辑: {content.Type} - {content.Content.Substring(0, Math.Min(50, content.Content.Length))}...");
+            System.Diagnostics.Trace.TraceInformation($"内容已编辑: {content.Type} - {content.Content.Substring(0, Math.Min(50, content.Content.Length))}...");
         }
 
         public void DeleteContent(ExtractedContent content)
@@ -175,7 +175,7 @@ namespace LearningAssistant.Services.Learning
                 _bookmarkService.RemoveBookmark(content.PageLabel, content.PageNumber - 1, content.Content);
             }
 
-            System.Diagnostics.Debug.WriteLine($"内容已删除: {content.Type} - {content.PageLabel}");
+            System.Diagnostics.Trace.TraceInformation($"内容已删除: {content.Type} - {content.PageLabel}");
         }
 
         public List<StudyMaterial> GenerateStudyMaterials(List<ExtractedContent> contents)
@@ -232,7 +232,7 @@ namespace LearningAssistant.Services.Learning
         {
             if (contents == null || contents.Count == 0)
             {
-                System.Diagnostics.Debug.WriteLine("没有内容可导出到学习库");
+                System.Diagnostics.Trace.TraceInformation("没有内容可导出到学习库");
                 return;
             }
 
@@ -254,17 +254,17 @@ namespace LearningAssistant.Services.Learning
                             CreatedAt = DateTime.Now,
                             UpdatedAt = DateTime.Now
                         });
-                        System.Diagnostics.Debug.WriteLine($"已导出学习素材: {material.Title}");
+                        System.Diagnostics.Trace.TraceInformation($"已导出学习素材: {material.Title}");
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"导出学习素材失败: {material.Title} - {ex.Message}");
+                        System.Diagnostics.Trace.TraceError($"导出学习素材失败: {material.Title} - {ex.Message}");
                     }
                 }
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"生成了 {materials.Count} 个学习素材，但无法保存到学习库（ContentLoaderService 未注入）");
+                System.Diagnostics.Trace.TraceWarning($"生成了 {materials.Count} 个学习素材，但无法保存到学习库（ContentLoaderService 未注入）");
             }
         }
 
