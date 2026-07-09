@@ -3,7 +3,7 @@ namespace LearningAssistant.Services.TTS
     public interface ITTSService
     {
 
-        Task<string?> SpeakAsync(string text, string? language = null, float? speed = null);
+        Task<string?> SpeakAsync(string text, string? language = null, float? speed = null, CancellationToken cancellationToken = default);
 
         Task<byte[]?> SpeakSteamAsync(string text, string? language = null, float? speed = null, string? format = null);
 

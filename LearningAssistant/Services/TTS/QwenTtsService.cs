@@ -46,7 +46,7 @@ namespace LearningAssistant.Services.TTS
 
 
 
-        public async Task<string?> SpeakAsync(string text, string? language = null, float? speed = null)
+        public async Task<string?> SpeakAsync(string text, string? language = null, float? speed = null, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(text)) return null;
             if (_client == null || !_client.Available) return null;
@@ -65,6 +65,8 @@ namespace LearningAssistant.Services.TTS
                 }
                 else
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     string lang = language switch
                     {
                         "zh" => "Chinese",
@@ -74,12 +76,18 @@ namespace LearningAssistant.Services.TTS
 
                     var wav = await _client.SynthesizeAsync(text: text, voice: "Cherry", language: lang, speed: speed ?? 1.0f, format: "wav").ConfigureAwait(false);
 
-                    await File.WriteAllBytesAsync(path, wav).ConfigureAwait(false);
+                    await File.WriteAllBytesAsync(path, wav, cancellationToken).ConfigureAwait(false);
                 }
 
-                await PlayAudioAsync(path);
+                await PlayAudioAsync(path, cancellationToken);
 
                 return path;
+            }
+            catch (OperationCanceledException)
+            {
+                _logger?.LogDebug("SpeakAsync: cancelled");
+                StopPlayback();
+                throw;
             }
             catch (Exception ex)
             {
@@ -89,35 +97,48 @@ namespace LearningAssistant.Services.TTS
             }
         }
 
-        private async Task PlayAudioAsync(string filePath)
+        private async Task PlayAudioAsync(string filePath, CancellationToken cancellationToken = default)
         {
             _stopRequested = false;
 
-            lock (_playerLock)
+            SoundPlayer player = null;
+            try
             {
-                _currentPlayer?.Dispose();
-                _currentPlayer = new SoundPlayer(filePath);
-                _currentPlayer.Load();
-            }
+                player = new SoundPlayer(filePath);
+                player.Load();
 
-            // 使用异步方式播放，定期检查停止请求
-            await Task.Run(() =>
-            {
                 lock (_playerLock)
                 {
-                    if (_currentPlayer != null && !_stopRequested)
-                    {
-                        try
-                        {
-                            _currentPlayer.PlaySync();
-                        }
-                        catch
-                        {
-                            // 播放被中断
-                        }
-                    }
+                    _currentPlayer?.Dispose();
+                    _currentPlayer = player;
                 }
-            });
+
+                if (_stopRequested || cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                var playbackTask = Task.Run(() =>
+                {
+                    try
+                    {
+                        player.PlaySync();
+                    }
+                    catch
+                    {
+                    }
+                }, cancellationToken);
+
+                await playbackTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                StopPlayback();
+                throw;
+            }
+            catch (Exception)
+            {
+            }
         }
 
         private void StopPlayback()
@@ -215,7 +236,6 @@ namespace LearningAssistant.Services.TTS
             }
             catch { }
         }
-
 
     }
 }

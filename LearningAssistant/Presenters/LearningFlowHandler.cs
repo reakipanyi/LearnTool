@@ -246,7 +246,7 @@ namespace LearningAssistant.Presenters
                 {
                     string text = item.GetMainContent();
                     _logger.LogInformation("Speaking original text: {Text}", text);
-                    await _ttsService.SpeakAsync(text, lang);
+                    await _ttsService.SpeakAsync(text, lang, cancellationToken: cancellationToken);
                     if (!cancellationToken.IsCancellationRequested)
                     {
                         await Task.Delay(500, cancellationToken);
@@ -256,7 +256,7 @@ namespace LearningAssistant.Presenters
                 if ((scope == PronunciationScope.Explanation || scope == PronunciationScope.Both) && !string.IsNullOrWhiteSpace(explanation) && !cancellationToken.IsCancellationRequested)
                 {
                     _logger.LogInformation("Speaking explanation: {Explanation}", explanation);
-                    await _ttsService.SpeakAsync(explanation, lang);
+                    await _ttsService.SpeakAsync(explanation, lang, cancellationToken: cancellationToken);
                 }
             }
             catch (OperationCanceledException)
