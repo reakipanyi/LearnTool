@@ -16,5 +16,8 @@ namespace LearningAssistant.Services.Learning
         public int QuickModeIndex { get; set; }
         public int CorrectCount { get; set; }
         public int TotalCount { get; set; }
+        public Dictionary<string, int> ContinuousCorrectCount { get; set; } = new Dictionary<string, int>();
+        public int SmartSkipThreshold { get; set; } = 3;
+        public Dictionary<LearningModeType, int> ModeIndexCache { get; set; } = new Dictionary<LearningModeType, int>();
     }
 }

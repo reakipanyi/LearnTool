@@ -7,6 +7,7 @@ using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 
 namespace LearningAssistant.Presenters
 {
@@ -19,6 +20,7 @@ namespace LearningAssistant.Presenters
         Task MoveToNextAsync();
         Task HandleSettingsChangedAsync();
         Task HandleItemSelectedAsync(int index);
+        void HandleSearchTextChanged(string searchText);
         void Exit();
         void OpenStatistics();
         void SendToPdfQuestion();
@@ -49,6 +51,9 @@ namespace LearningAssistant.Presenters
         private int _autoPronunciationCount = 0;
         private readonly DateTime _sessionStartTime = DateTime.Now;
         private const int MaxAutoPronunciationCount = 5;
+
+        private readonly ConcurrentQueue<(string Text, string Lang, string? Explanation)> _pronunciationQueue = new();
+        private bool _isProcessingQueue = false;
 
         public LearningFlowHandler(
             ILogger<LearningFlowHandler> logger,
@@ -242,22 +247,11 @@ namespace LearningAssistant.Presenters
                 _logger.LogInformation("Playing pronunciation - Scope: {Scope}, Language: {Lang}, Text: {Text}, Explanation: {Explanation}", 
                     scope, lang, item.GetMainContent(), explanation);
 
-                if (scope == PronunciationScope.Original || scope == PronunciationScope.Both)
-                {
-                    string text = item.GetMainContent();
-                    _logger.LogInformation("Speaking original text: {Text}", text);
-                    await _ttsService.SpeakAsync(text, lang, speed: 1.0f, cancellationToken: cancellationToken);
-                    if (!cancellationToken.IsCancellationRequested)
-                    {
-                        await Task.Delay(500, cancellationToken);
-                    }
-                }
+                string text = item.GetMainContent();
+                _pronunciationQueue.Enqueue((text, lang, explanation));
+                _ = ProcessPronunciationQueueAsync(cancellationToken);
 
-                if ((scope == PronunciationScope.Explanation || scope == PronunciationScope.Both) && !string.IsNullOrWhiteSpace(explanation) && !cancellationToken.IsCancellationRequested)
-                {
-                    _logger.LogInformation("Speaking explanation: {Explanation}", explanation);
-                    await _ttsService.SpeakAsync(explanation, lang, speed: 1.0f, cancellationToken: cancellationToken);
-                }
+                await PreloadNextPronunciationAsync();
             }
             catch (OperationCanceledException)
             {
@@ -267,6 +261,73 @@ namespace LearningAssistant.Presenters
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to play pronunciation");
+            }
+        }
+
+        private async Task ProcessPronunciationQueueAsync(CancellationToken cancellationToken)
+        {
+            if (_isProcessingQueue) return;
+            _isProcessingQueue = true;
+
+            try
+            {
+                while (_pronunciationQueue.TryDequeue(out var item) && !cancellationToken.IsCancellationRequested)
+                {
+                    var scope = _view.PronunciationScope;
+
+                    if (scope == PronunciationScope.Original || scope == PronunciationScope.Both)
+                    {
+                        _logger.LogInformation("Speaking from queue: {Text}", item.Text);
+                        await _ttsService?.SpeakAsync(item.Text, item.Lang, speed: 1.0f, cancellationToken: cancellationToken);
+                        if (!cancellationToken.IsCancellationRequested)
+                        {
+                            await Task.Delay(500, cancellationToken);
+                        }
+                    }
+
+                    if ((scope == PronunciationScope.Explanation || scope == PronunciationScope.Both) && 
+                        !string.IsNullOrWhiteSpace(item.Explanation) && !cancellationToken.IsCancellationRequested)
+                    {
+                        _logger.LogInformation("Speaking explanation from queue: {Explanation}", item.Explanation);
+                        await _ttsService?.SpeakAsync(item.Explanation, item.Lang, speed: 1.0f, cancellationToken: cancellationToken);
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogDebug("ProcessPronunciationQueueAsync was cancelled");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to process pronunciation queue");
+            }
+            finally
+            {
+                _isProcessingQueue = false;
+            }
+        }
+
+        private async Task PreloadNextPronunciationAsync()
+        {
+            if (!_view.IsVoiceEnabled || _ttsService == null || !_ttsService.Available) return;
+
+            try
+            {
+                var nextIndex = _studyEngine.CurrentIndex + 1;
+                if (nextIndex < _studyEngine.TotalCount)
+                {
+                    var allItems = _studyEngine.GetAllItems();
+                    var nextItem = allItems[nextIndex];
+                    string text = nextItem.GetMainContent();
+                    string lang = _currentSubject == SubjectType.Chinese ? "zh" : "en";
+
+                    await _ttsService.SpeakToCacheAsync(text, lang, speed: 1.0f);
+                    _logger.LogDebug("Preloaded pronunciation for: {Text}", text);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Preload pronunciation failed (non-critical)");
             }
         }
 
@@ -312,6 +373,7 @@ namespace LearningAssistant.Presenters
         {
             var currentItem = _studyEngine.GetCurrentItem();
             _studyEngine.MarkCurrentAsKnown();
+            UpdateStatistics();
             SaveProgress();
 
             if (currentItem != null)
@@ -390,6 +452,7 @@ namespace LearningAssistant.Presenters
         {
             var currentItem = _studyEngine.GetCurrentItem();
             _studyEngine.MarkCurrentAsUnknown();
+            UpdateStatistics();
             SaveProgress();
 
             if (currentItem != null)
@@ -516,6 +579,25 @@ namespace LearningAssistant.Presenters
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in HandleItemSelectedAsync, index: {Index}", index);
+            }
+        }
+
+        public void HandleSearchTextChanged(string searchText)
+        {
+            try
+            {
+                var allItems = _studyEngine.GetAllItems();
+                var filtered = string.IsNullOrWhiteSpace(searchText)
+                    ? allItems
+                    : allItems.Where(i => i.GetMainContent().Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                                         i.GetDisplayText().Contains(searchText, StringComparison.OrdinalIgnoreCase)).ToList();
+
+                _view.UpdateLearningList(filtered.Select(i => i.GetMainContent()).ToList(), 0);
+                _logger.LogInformation("Search text changed to: {SearchText}, filtered count: {Count}", searchText, filtered.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to handle search text change: {SearchText}", searchText);
             }
         }
 

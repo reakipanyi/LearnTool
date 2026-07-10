@@ -159,6 +159,45 @@ namespace LearningAssistant.Services.TTS
             }
         }
 
+        public async Task<string?> SpeakToCacheAsync(string text, string? language = null, float? speed = null)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return null;
+            if (_client == null || !_client.Available) return null;
+
+            try
+            {
+                Directory.CreateDirectory(AppPaths.GetUserTtsCacheDir());
+
+                string path = GetCacheFilePath(text, language, speed);
+
+                if (File.Exists(path))
+                {
+                    _logger?.LogDebug("SpeakToCacheAsync: already cached, path={Path}", path);
+                    return path;
+                }
+
+                string lang = language switch
+                {
+                    "zh" => "Chinese",
+                    "en" => "English",
+                    _ => language ?? "English"
+                };
+
+                var wav = await _client.SynthesizeAsync(text: text, voice: "Cherry", language: lang, speed: speed ?? 1.0f, format: "wav").ConfigureAwait(false);
+
+                await File.WriteAllBytesAsync(path, wav).ConfigureAwait(false);
+                _logger?.LogDebug("SpeakToCacheAsync: audio cached, path={Path}", path);
+
+                CleanupOldCache();
+                return path;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "TTS cache failed for text: {Text}", text.Length > 50 ? text.Substring(0, 50) + "..." : text);
+                return null;
+            }
+        }
+
         public async Task<byte[]?> SpeakStreamAsync(string text, string? language = null, float? speed = null, string? format = null)
         {
             if (string.IsNullOrWhiteSpace(text)) return null;

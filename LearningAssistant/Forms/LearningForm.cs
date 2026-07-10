@@ -881,6 +881,15 @@ namespace LearningAssistant.Forms
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public string SearchText
+        {
+            get => string.Empty;
+            set { }
+        }
+
+        public event EventHandler? SearchTextChanged;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int ProgressValue
         {
             set => progressBar1.Value = value;

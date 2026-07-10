@@ -280,6 +280,57 @@ namespace LearningAssistant.Services.TTS
             }
         }
 
+        public async Task<string?> SpeakToCacheAsync(string text, string? language = null, float? speed = null)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                _logger?.LogWarning("SpeakToCacheAsync: text is empty");
+                return null;
+            }
+
+            EnsureInitialized();
+            if (!Available)
+            {
+                _logger?.LogWarning("SpeakToCacheAsync: not available");
+                return null;
+            }
+
+            try
+            {
+                Directory.CreateDirectory(AppPaths.GetUserTtsCacheDir());
+
+                var actualVoice = SelectVoiceForSegment(language ?? "en", language) ?? _defaultVoice;
+                string paddedText = PadShortText(text);
+                string path = GetCacheFilePath(paddedText, language, speed, actualVoice?.Name);
+
+                if (File.Exists(path))
+                {
+                    _logger?.LogDebug("SpeakToCacheAsync: already cached, path={Path}", path);
+                    return path;
+                }
+
+                float actualSpeed = speed ?? _config.Speed;
+                var wavBytes = await SynthesizeToWavAsync(paddedText, language, actualSpeed).ConfigureAwait(false);
+
+                if (wavBytes == null || wavBytes.Length == 0)
+                {
+                    _logger?.LogWarning("SpeakToCacheAsync: synthesis returned empty result");
+                    return null;
+                }
+
+                await File.WriteAllBytesAsync(path, wavBytes).ConfigureAwait(false);
+                _logger?.LogDebug("SpeakToCacheAsync: audio cached, path={Path}", path);
+
+                CleanupOldCache();
+                return path;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "KokoroSharp TTS cache failed for text: {Text}", text.Length > 50 ? text.Substring(0, 50) + "..." : text);
+                return null;
+            }
+        }
+
         public async Task<byte[]?> SpeakStreamAsync(string text, string? language = null, float? speed = null, string? format = null)
         {
             if (string.IsNullOrWhiteSpace(text)) return null;

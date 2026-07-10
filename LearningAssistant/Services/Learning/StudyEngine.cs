@@ -267,10 +267,17 @@ namespace LearningAssistant.Services.Learning
                     return;
 
                 string content = item.GetMainContent();
-                if (!_state.KnownItems.Contains(content))
-                    _state.KnownItems.Add(content);
-                if (_state.UnknownItems.Contains(content))
-                    _state.UnknownItems.Remove(content);
+                
+                _state.ContinuousCorrectCount.TryGetValue(content, out var count);
+                _state.ContinuousCorrectCount[content] = count + 1;
+
+                if (_state.ContinuousCorrectCount[content] >= _state.SmartSkipThreshold)
+                {
+                    if (!_state.KnownItems.Contains(content))
+                        _state.KnownItems.Add(content);
+                    if (_state.UnknownItems.Contains(content))
+                        _state.UnknownItems.Remove(content);
+                }
 
                 _state.CorrectCount++;
                 _state.TotalCount++;
@@ -297,6 +304,8 @@ namespace LearningAssistant.Services.Learning
                 string content = item.GetMainContent();
                 if (!_state.UnknownItems.Contains(content))
                     _state.UnknownItems.Add(content);
+                
+                _state.ContinuousCorrectCount.Remove(content);
 
                 _state.TotalCount++;
 
@@ -386,7 +395,16 @@ namespace LearningAssistant.Services.Learning
 
         private void SaveProgressInternal()
         {
-            _progressManager.SaveProgress(_state.UserId, _state.SubCategory, _state);
+            try
+            {
+                Task.Run(() =>
+                {
+                    _progressManager.SaveProgress(_state.UserId, _state.SubCategory, _state);
+                });
+            }
+            catch (Exception)
+            {
+            }
         }
 
         private void RecordActivityInternal(string userId, SubCategoryType subCategory, string activityType)
@@ -452,8 +470,19 @@ namespace LearningAssistant.Services.Learning
         {
             lock (_stateLock)
             {
+                _state.ModeIndexCache[_state.CurrentMode] = CurrentIndex;
+
                 _state.CurrentMode = mode == LearningModeType.Quick ? LearningModeType.Quick : LearningModeType.Study;
                 _state.CurrentSortOrder = sortOrder;
+
+                if (_state.ModeIndexCache.TryGetValue(_state.CurrentMode, out var savedIndex))
+                {
+                    if (_state.CurrentMode == LearningModeType.Quick)
+                        _state.QuickModeIndex = savedIndex;
+                    else
+                        _state.StudyModeIndex = savedIndex;
+                }
+
                 BuildStudyItemsInternal();
                 ValidateIndexInternal();
             }

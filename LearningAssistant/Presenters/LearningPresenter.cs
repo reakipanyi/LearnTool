@@ -52,6 +52,7 @@ namespace LearningAssistant.Presenters
             _view.OpenStatisticsClicked += View_OpenStatisticsClicked;
             _view.ExportErrorBookClicked += View_ExportErrorBookClicked;
             _view.ItemSelectedFromList += View_ItemSelectedFromList;
+            _view.SearchTextChanged += View_SearchTextChanged;
         }
 
         private void UnsubscribeFromViewEvents()
@@ -66,6 +67,7 @@ namespace LearningAssistant.Presenters
             _view.OpenStatisticsClicked -= View_OpenStatisticsClicked;
             _view.ExportErrorBookClicked -= View_ExportErrorBookClicked;
             _view.ItemSelectedFromList -= View_ItemSelectedFromList;
+            _view.SearchTextChanged -= View_SearchTextChanged;
         }
 
         private void SubscribeToMediatorEvents()
@@ -181,6 +183,11 @@ namespace LearningAssistant.Presenters
             {
                 _logger.LogError(ex, "从列表选择项失败, Index: {Index}", e.Index);
             }
+        }
+
+        private void View_SearchTextChanged(object? sender, EventArgs e)
+        {
+            _flowHandler.HandleSearchTextChanged(_view.SearchText);
         }
 
         private void HandleSendToPdfQuestion(string text, string language)

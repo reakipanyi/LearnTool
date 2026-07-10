@@ -113,6 +113,9 @@ namespace LearningAssistant.Views
 
         void RefreshSubCategories(List<SubCategoryType> subCategories);
 
+        string SearchText { get; set; }
+        event EventHandler? SearchTextChanged;
+
         /// <summary>
         /// 设置加载状态
         /// </summary>
