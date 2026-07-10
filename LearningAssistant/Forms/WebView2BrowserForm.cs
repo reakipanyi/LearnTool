@@ -329,7 +329,11 @@ namespace LearningAssistant.Forms
                     webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
                     webView.CoreWebView2.Settings.IsWebMessageEnabled = true;
                     webView.CoreWebView2.Settings.IsScriptEnabled = true;
+#if DEBUG
                     webView.CoreWebView2.Settings.AreDevToolsEnabled = true;
+#else
+                    webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
+#endif
 
                     webView.ZoomFactor = _zoomLevel / 100.0;
 
@@ -356,7 +360,7 @@ namespace LearningAssistant.Forms
         /// <summary>
         /// 关闭指定标签页
         /// </summary>
-        private void CloseTab(TabPage tabPage)
+        private async void CloseTab(TabPage tabPage)
         {
             if (_webViews.TryGetValue(tabPage, out var webView))
             {
@@ -378,7 +382,14 @@ namespace LearningAssistant.Forms
 
             if (tabControl.TabCount == 0)
             {
-                _ = CreateNewTabAsync(Urls.BaiduNetdisk, "百度网盘");
+                try
+                {
+                    await CreateNewTabAsync(Urls.BaiduNetdisk, "百度网盘");
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "关闭标签页后创建新标签页失败");
+                }
             }
         }
 
@@ -414,7 +425,7 @@ namespace LearningAssistant.Forms
             e.Handled = true;
 
             var uri = e.Uri;
-            BeginInvoke(new Action(async () =>
+            BeginInvoke(async () =>
             {
                 if (IsDisposed) return;
                 try
@@ -425,7 +436,7 @@ namespace LearningAssistant.Forms
                 {
                     _logger?.LogError(ex, "处理新窗口请求失败");
                 }
-            }));
+            });
         }
 
         /// <summary>
@@ -571,26 +582,34 @@ namespace LearningAssistant.Forms
 
         private void CoreWebView2_ContextMenuRequested(object? sender, CoreWebView2ContextMenuRequestedEventArgs e)
         {
-            var webView = sender as CoreWebView2;
-            if (webView == null) return;
+            var coreWebView2 = sender as CoreWebView2;
+            if (coreWebView2 == null) return;
 
             var menuItems = e.MenuItems;
 
-            var saveToCardItem = webView.Environment.CreateContextMenuItem(
+            var saveToCardItem = coreWebView2.Environment.CreateContextMenuItem(
                 "📝 保存为学习卡片",
                 null,
                 CoreWebView2ContextMenuItemKind.Command);
+
+            var weakWebViewRef = new WeakReference<CoreWebView2>(coreWebView2);
 
             saveToCardItem.CustomItemSelected += async (s, args) =>
             {
                 try
                 {
-                    string? selectionText = await webView.ExecuteScriptAsync("window.getSelection().toString()");
+                    if (!weakWebViewRef.TryGetTarget(out var targetWebView))
+                    {
+                        _logger?.LogWarning("WebView2 已被释放，无法获取选中文本");
+                        return;
+                    }
+
+                    string? selectionText = await targetWebView.ExecuteScriptAsync("window.getSelection().toString()");
                     if (!string.IsNullOrEmpty(selectionText))
                     {
                         selectionText = System.Text.Json.JsonSerializer.Deserialize<string>(selectionText);
                     }
-                    SaveSelectedTextAsCard(selectionText ?? string.Empty, webView.Source);
+                    SaveSelectedTextAsCard(selectionText ?? string.Empty, targetWebView.Source);
                 }
                 catch (Exception ex)
                 {
@@ -648,29 +667,6 @@ namespace LearningAssistant.Forms
                 _logger?.LogError(ex, "保存划词内容失败");
                 MessageBox.Show($"保存失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-        }
-
-        private static string DetectLanguage(string text)
-        {
-            if (string.IsNullOrEmpty(text)) return "中文综合";
-
-            int chineseCount = 0;
-            int englishCount = 0;
-
-            foreach (char c in text)
-            {
-                if (c >= '\u4e00' && c <= '\u9fff')
-                    chineseCount++;
-                else if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
-                    englishCount++;
-            }
-
-            if (chineseCount > englishCount)
-                return "中文综合";
-            else if (englishCount > chineseCount)
-                return "英语";
-            else
-                return "中文综合";
         }
 
         private void ShowBalloonTip(string title, string content)
@@ -988,9 +984,10 @@ namespace LearningAssistant.Forms
             try
             {
                 string escapedPrompt = JsonConvert.SerializeObject(prompt);
+                string escapedSelector = JsonConvert.SerializeObject(selector);
                 string script = $@"
                     (function() {{
-                        var textarea = document.querySelector('{selector}');
+                        var textarea = document.querySelector({escapedSelector});
                         if (textarea) {{
                             textarea.value = {escapedPrompt};
                             textarea.dispatchEvent(new Event('input', {{ bubbles: true }}));
@@ -1456,28 +1453,28 @@ namespace LearningAssistant.Forms
                 lblLoadingStatus.ForeColor = colors.TextSecondary;
             }
 
-            ApplyWebView2ThemeAsync(colors.ThemeMode == ThemeMode.Dark);
+            _ = ApplyWebView2ThemeAsync(colors.ThemeMode == ThemeMode.Dark);
         }
 
-        private async void ApplyWebView2ThemeAsync(bool isDark)
+        private async Task ApplyWebView2ThemeAsync(bool isDark)
         {
-            var webViewList = _webViews.ToList();
-            foreach (var kvp in webViewList)
+            try
             {
-                var webView = kvp.Value;
-                if (webView?.CoreWebView2 == null) continue;
-
-                try
+                var webViewList = _webViews.ToList();
+                foreach (var kvp in webViewList)
                 {
+                    var webView = kvp.Value;
+                    if (webView?.CoreWebView2 == null) continue;
+
                     string script = isDark
                         ? @"document.documentElement.style.colorScheme = 'dark'; document.documentElement.style.backgroundColor = '#121212';"
                         : @"document.documentElement.style.colorScheme = 'light'; document.documentElement.style.backgroundColor = '';";
                     await webView.CoreWebView2.ExecuteScriptAsync(script);
                 }
-                catch (Exception ex)
-                {
-                    _logger?.LogWarning(ex, "应用 WebView2 主题失败");
-                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "应用 WebView2 主题失败");
             }
         }
 

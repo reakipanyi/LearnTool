@@ -1,9 +1,9 @@
 using LearningAssistant.Models.Config;
 using LearningAssistant.Services.Cache;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using System.Net.Http;
 using System.Text;
+using System.Text.Json;
 
 namespace LearningAssistant.Services.AI
 {
@@ -66,7 +66,7 @@ namespace LearningAssistant.Services.AI
                     max_tokens = 1000
                 };
 
-                var json = Newtonsoft.Json.JsonConvert.SerializeObject(requestBody);
+                var json = JsonSerializer.Serialize(requestBody);
                 
                 using var request = new HttpRequestMessage(HttpMethod.Post, _config.BaseUrl);
                 request.Content = new StringContent(json, Encoding.UTF8, "application/json");
@@ -85,9 +85,9 @@ namespace LearningAssistant.Services.AI
                     string errorDetail = $"豆包 API错误 ({response.StatusCode})";
                     try
                     {
-                        var errorObj = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(responseJson);
-                        if (errorObj != null && errorObj.error != null)
-                            errorDetail += $": {errorObj.error}";
+                        using var doc = JsonDocument.Parse(responseJson);
+                        if (doc.RootElement.TryGetProperty("error", out var errorElement))
+                            errorDetail += $": {errorElement.ToString()}";
                     }
                     catch
                     {
@@ -97,8 +97,14 @@ namespace LearningAssistant.Services.AI
                     throw new HttpRequestException(errorDetail);
                 }
 
-                var result = Newtonsoft.Json.JsonConvert.DeserializeObject<dynamic>(responseJson);
-                return result?.choices?[0]?.message?.content?.ToString() ?? string.Empty;
+                using var resultDoc = JsonDocument.Parse(responseJson);
+                var choices = resultDoc.RootElement.GetProperty("choices");
+                if (choices.GetArrayLength() > 0)
+                {
+                    var message = choices[0].GetProperty("message");
+                    return message.GetProperty("content").GetString() ?? string.Empty;
+                }
+                return string.Empty;
             }
             catch (Exception ex)
             {

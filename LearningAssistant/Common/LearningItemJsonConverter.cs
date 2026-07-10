@@ -107,17 +107,21 @@ namespace LearningAssistant.Common
             return item;
         }
 
+        private static readonly HashSet<string> StandardProperties = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Id", "CreatedAt", "UpdatedAt", "Subject", "SubCategory",
+            "MainContent", "Meaning", "Example", "Phonetic", "Pinyin",
+            "UkPhonetic", "UsPhonetic", "StrokeCount", "Radical",
+            "Structure", "PartOfSpeech", "WordForms", "Collocations",
+            "SyllableBreakdown", "Word", "Character", "Phrase", "Sentence",
+            "Idiom", "Poem", "Title", "Rule", "Questions",
+            "ChineseMeaning", "ExampleTranslation", "Content", "Explanation",
+            "$type", "Status", "ReviewCount", "LastReviewedAt"
+        };
+
         private static bool IsStandardProperty(string key)
         {
-            var standardProps = new[] { "Id", "CreatedAt", "UpdatedAt", "Subject", "SubCategory", 
-                                       "MainContent", "Meaning", "Example", "Phonetic", "Pinyin",
-                                       "UkPhonetic", "UsPhonetic", "StrokeCount", "Radical", 
-                                       "Structure", "PartOfSpeech", "WordForms", "Collocations", 
-                                       "SyllableBreakdown", "Word", "Character", "Phrase", "Sentence",
-                                       "Idiom", "Poem", "Title", "Rule", "Questions",
-                                       "ChineseMeaning", "ExampleTranslation", "Content", "Explanation",
-                                       "$type", "Status", "ReviewCount", "LastReviewedAt" };
-            return standardProps.Contains(key, StringComparer.OrdinalIgnoreCase);
+            return StandardProperties.Contains(key);
         }
 
         private static SubCategoryType InferSubCategoryFromTypeName(string typeName)

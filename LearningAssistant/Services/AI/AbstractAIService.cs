@@ -40,20 +40,12 @@ namespace LearningAssistant.Services.AI
             if (string.IsNullOrEmpty(prompt))
                 return string.Empty;
 
-            try
+            var explanation = await CallApiWithRetryAsync(prompt, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(explanation))
             {
-                var explanation = await CallApiWithRetryAsync(prompt, cancellationToken);
-                if (!string.IsNullOrWhiteSpace(explanation))
-                {
-                    _cacheService.Set(cacheKey, explanation, Constants.CacheDuration.ExplanationMinutes);
-                }
-                return explanation;
+                _cacheService.Set(cacheKey, explanation, Constants.CacheDuration.ExplanationMinutes);
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "AI解释获取失败");
-                return "暂时无法获取AI解释";
-            }
+            return explanation;
         }
 
         public virtual async Task<string> AskQuestionAsync(string question, string context = "", CancellationToken cancellationToken = default)
@@ -71,20 +63,12 @@ namespace LearningAssistant.Services.AI
                 ? question
                 : $"Context: {context}\n\nQuestion: {question}";
 
-            try
+            var answer = await CallApiWithRetryAsync(prompt, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(answer))
             {
-                var answer = await CallApiWithRetryAsync(prompt, cancellationToken);
-                if (!string.IsNullOrWhiteSpace(answer))
-                {
-                    _cacheService.Set(cacheKey, answer, 60 * 24 * 3);
-                }
-                return answer;
+                _cacheService.Set(cacheKey, answer, 60 * 24 * 3);
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "AI问答失败");
-                return "暂时无法获取AI回答";
-            }
+            return answer;
         }
 
         public virtual async Task<string> GenerateExerciseAsync(string text, string language, CancellationToken cancellationToken = default)
@@ -103,20 +87,12 @@ namespace LearningAssistant.Services.AI
                 ? $"请针对以下内容生成练习题：\n\n{text}\n\n请生成3-5道练习题，包括选择题、填空题或问答题。"
                 : $"Please generate exercises for the following content:\n\n{text}\n\nGenerate 3-5 exercises including multiple choice, fill-in-the-blank or short answer questions.";
 
-            try
+            var response = await CallApiWithRetryAsync(prompt, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(response))
             {
-                var response = await CallApiWithRetryAsync(prompt, cancellationToken);
-                if (!string.IsNullOrWhiteSpace(response))
-                {
-                    _cacheService.Set(cacheKey, response, 60 * 24 * 3);
-                }
-                return response;
+                _cacheService.Set(cacheKey, response, 60 * 24 * 3);
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "生成练习题失败");
-                return "生成练习题失败";
-            }
+            return response;
         }
 
         public virtual async Task<string> SummarizeAsync(string text, CancellationToken cancellationToken = default)
@@ -132,20 +108,12 @@ namespace LearningAssistant.Services.AI
 
             var prompt = $"请简要总结以下文本的主要内容：\n\n{text}\n\n总结要求：简洁明了，突出重点。";
 
-            try
+            var response = await CallApiWithRetryAsync(prompt, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(response))
             {
-                var response = await CallApiWithRetryAsync(prompt, cancellationToken);
-                if (!string.IsNullOrWhiteSpace(response))
-                {
-                    _cacheService.Set(cacheKey, response, Constants.CacheDuration.SummarizeMinutes);
-                }
-                return response;
+                _cacheService.Set(cacheKey, response, Constants.CacheDuration.SummarizeMinutes);
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "文本总结失败");
-                return "总结失败";
-            }
+            return response;
         }
 
         protected abstract string BuildExplanationPrompt(string text, string language, string subType);

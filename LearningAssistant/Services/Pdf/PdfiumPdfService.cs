@@ -1,12 +1,20 @@
 using PdfiumViewer;
 using System.Drawing.Printing;
+using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Services.Pdf
 {
     public class PdfiumPdfService : IPdfService
     {
         private PdfDocument? _pdf;
+        private string? _filePath;
         private readonly object _lockObj = new object();
+        private readonly ILogger<PdfiumPdfService> _logger;
+
+        public PdfiumPdfService(ILogger<PdfiumPdfService> logger)
+        {
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        }
 
         public void Load(string path)
         {
@@ -24,10 +32,14 @@ namespace LearningAssistant.Services.Pdf
                 _pdf?.Dispose();
                 try
                 {
+                    _logger.LogInformation("Loading PDF file: {Path}", path);
                     _pdf = PdfDocument.Load(path);
+                    _filePath = path;
+                    _logger.LogInformation("PDF loaded successfully: {Path}, Pages: {PageCount}", path, _pdf.PageCount);
                 }
                 catch (Exception ex)
                 {
+                    _logger.LogError(ex, "Failed to load PDF file: {Path}", path);
                     throw new InvalidOperationException("Failed to load PDF file.", ex);
                 }
             }
@@ -63,11 +75,15 @@ namespace LearningAssistant.Services.Pdf
 
                 try
                 {
+                    _logger.LogDebug("Rendering page {PageIndex} with size {Width}x{Height}", pageIndex, width, height);
                     using var img = _pdf.Render(pageIndex, width, height, 96, 96, PdfRenderFlags.Annotations);
-                    return img != null ? new Bitmap(img) : null;
+                    var result = img != null ? new Bitmap(img) : null;
+                    _logger.LogDebug("Page {PageIndex} rendered successfully", pageIndex);
+                    return result;
                 }
                 catch (Exception ex)
                 {
+                    _logger.LogError(ex, "Failed to render page {PageIndex}", pageIndex);
                     throw new InvalidOperationException($"Failed to render page {pageIndex}.", ex);
                 }
             }
@@ -149,6 +165,8 @@ namespace LearningAssistant.Services.Pdf
 
                 try
                 {
+                    _logger.LogInformation("Printing PDF: {FilePath}, PrintDialog={PrintDialog}, FromPage={FromPage}, ToPage={ToPage}",
+                        _filePath, printDialog, fromPage, toPage);
                     using var printDoc = _pdf.CreatePrintDocument();
                     printDoc.DocumentName = "PDF Document";
 
@@ -169,18 +187,22 @@ namespace LearningAssistant.Services.Pdf
                         if (dialog.ShowDialog() == DialogResult.OK)
                         {
                             printDoc.Print();
+                            _logger.LogInformation("PDF print job sent successfully");
                             return true;
                         }
+                        _logger.LogInformation("Print dialog cancelled");
                         return false;
                     }
                     else
                     {
                         printDoc.Print();
+                        _logger.LogInformation("PDF print job sent successfully");
                         return true;
                     }
                 }
                 catch (Exception ex)
                 {
+                    _logger.LogError(ex, "Failed to print PDF");
                     throw new InvalidOperationException("Failed to print PDF.", ex);
                 }
             }

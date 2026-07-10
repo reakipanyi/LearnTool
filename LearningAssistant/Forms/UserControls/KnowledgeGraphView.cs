@@ -1,6 +1,10 @@
 using LearningAssistant.Services.KnowledgeGraph;
+using Microsoft.Web.WebView2.Core;
+using Microsoft.Web.WebView2.WinForms;
 using System.Windows.Forms;
 using System.Drawing;
+using System.Text.Json;
+using System.IO;
 
 namespace LearningAssistant.Forms.UserControls
 {
@@ -14,9 +18,12 @@ namespace LearningAssistant.Forms.UserControls
         private Label _labelStatus = null!;
         private Panel _panelContent = null!;
         private Label _labelPlaceholder = null!;
+        private WebView2? _webView;
+        private CoreWebView2Environment? _webViewEnvironment;
 
         private IKnowledgeGraphService? _graphService;
         private string _currentUserId = "default";
+        private bool _isWebViewInitialized = false;
 
         public event EventHandler<string>? NodeClicked;
         public event EventHandler? GraphLoaded;
@@ -93,7 +100,7 @@ namespace LearningAssistant.Forms.UserControls
 
             _labelPlaceholder = new Label
             {
-                Text = "🌐 知识图谱\n\nWebView2 可视化版本\n需要安装 WebView2 Runtime",
+                Text = "🌐 知识图谱\n\n加载中...",
                 Font = new Font("微软雅黑", 12F),
                 ForeColor = Color.FromArgb(180, 180, 180),
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -106,6 +113,105 @@ namespace LearningAssistant.Forms.UserControls
             Controls.Add(_panelToolbar);
 
             BackColor = Color.FromArgb(20, 20, 30);
+
+            Load += KnowledgeGraphView_Load;
+        }
+
+        private async void KnowledgeGraphView_Load(object? sender, EventArgs e)
+        {
+            await InitializeWebViewAsync();
+        }
+
+        private async Task InitializeWebViewAsync()
+        {
+            try
+            {
+                var cacheDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), 
+                    "LearningAssistant", "WebView2Cache");
+                if (!Directory.Exists(cacheDir))
+                {
+                    Directory.CreateDirectory(cacheDir);
+                }
+
+                _webViewEnvironment = await CoreWebView2Environment.CreateAsync(null, cacheDir);
+
+                _webView = new WebView2
+                {
+                    Dock = DockStyle.Fill,
+                    Visible = false
+                };
+
+                _panelContent.Controls.Add(_webView);
+
+                await _webView.EnsureCoreWebView2Async(_webViewEnvironment);
+
+                if (_webView.CoreWebView2 != null)
+                {
+                    _webView.CoreWebView2.Settings.IsScriptEnabled = true;
+                    _webView.CoreWebView2.Settings.IsWebMessageEnabled = true;
+#if DEBUG
+                    _webView.CoreWebView2.Settings.AreDevToolsEnabled = true;
+#endif
+
+                    _webView.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
+                    _webView.NavigationCompleted += WebView_NavigationCompleted;
+
+                    var htmlPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, 
+                        "Resources", "KnowledgeGraph", "kg-visualization.html");
+                    if (File.Exists(htmlPath))
+                    {
+                        _webView.CoreWebView2.Navigate($"file:///{htmlPath}");
+                    }
+                    else
+                    {
+                        _labelPlaceholder.Text = "📊 知识图谱\n\n无法找到可视化文件";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _labelPlaceholder.Text = "🌐 知识图谱\n\nWebView2 Runtime 未安装\n请安装后重试";
+                System.Diagnostics.Trace.TraceError($"初始化 WebView2 失败: {ex}");
+            }
+        }
+
+        private void WebView_NavigationCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
+        {
+            if (e.IsSuccess)
+            {
+                _isWebViewInitialized = true;
+                _labelPlaceholder.Visible = false;
+                _webView?.Show();
+                UpdateStatus("可视化已就绪");
+            }
+        }
+
+        private void CoreWebView2_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+        {
+            try
+            {
+                var message = JsonSerializer.Deserialize<GraphMessage>(e.WebMessageAsJson);
+                if (message?.Type == "nodeClicked" && !string.IsNullOrEmpty(message.Data?.Id))
+                {
+                    NodeClicked?.Invoke(this, message.Data.Id);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceError($"解析图谱消息失败: {ex}");
+            }
+        }
+
+        private class GraphMessage
+        {
+            public string? Type { get; set; }
+            public GraphMessageData? Data { get; set; }
+        }
+
+        private class GraphMessageData
+        {
+            public string? Id { get; set; }
+            public string? Label { get; set; }
         }
 
         private static Button CreateToolbarButton(string text, bool active)
@@ -149,12 +255,12 @@ namespace LearningAssistant.Forms.UserControls
                     UpdateStatus($"已加载 {graph.NodeCount} 个节点, {graph.EdgeCount} 条关系");
                     GraphLoaded?.Invoke(this, EventArgs.Empty);
 
-                    UpdatePlaceholder(graph);
+                    await SendGraphToWebView(graph);
                 }
                 else
                 {
                     UpdateStatus("暂无数据");
-                    _labelPlaceholder.Text = "📊 暂无知识图谱数据\n\n请先添加学习内容以构建知识图谱";
+                    await SendGraphToWebView(null);
                 }
             }
             catch (Exception ex)
@@ -164,31 +270,81 @@ namespace LearningAssistant.Forms.UserControls
             }
         }
 
-        private void UpdatePlaceholder(Models.KnowledgeGraph.KnowledgeGraph graph)
+        private async Task SendGraphToWebView(Models.KnowledgeGraph.KnowledgeGraph? graph)
         {
-            var weakNodes = graph.Nodes
-                .OrderBy(n => n.MasteryLevel)
-                .Take(5)
-                .ToList();
+            if (!_isWebViewInitialized || _webView?.CoreWebView2 == null)
+                return;
 
-            var weakList = string.Join("\n", weakNodes.Select(n => $"  • {n.Label} ({(n.MasteryLevel * 100):0}%)"));
+            try
+            {
+                var data = new
+                {
+                    nodes = (graph?.Nodes ?? new List<Models.KnowledgeGraph.KGNode>()).Select(n => new
+                    {
+                        id = n.Id,
+                        label = n.Label,
+                        category = n.Category,
+                        masteryLevel = n.MasteryLevel,
+                        size = Math.Max(10, n.MasteryLevel * 50),
+                        color = GetNodeColor(n.MasteryLevel)
+                    }),
+                    links = (graph?.Edges ?? new List<Models.KnowledgeGraph.KGEdge>()).Select(e => new
+                    {
+                        source = e.Source,
+                        target = e.Target,
+                        label = e.Label,
+                        strength = e.Strength,
+                        color = "#757575"
+                    })
+                };
 
-            _labelPlaceholder.Text =
-                $"📊 知识图谱统计\n\n" +
-                $"节点数: {graph.NodeCount}\n" +
-                $"关系数: {graph.EdgeCount}\n\n" +
-                $"薄弱知识点 Top 5:\n{weakList}\n\n" +
-                $"💡 安装 WebView2 Runtime 可查看 3D 可视化";
+                var json = JsonSerializer.Serialize(data);
+                var script = $"window.setData({json});";
+                await _webView.CoreWebView2.ExecuteScriptAsync(script);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceError($"发送图谱数据失败: {ex}");
+            }
+        }
+
+        private string GetNodeColor(double masteryLevel)
+        {
+            if (masteryLevel < 0.3) return "#F44336";
+            if (masteryLevel < 0.7) return "#FFC107";
+            return "#4CAF50";
         }
 
         public async Task HighlightNodeAsync(string nodeId)
         {
-            await Task.CompletedTask;
+            if (!_isWebViewInitialized || _webView?.CoreWebView2 == null)
+                return;
+
+            try
+            {
+                var escapedId = JsonSerializer.Serialize(nodeId);
+                var script = $"window.highlight({escapedId});";
+                await _webView.CoreWebView2.ExecuteScriptAsync(script);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceError($"高亮节点失败: {ex}");
+            }
         }
 
         public async Task ClearHighlightAsync()
         {
-            await Task.CompletedTask;
+            if (!_isWebViewInitialized || _webView?.CoreWebView2 == null)
+                return;
+
+            try
+            {
+                await _webView.CoreWebView2.ExecuteScriptAsync("window.clearHighlightAll();");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceError($"清除高亮失败: {ex}");
+            }
         }
 
         public async Task RefreshGraphAsync()
@@ -200,6 +356,18 @@ namespace LearningAssistant.Forms.UserControls
         {
             _button2D.BackColor = dim == 2 ? Color.FromArgb(33, 150, 243) : Color.FromArgb(60, 60, 60);
             _button3D.BackColor = dim == 3 ? Color.FromArgb(33, 150, 243) : Color.FromArgb(60, 60, 60);
+
+            if (_isWebViewInitialized && _webView?.CoreWebView2 != null)
+            {
+                try
+                {
+                    _webView.CoreWebView2.ExecuteScriptAsync($"window.setDimension({dim});");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Trace.TraceError($"设置维度失败: {ex}");
+                }
+            }
         }
 
         private void UpdateFilterOptions(Models.KnowledgeGraph.KnowledgeGraph graph)
@@ -232,6 +400,19 @@ namespace LearningAssistant.Forms.UserControls
                 return;
             }
             _labelStatus.Text = status;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                if (_webView?.CoreWebView2 != null)
+                {
+                    _webView.CoreWebView2.WebMessageReceived -= CoreWebView2_WebMessageReceived;
+                }
+                _webView?.Dispose();
+            }
+            base.Dispose(disposing);
         }
     }
 }

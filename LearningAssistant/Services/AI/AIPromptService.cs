@@ -1,7 +1,7 @@
 using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
+using System.Text.Json;
 
 namespace LearningAssistant.Services.AI
 {
@@ -59,7 +59,7 @@ namespace LearningAssistant.Services.AI
                     if (File.Exists(configPath))
                     {
                         var json = File.ReadAllText(configPath);
-                        var config = JsonConvert.DeserializeObject<AIPromptConfig>(json);
+                        var config = JsonSerializer.Deserialize<AIPromptConfig>(json);
                         if (config != null)
                         {
                             _logger?.LogInformation("成功加载AI提示词配置: {Path}", configPath);

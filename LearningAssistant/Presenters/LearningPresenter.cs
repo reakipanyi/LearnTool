@@ -82,20 +82,9 @@ namespace LearningAssistant.Presenters
             _eventMediator.OpenStatistics += (_, _) => _flowHandler.OpenStatistics();
         }
 
-        public void Initialize(string userId, string language, string subCategory, string wordBankFile, bool continueMode = true)
-        {
-            _logger.LogInformation("Initializing learning session for user {UserId}, category {SubCategory}", userId, subCategory);
-            InitializeCore(userId, language, subCategory, wordBankFile, continueMode).ConfigureAwait(false);
-        }
-
         public async Task InitializeAsync(string userId, string language, string subCategory, string wordBankFile, bool continueMode = true)
         {
-            _logger.LogInformation("Async initializing learning session for user {UserId}, category {SubCategory}", userId, subCategory);
-            await _flowHandler.InitializeAsync(userId, language, subCategory, wordBankFile, continueMode);
-        }
-
-        private async Task InitializeCore(string userId, string language, string subCategory, string wordBankFile, bool continueMode)
-        {
+            _logger.LogInformation("Initializing learning session for user {UserId}, category {SubCategory}", userId, subCategory);
             await _flowHandler.InitializeAsync(userId, language, subCategory, wordBankFile, continueMode);
         }
 

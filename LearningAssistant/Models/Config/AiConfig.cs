@@ -9,14 +9,30 @@ namespace LearningAssistant.Models.Config
             get => _provider;
             set
             {
-                if (string.IsNullOrEmpty(value) || !Providers.ContainsKey(value))
+                if (string.IsNullOrEmpty(value))
                 {
                     _provider = "doubao";
+                    return;
                 }
-                else
+
+                var normalizedValue = value.Trim().ToLowerInvariant();
+                if (Providers.ContainsKey(normalizedValue))
                 {
-                    _provider = value;
+                    _provider = normalizedValue;
+                    return;
                 }
+
+                var matchedKey = Providers.Keys.FirstOrDefault(k =>
+                    k.Equals(normalizedValue, StringComparison.OrdinalIgnoreCase) ||
+                    Providers[k].Name.Contains(value, StringComparison.OrdinalIgnoreCase));
+
+                if (matchedKey != null)
+                {
+                    _provider = matchedKey;
+                    return;
+                }
+
+                _provider = "doubao";
             }
         }
 

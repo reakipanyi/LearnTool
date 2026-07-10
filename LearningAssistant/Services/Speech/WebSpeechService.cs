@@ -11,6 +11,7 @@ namespace LearningAssistant.Services.Speech
     {
         private readonly ILogger<WebSpeechService>? _logger;
         private readonly List<string> _speechJsFunctions = new();
+        private Microsoft.Web.WebView2.WinForms.WebView2? _webView;
 
         public event EventHandler<SpeechRecognitionResult>? RecognitionResult;
         public event EventHandler? RecognitionStarted;
@@ -18,6 +19,7 @@ namespace LearningAssistant.Services.Speech
 
         private bool _isListening;
         private CancellationTokenSource? _recognitionCts;
+        private EventHandler<SpeechRecognitionResult>? _continuousResultHandler;
 
         public bool IsRecognitionSupported => true;
         public bool IsListening => _isListening;
@@ -26,8 +28,65 @@ namespace LearningAssistant.Services.Speech
         {
             _logger = logger;
 
-            // 注册JavaScript函数
             RegisterSpeechFunctions();
+        }
+
+        public async Task SetWebViewAsync(Microsoft.Web.WebView2.WinForms.WebView2 webView)
+        {
+            _webView = webView ?? throw new ArgumentNullException(nameof(webView));
+            
+            if (_webView.CoreWebView2 == null)
+                throw new InvalidOperationException("WebView2未初始化");
+
+            foreach (var func in _speechJsFunctions)
+            {
+                await _webView.CoreWebView2.ExecuteScriptAsync(func);
+            }
+
+            _webView.CoreWebView2.WebMessageReceived += CoreWebView2_WebMessageReceived;
+        }
+
+        [Obsolete("Use SetWebViewAsync instead to properly handle initialization errors")]
+        public void SetWebView(Microsoft.Web.WebView2.WinForms.WebView2 webView)
+        {
+            _webView = webView ?? throw new ArgumentNullException(nameof(webView));
+            _ = SetWebViewAsync(webView).ContinueWith(t => 
+            {
+                if (t.Exception != null)
+                {
+                    _logger?.LogError(t.Exception, "WebView2初始化失败");
+                }
+            }, TaskContinuationOptions.OnlyOnFaulted);
+        }
+
+        private void CoreWebView2_WebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
+        {
+            try
+            {
+                var message = System.Text.Json.JsonSerializer.Deserialize<SpeechWebMessage>(e.WebMessageAsJson);
+                if (message?.Type == "recognitionStart")
+                {
+                    RecognitionStarted?.Invoke(this, EventArgs.Empty);
+                }
+                else if (message?.Type == "recognitionEnd")
+                {
+                    var result = new SpeechRecognitionResult();
+                    if (message.Result is System.Text.Json.JsonElement element)
+                    {
+                        if (element.TryGetProperty("text", out var textElement))
+                            result.Text = textElement.GetString() ?? "";
+                        if (element.TryGetProperty("confidence", out var confElement))
+                            result.Confidence = confElement.GetDouble();
+                        if (element.TryGetProperty("error", out var errElement))
+                            result.Error = errElement.GetString();
+                    }
+                    OnRecognitionResult(result);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "解析语音消息失败");
+            }
         }
 
         #region JavaScript函数注册
@@ -125,6 +184,63 @@ namespace LearningAssistant.Services.Speech
                         window.recognition.stop();
                         window.isListening = false;
                     }
+                };
+                
+                window.startContinuousRecognition = function(lang) {
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    
+                    if (!SpeechRecognition) {
+                        throw new Error('Speech recognition not supported');
+                    }
+                    
+                    if (window.recognition) {
+                        window.recognition.stop();
+                    }
+                    
+                    const recognition = new SpeechRecognition();
+                    recognition.lang = lang || 'zh-CN';
+                    recognition.continuous = true;
+                    recognition.interimResults = false;
+                    recognition.maxAlternatives = 1;
+                    
+                    recognition.onresult = (event) => {
+                        const result = event.results[event.results.length - 1][0];
+                        if (window.chrome && window.chrome.webview) {
+                            window.chrome.webview.postMessage({
+                                type: 'recognitionEnd',
+                                result: {
+                                    text: result.transcript,
+                                    confidence: result.confidence
+                                }
+                            });
+                        }
+                    };
+                    
+                    recognition.onend = () => {
+                        if (window.isListening) {
+                            try {
+                                recognition.start();
+                            } catch (e) {
+                                console.error('Restart recognition failed:', e);
+                            }
+                        }
+                    };
+                    
+                    recognition.onerror = (event) => {
+                        console.error('Recognition error:', event.error);
+                        if (event.error !== 'no-speech') {
+                            window.isListening = false;
+                        }
+                    };
+                    
+                    window.recognition = recognition;
+                    window.isListening = true;
+                    
+                    if (window.chrome && window.chrome.webview) {
+                        window.chrome.webview.postMessage({ type: 'recognitionStart' });
+                    }
+                    
+                    recognition.start();
                 };
             ");
 
@@ -259,21 +375,49 @@ namespace LearningAssistant.Services.Speech
         /// <summary>
         /// 开始连续语音识别
         /// </summary>
-        public Task StartContinuousRecognitionAsync(Action<string> onResult, string language = "zh-CN")
+        public async Task StartContinuousRecognitionAsync(Action<string> onResult, string language = "zh-CN")
         {
             if (_isListening)
             {
                 _logger?.LogWarning("已经在监听中");
-                return Task.CompletedTask;
+                return;
+            }
+
+            if (_webView?.CoreWebView2 == null)
+            {
+                _logger?.LogError("WebView2未初始化，无法开始连续识别");
+                throw new InvalidOperationException("WebView2未初始化");
             }
 
             _isListening = true;
             RecognitionStarted?.Invoke(this, EventArgs.Empty);
 
-            // 注意：连续识别需要WebView配合，这里简化处理
             _logger?.LogInformation("开始连续语音识别: 语言={Lang}", language);
 
-            return Task.CompletedTask;
+            try
+            {
+                var script = $"window.startContinuousRecognition('{language}')";
+                await ExecuteScriptAsync(script);
+
+                void OnContinuousResult(object? sender, SpeechRecognitionResult result)
+                {
+                    if (!string.IsNullOrEmpty(result.Text))
+                    {
+                        onResult?.Invoke(result.Text);
+                    }
+                }
+
+                RecognitionResult += OnContinuousResult;
+
+                _continuousResultHandler = OnContinuousResult;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "启动连续语音识别失败");
+                _isListening = false;
+                RecognitionEnded?.Invoke(this, EventArgs.Empty);
+                throw;
+            }
         }
 
         /// <summary>
@@ -288,6 +432,12 @@ namespace LearningAssistant.Services.Speech
             {
                 ExecuteScriptSync("window.stopRecognition()");
                 _recognitionCts?.Cancel();
+
+                if (_continuousResultHandler != null)
+                {
+                    RecognitionResult -= _continuousResultHandler;
+                    _continuousResultHandler = null;
+                }
             }
             catch (Exception ex)
             {
@@ -311,17 +461,20 @@ namespace LearningAssistant.Services.Speech
 
         #region 辅助方法
 
-        private static async Task ExecuteScriptAsync(string script)
+        private async Task ExecuteScriptAsync(string script)
         {
-            // 注意：这里需要传入WebView实例才能执行脚本
-            // 调用方需要在外部调用 WebSpeechServiceExtensions.ExecuteScriptAsync
-            await Task.CompletedTask;
+            if (_webView?.CoreWebView2 == null)
+                throw new InvalidOperationException("WebView2未初始化");
+
+            await _webView.CoreWebView2.ExecuteScriptAsync(script);
         }
 
-        private static void ExecuteScriptSync(string script)
+        private void ExecuteScriptSync(string script)
         {
-            // 注意：这里需要传入WebView实例才能执行脚本
-            // 调用方需要在外部调用 WebSpeechServiceExtensions.ExecuteScriptSync
+            if (_webView?.CoreWebView2 == null)
+                throw new InvalidOperationException("WebView2未初始化");
+
+            _webView.CoreWebView2.ExecuteScriptAsync(script).GetAwaiter().GetResult();
         }
 
         /// <summary>
@@ -338,6 +491,10 @@ namespace LearningAssistant.Services.Speech
         {
             _recognitionCts?.Cancel();
             _recognitionCts?.Dispose();
+            if (_webView?.CoreWebView2 != null)
+            {
+                _webView.CoreWebView2.WebMessageReceived -= CoreWebView2_WebMessageReceived;
+            }
         }
     }
 
@@ -403,11 +560,11 @@ namespace LearningAssistant.Services.Speech
 
             await webView.CoreWebView2.ExecuteScriptAsync(script);
         }
+    }
 
-        private class SpeechWebMessage
-        {
-            public string? Type { get; set; }
-            public object? Result { get; set; }
-        }
+    internal class SpeechWebMessage
+    {
+        public string? Type { get; set; }
+        public object? Result { get; set; }
     }
 }

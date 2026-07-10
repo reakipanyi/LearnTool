@@ -76,30 +76,40 @@ namespace LearningAssistant.Services.Pdf
 
         public void SetNightMode(bool enabled)
         {
-            _isNightMode = enabled;
+            if (_isNightMode != enabled)
+            {
+                _isNightMode = enabled;
+                ClearCache();
+            }
         }
 
         public async Task<Bitmap?> RenderPageAsync(int pageIndex, int width, int height)
         {
+            Bitmap? bitmap;
+            
             if (_isImageMode)
             {
-                return await LoadImageAsync(pageIndex);
+                bitmap = await LoadImageAsync(pageIndex);
             }
-
-            if (_pdfService == null) return null;
-            if (pageIndex < 0 || pageIndex >= _pdfService.PageCount) return null;
-
-            var pageSize = _pdfService.GetPageSize(pageIndex);
-            if (pageSize.Width <= 0 || pageSize.Height <= 0)
+            else
             {
-                _logger.LogWarning("Invalid page size for page {PageIndex}", pageIndex);
-                return null;
+                if (_pdfService == null) return null;
+                if (pageIndex < 0 || pageIndex >= _pdfService.PageCount) return null;
+
+                var pageSize = _pdfService.GetPageSize(pageIndex);
+                if (pageSize.Width <= 0 || pageSize.Height <= 0)
+                {
+                    _logger.LogWarning("Invalid page size for page {PageIndex}", pageIndex);
+                    return null;
+                }
+
+                int renderWidth = width;
+                int renderHeight = (int)(renderWidth * pageSize.Height / pageSize.Width);
+
+                bitmap = await GetRenderedPageAsync(pageIndex, renderWidth, renderHeight);
             }
 
-            int renderWidth = width;
-            int renderHeight = (int)(renderWidth * pageSize.Height / pageSize.Width);
-
-            return await GetRenderedPageAsync(pageIndex, renderWidth, renderHeight);
+            return ApplyNightMode(bitmap);
         }
 
         private async Task<Bitmap?> LoadImageAsync(int index)
@@ -120,7 +130,7 @@ namespace LearningAssistant.Services.Pdf
 
         private string GetRenderCacheKey(int pageIndex, int renderWidth, int renderHeight)
         {
-            return $"{_currentFilePath}_{pageIndex}_{renderWidth}_{renderHeight}";
+            return $"{_currentFilePath}_{pageIndex}_{renderWidth}_{renderHeight}_{_isNightMode}";
         }
 
         private void UpdateCacheAccessOrder(string cacheKey)
@@ -266,14 +276,8 @@ namespace LearningAssistant.Services.Pdf
 
         private async Task SmartPreRenderAsync(int currentPage, int renderW, int renderH)
         {
-            try
-            {
-                if (_cts?.IsCancellationRequested ?? true) return;
-            }
-            catch (ObjectDisposedException)
-            {
-                return;
-            }
+            var cts = _cts;
+            if (cts == null || cts.IsCancellationRequested) return;
 
             var pagesToRender = new List<int>();
             if (currentPage - 1 >= 0) pagesToRender.Add(currentPage - 1);
@@ -290,14 +294,7 @@ namespace LearningAssistant.Services.Pdf
 
             foreach (var p in pagesToRender)
             {
-                try
-                {
-                    if (_cts?.IsCancellationRequested ?? true) return;
-                }
-                catch (ObjectDisposedException)
-                {
-                    return;
-                }
+                if (cts.IsCancellationRequested) return;
                 
                 if (p < 0 || p >= PageCount) continue;
 

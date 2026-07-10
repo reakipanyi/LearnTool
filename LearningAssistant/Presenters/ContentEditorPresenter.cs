@@ -40,94 +40,7 @@ namespace LearningAssistant.Presenters
         /// </summary>
         private bool _isDirty = false;
 
-        /// <summary>
-        /// 类别类型名称映射字典，将类别常量映射为中文显示名称
-        /// </summary>
-        private static readonly Dictionary<string, string> CategoryTypeNames = new()
-        {
-            { Constants.SubCategory.ChineseCharacter, "识字" },
-            { Constants.SubCategory.ChineseIdiom, "成语" },
-            { Constants.SubCategory.ChinesePhrase, "短语" },
-            { Constants.SubCategory.ChinesePoem, "诗词" },
-            { Constants.SubCategory.ChineseComprehensive, "语文综合" },
-            { Constants.SubCategory.EnglishWord, "英语单词" },
-            { Constants.SubCategory.EnglishPhrase, "英语短语" },
-            { Constants.SubCategory.EnglishSentence, "英语句子" },
-            { Constants.SubCategory.EnglishComprehensive, "英语综合" }
-        };
-
-        /// <summary>
-        /// 按子分类分组的表头中英文映射字典
-        /// </summary>
-        private static readonly Dictionary<string, Dictionary<string, string>> CategoryColumnHeaders = new()
-        {
-            { Constants.SubCategory.ChineseCharacter, new Dictionary<string, string>
-                { { "Character", "汉字" }, { "Pinyin", "拼音" }, { "Meaning", "释义" }, { "StrokeCount", "笔画数" }, { "Radical", "部首" }, { "StrokeOrder", "笔顺" }, { "Words", "组词" }, { "SimilarCharacters", "形近字" }, { "Synonyms", "近义词" }, { "Antonyms", "反义词" }, { "CommonMistakes", "易错点" }, { "ExampleSentence", "例句" }, { "CharacterLevel", "字级" }, { "Structure", "结构" }, { "CharacterFormation", "造字法" }, { "OtherPronunciations", "其他读音" }, { "Id", "ID" }, { "CreatedAt", "创建时间" }, { "UpdatedAt", "更新时间" } } },
-            { Constants.SubCategory.ChineseIdiom, new Dictionary<string, string>
-                { { "Idiom", "成语" }, { "Pinyin", "拼音" }, { "Meaning", "释义" }, { "Origin", "出处" }, { "Example", "例句" } } },
-            { Constants.SubCategory.ChinesePhrase, new Dictionary<string, string>
-                { { "Phrase", "短语" }, { "Pinyin", "拼音" }, { "Meaning", "释义" }, { "Example", "例句" } } },
-            { Constants.SubCategory.ChinesePoem, new Dictionary<string, string>
-                { { "Title", "诗名" }, { "Author", "作者" }, { "Dynasty", "朝代" }, { "Verses", "诗句" }, { "Annotation", "注释" } } },
-            { Constants.SubCategory.ChineseComprehensive, new Dictionary<string, string>
-                { { "Title", "课文标题" }, { "Content", "课文内容" }, { "Questions", "课后习题" }, { "Question", "题目" }, { "Answer", "答案" }, { "Analysis", "解析" } } },
-            { Constants.SubCategory.EnglishWord, new Dictionary<string, string>
-                { { "Word", "单词" }, { "Phonetic", "音标" }, { "PartOfSpeech", "词性" }, { "SyllableBreakdown", "音节拼读" }, { "Meaning", "中文释义" }, { "Example", "例句" }, { "Synonyms", "近义词" }, { "Antonyms", "反义词" }, { "Id", "ID" }, { "CreatedAt", "创建时间" }, { "UpdatedAt", "更新时间" } } },
-            { Constants.SubCategory.EnglishPhrase, new Dictionary<string, string>
-                { { "Phrase", "短语" }, { "Meaning", "中文释义" }, { "Example", "例句" } } },
-            { Constants.SubCategory.EnglishSentence, new Dictionary<string, string>
-                { { "Sentence", "句子" }, { "Translation", "中文翻译" }, { "Grammar", "语法点" } } },
-            { Constants.SubCategory.EnglishComprehensive, new Dictionary<string, string>
-                { { "Title", "文章标题" }, { "Content", "文章内容" }, { "Questions", "阅读理解题" }, { "Question", "题目" }, { "Answer", "答案" }, { "Analysis", "解析" } } },
-            { Constants.SubCategory.MathFormula, new Dictionary<string, string>
-                { { "Topic", "公式名称" }, { "Content", "公式表达式" }, { "KeyPoints", "公式说明" }, { "Principle", "适用条件" }, { "Example", "应用举例" }, { "Applications", "应用场景" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.MathExample, new Dictionary<string, string>
-                { { "Topic", "例题标题" }, { "Content", "题目描述" }, { "Analysis", "解答过程" }, { "KeyPoints", "关键步骤" }, { "Example", "方法总结" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.MathConcept, new Dictionary<string, string>
-                { { "Topic", "概念名称" }, { "Content", "定义" }, { "KeyPoints", "性质" }, { "Example", "举例说明" }, { "Note", "注意事项" }, { "Applications", "应用" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.MathComprehensive, new Dictionary<string, string>
-                { { "Topic", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" }, { "Example", "典型例题" }, { "Analysis", "答案解析" }, { "Question", "问题" }, { "Answer", "答案" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.PhysicsLaw, new Dictionary<string, string>
-                { { "Topic", "定律名称" }, { "Content", "定律内容" }, { "KeyPoints", "公式" }, { "Principle", "适用条件" }, { "Applications", "应用场景" }, { "Example", "实例" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.PhysicsExperiment, new Dictionary<string, string>
-                { { "Topic", "实验名称" }, { "Content", "实验目的" }, { "KeyPoints", "实验器材" }, { "ExperimentSteps", "实验步骤" }, { "Analysis", "实验结论" }, { "Example", "实例" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.PhysicsDerivation, new Dictionary<string, string>
-                { { "Topic", "公式名称" }, { "Content", "推导结果" }, { "KeyPoints", "推导步骤" }, { "Principle", "前提条件" }, { "Example", "应用实例" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.PhysicsComprehensive, new Dictionary<string, string>
-                { { "Topic", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" }, { "Example", "典型例题" }, { "Analysis", "答案解析" }, { "Question", "问题" }, { "Answer", "答案" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.ChemistryEquation, new Dictionary<string, string>
-                { { "Topic", "反应名称" }, { "Content", "化学方程式" }, { "KeyPoints", "反应条件" }, { "Principle", "反应原理" }, { "Example", "反应现象" }, { "Applications", "应用" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.ChemistryElement, new Dictionary<string, string>
-                { { "Topic", "元素名称" }, { "Content", "元素符号" }, { "KeyPoints", "原子序数" }, { "Principle", "元素性质" }, { "Applications", "主要用途" }, { "Example", "实例" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.ChemistryExperiment, new Dictionary<string, string>
-                { { "Topic", "实验名称" }, { "Content", "实验目的" }, { "KeyPoints", "实验器材" }, { "ExperimentSteps", "操作步骤" }, { "Analysis", "实验现象" }, { "Example", "实例" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.ChemistryComprehensive, new Dictionary<string, string>
-                { { "Topic", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" }, { "Example", "典型例题" }, { "Analysis", "答案解析" }, { "Question", "问题" }, { "Answer", "答案" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.HistoryEvent, new Dictionary<string, string>
-                { { "Topic", "事件名称" }, { "TimePeriod", "发生时间" }, { "RelatedPlaces", "发生地点" }, { "Background", "历史背景" }, { "Content", "事件经过" }, { "Impact", "历史影响" }, { "RelatedPeople", "相关人物" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.HistoryPerson, new Dictionary<string, string>
-                { { "Topic", "人物姓名" }, { "TimePeriod", "所处朝代" }, { "Content", "生卒年月" }, { "KeyPoints", "主要成就" }, { "Analysis", "历史评价" }, { "Example", "代表作品" }, { "RelatedPlaces", "相关地点" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.HistoryTimeline, new Dictionary<string, string>
-                { { "Topic", "时代名称" }, { "TimePeriod", "时间范围" }, { "KeyPoints", "重要事件" }, { "Content", "时代特征" }, { "RelatedPeople", "重要人物" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.HistoryComprehensive, new Dictionary<string, string>
-                { { "Topic", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" }, { "Example", "典型例题" }, { "Analysis", "答案解析" }, { "Question", "问题" }, { "Answer", "答案" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.GeographyKnowledge, new Dictionary<string, string>
-                { { "Topic", "地理名称" }, { "Category", "地理分类" }, { "Content", "地理描述" }, { "RelatedPlaces", "分布地区" }, { "KeyPoints", "主要特征" }, { "Example", "实例" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.GeographyMap, new Dictionary<string, string>
-                { { "Topic", "地图名称" }, { "RelatedPlaces", "所属地区" }, { "Content", "地理特征" }, { "KeyPoints", "重要地点" }, { "Example", "读图技巧" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.GeographyClimate, new Dictionary<string, string>
-                { { "Topic", "气候类型" }, { "RelatedPlaces", "分布地区" }, { "Content", "气候特征" }, { "Principle", "形成原因" }, { "KeyPoints", "植被类型" }, { "Example", "实例" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.GeographyComprehensive, new Dictionary<string, string>
-                { { "Topic", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" }, { "Example", "典型例题" }, { "Analysis", "答案解析" }, { "Question", "问题" }, { "Answer", "答案" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.BiologyConcept, new Dictionary<string, string>
-                { { "Topic", "概念名称" }, { "Content", "定义" }, { "Category", "分类" }, { "KeyPoints", "主要特征" }, { "Applications", "功能作用" }, { "Example", "实例" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.BiologyExperiment, new Dictionary<string, string>
-                { { "Topic", "实验名称" }, { "Content", "实验目的" }, { "KeyPoints", "实验材料" }, { "ExperimentSteps", "实验步骤" }, { "Analysis", "实验结果" }, { "Example", "实例" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.BiologyPhenomenon, new Dictionary<string, string>
-                { { "Topic", "现象名称" }, { "Content", "现象描述" }, { "Category", "现象类型" }, { "Principle", "产生原因" }, { "Example", "常见实例" }, { "Impact", "生物意义" }, { "Note", "备注" }, { "Tags", "标签" } } },
-            { Constants.SubCategory.BiologyComprehensive, new Dictionary<string, string>
-                { { "Topic", "知识点标题" }, { "Content", "知识讲解" }, { "KeyPoints", "要点归纳" }, { "Example", "典型例题" }, { "Analysis", "答案解析" }, { "Question", "问题" }, { "Answer", "答案" }, { "Note", "备注" }, { "Tags", "标签" } } }
-        };
+        
 
         /// <summary>
         /// 类别模板字典，定义每个类别对应的字段结构
@@ -155,7 +68,7 @@ namespace LearningAssistant.Presenters
             {
                 Constants.SubCategory.ChinesePoem, new Dictionary<string, object>
                 {
-                    { "Title", "" }, { "Author", "" }, { "Dynasty", "" }, { "Verses", "" }, { "Annotation", "" }, { "Translation", "" }, { "Appreciation", "" }, { "CreationBackground", "" }, { "FamousLines", "" }, { "RhetoricalDevices", "" }, { "Theme", "" }, { "AuthorIntro", "" }, { "PoemType", "" }, { "RelatedPoems", "" }, { "DifficultyLevel", 1 }
+                    { "Title", "" }, { "Author", "" }, { "Dynasty", "" }, { "Verses", "" }, { "Annotation", "" }, { "Translation", "" }, { "Appreciation", "" }, { "CreationBackground", "" }, { "FamousLines", "" }, { "RhetoricalDevices", "" }, { "Theme", "" }, { "AuthorIntro", "" }, { "PoemType", "" }, { "RelatedPoems", "" }, { "DifficultyLevel", "" }
                 }
             },
             {
@@ -429,48 +342,7 @@ namespace LearningAssistant.Presenters
             _isDirty = false;
         }
 
-        /// <summary>
-        /// 获取列的中文名称
-        /// </summary>
-        /// <param name="columnName">英文列名</param>
-        /// <returns>中文列名，如果没有映射则返回原名称</returns>
-        private static readonly Dictionary<string, string> CommonColumnHeaders = new()
-        {
-            { "Id", "ID" }, { "CreatedAt", "创建时间" }, { "UpdatedAt", "更新时间" },
-            { "Synonyms", "近义词" }, { "Antonyms", "反义词" }, { "CommonMistakes", "易错点" },
-            { "ExampleSentence", "例句" }, { "OtherPronunciations", "其他读音" }
-        };
-
-        private static string GetChineseColumnName(string columnName, string category)
-        {
-            if (!string.IsNullOrEmpty(category) &&
-                CategoryColumnHeaders.TryGetValue(category, out var headers) &&
-                headers.TryGetValue(columnName, out var chineseName))
-            {
-                return chineseName;
-            }
-            if (CommonColumnHeaders.TryGetValue(columnName, out var commonName))
-            {
-                return commonName;
-            }
-            return columnName;
-        }
-
-        private static string GetEnglishColumnName(string columnName, string category)
-        {
-            if (!string.IsNullOrEmpty(category) &&
-                CategoryColumnHeaders.TryGetValue(category, out var headers))
-            {
-                foreach (var pair in headers)
-                {
-                    if (pair.Value == columnName)
-                    {
-                        return pair.Key;
-                    }
-                }
-            }
-            return columnName;
-        }
+        
 
         /// <summary>
         /// 将对象列表转换为DataTable，所有列均为string类型以避免类型推断问题
@@ -489,7 +361,7 @@ namespace LearningAssistant.Presenters
                     foreach (var key in template.Keys)
                     {
                         var column = table.Columns.Add(key, typeof(string));
-                        column.Caption = GetChineseColumnName(key, category);
+                        column.Caption = CategoryConfig.GetChineseColumnName(key, category);
                     }
                 }
                 return table;
@@ -550,7 +422,7 @@ namespace LearningAssistant.Presenters
             foreach (var col in allColumns)
             {
                 var column = table.Columns.Add(col, typeof(string));
-                column.Caption = GetChineseColumnName(col, category);
+                column.Caption = CategoryConfig.GetChineseColumnName(col, category);
             }
 
             foreach (var item in items)
@@ -641,13 +513,22 @@ namespace LearningAssistant.Presenters
         /// </summary>
         private void OnTemplateSaveClicked(object? sender, EventArgs e)
         {
+            SaveChanges();
+        }
+
+        /// <summary>
+        /// 保存更改
+        /// </summary>
+        /// <returns>保存是否成功</returns>
+        private bool SaveChanges()
+        {
             var json = _view.CurrentEditItemJson;
             var category = _view.SelectedSubCategory;
 
             if (string.IsNullOrEmpty(json))
             {
                 _view.ShowMessage("请先输入或生成JSON内容！");
-                return;
+                return false;
             }
 
             try
@@ -655,11 +536,14 @@ namespace LearningAssistant.Presenters
                 SaveFromJson(json, category);
                 _view.ClearEditForm();
                 LoadItems();
+                _view.UpdateDirtyStatus(false);
+                return true;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to save items to category {Category}", category);
                 _view.ShowMessage($"保存失败：{ex.Message}");
+                return false;
             }
         }
 
@@ -717,7 +601,7 @@ namespace LearningAssistant.Presenters
                     var properties = obj.Properties().ToList();
                     foreach (var prop in properties)
                     {
-                        var englishName = GetEnglishColumnName(prop.Name, category);
+                        var englishName = CategoryConfig.GetEnglishColumnName(prop.Name, category);
                         if (englishName != prop.Name)
                         {
                             obj[englishName] = prop.Value;
@@ -752,7 +636,14 @@ namespace LearningAssistant.Presenters
                     Id = row["Id"]?.ToString() ?? Guid.NewGuid().ToString(),
                     CreatedAt = DateTime.TryParse(row["CreatedAt"]?.ToString(), out var createdAt) ? createdAt : DateTime.Now,
                     UpdatedAt = DateTime.Now,
-                    Subject = category.StartsWith("English") ? SubjectType.English : SubjectType.Chinese
+                    Subject = category.StartsWith("English") ? SubjectType.English :
+                              category.StartsWith("Chinese") ? SubjectType.Chinese :
+                              category.StartsWith("Math") ? SubjectType.Math :
+                              category.StartsWith("Physics") ? SubjectType.Physics :
+                              category.StartsWith("Chemistry") ? SubjectType.Chemistry :
+                              category.StartsWith("History") ? SubjectType.History :
+                              category.StartsWith("Geography") ? SubjectType.Geography :
+                              category.StartsWith("Biology") ? SubjectType.Biology : SubjectType.Chinese
                 };
 
                 if (Enum.TryParse(category, out SubCategoryType subCategory))
@@ -770,6 +661,10 @@ namespace LearningAssistant.Presenters
                         item.MainContent = row["Title"]?.ToString() ?? "";
                     else
                         item.MainContent = row["Phrase"]?.ToString() ?? "";
+                }
+                else
+                {
+                    item.MainContent = row["Topic"]?.ToString() ?? "";
                 }
 
                 var meaning = row["Meaning"]?.ToString();
@@ -1022,8 +917,8 @@ namespace LearningAssistant.Presenters
         /// <returns>格式化后的AI提示词</returns>
         private string GetAIPrompt(string category, int count, string range)
         {
-            var typeName = CategoryTypeNames.GetValueOrDefault(category, "内容");
-            var format = JsonFormatHints.GetValueOrDefault(category, "[]");
+            var typeName = CategoryConfig.CategoryTypeNames.GetValueOrDefault(category, "内容");
+            var format = CategoryConfig.JsonFormatHints.GetValueOrDefault(category, "[]");
 
             if (category == Constants.SubCategory.ChineseComprehensive)
             {
@@ -1050,7 +945,7 @@ namespace LearningAssistant.Presenters
         }
 
         /// <summary>
-        /// 清理AI返回的JSON结果，处理换行符和特殊字符
+        /// 清理AI返回的JSON结果，提取JSON数组部分并使用JSON解析器确保格式正确
         /// </summary>
         /// <param name="result">AI返回的原始字符串</param>
         /// <returns>清理后的JSON字符串</returns>
@@ -1066,13 +961,15 @@ namespace LearningAssistant.Presenters
 
             var jsonContent = result.Substring(startIndex, endIndex - startIndex + 1);
 
-            jsonContent = jsonContent.Replace("\r\n", "\\n")
-                                     .Replace("\r", "\\n")
-                                     .Replace("\n", "\\n")
-                                     .Replace("\"", "\\\"")
-                                     .Replace("\t", "\\t");
-
-            return jsonContent;
+            try
+            {
+                var parsed = JArray.Parse(jsonContent);
+                return parsed.ToString(Formatting.Indented);
+            }
+            catch
+            {
+                return jsonContent;
+            }
         }
 
         /// <summary>
@@ -1082,8 +979,7 @@ namespace LearningAssistant.Presenters
         private bool CheckAndSaveUnsavedChanges()
         {
             if (!_isDirty) return true;
-            OnTemplateSaveClicked(this, EventArgs.Empty);
-            return true;
+            return SaveChanges();
         }
 
         /// <summary>
@@ -1091,7 +987,21 @@ namespace LearningAssistant.Presenters
         /// </summary>
         public void Dispose()
         {
-            OnTemplateSaveClicked(this, EventArgs.Empty);
+            if (_isDirty)
+            {
+                try
+                {
+                    var saveResult = SaveChanges();
+                    if (!saveResult)
+                    {
+                        _logger.LogWarning("ContentEditorPresenter.Dispose - Failed to save unsaved changes");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "ContentEditorPresenter.Dispose - Exception during save");
+                }
+            }
 
             _view.SubjectChanged -= OnSubjectChanged;
             _view.SubCategoryChanged -= OnSubCategoryChanged;

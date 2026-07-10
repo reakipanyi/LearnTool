@@ -54,6 +54,9 @@ namespace LearningAssistant.Presenters
 
         private readonly ConcurrentQueue<(string Text, string Lang, string? Explanation)> _pronunciationQueue = new();
         private bool _isProcessingQueue = false;
+        
+        private int _pendingSaveCount = 0;
+        private const int SaveBatchSize = 10;
 
         public LearningFlowHandler(
             ILogger<LearningFlowHandler> logger,
@@ -266,8 +269,8 @@ namespace LearningAssistant.Presenters
 
         private async Task ProcessPronunciationQueueAsync(CancellationToken cancellationToken)
         {
-            if (_isProcessingQueue) return;
-            _isProcessingQueue = true;
+            if (Interlocked.CompareExchange(ref _isProcessingQueue, true, false) == true)
+                return;
 
             try
             {
@@ -303,7 +306,7 @@ namespace LearningAssistant.Presenters
             }
             finally
             {
-                _isProcessingQueue = false;
+                Interlocked.Exchange(ref _isProcessingQueue, false);
             }
         }
 
@@ -479,6 +482,17 @@ namespace LearningAssistant.Presenters
         }
 
         private void SaveProgress()
+        {
+            _pendingSaveCount++;
+            
+            if (_pendingSaveCount >= SaveBatchSize)
+            {
+                _pendingSaveCount = 0;
+                PerformSaveProgress();
+            }
+        }
+
+        private void PerformSaveProgress()
         {
             try
             {
@@ -707,7 +721,19 @@ namespace LearningAssistant.Presenters
         {
             _cts?.Cancel();
             _cts?.Dispose();
-            _ttsService.StopAsync().ConfigureAwait(false);
+            
+            if (_ttsService != null)
+            {
+                try
+                {
+                    _ttsService.StopAsync().GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to stop TTS service during dispose");
+                }
+            }
+            
             _logger.LogInformation("LearningFlowHandler disposed");
         }
 

@@ -23,22 +23,24 @@ namespace LearningAssistant.Forms
     public partial class LearningForm : Form, ILearningView, IThemeable
     {
         #region === 依赖服务 ===
-        private readonly IAiQuestionService? _aiQuestionService;
-        private readonly ITTSService? _ttsService;
+        private readonly LearningFormServices _services;
         private readonly ILogger<LearningForm> _logger;
         private readonly ILoggerFactory _loggerFactory;
-        private readonly ISoundService? _soundService;
-        private readonly IThemeService _themeService;
-        private readonly IAIPanelPopupService? _aiPanelPopupService;
-        private readonly IEncouragementService _encouragementService;
-        private readonly IAchievementService? _achievementService;
-        private readonly ISpacedRepetitionService? _spacedRepetitionService;
-        private readonly IGamificationService _gamificationService;
-        private readonly IEventBus? _eventBus;
-        private readonly IUserSessionService? _userSessionService;
-        private readonly IPomodoroService? _pomodoroService;
         private readonly ConfettiManager _confettiManager;
         private readonly EncouragementManager _encouragementManager;
+
+        private IAiQuestionService? _aiQuestionService => _services.AiQuestionService;
+        private ITTSService? _ttsService => _services.AudioServices.TTSService;
+        private ISoundService? _soundService => _services.NotificationServices.SoundService;
+        private IThemeService _themeService => _services.ThemeService;
+        private IAIPanelPopupService? _aiPanelPopupService => _services.NotificationServices.AIPanelPopupService;
+        private IEncouragementService _encouragementService => _services.GamificationServices.EncouragementService;
+        private IAchievementService? _achievementService => _services.GamificationServices.AchievementService;
+        private ISpacedRepetitionService? _spacedRepetitionService => _services.SpacedRepetitionService;
+        private IGamificationService _gamificationService => _services.GamificationServices.GamificationService;
+        private IEventBus? _eventBus => _services.NotificationServices.EventBus;
+        private IUserSessionService? _userSessionService => _services.UserSessionService;
+        private IPomodoroService? _pomodoroService => _services.PomodoroService;
         #endregion
 
         #region === 学习状态 ===
@@ -59,7 +61,6 @@ namespace LearningAssistant.Forms
 
         #region === 进度可视化 ===
         private CircularProgressControl _dailyGoalProgress = null!;
-        private const int DailyGoal = 30;
         #endregion
 
         #region === 笔记增强 ===
@@ -192,39 +193,15 @@ namespace LearningAssistant.Forms
 
         #region === 构造函数 ===
         public LearningForm(
-            IAiQuestionService? aiQuestionService,
-            ITTSService? ttsService,
+            LearningFormServices services,
             ILogger<LearningForm> logger,
-            ILoggerFactory loggerFactory,
-            ISoundService? soundService,
-            IThemeService themeService,
-            IAIPanelPopupService? aiPanelPopupService,
-            IEncouragementService encouragementService,
-            IAchievementService? achievementService = null,
-            ISpacedRepetitionService? spacedRepetitionService = null,
-            IGamificationService? gamificationService = null,
-            IEventBus? eventBus = null,
-            IUserSessionService? userSessionService = null,
-            IPomodoroService? pomodoroService = null)
+            ILoggerFactory loggerFactory)
         {
             InitializeComponent();
             WindowState = FormWindowState.Maximized;
-            _aiQuestionService = aiQuestionService;
-            _ttsService = ttsService;
+            _services = services ?? throw new ArgumentNullException(nameof(services));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
-            _soundService = soundService;
-            _themeService = themeService ?? throw new ArgumentNullException(nameof(themeService));
-            _aiPanelPopupService = aiPanelPopupService;
-            _encouragementService = encouragementService ?? throw new ArgumentNullException(nameof(encouragementService));
-            _achievementService = achievementService;
-            _spacedRepetitionService = spacedRepetitionService;
-            _eventBus = eventBus;
-            _userSessionService = userSessionService;
-            _pomodoroService = pomodoroService;
-            _gamificationService = gamificationService ?? new GamificationService(
-                _loggerFactory,
-                null);
 
             _gamificationService.BadgesUnlocked += OnBadgesUnlocked;
             _gamificationService.LevelUp += OnLevelUp;
@@ -883,8 +860,8 @@ namespace LearningAssistant.Forms
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string SearchText
         {
-            get => string.Empty;
-            set { }
+            get => _listView?.TextBoxSearch.Text ?? string.Empty;
+            set => _listView?.FilterItems(value);
         }
 
         public event EventHandler? SearchTextChanged;
@@ -1320,7 +1297,7 @@ namespace LearningAssistant.Forms
             _toolTip.SetToolTip(labelEncouragement,
                 "鼓励语，每隔几句学习内容自动更新一次");
             _toolTip.SetToolTip(labelDailyGoal,
-                $"每日目标: {DailyGoal}项 | 当前进度: {_gamificationService?.TodayLearnedCount ?? 0}项\n" +
+                $"每日目标: {_settings.DailyGoal}项 | 当前进度: {_gamificationService?.TodayLearnedCount ?? 0}项\n" +
                 "快捷键: F8 开启/关闭自动播放");
         }
 
@@ -1411,7 +1388,7 @@ namespace LearningAssistant.Forms
             _dailyGoalProgress = new CircularProgressControl
             {
                 Size = new Size(100, 100),
-                MaxValue = DailyGoal,
+                MaxValue = _settings.DailyGoal,
                 CurrentValue = _gamificationService.TodayLearnedCount,
                 ProgressColor = Color.FromArgb(255, 152, 0),
                 TrackColor = Color.FromArgb(220, 220, 220),

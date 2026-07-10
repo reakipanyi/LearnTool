@@ -45,6 +45,9 @@ namespace LearningAssistant.Forms.UserControls
         public Label LabelListStatus => _labelListStatus;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public TextBox TextBoxSearch => _textBoxSearch;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int SelectedIndexInAllItems
         {
             get

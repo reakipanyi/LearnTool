@@ -139,6 +139,9 @@ namespace LearningAssistant.Common
                 return new FallbackAIService(config, factory, logger);
             });
             services.AddSingleton<IAiQuestionService, AiQuestionService>();
+            services.AddSingleton<AIPromptService>();
+            services.AddSingleton<IConversationContextService, ConversationContextService>();
+            services.AddSingleton<IPromptTemplateService, PromptTemplateService>();
             return services;
         }
 
@@ -375,23 +378,48 @@ namespace LearningAssistant.Common
                 return new MainForm(presenter, windowManager, appConfig, themeService, logger, webBookmarkService, trayIconService, hotkeyService, pomodoroService, spacedRepetitionService, userSessionService);
             });
             services.AddScoped<SettingForm>();
-            services.AddScoped<LearningForm>(sp =>
+            services.AddScoped<AudioServices>(sp =>
             {
-                var logger = sp.GetRequiredService<ILogger<LearningForm>>();
-                var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
-                var themeService = sp.GetRequiredService<IThemeService>();
-                var aiPanelPopupService = sp.GetService<IAIPanelPopupService>();
-                var encouragementService = sp.GetRequiredService<IEncouragementService>();
+                var ttsService = sp.GetService<ITTSService>();
+                return new AudioServices(ttsService);
+            });
+
+            services.AddScoped<GamificationServices>(sp =>
+            {
                 var achievementService = sp.GetService<IAchievementService>();
-                var spacedRepetitionService = sp.GetService<ISpacedRepetitionService>();
                 var gamificationService = sp.GetService<IGamificationService>();
+                var encouragementService = sp.GetRequiredService<IEncouragementService>();
+                return new GamificationServices(achievementService, gamificationService, encouragementService);
+            });
+
+            services.AddScoped<NotificationServices>(sp =>
+            {
                 var eventBus = sp.GetService<IEventBus>();
+                var soundService = sp.GetService<ISoundService>();
+                var aiPanelPopupService = sp.GetService<IAIPanelPopupService>();
+                return new NotificationServices(eventBus, soundService, aiPanelPopupService);
+            });
+
+            services.AddScoped<LearningFormServices>(sp =>
+            {
+                var audioServices = sp.GetRequiredService<AudioServices>();
+                var gamificationServices = sp.GetRequiredService<GamificationServices>();
+                var notificationServices = sp.GetRequiredService<NotificationServices>();
+                var spacedRepetitionService = sp.GetService<ISpacedRepetitionService>();
                 var userSessionService = sp.GetService<IUserSessionService>();
                 var pomodoroService = sp.GetService<IPomodoroService>();
-                return new LearningForm(null, null, logger, loggerFactory, null,
-                    themeService, aiPanelPopupService, encouragementService,
-                    achievementService, spacedRepetitionService, gamificationService,
-                    eventBus, userSessionService, pomodoroService);
+                var themeService = sp.GetRequiredService<IThemeService>();
+                var aiQuestionService = sp.GetService<IAiQuestionService>();
+                return new LearningFormServices(audioServices, gamificationServices, notificationServices,
+                    spacedRepetitionService, userSessionService, pomodoroService, themeService, aiQuestionService);
+            });
+
+            services.AddScoped<LearningForm>(sp =>
+            {
+                var services = sp.GetRequiredService<LearningFormServices>();
+                var logger = sp.GetRequiredService<ILogger<LearningForm>>();
+                var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+                return new LearningForm(services, logger, loggerFactory);
             });
             services.AddScoped<LearningHubForm>(sp =>
             {

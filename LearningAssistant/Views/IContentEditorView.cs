@@ -88,5 +88,6 @@ namespace LearningAssistant.Views
         void UpdateGridFromJson();
         void SetInitialSubject(SubjectType subject);
         void SetInitialSubCategory(SubCategoryType subCategory);
+        void UpdateDirtyStatus(bool isDirty);
     }
 }

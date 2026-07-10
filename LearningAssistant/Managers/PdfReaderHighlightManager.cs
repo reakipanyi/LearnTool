@@ -2,7 +2,6 @@ using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.Pdf;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Drawing.Drawing2D;
 
@@ -24,15 +23,14 @@ namespace LearningAssistant.Managers
         public HighlightColor CurrentHighlightColor { get; set; } = HighlightColor.Yellow;
         public bool IsHighlightMode { get; set; } = true;
 
-        public PdfReaderHighlightManager(ILogger logger, IPdfReaderFormAccess form, IHighlightService highlightService)
+        public PdfReaderHighlightManager(ILogger logger, IPdfReaderFormAccess form, IHighlightService highlightService,
+            IAnnotationService? annotationService = null, IEventBus? eventBus = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _form = form ?? throw new ArgumentNullException(nameof(form));
             _highlightService = highlightService ?? throw new ArgumentNullException(nameof(highlightService));
-
-            var serviceProvider = (ServiceProvider?)form.Form?.Tag;
-            _annotationService = serviceProvider?.GetService<IAnnotationService>();
-            _eventBus = serviceProvider?.GetService<IEventBus>();
+            _annotationService = annotationService;
+            _eventBus = eventBus;
         }
 
         public void UpdateHighlightLayer()

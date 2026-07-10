@@ -182,12 +182,6 @@ namespace LearningAssistant.Presenters
             _pdfFileManager.LoadFolder(folder);
         }
 
-        [Obsolete("Use RenderPageAsync instead to avoid blocking calls")]
-        public Bitmap? RenderPageToBitmap(int pageIndex, int width, int height)
-        {
-            return Task.Run(() => _pdfRenderer.RenderPageAsync(pageIndex, width, height)).GetAwaiter().GetResult();
-        }
-
         public async Task<Bitmap?> RenderPageAsync(int pageIndex, int width, int height)
         {
             return await _pdfRenderer.RenderPageAsync(pageIndex, width, height);
@@ -429,12 +423,27 @@ namespace LearningAssistant.Presenters
 
         public async Task SpeakTextAsync(string text, string language, float speed)
         {
-            if (_pdfTtsService == null)
+            try
             {
-                _view?.ShowWarning("TTS服务不可用");
-                return;
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    _view?.ShowWarning("请先输入要朗读的文本");
+                    return;
+                }
+
+                if (_pdfTtsService == null || !_pdfTtsService.IsAvailable)
+                {
+                    _view?.ShowWarning("朗读服务不可用，请检查TTS配置");
+                    return;
+                }
+
+                await _pdfTtsService.SpeakTextAsync(text, language, speed);
             }
-            await _pdfTtsService.SpeakTextAsync(text, language, speed);
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in SpeakTextAsync");
+                _view?.ShowError("朗读失败: " + ex.Message);
+            }
         }
 
         /// <summary>
@@ -1065,27 +1074,7 @@ namespace LearningAssistant.Presenters
 
         private async Task SpeakTextAsync(string text)
         {
-            try
-            {
-                if (string.IsNullOrWhiteSpace(text))
-                {
-                    _view?.ShowWarning("请先输入要朗读的文本");
-                    return;
-                }
-
-                if (_pdfTtsService == null || !_pdfTtsService.IsAvailable)
-                {
-                    _view?.ShowWarning("朗读服务不可用，请检查TTS配置");
-                    return;
-                }
-
-                await _pdfTtsService.SpeakTextAsync(text);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in SpeakTextAsync");
-                _view?.ShowError("朗读失败: " + ex.Message);
-            }
+            await SpeakTextAsync(text, _currentLanguage, 1.0f);
         }
 
 

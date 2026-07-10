@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Common.Events;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Presenters;
@@ -20,6 +21,8 @@ namespace LearningAssistant.Forms
         private readonly Services.Learning.IPendingContentService? _pendingContentService;
         private readonly IHighlightService _highlightService;
         private readonly IBookmarkService _bookmarkService;
+        private readonly IAnnotationService? _annotationService;
+        private readonly IEventBus? _eventBus;
 
         private PdfReaderNightModeManager? _nightModeManager;
         private PdfReaderHighlightManager? _highlightManager;
@@ -109,7 +112,7 @@ namespace LearningAssistant.Forms
         private GroupBox? groupBox2;
         private string _currentLanguage = "eng";
 
-        public PdfReaderForm(ILogger<PdfReaderForm> logger, IAIPanelPopupService? aiPanelPopupService = null, Services.Learning.IPendingContentService? pendingContentService = null, IHighlightService? highlightService = null, IBookmarkService? bookmarkService = null)
+        public PdfReaderForm(ILogger<PdfReaderForm> logger, IAIPanelPopupService? aiPanelPopupService = null, Services.Learning.IPendingContentService? pendingContentService = null, IHighlightService? highlightService = null, IBookmarkService? bookmarkService = null, IAnnotationService? annotationService = null, IEventBus? eventBus = null)
         {
             InitializeComponent();
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -117,6 +120,8 @@ namespace LearningAssistant.Forms
             _pendingContentService = pendingContentService;
             _highlightService = highlightService ?? new HighlightService();
             _bookmarkService = bookmarkService ?? new BookmarkService();
+            _annotationService = annotationService;
+            _eventBus = eventBus;
             Load += PdfReaderForm_Load;
             Resize += PdfReaderForm_Resize;
             KeyDown += PdfReaderForm_KeyDown;
@@ -127,7 +132,7 @@ namespace LearningAssistant.Forms
         private void InitializeManagers()
         {
             _nightModeManager = new PdfReaderNightModeManager(_logger, this);
-            _highlightManager = new PdfReaderHighlightManager(_logger, this, _highlightService);
+            _highlightManager = new PdfReaderHighlightManager(_logger, this, _highlightService, _annotationService, _eventBus);
             _bookmarkManager = new PdfReaderBookmarkManager(_logger, this, _bookmarkService);
             _navigationManager = new PdfReaderNavigationManager(_logger, this);
 
