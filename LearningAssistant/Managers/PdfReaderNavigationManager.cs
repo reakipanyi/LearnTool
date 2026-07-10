@@ -678,7 +678,13 @@ namespace LearningAssistant.Managers
                             {
                                 if (rect.Width > 0 && rect.Height > 0)
                                 {
-                                    var imgRect = _form.GetImageDisplayRect();
+                                    var imgRect = _form.GetImageDisplayRect();
+                                    if (_form.IsDualPage)
+                                    {
+                                        var centerPoint = new Point(_selectStart.X + (_selectEnd.X - _selectStart.X) / 2, _selectStart.Y + (_selectEnd.Y - _selectStart.Y) / 2);
+                                        var (_, pageRect, _) = _form.GetPageAtPoint(centerPoint);
+                                        imgRect = pageRect;
+                                    }
                                     float scaleX = (float)imgRect.Width / _form.CurrentPageImage!.Width;
                                     float scaleY = (float)imgRect.Height / _form.CurrentPageImage.Height;
 
@@ -1237,6 +1243,16 @@ namespace LearningAssistant.Managers
                 }
 
                 var imgRect = _form.GetImageDisplayRect();
+
+                if (_form.IsDualPage)
+
+                {
+
+                    var (_, pageRect, _) = _form.GetPageAtPoint(clientPt);
+
+                    imgRect = pageRect;
+
+                }
                 if (imgRect.Width <= 0 || imgRect.Height <= 0)
                 {
                     var scaleX = (float)imgWidth / _form.PictureBoxPdf.ClientSize.Width;

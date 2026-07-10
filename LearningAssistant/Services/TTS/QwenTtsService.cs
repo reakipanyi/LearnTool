@@ -159,7 +159,7 @@ namespace LearningAssistant.Services.TTS
             }
         }
 
-        public async Task<byte[]?> SpeakSteamAsync(string text, string? language = null, float? speed = null, string? format = null)
+        public async Task<byte[]?> SpeakStreamAsync(string text, string? language = null, float? speed = null, string? format = null)
         {
             if (string.IsNullOrWhiteSpace(text)) return null;
             if (_client == null || !_client.Available) return null;

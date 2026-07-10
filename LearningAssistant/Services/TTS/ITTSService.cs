@@ -5,7 +5,7 @@ namespace LearningAssistant.Services.TTS
 
         Task<string?> SpeakAsync(string text, string? language = null, float? speed = null, CancellationToken cancellationToken = default);
 
-        Task<byte[]?> SpeakSteamAsync(string text, string? language = null, float? speed = null, string? format = null);
+        Task<byte[]?> SpeakStreamAsync(string text, string? language = null, float? speed = null, string? format = null);
 
         Task StopAsync();
         bool IsSpeaking { get; }

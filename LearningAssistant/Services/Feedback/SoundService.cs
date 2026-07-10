@@ -73,7 +73,7 @@ namespace LearningAssistant.Services.Feedback
 
                 if (_ttsService != null && _ttsService.Available)
                 {
-                    var audioBytes = await _ttsService.SpeakSteamAsync(text, "en", 1.0f, "wav");
+                    var audioBytes = await _ttsService.SpeakStreamAsync(text, "en", 1.0f, "wav");
                     if (audioBytes != null && audioBytes.Length > 0)
                     {
                         File.WriteAllBytes(cachePath, audioBytes);

@@ -17,9 +17,7 @@ namespace LearningAssistant.Services.TTS
         private KokoroTTS? _tts;
         private KokoroVoice? _defaultVoice;
         private const long MaxCacheSizeBytes = 100 * 1024 * 1024;
-        private const int MaxTokensPerSegment = 400;
         private const int SynthesizeTimeoutMs = 300000;
-        private const int PollingIntervalMs = 20;
 
         private float ClampSpeed(float speed)
         {
@@ -263,6 +261,8 @@ namespace LearningAssistant.Services.TTS
                 await File.WriteAllBytesAsync(path, wavBytes, cancellationToken).ConfigureAwait(false);
                 _logger?.LogInformation("SpeakAsync: audio saved to cache, path={Path}", path);
 
+                CleanupOldCache();
+
                 return path;
             }
             catch (OperationCanceledException)
@@ -279,7 +279,7 @@ namespace LearningAssistant.Services.TTS
             }
         }
 
-        public async Task<byte[]?> SpeakSteamAsync(string text, string? language = null, float? speed = null, string? format = null)
+        public async Task<byte[]?> SpeakStreamAsync(string text, string? language = null, float? speed = null, string? format = null)
         {
             if (string.IsNullOrWhiteSpace(text)) return null;
             EnsureInitialized();
@@ -330,6 +330,47 @@ namespace LearningAssistant.Services.TTS
             }
 
             return await ProcessMultiSegmentsAsync(langSegments, safeSpeed, language, cancellationToken);
+        }
+
+        private async Task<byte[]?> SynthesizeToWavCoreAsync(string text, string? language, float speed)
+        {
+            if (_tts == null || _defaultVoice == null) return null;
+
+            float safeSpeed = ClampSpeed(speed);
+            string trimmedText = text.Trim();
+
+            var langSegments = SplitTextByLanguage(trimmedText);
+            if (langSegments.Count == 0)
+                return null;
+
+            if (langSegments.Count == 1)
+            {
+                var langCode = langSegments[0].LangCode;
+                var voice = SelectVoiceForSegment(langCode, language);
+                if (voice == null) return null;
+                var tokens = Tokenizer.Tokenize(langSegments[0].Text, MapLangCodeToTokenizerLang(langCode), preprocess: true);
+                return await SynthesizeTokensToWavAsync(tokens, voice, safeSpeed).ConfigureAwait(false);
+            }
+
+            var allSamples = new List<float>();
+            foreach (var seg in langSegments)
+            {
+                var segVoice = SelectVoiceForSegment(seg.LangCode, language);
+                if (segVoice == null) continue;
+                
+                var tokens = Tokenizer.Tokenize(seg.Text, MapLangCodeToTokenizerLang(seg.LangCode), preprocess: true);
+                var wavBytes = await SynthesizeTokensToWavAsync(tokens, segVoice, safeSpeed).ConfigureAwait(false);
+                if (wavBytes == null || wavBytes.Length == 0)
+                    continue;
+
+                var samples = ExtractPcmFloatFromWav(wavBytes);
+                allSamples.AddRange(samples);
+            }
+
+            if (allSamples.Count == 0)
+                return null;
+
+            return ConvertPcmFloatToWav(allSamples.ToArray(), 24000, 1);
         }
 
         private async Task<byte[]?> ProcessSingleSegmentAsync(string text, string langCode, float speed, string? language = null, CancellationToken cancellationToken = default)
@@ -444,50 +485,21 @@ namespace LearningAssistant.Services.TTS
             }
             finally
             {
-                try { File.Delete(tempFile); } catch { }
+                try 
+                { 
+                    if (File.Exists(tempFile))
+                        File.Delete(tempFile); 
+                } 
+                catch { }
             }
         }
 
         private async Task<byte[]?> SynthesizeToWavAsync(string text, string? language, float speed)
         {
-            if (_tts == null || _defaultVoice == null) return null;
+            _logger?.LogInformation("SynthesizeToWavAsync: inputSpeed={InputSpeed}, configSpeed={ConfigSpeed}",
+                speed, _config.Speed);
 
-            float safeSpeed = ClampSpeed(speed);
-
-            _logger?.LogInformation("SynthesizeToWavAsync: inputSpeed={InputSpeed}, safeSpeed={SafeSpeed}, configSpeed={ConfigSpeed}",
-                speed, safeSpeed, _config.Speed);
-
-            string trimmedText = text.Trim();
-
-            var langSegments = SplitTextByLanguage(trimmedText);
-            if (langSegments.Count == 0)
-                return null;
-
-            if (langSegments.Count == 1)
-            {
-                var langCode = langSegments[0].LangCode;
-                var voice = SelectVoiceForSegment(langCode, language);
-                var tokens = Tokenizer.Tokenize(langSegments[0].Text, MapLangCodeToTokenizerLang(langCode), preprocess: true);
-                return await SynthesizeTokensToWavAsync(tokens, voice, safeSpeed).ConfigureAwait(false);
-            }
-
-            var allSamples = new List<float>();
-            foreach (var seg in langSegments)
-            {
-                var segVoice = SelectVoiceForSegment(seg.LangCode, language);
-                var tokens = Tokenizer.Tokenize(seg.Text, MapLangCodeToTokenizerLang(seg.LangCode), preprocess: true);
-                var wavBytes = await SynthesizeTokensToWavAsync(tokens, segVoice, safeSpeed).ConfigureAwait(false);
-                if (wavBytes == null || wavBytes.Length == 0)
-                    continue;
-
-                var samples = ExtractPcmFloatFromWav(wavBytes);
-                allSamples.AddRange(samples);
-            }
-
-            if (allSamples.Count == 0)
-                return null;
-
-            return ConvertPcmFloatToWav(allSamples.ToArray(), 24000, 1);
+            return await SynthesizeToWavCoreAsync(text, language, speed).ConfigureAwait(false);
         }
 
         private async Task<byte[]?> SynthesizeTokensToWavAsync(int[] tokens, KokoroVoice voice, float speed)
@@ -661,29 +673,6 @@ namespace LearningAssistant.Services.TTS
             return "en";
         }
 
-        private KokoroVoice GetVoiceForLangCode(string langCode)
-        {
-            string voiceName;
-            if (langCode == "zh")
-            {
-                voiceName = "zf_tingting";
-            }
-            else
-            {
-                voiceName = "af_heart";
-            }
-
-            try
-            {
-                var voice = KokoroVoiceManager.GetVoice(voiceName);
-                return voice ?? _defaultVoice;
-            }
-            catch
-            {
-                return _defaultVoice;
-            }
-        }
-
         private KokoroVoice? SelectVoiceForSegment(string langCode, string? language)
         {
             string targetLang = !string.IsNullOrWhiteSpace(language) ? language.ToLowerInvariant() : langCode;
@@ -691,13 +680,22 @@ namespace LearningAssistant.Services.TTS
             if (targetLang.Contains("zh") || targetLang.Contains("cn"))
             {
                 var voice = GetVoiceForLanguage("zh");
-                _logger?.LogDebug("SelectVoiceForSegment: using Chinese voice, langCode={LangCode}, language={Language}, voice={Voice}", langCode, language, voice?.Name);
-                return voice;
+                if (voice != null)
+                {
+                    _logger?.LogDebug("SelectVoiceForSegment: using Chinese voice, langCode={LangCode}, language={Language}, voice={Voice}", langCode, language, voice.Name);
+                    return voice;
+                }
+                _logger?.LogWarning("SelectVoiceForSegment: Chinese voice not available, falling back to default, langCode={LangCode}, language={Language}", langCode, language);
             }
             
             var englishVoice = GetVoiceForLanguage("en");
-            _logger?.LogDebug("SelectVoiceForSegment: using English voice, langCode={LangCode}, language={Language}, voice={Voice}", langCode, language, englishVoice?.Name);
-            return englishVoice;
+            if (englishVoice != null)
+            {
+                _logger?.LogDebug("SelectVoiceForSegment: using English voice, langCode={LangCode}, language={Language}, voice={Voice}", langCode, language, englishVoice.Name);
+                return englishVoice;
+            }
+            _logger?.LogWarning("SelectVoiceForSegment: English voice not available, falling back to default, langCode={LangCode}, language={Language}", langCode, language);
+            return _defaultVoice;
         }
 
         private static byte[] ConvertPcmFloatToWav(float[] samples, int sampleRate, int channels)
@@ -742,7 +740,9 @@ namespace LearningAssistant.Services.TTS
         {
             _stopRequested = false;
 
-            SoundPlayer player = null;
+            SoundPlayer? player = null;
+            bool playerAssigned = false;
+
             try
             {
                 player = new SoundPlayer(filePath);
@@ -752,6 +752,7 @@ namespace LearningAssistant.Services.TTS
                 {
                     _currentPlayer?.Dispose();
                     _currentPlayer = player;
+                    playerAssigned = true;
                 }
 
                 if (_stopRequested || cancellationToken.IsCancellationRequested)
@@ -767,7 +768,7 @@ namespace LearningAssistant.Services.TTS
                 {
                     try
                     {
-                        player.PlaySync();
+                        player!.PlaySync();
                     }
                     catch (Exception ex)
                     {
@@ -788,6 +789,10 @@ namespace LearningAssistant.Services.TTS
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "PlayAudioAsync: Failed to load or play audio file {FilePath}", filePath);
+                if (!playerAssigned && player != null)
+                {
+                    player.Dispose();
+                }
             }
         }
 
