@@ -118,9 +118,9 @@ namespace LearningAssistant.Services.Pdf
             });
         }
 
-        private string GetRenderCacheKey(int pageIndex)
+        private string GetRenderCacheKey(int pageIndex, int renderWidth, int renderHeight)
         {
-            return $"{_currentFilePath}_{pageIndex}";
+            return $"{_currentFilePath}_{pageIndex}_{renderWidth}_{renderHeight}";
         }
 
         private void UpdateCacheAccessOrder(string cacheKey)
@@ -138,10 +138,15 @@ namespace LearningAssistant.Services.Pdf
 
         private async Task<Bitmap?> GetRenderedPageAsync(int pageIndex, int renderW, int renderH)
         {
+            if (_isImageMode)
+            {
+                return await GetRenderedImagePageAsync(pageIndex, renderW, renderH);
+            }
+
             if (_pdfService == null) return null;
             if (pageIndex < 0 || pageIndex >= _pdfService.PageCount) return null;
 
-            var cacheKey = GetRenderCacheKey(pageIndex);
+            var cacheKey = GetRenderCacheKey(pageIndex, renderW, renderH);
             lock (_renderLock)
             {
                 if (_renderCache.TryGetValue(cacheKey, out var cached))
@@ -198,6 +203,67 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
+        private async Task<Bitmap?> GetRenderedImagePageAsync(int pageIndex, int renderW, int renderH)
+        {
+            if (pageIndex < 0 || pageIndex >= _imageFiles.Count) return null;
+
+            var cacheKey = GetRenderCacheKey(pageIndex, renderW, renderH);
+            lock (_renderLock)
+            {
+                if (_renderCache.TryGetValue(cacheKey, out var cached))
+                {
+                    UpdateCacheAccessOrder(cacheKey);
+                    return CreateDeepCopy(cached);
+                }
+            }
+
+            await _renderSemaphore.WaitAsync();
+            try
+            {
+                lock (_renderLock)
+                {
+                    if (_renderCache.TryGetValue(cacheKey, out var cachedAfterWait))
+                    {
+                        UpdateCacheAccessOrder(cacheKey);
+                        return CreateDeepCopy(cachedAfterWait);
+                    }
+                }
+
+                var bmp = await Task.Run(() => RenderPageToBitmap(pageIndex, renderW, renderH),
+                    _cts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+                if (bmp == null) return null;
+
+                lock (_renderLock)
+                {
+                    if (!_renderCache.ContainsKey(cacheKey))
+                    {
+                        _renderCache[cacheKey] = CreateDeepCopy(bmp);
+                        UpdateCacheAccessOrder(cacheKey);
+
+                        while (_renderCache.Count > RenderCacheSize && _cacheAccessOrder.Count > 0)
+                        {
+                            var oldestKey = _cacheAccessOrder.First.Value;
+                            if (_renderCache.TryGetValue(oldestKey, out var oldBmp))
+                            {
+                                _renderCache.Remove(oldestKey);
+                                oldBmp?.Dispose();
+                            }
+                            _cacheAccessOrder.RemoveFirst();
+                        }
+                    }
+                }
+
+                _ = Task.Run(() => SmartPreRenderAsync(pageIndex, renderW, renderH),
+                    _cts?.Token ?? CancellationToken.None);
+
+                return bmp;
+            }
+            finally
+            {
+                _renderSemaphore.Release();
+            }
+        }
+
         private async Task SmartPreRenderAsync(int currentPage, int renderW, int renderH)
         {
             try
@@ -235,43 +301,20 @@ namespace LearningAssistant.Services.Pdf
                 
                 if (p < 0 || p >= PageCount) continue;
 
-                bool shouldRender = false;
-                lock (_renderLock)
+                try
                 {
-                    var key = GetRenderCacheKey(p);
-                    if (!_renderCache.ContainsKey(key) && !_preRenderingPages.Contains(p))
+                    if (_isImageMode)
                     {
-                        _preRenderingPages.Add(p);
-                        shouldRender = true;
+                        await GetRenderedImagePageAsync(p, renderW, renderH);
+                    }
+                    else
+                    {
+                        await GetRenderedPageAsync(p, renderW, renderH);
                     }
                 }
-
-                if (shouldRender)
-                    {
-                        try
-                        {
-                            var bmp = RenderPageToBitmap(p, renderW, renderH);
-                            if (bmp == null) continue;
-
-                            lock (_renderLock)
-                            {
-                                var key = GetRenderCacheKey(p);
-                                if (!_renderCache.ContainsKey(key))
-                                {
-                                    _renderCache[key] = CreateDeepCopy(bmp);
-                                    UpdateCacheAccessOrder(key);
-                                }
-                                _preRenderingPages.Remove(p);
-                            }
-                        }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to pre-render page {PageIndex}", p);
-                        lock (_renderLock)
-                        {
-                            _preRenderingPages.Remove(p);
-                        }
-                    }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to pre-render page {PageIndex}", p);
                 }
             }
         }
@@ -281,12 +324,7 @@ namespace LearningAssistant.Services.Pdf
             if (source == null)
                 return null;
 
-            var copy = new Bitmap(source.Width, source.Height, source.PixelFormat);
-            using (var graphics = Graphics.FromImage(copy))
-            {
-                graphics.DrawImage(source, 0, 0);
-            }
-            return copy;
+            return source.Clone(new Rectangle(0, 0, source.Width, source.Height), source.PixelFormat);
         }
 
         private Bitmap? RenderPageToBitmap(int pageIndex, int renderW, int renderH)
@@ -445,29 +483,28 @@ namespace LearningAssistant.Services.Pdf
             if (!_isNightMode || bitmap == null)
                 return bitmap;
 
-            var rect = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
-            var data = bitmap.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadWrite, bitmap.PixelFormat);
-
-            int bytesPerPixel = Image.GetPixelFormatSize(bitmap.PixelFormat) / 8;
-            IntPtr ptr = data.Scan0;
-            int bytes = Math.Abs(data.Stride) * bitmap.Height;
-            byte[] rgbValues = new byte[bytes];
-            System.Runtime.InteropServices.Marshal.Copy(ptr, rgbValues, 0, bytes);
-
-            for (int i = 0; i < rgbValues.Length; i += bytesPerPixel)
+            var inverted = new Bitmap(bitmap.Width, bitmap.Height);
+            using (var graphics = Graphics.FromImage(inverted))
             {
-                if (bytesPerPixel >= 3)
+                var colorMatrix = new System.Drawing.Imaging.ColorMatrix(
+                    new float[][]
+                    {
+                        new float[] { -1, 0, 0, 0, 0 },
+                        new float[] { 0, -1, 0, 0, 0 },
+                        new float[] { 0, 0, -1, 0, 0 },
+                        new float[] { 0, 0, 0, 1, 0 },
+                        new float[] { 1, 1, 1, 0, 1 }
+                    });
+
+                using (var attributes = new System.Drawing.Imaging.ImageAttributes())
                 {
-                    rgbValues[i] = (byte)(255 - rgbValues[i]);
-                    rgbValues[i + 1] = (byte)(255 - rgbValues[i + 1]);
-                    rgbValues[i + 2] = (byte)(255 - rgbValues[i + 2]);
+                    attributes.SetColorMatrix(colorMatrix);
+                    graphics.DrawImage(bitmap, new Rectangle(0, 0, bitmap.Width, bitmap.Height),
+                        0, 0, bitmap.Width, bitmap.Height, GraphicsUnit.Pixel, attributes);
                 }
             }
 
-            System.Runtime.InteropServices.Marshal.Copy(rgbValues, 0, ptr, bytes);
-            bitmap.UnlockBits(data);
-
-            return bitmap;
+            return inverted;
         }
     }
 }

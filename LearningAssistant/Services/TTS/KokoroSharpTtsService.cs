@@ -229,8 +229,9 @@ namespace LearningAssistant.Services.TTS
             {
                 Directory.CreateDirectory(AppPaths.GetUserTtsCacheDir());
 
-                var actualVoice = SelectVoiceForSegment("en", language) ?? _defaultVoice;
-                string path = GetCacheFilePath(text, language, speed, actualVoice?.Name);
+                var actualVoice = SelectVoiceForSegment(language ?? "en", language) ?? _defaultVoice;
+                string paddedText = PadShortText(text);
+                string path = GetCacheFilePath(paddedText, language, speed, actualVoice?.Name);
 
                 if (File.Exists(path))
                 {
@@ -243,11 +244,11 @@ namespace LearningAssistant.Services.TTS
 
                 cancellationToken.ThrowIfCancellationRequested();
 
-                _logger?.LogInformation("SpeakAsync: synthesizing new audio, text length={Len}", text.Length);
+                _logger?.LogInformation("SpeakAsync: synthesizing new audio, text length={Len}, padded={Padded}", text.Length, paddedText);
                 var sw = System.Diagnostics.Stopwatch.StartNew();
 
                 float actualSpeed = speed ?? _config.Speed;
-                var wavBytes = await SynthesizeAndPlayStreamAsync(text, language, actualSpeed, cancellationToken).ConfigureAwait(false);
+                var wavBytes = await SynthesizeAndPlayStreamAsync(paddedText, language, actualSpeed, cancellationToken).ConfigureAwait(false);
 
                 sw.Stop();
                 _logger?.LogInformation("SpeakAsync: total synthesis time {Elapsed}ms, wavBytes={WavBytesLength}", sw.ElapsedMilliseconds, wavBytes?.Length ?? 0);
@@ -344,22 +345,22 @@ namespace LearningAssistant.Services.TTS
                 return null;
 
             if (langSegments.Count == 1)
-            {
-                var langCode = langSegments[0].LangCode;
-                var voice = SelectVoiceForSegment(langCode, language);
-                if (voice == null) return null;
-                var tokens = Tokenizer.Tokenize(langSegments[0].Text, MapLangCodeToTokenizerLang(langCode), preprocess: true);
-                return await SynthesizeTokensToWavAsync(tokens, voice, safeSpeed).ConfigureAwait(false);
-            }
+                {
+                    var langCode = langSegments[0].LangCode;
+                    var voice = SelectVoiceForSegment(langCode, language);
+                    if (voice == null) return null;
+                    var tokens = Tokenizer.Tokenize(langSegments[0].Text, MapLangCodeToTokenizerLang(langCode), preprocess: true);
+                    return await SynthesizeTokensToWavAsync(tokens, voice, safeSpeed, langSegments[0].Text).ConfigureAwait(false);
+                }
 
-            var allSamples = new List<float>();
-            foreach (var seg in langSegments)
-            {
-                var segVoice = SelectVoiceForSegment(seg.LangCode, language);
-                if (segVoice == null) continue;
-                
-                var tokens = Tokenizer.Tokenize(seg.Text, MapLangCodeToTokenizerLang(seg.LangCode), preprocess: true);
-                var wavBytes = await SynthesizeTokensToWavAsync(tokens, segVoice, safeSpeed).ConfigureAwait(false);
+                var allSamples = new List<float>();
+                foreach (var seg in langSegments)
+                {
+                    var segVoice = SelectVoiceForSegment(seg.LangCode, language);
+                    if (segVoice == null) continue;
+                    
+                    var tokens = Tokenizer.Tokenize(seg.Text, MapLangCodeToTokenizerLang(seg.LangCode), preprocess: true);
+                    var wavBytes = await SynthesizeTokensToWavAsync(tokens, segVoice, safeSpeed, seg.Text).ConfigureAwait(false);
                 if (wavBytes == null || wavBytes.Length == 0)
                     continue;
 
@@ -390,7 +391,7 @@ namespace LearningAssistant.Services.TTS
                 string tokenizerLang = MapLangCodeToTokenizerLang(langCode);
                 _logger?.LogDebug("ProcessSingleSegmentAsync: langCode={LangCode}, tokenizerLang={TokenizerLang}, voice={Voice}, requestedLang={RequestedLang}", langCode, tokenizerLang, voice.Name, language);
                 var tokens = Tokenizer.Tokenize(text, tokenizerLang, preprocess: true);
-                var wavBytes = await SynthesizeTokensToWavAsync(tokens, voice, speed).ConfigureAwait(false);
+                var wavBytes = await SynthesizeTokensToWavAsync(tokens, voice, speed, text).ConfigureAwait(false);
 
                 if (wavBytes != null && wavBytes.Length > 0)
                 {
@@ -443,7 +444,7 @@ namespace LearningAssistant.Services.TTS
                     string tokenizerLang = MapLangCodeToTokenizerLang(segment.LangCode);
                     _logger?.LogDebug("ProcessMultiSegmentsAsync: segment {Index}, langCode={LangCode}, tokenizerLang={TokenizerLang}, voice={Voice}, requestedLang={RequestedLang}", i, segment.LangCode, tokenizerLang, voice.Name, language);
                     var tokens = Tokenizer.Tokenize(segment.Text, tokenizerLang, preprocess: true);
-                    var wavBytes = await SynthesizeTokensToWavAsync(tokens, voice, speed).ConfigureAwait(false);
+                    var wavBytes = await SynthesizeTokensToWavAsync(tokens, voice, speed, segment.Text).ConfigureAwait(false);
 
                     if (wavBytes != null && wavBytes.Length > 0)
                     {
@@ -502,7 +503,7 @@ namespace LearningAssistant.Services.TTS
             return await SynthesizeToWavCoreAsync(text, language, speed).ConfigureAwait(false);
         }
 
-        private async Task<byte[]?> SynthesizeTokensToWavAsync(int[] tokens, KokoroVoice voice, float speed)
+        private async Task<byte[]?> SynthesizeTokensToWavAsync(int[] tokens, KokoroVoice voice, float speed, string? text = null)
         {
             var tcs = new TaskCompletionSource<byte[]?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -532,6 +533,133 @@ namespace LearningAssistant.Services.TTS
             }
 
             return await tcs.Task.ConfigureAwait(false);
+        }
+
+        private bool IsShortText(string text)
+        {
+            string trimmed = text.Trim();
+            return trimmed.Length <= 6 || trimmed.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length <= 2;
+        }
+
+        private string PadShortText(string text)
+        {
+            string trimmed = text.Trim();
+            if (!IsShortText(trimmed))
+                return text;
+
+            if (!trimmed.EndsWith(".") && !trimmed.EndsWith("!") && !trimmed.EndsWith("?"))
+            {
+                _logger?.LogDebug("PadShortText: padding short text '{Text}' with period", text);
+                return trimmed + ".";
+            }
+
+            return text;
+        }
+
+        private float[] RemoveAudioRepetitions(float[] samples, int sampleRate)
+        {
+            if (samples.Length < sampleRate / 2)
+                return samples;
+
+            float[] normalized = NormalizeSamples(samples);
+            
+            int minPatternLength = sampleRate / 10;
+            int maxPatternLength = sampleRate * 2;
+            int searchWindow = sampleRate * 3;
+
+            List<int> cuts = new List<int>();
+            int i = 0;
+
+            while (i < normalized.Length - minPatternLength)
+            {
+                bool foundRepeat = false;
+
+                for (int patternLen = Math.Min(maxPatternLength, (normalized.Length - i) / 2); patternLen >= minPatternLength; patternLen--)
+                {
+                    int nextStart = i + patternLen;
+                    if (nextStart + patternLen > normalized.Length)
+                        continue;
+
+                    float similarity = CalculatePatternSimilarity(normalized, i, nextStart, patternLen);
+
+                    if (similarity > 0.85)
+                    {
+                        cuts.Add(nextStart);
+                        i = nextStart + patternLen;
+                        foundRepeat = true;
+                        break;
+                    }
+                }
+
+                if (!foundRepeat)
+                    i += minPatternLength / 4;
+            }
+
+            if (cuts.Count == 0)
+                return samples;
+
+            cuts.Sort();
+            cuts = cuts.Distinct().ToList();
+
+            List<float> result = new List<float>();
+            int prev = 0;
+
+            foreach (int cut in cuts)
+            {
+                if (cut > prev)
+                    result.AddRange(samples.Skip(prev).Take(cut - prev));
+                prev = cut;
+            }
+
+            if (prev < samples.Length)
+                result.AddRange(samples.Skip(prev));
+
+            float removalRatio = 1.0f - (float)result.Count / samples.Length;
+            if (removalRatio > 0.5f)
+            {
+                _logger?.LogInformation("RemoveAudioRepetitions: removal ratio {Ratio:P0} exceeds 50% threshold, returning original audio", removalRatio);
+                return samples;
+            }
+
+            _logger?.LogInformation("RemoveAudioRepetitions: removed {CutCount} repetitions, original length={Original}, result length={Result}, removal ratio={Ratio:P0}", cuts.Count, samples.Length, result.Count, removalRatio);
+            return result.ToArray();
+        }
+
+        private float[] NormalizeSamples(float[] samples)
+        {
+            float maxAbs = samples.Max(s => Math.Abs(s));
+            if (maxAbs < float.Epsilon)
+                return samples;
+
+            float[] normalized = new float[samples.Length];
+            for (int i = 0; i < samples.Length; i++)
+                normalized[i] = samples[i] / maxAbs;
+
+            return normalized;
+        }
+
+        private float CalculatePatternSimilarity(float[] samples, int start1, int start2, int length)
+        {
+            float sumDiff = 0f;
+            float sumAbs1 = 0f;
+            float sumAbs2 = 0f;
+
+            for (int i = 0; i < length; i++)
+            {
+                float diff = samples[start1 + i] - samples[start2 + i];
+                sumDiff += diff * diff;
+                sumAbs1 += Math.Abs(samples[start1 + i]);
+                sumAbs2 += Math.Abs(samples[start2 + i]);
+            }
+
+            float rmsDiff = (float)Math.Sqrt(sumDiff / length);
+            float avgEnergy = (sumAbs1 + sumAbs2) / (length * 2);
+
+            if (avgEnergy < 0.01f)
+                return 0f;
+
+            float similarity = 1.0f - Math.Min(rmsDiff / avgEnergy, 1.0f);
+            return similarity;
         }
 
         private List<(string Text, string LangCode)> SplitTextByLanguage(string text)
@@ -830,7 +958,7 @@ namespace LearningAssistant.Services.TTS
         {
             using var sha1 = SHA1.Create();
             var actualVoiceName = voiceName ?? _defaultVoice?.Name ?? string.Empty;
-            var meta = "kokoro|" + (text ?? string.Empty) + "|" + (language ?? string.Empty) + "|" + (speed?.ToString() ?? string.Empty) + "|" + actualVoiceName;
+            var meta = "kokoro_v2|" + (text ?? string.Empty) + "|" + (language ?? string.Empty) + "|" + (speed?.ToString() ?? string.Empty) + "|" + actualVoiceName;
             var hash = sha1.ComputeHash(Encoding.UTF8.GetBytes(meta));
             var sb = new StringBuilder();
             foreach (var b in hash) sb.Append(b.ToString("x2"));

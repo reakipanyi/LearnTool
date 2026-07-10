@@ -71,6 +71,7 @@ namespace LearningAssistant.Managers
         private PointF? _shapeStartPoint;
         private PointF? _shapeEndPoint;
         private bool _isDrawingShape = false;
+        private int _drawingPageIndex = -1;
 
         private readonly Stack<AnnotationStroke> _strokeUndoStack = new Stack<AnnotationStroke>();
         private const int MaxUndoStackSize = 50;
@@ -385,6 +386,7 @@ namespace LearningAssistant.Managers
                             _shapeEndPoint = _shapeStartPoint;
                             _selectStart = e.Location;
                             _selectEnd = e.Location;
+                            _drawingPageIndex = _form.GetPageAtPoint(e.Location).pageIndex;
                             _form.PictureBoxPdf.Invalidate();
                             break;
                         case AnnotationToolMode.Pen:
@@ -654,7 +656,7 @@ namespace LearningAssistant.Managers
                     {
                         _logger.LogError(ex, "Error saving annotation");
                     }
-                    finally { _currentStrokePoints = null; }
+                    finally { _currentStrokePoints = null; _drawingPageIndex = -1; }
                     _form.PictureBoxPdf.Invalidate();
                     return;
                 }
@@ -757,6 +759,7 @@ namespace LearningAssistant.Managers
                     {
                         _shapeStartPoint = null;
                         _shapeEndPoint = null;
+                        _drawingPageIndex = -1;
                     }
                     _form.PictureBoxPdf.Invalidate();
                     return;
@@ -1132,6 +1135,11 @@ namespace LearningAssistant.Managers
 
         public void DrawAnnotations(Graphics g, Rectangle imgRect)
         {
+            DrawAnnotations(g, imgRect, -1);
+        }
+
+        public void DrawAnnotations(Graphics g, Rectangle imgRect, int pageIndex)
+        {
             try
             {
                 if (_annotationBitmap != null)
@@ -1141,6 +1149,9 @@ namespace LearningAssistant.Managers
 
                 if (_isDrawing && _currentStrokePoints != null && _currentStrokePoints.Count >= 2)
                 {
+                    if (pageIndex >= 0 && pageIndex != _drawingPageIndex)
+                        return;
+
                     var scaleX = (float)imgRect.Width / _form.CurrentPageImage.Width;
                     var scaleY = (float)imgRect.Height / _form.CurrentPageImage.Height;
 
@@ -1164,6 +1175,9 @@ namespace LearningAssistant.Managers
 
                 if (_isDrawingShape && _shapeStartPoint.HasValue && _shapeEndPoint.HasValue)
                 {
+                    if (pageIndex >= 0 && pageIndex != _drawingPageIndex)
+                        return;
+
                     var scaleX = (float)imgRect.Width / _form.CurrentPageImage.Width;
                     var scaleY = (float)imgRect.Height / _form.CurrentPageImage.Height;
 

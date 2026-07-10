@@ -67,6 +67,13 @@ namespace LearningAssistant.Services.Pdf
         Task GenerateThumbnailsAsync();
 
         /// <summary>
+        /// 异步生成当前页面附近的可见缩略图
+        /// </summary>
+        /// <param name="currentPage">当前页面索引</param>
+        /// <param name="visibleCount">当前页面前后可见的页数</param>
+        Task GenerateVisibleThumbnailsAsync(int currentPage, int visibleCount = 5);
+
+        /// <summary>
         /// 对Bitmap应用夜间模式滤镜
         /// 将浅色背景变深，减少眼睛疲劳
         /// </summary>

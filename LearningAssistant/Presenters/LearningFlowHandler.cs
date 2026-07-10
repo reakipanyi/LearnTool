@@ -195,7 +195,7 @@ namespace LearningAssistant.Presenters
                     }
                     else
                     {
-                        await PlayPronunciationAsync(item, _currentExplanation, _cts.Token);
+                        _ = PlayPronunciationAsync(item, _currentExplanation, _cts.Token);
                         _autoPronunciationCount++;
                     }
                 }
@@ -246,7 +246,7 @@ namespace LearningAssistant.Presenters
                 {
                     string text = item.GetMainContent();
                     _logger.LogInformation("Speaking original text: {Text}", text);
-                    await _ttsService.SpeakAsync(text, lang, cancellationToken: cancellationToken);
+                    await _ttsService.SpeakAsync(text, lang, speed: 1.0f, cancellationToken: cancellationToken);
                     if (!cancellationToken.IsCancellationRequested)
                     {
                         await Task.Delay(500, cancellationToken);
@@ -256,7 +256,7 @@ namespace LearningAssistant.Presenters
                 if ((scope == PronunciationScope.Explanation || scope == PronunciationScope.Both) && !string.IsNullOrWhiteSpace(explanation) && !cancellationToken.IsCancellationRequested)
                 {
                     _logger.LogInformation("Speaking explanation: {Explanation}", explanation);
-                    await _ttsService.SpeakAsync(explanation, lang, cancellationToken: cancellationToken);
+                    await _ttsService.SpeakAsync(explanation, lang, speed: 1.0f, cancellationToken: cancellationToken);
                 }
             }
             catch (OperationCanceledException)
@@ -268,6 +268,44 @@ namespace LearningAssistant.Presenters
             {
                 _logger.LogError(ex, "Failed to play pronunciation");
             }
+        }
+
+        private string BuildPhonemeText(LearningItem item)
+        {
+            string mainContent = item.GetMainContent();
+            
+            if (_currentSubject != SubjectType.English || item.Pronunciation == null)
+                return mainContent;
+
+            var phonetic = item.Pronunciation.Main;
+            var usPhonetic = item.Pronunciation.UsPhonetic;
+            var ukPhonetic = item.Pronunciation.UkPhonetic;
+
+            List<string> phonemeParts = new List<string>();
+
+            phonemeParts.Add($"[{mainContent}](/{CleanPhonetic(phonetic)}/)");
+
+            if (!string.IsNullOrWhiteSpace(usPhonetic) && usPhonetic != phonetic)
+            {
+                phonemeParts.Add($"[{mainContent}](/{CleanPhonetic(usPhonetic)}/)");
+            }
+
+            if (!string.IsNullOrWhiteSpace(ukPhonetic) && ukPhonetic != phonetic && ukPhonetic != usPhonetic)
+            {
+                phonemeParts.Add($"[{mainContent}](/{CleanPhonetic(ukPhonetic)}/)");
+            }
+
+            string result = string.Join(" ", phonemeParts);
+            _logger.LogDebug("BuildPhonemeText: {Original} -> {PhonemeText}", mainContent, result);
+            return result;
+        }
+
+        private string CleanPhonetic(string phonetic)
+        {
+            if (string.IsNullOrWhiteSpace(phonetic))
+                return string.Empty;
+            
+            return phonetic.Trim().Trim('/');
         }
 
         public async Task MarkAsKnownAsync()

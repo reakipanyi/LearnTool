@@ -936,7 +936,7 @@ namespace LearningAssistant.Presenters
             }
 
             _ = FireAndForgetWithLogging(RenderAndDisplayCurrentPageAsync(), "RenderAndDisplayCurrentPageAsync");
-            _ = FireAndForgetWithLogging(_pdfRenderer.GenerateThumbnailsAsync(), "GenerateThumbnailsAsync");
+            _ = FireAndForgetWithLogging(_pdfRenderer.GenerateVisibleThumbnailsAsync(e.InitialPageIndex), "GenerateVisibleThumbnailsAsync");
         }
 
         private void OnFolderLoaded(object? sender, FolderLoadedEventArgs e)

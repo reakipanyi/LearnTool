@@ -1228,29 +1228,9 @@ namespace LearningAssistant.Forms
                 LoadHighlightsForCurrentPage();
                 _navigationManager?.LoadAnnotationsForCurrentPage();
             }
-            catch (OutOfMemoryException ex)
-            {
-                _logger.LogError(ex, "Out of memory in DisplayImage");
-                SafeDisposeImage(ref _currentPageImage);
-                _currentPageImage = bmp;
-                _pictureBoxPdf.Image = null;
-                _pictureBoxPdf.Invalidate();
-                LoadHighlightsForCurrentPage();
-                _navigationManager?.LoadAnnotationsForCurrentPage();
-            }
-            catch (ArgumentException ex)
-            {
-                _logger.LogError(ex, "Invalid argument in DisplayImage");
-                SafeDisposeImage(ref _currentPageImage);
-                _currentPageImage = bmp;
-                _pictureBoxPdf.Image = null;
-                _pictureBoxPdf.Invalidate();
-                LoadHighlightsForCurrentPage();
-                _navigationManager?.LoadAnnotationsForCurrentPage();
-            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error in DisplayImage");
+                _logger.LogError(ex, "Error in DisplayImage");
                 SafeDisposeImage(ref _currentPageImage);
                 _currentPageImage = bmp;
                 _pictureBoxPdf.Image = null;
@@ -2236,7 +2216,20 @@ namespace LearningAssistant.Forms
         private void DrawAnnotations(Graphics g)
         {
             if (_navigationManager == null || _currentPageImage == null) return;
-            _navigationManager.DrawAnnotations(g, GetImageDisplayRect());
+
+            if (_isDualPage)
+            {
+                var (leftRect, rightRect) = GetDualPageRects();
+                _navigationManager.DrawAnnotations(g, leftRect, _currentPageIndex);
+                if (_secondPageImage != null)
+                {
+                    _navigationManager.DrawAnnotations(g, rightRect, _currentPageIndex + 1);
+                }
+            }
+            else
+            {
+                _navigationManager.DrawAnnotations(g, GetImageDisplayRect());
+            }
         }
 
         private void DrawDualPageLayout(Graphics g)
