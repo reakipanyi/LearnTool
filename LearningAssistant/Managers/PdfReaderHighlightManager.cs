@@ -406,21 +406,29 @@ namespace LearningAssistant.Managers
             });
 
             _highlightService.RemoveHighlight(_form.CurrentPdfPath, highlight.Id);
-            RefreshHighlightList();
+
+            // 单个删除时只精确移除 ListBox 中的对应项，避免调用 RefreshHighlightList()
+            // 全量重建（会遍历所有页的标注文件，页数多时每次删除都会卡）
+            if (_form.ListBoxHighlights != null)
+            {
+                _form.ListBoxHighlights.Items.Remove(highlight);
+            }
+
             UpdateHighlightLayer();
             _form.PictureBoxPdf?.Invalidate();
         }
 
         public void BatchRemoveHighlights()
         {
-            var highlights = _highlightService.GetHighlights(_form.CurrentPdfPath);
-            int highlightCount = highlights?.Count ?? 0;
+            var highlights = _highlightService.GetHighlights(_form.CurrentPdfPath) ?? new List<PdfHighlight>();
+            int highlightCount = highlights.Count;
+            int pageCount = _form.Presenter?.PageCount ?? 0;
 
             int strokeCount = 0;
             int textCount = 0;
-            if (_annotationService != null)
+            if (_annotationService != null && pageCount > 0)
             {
-                for (int pageIndex = 0; pageIndex < _form.Presenter?.PageCount; pageIndex++)
+                for (int pageIndex = 0; pageIndex < pageCount; pageIndex++)
                 {
                     var strokes = _annotationService.GetStrokes(_form.CurrentPdfPath, pageIndex);
                     strokeCount += strokes.Count();
@@ -440,22 +448,26 @@ namespace LearningAssistant.Managers
             var result = _form.ShowConfirm(message, "确认删除");
             if (!result) return;
 
-            foreach (var highlight in highlights)
+            // 批量删除高亮：一次性移除并只写一次磁盘文件，避免逐个删除时反复序列化写文件导致UI卡死
+            if (highlightCount > 0)
             {
-                PushUndoAction(new HighlightUndoAction
+                var removedHighlights = _highlightService.RemoveAllHighlights(_form.CurrentPdfPath);
+                foreach (var highlight in removedHighlights)
                 {
-                    ActionType = HighlightActionType.Remove,
-                    Highlight = highlight
-                });
-                _highlightService.RemoveHighlight(_form.CurrentPdfPath, highlight.Id);
+                    PushUndoAction(new HighlightUndoAction
+                    {
+                        ActionType = HighlightActionType.Remove,
+                        Highlight = highlight
+                    });
+                }
             }
 
-            if (_annotationService != null)
+            // 清除所有页面标注：直接删除标注文件，比 ClearAllStrokes+ClearAllTexts（读+清空+写）高效得多
+            if (_annotationService != null && pageCount > 0)
             {
-                for (int pageIndex = 0; pageIndex < _form.Presenter?.PageCount; pageIndex++)
+                for (int pageIndex = 0; pageIndex < pageCount; pageIndex++)
                 {
-                    _annotationService.ClearAllStrokes(_form.CurrentPdfPath, pageIndex);
-                    _annotationService.ClearAllTexts(_form.CurrentPdfPath, pageIndex);
+                    _annotationService.ClearAnnotation(_form.CurrentPdfPath, pageIndex);
                 }
             }
 

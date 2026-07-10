@@ -51,7 +51,7 @@ namespace LearningAssistant.Services.TTS
                     await File.WriteAllBytesAsync(path, wav, cancellationToken).ConfigureAwait(false);
                 }
 
-                await PlayAudioAsync(path, cancellationToken);
+                await PlayAudioAsync(path, 1.0f, cancellationToken);
 
                 return path;
             }

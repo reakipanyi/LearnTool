@@ -135,6 +135,37 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
+        /// <summary>
+        /// 批量删除指定PDF的所有高亮。
+        /// 相比逐个调用 RemoveHighlight，本方法只序列化并写入磁盘一次，
+        /// 避免高亮数量较多时反复写文件导致UI线程长时间阻塞。
+        /// </summary>
+        public List<PdfHighlight> RemoveAllHighlights(string pdfPath)
+        {
+            var folderPath = Path.GetDirectoryName(pdfPath) ?? "";
+            var collection = GetOrCreateFolderCollection(folderPath);
+
+            var fileName = Path.GetFileName(pdfPath);
+            var removed = collection.Highlights
+                .Where(h => string.Equals(Path.GetFileName(h.PdfPath), fileName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (removed.Count == 0)
+            {
+                _logger?.LogInformation("批量删除高亮: 无高亮可删除, {Path}", pdfPath);
+                return removed;
+            }
+
+            collection.Highlights.RemoveAll(h =>
+                string.Equals(Path.GetFileName(h.PdfPath), fileName, StringComparison.OrdinalIgnoreCase));
+
+            // 一次性写回磁盘，而不是每个高亮写一次
+            SaveHighlightsToFolder(folderPath, collection);
+
+            _logger?.LogInformation("批量删除高亮: {Path}, 数量: {Count}", pdfPath, removed.Count);
+            return removed;
+        }
+
         public void RemoveHighlightsForPage(string pdfPath, int pageIndex)
         {
             var folderPath = Path.GetDirectoryName(pdfPath) ?? "";

@@ -40,16 +40,25 @@ namespace LearningAssistant.Services.TTS
 
         public abstract Task<string?> SpeakToCacheAsync(string text, string? language = null, float? speed = null, CancellationToken cancellationToken = default);
 
-        protected async Task PlayAudioAsync(string filePath, CancellationToken cancellationToken = default)
+        protected async Task PlayAudioAsync(string filePath, float volume = 1.0f, CancellationToken cancellationToken = default)
         {
             _stopRequested = false;
 
             SoundPlayer? player = null;
             bool playerAssigned = false;
+            string? tempFile = null;
 
             try
             {
-                player = new SoundPlayer(filePath);
+                string playFile = filePath;
+                if (Math.Abs(volume - 1.0f) > 0.001f)
+                {
+                    tempFile = ApplyVolumeToWav(filePath, volume);
+                    playFile = tempFile;
+                    _logger?.LogDebug("PlayAudioAsync: applied volume {Volume}, temp file={TempFile}", volume, tempFile);
+                }
+
+                player = new SoundPlayer(playFile);
                 player.Load();
 
                 lock (_playerLock)
@@ -66,7 +75,7 @@ namespace LearningAssistant.Services.TTS
                 }
 
                 var fileInfo = new FileInfo(filePath);
-                _logger?.LogInformation("PlayAudioAsync: starting playback, file={FilePath}, size={Size}", filePath, fileInfo.Length);
+                _logger?.LogInformation("PlayAudioAsync: starting playback, file={FilePath}, size={Size}, volume={Volume}", filePath, fileInfo.Length, volume);
 
                 var playbackTask = Task.Run(() =>
                 {
@@ -98,6 +107,37 @@ namespace LearningAssistant.Services.TTS
                     player.Dispose();
                 }
             }
+            finally
+            {
+                if (tempFile != null && File.Exists(tempFile))
+                {
+                    try { File.Delete(tempFile); } catch { }
+                }
+            }
+        }
+
+        private static string ApplyVolumeToWav(string filePath, float volume)
+        {
+            byte[] wavBytes = File.ReadAllBytes(filePath);
+            const int headerSize = 44;
+            if (wavBytes.Length <= headerSize)
+                return filePath;
+
+            volume = Math.Clamp(volume, 0f, 2f);
+
+            for (int i = headerSize; i < wavBytes.Length - 1; i += 2)
+            {
+                short sample = BitConverter.ToInt16(wavBytes, i);
+                int adjusted = (int)(sample * volume);
+                adjusted = Math.Clamp(adjusted, short.MinValue, short.MaxValue);
+                byte[] adjustedBytes = BitConverter.GetBytes((short)adjusted);
+                wavBytes[i] = adjustedBytes[0];
+                wavBytes[i + 1] = adjustedBytes[1];
+            }
+
+            string tempFile = Path.Combine(Path.GetTempPath(), $"tts_vol_{Guid.NewGuid():N}.wav");
+            File.WriteAllBytes(tempFile, wavBytes);
+            return tempFile;
         }
 
         protected void StopPlayback()

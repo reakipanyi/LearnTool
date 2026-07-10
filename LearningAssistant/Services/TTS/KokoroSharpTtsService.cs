@@ -134,7 +134,7 @@ namespace LearningAssistant.Services.TTS
 
         public void StartBackgroundInitialization()
         {
-            if (_isInitialized || _isLoading) return;
+            if (_isLoading) return;
             _isLoading = true;
 
             Task.Run(() =>
@@ -148,6 +148,17 @@ namespace LearningAssistant.Services.TTS
                     _isLoading = false;
                 }
             });
+        }
+
+        public void ReloadVoiceSettings()
+        {
+            _logger?.LogInformation("Reloading voice settings");
+            lock (_initLock)
+            {
+                _isInitialized = false;
+                _defaultVoice = null;
+            }
+            StartBackgroundInitialization();
         }
 
         private string GetModelPath()
@@ -225,7 +236,7 @@ namespace LearningAssistant.Services.TTS
                 {
                     File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
                     _logger?.LogInformation("SpeakAsync: using cached audio, path={Path}", path);
-                    await PlayAudioAsync(path, cancellationToken);
+                    await PlayAudioAsync(path, _config.Volume, cancellationToken);
                     _logger?.LogInformation("SpeakAsync: cached audio playback completed");
                     return path;
                 }
@@ -541,7 +552,7 @@ namespace LearningAssistant.Services.TTS
             try
             {
                 await File.WriteAllBytesAsync(tempFile, wavBytes, cancellationToken).ConfigureAwait(false);
-                await PlayAudioAsync(tempFile, cancellationToken).ConfigureAwait(false);
+                await PlayAudioAsync(tempFile, _config.Volume, cancellationToken).ConfigureAwait(false);
             }
             finally
             {

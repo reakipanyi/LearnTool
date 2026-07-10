@@ -83,6 +83,13 @@ namespace LearningAssistant.Services.Pdf
         void RemoveHighlight(string pdfPath, string highlightId);
 
         /// <summary>
+        /// 批量删除指定PDF的所有高亮（一次磁盘写入，避免逐个删除时反复写文件导致UI卡顿）
+        /// </summary>
+        /// <param name="pdfPath">PDF文件路径</param>
+        /// <returns>被删除的高亮列表（可用于撤销栈恢复）</returns>
+        List<PdfHighlight> RemoveAllHighlights(string pdfPath);
+
+        /// <summary>
         /// 删除指定页面的所有高亮
         /// </summary>
         /// <param name="pdfPath">PDF文件路径</param>

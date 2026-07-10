@@ -12,9 +12,6 @@ namespace LearningAssistant.Forms
         private readonly ILogger<SettingForm> _logger;
         private readonly IThemeService _themeService;
         private bool _disposed = false;
-        private CheckBox checkBoxNightMode;
-        private Panel headerPanel;
-        private Label labelTitle;
         private bool _isDarkMode = false;
         private bool _isProgrammaticChange = false;
 
@@ -85,7 +82,6 @@ namespace LearningAssistant.Forms
 
         #region ISettingView Implementation
 
-
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool TTSEnabled
         {
@@ -93,13 +89,19 @@ namespace LearningAssistant.Forms
             set => checkBoxTtsEnabled.Checked = value;
         }
 
-        private string _ttsProvider = TtsProviders.KokoroSharp;
-
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string TtsProvider
         {
-            get => _ttsProvider;
-            set => _ttsProvider = value ?? TtsProviders.KokoroSharp;
+            get => comboBoxTtsProvider.SelectedItem?.ToString() ?? TtsProviders.KokoroSharp;
+            set
+            {
+                _isProgrammaticChange = true;
+                comboBoxTtsProvider.SelectedItem = value;
+                if (comboBoxTtsProvider.SelectedItem == null)
+                    comboBoxTtsProvider.SelectedIndex = 0;
+                _isProgrammaticChange = false;
+                UpdateTtsProviderVisibility();
+            }
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -110,7 +112,6 @@ namespace LearningAssistant.Forms
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-
         public string TtsVoice
         {
             get => comboBoxVoice.Text;
@@ -121,17 +122,23 @@ namespace LearningAssistant.Forms
         public int TTSSpeed
         {
             get => trackBarSpeed.Value;
-            set => trackBarSpeed.Value = Math.Clamp(value, trackBarSpeed.Minimum, trackBarSpeed.Maximum);
+            set
+            {
+                trackBarSpeed.Value = Math.Clamp(value, trackBarSpeed.Minimum, trackBarSpeed.Maximum);
+                labelSpeedValue.Text = $"{trackBarSpeed.Value}%";
+            }
         }
-
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int TTSVolume
         {
             get => trackBarVolume.Value;
-            set => trackBarVolume.Value = Math.Clamp(value, trackBarVolume.Minimum, trackBarVolume.Maximum);
+            set
+            {
+                trackBarVolume.Value = Math.Clamp(value, trackBarVolume.Minimum, trackBarVolume.Maximum);
+                labelVolumeValue.Text = $"{trackBarVolume.Value}%";
+            }
         }
-
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public int FontSize
@@ -141,7 +148,6 @@ namespace LearningAssistant.Forms
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-
         public string Theme
         {
             get => comboBoxTheme.Text;
@@ -157,14 +163,12 @@ namespace LearningAssistant.Forms
             }
         }
 
-
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string BaiduAppId
         {
             get => textBoxBaiduAppId.Text;
             set => textBoxBaiduAppId.Text = value;
         }
-
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string BaiduSecret
@@ -174,7 +178,6 @@ namespace LearningAssistant.Forms
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-
         public bool IsVoiceEnabled
         {
             get => checkBoxIsVoiceEnabled.Checked;
@@ -182,13 +185,11 @@ namespace LearningAssistant.Forms
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-
         public int PronunciationScope
         {
             get => (int)numericUpDownPronunciationScope.Value;
             set => numericUpDownPronunciationScope.Value = value;
         }
-
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool IsAIExplanationEnabled
@@ -216,38 +217,45 @@ namespace LearningAssistant.Forms
 
         private System.ComponentModel.IContainer components = null;
         private GroupBox groupBoxTts;
-        private CheckBox checkBoxTtsEnabled;
-        private Label labelTtsApiKey;
-        private TextBox textBoxTtsApiKey;
-        private Label labelVoice;
-        private ComboBox comboBoxVoice;
-        private Label labelSpeed;
-        private TrackBar trackBarSpeed;
-        private Label labelSpeedValue;
+        private Label labelVolumeValue;
         private Label labelVolume;
         private TrackBar trackBarVolume;
-        private Label labelVolumeValue;
+        private Label labelSpeedValue;
+        private Label labelSpeed;
+        private TrackBar trackBarSpeed;
+        private TextBox textBoxTtsApiKey;
+        private Label labelTtsApiKey;
+        private ComboBox comboBoxVoice;
+        private Label labelVoice;
+        private CheckBox checkBoxTtsEnabled;
+        private Label labelTtsProvider;
+        private ComboBox comboBoxTtsProvider;
         private GroupBox groupBoxInterface;
-        private Label labelFontSize;
-        private NumericUpDown numericUpDownFontSize;
+        private CheckBox checkBoxNightMode;
         private Label labelTheme;
         private ComboBox comboBoxTheme;
+        private NumericUpDown numericUpDownFontSize;
+        private Label labelFontSize;
         private GroupBox groupBoxTranslation;
-        private Label labelBaiduAppId;
-        private TextBox textBoxBaiduAppId;
-        private Label labelBaiduSecret;
         private TextBox textBoxBaiduSecret;
+        private Label labelBaiduSecret;
+        private TextBox textBoxBaiduAppId;
+        private Label labelBaiduAppId;
+        private Button buttonSave;
+        private Button buttonCancel;
+        private Panel headerPanel;
+        private Label labelTitle;
         private GroupBox groupBoxLearningSettings;
         private CheckBox checkBoxIsVoiceEnabled;
         private Label labelPronunciationScope;
         private NumericUpDown numericUpDownPronunciationScope;
         private CheckBox checkBoxIsAIExplanationEnabled;
-        private Button buttonSave;
-        private Button buttonCancel;
 
         private void InitializeComponent()
         {
             groupBoxTts = new GroupBox();
+            labelTtsProvider = new Label();
+            comboBoxTtsProvider = new ComboBox();
             labelVolumeValue = new Label();
             labelVolume = new Label();
             trackBarVolume = new TrackBar();
@@ -293,6 +301,8 @@ namespace LearningAssistant.Forms
             // groupBoxTts
             // 
             groupBoxTts.BackColor = Color.FromArgb(255, 250, 240);
+            groupBoxTts.Controls.Add(labelTtsProvider);
+            groupBoxTts.Controls.Add(comboBoxTtsProvider);
             groupBoxTts.Controls.Add(labelVolumeValue);
             groupBoxTts.Controls.Add(labelVolume);
             groupBoxTts.Controls.Add(trackBarVolume);
@@ -309,15 +319,35 @@ namespace LearningAssistant.Forms
             groupBoxTts.ForeColor = Color.FromArgb(33, 33, 33);
             groupBoxTts.Location = new Point(15, 68);
             groupBoxTts.Name = "groupBoxTts";
-            groupBoxTts.Size = new Size(550, 181);
+            groupBoxTts.Size = new Size(550, 220);
             groupBoxTts.TabIndex = 1;
             groupBoxTts.TabStop = false;
-            groupBoxTts.Text = "🔊 千问TTS 语音设置";
+            groupBoxTts.Text = "🔊 TTS 语音设置";
+            // 
+            // labelTtsProvider
+            // 
+            labelTtsProvider.ForeColor = Color.FromArgb(33, 33, 33);
+            labelTtsProvider.Location = new Point(15, 55);
+            labelTtsProvider.Name = "labelTtsProvider";
+            labelTtsProvider.Size = new Size(60, 23);
+            labelTtsProvider.TabIndex = 11;
+            labelTtsProvider.Text = "引擎:";
+            // 
+            // comboBoxTtsProvider
+            // 
+            comboBoxTtsProvider.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboBoxTtsProvider.FormattingEnabled = true;
+            comboBoxTtsProvider.Items.AddRange(new object[] { TtsProviders.KokoroSharp, TtsProviders.Qwen });
+            comboBoxTtsProvider.Location = new Point(80, 52);
+            comboBoxTtsProvider.Name = "comboBoxTtsProvider";
+            comboBoxTtsProvider.Size = new Size(150, 27);
+            comboBoxTtsProvider.TabIndex = 10;
+            comboBoxTtsProvider.SelectedIndexChanged += ComboBoxTtsProvider_SelectedIndexChanged;
             // 
             // labelVolumeValue
             // 
             labelVolumeValue.ForeColor = Color.FromArgb(33, 33, 33);
-            labelVolumeValue.Location = new Point(500, 138);
+            labelVolumeValue.Location = new Point(500, 178);
             labelVolumeValue.Name = "labelVolumeValue";
             labelVolumeValue.Size = new Size(40, 23);
             labelVolumeValue.TabIndex = 10;
@@ -326,7 +356,7 @@ namespace LearningAssistant.Forms
             // labelVolume
             // 
             labelVolume.ForeColor = Color.FromArgb(33, 33, 33);
-            labelVolume.Location = new Point(15, 138);
+            labelVolume.Location = new Point(15, 178);
             labelVolume.Name = "labelVolume";
             labelVolume.Size = new Size(60, 23);
             labelVolume.TabIndex = 9;
@@ -334,7 +364,7 @@ namespace LearningAssistant.Forms
             // 
             // trackBarVolume
             // 
-            trackBarVolume.Location = new Point(80, 136);
+            trackBarVolume.Location = new Point(80, 176);
             trackBarVolume.Maximum = 100;
             trackBarVolume.Name = "trackBarVolume";
             trackBarVolume.Size = new Size(410, 45);
@@ -345,7 +375,7 @@ namespace LearningAssistant.Forms
             // labelSpeedValue
             // 
             labelSpeedValue.ForeColor = Color.FromArgb(33, 33, 33);
-            labelSpeedValue.Location = new Point(500, 99);
+            labelSpeedValue.Location = new Point(500, 139);
             labelSpeedValue.Name = "labelSpeedValue";
             labelSpeedValue.Size = new Size(40, 23);
             labelSpeedValue.TabIndex = 7;
@@ -354,7 +384,7 @@ namespace LearningAssistant.Forms
             // labelSpeed
             // 
             labelSpeed.ForeColor = Color.FromArgb(33, 33, 33);
-            labelSpeed.Location = new Point(15, 99);
+            labelSpeed.Location = new Point(15, 139);
             labelSpeed.Name = "labelSpeed";
             labelSpeed.Size = new Size(60, 23);
             labelSpeed.TabIndex = 6;
@@ -362,7 +392,7 @@ namespace LearningAssistant.Forms
             // 
             // trackBarSpeed
             // 
-            trackBarSpeed.Location = new Point(80, 96);
+            trackBarSpeed.Location = new Point(80, 136);
             trackBarSpeed.Maximum = 200;
             trackBarSpeed.Minimum = 0;
             trackBarSpeed.Name = "trackBarSpeed";
@@ -373,26 +403,28 @@ namespace LearningAssistant.Forms
             // 
             // textBoxTtsApiKey
             // 
-            textBoxTtsApiKey.Location = new Point(120, 57);
+            textBoxTtsApiKey.Location = new Point(120, 92);
             textBoxTtsApiKey.Name = "textBoxTtsApiKey";
             textBoxTtsApiKey.PasswordChar = '*';
             textBoxTtsApiKey.Size = new Size(400, 25);
             textBoxTtsApiKey.TabIndex = 4;
+            textBoxTtsApiKey.Visible = false;
             // 
             // labelTtsApiKey
             // 
             labelTtsApiKey.ForeColor = Color.FromArgb(33, 33, 33);
-            labelTtsApiKey.Location = new Point(15, 60);
+            labelTtsApiKey.Location = new Point(15, 95);
             labelTtsApiKey.Name = "labelTtsApiKey";
             labelTtsApiKey.Size = new Size(100, 23);
             labelTtsApiKey.TabIndex = 3;
             labelTtsApiKey.Text = "DashScope Key:";
+            labelTtsApiKey.Visible = false;
             // 
             // comboBoxVoice
             // 
             comboBoxVoice.FormattingEnabled = true;
-            comboBoxVoice.Items.AddRange(new object[] { "Aria", "Cherry", "Xiaobei", "Xiaoning" });
-            comboBoxVoice.Location = new Point(80, 17);
+            comboBoxVoice.Items.AddRange(new object[] { "af_heart", "af_sarah", "zf_tingting", "Cherry", "Aria", "Xiaobei", "Xiaoning" });
+            comboBoxVoice.Location = new Point(300, 52);
             comboBoxVoice.Name = "comboBoxVoice";
             comboBoxVoice.Size = new Size(150, 27);
             comboBoxVoice.TabIndex = 2;
@@ -400,16 +432,16 @@ namespace LearningAssistant.Forms
             // labelVoice
             // 
             labelVoice.ForeColor = Color.FromArgb(33, 33, 33);
-            labelVoice.Location = new Point(15, 20);
+            labelVoice.Location = new Point(250, 55);
             labelVoice.Name = "labelVoice";
-            labelVoice.Size = new Size(60, 23);
+            labelVoice.Size = new Size(50, 23);
             labelVoice.TabIndex = 1;
             labelVoice.Text = "声音:";
             // 
             // checkBoxTtsEnabled
             // 
             checkBoxTtsEnabled.ForeColor = Color.FromArgb(33, 33, 33);
-            checkBoxTtsEnabled.Location = new Point(250, 17);
+            checkBoxTtsEnabled.Location = new Point(15, 20);
             checkBoxTtsEnabled.Name = "checkBoxTtsEnabled";
             checkBoxTtsEnabled.Size = new Size(100, 28);
             checkBoxTtsEnabled.TabIndex = 0;
@@ -426,7 +458,7 @@ namespace LearningAssistant.Forms
             groupBoxInterface.FlatStyle = FlatStyle.Flat;
             groupBoxInterface.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             groupBoxInterface.ForeColor = Color.FromArgb(33, 33, 33);
-            groupBoxInterface.Location = new Point(15, 448);
+            groupBoxInterface.Location = new Point(15, 487);
             groupBoxInterface.Name = "groupBoxInterface";
             groupBoxInterface.Size = new Size(550, 91);
             groupBoxInterface.TabIndex = 2;
@@ -497,7 +529,7 @@ namespace LearningAssistant.Forms
             groupBoxTranslation.FlatStyle = FlatStyle.Flat;
             groupBoxTranslation.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             groupBoxTranslation.ForeColor = Color.FromArgb(33, 33, 33);
-            groupBoxTranslation.Location = new Point(15, 255);
+            groupBoxTranslation.Location = new Point(15, 294);
             groupBoxTranslation.Name = "groupBoxTranslation";
             groupBoxTranslation.Size = new Size(550, 91);
             groupBoxTranslation.TabIndex = 3;
@@ -543,7 +575,7 @@ namespace LearningAssistant.Forms
             buttonSave.FlatStyle = FlatStyle.Flat;
             buttonSave.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             buttonSave.ForeColor = Color.White;
-            buttonSave.Location = new Point(315, 554);
+            buttonSave.Location = new Point(315, 593);
             buttonSave.Name = "buttonSave";
             buttonSave.Size = new Size(120, 45);
             buttonSave.TabIndex = 6;
@@ -560,7 +592,7 @@ namespace LearningAssistant.Forms
             buttonCancel.FlatStyle = FlatStyle.Flat;
             buttonCancel.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             buttonCancel.ForeColor = Color.White;
-            buttonCancel.Location = new Point(445, 554);
+            buttonCancel.Location = new Point(445, 593);
             buttonCancel.Name = "buttonCancel";
             buttonCancel.Size = new Size(120, 45);
             buttonCancel.TabIndex = 7;
@@ -601,7 +633,7 @@ namespace LearningAssistant.Forms
             groupBoxLearningSettings.FlatStyle = FlatStyle.Flat;
             groupBoxLearningSettings.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             groupBoxLearningSettings.ForeColor = Color.FromArgb(33, 33, 33);
-            groupBoxLearningSettings.Location = new Point(15, 352);
+            groupBoxLearningSettings.Location = new Point(15, 391);
             groupBoxLearningSettings.Name = "groupBoxLearningSettings";
             groupBoxLearningSettings.Size = new Size(550, 91);
             groupBoxLearningSettings.TabIndex = 5;
@@ -649,7 +681,7 @@ namespace LearningAssistant.Forms
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.FromArgb(240, 240, 240);
-            ClientSize = new Size(580, 609);
+            ClientSize = new Size(580, 648);
             Controls.Add(buttonCancel);
             Controls.Add(buttonSave);
             Controls.Add(groupBoxLearningSettings);
@@ -676,6 +708,21 @@ namespace LearningAssistant.Forms
         #endregion
 
         #region Event Handlers
+
+        private void ComboBoxTtsProvider_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            if (_isProgrammaticChange) return;
+            UpdateTtsProviderVisibility();
+        }
+
+        private void UpdateTtsProviderVisibility()
+        {
+            var provider = comboBoxTtsProvider.SelectedItem?.ToString() ?? TtsProviders.KokoroSharp;
+            bool isQwen = provider.Equals(TtsProviders.Qwen, StringComparison.OrdinalIgnoreCase);
+
+            labelTtsApiKey.Visible = isQwen;
+            textBoxTtsApiKey.Visible = isQwen;
+        }
 
         private void TrackBarSpeed_Scroll(object? sender, EventArgs e)
         {

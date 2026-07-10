@@ -1,6 +1,8 @@
 using LearningAssistant.Models.Config;
 using LearningAssistant.Services.Persistence;
+using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Presenters
@@ -10,13 +12,16 @@ namespace LearningAssistant.Presenters
         private readonly ILogger<SettingPresenter> _logger;
         private readonly ISettingView _view;
         private readonly IDataPersistenceService _persistenceService;
-        private AppConfig _config;
+        private readonly AppConfig _appConfig;
+        private readonly IServiceProvider _serviceProvider;
 
-        public SettingPresenter(ILogger<SettingPresenter> logger, ISettingView view, IDataPersistenceService persistenceService)
+        public SettingPresenter(ILogger<SettingPresenter> logger, ISettingView view, IDataPersistenceService persistenceService, AppConfig appConfig, IServiceProvider serviceProvider)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _view = view ?? throw new ArgumentNullException(nameof(view));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
+            _appConfig = appConfig ?? throw new ArgumentNullException(nameof(appConfig));
+            _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
 
             _view.SaveClicked += View_SaveClicked;
             _view.CancelClicked += View_CancelClicked;
@@ -26,26 +31,26 @@ namespace LearningAssistant.Presenters
         public void Initialize()
         {
             _logger.LogInformation("Initializing SettingPresenter");
-            _config = _persistenceService.LoadConfig();
             LoadConfigToView();
         }
 
         private void LoadConfigToView()
         {
-            _view.TTSEnabled = !string.IsNullOrWhiteSpace(_config.TtsConfig.ApiKey) ||
-                               _config.TtsConfig.Provider.Equals(TtsProviders.KokoroSharp, StringComparison.OrdinalIgnoreCase);
-            _view.TtsProvider = _config.TtsConfig.Provider;
-            _view.TtsApiKey = _config.TtsConfig.ApiKey;
-            _view.TtsVoice = _config.TtsConfig.Voice;
-            _view.TTSSpeed = (int)(_config.TtsConfig.Speed * 100);
-            _view.TTSVolume = (int)(_config.TtsConfig.Volume * 100);
-            _view.FontSize = _config.AppSettings.DefaultFontSize;
-            _view.Theme = _config.AppSettings.Theme;
-            _view.BaiduAppId = _config.TranslationConfig.BaiduAppId;
-            _view.BaiduSecret = _config.TranslationConfig.BaiduSecret;
-            _view.IsVoiceEnabled = _config.AppSettings.IsVoiceEnabled;
-            _view.PronunciationScope = _config.AppSettings.PronunciationScope;
-            _view.IsAIExplanationEnabled = _config.AppSettings.IsAIExplanationEnabled;
+            var provider = string.IsNullOrWhiteSpace(_appConfig.TtsConfig.Provider) ? TtsProviders.KokoroSharp : _appConfig.TtsConfig.Provider;
+            _view.TtsProvider = provider;
+            _view.TTSEnabled = provider.Equals(TtsProviders.KokoroSharp, StringComparison.OrdinalIgnoreCase) ||
+                               !string.IsNullOrWhiteSpace(_appConfig.TtsConfig.ApiKey);
+            _view.TtsApiKey = _appConfig.TtsConfig.ApiKey;
+            _view.TtsVoice = _appConfig.TtsConfig.Voice;
+            _view.TTSSpeed = (int)(_appConfig.TtsConfig.Speed * 100);
+            _view.TTSVolume = (int)(_appConfig.TtsConfig.Volume * 100);
+            _view.FontSize = _appConfig.AppSettings.DefaultFontSize;
+            _view.Theme = _appConfig.AppSettings.Theme;
+            _view.BaiduAppId = _appConfig.TranslationConfig.BaiduAppId;
+            _view.BaiduSecret = _appConfig.TranslationConfig.BaiduSecret;
+            _view.IsVoiceEnabled = _appConfig.AppSettings.IsVoiceEnabled;
+            _view.PronunciationScope = _appConfig.AppSettings.PronunciationScope;
+            _view.IsAIExplanationEnabled = _appConfig.AppSettings.IsAIExplanationEnabled;
         }
 
         private void View_SaveClicked(object? sender, EventArgs e)
@@ -54,21 +59,31 @@ namespace LearningAssistant.Presenters
             {
                 _logger.LogInformation("Saving settings");
 
-                _config.TtsConfig.Provider = _view.TtsProvider;
-                _config.TtsConfig.ApiKey = _view.TTSEnabled ? _view.TtsApiKey : "";
-                _config.TtsConfig.Voice = _view.TtsVoice;
-                _config.TtsConfig.Speed = _view.TTSSpeed / 100f;
-                _config.TtsConfig.Volume = _view.TTSVolume / 100f;
-                _config.AppSettings.DefaultFontSize = _view.FontSize;
-                _config.AppSettings.Theme = _view.Theme;
-                _config.TranslationConfig.BaiduAppId = _view.BaiduAppId;
-                _config.TranslationConfig.BaiduSecret = _view.BaiduSecret;
-                _config.AppSettings.IsVoiceEnabled = _view.IsVoiceEnabled;
-                _config.AppSettings.PronunciationScope = _view.PronunciationScope;
-                _config.AppSettings.IsAIExplanationEnabled = _view.IsAIExplanationEnabled;
+                string oldVoice = _appConfig.TtsConfig.Voice;
+                string oldProvider = _appConfig.TtsConfig.Provider;
 
-                _persistenceService.SaveConfig(_config);
+                _appConfig.TtsConfig.Provider = _view.TtsProvider;
+                _appConfig.TtsConfig.ApiKey = _view.TtsApiKey;
+                _appConfig.TtsConfig.Voice = _view.TtsVoice;
+                _appConfig.TtsConfig.Speed = _view.TTSSpeed / 100f;
+                _appConfig.TtsConfig.Volume = _view.TTSVolume / 100f;
+                _appConfig.AppSettings.DefaultFontSize = _view.FontSize;
+                _appConfig.AppSettings.Theme = _view.Theme;
+                _appConfig.TranslationConfig.BaiduAppId = _view.BaiduAppId;
+                _appConfig.TranslationConfig.BaiduSecret = _view.BaiduSecret;
+                _appConfig.AppSettings.IsVoiceEnabled = _view.IsVoiceEnabled;
+                _appConfig.AppSettings.PronunciationScope = _view.PronunciationScope;
+                _appConfig.AppSettings.IsAIExplanationEnabled = _view.IsAIExplanationEnabled;
+
+                _persistenceService.SaveConfig(_appConfig);
                 _persistenceService.PersistCache();
+
+                if (!string.Equals(oldVoice, _appConfig.TtsConfig.Voice, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(oldProvider, _appConfig.TtsConfig.Provider, StringComparison.OrdinalIgnoreCase))
+                {
+                    NotifyTtsServiceSettingsChanged();
+                }
+
                 _view.ShowMessage("设置已保存");
                 _view.CloseView();
                 _logger.LogInformation("Settings saved successfully");
@@ -77,6 +92,23 @@ namespace LearningAssistant.Presenters
             {
                 _logger.LogError(ex, "Failed to save settings");
                 _view.ShowMessage($"保存失败: {ex.Message}");
+            }
+        }
+
+        private void NotifyTtsServiceSettingsChanged()
+        {
+            try
+            {
+                var ttsService = _serviceProvider.GetService<ITTSService>();
+                if (ttsService is KokoroSharpTtsService kokoroService)
+                {
+                    kokoroService.ReloadVoiceSettings();
+                    _logger.LogInformation("Notified KokoroSharp TTS service to reload voice settings");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to notify TTS service of settings change");
             }
         }
 

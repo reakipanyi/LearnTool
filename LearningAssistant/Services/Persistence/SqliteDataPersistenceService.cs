@@ -65,7 +65,8 @@ namespace LearningAssistant.Services.Persistence
         {
             try
             {
-                var configToSave = config;
+                var configJson = Common.JsonHelper.Serialize(config);
+                var configToSave = Common.JsonHelper.Deserialize<AppConfig>(configJson) ?? new AppConfig();
                 ConfigEncryptionHelper.EncryptSensitiveConfig(configToSave);
 
                 var path = AppPaths.AppSettingsPath;
