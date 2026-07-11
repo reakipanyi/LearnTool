@@ -59,16 +59,7 @@ namespace LearningAssistant.Services.TTS
                 float safeVolume = Math.Clamp(volume, 0f, 2f);
                 audioReader.Volume = safeVolume;
 
-                float safeSpeed = Math.Clamp(speed, 0.5f, 2.0f);
-                if (Math.Abs(safeSpeed - 1.0f) > 0.001f)
-                {
-                    playbackStream = new VarispeedWaveStream(audioReader, safeSpeed);
-                    _logger?.LogDebug("PlayAudioAsync: using playback speed={Speed}", safeSpeed);
-                }
-                else
-                {
-                    playbackStream = audioReader;
-                }
+                playbackStream = audioReader;
 
                 waveOut = new WaveOutEvent();
                 waveOut.PlaybackStopped += (s, e) =>
@@ -107,7 +98,7 @@ namespace LearningAssistant.Services.TTS
 
                 var fileInfo = new FileInfo(filePath);
                 _logger?.LogInformation("PlayAudioAsync: starting playback, file={FilePath}, size={Size}, volume={Volume}, speed={Speed}",
-                    filePath, fileInfo.Length, safeVolume, safeSpeed);
+                    filePath, fileInfo.Length, safeVolume, speed);
 
                 waveOut.Play();
 

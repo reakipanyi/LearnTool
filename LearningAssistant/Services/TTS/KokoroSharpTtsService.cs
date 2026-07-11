@@ -415,10 +415,9 @@ namespace LearningAssistant.Services.TTS
                 var langCode = langSegments[0].LangCode;
                 var voice = SelectVoiceForSegment(langCode, language);
                 if (voice == null) return null;
-                float adjustedSpeed = AdjustSpeedForLanguage(langCode, safeSpeed);
-                _logger?.LogDebug("SynthesizeToWavCoreAsync: single segment, lang={LangCode}, voice={Voice}, speed={Speed}", langCode, voice.Name, adjustedSpeed);
+                _logger?.LogDebug("SynthesizeToWavCoreAsync: single segment, lang={LangCode}, voice={Voice}, speed={Speed}", langCode, voice.Name, safeSpeed);
                 var tokens = Tokenizer.Tokenize(langSegments[0].Text, MapLangCodeToTokenizerLang(langCode), preprocess: true);
-                return await SynthesizeTokensToWavAsync(tokens, voice, adjustedSpeed, langSegments[0].Text, cancellationToken).ConfigureAwait(false);
+                return await SynthesizeTokensToWavAsync(tokens, voice, safeSpeed, langSegments[0].Text, cancellationToken).ConfigureAwait(false);
             }
 
             var allSamples = new List<float>();
@@ -433,10 +432,9 @@ namespace LearningAssistant.Services.TTS
                     continue;
                 }
 
-                float adjustedSpeed = AdjustSpeedForLanguage(seg.LangCode, safeSpeed);
-                _logger?.LogDebug("SynthesizeToWavCoreAsync: processing segment lang={LangCode}, voice={Voice}, textLength={TextLength}, speed={Speed}", seg.LangCode, segVoice.Name, seg.Text.Length, adjustedSpeed);
+                _logger?.LogDebug("SynthesizeToWavCoreAsync: processing segment lang={LangCode}, voice={Voice}, textLength={TextLength}, speed={Speed}", seg.LangCode, segVoice.Name, seg.Text.Length, safeSpeed);
                 var tokens = Tokenizer.Tokenize(seg.Text, MapLangCodeToTokenizerLang(seg.LangCode), preprocess: true);
-                var wavBytes = await SynthesizeTokensToWavAsync(tokens, segVoice, adjustedSpeed, seg.Text, cancellationToken).ConfigureAwait(false);
+                var wavBytes = await SynthesizeTokensToWavAsync(tokens, segVoice, safeSpeed, seg.Text, cancellationToken).ConfigureAwait(false);
                 if (wavBytes == null || wavBytes.Length == 0)
                 {
                     _logger?.LogWarning("SynthesizeToWavCoreAsync: segment synthesis returned empty result, lang={LangCode}", seg.LangCode);
