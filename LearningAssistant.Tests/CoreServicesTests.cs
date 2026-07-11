@@ -4,6 +4,7 @@ using FluentAssertions;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Persistence;
 using LearningAssistant.Models.Learning;
+using LearningAssistant.Common;
 using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Tests
@@ -28,8 +29,8 @@ namespace LearningAssistant.Tests
             {
                 Question = "Test question",
                 CorrectAnswer = "Correct answer",
-                Subject = "Math",
-                Category = "Algebra"
+                Subject = SubjectType.Math,
+                Category = SubCategoryType.MathFormula
             };
 
             _service.AddWrongAnswer("test_user", item);
@@ -46,7 +47,7 @@ namespace LearningAssistant.Tests
             {
                 Id = "test_id",
                 Question = "Test question",
-                Subject = "Math"
+                Subject = SubjectType.Math
             };
             _service.AddWrongAnswer("test_user", item);
 
@@ -62,20 +63,20 @@ namespace LearningAssistant.Tests
             _service.AddWrongAnswer("test_user", new WrongAnswerItem
             {
                 Question = "Math question",
-                Subject = "Math",
-                Category = "Algebra"
+                Subject = SubjectType.Math,
+                Category = SubCategoryType.MathFormula
             });
             _service.AddWrongAnswer("test_user", new WrongAnswerItem
             {
                 Question = "English question",
-                Subject = "English",
-                Category = "Vocabulary"
+                Subject = SubjectType.English,
+                Category = SubCategoryType.EnglishWord
             });
 
-            var mathItems = _service.GetWrongAnswers("test_user", "Math");
+            var mathItems = _service.GetWrongAnswers("test_user", SubjectType.Math);
 
             mathItems.Should().HaveCount(1);
-            mathItems[0].Subject.Should().Be("Math");
+            mathItems[0].Subject.Should().Be(SubjectType.Math);
         }
 
         [Fact]
@@ -84,14 +85,14 @@ namespace LearningAssistant.Tests
             _service.AddWrongAnswer("test_user", new WrongAnswerItem
             {
                 Question = "Algebra question",
-                Subject = "Math",
-                Category = "Algebra"
+                Subject = SubjectType.Math,
+                Category = SubCategoryType.MathFormula
             });
 
-            var items = _service.GetBySubjectCategory("test_user", "Math", "Algebra");
+            var items = _service.GetBySubjectCategory("test_user", SubjectType.Math, SubCategoryType.MathFormula);
 
             items.Should().NotBeEmpty();
-            items[0].Category.Should().Be("Algebra");
+            items[0].Category.Should().Be(SubCategoryType.MathFormula);
         }
 
         [Fact]
@@ -100,13 +101,13 @@ namespace LearningAssistant.Tests
             var item = new WrongAnswerItem
             {
                 Question = "Test question",
-                Subject = "Math"
+                Subject = SubjectType.Math
             };
             _service.AddWrongAnswer("test_user", item);
 
             _service.MarkAsMastered("test_user", item.Id);
 
-            var result = _service.GetWrongAnswers("test_user", "Math");
+            var result = _service.GetWrongAnswers("test_user", SubjectType.Math);
             result.Should().BeEmpty();
         }
     }
@@ -133,27 +134,5 @@ namespace LearningAssistant.Tests
 
             item.Id.Should().Be(testId);
         }
-    }
-
-    public class TestLearningItem : LearningItem
-    {
-        private readonly string _content;
-        private readonly string _meaning;
-        private readonly string _pronunciation;
-
-        public TestLearningItem(string content, string meaning, string pronunciation)
-        {
-            _content = content;
-            _meaning = meaning;
-            _pronunciation = pronunciation;
-        }
-
-        public override string GetMainContent() => _content;
-
-        public override string GetDisplayText() => $"{_content}: {_meaning}";
-
-        public override string GetPronunciation() => _pronunciation;
-
-        public override string GetDisplayStruct() => "单词 | 音标 | 释义";
     }
 }

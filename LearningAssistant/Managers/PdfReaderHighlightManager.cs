@@ -447,7 +447,11 @@ namespace LearningAssistant.Managers
                 (int)Math.Round(actualHeight)
             );
 
-            using var cropped = currentPageImage.Clone(cropRect, currentPageImage.PixelFormat);
+            var cropped = new Bitmap(cropRect.Width, cropRect.Height, currentPageImage.PixelFormat);
+            using (var g = Graphics.FromImage(cropped))
+            {
+                g.DrawImage(currentPageImage, new Rectangle(0, 0, cropRect.Width, cropRect.Height), cropRect, GraphicsUnit.Pixel);
+            }
 
             try
             {
@@ -593,10 +597,10 @@ namespace LearningAssistant.Managers
                     var newHighlightId = _highlightService.AddHighlight(
                         _form.CurrentPdfPath,
                         highlight.PageIndex,
-                        highlight.NormalizedX > 0 ? highlight.NormalizedX : highlight.X,
-                        highlight.NormalizedY > 0 ? highlight.NormalizedY : highlight.Y,
+                        highlight.NormalizedWidth > 0 ? highlight.NormalizedX : highlight.X,
+                        highlight.NormalizedWidth > 0 ? highlight.NormalizedY : highlight.Y,
                         highlight.NormalizedWidth > 0 ? highlight.NormalizedWidth : highlight.Width,
-                        highlight.NormalizedHeight > 0 ? highlight.NormalizedHeight : highlight.Height,
+                        highlight.NormalizedWidth > 0 ? highlight.NormalizedHeight : highlight.Height,
                         highlight.Text,
                         highlight.Color
                     );
@@ -607,10 +611,10 @@ namespace LearningAssistant.Managers
                         Id = newHighlightId,
                         PdfPath = _form.CurrentPdfPath,
                         PageIndex = highlight.PageIndex,
-                        NormalizedX = highlight.NormalizedX > 0 ? highlight.NormalizedX : highlight.X,
-                        NormalizedY = highlight.NormalizedY > 0 ? highlight.NormalizedY : highlight.Y,
+                        NormalizedX = highlight.NormalizedWidth > 0 ? highlight.NormalizedX : highlight.X,
+                        NormalizedY = highlight.NormalizedWidth > 0 ? highlight.NormalizedY : highlight.Y,
                         NormalizedWidth = highlight.NormalizedWidth > 0 ? highlight.NormalizedWidth : highlight.Width,
-                        NormalizedHeight = highlight.NormalizedHeight > 0 ? highlight.NormalizedHeight : highlight.Height,
+                        NormalizedHeight = highlight.NormalizedWidth > 0 ? highlight.NormalizedHeight : highlight.Height,
                         Text = highlight.Text,
                         Color = highlight.Color,
                         CreatedAt = highlight.CreatedAt

@@ -362,7 +362,12 @@ namespace LearningAssistant.Services.Pdf
             if (source == null)
                 return null;
 
-            return source.Clone(new Rectangle(0, 0, source.Width, source.Height), source.PixelFormat);
+            var result = new Bitmap(source.Width, source.Height, source.PixelFormat);
+            using (var g = Graphics.FromImage(result))
+            {
+                g.DrawImage(source, new Rectangle(0, 0, source.Width, source.Height));
+            }
+            return result;
         }
 
         private Bitmap? RenderPageToBitmap(int pageIndex, int renderW, int renderH)
@@ -505,17 +510,11 @@ namespace LearningAssistant.Services.Pdf
 
         public void Dispose()
         {
-            // 先清空缓存，这会正确取消和释放 _thumbnailCts
             ClearCache();
-            
-            // 然后取消和释放主 _cts
+
             _cts?.Cancel();
             _cts?.Dispose();
             _cts = null;
-            
-            _preRenderCts?.Cancel();
-            _preRenderCts?.Dispose();
-            _preRenderCts = null;
 
             _renderSemaphore.Dispose();
             _preRenderSemaphore.Dispose();

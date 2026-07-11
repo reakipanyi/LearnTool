@@ -187,12 +187,28 @@ namespace LearningAssistant.Presenters
                     noteCount,
                     todayNewNotes);
 
-                UpdateRecommendations();
+                LoadRecommendationsAsync();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "更新 Dashboard 统计数据失败");
             }
+        }
+
+        private void LoadRecommendationsAsync()
+        {
+            Task.Run(() =>
+            {
+                try
+                {
+                    Thread.Sleep(300);
+                    UpdateRecommendations();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "异步加载推荐数据失败");
+                }
+            });
         }
 
         private void UpdateRecommendations()

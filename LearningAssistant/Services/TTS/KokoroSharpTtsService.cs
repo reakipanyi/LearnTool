@@ -228,16 +228,27 @@ namespace LearningAssistant.Services.TTS
             {
                 Directory.CreateDirectory(AppPaths.GetUserTtsCacheDir());
 
-                var actualVoice = SelectVoiceForSegment(language ?? "en", language) ?? _defaultVoice;
                 string paddedText = PadShortText(text);
                 float actualSpeed = speed ?? _config.Speed;
+
+                var langSegments = SplitTextByLanguage(paddedText);
+                bool isMultiLanguage = langSegments.Count > 1;
+
+                if (isMultiLanguage)
+                {
+                    _logger?.LogInformation("SpeakAsync: detected {SegmentCount} language segments, skipping cache", langSegments.Count);
+                    var resultBytes = await SynthesizeAndPlayStreamAsync(paddedText, language, actualSpeed, cancellationToken).ConfigureAwait(false);
+                    return resultBytes != null && resultBytes.Length > 0 ? null : null;
+                }
+
+                var actualVoice = SelectVoiceForSegment(language ?? "en", language) ?? _defaultVoice;
                 string path = GetCacheFilePath(paddedText, language, actualSpeed, actualVoice?.Name);
 
                 if (File.Exists(path))
                 {
                     File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
                     _logger?.LogInformation("SpeakAsync: using cached audio, path={Path}", path);
-                    await PlayAudioAsync(path, _config.Volume, actualSpeed, cancellationToken);
+                    await PlayAudioAsync(path, _config.Volume, 1.0f, cancellationToken);
                     _logger?.LogInformation("SpeakAsync: cached audio playback completed");
                     return path;
                 }
@@ -404,9 +415,10 @@ namespace LearningAssistant.Services.TTS
                 var langCode = langSegments[0].LangCode;
                 var voice = SelectVoiceForSegment(langCode, language);
                 if (voice == null) return null;
-                _logger?.LogDebug("SynthesizeToWavCoreAsync: single segment, lang={LangCode}, voice={Voice}", langCode, voice.Name);
+                float adjustedSpeed = AdjustSpeedForLanguage(langCode, safeSpeed);
+                _logger?.LogDebug("SynthesizeToWavCoreAsync: single segment, lang={LangCode}, voice={Voice}, speed={Speed}", langCode, voice.Name, adjustedSpeed);
                 var tokens = Tokenizer.Tokenize(langSegments[0].Text, MapLangCodeToTokenizerLang(langCode), preprocess: true);
-                return await SynthesizeTokensToWavAsync(tokens, voice, safeSpeed, langSegments[0].Text, cancellationToken).ConfigureAwait(false);
+                return await SynthesizeTokensToWavAsync(tokens, voice, adjustedSpeed, langSegments[0].Text, cancellationToken).ConfigureAwait(false);
             }
 
             var allSamples = new List<float>();
@@ -421,9 +433,10 @@ namespace LearningAssistant.Services.TTS
                     continue;
                 }
 
-                _logger?.LogDebug("SynthesizeToWavCoreAsync: processing segment lang={LangCode}, voice={Voice}, textLength={TextLength}", seg.LangCode, segVoice.Name, seg.Text.Length);
+                float adjustedSpeed = AdjustSpeedForLanguage(seg.LangCode, safeSpeed);
+                _logger?.LogDebug("SynthesizeToWavCoreAsync: processing segment lang={LangCode}, voice={Voice}, textLength={TextLength}, speed={Speed}", seg.LangCode, segVoice.Name, seg.Text.Length, adjustedSpeed);
                 var tokens = Tokenizer.Tokenize(seg.Text, MapLangCodeToTokenizerLang(seg.LangCode), preprocess: true);
-                var wavBytes = await SynthesizeTokensToWavAsync(tokens, segVoice, safeSpeed, seg.Text, cancellationToken).ConfigureAwait(false);
+                var wavBytes = await SynthesizeTokensToWavAsync(tokens, segVoice, adjustedSpeed, seg.Text, cancellationToken).ConfigureAwait(false);
                 if (wavBytes == null || wavBytes.Length == 0)
                 {
                     _logger?.LogWarning("SynthesizeToWavCoreAsync: segment synthesis returned empty result, lang={LangCode}", seg.LangCode);
@@ -552,7 +565,7 @@ namespace LearningAssistant.Services.TTS
             try
             {
                 await File.WriteAllBytesAsync(tempFile, wavBytes, cancellationToken).ConfigureAwait(false);
-                await PlayAudioAsync(tempFile, _config.Volume, speed, cancellationToken).ConfigureAwait(false);
+                await PlayAudioAsync(tempFile, _config.Volume, 1.0f, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
@@ -621,13 +634,32 @@ namespace LearningAssistant.Services.TTS
             if (!IsShortText(trimmed))
                 return text;
 
-            if (!trimmed.EndsWith(".") && !trimmed.EndsWith("!") && !trimmed.EndsWith("?"))
+            string lastChar = trimmed.Length > 0 ? trimmed.Substring(trimmed.Length - 1) : "";
+            bool hasEndPunctuation = lastChar == "." || lastChar == "!" || lastChar == "?" || 
+                                     lastChar == "。" || lastChar == "！" || lastChar == "？";
+
+            if (!hasEndPunctuation)
             {
+                if (IsChineseText(trimmed))
+                {
+                    _logger?.LogDebug("PadShortText: padding Chinese short text '{Text}' with period", text);
+                    return trimmed + "。";
+                }
                 _logger?.LogDebug("PadShortText: padding short text '{Text}' with period", text);
                 return trimmed + ".";
             }
 
             return text;
+        }
+
+        private bool IsChineseText(string text)
+        {
+            foreach (char c in text)
+            {
+                if ((c >= 0x4E00 && c <= 0x9FFF) || (c >= 0x3400 && c <= 0x4DBF))
+                    return true;
+            }
+            return false;
         }
 
         private List<(string Text, string LangCode)> SplitTextByLanguage(string text)
@@ -661,7 +693,7 @@ namespace LearningAssistant.Services.TTS
             var merged = new List<(string Text, string LangCode)>();
             foreach (var seg in result)
             {
-                if (string.IsNullOrWhiteSpace(seg.Text))
+                if (string.IsNullOrWhiteSpace(seg.Text) || IsPurePunctuation(seg.Text))
                     continue;
                 merged.Add(seg);
             }
@@ -669,17 +701,27 @@ namespace LearningAssistant.Services.TTS
             return merged;
         }
 
+        private static bool IsPurePunctuation(string text)
+        {
+            foreach (char c in text)
+            {
+                if (!char.IsPunctuation(c) && !char.IsWhiteSpace(c))
+                    return false;
+            }
+            return true;
+        }
+
         private static string DetectLanguageFromChar(char c)
         {
-            if ((c >= 0x4E00 && c <= 0x9FFF) || (c >= 0x3400 && c <= 0x4DBF))
+            if ((c >= 0x4E00 && c <= 0x9FFF) || (c >= 0x3400 && c <= 0x4DBF) || (c >= 0x3000 && c <= 0x303F))
                 return "zh";
-
+            /*
             if ((c >= 0x3040 && c <= 0x309F) || (c >= 0x30A0 && c <= 0x30FF))
                 return "ja";
 
             if (c >= 0xAC00 && c <= 0xD7AF)
                 return "ko";
-
+            */
             return "en";
         }
 
@@ -702,6 +744,12 @@ namespace LearningAssistant.Services.TTS
             return samples;
         }
 
+        private readonly Dictionary<string, string[]> _chineseVoices = new Dictionary<string, string[]>
+        {
+            { "female", new[] { "zf_xiaoxiao", "zf_xiaobei", "zf_xiaoni", "zf_tingting" } },
+            { "male", new[] { "zm_yunjian" } }
+        };
+
         private KokoroVoice? GetVoiceForLanguage(string language)
         {
             string langCode = language.ToLowerInvariant();
@@ -713,41 +761,12 @@ namespace LearningAssistant.Services.TTS
                 case "zh-cn":
                 case "chinese":
                 case "mandarinchinese":
-                    voiceName = "zf_tingting";
+                    voiceName = SelectBestChineseVoice();
                     break;
                 case "en":
                 case "en-us":
                 case "americanenglish":
                     voiceName = string.IsNullOrWhiteSpace(_config.Voice) ? "af_heart" : _config.Voice;
-                    break;
-                case "en-gb":
-                case "britishenglish":
-                    voiceName = "af_sarah";
-                    break;
-                case "ja":
-                case "japanese":
-                    voiceName = "jf_gongitsune";
-                    break;
-                case "es":
-                case "spanish":
-                    voiceName = "af_sara";
-                    break;
-                case "fr":
-                case "french":
-                    voiceName = "af_siobhan";
-                    break;
-                case "it":
-                case "italian":
-                    voiceName = "af_whisper";
-                    break;
-                case "hi":
-                case "hindi":
-                    voiceName = "af_beta";
-                    break;
-                case "pt":
-                case "pt-br":
-                case "brazilianportuguese":
-                    voiceName = "af_heart";
                     break;
                 default:
                     voiceName = string.IsNullOrWhiteSpace(_config.Voice) ? "af_heart" : _config.Voice;
@@ -772,11 +791,59 @@ namespace LearningAssistant.Services.TTS
             }
         }
 
+        private string SelectBestChineseVoice()
+        {
+            if (!string.IsNullOrWhiteSpace(_config.Voice))
+            {
+                if (_config.Voice.StartsWith("zf_") || _config.Voice.StartsWith("zm_"))
+                {
+                    return _config.Voice;
+                }
+            }
+
+            foreach (var voice in _chineseVoices["female"])
+            {
+                try
+                {
+                    if (KokoroVoiceManager.GetVoice(voice) != null)
+                    {
+                        _logger?.LogDebug("SelectBestChineseVoice: using voice '{Voice}'", voice);
+                        return voice;
+                    }
+                }
+                catch { }
+            }
+
+            foreach (var voice in _chineseVoices["male"])
+            {
+                try
+                {
+                    if (KokoroVoiceManager.GetVoice(voice) != null)
+                    {
+                        _logger?.LogDebug("SelectBestChineseVoice: falling back to male voice '{Voice}'", voice);
+                        return voice;
+                    }
+                }
+                catch { }
+            }
+
+            return "zf_xiaoxiao";
+        }
+
         private static string MapLangCodeToTokenizerLang(string langCode)
         {
             if (langCode == "zh")
                 return "zh";
             return "en";
+        }
+
+        private static float AdjustSpeedForLanguage(string langCode, float baseSpeed)
+        {
+            if (langCode == "zh")
+            {
+                return Math.Clamp(baseSpeed * 0.85f, 0.5f, 1.2f);
+            }
+            return baseSpeed;
         }
 
         private KokoroVoice? SelectVoiceForSegment(string langCode, string? language)

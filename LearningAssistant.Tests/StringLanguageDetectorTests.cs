@@ -105,7 +105,7 @@ namespace LearningAssistant.Tests
         {
             var result = StringLanguageDetector.DetailedDetect("你好 World!");
             result.ChineseCount.Should().Be(2);
-            result.EnglishCount.Should().Be(6);
+            result.EnglishCount.Should().Be(5);
             result.OtherCount.Should().Be(2);
             result.LanguageType.Should().Be(LanguageType.Mixed);
         }

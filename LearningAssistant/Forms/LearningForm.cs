@@ -459,16 +459,21 @@ namespace LearningAssistant.Forms
         }
 
 
-        private void LearningForm_FormClosing(object? sender, FormClosingEventArgs e)
+        private async void LearningForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
             SaveSettings();
             try
             {
                 _gamificationService?.Save();
 
+                if (_services.SpeechCoordinator != null)
+                {
+                    await _services.SpeechCoordinator.StopAsync();
+                }
+
                 if (_ttsService != null)
                 {
-                    _ttsService.StopAsync().GetAwaiter().GetResult();
+                    await _ttsService.StopAsync();
                 }
 
                 ShowStudySessionSummary();
@@ -685,28 +690,10 @@ namespace LearningAssistant.Forms
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public string CurrentDisplayText
-        {
-            set
-            {
-                if (_learningCard != null && !string.IsNullOrEmpty(value))
-                {
-                    _learningCard.Content = value;
-                }
-            }
-        }
+        public string CurrentDisplayText { set { } }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public string CurrentDisplayStruct
-        {
-            set
-            {
-                if (_learningCard != null && !string.IsNullOrEmpty(value))
-                {
-                    _learningCard.Content = value;
-                }
-            }
-        }
+        public string CurrentDisplayStruct { set { } }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public LearningItem? CurrentItem
@@ -727,11 +714,20 @@ namespace LearningAssistant.Forms
             if (_learningCard == null || _currentItem == null) return;
 
             _learningCard.Title = _currentItem.GetMainContent();
-            _learningCard.Content = _currentItem.GetDisplayText();
             _learningCard.Category = comboBoxSubCategory.Text;
             _learningCard.Icon = GetSubjectIcon();
             _learningCard.AccentColor = GetSubjectColor();
             _learningCard.IsSelected = true;
+
+            UpdateCardFields();
+        }
+
+        private void UpdateCardFields()
+        {
+            if (_learningCard == null || _currentItem == null) return;
+
+            var fields = LearningItemFormatter.BuildFields(_currentItem);
+            _learningCard.SetFields(fields);
         }
 
         private string GetSubjectIcon()
@@ -948,6 +944,14 @@ namespace LearningAssistant.Forms
                 }
             }
         }
+
+        public LearningContext CurrentContext => new(
+            UserId: GetCurrentUserId(),
+            Subject: Subject,
+            SubCategory: SubCategory,
+            Mode: LearningMode,
+            SortOrder: SortOrder
+        );
 
 
         public void RefreshSubCategories(List<SubCategoryType> subCategories)
@@ -1416,7 +1420,8 @@ namespace LearningAssistant.Forms
             _learningCard = new LearningCard
             {
                 Dock = DockStyle.Fill,
-                Margin = new Padding(10)
+                Margin = new Padding(10),
+                SpeechCoordinator = _services.SpeechCoordinator
             };
             _learningCard.Click += ContentArea_Click;
 
@@ -1908,6 +1913,9 @@ namespace LearningAssistant.Forms
         }
 
         public event EventHandler<ItemSelectedEventArgs>? ItemSelectedFromList;
+        public event EventHandler<FieldSpeakEventArgs>? FieldSpeakRequested;
+        public event EventHandler<FieldSpeakEventArgs>? FieldStopRequested;
+        public event EventHandler<FieldCopyEventArgs>? FieldCopyRequested;
 
         #endregion
 
@@ -2000,23 +2008,14 @@ namespace LearningAssistant.Forms
             {
                 if (_isShowAnswer)
                 {
-                    // 答题模式：根据是否已揭示答案显示不同内容
                     _answerRevealed = showAnswer;
-                    if (_answerRevealed)
-                    {
-                        _learningCard.Content = _currentItem.GetDisplayText();
-                    }
-                    else
-                    {
-                        _learningCard.Content = _currentItem.GetDisplayStruct();
-                    }
                 }
                 else
                 {
-                    // 学习模式：显示完整内容
                     _answerRevealed = true;
-                    _learningCard.Content = _currentItem.GetDisplayText();
                 }
+                
+                UpdateCardFields();
             }
         }
 
@@ -2782,10 +2781,6 @@ namespace LearningAssistant.Forms
             if (_learningCard != null)
             {
                 _learningCard.Visible = true;
-                if (_currentItem != null)
-                {
-                    _learningCard.Content = _currentItem.GetDisplayText();
-                }
             }
         }
 
@@ -3204,6 +3199,29 @@ namespace LearningAssistant.Forms
 
         private bool ProcessShortcut(Keys keyCode)
         {
+            if (keyCode.HasFlag(Keys.Alt))
+            {
+                var keyWithoutAlt = keyCode & ~Keys.Alt;
+                switch (keyWithoutAlt)
+                {
+                    case Keys.D1:
+                        _learningCard?.TriggerFieldSpeak(0);
+                        return true;
+                    case Keys.D2:
+                        _learningCard?.TriggerFieldSpeak(1);
+                        return true;
+                    case Keys.D3:
+                        _learningCard?.TriggerFieldSpeak(2);
+                        return true;
+                    case Keys.D4:
+                        _learningCard?.TriggerFieldSpeak(3);
+                        return true;
+                    case Keys.D5:
+                        _learningCard?.TriggerFieldSpeak(4);
+                        return true;
+                }
+            }
+
             switch (keyCode)
             {
                 case Keys.Space:

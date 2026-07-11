@@ -103,7 +103,7 @@ namespace LearningAssistant.Forms
                 return;
 
             PositionToast(owner);
-            owner.Controls.Add(this);
+            Show(owner);
             BringToFront();
 
             Opacity = 0;
@@ -125,8 +125,9 @@ namespace LearningAssistant.Forms
         private void PositionToast(Form owner)
         {
             int margin = 10;
-            int x = owner.ClientSize.Width - Width - margin;
-            int y = owner.ClientSize.Height - Height - margin;
+            Point screenOrigin = owner.PointToScreen(new Point(0, 0));
+            int x = screenOrigin.X + owner.ClientSize.Width - Width - margin;
+            int y = screenOrigin.Y + owner.ClientSize.Height - Height - margin;
 
             Location = new Point(x, y);
         }

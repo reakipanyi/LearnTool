@@ -37,9 +37,14 @@ namespace LearningAssistant.Services.Pdf
                 if (!string.IsNullOrEmpty(_currentPdfPath))
                 {
                     _filePageMap[_currentPdfPath] = value;
-                    SaveSession();
                 }
             }
+        }
+
+        public void SetCurrentPageIndex(int pageIndex)
+        {
+            CurrentPageIndex = pageIndex;
+            SaveSession();
         }
 
         public bool IsImageMode => _isImageMode;

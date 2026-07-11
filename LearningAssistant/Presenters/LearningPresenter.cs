@@ -53,6 +53,9 @@ namespace LearningAssistant.Presenters
             _view.ExportErrorBookClicked += View_ExportErrorBookClicked;
             _view.ItemSelectedFromList += View_ItemSelectedFromList;
             _view.SearchTextChanged += View_SearchTextChanged;
+            _view.FieldSpeakRequested += View_FieldSpeakRequested;
+            _view.FieldStopRequested += View_FieldStopRequested;
+            _view.FieldCopyRequested += View_FieldCopyRequested;
         }
 
         private void UnsubscribeFromViewEvents()
@@ -68,6 +71,9 @@ namespace LearningAssistant.Presenters
             _view.ExportErrorBookClicked -= View_ExportErrorBookClicked;
             _view.ItemSelectedFromList -= View_ItemSelectedFromList;
             _view.SearchTextChanged -= View_SearchTextChanged;
+            _view.FieldSpeakRequested -= View_FieldSpeakRequested;
+            _view.FieldStopRequested -= View_FieldStopRequested;
+            _view.FieldCopyRequested -= View_FieldCopyRequested;
         }
 
         private void SubscribeToMediatorEvents()
@@ -80,6 +86,8 @@ namespace LearningAssistant.Presenters
             _eventMediator.SendToPdfQuestion += (_, args) => HandleSendToPdfQuestion(args.Text, args.Language);
             _eventMediator.SettingsChanged += async (_, _) => await _flowHandler.HandleSettingsChangedAsync();
             _eventMediator.OpenStatistics += (_, _) => _flowHandler.OpenStatistics();
+            _eventMediator.FieldSpeakRequested += async (_, args) => await _flowHandler.HandleFieldSpeakAsync(args);
+            _eventMediator.FieldStopRequested += async (_, _) => await _flowHandler.HandleFieldStopAsync();
         }
 
         public async Task InitializeAsync(string userId, string language, string subCategory, string wordBankFile, bool continueMode = true)
@@ -177,6 +185,42 @@ namespace LearningAssistant.Presenters
         private void View_SearchTextChanged(object? sender, EventArgs e)
         {
             _flowHandler.HandleSearchTextChanged(_view.SearchText);
+        }
+
+        private void View_FieldSpeakRequested(object? sender, FieldSpeakEventArgs e)
+        {
+            try
+            {
+                _eventMediator.RaiseFieldSpeakRequested(e.SpeakText, e.Language, e.SpeakKey);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "字段发音请求失败");
+            }
+        }
+
+        private void View_FieldStopRequested(object? sender, EventArgs e)
+        {
+            try
+            {
+                _eventMediator.RaiseFieldStopRequested();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "字段停止发音请求失败");
+            }
+        }
+
+        private void View_FieldCopyRequested(object? sender, FieldCopyEventArgs e)
+        {
+            try
+            {
+                Clipboard.SetText(e.Value);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "字段复制失败");
+            }
         }
 
         private void HandleSendToPdfQuestion(string text, string language)

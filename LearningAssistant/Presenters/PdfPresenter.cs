@@ -206,7 +206,7 @@ namespace LearningAssistant.Presenters
             if (pageIndex < 0 || pageIndex >= maxPage)
                 return;
 
-            _pdfFileManager.CurrentPageIndex = pageIndex;
+            _pdfFileManager.SetCurrentPageIndex(pageIndex);
             _view?.SetCurrentPageIndex(pageIndex);
             _view?.SetLoadingState(true);
             try
@@ -774,7 +774,7 @@ namespace LearningAssistant.Presenters
 
         public void RememberCurrentPageForCurrentFile(int pageIndex)
         {
-            _pdfFileManager.CurrentPageIndex = pageIndex;
+            _pdfFileManager.SetCurrentPageIndex(pageIndex);
         }
 
         public IEnumerable<AnnotationStroke> GetCurrentPageStrokes()
@@ -862,7 +862,7 @@ namespace LearningAssistant.Presenters
 
         public void ExportHighlights()
         {
-            _ = ExportHighlightsToExcelAsync();
+            _ = FireAndForgetWithLogging(ExportHighlightsToExcelAsync(), "ExportHighlightsToExcelAsync");
         }
 
         public void PrintPdf()

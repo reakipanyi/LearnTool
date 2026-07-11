@@ -4,77 +4,99 @@ using FluentAssertions;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Persistence;
 using LearningAssistant.Models.Learning;
+using LearningAssistant.Common;
 
 namespace LearningAssistant.Tests
 {
-    /// <summary>
-    /// 测试 StudyEngine 服务
-    /// </summary>
     public class StudyEngineTests
     {
         private readonly Mock<IDataPersistenceService> _mockPersistenceService;
         private readonly Mock<IContentLoaderService> _mockContentLoaderService;
+        private readonly Mock<IProgressManager> _mockProgressManager;
+        private readonly Mock<IStudyListProcessor> _mockStudyListProcessor;
         private readonly StudyEngine _studyEngine;
 
         public StudyEngineTests()
         {
             _mockPersistenceService = new Mock<IDataPersistenceService>();
             _mockContentLoaderService = new Mock<IContentLoaderService>();
-            _studyEngine = new StudyEngine(_mockPersistenceService.Object, _mockContentLoaderService.Object);
+            _mockProgressManager = new Mock<IProgressManager>();
+            _mockStudyListProcessor = new Mock<IStudyListProcessor>();
+            _studyEngine = new StudyEngine(
+                _mockContentLoaderService.Object,
+                _mockProgressManager.Object,
+                _mockStudyListProcessor.Object,
+                null,
+                _mockPersistenceService.Object);
         }
 
-        private List<object> CreateTestItems()
+        private List<LearningItem> CreateTestItems()
         {
-            return new List<object>
+            return new List<LearningItem>
             {
                 new TestLearningItem("Apple", "苹果", "/ˈæp.l/"),
                 new TestLearningItem("Banana", "香蕉", "/bəˈnæn.ə/")
             };
         }
 
-        private List<object> CreateSingleTestItem()
+        private List<LearningItem> CreateSingleTestItem()
         {
-            return new List<object>
+            return new List<LearningItem>
             {
                 new TestLearningItem("Apple", "苹果", "/ˈæp.l/")
             };
         }
 
-        private void SetupAndInitializeWithItems(List<object> items, string mode = "学习模式")
+        private LearningContext CreateContext(string mode = "学习模式")
+        {
+            var learningMode = mode == "快速模式" ? LearningModeType.Quick : LearningModeType.Study;
+            return new LearningContext(
+                UserId: "test_user",
+                Subject: SubjectType.English,
+                SubCategory: SubCategoryType.EnglishWord,
+                Mode: learningMode,
+                SortOrder: SortOrderType.Sequential
+            );
+        }
+
+        private void SetupAndInitializeWithItems(List<LearningItem> items, string mode = "学习模式")
         {
             _mockContentLoaderService
-                .Setup(x => x.LoadItems(It.IsAny<string>(), It.IsAny<string>()))
+                .Setup(x => x.LoadItems(It.IsAny<LearningContext>()))
                 .Returns(items);
 
-            _studyEngine.Initialize("test_user", "English", "Words", "", mode, "Sequential");
+            _mockStudyListProcessor
+                .Setup(x => x.ProcessItems(It.IsAny<List<LearningItem>>(), It.IsAny<SortOrderType>()))
+                .Returns<List<LearningItem>, SortOrderType>((items, sort) => items);
+
+            _mockStudyListProcessor
+                .Setup(x => x.RemoveDuplicates(It.IsAny<List<LearningItem>>()))
+                .Returns<List<LearningItem>>(items => items);
+
+            var context = CreateContext(mode);
+            _studyEngine.Initialize(context);
         }
 
         [Fact]
         public void Initialize_WithValidData_ShouldLoadItems()
         {
-            // Arrange
             var testItems = CreateTestItems();
 
-            // Act
             SetupAndInitializeWithItems(testItems);
 
-            // Assert
             _studyEngine.TotalCount.Should().Be(2);
-            _mockContentLoaderService.Verify(x => x.LoadItems(It.IsAny<string>(), It.IsAny<string>()), Times.Once);
+            _mockContentLoaderService.Verify(x => x.LoadItems(It.IsAny<LearningContext>()), Times.Once);
         }
 
         [Fact]
         public void GetCurrentItem_AfterInitialize_ShouldReturnFirstItem()
         {
-            // Arrange
             var testItems = CreateTestItems();
 
             SetupAndInitializeWithItems(testItems);
 
-            // Act
             var currentItem = _studyEngine.GetCurrentItem();
 
-            // Assert
             currentItem.Should().NotBeNull();
             currentItem!.GetMainContent().Should().Be("Apple");
         }
@@ -82,31 +104,25 @@ namespace LearningAssistant.Tests
         [Fact]
         public void HasNext_WithMultipleItems_ShouldReturnTrue()
         {
-            // Arrange
             var testItems = CreateTestItems();
 
             SetupAndInitializeWithItems(testItems);
 
-            // Act
             var hasNext = _studyEngine.HasNext();
 
-            // Assert
             hasNext.Should().BeTrue();
         }
 
         [Fact]
         public void MoveNext_ShouldAdvanceToNextItem()
         {
-            // Arrange
             var testItems = CreateTestItems();
 
             SetupAndInitializeWithItems(testItems);
 
-            // Act
             _studyEngine.MoveNext();
             var currentItem = _studyEngine.GetCurrentItem();
 
-            // Assert
             currentItem.Should().NotBeNull();
             currentItem!.GetMainContent().Should().Be("Banana");
         }
@@ -114,48 +130,45 @@ namespace LearningAssistant.Tests
         [Fact]
         public void MarkCurrentAsKnown_ShouldAddToKnownList()
         {
-            // Arrange
             var testItems = CreateSingleTestItem();
 
             SetupAndInitializeWithItems(testItems);
 
-            // Act
             _studyEngine.MarkCurrentAsKnown();
 
-            // Assert
             _studyEngine.KnownItems.Should().Contain("Apple");
         }
 
         [Fact]
         public void GetStatistics_WithCorrectAnswers_ShouldCalculateAccuracy()
         {
-            // Arrange
             var testItems = CreateSingleTestItem();
 
             SetupAndInitializeWithItems(testItems, "快速模式");
             _studyEngine.MarkCurrentAsKnown();
 
-            // Act
             var stats = _studyEngine.GetStatistics();
 
-            // Assert
             stats.AccuracyRate.Should().BeGreaterThan(0);
         }
-
-        // 边缘情况测试
 
         [Fact]
         public void Initialize_WithEmptyItemsList_ShouldNotThrow()
         {
-            // Arrange
             _mockContentLoaderService
-                .Setup(x => x.LoadItems(It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(new List<object>());
+                .Setup(x => x.LoadItems(It.IsAny<LearningContext>()))
+                .Returns(new List<LearningItem>());
 
-            // Act
-            Action act = () => _studyEngine.Initialize("test_user", "English", "Words", "", "学习模式", "Sequential");
+            _mockStudyListProcessor
+                .Setup(x => x.ProcessItems(It.IsAny<List<LearningItem>>(), It.IsAny<SortOrderType>()))
+                .Returns<List<LearningItem>, SortOrderType>((items, sort) => new List<LearningItem>());
 
-            // Assert
+            _mockStudyListProcessor
+                .Setup(x => x.RemoveDuplicates(It.IsAny<List<LearningItem>>()))
+                .Returns(new List<LearningItem>());
+
+            Action act = () => _studyEngine.Initialize(CreateContext());
+
             act.Should().NotThrow();
             _studyEngine.TotalCount.Should().Be(0);
         }
@@ -163,29 +176,24 @@ namespace LearningAssistant.Tests
         [Fact]
         public void GetCurrentItem_BeforeInitialize_ShouldReturnNull()
         {
-            // Act
             var currentItem = _studyEngine.GetCurrentItem();
 
-            // Assert
             currentItem.Should().BeNull();
         }
 
         [Fact]
         public void MoveNext_AtEndOfList_ShouldNotAdvance()
         {
-            // Arrange
             var testItems = CreateSingleTestItem();
 
             SetupAndInitializeWithItems(testItems);
 
-            // Act
-            _studyEngine.MoveNext(); // 第一次移动到第一个
+            _studyEngine.MoveNext();
             var hasNextAfterFirst = _studyEngine.HasNext();
             
-            _studyEngine.MoveNext(); // 尝试再移动
+            _studyEngine.MoveNext();
             var currentItem = _studyEngine.GetCurrentItem();
 
-            // Assert
             hasNextAfterFirst.Should().BeFalse();
             currentItem.Should().NotBeNull();
             currentItem!.GetMainContent().Should().Be("Apple");
@@ -194,53 +202,48 @@ namespace LearningAssistant.Tests
         [Fact]
         public void MarkCurrentAsKnown_DuplicateItem_ShouldOnlyAddOnce()
         {
-            // Arrange
             var testItems = CreateSingleTestItem();
 
             SetupAndInitializeWithItems(testItems);
 
-            // Act
             _studyEngine.MarkCurrentAsKnown();
-            _studyEngine.MarkCurrentAsKnown(); // 重复标记
+            _studyEngine.MarkCurrentAsKnown();
 
-            // Assert
             _studyEngine.KnownItems.Should().HaveCount(1);
         }
 
         [Fact]
         public void MarkCurrentAsUnknown_ShouldAddToUnknownList()
         {
-            // Arrange
             var testItems = CreateSingleTestItem();
 
             SetupAndInitializeWithItems(testItems);
 
-            // Act
             _studyEngine.MarkCurrentAsUnknown();
 
-            // Assert
             _studyEngine.UnknownItems.Should().Contain("Apple");
         }
     }
 
-    /// <summary>
-    /// 测试用的学习项类
-    /// </summary>
     public class TestLearningItem : LearningItem
     {
-        private readonly string _mainContent;
-        private readonly string _displayText;
+        private readonly string _content;
+        private readonly string _meaning;
         private readonly string _pronunciation;
 
-        public TestLearningItem(string mainContent, string displayText, string pronunciation)
+        public TestLearningItem(string content, string meaning, string pronunciation)
         {
-            _mainContent = mainContent;
-            _displayText = displayText;
+            _content = content;
+            _meaning = meaning;
             _pronunciation = pronunciation;
         }
 
-        public override string GetMainContent() => _mainContent;
-        public override string GetDisplayText() => _displayText;
+        public override string GetMainContent() => _content;
+
+        public override string GetDisplayText() => $"{_content}: {_meaning}";
+
         public override string GetPronunciation() => _pronunciation;
+
+        public override string GetDisplayStruct() => "单词 | 音标 | 释义";
     }
 }

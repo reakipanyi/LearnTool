@@ -14,18 +14,44 @@
 |-----------|---------------|--------|----------------------|------------|
 | **LearningItem** | 结构不变（目标11） | 创建 `LearningItemEntity`（9.6） | 参数化改造 | Phase 7 |
 | **ValueObject 基类** | 依赖 `Meaning`/`Example`/`Pronunciation` 结构 | 合并两个基类（9.1） | 无 | Phase 6 |
-| **LearningFlowHandler** | 移除 `_pronunciationQueue`，引入 `ISpeechCoordinator`（6.6） | 引入领域服务层（10.4） | 参数化改造 | Phase 3 + Phase 5 |
-| **ILearningView** | 新增三个字段发音事件（6.5） | 无 | `LearningContext` 参数化 | Phase 4 |
+| **LearningFlowHandler** | 移除 `_pronunciationQueue`，引入 `ISpeechCoordinator`（6.6） | 引入领域服务层（10.4）+ 用户聚合拆分（9.2） | 参数化改造 | Phase 2 + Phase 5 |
+| **ILearningView** | 新增三个字段发音事件（6.5） | 无 | `LearningContext` 参数化 | Phase 4a + Phase 4b |
 | **LearningItemFormatter** | 新增 `BuildFields`（6.2） | 无 | 无 | Phase 1 |
 | **LearningCard** | 容器化改造（6.4） | 无 | 无 | Phase 3 |
 | **ContentField** | 新增 `record`（6.1） | 无 | 无 | Phase 1 |
 | **ISpeechCoordinator** | 新增（6.6） | 依赖 | 无 | Phase 2 |
-| **AuditableEntityBase** | 无 | 添加 `RowVersion`（10.3.1） | 无 | Phase 8 |
-| **仓储模式** | 无 | 为每个聚合根创建仓储（10.2.1） | 无 | Phase 8 |
+| **AuditableEntityBase** | 无 | 添加 `RowVersion`（10.3.1） | 无 | Phase 8（调整后） |
+| **仓储模式** | 无 | 为每个聚合根创建仓储（10.2.1） | 无 | Phase 8（调整后） |
+| **用户聚合拆分** | 无 | 拆分为用户、提醒、目标三个聚合（9.2） | 无 | Phase 5 |
 
 ---
 
 ## 二、执行 Phase 序列
+
+### Phase 0：准备阶段
+
+**来源**：新增
+
+**任务清单**：
+1. 建立基线测试：运行现有单元测试，确保全部通过，记录当前状态
+2. 创建分支策略：为每个 Phase 创建独立分支模板
+3. 验证 CI/CD 流程：确保当前 CI/CD 能正常构建和测试
+4. 备份当前代码：创建 tag `before-unified-plan`
+5. 初始化测试数据：准备覆盖各子类别的测试学习项
+
+**涉及文件**：无（环境准备）
+
+**前置依赖**：无
+
+**完成标准**：
+- 所有现有单元测试通过
+- 分支策略文档创建完成
+- CI/CD 构建成功
+- Git tag 创建完成
+
+**回归测试范围**：全量现有测试
+
+---
 
 ### Phase 1：结构化字段输出（LEARNING_CARD P1）
 
@@ -44,7 +70,7 @@
 | `Services/Learning/LearningItemFormatter.cs` | 修改 |
 | `LearningAssistant.Tests/LearningItemFormatterTests.cs` | 新增 |
 
-**前置依赖**：无
+**前置依赖**：Phase 0 完成
 
 **完成标准**：
 - 编译通过，无错误
@@ -67,9 +93,11 @@
 1. 新增 `SpeakStateChangedEventArgs`（含 `SpeakKey` 播放来源标识）
 2. 新增 `ISpeechCoordinator` 接口
 3. 新增 `SpeechCoordinator` 实现（吸收 `_pronunciationQueue`）
-4. `LearningFlowHandler` 全局发音切换到 `ISpeechCoordinator`
-5. 注册到 DI（`ServiceCollectionExtensions`）
-6. 新增 `SpeechCoordinatorTests` 单元测试
+4. 新增 `IDomainService` 空接口（预留注入点，Phase 5 填充）
+5. `LearningFlowHandler` 全局发音切换到 `ISpeechCoordinator`
+6. `LearningFlowHandler` 注入 `IDomainService`（当前为空实现）
+7. 注册到 DI（`ServiceCollectionExtensions`）
+8. 新增 `SpeechCoordinatorTests` 单元测试
 
 **涉及文件**：
 | 文件 | 改动类型 |
@@ -77,6 +105,7 @@
 | `Services/TTS/SpeakStateChangedEventArgs.cs` | 新增 |
 | `Services/TTS/ISpeechCoordinator.cs` | 新增 |
 | `Services/TTS/SpeechCoordinator.cs` | 新增 |
+| `Services/Learning/IDomainService.cs` | 新增（空接口，预留） |
 | `Presenters/LearningFlowHandler.cs` | 修改 |
 | `Common/ServiceCollectionExtensions.cs` | 修改 |
 | `LearningAssistant.Tests/SpeechCoordinatorTests.cs` | 新增 |
@@ -86,6 +115,7 @@
 **完成标准**：
 - 编译通过，无错误
 - `_pronunciationQueue` 已移除，由 `SpeechCoordinator` 内部队列替代
+- `IDomainService` 空接口已注入，不影响当前逻辑
 - 全局发音/自动播放/预缓存行为无回归
 - 单元测试全部通过（串行化、`StopAsync` 中断、缓存命中、`SpeakStateChanged` 含 `SpeakKey`）
 
@@ -132,9 +162,9 @@
 
 ---
 
-### Phase 4：视图集成 + 键盘快捷键 + ILearningView 接口改造（LEARNING_CARD P4 + INTERFACE_REFACTORING）
+### Phase 4a：视图集成 + 键盘快捷键（LEARNING_CARD P4）
 
-**来源**：LEARNING_CARD 第六章 6.5-6.7 + INTERFACE_REFACTORING_SUGGESTIONS
+**来源**：LEARNING_CARD 第六章 6.5-6.7
 
 **任务清单**：
 1. 改造 `LearningForm`：`UpdateLearningCard`/`UpdateDetailState` 改用 `SetFields`
@@ -143,9 +173,8 @@
 4. 转发三个字段事件（`FieldSpeakRequested`/`FieldStopRequested`/`FieldCopyRequested`）
 5. `FieldCopyRequested` 直接处理 `Clipboard.SetText`
 6. `ILearningView` 新增三个字段发音事件
-7. **合并 INTERFACE_REFACTORING**：`ILearningView` 参数化改造（`LearningContext`）
-8. `LearningFlowHandler` 订阅字段发音/停止（传递 `speakKey`）
-9. Dispose 中清理新增事件
+7. `LearningFlowHandler` 订阅字段发音/停止（传递 `speakKey`）
+8. Dispose 中清理新增事件
 
 **涉及文件**：
 | 文件 | 改动类型 |
@@ -153,7 +182,6 @@
 | `Forms/LearningForm.cs` | 修改 |
 | `Views/ILearningView.cs` | 修改 |
 | `Presenters/LearningFlowHandler.cs` | 修改 |
-| `Forms/UserControls/LearningContentView.cs` | 修改（死代码清理） |
 
 **前置依赖**：Phase 3 完成
 
@@ -164,7 +192,6 @@
 - 来源追踪正确（快速切换多行）
 - 与全局发音不叠加
 - `Alt+1..Alt+5` 快捷键工作正常
-- `ILearningView` 参数化完成（`LearningContext`）
 - 事件清理正确（无内存泄漏）
 
 **回归测试范围**：
@@ -177,30 +204,69 @@
 
 ---
 
-### Phase 5：领域服务层引入（ENTITY 10.4）
+### Phase 4b：ILearningView 参数化改造（INTERFACE_REFACTORING）
 
-**来源**：ENTITY 第十章 10.4
+**来源**：INTERFACE_REFACTORING_SUGGESTIONS
 
 **任务清单**：
-1. 创建 `LearningDomainService` 领域服务
-2. 识别跨聚合业务场景（完成学习项、完成挑战、添加笔记、完成复习、完成费曼）
-3. 领域服务协调跨聚合操作，发布领域事件
-4. `LearningFlowHandler` 中跨聚合逻辑迁移到领域服务
-5. 领域服务调用 `ISpeechCoordinator` 完成发音操作
+1. `ILearningView` 参数化改造（`LearningContext` 替代分散参数）
+2. 更新 `LearningForm` 实现
+3. 更新 `LearningFlowHandler` 调用
+4. 更新其他 `ILearningView` 实现类
 
 **涉及文件**：
 | 文件 | 改动类型 |
 |------|----------|
-| `Services/Learning/LearningDomainService.cs` | 新增 |
+| `Views/ILearningView.cs` | 修改 |
+| `Forms/LearningForm.cs` | 修改 |
 | `Presenters/LearningFlowHandler.cs` | 修改 |
-| `Common/ServiceCollectionExtensions.cs` | 修改（注册领域服务） |
 
-**前置依赖**：Phase 4 完成（`ISpeechCoordinator` 和字段事件已就位）
+**前置依赖**：Phase 4a 完成
+
+**完成标准**：
+- 编译通过，无错误
+- `ILearningView` 参数化完成（`LearningContext`）
+- 字段发音事件保留且正常工作
+- 功能无回归
+
+**回归测试范围**：
+- 学习引擎初始化
+- 进度查询
+- 字段发音功能
+
+---
+
+### Phase 5：领域服务层引入 + 用户聚合拆分（ENTITY 9.2 + 10.4）
+
+**来源**：ENTITY 第九章 9.2 + 第十章 10.4
+
+**任务清单**：
+1. 创建 `LearningDomainService` 实现 `IDomainService` 接口
+2. 识别跨聚合业务场景（完成学习项、完成挑战、添加笔记、完成复习、完成费曼）
+3. 领域服务协调跨聚合操作，发布领域事件
+4. **用户聚合拆分**：将 `Reminder`/`ReminderRepeatDay` 和 `LearningGoal`/`DailyGoalRecord` 拆分为独立聚合
+5. 创建 `ReminderRepository` 和 `LearningGoalRepository`
+6. `LearningFlowHandler` 中跨聚合逻辑迁移到领域服务
+7. 领域服务调用 `ISpeechCoordinator` 完成发音操作
+
+**涉及文件**：
+| 文件 | 改动类型 |
+|------|----------|
+| `Services/Learning/LearningDomainService.cs` | 新增（实现 `IDomainService`） |
+| `Services/Learning/IDomainService.cs` | 修改（添加方法签名） |
+| `Services/Repositories/IReminderRepository.cs` | 新增 |
+| `Services/Repositories/ILearningGoalRepository.cs` | 新增 |
+| `Presenters/LearningFlowHandler.cs` | 修改 |
+| `Common/ServiceCollectionExtensions.cs` | 修改（注册领域服务和仓储） |
+| `Data/Database/Entities.cs` | 修改（调整实体关系） |
+
+**前置依赖**：Phase 4b 完成（`ISpeechCoordinator` 和字段事件已就位）
 
 **完成标准**：
 - 编译通过，无错误
 - 跨聚合业务操作由领域服务协调
 - 领域事件正确发布（`ItemLearnedEvent`、`ChallengeCompletedEvent` 等）
+- 用户聚合已拆分为三个独立聚合
 - 发音操作通过 `ISpeechCoordinator` 执行
 - 业务规则不变（XP 奖励、挑战进度等）
 
@@ -209,6 +275,8 @@
 - 完成挑战流程（解锁徽章、更新 XP）
 - 添加笔记流程（XP+15、更新目标进度）
 - 完成复习流程（更新记忆强度、移除错题）
+- 提醒功能
+- 目标管理功能
 
 ---
 
@@ -233,7 +301,7 @@
 | `Models/Learning/ValueObjects/WordFeatures.cs` | 修改（继承） |
 | `Models/Learning/ValueObjects/LearningProgress.cs` | 修改（继承） |
 
-**前置依赖**：Phase 4 完成（LEARNING_CARD 全部 UI 改造完成）
+**前置依赖**：Phase 4b 完成（LEARNING_CARD 全部 UI 改造完成）
 
 **完成标准**：
 - 编译通过，无错误
@@ -248,12 +316,41 @@
 
 ---
 
-### Phase 7：LearningItem 持久化迁移（ENTITY 9.6）
+### Phase 7：添加乐观并发控制（ENTITY 10.3.1）
+
+**来源**：ENTITY 第十章 10.3.1
+
+**任务清单**：
+1. `AuditableEntityBase` 添加 `RowVersion` 字段
+2. EF Core 配置 `IsRowVersion`
+3. 添加并发冲突处理逻辑
+
+**涉及文件**：
+| 文件 | 改动类型 |
+|------|----------|
+| `Data/Database/EntityBase.cs` | 修改（添加 `RowVersion`） |
+| `Data/Database/AppDbContext.cs` | 修改（配置 `IsRowVersion`） |
+
+**前置依赖**：Phase 6 完成
+
+**完成标准**：
+- 编译通过，无错误
+- `RowVersion` 字段正确添加
+- EF Core 配置正确
+- 并发冲突可被捕获和处理
+
+**回归测试范围**：
+- 所有数据持久化操作
+- 并发场景测试（模拟多用户同时修改）
+
+---
+
+### Phase 8：LearningItem 持久化迁移（ENTITY 9.6）
 
 **来源**：ENTITY 第九章 9.6
 
 **任务清单**：
-1. 创建 `LearningItemEntity` 数据库实体
+1. 创建 `LearningItemEntity` 数据库实体（自带 `RowVersion`）
 2. 更新 `AppDbContext` 注册实体
 3. 更新 `DbModelConverter` 添加转换方法
 4. 创建数据迁移工具（`DataMigrationService`）
@@ -269,11 +366,11 @@
 | `Services/Data/DataMigrationService.cs` | 新增 |
 | `Common/ServiceCollectionExtensions.cs` | 修改（注册迁移服务） |
 
-**前置依赖**：Phase 6 完成
+**前置依赖**：Phase 7 完成（`RowVersion` 已添加，新实体自带并发控制）
 
 **完成标准**：
 - 编译通过，无错误
-- `LearningItemEntity` 正确映射 `LearningItem`
+- `LearningItemEntity` 正确映射 `LearningItem`，自带 `RowVersion`
 - 数据迁移工具可将文件系统数据迁移到数据库
 - 配置开关可切换数据来源
 - LEARNING_CARD 功能无回归（输入仍是 `LearningItem` 对象）
@@ -286,21 +383,17 @@
 
 ---
 
-### Phase 8：基础设施优化 + 并发控制（ENTITY 10.2-10.3）
+### Phase 9：基础设施优化（ENTITY 10.2）
 
-**来源**：ENTITY 第十章 10.2-10.3
+**来源**：ENTITY 第十章 10.2
 
 **任务清单**：
 1. 为每个聚合根创建仓储接口和实现
-2. 添加乐观并发控制（`AuditableEntityBase` 添加 `RowVersion`）
-3. EF Core 配置 `IsRowVersion`
-4. 添加并发冲突处理逻辑
+2. 注册到 DI
 
 **涉及文件**：
 | 文件 | 改动类型 |
 |------|----------|
-| `Data/Database/EntityBase.cs` | 修改（添加 `RowVersion`） |
-| `Data/Database/AppDbContext.cs` | 修改（配置 `IsRowVersion`） |
 | `Services/Repositories/IUserProfileRepository.cs` | 新增 |
 | `Services/Repositories/ISpacedRepetitionRepository.cs` | 新增 |
 | `Services/Repositories/IWrongAnswerRepository.cs` | 新增 |
@@ -310,31 +403,26 @@
 | `Services/Repositories/IQuizRepository.cs` | 新增 |
 | `Common/ServiceCollectionExtensions.cs` | 修改（注册仓储） |
 
-**前置依赖**：Phase 7 完成
+**前置依赖**：Phase 8 完成
 
 **完成标准**：
 - 编译通过，无错误
 - 所有聚合根有对应的仓储接口和实现
-- `RowVersion` 字段正确添加
-- 并发冲突可被捕获和处理
 - 现有数据访问功能无回归
 
 **回归测试范围**：
 - 所有数据持久化操作
-- 并发场景测试（模拟多用户同时修改）
 - 现有 Service 层功能
 
 ---
 
-### Phase 9：清理收尾（LEARNING_CARD P5 + ENTITY 9.3）
+### Phase 10：清理收尾（LEARNING_CARD P5）
 
-**来源**：LEARNING_CARD 第六章 6.7 + ENTITY 第九章 9.3
+**来源**：LEARNING_CARD 第六章 6.7
 
 **任务清单**：
 1. 移除 `FormatDisplayText`/`FormatDisplayStruct` 旧方法及 `LearningCard.Content` 残留引用
 2. 移除 `LearningContentView` 中 `_labelContent`/`_listBoxDisplay` 死代码
-3. 废弃 `CategoryProgressEntity` 中的 `KnownItemsJson` 和 `UnknownItemsJson` 字段
-4. 完全使用 `LearningItemStateEntity` 存储学习项状态
 
 **涉及文件**：
 | 文件 | 改动类型 |
@@ -342,14 +430,12 @@
 | `Services/Learning/LearningItemFormatter.cs` | 修改（移除旧方法） |
 | `Forms/UserControls/LearningCard.cs` | 修改（清理残留引用） |
 | `Forms/UserControls/LearningContentView.cs` | 修改（移除死代码） |
-| `Data/Database/Entities.cs` | 修改（废弃 JSON 字段） |
 
-**前置依赖**：Phase 8 完成
+**前置依赖**：Phase 9 完成
 
 **完成标准**：
 - 编译通过，无错误
 - 旧代码路径完全移除
-- `CategoryProgressEntity` 不再使用 JSON 字段
 - 功能无回归
 
 **回归测试范围**：
@@ -357,29 +443,64 @@
 
 ---
 
+### Phase 11：废弃 JSON 字段（ENTITY 9.3）
+
+**来源**：ENTITY 第九章 9.3
+
+> **注意**：此 Phase 需在 Phase 8 上线后运行 **2-4 周验证期**，确认 `LearningItemStateEntity` 在生产中完全可靠后再执行。
+
+**任务清单**：
+1. 废弃 `CategoryProgressEntity` 中的 `KnownItemsJson` 和 `UnknownItemsJson` 字段
+2. 完全使用 `LearningItemStateEntity` 存储学习项状态
+3. 数据迁移：将现有 JSON 数据迁移到 `LearningItemStateEntity`
+
+**涉及文件**：
+| 文件 | 改动类型 |
+|------|----------|
+| `Data/Database/Entities.cs` | 修改（废弃 JSON 字段） |
+| `Services/Data/DataMigrationService.cs` | 修改（添加 JSON 迁移） |
+
+**前置依赖**：Phase 10 完成 + 验证期结束
+
+**完成标准**：
+- 编译通过，无错误
+- `CategoryProgressEntity` 不再使用 JSON 字段
+- 数据迁移完成，无数据丢失
+- 功能无回归
+
+**回归测试范围**：
+- 学习进度统计
+- 学习项状态管理
+- 全量回归测试
+
+---
+
 ## 三、关键路径
 
 ```
-Phase 1 ──► Phase 2 ──► Phase 3 ──► Phase 4 ──► Phase 5 ──► Phase 6 ──► Phase 7 ──► Phase 8 ──► Phase 9
-              │               │               │               │               │               │
-              │               └───────────────┴───────────────┴───────────────┘               │
-              │                                                     │                        │
-              └─────────────────────────────────────────────────────┘                        │
-                                                                                             │
-                                      关键路径（任何延期会阻塞后续所有 Phase）                  │
-                                                                                             │
-                                          Phase 4 是最大瓶颈：                               │
-                                          - ILearningView 接口改造                          │
-                                          - LearningForm 集成                                │
-                                          - LearningFlowHandler 改造                        │
+Phase 0 ──► Phase 1 ──► Phase 2 ──► Phase 3 ──► Phase 4a ──► Phase 4b ──► Phase 5 ──► Phase 6 ──► Phase 7 ──► Phase 8 ──► Phase 9 ──► Phase 10 ──► [2-4周验证期] ──► Phase 11
+              │               │               │               │               │               │               │               │               │
+              │               └───────────────┴───────────────┴───────────────┴───────────────┘               │               │
+              │                                                     │                        │               │
+              └─────────────────────────────────────────────────────┘                        │               │
+                                                                                             │               │
+                                      关键路径（任何延期会阻塞后续所有 Phase）                  │               │
+                                                                                             │               │
+                                          Phase 4a + 4b 是最大瓶颈：                           │               │
+                                          - ILearningView 接口改造（字段事件 + 参数化）          │               │
+                                          - LearningForm 集成                                │               │
+                                          - LearningFlowHandler 改造                        │               │
 ```
 
 **关键路径分析**：
-- **Phase 1-4**：LEARNING_CARD 核心改造，必须顺序执行
-- **Phase 5**：依赖 Phase 4 的 `ISpeechCoordinator` 和字段事件
-- **Phase 6-7**：依赖 Phase 4 完成（值对象和 LearningItem 结构不再变动）
-- **Phase 8**：依赖 Phase 7 的数据库实体创建
-- **Phase 9**：依赖所有前面的 Phase 完成
+- **Phase 0-4b**：LEARNING_CARD 核心改造，必须顺序执行
+- **Phase 5**：依赖 Phase 4b 的 `ISpeechCoordinator` 和字段事件，同时完成用户聚合拆分
+- **Phase 6**：依赖 Phase 4b 完成（值对象结构不再变动）
+- **Phase 7**：依赖 Phase 6 完成（实体基类稳定）
+- **Phase 8**：依赖 Phase 7 完成（`RowVersion` 已添加）
+- **Phase 9**：依赖 Phase 8 完成（数据库实体稳定）
+- **Phase 10**：依赖所有前面的 Phase 完成
+- **Phase 11**：依赖 Phase 10 完成 + 2-4 周验证期
 
 ---
 
@@ -389,12 +510,14 @@ Phase 1 ──► Phase 2 ──► Phase 3 ──► Phase 4 ──► Phase 5 
 |------|------|------|----------|------------|
 | LEARNING_CARD 字段映射错误 | 低 | 高 | `LearningItemFormatterTests` 覆盖全部子类别 | Phase 1 |
 | `ISpeechCoordinator` 串行化失败 | 中 | 高 | `SpeechCoordinatorTests` 测试多并发场景 | Phase 2 |
-| 播放来源追踪状态混乱 | 中 | 中 | `SpeakKey` 唯一性保证（`Label + ":" + SpeakText`） | Phase 3-4 |
-| ILearningView 接口改造回归 | 高 | 中 | 合并 LEARNING_CARD 和 INTERFACE_REFACTORING 到同一 Phase | Phase 4 |
-| LearningFlowHandler 两次改造冲突 | 中 | 高 | Phase 2 先完成 ISpeechCoordinator，Phase 5 再引入领域服务层 | Phase 2, 5 |
+| 播放来源追踪状态混乱 | 中 | 中 | `SpeakKey` 唯一性保证（`Label + ":" + SpeakText`） | Phase 3-4a |
+| ILearningView 接口改造回归 | 高 | 中 | 拆分为 Phase 4a（字段事件）和 Phase 4b（参数化），降低单次风险 | Phase 4a, 4b |
+| LearningFlowHandler 两次改造冲突 | 中 | 高 | Phase 2 预留 `IDomainService` 空接口注入点，Phase 5 只填充实现 | Phase 2, 5 |
+| 用户聚合拆分数据迁移失败 | 中 | 高 | 创建 `ReminderRepository` 和 `LearningGoalRepository`，保留旧数据作为兼容层 | Phase 5 |
 | 值对象基类统一导致字段映射失效 | 低 | 中 | 仅修改继承关系，保持字段结构不变 | Phase 6 |
-| LearningItem 持久化迁移数据丢失 | 低 | 高 | 保留旧路径作为兼容层，添加数据校验 | Phase 7 |
-| 并发冲突未正确处理 | 中 | 中 | `RowVersion` + `DbUpdateConcurrencyException` 处理 | Phase 8 |
+| LearningItem 持久化迁移数据丢失 | 低 | 高 | 保留旧路径作为兼容层，添加数据校验；新实体自带 `RowVersion` | Phase 8 |
+| 并发冲突未正确处理 | 中 | 中 | `RowVersion` + `DbUpdateConcurrencyException` 处理 | Phase 7 |
+| JSON 字段废弃后数据不一致 | 低 | 高 | 设置 2-4 周验证期，确保 `LearningItemStateEntity` 完全可靠 | Phase 11 |
 
 ---
 
@@ -402,16 +525,20 @@ Phase 1 ──► Phase 2 ──► Phase 3 ──► Phase 4 ──► Phase 5 
 
 | Phase | 预估工时 | 关键技能 | 依赖资源 |
 |-------|----------|----------|----------|
+| Phase 0 | 2h | Git、CI/CD | 项目环境 |
 | Phase 1 | 4h | C#、单元测试 | `LearningItem` 结构理解 |
 | Phase 2 | 8h | C#、TTS、异步编程 | `ITTSService` 理解 |
 | Phase 3 | 12h | WinForms、UI 设计 | `LearningCard` 当前代码 |
-| Phase 4 | 16h | WinForms、MVP 模式 | `LearningForm`、`ILearningView` |
-| Phase 5 | 8h | DDD、领域事件 | `IEventBus`、各 Service |
+| Phase 4a | 10h | WinForms、MVP 模式 | `LearningForm`、`ILearningView` |
+| Phase 4b | 6h | WinForms、接口重构 | `LearningContext` 理解 |
+| Phase 5 | 12h | DDD、领域事件、EF Core | `IEventBus`、各 Service、实体关系 |
 | Phase 6 | 2h | C#、继承重构 | 值对象当前代码 |
-| Phase 7 | 10h | EF Core、数据迁移 | `AppDbContext` |
-| Phase 8 | 8h | Repository Pattern、并发控制 | 数据库实体理解 |
-| Phase 9 | 4h | 代码清理、回归测试 | 全量代码理解 |
-| **合计** | **72h** | | |
+| Phase 7 | 4h | EF Core、并发控制 | `EntityBase` |
+| Phase 8 | 10h | EF Core、数据迁移 | `AppDbContext` |
+| Phase 9 | 8h | Repository Pattern | 数据库实体理解 |
+| Phase 10 | 4h | 代码清理、回归测试 | 全量代码理解 |
+| Phase 11 | 4h | 数据迁移、回归测试 | `CategoryProgressEntity` |
+| **合计** | **86h** | | |
 
 ---
 
@@ -419,15 +546,19 @@ Phase 1 ──► Phase 2 ──► Phase 3 ──► Phase 4 ──► Phase 5 
 
 | Phase | 交付物 | 验收标准 |
 |-------|--------|----------|
+| Phase 0 | 基线测试报告、分支策略文档、Git tag | 测试通过，tag 创建完成 |
 | Phase 1 | `ContentField.cs`、`LearningItemFormatterTests.cs` | 编译通过，测试通过 |
-| Phase 2 | `ISpeechCoordinator.cs`、`SpeechCoordinator.cs`、`SpeechCoordinatorTests.cs` | 全局发音无回归 |
+| Phase 2 | `ISpeechCoordinator.cs`、`SpeechCoordinator.cs`、`IDomainService.cs`、`SpeechCoordinatorTests.cs` | 全局发音无回归 |
 | Phase 3 | `ContentFieldRow.cs`、改造后的 `LearningCard.cs` | 卡片字段行渲染正常 |
-| Phase 4 | 改造后的 `LearningForm.cs`、`ILearningView.cs`、`LearningFlowHandler.cs` | 字段级 🔊/📋 可用 |
-| Phase 5 | `LearningDomainService.cs` | 跨聚合操作协调正常 |
+| Phase 4a | 改造后的 `LearningForm.cs`、`ILearningView.cs`、`LearningFlowHandler.cs` | 字段级 🔊/📋 可用 |
+| Phase 4b | 参数化改造后的 `ILearningView.cs` | `LearningContext` 参数化完成 |
+| Phase 5 | `LearningDomainService.cs`、用户聚合拆分 | 跨聚合操作协调正常，三个独立聚合就位 |
 | Phase 6 | 统一后的 ValueObject 基类 | 值对象结构不变，编译通过 |
-| Phase 7 | `LearningItemEntity.cs`、`DataMigrationService.cs` | 数据可从文件系统迁移到数据库 |
-| Phase 8 | 各仓储接口和实现、`RowVersion` 字段 | 仓储模式就位，并发控制生效 |
-| Phase 9 | 清理后的代码库 | 旧代码路径完全移除，全量回归通过 |
+| Phase 7 | `RowVersion` 字段、并发冲突处理 | 并发控制生效 |
+| Phase 8 | `LearningItemEntity.cs`、`DataMigrationService.cs` | 数据可从文件系统迁移到数据库 |
+| Phase 9 | 各仓储接口和实现 | 仓储模式就位 |
+| Phase 10 | 清理后的代码库 | 旧代码路径完全移除 |
+| Phase 11 | JSON 字段废弃、数据迁移完成 | 数据一致，功能无回归 |
 
 ---
 
@@ -452,6 +583,7 @@ Phase 1 ──► Phase 2 ──► Phase 3 ──► Phase 4 ──► Phase 5 
 
 每个 Phase 开始前，创建 git 分支：
 ```bash
+git checkout -b phase-0-preparation
 git checkout -b phase-1-content-field
 git checkout -b phase-2-speech-coordinator
 # ...
@@ -466,6 +598,15 @@ git checkout -b phase-2-speech-coordinator
 - 阻塞问题
 - 风险状态
 
+### 7.5 验证期管理（Phase 11 前）
+
+Phase 8 完成后，进入验证期：
+1. 部署到测试环境
+2. 运行 2-4 周验证
+3. 监控 `LearningItemStateEntity` 的使用情况
+4. 确认无数据不一致问题
+5. 验证期结束后执行 Phase 11
+
 ---
 
 ## 八、注意事项
@@ -474,4 +615,6 @@ git checkout -b phase-2-speech-coordinator
 2. **保持向后兼容**：过渡期保留旧方法，逐步移除
 3. **测试先行**：每个 Phase 的单元测试应与代码同步完成
 4. **文档同步**：代码变更后，同步更新相关文档
-5. **用户通知**：涉及用户体验变化的 Phase（Phase 3-4）完成后，通知用户测试新功能
+5. **用户通知**：涉及用户体验变化的 Phase（Phase 3-4a）完成后，通知用户测试新功能
+6. **验证期必须执行**：Phase 11（JSON 字段废弃）必须在验证期确认 `LearningItemStateEntity` 可靠后才能执行
+7. **预留注入点**：Phase 2 预留的 `IDomainService` 空接口在 Phase 5 才填充实现，减少二次侵入

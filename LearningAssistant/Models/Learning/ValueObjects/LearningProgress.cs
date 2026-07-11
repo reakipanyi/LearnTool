@@ -1,3 +1,5 @@
+using LearningAssistant.Models.ValueObjects;
+
 namespace LearningAssistant.Models.Learning.ValueObjects
 {
     public sealed class LearningProgress : ValueObject
@@ -29,7 +31,7 @@ namespace LearningAssistant.Models.Learning.ValueObjects
                 isCorrect ? Streak + 1 : 0
             );
 
-        protected override IEnumerable<object> GetEqualityComponents()
+        public override IEnumerable<object?> GetEqualityComponents()
         {
             yield return TotalReviewCount;
             yield return CorrectCount;

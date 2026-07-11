@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using LearningAssistant.Common;
+using LearningAssistant.Models.Learning;
+using LearningAssistant.Models.Learning.Status;
+using LearningAssistant.Models.Learning.ValueObjects;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services.Learning;
 
@@ -69,7 +72,7 @@ namespace LearningAssistant.Data.Database
         /// <summary>
         /// 将 UserProfileEntity 转换为 UserProfile
         /// </summary>
-        public static UserProfile ToModel(this UserProfileEntity entity)
+        public static UserProfile ToModel(this UserProfileEntity entity, List<LearningItemStateEntity>? itemStates = null)
         {
             if (entity == null) throw new ArgumentNullException(nameof(entity));
             
@@ -99,7 +102,7 @@ namespace LearningAssistant.Data.Database
             {
                 try
                 {
-                    profile.LearningProgress.CategoryProgresses[catEntity.CategoryName] = catEntity.ToModel();
+                    profile.LearningProgress.CategoryProgresses[catEntity.CategoryName] = catEntity.ToModel(itemStates);
                 }
                 catch
                 {
@@ -154,22 +157,31 @@ namespace LearningAssistant.Data.Database
         /// <summary>
         /// 将 CategoryProgressEntity 转换为 CategoryProgress
         /// </summary>
-        public static CategoryProgress ToModel(this CategoryProgressEntity entity)
+        public static CategoryProgress ToModel(this CategoryProgressEntity entity, List<LearningItemStateEntity>? itemStates = null)
         {
             if (entity == null) throw new ArgumentNullException(nameof(entity));
             
-            List<string> knownItems;
-            List<string> unknownItems;
+            var knownItems = new List<string>();
+            var unknownItems = new List<string>();
             
-            try
+            if (itemStates != null)
             {
-                knownItems = JsonHelper.Deserialize<List<string>>(entity.KnownItemsJson) ?? new List<string>();
-                unknownItems = JsonHelper.Deserialize<List<string>>(entity.UnknownItemsJson) ?? new List<string>();
+                var categoryStates = itemStates.Where(s => s.CategoryName == entity.CategoryName).ToList();
+                knownItems = categoryStates.Where(s => s.IsKnown).Select(s => s.Content).ToList();
+                unknownItems = categoryStates.Where(s => !s.IsKnown).Select(s => s.Content).ToList();
             }
-            catch
+            else if (!string.IsNullOrEmpty(entity.KnownItemsJson) || !string.IsNullOrEmpty(entity.UnknownItemsJson))
             {
-                knownItems = new List<string>();
-                unknownItems = new List<string>();
+                try
+                {
+                    knownItems = JsonHelper.Deserialize<List<string>>(entity.KnownItemsJson) ?? new List<string>();
+                    unknownItems = JsonHelper.Deserialize<List<string>>(entity.UnknownItemsJson) ?? new List<string>();
+                }
+                catch
+                {
+                    knownItems = new List<string>();
+                    unknownItems = new List<string>();
+                }
             }
             
             return new CategoryProgress
@@ -425,6 +437,54 @@ namespace LearningAssistant.Data.Database
             entity.AlgorithmType = item.AlgorithmType;
             entity.Category = item.Category;
             entity.Subject = item.Subject;
+        }
+
+        public static LearningItemEntity ToEntity(this LearningItem item)
+        {
+            if (item == null) throw new ArgumentNullException(nameof(item));
+
+            return new LearningItemEntity
+            {
+                Id = item.Id,
+                CreatedAt = item.CreatedAt,
+                UpdatedAt = item.UpdatedAt,
+                Subject = item.Subject.ToString(),
+                SubCategory = item.SubCategory.ToString(),
+                MainContent = item.MainContent,
+                MeaningJson = item.Meaning != null ? JsonHelper.Serialize(item.Meaning) : null,
+                ExampleJson = item.Example != null ? JsonHelper.Serialize(item.Example) : null,
+                PronunciationJson = item.Pronunciation != null ? JsonHelper.Serialize(item.Pronunciation) : null,
+                CharacterFeaturesJson = item.CharacterFeatures != null ? JsonHelper.Serialize(item.CharacterFeatures) : null,
+                WordFeaturesJson = item.WordFeatures != null ? JsonHelper.Serialize(item.WordFeatures) : null,
+                ExtendedProperties = item.ExtendedProperties,
+                Status = item.Status.ToString(),
+                ReviewCount = item.ReviewCount,
+                LastReviewedAt = item.LastReviewedAt
+            };
+        }
+
+        public static LearningItem ToModel(this LearningItemEntity entity)
+        {
+            if (entity == null) throw new ArgumentNullException(nameof(entity));
+
+            return new LearningItem
+            {
+                Id = entity.Id,
+                CreatedAt = entity.CreatedAt,
+                UpdatedAt = entity.UpdatedAt,
+                Subject = Enum.TryParse<SubjectType>(entity.Subject, out var subject) ? subject : SubjectType.English,
+                SubCategory = Enum.TryParse<SubCategoryType>(entity.SubCategory, out var subCategory) ? subCategory : SubCategoryType.EnglishWord,
+                MainContent = entity.MainContent,
+                Meaning = string.IsNullOrWhiteSpace(entity.MeaningJson) ? null : JsonHelper.Deserialize<Meaning>(entity.MeaningJson),
+                Example = string.IsNullOrWhiteSpace(entity.ExampleJson) ? null : JsonHelper.Deserialize<Example>(entity.ExampleJson),
+                Pronunciation = string.IsNullOrWhiteSpace(entity.PronunciationJson) ? null : JsonHelper.Deserialize<Pronunciation>(entity.PronunciationJson),
+                CharacterFeatures = string.IsNullOrWhiteSpace(entity.CharacterFeaturesJson) ? null : JsonHelper.Deserialize<CharacterFeatures>(entity.CharacterFeaturesJson),
+                WordFeatures = string.IsNullOrWhiteSpace(entity.WordFeaturesJson) ? null : JsonHelper.Deserialize<WordFeatures>(entity.WordFeaturesJson),
+                ExtendedProperties = entity.ExtendedProperties,
+                Status = Enum.TryParse<LearningStatus>(entity.Status, out var status) ? status : LearningStatus.New,
+                ReviewCount = entity.ReviewCount,
+                LastReviewedAt = entity.LastReviewedAt
+            };
         }
     }
 }

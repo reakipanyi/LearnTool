@@ -91,7 +91,10 @@ namespace LearningAssistant.Services.Persistence
 
                 if (userEntity != null)
                 {
-                    return userEntity.ToModel();
+                    var itemStates = db.LearningItemStates
+                        .Where(s => s.UserId == userId)
+                        .ToList();
+                    return userEntity.ToModel(itemStates);
                 }
             }
             catch (Exception ex)
@@ -159,6 +162,8 @@ namespace LearningAssistant.Services.Persistence
                         }
                     }
 
+                    SaveLearningItemStates(db, profile.UserId, profile.LearningProgress.CategoryProgresses.Values);
+
                     db.SaveChanges();
                     return;
                 }
@@ -180,6 +185,72 @@ namespace LearningAssistant.Services.Persistence
 
                     Thread.Sleep(retryDelayMs);
                 }
+            }
+        }
+
+        private void SaveLearningItemStates(AppDbContext db, string userId, IEnumerable<CategoryProgress> categoryProgresses)
+        {
+            var existingStates = db.LearningItemStates
+                .Where(s => s.UserId == userId)
+                .ToList();
+
+            var stateLookup = existingStates.ToLookup(s => (s.CategoryName, s.Content));
+
+            foreach (var categoryProgress in categoryProgresses)
+            {
+                foreach (var knownItem in categoryProgress.KnownItems)
+                {
+                    var key = (categoryProgress.CategoryName, knownItem);
+                    var existingState = stateLookup[key].FirstOrDefault();
+                    
+                    if (existingState != null)
+                    {
+                        existingState.IsKnown = true;
+                    }
+                    else
+                    {
+                        db.LearningItemStates.Add(new LearningItemStateEntity
+                        {
+                            UserId = userId,
+                            CategoryName = categoryProgress.CategoryName,
+                            Content = knownItem,
+                            IsKnown = true
+                        });
+                    }
+                }
+
+                foreach (var unknownItem in categoryProgress.UnknownItems)
+                {
+                    var key = (categoryProgress.CategoryName, unknownItem);
+                    var existingState = stateLookup[key].FirstOrDefault();
+                    
+                    if (existingState != null)
+                    {
+                        existingState.IsKnown = false;
+                    }
+                    else
+                    {
+                        db.LearningItemStates.Add(new LearningItemStateEntity
+                        {
+                            UserId = userId,
+                            CategoryName = categoryProgress.CategoryName,
+                            Content = unknownItem,
+                            IsKnown = false
+                        });
+                    }
+                }
+            }
+
+            var statesToRemove = existingStates.Where(s =>
+            {
+                var progress = categoryProgresses.FirstOrDefault(p => p.CategoryName == s.CategoryName);
+                if (progress == null) return true;
+                return !progress.KnownItems.Contains(s.Content) && !progress.UnknownItems.Contains(s.Content);
+            }).ToList();
+
+            foreach (var stateToRemove in statesToRemove)
+            {
+                db.LearningItemStates.Remove(stateToRemove);
             }
         }
 

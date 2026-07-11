@@ -31,7 +31,14 @@ namespace LearningAssistant.Common
             if (string.IsNullOrWhiteSpace(json))
                 return default;
             
-            return System.Text.Json.JsonSerializer.Deserialize<T>(json, _options);
+            try
+            {
+                return System.Text.Json.JsonSerializer.Deserialize<T>(json, _options);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                return default;
+            }
         }
 
         public static T? LoadFromFile<T>(string filePath)

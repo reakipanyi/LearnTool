@@ -45,7 +45,6 @@ namespace LearningAssistant.Services.TTS
 
         protected async Task PlayAudioAsync(string filePath, float volume = 1.0f, float speed = 1.0f, CancellationToken cancellationToken = default)
         {
-            _stopRequested = false;
             _playbackTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             WaveOutEvent? waveOut = null;
@@ -93,6 +92,7 @@ namespace LearningAssistant.Services.TTS
                 lock (_playerLock)
                 {
                     StopPlaybackInternal();
+                    _stopRequested = false;
                     _waveOut = waveOut;
                     _audioReader = audioReader;
                     _playbackStream = playbackStream;
@@ -134,6 +134,86 @@ namespace LearningAssistant.Services.TTS
                 {
                     playbackStream?.Dispose();
                     audioReader?.Dispose();
+                    waveOut?.Dispose();
+                }
+            }
+        }
+
+        protected async Task PlayAudioFromStreamAsync(Stream stream, float volume = 1.0f, float speed = 1.0f, CancellationToken cancellationToken = default)
+        {
+            _playbackTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            WaveOutEvent? waveOut = null;
+            WaveFileReader? waveFileReader = null;
+            bool playerAssigned = false;
+
+            try
+            {
+                waveFileReader = new WaveFileReader(stream);
+
+                float safeVolume = Math.Clamp(volume, 0f, 2f);
+
+                waveOut = new WaveOutEvent();
+                waveOut.Volume = safeVolume;
+                waveOut.PlaybackStopped += (s, e) =>
+                {
+                    try
+                    {
+                        if (e.Exception != null)
+                        {
+                            _playbackTcs?.TrySetException(e.Exception);
+                        }
+                        else
+                        {
+                            _playbackTcs?.TrySetResult(true);
+                        }
+                    }
+                    catch { }
+                };
+
+                waveOut.Init(waveFileReader);
+
+                lock (_playerLock)
+                {
+                    StopPlaybackInternal();
+                    _stopRequested = false;
+                    _waveOut = waveOut;
+                    playerAssigned = true;
+                }
+
+                if (_stopRequested || cancellationToken.IsCancellationRequested)
+                {
+                    _logger?.LogDebug("PlayAudioFromStreamAsync: stop requested before playback");
+                    return;
+                }
+
+                _logger?.LogInformation("PlayAudioFromStreamAsync: starting playback, streamLength={Length}, volume={Volume}, speed={Speed}",
+                    stream.Length, safeVolume, speed);
+
+                waveOut.Play();
+
+                using (cancellationToken.Register(() =>
+                {
+                    try { waveOut?.Stop(); } catch { }
+                }))
+                {
+                    await _playbackTcs.Task.ConfigureAwait(false);
+                }
+
+                _logger?.LogInformation("PlayAudioFromStreamAsync: playback completed");
+            }
+            catch (OperationCanceledException)
+            {
+                _logger?.LogDebug("PlayAudioFromStreamAsync: cancelled");
+                StopPlayback();
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "PlayAudioFromStreamAsync: Failed to play audio from stream");
+                if (!playerAssigned)
+                {
+                    waveFileReader?.Dispose();
                     waveOut?.Dispose();
                 }
             }

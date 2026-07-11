@@ -46,6 +46,11 @@ namespace LearningAssistant.Services.Pdf
         int CurrentPageIndex { get; set; }
 
         /// <summary>
+        /// 设置当前页面索引并保存会话
+        /// </summary>
+        void SetCurrentPageIndex(int pageIndex);
+
+        /// <summary>
         /// 是否为图片模式（用于扫描版PDF）
         /// </summary>
         bool IsImageMode { get; }

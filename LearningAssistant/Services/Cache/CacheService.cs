@@ -49,8 +49,23 @@ namespace LearningAssistant.Services.Cache
         {
             _cacheFilePath = cacheFilePath;
             _logger = logger;
-            LoadFromFile();
             StartCleanupTask(cleanupIntervalMinutes);
+            StartBackgroundLoad();
+        }
+
+        private void StartBackgroundLoad()
+        {
+            Task.Run(() =>
+            {
+                try
+                {
+                    LoadFromFile();
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Background cache load failed");
+                }
+            });
         }
 
         private void StartCleanupTask(int intervalMinutes)

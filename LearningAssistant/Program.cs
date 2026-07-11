@@ -69,21 +69,35 @@ namespace LearningAssistant
                 persistenceService?.Initialize();
                 logger.LogInformation("数据库初始化完成");
 
-                // 执行数据迁移（从 JSON 到 SQLite）
+                // 后台执行数据迁移（从 JSON 到 SQLite），不阻塞主窗体打开
                 var migrationService = ServiceProvider.GetService<IDataMigrationService>();
-                if (migrationService != null && migrationService.NeedsMigration())
+                if (migrationService != null)
                 {
-                    logger.LogInformation("检测到需要迁移的数据，开始迁移...");
-                    var result = migrationService.PerformMigration();
-                    if (result.Success)
+                    Task.Run(async () =>
                     {
-                        logger.LogInformation("数据迁移成功: {Count} 个用户", result.SuccessfulMigrations);
-                    }
-                    else
-                    {
-                        logger.LogWarning("数据迁移部分失败: 成功 {Success}, 失败 {Failed}",
-                            result.SuccessfulMigrations, result.FailedMigrations);
-                    }
+                        try
+                        {
+                            await Task.Delay(500);
+                            if (migrationService.NeedsMigration())
+                            {
+                                logger?.LogInformation("检测到需要迁移的数据，开始迁移...");
+                                var result = migrationService.PerformMigration();
+                                if (result.Success)
+                                {
+                                    logger?.LogInformation("数据迁移成功: {Count} 个用户", result.SuccessfulMigrations);
+                                }
+                                else
+                                {
+                                    logger?.LogWarning("数据迁移部分失败: 成功 {Success}, 失败 {Failed}",
+                                        result.SuccessfulMigrations, result.FailedMigrations);
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            logger?.LogError(ex, "后台数据迁移失败");
+                        }
+                    });
                 }
 
                 var reminderService = ServiceProvider.GetService<ILearningReminderService>();

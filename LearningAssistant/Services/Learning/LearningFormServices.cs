@@ -65,6 +65,7 @@ namespace LearningAssistant.Services.Learning
         public IPomodoroService? PomodoroService { get; }
         public IThemeService ThemeService { get; }
         public IAiQuestionService? AiQuestionService { get; }
+        public ISpeechCoordinator? SpeechCoordinator { get; }
 
         public LearningFormServices(
             AudioServices audioServices,
@@ -74,7 +75,8 @@ namespace LearningAssistant.Services.Learning
             IUserSessionService? userSessionService,
             IPomodoroService? pomodoroService,
             IThemeService themeService,
-            IAiQuestionService? aiQuestionService)
+            IAiQuestionService? aiQuestionService,
+            ISpeechCoordinator? speechCoordinator)
         {
             AudioServices = audioServices;
             GamificationServices = gamificationServices;
@@ -84,6 +86,7 @@ namespace LearningAssistant.Services.Learning
             PomodoroService = pomodoroService;
             ThemeService = themeService;
             AiQuestionService = aiQuestionService;
+            SpeechCoordinator = speechCoordinator;
         }
     }
 }

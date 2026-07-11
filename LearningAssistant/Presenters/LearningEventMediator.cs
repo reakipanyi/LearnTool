@@ -1,4 +1,5 @@
 using LearningAssistant.Common.Events;
+using LearningAssistant.Views;
 
 namespace LearningAssistant.Presenters
 {
@@ -12,6 +13,8 @@ namespace LearningAssistant.Presenters
         event EventHandler<SendToPdfEventArgs>? SendToPdfQuestion;
         event EventHandler? SettingsChanged;
         event EventHandler? OpenStatistics;
+        event EventHandler<FieldSpeakEventArgs>? FieldSpeakRequested;
+        event EventHandler? FieldStopRequested;
         void RaiseMarkAsKnown();
         void RaiseMarkAsUnknown();
         void RaisePronounce();
@@ -21,6 +24,8 @@ namespace LearningAssistant.Presenters
         void RaiseSettingsChanged();
         void RaiseOpenStatistics();
         void RaiseExportErrorBook();
+        void RaiseFieldSpeakRequested(string speakText, string language, string? speakKey = null);
+        void RaiseFieldStopRequested();
     }
 
     public class MarkAsKnownEventArgs : EventArgs
@@ -48,6 +53,8 @@ namespace LearningAssistant.Presenters
         public event EventHandler? SettingsChanged;
         public event EventHandler? OpenStatistics;
         public event EventHandler? ExportErrorBook;
+        public event EventHandler<FieldSpeakEventArgs>? FieldSpeakRequested;
+        public event EventHandler? FieldStopRequested;
 
         private readonly IEventBus? _eventBus;
 
@@ -110,6 +117,16 @@ namespace LearningAssistant.Presenters
         public void RaiseExportErrorBook()
         {
             ExportErrorBook?.Invoke(this, EventArgs.Empty);
+        }
+
+        public void RaiseFieldSpeakRequested(string speakText, string language, string? speakKey = null)
+        {
+            FieldSpeakRequested?.Invoke(this, new FieldSpeakEventArgs(speakText, language, speakKey));
+        }
+
+        public void RaiseFieldStopRequested()
+        {
+            FieldStopRequested?.Invoke(this, EventArgs.Empty);
         }
     }
 }

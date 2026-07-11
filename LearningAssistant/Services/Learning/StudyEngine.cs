@@ -53,7 +53,7 @@ namespace LearningAssistant.Services.Learning
                 _state.Subject = context.Subject;
                 _state.SubCategory = context.SubCategory;
                 _state.WordBankFile = context.WordBankFile;
-                _state.CurrentMode = context.Mode == LearningModeType.Quick ? LearningModeType.Quick : LearningModeType.Study;
+                _state.CurrentMode = context.Mode;
                 _state.CurrentSortOrder = context.SortOrder;
             }
 
@@ -112,7 +112,7 @@ namespace LearningAssistant.Services.Learning
             {
                 _studyItems.Clear();
 
-                if (_state.CurrentMode == LearningModeType.Quick)
+                if (_state.CurrentMode == LearningModeType.Quick || _state.CurrentMode == LearningModeType.QuickReview)
                 {
                     _studyItems = _studyListProcessor.ProcessItems(new List<LearningItem>(_allItems), _state.CurrentSortOrder);
                     _state.QuickModeIndex = Math.Min(_state.QuickModeIndex, _studyItems.Count - 1);
@@ -395,16 +395,17 @@ namespace LearningAssistant.Services.Learning
 
         private void SaveProgressInternal()
         {
-            try
+            Task.Run(() =>
             {
-                Task.Run(() =>
+                try
                 {
                     _progressManager.SaveProgress(_state.UserId, _state.SubCategory, _state);
-                });
-            }
-            catch (Exception)
-            {
-            }
+                }
+                catch (Exception ex)
+                {
+                    _analyticsService?.RecordActivity(_state.UserId, "Error", $"SaveProgress failed: {ex.Message}");
+                }
+            }).ConfigureAwait(false);
         }
 
         private void RecordActivityInternal(string userId, SubCategoryType subCategory, string activityType)
@@ -472,12 +473,12 @@ namespace LearningAssistant.Services.Learning
             {
                 _state.ModeIndexCache[_state.CurrentMode] = CurrentIndex;
 
-                _state.CurrentMode = mode == LearningModeType.Quick ? LearningModeType.Quick : LearningModeType.Study;
+                _state.CurrentMode = mode;
                 _state.CurrentSortOrder = sortOrder;
 
                 if (_state.ModeIndexCache.TryGetValue(_state.CurrentMode, out var savedIndex))
                 {
-                    if (_state.CurrentMode == LearningModeType.Quick)
+                    if (_state.CurrentMode == LearningModeType.Quick || _state.CurrentMode == LearningModeType.QuickReview)
                         _state.QuickModeIndex = savedIndex;
                     else
                         _state.StudyModeIndex = savedIndex;
@@ -492,7 +493,7 @@ namespace LearningAssistant.Services.Learning
         {
             _studyItems.Clear();
 
-            if (_state.CurrentMode == LearningModeType.Quick)
+            if (_state.CurrentMode == LearningModeType.Quick || _state.CurrentMode == LearningModeType.QuickReview)
             {
                 _studyItems = _studyListProcessor.ProcessItems(new List<LearningItem>(_allItems), _state.CurrentSortOrder);
                 _state.QuickModeIndex = Math.Min(_state.QuickModeIndex, _studyItems.Count - 1);
@@ -505,20 +506,20 @@ namespace LearningAssistant.Services.Learning
 
         private void ValidateIndexInternal()
         {
-            int currentIndex = _state.CurrentMode == LearningModeType.Quick
+            int currentIndex = (_state.CurrentMode == LearningModeType.Quick || _state.CurrentMode == LearningModeType.QuickReview)
                 ? _state.QuickModeIndex
                 : _state.StudyModeIndex;
 
             if (currentIndex >= _studyItems.Count)
             {
-                if (_state.CurrentMode == LearningModeType.Quick)
+                if (_state.CurrentMode == LearningModeType.Quick || _state.CurrentMode == LearningModeType.QuickReview)
                     _state.QuickModeIndex = Math.Max(0, _studyItems.Count - 1);
                 else
                     _state.StudyModeIndex = Math.Max(0, _studyItems.Count - 1);
             }
             if (currentIndex < 0)
             {
-                if (_state.CurrentMode == LearningModeType.Quick)
+                if (_state.CurrentMode == LearningModeType.Quick || _state.CurrentMode == LearningModeType.QuickReview)
                     _state.QuickModeIndex = 0;
                 else
                     _state.StudyModeIndex = 0;

@@ -21,6 +21,7 @@ namespace LearningAssistant.Data.Database
         public DbSet<PomodoroSettingsEntity> PomodoroSettings { get; set; }
         public DbSet<PomodoroRecordEntity> PomodoroRecords { get; set; }
         public DbSet<WrongAnswerEntity> WrongAnswers { get; set; }
+        public DbSet<LearningItemEntity> LearningItems { get; set; }
 
         private readonly string _dbPath;
 

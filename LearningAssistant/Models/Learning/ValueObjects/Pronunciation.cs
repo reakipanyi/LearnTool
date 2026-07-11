@@ -1,3 +1,5 @@
+using LearningAssistant.Models.ValueObjects;
+
 namespace LearningAssistant.Models.Learning.ValueObjects
 {
     public sealed class Pronunciation : ValueObject
@@ -22,7 +24,7 @@ namespace LearningAssistant.Models.Learning.ValueObjects
             return new Pronunciation(main, ukPhonetic, usPhonetic);
         }
 
-        protected override IEnumerable<object> GetEqualityComponents()
+        public override IEnumerable<object?> GetEqualityComponents()
         {
             yield return Main;
             yield return UkPhonetic ?? string.Empty;

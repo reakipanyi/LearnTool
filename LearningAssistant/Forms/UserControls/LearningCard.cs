@@ -1,3 +1,5 @@
+using LearningAssistant.Services.Learning;
+using LearningAssistant.Services.TTS;
 using System.ComponentModel;
 using System.Drawing.Drawing2D;
 
@@ -9,20 +11,21 @@ namespace LearningAssistant.Forms.UserControls
         private readonly Panel _accentBar;
         private readonly Label _iconLabel;
         private readonly Label _titleLabel;
-        private readonly Label _contentLabel;
         private readonly Label _categoryLabel;
         private readonly TableLayoutPanel _innerLayout;
+        private readonly Panel _fieldsContainer;
+        private readonly List<ContentFieldRow> _fieldRows;
         #endregion
 
         #region 状态字段
         private bool _isHovered;
         private bool _isSelected;
+        private ISpeechCoordinator? _speechCoordinator;
         #endregion
 
         #region 全局复用字体（Dispose统一销毁，防止GDI句柄泄漏）
         private readonly Font _fontIcon = new Font("Arial", 20F, FontStyle.Regular, GraphicsUnit.Point, 0);
         private readonly Font _fontTitle = new Font("微软雅黑", 48F, FontStyle.Bold, GraphicsUnit.Point, 134);
-        private readonly Font _fontContent = new Font("微软雅黑", 16F, FontStyle.Regular, GraphicsUnit.Point, 134);
         private readonly Font _fontCategoryTag = new Font("微软雅黑", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
         #endregion
 
@@ -36,9 +39,10 @@ namespace LearningAssistant.Forms.UserControls
             this._accentBar = new Panel();
             this._iconLabel = new Label();
             this._titleLabel = new Label();
-            this._contentLabel = new Label();
             this._categoryLabel = new Label();
             this._innerLayout = new TableLayoutPanel();
+            this._fieldsContainer = new Panel();
+            this._fieldRows = new List<ContentFieldRow>();
 
             InitChildControls();
 
@@ -64,8 +68,8 @@ namespace LearningAssistant.Forms.UserControls
             _innerLayout.Dock = DockStyle.Fill;
             _innerLayout.Padding = new Padding(15, 10, 15, 10);
             _innerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
+            _innerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 80F));
             _innerLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            _innerLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 250F));
 
             _iconLabel.Text = "📚";
             _iconLabel.Font = _fontIcon;
@@ -79,14 +83,6 @@ namespace LearningAssistant.Forms.UserControls
             _titleLabel.UseMnemonic = false;
             _titleLabel.AutoSize = false;
 
-            _contentLabel.Font = _fontContent;
-            _contentLabel.ForeColor = Color.Black;
-            _contentLabel.Dock = DockStyle.Fill;
-            _contentLabel.TextAlign = ContentAlignment.TopLeft;
-            _contentLabel.UseMnemonic = false;
-            _contentLabel.AutoSize = false;
-            _contentLabel.Padding = new Padding(0, 5, 0, 0);
-
             _categoryLabel.Font = _fontCategoryTag;
             _categoryLabel.ForeColor = Color.White;
             _categoryLabel.BackColor = Color.FromArgb(108, 117, 125);
@@ -96,9 +92,14 @@ namespace LearningAssistant.Forms.UserControls
             _categoryLabel.Margin = new Padding(0, 5, 15, 0);
             _categoryLabel.TextAlign = ContentAlignment.TopCenter;
 
+            _fieldsContainer.Dock = DockStyle.Fill;
+            _fieldsContainer.AutoScroll = true;
+            _fieldsContainer.BackColor = Color.Transparent;
+            _fieldsContainer.Padding = new Padding(0, 5, 0, 0);
+
             _innerLayout.Controls.Add(_iconLabel, 0, 0);
             _innerLayout.Controls.Add(_titleLabel, 0, 1);
-            _innerLayout.Controls.Add(_contentLabel, 0, 2);
+            _innerLayout.Controls.Add(_fieldsContainer, 0, 2);
 
             this.Controls.Add(_accentBar);
             this.Controls.Add(_categoryLabel);
@@ -114,18 +115,13 @@ namespace LearningAssistant.Forms.UserControls
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public string Content
-        {
-            get => _contentLabel.Text;
-            set => _contentLabel.Text = value;
-        }
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string Category
         {
             get => _categoryLabel.Text;
             set => _categoryLabel.Text = value;
         }
+
+        
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string Icon
@@ -149,6 +145,80 @@ namespace LearningAssistant.Forms.UserControls
             {
                 _isSelected = value;
                 this.Invalidate();
+            }
+        }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public ISpeechCoordinator? SpeechCoordinator
+        {
+            get => _speechCoordinator;
+            set
+            {
+                _speechCoordinator = value;
+                foreach (var row in _fieldRows)
+                {
+                    row.SpeechCoordinator = value;
+                }
+            }
+        }
+        #endregion
+
+        #region 字段设置与行复用
+        public void SetFields(IEnumerable<ContentField> fields)
+        {
+            var fieldList = fields?.ToList() ?? new List<ContentField>();
+            
+            int existingCount = _fieldRows.Count;
+            int neededCount = fieldList.Count;
+
+            _fieldsContainer.SuspendLayout();
+
+            if (neededCount > existingCount)
+            {
+                for (int i = existingCount; i < neededCount; i++)
+                {
+                    var row = new ContentFieldRow();
+                    row.SpeechCoordinator = _speechCoordinator;
+                    _fieldRows.Add(row);
+                    _fieldsContainer.Controls.Add(row);
+                }
+            }
+            else if (neededCount < existingCount)
+            {
+                for (int i = existingCount - 1; i >= neededCount; i--)
+                {
+                    var row = _fieldRows[i];
+                    _fieldsContainer.Controls.Remove(row);
+                    row.Dispose();
+                    _fieldRows.RemoveAt(i);
+                }
+            }
+
+            for (int i = 0; i < neededCount; i++)
+            {
+                _fieldRows[i].Field = fieldList[i];
+            }
+
+            _fieldsContainer.ResumeLayout();
+            this.PerformLayout();
+        }
+
+        public int FieldCount => _fieldRows.Count;
+
+        public ContentField? GetField(int index)
+        {
+            if (index >= 0 && index < _fieldRows.Count)
+            {
+                return _fieldRows[index].Field;
+            }
+            return null;
+        }
+
+        public void TriggerFieldSpeak(int index)
+        {
+            if (index >= 0 && index < _fieldRows.Count)
+            {
+                _fieldRows[index].TriggerSpeak();
             }
         }
         #endregion
@@ -236,8 +306,15 @@ namespace LearningAssistant.Forms.UserControls
             {
                 _fontIcon?.Dispose();
                 _fontTitle?.Dispose();
-                _fontContent?.Dispose();
                 _fontCategoryTag?.Dispose();
+                
+                foreach (var row in _fieldRows)
+                {
+                    row.Dispose();
+                }
+                _fieldRows.Clear();
+                
+                _fieldsContainer?.Dispose();
                 _innerLayout?.Dispose();
                 this.Region?.Dispose();
             }

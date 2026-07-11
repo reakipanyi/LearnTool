@@ -1,5 +1,6 @@
 using LearningAssistant.Common;
 using LearningAssistant.Managers;
+using LearningAssistant.Models.Learning;
 
 namespace LearningAssistant.Views
 {
@@ -27,6 +28,8 @@ namespace LearningAssistant.Views
         SortOrderType SortOrder { get; }
         SubjectType Subject { get; }
         SubCategoryType SubCategory { get; set; }
+
+        LearningContext CurrentContext { get; }
 
         /// <summary>
         /// 标记为已知点击事件
@@ -122,5 +125,44 @@ namespace LearningAssistant.Views
         /// <param name="isLoading">是否正在加载</param>
         /// <param name="message">加载提示文本</param>
         void SetLoadingState(bool isLoading, string message = "加载中...");
+
+        /// <summary>
+        /// 字段发音请求事件
+        /// </summary>
+        event EventHandler<FieldSpeakEventArgs>? FieldSpeakRequested;
+
+        /// <summary>
+        /// 字段停止发音请求事件
+        /// </summary>
+        event EventHandler<FieldSpeakEventArgs>? FieldStopRequested;
+
+        /// <summary>
+        /// 字段复制请求事件
+        /// </summary>
+        event EventHandler<FieldCopyEventArgs>? FieldCopyRequested;
+    }
+
+    public class FieldSpeakEventArgs : EventArgs
+    {
+        public string SpeakText { get; }
+        public string Language { get; }
+        public string? SpeakKey { get; }
+
+        public FieldSpeakEventArgs(string speakText, string language, string? speakKey = null)
+        {
+            SpeakText = speakText;
+            Language = language;
+            SpeakKey = speakKey;
+        }
+    }
+
+    public class FieldCopyEventArgs : EventArgs
+    {
+        public string Value { get; }
+
+        public FieldCopyEventArgs(string value)
+        {
+            Value = value;
+        }
     }
 }

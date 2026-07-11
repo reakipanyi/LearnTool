@@ -22,7 +22,25 @@ namespace LearningAssistant.Services.Pdf
             _config = config;
             _logger = logger;
             _currentLanguage = string.IsNullOrWhiteSpace(_config.Language) ? "eng" : _config.Language;
-            InitializeEngine();
+            StartBackgroundInitialization();
+        }
+
+        private void StartBackgroundInitialization()
+        {
+            if (_initialized) return;
+            _initialized = true;
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    InitializeEngineInternal(_currentLanguage);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Background OCR initialization failed");
+                }
+            });
         }
 
         public bool IsAvailable => _engine != null;

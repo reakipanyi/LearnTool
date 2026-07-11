@@ -71,7 +71,11 @@ namespace LearningAssistant.Models.Learning
             {
                 var props = JsonConvert.DeserializeObject<Dictionary<string, object>>(ExtendedProperties);
                 if (props?.TryGetValue(key, out var value) == true)
-                    return JsonConvert.DeserializeObject<T>(value.ToString() ?? "");
+                {
+                    if (typeof(T) == typeof(string))
+                        return (T)(object)(value?.ToString() ?? "");
+                    return JsonConvert.DeserializeObject<T>(JsonConvert.SerializeObject(value));
+                }
             }
             catch (Exception ex)
             {
@@ -88,19 +92,19 @@ namespace LearningAssistant.Models.Learning
             ExtendedProperties = JsonConvert.SerializeObject(props);
         }
 
-        public string GetMainContent() => MainContent;
+        public virtual string GetMainContent() => MainContent;
 
-        public string GetDisplayText()
+        public virtual string GetDisplayText()
         {
             return LearningItemFormatter.FormatDisplayText(this);
         }
 
-        public string GetPronunciation()
+        public virtual string GetPronunciation()
         {
             return Pronunciation?.Main ?? string.Empty;
         }
 
-        public string GetDisplayStruct()
+        public virtual string GetDisplayStruct()
         {
             return LearningItemFormatter.FormatDisplayStruct(this);
         }

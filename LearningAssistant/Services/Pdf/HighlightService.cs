@@ -12,6 +12,7 @@ namespace LearningAssistant.Services.Pdf
     public class HighlightService : IHighlightService
     {
         private readonly Dictionary<string, PdfHighlightCollection> _highlightsCache = new();
+        private readonly object _cacheLock = new object();
         private readonly ILogger<HighlightService>? _logger;
 
         public HighlightService(ILogger<HighlightService>? logger = null)
@@ -178,7 +179,10 @@ namespace LearningAssistant.Services.Pdf
 
         public void ClearCache()
         {
-            _highlightsCache.Clear();
+            lock (_cacheLock)
+            {
+                _highlightsCache.Clear();
+            }
             _logger?.LogDebug("清除所有高亮缓存");
         }
 
@@ -186,29 +190,48 @@ namespace LearningAssistant.Services.Pdf
         {
             var folderPath = Path.GetDirectoryName(pdfPath) ?? "";
             var key = GetFolderCacheKey(folderPath);
-            if (_highlightsCache.ContainsKey(key))
+            lock (_cacheLock)
             {
-                _highlightsCache.Remove(key);
-                _logger?.LogDebug("清除目录高亮缓存: {Path}", folderPath);
+                if (_highlightsCache.ContainsKey(key))
+                {
+                    _highlightsCache.Remove(key);
+                }
             }
+            _logger?.LogDebug("清除目录高亮缓存: {Path}", folderPath);
         }
 
         private PdfHighlightCollection GetOrCreateFolderCollection(string folderPath)
         {
             var key = GetFolderCacheKey(folderPath);
-            if (!_highlightsCache.TryGetValue(key, out var collection))
+            lock (_cacheLock)
             {
-                collection = LoadHighlightsFromFolder(folderPath);
-                _highlightsCache[key] = collection;
-                _logger?.LogInformation("创建新的高亮集合缓存: {FolderPath}, 缓存键: {Key}, 高亮数: {Count}",
-                    folderPath, key, collection.Highlights.Count);
+                if (_highlightsCache.TryGetValue(key, out var collection))
+                {
+                    _logger?.LogDebug("使用现有高亮集合缓存: {FolderPath}, 缓存键: {Key}, 高亮数: {Count}",
+                            folderPath, key, collection.Highlights.Count);
+                    return collection;
+                }
             }
-            else
+
+            var newCollection = LoadHighlightsFromFolder(folderPath);
+
+            lock (_cacheLock)
             {
-                _logger?.LogDebug("使用现有高亮集合缓存: {FolderPath}, 缓存键: {Key}, 高亮数: {Count}",
-                    folderPath, key, collection.Highlights.Count);
+                if (!_highlightsCache.ContainsKey(key))
+                {
+                    _highlightsCache[key] = newCollection;
+                    _logger?.LogInformation("创建新的高亮集合缓存: {FolderPath}, 缓存键: {Key}, 高亮数: {Count}",
+                            folderPath, key, newCollection.Highlights.Count);
+                }
+                else
+                {
+                    newCollection = _highlightsCache[key];
+                    _logger?.LogDebug("使用其他线程创建的高亮集合缓存: {FolderPath}, 缓存键: {Key}, 高亮数: {Count}",
+                            folderPath, key, newCollection.Highlights.Count);
+                }
             }
-            return collection;
+
+            return newCollection;
         }
 
         private PdfHighlightCollection LoadHighlightsFromFolder(string folderPath)

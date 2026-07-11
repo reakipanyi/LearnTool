@@ -1,3 +1,5 @@
+using LearningAssistant.Models.ValueObjects;
+
 namespace LearningAssistant.Models.Learning.ValueObjects
 {
     public sealed class WordFeatures : ValueObject
@@ -21,7 +23,7 @@ namespace LearningAssistant.Models.Learning.ValueObjects
                                           string collocations = "", string syllableBreakdown = "")
             => new(partOfSpeech, wordForms, collocations, syllableBreakdown);
 
-        protected override IEnumerable<object> GetEqualityComponents()
+        public override IEnumerable<object?> GetEqualityComponents()
         {
             yield return PartOfSpeech;
             yield return WordForms;

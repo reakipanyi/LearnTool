@@ -10,7 +10,9 @@ using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Backup;
 using LearningAssistant.Services.Backup.Providers;
 using LearningAssistant.Services.Cache;
+using LearningAssistant.Services.Data;
 using LearningAssistant.Services.DragDrop;
+using LearningAssistant.Services.Repositories;
 using LearningAssistant.Services.Favorites;
 using LearningAssistant.Services.Feedback;
 using LearningAssistant.Services.Gamification;
@@ -97,6 +99,13 @@ namespace LearningAssistant.Common
             services.AddSingleton<IUserSessionService, UserSessionService>();
             services.AddSingleton<ISubjectTemplateService, SubjectTemplateService>();
             services.AddSingleton<IDataMigrationService, DataMigrationService>();
+            services.AddScoped<ILearningItemMigrationService, LearningItemMigrationService>();
+
+            services.AddScoped<IUserProfileRepository, UserProfileRepository>();
+            services.AddScoped<ISpacedRepetitionRepository, SpacedRepetitionRepository>();
+            services.AddScoped<IWrongAnswerRepository, WrongAnswerRepository>();
+            services.AddScoped<IReminderRepository, ReminderRepository>();
+            services.AddScoped<ILearningGoalRepository, LearningGoalRepository>();
 
             services.AddSingleton<ITTSService>(sp =>
             {
@@ -268,12 +277,20 @@ namespace LearningAssistant.Common
                 var eventBus = sp.GetService<IEventBus>();
                 return new LearningEventMediator(eventBus);
             });
+            services.AddScoped<ISpeechCoordinator>(sp =>
+            {
+                var logger = sp.GetService<ILogger<SpeechCoordinator>>();
+                var ttsService = sp.GetService<ITTSService>();
+                var ttsConfig = sp.GetRequiredService<TtsConfig>();
+                return new SpeechCoordinator(logger, ttsService, ttsConfig);
+            });
             services.AddScoped<ILearningFlowHandler>(sp =>
                 {
                     var logger = sp.GetRequiredService<ILogger<LearningFlowHandler>>();
                     var studyEngine = sp.GetRequiredService<IStudyEngine>();
                     var aiService = sp.GetService<IAIService>();
                     var ttsService = sp.GetService<ITTSService>();
+                    var speechCoordinator = sp.GetService<ISpeechCoordinator>();
                     var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
                     var exportService = sp.GetRequiredService<IExportService>();
                     var windowManager = sp.GetRequiredService<IWindowManager>();
@@ -281,8 +298,8 @@ namespace LearningAssistant.Common
                     var view = sp.GetRequiredService<ILearningView>();
                     var eventBus = sp.GetService<IEventBus>();
                     var spacedRepetitionService = sp.GetService<ISpacedRepetitionService>();
-                    return new LearningFlowHandler(logger, studyEngine, aiService, ttsService, contentLoaderService,
-                        exportService, windowManager, settingsManager, view, eventBus, spacedRepetitionService);
+                    return new LearningFlowHandler(logger, studyEngine, aiService, ttsService, speechCoordinator,
+                        contentLoaderService, exportService, windowManager, settingsManager, view, eventBus, spacedRepetitionService);
                 });
 
             return services;
@@ -410,8 +427,9 @@ namespace LearningAssistant.Common
                 var pomodoroService = sp.GetService<IPomodoroService>();
                 var themeService = sp.GetRequiredService<IThemeService>();
                 var aiQuestionService = sp.GetService<IAiQuestionService>();
+                var speechCoordinator = sp.GetService<ISpeechCoordinator>();
                 return new LearningFormServices(audioServices, gamificationServices, notificationServices,
-                    spacedRepetitionService, userSessionService, pomodoroService, themeService, aiQuestionService);
+                    spacedRepetitionService, userSessionService, pomodoroService, themeService, aiQuestionService, speechCoordinator);
             });
 
             services.AddScoped<LearningForm>(sp =>

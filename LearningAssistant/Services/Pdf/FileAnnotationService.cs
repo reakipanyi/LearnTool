@@ -1,10 +1,18 @@
 using LearningAssistant.Common;
 using LearningAssistant.Models.Pdf;
+using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Services.Pdf
 {
     public class FileAnnotationService : IAnnotationService
     {
+        private readonly ILogger<FileAnnotationService>? _logger;
+
+        public FileAnnotationService(ILogger<FileAnnotationService>? logger = null)
+        {
+            _logger = logger;
+        }
+
         public Bitmap? LoadAnnotation(string pdfPath, int pageIndex, int targetWidth, int targetHeight, SizeF pageOriginalSize)
         {
             try
@@ -98,8 +106,9 @@ namespace LearningAssistant.Services.Pdf
 
                 return bitmap;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "Failed to load annotation for {PdfPath} page {PageIndex}", pdfPath, pageIndex);
                 return null;
             }
         }
@@ -115,8 +124,9 @@ namespace LearningAssistant.Services.Pdf
 
                 SaveAnnotationData(pdfPath, pageIndex, annotation);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "Failed to save annotation for {PdfPath} page {PageIndex}", pdfPath, pageIndex);
             }
         }
 
@@ -130,8 +140,9 @@ namespace LearningAssistant.Services.Pdf
                     File.Delete(path);
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "Failed to clear annotation for {PdfPath} page {PageIndex}", pdfPath, pageIndex);
             }
         }
 
@@ -147,8 +158,9 @@ namespace LearningAssistant.Services.Pdf
 
                 SaveAnnotationData(pdfPath, pageIndex, annotation);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "Failed to add stroke for {PdfPath} page {PageIndex}", pdfPath, pageIndex);
             }
         }
 
@@ -164,8 +176,9 @@ namespace LearningAssistant.Services.Pdf
 
                 SaveAnnotationData(pdfPath, pageIndex, annotation);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "Failed to add text annotation for {PdfPath} page {PageIndex}", pdfPath, pageIndex);
             }
         }
 
@@ -186,8 +199,9 @@ namespace LearningAssistant.Services.Pdf
                     SaveAnnotationData(pdfPath, pageIndex, annotation);
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "Failed to clear redo for {PdfPath} page {PageIndex}", pdfPath, pageIndex);
             }
         }
 
@@ -205,8 +219,9 @@ namespace LearningAssistant.Services.Pdf
                     return lastStroke;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "Failed to remove last stroke for {PdfPath} page {PageIndex}", pdfPath, pageIndex);
             }
             return null;
         }
@@ -223,8 +238,9 @@ namespace LearningAssistant.Services.Pdf
                     SaveAnnotationData(pdfPath, pageIndex, annotation);
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "Failed to remove stroke at index {Index} for {PdfPath} page {PageIndex}", index, pdfPath, pageIndex);
             }
         }
 
@@ -240,8 +256,9 @@ namespace LearningAssistant.Services.Pdf
                     SaveAnnotationData(pdfPath, pageIndex, annotation);
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "Failed to clear all strokes for {PdfPath} page {PageIndex}", pdfPath, pageIndex);
             }
         }
 
@@ -257,8 +274,9 @@ namespace LearningAssistant.Services.Pdf
                     SaveAnnotationData(pdfPath, pageIndex, annotation);
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "Failed to remove text at index {Index} for {PdfPath} page {PageIndex}", index, pdfPath, pageIndex);
             }
         }
 
@@ -274,8 +292,9 @@ namespace LearningAssistant.Services.Pdf
                     SaveAnnotationData(pdfPath, pageIndex, annotation);
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "Failed to update text at index {Index} for {PdfPath} page {PageIndex}", index, pdfPath, pageIndex);
             }
         }
 
@@ -291,8 +310,9 @@ namespace LearningAssistant.Services.Pdf
                     SaveAnnotationData(pdfPath, pageIndex, annotation);
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "Failed to clear all texts for {PdfPath} page {PageIndex}", pdfPath, pageIndex);
             }
         }
 
@@ -309,8 +329,9 @@ namespace LearningAssistant.Services.Pdf
                 var path = GetAnnotationPath(pdfPath, pageIndex);
                 return JsonHelper.LoadFromFile<PdfAnnotation>(path);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "Failed to load annotation data from {Path}", GetAnnotationPath(pdfPath, pageIndex));
                 return null;
             }
         }
@@ -322,8 +343,9 @@ namespace LearningAssistant.Services.Pdf
                 var path = GetAnnotationPath(pdfPath, pageIndex);
                 JsonHelper.SaveToFile(path, annotation);
             }
-            catch
+            catch (Exception ex)
             {
+                _logger?.LogError(ex, "Failed to save annotation data to {Path}", GetAnnotationPath(pdfPath, pageIndex));
             }
         }
 

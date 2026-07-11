@@ -423,7 +423,7 @@ namespace LearningAssistant.Forms
             // comboBoxVoice
             // 
             comboBoxVoice.FormattingEnabled = true;
-            comboBoxVoice.Items.AddRange(new object[] { "af_heart", "af_sarah", "zf_tingting", "Cherry", "Aria", "Xiaobei", "Xiaoning" });
+            comboBoxVoice.Items.AddRange(new object[] { "af_heart", "af_sarah", "af_bella", "af_nicole", "zf_xiaoxiao", "zf_xiaobei", "zf_xiaoni", "zf_tingting", "zm_yunjian", "Cherry", "Aria", "Xiaobei", "Xiaoning" });
             comboBoxVoice.Location = new Point(300, 52);
             comboBoxVoice.Name = "comboBoxVoice";
             comboBoxVoice.Size = new Size(150, 27);

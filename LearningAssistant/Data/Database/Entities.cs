@@ -274,6 +274,46 @@ namespace LearningAssistant.Data.Database
     }
 
     /// <summary>
+    /// 学习项实体 - 持久化 LearningItem 领域模型
+    /// </summary>
+    public class LearningItemEntity : AuditableEntityBase
+    {
+        [Key]
+        [MaxLength(50)]
+        public string Id { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(20)]
+        public string Subject { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(50)]
+        public string SubCategory { get; set; } = string.Empty;
+
+        [Required]
+        public string MainContent { get; set; } = string.Empty;
+
+        public string? MeaningJson { get; set; }
+
+        public string? ExampleJson { get; set; }
+
+        public string? PronunciationJson { get; set; }
+
+        public string? CharacterFeaturesJson { get; set; }
+
+        public string? WordFeaturesJson { get; set; }
+
+        public string ExtendedProperties { get; set; } = "{}";
+
+        [MaxLength(20)]
+        public string Status { get; set; } = "New";
+
+        public int ReviewCount { get; set; }
+
+        public DateTime? LastReviewedAt { get; set; }
+    }
+
+    /// <summary>
     /// 提醒重复日期实体 - 替代 Reminder 中的 RepeatDaysJson
     /// </summary>
     public class ReminderRepeatDayEntity : AuditableEntityBase

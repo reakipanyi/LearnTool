@@ -1,3 +1,5 @@
+using LearningAssistant.Models.ValueObjects;
+
 namespace LearningAssistant.Models.Learning.ValueObjects
 {
     public sealed class CharacterFeatures : ValueObject
@@ -18,7 +20,7 @@ namespace LearningAssistant.Models.Learning.ValueObjects
         public static CharacterFeatures Create(string strokeCount, string radical, string structure)
             => new(strokeCount, radical, structure);
 
-        protected override IEnumerable<object> GetEqualityComponents()
+        public override IEnumerable<object?> GetEqualityComponents()
         {
             yield return StrokeCount;
             yield return Radical;
