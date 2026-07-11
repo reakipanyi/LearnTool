@@ -230,13 +230,14 @@ namespace LearningAssistant.Services.TTS
 
                 var actualVoice = SelectVoiceForSegment(language ?? "en", language) ?? _defaultVoice;
                 string paddedText = PadShortText(text);
-                string path = GetCacheFilePath(paddedText, language, speed, actualVoice?.Name);
+                float actualSpeed = speed ?? _config.Speed;
+                string path = GetCacheFilePath(paddedText, language, actualSpeed, actualVoice?.Name);
 
                 if (File.Exists(path))
                 {
                     File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
                     _logger?.LogInformation("SpeakAsync: using cached audio, path={Path}", path);
-                    await PlayAudioAsync(path, _config.Volume, cancellationToken);
+                    await PlayAudioAsync(path, _config.Volume, actualSpeed, cancellationToken);
                     _logger?.LogInformation("SpeakAsync: cached audio playback completed");
                     return path;
                 }
@@ -246,7 +247,6 @@ namespace LearningAssistant.Services.TTS
                 _logger?.LogInformation("SpeakAsync: synthesizing new audio, text length={Len}, padded={Padded}", text.Length, paddedText);
                 var sw = System.Diagnostics.Stopwatch.StartNew();
 
-                float actualSpeed = speed ?? _config.Speed;
                 var wavBytes = await SynthesizeAndPlayStreamAsync(paddedText, language, actualSpeed, cancellationToken).ConfigureAwait(false);
 
                 sw.Stop();
@@ -303,7 +303,8 @@ namespace LearningAssistant.Services.TTS
 
                 var actualVoice = SelectVoiceForSegment(language ?? "en", language) ?? _defaultVoice;
                 string paddedText = PadShortText(text);
-                string path = GetCacheFilePath(paddedText, language, speed, actualVoice?.Name);
+                float actualSpeed = speed ?? _config.Speed;
+                string path = GetCacheFilePath(paddedText, language, actualSpeed, actualVoice?.Name);
 
                 if (File.Exists(path))
                 {
@@ -311,7 +312,6 @@ namespace LearningAssistant.Services.TTS
                     return path;
                 }
 
-                float actualSpeed = speed ?? _config.Speed;
                 var wavBytes = await SynthesizeToWavAsync(paddedText, language, actualSpeed, cancellationToken).ConfigureAwait(false);
 
                 if (wavBytes == null || wavBytes.Length == 0)
@@ -465,7 +465,7 @@ namespace LearningAssistant.Services.TTS
 
                 if (wavBytes != null && wavBytes.Length > 0)
                 {
-                    await PlayAudioFromBytesAsync(wavBytes, cancellationToken).ConfigureAwait(false);
+                    await PlayAudioFromBytesAsync(wavBytes, speed, cancellationToken).ConfigureAwait(false);
                 }
                 else
                 {
@@ -521,7 +521,7 @@ namespace LearningAssistant.Services.TTS
                         var samples = ExtractPcmFloatFromWav(wavBytes);
                         allSamples.AddRange(samples);
 
-                        await PlayAudioFromBytesAsync(wavBytes, cancellationToken).ConfigureAwait(false);
+                        await PlayAudioFromBytesAsync(wavBytes, speed, cancellationToken).ConfigureAwait(false);
                     }
                 }
                 catch (OperationCanceledException)
@@ -544,7 +544,7 @@ namespace LearningAssistant.Services.TTS
             return ConvertPcmFloatToWav(allSamples.ToArray(), 24000, 1);
         }
 
-        private async Task PlayAudioFromBytesAsync(byte[] wavBytes, CancellationToken cancellationToken = default)
+        private async Task PlayAudioFromBytesAsync(byte[] wavBytes, float speed, CancellationToken cancellationToken = default)
         {
             if (wavBytes == null || wavBytes.Length == 0 || _stopRequested || cancellationToken.IsCancellationRequested) return;
 
@@ -552,7 +552,7 @@ namespace LearningAssistant.Services.TTS
             try
             {
                 await File.WriteAllBytesAsync(tempFile, wavBytes, cancellationToken).ConfigureAwait(false);
-                await PlayAudioAsync(tempFile, _config.Volume, cancellationToken).ConfigureAwait(false);
+                await PlayAudioAsync(tempFile, _config.Volume, speed, cancellationToken).ConfigureAwait(false);
             }
             finally
             {

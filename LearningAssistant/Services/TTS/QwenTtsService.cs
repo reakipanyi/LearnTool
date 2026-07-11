@@ -36,7 +36,8 @@ namespace LearningAssistant.Services.TTS
                 Directory.CreateDirectory(AppPaths.GetUserTtsCacheDir());
 
                 string lang = MapLanguageCode(language ?? "English");
-                string path = GetCacheFilePath(text, language, speed);
+                float actualSpeed = speed ?? 1.0f;
+                string path = GetCacheFilePath(text, language, actualSpeed);
 
                 if (File.Exists(path))
                 {
@@ -46,12 +47,12 @@ namespace LearningAssistant.Services.TTS
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    var wav = await _client.SynthesizeAsync(text: text, voice: "Cherry", language: lang, speed: speed ?? 1.0f, format: "wav").ConfigureAwait(false);
+                    var wav = await _client.SynthesizeAsync(text: text, voice: "Cherry", language: lang, speed: actualSpeed, format: "wav").ConfigureAwait(false);
 
                     await File.WriteAllBytesAsync(path, wav, cancellationToken).ConfigureAwait(false);
                 }
 
-                await PlayAudioAsync(path, 1.0f, cancellationToken);
+                await PlayAudioAsync(path, 1.0f, actualSpeed, cancellationToken);
 
                 return path;
             }
@@ -79,7 +80,8 @@ namespace LearningAssistant.Services.TTS
                 Directory.CreateDirectory(AppPaths.GetUserTtsCacheDir());
 
                 string lang = MapLanguageCode(language ?? "English");
-                string path = GetCacheFilePath(text, language, speed);
+                float actualSpeed = speed ?? 1.0f;
+                string path = GetCacheFilePath(text, language, actualSpeed);
 
                 if (File.Exists(path))
                 {
@@ -87,7 +89,7 @@ namespace LearningAssistant.Services.TTS
                     return path;
                 }
 
-                var wav = await _client.SynthesizeAsync(text: text, voice: "Cherry", language: lang, speed: speed ?? 1.0f, format: "wav").ConfigureAwait(false);
+                var wav = await _client.SynthesizeAsync(text: text, voice: "Cherry", language: lang, speed: actualSpeed, format: "wav").ConfigureAwait(false);
 
                 await File.WriteAllBytesAsync(path, wav, cancellationToken).ConfigureAwait(false);
                 _logger?.LogDebug("SpeakToCacheAsync: audio cached, path={Path}", path);

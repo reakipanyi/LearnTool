@@ -1195,7 +1195,6 @@ namespace LearningAssistant.Forms
             _textBoxPage.Text = (pageIndex + 1).ToString();
             _progressBarPage.Value = pageIndex + 1;
             StartPageTransition(isForward);
-            LoadHighlightsForCurrentPage();
             UpdateStatusBar();
         }
 
@@ -1215,10 +1214,6 @@ namespace LearningAssistant.Forms
                 CleanupHighlightLayer();
 
                 Bitmap imageToDisplay = bmp;
-                if (_nightModeManager?.IsNightMode ?? false)
-                {
-                    imageToDisplay = new Bitmap(_nightModeManager.InvertImage(bmp));
-                }
 
                 if (_rotationAngle != 0)
                 {
@@ -1229,9 +1224,16 @@ namespace LearningAssistant.Forms
                 _currentPageImage = imageToDisplay;
 
                 _pictureBoxPdf.Image = null;
+
+                // 同步重建高亮图层（数据已在内存缓存中，无需磁盘IO）
+                _highlightManager?.UpdateHighlightLayer();
+
                 _pictureBoxPdf.Invalidate();
-                LoadHighlightsForCurrentPage();
-                _navigationManager?.LoadAnnotationsForCurrentPage();
+
+                // 标注位图构建较重，放到后台线程
+                int pageIndexAtDisplay = _currentPageIndex;
+                string pdfPathAtDisplay = _currentPdfPath;
+                _ = Task.Run(() => LoadAnnotationsAsync(pageIndexAtDisplay, pdfPathAtDisplay));
             }
             catch (Exception ex)
             {
@@ -1245,6 +1247,59 @@ namespace LearningAssistant.Forms
             }
         }
 
+        private async Task LoadAnnotationsAsync(int pageIndex, string pdfPath)
+        {
+            try
+            {
+                int imgW = 0, imgH = 0;
+                try
+                {
+                    if (_currentPageImage != null)
+                    {
+                        imgW = _currentPageImage.Width;
+                        imgH = _currentPageImage.Height;
+                    }
+                }
+                catch (ObjectDisposedException)
+                {
+                    return;
+                }
+
+                Bitmap? annotationBmp = null;
+                if (_presenter != null && !string.IsNullOrEmpty(pdfPath) && imgW > 0 && imgH > 0)
+                {
+                    annotationBmp = _presenter.LoadAnnotationForPage(pdfPath, pageIndex, imgW, imgH);
+                }
+
+                if (IsDisposed || _pictureBoxPdf.IsDisposed) return;
+
+                BeginInvoke(new Action(() =>
+                {
+                    if (_currentPageIndex != pageIndex || _currentPdfPath != pdfPath)
+                        return;
+                    if (_currentPageImage == null) return;
+
+                    try
+                    {
+                        _navigationManager?.ApplyLoadedAnnotationBitmap(annotationBmp);
+                        _pictureBoxPdf.Invalidate();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error applying async-loaded annotations");
+                    }
+                    finally
+                    {
+                        annotationBmp?.Dispose();
+                    }
+                }));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error in async annotation load");
+            }
+        }
+
         /// <summary>
         /// 设置双页模式下第二页的图像
         /// </summary>
@@ -1254,11 +1309,60 @@ namespace LearningAssistant.Forms
             try
             {
                 SafeReplaceImage(ref _secondPageImage, bmp);
+
+                if (_highlightManager != null)
+                {
+                    if (bmp == null)
+                    {
+                        _highlightManager.CleanupSecondHighlightLayer();
+                    }
+                    else
+                    {
+                        int pageIndexAtSet = _currentPageIndex + 1;
+                        string pdfPathAtSet = _currentPdfPath;
+                        int imgW = bmp.Width;
+                        int imgH = bmp.Height;
+                        _ = Task.Run(() => UpdateSecondHighlightLayerAsync(pageIndexAtSet, pdfPathAtSet, imgW, imgH));
+                    }
+                }
+
                 _pictureBoxPdf.Invalidate();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in SetSecondPageImage");
+            }
+        }
+
+        private async Task UpdateSecondHighlightLayerAsync(int pageIndex, string pdfPath, int imgW, int imgH)
+        {
+            try
+            {
+                if (_highlightService == null || string.IsNullOrEmpty(pdfPath)) return;
+
+                var highlights = _highlightService.GetHighlightsForPage(pdfPath, pageIndex);
+
+                if (IsDisposed || _pictureBoxPdf.IsDisposed) return;
+
+                BeginInvoke(new Action(() =>
+                {
+                    if (_currentPageIndex + 1 != pageIndex || _currentPdfPath != pdfPath) return;
+                    if (_secondPageImage == null) return;
+
+                    try
+                    {
+                        _highlightManager?.UpdateSecondHighlightLayer(pageIndex, _secondPageImage);
+                        _pictureBoxPdf.Invalidate();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error applying second highlight layer");
+                    }
+                }));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error in async second highlight load");
             }
         }
 
@@ -2291,12 +2395,10 @@ namespace LearningAssistant.Forms
                         if (_secondPageImage != null)
                         {
                             int secondPageIndex = _currentPageIndex + 1;
-                            _highlightManager.DrawHighlightsForPage(
+                            _highlightManager.DrawSecondHighlightsFromLayer(
                                 g,
-                                secondPageIndex,
                                 rightRect,
-                                _secondPageImage.Width,
-                                _secondPageImage.Height);
+                                secondPageIndex);
                         }
                     }
                     else

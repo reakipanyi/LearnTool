@@ -63,6 +63,8 @@ namespace LearningAssistant.Managers
 
         private Bitmap? _annotationBitmap;
         private Graphics? _annotationGraphics;
+        private Bitmap? _secondAnnotationBitmap;
+        private Graphics? _secondAnnotationGraphics;
         private List<PointF>? _currentStrokePoints;
         private Pen? _drawingPen;
         private Color _penColor = Color.Black;
@@ -381,17 +383,18 @@ namespace LearningAssistant.Managers
                         case AnnotationToolMode.Highlight:
                             _logger.LogInformation("MouseDown Left: Starting highlight selection at {X},{Y}", e.Location.X, e.Location.Y);
                             _isDrawingShape = true;
+                            _drawingPageIndex = _form.GetPageAtPoint(e.Location).pageIndex;
                             EnsureAnnotationBitmap();
                             _shapeStartPoint = ClientToImage(e.Location);
                             _shapeEndPoint = _shapeStartPoint;
                             _selectStart = e.Location;
                             _selectEnd = e.Location;
-                            _drawingPageIndex = _form.GetPageAtPoint(e.Location).pageIndex;
                             _form.PictureBoxPdf.Invalidate();
                             break;
                         case AnnotationToolMode.Pen:
                             _logger.LogInformation("MouseDown Left: Starting pen drawing at {X},{Y}", e.Location.X, e.Location.Y);
                             _isDrawing = true;
+                            _drawingPageIndex = _form.GetPageAtPoint(e.Location).pageIndex;
                             EnsureAnnotationBitmap();
                             _selectStart = e.Location;
                             _selectEnd = e.Location;
@@ -402,6 +405,7 @@ namespace LearningAssistant.Managers
                         case AnnotationToolMode.Strikethrough:
                             _logger.LogInformation("MouseDown Left: Starting strikethrough drawing at {X},{Y}", e.Location.X, e.Location.Y);
                             _isDrawing = true;
+                            _drawingPageIndex = _form.GetPageAtPoint(e.Location).pageIndex;
                             EnsureAnnotationBitmap();
                             _selectStart = e.Location;
                             _selectEnd = e.Location;
@@ -415,6 +419,7 @@ namespace LearningAssistant.Managers
                         case AnnotationToolMode.Mosaic:
                             _logger.LogInformation("MouseDown Left: Starting shape drawing ({Mode}) at {X},{Y}", _currentToolMode, e.Location.X, e.Location.Y);
                             _isDrawingShape = true;
+                            _drawingPageIndex = _form.GetPageAtPoint(e.Location).pageIndex;
                             EnsureAnnotationBitmap();
                             _shapeStartPoint = ClientToImage(e.Location);
                             _shapeEndPoint = _shapeStartPoint;
@@ -619,7 +624,11 @@ namespace LearningAssistant.Managers
                     {
                         if (_annotationBitmap != null && _currentStrokePoints != null && _currentStrokePoints.Count >= 2)
                         {
-                            _annotationGraphics!.SmoothingMode = SmoothingMode.AntiAlias;
+                            bool isSecondPage = _drawingPageIndex > _form.CurrentPageIndex;
+                            Graphics activeGfx = isSecondPage ? _secondAnnotationGraphics! : _annotationGraphics!;
+                            Bitmap activeBmp = isSecondPage ? _secondAnnotationBitmap! : _annotationBitmap!;
+
+                            activeGfx.SmoothingMode = SmoothingMode.AntiAlias;
 
                             Color drawColor = _currentToolMode == AnnotationToolMode.Strikethrough ? Color.Red : _penColor;
                             float drawWidth = _currentToolMode == AnnotationToolMode.Strikethrough ? 6f : _penWidth;
@@ -629,10 +638,10 @@ namespace LearningAssistant.Managers
                             drawPen.EndCap = LineCap.Round;
                             drawPen.LineJoin = LineJoin.Round;
 
-                            _annotationGraphics.DrawLines(drawPen, _currentStrokePoints.ToArray());
-                            _form.Presenter?.SaveAnnotationForCurrentPage((Bitmap)_annotationBitmap.Clone());
-                            var imgW = _annotationBitmap.Width;
-                            var imgH = _annotationBitmap.Height;
+                            activeGfx.DrawLines(drawPen, _currentStrokePoints.ToArray());
+                            _form.Presenter?.SaveAnnotationForPage((Bitmap)activeBmp.Clone(), _drawingPageIndex);
+                            var imgW = activeBmp.Width;
+                            var imgH = activeBmp.Height;
                             var pts = new List<float>();
                             foreach (var pt in _currentStrokePoints)
                             {
@@ -649,7 +658,7 @@ namespace LearningAssistant.Managers
                             };
 
                             PushStrokeToUndoStack(stroke);
-                            _form.Presenter?.AddAnnotationStroke(pts.ToArray(), drawColor.ToArgb(), drawWidth, imgW, imgH);
+                            _form.Presenter?.AddAnnotationStroke(pts.ToArray(), drawColor.ToArgb(), drawWidth, imgW, imgH, null, _drawingPageIndex);
                         }
                     }
                     catch (Exception ex)
@@ -701,7 +710,11 @@ namespace LearningAssistant.Managers
                             }
                             else
                             {
-                                _annotationGraphics!.SmoothingMode = SmoothingMode.AntiAlias;
+                                bool isSecondPage = _drawingPageIndex > _form.CurrentPageIndex;
+                                Graphics activeGfx = isSecondPage ? _secondAnnotationGraphics! : _annotationGraphics!;
+                                Bitmap activeBmp = isSecondPage ? _secondAnnotationBitmap! : _annotationBitmap!;
+
+                                activeGfx.SmoothingMode = SmoothingMode.AntiAlias;
 
                                 using var drawPen = new Pen(_penColor, _penWidth);
                                 drawPen.StartCap = LineCap.Round;
@@ -711,25 +724,25 @@ namespace LearningAssistant.Managers
                                 {
                                     case AnnotationToolMode.Rectangle:
                                         drawPen.DashStyle = DashStyle.Dash;
-                                        _annotationGraphics.DrawRectangle(drawPen, rect.X, rect.Y, rect.Width, rect.Height);
+                                        activeGfx.DrawRectangle(drawPen, rect.X, rect.Y, rect.Width, rect.Height);
                                         break;
                                     case AnnotationToolMode.Ellipse:
                                         drawPen.DashStyle = DashStyle.Dash;
-                                        _annotationGraphics.DrawEllipse(drawPen, rect);
+                                        activeGfx.DrawEllipse(drawPen, rect);
                                         break;
                                     case AnnotationToolMode.Arrow:
                                         drawPen.EndCap = LineCap.ArrowAnchor;
-                                        _annotationGraphics.DrawLine(drawPen, startPt, endPt);
+                                        activeGfx.DrawLine(drawPen, startPt, endPt);
                                         break;
                                     case AnnotationToolMode.Mosaic:
-                                        ApplyMosaic(rect, 10);
+                                        ApplyMosaic(rect, 10, activeGfx, activeBmp);
                                         break;
                                 }
 
-                                _form.Presenter?.SaveAnnotationForCurrentPage((Bitmap)_annotationBitmap.Clone());
+                                _form.Presenter?.SaveAnnotationForPage((Bitmap)activeBmp.Clone(), _drawingPageIndex);
 
-                                var imgW = _annotationBitmap.Width;
-                                var imgH = _annotationBitmap.Height;
+                                var imgW = activeBmp.Width;
+                                var imgH = activeBmp.Height;
 
                                 var strokePts = new List<float>
                                 {
@@ -747,7 +760,7 @@ namespace LearningAssistant.Managers
                                 };
 
                                 PushStrokeToUndoStack(stroke);
-                                _form.Presenter?.AddAnnotationStroke(strokePts.ToArray(), _penColor.ToArgb(), _penWidth, imgW, imgH, _currentToolMode.ToString());
+                                _form.Presenter?.AddAnnotationStroke(strokePts.ToArray(), _penColor.ToArgb(), _penWidth, imgW, imgH, _currentToolMode.ToString(), _drawingPageIndex);
                             }
                         }
                     }
@@ -876,14 +889,17 @@ namespace LearningAssistant.Managers
         {
             try
             {
-                if (_form.CurrentPageImage == null)
+                bool isSecondPage = _drawingPageIndex > _form.CurrentPageIndex;
+                Bitmap? pageImage = isSecondPage ? _form.SecondPageImage : _form.CurrentPageImage;
+
+                if (pageImage == null)
                     return;
 
                 int imgWidth, imgHeight;
                 try
                 {
-                    imgWidth = _form.CurrentPageImage.Width;
-                    imgHeight = _form.CurrentPageImage.Height;
+                    imgWidth = pageImage.Width;
+                    imgHeight = pageImage.Height;
                 }
                 catch (ObjectDisposedException)
                 {
@@ -891,26 +907,35 @@ namespace LearningAssistant.Managers
                     return;
                 }
 
-                if (_annotationBitmap != null)
+                ref Bitmap? bmpRef = ref isSecondPage ? ref _secondAnnotationBitmap : ref _annotationBitmap;
+                ref Graphics? gfxRef = ref isSecondPage ? ref _secondAnnotationGraphics : ref _annotationGraphics;
+
+                if (bmpRef != null)
                 {
                     try
                     {
-                        if (_annotationBitmap.Width != imgWidth ||
-                            _annotationBitmap.Height != imgHeight)
+                        if (bmpRef.Width != imgWidth ||
+                            bmpRef.Height != imgHeight)
                         {
-                            CleanupAnnotationBitmap();
+                            gfxRef?.Dispose();
+                            bmpRef?.Dispose();
+                            bmpRef = null;
+                            gfxRef = null;
                         }
                     }
                     catch (ObjectDisposedException)
                     {
-                        CleanupAnnotationBitmap();
+                        gfxRef?.Dispose();
+                        bmpRef?.Dispose();
+                        bmpRef = null;
+                        gfxRef = null;
                     }
                 }
 
-                if (_annotationBitmap == null)
+                if (bmpRef == null)
                 {
-                    _annotationBitmap = new Bitmap(imgWidth, imgHeight);
-                    _annotationGraphics = Graphics.FromImage(_annotationBitmap);
+                    bmpRef = new Bitmap(imgWidth, imgHeight);
+                    gfxRef = Graphics.FromImage(bmpRef);
                 }
             }
             catch (Exception ex)
@@ -928,6 +953,11 @@ namespace LearningAssistant.Managers
                 _annotationBitmap?.Dispose();
                 _annotationGraphics = null;
                 _annotationBitmap = null;
+
+                _secondAnnotationGraphics?.Dispose();
+                _secondAnnotationBitmap?.Dispose();
+                _secondAnnotationGraphics = null;
+                _secondAnnotationBitmap = null;
             }
             catch (Exception ex)
             {
@@ -945,6 +975,22 @@ namespace LearningAssistant.Managers
                 int imgHeight = _form.CurrentPageImage.Height;
 
                 var annotationBitmap = _form.Presenter.LoadAnnotationForCurrentPage(imgWidth, imgHeight);
+                ApplyLoadedAnnotationBitmap(annotationBitmap);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error loading annotations for current page");
+            }
+        }
+
+        /// <summary>
+        /// 用已加载好的标注位图直接设置当前标注图层，避免再次读磁盘。
+        /// 当 annotationBitmap 为 null 时创建空的透明图层。
+        /// </summary>
+        public void ApplyLoadedAnnotationBitmap(Bitmap? annotationBitmap)
+        {
+            try
+            {
                 if (annotationBitmap != null)
                 {
                     CleanupAnnotationBitmap();
@@ -962,7 +1008,7 @@ namespace LearningAssistant.Managers
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error loading annotations for current page");
+                _logger.LogWarning(ex, "Error applying loaded annotation bitmap");
             }
         }
 
@@ -1142,9 +1188,20 @@ namespace LearningAssistant.Managers
         {
             try
             {
-                if (_annotationBitmap != null)
+                // 双页模式下，_annotationBitmap 属于左页，_secondAnnotationBitmap 属于右页
+                if (pageIndex < 0 || pageIndex == _form.CurrentPageIndex)
                 {
-                    g.DrawImage(_annotationBitmap, imgRect);
+                    if (_annotationBitmap != null)
+                    {
+                        g.DrawImage(_annotationBitmap, imgRect);
+                    }
+                }
+                else if (pageIndex == _form.CurrentPageIndex + 1)
+                {
+                    if (_secondAnnotationBitmap != null)
+                    {
+                        g.DrawImage(_secondAnnotationBitmap, imgRect);
+                    }
                 }
 
                 if (_isDrawing && _currentStrokePoints != null && _currentStrokePoints.Count >= 2)
@@ -1152,8 +1209,12 @@ namespace LearningAssistant.Managers
                     if (pageIndex >= 0 && pageIndex != _drawingPageIndex)
                         return;
 
-                    var scaleX = (float)imgRect.Width / _form.CurrentPageImage.Width;
-                    var scaleY = (float)imgRect.Height / _form.CurrentPageImage.Height;
+                    Bitmap? srcImage = _form.CurrentPageImage;
+                    if (pageIndex > _form.CurrentPageIndex && _form.SecondPageImage != null)
+                        srcImage = _form.SecondPageImage;
+
+                    var scaleX = (float)imgRect.Width / srcImage.Width;
+                    var scaleY = (float)imgRect.Height / srcImage.Height;
 
                     var screenPoints = new List<Point>();
                     foreach (var pt in _currentStrokePoints)
@@ -1178,8 +1239,12 @@ namespace LearningAssistant.Managers
                     if (pageIndex >= 0 && pageIndex != _drawingPageIndex)
                         return;
 
-                    var scaleX = (float)imgRect.Width / _form.CurrentPageImage.Width;
-                    var scaleY = (float)imgRect.Height / _form.CurrentPageImage.Height;
+                    Bitmap? srcImage = _form.CurrentPageImage;
+                    if (pageIndex > _form.CurrentPageIndex && _form.SecondPageImage != null)
+                        srcImage = _form.SecondPageImage;
+
+                    var scaleX = (float)imgRect.Width / srcImage.Width;
+                    var scaleY = (float)imgRect.Height / srcImage.Height;
 
                     var startPt = _shapeStartPoint.Value;
                     var endPt = _shapeEndPoint.Value;
@@ -1242,14 +1307,25 @@ namespace LearningAssistant.Managers
         {
             try
             {
-                if (_form.CurrentPageImage == null)
+                int imgWidth, imgHeight;
+                Bitmap? srcImage = _form.CurrentPageImage;
+
+                if (_form.IsDualPage)
+                {
+                    var (_, pageRect, pageImage) = _form.GetPageAtPoint(clientPt);
+                    if (pageImage != null)
+                    {
+                        srcImage = pageImage;
+                    }
+                }
+
+                if (srcImage == null)
                     return new PointF(clientPt.X, clientPt.Y);
 
-                int imgWidth, imgHeight;
                 try
                 {
-                    imgWidth = _form.CurrentPageImage.Width;
-                    imgHeight = _form.CurrentPageImage.Height;
+                    imgWidth = srcImage.Width;
+                    imgHeight = srcImage.Height;
                 }
                 catch (ObjectDisposedException)
                 {
@@ -1259,14 +1335,11 @@ namespace LearningAssistant.Managers
                 var imgRect = _form.GetImageDisplayRect();
 
                 if (_form.IsDualPage)
-
                 {
-
                     var (_, pageRect, _) = _form.GetPageAtPoint(clientPt);
-
                     imgRect = pageRect;
-
                 }
+
                 if (imgRect.Width <= 0 || imgRect.Height <= 0)
                 {
                     var scaleX = (float)imgWidth / _form.PictureBoxPdf.ClientSize.Width;
@@ -1391,15 +1464,20 @@ namespace LearningAssistant.Managers
 
         private void ApplyMosaic(RectangleF rect, int blockSize)
         {
-            if (_annotationBitmap == null || _annotationGraphics == null) return;
+            ApplyMosaic(rect, blockSize, _annotationGraphics!, _annotationBitmap!);
+        }
+
+        private void ApplyMosaic(RectangleF rect, int blockSize, Graphics g, Bitmap bmp)
+        {
+            if (bmp == null || g == null) return;
             if (rect.Width <= 0 || rect.Height <= 0) return;
 
             try
             {
                 int x = (int)Math.Max(0, rect.X);
                 int y = (int)Math.Max(0, rect.Y);
-                int w = (int)Math.Min(_annotationBitmap.Width - x, rect.Width);
-                int h = (int)Math.Min(_annotationBitmap.Height - y, rect.Height);
+                int w = (int)Math.Min(bmp.Width - x, rect.Width);
+                int h = (int)Math.Min(bmp.Height - y, rect.Height);
 
                 if (w <= 0 || h <= 0) return;
 
@@ -1410,7 +1488,7 @@ namespace LearningAssistant.Managers
                     {
                         int bw = Math.Min(blockSize, x + w - blockX);
                         int bh = Math.Min(blockSize, y + h - blockY);
-                        _annotationGraphics.FillRectangle(mosaicPen, blockX, blockY, bw, bh);
+                        g.FillRectangle(mosaicPen, blockX, blockY, bw, bh);
                     }
                 }
             }

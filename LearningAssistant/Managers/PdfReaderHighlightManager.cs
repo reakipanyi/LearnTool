@@ -20,6 +20,9 @@ namespace LearningAssistant.Managers
         private Bitmap? _highlightBitmap;
         private Graphics? _highlightGraphics;
 
+        private Bitmap? _secondHighlightBitmap;
+        private Graphics? _secondHighlightGraphics;
+
         public HighlightColor CurrentHighlightColor { get; set; } = HighlightColor.Yellow;
         public bool IsHighlightMode { get; set; } = true;
 
@@ -92,7 +95,87 @@ namespace LearningAssistant.Managers
             }
         }
 
+        /// <summary>
+        /// 预渲染双页模式下第二页的高亮图层缓存，避免每帧 Paint 时实时绘制造成卡顿。
+        /// </summary>
+        public void UpdateSecondHighlightLayer()
+        {
+            var secondPageImage = _form.SecondPageImage;
+            if (secondPageImage == null) return;
+            UpdateSecondHighlightLayer(_form.CurrentPageIndex + 1, secondPageImage);
+        }
+
+        public void UpdateSecondHighlightLayer(int pageIndex, Bitmap secondPageImage)
+        {
+            if (secondPageImage == null) return;
+
+            try
+            {
+                int imgWidth = secondPageImage.Width;
+                int imgHeight = secondPageImage.Height;
+
+                bool needsRecreate = false;
+                if (_secondHighlightBitmap != null)
+                {
+                    try
+                    {
+                        if (_secondHighlightBitmap.Width != imgWidth || _secondHighlightBitmap.Height != imgHeight)
+                        {
+                            needsRecreate = true;
+                            CleanupSecondHighlightLayer();
+                        }
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        needsRecreate = true;
+                        CleanupSecondHighlightLayer();
+                    }
+                }
+
+                if (_secondHighlightBitmap == null || needsRecreate)
+                {
+                    _secondHighlightBitmap = new Bitmap(imgWidth, imgHeight);
+                    _secondHighlightGraphics = Graphics.FromImage(_secondHighlightBitmap);
+                    _secondHighlightGraphics.Clear(Color.Transparent);
+                }
+
+                _secondHighlightGraphics!.Clear(Color.Transparent);
+
+                var highlights = _highlightService.GetHighlightsForPage(_form.CurrentPdfPath, pageIndex);
+
+                foreach (var highlight in highlights)
+                {
+                    DrawHighlightToGraphics(_secondHighlightGraphics, highlight, imgWidth, imgHeight);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in UpdateSecondHighlightLayer");
+                CleanupSecondHighlightLayer();
+            }
+        }
+
+        public void CleanupSecondHighlightLayer()
+        {
+            try
+            {
+                _secondHighlightGraphics?.Dispose();
+                _secondHighlightBitmap?.Dispose();
+                _secondHighlightGraphics = null;
+                _secondHighlightBitmap = null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error cleaning up second highlight layer");
+            }
+        }
+
         private void DrawHighlight(PdfHighlight highlight, int imgWidth, int imgHeight)
+        {
+            DrawHighlightToGraphics(_highlightGraphics!, highlight, imgWidth, imgHeight);
+        }
+
+        private static void DrawHighlightToGraphics(Graphics g, PdfHighlight highlight, int imgWidth, int imgHeight)
         {
             var color = HighlightService.GetHighlightColor(highlight.Color);
 
@@ -114,14 +197,8 @@ namespace LearningAssistant.Managers
 
             var rect = new RectangleF(x, y, width, height);
 
-            _logger.LogDebug("DrawHighlight: Id={Id}, Page={Page}, Color={Color}, Rect={X},{Y} {Width}x{Height}, imgSize={ImgWidth}x{ImgHeight}",
-                highlight.Id, highlight.PageIndex, highlight.Color, rect.X, rect.Y, rect.Width, rect.Height, imgWidth, imgHeight);
-
             if (rect.Width <= 0 || rect.Height <= 0 || rect.X < 0 || rect.Y < 0)
-            {
-                _logger.LogWarning("DrawHighlight: rect has invalid dimensions, skipping");
                 return;
-            }
 
             int alpha1 = color.A;
             int alpha2 = Math.Max(0, color.A - 20);
@@ -133,16 +210,16 @@ namespace LearningAssistant.Managers
                 Color.FromArgb(alpha2, color.R, color.G, color.B),
                 LinearGradientMode.ForwardDiagonal);
 
-            _highlightGraphics!.FillRectangle(gradientBrush, rect);
+            g.FillRectangle(gradientBrush, rect);
 
             using var pen = new Pen(Color.FromArgb(alpha3, color.R, color.G, color.B), 2.5f);
-            _highlightGraphics.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
+            g.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
 
             if (!string.IsNullOrEmpty(highlight.Note))
             {
                 using var font = new Font("Microsoft YaHei UI", 10F);
                 using var textBrush = new SolidBrush(Color.Black);
-                _highlightGraphics.DrawString("📝", font, textBrush, rect.Location);
+                g.DrawString("📝", font, textBrush, rect.Location);
             }
         }
 
@@ -154,6 +231,11 @@ namespace LearningAssistant.Managers
                 _highlightBitmap?.Dispose();
                 _highlightGraphics = null;
                 _highlightBitmap = null;
+
+                _secondHighlightGraphics?.Dispose();
+                _secondHighlightBitmap?.Dispose();
+                _secondHighlightGraphics = null;
+                _secondHighlightBitmap = null;
             }
             catch (Exception ex)
             {
@@ -281,10 +363,15 @@ namespace LearningAssistant.Managers
                 _logger.LogInformation("AddHighlightFromSelectionAsync: RefreshHighlightList and UpdateHighlightLayer");
                 
                 // 检查当前页面是否仍然是目标页面，防止页面已切换
-                if (_form.CurrentPdfPath == currentPdfPath && _form.CurrentPageIndex == targetPageIndex)
+                bool isTargetPageVisible = _form.CurrentPdfPath == currentPdfPath &&
+                    (_form.CurrentPageIndex == targetPageIndex || 
+                     (_form.IsDualPage && _form.CurrentPageIndex + 1 == targetPageIndex));
+                
+                if (isTargetPageVisible)
                 {
                     RefreshHighlightList();
                     UpdateHighlightLayer();
+                    UpdateSecondHighlightLayer();
                     _form.PictureBoxPdf?.Invalidate();
                 }
 
@@ -632,6 +719,37 @@ namespace LearningAssistant.Managers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in DrawHighlightsFromLayer");
+            }
+        }
+
+        /// <summary>
+        /// 双页模式下用预渲染的第二页高亮图层绘制，避免每帧实时重绘。
+        /// 如果第二页图层还未准备好，则回退到实时绘制。
+        /// </summary>
+        public void DrawSecondHighlightsFromLayer(Graphics g, Rectangle targetRect, int secondPageIndex)
+        {
+            try
+            {
+                if (_secondHighlightBitmap != null && _form.SecondPageImage != null)
+                {
+                    g.DrawImage(_secondHighlightBitmap, targetRect);
+                    return;
+                }
+
+                // 回退：实时绘制第二页高亮
+                if (_form.SecondPageImage != null)
+                {
+                    DrawHighlightsForPage(g, secondPageIndex, targetRect,
+                        _form.SecondPageImage.Width, _form.SecondPageImage.Height);
+                }
+            }
+            catch (ObjectDisposedException ex)
+            {
+                _logger.LogWarning(ex, "Object disposed in DrawSecondHighlightsFromLayer");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in DrawSecondHighlightsFromLayer");
             }
         }
 

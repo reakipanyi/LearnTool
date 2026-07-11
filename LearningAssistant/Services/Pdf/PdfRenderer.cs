@@ -17,11 +17,13 @@ namespace LearningAssistant.Services.Pdf
         private readonly object _renderLock = new object();
         private readonly LinkedList<string> _cacheAccessOrder = new LinkedList<string>();
         private readonly Dictionary<string, Bitmap> _renderCache = new Dictionary<string, Bitmap>();
-        private const int RenderCacheSize = 15;
+        private const int RenderCacheSize = 30;
         private readonly Dictionary<int, Bitmap> _thumbnailCache = new Dictionary<int, Bitmap>();
         private bool _isGeneratingThumbnails = false;
         private CancellationTokenSource? _thumbnailCts;
         private readonly SemaphoreSlim _renderSemaphore = new SemaphoreSlim(2, 5);
+        private readonly SemaphoreSlim _preRenderSemaphore = new SemaphoreSlim(1, 1);
+        private CancellationTokenSource? _preRenderCts;
         private readonly HashSet<int> _preRenderingPages = new HashSet<int>();
         private CancellationTokenSource? _cts;
 
@@ -60,6 +62,10 @@ namespace LearningAssistant.Services.Pdf
             var oldCts = Interlocked.Exchange(ref _thumbnailCts, new CancellationTokenSource());
             oldCts?.Cancel();
             oldCts?.Dispose();
+
+            var oldPreRenderCts = Interlocked.Exchange(ref _preRenderCts, null);
+            oldPreRenderCts?.Cancel();
+            oldPreRenderCts?.Dispose();
 
             lock (_renderLock)
             {
@@ -279,14 +285,22 @@ namespace LearningAssistant.Services.Pdf
             var cts = _cts;
             if (cts == null || cts.IsCancellationRequested) return;
 
+            // 取消上一次预渲染
+            var oldPreRenderCts = Interlocked.Exchange(ref _preRenderCts, new CancellationTokenSource());
+            oldPreRenderCts?.Cancel();
+            oldPreRenderCts?.Dispose();
+
+            var preRenderCts = _preRenderCts;
+            if (preRenderCts == null) return;
+
             var pagesToRender = new List<int>();
-            if (currentPage - 1 >= 0) pagesToRender.Add(currentPage - 1);
             if (currentPage + 1 < PageCount) pagesToRender.Add(currentPage + 1);
+            if (currentPage - 1 >= 0) pagesToRender.Add(currentPage - 1);
 
             if (PageCount > 50)
             {
-                if (currentPage - 2 >= 0) pagesToRender.Add(currentPage - 2);
                 if (currentPage + 2 < PageCount) pagesToRender.Add(currentPage + 2);
+                if (currentPage - 2 >= 0) pagesToRender.Add(currentPage - 2);
             }
 
             var rnd = new Random();
@@ -294,20 +308,47 @@ namespace LearningAssistant.Services.Pdf
 
             foreach (var p in pagesToRender)
             {
-                if (cts.IsCancellationRequested) return;
+                if (preRenderCts.IsCancellationRequested || cts.IsCancellationRequested) return;
                 
                 if (p < 0 || p >= PageCount) continue;
 
+                // 检查缓存是否已有
+                var cacheKey = GetRenderCacheKey(p, renderW, renderH);
+                lock (_renderLock)
+                {
+                    if (_renderCache.ContainsKey(cacheKey)) continue;
+                }
+
                 try
                 {
-                    if (_isImageMode)
+                    await _preRenderSemaphore.WaitAsync(preRenderCts.Token);
+                    try
                     {
-                        await GetRenderedImagePageAsync(p, renderW, renderH);
+                        if (preRenderCts.IsCancellationRequested) return;
+
+                        // 再次检查缓存
+                        lock (_renderLock)
+                        {
+                            if (_renderCache.ContainsKey(cacheKey)) continue;
+                        }
+
+                        if (_isImageMode)
+                        {
+                            await GetRenderedImagePageAsync(p, renderW, renderH);
+                        }
+                        else
+                        {
+                            await GetRenderedPageAsync(p, renderW, renderH);
+                        }
                     }
-                    else
+                    finally
                     {
-                        await GetRenderedPageAsync(p, renderW, renderH);
+                        _preRenderSemaphore.Release();
                     }
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
                 }
                 catch (Exception ex)
                 {
@@ -472,7 +513,12 @@ namespace LearningAssistant.Services.Pdf
             _cts?.Dispose();
             _cts = null;
             
+            _preRenderCts?.Cancel();
+            _preRenderCts?.Dispose();
+            _preRenderCts = null;
+
             _renderSemaphore.Dispose();
+            _preRenderSemaphore.Dispose();
         }
 
         public Bitmap ApplyNightMode(Bitmap bitmap)

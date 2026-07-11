@@ -1,6 +1,6 @@
 using LearningAssistant.Common;
 using Microsoft.Extensions.Logging;
-using System.Media;
+using NAudio.Wave;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -11,10 +11,13 @@ namespace LearningAssistant.Services.TTS
         protected readonly ILogger? _logger;
         protected const long MaxCacheSizeBytes = 100 * 1024 * 1024;
 
-        private SoundPlayer? _currentPlayer;
+        private WaveOutEvent? _waveOut;
+        private AudioFileReader? _audioReader;
+        private WaveStream? _playbackStream;
         protected volatile bool _stopRequested = false;
         private readonly object _playerLock = new object();
         private bool _disposed = false;
+        private TaskCompletionSource<bool>? _playbackTcs;
 
         public abstract bool Available { get; }
 
@@ -24,7 +27,7 @@ namespace LearningAssistant.Services.TTS
             {
                 lock (_playerLock)
                 {
-                    return _currentPlayer != null && !_stopRequested;
+                    return _waveOut != null && !_stopRequested && _waveOut.PlaybackState == PlaybackState.Playing;
                 }
             }
         }
@@ -40,31 +43,59 @@ namespace LearningAssistant.Services.TTS
 
         public abstract Task<string?> SpeakToCacheAsync(string text, string? language = null, float? speed = null, CancellationToken cancellationToken = default);
 
-        protected async Task PlayAudioAsync(string filePath, float volume = 1.0f, CancellationToken cancellationToken = default)
+        protected async Task PlayAudioAsync(string filePath, float volume = 1.0f, float speed = 1.0f, CancellationToken cancellationToken = default)
         {
             _stopRequested = false;
+            _playbackTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            SoundPlayer? player = null;
+            WaveOutEvent? waveOut = null;
+            AudioFileReader? audioReader = null;
+            WaveStream? playbackStream = null;
             bool playerAssigned = false;
-            string? tempFile = null;
 
             try
             {
-                string playFile = filePath;
-                if (Math.Abs(volume - 1.0f) > 0.001f)
+                audioReader = new AudioFileReader(filePath);
+
+                float safeVolume = Math.Clamp(volume, 0f, 2f);
+                audioReader.Volume = safeVolume;
+
+                float safeSpeed = Math.Clamp(speed, 0.5f, 2.0f);
+                if (Math.Abs(safeSpeed - 1.0f) > 0.001f)
                 {
-                    tempFile = ApplyVolumeToWav(filePath, volume);
-                    playFile = tempFile;
-                    _logger?.LogDebug("PlayAudioAsync: applied volume {Volume}, temp file={TempFile}", volume, tempFile);
+                    playbackStream = new VarispeedWaveStream(audioReader, safeSpeed);
+                    _logger?.LogDebug("PlayAudioAsync: using playback speed={Speed}", safeSpeed);
+                }
+                else
+                {
+                    playbackStream = audioReader;
                 }
 
-                player = new SoundPlayer(playFile);
-                player.Load();
+                waveOut = new WaveOutEvent();
+                waveOut.PlaybackStopped += (s, e) =>
+                {
+                    try
+                    {
+                        if (e.Exception != null)
+                        {
+                            _playbackTcs?.TrySetException(e.Exception);
+                        }
+                        else
+                        {
+                            _playbackTcs?.TrySetResult(true);
+                        }
+                    }
+                    catch { }
+                };
+
+                waveOut.Init(playbackStream);
 
                 lock (_playerLock)
                 {
-                    _currentPlayer?.Dispose();
-                    _currentPlayer = player;
+                    StopPlaybackInternal();
+                    _waveOut = waveOut;
+                    _audioReader = audioReader;
+                    _playbackStream = playbackStream;
                     playerAssigned = true;
                 }
 
@@ -75,21 +106,18 @@ namespace LearningAssistant.Services.TTS
                 }
 
                 var fileInfo = new FileInfo(filePath);
-                _logger?.LogInformation("PlayAudioAsync: starting playback, file={FilePath}, size={Size}, volume={Volume}", filePath, fileInfo.Length, volume);
+                _logger?.LogInformation("PlayAudioAsync: starting playback, file={FilePath}, size={Size}, volume={Volume}, speed={Speed}",
+                    filePath, fileInfo.Length, safeVolume, safeSpeed);
 
-                var playbackTask = Task.Run(() =>
+                waveOut.Play();
+
+                using (cancellationToken.Register(() =>
                 {
-                    try
-                    {
-                        player!.PlaySync();
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger?.LogError(ex, "PlayAudioAsync: PlaySync failed for {FilePath}", filePath);
-                    }
-                }, cancellationToken);
-
-                await playbackTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    try { waveOut?.Stop(); } catch { }
+                }))
+                {
+                    await _playbackTcs.Task.ConfigureAwait(false);
+                }
 
                 _logger?.LogInformation("PlayAudioAsync: playback completed");
             }
@@ -102,42 +130,80 @@ namespace LearningAssistant.Services.TTS
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "PlayAudioAsync: Failed to load or play audio file {FilePath}", filePath);
-                if (!playerAssigned && player != null)
+                if (!playerAssigned)
                 {
-                    player.Dispose();
-                }
-            }
-            finally
-            {
-                if (tempFile != null && File.Exists(tempFile))
-                {
-                    try { File.Delete(tempFile); } catch { }
+                    playbackStream?.Dispose();
+                    audioReader?.Dispose();
+                    waveOut?.Dispose();
                 }
             }
         }
 
-        private static string ApplyVolumeToWav(string filePath, float volume)
+        private class VarispeedWaveStream : WaveStream
         {
-            byte[] wavBytes = File.ReadAllBytes(filePath);
-            const int headerSize = 44;
-            if (wavBytes.Length <= headerSize)
-                return filePath;
+            private readonly AudioFileReader _source;
+            private readonly float _speed;
+            private readonly WaveFormat _waveFormat;
+            private readonly long _length;
 
-            volume = Math.Clamp(volume, 0f, 2f);
-
-            for (int i = headerSize; i < wavBytes.Length - 1; i += 2)
+            public VarispeedWaveStream(AudioFileReader source, float speed)
             {
-                short sample = BitConverter.ToInt16(wavBytes, i);
-                int adjusted = (int)(sample * volume);
-                adjusted = Math.Clamp(adjusted, short.MinValue, short.MaxValue);
-                byte[] adjustedBytes = BitConverter.GetBytes((short)adjusted);
-                wavBytes[i] = adjustedBytes[0];
-                wavBytes[i + 1] = adjustedBytes[1];
+                _source = source;
+                _speed = speed;
+                int newSampleRate = (int)(source.WaveFormat.SampleRate / speed);
+                _waveFormat = new WaveFormat(newSampleRate, source.WaveFormat.BitsPerSample, source.WaveFormat.Channels);
+                _length = source.Length;
             }
 
-            string tempFile = Path.Combine(Path.GetTempPath(), $"tts_vol_{Guid.NewGuid():N}.wav");
-            File.WriteAllBytes(tempFile, wavBytes);
-            return tempFile;
+            public override WaveFormat WaveFormat => _waveFormat;
+            public override long Length => _length;
+
+            public override long Position
+            {
+                get => _source.Position;
+                set => _source.Position = value;
+            }
+
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                return _source.Read(buffer, offset, count);
+            }
+        }
+
+        private void StopPlaybackInternal()
+        {
+            if (_waveOut != null)
+            {
+                try
+                {
+                    _waveOut.Stop();
+                }
+                catch { }
+                try
+                {
+                    _waveOut.Dispose();
+                }
+                catch { }
+                _waveOut = null;
+            }
+            if (_playbackStream != null)
+            {
+                try
+                {
+                    _playbackStream.Dispose();
+                }
+                catch { }
+                _playbackStream = null;
+            }
+            if (_audioReader != null)
+            {
+                try
+                {
+                    _audioReader.Dispose();
+                }
+                catch { }
+                _audioReader = null;
+            }
         }
 
         protected void StopPlayback()
@@ -145,16 +211,8 @@ namespace LearningAssistant.Services.TTS
             lock (_playerLock)
             {
                 _stopRequested = true;
-                if (_currentPlayer != null)
-                {
-                    try
-                    {
-                        _currentPlayer.Stop();
-                        _currentPlayer.Dispose();
-                    }
-                    catch { }
-                    _currentPlayer = null;
-                }
+                StopPlaybackInternal();
+                _playbackTcs?.TrySetCanceled();
             }
         }
 
