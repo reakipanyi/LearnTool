@@ -27,6 +27,7 @@ namespace LearningAssistant.Forms.UserControls
         private string _searchKeyword = string.Empty;
         private bool _showFavoritesOnly = false;
         private HashSet<string> _favoriteItems = new();
+        private bool _isUpdatingItems = false;
 
         #endregion
 
@@ -344,36 +345,46 @@ namespace LearningAssistant.Forms.UserControls
 
         private void UpdateFilteredItems()
         {
-            var filtered = _allItems.AsEnumerable();
+            if (_isUpdatingItems) return;
+            _isUpdatingItems = true;
 
-            if (!string.IsNullOrEmpty(_searchKeyword))
+            try
             {
-                filtered = filtered.Where(item => 
-                    item.IndexOf(_searchKeyword, StringComparison.OrdinalIgnoreCase) >= 0);
-            }
+                var filtered = _allItems.AsEnumerable();
 
-            if (_showFavoritesOnly)
-            {
-                filtered = filtered.Where(item => 
-                    _favoriteItems.Contains(item) || 
-                    _favoriteItems.Any(fav => fav.EndsWith($"]{item}")));
-            }
+                if (!string.IsNullOrEmpty(_searchKeyword))
+                {
+                    filtered = filtered.Where(item => 
+                        item.IndexOf(_searchKeyword, StringComparison.OrdinalIgnoreCase) >= 0);
+                }
 
-            var selectedItem = _listBoxItems.SelectedItem?.ToString();
-            
-            _listBoxItems.Items.Clear();
-            foreach (var item in filtered)
-            {
-                _listBoxItems.Items.Add(item);
-            }
+                if (_showFavoritesOnly)
+                {
+                    filtered = filtered.Where(item => 
+                        _favoriteItems.Contains(item) || 
+                        _favoriteItems.Any(fav => fav.EndsWith($"]{item}")));
+                }
 
-            if (selectedItem != null && _listBoxItems.Items.Contains(selectedItem))
-            {
-                _listBoxItems.SelectedItem = selectedItem;
+                var selectedItem = _listBoxItems.SelectedItem?.ToString();
+                
+                _listBoxItems.Items.Clear();
+                foreach (var item in filtered)
+                {
+                    _listBoxItems.Items.Add(item);
+                }
+
+                if (selectedItem != null && _listBoxItems.Items.Contains(selectedItem))
+                {
+                    _listBoxItems.SelectedItem = selectedItem;
+                }
+                else if (_listBoxItems.Items.Count > 0)
+                {
+                    _listBoxItems.SelectedIndex = 0;
+                }
             }
-            else if (_listBoxItems.Items.Count > 0)
+            finally
             {
-                _listBoxItems.SelectedIndex = 0;
+                _isUpdatingItems = false;
             }
 
             int totalCount = _allItems.Count;

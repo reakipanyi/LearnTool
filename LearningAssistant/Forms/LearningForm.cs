@@ -8,7 +8,6 @@ using LearningAssistant.Models.Learning;
 using LearningAssistant.Models.Pomodoro;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services;
-using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Feedback;
 using LearningAssistant.Services.Gamification;
 using LearningAssistant.Services.Learning;
@@ -29,11 +28,9 @@ namespace LearningAssistant.Forms
         private readonly ConfettiManager _confettiManager;
         private readonly EncouragementManager _encouragementManager;
 
-        private IAiQuestionService? _aiQuestionService => _services.AiQuestionService;
         private ITTSService? _ttsService => _services.AudioServices.TTSService;
         private ISoundService? _soundService => _services.NotificationServices.SoundService;
         private IThemeService _themeService => _services.ThemeService;
-        private IAIPanelPopupService? _aiPanelPopupService => _services.NotificationServices.AIPanelPopupService;
         private IEncouragementService _encouragementService => _services.GamificationServices.EncouragementService;
         private IAchievementService? _achievementService => _services.GamificationServices.AchievementService;
         private ISpacedRepetitionService? _spacedRepetitionService => _services.SpacedRepetitionService;
@@ -48,7 +45,6 @@ namespace LearningAssistant.Forms
         private bool _isShowAnswer = false;
         private bool _answerRevealed = false;
         private bool _isFavorite = false;
-        private bool _currentNoteCounted = false;
         private bool _disposed = false;
         private Settings _settings = new();
         private bool _autoPlayEnabled = false;
@@ -63,17 +59,8 @@ namespace LearningAssistant.Forms
         private CircularProgressControl _dailyGoalProgress = null!;
         #endregion
 
-        #region === 笔记增强 ===
-        private Label _noteWordCountLabel = null!;
-        private ToolStrip _noteFormattingToolbar = null!;
-        #endregion
-
         #region === 卡片展示 ===
         private LearningCard _learningCard = null!;
-        #endregion
-
-        #region === AI历史 ===
-        private AIHistoryPanel _aiHistoryPanel = null!;
         #endregion
 
         #region === UI 状态 ===
@@ -94,7 +81,6 @@ namespace LearningAssistant.Forms
         private int _noteCount = 0;
         private int _totalLearnedCount = 0;
         private int _gameScore = 0;
-        private readonly System.Windows.Forms.Timer _noteSaveTimer = new System.Windows.Forms.Timer();
         #endregion
 
         #region === 静态资源 ===
@@ -147,11 +133,7 @@ namespace LearningAssistant.Forms
         private ComboBox comboBoxSubject => _settingsView.ComboBoxSubject;
         private ComboBox comboBoxSubCategory => _settingsView.ComboBoxSubCategory;
         private SpeedSelectorControl speedSelector => _settingsView.SpeedSelector;
-        private Panel panelNotes => _contentView.PanelNotes;
-        private RichTextBox richTextBoxNotes => _contentView.RichTextBoxNotes;
-        private Button buttonPronounce => _buttonsView.ButtonPronounce;
         private Button buttonFavorite => _buttonsView.ButtonFavorite;
-        private Button buttonNote => _buttonsView.ButtonNote;
         private Button buttonKnown => _buttonsView.ButtonKnown;
         private Button buttonUnknown => _buttonsView.ButtonUnknown;
 
@@ -174,19 +156,11 @@ namespace LearningAssistant.Forms
         private Label labelGameQuestion = null!;
         private TextBox textBoxGameAnswer = null!;
         private Label labelGameResult = null!;
-        private System.Windows.Forms.Timer _gameTimer = null!;
+
         private FloatingText _floatingText = null!;
         #endregion
 
-        #region === 费曼学习面板 ===
-        private FeynmanLearningPanel? _feynmanPanel;
-        private Panel? _feynmanContainerPanel;
-        private bool _isFeynmanPanelVisible = false;
-        private readonly FeynmanHistoryService _feynmanHistoryService = new();
-        private SpeechService? _speechService;
-        private bool _isDictationActive = false;
         private LevelBadge _levelBadge;
-        #endregion
 
         #region === 设计器生成 ===
         private System.ComponentModel.IContainer components = null;
@@ -228,9 +202,6 @@ namespace LearningAssistant.Forms
 
             _themeService.RegisterThemeable(this);
 
-            // 笔记保存计时器
-            _noteSaveTimer.Tick += NoteSaveTimer_Tick;
-
             // 自动播放计时器
             _autoPlayTimer.Interval = 5000;
             _autoPlayTimer.Tick += AutoPlayTimer_Tick;
@@ -242,12 +213,8 @@ namespace LearningAssistant.Forms
         {
             _buttonsView.KnownClicked += ButtonKnown_Click;
             _buttonsView.UnknownClicked += ButtonUnknown_Click;
-            _buttonsView.PronounceClicked += ButtonPronounce_Click;
             _buttonsView.FavoriteClicked += ButtonFavorite_Click;
-            _buttonsView.NoteClicked += ButtonNote_Click;
             _buttonsView.ExitClicked += ButtonExit_Click;
-            _buttonsView.AIAskClicked += ButtonAIAsk_Click;
-            _buttonsView.FeynmanClicked += ButtonFeynman_Click;
 
             _settingsView.RadioStudyMode.CheckedChanged += RadioSetting_CheckedChanged;
             _settingsView.RadioQuickMode.CheckedChanged += RadioSetting_CheckedChanged;
@@ -263,7 +230,6 @@ namespace LearningAssistant.Forms
 
             _contentView.ContentClicked += LabelContent_Click;
             _contentView.DetailClicked += ListBoxDisplay_Click;
-            _contentView.NoteTextChanged += RichTextBoxNotes_TextChanged;
 
             _listView.SelectedIndexChanged += ListBoxItems_SelectedIndexChanged;
 
@@ -359,30 +325,7 @@ namespace LearningAssistant.Forms
                 labelListStatus.BackColor = colors.Surface;
             }
 
-            if (panelNotes != null)
-            {
-                panelNotes.BackColor = colors.Surface;
-            }
 
-            if (richTextBoxNotes != null)
-            {
-                richTextBoxNotes.ForeColor = colors.TextPrimary;
-                richTextBoxNotes.BackColor = colors.Surface;
-            }
-
-            if (_noteFormattingToolbar != null)
-            {
-                _noteFormattingToolbar.BackColor = colors.Surface;
-                _noteFormattingToolbar.ForeColor = colors.TextPrimary;
-                _noteFormattingToolbar.Renderer = new ToolStripProfessionalRenderer(
-                    new ThemeColorTable(colors));
-            }
-
-            if (_noteWordCountLabel != null)
-            {
-                _noteWordCountLabel.ForeColor = colors.TextSecondary;
-                _noteWordCountLabel.BackColor = colors.Surface;
-            }
 
             foreach (Control control in Controls)
             {
@@ -775,7 +718,6 @@ namespace LearningAssistant.Forms
         private void ResetDetailState()
         {
             _answerRevealed = false;
-            _currentNoteCounted = false;
 
             UpdateDetailState(true, !_isShowAnswer);
 
@@ -1033,7 +975,6 @@ namespace LearningAssistant.Forms
         {
             buttonKnown.Enabled = enabled;
             buttonUnknown.Enabled = enabled;
-            buttonPronounce.Enabled = enabled;
         }
 
         public async Task PlayPronunciationAsync(string text, string language)
@@ -1200,12 +1141,6 @@ namespace LearningAssistant.Forms
             _studyTimer.Tick += StudyTimer_Tick;
             _studyTimer.Start();
 
-            _gameTimer = new System.Windows.Forms.Timer();
-            _gameTimer.Interval = 1000;
-            _gameTimer.Tick += GameTimer_Tick;
-
-            _noteSaveTimer.Interval = 1000;
-            _noteSaveTimer.Tick += NoteSaveTimer_Tick;
 
             ApplyButtonStyles();
 
@@ -1267,10 +1202,7 @@ namespace LearningAssistant.Forms
         {
             ApplyRoundedStyle(buttonKnown, 8);
             ApplyRoundedStyle(buttonUnknown, 8);
-            ApplyRoundedStyle(buttonPronounce, 8);
             ApplyRoundedStyle(buttonFavorite, 8);
-            ApplyRoundedStyle(buttonNote, 8);
-            //ApplyRoundedStyle(buttonExit, 8);
             ApplyRoundedStyle(buttonShowAnswer, 8);
             ApplyRoundedStyle(buttonThemeToggle, 8);
 
@@ -1293,13 +1225,9 @@ namespace LearningAssistant.Forms
             _toolTip.SetToolTip(_buttonsView.ButtonNext, "下一项 (Enter / → / PageDown / End)");
             _toolTip.SetToolTip(_buttonsView.ButtonKnown, "标记为已知 (1 / K)");
             _toolTip.SetToolTip(_buttonsView.ButtonUnknown, "标记为未知 (2 / U)");
-            _toolTip.SetToolTip(_buttonsView.ButtonPronounce, "播放发音 (Space)");
             _toolTip.SetToolTip(_buttonsView.ButtonFavorite, "收藏/取消收藏 (3 / F)");
-            _toolTip.SetToolTip(_buttonsView.ButtonNote, "打开笔记 (4 / N)");
             _toolTip.SetToolTip(_buttonsView.ButtonEdit, "编辑内容 (5 / E)");
             _toolTip.SetToolTip(_buttonsView.ButtonExit, "退出学习 (Esc)");
-            _toolTip.SetToolTip(_buttonsView.ButtonAIAsk, "AI 问答 (F6)");
-            _toolTip.SetToolTip(_buttonsView.ButtonFeynman, "费曼学习法 (F7)");
 
             _toolTip.SetToolTip(buttonShowAnswer, "切换学习/答题模式 (F3)");
 
@@ -1414,9 +1342,6 @@ namespace LearningAssistant.Forms
 
         private void InitializeShortcutHint()
         {
-
-
-            InitializeNoteEnhancements();
             InitializeLearningCard();
         }
 
@@ -1436,154 +1361,8 @@ namespace LearningAssistant.Forms
                 panelContent.Controls.SetChildIndex(_learningCard, 0);
             }
 
-            InitializeAIHistoryPanel();
-            InitializeMentorPanel();
         }
 
-        private void InitializeMentorPanel()
-        {
-        }
-
-        public void ToggleMentorPanel()
-        {
-            MessageBox.Show("AI导师功能已移除", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-
-        private void InitializeAIHistoryPanel()
-        {
-            _aiHistoryPanel = new AIHistoryPanel
-            {
-                Dock = DockStyle.Right,
-                Width = 300,
-                Visible = false
-            };
-            _aiHistoryPanel.HistoryItemSelected += AIHistoryPanel_HistoryItemSelected;
-
-            Controls.Add(_aiHistoryPanel);
-        }
-
-        private void AIHistoryPanel_HistoryItemSelected(object? sender, AIHistoryEventArgs e)
-        {
-            ShowToast($"问题: {e.Item.Question}", ToastType.Info);
-        }
-
-        private void InitializeNoteEnhancements()
-        {
-            _noteWordCountLabel = new Label
-            {
-                Text = "字数: 0",
-                Font = new Font("微软雅黑", 8F),
-                ForeColor = Color.Gray,
-                Dock = DockStyle.Bottom,
-                Padding = new Padding(5),
-                TextAlign = ContentAlignment.MiddleRight
-            };
-
-            _noteFormattingToolbar = new ToolStrip
-            {
-                Dock = DockStyle.Top,
-                Height = 25,
-                BackColor = Color.White
-            };
-
-            var boldBtn = new ToolStripButton("B")
-            {
-                ToolTipText = "加粗",
-                Font = new Font("微软雅黑", 9F, FontStyle.Bold)
-            };
-            boldBtn.Click += BoldBtn_Click;
-
-            var italicBtn = new ToolStripButton("I")
-            {
-                ToolTipText = "斜体",
-                Font = new Font("微软雅黑", 9F, FontStyle.Italic)
-            };
-            italicBtn.Click += ItalicBtn_Click;
-
-            var underlineBtn = new ToolStripButton("U")
-            {
-                ToolTipText = "下划线",
-                Font = new Font("微软雅黑", 9F, FontStyle.Underline)
-            };
-            underlineBtn.Click += UnderlineBtn_Click;
-
-            _noteFormattingToolbar.Items.Add(boldBtn);
-            _noteFormattingToolbar.Items.Add(italicBtn);
-            _noteFormattingToolbar.Items.Add(underlineBtn);
-            _noteFormattingToolbar.Items.Add(new ToolStripSeparator());
-
-            var fontColorBtn = new ToolStripButton("A")
-            {
-                ToolTipText = "字体颜色"
-            };
-            fontColorBtn.Click += FontColorBtn_Click;
-            _noteFormattingToolbar.Items.Add(fontColorBtn);
-
-            if (panelNotes != null)
-            {
-                panelNotes.Controls.Add(_noteWordCountLabel);
-                panelNotes.Controls.Add(_noteFormattingToolbar);
-            }
-
-            if (richTextBoxNotes != null)
-            {
-                richTextBoxNotes.TextChanged += RichTextBoxNotes_TextChangedEnhanced;
-            }
-        }
-
-        private void BoldBtn_Click(object? sender, EventArgs e)
-        {
-            ApplyNoteFormat(FontStyle.Bold);
-        }
-
-        private void ItalicBtn_Click(object? sender, EventArgs e)
-        {
-            ApplyNoteFormat(FontStyle.Italic);
-        }
-
-        private void UnderlineBtn_Click(object? sender, EventArgs e)
-        {
-            ApplyNoteFormat(FontStyle.Underline);
-        }
-
-        private void FontColorBtn_Click(object? sender, EventArgs e)
-        {
-            ChangeNoteFontColor();
-        }
-
-        private void ApplyNoteFormat(FontStyle style)
-        {
-            if (richTextBoxNotes == null) return;
-
-            var currentFont = richTextBoxNotes.SelectionFont;
-            if (currentFont != null)
-            {
-                var newFont = new Font(currentFont, currentFont.Style ^ style);
-                richTextBoxNotes.SelectionFont = newFont;
-            }
-        }
-
-        private void ChangeNoteFontColor()
-        {
-            if (richTextBoxNotes == null) return;
-
-            using (var colorDialog = new ColorDialog())
-            {
-                if (colorDialog.ShowDialog() == DialogResult.OK)
-                {
-                    richTextBoxNotes.SelectionColor = colorDialog.Color;
-                }
-            }
-        }
-
-        private void RichTextBoxNotes_TextChangedEnhanced(object? sender, EventArgs e)
-        {
-            if (_noteWordCountLabel != null && richTextBoxNotes != null)
-            {
-                int wordCount = richTextBoxNotes.Text.Length;
-                _noteWordCountLabel.Text = $"字数: {wordCount}";
-            }
-        }
 
         private void UpdateDailyGoalProgress()
         {
@@ -1745,19 +1524,6 @@ namespace LearningAssistant.Forms
             _favoritesCacheTime = DateTime.MinValue;
         }
 
-        private void UpdateListStatus(int totalItems, int currentIndex)
-        {
-            if (labelListStatus == null) return;
-
-            if (totalItems == 0)
-            {
-                labelListStatus.Text = "暂无学习内容";
-                return;
-            }
-
-            int progressPercent = totalItems > 0 ? (int)((currentIndex + 1) * 100.0 / totalItems) : 0;
-            labelListStatus.Text = $"共 {totalItems} 项 | 当前 {currentIndex + 1} | 进度 {progressPercent}%";
-        }
 
         public void UpdateLearningListSelection(int currentIndex)
         {
@@ -1924,29 +1690,7 @@ namespace LearningAssistant.Forms
 
         #endregion
 
-        #region 高级学习功能
 
-        public void StartProgressiveHint()
-        {
-            MessageBox.Show("渐进式提示功能已移除", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-
-        public void StartAssociationLearning()
-        {
-            MessageBox.Show("联想学习功能已移除", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-
-        public void ShowFeynmanQuestions()
-        {
-            MessageBox.Show("费曼学习功能已移除", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-
-        public void ShowDailyThinkingTask()
-        {
-            MessageBox.Show("每日思考任务功能已移除", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-
-        #endregion
 
         #region Event Handlers
 
@@ -2019,7 +1763,7 @@ namespace LearningAssistant.Forms
                 {
                     _answerRevealed = true;
                 }
-                
+
                 UpdateCardFields();
             }
         }
@@ -2038,63 +1782,6 @@ namespace LearningAssistant.Forms
 
 
 
-        /// <summary>
-        /// 启动猜词小游戏
-        /// </summary>
-        private void StartMiniGame()
-        {
-            _isGameActive = true;
-            _gameScore = 0;
-            panelGame.Visible = true;
-            _gameTimer.Start();
-            NextGameQuestion();
-        }
-
-        /// <summary>
-        /// 生成下一道游戏题目
-        /// </summary>
-        private void NextGameQuestion()
-        {
-            if (_currentItem == null) return;
-
-            labelGameQuestion.Text = $"❓ {_currentItem.GetMainContent()} 的意思是？";
-            textBoxGameAnswer.Text = "";
-            labelGameResult.Text = "";
-        }
-
-        /// <summary>
-        /// 处理游戏提交答案
-        /// </summary>
-        private void ButtonGameSubmit_Click(object? sender, EventArgs e)
-        {
-            if (_currentItem == null) return;
-
-            string userAnswer = textBoxGameAnswer.Text.Trim().ToLower();
-            string correctAnswer = _currentItem.GetDisplayText().ToLower();
-
-            if (correctAnswer.Contains(userAnswer) || userAnswer.Contains(correctAnswer))
-            {
-                _gameScore += 10;
-                _gamificationService.AddScore(10);
-                _gamificationService.AddXP(10);
-                labelGameResult.Text = $"✅ 正确！得分: {_gameScore}";
-                _soundService?.PlaySuccess();
-            }
-            else
-            {
-                labelGameResult.Text = $"❌ 错误！正确答案: {_currentItem.GetDisplayText()}";
-                _soundService?.PlayError();
-            }
-
-            NextGameQuestion();
-        }
-
-        /// <summary>
-        /// 游戏计时器回调（预留）
-        /// </summary>
-        private void GameTimer_Tick(object? sender, EventArgs e)
-        {
-        }
 
         /// <summary>
         /// 更新鼓励语显示（按间隔显示，避免太频繁）
@@ -2145,11 +1832,6 @@ namespace LearningAssistant.Forms
                 SettingsChanged?.Invoke(this, EventArgs.Empty);
         }
 
-        private void CheckBoxAIExplanation_CheckedChanged(object? sender, EventArgs e)
-        {
-            if (!_settingsChangedEventsSuspended)
-                SettingsChanged?.Invoke(this, EventArgs.Empty);
-        }
 
         private async void ButtonKnown_Click(object? sender, EventArgs e)
         {
@@ -2251,10 +1933,6 @@ namespace LearningAssistant.Forms
             NextClicked?.Invoke(this, EventArgs.Empty);
         }
 
-        private void ButtonPronounce_Click(object? sender, EventArgs e)
-        {
-            PronounceClicked?.Invoke(this, EventArgs.Empty);
-        }
 
         private void ShowXPFloatingText(int xpGained)
         {
@@ -2296,363 +1974,7 @@ namespace LearningAssistant.Forms
             Invalidate();
         }
 
-        private async void ShakeWindow()
-        {
-            var originalLocation = Location;
-            var shakeAmount = 15;
-            var shakeSteps = 8;
-            var stepDelay = 15;
 
-            for (int i = 0; i < shakeSteps; i++)
-            {
-                int currentShakeAmount = (int)(shakeAmount * (1 - (i / (float)shakeSteps)));
-
-                int dx = (Random.Shared.Next(3) - 1) * currentShakeAmount;
-                int dy = (Random.Shared.Next(3) - 1) * currentShakeAmount;
-
-                Location = new Point(originalLocation.X + dx, originalLocation.Y + dy);
-                await Task.Delay(stepDelay);
-            }
-
-            Location = originalLocation;
-        }
-
-        /// <summary>
-        /// AI问答按钮点击事件
-        /// </summary>
-        private void ButtonAIAsk_Click(object? sender, EventArgs e)
-        {
-            if (_currentItem == null)
-            {
-                ShowToast("请先选择一个学习内容", ToastType.Warning);
-                return;
-            }
-
-            ToggleMentorPanel();
-        }
-
-        /// <summary>
-        /// 费曼学习按钮点击事件
-        /// </summary>
-        private void ButtonFeynman_Click(object? sender, EventArgs e)
-        {
-            if (_currentItem == null)
-            {
-                MessageBox.Show("请先选择一个学习内容", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            try
-            {
-                ToggleFeynmanPanel();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "打开费曼学习面板失败");
-                MessageBox.Show($"打开费曼学习面板失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        /// <summary>
-        /// 切换费曼学习面板显示状态
-        /// </summary>
-        private void ToggleFeynmanPanel()
-        {
-            if (_isFeynmanPanelVisible)
-            {
-                HideFeynmanPanel();
-            }
-            else
-            {
-                ShowFeynmanPanel();
-            }
-        }
-
-        /// <summary>
-        /// 显示费曼学习面板
-        /// </summary>
-        private void ShowFeynmanPanel()
-        {
-            MessageBox.Show("费曼学习功能已移除", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-
-        private void CloseButton_Click(object? sender, EventArgs e)
-        {
-            HideFeynmanPanel();
-        }
-
-        /// <summary>
-        /// 隐藏费曼学习面板
-        /// </summary>
-        private void HideFeynmanPanel()
-        {
-            if (_feynmanContainerPanel != null)
-            {
-                _feynmanContainerPanel.Visible = false;
-                _isFeynmanPanelVisible = false;
-            }
-        }
-
-        private void CreateFeynmanPanel()
-        {
-            _feynmanPanel = new FeynmanLearningPanel
-            {
-                Dock = DockStyle.Fill
-            };
-            _feynmanPanel.CloseClicked += FeynmanPanel_CloseClicked;
-            _feynmanPanel.Completed += FeynmanPanel_Completed;
-            _feynmanPanel.AIFeedbackRequested += FeynmanPanel_AIFeedbackRequested;
-            _feynmanPanel.GenerateSimplifiedRequested += FeynmanPanel_GenerateSimplifiedRequested;
-            _feynmanPanel.GenerateAnalogyRequested += FeynmanPanel_GenerateAnalogyRequested;
-            _feynmanPanel.VoiceInputRequested += FeynmanPanel_VoiceInputRequested;
-
-            _feynmanContainerPanel = new Panel
-            {
-                Dock = DockStyle.Right,
-                Width = 420,
-                Name = "FeynmanPanelContainer",
-                BackColor = Color.White,
-                BorderStyle = BorderStyle.FixedSingle,
-                Padding = new Padding(0, 0, 0, 0)
-            };
-
-            var headerPanel = new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = 45,
-                BackColor = Color.FromArgb(147, 112, 219)
-            };
-
-            var titleLabel = new Label
-            {
-                Text = "🧠 费曼学习法",
-                Dock = DockStyle.Left,
-                ForeColor = Color.White,
-                Font = new Font("微软雅黑", 12F, FontStyle.Bold),
-                Padding = new Padding(20, 10, 0, 0),
-                AutoSize = true
-            };
-
-            var closeButton = new Button
-            {
-                Text = "✕",
-                Dock = DockStyle.Right,
-                Width = 45,
-                FlatStyle = FlatStyle.Flat,
-                ForeColor = Color.White,
-                Font = new Font("微软雅黑", 14F, FontStyle.Bold),
-                BackColor = Color.Transparent,
-                Cursor = Cursors.Hand
-            };
-            closeButton.FlatAppearance.BorderSize = 0;
-            closeButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(127, 92, 199);
-            closeButton.Click += CloseButton_Click;
-
-            var gradientPanel = new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = 8,
-                BackColor = Color.White
-            };
-            gradientPanel.Paint += (sender, e) =>
-            {
-                using (var brush = new System.Drawing.Drawing2D.LinearGradientBrush(
-                    new Rectangle(0, 0, gradientPanel.Width, gradientPanel.Height),
-                    Color.FromArgb(147, 112, 219),
-                    Color.FromArgb(76, 175, 80),
-                    System.Drawing.Drawing2D.LinearGradientMode.Horizontal))
-                {
-                    e.Graphics.FillRectangle(brush, e.ClipRectangle);
-                }
-            };
-
-            headerPanel.Controls.Add(titleLabel);
-            headerPanel.Controls.Add(closeButton);
-
-            _feynmanContainerPanel.Controls.Add(_feynmanPanel);
-            _feynmanContainerPanel.Controls.Add(gradientPanel);
-            _feynmanContainerPanel.Controls.Add(headerPanel);
-
-            Controls.Add(_feynmanContainerPanel);
-        }
-
-        private void FeynmanPanel_CloseClicked(object? sender, EventArgs e)
-        {
-            HideFeynmanPanel();
-        }
-
-        private void FeynmanPanel_Completed(object? sender, EventArgs e)
-        {
-            _soundService?.PlaySuccess();
-
-            if (_currentItem != null)
-            {
-                var record = new Models.Learning.FeynmanHistoryRecord
-                {
-                    ContentId = _currentItem.GetDisplayText(),
-                    ContentTitle = _currentItem.GetDisplayText(),
-                    TeachAnswer = _feynmanPanel?.TeachAnswer ?? string.Empty,
-                    AIFeedback = _feynmanPanel?.AIFeedbackText,
-                    SimplifiedText = _feynmanPanel?.SimplifiedText,
-                    AnalogyText = _feynmanPanel?.AnalogyText,
-                    IsCompleted = true
-                };
-                _feynmanHistoryService.SaveRecord(record);
-
-                if (_eventBus != null)
-                {
-                    _eventBus.Publish(eventData: new FeynmanCompletedEvent
-                    {
-                        UserId = GetCurrentUserId(),
-                        ItemContent = _currentItem.GetDisplayText(),
-                        SubCategory = _settings.SubCategory,
-                        SimplifiedText = record.SimplifiedText ?? string.Empty
-                    });
-                }
-            }
-
-            _gamificationService.Save();
-            MessageBox.Show("🎉 恭喜完成费曼学习法四步流程！\n\n获得 50 XP 和 100 分！\n你的理解会更加深刻！", "完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            HideFeynmanPanel();
-        }
-
-        private async void FeynmanPanel_AIFeedbackRequested(object? sender, string userExplanation)
-        {
-            if (_currentItem == null || _aiQuestionService == null || _feynmanPanel == null)
-                return;
-
-            try
-            {
-                _feynmanPanel.SetAIFeedbackLoading(true);
-
-                var content = _currentItem.GetMainContent();
-                var displayText = _currentItem.GetDisplayText();
-
-                var prompt = $"请评估以下用户对知识点的解释是否准确，并给出改进建议。\n\n" +
-                             $"知识点：{displayText}\n" +
-                             $"参考内容：{content}\n\n" +
-                             $"用户的解释：{userExplanation}\n\n" +
-                             $"请从以下几个方面评估：\n" +
-                             $"1. 准确性：解释是否正确\n" +
-                             $"2. 清晰度：是否容易理解\n" +
-                             $"3. 完整性：是否涵盖了关键点\n" +
-                             $"4. 改进建议：如何更好地解释";
-
-                var feedback = await _aiQuestionService.AskAsync(prompt, content);
-                _feynmanPanel.SetAIFeedback(feedback);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "获取AI反馈失败");
-                _feynmanPanel?.SetAIFeedback($"❌ 获取AI反馈失败：{ex.Message}");
-            }
-        }
-
-        private async void FeynmanPanel_GenerateSimplifiedRequested(object? sender, EventArgs e)
-        {
-            if (_currentItem == null || _aiQuestionService == null || _feynmanPanel == null)
-                return;
-
-            try
-            {
-                _feynmanPanel.SetSimplifiedLoading(true);
-
-                var content = _currentItem.GetMainContent();
-                var prompt = $"请用一句话（不超过30个字）总结以下知识点的核心内容：\n\n{content}";
-
-                var result = await _aiQuestionService.AskAsync(prompt, content);
-                result = result.Trim().Trim('"', '。', '.');
-                _feynmanPanel.SetSimplifiedText(result);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "生成简化总结失败");
-                _feynmanPanel?.SetSimplifiedText($"❌ 生成失败：{ex.Message}");
-            }
-        }
-
-        private async void FeynmanPanel_GenerateAnalogyRequested(object? sender, EventArgs e)
-        {
-            if (_currentItem == null || _aiQuestionService == null || _feynmanPanel == null)
-                return;
-
-            try
-            {
-                _feynmanPanel.SetAnalogyLoading(true);
-
-                var content = _currentItem.GetMainContent();
-                var displayText = _currentItem.GetDisplayText();
-                var prompt = $"请用一个生动形象的比喻/类比来解释\"{displayText}\"这个概念，让初学者也能轻松理解：\n\n参考内容：{content}";
-
-                var result = await _aiQuestionService.AskAsync(prompt, content);
-                result = result.Trim();
-                _feynmanPanel.SetAnalogyText(result);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "生成类比失败");
-                _feynmanPanel?.SetAnalogyText($"❌ 生成失败：{ex.Message}");
-            }
-        }
-
-        private void FeynmanPanel_VoiceInputRequested(object? sender, EventArgs e)
-        {
-            try
-            {
-                if (_isDictationActive)
-                {
-                    _speechService?.StopDictation();
-                    _isDictationActive = false;
-                    return;
-                }
-
-                _speechService ??= Program.GetService<SpeechService>();
-                if (_speechService == null)
-                {
-                    MessageBox.Show("语音服务未初始化", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                _speechService.DictationCompleted -= OnDictationCompleted;
-                _speechService.DictationCompleted += OnDictationCompleted;
-                _speechService.DictationError -= OnDictationError;
-                _speechService.DictationError += OnDictationError;
-
-                _speechService.StartDictation();
-                _isDictationActive = true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "启动语音输入失败");
-                MessageBox.Show($"启动语音输入失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                _isDictationActive = false;
-            }
-        }
-
-        private void OnDictationCompleted(object? sender, Services.Learning.DictationResultEventArgs e)
-        {
-            if (InvokeRequired)
-            {
-                Invoke(new Action(() => OnDictationCompleted(sender, e)));
-                return;
-            }
-
-            if (e.Success && !string.IsNullOrWhiteSpace(e.Text))
-            {
-                _feynmanPanel?.AppendVoiceText(e.Text);
-            }
-        }
-
-        private void OnDictationError(object? sender, string e)
-        {
-            if (InvokeRequired)
-            {
-                Invoke(new Action(() => OnDictationError(sender, e)));
-                return;
-            }
-
-            _logger.LogWarning("语音输入错误：{Error}", e);
-        }
 
         private void ButtonExit_Click(object? sender, EventArgs e)
         {
@@ -2694,23 +2016,6 @@ namespace LearningAssistant.Forms
                 _logger?.LogError(ex, "打开内容编辑器失败");
                 MessageBox.Show($"打开内容编辑器失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-        }
-        /*
-        private async void ButtonNote_Click(object? sender, EventArgs e)
-        {
-            if (panelNotes.Visible)
-            {
-                await AnimateNotesPanel(false);
-            }
-            else
-            {
-                LoadNotes();
-                await AnimateNotesPanel(true);
-            }
-        }*/
-        private void ButtonNote_Click(object? sender, EventArgs e)
-        {
-
         }
 
         private void ButtonAchievements_Click(object? sender, EventArgs e)
@@ -2968,17 +2273,6 @@ namespace LearningAssistant.Forms
             return Path.Combine(userDir, "favorites.json");
         }
 
-        /// <summary>
-        /// 获取用户笔记文件路径
-        /// </summary>
-        private string GetUserNotesPath()
-        {
-            var userId = GetCurrentUserId();
-            var userDir = Path.Combine(AppPaths.UsersDir, userId);
-            if (!Directory.Exists(userDir))
-                Directory.CreateDirectory(userDir);
-            return Path.Combine(userDir, "notes.json");
-        }
 
         /// <summary>
         /// 获取用户设置文件路径
@@ -3005,164 +2299,6 @@ namespace LearningAssistant.Forms
             return $"[{subCategory}]{content}";
         }
 
-
-        private async Task AnimateNotesPanel(bool show)
-        {
-            const int targetHeight = 200;
-            const int step = 10;
-            const int delay = 10;
-
-            if (show)
-            {
-                panelNotes.Visible = true;
-                middleTableLayoutPanel.RowStyles[1] = new RowStyle(SizeType.Absolute, 0F);
-                middleTableLayoutPanel.PerformLayout();
-
-                for (int height = 0; height <= targetHeight; height += step)
-                {
-                    middleTableLayoutPanel.RowStyles[1] = new RowStyle(SizeType.Absolute, height);
-                    middleTableLayoutPanel.PerformLayout();
-                    await Task.Delay(delay);
-                }
-
-                middleTableLayoutPanel.RowStyles[1] = new RowStyle(SizeType.Absolute, targetHeight);
-                middleTableLayoutPanel.PerformLayout();
-                buttonNote.Text = "📝 笔记 (开)";
-            }
-            else
-            {
-                var currentStyle = middleTableLayoutPanel.RowStyles[1];
-                int currentHeight = (int)(currentStyle.SizeType == SizeType.Absolute ? currentStyle.Height : targetHeight);
-
-                for (int height = currentHeight; height >= 0; height -= step)
-                {
-                    middleTableLayoutPanel.RowStyles[1] = new RowStyle(SizeType.Absolute, Math.Max(0, height));
-                    middleTableLayoutPanel.PerformLayout();
-                    await Task.Delay(delay);
-                }
-
-                middleTableLayoutPanel.RowStyles[1] = new RowStyle(SizeType.Absolute, 0F);
-                middleTableLayoutPanel.PerformLayout();
-                panelNotes.Visible = false;
-                buttonNote.Text = "📝 笔记";
-            }
-        }
-
-        private void LoadNotes()
-        {
-            if (_currentItem == null || richTextBoxNotes == null) return;
-
-            try
-            {
-                string notesPath = GetUserNotesPath();
-
-                if (File.Exists(notesPath))
-                {
-                    string json = File.ReadAllText(notesPath);
-                    var notesDict = JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
-
-                    // 使用唯一键（子类别+内容）
-                    string key = GetNoteKey();
-                    if (notesDict.TryGetValue(key, out string note))
-                    {
-                        richTextBoxNotes.Text = note;
-                    }
-                    else
-                    {
-                        // 兼容旧数据：尝试使用旧键（仅内容）
-                        string oldKey = _currentItem.GetMainContent();
-                        if (notesDict.TryGetValue(oldKey, out string oldNote))
-                        {
-                            richTextBoxNotes.Text = oldNote;
-                            // 迁移到新键
-                            notesDict[key] = oldNote;
-                            notesDict.Remove(oldKey);
-                            File.WriteAllText(notesPath, JsonSerializer.Serialize(notesDict, new JsonSerializerOptions { WriteIndented = true }));
-                        }
-                        else
-                        {
-                            richTextBoxNotes.Text = "";
-                        }
-                    }
-                }
-                else
-                {
-                    richTextBoxNotes.Text = "";
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "加载笔记失败");
-                richTextBoxNotes.Text = "";
-            }
-        }
-
-        private void SaveNotes()
-        {
-            if (_currentItem == null || richTextBoxNotes == null) return;
-
-            try
-            {
-                string notesPath = GetUserNotesPath();
-                Dictionary<string, string> notesDict = new Dictionary<string, string>();
-
-                if (File.Exists(notesPath))
-                {
-                    string json = File.ReadAllText(notesPath);
-                    notesDict = JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
-                }
-
-                // 使用唯一键（子类别+内容）
-                string key = GetNoteKey();
-                if (!string.IsNullOrEmpty(key))
-                {
-                    notesDict[key] = richTextBoxNotes.Text;
-
-                    string jsonOutput = JsonSerializer.Serialize(notesDict, new JsonSerializerOptions { WriteIndented = true });
-                    File.WriteAllText(notesPath, jsonOutput);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "保存笔记失败");
-            }
-        }
-
-        /// <summary>
-        /// 获取笔记的唯一键（复用 GetItemKey）
-        /// </summary>
-        private string GetNoteKey() => GetItemKey();
-
-        private void RichTextBoxNotes_TextChanged(object? sender, EventArgs e)
-        {
-            if (richTextBoxNotes != null)
-            {
-                bool hasContent = !string.IsNullOrWhiteSpace(richTextBoxNotes.Text);
-                if (hasContent && !_currentNoteCounted)
-                {
-                    _currentNoteCounted = true;
-                    _noteCount++;
-                    _gamificationService.RecordNote();
-                    _gamificationService.CheckBadgeUnlock("note", _noteCount);
-                }
-                else if (!hasContent && _currentNoteCounted)
-                {
-                    _currentNoteCounted = false;
-                    _noteCount = Math.Max(0, _noteCount - 1);
-                }
-            }
-
-            _noteSaveTimer.Stop();
-            _noteSaveTimer.Start();
-        }
-
-        private void NoteSaveTimer_Tick(object? sender, EventArgs e)
-        {
-            _noteSaveTimer.Stop();
-            SaveNotes();
-        }
-
-        private bool ContainsChinese(string text) => text.Any(c => c >= 0x4E00 && c <= 0x9FFF);
 
         private void LearningForm_KeyDown(object? sender, KeyEventArgs e)
         {
@@ -3251,9 +2387,7 @@ namespace LearningAssistant.Forms
                     ButtonFavorite_Click(this, EventArgs.Empty);
                     return true;
                 case Keys.D4:
-                case Keys.N:
-                    ButtonNote_Click(this, EventArgs.Empty);
-                    return true;
+
                 case Keys.D5:
                 case Keys.E:
                     ButtonEdit_Click(this, EventArgs.Empty);
@@ -3282,27 +2416,11 @@ namespace LearningAssistant.Forms
                     ExitClicked?.Invoke(this, EventArgs.Empty);
                     Close();
                     return true;
+
                 case Keys.F1:
-                    StartProgressiveHint();
-                    return true;
-                case Keys.F2:
-                    StartAssociationLearning();
-                    return true;
-                case Keys.F3:
                     ToggleAnswerDisplay();
                     return true;
-                case Keys.F4:
-                    ShowFeynmanQuestions();
-                    return true;
-                case Keys.F5:
-                    ShowDailyThinkingTask();
-                    return true;
-                case Keys.F6:
-                    ButtonAIAsk_Click(this, EventArgs.Empty);
-                    return true;
-                case Keys.F7:
-                    ButtonFeynman_Click(this, EventArgs.Empty);
-                    return true;
+
                 case Keys.F8:
                     ToggleAutoPlay();
                     return true;
@@ -3456,14 +2574,9 @@ namespace LearningAssistant.Forms
                 _confettiTimer?.Stop();
                 _confettiTimer?.Dispose();
 
-                _noteSaveTimer?.Stop();
-                _noteSaveTimer?.Dispose();
-
                 _autoPlayTimer?.Stop();
                 _autoPlayTimer?.Dispose();
 
-                _gameTimer?.Stop();
-                _gameTimer?.Dispose();
 
                 _toolTip?.Dispose();
 
@@ -3484,12 +2597,8 @@ namespace LearningAssistant.Forms
                     _buttonsView.KnownClicked -= ButtonKnown_Click;
                     _buttonsView.UnknownClicked -= ButtonUnknown_Click;
                     _buttonsView.NextClicked -= ButtonNext_Click;
-                    _buttonsView.PronounceClicked -= ButtonPronounce_Click;
                     _buttonsView.FavoriteClicked -= ButtonFavorite_Click;
-                    _buttonsView.NoteClicked -= ButtonNote_Click;
                     _buttonsView.ExitClicked -= ButtonExit_Click;
-                    _buttonsView.AIAskClicked -= ButtonAIAsk_Click;
-                    _buttonsView.FeynmanClicked -= ButtonFeynman_Click;
                 }
 
                 if (_settingsView != null)
@@ -3510,7 +2619,6 @@ namespace LearningAssistant.Forms
                 {
                     _contentView.ContentClicked -= LabelContent_Click;
                     _contentView.DetailClicked -= ListBoxDisplay_Click;
-                    _contentView.NoteTextChanged -= RichTextBoxNotes_TextChanged;
                 }
 
                 if (_listView != null)
@@ -3537,16 +2645,6 @@ namespace LearningAssistant.Forms
                 _normalForegroundBrush.Dispose();
                 _selectedBorderPen.Dispose();
                 _hoverBackgroundBrush.Dispose();
-
-                if (_speechService != null)
-                {
-                    _speechService.DictationCompleted -= OnDictationCompleted;
-                    _speechService.DictationError -= OnDictationError;
-                    if (_isDictationActive)
-                    {
-                        try { _speechService.StopDictation(); } catch { }
-                    }
-                }
             }
 
             _disposed = true;
