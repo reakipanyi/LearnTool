@@ -84,7 +84,7 @@ namespace LearningAssistant.Presenters
                     NotifyTtsServiceSettingsChanged();
                 }
 
-                _view.ShowMessage("设置已保存");
+                //_view.ShowMessage("设置已保存");
                 _view.CloseView();
                 _logger.LogInformation("Settings saved successfully");
             }

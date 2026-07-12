@@ -4,6 +4,7 @@ using KokoroSharp.Processing;
 using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
 using Microsoft.Extensions.Logging;
+using NAudio.Wave;
 
 namespace LearningAssistant.Services.TTS
 {
@@ -248,7 +249,7 @@ namespace LearningAssistant.Services.TTS
                 {
                     File.SetLastWriteTimeUtc(path, DateTime.UtcNow);
                     _logger?.LogInformation("SpeakAsync: using cached audio, path={Path}", path);
-                    await PlayAudioAsync(path, _config.Volume, 1.0f, cancellationToken);
+                    await PlayAudioAsync(path, _config.Volume, actualSpeed, cancellationToken);
                     _logger?.LogInformation("SpeakAsync: cached audio playback completed");
                     return path;
                 }
@@ -563,7 +564,7 @@ namespace LearningAssistant.Services.TTS
             try
             {
                 await File.WriteAllBytesAsync(tempFile, wavBytes, cancellationToken).ConfigureAwait(false);
-                await PlayAudioAsync(tempFile, _config.Volume, 1.0f, cancellationToken).ConfigureAwait(false);
+                await PlayAudioAsync(tempFile, _config.Volume, speed, cancellationToken).ConfigureAwait(false);
             }
             finally
             {
@@ -597,10 +598,11 @@ namespace LearningAssistant.Services.TTS
 
             try
             {
-                var job = KokoroJob.Create(tokens, voice, speed, OnComplete: (float[] samples) =>
+                var job = KokoroJob.Create(tokens, voice, 1.0f, OnComplete: (float[] samples) =>
                 {
                     try
                     {
+                        _logger?.LogDebug("SynthesizeTokensToWavAsync: SamplesCount={Count}", samples.Length);
                         var wavBytes = ConvertPcmFloatToWav(samples, 24000, 1);
                         tcs.TrySetResult(wavBytes);
                     }
@@ -633,7 +635,7 @@ namespace LearningAssistant.Services.TTS
                 return text;
 
             string lastChar = trimmed.Length > 0 ? trimmed.Substring(trimmed.Length - 1) : "";
-            bool hasEndPunctuation = lastChar == "." || lastChar == "!" || lastChar == "?" || 
+            bool hasEndPunctuation = lastChar == "." || lastChar == "!" || lastChar == "?" ||
                                      lastChar == "。" || lastChar == "！" || lastChar == "？";
 
             if (!hasEndPunctuation)
@@ -835,14 +837,6 @@ namespace LearningAssistant.Services.TTS
             return "en";
         }
 
-        private static float AdjustSpeedForLanguage(string langCode, float baseSpeed)
-        {
-            if (langCode == "zh")
-            {
-                return Math.Clamp(baseSpeed * 0.85f, 0.5f, 1.2f);
-            }
-            return baseSpeed;
-        }
 
         private KokoroVoice? SelectVoiceForSegment(string langCode, string? language)
         {
@@ -861,40 +855,13 @@ namespace LearningAssistant.Services.TTS
 
         private static byte[] ConvertPcmFloatToWav(float[] samples, int sampleRate, int channels)
         {
-            int sampleCount = samples.Length;
-            int bytesPerSample = 2;
-            int dataSize = sampleCount * bytesPerSample;
-            int headerSize = 44;
-            int totalSize = headerSize + dataSize;
-
-            byte[] wavBytes = new byte[totalSize];
-
-            using (var ms = new MemoryStream(wavBytes))
-            using (var writer = new BinaryWriter(ms))
+            using var ms = new MemoryStream();
+            var waveFormat = new WaveFormat(sampleRate, 16, channels);
+            using (var writer = new WaveFileWriter(ms, waveFormat))
             {
-                writer.Write(new char[] { 'R', 'I', 'F', 'F' });
-                writer.Write(totalSize - 8);
-                writer.Write(new char[] { 'W', 'A', 'V', 'E' });
-                writer.Write(new char[] { 'f', 'm', 't', ' ' });
-                writer.Write(16);
-                writer.Write((short)1);
-                writer.Write((short)channels);
-                writer.Write(sampleRate);
-                writer.Write(sampleRate * channels * bytesPerSample);
-                writer.Write((short)(channels * bytesPerSample));
-                writer.Write((short)(bytesPerSample * 8));
-                writer.Write(new char[] { 'd', 'a', 't', 'a' });
-                writer.Write(dataSize);
-
-                for (int i = 0; i < sampleCount; i++)
-                {
-                    float sample = Math.Clamp(samples[i], -1.0f, 1.0f);
-                    short intSample = (short)(sample * short.MaxValue);
-                    writer.Write(intSample);
-                }
+                writer.WriteSamples(samples, 0, samples.Length);
             }
-
-            return wavBytes;
+            return ms.ToArray();
         }
 
         public override void Dispose()

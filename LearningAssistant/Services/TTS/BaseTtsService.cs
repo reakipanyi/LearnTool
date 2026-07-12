@@ -59,7 +59,16 @@ namespace LearningAssistant.Services.TTS
                 float safeVolume = Math.Clamp(volume, 0f, 2f);
                 audioReader.Volume = safeVolume;
 
-                playbackStream = audioReader;
+                float safeSpeed = Math.Clamp(speed, 0.5f, 2.0f);
+                if (Math.Abs(safeSpeed - 1.0f) > 0.001f)
+                {
+                    playbackStream = new VarispeedWaveStream(audioReader, safeSpeed);
+                    _logger?.LogDebug("PlayAudioAsync: using playback speed={Speed}", safeSpeed);
+                }
+                else
+                {
+                    playbackStream = audioReader;
+                }
 
                 waveOut = new WaveOutEvent();
                 waveOut.PlaybackStopped += (s, e) =>
@@ -212,32 +221,133 @@ namespace LearningAssistant.Services.TTS
 
         private class VarispeedWaveStream : WaveStream
         {
-            private readonly AudioFileReader _source;
-            private readonly float _speed;
+            private readonly byte[] _buffer;
             private readonly WaveFormat _waveFormat;
-            private readonly long _length;
+            private long _position;
 
             public VarispeedWaveStream(AudioFileReader source, float speed)
             {
-                _source = source;
-                _speed = speed;
-                int newSampleRate = (int)(source.WaveFormat.SampleRate / speed);
-                _waveFormat = new WaveFormat(newSampleRate, source.WaveFormat.BitsPerSample, source.WaveFormat.Channels);
-                _length = source.Length;
+                _waveFormat = source.WaveFormat;
+
+                // 读取全部float样本
+                int bytesPerSample = source.WaveFormat.BitsPerSample / 8;
+                int sampleCount = (int)(source.Length / (bytesPerSample * source.WaveFormat.Channels));
+                float[] inputSamples = new float[sampleCount];
+                source.Read(inputSamples, 0, sampleCount);
+
+                // OLA时间拉伸（变速不变调）
+                float[] stretched = TimeStretchOla(inputSamples, speed);
+
+                // 转回bytes
+                _buffer = new byte[stretched.Length * 4];
+                Buffer.BlockCopy(stretched, 0, _buffer, 0, _buffer.Length);
+                _position = 0;
+            }
+
+            /// <summary>
+            /// WSOLA(波形相似重叠相加)时间拉伸算法，变速不变调，无重音
+            /// </summary>
+            private static float[] TimeStretchOla(float[] input, float speed)
+            {
+                if (Math.Abs(speed - 1.0f) < 0.001f) return input;
+
+                int inputLength = input.Length;
+                int outputLength = (int)(inputLength / speed) + 4096;
+                float[] output = new float[outputLength];
+
+                const int frameSize = 2048; // ~85ms at 24000Hz，帧越大重音越少
+                int hopIn = frameSize / 4;  // 输入步进
+                int hopOut = (int)(hopIn / speed); // 输出步进
+                int searchRange = hopIn;    // 搜索范围
+
+                // Hann窗
+                float[] window = new float[frameSize];
+                for (int i = 0; i < frameSize; i++)
+                {
+                    window[i] = 0.5f * (1.0f - (float)Math.Cos(2.0 * Math.PI * i / (frameSize - 1)));
+                }
+
+                // 第一帧直接复制
+                int firstLen = Math.Min(frameSize, inputLength);
+                for (int i = 0; i < firstLen; i++)
+                {
+                    output[i] = input[i] * window[i];
+                }
+
+                int outPos = hopOut;
+                int inPos = hopIn;
+
+                while (inPos + frameSize <= inputLength && outPos + frameSize <= outputLength)
+                {
+                    // WSOLA: 归一化交叉相关搜索最佳对齐
+                    int overlapLen = Math.Min(hopOut, frameSize);
+                    int bestDelta = 0;
+                    float bestCorr = float.MinValue;
+
+                    int searchStart = Math.Max(0, inPos - searchRange);
+                    int searchEnd = Math.Min(inputLength - frameSize, inPos + searchRange);
+
+                    int outBase = outPos - hopOut;
+
+                    for (int search = searchStart; search <= searchEnd; search++)
+                    {
+                        float corr = 0;
+                        float normOut = 0;
+                        float normIn = 0;
+
+                        for (int i = 0; i < overlapLen; i++)
+                        {
+                            float o = output[outBase + i];
+                            float s = input[search + i];
+                            corr += o * s;
+                            normOut += o * o;
+                            normIn += s * s;
+                        }
+
+                        // 归一化交叉相关
+                        float denom = (float)Math.Sqrt(normOut * normIn) + 1e-10f;
+                        float normCorr = corr / denom;
+
+                        if (normCorr > bestCorr)
+                        {
+                            bestCorr = normCorr;
+                            bestDelta = search - inPos;
+                        }
+                    }
+
+                    int alignedInPos = inPos + bestDelta;
+
+                    // 用最佳对齐位置复制帧
+                    for (int i = 0; i < frameSize; i++)
+                    {
+                        output[outPos + i] += input[alignedInPos + i] * window[i];
+                    }
+
+                    inPos += hopIn;
+                    outPos += hopOut;
+                }
+
+                int actualLength = (int)(inputLength / speed);
+                Array.Resize(ref output, Math.Min(actualLength, outputLength));
+                return output;
             }
 
             public override WaveFormat WaveFormat => _waveFormat;
-            public override long Length => _length;
+            public override long Length => _buffer.Length;
 
             public override long Position
             {
-                get => _source.Position;
-                set => _source.Position = value;
+                get => _position;
+                set => _position = Math.Clamp(value, 0, _buffer.Length);
             }
 
             public override int Read(byte[] buffer, int offset, int count)
             {
-                return _source.Read(buffer, offset, count);
+                int toRead = Math.Min(count, _buffer.Length - (int)_position);
+                if (toRead <= 0) return 0;
+                Array.Copy(_buffer, _position, buffer, offset, toRead);
+                _position += toRead;
+                return toRead;
             }
         }
 
