@@ -454,14 +454,12 @@ namespace LearningAssistant.Common
                 var audioServices = sp.GetRequiredService<AudioServices>();
                 var gamificationServices = sp.GetRequiredService<GamificationServices>();
                 var notificationServices = sp.GetRequiredService<NotificationServices>();
-                var spacedRepetitionService = sp.GetService<ISpacedRepetitionService>();
                 var userSessionService = sp.GetService<IUserSessionService>();
-                var pomodoroService = sp.GetService<IPomodoroService>();
                 var themeService = sp.GetRequiredService<IThemeService>();
                 var speechCoordinator = sp.GetService<ISpeechCoordinator>();
                 var persistenceService = sp.GetService<IDataPersistenceService>();
                 return new LearningFormServices(audioServices, gamificationServices, notificationServices,
-                    spacedRepetitionService, userSessionService, pomodoroService, themeService, speechCoordinator, persistenceService);
+                    userSessionService, themeService, speechCoordinator, persistenceService);
             });
 
             services.AddScoped<LearningForm>(sp =>

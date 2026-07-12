@@ -31,7 +31,9 @@ namespace LearningAssistant.Forms.UserControls
         private Label _labelSubCategory = null!;
         private ComboBox _comboBoxSubCategory = null!;
 
-        
+        // 玩家选择
+        private Label _labelUser = null!;
+        private ComboBox _comboBoxUser = null!;
 
         // Quiz 模式
         private Panel _panelQuizMode = null!;
@@ -78,6 +80,11 @@ namespace LearningAssistant.Forms.UserControls
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public ComboBox ComboBoxSubCategory => _comboBoxSubCategory;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public ComboBox ComboBoxUser => _comboBoxUser;
+
+        public event EventHandler? UserChanged;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Button ButtonShowAnswer => _buttonShowAnswer;
@@ -144,6 +151,8 @@ namespace LearningAssistant.Forms.UserControls
             _comboBoxSubject = new ComboBox();
             _labelSubCategory = new Label();
             _comboBoxSubCategory = new ComboBox();
+            _labelUser = new Label();
+            _comboBoxUser = new ComboBox();
             _checkBoxVoice = new CheckBox();
             _pronunciationFlowLayoutPanel = new FlowLayoutPanel();
             _radioOriginal = new RadioButton();
@@ -172,6 +181,8 @@ namespace LearningAssistant.Forms.UserControls
             _panelConfig.Controls.Add(_groupBoxSubject);
             _panelConfig.Controls.Add(_labelSubCategory);
             _panelConfig.Controls.Add(_comboBoxSubCategory);
+            _panelConfig.Controls.Add(_labelUser);
+            _panelConfig.Controls.Add(_comboBoxUser);
             _panelConfig.Controls.Add(_checkBoxVoice);
             _panelConfig.Controls.Add(_pronunciationFlowLayoutPanel);
             _panelConfig.Controls.Add(_speedSelector);
@@ -312,7 +323,29 @@ namespace LearningAssistant.Forms.UserControls
             _comboBoxSubCategory.Name = "_comboBoxSubCategory";
             _comboBoxSubCategory.Size = new Size(125, 25);
             _comboBoxSubCategory.TabIndex = 5;
-            // 
+            //
+            // _labelUser
+            //
+            _labelUser.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            _labelUser.ForeColor = Color.FromArgb(70, 90, 110);
+            _labelUser.Location = new Point(10, 463);
+            _labelUser.Name = "_labelUser";
+            _labelUser.Size = new Size(50, 26);
+            _labelUser.TabIndex = 6;
+            _labelUser.Text = "👤";
+            _labelUser.TextAlign = ContentAlignment.MiddleLeft;
+            //
+            // _comboBoxUser
+            //
+            _comboBoxUser.DropDownStyle = ComboBoxStyle.DropDownList;
+            _comboBoxUser.Font = new Font("微软雅黑", 9F);
+            _comboBoxUser.FormattingEnabled = true;
+            _comboBoxUser.Location = new Point(65, 460);
+            _comboBoxUser.Name = "_comboBoxUser";
+            _comboBoxUser.Size = new Size(125, 25);
+            _comboBoxUser.TabIndex = 7;
+            _comboBoxUser.SelectedIndexChanged += ComboBoxUser_SelectedIndexChanged;
+            //
             // _checkBoxVoice
             // 
             _checkBoxVoice.Checked = true;
@@ -447,6 +480,15 @@ namespace LearningAssistant.Forms.UserControls
             _pronunciationFlowLayoutPanel.PerformLayout();
             _panelQuizMode.ResumeLayout(false);
             ResumeLayout(false);
+        }
+
+        #endregion
+
+        #region Private Methods
+
+        private void ComboBoxUser_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            UserChanged?.Invoke(sender, e);
         }
 
         #endregion

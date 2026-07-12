@@ -50,7 +50,7 @@ namespace LearningAssistant.Forms.UserControls
             _labelStatistics.Dock = DockStyle.Bottom;
             _labelStatistics.Font = new Font("微软雅黑", 10F);
             _labelStatistics.ForeColor = Color.FromArgb(80, 100, 120);
-            _labelStatistics.Location = new Point(0, 812);
+            _labelStatistics.Location = new Point(0, 47);
             _labelStatistics.Name = "_labelStatistics";
             _labelStatistics.Size = new Size(1814, 17);
             _labelStatistics.TabIndex = 1;
@@ -74,7 +74,7 @@ namespace LearningAssistant.Forms.UserControls
             Controls.Add(_labelStatistics);
             Controls.Add(_progressBar);
             Name = "LearningProcessStatsView";
-            Size = new Size(1814, 829);
+            Size = new Size(1814, 64);
             ResumeLayout(false);
         }
 

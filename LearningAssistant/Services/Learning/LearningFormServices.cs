@@ -56,9 +56,7 @@ namespace LearningAssistant.Services.Learning
         public AudioServices AudioServices { get; }
         public GamificationServices GamificationServices { get; }
         public NotificationServices NotificationServices { get; }
-        public ISpacedRepetitionService? SpacedRepetitionService { get; }
         public IUserSessionService? UserSessionService { get; }
-        public IPomodoroService? PomodoroService { get; }
         public IThemeService ThemeService { get; }
         public ISpeechCoordinator? SpeechCoordinator { get; }
         public IDataPersistenceService? PersistenceService { get; }
@@ -67,9 +65,7 @@ namespace LearningAssistant.Services.Learning
             AudioServices audioServices,
             GamificationServices gamificationServices,
             NotificationServices notificationServices,
-            ISpacedRepetitionService? spacedRepetitionService,
             IUserSessionService? userSessionService,
-            IPomodoroService? pomodoroService,
             IThemeService themeService,
             ISpeechCoordinator? speechCoordinator,
             IDataPersistenceService? persistenceService)
@@ -77,9 +73,7 @@ namespace LearningAssistant.Services.Learning
             AudioServices = audioServices;
             GamificationServices = gamificationServices;
             NotificationServices = notificationServices;
-            SpacedRepetitionService = spacedRepetitionService;
             UserSessionService = userSessionService;
-            PomodoroService = pomodoroService;
             ThemeService = themeService;
             SpeechCoordinator = speechCoordinator;
             PersistenceService = persistenceService;

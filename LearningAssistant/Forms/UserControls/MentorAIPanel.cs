@@ -302,6 +302,9 @@ namespace LearningAssistant.Forms.UserControls
 
         private void OnMessageReceived(object? sender, ConversationTurn turn)
         {
+            if (IsDisposed || !IsHandleCreated)
+                return;
+
             if (InvokeRequired)
             {
                 BeginInvoke(() => OnMessageReceived(sender, turn));

@@ -75,6 +75,9 @@ namespace LearningAssistant.Forms.UserControls
 
         private void OnStateChanged(object? sender, PomodoroStateChangedEventArgs e)
         {
+            if (IsDisposed || !IsHandleCreated)
+                return;
+
             if (InvokeRequired)
             {
                 Invoke(new Action(() => OnStateChanged(sender, e)));
@@ -89,6 +92,9 @@ namespace LearningAssistant.Forms.UserControls
 
         private void OnTick(object? sender, TimeSpan remaining)
         {
+            if (IsDisposed || !IsHandleCreated)
+                return;
+
             if (InvokeRequired)
             {
                 Invoke(new Action(() => OnTick(sender, remaining)));

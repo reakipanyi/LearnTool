@@ -207,11 +207,11 @@ namespace LearningAssistant.Forms.UserControls
 
         private void SpeechCoordinator_SpeakStateChanged(object? sender, SpeakStateChangedEventArgs e)
         {
-            if (this.IsDisposed) return;
-            
+            if (this.IsDisposed || !this.IsHandleCreated) return;
+
             this.BeginInvoke(() =>
             {
-                if (!this.IsDisposed)
+                if (!this.IsDisposed && this.IsHandleCreated)
                 {
                     UpdateSpeakingState();
                 }
@@ -261,11 +261,11 @@ namespace LearningAssistant.Forms.UserControls
                 Task.Run(async () =>
                 {
                     await Task.Delay(1000);
-                    if (!_copyButton.IsDisposed)
+                    if (!_copyButton.IsDisposed && _copyButton.IsHandleCreated)
                     {
                         _copyButton.BeginInvoke(() =>
                         {
-                            if (!_copyButton.IsDisposed)
+                            if (!_copyButton.IsDisposed && _copyButton.IsHandleCreated)
                             {
                                 _copyButton.Text = originalText;
                                 _copyButton.ForeColor = SystemColors.ControlText;

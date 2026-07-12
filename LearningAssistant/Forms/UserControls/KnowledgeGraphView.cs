@@ -394,6 +394,9 @@ namespace LearningAssistant.Forms.UserControls
 
         private void UpdateStatus(string status)
         {
+            if (IsDisposed || !IsHandleCreated)
+                return;
+
             if (InvokeRequired)
             {
                 BeginInvoke(() => UpdateStatus(status));

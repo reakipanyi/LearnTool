@@ -5,7 +5,6 @@ using LearningAssistant.Forms.UserControls;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Models.Learning;
-using LearningAssistant.Models.Pomodoro;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services;
 using LearningAssistant.Services.Feedback;
@@ -33,11 +32,9 @@ namespace LearningAssistant.Forms
         private ISoundService? _soundService => _services.NotificationServices.SoundService;
         private IThemeService _themeService => _services.ThemeService;
         private IEncouragementService _encouragementService => _services.GamificationServices.EncouragementService;
-        private ISpacedRepetitionService? _spacedRepetitionService => _services.SpacedRepetitionService;
         private IGamificationService _gamificationService => _services.GamificationServices.GamificationService;
         private IEventBus? _eventBus => _services.NotificationServices.EventBus;
         private IUserSessionService? _userSessionService => _services.UserSessionService;
-        private IPomodoroService? _pomodoroService => _services.PomodoroService;
         private IDataPersistenceService? _persistenceService => _services.PersistenceService;
         #endregion
 
@@ -107,7 +104,6 @@ namespace LearningAssistant.Forms
         private LearningContentView _contentView = null!;
         private LearningButtonsView _buttonsView = null!;
         private LearningStatsView _statsView = null!;
-        private LearningStatsButtonView _statsButtonView = null!;
         private LearningProcessStatsView _statsProgressView = null!;
         private LearningSettingsView _settingsView = null!;
         #endregion
@@ -188,12 +184,6 @@ namespace LearningAssistant.Forms
             _gamificationService.LevelUp += OnLevelUp;
             _gamificationService.XPChanged += OnXPChanged;
 
-            if (_pomodoroService != null)
-            {
-                _pomodoroService.SessionCompleted += PomodoroService_SessionCompleted;
-                _pomodoroService.StateChanged += PomodoroService_StateChanged;
-            }
-
             _encouragementManager = new EncouragementManager();
 
             _confettiManager = new ConfettiManager();
@@ -237,7 +227,7 @@ namespace LearningAssistant.Forms
 
             _listView.SelectedIndexChanged += ListBoxItems_SelectedIndexChanged;
 
-            _statsButtonView.UserChanged += StatsButtonView_UserChanged;
+            _settingsView.UserChanged += StatsButtonView_UserChanged;
         }
 
         public void ApplyTheme(ThemeColors colors)
@@ -968,7 +958,6 @@ namespace LearningAssistant.Forms
         public event EventHandler? SettingsChanged;
         public event EventHandler? OpenStatisticsClicked;
         public event EventHandler? ExportErrorBookClicked;
-        public event EventHandler? ReviewClicked;
 
         public void ShowMessage(string msg)
         {
@@ -1022,7 +1011,6 @@ namespace LearningAssistant.Forms
             _buttonsView = new LearningButtonsView();
             _statsView = new LearningStatsView();
             _statsProgressView = new LearningProcessStatsView();
-            _statsButtonView = new LearningStatsButtonView();
             _settingsView = new LearningSettingsView();
             mainTableLayoutPanel = new TableLayoutPanel();
             middlePanel = new Panel();
@@ -1056,9 +1044,9 @@ namespace LearningAssistant.Forms
             // _statsView
             // 
             _statsView.Dock = DockStyle.Fill;
-            _statsView.Location = new Point(3, 797);
+            _statsView.Location = new Point(3, 806);
             _statsView.Name = "_statsView";
-            _statsView.Size = new Size(1089, 38);
+            _statsView.Size = new Size(1089, 29);
             _statsView.TabIndex = 9;
             // 
             // _statsProgressView
@@ -1066,18 +1054,8 @@ namespace LearningAssistant.Forms
             _statsProgressView.Dock = DockStyle.Fill;
             _statsProgressView.Location = new Point(3, 753);
             _statsProgressView.Name = "_statsProgressView";
-            _statsProgressView.Size = new Size(1089, 38);
+            _statsProgressView.Size = new Size(1089, 47);
             _statsProgressView.TabIndex = 1;
-            // 
-            // _statsButtonView
-            // 
-            _statsButtonView.BackColor = Color.White;
-            _statsButtonView.Dock = DockStyle.Fill;
-            _statsButtonView.Location = new Point(3, 3);
-            _statsButtonView.Name = "_statsButtonView";
-            _statsButtonView.Padding = new Padding(10, 4, 10, 4);
-            _statsButtonView.Size = new Size(1089, 42);
-            _statsButtonView.TabIndex = 0;
             // 
             // _settingsView
             // 
@@ -1092,9 +1070,7 @@ namespace LearningAssistant.Forms
             mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 266F));
             mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220F));
-            mainTableLayoutPanel.Controls.Add(_listView.PanelList, 0, 0);
             mainTableLayoutPanel.Controls.Add(middlePanel, 1, 0);
-            mainTableLayoutPanel.Controls.Add(_settingsView.PanelConfig, 2, 0);
             mainTableLayoutPanel.Dock = DockStyle.Fill;
             mainTableLayoutPanel.Location = new Point(0, 0);
             mainTableLayoutPanel.Name = "mainTableLayoutPanel";
@@ -1116,22 +1092,17 @@ namespace LearningAssistant.Forms
             // 
             middleTableLayoutPanel.ColumnCount = 1;
             middleTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            middleTableLayoutPanel.Controls.Add(_statsButtonView, 0, 0);
-            middleTableLayoutPanel.Controls.Add(_contentView.PanelContent, 0, 1);
-            middleTableLayoutPanel.Controls.Add(_contentView.PanelNotes, 0, 2);
-            middleTableLayoutPanel.Controls.Add(_buttonsView.ButtonsPanel, 0, 3);
-            middleTableLayoutPanel.Controls.Add(_statsProgressView, 0, 4);
-            middleTableLayoutPanel.Controls.Add(_statsView, 0, 5);
+            middleTableLayoutPanel.Controls.Add(_statsProgressView, 0, 3);
+            middleTableLayoutPanel.Controls.Add(_statsView, 0, 4);
             middleTableLayoutPanel.Dock = DockStyle.Fill;
             middleTableLayoutPanel.Location = new Point(0, 0);
             middleTableLayoutPanel.Name = "middleTableLayoutPanel";
-            middleTableLayoutPanel.RowCount = 6;
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
+            middleTableLayoutPanel.RowCount = 5;
             middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 0F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 91F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 74F));
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 53F));
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 35F));
             middleTableLayoutPanel.Size = new Size(1095, 838);
             middleTableLayoutPanel.TabIndex = 0;
             // 
@@ -1444,46 +1415,6 @@ namespace LearningAssistant.Forms
         {
             _studyDuration = _studyDuration.Add(TimeSpan.FromSeconds(1));
             _gamificationService.UpdateStudyDuration(_studyDuration);
-        }
-
-        private void PomodoroService_SessionCompleted(object? sender, EventArgs e)
-        {
-            if (InvokeRequired)
-            {
-                Invoke(new Action(() => PomodoroService_SessionCompleted(sender, e)));
-                return;
-            }
-
-            var completedCount = _pomodoroService?.CompletedPomodoros ?? 0;
-            _logger.LogInformation("番茄钟完成: 累计 {Count} 个", completedCount);
-            ShowMessage($"🍅 恭喜完成第 {completedCount} 个番茄钟！", "番茄钟完成");
-        }
-
-        private void PomodoroService_StateChanged(object? sender, PomodoroStateChangedEventArgs e)
-        {
-            if (InvokeRequired)
-            {
-                Invoke(new Action(() => PomodoroService_StateChanged(sender, e)));
-                return;
-            }
-
-            _logger.LogInformation("番茄钟状态变更: {OldState} -> {NewState}", e.OldState, e.NewState);
-
-            switch (e.NewState)
-            {
-                case PomodoroState.Studying:
-                    break;
-                case PomodoroState.ShortBreak:
-                    ShowMessage("⏸️ 短休息时间到了！休息一下吧~", "休息提醒");
-                    break;
-                case PomodoroState.LongBreak:
-                    ShowMessage("🛌 长休息时间到了！好好放松一下~", "休息提醒");
-                    break;
-                case PomodoroState.Paused:
-                    break;
-                case PomodoroState.Idle:
-                    break;
-            }
         }
 
         #endregion
@@ -2151,34 +2082,6 @@ namespace LearningAssistant.Forms
             }
         }
 
-
-
-        private void ButtonReview_Click(object? sender, EventArgs e)
-        {
-            try
-            {
-                if (_spacedRepetitionService == null)
-                {
-                    MessageBox.Show("复习服务未初始化", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
-
-                var reviewForm = new ReviewForm(_spacedRepetitionService, "default");
-                reviewForm.StartReview += OnStartReview;
-                reviewForm.ShowDialog(this);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "打开复习窗口失败");
-                MessageBox.Show($"打开复习窗口失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        private void OnStartReview(object? sender, EventArgs e)
-        {
-            ReviewClicked?.Invoke(this, EventArgs.Empty);
-        }
-
         private void LoadUserList()
         {
             try
@@ -2190,20 +2093,20 @@ namespace LearningAssistant.Forms
                         .Where(name => !string.IsNullOrEmpty(name))
                         .ToList();
 
-                    _statsButtonView.ComboBoxUser.Items.Clear();
+                    _settingsView.ComboBoxUser.Items.Clear();
                     foreach (var user in userDirs)
                     {
-                        _statsButtonView.ComboBoxUser.Items.Add(user);
+                        _settingsView.ComboBoxUser.Items.Add(user);
                     }
 
                     var currentUser = AppPaths.GetCurrentUserId();
-                    if (!string.IsNullOrEmpty(currentUser) && _statsButtonView.ComboBoxUser.Items.Contains(currentUser))
+                    if (!string.IsNullOrEmpty(currentUser) && _settingsView.ComboBoxUser.Items.Contains(currentUser))
                     {
-                        _statsButtonView.ComboBoxUser.Text = currentUser;
+                        _settingsView.ComboBoxUser.Text = currentUser;
                     }
-                    else if (_statsButtonView.ComboBoxUser.Items.Count > 0)
+                    else if (_settingsView.ComboBoxUser.Items.Count > 0)
                     {
-                        _statsButtonView.ComboBoxUser.SelectedIndex = 0;
+                        _settingsView.ComboBoxUser.SelectedIndex = 0;
                     }
                 }
             }
@@ -2215,7 +2118,7 @@ namespace LearningAssistant.Forms
 
         private void StatsButtonView_UserChanged(object? sender, EventArgs e)
         {
-            var selectedUser = _statsButtonView.ComboBoxUser.Text;
+            var selectedUser = _settingsView.ComboBoxUser.Text;
             if (!string.IsNullOrEmpty(selectedUser))
             {
                 AppPaths.SetCurrentUserId(selectedUser);
@@ -2783,7 +2686,6 @@ namespace LearningAssistant.Forms
                 _buttonsView?.Dispose();
                 _statsView?.Dispose();
                 _statsProgressView?.Dispose();
-                _statsButtonView?.Dispose();
                 _settingsView?.Dispose();
 
                 _selectedBackgroundBrush.Dispose();
