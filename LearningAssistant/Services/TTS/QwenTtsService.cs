@@ -33,7 +33,7 @@ namespace LearningAssistant.Services.TTS
 
             try
             {
-                Directory.CreateDirectory(AppPaths.GetUserTtsCacheDir());
+                Directory.CreateDirectory(AppPaths.GetTtsCacheDir());
 
                 string lang = MapLanguageCode(language ?? "English");
                 float actualSpeed = speed ?? 1.0f;
@@ -77,7 +77,7 @@ namespace LearningAssistant.Services.TTS
 
             try
             {
-                Directory.CreateDirectory(AppPaths.GetUserTtsCacheDir());
+                Directory.CreateDirectory(AppPaths.GetTtsCacheDir());
 
                 string lang = MapLanguageCode(language ?? "English");
                 float actualSpeed = speed ?? 1.0f;

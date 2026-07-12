@@ -166,5 +166,63 @@ namespace LearningAssistant.Common
 
             return _subCategoryStringMap.TryGetValue(subCategoryString, out subCategory);
         }
+
+        private static readonly Dictionary<SubCategoryType, string> _subCategoryDisplayNameMap = new()
+        {
+            { SubCategoryType.ChineseCharacter, "识字" },
+            { SubCategoryType.ChinesePhrase, "短语" },
+            { SubCategoryType.ChineseIdiom, "成语" },
+            { SubCategoryType.ChinesePoem, "诗词" },
+            { SubCategoryType.ChineseComprehensive, "语文综合" },
+            { SubCategoryType.EnglishWord, "英语单词" },
+            { SubCategoryType.EnglishPhrase, "英语短语" },
+            { SubCategoryType.EnglishSentence, "英语句子" },
+            { SubCategoryType.EnglishComprehensive, "英语综合" },
+            { SubCategoryType.MathFormula, "数学公式" },
+            { SubCategoryType.MathExample, "数学例题" },
+            { SubCategoryType.MathConcept, "数学概念" },
+            { SubCategoryType.MathComprehensive, "数学综合" },
+            { SubCategoryType.PhysicsLaw, "物理定律" },
+            { SubCategoryType.PhysicsExperiment, "物理实验" },
+            { SubCategoryType.PhysicsDerivation, "物理推导" },
+            { SubCategoryType.PhysicsComprehensive, "物理综合" },
+            { SubCategoryType.ChemistryEquation, "化学方程式" },
+            { SubCategoryType.ChemistryElement, "化学元素" },
+            { SubCategoryType.ChemistryExperiment, "化学实验" },
+            { SubCategoryType.ChemistryComprehensive, "化学综合" },
+            { SubCategoryType.HistoryEvent, "历史事件" },
+            { SubCategoryType.HistoryPerson, "历史人物" },
+            { SubCategoryType.HistoryTimeline, "历史时间线" },
+            { SubCategoryType.HistoryComprehensive, "历史综合" },
+            { SubCategoryType.GeographyKnowledge, "地理知识" },
+            { SubCategoryType.GeographyMap, "地理地图" },
+            { SubCategoryType.GeographyClimate, "地理气候" },
+            { SubCategoryType.GeographyComprehensive, "地理综合" },
+            { SubCategoryType.BiologyConcept, "生物概念" },
+            { SubCategoryType.BiologyExperiment, "生物实验" },
+            { SubCategoryType.BiologyPhenomenon, "生物现象" },
+            { SubCategoryType.BiologyComprehensive, "生物综合" }
+        };
+
+        public static string GetSubCategoryDisplayName(SubCategoryType subCategory)
+        {
+            return _subCategoryDisplayNameMap.TryGetValue(subCategory, out var name) ? name : subCategory.ToString();
+        }
+
+        public static string GetSubjectDisplayName(SubjectType subject)
+        {
+            var displayNames = new Dictionary<SubjectType, string>
+            {
+                { SubjectType.Chinese, "语文" },
+                { SubjectType.English, "英语" },
+                { SubjectType.Math, "数学" },
+                { SubjectType.Physics, "物理" },
+                { SubjectType.Chemistry, "化学" },
+                { SubjectType.History, "历史" },
+                { SubjectType.Geography, "地理" },
+                { SubjectType.Biology, "生物" }
+            };
+            return displayNames.TryGetValue(subject, out var name) ? name : subject.ToString();
+        }
     }
 }

@@ -18,7 +18,6 @@ namespace LearningAssistant.Services.Learning
     public class LearningAnalyticsService : ILearningAnalyticsService
     {
         private readonly ConcurrentDictionary<string, UserAnalyticsData> _userAnalytics = new ConcurrentDictionary<string, UserAnalyticsData>();
-        private readonly string _analyticsFilePath;
         private readonly IDataPersistenceService? _persistenceService;
         private readonly ILogger<LearningAnalyticsService>? _logger;
         private readonly IDbContextFactory<AppDbContext>? _dbContextFactory;
@@ -34,7 +33,6 @@ namespace LearningAssistant.Services.Learning
             _logger = logger;
             _persistenceService = persistenceService;
             _dbContextFactory = dbContextFactory;
-            _analyticsFilePath = AppPaths.AnalyticsPath;
             _sm2Algorithm = new SM2Algorithm();
             _fsrsAlgorithm = new FSRSAlgorithm();
         }
@@ -45,31 +43,68 @@ namespace LearningAssistant.Services.Learning
 
             try
             {
-                if (_persistenceService != null)
-                {
-                    var loaded = _persistenceService.LoadJsonFile<Dictionary<string, UserAnalyticsData>>(_analyticsFilePath);
-                    if (loaded != null)
-                    {
-                        foreach (var kvp in loaded)
-                        {
-                            _userAnalytics.TryAdd(kvp.Key, kvp.Value);
-                        }
-                        _logger?.LogInformation("加载分析数据成功，用户数: {Count}", _userAnalytics.Count);
-                    }
-                }
-                else
-                {
-                    // 兼容旧代码：直接使用文件加载
-                    LoadAnalytics();
-                }
+                LoadFromOldConfig();
+                LoadFromUserDirectories();
+
+                _logger?.LogInformation("加载分析数据成功，用户数: {Count}", _userAnalytics.Count);
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "加载分析数据失败: {Path}", _analyticsFilePath);
+                _logger?.LogError(ex, "加载分析数据失败");
             }
             finally
             {
                 _isLoaded = true;
+            }
+        }
+
+        private void LoadFromOldConfig()
+        {
+            var oldPath = AppPaths.AnalyticsPath;
+            if (!File.Exists(oldPath)) return;
+
+            try
+            {
+                var loaded = JsonHelper.LoadFromFile<Dictionary<string, UserAnalyticsData>>(oldPath);
+                if (loaded != null)
+                {
+                    foreach (var kvp in loaded)
+                    {
+                        _userAnalytics.TryAdd(kvp.Key, kvp.Value);
+                    }
+                    _logger?.LogInformation("从旧配置目录迁移分析数据，用户数: {Count}", loaded.Count);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "迁移旧分析数据失败");
+            }
+        }
+
+        private void LoadFromUserDirectories()
+        {
+            if (!Directory.Exists(AppPaths.UsersDir)) return;
+
+            foreach (var userDir in Directory.EnumerateDirectories(AppPaths.UsersDir))
+            {
+                var userId = Path.GetFileName(userDir);
+                if (string.IsNullOrEmpty(userId)) continue;
+
+                var userPath = AppPaths.GetUserAnalyticsPath(userId);
+                if (!File.Exists(userPath)) continue;
+
+                try
+                {
+                    var userData = JsonHelper.LoadFromFile<UserAnalyticsData>(userPath);
+                    if (userData != null && !_userAnalytics.ContainsKey(userId))
+                    {
+                        _userAnalytics.TryAdd(userId, userData);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "加载用户 {UserId} 的分析数据失败", userId);
+                }
             }
         }
 
@@ -234,64 +269,38 @@ namespace LearningAssistant.Services.Learning
             const int maxRetries = 3;
             const int retryDelayMs = 500;
 
-            for (int attempt = 1; attempt <= maxRetries; attempt++)
+            foreach (var kvp in _userAnalytics)
             {
-                try
+                var userId = kvp.Key;
+                var userData = kvp.Value;
+                var userPath = AppPaths.GetUserAnalyticsPath(userId);
+
+                for (int attempt = 1; attempt <= maxRetries; attempt++)
                 {
-                    if (_persistenceService != null)
+                    try
                     {
-                        var data = _userAnalytics.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-                        _persistenceService.SaveJsonFile(_analyticsFilePath, data);
-                        _logger?.LogDebug("保存分析数据成功(通过IDataPersistenceService)，用户数: {Count}", _userAnalytics.Count);
+                        JsonHelper.SaveToFile(userPath, userData);
+                        break;
                     }
-                    else
+                    catch (IOException ex) when (attempt < maxRetries)
                     {
-                        // 兼容旧代码：直接使用文件保存
-                        var data = _userAnalytics.ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
-                        JsonHelper.SaveToFile(_analyticsFilePath, data);
-                        _logger?.LogDebug("保存分析数据成功(通过JsonHelper)，用户数: {Count}", _userAnalytics.Count);
+                        _logger?.LogWarning(ex, "保存用户 {UserId} 分析数据失败(尝试 {Attempt}/{MaxRetries})，{Delay}ms后重试", userId, attempt, maxRetries, retryDelayMs);
+                        Thread.Sleep(retryDelayMs);
                     }
-                    return; // 成功后直接返回
-                }
-                catch (IOException ex) when (attempt < maxRetries)
-                {
-                    _logger?.LogWarning(ex, "保存分析数据失败(尝试 {Attempt}/{MaxRetries})，{Delay}ms后重试", attempt, maxRetries, retryDelayMs);
-                    Thread.Sleep(retryDelayMs);
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogError(ex, "保存分析数据失败: {Path}", _analyticsFilePath);
-                    return; // 非IO异常直接返回，避免无限重试
+                    catch (Exception ex)
+                    {
+                        _logger?.LogError(ex, "保存用户 {UserId} 分析数据失败", userId);
+                        break;
+                    }
                 }
             }
+
+            _logger?.LogDebug("保存分析数据成功，用户数: {Count}", _userAnalytics.Count);
         }
 
         public void LoadAnalytics()
         {
-            try
-            {
-                if (File.Exists(_analyticsFilePath))
-                {
-                    var loaded = JsonHelper.LoadFromFile<Dictionary<string, UserAnalyticsData>>(_analyticsFilePath);
-                    if (loaded != null)
-                    {
-                        foreach (var kvp in loaded)
-                        {
-                            _userAnalytics.TryAdd(kvp.Key, kvp.Value);
-                        }
-                        _logger?.LogInformation("加载分析数据成功，用户数: {Count}", _userAnalytics.Count);
-                    }
-                }
-                else
-                {
-                    _logger?.LogDebug("分析数据文件不存在，将创建新数据");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "加载分析数据失败: {Path}", _analyticsFilePath);
-                // 保持 ConcurrentDictionary 为空
-            }
+            EnsureLoaded();
         }
         
         #region 为报告服务添加的方法

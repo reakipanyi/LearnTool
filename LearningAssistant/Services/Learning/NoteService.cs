@@ -27,8 +27,9 @@ namespace LearningAssistant.Services.Learning
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _eventBus = eventBus;
-            _notesDir = Path.Combine(AppPaths.UsersDir, "notes");
+            _notesDir = AppPaths.NotesDir;
             EnsureDirectoryExists();
+            MigrateFromOldLocation();
         }
 
         private void EnsureDirectoryExists()
@@ -36,6 +37,32 @@ namespace LearningAssistant.Services.Learning
             if (!Directory.Exists(_notesDir))
             {
                 Directory.CreateDirectory(_notesDir);
+            }
+        }
+
+        private void MigrateFromOldLocation()
+        {
+            var oldDir = Path.Combine(AppPaths.UsersDir, "notes");
+            if (!Directory.Exists(oldDir)) return;
+
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(oldDir))
+                {
+                    var fileName = Path.GetFileName(file);
+                    var newPath = Path.Combine(_notesDir, fileName);
+                    if (!File.Exists(newPath))
+                    {
+                        File.Move(file, newPath);
+                    }
+                }
+
+                Directory.Delete(oldDir);
+                _logger.LogInformation("迁移笔记数据从旧位置完成");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "迁移笔记数据失败");
             }
         }
 

@@ -223,8 +223,6 @@ namespace LearningAssistant.Forms
             _settingsView.ComboBoxSubject.SelectedIndexChanged += ComboBoxSubject_SelectedIndexChanged;
             _settingsView.ComboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
             _settingsView.SpeedSelector.TtsConfig = _services.AudioServices.TtsConfig;
-            _settingsView.ButtonOpenStatistics.Click += ButtonOpenStatistics_Click;
-            _settingsView.ButtonExportErrorBook.Click += ButtonExportErrorBook_Click;
             _settingsView.ButtonShowAnswer.Click += ButtonShowAnswer_Click;
             _settingsView.ButtonThemeToggle.Click += ButtonThemeToggle_Click;
 
@@ -233,9 +231,7 @@ namespace LearningAssistant.Forms
 
             _listView.SelectedIndexChanged += ListBoxItems_SelectedIndexChanged;
 
-            _statsButtonView.AchievementsClicked += ButtonAchievements_Click;
-            _statsButtonView.ChallengesClicked += ButtonChallenges_Click;
-            _statsButtonView.ReviewClicked += ButtonReview_Click;
+            _statsButtonView.UserChanged += StatsButtonView_UserChanged;
         }
 
         public void ApplyTheme(ThemeColors colors)
@@ -530,7 +526,7 @@ namespace LearningAssistant.Forms
                 _settings.LearningMode = radioStudyMode.Checked ? Constants.LearningMode.Study : Constants.LearningMode.Quick;
                 _settings.SortOrder = radioSequential.Checked ? Constants.SortOrder.Sequential : Constants.SortOrder.Random;
                 _settings.Subject = comboBoxSubject.Text;
-                _settings.SubCategory = comboBoxSubCategory.Text;
+                _settings.SubCategory = SubCategory.ToString();
                 string settingsPath = GetUserSettingsPath();
                 var dir = Path.GetDirectoryName(settingsPath);
                 if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
@@ -875,20 +871,23 @@ namespace LearningAssistant.Forms
         {
             get
             {
-                var subCategoryStr = comboBoxSubCategory.Text;
-                return SubjectSubCategoryMapping.TryParseSubCategory(subCategoryStr, out var subCategory) ? subCategory : SubCategoryType.ChineseCharacter;
+                if (comboBoxSubCategory.SelectedItem is SubCategoryItem item)
+                {
+                    return item.Value;
+                }
+                return SubjectSubCategoryMapping.TryParseSubCategory(comboBoxSubCategory.Text, out var subCategory) ? subCategory : SubCategoryType.ChineseCharacter;
             }
             set
             {
-                var index = comboBoxSubCategory.Items.IndexOf(value.ToString());
-                if (index >= 0)
+                for (int i = 0; i < comboBoxSubCategory.Items.Count; i++)
                 {
-                    comboBoxSubCategory.SelectedIndex = index;
+                    if (comboBoxSubCategory.Items[i] is SubCategoryItem item && item.Value == value)
+                    {
+                        comboBoxSubCategory.SelectedIndex = i;
+                        return;
+                    }
                 }
-                else
-                {
-                    comboBoxSubCategory.Text = value.ToString();
-                }
+                comboBoxSubCategory.Text = SubjectSubCategoryMapping.GetSubCategoryDisplayName(value);
             }
         }
 
@@ -908,8 +907,10 @@ namespace LearningAssistant.Forms
             comboBoxSubCategory.Items.Clear();
             foreach (var cat in subCategories)
             {
-                comboBoxSubCategory.Items.Add(cat.ToString());
+                comboBoxSubCategory.Items.Add(new SubCategoryItem(cat));
             }
+
+            comboBoxSubCategory.DisplayMember = "DisplayName";
 
             if (comboBoxSubCategory.Items.Count > 0)
             {
@@ -917,6 +918,20 @@ namespace LearningAssistant.Forms
             }
 
             comboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
+        }
+
+        private class SubCategoryItem
+        {
+            public SubCategoryType Value { get; }
+            public string DisplayName { get; }
+
+            public SubCategoryItem(SubCategoryType value)
+            {
+                Value = value;
+                DisplayName = SubjectSubCategoryMapping.GetSubCategoryDisplayName(value);
+            }
+
+            public override string ToString() => DisplayName;
         }
 
         public void SetLoadingState(bool isLoading, string message = "加载中...")
@@ -1141,6 +1156,7 @@ namespace LearningAssistant.Forms
             _studyTimer.Tick += StudyTimer_Tick;
             _studyTimer.Start();
 
+            LoadUserList();
 
             ApplyButtonStyles();
 
@@ -2074,6 +2090,50 @@ namespace LearningAssistant.Forms
             ReviewClicked?.Invoke(this, EventArgs.Empty);
         }
 
+        private void LoadUserList()
+        {
+            try
+            {
+                if (Directory.Exists(AppPaths.UsersDir))
+                {
+                    var userDirs = Directory.GetDirectories(AppPaths.UsersDir)
+                        .Select(Path.GetFileName)
+                        .Where(name => !string.IsNullOrEmpty(name))
+                        .ToList();
+
+                    _statsButtonView.ComboBoxUser.Items.Clear();
+                    foreach (var user in userDirs)
+                    {
+                        _statsButtonView.ComboBoxUser.Items.Add(user);
+                    }
+
+                    var currentUser = AppPaths.GetCurrentUserId();
+                    if (!string.IsNullOrEmpty(currentUser) && _statsButtonView.ComboBoxUser.Items.Contains(currentUser))
+                    {
+                        _statsButtonView.ComboBoxUser.Text = currentUser;
+                    }
+                    else if (_statsButtonView.ComboBoxUser.Items.Count > 0)
+                    {
+                        _statsButtonView.ComboBoxUser.SelectedIndex = 0;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "加载用户列表失败");
+            }
+        }
+
+        private void StatsButtonView_UserChanged(object? sender, EventArgs e)
+        {
+            var selectedUser = _statsButtonView.ComboBoxUser.Text;
+            if (!string.IsNullOrEmpty(selectedUser))
+            {
+                AppPaths.SetCurrentUserId(selectedUser);
+                _gamificationService.Load(selectedUser);
+                _gamificationService.UpdateAllDisplays();
+            }
+        }
 
         private void ButtonOpenStatistics_Click(object? sender, EventArgs e)
         {
@@ -2442,9 +2502,7 @@ namespace LearningAssistant.Forms
                 "━━━━━ 学习操作 ━━━━━\n" +
                 "  1 / K   → 标记为已知\n" +
                 "  2 / U   → 标记为未知\n" +
-                "  Space   → 播放发音\n" +
                 "  3 / F   → 收藏/取消收藏\n" +
-                "  4 / N   → 打开笔记\n" +
                 "  5 / E   → 编辑内容\n\n" +
                 "━━━━━ 导航操作 ━━━━━\n" +
                 "  ← / PageUp  → 上一项\n" +
@@ -2456,13 +2514,7 @@ namespace LearningAssistant.Forms
                 "  ↑ / ↓       → 列表上下选择\n" +
                 "  F9          → 跳转到指定序号\n\n" +
                 "━━━━━ 功能按键 ━━━━━\n" +
-                "  F1     → 渐进式提示\n" +
-                "  F2     → 联想学习\n" +
                 "  F3     → 切换学习/答题模式\n" +
-                "  F4     → 费曼学习法\n" +
-                "  F5     → 每日思考任务\n" +
-                "  F6     → AI 问答\n" +
-                "  F7     → 费曼学习面板\n" +
                 "  F8     → 自动播放开关\n" +
                 "  F10    → 快捷键帮助（本窗口）\n" +
                 "  Esc    → 退出学习\n\n" +
@@ -2609,8 +2661,6 @@ namespace LearningAssistant.Forms
                     _settingsView.RadioRandom.CheckedChanged -= RadioSetting_CheckedChanged;
                     _settingsView.ComboBoxSubject.SelectedIndexChanged -= ComboBoxSubject_SelectedIndexChanged;
                     _settingsView.ComboBoxSubCategory.SelectedIndexChanged -= ComboBoxSubCategory_SelectedIndexChanged;
-                    _settingsView.ButtonOpenStatistics.Click -= ButtonOpenStatistics_Click;
-                    _settingsView.ButtonExportErrorBook.Click -= ButtonExportErrorBook_Click;
                     _settingsView.ButtonShowAnswer.Click -= ButtonShowAnswer_Click;
                     _settingsView.ButtonThemeToggle.Click -= ButtonThemeToggle_Click;
                 }

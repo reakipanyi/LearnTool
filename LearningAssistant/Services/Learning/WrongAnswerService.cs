@@ -29,8 +29,9 @@ namespace LearningAssistant.Services.Learning
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _eventBus = eventBus;
-            _wrongAnswersDir = Path.Combine(AppPaths.UsersDir, "wrong_answers");
+            _wrongAnswersDir = AppPaths.WrongAnswersDir;
             EnsureDirectoryExists();
+            MigrateFromOldLocation();
 
             SubscribeToEvents();
         }
@@ -105,6 +106,32 @@ namespace LearningAssistant.Services.Learning
             if (!Directory.Exists(_wrongAnswersDir))
             {
                 Directory.CreateDirectory(_wrongAnswersDir);
+            }
+        }
+
+        private void MigrateFromOldLocation()
+        {
+            var oldDir = Path.Combine(AppPaths.UsersDir, "wrong_answers");
+            if (!Directory.Exists(oldDir)) return;
+
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(oldDir))
+                {
+                    var fileName = Path.GetFileName(file);
+                    var newPath = Path.Combine(_wrongAnswersDir, fileName);
+                    if (!File.Exists(newPath))
+                    {
+                        File.Move(file, newPath);
+                    }
+                }
+
+                Directory.Delete(oldDir);
+                _logger.LogInformation("迁移错题本数据从旧位置完成");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "迁移错题本数据失败");
             }
         }
 

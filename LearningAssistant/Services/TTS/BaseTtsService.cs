@@ -410,16 +410,16 @@ namespace LearningAssistant.Services.TTS
             var hash = sha1.ComputeHash(Encoding.UTF8.GetBytes(meta));
             var sb = new StringBuilder();
             foreach (var b in hash) sb.Append(b.ToString("x2"));
-            return Path.Combine(AppPaths.GetUserTtsCacheDir(), sb.ToString() + ".wav");
+            return Path.Combine(AppPaths.GetTtsCacheDir(), sb.ToString() + ".wav");
         }
 
         protected void CleanupOldCache()
         {
             try
             {
-                if (!Directory.Exists(AppPaths.GetUserTtsCacheDir())) return;
+                if (!Directory.Exists(AppPaths.GetTtsCacheDir())) return;
 
-                var files = new DirectoryInfo(AppPaths.GetUserTtsCacheDir())
+                var files = new DirectoryInfo(AppPaths.GetTtsCacheDir())
                     .GetFiles("*.wav")
                     .OrderByDescending(f => f.LastWriteTimeUtc)
                     .ToList();

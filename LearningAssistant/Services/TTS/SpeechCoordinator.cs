@@ -37,6 +37,11 @@ namespace LearningAssistant.Services.TTS
 
         public Task SpeakAsync(string text, string language, string? explanation, CancellationToken cancellationToken = default, string? speakKey = null)
         {
+            _logger?.LogInformation("=== TTS INPUT LOG ===");
+            _logger?.LogInformation("TTS SpeakAsync called: text='{Text}', language='{Language}', explanation='{Explanation}', speakKey='{SpeakKey}', textLength={TextLength}",
+                text, language, explanation, speakKey ?? "__GLOBAL__", text?.Length ?? 0);
+            _logger?.LogInformation("TTS available: {Available}", _ttsService?.Available ?? false);
+
             if (_ttsService == null || !_ttsService.Available)
             {
                 _logger?.LogWarning("TTS service is not available, cannot speak");
@@ -45,6 +50,8 @@ namespace LearningAssistant.Services.TTS
 
             var queueItem = new SpeechQueueItem(text, language, explanation, speakKey ?? "__GLOBAL__");
             _pronunciationQueue.Enqueue(queueItem);
+            
+            _logger?.LogInformation("TTS item enqueued, queue count={QueueCount}", _pronunciationQueue.Count);
             
             _ = ProcessQueueAsync(cancellationToken);
             

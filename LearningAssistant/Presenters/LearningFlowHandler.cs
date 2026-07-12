@@ -677,13 +677,15 @@ namespace LearningAssistant.Presenters
             var item = _studyEngine.GetCurrentItem();
             if (item != null)
             {
+                string lang = _currentSubject == SubjectType.Chinese ? "zh" : "en";
+                
                 if (_eventBus != null)
                 {
                     _eventBus.Publish(new SendToPdfSearchEvent
                     {
                         UserId = _currentUserId,
                         SearchText = item.GetMainContent(),
-                        Language = _currentSubject.ToString()
+                        Language = lang
                     });
                     _logger.LogInformation("Published SendToPdfSearchEvent for text: {Text}", item.GetMainContent());
                 }
@@ -692,7 +694,7 @@ namespace LearningAssistant.Presenters
                     OnSendToPdfQuestion?.Invoke(this, new SendToPdfEventArgs
                     {
                         Text = item.GetMainContent(),
-                        Language = _currentSubject.ToString()
+                        Language = lang
                     });
                 }
             }

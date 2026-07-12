@@ -89,6 +89,14 @@ namespace LearningAssistant.Forms.UserControls.Cards
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         [Category("Appearance")]
+        public Color TextColor
+        {
+            get => _textColor;
+            set { _textColor = value; Invalidate(); }
+        }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        [Category("Appearance")]
         public Color CardColor
         {
             get => _cardColor;
@@ -110,6 +118,14 @@ namespace LearningAssistant.Forms.UserControls.Cards
         {
             get => _iconSize;
             set { _iconSize = value; Invalidate(); }
+        }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        [Category("Appearance")]
+        public Color LabelColor
+        {
+            get => _labelColor;
+            set { _labelColor = value; Invalidate(); }
         }
 
         [Category("Appearance")]

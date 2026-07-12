@@ -108,6 +108,19 @@ namespace LearningAssistant.Common
             public const string BiologyComprehensive = "生物综合.json";
         }
 
+        public static class ExcludedFileKeywords
+        {
+            public static readonly string[] WordBankExclusions = 
+            {
+                "learning_paths",
+                "recommendation",
+                "feedback",
+                "wrong_answers",
+                "_history",
+                "_progress"
+            };
+        }
+
         /// <summary>
         /// 缓存持续时间（分钟）
         /// </summary>

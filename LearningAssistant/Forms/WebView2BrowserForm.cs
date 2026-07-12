@@ -85,18 +85,7 @@ namespace LearningAssistant.Forms
             public const int MinZoomLevel = 50;
             public const int MaxZoomLevel = 300;
             public const int ZoomStep = 10;
-            private static string? _tabStateFilePath;
-            public static string TabStateFilePath
-            {
-                get
-                {
-                    if (_tabStateFilePath == null)
-                    {
-                        _tabStateFilePath = Path.Combine(AppPaths.ConfigDir, "browser_tabs.json");
-                    }
-                    return _tabStateFilePath;
-                }
-            }
+            public static string TabStateFilePath => AppPaths.BrowserTabsPath;
         }
 
         /// <summary>

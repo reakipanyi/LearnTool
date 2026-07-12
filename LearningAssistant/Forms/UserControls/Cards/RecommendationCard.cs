@@ -1,9 +1,11 @@
+using LearningAssistant.Common;
+using LearningAssistant.Common.Themes;
 using System.ComponentModel;
 using System.Drawing.Drawing2D;
 
 namespace LearningAssistant.Forms.UserControls.Cards
 {
-    public class RecommendationCard : Panel
+    public class RecommendationCard : Panel, IThemeable
     {
         private readonly Label _iconLabel;
         private readonly Label _titleLabel;
@@ -225,6 +227,18 @@ namespace LearningAssistant.Forms.UserControls.Cards
             path.CloseAllFigures();
 
             return path;
+        }
+
+        public void ApplyTheme(ThemeColors colors)
+        {
+            if (_titleLabel != null)
+                _titleLabel.ForeColor = colors.TextPrimary;
+
+            if (_reasonLabel != null)
+                _reasonLabel.ForeColor = colors.TextSecondary;
+
+            if (_timeLabel != null)
+                _timeLabel.ForeColor = colors.TextDisabled;
         }
 
         protected override void Dispose(bool disposing)

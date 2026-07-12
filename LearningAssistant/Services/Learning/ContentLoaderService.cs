@@ -128,13 +128,13 @@ namespace LearningAssistant.Services.Learning
             {
                 var dataDir = AppPaths.DataDir;
                 var defaultFile = _categoryFileMap.GetValueOrDefault(subCategory, "");
-                var subCategoryStr = subCategory.ToString();
 
                 var categoryPrefix = GetCategoryFilePrefix(subCategory);
 
                 var files = Directory.EnumerateFiles(dataDir, "*.json")
                                    .Select(Path.GetFileName)
-                                   .Where(file => file.StartsWith(categoryPrefix, StringComparison.OrdinalIgnoreCase))
+                                   .Where(file => file.StartsWith(categoryPrefix, StringComparison.OrdinalIgnoreCase)
+                                                  && !Constants.ExcludedFileKeywords.WordBankExclusions.Any(keyword => file.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0))
                                    .ToList();
 
                 if (!string.IsNullOrWhiteSpace(defaultFile) && !files.Contains(defaultFile))

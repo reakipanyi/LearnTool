@@ -114,6 +114,26 @@ namespace LearningAssistant.Common
         public static string HighlightsDir => Path.Combine(DataRoot, "highlights");
 
         /// <summary>
+        /// 错题本目录（全局共享，按用户分文件）
+        /// </summary>
+        public static string WrongAnswersDir => Path.Combine(DataDir, "wrong_answers");
+
+        /// <summary>
+        /// 推荐反馈目录（全局共享，按用户分文件）
+        /// </summary>
+        public static string RecommendationFeedbackDir => Path.Combine(DataDir, "recommendation_feedback");
+
+        /// <summary>
+        /// 笔记目录（全局共享，按用户分文件）
+        /// </summary>
+        public static string NotesDir => Path.Combine(DataDir, "notes");
+
+        /// <summary>
+        /// 学习路径目录（全局共享，按用户分文件）
+        /// </summary>
+        public static string LearningPathsDir => Path.Combine(DataDir, "learning_paths");
+
+        /// <summary>
         /// 缩略图目录
         /// </summary>
         public static string ThumbnailsDir => Path.Combine(DataDir, "Thumbnails");
@@ -150,9 +170,9 @@ namespace LearningAssistant.Common
         public static string PromptTemplatesPath => Path.Combine(ConfigDir, "PromptTemplates.json");
 
         /// <summary>
-        /// 网页书签路径
+        /// 网页书签路径（全局共享，不按用户隔离）
         /// </summary>
-        public static string WebBookmarksPath => Path.Combine(DataRoot, "WebBookmarks.json");
+        public static string WebBookmarksPath => Path.Combine(ConfigDir, "WebBookmarks.json");
 
         /// <summary>
         /// 科目模板配置路径
@@ -165,8 +185,10 @@ namespace LearningAssistant.Common
         public static string RemindersPath => Path.Combine(ConfigDir, "learning_reminders.json");
 
         /// <summary>
-        /// 学习分析文件路径
+        /// 学习分析文件路径（旧位置，已废弃）
+        /// 新分析数据按用户存储在用户目录下，使用 GetUserAnalyticsPath
         /// </summary>
+        [Obsolete("已废弃，使用 GetUserAnalyticsPath 获取用户学习分析路径")]
         public static string AnalyticsPath => Path.Combine(ConfigDir, "learning_analytics.json");
 
         /// <summary>
@@ -188,6 +210,11 @@ namespace LearningAssistant.Common
         /// 会话文件路径
         /// </summary>
         public static string SessionPath => Path.Combine(SessionDir, "session.json");
+
+        /// <summary>
+        /// 浏览器标签页状态文件路径
+        /// </summary>
+        public static string BrowserTabsPath => Path.Combine(SessionDir, "browser_tabs.json");
 
         /// <summary>
         /// 数据库文件路径
@@ -344,11 +371,11 @@ namespace LearningAssistant.Common
         }
 
         /// <summary>
-        /// 获取用户TTS缓存目录
+        /// 获取TTS缓存目录
         /// </summary>
-        public static string GetUserTtsCacheDir(string? userId = null)
+        public static string GetTtsCacheDir()
         {
-            return Path.Combine(GetUserDir(userId), "tts_cache");
+            return Path.Combine(CacheDir, "tts");
         }
 
         /// <summary>
@@ -400,6 +427,14 @@ namespace LearningAssistant.Common
         }
 
         /// <summary>
+        /// 获取用户学习分析文件路径
+        /// </summary>
+        public static string GetUserAnalyticsPath(string? userId = null)
+        {
+            return Path.Combine(GetUserDir(userId), "learning_analytics.json");
+        }
+
+        /// <summary>
         /// 确保用户目录存在
         /// </summary>
         public static void EnsureUserDirectoriesExist(string? userId = null)
@@ -409,7 +444,7 @@ namespace LearningAssistant.Common
             EnsureDirectoryExists(GetUserBookmarksDir(userId));
             EnsureDirectoryExists(GetUserHighlightsDir(userId));
             EnsureDirectoryExists(GetUserTranslationsDir(userId));
-            EnsureDirectoryExists(GetUserTtsCacheDir(userId));
+            EnsureDirectoryExists(GetTtsCacheDir());
             EnsureDirectoryExists(GetUserAutoSaveDir(userId));
             EnsureDirectoryExists(GetUserBackupDir(userId));
         }

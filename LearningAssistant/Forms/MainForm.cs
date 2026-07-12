@@ -123,6 +123,13 @@ namespace LearningAssistant.Forms
                     : Color.FromArgb(245, 245, 250);
             }
 
+            if (splitContainerMain != null)
+            {
+                splitContainerMain.Panel2.BackColor = colors.ThemeMode == ThemeMode.Dark
+                    ? Color.FromArgb(20, 20, 25)
+                    : Color.FromArgb(245, 245, 250);
+            }
+
             foreach (Control control in Controls)
             {
                 ApplyThemeToControl(control, colors);
@@ -133,17 +140,19 @@ namespace LearningAssistant.Forms
         {
             if (control == null) return;
 
+            if (control is IThemeable themeable)
+            {
+                themeable.ApplyTheme(colors);
+                return;
+            }
+
             if (control is Label label)
             {
                 label.ForeColor = colors.TextPrimary;
             }
             else if (control is Panel panel)
             {
-                // Light 主题下不改变 Panel 的颜色
-                if (colors.ThemeMode == ThemeMode.Dark)
-                {
-                    panel.BackColor = colors.Surface;
-                }
+                panel.BackColor = colors.Surface;
             }
             else if (control is GroupBox groupBox)
             {
@@ -1234,7 +1243,7 @@ namespace LearningAssistant.Forms
 
         private void ButtonWebView2Browser_Click(object? sender, EventArgs e)
         {
-            ShowMessageLocal("Web浏览器功能已移除");
+            _windowManager.OpenAIWebViewWindow();
         }
 
         private void ButtonAIWebView_Click(object? sender, EventArgs e)

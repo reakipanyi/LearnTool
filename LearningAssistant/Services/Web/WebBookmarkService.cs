@@ -111,18 +111,8 @@ namespace LearningAssistant.Services.Web
 
         public void SwitchUser(string userId)
         {
-            if (string.IsNullOrWhiteSpace(userId))
-                userId = "default";
-
-            if (_currentUserId == userId)
-                return;
-
-            SaveToFile();
             _currentUserId = userId;
-            _categories = new ConcurrentBag<WebBookmarkCategory>();
-            LoadFromFile();
-
-            _logger?.LogInformation("书签已切换到用户: {UserId}", userId);
+            _logger?.LogInformation("书签服务用户已切换: {UserId}", userId);
         }
 
         public List<WebBookmarkCategory> GetAllCategories()
@@ -221,10 +211,10 @@ namespace LearningAssistant.Services.Web
         {
             try
             {
-                var filePath = AppPaths.UserBookmarksPath;
+                var filePath = AppPaths.WebBookmarksPath;
                 var data = new WebBookmarkData
                 {
-                    UserId = _currentUserId,
+                    UserId = string.Empty,
                     Categories = _categories.ToList()
                 };
                 var json = JsonConvert.SerializeObject(data, Formatting.Indented);
@@ -248,7 +238,7 @@ namespace LearningAssistant.Services.Web
         {
             try
             {
-                var filePath = AppPaths.UserBookmarksPath;
+                var filePath = AppPaths.WebBookmarksPath;
                 if (File.Exists(filePath))
                 {
                     var json = File.ReadAllText(filePath);
@@ -260,9 +250,15 @@ namespace LearningAssistant.Services.Web
                         {
                             _categories.Add(category);
                         }
-                        _logger?.LogInformation("从文件加载书签: 用户 {UserId}, 分类数: {Count}", _currentUserId, data.Categories.Count);
+                        _logger?.LogInformation("从文件加载书签: 分类数: {Count}", data.Categories.Count);
                         return;
                     }
+                }
+
+                MigrateFromOldLocations();
+                if (_categories.Count > 0)
+                {
+                    return;
                 }
 
                 _logger?.LogInformation("书签文件不存在，加载默认数据");
@@ -272,6 +268,43 @@ namespace LearningAssistant.Services.Web
             {
                 _logger?.LogError(ex, "加载书签文件失败");
                 LoadDefaultBookmarks();
+            }
+        }
+
+        private void MigrateFromOldLocations()
+        {
+            var oldPaths = new[]
+            {
+                Path.Combine(AppPaths.DataRoot, "WebBookmarks.json"),
+                AppPaths.UserBookmarksPath,
+                Path.Combine(AppPaths.DataDir, "bookmarks", "WebBookmarks.json")
+            };
+
+            foreach (var oldPath in oldPaths)
+            {
+                if (!File.Exists(oldPath)) continue;
+
+                try
+                {
+                    var json = File.ReadAllText(oldPath);
+                    var data = JsonConvert.DeserializeObject<WebBookmarkData>(json);
+                    if (data?.Categories != null && data.Categories.Count > 0)
+                    {
+                        _categories = new ConcurrentBag<WebBookmarkCategory>();
+                        foreach (var category in data.Categories)
+                        {
+                            _categories.Add(category);
+                        }
+                        SaveToFile();
+                        _logger?.LogInformation("书签数据已从旧位置迁移: {OldPath}", oldPath);
+                        File.Delete(oldPath);
+                        return;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "迁移旧书签数据失败: {OldPath}", oldPath);
+                }
             }
         }
 

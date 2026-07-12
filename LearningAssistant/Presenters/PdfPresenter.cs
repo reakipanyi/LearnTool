@@ -8,6 +8,7 @@ using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
+using System.Drawing;
 
 namespace LearningAssistant.Presenters
 {
@@ -291,7 +292,6 @@ namespace LearningAssistant.Presenters
         {
             const int DefaultWidth = 1000;
             const int DefaultHeight = 1400;
-            const float DpiScale = 1.5f;
 
             try
             {
@@ -299,13 +299,15 @@ namespace LearningAssistant.Presenters
                 if (displayRect == null || displayRect.Value.Width <= 0 || displayRect.Value.Height <= 0)
                     return (DefaultWidth, DefaultHeight);
 
-                int w = (int)(displayRect.Value.Width * DpiScale);
-                int h = (int)(displayRect.Value.Height * DpiScale);
+                float dpiScale = GetDpiScale();
+
+                int w = (int)(displayRect.Value.Width * dpiScale);
+                int h = (int)(displayRect.Value.Height * dpiScale);
 
                 bool isDual = _view is PdfReaderFormV2 v2View && v2View.IsDualPage;
                 if (isDual)
                 {
-                    w = (int)(displayRect.Value.Width / 2f * DpiScale);
+                    w = (int)(displayRect.Value.Width / 2f * dpiScale);
                 }
 
                 w = Math.Max(w, 400);
@@ -318,6 +320,21 @@ namespace LearningAssistant.Presenters
             catch
             {
                 return (DefaultWidth, DefaultHeight);
+            }
+        }
+
+        private float GetDpiScale()
+        {
+            try
+            {
+                using (var graphics = Graphics.FromHwnd(IntPtr.Zero))
+                {
+                    return graphics.DpiX / 96f;
+                }
+            }
+            catch
+            {
+                return 1.5f;
             }
         }
 

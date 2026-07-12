@@ -27,7 +27,11 @@ namespace LearningAssistant.Tests
             fields.Should().HaveCount(6);
             fields.Select(f => f.Label).Should().Contain("拼音", "释义", "笔画", "部首", "结构", "组词");
             fields.First(f => f.Label == "拼音").SpeakText.Should().Be("shuāng");
-            fields.First(f => f.Label == "拼音").IsPronunciation.Should().BeTrue();
+            fields.First(f => f.Label == "拼音").CanSpeak.Should().BeTrue();
+            fields.First(f => f.Label == "笔画").HasSpeakText.Should().BeFalse();
+            fields.First(f => f.Label == "部首").HasSpeakText.Should().BeFalse();
+            fields.First(f => f.Label == "结构").HasSpeakText.Should().BeFalse();
+            fields.First(f => f.Label == "组词").HasSpeakText.Should().BeFalse();
         }
 
         [Fact]
@@ -70,7 +74,13 @@ namespace LearningAssistant.Tests
             fields.Should().HaveCount(10);
             fields.Select(f => f.Label).Should().Contain("词性", "音标", "英式", "美式", "拼读", "释义", "词形", "搭配", "例句", "例句翻译");
             fields.First(f => f.Label == "音标").SpeakText.Should().Be("/ˈæpl/");
-            fields.First(f => f.Label == "音标").IsPronunciation.Should().BeTrue();
+            fields.First(f => f.Label == "音标").CanSpeak.Should().BeTrue();
+            fields.First(f => f.Label == "词性").HasSpeakText.Should().BeFalse();
+            fields.First(f => f.Label == "拼读").HasSpeakText.Should().BeFalse();
+            fields.First(f => f.Label == "释义").HasSpeakText.Should().BeFalse();
+            fields.First(f => f.Label == "词形").HasSpeakText.Should().BeFalse();
+            fields.First(f => f.Label == "搭配").HasSpeakText.Should().BeFalse();
+            fields.First(f => f.Label == "例句翻译").HasSpeakText.Should().BeFalse();
         }
 
         [Fact]
@@ -106,7 +116,7 @@ namespace LearningAssistant.Tests
 
             fields.Should().HaveCount(3);
             fields.Select(f => f.Label).Should().Contain("拼音", "释义", "例句");
-            fields.First(f => f.Label == "拼音").IsPronunciation.Should().BeTrue();
+            fields.First(f => f.Label == "拼音").CanSpeak.Should().BeTrue();
         }
 
         [Fact]
@@ -161,7 +171,7 @@ namespace LearningAssistant.Tests
 
             fields.Should().HaveCount(3);
             fields.Select(f => f.Label).Should().Contain("音标", "释义", "例句");
-            fields.First(f => f.Label == "音标").IsPronunciation.Should().BeTrue();
+            fields.First(f => f.Label == "音标").CanSpeak.Should().BeTrue();
         }
 
         [Fact]

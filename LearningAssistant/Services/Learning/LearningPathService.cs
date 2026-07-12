@@ -29,8 +29,9 @@ namespace LearningAssistant.Services.Learning
             _analyticsService = analyticsService ?? throw new ArgumentNullException(nameof(analyticsService));
             _wrongAnswerService = wrongAnswerService ?? throw new ArgumentNullException(nameof(wrongAnswerService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _pathsDir = Path.Combine(AppPaths.UsersDir, "learning_paths");
+            _pathsDir = AppPaths.LearningPathsDir;
             EnsureDirectoryExists();
+            MigrateFromOldLocation();
         }
 
         private void EnsureDirectoryExists()
@@ -38,6 +39,32 @@ namespace LearningAssistant.Services.Learning
             if (!Directory.Exists(_pathsDir))
             {
                 Directory.CreateDirectory(_pathsDir);
+            }
+        }
+
+        private void MigrateFromOldLocation()
+        {
+            var oldDir = Path.Combine(AppPaths.UsersDir, "learning_paths");
+            if (!Directory.Exists(oldDir)) return;
+
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(oldDir))
+                {
+                    var fileName = Path.GetFileName(file);
+                    var newPath = Path.Combine(_pathsDir, fileName);
+                    if (!File.Exists(newPath))
+                    {
+                        File.Move(file, newPath);
+                    }
+                }
+
+                Directory.Delete(oldDir);
+                _logger.LogInformation("迁移学习路径数据从旧位置完成");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "迁移学习路径数据失败");
             }
         }
 

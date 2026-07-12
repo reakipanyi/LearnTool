@@ -31,9 +31,7 @@ namespace LearningAssistant.Forms.UserControls
         private Label _labelSubCategory = null!;
         private ComboBox _comboBoxSubCategory = null!;
 
-        // 操作按钮
-        private Button _buttonOpenStatistics = null!;
-        private Button _buttonExportErrorBook = null!;
+        
 
         // Quiz 模式
         private Panel _panelQuizMode = null!;
@@ -80,12 +78,6 @@ namespace LearningAssistant.Forms.UserControls
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public ComboBox ComboBoxSubCategory => _comboBoxSubCategory;
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public Button ButtonOpenStatistics => _buttonOpenStatistics;
-
-        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-        public Button ButtonExportErrorBook => _buttonExportErrorBook;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Button ButtonShowAnswer => _buttonShowAnswer;
@@ -152,8 +144,6 @@ namespace LearningAssistant.Forms.UserControls
             _comboBoxSubject = new ComboBox();
             _labelSubCategory = new Label();
             _comboBoxSubCategory = new ComboBox();
-            _buttonOpenStatistics = new Button();
-            _buttonExportErrorBook = new Button();
             _checkBoxVoice = new CheckBox();
             _pronunciationFlowLayoutPanel = new FlowLayoutPanel();
             _radioOriginal = new RadioButton();
@@ -182,8 +172,6 @@ namespace LearningAssistant.Forms.UserControls
             _panelConfig.Controls.Add(_groupBoxSubject);
             _panelConfig.Controls.Add(_labelSubCategory);
             _panelConfig.Controls.Add(_comboBoxSubCategory);
-            _panelConfig.Controls.Add(_buttonOpenStatistics);
-            _panelConfig.Controls.Add(_buttonExportErrorBook);
             _panelConfig.Controls.Add(_checkBoxVoice);
             _panelConfig.Controls.Add(_pronunciationFlowLayoutPanel);
             _panelConfig.Controls.Add(_speedSelector);
@@ -324,38 +312,6 @@ namespace LearningAssistant.Forms.UserControls
             _comboBoxSubCategory.Name = "_comboBoxSubCategory";
             _comboBoxSubCategory.Size = new Size(125, 25);
             _comboBoxSubCategory.TabIndex = 5;
-            // 
-            // _buttonOpenStatistics
-            // 
-            _buttonOpenStatistics.BackColor = Color.FromArgb(255, 152, 0);
-            _buttonOpenStatistics.FlatAppearance.BorderSize = 0;
-            _buttonOpenStatistics.FlatAppearance.MouseDownBackColor = Color.FromArgb(245, 142, 0);
-            _buttonOpenStatistics.FlatAppearance.MouseOverBackColor = Color.FromArgb(255, 162, 20);
-            _buttonOpenStatistics.FlatStyle = FlatStyle.Flat;
-            _buttonOpenStatistics.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
-            _buttonOpenStatistics.ForeColor = Color.White;
-            _buttonOpenStatistics.Location = new Point(10, 380);
-            _buttonOpenStatistics.Name = "_buttonOpenStatistics";
-            _buttonOpenStatistics.Size = new Size(180, 45);
-            _buttonOpenStatistics.TabIndex = 6;
-            _buttonOpenStatistics.Text = "📊 学习统计";
-            _buttonOpenStatistics.UseVisualStyleBackColor = false;
-            // 
-            // _buttonExportErrorBook
-            // 
-            _buttonExportErrorBook.BackColor = Color.FromArgb(244, 67, 54);
-            _buttonExportErrorBook.FlatAppearance.BorderSize = 0;
-            _buttonExportErrorBook.FlatAppearance.MouseDownBackColor = Color.FromArgb(234, 57, 44);
-            _buttonExportErrorBook.FlatAppearance.MouseOverBackColor = Color.FromArgb(254, 77, 64);
-            _buttonExportErrorBook.FlatStyle = FlatStyle.Flat;
-            _buttonExportErrorBook.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
-            _buttonExportErrorBook.ForeColor = Color.White;
-            _buttonExportErrorBook.Location = new Point(10, 436);
-            _buttonExportErrorBook.Name = "_buttonExportErrorBook";
-            _buttonExportErrorBook.Size = new Size(180, 45);
-            _buttonExportErrorBook.TabIndex = 7;
-            _buttonExportErrorBook.Text = "❌ 导出错题本";
-            _buttonExportErrorBook.UseVisualStyleBackColor = false;
             // 
             // _checkBoxVoice
             // 

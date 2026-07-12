@@ -115,6 +115,9 @@ namespace LearningAssistant.Forms
         public PdfReaderForm(ILogger<PdfReaderForm> logger, IAIPanelPopupService? aiPanelPopupService = null, Services.Learning.IPendingContentService? pendingContentService = null, IHighlightService? highlightService = null, IBookmarkService? bookmarkService = null, IAnnotationService? annotationService = null, IEventBus? eventBus = null)
         {
             InitializeComponent();
+            DoubleBuffered = true;
+            SetDoubleBuffered(panelPdf);
+            SetDoubleBuffered(pictureBoxPdf);
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _aiPanelPopupService = aiPanelPopupService;
             _pendingContentService = pendingContentService;
@@ -242,6 +245,61 @@ namespace LearningAssistant.Forms
 
         private void PdfReaderForm_KeyDown(object? sender, KeyEventArgs e)
         {
+            try
+            {
+                if ((ModifierKeys & Keys.Control) == Keys.Control)
+                {
+                    if (e.KeyCode == Keys.Oemplus || e.KeyCode == Keys.Add)
+                    {
+                        _navigationManager?.Zoom(_navigationManager.ZoomLevel + 10);
+                        e.Handled = true;
+                        return;
+                    }
+                    if (e.KeyCode == Keys.OemMinus || e.KeyCode == Keys.Subtract)
+                    {
+                        _navigationManager?.Zoom(_navigationManager.ZoomLevel - 10);
+                        e.Handled = true;
+                        return;
+                    }
+                    if (e.KeyCode == Keys.D0 || e.KeyCode == Keys.NumPad0)
+                    {
+                        _navigationManager?.ResetZoom();
+                        e.Handled = true;
+                        return;
+                    }
+                }
+
+                switch (e.KeyCode)
+                {
+                    case Keys.Left:
+                    case Keys.Up:
+                    case Keys.PageUp:
+                        _presenter?.PreviousPage();
+                        e.Handled = true;
+                        break;
+                    case Keys.Right:
+                    case Keys.Down:
+                    case Keys.PageDown:
+                        _presenter?.NextPage();
+                        e.Handled = true;
+                        break;
+                    case Keys.Home:
+                        _presenter?.RenderPage(0);
+                        e.Handled = true;
+                        break;
+                    case Keys.End:
+                        if (_presenter != null && _presenter.PageCount > 0)
+                        {
+                            _presenter.RenderPage(_presenter.PageCount - 1);
+                        }
+                        e.Handled = true;
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in PdfReaderForm_KeyDown");
+            }
         }
 
         private void PdfReaderForm_Resize(object? sender, EventArgs e)
@@ -540,54 +598,33 @@ namespace LearningAssistant.Forms
         {
             try
             {
-                // 首先清理相关的注释位图，因为它们依赖于原图像尺寸
                 CleanupAnnotationBitmap();
                 CleanupHighlightLayer();
 
-                // 夜间模式时反转图片
                 Bitmap imageToDisplay = bmp;
-                Bitmap? oldImageToDispose = null;
                 if (_nightModeManager?.IsNightMode ?? false)
                 {
                     imageToDisplay = new Bitmap(_nightModeManager.InvertImage(bmp));
-                    // 如果当前显示的不是原图（夜间模式切换），需要先释放旧图
-                    if (_currentPageImage != null && _currentPageImage != bmp)
-                    {
-                        oldImageToDispose = _currentPageImage;
-                    }
                 }
 
                 var old = _currentPageImage;
                 _currentPageImage = imageToDisplay;
 
-                // 确保 pictureBoxPdf.Image 为 null，避免自动绘制
                 pictureBoxPdf.Image = null;
 
-                // 延迟释放旧图像，避免竞态条件
                 if (old != null && old != bmp && old != imageToDisplay)
                 {
-                    oldImageToDispose = old;
-                }
-
-                if (oldImageToDispose != null)
-                {
-                    Task.Delay(100).ContinueWith(_ =>
+                    try
                     {
-                        try
-                        {
-                            oldImageToDispose?.Dispose();
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Failed to dispose old image");
-                        }
-                    }, TaskScheduler.Default);
+                        old.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to dispose old image");
+                    }
                 }
 
-                // 触发重绘
                 pictureBoxPdf.Invalidate();
-
-                // 重新加载当前页面的高亮
                 LoadHighlightsForCurrentPage();
             }
             catch (Exception ex)
@@ -3037,6 +3074,13 @@ namespace LearningAssistant.Forms
         private void _loadingIndicator_Click(object sender, EventArgs e)
         {
 
+        }
+
+        private static void SetDoubleBuffered(Control control)
+        {
+            if (control == null) return;
+            control.SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint, true);
+            control.UpdateStyles();
         }
 
         public void SetSecondPageImage(Bitmap? bmp)

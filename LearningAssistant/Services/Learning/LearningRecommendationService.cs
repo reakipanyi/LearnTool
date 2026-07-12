@@ -33,8 +33,9 @@ namespace LearningAssistant.Services.Learning
             _learningPathService = learningPathService ?? throw new ArgumentNullException(nameof(learningPathService));
             _pomodoroService = pomodoroService;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _feedbackDir = Path.Combine(AppPaths.UsersDir, "recommendation_feedback");
+            _feedbackDir = AppPaths.RecommendationFeedbackDir;
             EnsureDirectoryExists();
+            MigrateFromOldLocation();
         }
 
         private void EnsureDirectoryExists()
@@ -42,6 +43,32 @@ namespace LearningAssistant.Services.Learning
             if (!Directory.Exists(_feedbackDir))
             {
                 Directory.CreateDirectory(_feedbackDir);
+            }
+        }
+
+        private void MigrateFromOldLocation()
+        {
+            var oldDir = Path.Combine(AppPaths.UsersDir, "recommendation_feedback");
+            if (!Directory.Exists(oldDir)) return;
+
+            try
+            {
+                foreach (var file in Directory.EnumerateFiles(oldDir))
+                {
+                    var fileName = Path.GetFileName(file);
+                    var newPath = Path.Combine(_feedbackDir, fileName);
+                    if (!File.Exists(newPath))
+                    {
+                        File.Move(file, newPath);
+                    }
+                }
+
+                Directory.Delete(oldDir);
+                _logger.LogInformation("迁移推荐反馈数据从旧位置完成");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "迁移推荐反馈数据失败");
             }
         }
 

@@ -4,7 +4,7 @@ namespace LearningAssistant.Services.Learning
         string Label,
         string Value,
         string? SpeakText = null,
-        bool IsPronunciation = false,
+        bool CanSpeak = false,
         int Order = 0,
         string Language = "en")
     {

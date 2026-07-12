@@ -1,3 +1,5 @@
+using LearningAssistant.Common;
+using LearningAssistant.Common.Themes;
 using LearningAssistant.Forms.UserControls.Cards;
 using LearningAssistant.Models.Learning;
 using System.ComponentModel;
@@ -6,7 +8,7 @@ using CardRecommendation = LearningAssistant.Forms.UserControls.Cards.Recommenda
 
 namespace LearningAssistant.Forms.UserControls.Dashboard
 {
-    public class DashboardView : UserControl
+    public class DashboardView : UserControl, IThemeable
     {
         private readonly List<StatCard> _statCards = new();
         private readonly List<FeatureCard> _featureCards = new();
@@ -446,6 +448,39 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
         {
             base.OnPaint(e);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        }
+
+        public void ApplyTheme(ThemeColors colors)
+        {
+            BackColor = colors.Background;
+
+            if (_labelWelcome != null)
+                _labelWelcome.ForeColor = colors.TextPrimary;
+
+            if (_labelSubtitle != null)
+                _labelSubtitle.ForeColor = colors.TextSecondary;
+
+            if (_labelStatsTitle != null)
+                _labelStatsTitle.ForeColor = colors.TextPrimary;
+
+            if (_labelFeaturesTitle != null)
+                _labelFeaturesTitle.ForeColor = colors.TextPrimary;
+
+            if (_labelRecommendTitle != null)
+                _labelRecommendTitle.ForeColor = colors.TextPrimary;
+
+            foreach (var card in _statCards)
+            {
+                card.CardColor = colors.Surface;
+                card.TextColor = colors.TextPrimary;
+                card.LabelColor = colors.TextSecondary;
+            }
+
+            foreach (var card in _recommendCards)
+            {
+                card.BackColor = colors.Surface;
+                card.ApplyTheme(colors);
+            }
         }
     }
 }
