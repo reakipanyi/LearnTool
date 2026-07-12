@@ -1,14 +1,16 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
+using LearningAssistant.Data.Database;
 using LearningAssistant.Models.Pomodoro;
 using LearningAssistant.Services.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace LearningAssistant.Services.Learning
 {
     public class PomodoroService : IPomodoroService, IDisposable
     {
+        private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
         private readonly IDataPersistenceService _persistenceService;
         private readonly ILogger<PomodoroService> _logger;
         private readonly IEventBus? _eventBus;
@@ -47,10 +49,12 @@ namespace LearningAssistant.Services.Learning
         public event EventHandler<PomodoroState>? PhaseCompleted;
 
         public PomodoroService(
+            IDbContextFactory<AppDbContext> dbContextFactory,
             IDataPersistenceService persistenceService,
             ILogger<PomodoroService> logger,
             IEventBus? eventBus = null)
         {
+            _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _eventBus = eventBus;
@@ -59,6 +63,7 @@ namespace LearningAssistant.Services.Learning
             _timer = new System.Timers.Timer(1000);
             _timer.Elapsed += Timer_Elapsed;
 
+            MigrateFromJsonToDb();
             LoadRecords();
             LoadTodayStats();
             LoadSettings();
@@ -68,14 +73,6 @@ namespace LearningAssistant.Services.Learning
 
         private string DataFilePath => Path.Combine(StatsDir, "pomodoro_records.json");
         private string SettingsFilePath => Path.Combine(StatsDir, "pomodoro_settings.json");
-
-        private void EnsureDirectoryExists()
-        {
-            if (!Directory.Exists(StatsDir))
-            {
-                Directory.CreateDirectory(StatsDir);
-            }
-        }
 
         public void Start()
         {
@@ -515,6 +512,77 @@ namespace LearningAssistant.Services.Learning
                 r.Completed);
         }
 
+        private void MigrateFromJsonToDb()
+        {
+            try
+            {
+                if (!Directory.Exists(StatsDir)) return;
+
+                var migratedMarker = Path.Combine(StatsDir, ".migrated_to_db");
+                if (File.Exists(migratedMarker)) return;
+
+                using var db = _dbContextFactory.CreateDbContext();
+                var existingIds = db.PomodoroRecords.Select(r => r.Id).ToHashSet();
+
+                var dataPath = DataFilePath;
+                if (File.Exists(dataPath))
+                {
+                    var json = File.ReadAllText(dataPath);
+                    var records = System.Text.Json.JsonSerializer.Deserialize<List<PomodoroRecord>>(json) ?? new List<PomodoroRecord>();
+
+                    foreach (var record in records)
+                    {
+                        if (existingIds.Contains(record.Id)) continue;
+
+                        db.PomodoroRecords.Add(new PomodoroRecordEntity
+                        {
+                            Id = record.Id,
+                            StartTime = record.StartTime,
+                            EndTime = record.EndTime,
+                            Type = record.Type.ToString(),
+                            DurationSeconds = record.DurationSeconds,
+                            PlannedDurationSeconds = record.PlannedDurationSeconds,
+                            Completed = record.Completed,
+                            Task = record.Task,
+                            InterruptionCount = record.InterruptionCount
+                        });
+                    }
+
+                    db.SaveChanges();
+                }
+
+                var settingsPath = SettingsFilePath;
+                if (File.Exists(settingsPath))
+                {
+                    var json = File.ReadAllText(settingsPath);
+                    var settings = System.Text.Json.JsonSerializer.Deserialize<PomodoroSettings>(json);
+
+                    if (settings != null && !db.PomodoroSettings.Any())
+                    {
+                        db.PomodoroSettings.Add(new PomodoroSettingsEntity
+                        {
+                            StudyMinutes = settings.StudyMinutes,
+                            ShortBreakMinutes = settings.ShortBreakMinutes,
+                            LongBreakMinutes = settings.LongBreakMinutes,
+                            LongBreakInterval = settings.LongBreakInterval,
+                            AutoStartBreak = settings.AutoStartBreak,
+                            AutoStartStudy = settings.AutoStartStudy,
+                            SoundEnabled = settings.SoundEnabled,
+                            Volume = settings.Volume
+                        });
+                        db.SaveChanges();
+                    }
+                }
+
+                File.Create(migratedMarker).Dispose();
+                _logger.LogInformation("迁移番茄钟数据从JSON到数据库完成");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "迁移番茄钟数据失败");
+            }
+        }
+
         private void LoadTodayStats()
         {
             try
@@ -545,15 +613,22 @@ namespace LearningAssistant.Services.Learning
         {
             try
             {
-                var path = SettingsFilePath;
-                if (File.Exists(path))
+                using var db = _dbContextFactory.CreateDbContext();
+                var entity = db.PomodoroSettings.FirstOrDefault();
+
+                if (entity != null)
                 {
-                    var json = File.ReadAllText(path);
-                    var settings = JsonSerializer.Deserialize<PomodoroSettings>(json);
-                    if (settings != null)
+                    _settings = new PomodoroSettings
                     {
-                        _settings = settings;
-                    }
+                        StudyMinutes = entity.StudyMinutes,
+                        ShortBreakMinutes = entity.ShortBreakMinutes,
+                        LongBreakMinutes = entity.LongBreakMinutes,
+                        LongBreakInterval = entity.LongBreakInterval,
+                        AutoStartBreak = entity.AutoStartBreak,
+                        AutoStartStudy = entity.AutoStartStudy,
+                        SoundEnabled = entity.SoundEnabled,
+                        Volume = entity.Volume
+                    };
                 }
             }
             catch (Exception ex)
@@ -566,10 +641,36 @@ namespace LearningAssistant.Services.Learning
         {
             try
             {
-                EnsureDirectoryExists();
-                var path = SettingsFilePath;
-                var json = JsonSerializer.Serialize(_settings, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(path, json);
+                using var db = _dbContextFactory.CreateDbContext();
+                var entity = db.PomodoroSettings.FirstOrDefault();
+
+                if (entity != null)
+                {
+                    entity.StudyMinutes = _settings.StudyMinutes;
+                    entity.ShortBreakMinutes = _settings.ShortBreakMinutes;
+                    entity.LongBreakMinutes = _settings.LongBreakMinutes;
+                    entity.LongBreakInterval = _settings.LongBreakInterval;
+                    entity.AutoStartBreak = _settings.AutoStartBreak;
+                    entity.AutoStartStudy = _settings.AutoStartStudy;
+                    entity.SoundEnabled = _settings.SoundEnabled;
+                    entity.Volume = _settings.Volume;
+                }
+                else
+                {
+                    db.PomodoroSettings.Add(new PomodoroSettingsEntity
+                    {
+                        StudyMinutes = _settings.StudyMinutes,
+                        ShortBreakMinutes = _settings.ShortBreakMinutes,
+                        LongBreakMinutes = _settings.LongBreakMinutes,
+                        LongBreakInterval = _settings.LongBreakInterval,
+                        AutoStartBreak = _settings.AutoStartBreak,
+                        AutoStartStudy = _settings.AutoStartStudy,
+                        SoundEnabled = _settings.SoundEnabled,
+                        Volume = _settings.Volume
+                    });
+                }
+
+                db.SaveChanges();
             }
             catch (Exception ex)
             {
@@ -581,12 +682,23 @@ namespace LearningAssistant.Services.Learning
         {
             try
             {
-                var path = DataFilePath;
-                if (File.Exists(path))
-                {
-                    var json = File.ReadAllText(path);
-                    _records = JsonSerializer.Deserialize<List<PomodoroRecord>>(json) ?? new List<PomodoroRecord>();
-                }
+                using var db = _dbContextFactory.CreateDbContext();
+                _records = db.PomodoroRecords
+                    .OrderByDescending(r => r.StartTime)
+                    .AsEnumerable()
+                    .Select(e => new PomodoroRecord
+                    {
+                        Id = e.Id,
+                        StartTime = e.StartTime,
+                        EndTime = e.EndTime,
+                        Type = Enum.TryParse<Models.Pomodoro.PomodoroState>(e.Type, out var type) ? type : Models.Pomodoro.PomodoroState.Studying,
+                        DurationSeconds = e.DurationSeconds,
+                        PlannedDurationSeconds = e.PlannedDurationSeconds,
+                        Completed = e.Completed,
+                        Task = e.Task,
+                        InterruptionCount = e.InterruptionCount
+                    })
+                    .ToList();
             }
             catch (Exception ex)
             {
@@ -599,10 +711,40 @@ namespace LearningAssistant.Services.Learning
         {
             try
             {
-                EnsureDirectoryExists();
-                var path = DataFilePath;
-                var json = JsonSerializer.Serialize(_records, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(path, json);
+                using var db = _dbContextFactory.CreateDbContext();
+
+                foreach (var record in _records)
+                {
+                    var existing = db.PomodoroRecords.FirstOrDefault(e => e.Id == record.Id);
+                    if (existing != null)
+                    {
+                        existing.StartTime = record.StartTime;
+                        existing.EndTime = record.EndTime;
+                        existing.Type = record.Type.ToString();
+                        existing.DurationSeconds = record.DurationSeconds;
+                        existing.PlannedDurationSeconds = record.PlannedDurationSeconds;
+                        existing.Completed = record.Completed;
+                        existing.Task = record.Task;
+                        existing.InterruptionCount = record.InterruptionCount;
+                    }
+                    else
+                    {
+                        db.PomodoroRecords.Add(new PomodoroRecordEntity
+                        {
+                            Id = record.Id,
+                            StartTime = record.StartTime,
+                            EndTime = record.EndTime,
+                            Type = record.Type.ToString(),
+                            DurationSeconds = record.DurationSeconds,
+                            PlannedDurationSeconds = record.PlannedDurationSeconds,
+                            Completed = record.Completed,
+                            Task = record.Task,
+                            InterruptionCount = record.InterruptionCount
+                        });
+                    }
+                }
+
+                db.SaveChanges();
             }
             catch (Exception ex)
             {

@@ -1,5 +1,7 @@
 using LearningAssistant.Common;
+using LearningAssistant.Data.Database;
 using LearningAssistant.Models.Learning;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
@@ -10,6 +12,7 @@ namespace LearningAssistant.Managers
     /// </summary>
     public class StudyStatsManager
     {
+        private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
         private readonly ILogger<StudyStatsManager>? _logger;
         private string _currentUserId = "default";
         private readonly List<string> _levelTitles = new() {
@@ -45,11 +48,13 @@ namespace LearningAssistant.Managers
         /// 构造函数
         /// </summary>
         public StudyStatsManager(
+            IDbContextFactory<AppDbContext> dbContextFactory,
             ILogger<StudyStatsManager>? logger = null,
             Action? onLevelUp = null,
             Action<int>? onScoreChanged = null,
             Action<int>? onXPChanged = null)
         {
+            _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _logger = logger;
             _onLevelUp = onLevelUp;
             _onScoreChanged = onScoreChanged;
@@ -78,56 +83,50 @@ namespace LearningAssistant.Managers
         }
 
         /// <summary>
-        /// 获取用户统计数据文件路径
+        /// 获取用户统计数据文件路径（用于迁移）
         /// </summary>
         private static string GetUserStatsPath(string userId)
         {
             var userDir = Path.Combine(AppPaths.UsersDir, userId);
-            if (!Directory.Exists(userDir))
-                Directory.CreateDirectory(userDir);
             return Path.Combine(userDir, "study_stats.json");
         }
 
         /// <summary>
-        /// 从文件加载统计数据
+        /// 从数据库加载统计数据
         /// </summary>
         public void Load(string userId = "default")
         {
             _currentUserId = userId;
             try
             {
-                string statsPath = GetUserStatsPath(userId);
-                if (File.Exists(statsPath))
+                MigrateFromJsonToDb(userId);
+
+                using var db = _dbContextFactory.CreateDbContext();
+                var entity = db.StudyStats.FirstOrDefault(s => s.UserId == userId);
+
+                if (entity != null)
                 {
-                    string json = File.ReadAllText(statsPath);
-                    var stats = JsonSerializer.Deserialize<StudyStats>(json);
+                    _todayLearnedCount = entity.TodayLearnedCount;
+                    _streakDays = entity.StreakDays;
+                    _totalScore = entity.TotalScore;
+                    _totalLearnedCount = entity.TotalLearnedCount;
+                    _xp = entity.XP;
+                    _lastStudyDate = entity.LastStudyDate;
 
-                    if (stats != null)
+                    if (_lastStudyDate.Date != DateTime.Today)
                     {
-                        _todayLearnedCount = stats.TodayLearnedCount;
-                        _streakDays = stats.StreakDays;
-                        _totalScore = stats.TotalScore;
-                        _totalLearnedCount = stats.TotalLearnedCount;
-                        _xp = stats.XP;
-                        _lastStudyDate = stats.LastStudyDate;
-
-                        // 检查是否需要重置今日学习数
-                        if (_lastStudyDate.Date != DateTime.Today)
+                        _todayLearnedCount = 0;
+                        if (_lastStudyDate.Date == DateTime.Today.AddDays(-1))
                         {
-                            _todayLearnedCount = 0;
-                            // 检查是否连续学习
-                            if (_lastStudyDate.Date == DateTime.Today.AddDays(-1))
-                            {
-                                _streakDays++;
-                            }
-                            else if (_lastStudyDate.Date != DateTime.MinValue)
-                            {
-                                _streakDays = 1;
-                            }
+                            _streakDays++;
                         }
-
-                        UpdateLevel();
+                        else if (_lastStudyDate.Date != DateTime.MinValue)
+                        {
+                            _streakDays = 1;
+                        }
                     }
+
+                    UpdateLevel();
                 }
                 else
                 {
@@ -144,33 +143,86 @@ namespace LearningAssistant.Managers
         }
 
         /// <summary>
-        /// 保存统计数据到文件
+        /// 保存统计数据到数据库
         /// </summary>
         public void Save(string userId = "default")
         {
             try
             {
-                string statsPath = GetUserStatsPath(userId);
-                var statsDir = Path.GetDirectoryName(statsPath);
-                if (!string.IsNullOrEmpty(statsDir) && !Directory.Exists(statsDir))
-                    Directory.CreateDirectory(statsDir);
+                using var db = _dbContextFactory.CreateDbContext();
+                var entity = db.StudyStats.FirstOrDefault(s => s.UserId == userId);
 
-                var stats = new StudyStats
+                if (entity != null)
                 {
-                    TodayLearnedCount = _todayLearnedCount,
-                    StreakDays = _streakDays,
-                    TotalScore = _totalScore,
-                    TotalLearnedCount = _totalLearnedCount,
-                    XP = _xp,
-                    LastStudyDate = DateTime.Today
-                };
+                    entity.TodayLearnedCount = _todayLearnedCount;
+                    entity.StreakDays = _streakDays;
+                    entity.TotalScore = _totalScore;
+                    entity.TotalLearnedCount = _totalLearnedCount;
+                    entity.XP = _xp;
+                    entity.LastStudyDate = DateTime.Today;
+                }
+                else
+                {
+                    db.StudyStats.Add(new StudyStatsEntity
+                    {
+                        UserId = userId,
+                        TodayLearnedCount = _todayLearnedCount,
+                        StreakDays = _streakDays,
+                        TotalScore = _totalScore,
+                        TotalLearnedCount = _totalLearnedCount,
+                        XP = _xp,
+                        LastStudyDate = DateTime.Today
+                    });
+                }
 
-                string json = JsonSerializer.Serialize(stats, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(statsPath, json);
+                db.SaveChanges();
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "保存学习统计失败");
+            }
+        }
+
+        private void MigrateFromJsonToDb(string userId)
+        {
+            try
+            {
+                var statsPath = GetUserStatsPath(userId);
+                if (!File.Exists(statsPath)) return;
+
+                var migratedMarker = Path.Combine(AppPaths.UsersDir, userId, ".stats_migrated");
+                if (File.Exists(migratedMarker)) return;
+
+                var json = File.ReadAllText(statsPath);
+                var stats = System.Text.Json.JsonSerializer.Deserialize<StudyStats>(json);
+
+                if (stats != null)
+                {
+                    using var db = _dbContextFactory.CreateDbContext();
+                    var existing = db.StudyStats.FirstOrDefault(s => s.UserId == userId);
+
+                    if (existing == null)
+                    {
+                        db.StudyStats.Add(new StudyStatsEntity
+                        {
+                            UserId = userId,
+                            TodayLearnedCount = stats.TodayLearnedCount,
+                            StreakDays = stats.StreakDays,
+                            TotalScore = stats.TotalScore,
+                            TotalLearnedCount = stats.TotalLearnedCount,
+                            XP = stats.XP,
+                            LastStudyDate = stats.LastStudyDate
+                        });
+                        db.SaveChanges();
+                    }
+                }
+
+                File.Create(migratedMarker).Dispose();
+                _logger?.LogInformation("迁移学习统计数据从JSON到数据库完成: {UserId}", userId);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "迁移学习统计数据失败: {UserId}", userId);
             }
         }
 

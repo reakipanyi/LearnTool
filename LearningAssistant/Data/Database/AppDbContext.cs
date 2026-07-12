@@ -22,6 +22,14 @@ namespace LearningAssistant.Data.Database
         public DbSet<PomodoroRecordEntity> PomodoroRecords { get; set; }
         public DbSet<WrongAnswerEntity> WrongAnswers { get; set; }
         public DbSet<LearningItemEntity> LearningItems { get; set; }
+        public DbSet<NoteEntity> Notes { get; set; }
+        public DbSet<LearningPathEntity> LearningPaths { get; set; }
+        public DbSet<LearningPathItemEntity> LearningPathItems { get; set; }
+        public DbSet<BadgeUnlockEntity> BadgeUnlocks { get; set; }
+        public DbSet<DailyChallengeEntity> DailyChallenges { get; set; }
+        public DbSet<ChallengeHistoryEntity> ChallengeHistory { get; set; }
+        public DbSet<LearningGoalEntity> LearningGoals { get; set; }
+        public DbSet<DailyGoalRecordEntity> DailyGoalRecords { get; set; }
 
         private readonly string _dbPath;
 
@@ -59,11 +67,6 @@ namespace LearningAssistant.Data.Database
 
             var connectionString = $"Data Source={_dbPath};Cache=Shared;Pooling=True;";
             optionsBuilder.UseSqlite(connectionString);
-
-#if DEBUG
-            optionsBuilder.LogTo(Console.WriteLine, Microsoft.Extensions.Logging.LogLevel.Debug);
-            optionsBuilder.EnableSensitiveDataLogging();
-#endif
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

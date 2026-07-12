@@ -1,6 +1,7 @@
 using System;
 using System.Security.Cryptography;
 using System.Text;
+using LearningAssistant.Common;
 
 namespace LearningAssistant.Services.Utils
 {
@@ -43,8 +44,8 @@ namespace LearningAssistant.Services.Utils
             }
             catch (CryptographicException ex)
             {
-                System.Diagnostics.Trace.TraceWarning($"Encryption failed: {ex.Message}");
-                return plainText;
+                System.Diagnostics.Trace.TraceError($"Encryption failed: {ex.Message}");
+                throw new PersistenceException("Failed to encrypt sensitive configuration", ex);
             }
         }
 
@@ -62,8 +63,8 @@ namespace LearningAssistant.Services.Utils
             }
             catch (CryptographicException ex)
             {
-                System.Diagnostics.Trace.TraceWarning($"Decryption failed: {ex.Message}");
-                return encryptedText;
+                System.Diagnostics.Trace.TraceError($"Decryption failed: {ex.Message}");
+                throw new PersistenceException("Failed to decrypt sensitive configuration", ex);
             }
         }
 

@@ -133,6 +133,11 @@ namespace LearningAssistant.Models.Learning
         public bool IsActive { get; set; } = true;
 
         /// <summary>
+        /// 备注信息
+        /// </summary>
+        public string Notes { get; set; } = string.Empty;
+
+        /// <summary>
         /// 标签字符串（兼容旧版本）
         /// </summary>
         [JsonIgnore]

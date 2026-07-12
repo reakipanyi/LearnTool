@@ -1,8 +1,9 @@
 using LearningAssistant.Common;
+using LearningAssistant.Data.Database;
 using LearningAssistant.Models.Learning;
 using LearningAssistant.Services.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace LearningAssistant.Services.Learning
 {
@@ -12,55 +13,106 @@ namespace LearningAssistant.Services.Learning
     /// </summary>
     public class LearningPathService : ILearningPathService
     {
+        private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
         private readonly IDataPersistenceService _persistenceService;
         private readonly ILearningAnalyticsService _analyticsService;
         private readonly IWrongAnswerService _wrongAnswerService;
         private readonly ILogger<LearningPathService> _logger;
-        private readonly string _pathsDir;
         private readonly object _lock = new object();
 
         public LearningPathService(
+            IDbContextFactory<AppDbContext> dbContextFactory,
             IDataPersistenceService persistenceService,
             ILearningAnalyticsService analyticsService,
             IWrongAnswerService wrongAnswerService,
             ILogger<LearningPathService> logger)
         {
+            _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _analyticsService = analyticsService ?? throw new ArgumentNullException(nameof(analyticsService));
             _wrongAnswerService = wrongAnswerService ?? throw new ArgumentNullException(nameof(wrongAnswerService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _pathsDir = AppPaths.LearningPathsDir;
-            EnsureDirectoryExists();
-            MigrateFromOldLocation();
+            MigrateFromJsonToDb();
         }
 
-        private void EnsureDirectoryExists()
+        private void MigrateFromJsonToDb()
         {
-            if (!Directory.Exists(_pathsDir))
-            {
-                Directory.CreateDirectory(_pathsDir);
-            }
-        }
-
-        private void MigrateFromOldLocation()
-        {
-            var oldDir = Path.Combine(AppPaths.UsersDir, "learning_paths");
-            if (!Directory.Exists(oldDir)) return;
-
             try
             {
-                foreach (var file in Directory.EnumerateFiles(oldDir))
+                var pathsDir = AppPaths.LearningPathsDir;
+                if (!Directory.Exists(pathsDir))
                 {
-                    var fileName = Path.GetFileName(file);
-                    var newPath = Path.Combine(_pathsDir, fileName);
-                    if (!File.Exists(newPath))
-                    {
-                        File.Move(file, newPath);
-                    }
+                    pathsDir = Path.Combine(AppPaths.UsersDir, "learning_paths");
+                    if (!Directory.Exists(pathsDir)) return;
                 }
 
-                Directory.Delete(oldDir);
-                _logger.LogInformation("迁移学习路径数据从旧位置完成");
+                var migratedMarker = Path.Combine(pathsDir, ".migrated_to_db");
+                if (File.Exists(migratedMarker)) return;
+
+                foreach (var file in Directory.EnumerateFiles(pathsDir, "*_paths.json"))
+                {
+                    var fileName = Path.GetFileName(file);
+                    var userId = fileName.Replace("_paths.json", "");
+
+                    var json = File.ReadAllText(file);
+                    var paths = System.Text.Json.JsonSerializer.Deserialize<List<LearningPath>>(json) ?? new List<LearningPath>();
+
+                    if (paths.Count == 0) continue;
+
+                    using var db = _dbContextFactory.CreateDbContext();
+                    var existingIds = db.LearningPaths.Where(p => p.UserId == userId).Select(p => p.Id).ToHashSet();
+
+                    foreach (var path in paths)
+                    {
+                        if (existingIds.Contains(path.Id)) continue;
+
+                        var pathEntity = new LearningPathEntity
+                        {
+                            Id = path.Id,
+                            UserId = path.UserId,
+                            Name = path.Name,
+                            Description = path.Description,
+                            Goal = path.Goal,
+                            PathType = path.PathType,
+                            Domain = path.Domain,
+                            Level = path.Level,
+                            TotalEstimatedMinutes = path.TotalEstimatedMinutes,
+                            IsActive = path.IsActive,
+                            StartDate = path.StartDate,
+                            TargetDate = path.TargetDate,
+                            CreatedAt = path.CreatedAt,
+                            UpdatedAt = path.UpdatedAt
+                        };
+                        db.LearningPaths.Add(pathEntity);
+
+                        foreach (var item in path.Items)
+                        {
+                            db.LearningPathItems.Add(new LearningPathItemEntity
+                            {
+                                Id = item.Id,
+                                PathId = path.Id,
+                                Title = item.Title,
+                                Description = item.Description,
+                                ContentType = item.ContentType,
+                                ContentIds = System.Text.Json.JsonSerializer.Serialize(item.ContentIds),
+                                EstimatedMinutes = item.EstimatedMinutes,
+                                DifficultyLevel = item.DifficultyLevel,
+                                Prerequisites = System.Text.Json.JsonSerializer.Serialize(item.Prerequisites),
+                                Order = item.Order,
+                                IsCompleted = item.IsCompleted,
+                                CompletedAt = item.CompletedAt,
+                                Progress = item.Progress,
+                                CreatedAt = path.CreatedAt,
+                                UpdatedAt = path.UpdatedAt
+                            });
+                        }
+                    }
+
+                    db.SaveChanges();
+                }
+
+                File.Create(migratedMarker).Dispose();
+                _logger.LogInformation("迁移学习路径数据从JSON到数据库完成");
             }
             catch (Exception ex)
             {
@@ -68,21 +120,63 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        private string GetUserPathsPath(string userId)
-        {
-            return Path.Combine(_pathsDir, $"{userId}_paths.json");
-        }
-
         private List<LearningPath> LoadPaths(string userId)
         {
             try
             {
-                var path = GetUserPathsPath(userId);
-                if (!File.Exists(path))
-                    return new List<LearningPath>();
+                using var db = _dbContextFactory.CreateDbContext();
+                var paths = db.LearningPaths
+                    .Where(p => p.UserId == userId)
+                    .ToList();
 
-                var json = File.ReadAllText(path);
-                return JsonSerializer.Deserialize<List<LearningPath>>(json) ?? new List<LearningPath>();
+                var result = new List<LearningPath>();
+                foreach (var pathEntity in paths)
+                {
+                    var items = db.LearningPathItems
+                        .Where(i => i.PathId == pathEntity.Id)
+                        .OrderBy(i => i.Order)
+                        .Select(e => new LearningPathItem
+                        {
+                            Id = e.Id,
+                            Title = e.Title,
+                            Description = e.Description,
+                            ContentType = e.ContentType,
+                            ContentIds = !string.IsNullOrEmpty(e.ContentIds)
+                                ? System.Text.Json.JsonSerializer.Deserialize<List<string>>(e.ContentIds) ?? new List<string>()
+                                : new List<string>(),
+                            EstimatedMinutes = e.EstimatedMinutes,
+                            DifficultyLevel = e.DifficultyLevel,
+                            Prerequisites = !string.IsNullOrEmpty(e.Prerequisites)
+                                ? System.Text.Json.JsonSerializer.Deserialize<List<string>>(e.Prerequisites) ?? new List<string>()
+                                : new List<string>(),
+                            Order = e.Order,
+                            IsCompleted = e.IsCompleted,
+                            CompletedAt = e.CompletedAt,
+                            Progress = e.Progress
+                        })
+                        .ToList();
+
+                    result.Add(new LearningPath
+                    {
+                        Id = pathEntity.Id,
+                        UserId = pathEntity.UserId,
+                        Name = pathEntity.Name,
+                        Description = pathEntity.Description,
+                        Goal = pathEntity.Goal,
+                        PathType = pathEntity.PathType,
+                        Domain = pathEntity.Domain,
+                        Level = pathEntity.Level,
+                        Items = items,
+                        CreatedAt = pathEntity.CreatedAt,
+                        UpdatedAt = pathEntity.UpdatedAt,
+                        TotalEstimatedMinutes = pathEntity.TotalEstimatedMinutes,
+                        IsActive = pathEntity.IsActive,
+                        StartDate = pathEntity.StartDate,
+                        TargetDate = pathEntity.TargetDate
+                    });
+                }
+
+                return result;
             }
             catch (Exception ex)
             {
@@ -95,12 +189,89 @@ namespace LearningAssistant.Services.Learning
         {
             try
             {
-                var path = GetUserPathsPath(userId);
-                var json = JsonSerializer.Serialize(paths, new JsonSerializerOptions
+                using var db = _dbContextFactory.CreateDbContext();
+
+                foreach (var path in paths)
                 {
-                    WriteIndented = true
-                });
-                File.WriteAllText(path, json);
+                    var existing = db.LearningPaths.FirstOrDefault(e => e.Id == path.Id);
+                    if (existing != null)
+                    {
+                        existing.Name = path.Name;
+                        existing.Description = path.Description;
+                        existing.Goal = path.Goal;
+                        existing.PathType = path.PathType;
+                        existing.Domain = path.Domain;
+                        existing.Level = path.Level;
+                        existing.TotalEstimatedMinutes = path.TotalEstimatedMinutes;
+                        existing.IsActive = path.IsActive;
+                        existing.StartDate = path.StartDate;
+                        existing.TargetDate = path.TargetDate;
+                        existing.UpdatedAt = path.UpdatedAt;
+                    }
+                    else
+                    {
+                        db.LearningPaths.Add(new LearningPathEntity
+                        {
+                            Id = path.Id,
+                            UserId = path.UserId,
+                            Name = path.Name,
+                            Description = path.Description,
+                            Goal = path.Goal,
+                            PathType = path.PathType,
+                            Domain = path.Domain,
+                            Level = path.Level,
+                            TotalEstimatedMinutes = path.TotalEstimatedMinutes,
+                            IsActive = path.IsActive,
+                            StartDate = path.StartDate,
+                            TargetDate = path.TargetDate,
+                            CreatedAt = path.CreatedAt,
+                            UpdatedAt = path.UpdatedAt
+                        });
+                    }
+
+                    foreach (var item in path.Items)
+                    {
+                        var itemExisting = db.LearningPathItems.FirstOrDefault(e => e.Id == item.Id);
+                        if (itemExisting != null)
+                        {
+                            itemExisting.Title = item.Title;
+                            itemExisting.Description = item.Description;
+                            itemExisting.ContentType = item.ContentType;
+                            itemExisting.ContentIds = System.Text.Json.JsonSerializer.Serialize(item.ContentIds);
+                            itemExisting.EstimatedMinutes = item.EstimatedMinutes;
+                            itemExisting.DifficultyLevel = item.DifficultyLevel;
+                            itemExisting.Prerequisites = System.Text.Json.JsonSerializer.Serialize(item.Prerequisites);
+                            itemExisting.Order = item.Order;
+                            itemExisting.IsCompleted = item.IsCompleted;
+                            itemExisting.CompletedAt = item.CompletedAt;
+                            itemExisting.Progress = item.Progress;
+                            itemExisting.UpdatedAt = path.UpdatedAt;
+                        }
+                        else
+                        {
+                            db.LearningPathItems.Add(new LearningPathItemEntity
+                            {
+                                Id = item.Id,
+                                PathId = path.Id,
+                                Title = item.Title,
+                                Description = item.Description,
+                                ContentType = item.ContentType,
+                                ContentIds = System.Text.Json.JsonSerializer.Serialize(item.ContentIds),
+                                EstimatedMinutes = item.EstimatedMinutes,
+                                DifficultyLevel = item.DifficultyLevel,
+                                Prerequisites = System.Text.Json.JsonSerializer.Serialize(item.Prerequisites),
+                                Order = item.Order,
+                                IsCompleted = item.IsCompleted,
+                                CompletedAt = item.CompletedAt,
+                                Progress = item.Progress,
+                                CreatedAt = path.CreatedAt,
+                                UpdatedAt = path.UpdatedAt
+                            });
+                        }
+                    }
+                }
+
+                db.SaveChanges();
             }
             catch (Exception ex)
             {

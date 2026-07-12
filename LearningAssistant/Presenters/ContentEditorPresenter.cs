@@ -4,9 +4,10 @@ using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System.Data;
+using System.Text;
+using System.Text.Json;
 
 namespace LearningAssistant.Presenters
 {
@@ -478,7 +479,7 @@ namespace LearningAssistant.Presenters
 
                 try
                 {
-                    var props = JsonConvert.DeserializeObject<Dictionary<string, object>>(item.ExtendedProperties);
+                    var props = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(item.ExtendedProperties);
                     if (props != null)
                     {
                         foreach (var prop in props)
@@ -595,21 +596,24 @@ namespace LearningAssistant.Presenters
 
             try
             {
-                var jsonArray = JsonConvert.DeserializeObject<JArray>(json);
-                foreach (var obj in jsonArray.OfType<JObject>())
+                using var doc = JsonDocument.Parse(json);
+                var memoryStream = new MemoryStream();
+                using var writer = new Utf8JsonWriter(memoryStream);
+                writer.WriteStartArray();
+                foreach (var element in doc.RootElement.EnumerateArray())
                 {
-                    var properties = obj.Properties().ToList();
-                    foreach (var prop in properties)
+                    writer.WriteStartObject();
+                    foreach (var property in element.EnumerateObject())
                     {
-                        var englishName = CategoryConfig.GetEnglishColumnName(prop.Name, category);
-                        if (englishName != prop.Name)
-                        {
-                            obj[englishName] = prop.Value;
-                            obj.Remove(prop.Name);
-                        }
+                        var englishName = CategoryConfig.GetEnglishColumnName(property.Name, category);
+                        writer.WritePropertyName(englishName);
+                        property.Value.WriteTo(writer);
                     }
+                    writer.WriteEndObject();
                 }
-                json = jsonArray.ToString();
+                writer.WriteEndArray();
+                writer.Flush();
+                json = Encoding.UTF8.GetString(memoryStream.ToArray());
             }
             catch (Exception ex)
             {
@@ -709,7 +713,7 @@ namespace LearningAssistant.Presenters
                     if (!string.IsNullOrWhiteSpace(value))
                         extendedProps[colName] = value;
                 }
-                item.ExtendedProperties = JsonConvert.SerializeObject(extendedProps);
+                item.ExtendedProperties = System.Text.Json.JsonSerializer.Serialize(extendedProps);
 
                 items.Add(item);
             }
@@ -790,7 +794,7 @@ namespace LearningAssistant.Presenters
                     .Select(row => dataTable.Columns.Cast<DataColumn>()
                         .ToDictionary(col => col.ColumnName, col => row[col]?.ToString() ?? ""))
                     .ToList();
-                _view.CurrentEditItemJson = JsonConvert.SerializeObject(rows, Formatting.Indented);
+                _view.CurrentEditItemJson = System.Text.Json.JsonSerializer.Serialize(rows, new JsonSerializerOptions { WriteIndented = true });
             }
         }
 
@@ -810,11 +814,14 @@ namespace LearningAssistant.Presenters
             if (dialog.ShowDialog() != DialogResult.OK) return;
 
             try
-            {
-                var content = File.ReadAllText(dialog.FileName);
-                // 使用安全的自定义 Converter 替代 TypeNameHandling.Auto，防止 RCE 攻击
-                var converter = new LearningItemJsonConverter();
-                var importedItems = JsonConvert.DeserializeObject<List<LearningItem>>(content, converter);
+                {
+                    var content = File.ReadAllText(dialog.FileName);
+                    var options = new JsonSerializerOptions
+                    {
+                        PropertyNameCaseInsensitive = true,
+                        Converters = { new LearningItemJsonConverter() }
+                    };
+                    var importedItems = System.Text.Json.JsonSerializer.Deserialize<List<LearningItem>>(content, options);
 
                 if (importedItems?.Count > 0)
                 {
@@ -866,14 +873,17 @@ namespace LearningAssistant.Presenters
             if (dialog.ShowDialog() != DialogResult.OK) return;
 
             try
-            {
-                var subject = _view.SelectedSubject;
-                var subCategory = _view.SelectedSubCategory;
-                var context = new LearningContext("default_user", subject, subCategory);
-                var items = _contentLoaderService.LoadItems(context);
-                // 使用安全的自定义 Converter 替代 TypeNameHandling.Auto
-                var converter = new LearningItemListJsonConverter();
-                var json = JsonConvert.SerializeObject(items, Formatting.Indented, converter);
+                {
+                    var subject = _view.SelectedSubject;
+                    var subCategory = _view.SelectedSubCategory;
+                    var context = new LearningContext("default_user", subject, subCategory);
+                    var items = _contentLoaderService.LoadItems(context);
+                    var options = new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                        Converters = { new LearningItemJsonConverter() }
+                    };
+                    var json = System.Text.Json.JsonSerializer.Serialize(items, options);
 
                 if (!string.IsNullOrEmpty(json))
                 {
@@ -940,7 +950,7 @@ namespace LearningAssistant.Presenters
         private static string GetTemplateJson(string category)
         {
             return CategoryTemplates.TryGetValue(category, out var template)
-                ? JsonConvert.SerializeObject(template, Formatting.Indented)
+                ? System.Text.Json.JsonSerializer.Serialize(template, new JsonSerializerOptions { WriteIndented = true })
                 : "{}";
         }
 
@@ -963,8 +973,8 @@ namespace LearningAssistant.Presenters
 
             try
             {
-                var parsed = JArray.Parse(jsonContent);
-                return parsed.ToString(Formatting.Indented);
+                using var doc = JsonDocument.Parse(jsonContent);
+                return JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true });
             }
             catch
             {

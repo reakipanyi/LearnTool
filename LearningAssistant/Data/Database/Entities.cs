@@ -544,6 +544,10 @@ namespace LearningAssistant.Data.Database
         public bool PlaySound { get; set; } = true;
 
         public bool ShowNotification { get; set; } = true;
+
+        public bool SoundEnabled { get; set; } = true;
+
+        public int Volume { get; set; } = 50;
     }
 
     /// <summary>
@@ -625,5 +629,127 @@ namespace LearningAssistant.Data.Database
         public DateTime LastWrongAt { get; set; } = DateTime.Now;
 
         public string Notes { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// 笔记实体
+    /// </summary>
+    public class NoteEntity : UserEntityBase
+    {
+        [Key]
+        [MaxLength(100)]
+        public string Id { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(200)]
+        public string Title { get; set; } = string.Empty;
+
+        public string Content { get; set; } = string.Empty;
+
+        [MaxLength(100)]
+        public string Category { get; set; } = string.Empty;
+
+        [MaxLength(500)]
+        public string Tags { get; set; } = string.Empty;
+
+        [MaxLength(50)]
+        public string RelatedType { get; set; } = string.Empty;
+
+        [MaxLength(100)]
+        public string RelatedItemId { get; set; } = string.Empty;
+
+        [MaxLength(200)]
+        public string RelatedItemTitle { get; set; } = string.Empty;
+
+        public int Importance { get; set; } = 3;
+
+        public bool IsFavorite { get; set; }
+
+        public DateTime? LastReviewedAt { get; set; }
+
+        public int ReviewCount { get; set; }
+
+        [MaxLength(20)]
+        public string Color { get; set; } = string.Empty;
+
+        [MaxLength(50)]
+        public string Source { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// 学习路径实体
+    /// </summary>
+    public class LearningPathEntity : UserEntityBase
+    {
+        [Key]
+        [MaxLength(100)]
+        public string Id { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(200)]
+        public string Name { get; set; } = string.Empty;
+
+        public string Description { get; set; } = string.Empty;
+
+        [MaxLength(500)]
+        public string Goal { get; set; } = string.Empty;
+
+        [MaxLength(50)]
+        public string PathType { get; set; } = "custom";
+
+        [MaxLength(50)]
+        public string Domain { get; set; } = string.Empty;
+
+        [MaxLength(20)]
+        public string Level { get; set; } = "初级";
+
+        public int TotalEstimatedMinutes { get; set; }
+
+        public bool IsActive { get; set; }
+
+        public DateTime? StartDate { get; set; }
+
+        public DateTime? TargetDate { get; set; }
+    }
+
+    /// <summary>
+    /// 学习路径项实体
+    /// </summary>
+    public class LearningPathItemEntity : AuditableEntityBase
+    {
+        [Key]
+        [MaxLength(100)]
+        public string Id { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(100)]
+        public string PathId { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(200)]
+        public string Title { get; set; } = string.Empty;
+
+        public string Description { get; set; } = string.Empty;
+
+        [MaxLength(50)]
+        public string ContentType { get; set; } = string.Empty;
+
+        [MaxLength(1000)]
+        public string ContentIds { get; set; } = "[]";
+
+        public int EstimatedMinutes { get; set; }
+
+        public int DifficultyLevel { get; set; } = 1;
+
+        [MaxLength(500)]
+        public string Prerequisites { get; set; } = "[]";
+
+        public int Order { get; set; }
+
+        public bool IsCompleted { get; set; }
+
+        public DateTime? CompletedAt { get; set; }
+
+        public int Progress { get; set; }
     }
 }

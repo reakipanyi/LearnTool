@@ -310,6 +310,16 @@ namespace LearningAssistant.Models.Pomodoro
         public bool AutoStartStudy { get; set; } = false;
 
         /// <summary>
+        /// 是否启用声音
+        /// </summary>
+        public bool SoundEnabled { get; set; } = true;
+
+        /// <summary>
+        /// 音量大小（0-100）
+        /// </summary>
+        public int Volume { get; set; } = 50;
+
+        /// <summary>
         /// 是否播放声音
         /// </summary>
         public bool PlaySound { get; set; } = true;

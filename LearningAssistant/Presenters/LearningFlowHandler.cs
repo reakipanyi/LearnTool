@@ -607,11 +607,13 @@ namespace LearningAssistant.Presenters
                 var newSubCategory = _view.SubCategory;
                 var newMode = _view.LearningMode;
                 var newSortOrder = _view.SortOrder;
+                var newUserId = _view.CurrentContext.UserId;
 
                 bool subjectChanged = newSubject != _currentSubject;
                 bool subCategoryChanged = newSubCategory != _currentSubCategory;
                 bool modeChanged = newMode != _studyEngine.CurrentMode;
                 bool sortChanged = newSortOrder != _studyEngine.CurrentSortOrder;
+                bool userIdChanged = newUserId != _currentUserId;
 
                 if (subjectChanged)
                 {
@@ -630,7 +632,12 @@ namespace LearningAssistant.Presenters
                     _currentSubCategory = newSubCategory;
                 }
 
-                if (subjectChanged || subCategoryChanged)
+                if (userIdChanged)
+                {
+                    _currentUserId = newUserId;
+                }
+
+                if (subjectChanged || subCategoryChanged || userIdChanged)
                 {
                     string userId = string.IsNullOrWhiteSpace(_currentUserId) ? "default" : _currentUserId;
                     var context = _view.CurrentContext with { UserId = userId, SubCategory = _currentSubCategory, WordBankFile = "" };

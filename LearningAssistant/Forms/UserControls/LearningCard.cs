@@ -95,7 +95,7 @@ namespace LearningAssistant.Forms.UserControls
             _fieldsContainer.Dock = DockStyle.Fill;
             _fieldsContainer.AutoScroll = true;
             _fieldsContainer.BackColor = Color.Transparent;
-            _fieldsContainer.Padding = new Padding(0, 5, 0, 0);
+            _fieldsContainer.Padding = new Padding(0, 2, 0, 0);
 
             _innerLayout.Controls.Add(_iconLabel, 0, 0);
             _innerLayout.Controls.Add(_titleLabel, 0, 1);
@@ -121,7 +121,7 @@ namespace LearningAssistant.Forms.UserControls
             set => _categoryLabel.Text = value;
         }
 
-        
+
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string Icon
@@ -167,7 +167,7 @@ namespace LearningAssistant.Forms.UserControls
         public void SetFields(IEnumerable<ContentField> fields)
         {
             var fieldList = fields?.ToList() ?? new List<ContentField>();
-            
+
             int existingCount = _fieldRows.Count;
             int neededCount = fieldList.Count;
 
@@ -307,13 +307,13 @@ namespace LearningAssistant.Forms.UserControls
                 _fontIcon?.Dispose();
                 _fontTitle?.Dispose();
                 _fontCategoryTag?.Dispose();
-                
+
                 foreach (var row in _fieldRows)
                 {
                     row.Dispose();
                 }
                 _fieldRows.Clear();
-                
+
                 _fieldsContainer?.Dispose();
                 _innerLayout?.Dispose();
                 this.Region?.Dispose();

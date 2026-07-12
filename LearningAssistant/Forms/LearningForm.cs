@@ -11,6 +11,7 @@ using LearningAssistant.Services;
 using LearningAssistant.Services.Feedback;
 using LearningAssistant.Services.Gamification;
 using LearningAssistant.Services.Learning;
+using LearningAssistant.Services.Persistence;
 using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
@@ -32,12 +33,12 @@ namespace LearningAssistant.Forms
         private ISoundService? _soundService => _services.NotificationServices.SoundService;
         private IThemeService _themeService => _services.ThemeService;
         private IEncouragementService _encouragementService => _services.GamificationServices.EncouragementService;
-        private IAchievementService? _achievementService => _services.GamificationServices.AchievementService;
         private ISpacedRepetitionService? _spacedRepetitionService => _services.SpacedRepetitionService;
         private IGamificationService _gamificationService => _services.GamificationServices.GamificationService;
         private IEventBus? _eventBus => _services.NotificationServices.EventBus;
         private IUserSessionService? _userSessionService => _services.UserSessionService;
         private IPomodoroService? _pomodoroService => _services.PomodoroService;
+        private IDataPersistenceService? _persistenceService => _services.PersistenceService;
         #endregion
 
         #region === 学习状态 ===
@@ -53,6 +54,11 @@ namespace LearningAssistant.Forms
         private HashSet<string>? _cachedFavorites;
         private DateTime _favoritesCacheTime = DateTime.MinValue;
         private static readonly TimeSpan FavoritesCacheDuration = TimeSpan.FromSeconds(10);
+        
+        private HashSet<string>? _cachedKnownItems;
+        private HashSet<string>? _cachedUnknownItems;
+        private DateTime _learningStateCacheTime = DateTime.MinValue;
+        private static readonly TimeSpan LearningStateCacheDuration = TimeSpan.FromSeconds(30);
         #endregion
 
         #region === 进度可视化 ===
@@ -1631,6 +1637,7 @@ namespace LearningAssistant.Forms
 
             bool isFavorite = _listView.IsFavoriteItem(text);
             bool isKnown = IsItemKnown(text);
+            bool isUnknown = IsItemUnknown(text);
 
             int iconSize = 20;
             int iconMargin = 8;
@@ -1639,6 +1646,8 @@ namespace LearningAssistant.Forms
             using var iconFont = new Font("Arial", 10F);
             using var favoriteBrush = new SolidBrush(Color.FromArgb(255, 152, 0));
             using var knownBrush = new SolidBrush(Color.FromArgb(76, 175, 80));
+            using var unknownBrush = new SolidBrush(Color.FromArgb(244, 67, 54));
+            using var unlearnedBrush = new SolidBrush(Color.FromArgb(158, 158, 158));
 
             if (isFavorite)
             {
@@ -1652,6 +1661,20 @@ namespace LearningAssistant.Forms
             {
                 e.Graphics.DrawString("✓", iconFont,
                     isSelected ? _selectedForegroundBrush : knownBrush,
+                    e.Bounds.X + textStartX - iconSize - 5, e.Bounds.Y + (e.Bounds.Height - iconSize) / 2);
+                textStartX += iconSize;
+            }
+            else if (isUnknown)
+            {
+                e.Graphics.DrawString("✗", iconFont,
+                    isSelected ? _selectedForegroundBrush : unknownBrush,
+                    e.Bounds.X + textStartX - iconSize - 5, e.Bounds.Y + (e.Bounds.Height - iconSize) / 2);
+                textStartX += iconSize;
+            }
+            else
+            {
+                e.Graphics.DrawString("·", iconFont,
+                    isSelected ? _selectedForegroundBrush : unlearnedBrush,
                     e.Bounds.X + textStartX - iconSize - 5, e.Bounds.Y + (e.Bounds.Height - iconSize) / 2);
                 textStartX += iconSize;
             }
@@ -1675,19 +1698,75 @@ namespace LearningAssistant.Forms
 
         private bool IsItemKnown(string itemText)
         {
+            LoadLearningStateCache();
+            return _cachedKnownItems?.Contains(itemText) ?? false;
+        }
+
+        private bool IsItemUnknown(string itemText)
+        {
+            LoadLearningStateCache();
+            return _cachedUnknownItems?.Contains(itemText) ?? false;
+        }
+
+        private void LoadLearningStateCache()
+        {
+            if (_cachedKnownItems != null && _cachedUnknownItems != null && 
+                DateTime.Now - _learningStateCacheTime < LearningStateCacheDuration)
+            {
+                return;
+            }
+
             try
             {
-                string errorBookPath = Path.Combine(AppPaths.UsersDir, GetCurrentUserId(), "error_book.json");
-                if (!File.Exists(errorBookPath)) return true;
-
-                string json = File.ReadAllText(errorBookPath);
-                var errorItems = JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
-                return !errorItems.Contains(itemText);
+                var userId = GetCurrentUserId();
+                var subCategory = SubCategory;
+                
+                if (_persistenceService != null)
+                {
+                    _cachedKnownItems = new HashSet<string>(_persistenceService.GetKnownItems(userId, subCategory));
+                    _cachedUnknownItems = new HashSet<string>(_persistenceService.GetUnknownItems(userId, subCategory));
+                }
+                else
+                {
+                    _cachedKnownItems = new HashSet<string>();
+                    _cachedUnknownItems = new HashSet<string>();
+                }
+                _learningStateCacheTime = DateTime.Now;
             }
             catch
             {
-                return true;
+                _cachedKnownItems = new HashSet<string>();
+                _cachedUnknownItems = new HashSet<string>();
             }
+        }
+
+        private void InvalidateLearningStateCache()
+        {
+            _cachedKnownItems = null;
+            _cachedUnknownItems = null;
+            _learningStateCacheTime = DateTime.MinValue;
+            listBoxItems?.Invalidate();
+        }
+
+        private void UpdateLearningStateCacheImmediately(string itemText, bool isKnown)
+        {
+            if (_cachedKnownItems == null || _cachedUnknownItems == null)
+            {
+                LoadLearningStateCache();
+            }
+
+            if (isKnown)
+            {
+                _cachedKnownItems?.Add(itemText);
+                _cachedUnknownItems?.Remove(itemText);
+            }
+            else
+            {
+                _cachedUnknownItems?.Add(itemText);
+                _cachedKnownItems?.Remove(itemText);
+            }
+
+            listBoxItems?.Invalidate();
         }
 
         private void ListBoxItems_SelectedIndexChanged(object? sender, EventArgs e)
@@ -1845,7 +1924,10 @@ namespace LearningAssistant.Forms
         private void ComboBoxSubCategory_SelectedIndexChanged(object? sender, EventArgs e)
         {
             if (!_settingsChangedEventsSuspended)
+            {
+                InvalidateLearningStateCache();
                 SettingsChanged?.Invoke(this, EventArgs.Empty);
+            }
         }
 
 
@@ -1886,6 +1968,11 @@ namespace LearningAssistant.Forms
                     });
                 }
 
+                if (_currentItem != null)
+                {
+                    UpdateLearningStateCacheImmediately(_currentItem.GetMainContent(), true);
+                }
+
                 _ = _encouragementService.PlayRandomKnownFeedbackAsync();
 
                 await Task.Delay(500);
@@ -1924,6 +2011,8 @@ namespace LearningAssistant.Forms
                             WrongAt = DateTime.Now
                         });
                     }
+
+                    UpdateLearningStateCacheImmediately(_currentItem.GetMainContent(), false);
                 }
 
                 _soundService?.PlayError();
@@ -2130,8 +2219,15 @@ namespace LearningAssistant.Forms
             if (!string.IsNullOrEmpty(selectedUser))
             {
                 AppPaths.SetCurrentUserId(selectedUser);
+                _userSessionService?.SaveSession(selectedUser);
                 _gamificationService.Load(selectedUser);
                 _gamificationService.UpdateAllDisplays();
+
+                InvalidateLearningStateCache();
+                _cachedFavorites = null;
+                _favoritesCacheTime = DateTime.MinValue;
+
+                SettingsChanged?.Invoke(this, EventArgs.Empty);
             }
         }
 

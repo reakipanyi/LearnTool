@@ -349,12 +349,30 @@ namespace LearningAssistant.Services.Cache
         {
             try
             {
-                // 仅持久化未过期的项，避免下次启动时再加载无效数据
-                var cacheData = _cache
-                    .Where(kvp => !kvp.Value.IsExpired)
-                    .ToDictionary(
-                        kvp => kvp.Key,
-                        kvp => new CachedItemData { Value = kvp.Value.Value, ExpirationTime = kvp.Value.ExpirationTime });
+                var cacheData = new Dictionary<string, CachedItemData>();
+
+                foreach (var kvp in _cache)
+                {
+                    if (kvp.Value.IsExpired)
+                        continue;
+
+                    object valueToPersist = kvp.Value.Value;
+                    if (valueToPersist is AsyncLazy<object>)
+                    {
+                        try
+                        {
+                            var lazy = (AsyncLazy<object>)valueToPersist;
+                            valueToPersist = lazy.GetValueAsync().GetAwaiter().GetResult();
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogWarning(ex, "Failed to resolve async lazy value during persist for key: {Key}", kvp.Key);
+                            continue;
+                        }
+                    }
+
+                    cacheData[kvp.Key] = new CachedItemData { Value = valueToPersist, ExpirationTime = kvp.Value.ExpirationTime };
+                }
 
                 JsonHelper.SaveToFile(_cacheFilePath, cacheData);
                 _logger?.LogDebug("已持久化 {Count} 个缓存项到 {Path}", cacheData.Count, _cacheFilePath);

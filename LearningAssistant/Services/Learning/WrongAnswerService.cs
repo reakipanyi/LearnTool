@@ -1,10 +1,11 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
+using LearningAssistant.Data.Database;
 using LearningAssistant.Models.Learning;
 using LearningAssistant.Services.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Text;
-using System.Text.Json;
 
 namespace LearningAssistant.Services.Learning
 {
@@ -14,25 +15,25 @@ namespace LearningAssistant.Services.Learning
     /// </summary>
     public class WrongAnswerService : IWrongAnswerService, IDisposable
     {
+        private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
         private readonly IDataPersistenceService _persistenceService;
         private readonly ILogger<WrongAnswerService> _logger;
         private readonly IEventBus? _eventBus;
-        private readonly string _wrongAnswersDir;
         private readonly object _lock = new object();
         private bool _disposed = false;
 
         public WrongAnswerService(
+            IDbContextFactory<AppDbContext> dbContextFactory,
             IDataPersistenceService persistenceService,
             ILogger<WrongAnswerService> logger,
             IEventBus? eventBus = null)
         {
+            _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _eventBus = eventBus;
-            _wrongAnswersDir = AppPaths.WrongAnswersDir;
-            EnsureDirectoryExists();
-            MigrateFromOldLocation();
 
+            MigrateFromJsonToDb();
             SubscribeToEvents();
         }
 
@@ -101,43 +102,73 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        private void EnsureDirectoryExists()
+        private void MigrateFromJsonToDb()
         {
-            if (!Directory.Exists(_wrongAnswersDir))
-            {
-                Directory.CreateDirectory(_wrongAnswersDir);
-            }
-        }
-
-        private void MigrateFromOldLocation()
-        {
-            var oldDir = Path.Combine(AppPaths.UsersDir, "wrong_answers");
-            if (!Directory.Exists(oldDir)) return;
-
             try
             {
-                foreach (var file in Directory.EnumerateFiles(oldDir))
+                var wrongAnswersDir = AppPaths.WrongAnswersDir;
+                if (!Directory.Exists(wrongAnswersDir))
                 {
-                    var fileName = Path.GetFileName(file);
-                    var newPath = Path.Combine(_wrongAnswersDir, fileName);
-                    if (!File.Exists(newPath))
-                    {
-                        File.Move(file, newPath);
-                    }
+                    wrongAnswersDir = Path.Combine(AppPaths.UsersDir, "wrong_answers");
+                    if (!Directory.Exists(wrongAnswersDir)) return;
                 }
 
-                Directory.Delete(oldDir);
-                _logger.LogInformation("迁移错题本数据从旧位置完成");
+                var migratedMarker = Path.Combine(wrongAnswersDir, ".migrated_to_db");
+                if (File.Exists(migratedMarker)) return;
+
+                foreach (var file in Directory.EnumerateFiles(wrongAnswersDir, "*_wrong_answers.json"))
+                {
+                    var fileName = Path.GetFileName(file);
+                    var userId = fileName.Replace("_wrong_answers.json", "");
+
+                    var json = File.ReadAllText(file);
+                    var items = System.Text.Json.JsonSerializer.Deserialize<List<WrongAnswerItem>>(json) ?? new List<WrongAnswerItem>();
+
+                    if (items.Count == 0) continue;
+
+                    using var db = _dbContextFactory.CreateDbContext();
+                    var existingIds = db.WrongAnswers.Where(w => w.UserId == userId).Select(w => w.Id).ToHashSet();
+
+                    foreach (var item in items)
+                    {
+                        if (existingIds.Contains(item.Id)) continue;
+
+                        db.WrongAnswers.Add(new WrongAnswerEntity
+                        {
+                            Id = item.Id,
+                            UserId = item.UserId,
+                            Subject = item.Subject.ToString(),
+                            Category = item.Category.ToString(),
+                            Question = item.Question,
+                            CorrectAnswer = item.CorrectAnswer,
+                            UserAnswer = item.UserAnswer,
+                            Explanation = item.Explanation,
+                            AddedAt = item.AddedAt,
+                            LastReviewAt = item.LastReviewAt,
+                            ReviewCount = item.ReviewCount,
+                            WrongCount = item.WrongCount,
+                            CorrectCount = item.CorrectCount,
+                            Difficulty = item.Difficulty,
+                            MasteryLevel = (int)item.Mastery,
+                            Tags = item.Tags,
+                            NextReviewAt = item.NextReviewAt,
+                            FirstWrongAt = item.FirstWrongAt,
+                            LastWrongAt = item.LastWrongAt,
+                            IsActive = item.IsActive,
+                            Notes = item.Notes
+                        });
+                    }
+
+                    db.SaveChanges();
+                }
+
+                File.Create(migratedMarker).Dispose();
+                _logger.LogInformation("迁移错题本数据从JSON到数据库完成");
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "迁移错题本数据失败");
             }
-        }
-
-        private string GetUserWrongAnswersPath(string userId)
-        {
-            return Path.Combine(_wrongAnswersDir, $"{userId}_wrong_answers.json");
         }
 
         #region 基础 CRUD（兼容旧接口）
@@ -934,39 +965,13 @@ namespace LearningAssistant.Services.Learning
 
         private List<WrongAnswerItem> LoadWrongAnswers(string userId)
         {
-            var path = GetUserWrongAnswersPath(userId);
-            if (!File.Exists(path))
-                return new List<WrongAnswerItem>();
-
             try
             {
-                var json = File.ReadAllText(path);
-                var items = JsonSerializer.Deserialize<List<WrongAnswerItem>>(json) ?? new List<WrongAnswerItem>();
-
-                bool needsMigration = false;
-                foreach (var item in items)
-                {
-                    if (item.TagsList.Count == 0 && !string.IsNullOrWhiteSpace(item.Tags))
-                    {
-                        item.TagsList = item.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
-                        needsMigration = true;
-                    }
-                }
-
-                if (needsMigration)
-                {
-                    try
-                    {
-                        SaveWrongAnswers(userId, items);
-                        _logger.LogInformation("用户 {UserId} 错题标签数据已迁移并保存", userId);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "迁移后保存错题数据失败: {UserId}", userId);
-                    }
-                }
-
-                return items;
+                using var db = _dbContextFactory.CreateDbContext();
+                return db.WrongAnswers
+                    .Where(w => w.UserId == userId)
+                    .Select(e => ToModel(e))
+                    .ToList();
             }
             catch (Exception ex)
             {
@@ -977,9 +982,107 @@ namespace LearningAssistant.Services.Learning
 
         private void SaveWrongAnswers(string userId, List<WrongAnswerItem> items)
         {
-            var path = GetUserWrongAnswersPath(userId);
-            var json = JsonSerializer.Serialize(items, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(path, json);
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+
+                foreach (var item in items)
+                {
+                    var existing = db.WrongAnswers.FirstOrDefault(e => e.Id == item.Id);
+                    if (existing != null)
+                    {
+                        UpdateEntity(existing, item);
+                    }
+                    else
+                    {
+                        db.WrongAnswers.Add(ToEntity(item));
+                    }
+                }
+
+                db.SaveChanges();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "保存错题数据失败: {UserId}", userId);
+                throw;
+            }
+        }
+
+        private WrongAnswerItem ToModel(WrongAnswerEntity entity)
+        {
+            return new WrongAnswerItem
+            {
+                Id = entity.Id,
+                UserId = entity.UserId,
+                Subject = Enum.TryParse<SubjectType>(entity.Subject, out var subject) ? subject : SubjectType.Unknown,
+                Category = Enum.TryParse<SubCategoryType>(entity.Category, out var category) ? category : SubCategoryType.Unknown,
+                Question = entity.Question,
+                CorrectAnswer = entity.CorrectAnswer,
+                UserAnswer = entity.UserAnswer,
+                Explanation = entity.Explanation,
+                AddedAt = entity.AddedAt,
+                LastReviewAt = entity.LastReviewAt,
+                ReviewCount = entity.ReviewCount,
+                WrongCount = entity.WrongCount,
+                CorrectCount = entity.CorrectCount,
+                Difficulty = entity.Difficulty,
+                Mastery = (MasteryLevel)entity.MasteryLevel,
+                Tags = entity.Tags ?? string.Empty,
+                NextReviewAt = entity.NextReviewAt,
+                FirstWrongAt = entity.FirstWrongAt,
+                LastWrongAt = entity.LastWrongAt,
+                IsActive = entity.IsActive,
+                Notes = entity.Notes
+            };
+        }
+
+        private WrongAnswerEntity ToEntity(WrongAnswerItem item)
+        {
+            return new WrongAnswerEntity
+            {
+                Id = item.Id,
+                UserId = item.UserId,
+                Subject = item.Subject.ToString(),
+                Category = item.Category.ToString(),
+                Question = item.Question,
+                CorrectAnswer = item.CorrectAnswer,
+                UserAnswer = item.UserAnswer,
+                Explanation = item.Explanation,
+                AddedAt = item.AddedAt,
+                LastReviewAt = item.LastReviewAt,
+                ReviewCount = item.ReviewCount,
+                WrongCount = item.WrongCount,
+                CorrectCount = item.CorrectCount,
+                Difficulty = item.Difficulty,
+                MasteryLevel = (int)item.Mastery,
+                Tags = item.Tags,
+                NextReviewAt = item.NextReviewAt,
+                FirstWrongAt = item.FirstWrongAt,
+                LastWrongAt = item.LastWrongAt,
+                IsActive = item.IsActive,
+                Notes = item.Notes
+            };
+        }
+
+        private void UpdateEntity(WrongAnswerEntity entity, WrongAnswerItem item)
+        {
+            entity.Subject = item.Subject.ToString();
+            entity.Category = item.Category.ToString();
+            entity.Question = item.Question;
+            entity.CorrectAnswer = item.CorrectAnswer;
+            entity.UserAnswer = item.UserAnswer;
+            entity.Explanation = item.Explanation;
+            entity.LastReviewAt = item.LastReviewAt;
+            entity.ReviewCount = item.ReviewCount;
+            entity.WrongCount = item.WrongCount;
+            entity.CorrectCount = item.CorrectCount;
+            entity.Difficulty = item.Difficulty;
+            entity.MasteryLevel = (int)item.Mastery;
+            entity.Tags = item.Tags;
+            entity.NextReviewAt = item.NextReviewAt;
+            entity.LastWrongAt = item.LastWrongAt;
+            entity.IsActive = item.IsActive;
+            entity.Notes = item.Notes;
         }
 
         #endregion

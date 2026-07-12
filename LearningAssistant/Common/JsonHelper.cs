@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LearningAssistant.Models.Learning;
-using Newtonsoft.Json;
 
 namespace LearningAssistant.Common
 {
@@ -15,10 +14,12 @@ namespace LearningAssistant.Common
             Converters = { new JsonStringEnumConverter() }
         };
 
-        private static readonly JsonSerializerSettings _learningItemSettings = new JsonSerializerSettings
+        private static readonly JsonSerializerOptions _learningItemOptions = new JsonSerializerOptions
         {
-            Formatting = Formatting.Indented,
-            Converters = { new LearningItemListJsonConverter() }
+            WriteIndented = true,
+            PropertyNameCaseInsensitive = true,
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            Converters = { new JsonStringEnumConverter(), new LearningItemJsonConverter() }
         };
 
         public static string Serialize<T>(T obj)
@@ -101,7 +102,7 @@ namespace LearningAssistant.Common
 
             try
             {
-                return JsonConvert.DeserializeObject<List<LearningItem>>(json, _learningItemSettings) 
+                return System.Text.Json.JsonSerializer.Deserialize<List<LearningItem>>(json, _learningItemOptions) 
                        ?? new List<LearningItem>();
             }
             catch (Exception ex)
@@ -119,7 +120,7 @@ namespace LearningAssistant.Common
                 AppPaths.EnsureDirectoryExists(directory);
             }
             
-            var json = JsonConvert.SerializeObject(items, _learningItemSettings);
+            var json = System.Text.Json.JsonSerializer.Serialize(items, _learningItemOptions);
             File.WriteAllText(filePath, json);
         }
     }

@@ -25,6 +25,7 @@ using LearningAssistant.Services.Recovery;
 using LearningAssistant.Services.SystemTray;
 using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -217,13 +218,20 @@ namespace LearningAssistant.Common
             services.AddSingleton<Services.Web.IWebBookmarkService, Services.Web.WebBookmarkService>();
             services.AddSingleton<IEncouragementService, EncouragementService>();
             services.AddSingleton<IAchievementService, AchievementService>();
-            services.AddSingleton<IGamificationService, GamificationService>();
+            services.AddSingleton<IGamificationService>(sp =>
+            {
+                var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
+                var loggerFactory = sp.GetService<ILoggerFactory>();
+                var eventBus = sp.GetService<IEventBus>();
+                return new GamificationService(dbFactory, loggerFactory, eventBus);
+            });
             services.AddSingleton<ILearningGoalService>(sp =>
             {
+                var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
                 var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
                 var logger = sp.GetRequiredService<ILogger<LearningGoalService>>();
                 var eventBus = sp.GetService<IEventBus>();
-                return new LearningGoalService(persistenceService, logger, eventBus);
+                return new LearningGoalService(dbFactory, persistenceService, logger, eventBus);
             });
             services.AddSingleton<FavoritesBackupProvider>();
             services.AddSingleton<StudyStatsBackupProvider>();
@@ -243,14 +251,37 @@ namespace LearningAssistant.Common
 
                 return backupService;
             });
-            services.AddSingleton<IWrongAnswerService, WrongAnswerService>();
+            services.AddSingleton<IWrongAnswerService>(sp =>
+            {
+                var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
+                var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
+                var logger = sp.GetService<ILogger<WrongAnswerService>>();
+                var eventBus = sp.GetService<IEventBus>();
+                return new WrongAnswerService(dbFactory, persistenceService, logger, eventBus);
+            });
+            services.AddSingleton<INoteService>(sp =>
+            {
+                var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
+                var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
+                var logger = sp.GetService<ILogger<NoteService>>();
+                var eventBus = sp.GetService<IEventBus>();
+                return new NoteService(dbFactory, logger, persistenceService, eventBus);
+            });
             services.AddSingleton<IFavoritesService>(sp =>
             {
                 var logger = sp.GetService<ILogger<FavoritesService>>();
                 var eventBus = sp.GetService<IEventBus>();
                 return new FavoritesService(logger, eventBus);
             });
-            services.AddSingleton<ILearningPathService, LearningPathService>();
+            services.AddSingleton<ILearningPathService>(sp =>
+            {
+                var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
+                var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
+                var analyticsService = sp.GetRequiredService<ILearningAnalyticsService>();
+                var wrongAnswerService = sp.GetRequiredService<IWrongAnswerService>();
+                var logger = sp.GetService<ILogger<LearningPathService>>();
+                return new LearningPathService(dbFactory, persistenceService, analyticsService, wrongAnswerService, logger);
+            });
             services.AddSingleton<ILearningRecommendationService>(sp =>
             {
                 var spacedRepetitionService = sp.GetRequiredService<ISpacedRepetitionService>();
@@ -264,10 +295,11 @@ namespace LearningAssistant.Common
             });
             services.AddSingleton<IPomodoroService>(sp =>
             {
+                var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
                 var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
                 var logger = sp.GetService<ILogger<PomodoroService>>();
                 var eventBus = sp.GetService<IEventBus>();
-                return new PomodoroService(persistenceService, logger, eventBus);
+                return new PomodoroService(dbFactory, persistenceService, logger, eventBus);
             });
             services.AddSingleton<IDataImportService, DataImportService>();
 
@@ -405,18 +437,16 @@ namespace LearningAssistant.Common
 
             services.AddScoped<GamificationServices>(sp =>
             {
-                var achievementService = sp.GetService<IAchievementService>();
                 var gamificationService = sp.GetService<IGamificationService>();
                 var encouragementService = sp.GetRequiredService<IEncouragementService>();
-                return new GamificationServices(achievementService, gamificationService, encouragementService);
+                return new GamificationServices(gamificationService, encouragementService);
             });
 
             services.AddScoped<NotificationServices>(sp =>
             {
                 var eventBus = sp.GetService<IEventBus>();
                 var soundService = sp.GetService<ISoundService>();
-                var aiPanelPopupService = sp.GetService<IAIPanelPopupService>();
-                return new NotificationServices(eventBus, soundService, aiPanelPopupService);
+                return new NotificationServices(eventBus, soundService);
             });
 
             services.AddScoped<LearningFormServices>(sp =>
@@ -428,10 +458,10 @@ namespace LearningAssistant.Common
                 var userSessionService = sp.GetService<IUserSessionService>();
                 var pomodoroService = sp.GetService<IPomodoroService>();
                 var themeService = sp.GetRequiredService<IThemeService>();
-                var aiQuestionService = sp.GetService<IAiQuestionService>();
                 var speechCoordinator = sp.GetService<ISpeechCoordinator>();
+                var persistenceService = sp.GetService<IDataPersistenceService>();
                 return new LearningFormServices(audioServices, gamificationServices, notificationServices,
-                    spacedRepetitionService, userSessionService, pomodoroService, themeService, aiQuestionService, speechCoordinator);
+                    spacedRepetitionService, userSessionService, pomodoroService, themeService, speechCoordinator, persistenceService);
             });
 
             services.AddScoped<LearningForm>(sp =>

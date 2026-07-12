@@ -1,10 +1,11 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
+using LearningAssistant.Data.Database;
 using LearningAssistant.Models.Learning;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace LearningAssistant.Services.Learning
 {
@@ -14,10 +15,10 @@ namespace LearningAssistant.Services.Learning
     /// </summary>
     public class LearningGoalService : ILearningGoalService, IDisposable
     {
+        private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
         private readonly IDataPersistenceService _persistenceService;
         private readonly ILogger<LearningGoalService> _logger;
         private readonly IEventBus? _eventBus;
-        private readonly string _goalsDir;
         private readonly HashSet<string> _completedGoalsToday = new();
         private string _userId = "default";
 
@@ -25,16 +26,17 @@ namespace LearningAssistant.Services.Learning
         public event EventHandler? AllGoalsCompleted;
 
         public LearningGoalService(
+            IDbContextFactory<AppDbContext> dbContextFactory,
             IDataPersistenceService persistenceService,
             ILogger<LearningGoalService> logger,
             IEventBus? eventBus = null)
         {
+            _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _eventBus = eventBus;
-            _goalsDir = Path.Combine(AppPaths.UsersDir, "goals");
-            EnsureDirectoryExists();
 
+            MigrateFromJsonToDb();
             SubscribeToEvents();
         }
 
@@ -68,22 +70,83 @@ namespace LearningAssistant.Services.Learning
             _logger?.LogInformation("学习项完成事件处理: 用户 {UserId}", evt.UserId);
         }
 
-        private void EnsureDirectoryExists()
+        private void MigrateFromJsonToDb()
         {
-            if (!Directory.Exists(_goalsDir))
+            try
             {
-                Directory.CreateDirectory(_goalsDir);
+                var goalsDir = Path.Combine(AppPaths.UsersDir, "goals");
+                if (!Directory.Exists(goalsDir)) return;
+
+                var migratedMarker = Path.Combine(goalsDir, ".migrated_to_db");
+                if (File.Exists(migratedMarker)) return;
+
+                foreach (var file in Directory.EnumerateFiles(goalsDir, "*_settings.json"))
+                {
+                    var fileName = Path.GetFileName(file);
+                    var userId = fileName.Replace("_settings.json", "");
+
+                    var json = File.ReadAllText(file);
+                    var goals = System.Text.Json.JsonSerializer.Deserialize<List<LearningGoal>>(json) ?? new List<LearningGoal>();
+
+                    if (goals.Count == 0) continue;
+
+                    using var db = _dbContextFactory.CreateDbContext();
+                    var existingTypes = db.LearningGoals.Where(g => g.UserId == userId).Select(g => g.GoalType).ToHashSet();
+
+                    foreach (var goal in goals)
+                    {
+                        if (existingTypes.Contains(goal.Type.ToString())) continue;
+
+                        db.LearningGoals.Add(new LearningGoalEntity
+                        {
+                            UserId = goal.UserId,
+                            GoalType = goal.Type.ToString(),
+                            TargetValue = goal.TargetValue,
+                            Unit = goal.Unit,
+                            Enabled = goal.Enabled
+                        });
+                    }
+
+                    db.SaveChanges();
+                }
+
+                foreach (var file in Directory.EnumerateFiles(goalsDir, "*_records.json"))
+                {
+                    var fileName = Path.GetFileName(file);
+                    var userId = fileName.Replace("_records.json", "");
+
+                    var json = File.ReadAllText(file);
+                    var records = System.Text.Json.JsonSerializer.Deserialize<List<DailyGoalRecord>>(json) ?? new List<DailyGoalRecord>();
+
+                    if (records.Count == 0) continue;
+
+                    using var db = _dbContextFactory.CreateDbContext();
+                    var existingDates = db.DailyGoalRecords.Where(r => r.UserId == userId).Select(r => r.Date).ToHashSet();
+
+                    foreach (var record in records)
+                    {
+                        if (existingDates.Contains(record.Date.Date)) continue;
+
+                        db.DailyGoalRecords.Add(new DailyGoalRecordEntity
+                        {
+                            UserId = record.UserId,
+                            Date = record.Date,
+                            ProgressJson = System.Text.Json.JsonSerializer.Serialize(record.Progress),
+                            CompletedJson = System.Text.Json.JsonSerializer.Serialize(record.Completed),
+                            AllCompleted = record.AllCompleted
+                        });
+                    }
+
+                    db.SaveChanges();
+                }
+
+                File.Create(migratedMarker).Dispose();
+                _logger.LogInformation("迁移学习目标数据从JSON到数据库完成");
             }
-        }
-
-        private string GetGoalsPath(string userId)
-        {
-            return Path.Combine(_goalsDir, $"{userId}_settings.json");
-        }
-
-        private string GetRecordsPath(string userId)
-        {
-            return Path.Combine(_goalsDir, $"{userId}_records.json");
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "迁移学习目标数据失败");
+            }
         }
 
         #region 旧接口兼容
@@ -555,14 +618,23 @@ namespace LearningAssistant.Services.Learning
 
         private List<LearningGoal> LoadGoals(string userId)
         {
-            var path = GetGoalsPath(userId);
-            if (!File.Exists(path))
-                return new List<LearningGoal>();
-
             try
             {
-                var json = File.ReadAllText(path);
-                return JsonSerializer.Deserialize<List<LearningGoal>>(json) ?? new List<LearningGoal>();
+                using var db = _dbContextFactory.CreateDbContext();
+                var entities = db.LearningGoals
+                    .Where(g => g.UserId == userId)
+                    .ToList();
+
+                return entities.Select(e => new LearningGoal
+                {
+                    UserId = e.UserId,
+                    Type = ParseGoalType(e.GoalType),
+                    TargetValue = e.TargetValue,
+                    Unit = e.Unit ?? string.Empty,
+                    Enabled = e.Enabled,
+                    CreatedAt = e.CreatedAt,
+                    UpdatedAt = e.UpdatedAt
+                }).ToList();
             }
             catch (Exception ex)
             {
@@ -571,23 +643,73 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
+        private GoalType ParseGoalType(string goalType)
+        {
+            if (Enum.TryParse<GoalType>(goalType, out var type))
+                return type;
+            return GoalType.DailyStudyItems;
+        }
+
         private void SaveGoals(string userId, List<LearningGoal> goals)
         {
-            var path = GetGoalsPath(userId);
-            var json = JsonSerializer.Serialize(goals, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(path, json);
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+
+                foreach (var goal in goals)
+                {
+                    var existing = db.LearningGoals.FirstOrDefault(e => e.UserId == userId && e.GoalType == goal.Type.ToString());
+                    if (existing != null)
+                    {
+                        existing.TargetValue = goal.TargetValue;
+                        existing.Unit = goal.Unit;
+                        existing.Enabled = goal.Enabled;
+                        existing.UpdatedAt = goal.UpdatedAt ?? DateTime.Now;
+                    }
+                    else
+                    {
+                        db.LearningGoals.Add(new LearningGoalEntity
+                        {
+                            UserId = goal.UserId,
+                            GoalType = goal.Type.ToString(),
+                            TargetValue = goal.TargetValue,
+                            Unit = goal.Unit,
+                            Enabled = goal.Enabled,
+                            CreatedAt = goal.CreatedAt,
+                            UpdatedAt = goal.UpdatedAt ?? DateTime.Now
+                        });
+                    }
+                }
+
+                db.SaveChanges();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "保存目标设置失败: {UserId}", userId);
+                throw;
+            }
         }
 
         private List<DailyGoalRecord> LoadRecords(string userId)
         {
-            var path = GetRecordsPath(userId);
-            if (!File.Exists(path))
-                return new List<DailyGoalRecord>();
-
             try
             {
-                var json = File.ReadAllText(path);
-                return JsonSerializer.Deserialize<List<DailyGoalRecord>>(json) ?? new List<DailyGoalRecord>();
+                using var db = _dbContextFactory.CreateDbContext();
+                return db.DailyGoalRecords
+                    .Where(r => r.UserId == userId)
+                    .Select(e => new DailyGoalRecord
+                    {
+                        UserId = e.UserId,
+                        Date = e.Date,
+                        Progress = !string.IsNullOrEmpty(e.ProgressJson)
+                            ? System.Text.Json.JsonSerializer.Deserialize<Dictionary<GoalType, int>>(e.ProgressJson) ?? new Dictionary<GoalType, int>()
+                            : new Dictionary<GoalType, int>(),
+                        Completed = !string.IsNullOrEmpty(e.CompletedJson)
+                            ? System.Text.Json.JsonSerializer.Deserialize<Dictionary<GoalType, bool>>(e.CompletedJson) ?? new Dictionary<GoalType, bool>()
+                            : new Dictionary<GoalType, bool>(),
+                        AllCompleted = e.AllCompleted
+                    })
+                    .ToList();
             }
             catch (Exception ex)
             {
@@ -598,9 +720,39 @@ namespace LearningAssistant.Services.Learning
 
         private void SaveRecords(string userId, List<DailyGoalRecord> records)
         {
-            var path = GetRecordsPath(userId);
-            var json = JsonSerializer.Serialize(records, new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(path, json);
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+
+                foreach (var record in records)
+                {
+                    var existing = db.DailyGoalRecords.FirstOrDefault(e => e.UserId == userId && e.Date.Date == record.Date.Date);
+                    if (existing != null)
+                    {
+                        existing.ProgressJson = System.Text.Json.JsonSerializer.Serialize(record.Progress);
+                        existing.CompletedJson = System.Text.Json.JsonSerializer.Serialize(record.Completed);
+                        existing.AllCompleted = record.AllCompleted;
+                    }
+                    else
+                    {
+                        db.DailyGoalRecords.Add(new DailyGoalRecordEntity
+                        {
+                            UserId = record.UserId,
+                            Date = record.Date,
+                            ProgressJson = System.Text.Json.JsonSerializer.Serialize(record.Progress),
+                            CompletedJson = System.Text.Json.JsonSerializer.Serialize(record.Completed),
+                            AllCompleted = record.AllCompleted
+                        });
+                    }
+                }
+
+                db.SaveChanges();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "保存目标记录失败: {UserId}", userId);
+                throw;
+            }
         }
 
         private DailyGoalRecord GetTodayRecord(string userId)

@@ -1,64 +1,96 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
+using LearningAssistant.Data.Database;
 using LearningAssistant.Models.Learning;
 using LearningAssistant.Services.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace LearningAssistant.Services.Learning
 {
     /// <summary>
     /// 笔记服务实现
-    /// 使用IDataPersistenceService持久化笔记数据
+    /// 使用SQLite数据库持久化笔记数据
     /// </summary>
     public class NoteService : INoteService
     {
+        private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
         private readonly ILogger<NoteService> _logger;
         private readonly IEventBus? _eventBus;
         private readonly IDataPersistenceService _persistenceService;
-        private readonly string _notesDir;
         private readonly object _lock = new object();
 
         public NoteService(
+            IDbContextFactory<AppDbContext> dbContextFactory,
             ILogger<NoteService> logger,
             IDataPersistenceService persistenceService,
             IEventBus? eventBus = null)
         {
+            _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _eventBus = eventBus;
-            _notesDir = AppPaths.NotesDir;
-            EnsureDirectoryExists();
-            MigrateFromOldLocation();
+            MigrateFromJsonToDb();
         }
 
-        private void EnsureDirectoryExists()
+        private void MigrateFromJsonToDb()
         {
-            if (!Directory.Exists(_notesDir))
-            {
-                Directory.CreateDirectory(_notesDir);
-            }
-        }
-
-        private void MigrateFromOldLocation()
-        {
-            var oldDir = Path.Combine(AppPaths.UsersDir, "notes");
-            if (!Directory.Exists(oldDir)) return;
-
             try
             {
-                foreach (var file in Directory.EnumerateFiles(oldDir))
+                var notesDir = AppPaths.NotesDir;
+                if (!Directory.Exists(notesDir))
                 {
-                    var fileName = Path.GetFileName(file);
-                    var newPath = Path.Combine(_notesDir, fileName);
-                    if (!File.Exists(newPath))
-                    {
-                        File.Move(file, newPath);
-                    }
+                    notesDir = Path.Combine(AppPaths.UsersDir, "notes");
+                    if (!Directory.Exists(notesDir)) return;
                 }
 
-                Directory.Delete(oldDir);
-                _logger.LogInformation("迁移笔记数据从旧位置完成");
+                var migratedMarker = Path.Combine(notesDir, ".migrated_to_db");
+                if (File.Exists(migratedMarker)) return;
+
+                foreach (var file in Directory.EnumerateFiles(notesDir, "*_notes.json"))
+                {
+                    var fileName = Path.GetFileName(file);
+                    var userId = fileName.Replace("_notes.json", "");
+
+                    var json = File.ReadAllText(file);
+                    var items = System.Text.Json.JsonSerializer.Deserialize<List<NoteItem>>(json) ?? new List<NoteItem>();
+
+                    if (items.Count == 0) continue;
+
+                    using var db = _dbContextFactory.CreateDbContext();
+                    var existingIds = db.Notes.Where(n => n.UserId == userId).Select(n => n.Id).ToHashSet();
+
+                    foreach (var item in items)
+                    {
+                        if (existingIds.Contains(item.Id)) continue;
+
+                        db.Notes.Add(new NoteEntity
+                        {
+                            Id = item.Id,
+                            UserId = item.UserId,
+                            Title = item.Title,
+                            Content = item.Content,
+                            Category = item.Category,
+                            Tags = item.Tags != null ? string.Join(",", item.Tags) : string.Empty,
+                            RelatedType = item.RelatedType,
+                            RelatedItemId = item.RelatedItemId,
+                            RelatedItemTitle = item.RelatedItemTitle,
+                            Importance = item.Importance,
+                            IsFavorite = item.IsFavorite,
+                            CreatedAt = item.CreatedAt,
+                            UpdatedAt = item.UpdatedAt,
+                            LastReviewedAt = item.LastReviewedAt,
+                            ReviewCount = item.ReviewCount,
+                            Color = item.Color,
+                            Source = item.Source
+                        });
+                    }
+
+                    db.SaveChanges();
+                }
+
+                File.Create(migratedMarker).Dispose();
+                _logger.LogInformation("迁移笔记数据从JSON到数据库完成");
             }
             catch (Exception ex)
             {
@@ -66,18 +98,15 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        private string GetUserNotesPath(string userId)
-        {
-            return Path.Combine(_notesDir, $"{userId}_notes.json");
-        }
-
         private List<NoteItem> LoadNotes(string userId)
         {
             try
             {
-                var path = GetUserNotesPath(userId);
-                var result = _persistenceService.LoadJsonFile<List<NoteItem>>(path);
-                return result ?? new List<NoteItem>();
+                using var db = _dbContextFactory.CreateDbContext();
+                return db.Notes
+                    .Where(n => n.UserId == userId)
+                    .Select(e => ToModel(e))
+                    .ToList();
             }
             catch (Exception ex)
             {
@@ -90,14 +119,90 @@ namespace LearningAssistant.Services.Learning
         {
             try
             {
-                var path = GetUserNotesPath(userId);
-                _persistenceService.SaveJsonFile(path, notes);
+                using var db = _dbContextFactory.CreateDbContext();
+
+                foreach (var item in notes)
+                {
+                    var existing = db.Notes.FirstOrDefault(e => e.Id == item.Id);
+                    if (existing != null)
+                    {
+                        UpdateEntity(existing, item);
+                    }
+                    else
+                    {
+                        db.Notes.Add(ToEntity(item));
+                    }
+                }
+
+                db.SaveChanges();
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "保存笔记数据失败");
                 throw;
             }
+        }
+
+        private NoteItem ToModel(NoteEntity entity)
+        {
+            return new NoteItem
+            {
+                Id = entity.Id,
+                UserId = entity.UserId,
+                Title = entity.Title,
+                Content = entity.Content,
+                Category = entity.Category,
+                Tags = !string.IsNullOrEmpty(entity.Tags) ? entity.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList() : new List<string>(),
+                RelatedType = entity.RelatedType,
+                RelatedItemId = entity.RelatedItemId,
+                RelatedItemTitle = entity.RelatedItemTitle,
+                Importance = entity.Importance,
+                IsFavorite = entity.IsFavorite,
+                CreatedAt = entity.CreatedAt,
+                UpdatedAt = entity.UpdatedAt,
+                LastReviewedAt = entity.LastReviewedAt,
+                ReviewCount = entity.ReviewCount,
+                Color = entity.Color,
+                Source = entity.Source
+            };
+        }
+
+        private NoteEntity ToEntity(NoteItem item)
+        {
+            return new NoteEntity
+            {
+                Id = item.Id,
+                UserId = item.UserId,
+                Title = item.Title,
+                Content = item.Content,
+                Category = item.Category,
+                Tags = item.Tags != null ? string.Join(",", item.Tags) : string.Empty,
+                RelatedType = item.RelatedType,
+                RelatedItemId = item.RelatedItemId,
+                RelatedItemTitle = item.RelatedItemTitle,
+                Importance = item.Importance,
+                IsFavorite = item.IsFavorite,
+                CreatedAt = item.CreatedAt,
+                UpdatedAt = item.UpdatedAt,
+                LastReviewedAt = item.LastReviewedAt,
+                ReviewCount = item.ReviewCount,
+                Color = item.Color,
+                Source = item.Source
+            };
+        }
+
+        private void UpdateEntity(NoteEntity entity, NoteItem item)
+        {
+            entity.Title = item.Title;
+            entity.Content = item.Content;
+            entity.Category = item.Category;
+            entity.Tags = item.Tags != null ? string.Join(",", item.Tags) : string.Empty;
+            entity.Importance = item.Importance;
+            entity.Color = item.Color;
+            entity.UpdatedAt = item.UpdatedAt;
+            entity.LastReviewedAt = item.LastReviewedAt;
+            entity.ReviewCount = item.ReviewCount;
+            entity.IsFavorite = item.IsFavorite;
         }
 
         /// <inheritdoc/>

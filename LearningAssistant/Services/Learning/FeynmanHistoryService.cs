@@ -1,6 +1,7 @@
 using LearningAssistant.Models.Learning;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using LearningAssistant.Common;
 
 namespace LearningAssistant.Services.Learning
 {
@@ -18,10 +19,8 @@ namespace LearningAssistant.Services.Learning
         public FeynmanHistoryService(ILogger<FeynmanHistoryService>? logger = null)
         {
             _logger = logger;
-            var dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LearningAssistant", "Data");
-            if (!Directory.Exists(dataDir))
-                Directory.CreateDirectory(dataDir);
-            _storagePath = Path.Combine(dataDir, "feynman_history.json");
+            _storagePath = Path.Combine(AppPaths.CurrentUserDir, "feynman_history.json");
+            AppPaths.EnsureDirectoryExists(Path.GetDirectoryName(_storagePath));
             Load();
         }
 

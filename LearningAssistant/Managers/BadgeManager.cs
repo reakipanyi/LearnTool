@@ -1,12 +1,14 @@
 using LearningAssistant.Common;
+using LearningAssistant.Data.Database;
 using LearningAssistant.Models.User;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using System.Text.Json;
 
 namespace LearningAssistant.Managers
 {
     public class BadgeManager
     {
+        private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
         private readonly ILogger<BadgeManager>? _logger;
         private string _currentUserId = "default";
         private readonly Dictionary<string, Badge> _badges = new();
@@ -17,8 +19,9 @@ namespace LearningAssistant.Managers
 
         public event Action<List<string>>? BadgesUnlocked;
 
-        public BadgeManager(ILogger<BadgeManager>? logger = null)
+        public BadgeManager(IDbContextFactory<AppDbContext> dbContextFactory, ILogger<BadgeManager>? logger = null)
         {
+            _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _logger = logger;
             InitializeBadges();
         }
@@ -142,42 +145,25 @@ namespace LearningAssistant.Managers
             _toolTip = toolTip;
         }
 
-        private static string GetUserBadgesPath(string userId)
-        {
-            var userDir = Path.Combine(AppPaths.UsersDir, userId);
-            if (!Directory.Exists(userDir))
-                Directory.CreateDirectory(userDir);
-            return Path.Combine(userDir, "badges.json");
-        }
-
         public void Load(string userId = "default")
         {
             _currentUserId = userId;
             try
             {
-                string badgesPath = GetUserBadgesPath(userId);
-                if (File.Exists(badgesPath))
-                {
-                    string json = File.ReadAllText(badgesPath);
-                    _unlockedBadges.Clear();
-                    var unlocked = JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
-                    _unlockedBadges.AddRange(unlocked);
+                MigrateFromJsonToDb(userId);
 
-                    foreach (var badgeId in _unlockedBadges)
-                    {
-                        if (_badges.TryGetValue(badgeId, out var badge))
-                        {
-                            badge.IsUnlocked = true;
-                        }
-                    }
-                }
-                else
+                using var db = _dbContextFactory.CreateDbContext();
+                var unlocked = db.BadgeUnlocks
+                    .Where(b => b.UserId == userId)
+                    .Select(b => b.BadgeId)
+                    .ToList();
+
+                _unlockedBadges.Clear();
+                _unlockedBadges.AddRange(unlocked);
+
+                foreach (var badge in _badges.Values)
                 {
-                    foreach (var badge in _badges.Values)
-                    {
-                        badge.IsUnlocked = false;
-                    }
-                    _unlockedBadges.Clear();
+                    badge.IsUnlocked = _unlockedBadges.Contains(badge.Id);
                 }
             }
             catch (Exception ex)
@@ -186,17 +172,75 @@ namespace LearningAssistant.Managers
             }
         }
 
+        private void MigrateFromJsonToDb(string userId)
+        {
+            try
+            {
+                var userDir = Path.Combine(AppPaths.UsersDir, userId);
+                if (!Directory.Exists(userDir)) return;
+
+                var migratedMarker = Path.Combine(userDir, ".badges_migrated");
+                if (File.Exists(migratedMarker)) return;
+
+                var badgesPath = Path.Combine(userDir, "badges.json");
+                if (!File.Exists(badgesPath)) return;
+
+                var json = File.ReadAllText(badgesPath);
+                var unlocked = System.Text.Json.JsonSerializer.Deserialize<List<string>>(json) ?? new List<string>();
+
+                using var db = _dbContextFactory.CreateDbContext();
+
+                var existingIds = db.BadgeUnlocks
+                    .Where(b => b.UserId == userId)
+                    .Select(b => b.BadgeId)
+                    .ToHashSet();
+
+                foreach (var badgeId in unlocked)
+                {
+                    if (existingIds.Contains(badgeId)) continue;
+
+                    db.BadgeUnlocks.Add(new BadgeUnlockEntity
+                    {
+                        UserId = userId,
+                        BadgeId = badgeId,
+                        UnlockedAt = DateTime.Now
+                    });
+                }
+
+                db.SaveChanges();
+                File.Create(migratedMarker).Dispose();
+                _logger?.LogInformation("迁移徽章数据从JSON到数据库完成: {UserId}", userId);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "迁移徽章数据失败: {UserId}", userId);
+            }
+        }
+
         public void Save(string userId = "default")
         {
             try
             {
-                string badgesPath = GetUserBadgesPath(userId);
-                var badgesDir = Path.GetDirectoryName(badgesPath);
-                if (!string.IsNullOrEmpty(badgesDir) && !Directory.Exists(badgesDir))
-                    Directory.CreateDirectory(badgesDir);
+                using var db = _dbContextFactory.CreateDbContext();
 
-                string json = JsonSerializer.Serialize(_unlockedBadges, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(badgesPath, json);
+                var existingIds = db.BadgeUnlocks
+                    .Where(b => b.UserId == userId)
+                    .Select(b => b.BadgeId)
+                    .ToHashSet();
+
+                foreach (var badgeId in _unlockedBadges)
+                {
+                    if (existingIds.Contains(badgeId)) continue;
+
+                    db.BadgeUnlocks.Add(new BadgeUnlockEntity
+                    {
+                        UserId = userId,
+                        BadgeId = badgeId,
+                        UnlockedAt = DateTime.Now
+                    });
+                }
+
+                db.SaveChanges();
             }
             catch (Exception ex)
             {

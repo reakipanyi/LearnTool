@@ -1,9 +1,11 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
+using LearningAssistant.Data.Database;
 using LearningAssistant.Managers;
 using LearningAssistant.Models;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services.Feedback;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Services.Gamification
@@ -12,6 +14,7 @@ namespace LearningAssistant.Services.Gamification
     {
         private readonly ILogger<GamificationService>? _logger;
         private readonly IEventBus? _eventBus;
+        private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
 
         private readonly StudyStatsManager _statsManager;
         private readonly BadgeManager _badgeManager;
@@ -47,22 +50,26 @@ namespace LearningAssistant.Services.Gamification
         #endregion
 
         public GamificationService(
+            IDbContextFactory<AppDbContext> dbContextFactory,
             ILoggerFactory? loggerFactory = null,
             IEventBus? eventBus = null)
         {
+            _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _logger = loggerFactory?.CreateLogger<GamificationService>();
             _eventBus = eventBus;
 
             _statsManager = new StudyStatsManager(
+                dbContextFactory,
                 loggerFactory?.CreateLogger<StudyStatsManager>(),
                 OnLevelUp,
                 OnScoreChanged,
                 OnXPChanged);
 
-            _badgeManager = new BadgeManager(loggerFactory?.CreateLogger<BadgeManager>());
+            _badgeManager = new BadgeManager(dbContextFactory, loggerFactory?.CreateLogger<BadgeManager>());
             _badgeManager.BadgesUnlocked += OnBadgesUnlocked;
 
             _challengeManager = new ChallengeManager(
+                dbContextFactory,
                 loggerFactory?.CreateLogger<ChallengeManager>(),
                 OnScoreChanged,
                 OnXPChanged,

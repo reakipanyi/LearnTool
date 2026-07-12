@@ -75,6 +75,7 @@ namespace LearningAssistant.Services.Persistence
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Failed to save configuration");
+                throw new PersistenceException("Failed to save configuration", ex);
             }
         }
 
@@ -118,6 +119,8 @@ namespace LearningAssistant.Services.Persistence
                 try
                 {
                     using var db = _dbContextFactory.CreateDbContext();
+                    using var transaction = db.Database.BeginTransaction();
+
                     var existingUser = db.UserProfiles
                         .Include(u => u.CategoryProgresses)
                         .FirstOrDefault(u => u.UserId == profile.UserId);
@@ -165,6 +168,7 @@ namespace LearningAssistant.Services.Persistence
                     SaveLearningItemStates(db, profile.UserId, profile.LearningProgress.CategoryProgresses.Values);
 
                     db.SaveChanges();
+                    transaction.Commit();
                     return;
                 }
                 catch (Exception ex)
@@ -307,6 +311,7 @@ namespace LearningAssistant.Services.Persistence
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Failed to save session");
+                throw new PersistenceException("Failed to save session", ex);
             }
         }
 
@@ -471,31 +476,22 @@ namespace LearningAssistant.Services.Persistence
                 if (contentList.Count == 0)
                     return;
 
-                var existingContents = db.LearningItemStates
+                var existingEntities = db.LearningItemStates
                     .Where(s => s.UserId == userId && s.CategoryName == categoryName && contentList.Contains(s.Content))
-                    .Select(s => s.Content)
-                    .ToHashSet();
+                    .ToDictionary(s => s.Content);
 
                 var now = DateTime.Now;
-                var entitiesToAdd = new List<LearningItemStateEntity>();
-                var entitiesToUpdate = new List<LearningItemStateEntity>();
 
                 foreach (var content in contentList)
                 {
-                    if (existingContents.Contains(content))
+                    if (existingEntities.TryGetValue(content, out var existing))
                     {
-                        entitiesToUpdate.Add(new LearningItemStateEntity
-                        {
-                            UserId = userId,
-                            CategoryName = categoryName,
-                            Content = content,
-                            IsKnown = isKnown,
-                            UpdatedAt = now
-                        });
+                        existing.IsKnown = isKnown;
+                        existing.UpdatedAt = now;
                     }
                     else
                     {
-                        entitiesToAdd.Add(new LearningItemStateEntity
+                        db.LearningItemStates.Add(new LearningItemStateEntity
                         {
                             UserId = userId,
                             CategoryName = categoryName,
@@ -505,27 +501,6 @@ namespace LearningAssistant.Services.Persistence
                             UpdatedAt = now
                         });
                     }
-                }
-
-                if (entitiesToUpdate.Count > 0)
-                {
-                    foreach (var entity in entitiesToUpdate)
-                    {
-                        var existing = db.LearningItemStates
-                            .FirstOrDefault(s => s.UserId == entity.UserId &&
-                                               s.CategoryName == entity.CategoryName &&
-                                               s.Content == entity.Content);
-                        if (existing != null)
-                        {
-                            existing.IsKnown = entity.IsKnown;
-                            existing.UpdatedAt = entity.UpdatedAt;
-                        }
-                    }
-                }
-
-                if (entitiesToAdd.Count > 0)
-                {
-                    db.LearningItemStates.AddRange(entitiesToAdd);
                 }
 
                 db.SaveChanges();
