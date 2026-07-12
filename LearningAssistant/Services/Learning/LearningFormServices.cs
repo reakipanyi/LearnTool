@@ -5,6 +5,7 @@ using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.TTS;
 using LearningAssistant.Common.Events;
 using LearningAssistant.Common.Themes;
+using LearningAssistant.Models.Config;
 
 namespace LearningAssistant.Services.Learning
 {
@@ -12,10 +13,12 @@ namespace LearningAssistant.Services.Learning
     {
         public ITTSService? TTSService { get; }
         public SpeechService? SpeechService { get; }
+        public TtsConfig TtsConfig { get; }
 
-        public AudioServices(ITTSService? ttsService)
+        public AudioServices(ITTSService? ttsService, TtsConfig ttsConfig)
         {
             TTSService = ttsService;
+            TtsConfig = ttsConfig ?? new TtsConfig();
         }
     }
 

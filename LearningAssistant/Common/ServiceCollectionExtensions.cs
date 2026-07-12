@@ -373,10 +373,11 @@ namespace LearningAssistant.Common
                 var annotationService = sp.GetRequiredService<IAnnotationService>();
                 var highlightService = sp.GetRequiredService<IHighlightService>();
                 var pdfService = sp.GetRequiredService<IPdfService>();
+                var ttsConfig = sp.GetRequiredService<TtsConfig>();
                 var eventBus = sp.GetService<IEventBus>();
                 return new PdfPresenter(logger, pdfRenderer, pdfFileManager, pdfOcrService, pdfTranslationService,
                     aiService, pdfTtsService, pdfStudyIntegration, exportService,
-                    annotationService, highlightService, pdfService, eventBus);
+                    annotationService, highlightService, pdfService, ttsConfig, eventBus);
             });
 
             services.AddScoped<MainForm>(sp =>
@@ -398,7 +399,8 @@ namespace LearningAssistant.Common
             services.AddScoped<AudioServices>(sp =>
             {
                 var ttsService = sp.GetService<ITTSService>();
-                return new AudioServices(ttsService);
+                var ttsConfig = sp.GetRequiredService<TtsConfig>();
+                return new AudioServices(ttsService, ttsConfig);
             });
 
             services.AddScoped<GamificationServices>(sp =>

@@ -1,4 +1,3 @@
-using LearningAssistant.Common;
 using System.ComponentModel;
 
 namespace LearningAssistant.Forms.UserControls
@@ -54,6 +53,8 @@ namespace LearningAssistant.Forms.UserControls
 
         // 发音范围面板
         private FlowLayoutPanel _pronunciationFlowLayoutPanel = null!;
+
+        private SpeedSelectorControl _speedSelector = null!;
 
         #endregion
 
@@ -125,6 +126,9 @@ namespace LearningAssistant.Forms.UserControls
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public RadioButton RadioBoth => _radioBoth;
 
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public SpeedSelectorControl SpeedSelector => _speedSelector;
+
         #endregion
 
         #region Initialization
@@ -159,6 +163,7 @@ namespace LearningAssistant.Forms.UserControls
             _buttonShowAnswer = new Button();
             _labelQuizHint = new Label();
             _buttonThemeToggle = new Button();
+            _speedSelector = new SpeedSelectorControl();
             _panelConfig.SuspendLayout();
             _groupBoxMode.SuspendLayout();
             _groupBoxSort.SuspendLayout();
@@ -181,6 +186,7 @@ namespace LearningAssistant.Forms.UserControls
             _panelConfig.Controls.Add(_buttonExportErrorBook);
             _panelConfig.Controls.Add(_checkBoxVoice);
             _panelConfig.Controls.Add(_pronunciationFlowLayoutPanel);
+            _panelConfig.Controls.Add(_speedSelector);
             _panelConfig.Controls.Add(_panelQuizMode);
             _panelConfig.Controls.Add(_buttonThemeToggle);
             _panelConfig.Dock = DockStyle.Fill;
@@ -460,6 +466,13 @@ namespace LearningAssistant.Forms.UserControls
             _buttonThemeToggle.Text = "🌙 深色模式";
             _buttonThemeToggle.UseVisualStyleBackColor = false;
             // 
+            // 
+            // _speedSelector
+            // 
+            _speedSelector.Location = new Point(10, 607);
+            _speedSelector.Name = "_speedSelector";
+            _speedSelector.Size = new Size(135, 32);
+            _speedSelector.TabIndex = 13;
             // LearningSettingsView
             // 
             AutoScaleDimensions = new SizeF(7F, 17F);

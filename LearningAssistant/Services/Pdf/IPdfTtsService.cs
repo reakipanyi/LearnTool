@@ -22,7 +22,7 @@ namespace LearningAssistant.Services.Pdf
         /// 使用默认语言朗读文本
         /// </summary>
         /// <param name="text">要朗读的文本</param>
-        /// <param name="speed">语速（1.0为正常速度，默认1.0）</param>
-        Task SpeakTextAsync(string text, float speed = 1.0f);
+        /// <param name="speed">语速（1.0为正常速度，-1表示使用配置值）</param>
+        Task SpeakTextAsync(string text, float speed = -1f);
     }
 }

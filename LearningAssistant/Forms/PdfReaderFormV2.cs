@@ -69,6 +69,7 @@ namespace LearningAssistant.Forms
         private Button _buttonSpeakTranslation;
         private Button _buttonAddToLearningContent;
         private CheckBox _checkBoxAutoSpeak;
+        private SpeedSelectorControl _speedSelector;
         private Panel _panelNavigation;
         private Button _buttonPrev;
         private TextBox _textBoxPage;
@@ -397,6 +398,7 @@ namespace LearningAssistant.Forms
         public Button? ButtonTranslate => _buttonTranslate;
         public Button? ButtonSpeakOriginal => _buttonSpeakOriginal;
         public Button? ButtonSpeakTranslation => _buttonSpeakTranslation;
+        public SpeedSelectorControl? SpeedSelector => _speedSelector;
 
         [System.ComponentModel.Browsable(false)]
         [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
@@ -2866,7 +2868,9 @@ namespace LearningAssistant.Forms
             _buttonAddToLearningContent = new Button();
             _textBoxOriginal = new TextBox();
             _buttonSpeakOriginal = new Button();
+            _checkBoxAutoTranslate = new CheckBox();
             _checkBoxAutoSpeak = new CheckBox();
+            _speedSelector = new SpeedSelectorControl();
             _labelTranslation = new Label();
             _labelOriginal = new Label();
             _buttonTranslate = new Button();
@@ -2896,7 +2900,6 @@ namespace LearningAssistant.Forms
             _toastLabel = new Label();
             _buttonTranslationToggle = new Button();
             _pageTransitionTimer = new System.Windows.Forms.Timer(components);
-            _checkBoxAutoTranslate = new CheckBox();
             ((ISupportInitialize)_splitContainerMain).BeginInit();
             _splitContainerMain.Panel1.SuspendLayout();
             _splitContainerMain.Panel2.SuspendLayout();
@@ -3841,6 +3844,7 @@ namespace LearningAssistant.Forms
             _groupBoxProgress.Controls.Add(_buttonSpeakOriginal);
             _groupBoxProgress.Controls.Add(_checkBoxAutoTranslate);
             _groupBoxProgress.Controls.Add(_checkBoxAutoSpeak);
+            _groupBoxProgress.Controls.Add(_speedSelector);
             _groupBoxProgress.Controls.Add(_labelTranslation);
             _groupBoxProgress.Controls.Add(_labelOriginal);
             _groupBoxProgress.Controls.Add(_buttonTranslate);
@@ -3894,11 +3898,11 @@ namespace LearningAssistant.Forms
             // 
             _textBoxOriginal.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
             _textBoxOriginal.BorderStyle = BorderStyle.FixedSingle;
-            _textBoxOriginal.Location = new Point(10, 50);
+            _textBoxOriginal.Location = new Point(10, 91);
             _textBoxOriginal.Multiline = true;
             _textBoxOriginal.Name = "_textBoxOriginal";
             _textBoxOriginal.ScrollBars = ScrollBars.Vertical;
-            _textBoxOriginal.Size = new Size(294, 220);
+            _textBoxOriginal.Size = new Size(294, 179);
             _textBoxOriginal.TabIndex = 4;
             // 
             // _buttonSpeakOriginal
@@ -3906,7 +3910,7 @@ namespace LearningAssistant.Forms
             _buttonSpeakOriginal.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             _buttonSpeakOriginal.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonSpeakOriginal.FlatStyle = FlatStyle.Flat;
-            _buttonSpeakOriginal.Location = new Point(229, 20);
+            _buttonSpeakOriginal.Location = new Point(57, 20);
             _buttonSpeakOriginal.Name = "_buttonSpeakOriginal";
             _buttonSpeakOriginal.Size = new Size(75, 25);
             _buttonSpeakOriginal.TabIndex = 3;
@@ -3914,17 +3918,35 @@ namespace LearningAssistant.Forms
             _buttonSpeakOriginal.UseVisualStyleBackColor = false;
             _buttonSpeakOriginal.Click += ButtonSpeakOriginal_Click;
             // 
+            // _checkBoxAutoTranslate
+            // 
+            _checkBoxAutoTranslate.AutoSize = true;
+            _checkBoxAutoTranslate.Location = new Point(102, 282);
+            _checkBoxAutoTranslate.Name = "_checkBoxAutoTranslate";
+            _checkBoxAutoTranslate.Size = new Size(107, 21);
+            _checkBoxAutoTranslate.TabIndex = 8;
+            _checkBoxAutoTranslate.Text = "🌐 识别后翻译";
+            _checkBoxAutoTranslate.UseVisualStyleBackColor = true;
+            // 
             // _checkBoxAutoSpeak
             // 
             _checkBoxAutoSpeak.AutoSize = true;
             _checkBoxAutoSpeak.Checked = true;
             _checkBoxAutoSpeak.CheckState = CheckState.Checked;
-            _checkBoxAutoSpeak.Location = new Point(102, 22);
+            _checkBoxAutoSpeak.Location = new Point(25, 56);
             _checkBoxAutoSpeak.Name = "_checkBoxAutoSpeak";
             _checkBoxAutoSpeak.Size = new Size(107, 21);
             _checkBoxAutoSpeak.TabIndex = 8;
             _checkBoxAutoSpeak.Text = "🔊 识别后朗读";
             _checkBoxAutoSpeak.UseVisualStyleBackColor = true;
+            // 
+            // _speedSelector
+            // 
+            _speedSelector.BackColor = Color.Transparent;
+            _speedSelector.Location = new Point(138, 45);
+            _speedSelector.Name = "_speedSelector";
+            _speedSelector.Size = new Size(135, 32);
+            _speedSelector.TabIndex = 9;
             // 
             // _labelTranslation
             // 
@@ -4253,16 +4275,6 @@ namespace LearningAssistant.Forms
             _buttonTranslationToggle.Text = "译";
             _buttonTranslationToggle.UseVisualStyleBackColor = false;
             _buttonTranslationToggle.Click += ButtonTranslationToggle_Click;
-            // 
-            // _checkBoxAutoTranslate
-            // 
-            _checkBoxAutoTranslate.AutoSize = true;
-            _checkBoxAutoTranslate.Location = new Point(102, 282);
-            _checkBoxAutoTranslate.Name = "_checkBoxAutoTranslate";
-            _checkBoxAutoTranslate.Size = new Size(107, 21);
-            _checkBoxAutoTranslate.TabIndex = 8;
-            _checkBoxAutoTranslate.Text = "🌐 识别后翻译";
-            _checkBoxAutoTranslate.UseVisualStyleBackColor = true;
             // 
             // PdfReaderFormV2
             // 

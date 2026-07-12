@@ -146,6 +146,7 @@ namespace LearningAssistant.Forms
         private RadioButton radioRandom => _settingsView.RadioRandom;
         private ComboBox comboBoxSubject => _settingsView.ComboBoxSubject;
         private ComboBox comboBoxSubCategory => _settingsView.ComboBoxSubCategory;
+        private SpeedSelectorControl speedSelector => _settingsView.SpeedSelector;
         private Panel panelNotes => _contentView.PanelNotes;
         private RichTextBox richTextBoxNotes => _contentView.RichTextBoxNotes;
         private Button buttonPronounce => _buttonsView.ButtonPronounce;
@@ -254,6 +255,7 @@ namespace LearningAssistant.Forms
             _settingsView.RadioRandom.CheckedChanged += RadioSetting_CheckedChanged;
             _settingsView.ComboBoxSubject.SelectedIndexChanged += ComboBoxSubject_SelectedIndexChanged;
             _settingsView.ComboBoxSubCategory.SelectedIndexChanged += ComboBoxSubCategory_SelectedIndexChanged;
+            _settingsView.SpeedSelector.TtsConfig = _services.AudioServices.TtsConfig;
             _settingsView.ButtonOpenStatistics.Click += ButtonOpenStatistics_Click;
             _settingsView.ButtonExportErrorBook.Click += ButtonExportErrorBook_Click;
             _settingsView.ButtonShowAnswer.Click += ButtonShowAnswer_Click;
@@ -661,6 +663,9 @@ namespace LearningAssistant.Forms
                         comboBoxSubCategory.SelectedIndex = index;
                     }
                 }
+
+                // 刷新语速选择器显示
+                speedSelector.RefreshDisplay();
 
             }
             finally

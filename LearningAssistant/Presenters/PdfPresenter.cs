@@ -1,6 +1,7 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
 using LearningAssistant.Forms;
+using LearningAssistant.Models.Config;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Learning;
@@ -21,6 +22,7 @@ namespace LearningAssistant.Presenters
         private readonly IAIService? _aiService;
         private readonly IPdfTtsService? _pdfTtsService;
         private readonly IPdfStudyIntegration _pdfStudyIntegration;
+        private readonly TtsConfig _ttsConfig;
         private readonly IExportService _exportService;
         private readonly IAnnotationService _annotationService;
         private readonly IHighlightService _highlightService;
@@ -45,6 +47,7 @@ namespace LearningAssistant.Presenters
             IAnnotationService annotationService,
             IHighlightService highlightService,
             IPdfService pdfService,
+            TtsConfig ttsConfig,
             IEventBus? eventBus = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -55,6 +58,7 @@ namespace LearningAssistant.Presenters
             _aiService = aiService;
             _pdfTtsService = pdfTtsService;
             _pdfStudyIntegration = pdfStudyIntegration ?? throw new ArgumentNullException(nameof(pdfStudyIntegration));
+            _ttsConfig = ttsConfig ?? throw new ArgumentNullException(nameof(ttsConfig));
             _exportService = exportService ?? throw new ArgumentNullException(nameof(exportService));
             _annotationService = annotationService ?? throw new ArgumentNullException(nameof(annotationService));
             _highlightService = highlightService ?? throw new ArgumentNullException(nameof(highlightService));
@@ -130,6 +134,11 @@ namespace LearningAssistant.Presenters
             UnsubscribeFromEvents();
             _view = view;
             SubscribeToEvents();
+
+            if (_view is PdfReaderFormV2 v2View)
+            {
+                v2View.SpeedSelector?.TtsConfig = _ttsConfig;
+            }
         }
 
         private void SubscribeToEvents()
@@ -1104,7 +1113,7 @@ namespace LearningAssistant.Presenters
                     return;
                 }
 
-                await _pdfTtsService.SpeakTextAsync(text);
+                await _pdfTtsService.SpeakTextAsync(text, _ttsConfig.Speed);
             }
             catch (Exception ex)
             {
@@ -1135,7 +1144,7 @@ namespace LearningAssistant.Presenters
                     return;
                 }
 
-                await _pdfTtsService.SpeakTextAsync(text, "zh", -1f);
+                await _pdfTtsService.SpeakTextAsync(text, "zh", _ttsConfig.Speed);
             }
             catch (Exception ex)
             {
@@ -1151,7 +1160,7 @@ namespace LearningAssistant.Presenters
 
         private async Task SpeakTextAsync(string text)
         {
-            await SpeakTextAsync(text, _currentLanguage, 1.0f);
+            await SpeakTextAsync(text, _currentLanguage, _ttsConfig.Speed);
         }
 
 
