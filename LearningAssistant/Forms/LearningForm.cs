@@ -670,7 +670,7 @@ namespace LearningAssistant.Forms
         {
             if (_learningCard == null || _currentItem == null) return;
 
-            var fields = LearningItemFormatter.BuildFields(_currentItem);
+            var fields = LearningItemFormatter.BuildFields(_currentItem, _answerRevealed);
             _learningCard.SetFields(fields);
         }
 

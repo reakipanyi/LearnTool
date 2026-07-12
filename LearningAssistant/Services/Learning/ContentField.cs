@@ -6,7 +6,8 @@ namespace LearningAssistant.Services.Learning
         string? SpeakText = null,
         bool CanSpeak = false,
         int Order = 0,
-        string Language = "en")
+        string Language = "en",
+        bool IsAnswer = false)
     {
         public bool HasSpeakText => !string.IsNullOrWhiteSpace(SpeakText);
     }
