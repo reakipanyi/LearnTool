@@ -54,8 +54,6 @@ namespace LearningAssistant.Forms
         
         private HashSet<string>? _cachedKnownItems;
         private HashSet<string>? _cachedUnknownItems;
-        private DateTime _learningStateCacheTime = DateTime.MinValue;
-        private static readonly TimeSpan LearningStateCacheDuration = TimeSpan.FromSeconds(30);
         #endregion
 
         #region === 进度可视化 ===
@@ -1022,23 +1020,20 @@ namespace LearningAssistant.Forms
             // 
             // _listView
             // 
-            _listView.Location = new Point(0, 0);
+            _listView.Dock = DockStyle.Fill;
             _listView.Name = "_listView";
-            _listView.Size = new Size(260, 981);
             _listView.TabIndex = 0;
             // 
             // _contentView
             // 
-            _contentView.Location = new Point(0, 0);
+            _contentView.Dock = DockStyle.Fill;
             _contentView.Name = "_contentView";
-            _contentView.Size = new Size(954, 225);
             _contentView.TabIndex = 0;
             // 
             // _buttonsView
             // 
-            _buttonsView.Location = new Point(3, 648);
+            _buttonsView.Dock = DockStyle.Fill;
             _buttonsView.Name = "_buttonsView";
-            _buttonsView.Size = new Size(1089, 66);
             _buttonsView.TabIndex = 0;
             // 
             // _statsView
@@ -1059,9 +1054,8 @@ namespace LearningAssistant.Forms
             // 
             // _settingsView
             // 
-            _settingsView.Location = new Point(0, 0);
+            _settingsView.Dock = DockStyle.Fill;
             _settingsView.Name = "_settingsView";
-            _settingsView.Size = new Size(220, 837);
             _settingsView.TabIndex = 0;
             // 
             // mainTableLayoutPanel
@@ -1070,7 +1064,9 @@ namespace LearningAssistant.Forms
             mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 266F));
             mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220F));
+            mainTableLayoutPanel.Controls.Add(_listView, 0, 0);
             mainTableLayoutPanel.Controls.Add(middlePanel, 1, 0);
+            mainTableLayoutPanel.Controls.Add(_settingsView, 2, 0);
             mainTableLayoutPanel.Dock = DockStyle.Fill;
             mainTableLayoutPanel.Location = new Point(0, 0);
             mainTableLayoutPanel.Name = "mainTableLayoutPanel";
@@ -1092,6 +1088,8 @@ namespace LearningAssistant.Forms
             // 
             middleTableLayoutPanel.ColumnCount = 1;
             middleTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            middleTableLayoutPanel.Controls.Add(_contentView, 0, 0);
+            middleTableLayoutPanel.Controls.Add(_buttonsView, 0, 2);
             middleTableLayoutPanel.Controls.Add(_statsProgressView, 0, 3);
             middleTableLayoutPanel.Controls.Add(_statsView, 0, 4);
             middleTableLayoutPanel.Dock = DockStyle.Fill;
@@ -1407,6 +1405,7 @@ namespace LearningAssistant.Forms
 
             _soundService?.PlaySuccess();
             StartConfetti();
+            _ = _encouragementService.PlayRandomKnownFeedbackAsync();
             TriggerLevelUp(e.NewLevel, e.LevelTitle);
             MessageBox.Show($"🎉 恭喜升级！\n\n你现在是「{e.LevelTitle}」级别！", "升级成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
@@ -1627,6 +1626,19 @@ namespace LearningAssistant.Forms
             e.DrawFocusRectangle();
         }
 
+        public void UpdateLearningItemStates(HashSet<string> knownItems, HashSet<string> unknownItems)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => UpdateLearningItemStates(knownItems, unknownItems)));
+                return;
+            }
+
+            _cachedKnownItems = new HashSet<string>(knownItems);
+            _cachedUnknownItems = new HashSet<string>(unknownItems);
+            listBoxItems?.Invalidate();
+        }
+
         private bool IsItemKnown(string itemText)
         {
             LoadLearningStateCache();
@@ -1641,8 +1653,7 @@ namespace LearningAssistant.Forms
 
         private void LoadLearningStateCache()
         {
-            if (_cachedKnownItems != null && _cachedUnknownItems != null && 
-                DateTime.Now - _learningStateCacheTime < LearningStateCacheDuration)
+            if (_cachedKnownItems != null && _cachedUnknownItems != null)
             {
                 return;
             }
@@ -1662,7 +1673,6 @@ namespace LearningAssistant.Forms
                     _cachedKnownItems = new HashSet<string>();
                     _cachedUnknownItems = new HashSet<string>();
                 }
-                _learningStateCacheTime = DateTime.Now;
             }
             catch
             {
@@ -1675,7 +1685,6 @@ namespace LearningAssistant.Forms
         {
             _cachedKnownItems = null;
             _cachedUnknownItems = null;
-            _learningStateCacheTime = DateTime.MinValue;
             listBoxItems?.Invalidate();
         }
 
@@ -1799,6 +1808,10 @@ namespace LearningAssistant.Forms
             _gamificationService.AddScore(50 * e.BadgeIds.Count);
             _gamificationService.AddXP(50 * e.BadgeIds.Count);
             _gamificationService.UpdateAllDisplays();
+
+            _soundService?.PlaySuccess();
+            StartConfetti();
+            _ = _encouragementService.PlayRandomKnownFeedbackAsync();
         }
 
         private void UpdateChallengesProgress()
@@ -1887,18 +1900,6 @@ namespace LearningAssistant.Forms
                 UpdateChallengesProgress();
                 UpdateDailyGoalProgress();
 
-                if (_eventBus != null && _currentItem != null)
-                {
-                    _eventBus.Publish(new ItemLearnedEvent
-                    {
-                        UserId = GetCurrentUserId(),
-                        ItemId = _currentItem.GetMainContent(),
-                        ItemContent = _currentItem.GetDisplayText(),
-                        SubCategory = _settings.SubCategory,
-                        LearnedAt = DateTime.Now
-                    });
-                }
-
                 if (_currentItem != null)
                 {
                     UpdateLearningStateCacheImmediately(_currentItem.GetMainContent(), true);
@@ -1928,20 +1929,6 @@ namespace LearningAssistant.Forms
                 if (_currentItem != null)
                 {
                     UpdateDetailState(true, true);
-
-                    if (_eventBus != null)
-                    {
-                        _eventBus.Publish(new ItemWrongEvent
-                        {
-                            UserId = GetCurrentUserId(),
-                            ItemId = _currentItem.GetMainContent(),
-                            ItemContent = _currentItem.GetDisplayText(),
-                            CorrectAnswer = _currentItem.GetDisplayText(),
-                            UserAnswer = string.Empty,
-                            SubCategory = _settings.SubCategory,
-                            WrongAt = DateTime.Now
-                        });
-                    }
 
                     UpdateLearningStateCacheImmediately(_currentItem.GetMainContent(), false);
                 }

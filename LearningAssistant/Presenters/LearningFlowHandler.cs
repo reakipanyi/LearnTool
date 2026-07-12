@@ -113,6 +113,7 @@ namespace LearningAssistant.Presenters
             var context = _view.CurrentContext with { UserId = userId, WordBankFile = wordBankFile, SubCategory = selectedSubCategory };
             _studyEngine.Initialize(context, continueMode);
             UpdateLearningList();
+            SyncLearningItemStates();
             await DisplayCurrentItemAsync();
         }
 
@@ -156,6 +157,20 @@ namespace LearningAssistant.Presenters
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to update learning list");
+            }
+        }
+
+        private void SyncLearningItemStates()
+        {
+            try
+            {
+                var knownItems = new HashSet<string>(_studyEngine.KnownItems);
+                var unknownItems = new HashSet<string>(_studyEngine.UnknownItems);
+                _view.UpdateLearningItemStates(knownItems, unknownItems);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to sync learning item states");
             }
         }
 
@@ -642,6 +657,7 @@ namespace LearningAssistant.Presenters
                     string userId = string.IsNullOrWhiteSpace(_currentUserId) ? "default" : _currentUserId;
                     var context = _view.CurrentContext with { UserId = userId, SubCategory = _currentSubCategory, WordBankFile = "" };
                     _studyEngine.Initialize(context, true);
+                    SyncLearningItemStates();
                 }
                 else if (modeChanged || sortChanged)
                 {

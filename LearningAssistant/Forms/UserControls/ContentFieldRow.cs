@@ -48,20 +48,20 @@ namespace LearningAssistant.Forms.UserControls
             _layout.ColumnCount = 3;
             _layout.RowCount = 1;
             _layout.Dock = DockStyle.Fill;
-            _layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
-            _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 65F));
+            _layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));
+            _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 55F));
             _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 65F));
+            _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 55F));
 
-            _labelLabel.Font = new Font("微软雅黑", 12F, FontStyle.Bold, GraphicsUnit.Point, 134);
+            _labelLabel.Font = new Font("微软雅黑", 11F, FontStyle.Bold, GraphicsUnit.Point, 134);
             _labelLabel.ForeColor = Color.FromArgb(108, 117, 125);
             _labelLabel.TextAlign = ContentAlignment.MiddleLeft;
             _labelLabel.UseMnemonic = false;
             _labelLabel.AutoSize = false;
             _labelLabel.Dock = DockStyle.Fill;
-            _labelLabel.Padding = new Padding(0, 0, 6, 0);
+            _labelLabel.Padding = new Padding(0, 0, 4, 0);
 
-            _valueLabel.Font = new Font("微软雅黑", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
+            _valueLabel.Font = new Font("微软雅黑", 11F, FontStyle.Regular, GraphicsUnit.Point, 134);
             _valueLabel.ForeColor = Color.FromArgb(33, 33, 33);
             _valueLabel.TextAlign = ContentAlignment.MiddleLeft;
             _valueLabel.UseMnemonic = false;
@@ -70,9 +70,9 @@ namespace LearningAssistant.Forms.UserControls
             _valueLabel.Padding = new Padding(0);
 
             _speakButton.Text = "🔊";
-            _speakButton.Font = new Font("Arial", 12F, FontStyle.Regular, GraphicsUnit.Point, 0);
-            _speakButton.Width = 28;
-            _speakButton.Height = 28;
+            _speakButton.Font = new Font("Arial", 11F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            _speakButton.Width = 24;
+            _speakButton.Height = 24;
             _speakButton.FlatStyle = FlatStyle.Flat;
             _speakButton.FlatAppearance.BorderSize = 0;
             _speakButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(240, 240, 240);
@@ -82,9 +82,9 @@ namespace LearningAssistant.Forms.UserControls
             _speakButton.Cursor = Cursors.Hand;
 
             _copyButton.Text = "📋";
-            _copyButton.Font = new Font("Arial", 12F, FontStyle.Regular, GraphicsUnit.Point, 0);
-            _copyButton.Width = 28;
-            _copyButton.Height = 28;
+            _copyButton.Font = new Font("Arial", 11F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            _copyButton.Width = 24;
+            _copyButton.Height = 24;
             _copyButton.FlatStyle = FlatStyle.Flat;
             _copyButton.FlatAppearance.BorderSize = 0;
             _copyButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(240, 240, 240);
@@ -97,7 +97,7 @@ namespace LearningAssistant.Forms.UserControls
             buttonsPanel.Controls.Add(_speakButton);
             buttonsPanel.Controls.Add(_copyButton);
             _speakButton.Location = new Point(0, 0);
-            _copyButton.Location = new Point(32, 0);
+            _copyButton.Location = new Point(26, 0);
 
             _layout.Controls.Add(_labelLabel, 0, 0);
             _layout.Controls.Add(_valueLabel, 1, 0);

@@ -1,6 +1,7 @@
 using LearningAssistant.Common;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Learning;
+using System.Collections.Generic;
 
 namespace LearningAssistant.Views
 {
@@ -113,6 +114,13 @@ namespace LearningAssistant.Views
         /// </summary>
         /// <param name="currentIndex">当前索引</param>
         void UpdateLearningListSelection(int currentIndex);
+
+        /// <summary>
+        /// 更新学习项的已知/未知状态，用于列表对勾显示同步
+        /// </summary>
+        /// <param name="knownItems">已知项内容集合</param>
+        /// <param name="unknownItems">未知项内容集合</param>
+        void UpdateLearningItemStates(HashSet<string> knownItems, HashSet<string> unknownItems);
 
         void RefreshSubCategories(List<SubCategoryType> subCategories);
 
