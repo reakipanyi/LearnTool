@@ -706,17 +706,17 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        public void SaveAnnotationForCurrentPage(Bitmap overlay)
+        public void SaveAnnotationForCurrentPage()
         {
-            SaveAnnotationForPage(overlay, _pdfFileManager.CurrentPageIndex);
+            SaveAnnotationForPage(_pdfFileManager.CurrentPageIndex);
         }
 
-        public void SaveAnnotationForPage(Bitmap overlay, int pageIndex)
+        public void SaveAnnotationForPage(int pageIndex)
         {
             try
             {
                 if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath)) return;
-                _annotationService.SaveAnnotation(_pdfFileManager.CurrentFilePath, pageIndex, overlay);
+                _annotationService.SaveAnnotation(_pdfFileManager.CurrentFilePath, pageIndex);
             }
             catch (Exception ex)
             {
@@ -921,11 +921,87 @@ namespace LearningAssistant.Presenters
             }
         }
 
+        private List<int> _searchResults = new List<int>();
+        private int _currentSearchIndex = -1;
+
         public void SearchText(string text)
         {
-            // TODO: 实现PDF文本搜索
-            _logger.LogWarning("SearchText not yet implemented: {Text}", text);
-            throw new NotImplementedException("PDF文本搜索功能尚未实现");
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                _view?.ShowWarning("请输入搜索内容");
+                return;
+            }
+
+            if (_pdfFileManager.IsImageMode)
+            {
+                _view?.ShowWarning("图片模式不支持文本搜索");
+                return;
+            }
+
+            _searchResults.Clear();
+            _currentSearchIndex = -1;
+
+            try
+            {
+                for (int i = 0; i < PageCount; i++)
+                {
+                    string pageText = _pdfService.GetPdfText(i);
+                    if (!string.IsNullOrEmpty(pageText) && pageText.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        _searchResults.Add(i);
+                    }
+                }
+
+                if (_searchResults.Count > 0)
+                {
+                    _currentSearchIndex = 0;
+                    RenderPage(_searchResults[0]);
+                    _view?.ShowMessage($"找到 {_searchResults.Count} 个匹配结果", "搜索结果");
+                }
+                else
+                {
+                    _view?.ShowMessage("未找到匹配内容", "搜索结果");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "SearchText failed: {Text}", text);
+                _view?.ShowError("搜索失败：" + ex.Message);
+            }
+        }
+
+        public void SearchNext()
+        {
+            if (_searchResults.Count == 0)
+            {
+                _view?.ShowWarning("请先执行搜索");
+                return;
+            }
+
+            _currentSearchIndex++;
+            if (_currentSearchIndex >= _searchResults.Count)
+            {
+                _currentSearchIndex = 0;
+            }
+
+            RenderPage(_searchResults[_currentSearchIndex]);
+        }
+
+        public void SearchPrevious()
+        {
+            if (_searchResults.Count == 0)
+            {
+                _view?.ShowWarning("请先执行搜索");
+                return;
+            }
+
+            _currentSearchIndex--;
+            if (_currentSearchIndex < 0)
+            {
+                _currentSearchIndex = _searchResults.Count - 1;
+            }
+
+            RenderPage(_searchResults[_currentSearchIndex]);
         }
 
         public void ZoomIn()
@@ -1185,25 +1261,7 @@ namespace LearningAssistant.Presenters
 
         private void View_SelectOcrClicked(object? sender, EventArgs e)
         {
-            _ = ProcessOcrSelectionAsync();
-        }
-
-        private async Task ProcessOcrSelectionAsync()
-        {
-            try
-            {
-                var img = _view?.GetCurrentImage() as Bitmap;
-                var selection = _view?.GetSelectionRect();
-                var displayRect = _view?.GetDisplayRect();
-                if (img != null && selection.HasValue)
-                {
-                    await OcrCropAndTranslateAsync(img, selection.Value, displayRect ?? Rectangle.Empty);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in ProcessOcrSelectionAsync");
-            }
+            View_OcrSelectionComplete(sender, e);
         }
 
         private async void View_TranslateClicked(object? sender, EventArgs e)

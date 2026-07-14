@@ -1366,7 +1366,11 @@ namespace LearningAssistant.Forms
         private void ButtonPrevious_Click(object? sender, EventArgs e)
         {
             _soundService?.PlayNavigation();
-            ItemSelectedFromList?.Invoke(this, new ItemSelectedEventArgs(listBoxItems.SelectedIndex - 1));
+            int currentFullIndex = _listView.SelectedIndexInAllItems;
+            if (currentFullIndex >= 0)
+            {
+                ItemSelectedFromList?.Invoke(this, new ItemSelectedEventArgs(currentFullIndex - 1));
+            }
         }
 
         private void ButtonNextNav_Click(object? sender, EventArgs e)
@@ -2412,6 +2416,7 @@ namespace LearningAssistant.Forms
             switch (keyCode)
             {
                 case Keys.Space:
+                    _soundService?.PlayNavigation();
                     PronounceClicked?.Invoke(this, EventArgs.Empty);
                     return true;
                 case Keys.Enter:
@@ -2420,13 +2425,11 @@ namespace LearningAssistant.Forms
                     return true;
                 case Keys.D1:
                 case Keys.K:
-                    _soundService?.PlaySuccess();
-                    MarkAsKnownClicked?.Invoke(this, EventArgs.Empty);
+                    ButtonKnown_Click(this, EventArgs.Empty);
                     return true;
                 case Keys.D2:
                 case Keys.U:
-                    _soundService?.PlayError();
-                    MarkAsUnknownClicked?.Invoke(this, EventArgs.Empty);
+                    ButtonUnknown_Click(this, EventArgs.Empty);
                     return true;
                 case Keys.D3:
                 case Keys.F:
@@ -2459,8 +2462,7 @@ namespace LearningAssistant.Forms
                     JumpToRandomItem();
                     return true;
                 case Keys.Escape:
-                    ExitClicked?.Invoke(this, EventArgs.Empty);
-                    Close();
+                    ButtonExit_Click(this, EventArgs.Empty);
                     return true;
 
                 case Keys.F1:

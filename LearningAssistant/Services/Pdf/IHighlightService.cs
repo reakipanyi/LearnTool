@@ -54,6 +54,20 @@ namespace LearningAssistant.Services.Pdf
         string AddHighlight(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text = "", HighlightColor color = HighlightColor.Yellow);
 
         /// <summary>
+        /// 异步添加高亮（推荐使用，避免阻塞UI线程）
+        /// </summary>
+        /// <param name="pdfPath">PDF文件路径</param>
+        /// <param name="pageIndex">页码索引</param>
+        /// <param name="normalizedX">归一化X坐标（0-1）</param>
+        /// <param name="normalizedY">归一化Y坐标（0-1）</param>
+        /// <param name="normalizedWidth">归一化宽度（0-1）</param>
+        /// <param name="normalizedHeight">归一化高度（0-1）</param>
+        /// <param name="text">高亮选中的文本</param>
+        /// <param name="color">高亮颜色</param>
+        /// <returns>添加的高亮的Id</returns>
+        Task<string> AddHighlightAsync(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text = "", HighlightColor color = HighlightColor.Yellow);
+
+        /// <summary>
         /// 添加带笔记的高亮
         /// </summary>
         /// <param name="pdfPath">PDF文件路径</param>

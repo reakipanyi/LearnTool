@@ -24,8 +24,7 @@ namespace LearningAssistant.Services.Pdf
         /// </summary>
         /// <param name="pdfPath">PDF文件路径</param>
         /// <param name="pageIndex">页码索引</param>
-        /// <param name="overlayBitmap">标注图层Bitmap</param>
-        void SaveAnnotation(string pdfPath, int pageIndex, Bitmap overlayBitmap);
+        void SaveAnnotation(string pdfPath, int pageIndex);
 
         /// <summary>
         /// 清除指定页面的所有标注

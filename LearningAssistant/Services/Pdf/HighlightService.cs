@@ -94,10 +94,38 @@ namespace LearningAssistant.Services.Pdf
             collection.Highlights.Add(highlight);
             SaveHighlightsToFolder(folderPath, collection);
 
-            // 验证保存成功
             var verificationHighlights = collection.Highlights.Where(h => h.PageIndex == pageIndex).ToList();
             _logger?.LogInformation("添加高亮成功: {Path}, 页码: {Page}, 颜色: {Color}, 验证数量: {Count}, HighlightId: {HighlightId}",
                 pdfPath, pageIndex, color, verificationHighlights.Count, highlight.Id);
+
+            return highlight.Id;
+        }
+
+        public async Task<string> AddHighlightAsync(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text = "", HighlightColor color = HighlightColor.Yellow)
+        {
+            var folderPath = Path.GetDirectoryName(pdfPath) ?? "";
+            var collection = GetOrCreateFolderCollection(folderPath);
+
+            var highlight = new PdfHighlight
+            {
+                PdfPath = pdfPath,
+                PdfHash = await ComputeFileHashAsync(pdfPath),
+                PageIndex = pageIndex,
+                NormalizedX = normalizedX,
+                NormalizedY = normalizedY,
+                NormalizedWidth = normalizedWidth,
+                NormalizedHeight = normalizedHeight,
+                Text = text,
+                Note = "",
+                Color = color,
+                CreatedAt = DateTime.Now
+            };
+
+            collection.Highlights.Add(highlight);
+            SaveHighlightsToFolder(folderPath, collection);
+
+            _logger?.LogInformation("添加高亮成功(异步): {Path}, 页码: {Page}, 颜色: {Color}, HighlightId: {HighlightId}",
+                pdfPath, pageIndex, color, highlight.Id);
 
             return highlight.Id;
         }
@@ -349,6 +377,29 @@ namespace LearningAssistant.Services.Pdf
             catch (Exception ex)
             {
                 _logger?.LogDebug(ex, "计算文件哈希失败: {FilePath}", filePath);
+                return null;
+            }
+        }
+
+        private async Task<string?> ComputeFileHashAsync(string filePath)
+        {
+            try
+            {
+                if (!File.Exists(filePath)) return null;
+
+                using var sha256 = SHA256.Create();
+                using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, true);
+                var hashBytes = await sha256.ComputeHashAsync(stream);
+                var sb = new StringBuilder();
+                foreach (var b in hashBytes)
+                {
+                    sb.Append(b.ToString("x2"));
+                }
+                return sb.ToString();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogDebug(ex, "计算文件哈希失败(异步): {FilePath}", filePath);
                 return null;
             }
         }

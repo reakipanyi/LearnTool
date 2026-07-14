@@ -47,6 +47,8 @@ namespace LearningAssistant.Common
             appConfig.OcrConfig ??= new OcrConfig();
             appConfig.CloudStorageConfig ??= new CloudStorageConfig();
 
+            ConfigEncryptionHelper.DecryptSensitiveConfig(appConfig);
+
             services.AddSingleton(appConfig);
             services.AddSingleton(appConfig.TtsConfig);
             services.AddSingleton(appConfig.AiConfig);

@@ -156,73 +156,24 @@ namespace LearningAssistant.Services.Pdf
         {
             if (_isImageMode)
             {
-                return await GetRenderedImagePageAsync(pageIndex, renderW, renderH);
+                if (pageIndex < 0 || pageIndex >= _imageFiles.Count) return null;
             }
-
-            if (_pdfService == null) return null;
-            if (pageIndex < 0 || pageIndex >= _pdfService.PageCount) return null;
-
-            var cacheKey = GetRenderCacheKey(pageIndex, renderW, renderH);
-            lock (_renderLock)
+            else
             {
-                if (_renderCache.TryGetValue(cacheKey, out var cached))
-                {
-                    UpdateCacheAccessOrder(cacheKey);
-                    return CreateDeepCopy(cached);
-                }
+                if (_pdfService == null) return null;
+                if (pageIndex < 0 || pageIndex >= _pdfService.PageCount) return null;
             }
 
-            await _renderSemaphore.WaitAsync();
-            try
-            {
-                lock (_renderLock)
-                {
-                    if (_renderCache.TryGetValue(cacheKey, out var cachedAfterWait))
-                    {
-                        UpdateCacheAccessOrder(cacheKey);
-                        return CreateDeepCopy(cachedAfterWait);
-                    }
-                }
-
-                var bmp = await Task.Run(() => RenderPageToBitmap(pageIndex, renderW, renderH),
-                    _cts?.Token ?? CancellationToken.None).ConfigureAwait(false);
-                if (bmp == null) return null;
-
-                lock (_renderLock)
-                {
-                    if (!_renderCache.ContainsKey(cacheKey))
-                    {
-                        _renderCache[cacheKey] = CreateDeepCopy(bmp);
-                        UpdateCacheAccessOrder(cacheKey);
-
-                        while (_renderCache.Count > RenderCacheSize && _cacheAccessOrder.Count > 0)
-                            {
-                                var oldestKey = _cacheAccessOrder.First.Value;
-                                if (_renderCache.TryGetValue(oldestKey, out var oldBmp))
-                                {
-                                    _renderCache.Remove(oldestKey);
-                                    oldBmp?.Dispose();
-                                }
-                                _cacheAccessOrder.RemoveFirst();
-                            }
-                    }
-                }
-
-                _ = Task.Run(() => SmartPreRenderAsync(pageIndex, renderW, renderH),
-                    _cts?.Token ?? CancellationToken.None);
-
-                return bmp;
-            }
-            finally
-            {
-                _renderSemaphore.Release();
-            }
+            return await GetRenderedPageInternalAsync(pageIndex, renderW, renderH);
         }
 
         private async Task<Bitmap?> GetRenderedImagePageAsync(int pageIndex, int renderW, int renderH)
         {
-            if (pageIndex < 0 || pageIndex >= _imageFiles.Count) return null;
+            return await GetRenderedPageAsync(pageIndex, renderW, renderH);
+        }
 
+        private async Task<Bitmap?> GetRenderedPageInternalAsync(int pageIndex, int renderW, int renderH)
+        {
             var cacheKey = GetRenderCacheKey(pageIndex, renderW, renderH);
             lock (_renderLock)
             {

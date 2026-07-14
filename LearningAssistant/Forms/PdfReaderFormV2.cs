@@ -1005,9 +1005,9 @@ namespace LearningAssistant.Forms
             _highlightManager?.BatchRemoveHighlights();
         }
 
-        private void ButtonUndoHighlight_Click(object? sender, EventArgs e)
+        private async void ButtonUndoHighlight_Click(object? sender, EventArgs e)
         {
-            _highlightManager?.UndoHighlight();
+            await _highlightManager?.UndoHighlightAsync();
         }
 
         private void RefreshBookmarkList()

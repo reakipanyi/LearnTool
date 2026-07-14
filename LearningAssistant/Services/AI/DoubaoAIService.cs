@@ -71,7 +71,7 @@ namespace LearningAssistant.Services.AI
                 using var request = new HttpRequestMessage(HttpMethod.Post, _config.BaseUrl);
                 request.Content = new StringContent(json, Encoding.UTF8, "application/json");
                 
-                string apiKey = DecryptedApiKey;
+                string apiKey = ApiKey;
                 if (!string.IsNullOrEmpty(apiKey))
                 {
                     request.Headers.Add("Authorization", $"Bearer {apiKey}");

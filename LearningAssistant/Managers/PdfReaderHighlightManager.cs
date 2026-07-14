@@ -341,7 +341,7 @@ namespace LearningAssistant.Managers
                     CreatedAt = DateTime.Now
                 };
 
-                var highlightId = _highlightService.AddHighlight(
+                var highlightId = await _highlightService.AddHighlightAsync(
                     currentPdfPath,
                     targetPageIndex,
                     normalizedRect.X,
@@ -568,7 +568,7 @@ namespace LearningAssistant.Managers
             _form.ShowMessage($"已成功删除 {highlightCount} 个高亮、{strokeCount} 个笔画和 {textCount} 个文字标注", "删除完成");
         }
 
-        public void UndoHighlight()
+        public async Task UndoHighlightAsync()
         {
             if (_undoStack.Count == 0)
             {
@@ -594,7 +594,7 @@ namespace LearningAssistant.Managers
                 if (lastAction.Highlight != null)
                 {
                     var highlight = lastAction.Highlight;
-                    var newHighlightId = _highlightService.AddHighlight(
+                    var newHighlightId = await _highlightService.AddHighlightAsync(
                         _form.CurrentPdfPath,
                         highlight.PageIndex,
                         highlight.NormalizedWidth > 0 ? highlight.NormalizedX : highlight.X,
@@ -605,7 +605,6 @@ namespace LearningAssistant.Managers
                         highlight.Color
                     );
 
-                    // 创建恢复后的高亮对象（带新Id），用于后续撤销
                     var recoveredHighlight = new PdfHighlight
                     {
                         Id = newHighlightId,
@@ -620,7 +619,6 @@ namespace LearningAssistant.Managers
                         CreatedAt = highlight.CreatedAt
                     };
 
-                    // 将恢复的操作压入撤销栈，以便再次撤销
                     PushUndoAction(new HighlightUndoAction
                     {
                         ActionType = HighlightActionType.Add,

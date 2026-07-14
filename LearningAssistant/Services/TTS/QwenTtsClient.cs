@@ -1,4 +1,3 @@
-using LearningAssistant.Services.Utils;
 using System.Text;
 using System.Text.Json;
 
@@ -13,33 +12,13 @@ namespace LearningAssistant.Services.TTS
         };
 
         private readonly HttpClient _httpClient;
-        private readonly string? _encryptedApiKey;
-        private string? _decryptedApiKey;
+        private readonly string? _apiKey;
         private readonly string _endpoint;
         private readonly string _defaultVoice;
         private readonly float _defaultPitch;
         private bool _disposed = false;
 
-        public bool Available => !string.IsNullOrWhiteSpace(DecryptedApiKey);
-
-        private string? DecryptedApiKey
-        {
-            get
-            {
-                if (_decryptedApiKey != null) return _decryptedApiKey;
-
-                try
-                {
-                    _decryptedApiKey = SecureConfigManager.Decrypt(_encryptedApiKey);
-                }
-                catch
-                {
-                    _decryptedApiKey = _encryptedApiKey;
-                }
-
-                return _decryptedApiKey;
-            }
-        }
+        public bool Available => !string.IsNullOrWhiteSpace(_apiKey);
 
         public QwenTtsClient(string? apiKey, string? endpoint)
             : this(apiKey, endpoint, useSharedClient: true, "Cherry", 1.1f)
@@ -53,7 +32,7 @@ namespace LearningAssistant.Services.TTS
 
         public QwenTtsClient(string? apiKey, string? endpoint, bool useSharedClient, string defaultVoice, float defaultPitch)
         {
-            _encryptedApiKey = apiKey ?? Environment.GetEnvironmentVariable("QWEN_TTS_KEY") ?? Environment.GetEnvironmentVariable("DASHSCOPE_API_KEY");
+            _apiKey = apiKey ?? Environment.GetEnvironmentVariable("QWEN_TTS_KEY") ?? Environment.GetEnvironmentVariable("DASHSCOPE_API_KEY");
             _endpoint = endpoint ?? "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation";
             _httpClient = useSharedClient ? _sharedHttpClient : new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
             _defaultVoice = defaultVoice;
@@ -105,7 +84,7 @@ namespace LearningAssistant.Services.TTS
             {
                 Content = content
             };
-            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", DecryptedApiKey);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _apiKey);
 
             using var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
 

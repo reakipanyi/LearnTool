@@ -113,7 +113,7 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
-        public void SaveAnnotation(string pdfPath, int pageIndex, Bitmap overlayBitmap)
+        public void SaveAnnotation(string pdfPath, int pageIndex)
         {
             try
             {

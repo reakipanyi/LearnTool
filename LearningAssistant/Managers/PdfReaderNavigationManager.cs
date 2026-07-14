@@ -639,7 +639,7 @@ namespace LearningAssistant.Managers
                             drawPen.LineJoin = LineJoin.Round;
 
                             activeGfx.DrawLines(drawPen, _currentStrokePoints.ToArray());
-                            _form.Presenter?.SaveAnnotationForPage((Bitmap)activeBmp.Clone(), _drawingPageIndex);
+                            _form.Presenter?.SaveAnnotationForPage(_drawingPageIndex);
                             var imgW = activeBmp.Width;
                             var imgH = activeBmp.Height;
                             var pts = new List<float>();
@@ -739,7 +739,7 @@ namespace LearningAssistant.Managers
                                         break;
                                 }
 
-                                _form.Presenter?.SaveAnnotationForPage((Bitmap)activeBmp.Clone(), _drawingPageIndex);
+                                _form.Presenter?.SaveAnnotationForPage(_drawingPageIndex);
 
                                 var imgW = activeBmp.Width;
                                 var imgH = activeBmp.Height;

@@ -144,31 +144,7 @@ namespace LearningAssistant.Services.AI
             return BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
         }
 
-        protected string DecryptedApiKey
-        {
-            get
-            {
-                if (string.IsNullOrEmpty(_config.ApiKey))
-                    return string.Empty;
-
-                // 检查是否是未加密的原始密钥（长度小于64的短字符串）
-                if (_config.ApiKey.Length < 64)
-                {
-                    return _config.ApiKey;
-                }
-
-                try
-                {
-                    // 使用安全的配置管理器解密
-                    return Services.Utils.SecureConfigManager.Decrypt(_config.ApiKey);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "API密钥解密失败，请检查密钥配置");
-                    return string.Empty;
-                }
-            }
-        }
+        protected string ApiKey => _config.ApiKey ?? string.Empty;
 
         /// <summary>
         /// 检查API密钥是否有效
@@ -177,7 +153,7 @@ namespace LearningAssistant.Services.AI
         {
             get
             {
-                var key = DecryptedApiKey;
+                var key = ApiKey;
                 return !string.IsNullOrEmpty(key) && key.Length > 10;
             }
         }

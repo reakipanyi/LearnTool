@@ -16,8 +16,6 @@ namespace LearningAssistant.Services.Pdf
         private const int MaxTextLength = 6000;
         private const int DefaultSegmentLength = 5000;
         private bool _disposed;
-        private string? _decryptedAppId;
-        private string? _decryptedSecret;
         #endregion
 
         #region 构造函数
@@ -46,48 +44,11 @@ namespace LearningAssistant.Services.Pdf
 
         #region 公开属性
         public bool IsAvailable =>
-            !string.IsNullOrWhiteSpace(DecryptedAppId) &&
-            !string.IsNullOrWhiteSpace(DecryptedSecret);
+            !string.IsNullOrWhiteSpace(_config.BaiduAppId) &&
+            !string.IsNullOrWhiteSpace(_config.BaiduSecret);
 
-        private string DecryptedAppId 
-        { 
-            get 
-            { 
-                if (_decryptedAppId != null) return _decryptedAppId;
-                
-                try
-                {
-                    _decryptedAppId = Services.Utils.SecureConfigManager.Decrypt(_config.BaiduAppId);
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogWarning(ex, "解密BaiduAppId失败，使用原始值");
-                    _decryptedAppId = _config.BaiduAppId;
-                }
-                
-                return _decryptedAppId;
-            } 
-        }
-        
-        private string DecryptedSecret 
-        { 
-            get 
-            { 
-                if (_decryptedSecret != null) return _decryptedSecret;
-                
-                try
-                {
-                    _decryptedSecret = Services.Utils.SecureConfigManager.Decrypt(_config.BaiduSecret);
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogWarning(ex, "解密BaiduSecret失败，使用原始值");
-                    _decryptedSecret = _config.BaiduSecret;
-                }
-                
-                return _decryptedSecret;
-            } 
-        }
+        private string AppId => _config.BaiduAppId;
+        private string Secret => _config.BaiduSecret;
         #endregion
 
         #region 核心翻译方法
@@ -207,7 +168,7 @@ namespace LearningAssistant.Services.Pdf
                 { "q", text },
                 { "from", from },
                 { "to", to },
-                { "appid", DecryptedAppId },
+                { "appid", AppId },
                 { "salt", salt },
                 { "sign", sign }
             };
@@ -278,7 +239,7 @@ namespace LearningAssistant.Services.Pdf
 
         private string CalculateSign(string text, string salt)
         {
-            var signStr = $"{DecryptedAppId}{text}{salt}{DecryptedSecret}";
+            var signStr = $"{AppId}{text}{salt}{Secret}";
             using var md5 = MD5.Create();
             var bytes = md5.ComputeHash(Encoding.UTF8.GetBytes(signStr));
 

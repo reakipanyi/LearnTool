@@ -476,9 +476,9 @@ namespace LearningAssistant.Forms
             _highlightManager?.BatchRemoveHighlights();
         }
 
-        private void ButtonUndoHighlight_Click(object? sender, EventArgs e)
+        private async void ButtonUndoHighlight_Click(object? sender, EventArgs e)
         {
-            _highlightManager?.UndoHighlight();
+            await _highlightManager?.UndoHighlightAsync();
         }
 
         private void RefreshBookmarkList()
@@ -2302,7 +2302,7 @@ namespace LearningAssistant.Forms
                             var ip2 = ClientToImage(_selectEnd);
                             _annotationGraphics!.SmoothingMode = SmoothingMode.AntiAlias;
                             _annotationGraphics.DrawLine(_pen, ip1, ip2);
-                            _presenter.SaveAnnotationForCurrentPage((Bitmap)_annotationBitmap.Clone());
+                            _presenter.SaveAnnotationForCurrentPage();
                             var imgW = _annotationBitmap.Width;
                             var imgH = _annotationBitmap.Height;
                             var pts = new List<float>() { ip1.X / imgW, ip1.Y / imgH, ip2.X / imgW, ip2.Y / imgH };
