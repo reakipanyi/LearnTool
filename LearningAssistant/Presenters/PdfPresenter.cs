@@ -1124,7 +1124,7 @@ namespace LearningAssistant.Presenters
             }
 
             _ = FireAndForgetWithLogging(RenderAndDisplayCurrentPageAsync(), "RenderAndDisplayCurrentPageAsync");
-            _ = FireAndForgetWithLogging(_pdfRenderer.GenerateVisibleThumbnailsAsync(e.InitialPageIndex), "GenerateVisibleThumbnailsAsync");
+            _ = FireAndForgetWithLogging(_pdfRenderer.GenerateThumbnailsAsync(), "GenerateThumbnailsAsync");
         }
 
         private void OnFolderLoaded(object? sender, FolderLoadedEventArgs e)
@@ -1152,7 +1152,7 @@ namespace LearningAssistant.Presenters
             var selectedFile = _view?.GetSelectedFile();
             if (!string.IsNullOrWhiteSpace(selectedFile))
             {
-                LoadPdf(selectedFile);
+                _ = LoadPdf(selectedFile);
             }
         }
 

@@ -125,6 +125,14 @@ namespace LearningAssistant.Services.Pdf
             if (string.IsNullOrWhiteSpace(pdfPath))
                 throw new ArgumentException("PDF path cannot be null or empty.", nameof(pdfPath));
 
+            lock (_lockObj)
+            {
+                if (_pdf != null && _filePath == pdfPath)
+                {
+                    return _pdf.PageCount;
+                }
+            }
+
             try
             {
                 using var doc = PdfDocument.Load(pdfPath);
@@ -142,6 +150,16 @@ namespace LearningAssistant.Services.Pdf
                 throw new ArgumentException("PDF path cannot be null or empty.", nameof(pdfPath));
             if (pageNumber < 1)
                 throw new ArgumentOutOfRangeException(nameof(pageNumber), "Page number must be greater than 0.");
+
+            lock (_lockObj)
+            {
+                if (_pdf != null && _filePath == pdfPath)
+                {
+                    if (pageNumber - 1 >= _pdf.PageCount)
+                        return string.Empty;
+                    return _pdf.GetPdfText(pageNumber - 1) ?? string.Empty;
+                }
+            }
 
             try
             {

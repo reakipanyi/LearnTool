@@ -78,6 +78,13 @@ namespace LearningAssistant.Managers
         private readonly Stack<AnnotationStroke> _strokeUndoStack = new Stack<AnnotationStroke>();
         private const int MaxUndoStackSize = 50;
 
+        /// <summary>
+        /// 当一个画笔/标注撤销动作被压入内部撤销栈时触发。
+        /// 订阅方（如主窗体）可据此把该操作类型记录到统一撤销栈中，
+        /// 以便工具栏撤销按钮按时间顺序智能撤销最近一次操作（画笔或高亮）。
+        /// </summary>
+        public event EventHandler? UndoActionRecorded;
+
         private AnnotationStroke? _selectedStroke;
         private int _selectedStrokeIndex = -1;
         private const float HitTestThreshold = 25f;
@@ -1431,6 +1438,7 @@ namespace LearningAssistant.Managers
                 }
             }
             _strokeUndoStack.Push(stroke);
+            UndoActionRecorded?.Invoke(this, EventArgs.Empty);
         }
 
         public bool CanUndoStroke()

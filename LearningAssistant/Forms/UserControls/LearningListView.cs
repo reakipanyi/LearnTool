@@ -68,6 +68,11 @@ namespace LearningAssistant.Forms.UserControls
         /// </summary>
         public event EventHandler? SelectedIndexChanged;
 
+        /// <summary>
+        /// 搜索文本变更事件
+        /// </summary>
+        public event EventHandler? SearchTextChanged;
+
         #endregion
 
         #region Initialization
@@ -253,6 +258,7 @@ namespace LearningAssistant.Forms.UserControls
                 _searchKeyword = _textBoxSearch.Text.Trim();
             }
             UpdateFilteredItems();
+            SearchTextChanged?.Invoke(this, EventArgs.Empty);
         }
 
         private void ButtonFilterFavorites_Click(object? sender, EventArgs e)

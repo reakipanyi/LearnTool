@@ -128,7 +128,6 @@ namespace LearningAssistant.Managers
             ApplyButtonNightMode(_form.ButtonRemoveHighlight);
             ApplyButtonNightMode(_form.ButtonBatchRemoveHighlight);
             ApplyButtonNightMode(_form.ButtonExportHighlights);
-            ApplyButtonNightMode(_form.ButtonUndoHighlight);
         }
 
         private void ApplyControlBackColor(Control? control, bool isNightMode)

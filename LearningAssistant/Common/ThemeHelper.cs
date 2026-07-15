@@ -448,9 +448,44 @@ namespace LearningAssistant.Common
         }
 
         /// <summary>
+        /// 添加按钮点击反馈效果
+        /// </summary>
+        public static void AddButtonPressEffect(Button button, Color originalColor, int pressAdjustment = -40)
+        {
+            Color pressedColor = Color.FromArgb(
+                Math.Max(0, (int)originalColor.R + pressAdjustment),
+                Math.Max(0, (int)originalColor.G + pressAdjustment),
+                Math.Max(0, (int)originalColor.B + pressAdjustment));
+
+            button.MouseDown += (s, e) => button.BackColor = pressedColor;
+            button.MouseUp += (s, e) => button.BackColor = originalColor;
+            button.MouseLeave += (s, e) => button.BackColor = originalColor;
+        }
+
+        /// <summary>
+        /// 添加按钮完整交互效果（悬停+点击）
+        /// </summary>
+        public static void AddButtonInteractiveEffects(Button button, Color originalColor)
+        {
+            AddButtonHoverEffect(button, originalColor);
+            AddButtonPressEffect(button, originalColor);
+        }
+
+        /// <summary>
         /// 计算悬停时的颜色
         /// </summary>
         public static Color GetHoverColor(Color baseColor, int adjustment = -30)
+        {
+            return Color.FromArgb(
+                Math.Max(0, (int)baseColor.R + adjustment),
+                Math.Max(0, (int)baseColor.G + adjustment),
+                Math.Max(0, (int)baseColor.B + adjustment));
+        }
+
+        /// <summary>
+        /// 计算按下时的颜色
+        /// </summary>
+        public static Color GetPressedColor(Color baseColor, int adjustment = -40)
         {
             return Color.FromArgb(
                 Math.Max(0, (int)baseColor.R + adjustment),

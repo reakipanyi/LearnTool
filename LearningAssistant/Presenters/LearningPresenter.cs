@@ -76,19 +76,44 @@ namespace LearningAssistant.Presenters
             _view.FieldCopyRequested -= View_FieldCopyRequested;
         }
 
+        private void UnsubscribeFromMediatorEvents()
+        {
+            _eventMediator.MarkAsKnown -= MarkAsKnownHandler;
+            _eventMediator.MarkAsUnknown -= MarkAsUnknownHandler;
+            _eventMediator.Pronounce -= PronounceHandler;
+            _eventMediator.Next -= NextHandler;
+            _eventMediator.Exit -= ExitHandler;
+            _eventMediator.SendToPdfQuestion -= SendToPdfQuestionHandler;
+            _eventMediator.SettingsChanged -= SettingsChangedHandler;
+            _eventMediator.OpenStatistics -= OpenStatisticsHandler;
+            _eventMediator.FieldSpeakRequested -= FieldSpeakRequestedHandler;
+            _eventMediator.FieldStopRequested -= FieldStopRequestedHandler;
+        }
+
         private void SubscribeToMediatorEvents()
         {
-            _eventMediator.MarkAsKnown += async (_, _) => await _flowHandler.MarkAsKnownAsync();
-            _eventMediator.MarkAsUnknown += async (_, _) => await _flowHandler.MarkAsUnknownAsync();
-            _eventMediator.Pronounce += async (_, _) => await _flowHandler.HandlePronounceAsync();
-            _eventMediator.Next += async (_, _) => await _flowHandler.MoveToNextAsync();
-            _eventMediator.Exit += (_, _) => _flowHandler.Exit();
-            _eventMediator.SendToPdfQuestion += (_, args) => HandleSendToPdfQuestion(args.Text, args.Language);
-            _eventMediator.SettingsChanged += async (_, _) => await _flowHandler.HandleSettingsChangedAsync();
-            _eventMediator.OpenStatistics += (_, _) => _flowHandler.OpenStatistics();
-            _eventMediator.FieldSpeakRequested += async (_, args) => await _flowHandler.HandleFieldSpeakAsync(args);
-            _eventMediator.FieldStopRequested += async (_, _) => await _flowHandler.HandleFieldStopAsync();
+            _eventMediator.MarkAsKnown += MarkAsKnownHandler;
+            _eventMediator.MarkAsUnknown += MarkAsUnknownHandler;
+            _eventMediator.Pronounce += PronounceHandler;
+            _eventMediator.Next += NextHandler;
+            _eventMediator.Exit += ExitHandler;
+            _eventMediator.SendToPdfQuestion += SendToPdfQuestionHandler;
+            _eventMediator.SettingsChanged += SettingsChangedHandler;
+            _eventMediator.OpenStatistics += OpenStatisticsHandler;
+            _eventMediator.FieldSpeakRequested += FieldSpeakRequestedHandler;
+            _eventMediator.FieldStopRequested += FieldStopRequestedHandler;
         }
+
+        private async void MarkAsKnownHandler(object? sender, MarkAsKnownEventArgs e) => await _flowHandler.MarkAsKnownAsync();
+        private async void MarkAsUnknownHandler(object? sender, MarkAsUnknownEventArgs e) => await _flowHandler.MarkAsUnknownAsync();
+        private async void PronounceHandler(object? sender, EventArgs e) => await _flowHandler.HandlePronounceAsync();
+        private async void NextHandler(object? sender, EventArgs e) => await _flowHandler.MoveToNextAsync();
+        private void ExitHandler(object? sender, EventArgs e) => _flowHandler.Exit();
+        private void SendToPdfQuestionHandler(object? sender, SendToPdfEventArgs e) => HandleSendToPdfQuestion(e.Text, e.Language);
+        private async void SettingsChangedHandler(object? sender, EventArgs e) => await _flowHandler.HandleSettingsChangedAsync();
+        private void OpenStatisticsHandler(object? sender, EventArgs e) => _flowHandler.OpenStatistics();
+        private async void FieldSpeakRequestedHandler(object? sender, FieldSpeakEventArgs e) => await _flowHandler.HandleFieldSpeakAsync(e);
+        private async void FieldStopRequestedHandler(object? sender, EventArgs e) => await _flowHandler.HandleFieldStopAsync();
 
         public async Task InitializeAsync(string userId, string language, string subCategory, string wordBankFile, bool continueMode = true)
         {
@@ -237,6 +262,7 @@ namespace LearningAssistant.Presenters
         {
             _settingsManager.SaveSettings(_view);
             UnsubscribeFromViewEvents();
+            UnsubscribeFromMediatorEvents();
             (_flowHandler as IDisposable)?.Dispose();
             _logger.LogInformation("LearningPresenter disposed");
         }

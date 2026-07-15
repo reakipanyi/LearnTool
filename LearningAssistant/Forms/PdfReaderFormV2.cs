@@ -91,7 +91,6 @@ namespace LearningAssistant.Forms
         private FlowLayoutPanel _buttonPanel;
         private Panel _highlightContainer;
         private FlowLayoutPanel _highlightButtonPanel;
-        private Button _buttonUndoHighlight;
 
         private GroupBox _groupBoxHighlightColor;
         private RadioButton _radioHighlightYellow;
@@ -152,6 +151,13 @@ namespace LearningAssistant.Forms
 
         // 图片模式下，缩略图按目录分组展示时，记录已创建的目录分组标题
         private readonly Dictionary<string, Label> _thumbnailDirectoryHeaders = new Dictionary<string, Label>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// 统一撤销栈：按时间顺序记录最近发生的操作类型（画笔或高亮）。
+        /// 工具栏撤销按钮据此智能撤销"最近一次操作"，
+        /// 取代原先书签面板中只针对高亮的撤销按钮。
+        /// </summary>
+        private readonly Stack<UndoActionKind> _unifiedUndoStack = new Stack<UndoActionKind>();
 
 
         private Bitmap? _currentPageImage;
@@ -251,6 +257,11 @@ namespace LearningAssistant.Forms
             _highlightManager = new PdfReaderHighlightManager(_logger, this, _highlightService, _annotationService, _eventBus);
             _bookmarkManager = new PdfReaderBookmarkManager(_logger, this, _bookmarkService);
             _navigationManager = new PdfReaderNavigationManager(_logger, this);
+
+            // 订阅两个 Manager 的撤销动作入栈事件，统一记录到 _unifiedUndoStack，
+            // 供工具栏撤销按钮按时间顺序智能撤销最近一次操作（画笔或高亮）。
+            _highlightManager.UndoActionRecorded += (s, e) => _unifiedUndoStack.Push(UndoActionKind.Highlight);
+            _navigationManager.UndoActionRecorded += (s, e) => _unifiedUndoStack.Push(UndoActionKind.Stroke);
 
             _navigationManager.IsHighlightModeCallback = () => _highlightManager?.IsHighlightMode ?? true;
             _navigationManager.AddHighlightCallback = rect => _highlightManager?.AddHighlight(rect);
@@ -429,7 +440,6 @@ namespace LearningAssistant.Forms
         public Button? ButtonRemoveHighlight => _buttonRemoveHighlight;
         public Button? ButtonBatchRemoveHighlight => _buttonBatchRemoveHighlight;
         public Button? ButtonExportHighlights => _buttonExportHighlights;
-        public Button? ButtonUndoHighlight => _buttonUndoHighlight;
 
         public Panel? PanelPdf => _panelPdf;
         public Panel? PanelNavigation => _panelNavigation;
@@ -1003,11 +1013,6 @@ namespace LearningAssistant.Forms
         private void ButtonBatchRemoveHighlight_Click(object? sender, EventArgs e)
         {
             _highlightManager?.BatchRemoveHighlights();
-        }
-
-        private async void ButtonUndoHighlight_Click(object? sender, EventArgs e)
-        {
-            await _highlightManager?.UndoHighlightAsync();
         }
 
         private void RefreshBookmarkList()
@@ -1996,10 +2001,48 @@ namespace LearningAssistant.Forms
             SetAnnotationToolMode(AnnotationToolMode.Mosaic);
         }
 
-        private void ButtonUndoAnnotation_Click(object? sender, EventArgs e)
+        private async void ButtonUndoAnnotation_Click(object? sender, EventArgs e)
         {
-            _navigationManager?.UndoStroke();
+            await UndoLastActionAsync();
             RefreshHighlightList();
+        }
+
+        /// <summary>
+        /// 按时间顺序智能撤销最近一次操作。
+        /// 弹出统一撤销栈顶的操作类型，根据类型调用对应 Manager 的撤销方法：
+        /// - <see cref="UndoActionKind.Stroke"/>：撤销画笔/标注笔画
+        /// - <see cref="UndoActionKind.Highlight"/>：撤销高亮添加/删除
+        /// 若对应 Manager 内部栈已空（与统一栈不同步的边界情况），
+        /// 自动跳过该记录并继续尝试下一个，保证用户感知一致。
+        /// </summary>
+        private async Task UndoLastActionAsync()
+        {
+            while (_unifiedUndoStack.Count > 0)
+            {
+                var kind = _unifiedUndoStack.Pop();
+
+                if (kind == UndoActionKind.Stroke)
+                {
+                    if (_navigationManager != null && _navigationManager.CanUndoStroke())
+                    {
+                        _navigationManager.UndoStroke();
+                        return;
+                    }
+                    // 内部画笔栈已空，跳过此记录继续尝试下一个
+                }
+                else if (kind == UndoActionKind.Highlight)
+                {
+                    if (_highlightManager != null && _highlightManager.CanUndoHighlight())
+                    {
+                        await _highlightManager.UndoHighlightAsync();
+                        return;
+                    }
+                    // 内部高亮栈已空，跳过此记录继续尝试下一个
+                }
+            }
+
+            _logger?.LogInformation("UndoLastAction: 统一撤销栈为空，无可撤销的操作");
+            ShowMessage("没有可撤销的操作", "提示");
         }
 
         private void ButtonClearAllAnnotations_Click(object? sender, EventArgs e)
@@ -2886,7 +2929,6 @@ namespace LearningAssistant.Forms
             _highlightButtonPanel = new FlowLayoutPanel();
             _buttonRemoveHighlight = new Button();
             _buttonEditHighlight = new Button();
-            _buttonUndoHighlight = new Button();
             _buttonBatchRemoveHighlight = new Button();
             _buttonExportHighlights = new Button();
             _groupBoxBookmarks = new GroupBox();
@@ -4110,7 +4152,6 @@ namespace LearningAssistant.Forms
             // 
             _highlightButtonPanel.Controls.Add(_buttonRemoveHighlight);
             _highlightButtonPanel.Controls.Add(_buttonEditHighlight);
-            _highlightButtonPanel.Controls.Add(_buttonUndoHighlight);
             _highlightButtonPanel.Controls.Add(_buttonBatchRemoveHighlight);
             _highlightButtonPanel.Controls.Add(_buttonExportHighlights);
             _highlightButtonPanel.Location = new Point(6, 315);
@@ -4141,18 +4182,6 @@ namespace LearningAssistant.Forms
             _buttonEditHighlight.Text = "编辑";
             _buttonEditHighlight.UseVisualStyleBackColor = false;
             _buttonEditHighlight.Click += ButtonEditHighlight_Click;
-            // 
-            // _buttonUndoHighlight
-            // 
-            _buttonUndoHighlight.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
-            _buttonUndoHighlight.FlatStyle = FlatStyle.Flat;
-            _buttonUndoHighlight.Location = new Point(125, 3);
-            _buttonUndoHighlight.Name = "_buttonUndoHighlight";
-            _buttonUndoHighlight.Size = new Size(55, 28);
-            _buttonUndoHighlight.TabIndex = 1;
-            _buttonUndoHighlight.Text = "撤销";
-            _buttonUndoHighlight.UseVisualStyleBackColor = false;
-            _buttonUndoHighlight.Click += ButtonUndoHighlight_Click;
             // 
             // _buttonBatchRemoveHighlight
             // 

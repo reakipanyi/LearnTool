@@ -77,6 +77,16 @@ namespace LearningAssistant.Common
             };
         }
 
+        public static string ToLanguageCode(this SubjectType subject)
+        {
+            return subject switch
+            {
+                SubjectType.Chinese => "zh",
+                SubjectType.English => "en",
+                _ => "en"
+            };
+        }
+
         public static string ToDisplayString(this LearningModeType mode)
         {
             return mode switch

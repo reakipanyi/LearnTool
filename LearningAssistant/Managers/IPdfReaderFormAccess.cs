@@ -47,7 +47,6 @@ namespace LearningAssistant.Managers
         Button? ButtonRemoveHighlight { get; }
         Button? ButtonBatchRemoveHighlight { get; }
         Button? ButtonExportHighlights { get; }
-        Button? ButtonUndoHighlight { get; }
 
         Panel? PanelPdf { get; }
         Panel? PanelNavigation { get; }

@@ -40,9 +40,19 @@ namespace LearningAssistant.Services.Learning
         List<ReviewItem> GetItemsDueForReview(string userId, DateTime? date = null);
 
         /// <summary>
+        /// 异步获取待复习项列表
+        /// </summary>
+        Task<List<ReviewItem>> GetItemsDueForReviewAsync(string userId, DateTime? date = null);
+
+        /// <summary>
         /// 更新复习项
         /// </summary>
         void UpdateItem(ReviewItem item);
+
+        /// <summary>
+        /// 异步更新复习项
+        /// </summary>
+        Task UpdateItemAsync(ReviewItem item);
 
         /// <summary>
         /// 获取用户所有复习项
@@ -50,9 +60,19 @@ namespace LearningAssistant.Services.Learning
         List<ReviewItem> GetAllItems(string userId);
 
         /// <summary>
+        /// 异步获取用户所有复习项
+        /// </summary>
+        Task<List<ReviewItem>> GetAllItemsAsync(string userId);
+
+        /// <summary>
         /// 删除复习项
         /// </summary>
         void DeleteItem(Guid itemId);
+
+        /// <summary>
+        /// 异步删除复习项
+        /// </summary>
+        Task DeleteItemAsync(Guid itemId);
 
         /// <summary>
         /// 获取今日复习数量
@@ -410,6 +430,29 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
+        public async Task<List<ReviewItem>> GetItemsDueForReviewAsync(string userId, DateTime? date = null)
+        {
+            var targetDate = date ?? DateTime.Today;
+
+            try
+            {
+                await using var db = await _dbContextFactory.CreateDbContextAsync();
+                var dueItems = await db.SpacedRepetitionItems
+                    .Where(i => i.UserId == userId && i.IsActive && i.NextReviewDate <= targetDate.Date)
+                    .OrderBy(i => i.NextReviewDate)
+                    .Select(i => i.ToModel())
+                    .ToListAsync();
+
+                _logger?.LogDebug("获取待复习项(异步): 用户 {UserId}, 数量 {Count}", userId, dueItems.Count);
+                return dueItems;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "获取待复习项失败(异步): 用户 {UserId}", userId);
+                return new List<ReviewItem>();
+            }
+        }
+
         public void UpdateItem(ReviewItem item)
         {
             try
@@ -435,6 +478,31 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
+        public async Task UpdateItemAsync(ReviewItem item)
+        {
+            try
+            {
+                await using var db = await _dbContextFactory.CreateDbContextAsync();
+                var entity = await db.SpacedRepetitionItems.FirstOrDefaultAsync(i => i.Id == item.Id);
+
+                if (entity != null)
+                {
+                    entity.UpdateFromModel(item);
+                }
+                else
+                {
+                    await db.SpacedRepetitionItems.AddAsync(item.ToEntity());
+                }
+
+                await db.SaveChangesAsync();
+                _logger?.LogDebug("更新复习项(异步): {Id}", item.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "更新复习项失败(异步): {Id}", item.Id);
+            }
+        }
+
         public List<ReviewItem> GetAllItems(string userId)
         {
             try
@@ -450,6 +518,25 @@ namespace LearningAssistant.Services.Learning
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "获取所有复习项失败: 用户 {UserId}", userId);
+                return new List<ReviewItem>();
+            }
+        }
+
+        public async Task<List<ReviewItem>> GetAllItemsAsync(string userId)
+        {
+            try
+            {
+                await using var db = await _dbContextFactory.CreateDbContextAsync();
+                var items = await db.SpacedRepetitionItems
+                    .Where(i => i.UserId == userId && i.IsActive)
+                    .Select(i => i.ToModel())
+                    .ToListAsync();
+
+                return items;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "获取所有复习项失败(异步): 用户 {UserId}", userId);
                 return new List<ReviewItem>();
             }
         }
@@ -472,6 +559,27 @@ namespace LearningAssistant.Services.Learning
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "删除复习项失败: {Id}", itemId);
+            }
+        }
+
+        public async Task DeleteItemAsync(Guid itemId)
+        {
+            try
+            {
+                await using var db = await _dbContextFactory.CreateDbContextAsync();
+                var entity = await db.SpacedRepetitionItems.FirstOrDefaultAsync(i => i.Id == itemId);
+
+                if (entity != null)
+                {
+                    entity.IsActive = false;
+                    entity.UpdatedAt = DateTime.Now;
+                    await db.SaveChangesAsync();
+                    _logger?.LogInformation("标记复习项为删除(异步): {Id}", itemId);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "删除复习项失败(异步): {Id}", itemId);
             }
         }
 

@@ -26,6 +26,13 @@ namespace LearningAssistant.Managers
         public HighlightColor CurrentHighlightColor { get; set; } = HighlightColor.Yellow;
         public bool IsHighlightMode { get; set; } = true;
 
+        /// <summary>
+        /// 当一个高亮撤销动作被压入内部撤销栈时触发。
+        /// 订阅方（如主窗体）可据此把该操作类型记录到统一撤销栈中，
+        /// 以便工具栏撤销按钮按时间顺序智能撤销最近一次操作（画笔或高亮）。
+        /// </summary>
+        public event EventHandler? UndoActionRecorded;
+
         public PdfReaderHighlightManager(ILogger logger, IPdfReaderFormAccess form, IHighlightService highlightService,
             IAnnotationService? annotationService = null, IEventBus? eventBus = null)
         {
@@ -486,6 +493,7 @@ namespace LearningAssistant.Managers
                 _logger.LogDebug("UndoHighlight: 撤销栈已满，移除最旧的记录");
             }
             _undoStack.Push(action);
+            UndoActionRecorded?.Invoke(this, EventArgs.Empty);
         }
 
         public void RemoveHighlight(PdfHighlight highlight)
@@ -568,6 +576,15 @@ namespace LearningAssistant.Managers
             _form.ShowMessage($"已成功删除 {highlightCount} 个高亮、{strokeCount} 个笔画和 {textCount} 个文字标注", "删除完成");
         }
 
+        /// <summary>
+        /// 判断高亮撤销栈中是否还有可撤销的高亮操作。
+        /// 供统一撤销调度器在执行撤销前检查内部栈是否与统一栈同步。
+        /// </summary>
+        public bool CanUndoHighlight()
+        {
+            return _undoStack.Count > 0;
+        }
+
         public async Task UndoHighlightAsync()
         {
             if (_undoStack.Count == 0)
@@ -576,7 +593,6 @@ namespace LearningAssistant.Managers
                 _form.ShowMessage("没有可撤销的操作", "提示");
                 return;
             }
-
             var lastAction = _undoStack.Pop();
             _logger.LogInformation("UndoHighlight: 执行撤销, ActionType={ActionType}, HighlightId={HighlightId}",
                 lastAction.ActionType, lastAction.Highlight?.Id);

@@ -27,6 +27,7 @@ namespace LearningAssistant.Services.Learning
     {
         private readonly IDataPersistenceService _persistenceService;
         private readonly ProgressState _currentState = new ProgressState();
+        private readonly object _lock = new object();
 
         public ProgressManager(IDataPersistenceService persistenceService)
         {
@@ -35,7 +36,10 @@ namespace LearningAssistant.Services.Learning
 
         public ProgressState GetProgressState()
         {
-            return _currentState;
+            lock (_lock)
+            {
+                return _currentState;
+            }
         }
 
         public void LoadProgress(string userId, SubCategoryType subCategory)
@@ -61,21 +65,24 @@ namespace LearningAssistant.Services.Learning
                 }
             }
 
-            _currentState.KnownItems = knownItems;
-            _currentState.UnknownItems = unknownItems;
+            lock (_lock)
+            {
+                _currentState.KnownItems = knownItems;
+                _currentState.UnknownItems = unknownItems;
 
-            var userProfile = _persistenceService.LoadUserProfile(userId);
-            var subCatStr = subCategory.ToString();
-            if (userProfile.LearningProgress.CategoryProgresses.TryGetValue(subCatStr, out var catProgress))
-            {
-                _currentState.CorrectCount = catProgress.CorrectCount;
-                _currentState.TotalCount = catProgress.TotalTestCount;
-                _currentState.StudyModeIndex = catProgress.LastResumeIndex;
-                _currentState.QuickModeIndex = catProgress.QuickTestResumeIndex;
-            }
-            else
-            {
-                ResetProgress();
+                var userProfile = _persistenceService.LoadUserProfile(userId);
+                var subCatStr = subCategory.ToString();
+                if (userProfile.LearningProgress.CategoryProgresses.TryGetValue(subCatStr, out var catProgress))
+                {
+                    _currentState.CorrectCount = catProgress.CorrectCount;
+                    _currentState.TotalCount = catProgress.TotalTestCount;
+                    _currentState.StudyModeIndex = catProgress.LastResumeIndex;
+                    _currentState.QuickModeIndex = catProgress.QuickTestResumeIndex;
+                }
+                else
+                {
+                    ResetProgressInternal();
+                }
             }
         }
 
@@ -115,34 +122,45 @@ namespace LearningAssistant.Services.Learning
             var knownItems = _persistenceService.GetKnownItems(userId, subCategory);
             var unknownItems = _persistenceService.GetUnknownItems(userId, subCategory);
 
-            if (!knownItems.Contains(content) && !unknownItems.Contains(content))
+            lock (_lock)
             {
-                _persistenceService.UpsertLearningItemState(userId, subCategory, content, false);
-                if (!_currentState.UnknownItems.Contains(content))
-                    _currentState.UnknownItems.Add(content);
-            }
-            else if (knownItems.Contains(content))
-            {
-                _persistenceService.UpsertLearningItemState(userId, subCategory, content, false);
-                _currentState.KnownItems.Remove(content);
-                if (!_currentState.UnknownItems.Contains(content))
-                    _currentState.UnknownItems.Add(content);
-
-                var profile = _persistenceService.LoadUserProfile(userId);
-                var subCategoryStr = subCategory.ToString();
-                if (profile.LearningProgress.CategoryProgresses.TryGetValue(subCategoryStr, out var catProgress))
+                if (!knownItems.Contains(content) && !unknownItems.Contains(content))
                 {
-                    catProgress.KnownItems.Remove(content);
-                    if (!catProgress.UnknownItems.Contains(content))
+                    _persistenceService.UpsertLearningItemState(userId, subCategory, content, false);
+                    if (!_currentState.UnknownItems.Contains(content))
+                        _currentState.UnknownItems.Add(content);
+                }
+                else if (knownItems.Contains(content))
+                {
+                    _persistenceService.UpsertLearningItemState(userId, subCategory, content, false);
+                    _currentState.KnownItems.Remove(content);
+                    if (!_currentState.UnknownItems.Contains(content))
+                        _currentState.UnknownItems.Add(content);
+
+                    var profile = _persistenceService.LoadUserProfile(userId);
+                    var subCategoryStr = subCategory.ToString();
+                    if (profile.LearningProgress.CategoryProgresses.TryGetValue(subCategoryStr, out var catProgress))
                     {
-                        catProgress.UnknownItems.Add(content);
+                        catProgress.KnownItems.Remove(content);
+                        if (!catProgress.UnknownItems.Contains(content))
+                        {
+                            catProgress.UnknownItems.Add(content);
+                        }
+                        _persistenceService.SaveUserProfile(profile);
                     }
-                    _persistenceService.SaveUserProfile(profile);
                 }
             }
         }
 
         public void ResetProgress()
+        {
+            lock (_lock)
+            {
+                ResetProgressInternal();
+            }
+        }
+
+        private void ResetProgressInternal()
         {
             _currentState.KnownItems.Clear();
             _currentState.UnknownItems.Clear();

@@ -403,7 +403,53 @@ namespace LearningAssistant.Services.Pdf
 
         public async Task GenerateThumbnailsAsync()
         {
-            await GenerateVisibleThumbnailsAsync(0);
+            if (_isGeneratingThumbnails) return;
+            _isGeneratingThumbnails = true;
+            var currentCts = _thumbnailCts;
+
+            try
+            {
+                if (_pdfService == null && !_isImageMode)
+                {
+                    _logger.LogWarning("GenerateThumbnailsAsync: _pdfService is null");
+                    return;
+                }
+
+                int total = PageCount;
+                for (int i = 0; i < total; i++)
+                {
+                    try
+                    {
+                        if (_cts?.IsCancellationRequested ?? false) break;
+                        if (currentCts?.IsCancellationRequested ?? false) break;
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        break;
+                    }
+
+                    try
+                    {
+                        var thumbnail = await GetThumbnailAsync(i);
+                        ThumbnailGenerated?.Invoke(this, new ThumbnailGeneratedEventArgs
+                        {
+                            PageIndex = i,
+                            Thumbnail = thumbnail,
+                            DirectoryPath = _isImageMode && i >= 0 && i < _imageFiles.Count
+                                ? (Path.GetDirectoryName(_imageFiles[i]) ?? string.Empty)
+                                : string.Empty
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to generate thumbnail for page {PageIndex}", i);
+                    }
+                }
+            }
+            finally
+            {
+                _isGeneratingThumbnails = false;
+            }
         }
 
         public async Task GenerateVisibleThumbnailsAsync(int currentPage, int visibleCount = 5)
