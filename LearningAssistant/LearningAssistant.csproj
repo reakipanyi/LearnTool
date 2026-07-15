@@ -19,6 +19,12 @@
 	  <None Remove="tessdata\**" />
 	</ItemGroup>
 	<ItemGroup>
+	  <Compile Remove="Common\BrowserHelper.cs" />
+	  <Compile Remove="Common\CacheHelper.cs" />
+	  <Compile Remove="Common\Events\ContextChangedEventArgs.cs" />
+	  <Compile Remove="Common\ImageHelper.cs" />
+	  <Compile Remove="Common\MarkdownParser.cs" />
+	  <Compile Remove="Common\WinFormsExtensions.cs" />
 	  <Compile Remove="Forms\AddBookmarkDialog.cs" />
 	  <Compile Remove="Forms\BaiduNetdiskAuthForm.cs" />
 	  <Compile Remove="Forms\BookmarkManagerForm.cs" />
@@ -28,6 +34,8 @@
 	  <Compile Remove="Forms\UserComparisonForm.cs" />
 	  <Compile Remove="Services\AI\SiliconFlowAIService.cs" />
 	  <Compile Remove="Services\Cloud\BaiduPanFileManager.cs" />
+	  <Compile Remove="Services\Data\LearningItemMigrationService.cs" />
+	  <Compile Remove="Services\Migration\DataMigrationService.cs" />
 	</ItemGroup>
 	<ItemGroup>
 	  <EmbeddedResource Remove="Forms\BaiduNetdiskAuthForm.resx" />
@@ -71,6 +79,8 @@
 	</ItemGroup>
 	<ItemGroup>
 		<Folder Include="Data\" />
+		<Folder Include="Services\Data\" />
+		<Folder Include="Services\Migration\" />
 	</ItemGroup>
 	<ItemGroup>
 	  <Compile Update="Forms\UserControls\LearningProcessStatsView.cs">

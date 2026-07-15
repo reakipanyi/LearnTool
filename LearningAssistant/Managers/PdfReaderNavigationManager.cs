@@ -696,12 +696,18 @@ namespace LearningAssistant.Managers
                             {
                                 if (rect.Width > 0 && rect.Height > 0)
                                 {
-                                    var imgRect = _form.GetImageDisplayRect();
-                                    if (_form.IsDualPage)
-                                    {
-                                        var centerPoint = new Point(_selectStart.X + (_selectEnd.X - _selectStart.X) / 2, _selectStart.Y + (_selectEnd.Y - _selectStart.Y) / 2);
-                                        var (_, pageRect, _) = _form.GetPageAtPoint(centerPoint);
-                                        imgRect = pageRect;
+                                    var imgRect = _form.GetImageDisplayRect();
+
+                                    if (_form.IsDualPage)
+
+                                    {
+
+                                        var centerPoint = new Point(_selectStart.X + (_selectEnd.X - _selectStart.X) / 2, _selectStart.Y + (_selectEnd.Y - _selectStart.Y) / 2);
+
+                                        var (_, pageRect, _) = _form.GetPageAtPoint(centerPoint);
+
+                                        imgRect = pageRect;
+
                                     }
                                     float scaleX = (float)imgRect.Width / _form.CurrentPageImage!.Width;
                                     float scaleY = (float)imgRect.Height / _form.CurrentPageImage.Height;

@@ -10,18 +10,17 @@ using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Backup;
 using LearningAssistant.Services.Backup.Providers;
 using LearningAssistant.Services.Cache;
-using LearningAssistant.Services.Data;
 using LearningAssistant.Services.DragDrop;
-using LearningAssistant.Services.Repositories;
 using LearningAssistant.Services.Favorites;
 using LearningAssistant.Services.Feedback;
 using LearningAssistant.Services.Gamification;
 using LearningAssistant.Services.Hotkeys;
 using LearningAssistant.Services.Learning;
-using LearningAssistant.Services.Migration;
+//using LearningAssistant.Services.Migration;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Services.Persistence;
 using LearningAssistant.Services.Recovery;
+using LearningAssistant.Services.Repositories;
 using LearningAssistant.Services.SystemTray;
 using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
@@ -29,7 +28,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System;
 
 namespace LearningAssistant.Common
 {
@@ -101,8 +99,8 @@ namespace LearningAssistant.Common
             services.AddSingleton<IContentLoaderService, ContentLoaderService>();
             services.AddSingleton<IUserSessionService, UserSessionService>();
             services.AddSingleton<ISubjectTemplateService, SubjectTemplateService>();
-            services.AddSingleton<IDataMigrationService, DataMigrationService>();
-            services.AddScoped<ILearningItemMigrationService, LearningItemMigrationService>();
+            //services.AddSingleton<IDataMigrationService, DataMigrationService>();
+            //services.AddScoped<ILearningItemMigrationService, LearningItemMigrationService>();
 
             services.AddScoped<IUserProfileRepository, UserProfileRepository>();
             services.AddScoped<ISpacedRepetitionRepository, SpacedRepetitionRepository>();

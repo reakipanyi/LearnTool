@@ -124,12 +124,13 @@ namespace LearningAssistant.Forms
 
         private void PositionToast(Form owner)
         {
+            if (owner == null) return;
             int margin = 10;
             Point screenOrigin = owner.PointToScreen(new Point(0, 0));
             int x = screenOrigin.X + owner.ClientSize.Width - Width - margin;
             int y = screenOrigin.Y + owner.ClientSize.Height - Height - margin;
-
             Location = new Point(x, y);
+
         }
 
         private void FadeTimer_Tick(object? sender, EventArgs e)
