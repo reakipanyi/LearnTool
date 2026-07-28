@@ -137,6 +137,24 @@ namespace LearningAssistant.Services.Learning
         /// <param name="weeks">周数</param>
         /// <returns>周热力图数据</returns>
         List<HeatmapData> GetWeeklyHeatmap(string userId, int weeks = 12);
+
+        /// <summary>
+        /// 获取多维交叉分析（P-007）
+        /// 按学科、分类、时间段交叉分析学习数据
+        /// </summary>
+        MultiDimensionAnalysis GetMultiDimensionAnalysis(string userId, DateTime startDate, DateTime endDate);
+
+        /// <summary>
+        /// 评估学习效率（P-007）
+        /// 综合正确率、学习速度、记忆保留率等指标
+        /// </summary>
+        LearningEfficiencyReport GetLearningEfficiency(string userId);
+
+        /// <summary>
+        /// 生成学习建议（P-007）
+        /// 基于分析数据自动生成个性化建议
+        /// </summary>
+        List<LearningSuggestion> GenerateSuggestions(string userId);
     }
 
     /// <summary>
@@ -301,5 +319,41 @@ namespace LearningAssistant.Services.Learning
         public DateTime Date { get; set; }
         public int Count { get; set; }
         public int Level { get; set; }
+    }
+
+    /// <summary>
+    /// 多维交叉分析结果
+    /// </summary>
+    public class MultiDimensionAnalysis
+    {
+        public Dictionary<string, Dictionary<string, int>> SubjectCategoryBreakdown { get; set; } = new();
+        public Dictionary<string, double> TimeSlotEfficiency { get; set; } = new();
+        public Dictionary<string, int> WeeklyPattern { get; set; } = new();
+        public double OverallScore { get; set; }
+    }
+
+    /// <summary>
+    /// 学习效率报告
+    /// </summary>
+    public class LearningEfficiencyReport
+    {
+        public double OverallEfficiency { get; set; }
+        public double AccuracyScore { get; set; }
+        public double SpeedScore { get; set; }
+        public double RetentionScore { get; set; }
+        public double ConsistencyScore { get; set; }
+        public string Summary { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// 学习建议
+    /// </summary>
+    public class LearningSuggestion
+    {
+        public string Category { get; set; } = string.Empty;
+        public string Title { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public int Priority { get; set; }
+        public string Action { get; set; } = string.Empty;
     }
 }

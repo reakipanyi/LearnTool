@@ -751,5 +751,173 @@ namespace LearningAssistant.Services.Learning
                 return text;
             return text.Substring(0, maxLength) + "...";
         }
+
+        /// <summary>
+        /// 深度薄弱点分析（P-004）
+        /// 基于错题频率、复习间隔、正确率等多维度分析
+        /// </summary>
+        public List<DeepWeakPointAnalysis> GetDeepWeakPoints(string userId)
+        {
+            var result = new List<DeepWeakPointAnalysis>();
+
+            try
+            {
+                var wrongAnswers = _wrongAnswerService.GetWrongAnswers(userId, 0, 200);
+
+                // 按 Subject 分类聚合
+                var grouped = wrongAnswers
+                    .GroupBy(wa => wa.Subject == SubjectType.Unknown ? "通用" : wa.Subject.ToString())
+                    .ToList();
+
+                foreach (var group in grouped)
+                {
+                    var items = group.ToList();
+                    int wrongCount = items.Sum(wa => wa.WrongCount);
+                    int reviewCount = items.Sum(wa => wa.ReviewCount);
+                    int correctCount = items.Sum(wa => wa.CorrectCount);
+                    int totalAttempts = correctCount + wrongCount;
+                    double accuracyRate = totalAttempts > 0 ? (double)correctCount / totalAttempts * 100 : 0;
+
+                    // 计算距上次复习的天数（优先取最近一次复习时间，否则取最后错误时间）
+                    var lastReview = items
+                        .Where(wa => wa.LastReviewAt.HasValue)
+                        .Select(wa => wa.LastReviewAt!.Value)
+                        .DefaultIfEmpty(DateTime.MinValue)
+                        .Max();
+                    int daysSinceLastReview = lastReview == DateTime.MinValue
+                        ? (int)(DateTime.Now - items.Max(wa => wa.LastWrongAt)).TotalDays
+                        : (int)(DateTime.Now - lastReview).TotalDays;
+
+                    // 薄弱分数：错误次数、正确率、间隔综合计算（0-100）
+                    double weaknessScore = CalculateDeepWeaknessScore(wrongCount, accuracyRate, daysSinceLastReview);
+
+                    var actions = GenerateRecommendedActions(wrongCount, accuracyRate, daysSinceLastReview);
+
+                    result.Add(new DeepWeakPointAnalysis
+                    {
+                        Category = group.Key,
+                        WeaknessScore = Math.Round(weaknessScore, 2),
+                        WrongCount = wrongCount,
+                        ReviewCount = reviewCount,
+                        AccuracyRate = Math.Round(accuracyRate, 2),
+                        DaysSinceLastReview = daysSinceLastReview,
+                        RecommendedActions = actions
+                    });
+                }
+
+                return result.OrderByDescending(r => r.WeaknessScore).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "深度薄弱点分析失败: {UserId}", userId);
+                return result;
+            }
+        }
+
+        private double CalculateDeepWeaknessScore(int wrongCount, double accuracyRate, int daysSinceLastReview)
+        {
+            // 错误次数权重 40%，正确率权重 40%，间隔权重 20%
+            double wrongScore = Math.Min(100, wrongCount * 10);
+            double accuracyScore = 100 - accuracyRate;
+            double intervalScore = Math.Min(100, daysSinceLastReview * 2);
+
+            return wrongScore * 0.4 + accuracyScore * 0.4 + intervalScore * 0.2;
+        }
+
+        private List<string> GenerateRecommendedActions(int wrongCount, double accuracyRate, int daysSinceLastReview)
+        {
+            var actions = new List<string>();
+
+            if (accuracyRate < 50)
+            {
+                actions.Add("建议重新学习该分类的基础知识");
+            }
+            else if (accuracyRate < 80)
+            {
+                actions.Add("建议针对薄弱知识点进行专项练习");
+            }
+            else
+            {
+                actions.Add("建议保持定期复习以巩固记忆");
+            }
+
+            if (wrongCount >= 10)
+            {
+                actions.Add("错题数量较多，建议集中攻克高频错题");
+            }
+
+            if (daysSinceLastReview > 7)
+            {
+                actions.Add("距上次复习已超过一周，建议立即复习");
+            }
+
+            return actions;
+        }
+
+        /// <summary>
+        /// 生成个性化学习路径建议（P-004）
+        /// </summary>
+        public PersonalizedPathSuggestion GetPersonalizedPath(string userId)
+        {
+            var suggestion = new PersonalizedPathSuggestion();
+
+            try
+            {
+                var weakPoints = GetDeepWeakPoints(userId);
+
+                if (weakPoints.Count == 0)
+                {
+                    suggestion.Title = "稳步推进学习计划";
+                    suggestion.Description = "当前没有明显的薄弱点，建议按计划继续推进新知识学习。";
+                    suggestion.Steps = new List<string>
+                    {
+                        "每天保持30分钟的学习时间",
+                        "按学习路径推进新内容",
+                        "定期复习已学知识"
+                    };
+                    suggestion.EstimatedDays = 30;
+                    suggestion.MatchScore = 0.8;
+                    return suggestion;
+                }
+
+                var topWeak = weakPoints.First();
+                suggestion.Title = $"攻克{topWeak.Category}薄弱点";
+                suggestion.Description = $"该分类薄弱分数为 {topWeak.WeaknessScore}，正确率 {topWeak.AccuracyRate}%，建议优先加强。";
+
+                suggestion.Steps = new List<string>
+                {
+                    $"1. 复习{topWeak.Category}相关错题（共{topWeak.WrongCount}题）",
+                    "2. 针对错题进行专项练习，确保理解知识点"
+                };
+
+                if (topWeak.AccuracyRate < 50)
+                {
+                    suggestion.Steps.Add($"3. 重新学习{topWeak.Category}基础知识");
+                    suggestion.Steps.Add("4. 完成基础练习后再挑战进阶题目");
+                }
+                else
+                {
+                    suggestion.Steps.Add("3. 完成专项练习巩固薄弱知识点");
+                }
+
+                suggestion.Steps.Add("5. 一周后进行复习检测，评估掌握程度");
+
+                // 根据错题数量和正确率估算天数
+                suggestion.EstimatedDays = Math.Max(7, Math.Min(30, topWeak.WrongCount / 2 + 7));
+                suggestion.MatchScore = Math.Round(Math.Min(1.0, topWeak.WeaknessScore / 100), 2);
+
+                return suggestion;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "生成个性化学习路径建议失败: {UserId}", userId);
+                suggestion.Title = "默认学习计划";
+                suggestion.Description = "暂时无法生成个性化建议，请按常规计划学习。";
+                suggestion.Steps = new List<string> { "按学习路径继续推进", "定期复习错题" };
+                suggestion.EstimatedDays = 14;
+                suggestion.MatchScore = 0.5;
+                return suggestion;
+            }
+        }
     }
 }

@@ -287,6 +287,16 @@ namespace LearningAssistant.Common
                 var logger = sp.GetService<ILogger<LearningPathService>>();
                 return new LearningPathService(dbFactory, persistenceService, analyticsService, wrongAnswerService, logger);
             });
+            // P-001: 统一学习入口服务
+            services.AddSingleton<IUnifiedStudyEntryService>(sp =>
+            {
+                var wrongAnswerService = sp.GetRequiredService<IWrongAnswerService>();
+                var favoritesService = sp.GetRequiredService<IFavoritesService>();
+                var learningPathService = sp.GetRequiredService<ILearningPathService>();
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var logger = sp.GetService<ILogger<UnifiedStudyEntryService>>();
+                return new UnifiedStudyEntryService(wrongAnswerService, favoritesService, learningPathService, contentLoaderService, logger);
+            });
             services.AddSingleton<ILearningRecommendationService>(sp =>
             {
                 var spacedRepetitionService = sp.GetRequiredService<ISpacedRepetitionService>();

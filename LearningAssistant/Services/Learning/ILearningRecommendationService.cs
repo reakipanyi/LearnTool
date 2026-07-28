@@ -21,6 +21,17 @@ namespace LearningAssistant.Services.Learning
         RecommendationWeights GetWeights(string userId);
 
         void AdjustWeights(string userId, RecommendationWeights weights);
+
+        /// <summary>
+        /// 深度薄弱点分析（P-004）
+        /// 基于错题频率、复习间隔、正确率等多维度分析
+        /// </summary>
+        List<DeepWeakPointAnalysis> GetDeepWeakPoints(string userId);
+
+        /// <summary>
+        /// 生成个性化学习路径建议（P-004）
+        /// </summary>
+        PersonalizedPathSuggestion GetPersonalizedPath(string userId);
     }
 
     public class WeakPointAnalysis
@@ -52,5 +63,31 @@ namespace LearningAssistant.Services.Learning
         public double WeaknessWeight { get; set; } = 0.3;
         public double FreshnessWeight { get; set; } = 0.2;
         public double VarietyWeight { get; set; } = 0.1;
+    }
+
+    /// <summary>
+    /// 深度薄弱点分析结果
+    /// </summary>
+    public class DeepWeakPointAnalysis
+    {
+        public string Category { get; set; } = string.Empty;
+        public double WeaknessScore { get; set; }
+        public int WrongCount { get; set; }
+        public int ReviewCount { get; set; }
+        public double AccuracyRate { get; set; }
+        public int DaysSinceLastReview { get; set; }
+        public List<string> RecommendedActions { get; set; } = new();
+    }
+
+    /// <summary>
+    /// 个性化路径建议
+    /// </summary>
+    public class PersonalizedPathSuggestion
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public List<string> Steps { get; set; } = new();
+        public int EstimatedDays { get; set; }
+        public double MatchScore { get; set; }
     }
 }

@@ -673,6 +673,223 @@ namespace LearningAssistant.Services.Learning
         }
 
         #endregion
+
+        #region P-007 多维分析与学习效率
+
+        /// <summary>
+        /// 获取多维交叉分析（P-007）
+        /// 按学科、分类、时间段交叉分析学习数据
+        /// </summary>
+        public MultiDimensionAnalysis GetMultiDimensionAnalysis(string userId, DateTime startDate, DateTime endDate)
+        {
+            var result = new MultiDimensionAnalysis();
+
+            try
+            {
+                EnsureLoaded();
+                if (!_userAnalytics.TryGetValue(userId, out var userData))
+                    return result;
+
+                // 按分类聚合学习数据
+                var categoryBreakdown = new Dictionary<string, int>();
+                var weeklyPattern = new Dictionary<string, int>();
+                int totalItems = 0;
+                int totalCorrect = 0;
+                int totalWrong = 0;
+
+                var dayNames = new[] { "周日", "周一", "周二", "周三", "周四", "周五", "周六" };
+
+                for (var date = startDate.Date; date <= endDate.Date; date = date.AddDays(1))
+                {
+                    if (userData.DailyRecords.TryGetValue(date, out var record))
+                    {
+                        totalItems += record.TotalItems;
+                        totalCorrect += record.CorrectCount;
+                        totalWrong += record.WrongCount;
+
+                        // 聚合分类明细
+                        foreach (var kvp in record.CategoryBreakdown)
+                        {
+                            if (!categoryBreakdown.ContainsKey(kvp.Key))
+                                categoryBreakdown[kvp.Key] = 0;
+                            categoryBreakdown[kvp.Key] += kvp.Value;
+                        }
+
+                        // 按星期几统计学习量
+                        var dayName = dayNames[(int)date.DayOfWeek];
+                        if (!weeklyPattern.ContainsKey(dayName))
+                            weeklyPattern[dayName] = 0;
+                        weeklyPattern[dayName] += record.TotalItems;
+                    }
+                }
+
+                // SubjectCategoryBreakdown: 使用"全部"作为学科键，包含分类明细
+                result.SubjectCategoryBreakdown["全部"] = categoryBreakdown;
+                result.WeeklyPattern = weeklyPattern;
+
+                // 时间段效率（基于整体正确率）
+                int totalAttempts = totalCorrect + totalWrong;
+                double accuracy = totalAttempts > 0 ? (double)totalCorrect / totalAttempts * 100 : 0;
+                result.TimeSlotEfficiency["整体"] = Math.Round(accuracy, 2);
+
+                // 综合评分：正确率 50% + 学习量 30% + 连续性 20%
+                double itemsScore = Math.Min(100, totalItems * 2);
+                double consistencyScore = Math.Min(100, weeklyPattern.Count * 14.3);
+                result.OverallScore = Math.Round(accuracy * 0.5 + itemsScore * 0.3 + consistencyScore * 0.2, 2);
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "获取多维交叉分析失败: {UserId}", userId);
+                return result;
+            }
+        }
+
+        /// <summary>
+        /// 评估学习效率（P-007）
+        /// 综合正确率、学习速度、记忆保留率等指标
+        /// </summary>
+        public LearningEfficiencyReport GetLearningEfficiency(string userId)
+        {
+            var report = new LearningEfficiencyReport();
+
+            try
+            {
+                EnsureLoaded();
+
+                var startDate = DateTime.Today.AddDays(-30);
+
+                // 正确率评分（0-100）
+                double accuracy = GetAccuracyRate(userId, startDate);
+                report.AccuracyScore = Math.Round(accuracy, 2);
+
+                // 记忆保留率评分（CalculateRetentionRate 返回 0-1，转换为 0-100）
+                double retention = CalculateRetentionRate(userId);
+                report.RetentionScore = Math.Round(retention * 100, 2);
+
+                // 学习速度评分：基于近30天学习项目数和时长
+                int learnedItems = GetTotalLearnedItems(userId, startDate);
+                int studyMinutes = GetTotalStudyMinutes(userId, startDate);
+                double speed = studyMinutes > 0 ? Math.Min(100, (double)learnedItems / studyMinutes * 60) : 0;
+                report.SpeedScore = Math.Round(speed, 2);
+
+                // 一致性评分：基于连续学习天数
+                int streak = GetStudyStreak(userId);
+                report.ConsistencyScore = Math.Round(Math.Min(100, streak * 5.0), 2);
+
+                // 综合效率：正确率 35% + 保留率 25% + 速度 20% + 一致性 20%
+                report.OverallEfficiency = Math.Round(
+                    report.AccuracyScore * 0.35 + report.RetentionScore * 0.25 +
+                    report.SpeedScore * 0.2 + report.ConsistencyScore * 0.2, 2);
+
+                report.Summary = GenerateEfficiencySummary(report);
+
+                return report;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "评估学习效率失败: {UserId}", userId);
+                report.Summary = "暂时无法评估学习效率";
+                return report;
+            }
+        }
+
+        private string GenerateEfficiencySummary(LearningEfficiencyReport report)
+        {
+            if (report.OverallEfficiency >= 80)
+                return "学习效率优秀，继续保持当前学习节奏";
+            if (report.OverallEfficiency >= 60)
+                return "学习效率良好，可在薄弱环节上进一步加强";
+            if (report.OverallEfficiency >= 40)
+                return "学习效率一般，建议提升正确率和学习连续性";
+            return "学习效率较低，建议制定规律的学习计划并坚持执行";
+        }
+
+        /// <summary>
+        /// 生成学习建议（P-007）
+        /// 基于分析数据自动生成个性化建议
+        /// </summary>
+        public List<LearningSuggestion> GenerateSuggestions(string userId)
+        {
+            var suggestions = new List<LearningSuggestion>();
+
+            try
+            {
+                // 基于效率报告生成建议
+                var efficiency = GetLearningEfficiency(userId);
+
+                if (efficiency.AccuracyScore < 60)
+                {
+                    suggestions.Add(new LearningSuggestion
+                    {
+                        Category = "正确率",
+                        Title = "提升答题正确率",
+                        Description = $"当前正确率为 {efficiency.AccuracyScore}%，低于60%",
+                        Priority = 1,
+                        Action = "复习错题并重新学习薄弱知识点"
+                    });
+                }
+
+                if (efficiency.RetentionScore < 50)
+                {
+                    suggestions.Add(new LearningSuggestion
+                    {
+                        Category = "记忆保留",
+                        Title = "加强记忆巩固",
+                        Description = $"当前记忆保留率为 {efficiency.RetentionScore}%，需要加强复习",
+                        Priority = 2,
+                        Action = "增加间隔重复复习频率"
+                    });
+                }
+
+                if (efficiency.ConsistencyScore < 50)
+                {
+                    suggestions.Add(new LearningSuggestion
+                    {
+                        Category = "学习连续性",
+                        Title = "保持每日学习习惯",
+                        Description = "学习连续性不足，建议每日坚持学习",
+                        Priority = 3,
+                        Action = "制定每日学习计划并设置提醒"
+                    });
+                }
+
+                if (efficiency.SpeedScore < 30)
+                {
+                    suggestions.Add(new LearningSuggestion
+                    {
+                        Category = "学习速度",
+                        Title = "提升学习效率",
+                        Description = "学习速度偏低，建议专注学习减少分心",
+                        Priority = 4,
+                        Action = "使用番茄工作法提升专注度"
+                    });
+                }
+
+                // 如果没有具体建议，给出鼓励性建议
+                if (suggestions.Count == 0)
+                {
+                    suggestions.Add(new LearningSuggestion
+                    {
+                        Category = "综合",
+                        Title = "继续保持良好学习状态",
+                        Description = "各项指标表现良好",
+                        Priority = 5,
+                        Action = "继续按当前节奏学习并适当挑战更高难度"
+                    });
+                }
+
+                return suggestions.OrderBy(s => s.Priority).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "生成学习建议失败: {UserId}", userId);
+                return suggestions;
+            }
+        }
+
+        #endregion
     }
 
     /// <summary>

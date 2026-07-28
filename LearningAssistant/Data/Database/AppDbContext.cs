@@ -98,15 +98,26 @@ namespace LearningAssistant.Data.Database
                 System.Diagnostics.Trace.TraceError($"创建数据库目录失败: {ex.Message}");
             }
 
-            // BusyTimeout=5000: SQLite 遇到锁时最多等待 5 秒，避免立刻抛 SQLITE_BUSY。
-            var connectionString = $"Data Source={_dbPath};Cache=Shared;Pooling=True;BusyTimeout=5000;";
+            // 注意：Microsoft.Data.Sqlite 10.0+ 不再支持连接字符串中的 BusyTimeout 关键字，
+            // 改为通过 PRAGMA busy_timeout 在连接打开后设置（见 EnsureConnectionPragmas 方法）。
+            var connectionString = $"Data Source={_dbPath};Cache=Shared;Pooling=True;";
             optionsBuilder.UseSqlite(connectionString);
         }
 
         /// <summary>
-        /// 打开连接时启用 WAL 模式（读写并发支持更好）。
+        /// 打开连接时启用 WAL 模式（读写并发支持更好）并设置 busy_timeout。
         /// </summary>
         private void EnsureWALMode()
+        {
+            EnsureConnectionPragmas();
+        }
+
+        /// <summary>
+        /// 统一设置连接级 PRAGMA：WAL 模式 + busy_timeout=5000ms。
+        /// busy_timeout 无法再通过连接字符串设置（Microsoft.Data.Sqlite 10.0+ 已移除该关键字），
+        /// 必须在每次打开连接后通过 PRAGMA 命令显式设置。
+        /// </summary>
+        private void EnsureConnectionPragmas()
         {
             try
             {
@@ -116,6 +127,12 @@ namespace LearningAssistant.Data.Database
                     connection.Open();
                 }
                 using var cmd = connection.CreateCommand();
+
+                // 设置 busy_timeout = 5000ms：SQLite 遇到锁时最多等待 5 秒，避免立刻抛 SQLITE_BUSY。
+                cmd.CommandText = "PRAGMA busy_timeout = 5000;";
+                cmd.ExecuteNonQuery();
+
+                // 启用 WAL 模式（读写并发支持更好）。
                 cmd.CommandText = "PRAGMA journal_mode=WAL;";
                 var result = cmd.ExecuteScalar()?.ToString();
                 if (string.Equals(result, "wal", StringComparison.OrdinalIgnoreCase))
@@ -126,7 +143,7 @@ namespace LearningAssistant.Data.Database
             }
             catch
             {
-                // 启用 WAL 是非关键增强，失败不影响主流程。
+                // PRAGMA 设置是非关键增强，失败不影响主流程。
             }
         }
 
@@ -1010,6 +1027,7 @@ namespace LearningAssistant.Data.Database
         private int SaveChangesWithRetry(bool acceptAllChangesOnSuccess)
         {
             PrepareAuditableEntities();
+            EnsureConnectionPragmas(); // 写操作前确保 busy_timeout / WAL 已设置
             bool mutexHeld = AcquireWriteMutex();
             try
             {
@@ -1044,6 +1062,7 @@ namespace LearningAssistant.Data.Database
         private async Task<int> SaveChangesWithRetryAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken)
         {
             PrepareAuditableEntities();
+            EnsureConnectionPragmas(); // 写操作前确保 busy_timeout / WAL 已设置
             bool mutexHeld = AcquireWriteMutex();
             try
             {
