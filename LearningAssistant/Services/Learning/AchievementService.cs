@@ -45,8 +45,7 @@ namespace LearningAssistant.Services.Learning
         {
             if (_currentUserProfile != null && evt.UserId == _currentUserId)
             {
-                _currentUserProfile.LearningProgress.TotalItemsStudied++;
-                _currentUserProfile.LearningProgress.TotalItemsMastered++;
+                UpdateCategoryProgress(true);
                 CheckAndUnlockAchievements(_currentUserProfile, _currentUserProfile.LearningProgress);
             }
         }
@@ -55,8 +54,23 @@ namespace LearningAssistant.Services.Learning
         {
             if (_currentUserProfile != null && evt.UserId == _currentUserId)
             {
-                _currentUserProfile.LearningProgress.TotalItemsStudied++;
+                UpdateCategoryProgress(false);
                 CheckAndUnlockAchievements(_currentUserProfile, _currentUserProfile.LearningProgress);
+            }
+        }
+
+        private void UpdateCategoryProgress(bool isCorrect)
+        {
+            const string defaultCategory = "General";
+            if (!_currentUserProfile!.LearningProgress.CategoryProgresses.TryGetValue(defaultCategory, out var progress))
+            {
+                progress = new CategoryProgress { CategoryName = defaultCategory };
+                _currentUserProfile.LearningProgress.CategoryProgresses[defaultCategory] = progress;
+            }
+            progress.TotalTestCount++;
+            if (isCorrect)
+            {
+                progress.CorrectCount++;
             }
         }
 

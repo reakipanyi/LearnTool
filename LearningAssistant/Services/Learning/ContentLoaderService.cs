@@ -45,6 +45,12 @@ namespace LearningAssistant.Services.Learning
             { SubCategoryType.BiologyComprehensive, Constants.FileName.BiologyComprehensive }
         };
 
+        private const int MaxCacheEntries = 20;
+        private const int CacheSlidingExpirationMinutes = 30;
+
+        private readonly Dictionary<string, CacheEntry> _fileCache = new Dictionary<string, CacheEntry>();
+        private readonly object _cacheLock = new object();
+
         public ContentLoaderService(ILogger<ContentLoaderService> logger)
         {
             _logger = logger;
@@ -68,17 +74,7 @@ namespace LearningAssistant.Services.Learning
                     return new List<LearningItem>();
                 }
 
-                var json = File.ReadAllText(filePath);
-                var items = JsonHelper.DeserializeLearningItems(json);
-
-                foreach (var item in items)
-                {
-                    if (item.SubCategory == 0)
-                    {
-                        item.SubCategory = context.SubCategory;
-                    }
-                }
-
+                var items = LoadFromCacheOrFile(filePath, context.SubCategory);
                 return items;
             }
             catch (Exception ex)
@@ -88,12 +84,149 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
+        public List<LearningItem> LoadItemsPaged(LearningContext context, int pageIndex, int pageSize)
+        {
+            if (pageIndex < 0) pageIndex = 0;
+            if (pageSize <= 0) pageSize = 100;
+
+            try
+            {
+                var allItems = LoadItems(context);
+                int start = pageIndex * pageSize;
+                if (start >= allItems.Count)
+                    return new List<LearningItem>();
+
+                int count = Math.Min(pageSize, allItems.Count - start);
+                return allItems.Skip(start).Take(count).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load paged items for subCategory: {SubCategory}", context.SubCategory);
+                return new List<LearningItem>();
+            }
+        }
+
+        public int GetItemCount(LearningContext context)
+        {
+            try
+            {
+                string filePath = GetFilePath(context.SubCategory, context.WordBankFile);
+
+                if (!IsPathSafe(filePath) || !File.Exists(filePath))
+                    return 0;
+
+                var items = LoadFromCacheOrFile(filePath, context.SubCategory);
+                return items.Count;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to get item count for subCategory: {SubCategory}", context.SubCategory);
+                return 0;
+            }
+        }
+
+        public void InvalidateCache(SubCategoryType subCategory)
+        {
+            lock (_cacheLock)
+            {
+                var keysToRemove = _fileCache.Keys
+                    .Where(k => k.Contains(subCategory.ToString()))
+                    .ToList();
+
+                foreach (var key in keysToRemove)
+                {
+                    _fileCache.Remove(key);
+                    _logger.LogDebug("Cache invalidated for subCategory: {SubCategory}", subCategory);
+                }
+            }
+        }
+
+        public void InvalidateAllCaches()
+        {
+            lock (_cacheLock)
+            {
+                _fileCache.Clear();
+                _logger.LogDebug("All caches invalidated");
+            }
+        }
+
+        private List<LearningItem> LoadFromCacheOrFile(string filePath, SubCategoryType subCategory)
+        {
+            lock (_cacheLock)
+            {
+                if (_fileCache.TryGetValue(filePath, out var cached))
+                {
+                    if (cached.IsValid && !cached.IsExpired)
+                    {
+                        cached.LastAccessTime = DateTime.Now;
+                        _logger.LogDebug("Items loaded from cache: {FilePath}", filePath);
+                        return cached.Items;
+                    }
+
+                    if (!cached.IsValid)
+                    {
+                        _fileCache.Remove(filePath);
+                        _logger.LogDebug("Cache invalidated (file changed): {FilePath}", filePath);
+                    }
+                    else if (cached.IsExpired)
+                    {
+                        _fileCache.Remove(filePath);
+                        _logger.LogDebug("Cache expired: {FilePath}", filePath);
+                    }
+                }
+
+                if (_fileCache.Count >= MaxCacheEntries)
+                {
+                    var oldestKey = _fileCache.OrderBy(kvp => kvp.Value.LastAccessTime)
+                        .FirstOrDefault().Key;
+                    if (oldestKey != null)
+                    {
+                        _fileCache.Remove(oldestKey);
+                        _logger.LogDebug("Evicted oldest cache entry: {FilePath}", oldestKey);
+                    }
+                }
+            }
+
+            var fileInfo = new FileInfo(filePath);
+            var json = File.ReadAllText(filePath);
+            var items = JsonHelper.DeserializeLearningItems(json);
+
+            foreach (var item in items)
+            {
+                if (item.SubCategory == 0)
+                {
+                    item.SubCategory = subCategory;
+                }
+            }
+
+            lock (_cacheLock)
+            {
+                _fileCache[filePath] = new CacheEntry
+                {
+                    Items = items,
+                    FilePath = filePath,
+                    FileLastWriteTime = fileInfo.LastWriteTime,
+                    LoadTime = DateTime.Now,
+                    LastAccessTime = DateTime.Now
+                };
+            }
+
+            _logger.LogDebug("Items loaded from file and cached: {FilePath}, count: {Count}", filePath, items.Count);
+            return items;
+        }
+
         public void SaveItems(LearningContext context, List<LearningItem> items)
         {
             try
             {
                 string filePath = GetFilePath(context.SubCategory, context.WordBankFile);
                 JsonHelper.SaveToFile(filePath, items);
+
+                lock (_cacheLock)
+                {
+                    _fileCache.Remove(filePath);
+                }
+
                 _logger.LogInformation("Saved {Count} items to {FilePath}", items.Count, filePath);
             }
             catch (Exception ex)
@@ -236,6 +369,36 @@ namespace LearningAssistant.Services.Learning
             {
                 return false;
             }
+        }
+
+        private class CacheEntry
+        {
+            public List<LearningItem> Items { get; set; } = new List<LearningItem>();
+            public string FilePath { get; set; } = string.Empty;
+            public DateTime FileLastWriteTime { get; set; }
+            public DateTime LoadTime { get; set; }
+            public DateTime LastAccessTime { get; set; }
+
+            public bool IsValid
+            {
+                get
+                {
+                    try
+                    {
+                        if (string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath))
+                            return true;
+
+                        var currentLastWrite = File.GetLastWriteTime(FilePath);
+                        return currentLastWrite <= FileLastWriteTime;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            public bool IsExpired => (DateTime.Now - LastAccessTime).TotalMinutes > CacheSlidingExpirationMinutes;
         }
     }
 }

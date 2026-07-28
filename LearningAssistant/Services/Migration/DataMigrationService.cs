@@ -5,6 +5,8 @@ using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Text;
+using System.Text.Json;
 
 namespace LearningAssistant.Services.Migration
 {
@@ -17,6 +19,19 @@ namespace LearningAssistant.Services.Migration
 
         bool NeedsMigration();
         MigrationResult PerformMigration();
+        bool BackupBeforeMigration();
+        bool VerifyMigrationResult(MigrationResult result);
+    }
+
+    /// <summary>
+    /// 迁移检查点状态。
+    /// </summary>
+    internal static class MigrationStepStatus
+    {
+        public const string Pending = "Pending";
+        public const string Running = "Running";
+        public const string Completed = "Completed";
+        public const string Failed = "Failed";
     }
 
     /// <summary>
@@ -28,6 +43,18 @@ namespace LearningAssistant.Services.Migration
 
         private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
         private readonly ILogger<DataMigrationService>? _logger;
+
+        /// <summary>迁移步骤常量（用于检查点）</summary>
+        private static class MigrationSteps
+        {
+            public const string Backup = "Backup";
+            public const string SpacedRepetition = "SpacedRepetition";
+            public const string Session = "Session";
+            public const string LearningItemStates = "LearningItemStates";
+            public const string ReminderRepeatDays = "ReminderRepeatDays";
+            public const string Verification = "Verification";
+            public static string User(string userId) => $"User:{userId}";
+        }
 
         public event EventHandler<MigrationProgressEventArgs>? ProgressChanged;
 
@@ -48,6 +75,59 @@ namespace LearningAssistant.Services.Migration
         #region 公共方法
 
         /// <summary>
+        /// 检查指定迁移步骤是否已经完成（断点续传）。
+        /// </summary>
+        private bool IsStepCompleted(string stepId)
+        {
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var step = db.MigrationCheckpoints.FirstOrDefault(s => s.StepId == stepId);
+                return step != null && step.Status == MigrationStepStatus.Completed;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to read checkpoint for step {StepId}", stepId);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 更新迁移步骤状态。失败时不抛异常（记录日志即可），保证检查点写入为 best-effort。
+        /// </summary>
+        private void MarkStepStatus(string stepId, string status, object? detail = null)
+        {
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var step = db.MigrationCheckpoints.FirstOrDefault(s => s.StepId == stepId);
+                string detailJson = detail != null ? JsonSerializer.Serialize(detail) : (step?.DetailJson ?? "{}");
+                if (step == null)
+                {
+                    db.MigrationCheckpoints.Add(new MigrationCheckpointEntity
+                    {
+                        StepId = stepId,
+                        Status = status,
+                        DetailJson = detailJson,
+                        CreatedAt = DateTime.Now,
+                        UpdatedAt = DateTime.Now
+                    });
+                }
+                else
+                {
+                    step.Status = status;
+                    step.DetailJson = detailJson;
+                    step.UpdatedAt = DateTime.Now;
+                }
+                db.SaveChanges();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to mark checkpoint {StepId}={Status}", stepId, status);
+            }
+        }
+
+        /// <summary>
         /// 检查是否需要迁移
         /// </summary>
         public bool NeedsMigration()
@@ -56,42 +136,43 @@ namespace LearningAssistant.Services.Migration
             {
                 var needsMigration = false;
 
-                // 检查用户数据
-                if (JsonUserIds.Count > 0)
+                // 有任何用户未完成迁移则需要迁移
+                foreach (var userId in JsonUserIds)
                 {
+                    if (IsStepCompleted(MigrationSteps.User(userId)))
+                        continue;
                     using var db = _dbContextFactory.CreateDbContext();
-                    var existingUserIds = new HashSet<string>(db.UserProfiles.Select(u => u.UserId));
-
-                    foreach (var userId in JsonUserIds)
+                    if (!db.UserProfiles.Any(u => u.UserId == userId))
                     {
-                        if (!existingUserIds.Contains(userId))
+                        _logger?.LogInformation("Found user {UserId} not in SQLite, migration needed", userId);
+                        needsMigration = true;
+                        break;
+                    }
+                }
+
+                if (!needsMigration && File.Exists(SpacedRepetitionJsonPath))
+                {
+                    if (!IsStepCompleted(MigrationSteps.SpacedRepetition))
+                    {
+                        using var db = _dbContextFactory.CreateDbContext();
+                        if (!db.SpacedRepetitionItems.Any())
                         {
-                            _logger?.LogInformation("Found user {UserId} not in SQLite, migration needed", userId);
+                            _logger?.LogInformation("Spaced repetition data needs migration");
                             needsMigration = true;
-                            break;
                         }
                     }
                 }
 
-                // 检查间隔重复数据
-                if (!needsMigration && File.Exists(SpacedRepetitionJsonPath))
-                {
-                    using var db = _dbContextFactory.CreateDbContext();
-                    if (!db.SpacedRepetitionItems.Any())
-                    {
-                        _logger?.LogInformation("Spaced repetition data needs migration");
-                        needsMigration = true;
-                    }
-                }
-
-                // 检查会话数据
                 if (!needsMigration && File.Exists(SessionJsonPath))
                 {
-                    using var db = _dbContextFactory.CreateDbContext();
-                    if (!db.AppSessions.Any(s => s.SessionKey == "app_session"))
+                    if (!IsStepCompleted(MigrationSteps.Session))
                     {
-                        _logger?.LogInformation("Session data needs migration");
-                        needsMigration = true;
+                        using var db = _dbContextFactory.CreateDbContext();
+                        if (!db.AppSessions.Any(s => s.SessionKey == "app_session"))
+                        {
+                            _logger?.LogInformation("Session data needs migration");
+                            needsMigration = true;
+                        }
                     }
                 }
 
@@ -100,6 +181,137 @@ namespace LearningAssistant.Services.Migration
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Failed to check migration status");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 迁移前备份
+        /// </summary>
+        public bool BackupBeforeMigration()
+        {
+            try
+            {
+                var backupDir = Path.Combine(AppPaths.DataDir, "MigrationBackups", DateTime.Now.ToString("yyyyMMdd_HHmmss"));
+                Directory.CreateDirectory(backupDir);
+
+                _logger?.LogInformation("Starting backup to {BackupDir}", backupDir);
+                ReportProgress(0, "备份中...");
+
+                var backupSuccess = true;
+
+                if (Directory.Exists(AppPaths.UsersDir))
+                {
+                    var userBackupDir = Path.Combine(backupDir, "Users");
+                    Directory.CreateDirectory(userBackupDir);
+
+                    foreach (var file in Directory.GetFiles(AppPaths.UsersDir, "*.json"))
+                    {
+                        try
+                        {
+                            var destFile = Path.Combine(userBackupDir, Path.GetFileName(file));
+                            File.Copy(file, destFile, true);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogWarning(ex, "Failed to backup user file: {File}", file);
+                            backupSuccess = false;
+                        }
+                    }
+                }
+
+                if (File.Exists(SpacedRepetitionJsonPath))
+                {
+                    try
+                    {
+                        var destFile = Path.Combine(backupDir, "spaced_repetition.json");
+                        File.Copy(SpacedRepetitionJsonPath, destFile, true);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "Failed to backup spaced repetition data");
+                        backupSuccess = false;
+                    }
+                }
+
+                if (File.Exists(SessionJsonPath))
+                {
+                    try
+                    {
+                        var destFile = Path.Combine(backupDir, "session.json");
+                        File.Copy(SessionJsonPath, destFile, true);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "Failed to backup session data");
+                        backupSuccess = false;
+                    }
+                }
+
+                _logger?.LogInformation("Backup completed to {BackupDir}, success: {Success}", backupDir, backupSuccess);
+                return backupSuccess;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Backup failed");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 验证迁移结果
+        /// </summary>
+        public bool VerifyMigrationResult(MigrationResult result)
+        {
+            if (!result.Success)
+                return false;
+
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var verificationErrors = new List<string>();
+
+                var jsonUserIds = new HashSet<string>(JsonUserIds);
+                var dbUserIds = new HashSet<string>(db.UserProfiles.Select(u => u.UserId));
+
+                foreach (var userId in jsonUserIds)
+                {
+                    if (!dbUserIds.Contains(userId))
+                    {
+                        verificationErrors.Add($"用户 {userId} 迁移失败");
+                    }
+                }
+
+                if (result.SpacedRepetitionMigrated)
+                {
+                    if (!db.SpacedRepetitionItems.Any())
+                    {
+                        verificationErrors.Add("间隔重复数据迁移验证失败");
+                    }
+                }
+
+                if (result.SessionMigrated)
+                {
+                    if (!db.AppSessions.Any(s => s.SessionKey == "app_session"))
+                    {
+                        verificationErrors.Add("会话数据迁移验证失败");
+                    }
+                }
+
+                if (verificationErrors.Count > 0)
+                {
+                    _logger?.LogError("Migration verification failed: {Errors}", string.Join(", ", verificationErrors));
+                    result.Errors.AddRange(verificationErrors);
+                    return false;
+                }
+
+                result.VerificationPassed = true;
+                _logger?.LogInformation("Migration verification passed");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Migration verification failed with exception");
                 return false;
             }
         }
@@ -138,7 +350,7 @@ namespace LearningAssistant.Services.Migration
         private string SessionJsonPath => AppPaths.LastSessionPath;
 
         /// <summary>
-        /// 执行迁移
+        /// 执行迁移（支持断电/崩溃后断点续传）
         /// </summary>
         public MigrationResult PerformMigration()
         {
@@ -146,27 +358,59 @@ namespace LearningAssistant.Services.Migration
             try
             {
                 _logger?.LogInformation("Starting data migration...");
-                ReportProgress(0, "开始迁移...");
 
-                // 1. 迁移用户数据
+                // ---- 备份步骤 ----
+                ReportProgress(5, "开始备份...");
+                var backupDir = Path.Combine(AppPaths.DataDir, "MigrationBackups", DateTime.Now.ToString("yyyyMMdd_HHmmss"));
+                result.BackupPath = backupDir;
+
+                if (!IsStepCompleted(MigrationSteps.Backup))
+                {
+                    MarkStepStatus(MigrationSteps.Backup, MigrationStepStatus.Running, new { backupDir });
+                    if (!BackupBeforeMigration())
+                    {
+                        _logger?.LogWarning("Backup completed with warnings, proceeding with migration");
+                        result.Errors.Add("备份过程中出现警告，请检查备份文件");
+                    }
+                    MarkStepStatus(MigrationSteps.Backup, MigrationStepStatus.Completed, new { backupDir });
+                }
+                else
+                {
+                    _logger?.LogInformation("Backup step already completed, skipping");
+                }
+
+                ReportProgress(10, "开始迁移...");
+
                 var userIds = JsonUserIds;
                 result.TotalUsers = userIds.Count;
 
+                // ---- 用户迁移步骤（每个用户独立检查点）----
                 for (int i = 0; i < userIds.Count; i++)
                 {
                     var userId = userIds[i];
-                    var progress = result.TotalUsers > 0 ? (i + 1) * 60 / result.TotalUsers : 60;
+                    var stepId = MigrationSteps.User(userId);
+                    var progress = 10 + (result.TotalUsers > 0 ? (i + 1) * 50 / result.TotalUsers : 50);
                     ReportProgress(progress, $"正在迁移用户: {userId}");
+
+                    if (IsStepCompleted(stepId))
+                    {
+                        result.SuccessfulMigrations++;
+                        continue;
+                    }
 
                     try
                     {
+                        MarkStepStatus(stepId, MigrationStepStatus.Running);
                         if (MigrateUser(userId))
                         {
                             result.SuccessfulMigrations++;
+                            MarkStepStatus(stepId, MigrationStepStatus.Completed);
                         }
                         else
                         {
                             result.FailedMigrations++;
+                            MarkStepStatus(stepId, MigrationStepStatus.Failed,
+                                new { error = "MigrateUser returned false" });
                         }
                     }
                     catch (Exception ex)
@@ -174,73 +418,127 @@ namespace LearningAssistant.Services.Migration
                         _logger?.LogError(ex, "Failed to migrate user {UserId}", userId);
                         result.FailedMigrations++;
                         result.Errors.Add($"迁移用户 {userId} 时出错: {ex.Message}");
+                        MarkStepStatus(stepId, MigrationStepStatus.Failed, new { error = ex.Message });
                     }
                 }
 
-                // 2. 迁移间隔重复数据
-                ReportProgress(70, "正在迁移间隔重复数据...");
-                try
+                // ---- 间隔重复数据迁移 ----
+                ReportProgress(65, "正在迁移间隔重复数据...");
+                if (!IsStepCompleted(MigrationSteps.SpacedRepetition))
                 {
-                    if (MigrateSpacedRepetitionData())
+                    try
                     {
-                        result.SpacedRepetitionMigrated = true;
-                        _logger?.LogInformation("Spaced repetition data migrated successfully");
+                        MarkStepStatus(MigrationSteps.SpacedRepetition, MigrationStepStatus.Running);
+                        if (MigrateSpacedRepetitionData())
+                        {
+                            result.SpacedRepetitionMigrated = true;
+                            MarkStepStatus(MigrationSteps.SpacedRepetition, MigrationStepStatus.Completed);
+                            _logger?.LogInformation("Spaced repetition data migrated successfully");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogError(ex, "Failed to migrate spaced repetition data");
+                        result.Errors.Add($"迁移间隔重复数据失败: {ex.Message}");
+                        MarkStepStatus(MigrationSteps.SpacedRepetition, MigrationStepStatus.Failed, new { error = ex.Message });
                     }
                 }
-                catch (Exception ex)
+                else
                 {
-                    _logger?.LogError(ex, "Failed to migrate spaced repetition data");
-                    result.Errors.Add($"迁移间隔重复数据失败: {ex.Message}");
+                    result.SpacedRepetitionMigrated = true;
                 }
 
-                // 3. 迁移会话数据
-                ReportProgress(80, "正在迁移会话数据...");
-                try
+                // ---- 会话数据迁移 ----
+                ReportProgress(75, "正在迁移会话数据...");
+                if (!IsStepCompleted(MigrationSteps.Session))
                 {
-                    if (MigrateSessionData())
+                    try
                     {
-                        result.SessionMigrated = true;
-                        _logger?.LogInformation("Session data migrated successfully");
+                        MarkStepStatus(MigrationSteps.Session, MigrationStepStatus.Running);
+                        if (MigrateSessionData())
+                        {
+                            result.SessionMigrated = true;
+                            MarkStepStatus(MigrationSteps.Session, MigrationStepStatus.Completed);
+                            _logger?.LogInformation("Session data migrated successfully");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogError(ex, "Failed to migrate session data");
+                        result.Errors.Add($"迁移会话数据失败: {ex.Message}");
+                        MarkStepStatus(MigrationSteps.Session, MigrationStepStatus.Failed, new { error = ex.Message });
                     }
                 }
-                catch (Exception ex)
+                else
                 {
-                    _logger?.LogError(ex, "Failed to migrate session data");
-                    result.Errors.Add($"迁移会话数据失败: {ex.Message}");
+                    result.SessionMigrated = true;
                 }
 
-                // 4. 迁移学习项状态数据（从 CategoryProgress 的 JSON 字段）
-                ReportProgress(85, "正在迁移学习项状态数据...");
-                try
+                // ---- 学习项状态迁移 ----
+                ReportProgress(80, "正在迁移学习项状态数据...");
+                if (!IsStepCompleted(MigrationSteps.LearningItemStates))
                 {
-                    if (MigrateLearningItemStates())
+                    try
                     {
+                        MarkStepStatus(MigrationSteps.LearningItemStates, MigrationStepStatus.Running);
+                        var migrated = MigrateLearningItemStates();
+                        MarkStepStatus(MigrationSteps.LearningItemStates, MigrationStepStatus.Completed, new { migrated });
                         _logger?.LogInformation("Learning item states migrated successfully");
                     }
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogError(ex, "Failed to migrate learning item states");
-                    result.Errors.Add($"迁移学习项状态数据失败: {ex.Message}");
-                }
-
-                // 5. 迁移提醒重复日期数据（从 Reminder 的 JSON 字段）
-                ReportProgress(95, "正在迁移提醒重复日期数据...");
-                try
-                {
-                    if (MigrateReminderRepeatDays())
+                    catch (Exception ex)
                     {
-                        _logger?.LogInformation("Reminder repeat days migrated successfully");
+                        _logger?.LogError(ex, "Failed to migrate learning item states");
+                        result.Errors.Add($"迁移学习项状态数据失败: {ex.Message}");
+                        MarkStepStatus(MigrationSteps.LearningItemStates, MigrationStepStatus.Failed, new { error = ex.Message });
                     }
                 }
-                catch (Exception ex)
+
+                // ---- 提醒重复日期迁移 ----
+                ReportProgress(90, "正在迁移提醒重复日期数据...");
+                if (!IsStepCompleted(MigrationSteps.ReminderRepeatDays))
                 {
-                    _logger?.LogError(ex, "Failed to migrate reminder repeat days");
-                    result.Errors.Add($"迁移提醒重复日期数据失败: {ex.Message}");
+                    try
+                    {
+                        MarkStepStatus(MigrationSteps.ReminderRepeatDays, MigrationStepStatus.Running);
+                        var migrated = MigrateReminderRepeatDays();
+                        MarkStepStatus(MigrationSteps.ReminderRepeatDays, MigrationStepStatus.Completed, new { migrated });
+                        _logger?.LogInformation("Reminder repeat days migrated successfully");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogError(ex, "Failed to migrate reminder repeat days");
+                        result.Errors.Add($"迁移提醒重复日期数据失败: {ex.Message}");
+                        MarkStepStatus(MigrationSteps.ReminderRepeatDays, MigrationStepStatus.Failed, new { error = ex.Message });
+                    }
                 }
 
-                ReportProgress(100, "迁移完成!");
-                result.Success = result.FailedMigrations == 0;
+                // ---- 验证迁移 ----
+                ReportProgress(95, "正在验证迁移结果...");
+                bool verificationPassed;
+                if (!IsStepCompleted(MigrationSteps.Verification))
+                {
+                    MarkStepStatus(MigrationSteps.Verification, MigrationStepStatus.Running);
+                    verificationPassed = VerifyMigrationResult(result);
+                    if (!verificationPassed)
+                    {
+                        _logger?.LogError("Migration verification failed");
+                        result.Errors.Add("迁移验证失败，请检查数据完整性");
+                        MarkStepStatus(MigrationSteps.Verification, MigrationStepStatus.Failed,
+                            new { errors = result.Errors });
+                    }
+                    else
+                    {
+                        MarkStepStatus(MigrationSteps.Verification, MigrationStepStatus.Completed);
+                    }
+                }
+                else
+                {
+                    verificationPassed = true;
+                    result.VerificationPassed = true;
+                }
+
+                ReportProgress(100, verificationPassed ? "迁移完成!" : "迁移完成(部分数据可能需要检查)");
+                result.Success = result.FailedMigrations == 0 && verificationPassed;
                 _logger?.LogInformation("Migration completed: {SuccessCount} successful, {FailedCount} failed",
                     result.SuccessfulMigrations, result.FailedMigrations);
             }
@@ -257,7 +555,7 @@ namespace LearningAssistant.Services.Migration
         #region 私有迁移方法
 
         /// <summary>
-        /// 迁移单个用户
+        /// 迁移单个用户（使用事务保护）
         /// </summary>
         private bool MigrateUser(string userId)
         {
@@ -278,17 +576,29 @@ namespace LearningAssistant.Services.Migration
                 return false;
             }
 
-            var userEntity = profile.ToEntity();
-            db.UserProfiles.Add(userEntity);
-
-            foreach (var categoryProgress in profile.LearningProgress.CategoryProgresses.Values)
+            try
             {
-                userEntity.CategoryProgresses.Add(categoryProgress.ToEntity(userId));
-            }
+                using var transaction = db.Database.BeginTransaction();
 
-            db.SaveChanges();
-            _logger?.LogInformation("Successfully migrated user {UserId}", userId);
-            return true;
+                var userEntity = profile.ToEntity();
+                db.UserProfiles.Add(userEntity);
+
+                foreach (var categoryProgress in profile.LearningProgress.CategoryProgresses.Values)
+                {
+                    userEntity.CategoryProgresses.Add(categoryProgress.ToEntity(userId));
+                }
+
+                db.SaveChanges();
+                transaction.Commit();
+
+                _logger?.LogInformation("Successfully migrated user {UserId}", userId);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to migrate user {UserId} within transaction", userId);
+                return false;
+            }
         }
 
         /// <summary>
@@ -319,19 +629,31 @@ namespace LearningAssistant.Services.Migration
                 return false;
             }
 
-            var totalItems = 0;
-            foreach (var kvp in userItems)
+            try
             {
-                foreach (var item in kvp.Value)
-                {
-                    db.SpacedRepetitionItems.Add(item.ToEntity());
-                    totalItems++;
-                }
-            }
+                using var transaction = db.Database.BeginTransaction();
+                var totalItems = 0;
 
-            db.SaveChanges();
-            _logger?.LogInformation("Migrated {Count} spaced repetition items", totalItems);
-            return true;
+                foreach (var kvp in userItems)
+                {
+                    foreach (var item in kvp.Value)
+                    {
+                        db.SpacedRepetitionItems.Add(item.ToEntity());
+                        totalItems++;
+                    }
+                }
+
+                db.SaveChanges();
+                transaction.Commit();
+
+                _logger?.LogInformation("Migrated {count} spaced repetition items", totalItems);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to migrate spaced repetition data within transaction");
+                return false;
+            }
         }
 
         /// <summary>
@@ -360,18 +682,30 @@ namespace LearningAssistant.Services.Migration
                 return false;
             }
 
-            var sessionJson = Common.JsonHelper.Serialize(session);
-            db.AppSessions.Add(new AppSessionEntity
+            try
             {
-                SessionKey = "app_session",
-                SessionDataJson = sessionJson,
-                LastAccessTime = DateTime.Now,
-                UpdatedAt = DateTime.Now
-            });
+                using var transaction = db.Database.BeginTransaction();
 
-            db.SaveChanges();
-            _logger?.LogInformation("Session data migrated successfully");
-            return true;
+                var sessionJson = Common.JsonHelper.Serialize(session);
+                db.AppSessions.Add(new AppSessionEntity
+                {
+                    SessionKey = "app_session",
+                    SessionDataJson = sessionJson,
+                    LastAccessTime = DateTime.Now,
+                    UpdatedAt = DateTime.Now
+                });
+
+                db.SaveChanges();
+                transaction.Commit();
+
+                _logger?.LogInformation("Session data migrated successfully");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to migrate session data within transaction");
+                return false;
+            }
         }
 
         /// <summary>
@@ -411,61 +745,72 @@ namespace LearningAssistant.Services.Migration
                 return false;
             }
 
-            var totalStates = 0;
-            foreach (var cp in categoryProgresses)
+            try
             {
-                try
-                {
-                    var knownItems = JsonHelper.Deserialize<List<string>>(cp.KnownItemsJson) ?? new List<string>();
-                    var unknownItems = JsonHelper.Deserialize<List<string>>(cp.UnknownItemsJson) ?? new List<string>();
+                using var transaction = db.Database.BeginTransaction();
+                var totalStates = 0;
 
-                    foreach (var content in knownItems)
+                foreach (var cp in categoryProgresses)
+                {
+                    try
                     {
-                        if (!string.IsNullOrWhiteSpace(content))
+                        var knownItems = JsonHelper.Deserialize<List<string>>(cp.KnownItemsJson) ?? new List<string>();
+                        var unknownItems = JsonHelper.Deserialize<List<string>>(cp.UnknownItemsJson) ?? new List<string>();
+
+                        foreach (var content in knownItems)
                         {
-                            db.LearningItemStates.Add(new LearningItemStateEntity
+                            if (!string.IsNullOrWhiteSpace(content))
                             {
-                                UserId = cp.UserId,
-                                CategoryName = cp.CategoryName,
-                                Content = content,
-                                IsKnown = true,
-                                CreatedAt = DateTime.Now,
-                                UpdatedAt = DateTime.Now
-                            });
-                            totalStates++;
+                                db.LearningItemStates.Add(new LearningItemStateEntity
+                                {
+                                    UserId = cp.UserId,
+                                    CategoryName = cp.CategoryName,
+                                    Content = content,
+                                    IsKnown = true,
+                                    CreatedAt = DateTime.Now,
+                                    UpdatedAt = DateTime.Now
+                                });
+                                totalStates++;
+                            }
+                        }
+
+                        foreach (var content in unknownItems)
+                        {
+                            if (!string.IsNullOrWhiteSpace(content))
+                            {
+                                db.LearningItemStates.Add(new LearningItemStateEntity
+                                {
+                                    UserId = cp.UserId,
+                                    CategoryName = cp.CategoryName,
+                                    Content = content,
+                                    IsKnown = false,
+                                    CreatedAt = DateTime.Now,
+                                    UpdatedAt = DateTime.Now
+                                });
+                                totalStates++;
+                            }
                         }
                     }
-
-                    foreach (var content in unknownItems)
+                    catch (Exception ex)
                     {
-                        if (!string.IsNullOrWhiteSpace(content))
-                        {
-                            db.LearningItemStates.Add(new LearningItemStateEntity
-                            {
-                                UserId = cp.UserId,
-                                CategoryName = cp.CategoryName,
-                                Content = content,
-                                IsKnown = false,
-                                CreatedAt = DateTime.Now,
-                                UpdatedAt = DateTime.Now
-                            });
-                            totalStates++;
-                        }
+                        _logger?.LogWarning(ex, "Failed to migrate learning item states for category {Category}", cp.CategoryName);
                     }
                 }
-                catch (Exception ex)
+
+                if (totalStates > 0)
                 {
-                    _logger?.LogWarning(ex, "Failed to migrate learning item states for category {Category}", cp.CategoryName);
+                    db.SaveChanges();
+                    transaction.Commit();
+                    _logger?.LogInformation("Migrated {count} learning item states", totalStates);
                 }
-            }
 
-            if (totalStates > 0)
+                return totalStates > 0;
+            }
+            catch (Exception ex)
             {
-                db.SaveChanges();
-                _logger?.LogInformation("Migrated {Count} learning item states", totalStates);
+                _logger?.LogError(ex, "Failed to migrate learning item states within transaction");
+                return false;
             }
-
-            return totalStates > 0;
         }
 
         /// <summary>
@@ -488,39 +833,50 @@ namespace LearningAssistant.Services.Migration
                 return false;
             }
 
-            var totalDays = 0;
-            foreach (var reminder in reminders)
+            try
             {
-                try
+                using var transaction = db.Database.BeginTransaction();
+                var totalDays = 0;
+
+                foreach (var reminder in reminders)
                 {
-                    var repeatDays = JsonHelper.Deserialize<List<DayOfWeek>>(reminder.RepeatDaysJson);
-                    if (repeatDays != null)
+                    try
                     {
-                        foreach (var day in repeatDays)
+                        var repeatDays = JsonHelper.Deserialize<List<DayOfWeek>>(reminder.RepeatDaysJson);
+                        if (repeatDays != null)
                         {
-                            db.ReminderRepeatDays.Add(new ReminderRepeatDayEntity
+                            foreach (var day in repeatDays)
                             {
-                                ReminderId = reminder.Id,
-                                DayOfWeek = (int)day,
-                                CreatedAt = DateTime.Now
-                            });
-                            totalDays++;
+                                db.ReminderRepeatDays.Add(new ReminderRepeatDayEntity
+                                {
+                                    ReminderId = reminder.Id,
+                                    DayOfWeek = (int)day,
+                                    CreatedAt = DateTime.Now
+                                });
+                                totalDays++;
+                            }
                         }
                     }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "Failed to migrate repeat days for reminder {Id}", reminder.Id);
+                    }
                 }
-                catch (Exception ex)
+
+                if (totalDays > 0)
                 {
-                    _logger?.LogWarning(ex, "Failed to migrate repeat days for reminder {Id}", reminder.Id);
+                    db.SaveChanges();
+                    transaction.Commit();
+                    _logger?.LogInformation("Migrated {count} reminder repeat days", totalDays);
                 }
-            }
 
-            if (totalDays > 0)
+                return totalDays > 0;
+            }
+            catch (Exception ex)
             {
-                db.SaveChanges();
-                _logger?.LogInformation("Migrated {Count} reminder repeat days", totalDays);
+                _logger?.LogError(ex, "Failed to migrate reminder repeat days within transaction");
+                return false;
             }
-
-            return totalDays > 0;
         }
 
         private void ReportProgress(int percentage, string message)
@@ -555,6 +911,8 @@ namespace LearningAssistant.Services.Migration
         public int FailedMigrations { get; set; }
         public bool SpacedRepetitionMigrated { get; set; }
         public bool SessionMigrated { get; set; }
+        public bool VerificationPassed { get; set; }
+        public string BackupPath { get; set; } = string.Empty;
         public List<string> Errors { get; set; } = new List<string>();
     }
 }

@@ -1,5 +1,7 @@
 using LearningAssistant.Common;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using System.Threading;
 
 namespace LearningAssistant.Data.Database
 {
@@ -8,6 +10,16 @@ namespace LearningAssistant.Data.Database
     /// </summary>
     public class AppDbContext : DbContext
     {
+        /// <summary>跨进程互斥锁名称（基于数据库文件路径哈希）。</summary>
+        private static readonly Mutex _dbWriteMutex = CreateGlobalMutex();
+
+        /// <summary>SQLite 忙/锁错误码（SqliteException.SqliteErrorCode）。</summary>
+        private const int SQLITE_BUSY = 5;
+        private const int SQLITE_LOCKED = 6;
+        /// <summary>SQLite 写冲突错误码。</summary>
+        private const int SQLITE_CONSTRAINT_PRIMARYKEY = 1555;
+        private const int MAX_SAVE_RETRIES = 6;
+
         public DbSet<UserProfileEntity> UserProfiles { get; set; }
         public DbSet<CategoryProgressEntity> CategoryProgresses { get; set; }
         public DbSet<LearningRecordEntity> LearningRecords { get; set; }
@@ -30,8 +42,17 @@ namespace LearningAssistant.Data.Database
         public DbSet<ChallengeHistoryEntity> ChallengeHistory { get; set; }
         public DbSet<LearningGoalEntity> LearningGoals { get; set; }
         public DbSet<DailyGoalRecordEntity> DailyGoalRecords { get; set; }
+        public DbSet<MigrationCheckpointEntity> MigrationCheckpoints { get; set; }
 
         private readonly string _dbPath;
+
+        private static Mutex CreateGlobalMutex()
+        {
+            // 使用数据库路径生成稳定的全局互斥锁名称。
+            // 跨进程/多实例运行时可把写操作串行化，避免 1555/5 错误。
+            string mutexId = $"Global\\LearningAssistantDB_{AppPaths.DatabasePath.GetHashCode():X8}";
+            return new Mutex(false, mutexId);
+        }
 
         /// <summary>
         /// 默认构造函数，使用默认数据库路径
@@ -42,16 +63,28 @@ namespace LearningAssistant.Data.Database
         }
 
         /// <summary>
+        /// 使用指定配置的构造函数，用于测试
+        /// </summary>
+        public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
+        {
+            _dbPath = GetDefaultDbPath();
+        }
+
+        /// <summary>
         /// 获取默认数据库路径
         /// </summary>
         private string GetDefaultDbPath()
         {
             return AppPaths.DatabasePath;
-
         }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
+            if (optionsBuilder.IsConfigured)
+            {
+                return;
+            }
+
             try
             {
                 var dbDir = Path.GetDirectoryName(_dbPath);
@@ -65,8 +98,36 @@ namespace LearningAssistant.Data.Database
                 System.Diagnostics.Trace.TraceError($"创建数据库目录失败: {ex.Message}");
             }
 
-            var connectionString = $"Data Source={_dbPath};Cache=Shared;Pooling=True;";
+            // BusyTimeout=5000: SQLite 遇到锁时最多等待 5 秒，避免立刻抛 SQLITE_BUSY。
+            var connectionString = $"Data Source={_dbPath};Cache=Shared;Pooling=True;BusyTimeout=5000;";
             optionsBuilder.UseSqlite(connectionString);
+        }
+
+        /// <summary>
+        /// 打开连接时启用 WAL 模式（读写并发支持更好）。
+        /// </summary>
+        private void EnsureWALMode()
+        {
+            try
+            {
+                var connection = Database.GetDbConnection();
+                if (connection.State != System.Data.ConnectionState.Open)
+                {
+                    connection.Open();
+                }
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = "PRAGMA journal_mode=WAL;";
+                var result = cmd.ExecuteScalar()?.ToString();
+                if (string.Equals(result, "wal", StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+                // 若无法切换（例如 DB 已有连接），静默忽略，默认 DELETE 模式仍可用。
+            }
+            catch
+            {
+                // 启用 WAL 是非关键增强，失败不影响主流程。
+            }
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -252,6 +313,13 @@ namespace LearningAssistant.Data.Database
 
             modelBuilder.Entity<WrongAnswerEntity>()
                 .HasIndex(w => w.NextReviewAt);
+
+            // 迁移检查点：用于 B-008 中断后断点续传
+            modelBuilder.Entity<MigrationCheckpointEntity>()
+                .HasKey(m => m.StepId);
+
+            modelBuilder.Entity<MigrationCheckpointEntity>()
+                .HasIndex(m => m.Status);
         }
 
         /// <summary>
@@ -262,6 +330,7 @@ namespace LearningAssistant.Data.Database
             try
             {
                 Database.EnsureCreated();
+                EnsureWALMode();
             }
             catch (Exception ex)
             {
@@ -301,6 +370,9 @@ namespace LearningAssistant.Data.Database
                 RepairPomodoroRecordsTable();
                 RepairSpacedRepetitionItemsColumn();
                 RepairPomodoroSettingsColumns();
+                RepairRowVersionColumns();
+                RepairMigrationCheckpointsTable();
+                EnsureWALMode();
             }
             catch (Exception ex)
             {
@@ -866,5 +938,195 @@ namespace LearningAssistant.Data.Database
                 System.Diagnostics.Trace.TraceWarning($"添加AlgorithmType列失败（可能已存在）: {ex.Message}");
             }
         }
+
+        private static readonly string[] RowVersionTables = new[]
+        {
+            "UserProfiles", "CategoryProgresses", "LearningRecords", "Reminders",
+            "ReminderRepeatDays", "SpacedRepetitionItems", "StudyStats",
+            "LearningItemStates", "PomodoroSettings", "PomodoroRecords", "WrongAnswers",
+            "ReviewLogs", "Notes", "LearningPaths", "LearningPathItems", "BadgeUnlocks",
+            "DailyChallenges", "ChallengeHistory", "LearningGoals", "DailyGoalRecords",
+            "LearningItems"
+        };
+
+        /// <summary>
+        /// 为所有包含 AuditableEntityBase 派生表补齐 RowVersion 列。
+        /// 老 DB 升级时需要从旧库补列。
+        /// </summary>
+        private void RepairRowVersionColumns()
+        {
+            foreach (var table in RowVersionTables)
+            {
+                try
+                {
+                    Database.ExecuteSqlRaw($"ALTER TABLE {table} ADD COLUMN RowVersion INTEGER NOT NULL DEFAULT 0;");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Trace.TraceWarning($"为表 {table} 添加 RowVersion 失败（可能已存在）: {ex.Message}");
+                }
+            }
+        }
+
+        private void RepairMigrationCheckpointsTable()
+        {
+            var sql = @"CREATE TABLE IF NOT EXISTS MigrationCheckpoints (
+                StepId TEXT PRIMARY KEY,
+                Status TEXT NOT NULL,
+                DetailJson TEXT NOT NULL DEFAULT '{}',
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL
+            );";
+            Database.ExecuteSqlRaw(sql);
+            sql = @"CREATE INDEX IF NOT EXISTS IX_MigrationCheckpoints_Status ON MigrationCheckpoints(Status);";
+            Database.ExecuteSqlRaw(sql);
+        }
+
+        #region SaveChanges：行版本号递增 + 写互斥 + 忙重试
+
+        public override int SaveChanges()
+        {
+            return SaveChangesWithRetry(acceptAllChangesOnSuccess: true);
+        }
+
+        public override int SaveChanges(bool acceptAllChangesOnSuccess)
+        {
+            return SaveChangesWithRetry(acceptAllChangesOnSuccess);
+        }
+
+        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            return SaveChangesWithRetryAsync(acceptAllChangesOnSuccess: true, cancellationToken);
+        }
+
+        public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+        {
+            return SaveChangesWithRetryAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+
+        /// <summary>
+        /// 内部统一写入调度（同步）：自动递增 RowVersion + 写互斥 + SQLite 忙错误指数退避重试。
+        /// </summary>
+        private int SaveChangesWithRetry(bool acceptAllChangesOnSuccess)
+        {
+            PrepareAuditableEntities();
+            bool mutexHeld = AcquireWriteMutex();
+            try
+            {
+                int attempt = 0;
+                while (true)
+                {
+                    try
+                    {
+                        return base.SaveChanges(acceptAllChangesOnSuccess);
+                    }
+                    catch (DbUpdateConcurrencyException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex) when (IsBusyOrLocked(ex) && attempt < MAX_SAVE_RETRIES)
+                    {
+                        attempt++;
+                        int delayMs = 10 << (attempt - 1);
+                        Thread.Sleep(delayMs);
+                    }
+                }
+            }
+            finally
+            {
+                ReleaseWriteMutex(mutexHeld);
+            }
+        }
+
+        /// <summary>
+        /// 内部统一写入调度（异步）。
+        /// </summary>
+        private async Task<int> SaveChangesWithRetryAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken)
+        {
+            PrepareAuditableEntities();
+            bool mutexHeld = AcquireWriteMutex();
+            try
+            {
+                int attempt = 0;
+                while (true)
+                {
+                    try
+                    {
+                        return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken)
+                            .ConfigureAwait(false);
+                    }
+                    catch (DbUpdateConcurrencyException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex) when (IsBusyOrLocked(ex) && attempt < MAX_SAVE_RETRIES)
+                    {
+                        attempt++;
+                        int delayMs = 10 << (attempt - 1);
+                        await Task.Delay(delayMs, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+            }
+            finally
+            {
+                ReleaseWriteMutex(mutexHeld);
+            }
+        }
+
+        private bool AcquireWriteMutex()
+        {
+            try
+            {
+                return _dbWriteMutex.WaitOne(TimeSpan.FromSeconds(8));
+            }
+            catch (AbandonedMutexException)
+            {
+                return true; // 前一个进程崩溃后遗留下的 mutex，我们拿到了所有权
+            }
+        }
+
+        private static void ReleaseWriteMutex(bool mutexHeld)
+        {
+            if (mutexHeld)
+            {
+                try { _dbWriteMutex.ReleaseMutex(); }
+                catch { /* 极端情况下释放失败，不影响业务 */ }
+            }
+        }
+
+        private static bool IsBusyOrLocked(Exception ex)
+        {
+            if (ex is SqliteException sqliteEx)
+            {
+                return sqliteEx.SqliteErrorCode == SQLITE_BUSY
+                    || sqliteEx.SqliteErrorCode == SQLITE_LOCKED
+                    || sqliteEx.SqliteErrorCode == SQLITE_CONSTRAINT_PRIMARYKEY;
+            }
+            return ex.InnerException != null && IsBusyOrLocked(ex.InnerException);
+        }
+
+        /// <summary>
+        /// 在写入前自动更新 UpdatedAt 并递增 RowVersion 模拟并发令牌。
+        /// </summary>
+        private void PrepareAuditableEntities()
+        {
+            var entries = ChangeTracker.Entries<AuditableEntityBase>();
+            foreach (var entry in entries)
+            {
+                if (entry.State == EntityState.Added)
+                {
+                    entry.Entity.CreatedAt = DateTime.Now;
+                    entry.Entity.UpdatedAt = DateTime.Now;
+                    entry.Entity.RowVersion = 1;
+                }
+                else if (entry.State == EntityState.Modified)
+                {
+                    entry.Entity.UpdatedAt = DateTime.Now;
+                    unchecked { entry.Entity.RowVersion += 1; }
+                }
+            }
+        }
+
+        #endregion
     }
 }

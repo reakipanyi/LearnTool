@@ -12,5 +12,10 @@ namespace LearningAssistant.Services.Learning
         List<string> GetWordBankFiles(SubCategoryType subCategory);
         string GetDefaultWordBankFile(SubCategoryType subCategory);
         void SaveUserContent(UserContent content);
+
+        List<LearningItem> LoadItemsPaged(LearningContext context, int pageIndex, int pageSize);
+        int GetItemCount(LearningContext context);
+        void InvalidateCache(SubCategoryType subCategory);
+        void InvalidateAllCaches();
     }
 }

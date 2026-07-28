@@ -5,7 +5,7 @@ namespace LearningAssistant.Services.Learning
 {
     public interface IStudyEngine
     {
-        void Initialize(LearningContext context, bool continueMode = true);
+        void Initialize(LearningContext context, bool continueMode = true, bool loadAllItems = true);
         LearningItem? GetCurrentItem();
         bool HasNext();
         void MoveNext();
@@ -23,6 +23,7 @@ namespace LearningAssistant.Services.Learning
 
         int CurrentIndex { get; }
         int TotalCount { get; }
+        int TotalItemCount { get; }
         IReadOnlyList<string> KnownItems { get; }
         IReadOnlyList<string> UnknownItems { get; }
         LearningModeType CurrentMode { get; }
@@ -35,6 +36,7 @@ namespace LearningAssistant.Services.Learning
         int GetUnknownCount(string userId, SubCategoryType subCategory);
         double GetAccuracy(string userId, SubCategoryType subCategory);
         List<string> GetUnknownItems(string userId);
+        void EnsureItemsLoaded(int pageSize = 100);
     }
 
     /// <summary>

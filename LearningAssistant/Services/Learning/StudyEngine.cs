@@ -23,6 +23,7 @@ namespace LearningAssistant.Services.Learning
             : _state.StudyModeIndex;
 
         public int TotalCount => _studyItems.Count;
+        public int TotalItemCount => _state.TotalItemCount > 0 ? _state.TotalItemCount : _allItems.Count;
         public IReadOnlyList<string> KnownItems => _state.KnownItems.AsReadOnly();
         public IReadOnlyList<string> UnknownItems => _state.UnknownItems.AsReadOnly();
         public LearningModeType CurrentMode => _state.CurrentMode;
@@ -43,7 +44,7 @@ namespace LearningAssistant.Services.Learning
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
         }
 
-        public void Initialize(LearningContext context, bool continueMode = true)
+        public void Initialize(LearningContext context, bool continueMode = true, bool loadAllItems = true)
         {
             ValidateInitializeParameters(context);
 
@@ -57,7 +58,14 @@ namespace LearningAssistant.Services.Learning
                 _state.CurrentSortOrder = context.SortOrder;
             }
 
-            LoadAllItems(context);
+            if (loadAllItems)
+            {
+                LoadAllItems(context);
+            }
+            else
+            {
+                PrepareLazyLoading(context);
+            }
 
             if (continueMode)
             {
@@ -71,6 +79,41 @@ namespace LearningAssistant.Services.Learning
 
             BuildStudyItems();
             ValidateIndex();
+        }
+
+        public void EnsureItemsLoaded(int pageSize = 100)
+        {
+            if (_allItems.Count == 0 && _state.TotalItemCount > 0)
+            {
+                var context = CreateLearningContext();
+                GetItemsForLazyLoading(context, pageSize);
+                RebuildStudyItems();
+            }
+        }
+
+        private LearningContext CreateLearningContext()
+        {
+            return new LearningContext(
+                _state.UserId,
+                _state.Subject,
+                _state.SubCategory,
+                _state.WordBankFile,
+                _state.CurrentMode,
+                _state.CurrentSortOrder
+            );
+        }
+
+        private void RebuildStudyItems()
+        {
+            if (_state.CurrentMode == LearningModeType.Quick || _state.CurrentMode == LearningModeType.QuickReview)
+            {
+                _studyItems = _studyListProcessor.ProcessItems(new List<LearningItem>(_allItems), _state.CurrentSortOrder);
+                _state.QuickModeIndex = Math.Min(_state.QuickModeIndex, _studyItems.Count - 1);
+            }
+            else
+            {
+                BuildStudyModeItemsInternal();
+            }
         }
 
         private void ValidateInitializeParameters(LearningContext context)
@@ -90,6 +133,35 @@ namespace LearningAssistant.Services.Learning
                     _allItems.Add(learningItem);
                 }
             }
+        }
+
+        private void PrepareLazyLoading(LearningContext context)
+        {
+            _allItems.Clear();
+            var totalCount = _contentLoaderService.GetItemCount(context);
+            _state.TotalItemCount = totalCount;
+        }
+
+        private List<LearningItem> GetItemsForLazyLoading(LearningContext context, int pageSize = 100)
+        {
+            if (_allItems.Count > 0)
+                return _allItems;
+
+            var items = _contentLoaderService.LoadItemsPaged(context, 0, pageSize);
+            foreach (var item in items)
+            {
+                if (item is LearningItem learningItem)
+                {
+                    _allItems.Add(learningItem);
+                }
+            }
+
+            if (_state.TotalItemCount <= 0)
+            {
+                _state.TotalItemCount = _contentLoaderService.GetItemCount(context);
+            }
+
+            return _allItems;
         }
 
         private void SyncProgressState()

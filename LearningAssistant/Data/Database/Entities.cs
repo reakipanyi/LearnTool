@@ -345,6 +345,29 @@ namespace LearningAssistant.Data.Database
     }
 
     /// <summary>
+    /// 迁移检查点实体：用于 B-008 迁移中断后断点续传
+    /// </summary>
+    public class MigrationCheckpointEntity
+    {
+        [Key]
+        [MaxLength(100)]
+        public string StepId { get; set; } = string.Empty;
+
+        /// <summary>Pending | Running | Completed | Failed</summary>
+        [Required]
+        [MaxLength(20)]
+        public string Status { get; set; } = "Pending";
+
+        /// <summary>
+        /// 额外详情，例如迁移的数据条数、失败的异常信息等。
+        /// </summary>
+        public string DetailJson { get; set; } = "{}";
+
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public DateTime UpdatedAt { get; set; } = DateTime.Now;
+    }
+
+    /// <summary>
     /// 徽章解锁记录实体
     /// </summary>
     public class BadgeUnlockEntity : UserEntityBase

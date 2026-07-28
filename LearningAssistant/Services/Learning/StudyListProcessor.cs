@@ -29,6 +29,9 @@ namespace LearningAssistant.Services.Learning
 
         public List<LearningItem> RemoveDuplicates(List<LearningItem> items)
         {
+            if (items == null)
+                return new List<LearningItem>();
+
             var seen = new HashSet<string>();
             var result = new List<LearningItem>();
 

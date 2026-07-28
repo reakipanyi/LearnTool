@@ -187,6 +187,11 @@ namespace LearningAssistant.Common
             services.AddSingleton<IStudyListProcessor, StudyListProcessor>();
             services.AddSingleton<IProgressManager, ProgressManager>();
 
+            // 新增: 收藏、设置和状态缓存服务
+            services.AddSingleton<IFavoriteService, FavoriteService>();
+            services.AddSingleton<IUserSettingsService, UserSettingsService>();
+            services.AddSingleton<ILearningStateCacheService, LearningStateCacheService>();
+
             services.AddSingleton<IStudyEngine>(sp =>
             {
                 var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
