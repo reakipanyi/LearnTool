@@ -5,21 +5,33 @@ using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Persistence;
 using LearningAssistant.Models.Learning;
 using LearningAssistant.Common;
+using LearningAssistant.Data.Database;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Tests
 {
     public class WrongAnswerServiceTests
     {
+        private readonly Mock<IDbContextFactory<AppDbContext>> _mockDbContextFactory;
         private readonly Mock<IDataPersistenceService> _mockPersistence;
         private readonly Mock<ILogger<WrongAnswerService>> _mockLogger;
         private readonly WrongAnswerService _service;
 
         public WrongAnswerServiceTests()
         {
+            _mockDbContextFactory = new Mock<IDbContextFactory<AppDbContext>>();
             _mockPersistence = new Mock<IDataPersistenceService>();
             _mockLogger = new Mock<ILogger<WrongAnswerService>>();
-            _service = new WrongAnswerService(_mockPersistence.Object, _mockLogger.Object);
+
+            var options = new DbContextOptionsBuilder<AppDbContext>()
+                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+                .Options;
+
+            _mockDbContextFactory.Setup(f => f.CreateDbContext())
+                .Returns(() => new AppDbContext(options));
+
+            _service = new WrongAnswerService(_mockDbContextFactory.Object, _mockPersistence.Object, _mockLogger.Object);
         }
 
         [Fact]
