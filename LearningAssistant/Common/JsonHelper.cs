@@ -75,9 +75,9 @@ namespace LearningAssistant.Common
             {
                 AppPaths.EnsureDirectoryExists(directory);
             }
-            
+
             var json = Serialize(obj);
-            File.WriteAllText(filePath, json);
+            WriteAllTextAtomic(filePath, json);
         }
 
         public static byte[] SerializeToBytes<T>(T obj)
@@ -119,9 +119,37 @@ namespace LearningAssistant.Common
             {
                 AppPaths.EnsureDirectoryExists(directory);
             }
-            
+
             var json = System.Text.Json.JsonSerializer.Serialize(items, _learningItemOptions);
-            File.WriteAllText(filePath, json);
+            WriteAllTextAtomic(filePath, json);
+        }
+
+        /// <summary>
+        /// 原子写入文件：先写入临时文件，再替换目标文件，避免并发读取到部分写入的损坏内容。
+        /// </summary>
+        private static void WriteAllTextAtomic(string filePath, string json)
+        {
+            var tempPath = filePath + ".tmp";
+            File.WriteAllText(tempPath, json);
+            try
+            {
+                if (File.Exists(filePath))
+                {
+                    File.Replace(tempPath, filePath, null);
+                }
+                else
+                {
+                    File.Move(tempPath, filePath);
+                }
+            }
+            catch
+            {
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+                throw;
+            }
         }
     }
 }

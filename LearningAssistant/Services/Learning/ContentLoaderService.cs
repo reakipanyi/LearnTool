@@ -129,8 +129,12 @@ namespace LearningAssistant.Services.Learning
         {
             lock (_cacheLock)
             {
+                var defaultFile = _categoryFileMap.GetValueOrDefault(subCategory, "");
+                if (string.IsNullOrEmpty(defaultFile))
+                    return;
+
                 var keysToRemove = _fileCache.Keys
-                    .Where(k => k.Contains(subCategory.ToString()))
+                    .Where(k => k.EndsWith(defaultFile, StringComparison.OrdinalIgnoreCase))
                     .ToList();
 
                 foreach (var key in keysToRemove)
@@ -160,7 +164,7 @@ namespace LearningAssistant.Services.Learning
                     {
                         cached.LastAccessTime = DateTime.Now;
                         _logger.LogDebug("Items loaded from cache: {FilePath}", filePath);
-                        return cached.Items;
+                        return cached.Items.ToList();
                     }
 
                     if (!cached.IsValid)
@@ -212,7 +216,7 @@ namespace LearningAssistant.Services.Learning
             }
 
             _logger.LogDebug("Items loaded from file and cached: {FilePath}, count: {Count}", filePath, items.Count);
-            return items;
+            return items.ToList();
         }
 
         public void SaveItems(LearningContext context, List<LearningItem> items)
@@ -338,7 +342,9 @@ namespace LearningAssistant.Services.Learning
                 var userContentDir = Path.Combine(AppPaths.DataDir, "UserContent");
                 Directory.CreateDirectory(userContentDir);
 
-                var filePath = Path.Combine(userContentDir, $"{content.UserId}_{content.Id}.json");
+                var safeUserId = SanitizeFileName(content.UserId);
+                var safeId = SanitizeFileName(content.Id.ToString());
+                var filePath = Path.Combine(userContentDir, $"{safeUserId}_{safeId}.json");
                 JsonHelper.SaveToFile(filePath, content);
                 _logger.LogInformation("Saved user content: {Title}", content.Title);
             }
@@ -346,6 +352,19 @@ namespace LearningAssistant.Services.Learning
             {
                 _logger.LogError(ex, "Failed to save user content");
             }
+        }
+
+        private static string SanitizeFileName(string fileName)
+        {
+            if (string.IsNullOrEmpty(fileName))
+                return "unnamed";
+
+            var invalid = Path.GetInvalidFileNameChars();
+            foreach (var c in invalid)
+            {
+                fileName = fileName.Replace(c, '_');
+            }
+            return fileName;
         }
 
         private string GetFilePath(SubCategoryType subCategory, string wordBankFile)
@@ -363,7 +382,8 @@ namespace LearningAssistant.Services.Learning
             {
                 var dataDir = new DirectoryInfo(AppPaths.DataDir).FullName;
                 var fullPath = new FileInfo(filePath).FullName;
-                return fullPath.StartsWith(dataDir, StringComparison.OrdinalIgnoreCase);
+                return fullPath.Equals(dataDir, StringComparison.OrdinalIgnoreCase)
+                    || fullPath.StartsWith(dataDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
             }
             catch
             {
@@ -386,7 +406,7 @@ namespace LearningAssistant.Services.Learning
                     try
                     {
                         if (string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath))
-                            return true;
+                            return false;
 
                         var currentLastWrite = File.GetLastWriteTime(FilePath);
                         return currentLastWrite <= FileLastWriteTime;
