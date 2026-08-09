@@ -702,5 +702,39 @@
         }
       }
     }
+  },
+  "commonFieldNames": {
+    "Id": "ID",
+    "CreatedAt": "创建时间",
+    "UpdatedAt": "更新时间",
+    "Meaning": "释义",
+    "Example": "例句",
+    "ExampleTranslation": "例句翻译",
+    "Phonetic": "音标",
+    "UkPhonetic": "英式音标",
+    "UsPhonetic": "美式音标",
+    "StrokeCount": "笔画数",
+    "Radical": "部首",
+    "Structure": "结构",
+    "StrokeOrder": "笔顺",
+    "CharacterLevel": "字级",
+    "CharacterFormation": "造字法",
+    "PartOfSpeech": "词性",
+    "WordForms": "词形变化",
+    "Collocations": "常见搭配",
+    "SyllableBreakdown": "音节拼读",
+    "Synonyms": "近义词",
+    "Antonyms": "反义词",
+    "CommonMistakes": "易错点",
+    "ExampleSentence": "例句",
+    "OtherPronunciations": "其他读音",
+    "Tags": "标签",
+    "Note": "备注",
+    "Analysis": "解析",
+    "Question": "问题",
+    "Answer": "答案",
+    "Applications": "应用",
+    "Principle": "原理",
+    "Background": "背景"
   }
 }

@@ -42,6 +42,7 @@ namespace LearningAssistant.Services
             _logger = logger;
             _config = LoadConfig();
             InitializeCategoryConfigFieldNames();
+            InitializeCommonFieldNames();
         }
 
         private SubjectTemplateConfig LoadConfig()
@@ -101,6 +102,18 @@ namespace LearningAssistant.Services
                     map[enumName] = new Dictionary<string, string>(template.FieldNames, StringComparer.OrdinalIgnoreCase);
             }
             CategoryConfig.InitializeJsonFieldNames(map);
+        }
+
+        /// <summary>
+        /// 将 SubjectTemplates.json 的 commonFieldNames 推送到 CategoryConfig，
+        /// 作为类别特定 fieldNames 未命中时的跨类别通用字段翻译兜底。
+        /// </summary>
+        private void InitializeCommonFieldNames()
+        {
+            var common = _config.CommonFieldNames != null && _config.CommonFieldNames.Count > 0
+                ? new Dictionary<string, string>(_config.CommonFieldNames, StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            CategoryConfig.InitializeCommonFieldNames(common);
         }
 
         /// <summary>
@@ -248,6 +261,7 @@ namespace LearningAssistant.Services
             {
                 _config = LoadConfig();
                 InitializeCategoryConfigFieldNames();
+                InitializeCommonFieldNames();
             }
         }
 

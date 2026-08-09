@@ -8,6 +8,11 @@ namespace LearningAssistant.Models.Config
     public class SubjectTemplateConfig
     {
         public Dictionary<string, SubjectTemplate> Subjects { get; set; } = new();
+
+        /// <summary>
+        /// 跨类别通用字段显示名（英文键→中文名），作为类别特定 fieldNames 未命中时的兜底翻译。
+        /// </summary>
+        public Dictionary<string, string> CommonFieldNames { get; set; } = new();
     }
 
     /// <summary>
