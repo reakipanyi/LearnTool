@@ -2,7 +2,7 @@ namespace LearningAssistant.Common
 {
     public static class Constants
     {
-        public static string DefaultUserId = "Default";
+        public const string DefaultUserId = "钦伊";
 
         public static class Subject
         {

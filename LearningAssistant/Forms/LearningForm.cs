@@ -1157,7 +1157,9 @@ namespace LearningAssistant.Forms
 
             _confettiManager.SetTargetControl(mainTableLayoutPanel);
 
-            _gamificationService.Load("default");
+            // 使用当前用户加载游戏化数据，避免覆盖单例 GamificationService 的用户上下文
+            // （原硬编码 "default" 会导致真实用户事件被丢弃、数据存到 default 下）。
+            _gamificationService.Load(GetCurrentUserId());
             UpdateEncouragement();
             _gamificationService.UpdateAllDisplays();
 
@@ -2034,7 +2036,8 @@ namespace LearningAssistant.Forms
                     MessageBox.Show("无法获取Presenter日志服务", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
-                var presenter = new Presenters.ContentEditorPresenter(presenterLogger, editorForm, contentLoaderService, aiQuestionService);
+                var subjectTemplateService = Program.GetService<ISubjectTemplateService>();
+                var presenter = new Presenters.ContentEditorPresenter(presenterLogger, editorForm, contentLoaderService, aiQuestionService, subjectTemplateService);
                 editorForm.SetPresenter(presenter);
                 editorForm.ShowDialog();
             }
@@ -2327,7 +2330,7 @@ namespace LearningAssistant.Forms
         /// </summary>
         private string GetCurrentUserId()
         {
-            return _userSessionService?.CurrentUserId ?? "default";
+            return _userSessionService?.CurrentUserId ?? Constants.DefaultUserId;
         }
 
         /// <summary>

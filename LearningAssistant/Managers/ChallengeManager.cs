@@ -21,7 +21,7 @@ namespace LearningAssistant.Managers
         private readonly Action? _onLevelUp;
         private readonly Action? _onChallengeCompleted;
 
-        private string _currentUserId = "default";
+        private string _currentUserId = Constants.DefaultUserId;
         private List<Challenge> _dailyChallenges = new();
         private List<ChallengeHistoryRecord> _historyRecords = new();
         private FlowLayoutPanel? _flowLayoutPanelChallenges;
@@ -389,7 +389,7 @@ namespace LearningAssistant.Managers
         /// <summary>
         /// 保存挑战数据
         /// </summary>
-        public void Save(string userId = "default")
+        public void Save(string userId = Constants.DefaultUserId)
         {
             try
             {

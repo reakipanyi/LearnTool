@@ -431,20 +431,20 @@
         },
         "实验操作": {
           "name": "实验操作",
-          "fields": ["Experiment", "Steps", "现象", "原理", "注意"],
+          "fields": ["Experiment", "Steps", "Phenomenon", "Principle", "Note"],
           "fieldNames": {
             "Experiment": "实验名称",
             "Steps": "操作步骤",
-            "现象": "实验现象",
-            "原理": "反应原理",
-            "注意": "注意事项"
+            "Phenomenon": "实验现象",
+            "Principle": "反应原理",
+            "Note": "注意事项"
           },
           "sample": {
             "Experiment": "氧气的实验室制取",
             "Steps": "1.检查装置气密性 2.装药品 3.加热 4.收集 5.验满",
-            "现象": "有气泡产生，带火星的木条复燃",
-            "原理": "2KMnO₄ = K₂MnO₄ + MnO₂ + O₂↑",
-            "注意": "用排水法或向上排空气法收集"
+            "Phenomenon": "有气泡产生，带火星的木条复燃",
+            "Principle": "2KMnO₄ = K₂MnO₄ + MnO₂ + O₂↑",
+            "Note": "用排水法或向上排空气法收集"
           }
         },
         "化学综合": {
@@ -495,10 +495,10 @@
           "fields": ["Name", "Birth", "Death", "Achievement", "Significance"],
           "fieldNames": {
             "Name": "人物",
-            "Birth": "生卒年",
+            "Birth": "出生年",
+            "Death": "逝世年",
             "Achievement": "主要成就",
-            "Significance": "历史地位",
-            "Details": "详情"
+            "Significance": "历史地位"
           },
           "sample": {
             "Name": "秦始皇",

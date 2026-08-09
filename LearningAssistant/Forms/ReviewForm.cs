@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using LearningAssistant.Forms.UserControls;
 using LearningAssistant.Services.Learning;
 
@@ -7,11 +8,11 @@ namespace LearningAssistant.Forms
     {
         private ReviewPanel _reviewPanel = null!;
         private readonly ISpacedRepetitionService _spacedRepetitionService;
-        private readonly string _userId = "default";
+        private readonly string _userId = Constants.DefaultUserId;
 
         public event EventHandler? StartReview;
 
-        public ReviewForm(ISpacedRepetitionService spacedRepetitionService, string userId = "default")
+        public ReviewForm(ISpacedRepetitionService spacedRepetitionService, string userId = Constants.DefaultUserId)
         {
             _spacedRepetitionService = spacedRepetitionService;
             _userId = userId;

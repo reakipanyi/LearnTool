@@ -10,7 +10,7 @@ namespace LearningAssistant.Managers
     {
         private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
         private readonly ILogger<BadgeManager>? _logger;
-        private string _currentUserId = "default";
+        private string _currentUserId = Constants.DefaultUserId;
         private readonly Dictionary<string, Badge> _badges = new();
         private readonly List<string> _unlockedBadges = new();
         private FlowLayoutPanel? _flowLayoutPanelBadges;
@@ -217,7 +217,7 @@ namespace LearningAssistant.Managers
             }
         }
 
-        public void Save(string userId = "default")
+        public void Save(string userId = Constants.DefaultUserId)
         {
             try
             {

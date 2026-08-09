@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using LearningAssistant.Services.KnowledgeGraph;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
@@ -22,7 +23,7 @@ namespace LearningAssistant.Forms.UserControls
         private CoreWebView2Environment? _webViewEnvironment;
 
         private IKnowledgeGraphService? _graphService;
-        private string _currentUserId = "default";
+        private string _currentUserId = Constants.DefaultUserId;
         private bool _isWebViewInitialized = false;
 
         public event EventHandler<string>? NodeClicked;

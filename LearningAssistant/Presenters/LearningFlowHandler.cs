@@ -654,7 +654,7 @@ namespace LearningAssistant.Presenters
 
                 if (subjectChanged || subCategoryChanged || userIdChanged)
                 {
-                    string userId = string.IsNullOrWhiteSpace(_currentUserId) ? "default" : _currentUserId;
+                    string userId = string.IsNullOrWhiteSpace(_currentUserId) ? Constants.DefaultUserId : _currentUserId;
                     var context = _view.CurrentContext with { UserId = userId, SubCategory = _currentSubCategory, WordBankFile = "" };
                     _studyEngine.Initialize(context, true);
                     SyncLearningItemStates();

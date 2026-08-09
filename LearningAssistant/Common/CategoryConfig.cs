@@ -4,6 +4,58 @@ namespace LearningAssistant.Common
 {
     public static class CategoryConfig
     {
+        /// <summary>
+        /// 来自 SubjectTemplates.json 的字段显示名缓存，按 SubCategoryType 枚举名（如 MathFormula）索引。
+        /// 由 SubjectTemplateService 启动时通过 <see cref="InitializeJsonFieldNames"/> 推送，作为字段中文显示名的权威来源。
+        /// </summary>
+        private static Dictionary<string, Dictionary<string, string>> _jsonFieldNamesByEnum =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// 用 SubjectTemplates.json 的 fieldNames 初始化缓存，使列标题等显示名以 JSON 为准。
+        /// </summary>
+        /// <param name="fieldNamesByEnumName">键为 SubCategoryType 枚举名，值为该类别 字段键→中文名 映射。</param>
+        public static void InitializeJsonFieldNames(Dictionary<string, Dictionary<string, string>> fieldNamesByEnumName)
+        {
+            _jsonFieldNamesByEnum = fieldNamesByEnumName ?? new(StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// SubCategoryType 枚举名 → Constants.SubCategory 中文值 的映射。
+        /// 调用方传入的 category 为枚举名（如 MathFormula），而 ColumnHeaders 以中文值（如 公式定理）为键，
+        /// 需通过此映射转换后再查 ColumnHeaders，否则 fallback 永远不命中。
+        /// </summary>
+        private static readonly Dictionary<string, string> _enumToChineseSubCategory = BuildEnumToChineseSubCategory();
+
+        private static Dictionary<string, string> BuildEnumToChineseSubCategory()
+        {
+            var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var f in typeof(Constants.SubCategory).GetFields())
+            {
+                if (f.IsLiteral && !f.IsInitOnly)
+                {
+                    var value = f.GetValue(null) as string;
+                    if (value != null)
+                        map[f.Name] = value;
+                }
+            }
+            return map;
+        }
+
+        /// <summary>
+        /// 尝试将 SubCategoryType 枚举名转换为 Constants.SubCategory 中文值。
+        /// </summary>
+        private static bool TryGetChineseSubCategory(string? enumName, out string chineseValue)
+        {
+            if (!string.IsNullOrEmpty(enumName) && _enumToChineseSubCategory.TryGetValue(enumName, out var v))
+            {
+                chineseValue = v;
+                return true;
+            }
+            chineseValue = enumName ?? string.Empty;
+            return false;
+        }
+
         public static readonly Dictionary<string, Dictionary<string, string>> ColumnHeaders = new()
         {
             { Constants.SubCategory.ChineseCharacter, new Dictionary<string, string>
@@ -118,47 +170,20 @@ namespace LearningAssistant.Common
             { Constants.SubCategory.BiologyComprehensive, "生物综合" }
         };
 
-        public static readonly Dictionary<string, string> JsonFormatHints = new()
-        {
-            { Constants.SubCategory.ChineseCharacter, @"[  {""Character"":"""",""Pinyin"":"""",""Meaning"":"""",""StrokeCount"":"""",""Radical"":"""",""StrokeOrder"":"""",""Words"":""...,...""} ]" },
-            { Constants.SubCategory.ChineseIdiom, @"[  {""Idiom"":"""",""Pinyin"":"""",""Meaning"":"""",""Origin"":"""",""Example"":""""} ]" },
-            { Constants.SubCategory.ChinesePhrase, @"[  {""Phrase"":"""",""Pinyin"":"""",""Meaning"":"""",""Example"":""""} ]" },
-            { Constants.SubCategory.ChinesePoem, @"[  {""Title"":"""",""Author"":"""",""Dynasty"":"""",""Verses"":["""","""","""",""""],""Annotation"":""""} ]" },
-            { Constants.SubCategory.ChineseComprehensive, @"[  {""Title"":"""",""Content"":"""",""Questions"":[{""Question"":"""",""Answer"":""""}],""Analysis"":""""} ]" },
-            { Constants.SubCategory.EnglishWord, @"[  {""Word"":"""",""Phonetic"":"""",""PartOfSpeech"":"""",""SyllableBreakdown"":"""",""Meaning"":"""",""Example"":""""} ]" },
-            { Constants.SubCategory.EnglishPhrase, @"[  {""Phrase"":"""",""Meaning"":"""",""Example"":""""} ]" },
-            { Constants.SubCategory.EnglishSentence, @"[  {""Sentence"":"""",""Translation"":"""",""Grammar"":""""} ]" },
-            { Constants.SubCategory.EnglishComprehensive, @"[  {""Title"":"""",""Content"":"""",""Questions"":[{""Question"":"""",""Answer"":""""}],""Analysis"":""""} ]" },
-            { Constants.SubCategory.MathFormula, @"[  {""Topic"":"""",""Content"":"""",""KeyPoints"":"""",""Principle"":"""",""Example"":"""",""Applications"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.MathExample, @"[  {""Topic"":"""",""Content"":"""",""Analysis"":"""",""KeyPoints"":["""","""",""""],""Example"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.MathConcept, @"[  {""Topic"":"""",""Content"":"""",""KeyPoints"":["""","""",""""],""Example"":"""",""Note"":"""",""Applications"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.MathComprehensive, @"[  {""Topic"":"""",""Content"":"""",""KeyPoints"":["""","""",""""],""Example"":"""",""Analysis"":"""",""Question"":"""",""Answer"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.PhysicsLaw, @"[  {""Topic"":"""",""Content"":"""",""KeyPoints"":"""",""Principle"":"""",""Applications"":"""",""Example"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.PhysicsExperiment, @"[  {""Topic"":"""",""Content"":"""",""KeyPoints"":["""","""",""""],""ExperimentSteps"":["""","""",""""],""Analysis"":"""",""Example"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.PhysicsDerivation, @"[  {""Topic"":"""",""Content"":"""",""KeyPoints"":["""","""",""""],""Principle"":"""",""Example"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.PhysicsComprehensive, @"[  {""Topic"":"""",""Content"":"""",""KeyPoints"":["""","""",""""],""Example"":"""",""Analysis"":"""",""Question"":"""",""Answer"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.ChemistryEquation, @"[  {""Topic"":"""",""Content"":"""",""KeyPoints"":"""",""Principle"":"""",""Example"":"""",""Applications"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.ChemistryElement, @"[  {""Topic"":"""",""Content"":"""",""KeyPoints"":"""",""Principle"":"""",""Applications"":"""",""Example"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.ChemistryExperiment, @"[  {""Topic"":"""",""Content"":"""",""KeyPoints"":["""","""",""""],""ExperimentSteps"":["""","""",""""],""Analysis"":"""",""Example"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.ChemistryComprehensive, @"[  {""Topic"":"""",""Content"":"""",""KeyPoints"":["""","""",""""],""Example"":"""",""Analysis"":"""",""Question"":"""",""Answer"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.HistoryEvent, @"[  {""Topic"":"""",""TimePeriod"":"""",""RelatedPlaces"":"""",""Background"":"""",""Content"":"""",""Impact"":"""",""RelatedPeople"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.HistoryPerson, @"[  {""Topic"":"""",""TimePeriod"":"""",""Content"":"""",""KeyPoints"":["""","""",""""],""Analysis"":"""",""Example"":"""",""RelatedPlaces"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.HistoryTimeline, @"[  {""Topic"":"""",""TimePeriod"":"""",""KeyPoints"":["""","""",""""],""Content"":"""",""RelatedPeople"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.HistoryComprehensive, @"[  {""Topic"":"""",""Content"":"""",""KeyPoints"":["""","""",""""],""Example"":"""",""Analysis"":"""",""Question"":"""",""Answer"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.GeographyKnowledge, @"[  {""Topic"":"""",""Category"":"""",""Content"":"""",""RelatedPlaces"":"""",""KeyPoints"":["""","""",""""],""Example"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.GeographyMap, @"[  {""Topic"":"""",""RelatedPlaces"":"""",""Content"":"""",""KeyPoints"":["""","""",""""],""Example"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.GeographyClimate, @"[  {""Topic"":"""",""RelatedPlaces"":"""",""Content"":"""",""Principle"":"""",""KeyPoints"":["""","""",""""],""Example"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.GeographyComprehensive, @"[  {""Topic"":"""",""Content"":"""",""KeyPoints"":["""","""",""""],""Example"":"""",""Analysis"":"""",""Question"":"""",""Answer"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.BiologyConcept, @"[  {""Topic"":"""",""Content"":"""",""Category"":"""",""KeyPoints"":["""","""",""""],""Applications"":"""",""Example"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.BiologyExperiment, @"[  {""Topic"":"""",""Content"":"""",""KeyPoints"":["""","""",""""],""ExperimentSteps"":["""","""",""""],""Analysis"":"""",""Example"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.BiologyPhenomenon, @"[  {""Topic"":"""",""Content"":"""",""Category"":"""",""Principle"":"""",""Example"":"""",""Impact"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" },
-            { Constants.SubCategory.BiologyComprehensive, @"[  {""Topic"":"""",""Content"":"""",""KeyPoints"":["""","""",""""],""Example"":"""",""Analysis"":"""",""Question"":"""",""Answer"":"""",""Note"":"""",""Tags"":["""","""",""""]} ]" }
-        };
-
         public static string GetChineseColumnName(string columnName, string? category)
         {
+            // 优先查询 SubjectTemplates.json 的 fieldNames（以 JSON 为权威字段显示名来源）。
+            // category 为 SubCategoryType 枚举名（如 MathFormula），由启动时初始化的映射提供。
             if (!string.IsNullOrEmpty(category) &&
-                ColumnHeaders.TryGetValue(category, out var headers) &&
+                _jsonFieldNamesByEnum.TryGetValue(category, out var jsonNames) &&
+                jsonNames.TryGetValue(columnName, out var jsonChineseName))
+            {
+                return jsonChineseName;
+            }
+            // ColumnHeaders 以 Constants.SubCategory 中文值（如 公式定理）为键，需将枚举名转换后再查。
+            if (!string.IsNullOrEmpty(category) &&
+                TryGetChineseSubCategory(category, out var chineseCat) &&
+                ColumnHeaders.TryGetValue(chineseCat, out var headers) &&
                 headers.TryGetValue(columnName, out var chineseName))
             {
                 return chineseName;
@@ -172,8 +197,10 @@ namespace LearningAssistant.Common
 
         public static string GetEnglishColumnName(string columnName, string? category)
         {
+            // ColumnHeaders 以 Constants.SubCategory 中文值为键，需将枚举名转换后再查。
             if (!string.IsNullOrEmpty(category) &&
-                ColumnHeaders.TryGetValue(category, out var headers))
+                TryGetChineseSubCategory(category, out var chineseCat) &&
+                ColumnHeaders.TryGetValue(chineseCat, out var headers))
             {
                 foreach (var pair in headers)
                 {

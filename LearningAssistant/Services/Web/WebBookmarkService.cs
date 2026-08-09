@@ -105,7 +105,7 @@ namespace LearningAssistant.Services.Web
             _logger = logger;
             _userSessionService = userSessionService;
 
-            _currentUserId = _userSessionService?.CurrentUserId ?? "default";
+            _currentUserId = _userSessionService?.CurrentUserId ?? Constants.DefaultUserId;
             LoadFromFile();
         }
 

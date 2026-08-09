@@ -377,7 +377,7 @@ namespace LearningAssistant.Services.Learning
                     {
                         await _eventBus.PublishAsync(new PomodoroCompletedEvent
                         {
-                            UserId = "default",
+                            UserId = Constants.DefaultUserId,
                             DurationMinutes = _settings.StudyMinutes,
                             TaskName = _currentTask,
                             CompletedCount = _completedPomodoros,

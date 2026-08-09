@@ -1,5 +1,6 @@
 using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
+using LearningAssistant.Models.Learning;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
@@ -40,6 +41,7 @@ namespace LearningAssistant.Services
         {
             _logger = logger;
             _config = LoadConfig();
+            InitializeCategoryConfigFieldNames();
         }
 
         private SubjectTemplateConfig LoadConfig()
@@ -74,6 +76,31 @@ namespace LearningAssistant.Services
             }
 
             return new SubjectTemplateConfig();
+        }
+
+        /// <summary>
+        /// 将 SubjectTemplates.json 的 fieldNames 按 SubCategoryType 枚举名推送到 CategoryConfig，
+        /// 使列标题等字段显示名以 JSON 为权威来源。
+        /// </summary>
+        private void InitializeCategoryConfigFieldNames()
+        {
+            var map = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var sub in Enum.GetValues<SubCategoryType>())
+            {
+                var enumName = sub.ToString();
+                // JSON category 键 = Constants.FileName（去 .json），与 SubjectTemplates.json 的模板键一致。
+                var fileField = typeof(Constants.FileName).GetField(enumName);
+                var file = fileField?.GetValue(null) as string;
+                var categoryKey = file?.Replace(".json", "");
+                if (string.IsNullOrEmpty(categoryKey))
+                    continue;
+
+                var subjectKey = SubjectSubCategoryMapping.GetSubjectDisplayName(SubjectSubCategoryMapping.GetSubject(sub));
+                var template = GetCategoryTemplate(subjectKey, categoryKey);
+                if (template?.FieldNames != null && template.FieldNames.Count > 0)
+                    map[enumName] = new Dictionary<string, string>(template.FieldNames, StringComparer.OrdinalIgnoreCase);
+            }
+            CategoryConfig.InitializeJsonFieldNames(map);
         }
 
         /// <summary>
@@ -220,6 +247,7 @@ namespace LearningAssistant.Services
             lock (_lock)
             {
                 _config = LoadConfig();
+                InitializeCategoryConfigFieldNames();
             }
         }
 

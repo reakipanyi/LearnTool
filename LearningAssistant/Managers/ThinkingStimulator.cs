@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using LearningAssistant.Forms;
 using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Learning;
@@ -38,7 +39,7 @@ namespace LearningAssistant.Managers
     {
         private readonly IAiQuestionService? _aiService;
         private readonly IProgressiveHintStateService? _hintStateService;
-        private readonly string _userId = "default";
+        private readonly string _userId = Constants.DefaultUserId;
 
         #region 构造函数
 
@@ -52,7 +53,7 @@ namespace LearningAssistant.Managers
         /// <summary>
         /// 带 AI 服务的构造函数
         /// </summary>
-        public ThinkingStimulator(IAiQuestionService? aiService, IProgressiveHintStateService? hintStateService = null, string userId = "default")
+        public ThinkingStimulator(IAiQuestionService? aiService, IProgressiveHintStateService? hintStateService = null, string userId = Constants.DefaultUserId)
         {
             _aiService = aiService;
             _hintStateService = hintStateService;

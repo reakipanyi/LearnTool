@@ -15,7 +15,5 @@ namespace LearningAssistant.Services.Learning
 
         List<LearningItem> LoadItemsPaged(LearningContext context, int pageIndex, int pageSize);
         int GetItemCount(LearningContext context);
-        void InvalidateCache(SubCategoryType subCategory);
-        void InvalidateAllCaches();
     }
 }

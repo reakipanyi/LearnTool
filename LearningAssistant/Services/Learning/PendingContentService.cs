@@ -1,6 +1,5 @@
 using LearningAssistant.Common;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using System.Collections.Concurrent;
 
 namespace LearningAssistant.Services.Learning
@@ -88,8 +87,9 @@ namespace LearningAssistant.Services.Learning
             try
             {
                 var items = _pendingItems.ToList();
-                var json = JsonConvert.SerializeObject(items, Formatting.Indented);
-                File.WriteAllText(_filePath, json);
+                // 使用 JsonHelper.SaveToFile 原子写入（temp+replace），避免写入中途崩溃导致文件损坏、
+                // 下次加载反序列化失败而丢失全部待处理内容；同时统一到项目 System.Text.Json 序列化栈。
+                JsonHelper.SaveToFile(_filePath, items);
             }
             catch (Exception ex)
             {
@@ -99,24 +99,15 @@ namespace LearningAssistant.Services.Learning
 
         public void LoadFromFile()
         {
-            try
+            var items = JsonHelper.LoadFromFile<List<PendingContentItem>>(_filePath);
+            if (items == null || items.Count == 0)
+                return;
+
+            // 加载即替换：先清空再追加，避免重复调用导致条目复制。
+            _pendingItems.Clear();
+            foreach (var item in items)
             {
-                if (File.Exists(_filePath))
-                {
-                    var json = File.ReadAllText(_filePath);
-                    var items = JsonConvert.DeserializeObject<List<PendingContentItem>>(json);
-                    if (items != null)
-                    {
-                        foreach (var item in items)
-                        {
-                            _pendingItems.Add(item);
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Failed to load pending content");
+                _pendingItems.Add(item);
             }
         }
     }

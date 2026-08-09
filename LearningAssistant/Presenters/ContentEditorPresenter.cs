@@ -1,5 +1,6 @@
 using LearningAssistant.Common;
 using LearningAssistant.Models.Learning;
+using LearningAssistant.Services;
 using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Views;
@@ -37,11 +38,16 @@ namespace LearningAssistant.Presenters
         private readonly IAiQuestionService _aiQuestionService;
 
         /// <summary>
+        /// 科目模板服务，从 SubjectTemplates.json 加载字段模板（支持新增模板动态生效）
+        /// </summary>
+        private readonly ISubjectTemplateService _subjectTemplateService;
+
+        /// <summary>
         /// 脏标记，标识当前数据是否有未保存的更改
         /// </summary>
         private bool _isDirty = false;
 
-        
+
 
         /// <summary>
         /// 类别模板字典，定义每个类别对应的字段结构
@@ -249,39 +255,26 @@ namespace LearningAssistant.Presenters
         };
 
         /// <summary>
-        /// JSON格式提示字典，用于AI生成时指定输出格式
-        /// </summary>
-        private static readonly Dictionary<string, string> JsonFormatHints = new()
-        {
-            { Constants.SubCategory.ChineseCharacter, @"[  {""Character"":"""",""Pinyin"":"""",""Meaning"":"""",""StrokeCount"":"""",""Radical"":"""",""StrokeOrder"":"""",""Words"":""...,...""} ]" },
-            { Constants.SubCategory.ChineseIdiom, @"[  {""Idiom"":"""",""Pinyin"":"""",""Meaning"":"""",""Origin"":"""",""Example"":""""} ]" },
-            { Constants.SubCategory.ChinesePhrase, @"[  {""Phrase"":"""",""Pinyin"":"""",""Meaning"":"""",""Example"":""""} ]" },
-            { Constants.SubCategory.ChinesePoem, @"[  {""Title"":"""",""Author"":"""",""Dynasty"":"""",""Verses"":["""","""","""",""""],""Annotation"":""""} ]" },
-            { Constants.SubCategory.ChineseComprehensive, @"[  {""Title"":"""",""Content"":"""",""Questions"":[{""Question"":"""",""Answer"":""""}],""Analysis"":""""} ]" },
-            { Constants.SubCategory.EnglishWord, @"[  {""Word"":"""",""Phonetic"":"""",""PartOfSpeech"":"""",""SyllableBreakdown"":"""",""Meaning"":"""",""Example"":""""} ]" },
-            { Constants.SubCategory.EnglishPhrase, @"[  {""Phrase"":"""",""Meaning"":"""",""Example"":""""} ]" },
-            { Constants.SubCategory.EnglishSentence, @"[  {""Sentence"":"""",""Translation"":"""",""Grammar"":""""} ]" },
-            { Constants.SubCategory.EnglishComprehensive, @"[  {""Title"":"""",""Content"":"""",""Questions"":[{""Question"":"""",""Answer"":""""}],""Analysis"":""""} ]" }
-        };
-
-        /// <summary>
         /// 构造函数，初始化ContentEditorPresenter
         /// </summary>
         /// <param name="logger">日志记录器</param>
         /// <param name="view">视图接口</param>
         /// <param name="contentLoaderService">内容加载服务</param>
         /// <param name="aiQuestionService">AI问答服务</param>
+        /// <param name="subjectTemplateService">科目模板服务</param>
         /// <exception cref="ArgumentNullException">当任一参数为null时抛出</exception>
         public ContentEditorPresenter(
             ILogger<ContentEditorPresenter> logger,
             IContentEditorView view,
             IContentLoaderService contentLoaderService,
-            IAiQuestionService aiQuestionService)
+            IAiQuestionService aiQuestionService,
+            ISubjectTemplateService subjectTemplateService)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _view = view ?? throw new ArgumentNullException(nameof(view));
             _contentLoaderService = contentLoaderService ?? throw new ArgumentNullException(nameof(contentLoaderService));
             _aiQuestionService = aiQuestionService ?? throw new ArgumentNullException(nameof(aiQuestionService));
+            _subjectTemplateService = subjectTemplateService ?? throw new ArgumentNullException(nameof(subjectTemplateService));
 
             _view.SubjectChanged += OnSubjectChanged;
             _view.SubCategoryChanged += OnSubCategoryChanged;
@@ -339,39 +332,41 @@ namespace LearningAssistant.Presenters
             var subCategory = _view.SelectedSubCategory;
             var context = new LearningContext("default_user", subject, subCategory);
             var items = _contentLoaderService.LoadItems(context);
-            _view.ItemData = ConvertToDataTable(items, subCategory.ToString());
+            _view.ItemData = ConvertToDataTable(items, subCategory);
             _isDirty = false;
         }
 
-        
+
 
         /// <summary>
         /// 将对象列表转换为DataTable，所有列均为string类型以避免类型推断问题
         /// </summary>
         /// <param name="items">对象列表</param>
-        /// <param name="category">类别名称</param>
+        /// <param name="category">类别</param>
         /// <returns>转换后的DataTable</returns>
-        private DataTable ConvertToDataTable(List<LearningItem> items, string category)
+        private DataTable ConvertToDataTable(List<LearningItem> items, SubCategoryType category)
         {
             var table = new DataTable();
+            var categoryStr = category.ToString();
+            var template = GetTemplateDictionary(category);
 
             if (items.Count == 0)
             {
-                if (CategoryTemplates.TryGetValue(category, out var template))
+                if (template.Count > 0)
                 {
                     foreach (var key in template.Keys)
                     {
                         var column = table.Columns.Add(key, typeof(string));
-                        column.Caption = CategoryConfig.GetChineseColumnName(key, category);
+                        column.Caption = CategoryConfig.GetChineseColumnName(key, categoryStr);
                     }
                 }
                 return table;
             }
 
             var allColumns = new HashSet<string>();
-            if (CategoryTemplates.TryGetValue(category, out var template2))
+            if (template.Count > 0)
             {
-                foreach (var key in template2.Keys)
+                foreach (var key in template.Keys)
                     allColumns.Add(key);
             }
 
@@ -383,10 +378,10 @@ namespace LearningAssistant.Presenters
 
                 if (!string.IsNullOrWhiteSpace(item.MainContent))
                 {
-                    if (category.StartsWith("English"))
+                    if (categoryStr.StartsWith("English"))
                         allColumns.Add("Word");
-                    else if (category.StartsWith("Chinese"))
-                        allColumns.Add(category.Contains("Character") ? "Character" : category.Contains("Idiom") ? "Idiom" : category.Contains("Poem") ? "Title" : "Phrase");
+                    else if (categoryStr.StartsWith("Chinese"))
+                        allColumns.Add(categoryStr.Contains("Character") ? "Character" : categoryStr.Contains("Idiom") ? "Idiom" : categoryStr.Contains("Poem") ? "Title" : "Phrase");
                 }
 
                 if (item.Meaning != null)
@@ -423,7 +418,7 @@ namespace LearningAssistant.Presenters
             foreach (var col in allColumns)
             {
                 var column = table.Columns.Add(col, typeof(string));
-                column.Caption = CategoryConfig.GetChineseColumnName(col, category);
+                column.Caption = CategoryConfig.GetChineseColumnName(col, categoryStr);
             }
 
             foreach (var item in items)
@@ -433,15 +428,15 @@ namespace LearningAssistant.Presenters
                 row["CreatedAt"] = item.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss");
                 row["UpdatedAt"] = item.UpdatedAt.ToString("yyyy-MM-dd HH:mm:ss");
 
-                if (category.StartsWith("English"))
+                if (categoryStr.StartsWith("English"))
                     row["Word"] = item.MainContent;
-                else if (category.StartsWith("Chinese"))
+                else if (categoryStr.StartsWith("Chinese"))
                 {
-                    if (category.Contains("Character"))
+                    if (categoryStr.Contains("Character"))
                         row["Character"] = item.MainContent;
-                    else if (category.Contains("Idiom"))
+                    else if (categoryStr.Contains("Idiom"))
                         row["Idiom"] = item.MainContent;
-                    else if (category.Contains("Poem"))
+                    else if (categoryStr.Contains("Poem"))
                         row["Title"] = item.MainContent;
                     else
                         row["Phrase"] = item.MainContent;
@@ -506,7 +501,7 @@ namespace LearningAssistant.Presenters
         private void OnTemplateAddClicked(object? sender, EventArgs e)
         {
             if (!CheckAndSaveUnsavedChanges()) return;
-            _view.CurrentEditItemJson = GetTemplateJson(_view.SelectedSubCategory.ToString());
+            _view.CurrentEditItemJson = GetTemplateJson(_view.SelectedSubCategory);
         }
 
         /// <summary>
@@ -624,104 +619,6 @@ namespace LearningAssistant.Presenters
         }
 
         /// <summary>
-        /// 将DataTable转换为对象列表
-        /// </summary>
-        /// <param name="table">DataTable数据源</param>
-        /// <param name="category">类别名称，用于确定对象类型</param>
-        /// <returns>转换后的对象列表</returns>
-        private List<LearningItem> ConvertDataTableToItems(DataTable table, string category)
-        {
-            var items = new List<LearningItem>();
-
-            foreach (DataRow row in table.Rows)
-            {
-                var item = new LearningItem
-                {
-                    Id = row["Id"]?.ToString() ?? Guid.NewGuid().ToString(),
-                    CreatedAt = DateTime.TryParse(row["CreatedAt"]?.ToString(), out var createdAt) ? createdAt : DateTime.Now,
-                    UpdatedAt = DateTime.Now,
-                    Subject = category.StartsWith("English") ? SubjectType.English :
-                              category.StartsWith("Chinese") ? SubjectType.Chinese :
-                              category.StartsWith("Math") ? SubjectType.Math :
-                              category.StartsWith("Physics") ? SubjectType.Physics :
-                              category.StartsWith("Chemistry") ? SubjectType.Chemistry :
-                              category.StartsWith("History") ? SubjectType.History :
-                              category.StartsWith("Geography") ? SubjectType.Geography :
-                              category.StartsWith("Biology") ? SubjectType.Biology : SubjectType.Chinese
-                };
-
-                if (Enum.TryParse(category, out SubCategoryType subCategory))
-                    item.SubCategory = subCategory;
-
-                if (category.StartsWith("English"))
-                    item.MainContent = row["Word"]?.ToString() ?? "";
-                else if (category.StartsWith("Chinese"))
-                {
-                    if (category.Contains("Character"))
-                        item.MainContent = row["Character"]?.ToString() ?? "";
-                    else if (category.Contains("Idiom"))
-                        item.MainContent = row["Idiom"]?.ToString() ?? "";
-                    else if (category.Contains("Poem"))
-                        item.MainContent = row["Title"]?.ToString() ?? "";
-                    else
-                        item.MainContent = row["Phrase"]?.ToString() ?? "";
-                }
-                else
-                {
-                    item.MainContent = row["Topic"]?.ToString() ?? "";
-                }
-
-                var meaning = row["Meaning"]?.ToString();
-                if (!string.IsNullOrWhiteSpace(meaning))
-                    item.Meaning = Models.Learning.ValueObjects.Meaning.Create(meaning);
-
-                var example = row["Example"]?.ToString();
-                var exampleTranslation = row["ExampleTranslation"]?.ToString();
-                if (!string.IsNullOrWhiteSpace(example))
-                    item.Example = Models.Learning.ValueObjects.Example.Create(example, exampleTranslation);
-
-                var phonetic = row["Phonetic"]?.ToString();
-                var ukPhonetic = row["UkPhonetic"]?.ToString();
-                var usPhonetic = row["UsPhonetic"]?.ToString();
-                if (!string.IsNullOrWhiteSpace(phonetic))
-                    item.Pronunciation = Models.Learning.ValueObjects.Pronunciation.Create(phonetic, ukPhonetic, usPhonetic);
-
-                var strokeCount = row["StrokeCount"]?.ToString();
-                var radical = row["Radical"]?.ToString();
-                var structure = row["Structure"]?.ToString();
-                if (!string.IsNullOrWhiteSpace(strokeCount) || !string.IsNullOrWhiteSpace(radical))
-                    item.CharacterFeatures = Models.Learning.ValueObjects.CharacterFeatures.Create(strokeCount, radical, structure);
-
-                var partOfSpeech = row["PartOfSpeech"]?.ToString();
-                var wordForms = row["WordForms"]?.ToString();
-                var collocations = row["Collocations"]?.ToString();
-                var syllableBreakdown = row["SyllableBreakdown"]?.ToString();
-                if (!string.IsNullOrWhiteSpace(partOfSpeech) || !string.IsNullOrWhiteSpace(wordForms))
-                    item.WordFeatures = Models.Learning.ValueObjects.WordFeatures.Create(partOfSpeech, wordForms, collocations, syllableBreakdown);
-
-                var extendedProps = new Dictionary<string, object>();
-                foreach (DataColumn col in table.Columns)
-                {
-                    var colName = col.ColumnName;
-                    if (new[] { "Id", "CreatedAt", "UpdatedAt", "Word", "Character", "Idiom", "Phrase", "Title",
-                        "Meaning", "Example", "ExampleTranslation", "Phonetic", "UkPhonetic", "UsPhonetic",
-                        "StrokeCount", "Radical", "Structure", "PartOfSpeech", "WordForms", "Collocations",
-                        "SyllableBreakdown" }.Contains(colName))
-                        continue;
-
-                    var value = row[col]?.ToString();
-                    if (!string.IsNullOrWhiteSpace(value))
-                        extendedProps[colName] = value;
-                }
-                item.ExtendedProperties = System.Text.Json.JsonSerializer.Serialize(extendedProps);
-
-                items.Add(item);
-            }
-
-            return items;
-        }
-
-        /// <summary>
         /// 尝试将逗号分隔的字符串解析为JSON数组
         /// </summary>
         /// <param name="value">待解析的字符串</param>
@@ -814,14 +711,14 @@ namespace LearningAssistant.Presenters
             if (dialog.ShowDialog() != DialogResult.OK) return;
 
             try
+            {
+                var content = File.ReadAllText(dialog.FileName);
+                var options = new JsonSerializerOptions
                 {
-                    var content = File.ReadAllText(dialog.FileName);
-                    var options = new JsonSerializerOptions
-                    {
-                        PropertyNameCaseInsensitive = true,
-                        Converters = { new LearningItemJsonConverter() }
-                    };
-                    var importedItems = System.Text.Json.JsonSerializer.Deserialize<List<LearningItem>>(content, options);
+                    PropertyNameCaseInsensitive = true,
+                    Converters = { new LearningItemJsonConverter() }
+                };
+                var importedItems = System.Text.Json.JsonSerializer.Deserialize<List<LearningItem>>(content, options);
 
                 if (importedItems?.Count > 0)
                 {
@@ -873,17 +770,17 @@ namespace LearningAssistant.Presenters
             if (dialog.ShowDialog() != DialogResult.OK) return;
 
             try
+            {
+                var subject = _view.SelectedSubject;
+                var subCategory = _view.SelectedSubCategory;
+                var context = new LearningContext("default_user", subject, subCategory);
+                var items = _contentLoaderService.LoadItems(context);
+                var options = new JsonSerializerOptions
                 {
-                    var subject = _view.SelectedSubject;
-                    var subCategory = _view.SelectedSubCategory;
-                    var context = new LearningContext("default_user", subject, subCategory);
-                    var items = _contentLoaderService.LoadItems(context);
-                    var options = new JsonSerializerOptions
-                    {
-                        WriteIndented = true,
-                        Converters = { new LearningItemJsonConverter() }
-                    };
-                    var json = System.Text.Json.JsonSerializer.Serialize(items, options);
+                    WriteIndented = true,
+                    Converters = { new LearningItemJsonConverter() }
+                };
+                var json = System.Text.Json.JsonSerializer.Serialize(items, options);
 
                 if (!string.IsNullOrEmpty(json))
                 {
@@ -919,38 +816,47 @@ namespace LearningAssistant.Presenters
         }
 
         /// <summary>
-        /// 生成AI请求提示词
+        /// 获取指定类别的模板字段字典。
+        /// 优先从 SubjectTemplates.json 动态加载（支持新增模板），未命中时回退到硬编码 CategoryTemplates。
         /// </summary>
-        /// <param name="category">内容类别</param>
-        /// <param name="count">生成数量</param>
-        /// <param name="range">关键词或范围</param>
-        /// <returns>格式化后的AI提示词</returns>
-        private string GetAIPrompt(string category, int count, string range)
+        private Dictionary<string, object> GetTemplateDictionary(SubCategoryType category)
         {
-            var typeName = CategoryConfig.CategoryTypeNames.GetValueOrDefault(category, "内容");
-            var format = CategoryConfig.JsonFormatHints.GetValueOrDefault(category, "[]");
+            // JSON subject 键 = 科目显示名（语文/英语/数学…）；
+            // JSON category 键 = 默认词库文件名去掉 .json（识字/公式定理/人物传记…），与 Constants.SubCategory 一致。
+            var subjectKey = SubjectSubCategoryMapping.GetSubjectDisplayName(SubjectSubCategoryMapping.GetSubject(category));
+            var categoryKey = _contentLoaderService.GetDefaultWordBankFile(category)?.Replace(".json", "");
 
-            if (category == Constants.SubCategory.ChineseComprehensive)
+            if (!string.IsNullOrEmpty(categoryKey))
             {
-                return $"生成{count}个语文综合练习题（{range}），包含标题、内容、3-5道题目及答案、解析。格式：{format}";
-            }
-            else if (category == Constants.SubCategory.EnglishComprehensive)
-            {
-                return $"Generate {count} English exercises ({range}) with title, content, 3-5 questions and answers, analysis. Format: {format}";
+                var template = _subjectTemplateService.GetCategoryTemplate(subjectKey, categoryKey);
+                if (template?.Fields != null && template.Fields.Count > 0)
+                {
+                    var dict = new Dictionary<string, object>();
+                    foreach (var field in template.Fields)
+                        dict[field] = "";
+                    return dict;
+                }
+
+                // 回退到硬编码模板（其键为中文 categoryKey）。
+                // 注意：硬编码字段可能与 SubjectTemplates.json 不一致，仅作 JSON 缺失时的容错回退。
+                _logger?.LogWarning("JSON模板缺失(subject={Subject}, category={Category})，回退到硬编码模板", subjectKey, categoryKey);
+                if (CategoryTemplates.TryGetValue(categoryKey, out var hardcoded))
+                    return hardcoded;
             }
 
-            return $"生成{count}个{range}的{typeName}。格式：{format}";
+            return new Dictionary<string, object>();
         }
 
         /// <summary>
         /// 获取指定类别的JSON模板
         /// </summary>
-        /// <param name="category">类别名称</param>
+        /// <param name="category">类别</param>
         /// <returns>JSON格式的模板字符串</returns>
-        private static string GetTemplateJson(string category)
+        private string GetTemplateJson(SubCategoryType category)
         {
-            return CategoryTemplates.TryGetValue(category, out var template)
-                ? System.Text.Json.JsonSerializer.Serialize(template, new JsonSerializerOptions { WriteIndented = true })
+            var dict = GetTemplateDictionary(category);
+            return dict.Count > 0
+                ? System.Text.Json.JsonSerializer.Serialize(dict, new JsonSerializerOptions { WriteIndented = true })
                 : "{}";
         }
 

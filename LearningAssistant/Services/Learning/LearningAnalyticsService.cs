@@ -83,13 +83,26 @@ namespace LearningAssistant.Services.Learning
 
         private void LoadFromUserDirectories()
         {
-            if (!Directory.Exists(AppPaths.UsersDir)) return;
-
-            foreach (var userDir in Directory.EnumerateDirectories(AppPaths.UsersDir))
+            // 以 DB 为权威用户源（覆盖仅写 DB 但无目录的用户），并与文件系统目录取并集
+            // （兼容遗留目录用户）。服务子目录因无分析数据文件会被下方 File.Exists 过滤。
+            var userIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (_persistenceService != null)
             {
-                var userId = Path.GetFileName(userDir);
-                if (string.IsNullOrEmpty(userId)) continue;
+                foreach (var uid in _persistenceService.GetUserIds())
+                    userIds.Add(uid);
+            }
+            if (Directory.Exists(AppPaths.UsersDir))
+            {
+                foreach (var dir in Directory.EnumerateDirectories(AppPaths.UsersDir))
+                {
+                    var name = Path.GetFileName(dir);
+                    if (!string.IsNullOrEmpty(name))
+                        userIds.Add(name);
+                }
+            }
 
+            foreach (var userId in userIds)
+            {
                 var userPath = AppPaths.GetUserAnalyticsPath(userId);
                 if (!File.Exists(userPath)) continue;
 
@@ -103,7 +116,7 @@ namespace LearningAssistant.Services.Learning
                 }
                 catch (Exception ex)
                 {
-                    _logger?.LogWarning(ex, "加载用户 {UserId} 的分析数据失败", userId);
+                    _logger?.LogWarning(ex, "加载用户 {UserId} 分析数据失败", userId);
                 }
             }
         }

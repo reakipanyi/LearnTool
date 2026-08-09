@@ -258,6 +258,7 @@ namespace LearningAssistant.Common
         /// </summary>
         public static void EnsureDirectoryExists(string path)
         {
+            path = path.Replace("\r\n", "");
             if (!Directory.Exists(path))
             {
                 Directory.CreateDirectory(path);

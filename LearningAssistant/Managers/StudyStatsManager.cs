@@ -145,7 +145,7 @@ namespace LearningAssistant.Managers
         /// <summary>
         /// 保存统计数据到数据库
         /// </summary>
-        public void Save(string userId = "default")
+        public void Save(string userId = Constants.DefaultUserId)
         {
             try
             {

@@ -20,7 +20,7 @@ namespace LearningAssistant.Services.Gamification
         private readonly BadgeManager _badgeManager;
         private readonly ChallengeManager _challengeManager;
 
-        private string _userId = "default";
+        private string _userId = Constants.DefaultUserId;
         private TimeSpan _studyDuration;
         private int _quizCorrectCount;
         private int _quizTotalCount;

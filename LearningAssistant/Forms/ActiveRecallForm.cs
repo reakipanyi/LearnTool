@@ -97,7 +97,7 @@ namespace LearningAssistant.Forms
         /// <summary>
         /// 初始化主动回忆训练器（带事件总线）
         /// </summary>
-        public ActiveRecallForm(IEventBus? eventBus, string userId = "default") : this()
+        public ActiveRecallForm(IEventBus? eventBus, string userId = Constants.DefaultUserId) : this()
         {
             _eventBus = eventBus;
             _userId = userId;

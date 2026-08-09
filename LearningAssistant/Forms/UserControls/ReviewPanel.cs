@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using LearningAssistant.Services.Learning;
 using System.ComponentModel;
 
@@ -31,7 +32,7 @@ namespace LearningAssistant.Forms.UserControls
         private EmptyStateView? _emptyState;
 
         private readonly ISpacedRepetitionService? _spacedRepetitionService;
-        private readonly string _userId = "default";
+        private readonly string _userId = Constants.DefaultUserId;
         private List<ReviewItem> _dueItems = new();
 
         private int _dueTotal = 0;
@@ -57,7 +58,7 @@ namespace LearningAssistant.Forms.UserControls
             InitializeComponent();
         }
 
-        public ReviewPanel(ISpacedRepetitionService spacedRepetitionService, string userId = "default") : this()
+        public ReviewPanel(ISpacedRepetitionService spacedRepetitionService, string userId = Constants.DefaultUserId) : this()
         {
             _spacedRepetitionService = spacedRepetitionService;
             _userId = userId;

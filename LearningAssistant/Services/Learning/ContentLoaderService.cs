@@ -125,35 +125,6 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        public void InvalidateCache(SubCategoryType subCategory)
-        {
-            lock (_cacheLock)
-            {
-                var defaultFile = _categoryFileMap.GetValueOrDefault(subCategory, "");
-                if (string.IsNullOrEmpty(defaultFile))
-                    return;
-
-                var keysToRemove = _fileCache.Keys
-                    .Where(k => k.EndsWith(defaultFile, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-
-                foreach (var key in keysToRemove)
-                {
-                    _fileCache.Remove(key);
-                    _logger.LogDebug("Cache invalidated for subCategory: {SubCategory}", subCategory);
-                }
-            }
-        }
-
-        public void InvalidateAllCaches()
-        {
-            lock (_cacheLock)
-            {
-                _fileCache.Clear();
-                _logger.LogDebug("All caches invalidated");
-            }
-        }
-
         private List<LearningItem> LoadFromCacheOrFile(string filePath, SubCategoryType subCategory)
         {
             lock (_cacheLock)
@@ -274,7 +245,7 @@ namespace LearningAssistant.Services.Learning
                                                   && !Constants.ExcludedFileKeywords.WordBankExclusions.Any(keyword => file.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0))
                                    .ToList();
 
-                if (!string.IsNullOrWhiteSpace(defaultFile) && !files.Contains(defaultFile))
+                if (!string.IsNullOrWhiteSpace(defaultFile) && !files.Contains(defaultFile, StringComparer.OrdinalIgnoreCase))
                 {
                     files.Add(defaultFile);
                 }

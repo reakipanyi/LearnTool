@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using LearningAssistant.Models.AI;
 using LearningAssistant.Services.AI;
 using System.ComponentModel;
@@ -28,7 +29,7 @@ namespace LearningAssistant.Forms.UserControls
         #region 属性
 
         private IConversationContextService? _contextService;
-        private string _currentUserId = "default";
+        private string _currentUserId = Constants.DefaultUserId;
         private bool _isLoading;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]

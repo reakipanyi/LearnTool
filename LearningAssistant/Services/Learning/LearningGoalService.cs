@@ -20,7 +20,7 @@ namespace LearningAssistant.Services.Learning
         private readonly ILogger<LearningGoalService> _logger;
         private readonly IEventBus? _eventBus;
         private readonly HashSet<string> _completedGoalsToday = new();
-        private string _userId = "default";
+        private string _userId = Constants.DefaultUserId;
 
         public event EventHandler<GoalType>? GoalCompleted;
         public event EventHandler? AllGoalsCompleted;
