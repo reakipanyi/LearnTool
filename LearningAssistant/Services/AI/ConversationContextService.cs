@@ -15,7 +15,7 @@ namespace LearningAssistant.Services.AI
         private readonly ILogger<ConversationContextService>? _logger;
 
         private MentorSession? _currentSession;
-        private readonly object _lock = new();
+        private readonly SemaphoreSlim _semaphore = new(1, 1);
 
         private const int MaxHistoryTurns = 20;
         private const int ContextTruncateTurns = 10;
@@ -42,7 +42,8 @@ namespace LearningAssistant.Services.AI
         /// </summary>
         public MentorSession GetOrCreateSession(string userId, MentorPersonaType personaType = MentorPersonaType.Tutor)
         {
-            lock (_lock)
+            _semaphore.Wait();
+            try
             {
                 if (_currentSession == null || _currentSession.UserId != userId)
                 {
@@ -55,6 +56,10 @@ namespace LearningAssistant.Services.AI
                 }
                 return _currentSession;
             }
+            finally
+            {
+                _semaphore.Release();
+            }
         }
 
         /// <summary>
@@ -66,63 +71,71 @@ namespace LearningAssistant.Services.AI
                 return string.Empty;
 
             var userId = _userSessionService.CurrentUserId;
-            var session = GetOrCreateSession(userId);
 
-            var turn = new ConversationTurn
-            {
-                UserMessage = userMessage.Trim(),
-                Type = GetConversationType(session.Persona.Type)
-            };
-
+            await _semaphore.WaitAsync(cancellationToken);
             try
             {
-                _logger?.LogDebug("发送AI请求: 用户 {UserId}, 消息长度 {Length}", userId, userMessage.Length);
+                var session = GetOrCreateSession(userId);
 
-                // 构建上下文 - 使用角色提示词 + 对话历史
-                var systemPrompt = session.Persona.GetSystemPrompt();
-                var historyContext = session.BuildContextString(ContextTruncateTurns);
-                var fullContext = string.IsNullOrEmpty(historyContext)
-                    ? systemPrompt
-                    : $"{systemPrompt}\n\n{historyContext}";
-
-                // 如果有学习上下文，添加进去
-                if (!string.IsNullOrEmpty(session.LearningContext))
+                var turn = new ConversationTurn
                 {
-                    fullContext = $"当前学习内容：{session.LearningContext}\n\n{fullContext}";
+                    UserMessage = userMessage.Trim(),
+                    Type = GetConversationType(session.Persona.Type)
+                };
+
+                try
+                {
+                    _logger?.LogDebug("发送AI请求: 用户 {UserId}, 消息长度 {Length}", userId, userMessage.Length);
+
+                    // 构建上下文 - 使用角色提示词 + 对话历史
+                    var systemPrompt = session.Persona.GetSystemPrompt();
+                    var historyContext = session.BuildContextString(ContextTruncateTurns);
+                    var fullContext = string.IsNullOrEmpty(historyContext)
+                        ? systemPrompt
+                        : $"{systemPrompt}\n\n{historyContext}";
+
+                    // 如果有学习上下文，添加进去
+                    if (!string.IsNullOrEmpty(session.LearningContext))
+                    {
+                        fullContext = $"当前学习内容：{session.LearningContext}\n\n{fullContext}";
+                    }
+
+                    // 调用现有AI服务
+                    var response = await _aiService.AskAsync(userMessage, fullContext, cancellationToken);
+
+                    turn.AiResponse = response;
+                    turn.Confidence = string.IsNullOrEmpty(response) ? 0 : 1.0;
+
+                    // 添加到历史
+                    session.AddTurn(turn);
+
+                    // 限制历史长度
+                    TrimHistory(session);
+
+                    _logger?.LogDebug("AI回复: 长度 {Length}, 历史轮次 {Count}", response.Length, session.TurnCount);
+
+                    // 触发事件
+                    MessageReceived?.Invoke(this, turn);
+
+                    return response;
                 }
-
-                // 调用现有AI服务
-                var response = await _aiService.AskAsync(userMessage, fullContext, cancellationToken);
-
-                turn.AiResponse = response;
-                turn.Confidence = string.IsNullOrEmpty(response) ? 0 : 1.0;
-
-                // 添加到历史
-                session.AddTurn(turn);
-
-                // 限制历史长度
-                TrimHistory(session);
-
-                _logger?.LogDebug("AI回复: 长度 {Length}, 历史轮次 {Count}", response.Length, session.TurnCount);
-
-                // 触发事件
-                MessageReceived?.Invoke(this, turn);
-
-                return response;
+                catch (OperationCanceledException)
+                {
+                    _logger?.LogWarning("AI请求取消");
+                    // 取消时不记录turn到历史，避免污染后续对话上下文
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "AI请求失败");
+                    turn.AiResponse = "抱歉，服务暂时不可用，请稍后再试。";
+                    session.AddTurn(turn);
+                    return turn.AiResponse;
+                }
             }
-            catch (OperationCanceledException)
+            finally
             {
-                _logger?.LogWarning("AI请求取消");
-                turn.AiResponse = "请求已取消";
-                session.AddTurn(turn);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "AI请求失败");
-                turn.AiResponse = "抱歉，服务暂时不可用，请稍后再试。";
-                session.AddTurn(turn);
-                return turn.AiResponse;
+                _semaphore.Release();
             }
         }
 
@@ -170,12 +183,17 @@ namespace LearningAssistant.Services.AI
         /// </summary>
         public void ClearAllSessions(string userId)
         {
-            lock (_lock)
+            _semaphore.Wait();
+            try
             {
                 if (_currentSession?.UserId == userId)
                 {
                     _currentSession.Clear();
                 }
+            }
+            finally
+            {
+                _semaphore.Release();
             }
             _logger?.LogInformation("清空用户所有会话: {UserId}", userId);
         }

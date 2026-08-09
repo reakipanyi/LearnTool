@@ -5,7 +5,7 @@ namespace LearningAssistant.Services.AI
 {
     /// <summary>
     /// AI问题服务 - 作为IAIService的代理，保持向后兼容
-    /// 所有方法现在直接调用IAIService的对应方法
+    /// 所有方法现在直接调用IAIService的对应方法，异常由调用方处理
     /// </summary>
     public class AiQuestionService : IAiQuestionService
     {
@@ -26,15 +26,7 @@ namespace LearningAssistant.Services.AI
             if (string.IsNullOrWhiteSpace(text))
                 return string.Empty;
 
-            try
-            {
-                return await _aiService.AskQuestionAsync(text, context, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "AI提问失败");
-                return "获取答案失败";
-            }
+            return await _aiService.AskQuestionAsync(text, context, cancellationToken);
         }
 
         /// <summary>
@@ -45,15 +37,7 @@ namespace LearningAssistant.Services.AI
             if (string.IsNullOrWhiteSpace(text))
                 return string.Empty;
 
-            try
-            {
-                return await _aiService.GenerateExerciseAsync(text, language, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "生成练习题失败");
-                return "生成练习题失败";
-            }
+            return await _aiService.GenerateExerciseAsync(text, language, cancellationToken);
         }
 
         /// <summary>
@@ -64,15 +48,7 @@ namespace LearningAssistant.Services.AI
             if (string.IsNullOrWhiteSpace(text))
                 return string.Empty;
 
-            try
-            {
-                return await _aiService.SummarizeAsync(text, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "文本总结失败");
-                return "总结失败";
-            }
+            return await _aiService.SummarizeAsync(text, cancellationToken);
         }
     }
 }

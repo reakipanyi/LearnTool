@@ -2,20 +2,35 @@ using LearningAssistant.Models.Config;
 using LearningAssistant.Services.Cache;
 using Microsoft.Extensions.Logging;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
 namespace LearningAssistant.Services.AI
 {
-    public class DoubaoAIService : AbstractAIService
+    /// <summary>
+    /// 通用OpenAI兼容API服务 - 适用于所有使用 /chat/completions 接口的AI提供商
+    /// </summary>
+    public class OpenAICompatibleAIService : AbstractAIService
     {
-        public DoubaoAIService(AiConfig config, ICacheService cacheService, ILogger<DoubaoAIService> logger, HttpClient httpClient)
+        private readonly string _providerName;
+        private readonly string _modelName;
+
+        public OpenAICompatibleAIService(
+            AiConfig config,
+            ICacheService cacheService,
+            ILogger logger,
+            HttpClient httpClient,
+            string providerName,
+            string modelName)
             : base(config, cacheService, logger, httpClient)
         {
+            _providerName = providerName;
+            _modelName = modelName;
         }
 
-        public override string ModelName => "Doubao";
-        public override string ProviderName => "doubao";
+        public override string ModelName => _modelName;
+        public override string ProviderName => _providerName;
 
         protected override string BuildExplanationPrompt(string text, string language, string subType)
         {
@@ -25,11 +40,11 @@ namespace LearningAssistant.Services.AI
                 "成语" => "成语",
                 "短语" => "短语",
                 "诗词" => "诗词",
-                "语文综合" => "语文综合内容",
+                "语文综合" => "语文内容",
                 "英语单词" => "英语单词",
                 "英语短语" => "英语短语",
                 "英语句子" => "英语句子",
-                "英语综合" => "英语综合内容",
+                "英语综合" => "英语内容",
                 _ => "词语"
             };
 
@@ -37,17 +52,17 @@ namespace LearningAssistant.Services.AI
             {
                 if (subType == "语文综合")
                 {
-                    return $"请简要解析：{text}\n要求：控制在100字以内，简洁明了，突出重点。格式：概要+要点。";
+                    return $"请简要解析这个内容：{text}\n要求：100字内，简洁解析，只输出解析内容，不要输出其他说明。";
                 }
-                return $"请简要解释{typeName}：{text}\n要求：控制在100字以内。格式：读音+含义+简单用法示例。";
+                return $"请简要解释这个{typeName}：{text}\n要求：100字内。只输出解释内容，包括读音、含义和简单用法示例。不要输出格式或其他说明文字。";
             }
             else
             {
                 if (subType == "英语综合")
                 {
-                    return $"请简要解析：{text}\n要求：控制在100字以内，简洁明了。格式：概要+要点+学习提示。";
+                    return $"请简要解析这个内容：{text}\n要求：100字内，简洁解析。只输出解析内容，不要输出其他说明。";
                 }
-                return $"请简要解释{typeName}：{text}\n要求：控制在100字以内。格式：音标+中文释义+简单例句。";
+                return $"请简要解释这个{typeName}：{text}\n要求：100字内。只输出解释内容，包括音标、中文释义和简单例句。不要输出格式或其他说明文字。";
             }
         }
 
@@ -68,14 +83,14 @@ namespace LearningAssistant.Services.AI
                 };
 
                 var json = JsonSerializer.Serialize(requestBody);
-                
+
                 using var request = new HttpRequestMessage(HttpMethod.Post, _config.BaseUrl);
                 request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-                
+
                 string apiKey = ApiKey;
                 if (!string.IsNullOrEmpty(apiKey))
                 {
-                    request.Headers.Add("Authorization", $"Bearer {apiKey}");
+                    request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
                 }
 
                 var response = await _httpClient.SendAsync(request, cancellationToken);
@@ -83,7 +98,7 @@ namespace LearningAssistant.Services.AI
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    string errorDetail = $"豆包 API错误 ({response.StatusCode})";
+                    string errorDetail = $"{_providerName} API错误 ({response.StatusCode})";
                     try
                     {
                         using var doc = JsonDocument.Parse(responseJson);
@@ -95,7 +110,7 @@ namespace LearningAssistant.Services.AI
                         _logger.LogWarning("Failed to parse error response: {Ex}", ex.Message);
                     }
 
-                    _logger.LogError("豆包 API调用失败: {Error}", errorDetail);
+                    _logger.LogError("{Provider} API调用失败: {Error}", _providerName, errorDetail);
                     throw new HttpRequestException(errorDetail);
                 }
 
@@ -110,7 +125,7 @@ namespace LearningAssistant.Services.AI
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "豆包 API调用异常");
+                _logger.LogError(ex, "{Provider} API调用异常", _providerName);
                 throw;
             }
         }

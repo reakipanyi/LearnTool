@@ -1,6 +1,7 @@
 using LearningAssistant.Models.KnowledgeGraph;
 using LearningAssistant.Services.AI;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 
 namespace LearningAssistant.Services.KnowledgeGraph
 {
@@ -9,7 +10,7 @@ namespace LearningAssistant.Services.KnowledgeGraph
         private readonly IAiQuestionService _aiService;
         private readonly ILogger<KnowledgeGraphService>? _logger;
 
-        private readonly Dictionary<string, Models.KnowledgeGraph.KnowledgeGraph> _graphs = new();
+        private readonly ConcurrentDictionary<string, Models.KnowledgeGraph.KnowledgeGraph> _graphs = new();
 
         public KnowledgeGraphService(
             IAiQuestionService aiService,
@@ -21,15 +22,11 @@ namespace LearningAssistant.Services.KnowledgeGraph
 
         public Task<Models.KnowledgeGraph.KnowledgeGraph> GetGraphAsync(string userId)
         {
-            if (!_graphs.TryGetValue(userId, out var graph))
+            var graph = _graphs.GetOrAdd(userId, id => new Models.KnowledgeGraph.KnowledgeGraph
             {
-                graph = new Models.KnowledgeGraph.KnowledgeGraph
-                {
-                    UserId = userId,
-                    Name = $"{userId} 的知识图谱"
-                };
-                _graphs[userId] = graph;
-            }
+                UserId = id,
+                Name = $"{id} 的知识图谱"
+            });
 
             return Task.FromResult(graph);
         }

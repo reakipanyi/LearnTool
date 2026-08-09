@@ -66,7 +66,7 @@ namespace LearningAssistant.Services.AI
             var answer = await CallApiWithRetryAsync(prompt, cancellationToken);
             if (!string.IsNullOrWhiteSpace(answer))
             {
-                _cacheService.Set(cacheKey, answer, 60 * 24 * 3);
+                _cacheService.Set(cacheKey, answer, Constants.CacheDuration.QAMinutes);
             }
             return answer;
         }
@@ -90,7 +90,7 @@ namespace LearningAssistant.Services.AI
             var response = await CallApiWithRetryAsync(prompt, cancellationToken);
             if (!string.IsNullOrWhiteSpace(response))
             {
-                _cacheService.Set(cacheKey, response, 60 * 24 * 3);
+                _cacheService.Set(cacheKey, response, Constants.CacheDuration.ExerciseMinutes);
             }
             return response;
         }
@@ -139,8 +139,8 @@ namespace LearningAssistant.Services.AI
 
         protected string GetHash(string input)
         {
-            using var md5 = MD5.Create();
-            var bytes = md5.ComputeHash(Encoding.UTF8.GetBytes(input));
+            using var sha256 = SHA256.Create();
+            var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(input));
             return BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
         }
 

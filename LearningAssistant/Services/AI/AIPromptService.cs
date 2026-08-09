@@ -12,33 +12,9 @@ namespace LearningAssistant.Services.AI
     {
         private AIPromptConfig _config;
         private readonly ILogger<AIPromptService>? _logger;
-        private static AIPromptService? _instance;
-        private static readonly object _lock = new object();
+        private readonly object _lock = new object();
 
-        /// <summary>
-        /// 单例实例
-        /// </summary>
-        public static AIPromptService Instance
-        {
-            get
-            {
-                if (_instance == null)
-                {
-                    lock (_lock)
-                    {
-                        _instance ??= new AIPromptService();
-                    }
-                }
-                return _instance;
-            }
-        }
-
-        private AIPromptService()
-        {
-            _config = LoadConfig();
-        }
-
-        public AIPromptService(ILogger<AIPromptService>? logger)
+        public AIPromptService(ILogger<AIPromptService>? logger = null)
         {
             _logger = logger;
             _config = LoadConfig();

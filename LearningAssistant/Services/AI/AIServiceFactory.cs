@@ -25,18 +25,36 @@ namespace LearningAssistant.Services.AI
         {
             _logger.LogInformation("创建AI服务: {Provider}", provider);
 
+            var config = _serviceProvider.GetRequiredService<AiConfig>();
+            var cacheService = _serviceProvider.GetRequiredService<ICacheService>();
+            var httpClient = _serviceProvider.GetRequiredService<HttpClient>();
+
             return provider.ToLower() switch
             {
                 "doubao" or "豆包" => new DoubaoAIService(
-                    _serviceProvider.GetRequiredService<AiConfig>(),
-                    _serviceProvider.GetRequiredService<ICacheService>(),
+                    config, cacheService,
                     _serviceProvider.GetRequiredService<ILogger<DoubaoAIService>>(),
-                    _serviceProvider.GetRequiredService<HttpClient>()),
+                    httpClient),
                 "deepseek" => new DeepseekAIService(
-                    _serviceProvider.GetRequiredService<AiConfig>(),
-                    _serviceProvider.GetRequiredService<ICacheService>(),
+                    config, cacheService,
                     _serviceProvider.GetRequiredService<ILogger<DeepseekAIService>>(),
-                    _serviceProvider.GetRequiredService<HttpClient>()),
+                    httpClient),
+                "zhipu" or "glm" => new OpenAICompatibleAIService(
+                    config, cacheService,
+                    _serviceProvider.GetRequiredService<ILogger<OpenAICompatibleAIService>>(),
+                    httpClient, "zhipu", "GLM"),
+                "qwen" or "dashscope" => new OpenAICompatibleAIService(
+                    config, cacheService,
+                    _serviceProvider.GetRequiredService<ILogger<OpenAICompatibleAIService>>(),
+                    httpClient, "qwen", "Qwen"),
+                "spark" => new OpenAICompatibleAIService(
+                    config, cacheService,
+                    _serviceProvider.GetRequiredService<ILogger<OpenAICompatibleAIService>>(),
+                    httpClient, "spark", "Spark"),
+                "wenxin" or "ernie" => new OpenAICompatibleAIService(
+                    config, cacheService,
+                    _serviceProvider.GetRequiredService<ILogger<OpenAICompatibleAIService>>(),
+                    httpClient, "wenxin", "ERNIE"),
                 _ => throw new ArgumentException($"不支持的AI服务提供商: {provider}", nameof(provider))
             };
         }
@@ -44,7 +62,7 @@ namespace LearningAssistant.Services.AI
 
     public class FallbackAIService : IAIService
     {
-        private static readonly string[] FallbackProviders = { "deepseek", "doubao" };
+        private static readonly string[] FallbackProviders = { "deepseek", "doubao", "zhipu", "qwen", "spark", "wenxin" };
 
         private readonly IAIService _currentService;
         private readonly AiConfig _config;

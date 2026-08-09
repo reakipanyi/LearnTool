@@ -97,13 +97,13 @@ namespace LearningAssistant.Forms
             }
         }
 
-        public void Show(Form owner, int duration = 3000)
+        public new void Show(Form owner, int duration = 3000)
         {
             if (owner == null || owner.IsDisposed)
                 return;
 
             PositionToast(owner);
-            Show(owner);
+            base.Show(owner);
             BringToFront();
 
             Opacity = 0;

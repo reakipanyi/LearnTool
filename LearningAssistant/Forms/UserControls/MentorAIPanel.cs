@@ -331,29 +331,29 @@ namespace LearningAssistant.Forms.UserControls
             _textInput.Clear();
             SetLoading(true);
 
-            // 添加用户消息气泡
-            AddMessageBubble(message, isUser: true);
-            MessageSent?.Invoke(this, message);
-
-            // 发送到AI服务
-            if (_contextService != null)
+            try
             {
-                try
+                // 添加用户消息气泡
+                AddMessageBubble(message, isUser: true);
+                MessageSent?.Invoke(this, message);
+
+                // 发送到AI服务
+                if (_contextService != null)
                 {
                     var response = await _contextService.AddMessageAsync(message);
                     // 响应会在 MessageReceived 事件中处理
                 }
-                catch (Exception ex)
+                else
                 {
-                    AddMessageBubble($"错误: {ex.Message}", isUser: false);
+                    // 如果没有配置服务，模拟响应
+                    await Task.Delay(500);
+                    AddMessageBubble("请先配置对话服务", isUser: false);
                     SetLoading(false);
                 }
             }
-            else
+            catch (Exception ex)
             {
-                // 如果没有配置服务，模拟响应
-                await Task.Delay(500);
-                AddMessageBubble("请先配置对话服务", isUser: false);
+                AddMessageBubble($"错误: {ex.Message}", isUser: false);
                 SetLoading(false);
             }
         }

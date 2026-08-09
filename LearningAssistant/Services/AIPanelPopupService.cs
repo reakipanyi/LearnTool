@@ -1,5 +1,6 @@
 using LearningAssistant.Common;
 using LearningAssistant.Forms.UserControls;
+using System.Collections.Concurrent;
 using System.Windows.Forms;
 
 namespace LearningAssistant.Services
@@ -33,8 +34,8 @@ namespace LearningAssistant.Services
     {
         #region 字段
 
-        private readonly Dictionary<Form, Panel> _panelContainers = new();
-        private readonly Dictionary<Form, Button> _closeButtons = new();
+        private readonly ConcurrentDictionary<Form, Panel> _panelContainers = new();
+        private readonly ConcurrentDictionary<Form, Button> _closeButtons = new();
         private readonly Color _closeButtonNormalColor = Color.FromArgb(240, 240, 240);
         private readonly Color _closeButtonHoverColor = Color.FromArgb(220, 220, 220);
 
@@ -79,7 +80,7 @@ namespace LearningAssistant.Services
 
         #region 私有方法
 
-        private void ShowExistingPanel(Panel container, string? prompt, string? aiUrl, string? context)
+        private async void ShowExistingPanel(Panel container, string? prompt, string? aiUrl, string? context)
         {
             container.Visible = true;
             container.BringToFront();
@@ -94,11 +95,18 @@ namespace LearningAssistant.Services
                     aiPanel.PromptText = prompt;
 
                 var urlToUse = !string.IsNullOrEmpty(aiUrl) ? aiUrl : aiPanel.CurrentAIUrl;
-                _ = aiPanel.OpenWebViewAsync(urlToUse, prompt);
+                try
+                {
+                    await aiPanel.OpenWebViewAsync(urlToUse, prompt);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"AI面板WebView加载失败: {ex.Message}");
+                }
             }
         }
 
-        private void CreateAndShowNewPanel(Form parent, string? prompt, string? aiUrl, string? context)
+        private async void CreateAndShowNewPanel(Form parent, string? prompt, string? aiUrl, string? context)
         {
             var aiAbilityPanel = CreateAIAbilityPanel(prompt, context);
             var containerPanel = CreateContainerPanel(aiAbilityPanel, parent);
@@ -108,7 +116,14 @@ namespace LearningAssistant.Services
             _panelContainers[parent] = containerPanel;
 
             var finalUrl = !string.IsNullOrEmpty(aiUrl) ? aiUrl : aiAbilityPanel.CurrentAIUrl;
-            _ = aiAbilityPanel.OpenWebViewAsync(finalUrl, prompt);
+            try
+            {
+                await aiAbilityPanel.OpenWebViewAsync(finalUrl, prompt);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"AI面板WebView加载失败: {ex.Message}");
+            }
 
             parent.FormClosed += ParentFormClosedHandler;
         }
@@ -174,7 +189,7 @@ namespace LearningAssistant.Services
 
         private void DisposePanel(Form parent)
         {
-            if (_panelContainers.TryGetValue(parent, out var container))
+            if (_panelContainers.TryRemove(parent, out var container))
             {
                 try
                 {
@@ -184,8 +199,7 @@ namespace LearningAssistant.Services
                 {
                     // 忽略 dispose 过程中的异常，确保后续清理继续执行
                 }
-                _panelContainers.Remove(parent);
-                _closeButtons.Remove(parent);
+                _closeButtons.TryRemove(parent, out _);
                 parent.FormClosed -= ParentFormClosedHandler;
             }
         }

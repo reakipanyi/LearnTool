@@ -58,7 +58,7 @@ namespace LearningAssistant.Services.Quiz
 
                 // 调用AI生成题目
                 var prompt = BuildQuestionPrompt(content, language, count, type);
-                var aiResponse = await _aiService.GenerateExerciseAsync(content, language);
+                var aiResponse = await _aiService.GenerateExerciseAsync(prompt, language);
 
                 if (string.IsNullOrWhiteSpace(aiResponse))
                 {
@@ -205,16 +205,36 @@ namespace LearningAssistant.Services.Quiz
         private static List<int> ParseAnswerIndices(string answer)
         {
             var indices = new List<int>();
-            var upper = answer.ToUpper();
+            var upper = answer.ToUpper().Trim();
 
-            if (upper.Contains("A") || upper.Contains("正确") && upper.Contains("T"))
-                indices.Add(0);
-            if (upper.Contains("B") || (upper.Contains("正确") && !upper.Contains("T")))
+            // 尝试从"答案: B"格式中提取字母部分
+            var match = System.Text.RegularExpressions.Regex.Match(upper, @"([A-D]+)");
+            if (match.Success)
+            {
+                foreach (char c in match.Groups[1].Value)
+                {
+                    var idx = c - 'A';
+                    if (idx >= 0 && idx <= 3 && !indices.Contains(idx))
+                        indices.Add(idx);
+                }
+                if (indices.Count > 0)
+                    return indices;
+            }
+
+            // 判断题：检查是否包含"正确"/"错误"关键词
+            if (upper.Contains("正确") || upper.Contains("TRUE") || upper.Contains("T"))
+            {
+                if (upper.Contains("不正确") || upper.Contains("错误") || upper.Contains("FALSE") || upper.Contains("F"))
+                    indices.Add(1);
+                else
+                    indices.Add(0);
+                return indices;
+            }
+            if (upper.Contains("错误") || upper.Contains("FALSE") || upper.Contains("F"))
+            {
                 indices.Add(1);
-            if (upper.Contains("C"))
-                indices.Add(2);
-            if (upper.Contains("D"))
-                indices.Add(3);
+                return indices;
+            }
 
             // 如果是数字，尝试解析
             if (indices.Count == 0 && int.TryParse(answer.Trim(), out var num))

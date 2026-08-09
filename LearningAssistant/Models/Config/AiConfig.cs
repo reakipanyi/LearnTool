@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace LearningAssistant.Models.Config
 {
     public class AiConfig
@@ -41,7 +43,7 @@ namespace LearningAssistant.Models.Config
         public string BaseUrl { get; set; } = string.Empty;
         public int TimeoutSeconds { get; set; } = 30;
 
-        public static readonly Dictionary<string, AiProviderInfo> Providers = new()
+        public static readonly ImmutableDictionary<string, AiProviderInfo> Providers = new Dictionary<string, AiProviderInfo>()
         {
             {
                 "doubao", new AiProviderInfo
@@ -141,7 +143,7 @@ namespace LearningAssistant.Models.Config
                     WebViewUrl = "https://yiyan.baidu.com"
                 }
             }
-        };
+        }.ToImmutableDictionary();
     }
 
     public class AiProviderInfo

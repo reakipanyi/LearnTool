@@ -1,4 +1,5 @@
 using LearningAssistant.Services.AI;
+using System.Text.Json;
 
 namespace LearningAssistant.Forms
 {
@@ -977,8 +978,10 @@ namespace LearningAssistant.Forms
                 {
                     string json = aiResponse.Substring(jsonStart, jsonEnd - jsonStart + 1);
 
-                    var similarItems = ParseJsonArray(json, "similar");
-                    foreach (var item in similarItems)
+                    using var doc = JsonDocument.Parse(json);
+                    var root = doc.RootElement;
+
+                    foreach (var item in ParseJsonArray(root, "similar"))
                     {
                         result.Add(new AssociationNode
                         {
@@ -988,8 +991,7 @@ namespace LearningAssistant.Forms
                         });
                     }
 
-                    var oppositeItems = ParseJsonArray(json, "opposite");
-                    foreach (var item in oppositeItems)
+                    foreach (var item in ParseJsonArray(root, "opposite"))
                     {
                         result.Add(new AssociationNode
                         {
@@ -999,8 +1001,7 @@ namespace LearningAssistant.Forms
                         });
                     }
 
-                    var relatedItems = ParseJsonArray(json, "related");
-                    foreach (var item in relatedItems)
+                    foreach (var item in ParseJsonArray(root, "related"))
                     {
                         result.Add(new AssociationNode
                         {
@@ -1010,8 +1011,7 @@ namespace LearningAssistant.Forms
                         });
                     }
 
-                    var exampleItems = ParseJsonArray(json, "examples");
-                    foreach (var item in exampleItems)
+                    foreach (var item in ParseJsonArray(root, "examples"))
                     {
                         result.Add(new AssociationNode
                         {
@@ -1021,8 +1021,7 @@ namespace LearningAssistant.Forms
                         });
                     }
 
-                    var knowledgeItems = ParseJsonArray(json, "knowledge");
-                    foreach (var item in knowledgeItems)
+                    foreach (var item in ParseJsonArray(root, "knowledge"))
                     {
                         result.Add(new AssociationNode
                         {
@@ -1033,36 +1032,30 @@ namespace LearningAssistant.Forms
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"解析AI联想内容失败: {ex.Message}");
             }
 
             return result;
         }
 
         /// <summary>
-        /// 简单解析JSON数组
+        /// 从JsonDocument中解析字符串数组
         /// </summary>
-        private List<string> ParseJsonArray(string json, string key)
+        private static List<string> ParseJsonArray(JsonElement root, string key)
         {
             var result = new List<string>();
-            string pattern = $"\"{key}\"";
-            int idx = json.IndexOf(pattern);
-            if (idx < 0) return result;
 
-            int bracketStart = json.IndexOf('[', idx);
-            int bracketEnd = json.IndexOf(']', bracketStart);
-            if (bracketStart < 0 || bracketEnd < 0) return result;
-
-            string arrayContent = json.Substring(bracketStart + 1, bracketEnd - bracketStart - 1);
-
-            var items = arrayContent.Split(',');
-            foreach (var item in items)
+            if (root.TryGetProperty(key, out var arrayElement) && arrayElement.ValueKind == JsonValueKind.Array)
             {
-                string trimmed = item.Trim().Trim('"', ' ', '\n', '\r', '\t');
-                if (!string.IsNullOrEmpty(trimmed))
+                foreach (var item in arrayElement.EnumerateArray())
                 {
-                    result.Add(trimmed);
+                    var text = item.ValueKind == JsonValueKind.String
+                        ? item.GetString() ?? string.Empty
+                        : item.ToString();
+                    if (!string.IsNullOrEmpty(text))
+                        result.Add(text);
                 }
             }
 

@@ -342,7 +342,7 @@ namespace LearningAssistant.Services.AI
                         {
                             existing.Name = template.Name;
                             existing.Description = template.Description;
-                            template.Category = template.Category;
+                            existing.Category = template.Category;
                             existing.SystemPrompt = template.SystemPrompt;
                             existing.UserPromptTemplate = template.UserPromptTemplate;
                             existing.Variables = template.Variables;
