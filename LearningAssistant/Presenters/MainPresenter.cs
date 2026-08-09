@@ -388,6 +388,9 @@ namespace LearningAssistant.Presenters
                 }
 
                 _persistenceService.CreateUserProfile(userId, userId);
+                // 同步文件路径层当前用户并创建用户目录，确保该用户在学习窗口列表中可见
+                // （列表以目录存在性/DB 为据），且专属文件路径解析正确。
+                AppPaths.SetCurrentUserId(userId);
                 RefreshUserList();
                 _view.SelectedUser = userId;
                 _view?.ShowMessage($"玩家 \"{userId}\" 创建成功！");

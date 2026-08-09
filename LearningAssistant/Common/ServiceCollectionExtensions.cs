@@ -20,7 +20,6 @@ using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Services.Persistence;
 using LearningAssistant.Services.Recovery;
-using LearningAssistant.Services.Repositories;
 using LearningAssistant.Services.SystemTray;
 using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
@@ -102,11 +101,14 @@ namespace LearningAssistant.Common
             //services.AddSingleton<IDataMigrationService, DataMigrationService>();
             //services.AddScoped<ILearningItemMigrationService, LearningItemMigrationService>();
 
-            services.AddScoped<IUserProfileRepository, UserProfileRepository>();
-            services.AddScoped<ISpacedRepetitionRepository, SpacedRepetitionRepository>();
-            services.AddScoped<IWrongAnswerRepository, WrongAnswerRepository>();
-            services.AddScoped<IReminderRepository, ReminderRepository>();
-            services.AddScoped<ILearningGoalRepository, LearningGoalRepository>();
+            // 注：仓储层（IUserProfileRepository 等）当前未被任何服务消费，且 RepositoryBase 依赖 AppDbContext，
+            // 而 AddDatabaseServices 仅注册了 IDbContextFactory<AppDbContext>（不注册 AppDbContext 本身），
+            // 直接注册为 Scoped 会在解析时失败。故暂不注册；如需启用，应改为注入 IDbContextFactory 并补注册。
+            // services.AddScoped<IUserProfileRepository, UserProfileRepository>();
+            // services.AddScoped<ISpacedRepetitionRepository, SpacedRepetitionRepository>();
+            // services.AddScoped<IWrongAnswerRepository, WrongAnswerRepository>();
+            // services.AddScoped<IReminderRepository, ReminderRepository>();
+            // services.AddScoped<ILearningGoalRepository, LearningGoalRepository>();
 
             services.AddSingleton<ITTSService>(sp =>
             {

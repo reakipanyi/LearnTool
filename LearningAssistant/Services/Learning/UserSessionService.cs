@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using LearningAssistant.Common;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services.Persistence;
 
@@ -25,12 +26,18 @@ namespace LearningAssistant.Services.Learning
             {
                 _currentUserId = session.CurrentUserId;
             }
+            // 启动恢复上次用户时，同步文件路径层的当前用户标识，
+            // 确保 CurrentUserDir/书签/收藏/设置等路径解析到正确用户。
+            AppPaths.SetCurrentUserId(_currentUserId);
             return _currentUserId;
         }
 
         public void SaveSession(string userId)
         {
             _currentUserId = userId;
+            // 切换/保存用户时同步文件路径层，避免 AppPaths._currentUserId 与实际当前用户脱节
+            // 造成用户专属文件数据读写到错误用户目录（跨用户数据污染）。
+            AppPaths.SetCurrentUserId(userId);
             var session = _persistenceService.LoadSession();
             session.CurrentUserId = userId;
             session.LastAccessTime = DateTime.Now;

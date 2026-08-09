@@ -2077,28 +2077,39 @@ namespace LearningAssistant.Forms
         {
             try
             {
+                // 以数据库为权威用户源（覆盖仅写 DB 但无目录的用户），并与文件系统目录取并集
+                // （兼容遗留目录用户）。过滤掉遗留的服务子目录名，避免被误列为用户。
+                var dbUsers = _userSessionService?.GetUserList() ?? new List<string>();
+
+                var dirUsers = new List<string>();
                 if (Directory.Exists(AppPaths.UsersDir))
                 {
-                    var userDirs = Directory.GetDirectories(AppPaths.UsersDir)
+                    dirUsers = Directory.GetDirectories(AppPaths.UsersDir)
                         .Select(Path.GetFileName)
-                        .Where(name => !string.IsNullOrEmpty(name))
+                        .Where(name => !string.IsNullOrEmpty(name) && !ServiceSubDirectoryNames.Contains(name))
                         .ToList();
+                }
 
-                    _settingsView.ComboBoxUser.Items.Clear();
-                    foreach (var user in userDirs)
-                    {
-                        _settingsView.ComboBoxUser.Items.Add(user);
-                    }
+                var users = dbUsers
+                    .Concat(dirUsers)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(u => u, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
 
-                    var currentUser = AppPaths.GetCurrentUserId();
-                    if (!string.IsNullOrEmpty(currentUser) && _settingsView.ComboBoxUser.Items.Contains(currentUser))
-                    {
-                        _settingsView.ComboBoxUser.Text = currentUser;
-                    }
-                    else if (_settingsView.ComboBoxUser.Items.Count > 0)
-                    {
-                        _settingsView.ComboBoxUser.SelectedIndex = 0;
-                    }
+                _settingsView.ComboBoxUser.Items.Clear();
+                foreach (var user in users)
+                {
+                    _settingsView.ComboBoxUser.Items.Add(user);
+                }
+
+                var currentUser = AppPaths.GetCurrentUserId();
+                if (!string.IsNullOrEmpty(currentUser) && _settingsView.ComboBoxUser.Items.Contains(currentUser))
+                {
+                    _settingsView.ComboBoxUser.Text = currentUser;
+                }
+                else if (_settingsView.ComboBoxUser.Items.Count > 0)
+                {
+                    _settingsView.ComboBoxUser.SelectedIndex = 0;
                 }
             }
             catch (Exception ex)
@@ -2106,6 +2117,14 @@ namespace LearningAssistant.Forms
                 _logger.LogError(ex, "加载用户列表失败");
             }
         }
+
+        /// <summary>
+        /// UsersDir 下遗留的服务子目录名，不应作为用户名显示。
+        /// </summary>
+        private static readonly HashSet<string> ServiceSubDirectoryNames = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "goals", "learning_paths", "notes", "wrong_answers", "pomodoro_stats", "recommendation_feedback"
+        };
 
         private void StatsButtonView_UserChanged(object? sender, EventArgs e)
         {

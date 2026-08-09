@@ -6,7 +6,6 @@ using LearningAssistant.Services.Cache;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using System.Threading;
 
 namespace LearningAssistant.Services.Persistence
 {
@@ -48,17 +47,22 @@ namespace LearningAssistant.Services.Persistence
 
         public AppConfig LoadConfig()
         {
+            AppConfig config;
             try
             {
-                var config = _configuration.Get<AppConfig>() ?? new AppConfig();
-                ConfigEncryptionHelper.DecryptSensitiveConfig(config);
-                return config;
+                config = _configuration.Get<AppConfig>() ?? new AppConfig();
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Failed to load configuration");
+                // 仅当配置源读取本身失败时才返回默认配置
+                _logger?.LogError(ex, "Failed to load configuration from source");
                 return new AppConfig();
             }
+
+            // 解密按字段降级（见 ConfigEncryptionHelper），不会整体抛出，
+            // 避免单字段问题导致返回默认配置并在后续 SaveConfig 时覆盖磁盘原值。
+            ConfigEncryptionHelper.DecryptSensitiveConfig(config);
+            return config;
         }
 
         public void SaveConfig(AppConfig config)
@@ -111,84 +115,74 @@ namespace LearningAssistant.Services.Persistence
             ArgumentNullException.ThrowIfNull(profile, nameof(profile));
             ArgumentException.ThrowIfNullOrWhiteSpace(profile.UserId, nameof(profile.UserId));
 
-            const int maxRetries = 3;
-            const int retryDelayMs = 500;
-
-            for (int attempt = 1; attempt <= maxRetries; attempt++)
+            // AppDbContext.SaveChanges 已内置 SQLITE_BUSY/LOCKED 指数退避重试 + 全局写互斥锁，
+            // 此处不再做外层重试与 Thread.Sleep，避免对逻辑错误重试以及阻塞调用线程（多为 UI 线程）。
+            try
             {
-                try
+                using var db = _dbContextFactory.CreateDbContext();
+                using var transaction = db.Database.BeginTransaction();
+
+                var existingUser = db.UserProfiles
+                    .Include(u => u.CategoryProgresses)
+                    .FirstOrDefault(u => u.UserId == profile.UserId);
+
+                if (existingUser == null)
                 {
-                    using var db = _dbContextFactory.CreateDbContext();
-                    using var transaction = db.Database.BeginTransaction();
+                    var userEntity = profile.ToEntity();
+                    db.UserProfiles.Add(userEntity);
 
-                    var existingUser = db.UserProfiles
-                        .Include(u => u.CategoryProgresses)
-                        .FirstOrDefault(u => u.UserId == profile.UserId);
-
-                    if (existingUser == null)
+                    foreach (var categoryProgress in profile.LearningProgress.CategoryProgresses.Values)
                     {
-                        var userEntity = profile.ToEntity();
-                        db.UserProfiles.Add(userEntity);
-
-                        foreach (var categoryProgress in profile.LearningProgress.CategoryProgresses.Values)
-                        {
-                            userEntity.CategoryProgresses.Add(categoryProgress.ToEntity(profile.UserId));
-                        }
+                        userEntity.CategoryProgresses.Add(categoryProgress.ToEntity(profile.UserId));
                     }
-                    else
-                    {
-                        existingUser.UpdateEntity(profile);
-
-                        var categoryNamesInProfile = new HashSet<string>(profile.LearningProgress.CategoryProgresses.Keys);
-                        var categoriesToRemove = existingUser.CategoryProgresses
-                            .Where(c => !categoryNamesInProfile.Contains(c.CategoryName))
-                            .ToList();
-
-                        foreach (var categoryToRemove in categoriesToRemove)
-                        {
-                            db.CategoryProgresses.Remove(categoryToRemove);
-                        }
-
-                        foreach (var categoryProgress in profile.LearningProgress.CategoryProgresses.Values)
-                        {
-                            var existingCategory = existingUser.CategoryProgresses
-                                .FirstOrDefault(c => c.CategoryName == categoryProgress.CategoryName);
-
-                            if (existingCategory != null)
-                            {
-                                existingCategory.UpdateEntity(categoryProgress);
-                            }
-                            else
-                            {
-                                existingUser.CategoryProgresses.Add(categoryProgress.ToEntity(profile.UserId));
-                            }
-                        }
-                    }
-
-                    SaveLearningItemStates(db, profile.UserId, profile.LearningProgress.CategoryProgresses.Values);
-
-                    db.SaveChanges();
-                    transaction.Commit();
-                    return;
                 }
-                catch (Exception ex)
+                else
                 {
-                    _logger?.LogError(ex, "Failed to save user profile for {UserId} (attempt {Attempt}/{MaxRetries})", profile.UserId, attempt, maxRetries);
+                    existingUser.UpdateEntity(profile);
 
-                    if (attempt >= maxRetries)
+                    var categoryNamesInProfile = new HashSet<string>(profile.LearningProgress.CategoryProgresses.Keys);
+                    var categoriesToRemove = existingUser.CategoryProgresses
+                        .Where(c => !categoryNamesInProfile.Contains(c.CategoryName))
+                        .ToList();
+
+                    foreach (var categoryToRemove in categoriesToRemove)
                     {
-                        var errorMsg = $"保存用户配置失败: {profile.UserId}";
-                        var innerEx = ex.InnerException;
-                        while (innerEx != null)
-                        {
-                            errorMsg += $" - {innerEx.Message}";
-                            innerEx = innerEx.InnerException;
-                        }
-                        throw new PersistenceException(errorMsg, ex);
+                        db.CategoryProgresses.Remove(categoryToRemove);
                     }
 
-                    Thread.Sleep(retryDelayMs);
+                    foreach (var categoryProgress in profile.LearningProgress.CategoryProgresses.Values)
+                    {
+                        var existingCategory = existingUser.CategoryProgresses
+                            .FirstOrDefault(c => c.CategoryName == categoryProgress.CategoryName);
+
+                        if (existingCategory != null)
+                        {
+                            existingCategory.UpdateEntity(categoryProgress);
+                        }
+                        else
+                        {
+                            existingUser.CategoryProgresses.Add(categoryProgress.ToEntity(profile.UserId));
+                        }
+                    }
                 }
+
+                SaveLearningItemStates(db, profile.UserId, profile.LearningProgress.CategoryProgresses.Values);
+
+                db.SaveChanges();
+                transaction.Commit();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to save user profile for {UserId}", profile.UserId);
+
+                var errorMsg = $"保存用户配置失败: {profile.UserId}";
+                var innerEx = ex.InnerException;
+                while (innerEx != null)
+                {
+                    errorMsg += $" - {innerEx.Message}";
+                    innerEx = innerEx.InnerException;
+                }
+                throw new PersistenceException(errorMsg, ex);
             }
         }
 
@@ -199,6 +193,9 @@ namespace LearningAssistant.Services.Persistence
                 .ToList();
 
             var stateLookup = existingStates.ToLookup(s => (s.CategoryName, s.Content));
+            // 预建 CategoryName -> CategoryProgress 索引，避免在 .Where() 内 FirstOrDefault 造成 O(states×categories)。
+            var progressByCategory = categoryProgresses.ToDictionary(p => p.CategoryName);
+            var now = DateTime.Now;
 
             foreach (var categoryProgress in categoryProgresses)
             {
@@ -206,10 +203,11 @@ namespace LearningAssistant.Services.Persistence
                 {
                     var key = (categoryProgress.CategoryName, knownItem);
                     var existingState = stateLookup[key].FirstOrDefault();
-                    
+
                     if (existingState != null)
                     {
                         existingState.IsKnown = true;
+                        existingState.UpdatedAt = now;
                     }
                     else
                     {
@@ -218,7 +216,9 @@ namespace LearningAssistant.Services.Persistence
                             UserId = userId,
                             CategoryName = categoryProgress.CategoryName,
                             Content = knownItem,
-                            IsKnown = true
+                            IsKnown = true,
+                            CreatedAt = now,
+                            UpdatedAt = now
                         });
                     }
                 }
@@ -227,10 +227,11 @@ namespace LearningAssistant.Services.Persistence
                 {
                     var key = (categoryProgress.CategoryName, unknownItem);
                     var existingState = stateLookup[key].FirstOrDefault();
-                    
+
                     if (existingState != null)
                     {
                         existingState.IsKnown = false;
+                        existingState.UpdatedAt = now;
                     }
                     else
                     {
@@ -239,7 +240,9 @@ namespace LearningAssistant.Services.Persistence
                             UserId = userId,
                             CategoryName = categoryProgress.CategoryName,
                             Content = unknownItem,
-                            IsKnown = false
+                            IsKnown = false,
+                            CreatedAt = now,
+                            UpdatedAt = now
                         });
                     }
                 }
@@ -247,9 +250,8 @@ namespace LearningAssistant.Services.Persistence
 
             var statesToRemove = existingStates.Where(s =>
             {
-                var progress = categoryProgresses.FirstOrDefault(p => p.CategoryName == s.CategoryName);
-                if (progress == null) return true;
-                return !progress.KnownItems.Contains(s.Content) && !progress.UnknownItems.Contains(s.Content);
+                return !progressByCategory.TryGetValue(s.CategoryName, out var progress)
+                    || (!progress.KnownItems.Contains(s.Content) && !progress.UnknownItems.Contains(s.Content));
             }).ToList();
 
             foreach (var stateToRemove in statesToRemove)
@@ -327,10 +329,16 @@ namespace LearningAssistant.Services.Persistence
                     var session = Common.JsonHelper.Deserialize<SessionData>(entity.SessionDataJson);
                     if (session != null)
                     {
-                        entity.LastAccessTime = DateTime.Now;
-                        db.SaveChanges();
+                        // 读操作不再产生写副作用（LastAccessTime 的更新由 SaveSession 负责），
+                        // 避免每次启动都获取写锁造成争用。
                         return session;
                     }
+
+                    // 实体存在但数据损坏：删除损坏实体，否则每次加载都会反序列化失败且无法恢复，
+                    // 导致“继续上次学习”功能永久失效。
+                    db.AppSessions.Remove(entity);
+                    db.SaveChanges();
+                    _logger?.LogWarning("Detected corrupt app session entity, removed it to allow recovery");
                 }
 
                 // 尝试从旧的 JSON 文件迁移
@@ -470,42 +478,51 @@ namespace LearningAssistant.Services.Persistence
             var categoryName = category.ToString();
             try
             {
-                using var db = _dbContextFactory.CreateDbContext();
                 var contentList = contents.Where(c => !string.IsNullOrWhiteSpace(c)).ToList();
-
                 if (contentList.Count == 0)
                     return;
 
-                var existingEntities = db.LearningItemStates
-                    .Where(s => s.UserId == userId && s.CategoryName == categoryName && contentList.Contains(s.Content))
-                    .ToDictionary(s => s.Content);
-
+                // 分批处理，避免 IN 子句参数超过 SQLite 默认 999 限制。
+                const int batchSize = 500;
                 var now = DateTime.Now;
+                var totalProcessed = 0;
 
-                foreach (var content in contentList)
+                for (int i = 0; i < contentList.Count; i += batchSize)
                 {
-                    if (existingEntities.TryGetValue(content, out var existing))
+                    var batch = contentList.Skip(i).Take(batchSize).ToList();
+
+                    using var db = _dbContextFactory.CreateDbContext();
+                    var existingEntities = db.LearningItemStates
+                        .Where(s => s.UserId == userId && s.CategoryName == categoryName && batch.Contains(s.Content))
+                        .ToDictionary(s => s.Content);
+
+                    foreach (var content in batch)
                     {
-                        existing.IsKnown = isKnown;
-                        existing.UpdatedAt = now;
-                    }
-                    else
-                    {
-                        db.LearningItemStates.Add(new LearningItemStateEntity
+                        if (existingEntities.TryGetValue(content, out var existing))
                         {
-                            UserId = userId,
-                            CategoryName = categoryName,
-                            Content = content,
-                            IsKnown = isKnown,
-                            CreatedAt = now,
-                            UpdatedAt = now
-                        });
+                            existing.IsKnown = isKnown;
+                            existing.UpdatedAt = now;
+                        }
+                        else
+                        {
+                            db.LearningItemStates.Add(new LearningItemStateEntity
+                            {
+                                UserId = userId,
+                                CategoryName = categoryName,
+                                Content = content,
+                                IsKnown = isKnown,
+                                CreatedAt = now,
+                                UpdatedAt = now
+                            });
+                        }
                     }
+
+                    db.SaveChanges();
+                    totalProcessed += batch.Count;
                 }
 
-                db.SaveChanges();
                 _logger?.LogDebug("Batch upserted {Count} learning item states for user {UserId}, category {Category}",
-                    contentList.Count, userId, category);
+                    totalProcessed, userId, category);
             }
             catch (Exception ex)
             {
@@ -543,40 +560,74 @@ namespace LearningAssistant.Services.Persistence
             try
             {
                 using var db = _dbContextFactory.CreateDbContext();
+                using var transaction = db.Database.BeginTransaction();
 
                 var existingStates = db.LearningItemStates
                     .Where(s => s.UserId == userId && s.CategoryName == categoryName)
                     .ToList();
 
-                db.LearningItemStates.RemoveRange(existingStates);
+                // 改为 upsert：按 Content 匹配更新，保留原始 CreatedAt；仅删除不再需要的项。
+                var stateByContent = existingStates.ToDictionary(s => s.Content);
+                var now = DateTime.Now;
+                var desired = new HashSet<string>();
 
                 foreach (var content in knownItems.Where(c => !string.IsNullOrWhiteSpace(c)))
                 {
-                    db.LearningItemStates.Add(new LearningItemStateEntity
+                    desired.Add(content);
+                    if (stateByContent.TryGetValue(content, out var existing))
                     {
-                        UserId = userId,
-                        CategoryName = categoryName,
-                        Content = content,
-                        IsKnown = true,
-                        CreatedAt = DateTime.Now,
-                        UpdatedAt = DateTime.Now
-                    });
+                        if (!existing.IsKnown)
+                        {
+                            existing.IsKnown = true;
+                            existing.UpdatedAt = now;
+                        }
+                    }
+                    else
+                    {
+                        db.LearningItemStates.Add(new LearningItemStateEntity
+                        {
+                            UserId = userId,
+                            CategoryName = categoryName,
+                            Content = content,
+                            IsKnown = true,
+                            CreatedAt = now,
+                            UpdatedAt = now
+                        });
+                    }
                 }
 
                 foreach (var content in unknownItems.Where(c => !string.IsNullOrWhiteSpace(c)))
                 {
-                    db.LearningItemStates.Add(new LearningItemStateEntity
+                    desired.Add(content);
+                    if (stateByContent.TryGetValue(content, out var existing))
                     {
-                        UserId = userId,
-                        CategoryName = categoryName,
-                        Content = content,
-                        IsKnown = false,
-                        CreatedAt = DateTime.Now,
-                        UpdatedAt = DateTime.Now
-                    });
+                        if (existing.IsKnown)
+                        {
+                            existing.IsKnown = false;
+                            existing.UpdatedAt = now;
+                        }
+                    }
+                    else
+                    {
+                        db.LearningItemStates.Add(new LearningItemStateEntity
+                        {
+                            UserId = userId,
+                            CategoryName = categoryName,
+                            Content = content,
+                            IsKnown = false,
+                            CreatedAt = now,
+                            UpdatedAt = now
+                        });
+                    }
+                }
+
+                foreach (var stateToRemove in existingStates.Where(s => !desired.Contains(s.Content)))
+                {
+                    db.LearningItemStates.Remove(stateToRemove);
                 }
 
                 db.SaveChanges();
+                transaction.Commit();
                 _logger?.LogInformation("Synced category progress to LearningItemStates: user {UserId}, category {Category}, known {KnownCount}, unknown {UnknownCount}",
                     userId, category, knownItems.Count, unknownItems.Count);
             }

@@ -1,6 +1,8 @@
 using LearningAssistant.Common;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using System.Data.Common;
 using System.Threading;
 
 namespace LearningAssistant.Data.Database
@@ -102,6 +104,9 @@ namespace LearningAssistant.Data.Database
             // 改为通过 PRAGMA busy_timeout 在连接打开后设置（见 EnsureConnectionPragmas 方法）。
             var connectionString = $"Data Source={_dbPath};Cache=Shared;Pooling=True;";
             optionsBuilder.UseSqlite(connectionString);
+            // 通过拦截器在每次连接打开时设置 busy_timeout，确保读连接也具备忙等待能力
+            // （EnsureConnectionPragmas 仅在写路径调用，读连接可能缺失该 PRAGMA）。
+            optionsBuilder.AddInterceptors(new SqliteBusyTimeoutInterceptor());
         }
 
         /// <summary>
@@ -1147,5 +1152,40 @@ namespace LearningAssistant.Data.Database
         }
 
         #endregion
+
+        /// <summary>
+        /// 连接打开时设置 busy_timeout，确保读连接也具备忙等待能力。
+        /// </summary>
+        private sealed class SqliteBusyTimeoutInterceptor : DbConnectionInterceptor
+        {
+            private const int BusyTimeoutMs = 5000;
+
+            public override void ConnectionOpened(DbConnection connection, ConnectionEndEventData eventData)
+            {
+                SetBusyTimeout(connection);
+            }
+
+            public override Task ConnectionOpenedAsync(DbConnection connection, ConnectionEndEventData eventData, CancellationToken cancellationToken = default)
+            {
+                SetBusyTimeout(connection);
+                return Task.CompletedTask;
+            }
+
+            private static void SetBusyTimeout(DbConnection connection)
+            {
+                try
+                {
+                    if (connection is not SqliteConnection sqliteConn) return;
+                    if (sqliteConn.State != System.Data.ConnectionState.Open) return;
+                    using var cmd = sqliteConn.CreateCommand();
+                    cmd.CommandText = $"PRAGMA busy_timeout = {BusyTimeoutMs};";
+                    cmd.ExecuteNonQuery();
+                }
+                catch
+                {
+                    // PRAGMA 设置是非关键增强，失败不影响主流程。
+                }
+            }
+        }
     }
 }
