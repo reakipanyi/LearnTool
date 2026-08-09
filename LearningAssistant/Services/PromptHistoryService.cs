@@ -41,7 +41,8 @@ namespace LearningAssistant.Services
         {
             if (string.IsNullOrWhiteSpace(prompt)) return;
 
-            _promptHistory.Remove(prompt);
+            // 移除旧条目（同时处理带收藏前缀和不带前缀的情况）
+            _promptHistory.RemoveAll(item => item == prompt || item == $"⭐ {prompt}");
             string itemText = isFavorite ? $"⭐ {prompt}" : prompt;
             _promptHistory.Insert(0, itemText);
 

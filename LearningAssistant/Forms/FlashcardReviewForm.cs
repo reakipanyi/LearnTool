@@ -443,42 +443,50 @@ namespace LearningAssistant.Forms
         {
             if (_currentItem == null) return;
 
-            var duration = (int)(DateTime.Now - _cardShownTime).TotalMilliseconds;
-
-            // 调用SM-2算法计算下次复习间隔
-            var result = _spacedRepetitionService.CalculateNextReview(_currentItem, rating, duration);
-
-            // 记录日志
-            _logger?.LogInformation("闪卡复习评分: 内容={Content}, 评分={Rating}, 下次间隔={Interval}天",
-                _currentItem.Content.Length > 20 ? _currentItem.Content.Substring(0, 20) + "..." : _currentItem.Content,
-                rating, result.NewInterval);
-
-            // 发布学习事件
-            if (rating >= 3)
+            try
             {
-                _eventBus?.Publish(new ItemLearnedEvent
+                var duration = (int)(DateTime.Now - _cardShownTime).TotalMilliseconds;
+
+                // 调用SM-2算法计算下次复习间隔
+                var result = _spacedRepetitionService.CalculateNextReview(_currentItem, rating, duration);
+
+                // 记录日志
+                _logger?.LogInformation("闪卡复习评分: 内容={Content}, 评分={Rating}, 下次间隔={Interval}天",
+                    _currentItem.Content.Length > 20 ? _currentItem.Content.Substring(0, 20) + "..." : _currentItem.Content,
+                    rating, result.NewInterval);
+
+                // 发布学习事件
+                if (rating >= 3)
                 {
-                    UserId = _currentItem.UserId,
-                    ItemContent = _currentItem.Content,
-                    LearningType = "Flashcard"
-                });
+                    _eventBus?.Publish(new ItemLearnedEvent
+                    {
+                        UserId = _currentItem.UserId,
+                        ItemContent = _currentItem.Content,
+                        LearningType = "Flashcard"
+                    });
+                }
+                else
+                {
+                    _eventBus?.Publish(new ItemWrongEvent
+                    {
+                        UserId = _currentItem.UserId,
+                        ItemContent = _currentItem.Content,
+                        LearningType = "Flashcard"
+                    });
+                }
+
+                // 移动到下一张
+                _currentIndex++;
+                ShowCurrentCard();
+
+                // 短暂延迟，让用户看到反馈
+                await Task.Delay(200);
             }
-            else
+            catch (Exception ex)
             {
-                _eventBus?.Publish(new ItemWrongEvent
-                {
-                    UserId = _currentItem.UserId,
-                    ItemContent = _currentItem.Content,
-                    LearningType = "Flashcard"
-                });
+                _logger?.LogError(ex, "闪卡评分失败: 内容={Content}, 评分={Rating}", _currentItem.Content, rating);
+                MessageBox.Show($"评分失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-
-            // 移动到下一张
-            _currentIndex++;
-            ShowCurrentCard();
-
-            // 短暂延迟，让用户看到反馈
-            await Task.Delay(200);
         }
 
         private void ShowComplete()

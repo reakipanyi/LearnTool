@@ -680,7 +680,7 @@ namespace LearningAssistant.Forms.UserControls
                     }
                 }
 
-                _ = OpenWebViewAsync(CurrentAIUrl, prompt);
+                await OpenWebViewAsync(CurrentAIUrl, prompt);
             }
             catch (Exception ex)
             {
@@ -923,7 +923,7 @@ namespace LearningAssistant.Forms.UserControls
                 string script = GetFillPromptScript(_webView?.Source?.Host, _pendingPrompt!);
                 var result = await _webView!.CoreWebView2.ExecuteScriptAsync(script);
 
-                if (result.Contains("filled"))
+                if (result.Contains("\"filled"))
                 {
                     filled = true;
                     SetStatus("就绪");

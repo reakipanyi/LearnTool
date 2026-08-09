@@ -337,7 +337,6 @@ namespace LearningAssistant.Common
                 {
                     var logger = sp.GetRequiredService<ILogger<LearningFlowHandler>>();
                     var studyEngine = sp.GetRequiredService<IStudyEngine>();
-                    var aiService = sp.GetService<IAIService>();
                     var ttsService = sp.GetService<ITTSService>();
                     var speechCoordinator = sp.GetService<ISpeechCoordinator>();
                     var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
@@ -347,7 +346,7 @@ namespace LearningAssistant.Common
                     var view = sp.GetRequiredService<ILearningView>();
                     var eventBus = sp.GetService<IEventBus>();
                     var spacedRepetitionService = sp.GetService<ISpacedRepetitionService>();
-                    return new LearningFlowHandler(logger, studyEngine, aiService, ttsService, speechCoordinator,
+                    return new LearningFlowHandler(logger, studyEngine, ttsService, speechCoordinator,
                         contentLoaderService, exportService, windowManager, settingsManager, view, eventBus, spacedRepetitionService);
                 });
 

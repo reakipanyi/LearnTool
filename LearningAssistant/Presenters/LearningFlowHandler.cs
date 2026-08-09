@@ -2,7 +2,6 @@ using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Learning;
-using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
@@ -34,7 +33,6 @@ namespace LearningAssistant.Presenters
     {
         private readonly ILogger<LearningFlowHandler> _logger;
         private readonly IStudyEngine _studyEngine;
-        private readonly IAIService? _aiService;
         private readonly ITTSService? _ttsService;
         private readonly ISpeechCoordinator? _speechCoordinator;
         private readonly IContentLoaderService _contentLoaderService;
@@ -61,7 +59,6 @@ namespace LearningAssistant.Presenters
         public LearningFlowHandler(
             ILogger<LearningFlowHandler> logger,
             IStudyEngine studyEngine,
-            IAIService? aiService,
             ITTSService? ttsService,
             ISpeechCoordinator? speechCoordinator,
             IContentLoaderService contentLoaderService,
@@ -74,7 +71,6 @@ namespace LearningAssistant.Presenters
         {
             _logger = logger;
             _studyEngine = studyEngine;
-            _aiService = aiService;
             _ttsService = ttsService;
             _speechCoordinator = speechCoordinator;
             _contentLoaderService = contentLoaderService;
@@ -732,7 +728,7 @@ namespace LearningAssistant.Presenters
             {
                 try
                 {
-                    Task.Run(async () => await _speechCoordinator.StopAsync()).GetAwaiter().GetResult();
+                    _speechCoordinator.StopAsync().Wait(TimeSpan.FromSeconds(2));
                 }
                 catch (Exception ex)
                 {

@@ -2020,10 +2020,9 @@ namespace LearningAssistant.Forms
                 var aiPanelPopupService = Program.GetService<IAIPanelPopupService>();
                 var themeService = Program.GetService<IThemeService>();
                 var contentLoaderService = Program.GetService<Services.Learning.IContentLoaderService>();
-                var aiQuestionService = Program.GetService<Services.AI.IAiQuestionService>();
 
                 if (logger == null || appConfig == null || aiPanelPopupService == null || themeService == null ||
-                    contentLoaderService == null || aiQuestionService == null)
+                    contentLoaderService == null)
                 {
                     MessageBox.Show("无法加载内容编辑器所需的服务", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
@@ -2037,7 +2036,7 @@ namespace LearningAssistant.Forms
                     return;
                 }
                 var subjectTemplateService = Program.GetService<ISubjectTemplateService>();
-                var presenter = new Presenters.ContentEditorPresenter(presenterLogger, editorForm, contentLoaderService, aiQuestionService, subjectTemplateService);
+                var presenter = new Presenters.ContentEditorPresenter(presenterLogger, editorForm, contentLoaderService, subjectTemplateService);
                 editorForm.SetPresenter(presenter);
                 editorForm.ShowDialog();
             }

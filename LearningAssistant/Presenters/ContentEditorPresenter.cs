@@ -1,7 +1,6 @@
 using LearningAssistant.Common;
 using LearningAssistant.Models.Learning;
 using LearningAssistant.Services;
-using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
@@ -32,11 +31,6 @@ namespace LearningAssistant.Presenters
         private readonly IContentLoaderService _contentLoaderService;
 
         /// <summary>
-        /// AI问答服务，用于生成学习内容
-        /// </summary>
-        private readonly IAiQuestionService _aiQuestionService;
-
-        /// <summary>
         /// 科目模板服务，从 SubjectTemplates.json 加载字段模板（支持新增模板动态生效）
         /// </summary>
         private readonly ISubjectTemplateService _subjectTemplateService;
@@ -59,21 +53,18 @@ namespace LearningAssistant.Presenters
         /// <param name="logger">日志记录器</param>
         /// <param name="view">视图接口</param>
         /// <param name="contentLoaderService">内容加载服务</param>
-        /// <param name="aiQuestionService">AI问答服务</param>
         /// <param name="subjectTemplateService">科目模板服务</param>
         /// <exception cref="ArgumentNullException">当任一参数为null时抛出</exception>
         public ContentEditorPresenter(
             ILogger<ContentEditorPresenter> logger,
             IContentEditorView view,
             IContentLoaderService contentLoaderService,
-            IAiQuestionService aiQuestionService,
             ISubjectTemplateService subjectTemplateService,
             IUserSessionService? userSessionService = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _view = view ?? throw new ArgumentNullException(nameof(view));
             _contentLoaderService = contentLoaderService ?? throw new ArgumentNullException(nameof(contentLoaderService));
-            _aiQuestionService = aiQuestionService ?? throw new ArgumentNullException(nameof(aiQuestionService));
             _subjectTemplateService = subjectTemplateService ?? throw new ArgumentNullException(nameof(subjectTemplateService));
             _userSessionService = userSessionService;
 

@@ -64,7 +64,7 @@ namespace LearningAssistant.Services.AI
     {
         private static readonly string[] FallbackProviders = { "deepseek", "doubao", "zhipu", "qwen", "spark", "wenxin" };
 
-        private readonly IAIService _currentService;
+        private IAIService _currentService;
         private readonly AiConfig _config;
         private readonly IAIServiceFactory _factory;
         private readonly ILogger<FallbackAIService> _logger;
@@ -141,6 +141,7 @@ namespace LearningAssistant.Services.AI
         private async Task<string> TryFallbackAsync(Func<IAIService, Task<string>> callServiceMethod, CancellationToken cancellationToken = default)
         {
             var currentProvider = _config.Provider.ToLower();
+            Exception? lastException = null;
 
             foreach (var provider in FallbackProviders)
             {
@@ -153,15 +154,17 @@ namespace LearningAssistant.Services.AI
                     var service = _factory.CreateService(provider);
                     var result = await callServiceMethod(service);
                     _logger.LogInformation("切换成功: {Provider}", provider);
+                    _currentService = service;
                     return result;
                 }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "{Provider} 也不可用", provider);
+                    lastException = ex;
                 }
             }
 
-            throw new Exception("所有AI服务都不可用");
+            throw new InvalidOperationException("所有AI服务都不可用", lastException);
         }
     }
 }
