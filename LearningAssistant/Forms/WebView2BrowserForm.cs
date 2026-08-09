@@ -349,7 +349,7 @@ namespace LearningAssistant.Forms
         /// <summary>
         /// 关闭指定标签页
         /// </summary>
-        private async void CloseTab(TabPage tabPage)
+        private async Task CloseTabAsync(TabPage tabPage)
         {
             if (_webViews.TryGetValue(tabPage, out var webView))
             {
@@ -382,21 +382,37 @@ namespace LearningAssistant.Forms
             }
         }
 
-        private void CloseTabItem_Click(object? sender, EventArgs e)
+        private async void CloseTabItem_Click(object? sender, EventArgs e)
         {
             if (sender is ToolStripItem item && item.Tag is TabPage tabPage)
             {
-                CloseTab(tabPage);
+                try
+                {
+                    await CloseTabAsync(tabPage);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "关闭标签页失败");
+                }
             }
         }
 
-        private void CloseOtherItem_Click(object? sender, EventArgs e)
+        private async void CloseOtherItem_Click(object? sender, EventArgs e)
         {
             if (sender is ToolStripItem item && item.Tag is TabPage tabPage)
             {
                 var tabsToClose = tabControl.TabPages.Cast<TabPage>().Where(t => t != tabPage).ToList();
                 foreach (var tab in tabsToClose)
-                    CloseTab(tab);
+                {
+                    try
+                    {
+                        await CloseTabAsync(tab);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogError(ex, "批量关闭标签页失败");
+                    }
+                }
             }
         }
 
@@ -463,7 +479,7 @@ namespace LearningAssistant.Forms
         /// <summary>
         /// 浏览器进程崩溃处理
         /// </summary>
-        private void CoreWebView2_ProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs e)
+        private async void CoreWebView2_ProcessFailed(object? sender, CoreWebView2ProcessFailedEventArgs e)
         {
             if (IsDisposed || !IsHandleCreated) return;
 
@@ -472,7 +488,7 @@ namespace LearningAssistant.Forms
 
             _logger?.LogError("WebView2 浏览器进程崩溃，原因：{Reason}", e.ProcessFailedKind);
 
-            BeginInvoke(new Action(() =>
+            BeginInvoke(new Action(async () =>
             {
                 if (IsDisposed) return;
                 var tabPage = webView.Tag as TabPage;
@@ -480,7 +496,7 @@ namespace LearningAssistant.Forms
                 {
                     try
                     {
-                        CloseTab(tabPage);
+                        await CloseTabAsync(tabPage);
                     }
                     catch (Exception ex)
                     {
@@ -666,7 +682,7 @@ namespace LearningAssistant.Forms
         /// <summary>
         /// 标签页切换处理
         /// </summary>
-        private void TabControl_SelectedIndexChanged(object? sender, EventArgs e)
+        private async void TabControl_SelectedIndexChanged(object? sender, EventArgs e)
         {
             if (CurrentWebView != null)
             {
@@ -682,7 +698,14 @@ namespace LearningAssistant.Forms
                 btnOpenNetdisk.Visible = !isNetdiskPage;
 
                 ApplyZoom();
-                ApplyWebView2ThemeAsync(_currentThemeMode == ThemeMode.Dark);
+                try
+                {
+                    await ApplyWebView2ThemeAsync(_currentThemeMode == ThemeMode.Dark);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "切换标签页时应用 WebView2 主题失败");
+                }
             }
         }
 
@@ -705,7 +728,7 @@ namespace LearningAssistant.Forms
             var tabHeight = tabRect.Height;
             var cornerRadius = 6;
 
-            var path = new System.Drawing.Drawing2D.GraphicsPath();
+            using var path = new System.Drawing.Drawing2D.GraphicsPath();
             path.AddLine(tabRect.Left + cornerRadius, tabRect.Top, tabRect.Right - cornerRadius, tabRect.Top);
             path.AddArc(tabRect.Right - cornerRadius * 2, tabRect.Top, cornerRadius * 2, cornerRadius * 2, -90, 90);
             path.AddLine(tabRect.Right, tabRect.Top + cornerRadius, tabRect.Right, tabRect.Bottom);
@@ -730,7 +753,6 @@ namespace LearningAssistant.Forms
                 using var borderPen = new Pen(colors.Divider);
                 e.Graphics.DrawPath(borderPen, path);
             }
-            path.Dispose();
 
             string tabText = tabPage.Text;
             if (tabText.Length > 20)
@@ -741,17 +763,16 @@ namespace LearningAssistant.Forms
             using var font = new Font("Microsoft YaHei", 9f);
 
             var textRect = new Rectangle(tabRect.Left + 8, tabRect.Top + 2, tabWidth - 32, tabHeight - 4);
-            var format = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center };
+            using var format = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center };
             e.Graphics.DrawString(tabText, font, textBrush, textRect, format);
 
             var closeRect = new Rectangle(tabRect.Right - 20, tabRect.Top + 4, 14, 14);
-            var closePath = new System.Drawing.Drawing2D.GraphicsPath();
+            using var closePath = new System.Drawing.Drawing2D.GraphicsPath();
             closePath.AddEllipse(closeRect);
 
             var closeColor = isSelected ? colors.TextSecondary : colors.TextDisabled;
             using var closeBrush = new SolidBrush(closeColor);
             e.Graphics.FillPath(closeBrush, closePath);
-            closePath.Dispose();
 
             using var closePen = new Pen(isSelected ? colors.TextPrimary : colors.TextSecondary, 1.5f);
             e.Graphics.DrawLine(closePen, closeRect.Left + 4, closeRect.Top + 4, closeRect.Right - 4, closeRect.Bottom - 4);
@@ -761,7 +782,7 @@ namespace LearningAssistant.Forms
         /// <summary>
         /// 标签页鼠标点击 - 处理中键关闭和关闭按钮点击
         /// </summary>
-        private void TabControl_MouseDown(object? sender, MouseEventArgs e)
+        private async void TabControl_MouseDown(object? sender, MouseEventArgs e)
         {
             if (e.Button == MouseButtons.Middle)
             {
@@ -769,7 +790,14 @@ namespace LearningAssistant.Forms
                 {
                     if (tabControl.GetTabRect(i).Contains(e.Location))
                     {
-                        CloseTab(tabControl.TabPages[i]);
+                        try
+                        {
+                            await CloseTabAsync(tabControl.TabPages[i]);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogError(ex, "中键关闭标签页失败");
+                        }
                         break;
                     }
                 }
@@ -784,7 +812,14 @@ namespace LearningAssistant.Forms
                         var closeRect = new Rectangle(tabRect.Right - 20, tabRect.Top + 4, 14, 14);
                         if (closeRect.Contains(e.Location))
                         {
-                            CloseTab(tabControl.TabPages[i]);
+                            try
+                            {
+                                await CloseTabAsync(tabControl.TabPages[i]);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger?.LogError(ex, "关闭按钮关闭标签页失败");
+                            }
                             break;
                         }
                     }
@@ -809,7 +844,7 @@ namespace LearningAssistant.Forms
         /// </summary>
         private void ShowTabContextMenu(Point location, TabPage tabPage)
         {
-            var menu = new ContextMenuStrip();
+            using var menu = new ContextMenuStrip();
 
             var newTabItem = new ToolStripMenuItem("新建标签页");
             newTabItem.Click += async (s, e) => await CreateNewTabAsync(Urls.BaiduNetdisk, "百度网盘");
@@ -1053,9 +1088,16 @@ namespace LearningAssistant.Forms
             }
         }
 
-        private void btnNewTab_Click(object? sender, EventArgs e)
+        private async void btnNewTab_Click(object? sender, EventArgs e)
         {
-            _ = CreateNewTabAsync(Urls.BaiduNetdisk, "百度网盘");
+            try
+            {
+                await CreateNewTabAsync(Urls.BaiduNetdisk, "百度网盘");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "新建标签页失败");
+            }
         }
 
         private void btnZoomIn_Click(object? sender, EventArgs e)
@@ -1240,7 +1282,10 @@ namespace LearningAssistant.Forms
                 var normalizedUrl = NormalizeUrl(url);
 
                 if (string.IsNullOrEmpty(normalizedUrl))
+                {
+                    MessageBox.Show("请输入有效的网址（URL格式不正确）", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
+                }
 
                 var currentWebView = CurrentWebView;
                 if (currentWebView == null || currentWebView.CoreWebView2 == null)
@@ -1259,7 +1304,7 @@ namespace LearningAssistant.Forms
         }
 
         /// <summary>
-        /// 标准化URL格式
+        /// 标准化URL格式并验证有效性
         /// </summary>
         private static string NormalizeUrl(string? url)
         {
@@ -1271,6 +1316,13 @@ namespace LearningAssistant.Forms
             {
                 url = "https://" + url;
             }
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                return string.Empty;
+            }
+
             return url;
         }
 
@@ -1442,7 +1494,18 @@ namespace LearningAssistant.Forms
                 lblLoadingStatus.ForeColor = colors.TextSecondary;
             }
 
-            _ = ApplyWebView2ThemeAsync(colors.ThemeMode == ThemeMode.Dark);
+            async void ApplyThemeAsync()
+            {
+                try
+                {
+                    await ApplyWebView2ThemeAsync(colors.ThemeMode == ThemeMode.Dark);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "应用 WebView2 主题失败");
+                }
+            }
+            ApplyThemeAsync();
         }
 
         private async Task ApplyWebView2ThemeAsync(bool isDark)

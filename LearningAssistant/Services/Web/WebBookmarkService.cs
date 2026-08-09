@@ -97,6 +97,7 @@ namespace LearningAssistant.Services.Web
         private readonly IUserSessionService? _userSessionService;
         private ConcurrentBag<WebBookmarkCategory> _categories = new();
         private string _currentUserId = string.Empty;
+        private readonly object _lock = new();
 
         public string CurrentUserId => _currentUserId;
 
@@ -106,104 +107,132 @@ namespace LearningAssistant.Services.Web
             _userSessionService = userSessionService;
 
             _currentUserId = _userSessionService?.CurrentUserId ?? Constants.DefaultUserId;
+            AppPaths.SetCurrentUserId(_currentUserId);
             LoadFromFile();
         }
 
         public void SwitchUser(string userId)
         {
-            _currentUserId = userId;
-            _logger?.LogInformation("书签服务用户已切换: {UserId}", userId);
+            lock (_lock)
+            {
+                _currentUserId = string.IsNullOrWhiteSpace(userId) ? Constants.DefaultUserId : userId;
+                AppPaths.SetCurrentUserId(_currentUserId);
+                _categories = new ConcurrentBag<WebBookmarkCategory>();
+                LoadFromFile();
+                _logger?.LogInformation("书签服务用户已切换: {UserId}", _currentUserId);
+            }
         }
 
         public List<WebBookmarkCategory> GetAllCategories()
         {
-            return _categories.ToList();
+            lock (_lock)
+            {
+                return _categories.ToList();
+            }
         }
 
         public List<WebBookmarkItem> GetAllBookmarks()
         {
-            var result = new List<WebBookmarkItem>();
-            foreach (var category in _categories)
+            lock (_lock)
             {
-                result.AddRange(category.Bookmarks);
+                var result = new List<WebBookmarkItem>();
+                foreach (var category in _categories)
+                {
+                    result.AddRange(category.Bookmarks);
+                }
+                return result;
             }
-            return result;
         }
 
         public WebBookmarkItem? GetBookmarkByUrl(string url)
         {
-            foreach (var category in _categories)
+            lock (_lock)
             {
-                var bookmark = category.Bookmarks.FirstOrDefault(b => b.Url.Equals(url, StringComparison.OrdinalIgnoreCase));
-                if (bookmark != null)
-                    return bookmark;
+                foreach (var category in _categories)
+                {
+                    var bookmark = category.Bookmarks.FirstOrDefault(b => b.Url.Equals(url, StringComparison.OrdinalIgnoreCase));
+                    if (bookmark != null)
+                        return bookmark;
+                }
+                return null;
             }
-            return null;
         }
 
         public void AddBookmark(string categoryName, WebBookmarkItem bookmark)
         {
-            var category = _categories.FirstOrDefault(c => c.Name == categoryName);
-            if (category == null)
+            lock (_lock)
             {
-                category = new WebBookmarkCategory { Name = categoryName };
-                _categories.Add(category);
-            }
+                var category = _categories.FirstOrDefault(c => c.Name == categoryName);
+                if (category == null)
+                {
+                    category = new WebBookmarkCategory { Name = categoryName };
+                    _categories.Add(category);
+                }
 
-            if (category.Bookmarks.Any(b => b.Url.Equals(bookmark.Url, StringComparison.OrdinalIgnoreCase)))
-            {
-                _logger?.LogWarning("书签已存在: {Url}", bookmark.Url);
-                return;
-            }
+                if (category.Bookmarks.Any(b => b.Url.Equals(bookmark.Url, StringComparison.OrdinalIgnoreCase)))
+                {
+                    _logger?.LogWarning("书签已存在: {Url}", bookmark.Url);
+                    return;
+                }
 
-            bookmark.CreatedAt = DateTime.Now;
-            category.Bookmarks.Add(bookmark);
-            SaveToFile();
-            _logger?.LogInformation("添加书签成功: {Category} - {Title}", categoryName, bookmark.Title);
+                bookmark.CreatedAt = DateTime.Now;
+                category.Bookmarks.Add(bookmark);
+                SaveToFile();
+                _logger?.LogInformation("添加书签成功: {Category} - {Title}", categoryName, bookmark.Title);
+            }
         }
 
         public void RemoveBookmark(string url)
         {
-            foreach (var category in _categories)
+            lock (_lock)
             {
-                var bookmark = category.Bookmarks.FirstOrDefault(b => b.Url.Equals(url, StringComparison.OrdinalIgnoreCase));
-                if (bookmark != null)
+                foreach (var category in _categories)
                 {
-                    category.Bookmarks.Remove(bookmark);
-                    SaveToFile();
-                    _logger?.LogInformation("删除书签成功: {Url}", url);
-                    return;
+                    var bookmark = category.Bookmarks.FirstOrDefault(b => b.Url.Equals(url, StringComparison.OrdinalIgnoreCase));
+                    if (bookmark != null)
+                    {
+                        category.Bookmarks.Remove(bookmark);
+                        SaveToFile();
+                        _logger?.LogInformation("删除书签成功: {Url}", url);
+                        return;
+                    }
                 }
+                _logger?.LogWarning("未找到要删除的书签: {Url}", url);
             }
-            _logger?.LogWarning("未找到要删除的书签: {Url}", url);
         }
 
         public void UpdateBookmark(string url, WebBookmarkItem updatedBookmark)
         {
-            foreach (var category in _categories)
+            lock (_lock)
             {
-                var bookmark = category.Bookmarks.FirstOrDefault(b => b.Url.Equals(url, StringComparison.OrdinalIgnoreCase));
-                if (bookmark != null)
+                foreach (var category in _categories)
                 {
-                    bookmark.Title = updatedBookmark.Title;
-                    bookmark.Url = updatedBookmark.Url;
-                    bookmark.Icon = updatedBookmark.Icon;
-                    SaveToFile();
-                    _logger?.LogInformation("更新书签成功: {Url}", url);
-                    return;
+                    var bookmark = category.Bookmarks.FirstOrDefault(b => b.Url.Equals(url, StringComparison.OrdinalIgnoreCase));
+                    if (bookmark != null)
+                    {
+                        bookmark.Title = updatedBookmark.Title;
+                        bookmark.Url = updatedBookmark.Url;
+                        bookmark.Icon = updatedBookmark.Icon;
+                        SaveToFile();
+                        _logger?.LogInformation("更新书签成功: {Url}", url);
+                        return;
+                    }
                 }
+                _logger?.LogWarning("未找到要更新的书签: {Url}", url);
             }
-            _logger?.LogWarning("未找到要更新的书签: {Url}", url);
         }
 
         public void IncrementVisit(string url)
         {
-            var bookmark = GetBookmarkByUrl(url);
-            if (bookmark != null)
+            lock (_lock)
             {
-                bookmark.VisitCount++;
-                bookmark.LastVisited = DateTime.Now;
-                SaveToFile();
+                var bookmark = GetBookmarkByUrl(url);
+                if (bookmark != null)
+                {
+                    bookmark.VisitCount++;
+                    bookmark.LastVisited = DateTime.Now;
+                    SaveToFile();
+                }
             }
         }
 
@@ -211,10 +240,10 @@ namespace LearningAssistant.Services.Web
         {
             try
             {
-                var filePath = AppPaths.WebBookmarksPath;
+                var filePath = AppPaths.UserBookmarksPath;
                 var data = new WebBookmarkData
                 {
-                    UserId = string.Empty,
+                    UserId = _currentUserId,
                     Categories = _categories.ToList()
                 };
                 var json = JsonConvert.SerializeObject(data, Formatting.Indented);
@@ -238,7 +267,7 @@ namespace LearningAssistant.Services.Web
         {
             try
             {
-                var filePath = AppPaths.WebBookmarksPath;
+                var filePath = AppPaths.UserBookmarksPath;
                 if (File.Exists(filePath))
                 {
                     var json = File.ReadAllText(filePath);
@@ -250,7 +279,7 @@ namespace LearningAssistant.Services.Web
                         {
                             _categories.Add(category);
                         }
-                        _logger?.LogInformation("从文件加载书签: 分类数: {Count}", data.Categories.Count);
+                        _logger?.LogInformation("从文件加载书签: 分类数: {Count}, 用户: {UserId}", data.Categories.Count, data.UserId);
                         return;
                     }
                 }
@@ -261,7 +290,7 @@ namespace LearningAssistant.Services.Web
                     return;
                 }
 
-                _logger?.LogInformation("书签文件不存在，加载默认数据");
+                _logger?.LogInformation("书签文件不存在，加载默认数据，用户: {UserId}", _currentUserId);
                 LoadDefaultBookmarks();
             }
             catch (Exception ex)
@@ -277,12 +306,15 @@ namespace LearningAssistant.Services.Web
             {
                 Path.Combine(AppPaths.DataRoot, "WebBookmarks.json"),
                 AppPaths.UserBookmarksPath,
+                AppPaths.WebBookmarksPath,
                 Path.Combine(AppPaths.DataDir, "bookmarks", "WebBookmarks.json")
             };
 
             foreach (var oldPath in oldPaths)
             {
                 if (!File.Exists(oldPath)) continue;
+                // 避免从当前用户自己的路径再迁移一次
+                if (string.Equals(oldPath, AppPaths.UserBookmarksPath, StringComparison.OrdinalIgnoreCase)) continue;
 
                 try
                 {
@@ -296,8 +328,15 @@ namespace LearningAssistant.Services.Web
                             _categories.Add(category);
                         }
                         SaveToFile();
-                        _logger?.LogInformation("书签数据已从旧位置迁移: {OldPath}", oldPath);
-                        File.Delete(oldPath);
+                        _logger?.LogInformation("书签数据已从旧位置迁移: {OldPath} -> {NewPath}", oldPath, AppPaths.UserBookmarksPath);
+                        try
+                        {
+                            File.Delete(oldPath);
+                        }
+                        catch (Exception delEx)
+                        {
+                            _logger?.LogWarning(delEx, "删除旧书签文件失败: {OldPath}", oldPath);
+                        }
                         return;
                     }
                 }

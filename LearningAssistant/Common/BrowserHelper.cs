@@ -27,8 +27,9 @@ namespace LearningAssistant.Common
                 });
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
+                Trace.TraceError($"BrowserHelper.OpenUrl 打开URL失败: {url}, 异常: {ex}");
                 return false;
             }
         }
