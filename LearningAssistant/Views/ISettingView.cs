@@ -63,6 +63,16 @@ namespace LearningAssistant.Views
         bool IsAIExplanationEnabled { get; set; }
 
         /// <summary>
+        /// 当前选中的用户ID
+        /// </summary>
+        string SelectedUserId { get; set; }
+
+        /// <summary>
+        /// 设置用户列表显示
+        /// </summary>
+        void SetUserList(IList<string> userIds);
+
+        /// <summary>
         /// 保存按钮点击事件
         /// </summary>
         event EventHandler? SaveClicked;
@@ -71,6 +81,16 @@ namespace LearningAssistant.Views
         /// 取消按钮点击事件
         /// </summary>
         event EventHandler? CancelClicked;
+
+        /// <summary>
+        /// 添加用户按钮点击事件
+        /// </summary>
+        event EventHandler? AddUserClicked;
+
+        /// <summary>
+        /// 删除用户按钮点击事件
+        /// </summary>
+        event EventHandler? DeleteUserClicked;
 
         /// <summary>
         /// 显示消息

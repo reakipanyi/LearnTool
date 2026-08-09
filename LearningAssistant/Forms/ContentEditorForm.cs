@@ -133,7 +133,26 @@ namespace LearningAssistant.Forms
             set => dataGridView.DataSource = value;
         }
 
-        public List<int> SelectedRowIndices => dataGridView.SelectedRows.Cast<DataGridViewRow>().Select(row => row.Index).ToList();
+        public List<int> SelectedRowIndices
+        {
+            get
+            {
+                var result = new List<int>();
+                if (dataGridView.DataSource is DataTable dataTable)
+                {
+                    foreach (DataGridViewRow row in dataGridView.SelectedRows)
+                    {
+                        if (row.DataBoundItem is DataRowView dataRowView)
+                        {
+                            var index = dataTable.Rows.IndexOf(dataRowView.Row);
+                            if (index >= 0)
+                                result.Add(index);
+                        }
+                    }
+                }
+                return result;
+            }
+        }
 
         public event EventHandler? SubjectChanged;
         public event EventHandler? SubCategoryChanged;
@@ -155,7 +174,7 @@ namespace LearningAssistant.Forms
             var count = dataGridView.RowCount;
             if (dataGridView.AllowUserToAddRows) count--;
             statusLabelCount.Text = $"📊 共 {count} 条";
-            statusLabelCategory.Text = $"📁 {SelectedSubject} / {SelectedSubCategory}";
+            statusLabelCategory.Text = $"📁 {SubjectSubCategoryMapping.GetSubjectDisplayName(SelectedSubject)} / {SubjectSubCategoryMapping.GetSubCategoryDisplayName(SelectedSubCategory)}";
         }
 
         public void UpdateDirtyStatus(bool isDirty)
@@ -167,7 +186,8 @@ namespace LearningAssistant.Forms
 
         public void SetInitialSubject(SubjectType subject)
         {
-            var index = comboBoxSubject.Items.IndexOf(subject.ToString());
+            var displayName = SubjectSubCategoryMapping.GetSubjectDisplayName(subject);
+            var index = comboBoxSubject.Items.IndexOf(displayName);
             if (index >= 0)
             {
                 comboBoxSubject.SelectedIndex = index;
@@ -176,9 +196,10 @@ namespace LearningAssistant.Forms
 
         public void SetInitialSubCategory(SubCategoryType subCategory)
         {
-            if (comboBoxSubCategory.Items.Contains(subCategory.ToString()))
+            var displayName = SubjectSubCategoryMapping.GetSubCategoryDisplayName(subCategory);
+            if (comboBoxSubCategory.Items.Contains(displayName))
             {
-                comboBoxSubCategory.SelectedItem = subCategory.ToString();
+                comboBoxSubCategory.SelectedItem = displayName;
             }
         }
 
@@ -187,7 +208,7 @@ namespace LearningAssistant.Forms
             comboBoxSubCategory.Items.Clear();
             foreach (var subCategory in subCategories)
             {
-                comboBoxSubCategory.Items.Add(subCategory.ToString());
+                comboBoxSubCategory.Items.Add(SubjectSubCategoryMapping.GetSubCategoryDisplayName(subCategory));
             }
             if (comboBoxSubCategory.Items.Count > 0)
             {
@@ -1009,6 +1030,11 @@ namespace LearningAssistant.Forms
         public void ShowMessage(string msg)
         {
             MessageBox.Show(msg, "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        public DialogResult ShowConfirm(string message, string title)
+        {
+            return MessageBox.Show(message, title, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
         }
 
         public void ApplyTheme(ThemeColors colors)

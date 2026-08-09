@@ -13,6 +13,7 @@ namespace LearningAssistant.Services.Persistence
         void SaveUserProfile(UserProfile profile);
         List<string> GetUserIds();
         void CreateUserProfile(string userId, string userName);
+        bool DeleteUserProfile(string userId);
         void SaveSession(SessionData session);
         SessionData LoadSession();
         T? LoadJsonFile<T>(string filePath);

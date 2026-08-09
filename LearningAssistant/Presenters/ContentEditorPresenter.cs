@@ -5,7 +5,6 @@ using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
-using Newtonsoft.Json.Linq;
 using System.Data;
 using System.Text;
 using System.Text.Json;
@@ -43,216 +42,16 @@ namespace LearningAssistant.Presenters
         private readonly ISubjectTemplateService _subjectTemplateService;
 
         /// <summary>
+        /// 用户会话服务，用于获取当前用户 ID
+        /// </summary>
+        private readonly IUserSessionService? _userSessionService;
+
+        /// <summary>
         /// 脏标记，标识当前数据是否有未保存的更改
         /// </summary>
         private bool _isDirty = false;
 
 
-
-        /// <summary>
-        /// 类别模板字典，定义每个类别对应的字段结构
-        /// </summary>
-        private static readonly Dictionary<string, Dictionary<string, object>> CategoryTemplates = new()
-        {
-            {
-                Constants.SubCategory.ChineseCharacter, new Dictionary<string, object>
-                {
-                    { "Character", "" }, { "Pinyin", "" }, { "Meaning", "" }, { "StrokeCount", "" }, { "Radical", "" }, { "StrokeOrder", "" }, { "Words", "" }, { "SimilarCharacters", "" }, { "Synonyms", "" }, { "Antonyms", "" }, { "CommonMistakes", "" }, { "ExampleSentence", "" }, { "CharacterLevel", "" }, { "Structure", "" }, { "CharacterFormation", "" }, { "OtherPronunciations", "" }
-                }
-            },
-            {
-                Constants.SubCategory.ChineseIdiom, new Dictionary<string, object>
-                {
-                    { "Idiom", "" }, { "Pinyin", "" }, { "Meaning", "" }, { "Origin", "" }, { "Example", "" }
-                }
-            },
-            {
-                Constants.SubCategory.ChinesePhrase, new Dictionary<string, object>
-                {
-                    { "Phrase", "" }, { "Pinyin", "" }, { "Meaning", "" }, { "Example", "" }
-                }
-            },
-            {
-                Constants.SubCategory.ChinesePoem, new Dictionary<string, object>
-                {
-                    { "Title", "" }, { "Author", "" }, { "Dynasty", "" }, { "Verses", "" }, { "Annotation", "" }, { "Translation", "" }, { "Appreciation", "" }, { "CreationBackground", "" }, { "FamousLines", "" }, { "RhetoricalDevices", "" }, { "Theme", "" }, { "AuthorIntro", "" }, { "PoemType", "" }, { "RelatedPoems", "" }, { "DifficultyLevel", "" }
-                }
-            },
-            {
-                Constants.SubCategory.EnglishWord, new Dictionary<string, object>
-                {
-                    { "Word", "" }, { "Phonetic", "" }, { "PartOfSpeech", "" }, { "SyllableBreakdown", "" }, { "Meaning", "" }, { "Example", "" }, { "Synonyms", "" }, { "Antonyms", "" }, { "WordForms", "" }, { "WordRootAffix", "" }, { "Collocations", "" }, { "Phrases", "" }, { "SynonymAnalysis", "" }, { "UkPhonetic", "" }, { "UsPhonetic", "" }, { "VocabularyLevel", "" }, { "Etymology", "" }, { "ConfusableWords", "" }
-                }
-            },
-            {
-                Constants.SubCategory.EnglishPhrase, new Dictionary<string, object>
-                {
-                    { "Phrase", "" }, { "Meaning", "" }, { "Example", "" }
-                }
-            },
-            {
-                Constants.SubCategory.EnglishSentence, new Dictionary<string, object>
-                {
-                    { "Sentence", "" }, { "Translation", "" }, { "Grammar", "" }
-                }
-            },
-            {
-                Constants.SubCategory.ChineseComprehensive, new Dictionary<string, object>
-                {
-                    { "Title", "" }, { "Content", "" }, { "Questions", new List<object> { new Dictionary<string, object> { { "Question", "" }, { "Answer", "" } } } }, { "Analysis", "" }
-                }
-            },
-            {
-                Constants.SubCategory.EnglishComprehensive, new Dictionary<string, object>
-                {
-                    { "Title", "" }, { "Content", "" }, { "Questions", new List<object> { new Dictionary<string, object> { { "Question", "" }, { "Answer", "" } } } }, { "Analysis", "" }
-                }
-            },
-            {
-                Constants.SubCategory.MathFormula, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Content", "" }, { "KeyPoints", "" }, { "Principle", "" }, { "Example", "" }, { "Applications", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.MathExample, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Content", "" }, { "Analysis", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Example", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.MathConcept, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Example", "" }, { "Note", "" }, { "Applications", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.MathComprehensive, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Example", "" }, { "Analysis", "" }, { "Question", "" }, { "Answer", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.PhysicsLaw, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Content", "" }, { "KeyPoints", "" }, { "Principle", "" }, { "Applications", "" }, { "Example", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.PhysicsExperiment, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "ExperimentSteps", new List<string> { "", "", "" } }, { "Analysis", "" }, { "Example", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.PhysicsDerivation, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Principle", "" }, { "Example", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.PhysicsComprehensive, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Example", "" }, { "Analysis", "" }, { "Question", "" }, { "Answer", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.ChemistryEquation, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Content", "" }, { "KeyPoints", "" }, { "Principle", "" }, { "Example", "" }, { "Applications", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.ChemistryElement, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Content", "" }, { "KeyPoints", "" }, { "Principle", "" }, { "Applications", "" }, { "Example", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.ChemistryExperiment, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "ExperimentSteps", new List<string> { "", "", "" } }, { "Analysis", "" }, { "Example", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.ChemistryComprehensive, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Example", "" }, { "Analysis", "" }, { "Question", "" }, { "Answer", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.HistoryEvent, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "TimePeriod", "" }, { "RelatedPlaces", "" }, { "Background", "" }, { "Content", "" }, { "Impact", "" }, { "RelatedPeople", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.HistoryPerson, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "TimePeriod", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Analysis", "" }, { "Example", "" }, { "RelatedPlaces", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.HistoryTimeline, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "TimePeriod", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Content", "" }, { "RelatedPeople", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.HistoryComprehensive, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Example", "" }, { "Analysis", "" }, { "Question", "" }, { "Answer", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.GeographyKnowledge, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Category", "" }, { "Content", "" }, { "RelatedPlaces", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Example", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.GeographyMap, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "RelatedPlaces", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Example", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.GeographyClimate, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "RelatedPlaces", "" }, { "Content", "" }, { "Principle", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Example", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.GeographyComprehensive, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Example", "" }, { "Analysis", "" }, { "Question", "" }, { "Answer", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.BiologyConcept, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Content", "" }, { "Category", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Applications", "" }, { "Example", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.BiologyExperiment, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "ExperimentSteps", new List<string> { "", "", "" } }, { "Analysis", "" }, { "Example", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.BiologyPhenomenon, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Content", "" }, { "Category", "" }, { "Principle", "" }, { "Example", "" }, { "Impact", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            },
-            {
-                Constants.SubCategory.BiologyComprehensive, new Dictionary<string, object>
-                {
-                    { "Topic", "" }, { "Content", "" }, { "KeyPoints", new List<string> { "", "", "" } }, { "Example", "" }, { "Analysis", "" }, { "Question", "" }, { "Answer", "" }, { "Note", "" }, { "Tags", new List<string> { "", "", "" } }
-                }
-            }
-        };
 
         /// <summary>
         /// 构造函数，初始化ContentEditorPresenter
@@ -268,13 +67,15 @@ namespace LearningAssistant.Presenters
             IContentEditorView view,
             IContentLoaderService contentLoaderService,
             IAiQuestionService aiQuestionService,
-            ISubjectTemplateService subjectTemplateService)
+            ISubjectTemplateService subjectTemplateService,
+            IUserSessionService? userSessionService = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _view = view ?? throw new ArgumentNullException(nameof(view));
             _contentLoaderService = contentLoaderService ?? throw new ArgumentNullException(nameof(contentLoaderService));
             _aiQuestionService = aiQuestionService ?? throw new ArgumentNullException(nameof(aiQuestionService));
             _subjectTemplateService = subjectTemplateService ?? throw new ArgumentNullException(nameof(subjectTemplateService));
+            _userSessionService = userSessionService;
 
             _view.SubjectChanged += OnSubjectChanged;
             _view.SubCategoryChanged += OnSubCategoryChanged;
@@ -326,14 +127,23 @@ namespace LearningAssistant.Presenters
             _view.RefreshSubCategories(subCategories);
         }
 
+        /// <summary>
+        /// 获取当前用户 ID，优先使用 IUserSessionService，回退到默认用户。
+        /// </summary>
+        private string GetCurrentUserId()
+        {
+            return _userSessionService?.CurrentUserId ?? Constants.DefaultUserId;
+        }
+
         private void LoadItems()
         {
             var subject = _view.SelectedSubject;
             var subCategory = _view.SelectedSubCategory;
-            var context = new LearningContext("default_user", subject, subCategory);
+            var context = new LearningContext(GetCurrentUserId(), subject, subCategory);
             var items = _contentLoaderService.LoadItems(context);
             _view.ItemData = ConvertToDataTable(items, subCategory);
             _isDirty = false;
+            _view.UpdateDirtyStatus(false);
         }
 
 
@@ -543,6 +353,38 @@ namespace LearningAssistant.Presenters
             }
         }
 
+        /// <summary>
+        /// 获取学习项的去重键。优先使用 MainContent；为空时从 ExtendedProperties 提取主字段（如 Name/Formula/Question/Concept）。
+        /// 解决数学/物理等类别 MainContent 为空导致所有项被视为重复的问题。
+        /// </summary>
+        private string GetDedupKey(LearningItem item, SubCategoryType category)
+        {
+            var mainContent = item.GetMainContent().Trim().ToLowerInvariant();
+            if (!string.IsNullOrEmpty(mainContent))
+                return mainContent;
+
+            // MainContent 为空时，从模板主字段提取去重键
+            var primaryField = GetPrimaryFieldName(category);
+            if (!string.IsNullOrEmpty(primaryField))
+            {
+                var value = item.GetExtendedProperty<string>(primaryField, "");
+                if (!string.IsNullOrWhiteSpace(value))
+                    return value.Trim().ToLowerInvariant();
+            }
+
+            // 兜底：使用 ExtendedProperties 整体作为去重键
+            return (item.ExtendedProperties ?? "{}").Trim().ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// 获取类别的模板主字段名（模板字段列表的第一个字段）。
+        /// </summary>
+        private string? GetPrimaryFieldName(SubCategoryType category)
+        {
+            var template = GetTemplateDictionary(category);
+            return template.Keys.FirstOrDefault();
+        }
+
         private void SaveFromJson(string json, SubCategoryType category)
         {
             var items = ParseJsonToItems(json, category.ToString());
@@ -552,7 +394,7 @@ namespace LearningAssistant.Presenters
                 return;
             }
             var subject = _view.SelectedSubject;
-            var context = new LearningContext("default_user", subject, category);
+            var context = new LearningContext(GetCurrentUserId(), subject, category);
             var itemsOld = _contentLoaderService.LoadItems(context);
 
             foreach (var newItem in items)
@@ -560,14 +402,14 @@ namespace LearningAssistant.Presenters
                 newItem.Subject = subject;
                 newItem.SubCategory = category;
 
-                var newMainContent = newItem.GetMainContent().Trim().ToLower();
+                var dedupKey = GetDedupKey(newItem, category);
                 var existingIndex = itemsOld.FindIndex(item =>
-                    item.GetMainContent().Trim().ToLower() == newMainContent);
+                    GetDedupKey(item, category) == dedupKey);
 
                 if (existingIndex >= 0)
                 {
                     itemsOld[existingIndex] = newItem;
-                    _logger.LogInformation("覆盖重复项: {MainContent}", newMainContent);
+                    _logger.LogInformation("覆盖重复项: {DedupKey}", dedupKey);
                 }
                 else
                 {
@@ -592,7 +434,7 @@ namespace LearningAssistant.Presenters
             try
             {
                 using var doc = JsonDocument.Parse(json);
-                var memoryStream = new MemoryStream();
+                using var memoryStream = new MemoryStream();
                 using var writer = new Utf8JsonWriter(memoryStream);
                 writer.WriteStartArray();
                 foreach (var element in doc.RootElement.EnumerateArray())
@@ -619,21 +461,6 @@ namespace LearningAssistant.Presenters
         }
 
         /// <summary>
-        /// 尝试将逗号分隔的字符串解析为JSON数组
-        /// </summary>
-        /// <param name="value">待解析的字符串</param>
-        /// <returns>如果解析成功返回JArray，否则返回null</returns>
-        private JToken? TryParseAsList(string? value)
-        {
-            if (string.IsNullOrEmpty(value) || !value.Contains(',')) return null;
-            var parts = value.Split(',', StringSplitOptions.RemoveEmptyEntries)
-                           .Select(p => p.Trim())
-                           .Where(p => !string.IsNullOrEmpty(p))
-                           .ToList();
-            return parts.Count > 1 ? JArray.FromObject(parts) : null;
-        }
-
-        /// <summary>
         /// 删除选中条目事件处理方法
         /// </summary>
         private void OnTemplateDeleteClicked(object? sender, EventArgs e)
@@ -650,7 +477,7 @@ namespace LearningAssistant.Presenters
             try
             {
                 var subject = _view.SelectedSubject;
-                var context = new LearningContext("default_user", subject, category);
+                var context = new LearningContext(GetCurrentUserId(), subject, category);
                 var items = _contentLoaderService.LoadItems(context);
                 foreach (var index in selectedIndices.OrderByDescending(i => i).Where(i => i >= 0 && i < items.Count))
                     items.RemoveAt(index);
@@ -681,7 +508,15 @@ namespace LearningAssistant.Presenters
         }
 
         /// <summary>
-        /// 从网格数据更新JSON内容
+        /// 系统列名，不应序列化到编辑JSON中（避免空Id/CreatedAt/UpdatedAt 覆盖真实数据）
+        /// </summary>
+        private static readonly HashSet<string> SystemColumns = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Id", "CreatedAt", "UpdatedAt"
+        };
+
+        /// <summary>
+        /// 从网格数据更新JSON内容（过滤系统列，避免空Id被序列化保存）
         /// </summary>
         private void UpdateJsonFromGrid()
         {
@@ -689,6 +524,7 @@ namespace LearningAssistant.Presenters
             {
                 var rows = dataTable.Rows.Cast<DataRow>()
                     .Select(row => dataTable.Columns.Cast<DataColumn>()
+                        .Where(col => !SystemColumns.Contains(col.ColumnName))
                         .ToDictionary(col => col.ColumnName, col => row[col]?.ToString() ?? ""))
                     .ToList();
                 _view.CurrentEditItemJson = System.Text.Json.JsonSerializer.Serialize(rows, new JsonSerializerOptions { WriteIndented = true });
@@ -724,19 +560,19 @@ namespace LearningAssistant.Presenters
                 {
                     var subject = _view.SelectedSubject;
                     var subCategory = _view.SelectedSubCategory;
-                    var context = new LearningContext("default_user", subject, subCategory);
+                    var context = new LearningContext(GetCurrentUserId(), subject, subCategory);
                     var existingItems = _contentLoaderService.LoadItems(context);
 
                     foreach (var newItem in importedItems)
                     {
-                        var newMainContent = newItem.GetMainContent().Trim().ToLower();
+                        var dedupKey = GetDedupKey(newItem, subCategory);
                         var existingIndex = existingItems.FindIndex(item =>
-                            item.GetMainContent().Trim().ToLower() == newMainContent);
+                            GetDedupKey(item, subCategory) == dedupKey);
 
                         if (existingIndex >= 0)
                         {
                             existingItems[existingIndex] = newItem;
-                            _logger.LogInformation("导入时覆盖重复项: {MainContent}", newMainContent);
+                            _logger.LogInformation("导入时覆盖重复项: {DedupKey}", dedupKey);
                         }
                         else
                         {
@@ -773,25 +609,24 @@ namespace LearningAssistant.Presenters
             {
                 var subject = _view.SelectedSubject;
                 var subCategory = _view.SelectedSubCategory;
-                var context = new LearningContext("default_user", subject, subCategory);
+                var context = new LearningContext(GetCurrentUserId(), subject, subCategory);
                 var items = _contentLoaderService.LoadItems(context);
+
+                if (items.Count == 0)
+                {
+                    _view.ShowMessage("没有可导出的内容");
+                    return;
+                }
+
                 var options = new JsonSerializerOptions
                 {
                     WriteIndented = true,
                     Converters = { new LearningItemJsonConverter() }
                 };
                 var json = System.Text.Json.JsonSerializer.Serialize(items, options);
-
-                if (!string.IsNullOrEmpty(json))
-                {
-                    File.WriteAllText(dialog.FileName, json);
-                    _view.ShowMessage("导出成功");
-                    _logger.LogInformation("Successfully exported {Count} items to {FilePath}", items.Count, dialog.FileName);
-                }
-                else
-                {
-                    _view.ShowMessage("没有可导出的内容");
-                }
+                File.WriteAllText(dialog.FileName, json);
+                _view.ShowMessage("导出成功");
+                _logger.LogInformation("Successfully exported {Count} items to {FilePath}", items.Count, dialog.FileName);
             }
             catch (Exception ex)
             {
@@ -801,28 +636,10 @@ namespace LearningAssistant.Presenters
         }
 
         /// <summary>
-        /// 根据HTTP错误信息生成友好的中文错误提示
-        /// </summary>
-        /// <param name="errorMessage">原始错误信息</param>
-        /// <returns>友好的中文错误提示</returns>
-        private static string GetFriendlyErrorMessage(string errorMessage)
-        {
-            return errorMessage.Contains("401") ? "AI服务认证失败，请检查API密钥是否正确！" :
-                   errorMessage.Contains("403") ? "AI服务访问被拒绝，请检查API密钥权限！" :
-                   errorMessage.Contains("429") ? "AI服务请求过于频繁，请稍后再试！" :
-                   errorMessage.Contains("500") || errorMessage.Contains("502") || errorMessage.Contains("503")
-                       ? "AI服务暂时不可用，请稍后再试！" :
-                       $"AI生成失败：{errorMessage}";
-        }
-
-        /// <summary>
-        /// 获取指定类别的模板字段字典。
-        /// 优先从 SubjectTemplates.json 动态加载（支持新增模板），未命中时回退到硬编码 CategoryTemplates。
+        /// 获取指定类别的模板字段字典，从 SubjectTemplates.json 动态加载。
         /// </summary>
         private Dictionary<string, object> GetTemplateDictionary(SubCategoryType category)
         {
-            // JSON subject 键 = 科目显示名（语文/英语/数学…）；
-            // JSON category 键 = 默认词库文件名去掉 .json（识字/公式定理/人物传记…），与 Constants.SubCategory 一致。
             var subjectKey = SubjectSubCategoryMapping.GetSubjectDisplayName(SubjectSubCategoryMapping.GetSubject(category));
             var categoryKey = _contentLoaderService.GetDefaultWordBankFile(category)?.Replace(".json", "");
 
@@ -836,12 +653,6 @@ namespace LearningAssistant.Presenters
                         dict[field] = "";
                     return dict;
                 }
-
-                // 回退到硬编码模板（其键为中文 categoryKey）。
-                // 注意：硬编码字段可能与 SubjectTemplates.json 不一致，仅作 JSON 缺失时的容错回退。
-                _logger?.LogWarning("JSON模板缺失(subject={Subject}, category={Category})，回退到硬编码模板", subjectKey, categoryKey);
-                if (CategoryTemplates.TryGetValue(categoryKey, out var hardcoded))
-                    return hardcoded;
             }
 
             return new Dictionary<string, object>();
@@ -861,41 +672,23 @@ namespace LearningAssistant.Presenters
         }
 
         /// <summary>
-        /// 清理AI返回的JSON结果，提取JSON数组部分并使用JSON解析器确保格式正确
-        /// </summary>
-        /// <param name="result">AI返回的原始字符串</param>
-        /// <returns>清理后的JSON字符串</returns>
-        private static string CleanJsonResult(string result)
-        {
-            var startIndex = result.IndexOf('[');
-            var endIndex = result.LastIndexOf(']');
-
-            if (startIndex < 0 || endIndex < startIndex)
-            {
-                return result;
-            }
-
-            var jsonContent = result.Substring(startIndex, endIndex - startIndex + 1);
-
-            try
-            {
-                using var doc = JsonDocument.Parse(jsonContent);
-                return JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true });
-            }
-            catch
-            {
-                return jsonContent;
-            }
-        }
-
-        /// <summary>
-        /// 检查并保存未保存的更改
+        /// 检查并保存未保存的更改。询问用户是否保存（保存/放弃/取消）。
         /// </summary>
         /// <returns>如果允许继续操作返回true，否则返回false</returns>
         private bool CheckAndSaveUnsavedChanges()
         {
             if (!_isDirty) return true;
-            return SaveChanges();
+
+            var result = _view.ShowConfirm("有未保存的更改，是否保存？", "确认保存");
+            if (result == DialogResult.Yes)
+                return SaveChanges();
+            if (result == DialogResult.No)
+            {
+                _isDirty = false;
+                _view.UpdateDirtyStatus(false);
+                return true;
+            }
+            return false; // Cancel
         }
 
         /// <summary>

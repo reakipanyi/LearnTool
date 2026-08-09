@@ -283,6 +283,44 @@ namespace LearningAssistant.Services.Persistence
             SaveUserProfile(profile);
         }
 
+        public bool DeleteUserProfile(string userId)
+        {
+            if (string.IsNullOrWhiteSpace(userId))
+                return false;
+
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+                var entity = db.UserProfiles.FirstOrDefault(u => u.UserId == userId);
+                if (entity == null)
+                    return false;
+
+                db.UserProfiles.Remove(entity);
+                db.SaveChanges();
+                _logger?.LogInformation("Deleted user profile: {UserId}", userId);
+
+                // 清理用户文件目录（书签/收藏/标注/笔记/设置等）
+                TryCleanupUserDirectory(userId);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to delete user profile: {UserId}", userId);
+                throw new PersistenceException($"Failed to delete user profile: {userId}", ex);
+            }
+        }
+
+        private static void TryCleanupUserDirectory(string userId)
+        {
+            try
+            {
+                var userDir = AppPaths.GetUserDir(userId);
+                if (Directory.Exists(userDir))
+                    Directory.Delete(userDir, recursive: true);
+            }
+            catch { /* 目录清理失败不影响 DB 删除结果 */ }
+        }
+
         public void SaveSession(SessionData session)
         {
             try

@@ -2080,22 +2080,8 @@ namespace LearningAssistant.Forms
         {
             try
             {
-                // 以数据库为权威用户源（覆盖仅写 DB 但无目录的用户），并与文件系统目录取并集
-                // （兼容遗留目录用户）。过滤掉遗留的服务子目录名，避免被误列为用户。
-                var dbUsers = _userSessionService?.GetUserList() ?? new List<string>();
-
-                var dirUsers = new List<string>();
-                if (Directory.Exists(AppPaths.UsersDir))
-                {
-                    dirUsers = Directory.GetDirectories(AppPaths.UsersDir)
-                        .Select(Path.GetFileName)
-                        .Where(name => !string.IsNullOrEmpty(name) && !ServiceSubDirectoryNames.Contains(name))
-                        .ToList();
-                }
-
-                var users = dbUsers
-                    .Concat(dirUsers)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                // 以数据库为唯一权威用户源，与首页/设置保持一致，避免目录残留导致列表不一致。
+                var users = (_userSessionService?.GetUserList() ?? new List<string>())
                     .OrderBy(u => u, StringComparer.OrdinalIgnoreCase)
                     .ToList();
 
@@ -2120,14 +2106,6 @@ namespace LearningAssistant.Forms
                 _logger.LogError(ex, "加载用户列表失败");
             }
         }
-
-        /// <summary>
-        /// UsersDir 下遗留的服务子目录名，不应作为用户名显示。
-        /// </summary>
-        private static readonly HashSet<string> ServiceSubDirectoryNames = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "goals", "learning_paths", "notes", "wrong_answers", "pomodoro_stats", "recommendation_feedback"
-        };
 
         private void StatsButtonView_UserChanged(object? sender, EventArgs e)
         {

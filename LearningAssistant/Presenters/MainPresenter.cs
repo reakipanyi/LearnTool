@@ -232,6 +232,14 @@ namespace LearningAssistant.Presenters
             _view.RefreshUserList(users);
         }
 
+        /// <summary>
+        /// 供外部（如设置窗体关闭后）触发用户列表刷新。
+        /// </summary>
+        public void RefreshUsers()
+        {
+            RefreshUserList();
+        }
+
         private void UpdateStatus()
         {
             string ttsStatus = _ttsService.Available ? "TTS 就绪" : "TTS 加载中";

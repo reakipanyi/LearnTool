@@ -14,9 +14,6 @@ namespace LearningAssistant.Services.Learning.SortStrategies
 
         public ISortStrategy GetStrategy(string strategyName)
         {
-            if (string.IsNullOrEmpty(strategyName))
-                return _strategies["Sequential"];
-
             if (_strategies.TryGetValue(strategyName, out var strategy))
             {
                 return strategy;

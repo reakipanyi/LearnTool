@@ -23,12 +23,8 @@ namespace LearningAssistant.Tests
             _mockPersistence = new Mock<IDataPersistenceService>();
             _mockLogger = new Mock<ILogger<PomodoroService>>();
 
-            var options = new DbContextOptionsBuilder<AppDbContext>()
-                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-                .Options;
-
             _mockDbContextFactory.Setup(f => f.CreateDbContext())
-                .Returns(() => new AppDbContext(options));
+                .Returns(() => new AppDbContext());
         }
 
         public void Dispose()

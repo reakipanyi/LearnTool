@@ -567,6 +567,8 @@ namespace LearningAssistant.Forms
         private void Presenter_OnOpenSettings(object? sender, EventArgs e)
         {
             _windowManager.OpenSettingsWindow();
+            // 设置窗体（模态）关闭后，用户列表可能已变更（新增/删除用户），需刷新首页下拉框
+            _presenter?.RefreshUsers();
         }
 
         private void Presenter_OnOpenEditor(object? sender, EventArgs e)

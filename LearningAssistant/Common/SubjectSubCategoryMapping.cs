@@ -1,126 +1,120 @@
+using System.Reflection;
+using System.Linq;
+
 namespace LearningAssistant.Common
 {
     public static class SubjectSubCategoryMapping
     {
-        private static readonly Dictionary<SubjectType, List<SubCategoryType>> _mapping = new()
-        {
-            { SubjectType.Chinese, new List<SubCategoryType> 
-                { SubCategoryType.ChineseCharacter, SubCategoryType.ChinesePhrase, 
-                  SubCategoryType.ChineseIdiom, SubCategoryType.ChinesePoem, 
-                  SubCategoryType.ChineseComprehensive } },
-            { SubjectType.English, new List<SubCategoryType> 
-                { SubCategoryType.EnglishWord, SubCategoryType.EnglishPhrase, 
-                  SubCategoryType.EnglishSentence, SubCategoryType.EnglishComprehensive } },
-            { SubjectType.Math, new List<SubCategoryType> 
-                { SubCategoryType.MathFormula, SubCategoryType.MathExample, 
-                  SubCategoryType.MathConcept, SubCategoryType.MathComprehensive } },
-            { SubjectType.Physics, new List<SubCategoryType> 
-                { SubCategoryType.PhysicsLaw, SubCategoryType.PhysicsExperiment, 
-                  SubCategoryType.PhysicsDerivation, SubCategoryType.PhysicsComprehensive } },
-            { SubjectType.Chemistry, new List<SubCategoryType> 
-                { SubCategoryType.ChemistryEquation, SubCategoryType.ChemistryElement, 
-                  SubCategoryType.ChemistryExperiment, SubCategoryType.ChemistryComprehensive } },
-            { SubjectType.History, new List<SubCategoryType> 
-                { SubCategoryType.HistoryEvent, SubCategoryType.HistoryPerson, 
-                  SubCategoryType.HistoryTimeline, SubCategoryType.HistoryComprehensive } },
-            { SubjectType.Geography, new List<SubCategoryType> 
-                { SubCategoryType.GeographyKnowledge, SubCategoryType.GeographyMap, 
-                  SubCategoryType.GeographyClimate, SubCategoryType.GeographyComprehensive } },
-            { SubjectType.Biology, new List<SubCategoryType> 
-                { SubCategoryType.BiologyConcept, SubCategoryType.BiologyExperiment, 
-                  SubCategoryType.BiologyPhenomenon, SubCategoryType.BiologyComprehensive } }
-        };
+        /// <summary>
+        /// 科目 → 子类别映射，通过反射从枚举命名约定自动构建（单一数据源，无需手动维护）。
+        /// SubCategoryType 枚举名以 SubjectType 枚举名开头（如 ChineseCharacter ↔ Chinese）。
+        /// </summary>
+        private static readonly Dictionary<SubjectType, List<SubCategoryType>> _mapping = BuildMapping();
 
-        private static readonly Dictionary<string, SubjectType> _subjectStringMap = new(StringComparer.OrdinalIgnoreCase)
-        {
-            { "Chinese", SubjectType.Chinese },
-            { "English", SubjectType.English },
-            { "Math", SubjectType.Math },
-            { "Physics", SubjectType.Physics },
-            { "Chemistry", SubjectType.Chemistry },
-            { "History", SubjectType.History },
-            { "Geography", SubjectType.Geography },
-            { "Biology", SubjectType.Biology },
-            { "中文", SubjectType.Chinese },
-            { "英语", SubjectType.English },
-            { "语文", SubjectType.Chinese },
-            { "数学", SubjectType.Math },
-            { "物理", SubjectType.Physics },
-            { "化学", SubjectType.Chemistry },
-            { "历史", SubjectType.History },
-            { "地理", SubjectType.Geography },
-            { "生物", SubjectType.Biology }
-        };
+        /// <summary>
+        /// 科目枚举 → 中文显示名，通过反射从 Constants.Subject 自动构建（单一数据源，无需手动维护映射）。
+        /// </summary>
+        private static readonly Dictionary<SubjectType, string> _subjectDisplayNames =
+            BuildDisplayNames<SubjectType>(typeof(Constants.Subject));
 
-        private static readonly Dictionary<string, SubCategoryType> _subCategoryStringMap = new(StringComparer.OrdinalIgnoreCase)
+        /// <summary>
+        /// 子类别枚举 → 中文显示名，通过反射从 Constants.SubCategory 自动构建。
+        /// </summary>
+        private static readonly Dictionary<SubCategoryType, string> _subCategoryDisplayNames =
+            BuildDisplayNames<SubCategoryType>(typeof(Constants.SubCategory));
+
+        /// <summary>
+        /// 子类别旧版中文别名（与 Constants.SubCategory 不一致的历史名称），仅用于向后兼容解析已存储数据。
+        /// </summary>
+        private static readonly Dictionary<string, SubCategoryType> _legacySubCategoryAliases = new(StringComparer.OrdinalIgnoreCase)
         {
-            { "ChineseCharacter", SubCategoryType.ChineseCharacter },
-            { "ChinesePhrase", SubCategoryType.ChinesePhrase },
-            { "ChineseIdiom", SubCategoryType.ChineseIdiom },
-            { "ChinesePoem", SubCategoryType.ChinesePoem },
-            { "ChineseComprehensive", SubCategoryType.ChineseComprehensive },
-            { "EnglishWord", SubCategoryType.EnglishWord },
-            { "EnglishPhrase", SubCategoryType.EnglishPhrase },
-            { "EnglishSentence", SubCategoryType.EnglishSentence },
-            { "EnglishComprehensive", SubCategoryType.EnglishComprehensive },
-            { "MathFormula", SubCategoryType.MathFormula },
-            { "MathExample", SubCategoryType.MathExample },
-            { "MathConcept", SubCategoryType.MathConcept },
-            { "MathComprehensive", SubCategoryType.MathComprehensive },
-            { "PhysicsLaw", SubCategoryType.PhysicsLaw },
-            { "PhysicsExperiment", SubCategoryType.PhysicsExperiment },
-            { "PhysicsDerivation", SubCategoryType.PhysicsDerivation },
-            { "PhysicsComprehensive", SubCategoryType.PhysicsComprehensive },
-            { "ChemistryEquation", SubCategoryType.ChemistryEquation },
-            { "ChemistryElement", SubCategoryType.ChemistryElement },
-            { "ChemistryExperiment", SubCategoryType.ChemistryExperiment },
-            { "ChemistryComprehensive", SubCategoryType.ChemistryComprehensive },
-            { "HistoryEvent", SubCategoryType.HistoryEvent },
-            { "HistoryPerson", SubCategoryType.HistoryPerson },
-            { "HistoryTimeline", SubCategoryType.HistoryTimeline },
-            { "HistoryComprehensive", SubCategoryType.HistoryComprehensive },
-            { "GeographyKnowledge", SubCategoryType.GeographyKnowledge },
-            { "GeographyMap", SubCategoryType.GeographyMap },
-            { "GeographyClimate", SubCategoryType.GeographyClimate },
-            { "GeographyComprehensive", SubCategoryType.GeographyComprehensive },
-            { "BiologyConcept", SubCategoryType.BiologyConcept },
-            { "BiologyExperiment", SubCategoryType.BiologyExperiment },
-            { "BiologyPhenomenon", SubCategoryType.BiologyPhenomenon },
-            { "BiologyComprehensive", SubCategoryType.BiologyComprehensive },
-            { "识字", SubCategoryType.ChineseCharacter },
-            { "短语", SubCategoryType.ChinesePhrase },
-            { "成语", SubCategoryType.ChineseIdiom },
-            { "诗词", SubCategoryType.ChinesePoem },
-            { "语文综合", SubCategoryType.ChineseComprehensive },
-            { "英语单词", SubCategoryType.EnglishWord },
-            { "英语短语", SubCategoryType.EnglishPhrase },
-            { "英语句子", SubCategoryType.EnglishSentence },
-            { "英语综合", SubCategoryType.EnglishComprehensive },
             { "数学公式", SubCategoryType.MathFormula },
             { "数学例题", SubCategoryType.MathExample },
             { "数学概念", SubCategoryType.MathConcept },
-            { "数学综合", SubCategoryType.MathComprehensive },
-            { "物理定律", SubCategoryType.PhysicsLaw },
             { "物理实验", SubCategoryType.PhysicsExperiment },
-            { "物理推导", SubCategoryType.PhysicsDerivation },
-            { "物理综合", SubCategoryType.PhysicsComprehensive },
-            { "化学方程式", SubCategoryType.ChemistryEquation },
-            { "化学元素", SubCategoryType.ChemistryElement },
             { "化学实验", SubCategoryType.ChemistryExperiment },
-            { "化学综合", SubCategoryType.ChemistryComprehensive },
-            { "历史事件", SubCategoryType.HistoryEvent },
             { "历史人物", SubCategoryType.HistoryPerson },
             { "历史时间线", SubCategoryType.HistoryTimeline },
-            { "历史综合", SubCategoryType.HistoryComprehensive },
-            { "地理知识", SubCategoryType.GeographyKnowledge },
             { "地理地图", SubCategoryType.GeographyMap },
             { "地理气候", SubCategoryType.GeographyClimate },
-            { "地理综合", SubCategoryType.GeographyComprehensive },
-            { "生物概念", SubCategoryType.BiologyConcept },
             { "生物实验", SubCategoryType.BiologyExperiment },
-            { "生物现象", SubCategoryType.BiologyPhenomenon },
-            { "生物综合", SubCategoryType.BiologyComprehensive }
+            { "生物现象", SubCategoryType.BiologyPhenomenon }
         };
+
+        /// <summary>科目旧版中文别名。</summary>
+        private static readonly Dictionary<string, SubjectType> _legacySubjectAliases = new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "中文", SubjectType.Chinese }
+        };
+
+        /// <summary>中文名 → 子类别枚举（显示名 + 旧版别名），供 TryParseSubCategory 使用。</summary>
+        private static readonly Dictionary<string, SubCategoryType> _subCategoryParseMap =
+            BuildParseMap(_subCategoryDisplayNames, _legacySubCategoryAliases);
+
+        /// <summary>中文名 → 科目枚举（显示名 + 旧版别名），供 TryParseSubject 使用。</summary>
+        private static readonly Dictionary<string, SubjectType> _subjectParseMap =
+            BuildParseMap(_subjectDisplayNames, _legacySubjectAliases);
+
+        /// <summary>
+        /// 通过反射从枚举命名约定构建 科目→子类别 映射。
+        /// 遍历 SubCategoryType，按枚举名是否以 SubjectType 名开头进行归类。
+        /// </summary>
+        private static Dictionary<SubjectType, List<SubCategoryType>> BuildMapping()
+        {
+            var map = new Dictionary<SubjectType, List<SubCategoryType>>();
+            var subjects = Enum.GetValues<SubjectType>()
+                .Where(s => s != SubjectType.Unknown)
+                .OrderByDescending(s => s.ToString().Length)
+                .ToList();
+
+            foreach (var sub in Enum.GetValues<SubCategoryType>())
+            {
+                if (sub == SubCategoryType.Unknown)
+                    continue;
+                var name = sub.ToString();
+                // 长前缀优先，避免短前缀（如 Math）误匹配到其他科目的子类别。
+                var subject = subjects.FirstOrDefault(s => name.StartsWith(s.ToString(), StringComparison.Ordinal));
+                if (subject == SubjectType.Unknown)
+                    continue;
+                if (!map.TryGetValue(subject, out var list))
+                {
+                    list = new List<SubCategoryType>();
+                    map[subject] = list;
+                }
+                list.Add(sub);
+            }
+            return map;
+        }
+
+        /// <summary>
+        /// 通过反射从 Constants 的嵌套类构建 枚举→中文名 字典。
+        /// 字段名与枚举名一一对应（如 Constants.Subject.Chinese ↔ SubjectType.Chinese）。
+        /// </summary>
+        private static Dictionary<TEnum, string> BuildDisplayNames<TEnum>(Type constantsType) where TEnum : struct, Enum
+        {
+            var map = new Dictionary<TEnum, string>();
+            foreach (var field in constantsType.GetFields(BindingFlags.Public | BindingFlags.Static))
+            {
+                if (field.FieldType == typeof(string) && Enum.TryParse<TEnum>(field.Name, out var enumValue))
+                    map[enumValue] = (string)field.GetValue(null)!;
+            }
+            return map;
+        }
+
+        /// <summary>
+        /// 从显示名字典 + 旧版别名字典构建反向解析映射（中文名→枚举）。
+        /// </summary>
+        private static Dictionary<string, TEnum> BuildParseMap<TEnum>(
+            Dictionary<TEnum, string> displayNames,
+            Dictionary<string, TEnum> legacyAliases) where TEnum : struct, Enum
+        {
+            var map = new Dictionary<string, TEnum>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in displayNames)
+                map[kv.Value] = kv.Key;
+            foreach (var kv in legacyAliases)
+                map.TryAdd(kv.Key, kv.Value);
+            return map;
+        }
 
         public static List<SubCategoryType> GetSubCategories(SubjectType subject)
             => _mapping.TryGetValue(subject, out var list) ? list : new List<SubCategoryType>();
@@ -132,97 +126,35 @@ namespace LearningAssistant.Common
             => GetSubCategories(subject).Contains(subCategory);
 
         public static SubjectType ParseSubject(string subjectString)
-        {
-            if (Enum.TryParse<SubjectType>(subjectString, true, out var result))
-                return result;
-
-            return _subjectStringMap.TryGetValue(subjectString, out var mapped) 
-                ? mapped 
-                : SubjectType.Chinese;
-        }
+            => TryParseSubject(subjectString, out var subject) ? subject : SubjectType.Chinese;
 
         public static SubCategoryType ParseSubCategory(string subCategoryString)
-        {
-            if (Enum.TryParse<SubCategoryType>(subCategoryString, true, out var result))
-                return result;
-
-            return _subCategoryStringMap.TryGetValue(subCategoryString, out var mapped) 
-                ? mapped 
-                : SubCategoryType.ChineseCharacter;
-        }
+            => TryParseSubCategory(subCategoryString, out var subCategory) ? subCategory : SubCategoryType.ChineseCharacter;
 
         public static bool TryParseSubject(string subjectString, out SubjectType subject)
         {
             if (Enum.TryParse<SubjectType>(subjectString, true, out subject))
                 return true;
-
-            return _subjectStringMap.TryGetValue(subjectString, out subject);
+            return _subjectParseMap.TryGetValue(subjectString, out subject);
         }
 
         public static bool TryParseSubCategory(string subCategoryString, out SubCategoryType subCategory)
         {
             if (Enum.TryParse<SubCategoryType>(subCategoryString, true, out subCategory))
                 return true;
-
-            return _subCategoryStringMap.TryGetValue(subCategoryString, out subCategory);
+            return _subCategoryParseMap.TryGetValue(subCategoryString, out subCategory);
         }
 
-        private static readonly Dictionary<SubCategoryType, string> _subCategoryDisplayNameMap = new()
-        {
-            { SubCategoryType.ChineseCharacter, "识字" },
-            { SubCategoryType.ChinesePhrase, "短语" },
-            { SubCategoryType.ChineseIdiom, "成语" },
-            { SubCategoryType.ChinesePoem, "诗词" },
-            { SubCategoryType.ChineseComprehensive, "语文综合" },
-            { SubCategoryType.EnglishWord, "英语单词" },
-            { SubCategoryType.EnglishPhrase, "英语短语" },
-            { SubCategoryType.EnglishSentence, "英语句子" },
-            { SubCategoryType.EnglishComprehensive, "英语综合" },
-            { SubCategoryType.MathFormula, "数学公式" },
-            { SubCategoryType.MathExample, "数学例题" },
-            { SubCategoryType.MathConcept, "数学概念" },
-            { SubCategoryType.MathComprehensive, "数学综合" },
-            { SubCategoryType.PhysicsLaw, "物理定律" },
-            { SubCategoryType.PhysicsExperiment, "物理实验" },
-            { SubCategoryType.PhysicsDerivation, "物理推导" },
-            { SubCategoryType.PhysicsComprehensive, "物理综合" },
-            { SubCategoryType.ChemistryEquation, "化学方程式" },
-            { SubCategoryType.ChemistryElement, "化学元素" },
-            { SubCategoryType.ChemistryExperiment, "化学实验" },
-            { SubCategoryType.ChemistryComprehensive, "化学综合" },
-            { SubCategoryType.HistoryEvent, "历史事件" },
-            { SubCategoryType.HistoryPerson, "历史人物" },
-            { SubCategoryType.HistoryTimeline, "历史时间线" },
-            { SubCategoryType.HistoryComprehensive, "历史综合" },
-            { SubCategoryType.GeographyKnowledge, "地理知识" },
-            { SubCategoryType.GeographyMap, "地理地图" },
-            { SubCategoryType.GeographyClimate, "地理气候" },
-            { SubCategoryType.GeographyComprehensive, "地理综合" },
-            { SubCategoryType.BiologyConcept, "生物概念" },
-            { SubCategoryType.BiologyExperiment, "生物实验" },
-            { SubCategoryType.BiologyPhenomenon, "生物现象" },
-            { SubCategoryType.BiologyComprehensive, "生物综合" }
-        };
-
+        /// <summary>
+        /// 获取子类别的中文显示名（来自 Constants.SubCategory，与 SubjectTemplates.json 一致）。
+        /// </summary>
         public static string GetSubCategoryDisplayName(SubCategoryType subCategory)
-        {
-            return _subCategoryDisplayNameMap.TryGetValue(subCategory, out var name) ? name : subCategory.ToString();
-        }
+            => _subCategoryDisplayNames.TryGetValue(subCategory, out var name) ? name : subCategory.ToString();
 
+        /// <summary>
+        /// 获取科目的中文显示名（来自 Constants.Subject）。
+        /// </summary>
         public static string GetSubjectDisplayName(SubjectType subject)
-        {
-            var displayNames = new Dictionary<SubjectType, string>
-            {
-                { SubjectType.Chinese, "语文" },
-                { SubjectType.English, "英语" },
-                { SubjectType.Math, "数学" },
-                { SubjectType.Physics, "物理" },
-                { SubjectType.Chemistry, "化学" },
-                { SubjectType.History, "历史" },
-                { SubjectType.Geography, "地理" },
-                { SubjectType.Biology, "生物" }
-            };
-            return displayNames.TryGetValue(subject, out var name) ? name : subject.ToString();
-        }
+            => _subjectDisplayNames.TryGetValue(subject, out var name) ? name : subject.ToString();
     }
 }

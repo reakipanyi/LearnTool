@@ -1,5 +1,6 @@
 using LearningAssistant.Common;
 using System.Data;
+using System.Windows.Forms;
 
 namespace LearningAssistant.Views
 {
@@ -78,6 +79,14 @@ namespace LearningAssistant.Views
         /// </summary>
         /// <param name="msg">消息内容</param>
         void ShowMessage(string msg);
+
+        /// <summary>
+        /// 显示三选确认对话框（是/否/取消），用于未保存更改时的询问。
+        /// </summary>
+        /// <param name="message">提示消息</param>
+        /// <param name="title">对话框标题</param>
+        /// <returns>Yes=保存, No=放弃, Cancel=取消操作</returns>
+        DialogResult ShowConfirm(string message, string title);
 
         void RefreshSubCategories(List<SubCategoryType> subCategories);
         void RefreshTreeView(TreeNodeCollection nodes);

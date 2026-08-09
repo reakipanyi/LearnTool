@@ -20,6 +20,7 @@ namespace LearningAssistant.Common
 
             var item = new LearningItem();
             string? typeName = null;
+            var extraProps = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
 
             while (reader.Read())
             {
@@ -159,13 +160,63 @@ namespace LearningAssistant.Common
                         using (var doc = JsonDocument.ParseValue(ref reader))
                             item.ExtendedProperties = doc.RootElement.GetRawText();
                         break;
+                    default:
+                        // 未知属性（如数学类的 Name/Formula/Question/Concept 等）保留到 ExtendedProperties，
+                        // 避免数据在反序列化时丢失导致去重失效和数据round-trip破坏。
+                        if (!string.IsNullOrEmpty(propertyName) && !StandardProperties.Contains(propertyName))
+                        {
+                            using (var extraDoc = JsonDocument.ParseValue(ref reader))
+                            {
+                                var cloned = extraDoc.RootElement.Clone();
+                                extraProps[propertyName] = cloned;
+                            }
+                        }
+                        break;
                 }
+            }
+
+            // 合并非标准属性到 ExtendedProperties
+            if (extraProps.Count > 0)
+            {
+                item.ExtendedProperties = MergeExtendedProperties(item.ExtendedProperties, extraProps);
             }
 
             if (!string.IsNullOrEmpty(typeName) && item.SubCategory == 0)
                 item.SubCategory = InferSubCategoryFromTypeName(typeName);
 
             return item;
+        }
+
+        /// <summary>
+        /// 将非标准属性合并到 ExtendedProperties。已存在的键不会被覆盖。
+        /// </summary>
+        private static string MergeExtendedProperties(string existing, Dictionary<string, JsonElement> extraProps)
+        {
+            var merged = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            // 先解析已有的 ExtendedProperties
+            if (!string.IsNullOrWhiteSpace(existing) && existing.Trim() != "{}")
+            {
+                try
+                {
+                    var existingDict = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object?>>(existing);
+                    if (existingDict != null)
+                    {
+                        foreach (var kvp in existingDict)
+                            merged[kvp.Key] = kvp.Value;
+                    }
+                }
+                catch
+                {
+                    // 解析失败则忽略已有内容
+                }
+            }
+            // 追加非标准属性（不覆盖已存在的键）
+            foreach (var kvp in extraProps)
+            {
+                if (!merged.ContainsKey(kvp.Key))
+                    merged[kvp.Key] = kvp.Value;
+            }
+            return System.Text.Json.JsonSerializer.Serialize(merged);
         }
 
         private static readonly HashSet<string> StandardProperties = new(StringComparer.OrdinalIgnoreCase)
@@ -175,7 +226,7 @@ namespace LearningAssistant.Common
             "UkPhonetic", "UsPhonetic", "StrokeCount", "Radical",
             "Structure", "PartOfSpeech", "WordForms", "Collocations",
             "SyllableBreakdown", "Word", "Character", "Phrase", "Sentence",
-            "Idiom", "Poem", "Title", "Rule", "Questions",
+            "Idiom", "Poem", "Title", "Rule",
             "ChineseMeaning", "ExampleTranslation", "Content", "Explanation",
             "$type", "Status", "ReviewCount", "LastReviewedAt", "ExtendedProperties"
         };

@@ -26,12 +26,8 @@ namespace LearningAssistant.Tests
             _mockLogger = new Mock<ILogger<LearningGoalService>>();
             _mockEventBus = new Mock<IEventBus>();
 
-            var options = new DbContextOptionsBuilder<AppDbContext>()
-                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-                .Options;
-
             _mockDbContextFactory.Setup(f => f.CreateDbContext())
-                .Returns(() => new AppDbContext(options));
+                .Returns(() => new AppDbContext());
         }
 
         public void Dispose()
@@ -129,13 +125,12 @@ namespace LearningAssistant.Tests
         }
 
         [Fact]
-        public void GetGoals_WithNoGoals_ShouldReturnDefaultGoals()
+        public void GetGoals_WithNoGoals_ShouldReturnEmpty()
         {
             _service = CreateService();
 
             var goals = _service.GetGoals("test_user");
-            goals.Should().NotBeEmpty();
-            goals.Count.Should().BeGreaterThanOrEqualTo(1);
+            goals.Should().BeEmpty();
         }
 
         [Fact]

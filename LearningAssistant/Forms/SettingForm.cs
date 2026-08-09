@@ -200,6 +200,36 @@ namespace LearningAssistant.Forms
 
         public event EventHandler? SaveClicked;
         public event EventHandler? CancelClicked;
+        public event EventHandler? AddUserClicked;
+        public event EventHandler? DeleteUserClicked;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public string SelectedUserId
+        {
+            get => listBoxUsers.SelectedItem?.ToString() ?? string.Empty;
+            set
+            {
+                for (int i = 0; i < listBoxUsers.Items.Count; i++)
+                {
+                    if (listBoxUsers.Items[i]?.ToString() == value)
+                    {
+                        listBoxUsers.SelectedIndex = i;
+                        return;
+                    }
+                }
+                if (listBoxUsers.Items.Count > 0)
+                    listBoxUsers.SelectedIndex = 0;
+            }
+        }
+
+        public void SetUserList(IList<string> userIds)
+        {
+            listBoxUsers.Items.Clear();
+            foreach (var id in userIds)
+                listBoxUsers.Items.Add(id);
+            if (listBoxUsers.Items.Count > 0)
+                listBoxUsers.SelectedIndex = 0;
+        }
 
         public void ShowMessage(string msg)
         {
@@ -250,6 +280,11 @@ namespace LearningAssistant.Forms
         private Label labelPronunciationScope;
         private NumericUpDown numericUpDownPronunciationScope;
         private CheckBox checkBoxIsAIExplanationEnabled;
+        private GroupBox groupBoxUserManagement;
+        private ListBox listBoxUsers;
+        private Button buttonAddUser;
+        private Button buttonDeleteUser;
+        private Label labelUserManagementHint;
 
         private void InitializeComponent()
         {
@@ -287,6 +322,11 @@ namespace LearningAssistant.Forms
             labelPronunciationScope = new Label();
             numericUpDownPronunciationScope = new NumericUpDown();
             checkBoxIsAIExplanationEnabled = new CheckBox();
+            groupBoxUserManagement = new GroupBox();
+            listBoxUsers = new ListBox();
+            buttonAddUser = new Button();
+            buttonDeleteUser = new Button();
+            labelUserManagementHint = new Label();
             groupBoxTts.SuspendLayout();
             ((ISupportInitialize)trackBarVolume).BeginInit();
             ((ISupportInitialize)trackBarSpeed).BeginInit();
@@ -575,7 +615,7 @@ namespace LearningAssistant.Forms
             buttonSave.FlatStyle = FlatStyle.Flat;
             buttonSave.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             buttonSave.ForeColor = Color.White;
-            buttonSave.Location = new Point(315, 593);
+            buttonSave.Location = new Point(315, 720);
             buttonSave.Name = "buttonSave";
             buttonSave.Size = new Size(120, 45);
             buttonSave.TabIndex = 6;
@@ -592,7 +632,7 @@ namespace LearningAssistant.Forms
             buttonCancel.FlatStyle = FlatStyle.Flat;
             buttonCancel.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             buttonCancel.ForeColor = Color.White;
-            buttonCancel.Location = new Point(445, 593);
+            buttonCancel.Location = new Point(445, 720);
             buttonCancel.Name = "buttonCancel";
             buttonCancel.Size = new Size(120, 45);
             buttonCancel.TabIndex = 7;
@@ -675,15 +715,83 @@ namespace LearningAssistant.Forms
             checkBoxIsAIExplanationEnabled.Size = new Size(120, 23);
             checkBoxIsAIExplanationEnabled.TabIndex = 3;
             checkBoxIsAIExplanationEnabled.Text = "启用AI讲解";
-            // 
+            //
+            // groupBoxUserManagement
+            //
+            groupBoxUserManagement.BackColor = Color.FromArgb(255, 250, 240);
+            groupBoxUserManagement.Controls.Add(listBoxUsers);
+            groupBoxUserManagement.Controls.Add(buttonAddUser);
+            groupBoxUserManagement.Controls.Add(buttonDeleteUser);
+            groupBoxUserManagement.Controls.Add(labelUserManagementHint);
+            groupBoxUserManagement.FlatStyle = FlatStyle.Flat;
+            groupBoxUserManagement.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            groupBoxUserManagement.ForeColor = Color.FromArgb(33, 33, 33);
+            groupBoxUserManagement.Location = new Point(15, 585);
+            groupBoxUserManagement.Name = "groupBoxUserManagement";
+            groupBoxUserManagement.Size = new Size(550, 130);
+            groupBoxUserManagement.TabIndex = 6;
+            groupBoxUserManagement.TabStop = false;
+            groupBoxUserManagement.Text = "👥 用户管理";
+            //
+            // listBoxUsers
+            //
+            listBoxUsers.FormattingEnabled = true;
+            listBoxUsers.ItemHeight = 17;
+            listBoxUsers.Location = new Point(15, 28);
+            listBoxUsers.Name = "listBoxUsers";
+            listBoxUsers.Size = new Size(350, 85);
+            listBoxUsers.TabIndex = 0;
+            //
+            // buttonAddUser
+            //
+            buttonAddUser.BackColor = Color.FromArgb(76, 175, 80);
+            buttonAddUser.FlatAppearance.BorderSize = 0;
+            buttonAddUser.FlatStyle = FlatStyle.Flat;
+            buttonAddUser.Font = new Font("微软雅黑", 9F, FontStyle.Regular);
+            buttonAddUser.ForeColor = Color.White;
+            buttonAddUser.Location = new Point(380, 28);
+            buttonAddUser.Name = "buttonAddUser";
+            buttonAddUser.Size = new Size(150, 35);
+            buttonAddUser.TabIndex = 1;
+            buttonAddUser.Text = "➕ 添加用户";
+            buttonAddUser.UseVisualStyleBackColor = false;
+            buttonAddUser.Click += ButtonAddUser_Click;
+            //
+            // buttonDeleteUser
+            //
+            buttonDeleteUser.BackColor = Color.FromArgb(244, 67, 54);
+            buttonDeleteUser.FlatAppearance.BorderSize = 0;
+            buttonDeleteUser.FlatStyle = FlatStyle.Flat;
+            buttonDeleteUser.Font = new Font("微软雅黑", 9F, FontStyle.Regular);
+            buttonDeleteUser.ForeColor = Color.White;
+            buttonDeleteUser.Location = new Point(380, 72);
+            buttonDeleteUser.Name = "buttonDeleteUser";
+            buttonDeleteUser.Size = new Size(150, 35);
+            buttonDeleteUser.TabIndex = 2;
+            buttonDeleteUser.Text = "🗑️ 删除用户";
+            buttonDeleteUser.UseVisualStyleBackColor = false;
+            buttonDeleteUser.Click += ButtonDeleteUser_Click;
+            //
+            // labelUserManagementHint
+            //
+            labelUserManagementHint.AutoSize = true;
+            labelUserManagementHint.Font = new Font("微软雅黑", 8F, FontStyle.Regular);
+            labelUserManagementHint.ForeColor = Color.FromArgb(120, 120, 120);
+            labelUserManagementHint.Location = new Point(15, 115);
+            labelUserManagementHint.Name = "labelUserManagementHint";
+            labelUserManagementHint.Size = new Size(300, 15);
+            labelUserManagementHint.TabIndex = 3;
+            labelUserManagementHint.Text = "提示：删除用户会清除其所有学习数据，不可恢复";
+            //
             // SettingForm
-            // 
+            //
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.FromArgb(240, 240, 240);
-            ClientSize = new Size(580, 648);
+            ClientSize = new Size(580, 775);
             Controls.Add(buttonCancel);
             Controls.Add(buttonSave);
+            Controls.Add(groupBoxUserManagement);
             Controls.Add(groupBoxLearningSettings);
             Controls.Add(groupBoxTranslation);
             Controls.Add(groupBoxInterface);
@@ -742,6 +850,16 @@ namespace LearningAssistant.Forms
         private void ButtonCancel_Click(object? sender, EventArgs e)
         {
             CancelClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ButtonAddUser_Click(object? sender, EventArgs e)
+        {
+            AddUserClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ButtonDeleteUser_Click(object? sender, EventArgs e)
+        {
+            DeleteUserClicked?.Invoke(this, EventArgs.Empty);
         }
 
         private void CheckBoxNightMode_CheckedChanged(object? sender, EventArgs e)

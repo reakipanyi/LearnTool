@@ -23,13 +23,9 @@ namespace LearningAssistant.Tests
 
         public NoteServiceTests()
         {
-            _options = new DbContextOptionsBuilder<AppDbContext>()
-                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-                .Options;
-
             _mockDbContextFactory = new Mock<IDbContextFactory<AppDbContext>>();
             _mockDbContextFactory.Setup(f => f.CreateDbContext())
-                .Returns(() => new AppDbContext(_options));
+                .Returns(() => new AppDbContext());
 
             _mockPersistence = new Mock<IDataPersistenceService>();
             _mockLogger = new Mock<ILogger<NoteService>>();
