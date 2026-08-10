@@ -137,6 +137,44 @@ namespace LearningAssistant.Managers
                 Category = BadgeCategory.Special,
                 Requirement = new BadgeRequirement { Type = BadgeType.SpeedLearning, TargetValue = 10 }
             };
+            _badges["time_investor"] = new Badge
+            {
+                Id = "time_investor",
+                Name = "时间投资者",
+                Description = "累计学习超过10小时",
+                Icon = "⏰",
+                Category = BadgeCategory.Learning,
+                Requirement = new BadgeRequirement { Type = BadgeType.TotalStudyTime, TargetValue = 600 }
+            };
+            _badges["time_master"] = new Badge
+            {
+                Id = "time_master",
+                Name = "时间大师",
+                Description = "累计学习超过100小时",
+                Icon = "🎓",
+                Category = BadgeCategory.Mastery,
+                Requirement = new BadgeRequirement { Type = BadgeType.TotalStudyTime, TargetValue = 6000 }
+            };
+            _badges["night_owl"] = new Badge
+            {
+                Id = "night_owl",
+                Name = "夜猫子",
+                Description = "在深夜时段（00:00-05:00）完成学习",
+                Icon = "🌙",
+                Category = BadgeCategory.Special,
+                IsHidden = true,
+                Requirement = new BadgeRequirement { Type = BadgeType.NightStudy, TargetValue = 1 }
+            };
+            _badges["easter_egg_master"] = new Badge
+            {
+                Id = "easter_egg_master",
+                Name = "彩蛋猎人",
+                Description = "发现并解锁一个隐藏成就",
+                Icon = "🥚",
+                Category = BadgeCategory.Special,
+                IsHidden = true,
+                Requirement = new BadgeRequirement { Type = BadgeType.HiddenBadgeCount, TargetValue = 1 }
+            };
         }
 
         public void SetUI(FlowLayoutPanel flowLayoutPanel, ToolTip toolTip)
@@ -248,7 +286,8 @@ namespace LearningAssistant.Managers
             }
         }
 
-        public void CheckUnlock(int totalLearned, int streakDays, int todayLearned, int quizCorrect, int favoriteCount, int noteCount)
+        public void CheckUnlock(int totalLearned, int streakDays, int todayLearned, int quizCorrect, int favoriteCount, int noteCount,
+            int totalStudyMinutes = 0, int speedLearningCount = 0, int nightStudyCount = 0)
         {
             List<string> newlyUnlocked = new();
 
@@ -263,6 +302,15 @@ namespace LearningAssistant.Managers
             TryUnlockBadge("quiz_master", quizCorrect >= 20, newlyUnlocked);
             TryUnlockBadge("favorite_collector", favoriteCount >= 20, newlyUnlocked);
             TryUnlockBadge("note_taker", noteCount >= 10, newlyUnlocked);
+            TryUnlockBadge("speed_learner", speedLearningCount >= 10, newlyUnlocked);
+            TryUnlockBadge("time_investor", totalStudyMinutes >= 600, newlyUnlocked);
+            TryUnlockBadge("time_master", totalStudyMinutes >= 6000, newlyUnlocked);
+            TryUnlockBadge("night_owl", nightStudyCount >= 1, newlyUnlocked);
+
+            // 彩蛋猎人：解锁任意隐藏成就后自动解锁
+            int hiddenUnlockedCount = _badges.Values
+                .Count(b => b.IsHidden && b.IsUnlocked && b.Id != "easter_egg_master");
+            TryUnlockBadge("easter_egg_master", hiddenUnlockedCount >= 1, newlyUnlocked);
 
             if (newlyUnlocked.Count > 0)
             {
@@ -353,14 +401,15 @@ namespace LearningAssistant.Managers
             int favoriteCount,
             int noteCount,
             int perfectSessions = 0,
-            int speedLearningCount = 0)
+            int speedLearningCount = 0,
+            int nightStudyCount = 0)
         {
             var progress = new Dictionary<string, int>();
             foreach (var badge in _badges.Values)
             {
                 progress[badge.Id] = GetBadgeProgress(badge, totalLearned, streakDays,
                     totalStudyMinutes, quizCorrect, favoriteCount, noteCount,
-                    perfectSessions, speedLearningCount);
+                    perfectSessions, speedLearningCount, nightStudyCount);
             }
             return progress;
         }
@@ -374,7 +423,8 @@ namespace LearningAssistant.Managers
             int favoriteCount,
             int noteCount,
             int perfectSessions,
-            int speedLearningCount)
+            int speedLearningCount,
+            int nightStudyCount = 0)
         {
             return badge.Requirement.Type switch
             {
@@ -386,6 +436,8 @@ namespace LearningAssistant.Managers
                 BadgeType.FavoriteCount => favoriteCount,
                 BadgeType.NoteCount => noteCount,
                 BadgeType.SpeedLearning => speedLearningCount,
+                BadgeType.NightStudy => nightStudyCount,
+                BadgeType.HiddenBadgeCount => _badges.Values.Count(b => b.IsHidden && b.IsUnlocked && b.Id != "easter_egg_master"),
                 _ => 0
             };
         }

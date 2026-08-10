@@ -29,6 +29,13 @@ namespace LearningAssistant.Services.Gamification
         private int _wrongCount;
         private bool _disposed = false;
 
+        // 速度学习追踪：5分钟内连续学习计数
+        private int _speedLearnBurstCount;
+        private DateTime _speedLearnBurstStart;
+        private int _speedLearnMaxCount;
+        // 深夜学习追踪
+        private int _nightStudyCount;
+
         #region Stats
         public int TodayLearnedCount => _statsManager.TodayLearnedCount;
         public int StreakDays => _statsManager.StreakDays;
@@ -107,6 +114,29 @@ namespace LearningAssistant.Services.Gamification
 
             try
             {
+                // 深夜学习检测（00:00-05:00）
+                int hour = DateTime.Now.Hour;
+                if (hour >= 0 && hour < 5)
+                {
+                    _nightStudyCount++;
+                }
+
+                // 速度学习检测：5分钟内连续学习计数
+                DateTime now = DateTime.Now;
+                if (_speedLearnBurstCount == 0 || (now - _speedLearnBurstStart).TotalMinutes >= 5)
+                {
+                    _speedLearnBurstStart = now;
+                    _speedLearnBurstCount = 1;
+                }
+                else
+                {
+                    _speedLearnBurstCount++;
+                    if (_speedLearnBurstCount > _speedLearnMaxCount)
+                    {
+                        _speedLearnMaxCount = _speedLearnBurstCount;
+                    }
+                }
+
                 AddXP(10);
                 IncrementTodayLearned();
                 CheckBadgesAndChallenges();
@@ -280,7 +310,10 @@ namespace LearningAssistant.Services.Gamification
                 _statsManager.TodayLearnedCount,
                 _quizCorrectCount,
                 _favoriteCount,
-                _noteCount);
+                _noteCount,
+                (int)_studyDuration.TotalMinutes,
+                _speedLearnMaxCount,
+                _nightStudyCount);
 
             _challengeManager.SetLearningData(
                 _statsManager.TodayLearnedCount,
@@ -316,7 +349,9 @@ namespace LearningAssistant.Services.Gamification
                 (int)StudyDuration.TotalMinutes,
                 _quizCorrectCount,
                 _favoriteCount,
-                _noteCount);
+                _noteCount,
+                speedLearningCount: _speedLearnMaxCount,
+                nightStudyCount: _nightStudyCount);
         }
         #endregion
 
@@ -477,7 +512,10 @@ namespace LearningAssistant.Services.Gamification
                 _statsManager.TodayLearnedCount,
                 _quizCorrectCount,
                 _favoriteCount,
-                _noteCount);
+                _noteCount,
+                (int)_studyDuration.TotalMinutes,
+                _speedLearnMaxCount,
+                _nightStudyCount);
         }
 
         private void PublishStatsChangedEvent()

@@ -315,7 +315,7 @@ namespace LearningAssistant.Managers
         }
 
         /// <summary>
-        /// 生成每日挑战（扩展版）
+        /// 生成每日挑战（扩展版，根据用户近期完成率自适应难度）
         /// </summary>
         private void GenerateDailyChallenges()
         {
@@ -336,13 +336,24 @@ namespace LearningAssistant.Managers
                 .Take(5)
                 .ToList();
 
+            // 根据用户近7天挑战完成率自适应选择难度
+            double recentRate = GetRecentCompletionRate();
+            int baseDifficultyIndex = recentRate switch
+            {
+                >= 0.8 => 2,  // 高完成率 → 高难度
+                >= 0.5 => 1,  // 中等完成率 → 中难度
+                _ => 0         // 低完成率 → 低难度
+            };
+
             _dailyChallenges = new List<Challenge>();
 
             for (int i = 0; i < selectedTemplates.Count; i++)
             {
                 var template = selectedTemplates[i];
-                int difficultyIndex = i % 3; // 难度分布
-                int target = template.Targets[Math.Min(difficultyIndex, template.Targets.Length - 1)];
+                // 在基础难度上交替分布，保证挑战难度多样性
+                int difficultyIndex = (baseDifficultyIndex + i) % 3;
+                difficultyIndex = Math.Clamp(difficultyIndex, 0, template.Targets.Length - 1);
+                int target = template.Targets[difficultyIndex];
                 int reward = template.Rewards[Math.Min(difficultyIndex, template.Rewards.Length - 1)];
 
                 string description = template.DescriptionTemplate.Replace("{0}", target.ToString());
@@ -369,6 +380,23 @@ namespace LearningAssistant.Managers
             });
 
             Save(_currentUserId);
+        }
+
+        /// <summary>
+        /// 计算近7天挑战平均完成率，用于难度自适应
+        /// </summary>
+        private double GetRecentCompletionRate()
+        {
+            if (_historyRecords.Count == 0) return 0.3; // 新用户默认低难度
+
+            var recent = _historyRecords
+                .OrderByDescending(h => h.Date)
+                .Take(7)
+                .ToList();
+
+            if (recent.Count == 0) return 0.3;
+
+            return recent.Average(h => h.TotalCount > 0 ? (double)h.CompletedCount / h.TotalCount : 0);
         }
 
         private ChallengeType GetChallengeType(string id)

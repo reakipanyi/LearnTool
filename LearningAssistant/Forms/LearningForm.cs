@@ -209,6 +209,10 @@ namespace LearningAssistant.Forms
             _buttonsView.UnknownClicked += ButtonUnknown_Click;
             _buttonsView.FavoriteClicked += ButtonFavorite_Click;
             _buttonsView.ExitClicked += ButtonExit_Click;
+            _buttonsView.StatsClicked += ButtonStats_Click;
+            _buttonsView.ChallengeClicked += ButtonChallenge_Click;
+            _buttonsView.AchievementClicked += ButtonAchievement_Click;
+            _buttonsView.WrongBookClicked += ButtonWrongBook_Click;
 
             _settingsView.RadioStudyMode.CheckedChanged += RadioSetting_CheckedChanged;
             _settingsView.RadioQuickMode.CheckedChanged += RadioSetting_CheckedChanged;
@@ -1199,6 +1203,11 @@ namespace LearningAssistant.Forms
             ApplyRoundedStyle(buttonShowAnswer, 8);
             ApplyRoundedStyle(buttonThemeToggle, 8);
 
+            if (_buttonsView.ButtonStats != null) ApplyRoundedStyle(_buttonsView.ButtonStats, 8);
+            if (_buttonsView.ButtonChallenge != null) ApplyRoundedStyle(_buttonsView.ButtonChallenge, 8);
+            if (_buttonsView.ButtonAchievement != null) ApplyRoundedStyle(_buttonsView.ButtonAchievement, 8);
+            if (_buttonsView.ButtonWrongBook != null) ApplyRoundedStyle(_buttonsView.ButtonWrongBook, 8);
+
             foreach (Control ctrl in _buttonsView.ButtonsPanel.Controls)
             {
                 if (ctrl is Button btn)
@@ -1220,6 +1229,10 @@ namespace LearningAssistant.Forms
             _toolTip.SetToolTip(_buttonsView.ButtonUnknown, "标记为未知 (2 / U)");
             _toolTip.SetToolTip(_buttonsView.ButtonFavorite, "收藏/取消收藏 (3 / F)");
             _toolTip.SetToolTip(_buttonsView.ButtonEdit, "编辑内容 (5 / E)");
+            _toolTip.SetToolTip(_buttonsView.ButtonStats, "打开学习统计");
+            _toolTip.SetToolTip(_buttonsView.ButtonChallenge, "打开每日挑战");
+            _toolTip.SetToolTip(_buttonsView.ButtonAchievement, "查看成就徽章");
+            _toolTip.SetToolTip(_buttonsView.ButtonWrongBook, "打开错题本");
             _toolTip.SetToolTip(_buttonsView.ButtonExit, "退出学习 (Esc)");
 
             _toolTip.SetToolTip(buttonShowAnswer, "切换学习/答题模式 (F3)");
@@ -1379,6 +1392,91 @@ namespace LearningAssistant.Forms
         {
             _soundService?.PlayNavigation();
             NextClicked?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void ButtonStats_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                OpenStatisticsClicked?.Invoke(this, EventArgs.Empty);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "打开学习统计失败");
+                ShowToast($"打开学习统计失败: {ex.Message}", ToastType.Error);
+            }
+        }
+
+        private void ButtonChallenge_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                var gamificationService = Program.GetRequiredService<IGamificationService>();
+                var analyticsService = Program.GetService<ILearningAnalyticsService>();
+                var noteService = Program.GetService<INoteService>();
+                var wrongAnswerService = Program.GetService<IWrongAnswerService>();
+                var themeService = Program.GetService<IThemeService>();
+                var userSessionService = Program.GetService<IUserSessionService>();
+                var logger = Program.GetService<ILogger<ChallengeForm>>();
+
+                using var form = new ChallengeForm(
+                    gamificationService,
+                    analyticsService,
+                    noteService,
+                    wrongAnswerService,
+                    logger,
+                    themeService,
+                    userSessionService,
+                    GetCurrentUserId());
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.ShowDialog(this);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "打开每日挑战失败");
+                ShowToast($"打开每日挑战失败: {ex.Message}", ToastType.Error);
+            }
+        }
+
+        private void ButtonAchievement_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                var gamificationService = Program.GetRequiredService<IGamificationService>();
+                var form = new AchievementForm(gamificationService);
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.ShowDialog(this);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "打开成就窗口失败");
+                ShowToast($"打开成就窗口失败: {ex.Message}", ToastType.Error);
+            }
+        }
+
+        private void ButtonWrongBook_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                var wrongAnswerService = Program.GetRequiredService<IWrongAnswerService>();
+                var themeService = Program.GetService<IThemeService>();
+                var userSessionService = Program.GetService<IUserSessionService>();
+                var logger = Program.GetService<ILogger<WrongAnswerForm>>();
+
+                var form = new WrongAnswerForm(
+                    wrongAnswerService,
+                    logger,
+                    themeService,
+                    userSessionService,
+                    GetCurrentUserId());
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.ShowDialog(this);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "打开错题本失败");
+                ShowToast($"打开错题本失败: {ex.Message}", ToastType.Error);
+            }
         }
 
         private void OnXPChanged(object? sender, XPChangedEventArgs e)

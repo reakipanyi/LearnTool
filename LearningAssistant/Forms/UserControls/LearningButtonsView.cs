@@ -16,9 +16,14 @@ namespace LearningAssistant.Forms.UserControls
         private Button _buttonExit = null!;
         private Panel separator1;
         private Panel separator2;
+        private Panel separator3;
         private Button _buttonPrevious = null!;
         private Button _buttonNext = null!;
         private Button _buttonEdit = null!;
+        private Button _buttonStats = null!;
+        private Button _buttonChallenge = null!;
+        private Button _buttonAchievement = null!;
+        private Button _buttonWrongBook = null!;
         private readonly Dictionary<Button, Size> _originalButtonSizes = new Dictionary<Button, Size>();
 
         #endregion
@@ -48,6 +53,18 @@ namespace LearningAssistant.Forms.UserControls
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Button ButtonEdit => _buttonEdit;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Button ButtonStats => _buttonStats;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Button ButtonChallenge => _buttonChallenge;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Button ButtonAchievement => _buttonAchievement;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Button ButtonWrongBook => _buttonWrongBook;
 
         #endregion
 
@@ -88,6 +105,26 @@ namespace LearningAssistant.Forms.UserControls
         /// </summary>
         public event EventHandler? ExitClicked;
 
+        /// <summary>
+        /// 学习统计按钮点击事件
+        /// </summary>
+        public event EventHandler? StatsClicked;
+
+        /// <summary>
+        /// 每日挑战按钮点击事件
+        /// </summary>
+        public event EventHandler? ChallengeClicked;
+
+        /// <summary>
+        /// 成就徽章按钮点击事件
+        /// </summary>
+        public event EventHandler? AchievementClicked;
+
+        /// <summary>
+        /// 错题本按钮点击事件
+        /// </summary>
+        public event EventHandler? WrongBookClicked;
+
         #endregion
 
         #region Initialization
@@ -107,6 +144,10 @@ namespace LearningAssistant.Forms.UserControls
             ApplyRoundedStyle(_buttonPrevious, 6);
             ApplyRoundedStyle(_buttonNext, 6);
             ApplyRoundedStyle(_buttonEdit, 6);
+            ApplyRoundedStyle(_buttonStats, 6);
+            ApplyRoundedStyle(_buttonChallenge, 6);
+            ApplyRoundedStyle(_buttonAchievement, 6);
+            ApplyRoundedStyle(_buttonWrongBook, 6);
         }
 
         private void ApplyRoundedStyle(Button button, int radius)
@@ -182,6 +223,11 @@ namespace LearningAssistant.Forms.UserControls
             _buttonFavorite = new Button();
             _buttonEdit = new Button();
             separator2 = new Panel();
+            _buttonStats = new Button();
+            _buttonChallenge = new Button();
+            _buttonAchievement = new Button();
+            _buttonWrongBook = new Button();
+            separator3 = new Panel();
             _buttonExit = new Button();
             _buttonsPanel.SuspendLayout();
             SuspendLayout();
@@ -196,6 +242,11 @@ namespace LearningAssistant.Forms.UserControls
             _buttonsPanel.Controls.Add(_buttonFavorite);
             _buttonsPanel.Controls.Add(_buttonEdit);
             _buttonsPanel.Controls.Add(separator2);
+            _buttonsPanel.Controls.Add(_buttonStats);
+            _buttonsPanel.Controls.Add(_buttonChallenge);
+            _buttonsPanel.Controls.Add(_buttonAchievement);
+            _buttonsPanel.Controls.Add(_buttonWrongBook);
+            _buttonsPanel.Controls.Add(separator3);
             _buttonsPanel.Controls.Add(_buttonExit);
             _buttonsPanel.Dock = DockStyle.Fill;
             _buttonsPanel.Location = new Point(0, 0);
@@ -327,6 +378,80 @@ namespace LearningAssistant.Forms.UserControls
             separator2.Size = new Size(20, 51);
             separator2.TabIndex = 7;
             // 
+            // _buttonStats
+            // 
+            _buttonStats.BackColor = Color.FromArgb(156, 39, 176);
+            _buttonStats.FlatAppearance.BorderSize = 0;
+            _buttonStats.FlatAppearance.MouseDownBackColor = Color.FromArgb(146, 29, 166);
+            _buttonStats.FlatAppearance.MouseOverBackColor = Color.FromArgb(166, 49, 186);
+            _buttonStats.FlatStyle = FlatStyle.Flat;
+            _buttonStats.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            _buttonStats.ForeColor = Color.White;
+            _buttonStats.Margin = new Padding(5, 6, 5, 6);
+            _buttonStats.Name = "_buttonStats";
+            _buttonStats.Size = new Size(86, 51);
+            _buttonStats.TabIndex = 9;
+            _buttonStats.Text = "📊 统计";
+            _buttonStats.UseVisualStyleBackColor = false;
+            _buttonStats.Click += ButtonStats_Click;
+            // 
+            // _buttonChallenge
+            // 
+            _buttonChallenge.BackColor = Color.FromArgb(255, 87, 34);
+            _buttonChallenge.FlatAppearance.BorderSize = 0;
+            _buttonChallenge.FlatAppearance.MouseDownBackColor = Color.FromArgb(245, 77, 24);
+            _buttonChallenge.FlatAppearance.MouseOverBackColor = Color.FromArgb(255, 97, 44);
+            _buttonChallenge.FlatStyle = FlatStyle.Flat;
+            _buttonChallenge.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            _buttonChallenge.ForeColor = Color.White;
+            _buttonChallenge.Margin = new Padding(5, 6, 5, 6);
+            _buttonChallenge.Name = "_buttonChallenge";
+            _buttonChallenge.Size = new Size(86, 51);
+            _buttonChallenge.TabIndex = 10;
+            _buttonChallenge.Text = "🎯 挑战";
+            _buttonChallenge.UseVisualStyleBackColor = false;
+            _buttonChallenge.Click += ButtonChallenge_Click;
+            // 
+            // _buttonAchievement
+            // 
+            _buttonAchievement.BackColor = Color.FromArgb(255, 193, 7);
+            _buttonAchievement.FlatAppearance.BorderSize = 0;
+            _buttonAchievement.FlatAppearance.MouseDownBackColor = Color.FromArgb(245, 183, 0);
+            _buttonAchievement.FlatAppearance.MouseOverBackColor = Color.FromArgb(255, 203, 27);
+            _buttonAchievement.FlatStyle = FlatStyle.Flat;
+            _buttonAchievement.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            _buttonAchievement.ForeColor = Color.White;
+            _buttonAchievement.Margin = new Padding(5, 6, 5, 6);
+            _buttonAchievement.Name = "_buttonAchievement";
+            _buttonAchievement.Size = new Size(86, 51);
+            _buttonAchievement.TabIndex = 11;
+            _buttonAchievement.Text = "🏆 成就";
+            _buttonAchievement.UseVisualStyleBackColor = false;
+            _buttonAchievement.Click += ButtonAchievement_Click;
+            // 
+            // _buttonWrongBook
+            // 
+            _buttonWrongBook.BackColor = Color.FromArgb(244, 67, 54);
+            _buttonWrongBook.FlatAppearance.BorderSize = 0;
+            _buttonWrongBook.FlatAppearance.MouseDownBackColor = Color.FromArgb(234, 57, 44);
+            _buttonWrongBook.FlatAppearance.MouseOverBackColor = Color.FromArgb(254, 77, 64);
+            _buttonWrongBook.FlatStyle = FlatStyle.Flat;
+            _buttonWrongBook.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            _buttonWrongBook.ForeColor = Color.White;
+            _buttonWrongBook.Margin = new Padding(5, 6, 5, 6);
+            _buttonWrongBook.Name = "_buttonWrongBook";
+            _buttonWrongBook.Size = new Size(86, 51);
+            _buttonWrongBook.TabIndex = 12;
+            _buttonWrongBook.Text = "📕 错题";
+            _buttonWrongBook.UseVisualStyleBackColor = false;
+            _buttonWrongBook.Click += ButtonWrongBook_Click;
+            // 
+            // separator3
+            // 
+            separator3.Name = "separator3";
+            separator3.Size = new Size(20, 51);
+            separator3.TabIndex = 13;
+            // 
             // _buttonExit
             // 
             _buttonExit.BackColor = Color.FromArgb(108, 117, 125);
@@ -336,11 +461,10 @@ namespace LearningAssistant.Forms.UserControls
             _buttonExit.FlatStyle = FlatStyle.Flat;
             _buttonExit.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonExit.ForeColor = Color.White;
-            _buttonExit.Location = new Point(679, 12);
             _buttonExit.Margin = new Padding(5, 6, 5, 6);
             _buttonExit.Name = "_buttonExit";
             _buttonExit.Size = new Size(86, 51);
-            _buttonExit.TabIndex = 8;
+            _buttonExit.TabIndex = 14;
             _buttonExit.Text = "🏠 返回";
             _buttonExit.UseVisualStyleBackColor = false;
             _buttonExit.Click += ButtonExit_Click;
@@ -370,6 +494,14 @@ namespace LearningAssistant.Forms.UserControls
 
         private void ButtonExit_Click(object? sender, EventArgs e) => ExitClicked?.Invoke(sender, e);
 
+        private void ButtonStats_Click(object? sender, EventArgs e) => StatsClicked?.Invoke(sender, e);
+
+        private void ButtonChallenge_Click(object? sender, EventArgs e) => ChallengeClicked?.Invoke(sender, e);
+
+        private void ButtonAchievement_Click(object? sender, EventArgs e) => AchievementClicked?.Invoke(sender, e);
+
+        private void ButtonWrongBook_Click(object? sender, EventArgs e) => WrongBookClicked?.Invoke(sender, e);
+
         #endregion
 
         #region Public Methods
@@ -385,6 +517,10 @@ namespace LearningAssistant.Forms.UserControls
             _buttonUnknown.Enabled = enabled;
             _buttonFavorite.Enabled = enabled;
             _buttonEdit.Enabled = enabled;
+            _buttonStats.Enabled = enabled;
+            _buttonChallenge.Enabled = enabled;
+            _buttonAchievement.Enabled = enabled;
+            _buttonWrongBook.Enabled = enabled;
             _buttonExit.Enabled = enabled;
         }
 

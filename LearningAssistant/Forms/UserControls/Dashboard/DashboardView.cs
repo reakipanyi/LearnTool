@@ -137,15 +137,15 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             AddFeatureCard("📖", "PDF阅读", "打开PDF阅读器", Color.FromArgb(34, 197, 94), Color.FromArgb(16, 185, 129));
 
             // 游戏化
-            AddFeatureCard("🎯", "每日挑战", "完成每日任务", Color.FromArgb(236, 72, 153), Color.FromArgb(219, 39, 119));
-            AddFeatureCard("🏆", "成就徽章", "查看成就", Color.FromArgb(255, 193, 7), Color.FromArgb(251, 146, 60));
+            //AddFeatureCard("🎯", "每日挑战", "完成每日任务", Color.FromArgb(236, 72, 153), Color.FromArgb(219, 39, 119));
+            //AddFeatureCard("🏆", "成就徽章", "查看成就", Color.FromArgb(255, 193, 7), Color.FromArgb(251, 146, 60));
 
             // 工具辅助
-            AddFeatureCard("📒", "笔记", "管理学习笔记", Color.FromArgb(156, 39, 176), Color.FromArgb(103, 58, 183));
-            AddFeatureCard("📝", "错题本", "复习错题", Color.FromArgb(249, 115, 22), Color.FromArgb(239, 68, 68));
+            //AddFeatureCard("📒", "笔记", "管理学习笔记", Color.FromArgb(156, 39, 176), Color.FromArgb(103, 58, 183));
+            //AddFeatureCard("📝", "错题本", "复习错题", Color.FromArgb(249, 115, 22), Color.FromArgb(239, 68, 68));
 
             // 数据分析
-            AddFeatureCard("📊", "学习统计", "查看学习数据", Color.FromArgb(14, 165, 233), Color.FromArgb(59, 130, 246));
+            //AddFeatureCard("📊", "学习统计", "查看学习数据", Color.FromArgb(14, 165, 233), Color.FromArgb(59, 130, 246));
             AddFeatureCard("⚙️", "设置", "应用设置", Color.FromArgb(108, 117, 125), Color.FromArgb(75, 85, 99));
 
             InitializeRecommendPanel();

@@ -55,7 +55,15 @@ namespace LearningAssistant.Models.User
         QuizCorrect,
         FavoriteCount,
         NoteCount,
-        SpeedLearning
+        SpeedLearning,
+        /// <summary>
+        /// 深夜时段学习（00:00-05:00）
+        /// </summary>
+        NightStudy,
+        /// <summary>
+        /// 隐藏徽章解锁数量
+        /// </summary>
+        HiddenBadgeCount
     }
 
     public enum BadgeRarity
@@ -75,75 +83,129 @@ namespace LearningAssistant.Models.User
             {
                 new Badge
                 {
-                    Id = "study_legend",
-                    Name = "学习达人",
-                    Description = "连续学习 7 天以上",
+                    Id = "first_blood",
+                    Name = "首战告捷",
+                    Description = "完成第一次学习",
                     Icon = "🏆",
+                    Category = BadgeCategory.Learning,
+                    Requirement = new BadgeRequirement { Type = BadgeType.TotalItemsLearned, TargetValue = 1 }
+                },
+                new Badge
+                {
+                    Id = "streak_3",
+                    Name = "三日坚持",
+                    Description = "连续学习3天",
+                    Icon = "🔥",
+                    Category = BadgeCategory.Consistency,
+                    Requirement = new BadgeRequirement { Type = BadgeType.ConsecutiveDays, TargetValue = 3 }
+                },
+                new Badge
+                {
+                    Id = "streak_7",
+                    Name = "一周达人",
+                    Description = "连续学习7天",
+                    Icon = "⭐",
                     Category = BadgeCategory.Consistency,
                     Requirement = new BadgeRequirement { Type = BadgeType.ConsecutiveDays, TargetValue = 7 }
                 },
                 new Badge
                 {
-                    Id = "perseverance",
-                    Name = "坚持不懈",
-                    Description = "连续学习 30 天以上",
-                    Icon = "💪",
+                    Id = "streak_30",
+                    Name = "月度冠军",
+                    Description = "连续学习30天",
+                    Icon = "👑",
                     Category = BadgeCategory.Consistency,
                     Requirement = new BadgeRequirement { Type = BadgeType.ConsecutiveDays, TargetValue = 30 }
                 },
                 new Badge
                 {
-                    Id = "study_master",
-                    Name = "学习大师",
-                    Description = "累计学习超过 100 小时",
-                    Icon = "🎓",
+                    Id = "learn_100",
+                    Name = "百题斩",
+                    Description = "累计学习100项",
+                    Icon = "💯",
                     Category = BadgeCategory.Learning,
-                    Requirement = new BadgeRequirement { Type = BadgeType.TotalStudyTime, TargetValue = 6000 }
+                    Requirement = new BadgeRequirement { Type = BadgeType.TotalItemsLearned, TargetValue = 100 }
+                },
+                new Badge
+                {
+                    Id = "learn_500",
+                    Name = "五百勇士",
+                    Description = "累计学习500项",
+                    Icon = "⚔️",
+                    Category = BadgeCategory.Learning,
+                    Requirement = new BadgeRequirement { Type = BadgeType.TotalItemsLearned, TargetValue = 500 }
+                },
+                new Badge
+                {
+                    Id = "learn_1000",
+                    Name = "千题大师",
+                    Description = "累计学习1000项",
+                    Icon = "🏅",
+                    Category = BadgeCategory.Mastery,
+                    Requirement = new BadgeRequirement { Type = BadgeType.TotalItemsLearned, TargetValue = 1000 }
+                },
+                new Badge
+                {
+                    Id = "perfect_day",
+                    Name = "完美一天",
+                    Description = "单日学习50项",
+                    Icon = "🌟",
+                    Category = BadgeCategory.Special,
+                    Requirement = new BadgeRequirement { Type = BadgeType.PerfectSession, TargetValue = 50 }
+                },
+                new Badge
+                {
+                    Id = "quiz_master",
+                    Name = "答题高手",
+                    Description = "答题模式答对20题",
+                    Icon = "🎯",
+                    Category = BadgeCategory.Learning,
+                    Requirement = new BadgeRequirement { Type = BadgeType.QuizCorrect, TargetValue = 20 }
+                },
+                new Badge
+                {
+                    Id = "favorite_collector",
+                    Name = "收藏达人",
+                    Description = "收藏20个内容",
+                    Icon = "❤️",
+                    Category = BadgeCategory.Learning,
+                    Requirement = new BadgeRequirement { Type = BadgeType.FavoriteCount, TargetValue = 20 }
+                },
+                new Badge
+                {
+                    Id = "note_taker",
+                    Name = "笔记达人",
+                    Description = "记录10条笔记",
+                    Icon = "📝",
+                    Category = BadgeCategory.Learning,
+                    Requirement = new BadgeRequirement { Type = BadgeType.NoteCount, TargetValue = 10 }
+                },
+                new Badge
+                {
+                    Id = "speed_learner",
+                    Name = "神速学习",
+                    Description = "5分钟内完成10项",
+                    Icon = "⚡",
+                    Category = BadgeCategory.Special,
+                    Requirement = new BadgeRequirement { Type = BadgeType.SpeedLearning, TargetValue = 10 }
                 },
                 new Badge
                 {
                     Id = "time_investor",
                     Name = "时间投资者",
-                    Description = "累计学习超过 10 小时",
+                    Description = "累计学习超过10小时",
                     Icon = "⏰",
                     Category = BadgeCategory.Learning,
                     Requirement = new BadgeRequirement { Type = BadgeType.TotalStudyTime, TargetValue = 600 }
                 },
                 new Badge
                 {
-                    Id = "perfect_student",
-                    Name = "完美学生",
-                    Description = "完成一次完美的学习（全部答对）",
-                    Icon = "🌟",
-                    Category = BadgeCategory.Special,
-                    Requirement = new BadgeRequirement { Type = BadgeType.PerfectSession, TargetValue = 1 }
-                },
-                new Badge
-                {
-                    Id = "knowledge_seeker",
-                    Name = "知识探索者",
-                    Description = "累计学习超过 500 个项目",
-                    Icon = "📚",
-                    Category = BadgeCategory.Learning,
-                    Requirement = new BadgeRequirement { Type = BadgeType.TotalItemsLearned, TargetValue = 500 }
-                },
-                new Badge
-                {
-                    Id = "daily_learner",
-                    Name = "每日学习者",
-                    Description = "连续学习 3 天以上",
-                    Icon = "📖",
-                    Category = BadgeCategory.Consistency,
-                    Requirement = new BadgeRequirement { Type = BadgeType.ConsecutiveDays, TargetValue = 3 }
-                },
-                new Badge
-                {
-                    Id = "week_warrior",
-                    Name = "周冠军",
-                    Description = "连续学习 7 天",
-                    Icon = "🏅",
-                    Category = BadgeCategory.Consistency,
-                    Requirement = new BadgeRequirement { Type = BadgeType.ConsecutiveDays, TargetValue = 7 }
+                    Id = "time_master",
+                    Name = "时间大师",
+                    Description = "累计学习超过100小时",
+                    Icon = "🎓",
+                    Category = BadgeCategory.Mastery,
+                    Requirement = new BadgeRequirement { Type = BadgeType.TotalStudyTime, TargetValue = 6000 }
                 },
                 new Badge
                 {
@@ -153,7 +215,7 @@ namespace LearningAssistant.Models.User
                     Icon = "🌙",
                     Category = BadgeCategory.Special,
                     IsHidden = true,
-                    Requirement = new BadgeRequirement { Type = BadgeType.ConsecutiveDays, TargetValue = 1 }
+                    Requirement = new BadgeRequirement { Type = BadgeType.NightStudy, TargetValue = 1 }
                 },
                 new Badge
                 {
@@ -163,7 +225,7 @@ namespace LearningAssistant.Models.User
                     Icon = "🥚",
                     Category = BadgeCategory.Special,
                     IsHidden = true,
-                    Requirement = new BadgeRequirement { Type = BadgeType.PerfectSession, TargetValue = 1 }
+                    Requirement = new BadgeRequirement { Type = BadgeType.HiddenBadgeCount, TargetValue = 1 }
                 }
             };
         }
@@ -176,6 +238,8 @@ namespace LearningAssistant.Models.User
                 BadgeType.TotalStudyTime => profile.TotalStudyTimeMinutes >= badge.Requirement.TargetValue,
                 BadgeType.TotalItemsLearned => profile.LearningProgress.ComputedTotalItemsStudied >= badge.Requirement.TargetValue,
                 BadgeType.PerfectSession => profile.LearningProgress.PerfectSessions >= badge.Requirement.TargetValue,
+                BadgeType.QuizCorrect => profile.LearningProgress.CategoryProgresses.Values.Sum(c => c.CorrectCount) >= badge.Requirement.TargetValue,
+                // 以下类型需通过 BadgeManager.CheckUnlock 进行运行时检测，静态方法无法验证
                 _ => false
             };
         }

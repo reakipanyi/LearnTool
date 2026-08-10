@@ -206,11 +206,11 @@ namespace LearningAssistant.Forms
                 new() { Key = "pdf", Icon = "📖", Text = "PDF阅读", Order = 2, Group = "main" },
                 //new() { Key = "mentor", Icon = "🤖", Text = "AI导师", Order = 3, Group = "main" },
                 //new() { Key = "flashcard", Icon = "🧠", Text = "闪卡复习", Order = 4, Group = "main" },
-                new() { Key = "statistics", Icon = "📊", Text = "学习统计", Order = 5, Group = "main" },
-                new() { Key = "challenges", Icon = "🎯", Text = "每日挑战", Order = 6, Group = "main" },
-                new() { Key = "achievements", Icon = "🏆", Text = "成就徽章", Order = 7, Group = "main" },
+                //new() { Key = "statistics", Icon = "📊", Text = "学习统计", Order = 5, Group = "main" },
+                //new() { Key = "challenges", Icon = "🎯", Text = "每日挑战", Order = 6, Group = "main" },
+                //new() { Key = "achievements", Icon = "🏆", Text = "成就徽章", Order = 7, Group = "main" },
                 //new() { Key = "notes", Icon = "📝", Text = "笔记", Order = 8, Group = "tools" },
-                new() { Key = "wrongbook", Icon = "📕", Text = "错题本", Order = 9, Group = "tools" },
+                //new() { Key = "wrongbook", Icon = "📕", Text = "错题本", Order = 9, Group = "tools" },
                 //new() { Key = "graph", Icon = "🌐", Text = "知识图谱", Order = 10, Group = "tools" },
                 new() { Key = "browser", Icon = "🌐", Text = "浏览器", Order = 11, Group = "tools" },
                 new() { Key = "editor", Icon = "✏️", Text = "模板编辑", Order = 12, Group = "tools" },
@@ -1248,40 +1248,7 @@ namespace LearningAssistant.Forms
             _windowManager.OpenAIWebViewWindow();
         }
 
-        private void ButtonAIWebView_Click(object? sender, EventArgs e)
-        {
-            ShowMessageLocal("AI浏览功能已移除");
-        }
 
-        private void OnBaiduNetdiskAuthCompleted(bool success)
-        {
-            ShowMessageLocal("云存储功能已移除");
-        }
-
-        private void ShowBaiduNetdiskFiles()
-        {
-            ShowMessageLocal("云存储功能已移除");
-        }
-
-        private void ToolStripMenuItemNewUser_Click(object? sender, EventArgs e)
-        {
-            NewUserClicked?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void ToolStripMenuItemSettings_Click(object? sender, EventArgs e)
-        {
-            OpenSettingsClicked?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void ToolStripMenuItemExit_Click(object? sender, EventArgs e)
-        {
-            Application.Exit();
-        }
-
-        private void TabControl1_SelectedIndexChanged(object? sender, EventArgs e)
-        {
-            TabChanged?.Invoke(this, EventArgs.Empty);
-        }
 
         #endregion
 
