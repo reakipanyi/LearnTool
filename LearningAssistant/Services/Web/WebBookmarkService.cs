@@ -1,5 +1,4 @@
 using LearningAssistant.Common;
-using LearningAssistant.Services.Learning;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using System.Collections.Concurrent;
@@ -52,16 +51,6 @@ namespace LearningAssistant.Services.Web
         void LoadFromFile();
 
         /// <summary>
-        /// 当前用户ID
-        /// </summary>
-        string CurrentUserId { get; }
-
-        /// <summary>
-        /// 切换用户并重新加载书签
-        /// </summary>
-        void SwitchUser(string userId);
-
-        /// <summary>
         /// 记录书签访问（增加访问次数并更新最后访问时间）
         /// </summary>
         void IncrementVisit(string url);
@@ -94,33 +83,13 @@ namespace LearningAssistant.Services.Web
     public class WebBookmarkService : IWebBookmarkService
     {
         private readonly ILogger<WebBookmarkService>? _logger;
-        private readonly IUserSessionService? _userSessionService;
         private ConcurrentBag<WebBookmarkCategory> _categories = new();
-        private string _currentUserId = string.Empty;
         private readonly object _lock = new();
 
-        public string CurrentUserId => _currentUserId;
-
-        public WebBookmarkService(ILogger<WebBookmarkService>? logger = null, IUserSessionService? userSessionService = null)
+        public WebBookmarkService(ILogger<WebBookmarkService>? logger = null)
         {
             _logger = logger;
-            _userSessionService = userSessionService;
-
-            _currentUserId = _userSessionService?.CurrentUserId ?? Constants.DefaultUserId;
-            AppPaths.SetCurrentUserId(_currentUserId);
             LoadFromFile();
-        }
-
-        public void SwitchUser(string userId)
-        {
-            lock (_lock)
-            {
-                _currentUserId = string.IsNullOrWhiteSpace(userId) ? Constants.DefaultUserId : userId;
-                AppPaths.SetCurrentUserId(_currentUserId);
-                _categories = new ConcurrentBag<WebBookmarkCategory>();
-                LoadFromFile();
-                _logger?.LogInformation("书签服务用户已切换: {UserId}", _currentUserId);
-            }
         }
 
         public List<WebBookmarkCategory> GetAllCategories()
@@ -240,10 +209,9 @@ namespace LearningAssistant.Services.Web
         {
             try
             {
-                var filePath = AppPaths.UserBookmarksPath;
+                var filePath = AppPaths.WebBookmarksPath;
                 var data = new WebBookmarkData
                 {
-                    UserId = _currentUserId,
                     Categories = _categories.ToList()
                 };
                 var json = JsonConvert.SerializeObject(data, Formatting.Indented);
@@ -267,7 +235,7 @@ namespace LearningAssistant.Services.Web
         {
             try
             {
-                var filePath = AppPaths.UserBookmarksPath;
+                var filePath = AppPaths.WebBookmarksPath;
                 if (File.Exists(filePath))
                 {
                     var json = File.ReadAllText(filePath);
@@ -279,7 +247,7 @@ namespace LearningAssistant.Services.Web
                         {
                             _categories.Add(category);
                         }
-                        _logger?.LogInformation("从文件加载书签: 分类数: {Count}, 用户: {UserId}", data.Categories.Count, data.UserId);
+                        _logger?.LogInformation("从文件加载书签: 分类数: {Count}", data.Categories.Count);
                         return;
                     }
                 }
@@ -290,7 +258,7 @@ namespace LearningAssistant.Services.Web
                     return;
                 }
 
-                _logger?.LogInformation("书签文件不存在，加载默认数据，用户: {UserId}", _currentUserId);
+                _logger?.LogInformation("书签文件不存在，加载默认数据");
                 LoadDefaultBookmarks();
             }
             catch (Exception ex)
@@ -302,19 +270,17 @@ namespace LearningAssistant.Services.Web
 
         private void MigrateFromOldLocations()
         {
+            // 迁移来源：按用户存储的旧位置 -> 全局共享位置
             var oldPaths = new[]
             {
                 Path.Combine(AppPaths.DataRoot, "WebBookmarks.json"),
                 AppPaths.UserBookmarksPath,
-                AppPaths.WebBookmarksPath,
                 Path.Combine(AppPaths.DataDir, "bookmarks", "WebBookmarks.json")
             };
 
             foreach (var oldPath in oldPaths)
             {
                 if (!File.Exists(oldPath)) continue;
-                // 避免从当前用户自己的路径再迁移一次
-                if (string.Equals(oldPath, AppPaths.UserBookmarksPath, StringComparison.OrdinalIgnoreCase)) continue;
 
                 try
                 {
@@ -328,7 +294,7 @@ namespace LearningAssistant.Services.Web
                             _categories.Add(category);
                         }
                         SaveToFile();
-                        _logger?.LogInformation("书签数据已从旧位置迁移: {OldPath} -> {NewPath}", oldPath, AppPaths.UserBookmarksPath);
+                        _logger?.LogInformation("书签数据已从旧位置迁移: {OldPath} -> {NewPath}", oldPath, AppPaths.WebBookmarksPath);
                         try
                         {
                             File.Delete(oldPath);

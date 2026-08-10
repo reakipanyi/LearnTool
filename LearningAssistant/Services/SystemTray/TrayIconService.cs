@@ -266,6 +266,10 @@ namespace LearningAssistant.Services.SystemTray
             {
                 if (_notifyIcon != null)
                 {
+                    // 主窗口的图标可能已被释放，先解绑图标引用，避免后续
+                    // Visible/Dispose 访问已释放的图标句柄（UpdateIcon 仅在
+                    // icon != null 时才访问 icon.Handle）
+                    _notifyIcon.Icon = null;
                     _notifyIcon.Visible = false;
                     _notifyIcon.Dispose();
                     _notifyIcon = null;

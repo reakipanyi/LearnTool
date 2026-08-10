@@ -1,0 +1,740 @@
+{
+  "subjects": {
+    "语文": {
+      "name": "语文",
+      "icon": "📚",
+      "categories": ["识字", "成语", "短语", "诗词", "语文综合"],
+      "templates": {
+        "识字": {
+          "name": "识字",
+          "fields": ["Character", "Pinyin", "Meaning", "StrokeCount", "Radical", "StrokeOrder", "Words", "SimilarCharacters", "Synonyms", "Antonyms", "CommonMistakes", "ExampleSentence", "CharacterLevel", "Structure", "CharacterFormation", "OtherPronunciations"],
+          "fieldNames": {
+            "Character": "汉字",
+            "Pinyin": "拼音",
+            "Meaning": "释义",
+            "StrokeCount": "笔画数",
+            "Radical": "部首",
+            "StrokeOrder": "笔顺",
+            "Words": "组词",
+            "SimilarCharacters": "形近字",
+            "Synonyms": "近义词",
+            "Antonyms": "反义词",
+            "CommonMistakes": "易错点",
+            "ExampleSentence": "例句",
+            "CharacterLevel": "字级",
+            "Structure": "结构",
+            "CharacterFormation": "造字法",
+            "OtherPronunciations": "其他读音"
+          },
+          "sample": {
+            "Character": "学",
+            "Pinyin": "xué",
+            "Meaning": "学习；模仿；学科",
+            "StrokeCount": 8,
+            "Radical": "子",
+            "StrokeOrder": "点 横 横 竖 撇 捺",
+            "Words": "学习、学校、学生",
+            "SimilarCharacters": "子、字",
+            "Synonyms": "学、习",
+            "Antonyms": "忘",
+            "CommonMistakes": "注意第三笔是竖不是撇",
+            "ExampleSentence": "我们要好好学习。",
+            "CharacterLevel": "一级",
+            "Structure": "上下结构",
+            "CharacterFormation": "会意",
+            "OtherPronunciations": ""
+          }
+        },
+        "成语": {
+          "name": "成语",
+          "fields": ["Idiom", "Pinyin", "Meaning", "Origin", "Example"],
+          "fieldNames": {
+            "Idiom": "成语",
+            "Pinyin": "拼音",
+            "Meaning": "释义",
+            "Origin": "出处",
+            "Example": "例句"
+          },
+          "sample": {
+            "Idiom": "学以致用",
+            "Pinyin": "xué yǐ zhì yòng",
+            "Meaning": "为了实际应用而学习",
+            "Origin": "《论语》",
+            "Example": "我们要学以致用，把学到知识用到实际生活中。"
+          }
+        },
+        "短语": {
+          "name": "短语",
+          "fields": ["Phrase", "Meaning", "Example"],
+          "fieldNames": {
+            "Phrase": "短语",
+            "Meaning": "含义",
+            "Example": "例句"
+          },
+          "sample": {
+            "Phrase": "学习方法",
+            "Meaning": "关于学习的技巧和方式",
+            "Example": "掌握正确的学习方法可以提高学习效率。"
+          }
+        },
+        "诗词": {
+          "name": "诗词",
+          "fields": ["Title", "Author", "Dynasty", "Verses", "Annotation", "Translation", "Appreciation", "CreationBackground", "FamousLines", "RhetoricalDevices", "Theme", "AuthorIntro", "PoemType", "RelatedPoems", "DifficultyLevel"],
+          "fieldNames": {
+            "Title": "标题",
+            "Author": "作者",
+            "Dynasty": "朝代",
+            "Verses": "诗句",
+            "Annotation": "注释",
+            "Translation": "译文",
+            "Appreciation": "赏析",
+            "CreationBackground": "创作背景",
+            "FamousLines": "名句",
+            "RhetoricalDevices": "修辞手法",
+            "Theme": "主题思想",
+            "AuthorIntro": "作者简介",
+            "PoemType": "诗歌类型",
+            "RelatedPoems": "相关诗词",
+            "DifficultyLevel": "难度等级"
+          },
+          "sample": {
+            "Title": "静夜思",
+            "Author": "李白",
+            "Dynasty": "唐",
+            "Verses": "床前明月光，疑是地上霜。举头望明月，低头思故乡。",
+            "Annotation": "这首诗表达了诗人对故乡的思念之情。",
+            "Translation": "月光洒在床前，让人误以为是霜。抬头望着天上的月亮，低头思念起故乡。",
+            "Appreciation": "诗人运用比喻手法，将月光比作霜，形象地描绘了夜景，表达了深深的思乡之情。",
+            "CreationBackground": "唐玄宗开元十四年，李白在扬州旅舍所作。",
+            "FamousLines": "举头望明月，低头思故乡",
+            "RhetoricalDevices": "比喻、对偶",
+            "Theme": "思乡",
+            "AuthorIntro": "李白（701-762），唐代伟大的浪漫主义诗人。",
+            "PoemType": "五言绝句",
+            "RelatedPoems": "《月下独酌》《把酒问月》",
+            "DifficultyLevel": 1
+          }
+        },
+        "语文综合": {
+          "name": "语文综合",
+          "fields": ["Content", "Meaning", "Example", "Questions"],
+          "fieldNames": {
+            "Content": "内容",
+            "Meaning": "含义",
+            "Example": "例句",
+            "Questions": "相关问题"
+          },
+          "sample": {
+            "Content": "学习使人进步",
+            "Meaning": "通过学习可以获得知识和技能，从而不断进步",
+            "Example": "只有不断学习，才能不断进步。",
+            "Questions": "为什么说学习使人进步？"
+          }
+        }
+      }
+    },
+    "英语": {
+      "name": "英语",
+      "icon": "🇬🇧",
+      "categories": ["英语单词", "英语短语", "英语句子", "英语综合"],
+      "templates": {
+        "英语单词": {
+          "name": "英语单词",
+          "fields": ["Word", "Phonetic", "PartOfSpeech", "SyllableBreakdown", "Meaning", "Example", "Synonyms", "Antonyms", "WordForms", "WordRootAffix", "Collocations", "Phrases", "SynonymAnalysis", "UkPhonetic", "UsPhonetic", "VocabularyLevel", "Etymology", "ConfusableWords"],
+          "fieldNames": {
+            "Word": "单词",
+            "Phonetic": "音标",
+            "PartOfSpeech": "词性",
+            "SyllableBreakdown": "音节拼读",
+            "Meaning": "释义",
+            "Example": "例句",
+            "Synonyms": "近义词",
+            "Antonyms": "反义词",
+            "WordForms": "词形变化",
+            "WordRootAffix": "词根词缀",
+            "Collocations": "常见搭配",
+            "Phrases": "常用短语",
+            "SynonymAnalysis": "同义词辨析",
+            "UkPhonetic": "英式音标",
+            "UsPhonetic": "美式音标",
+            "VocabularyLevel": "词汇等级",
+            "Etymology": "词源",
+            "ConfusableWords": "易混词"
+          },
+          "sample": {
+            "Word": "learn",
+            "Phonetic": "/lɜːrn/",
+            "PartOfSpeech": "v.",
+            "SyllableBreakdown": "l-ea-rn",
+            "Meaning": "学习",
+            "Example": "I learn English every day.",
+            "Synonyms": "study, acquire",
+            "Antonyms": "forget, ignore",
+            "WordForms": "learned/learnt, learning, learns",
+            "WordRootAffix": "learn (学习)",
+            "Collocations": "learn from, learn by heart",
+            "Phrases": "learn the ropes, learn one's lesson",
+            "SynonymAnalysis": "learn侧重于通过学习获得知识或技能，study更强调深入研究",
+            "UkPhonetic": "/lɜːn/",
+            "UsPhonetic": "/lɜːrn/",
+            "VocabularyLevel": "CET4",
+            "Etymology": "古英语leornian",
+            "ConfusableWords": "learn/learn"
+          }
+        },
+        "英语短语": {
+          "name": "英语短语",
+          "fields": ["Phrase", "Meaning", "Example"],
+          "fieldNames": {
+            "Phrase": "短语",
+            "Meaning": "含义",
+            "Example": "例句"
+          },
+          "sample": {
+            "Phrase": "learn by heart",
+            "Meaning": "背诵",
+            "Example": "Students should learn the new words by heart."
+          }
+        },
+        "英语句子": {
+          "name": "英语句子",
+          "fields": ["Sentence", "Translation", "Grammar", "Analysis"],
+          "fieldNames": {
+            "Sentence": "句子",
+            "Translation": "翻译",
+            "Grammar": "语法",
+            "Analysis": "分析"
+          },
+          "sample": {
+            "Sentence": "The more you learn, the more you know.",
+            "Translation": "学得越多，知道得越多。",
+            "Grammar": "the more...the more... 越...越... 结构",
+            "Analysis": "这是一个比较状语从句，表示两者之间的正比关系。"
+          }
+        },
+        "英语综合": {
+          "name": "英语综合",
+          "fields": ["Content", "Translation", "Vocabulary", "Grammar", "Questions"],
+          "fieldNames": {
+            "Content": "内容",
+            "Translation": "翻译",
+            "Vocabulary": "词汇",
+            "Grammar": "语法",
+            "Questions": "问题"
+          },
+          "sample": {
+            "Content": "Reading is important for everyone.",
+            "Translation": "阅读对每个人都很重要。",
+            "Vocabulary": "reading(n.)阅读；everyone每个人",
+            "Grammar": "动名词作主语",
+            "Questions": "为什么说阅读对每个人都很重要？"
+          }
+        }
+      }
+    },
+    "数学": {
+      "name": "数学",
+      "icon": "🔢",
+      "categories": ["公式定理", "例题解析", "概念定义", "数学综合"],
+      "templates": {
+        "公式定理": {
+          "name": "公式定理",
+          "fields": ["Name", "Formula", "Description", "Application", "Example"],
+          "fieldNames": {
+            "Name": "名称",
+            "Formula": "公式",
+            "Description": "描述",
+            "Application": "应用场景",
+            "Example": "示例"
+          },
+          "sample": {
+            "Name": "勾股定理",
+            "Formula": "a² + b² = c²",
+            "Description": "在直角三角形中，两条直角边的平方和等于斜边的平方",
+            "Application": "计算直角三角形的边长",
+            "Example": "已知直角边3和4，斜边=√(9+16)=5"
+          }
+        },
+        "例题解析": {
+          "name": "例题解析",
+          "fields": ["Question", "Analysis", "Solution", "Answer", "Note"],
+          "fieldNames": {
+            "Question": "题目",
+            "Analysis": "分析",
+            "Solution": "解答",
+            "Answer": "答案",
+            "Note": "备注"
+          },
+          "sample": {
+            "Question": "求解方程 x² - 5x + 6 = 0",
+            "Analysis": "这是一个一元二次方程，可以使用因式分解或求根公式",
+            "Solution": "使用因式分解：(x-2)(x-3)=0，所以 x=2 或 x=3",
+            "Answer": "x=2 或 x=3",
+            "Note": "一元二次方程标准解法"
+          }
+        },
+        "概念定义": {
+          "name": "概念定义",
+          "fields": ["Concept", "Definition", "Properties", "Example", "Note"],
+          "fieldNames": {
+            "Concept": "概念",
+            "Definition": "定义",
+            "Properties": "性质",
+            "Example": "例子",
+            "Note": "注意"
+          },
+          "sample": {
+            "Concept": "函数",
+            "Definition": "两个变量之间的对应关系，对于每一个自变量x，有且只有一个因变量y与之对应",
+            "Properties": "定义域、值域、单调性、奇偶性",
+            "Example": "y = 2x + 1 是一次函数",
+            "Note": "函数的三要素：定义域、对应法则、值域"
+          }
+        },
+        "数学综合": {
+          "name": "数学综合",
+          "fields": ["Content", "Topic", "KeyPoints", "Example", "Exercise"],
+          "fieldNames": {
+            "Content": "内容",
+            "Topic": "主题",
+            "KeyPoints": "要点",
+            "Example": "例题",
+            "Exercise": "练习"
+          },
+          "sample": {
+            "Content": "三角形面积",
+            "Topic": "几何面积计算",
+            "KeyPoints": "底×高÷2",
+            "Example": "底=6，高=4，面积=12",
+            "Exercise": "计算底为8，高为5的三角形面积"
+          }
+        }
+      }
+    },
+    "物理": {
+      "name": "物理",
+      "icon": "⚡",
+      "categories": ["物理定律", "实验原理", "公式推导", "物理综合"],
+      "templates": {
+        "物理定律": {
+          "name": "物理定律",
+          "fields": ["LawName", "Content", "Formula", "Condition", "Application"],
+          "fieldNames": {
+            "LawName": "定律名称",
+            "Content": "内容",
+            "Formula": "公式",
+            "Condition": "适用条件",
+            "Application": "应用"
+          },
+          "sample": {
+            "LawName": "牛顿第一定律",
+            "Content": "一切物体在没有受到外力作用时，总保持静止状态或匀速直线运动状态",
+            "Formula": "无",
+            "Condition": "不受外力或合外力为零",
+            "Application": "解释惯性现象，理解物体运动状态改变的原因"
+          }
+        },
+        "实验原理": {
+          "name": "实验原理",
+          "fields": ["Experiment", "Principle", "Steps", "Result", "Note"],
+          "fieldNames": {
+            "Experiment": "实验名称",
+            "Principle": "实验原理",
+            "Steps": "实验步骤",
+            "Result": "实验结果",
+            "Note": "注意事项"
+          },
+          "sample": {
+            "Experiment": "测量物质的密度",
+            "Principle": "密度=质量÷体积",
+            "Steps": "1.用天平测量质量 2.用量筒测量体积 3.计算密度",
+            "Result": "得到物质的密度值",
+            "Note": "注意测量误差"
+          }
+        },
+        "公式推导": {
+          "name": "公式推导",
+          "fields": ["Formula", "Derivation", "Conditions", "Example"],
+          "fieldNames": {
+            "Formula": "公式",
+            "Derivation": "推导过程",
+            "Conditions": "适用条件",
+            "Example": "例题"
+          },
+          "sample": {
+            "Formula": "v = s / t",
+            "Derivation": "速度定义为单位时间内通过的路程",
+            "Conditions": "匀速直线运动",
+            "Example": "汽车2小时行驶120km，速度=60km/h"
+          }
+        },
+        "物理综合": {
+          "name": "物理综合",
+          "fields": ["Content", "Concept", "Formula", "Application", "Question"],
+          "fieldNames": {
+            "Content": "内容",
+            "Concept": "概念",
+            "Formula": "公式",
+            "Application": "应用",
+            "Question": "问题"
+          },
+          "sample": {
+            "Content": "机械能守恒",
+            "Concept": "在只有重力或弹力做功的情况下，机械能的总量保持不变",
+            "Formula": "E1 = E2，即 Ek1 + Ep1 = Ek2 + Ep2",
+            "Application": "分析自由落体、弹簧振子等运动",
+            "Question": "为什么物体从高处落下速度会增加？"
+          }
+        }
+      }
+    },
+    "化学": {
+      "name": "化学",
+      "icon": "🧪",
+      "categories": ["化学方程式", "元素性质", "实验操作", "化学综合"],
+      "templates": {
+        "化学方程式": {
+          "name": "化学方程式",
+          "fields": ["Equation", "Type", "Condition", "Products", "Application"],
+          "fieldNames": {
+            "Equation": "方程式",
+            "Type": "反应类型",
+            "Condition": "反应条件",
+            "Products": "生成物",
+            "Application": "应用"
+          },
+          "sample": {
+            "Equation": "2H₂ + O₂ = 2H₂O",
+            "Type": "化合反应",
+            "Condition": "点燃",
+            "Products": "水",
+            "Application": "氢气燃烧提供能量"
+          }
+        },
+        "元素性质": {
+          "name": "元素性质",
+          "fields": ["Element", "Symbol", "AtomicNumber", "Properties", "Uses"],
+          "fieldNames": {
+            "Element": "元素",
+            "Symbol": "符号",
+            "AtomicNumber": "原子序数",
+            "Properties": "性质",
+            "Uses": "用途"
+          },
+          "sample": {
+            "Element": "氢",
+            "Symbol": "H",
+            "AtomicNumber": 1,
+            "Properties": "最轻的元素，可燃性，还原性",
+            "Uses": "火箭燃料，合成氨"
+          }
+        },
+        "实验操作": {
+          "name": "实验操作",
+          "fields": ["Experiment", "Steps", "Phenomenon", "Principle", "Note"],
+          "fieldNames": {
+            "Experiment": "实验名称",
+            "Steps": "操作步骤",
+            "Phenomenon": "实验现象",
+            "Principle": "反应原理",
+            "Note": "注意事项"
+          },
+          "sample": {
+            "Experiment": "氧气的实验室制取",
+            "Steps": "1.检查装置气密性 2.装药品 3.加热 4.收集 5.验满",
+            "Phenomenon": "有气泡产生，带火星的木条复燃",
+            "Principle": "2KMnO₄ = K₂MnO₄ + MnO₂ + O₂↑",
+            "Note": "用排水法或向上排空气法收集"
+          }
+        },
+        "化学综合": {
+          "name": "化学综合",
+          "fields": ["Content", "Topic", "KeyPoints", "Example", "Question"],
+          "fieldNames": {
+            "Content": "内容",
+            "Topic": "主题",
+            "KeyPoints": "要点",
+            "Example": "例子",
+            "Question": "思考题"
+          },
+          "sample": {
+            "Content": "质量守恒定律",
+            "Topic": "化学反应规律",
+            "KeyPoints": "参加反应的各物质质量总和等于反应后生成的各物质质量总和",
+            "Example": "2g氢气和16g氧气反应生成18g水",
+            "Question": "为什么化学反应前后质量守恒？"
+          }
+        }
+      }
+    },
+    "历史": {
+      "name": "历史",
+      "icon": "📜",
+      "categories": ["历史事件", "人物传记", "年代记忆", "历史综合"],
+      "templates": {
+        "历史事件": {
+          "name": "历史事件",
+          "fields": ["Event", "Date", "Location", "Significance", "Details"],
+          "fieldNames": {
+            "Event": "事件",
+            "Date": "时间",
+            "Location": "地点",
+            "Significance": "意义",
+            "Details": "详情"
+          },
+          "sample": {
+            "Event": "辛亥革命",
+            "Date": "1911年",
+            "Location": "武昌",
+            "Significance": "推翻了两千多年的封建君主专制制度",
+            "Details": "建立了中华民国，传播了民主共和理念"
+          }
+        },
+        "人物传记": {
+          "name": "人物传记",
+          "fields": ["Name", "Birth", "Death", "Achievement", "Significance"],
+          "fieldNames": {
+            "Name": "人物",
+            "Birth": "出生年",
+            "Death": "逝世年",
+            "Achievement": "主要成就",
+            "Significance": "历史地位"
+          },
+          "sample": {
+            "Name": "秦始皇",
+            "Birth": "公元前259年",
+            "Death": "公元前210年",
+            "Achievement": "统一六国，建立秦朝，实行郡县制",
+            "Significance": "中国历史上第一个皇帝"
+          }
+        },
+        "年代记忆": {
+          "name": "年代记忆",
+          "fields": ["Period", "Event", "KeyPoints", "Summary"],
+          "fieldNames": {
+            "Period": "时期",
+            "Event": "重大事件",
+            "KeyPoints": "关键要点",
+            "Summary": "总结"
+          },
+          "sample": {
+            "Period": "1840-1842年",
+            "Event": "鸦片战争",
+            "KeyPoints": "中国近代史的开端，不平等条约的签订",
+            "Summary": "中国开始沦为半殖民地半封建社会"
+          }
+        },
+        "历史综合": {
+          "name": "历史综合",
+          "fields": ["Content", "Topic", "KeyEvents", "Impact", "Question"],
+          "fieldNames": {
+            "Content": "内容",
+            "Topic": "主题",
+            "KeyEvents": "关键事件",
+            "Impact": "影响",
+            "Question": "思考题"
+          },
+          "sample": {
+            "Content": "改革开放",
+            "Topic": "中国现代史",
+            "KeyEvents": "1978年十一届三中全会，设立经济特区",
+            "Impact": "中国经济的快速发展",
+            "Question": "改革开放带来了哪些变化？"
+          }
+        }
+      }
+    },
+    "地理": {
+      "name": "地理",
+      "icon": "🌍",
+      "categories": ["地理知识", "地图解读", "气候类型", "地理综合"],
+      "templates": {
+        "地理知识": {
+          "name": "地理知识",
+          "fields": ["Topic", "Location", "Features", "Climate", "Importance"],
+          "fieldNames": {
+            "Topic": "主题",
+            "Location": "位置",
+            "Features": "特点",
+            "Climate": "气候",
+            "Importance": "重要性"
+          },
+          "sample": {
+            "Topic": "长江",
+            "Location": "中国中部和东部",
+            "Features": "中国最长河流，世界第三长河",
+            "Climate": "亚热带季风气候",
+            "Importance": "水运、灌溉、发电"
+          }
+        },
+        "地图解读": {
+          "name": "地图解读",
+          "fields": ["MapType", "Content", "Legend", "Location", "Note"],
+          "fieldNames": {
+            "MapType": "地图类型",
+            "Content": "内容",
+            "Legend": "图例",
+            "Location": "位置",
+            "Note": "备注"
+          },
+          "sample": {
+            "MapType": "中国地形图",
+            "Content": "展示中国的地形分布",
+            "Legend": "绿色低海拔，棕色高海拔",
+            "Location": "亚洲东部，太平洋西岸",
+            "Note": "西高东低，呈三级阶梯状"
+          }
+        },
+        "气候类型": {
+          "name": "气候类型",
+          "fields": ["Climate", "Distribution", "Features", "Vegetation", "Note"],
+          "fieldNames": {
+            "Climate": "气候类型",
+            "Distribution": "分布地区",
+            "Features": "气候特点",
+            "Vegetation": "植被类型",
+            "Note": "备注"
+          },
+          "sample": {
+            "Climate": "亚热带季风气候",
+            "Distribution": "秦岭-淮河以南",
+            "Features": "夏季高温多雨，冬季温和少雨",
+            "Vegetation": "亚热带常绿阔叶林",
+            "Note": "最适合人类居住的气候类型之一"
+          }
+        },
+        "地理综合": {
+          "name": "地理综合",
+          "fields": ["Content", "Topic", "KeyPoints", "Example", "Question"],
+          "fieldNames": {
+            "Content": "内容",
+            "Topic": "主题",
+            "KeyPoints": "要点",
+            "Example": "例子",
+            "Question": "问题"
+          },
+          "sample": {
+            "Content": "板块构造",
+            "Topic": "地球结构",
+            "KeyPoints": "六大板块，板块运动，地震带",
+            "Example": "喜马拉雅山是亚欧板块和印度洋板块碰撞形成",
+            "Question": "为什么日本经常发生地震？"
+          }
+        }
+      }
+    },
+    "生物": {
+      "name": "生物",
+      "icon": "🧬",
+      "categories": ["生物概念", "实验方法", "生命现象", "生物综合"],
+      "templates": {
+        "生物概念": {
+          "name": "生物概念",
+          "fields": ["Concept", "Definition", "Example", "Function", "Relation"],
+          "fieldNames": {
+            "Concept": "概念",
+            "Definition": "定义",
+            "Example": "例子",
+            "Function": "功能",
+            "Relation": "关系"
+          },
+          "sample": {
+            "Concept": "细胞",
+            "Definition": "生命体结构和功能的基本单位",
+            "Example": "红细胞、神经细胞、植物细胞",
+            "Function": "进行生命活动",
+            "Relation": "构成组织、器官、系统"
+          }
+        },
+        "实验方法": {
+          "name": "实验方法",
+          "fields": ["Experiment", "Method", "Steps", "Observation", "Conclusion"],
+          "fieldNames": {
+            "Experiment": "实验名称",
+            "Method": "方法",
+            "Steps": "步骤",
+            "Observation": "观察",
+            "Conclusion": "结论"
+          },
+          "sample": {
+            "Experiment": "观察洋葱表皮细胞",
+            "Method": "显微镜观察法",
+            "Steps": "1.制片 2.染色 3.观察",
+            "Observation": "可以看到细胞壁、细胞核等结构",
+            "Conclusion": "植物细胞由细胞壁、细胞膜、细胞质、细胞核等组成"
+          }
+        },
+        "生命现象": {
+          "name": "生命现象",
+          "fields": ["Phenomenon", "Description", "Cause", "Example", "Significance"],
+          "fieldNames": {
+            "Phenomenon": "现象",
+            "Description": "描述",
+            "Cause": "原因",
+            "Example": "例子",
+            "Significance": "意义"
+          },
+          "sample": {
+            "Phenomenon": "光合作用",
+            "Description": "绿色植物利用光能把二氧化碳和水合成有机物",
+            "Cause": "叶绿素吸收光能",
+            "Example": "植物在阳光下生长",
+            "Significance": "产生氧气，固定能量"
+          }
+        },
+        "生物综合": {
+          "name": "生物综合",
+          "fields": ["Content", "Topic", "KeyPoints", "Example", "Question"],
+          "fieldNames": {
+            "Content": "内容",
+            "Topic": "主题",
+            "KeyPoints": "要点",
+            "Example": "例子",
+            "Question": "问题"
+          },
+          "sample": {
+            "Content": "遗传与变异",
+            "Topic": "遗传学基础",
+            "KeyPoints": "基因、DNA、遗传规律、变异类型",
+            "Example": "子女像父母但不完全相同",
+            "Question": "为什么兄弟姐妹之间有差异？"
+          }
+        }
+      }
+    }
+  },
+  "commonFieldNames": {
+    "Id": "ID",
+    "CreatedAt": "创建时间",
+    "UpdatedAt": "更新时间",
+    "Meaning": "释义",
+    "Example": "例句",
+    "ExampleTranslation": "例句翻译",
+    "Phonetic": "音标",
+    "UkPhonetic": "英式音标",
+    "UsPhonetic": "美式音标",
+    "StrokeCount": "笔画数",
+    "Radical": "部首",
+    "Structure": "结构",
+    "StrokeOrder": "笔顺",
+    "CharacterLevel": "字级",
+    "CharacterFormation": "造字法",
+    "PartOfSpeech": "词性",
+    "WordForms": "词形变化",
+    "Collocations": "常见搭配",
+    "SyllableBreakdown": "音节拼读",
+    "Synonyms": "近义词",
+    "Antonyms": "反义词",
+    "CommonMistakes": "易错点",
+    "ExampleSentence": "例句",
+    "OtherPronunciations": "其他读音",
+    "Tags": "标签",
+    "Note": "备注",
+    "Analysis": "解析",
+    "Question": "问题",
+    "Answer": "答案",
+    "Applications": "应用",
+    "Principle": "原理",
+    "Background": "背景"
+  }
+}

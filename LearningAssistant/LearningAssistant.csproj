@@ -46,7 +46,23 @@
 	  <EmbeddedResource Remove="Forms\UserComparisonForm.resx" />
 	</ItemGroup>
 	<ItemGroup>
+	  <None Remove="AppData\config\appsettings.json" />
+	  <None Remove="AppData\config\SubjectTemplates.json" />
+	  <None Remove="AppData\config\WebBookmarks.json" />
+	</ItemGroup>
+	<ItemGroup>
 		<Content Include="icon.ico" />
+	</ItemGroup>
+	<ItemGroup>
+	  <EmbeddedResource Include="AppData\config\appsettings.json">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </EmbeddedResource>
+	  <EmbeddedResource Include="AppData\config\SubjectTemplates.json">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </EmbeddedResource>
+	  <EmbeddedResource Include="AppData\config\WebBookmarks.json">
+	    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+	  </EmbeddedResource>
 	</ItemGroup>
 	<ItemGroup>
 		<PackageReference Include="KokoroSharp" Version="0.6.7" />

@@ -164,6 +164,12 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
 
         public void UpdateRecommendations(List<LearningRecommendation> recommendations)
         {
+            if (InvokeRequired)
+            {
+                Invoke(new Action<List<LearningRecommendation>>(UpdateRecommendations), recommendations);
+                return;
+            }
+
             _recommendCards.Clear();
             _panelRecommend.Controls.Clear();
 

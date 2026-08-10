@@ -1,0 +1,526 @@
+{
+  "Categories": [
+    {
+      "Name": "英文学习（自然拼读+打字拼写）",
+      "Icon": "📚",
+      "Bookmarks": [
+        {
+          "Title": "⭐⭐⭐⭐ 拼读树",
+          "Url": "https://pindushu.com/phonics",
+          "Icon": "🌳",
+          "CreatedAt": "2026-08-09T22:05:04.1066238+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ WordChop音节拆分拼读",
+          "Url": "https://wordchop.com/",
+          "Icon": "✂️",
+          "CreatedAt": "2026-08-09T22:05:04.1066298+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ Starfall自然拼读启蒙",
+          "Url": "https://www.starfall.com/",
+          "Icon": "⭐",
+          "CreatedAt": "2026-08-09T22:05:04.106636+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ Tricky Words Trainer拼写打字",
+          "Url": "https://trickywords.fun/",
+          "Icon": "⌨️",
+          "CreatedAt": "2026-08-09T22:05:04.1066421+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ 打字侠（英文打字专项）",
+          "Url": "https://www.hellotyping.com/",
+          "Icon": "🖥️",
+          "CreatedAt": "2026-08-09T22:05:04.1066481+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ 牛津猫头鹰英文图书馆",
+          "Url": "https://www.oxfordowl.co.uk/",
+          "Icon": "🦉",
+          "CreatedAt": "2026-08-09T22:05:04.1066541+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ BBC Learning English Kids",
+          "Url": "https://learnenglishkids.britishcouncil.org/",
+          "Icon": "🇬🇧",
+          "CreatedAt": "2026-08-09T22:05:04.1066601+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ Storyline Online绘本朗读",
+          "Url": "https://www.storylineonline.net/",
+          "Icon": "📖",
+          "CreatedAt": "2026-08-09T22:05:04.1066665+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐ ManyThings英文小游戏",
+          "Url": "https://www.manythings.org/",
+          "Icon": "🔤",
+          "CreatedAt": "2026-08-09T22:05:04.1066728+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ Reading Bear自然拼读",
+          "Url": "http://www.readingbear.org/",
+          "Icon": "🐻",
+          "CreatedAt": "2026-08-09T22:05:04.106679+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        }
+      ]
+    },
+    {
+      "Name": "中文语文（拼音识字+练字朗读）",
+      "Icon": "🀄️",
+      "Bookmarks": [
+        {
+          "Title": "⭐⭐⭐⭐ 人教点读",
+          "Url": "https://www.reader.cn/",
+          "Icon": "📖",
+          "CreatedAt": "2026-08-09T22:05:04.1065791+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ 国家少儿数字图书馆",
+          "Url": "https://www.childlib.org/",
+          "Icon": "📕",
+          "CreatedAt": "2026-08-09T22:05:04.1065867+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐ 汉听大赛在线识字练习",
+          "Url": "https://hanyingting.com/",
+          "Icon": "🔤",
+          "CreatedAt": "2026-08-09T22:05:04.1065932+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ 中小学语文示范诵读库",
+          "Url": "https://voice.moe.gov.cn/",
+          "Icon": "🎙️",
+          "CreatedAt": "2026-08-09T22:05:04.1065991+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ 兔小乖在线字帖生成",
+          "Url": "https://www.tuxiaoguai.com/",
+          "Icon": "✍️",
+          "CreatedAt": "2026-08-09T22:05:04.1066051+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ SReading智能识字",
+          "Url": "https://www.sreading.org/",
+          "Icon": "📖",
+          "CreatedAt": "2026-08-09T22:05:04.1066112+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        }
+      ]
+    },
+    {
+      "Name": "数学思维（游戏化刷题+出题）",
+      "Icon": "🔢",
+      "Bookmarks": [
+        {
+          "Title": "⭐⭐⭐⭐⭐ 可汗学院数学",
+          "Url": "https://zh.khanacademy.org/math",
+          "Icon": "🎓",
+          "CreatedAt": "2026-08-09T22:05:04.1065287+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ Prodigy数学RPG闯关",
+          "Url": "https://www.prodigy.com/",
+          "Icon": "🧙",
+          "CreatedAt": "2026-08-09T22:05:04.106535+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ Math Playground数学游乐场",
+          "Url": "https://www.mathplayground.com/",
+          "Icon": "🎠",
+          "CreatedAt": "2026-08-09T22:05:04.1065413+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐ CoolMath益智逻辑游戏",
+          "Url": "https://www.coolmathgames.com/",
+          "Icon": "🧠",
+          "CreatedAt": "2026-08-09T22:05:04.1065477+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ 习题打印生成器",
+          "Url": "https://www.dayin.page",
+          "Icon": "📝",
+          "CreatedAt": "2026-08-09T22:05:04.1065536+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ Maths Chase乘法口诀闯关",
+          "Url": "https://mathschase.com/",
+          "Icon": "🏃",
+          "CreatedAt": "2026-08-09T22:05:04.1065596+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ Coolmath4Kids",
+          "Url": "https://www.coolmath4kids.com/",
+          "Icon": "🎮",
+          "CreatedAt": "2026-08-09T22:05:04.1065655+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        }
+      ]
+    },
+    {
+      "Name": "官方权威全科同步平台（必收藏）",
+      "Icon": "🏛️",
+      "Bookmarks": [
+        {
+          "Title": "⭐⭐⭐⭐⭐ 国家中小学智慧教育平台",
+          "Url": "https://basic.smartedu.cn/",
+          "Icon": "🏫",
+          "CreatedAt": "2026-08-09T22:05:04.1064969+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ 国家教育资源公共服务平台",
+          "Url": "http://www.eduyun.cn/",
+          "Icon": "📚",
+          "CreatedAt": "2026-08-09T22:05:04.1065038+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ 全国中小学实验在线平台",
+          "Url": "https://syzx.jiaoyu.org.cn/",
+          "Icon": "⚗️",
+          "CreatedAt": "2026-08-09T22:05:04.1065099+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ 国家智慧教育读书平台",
+          "Url": "https://reading.smartedu.cn/youth/",
+          "Icon": "⚗️",
+          "CreatedAt": "2026-08-09T22:05:04.1065159+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        }
+      ]
+    },
+    {
+      "Name": "少儿编程启蒙",
+      "Icon": "💻",
+      "Bookmarks": [
+        {
+          "Title": "⭐⭐⭐⭐⭐ Code.org编程一小时",
+          "Url": "https://code.org/",
+          "Icon": "👨‍💻",
+          "CreatedAt": "2026-08-09T22:05:04.1064633+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ Scratch在线编辑器",
+          "Url": "https://scratch.mit.edu/",
+          "Icon": "🐱",
+          "CreatedAt": "2026-08-09T22:05:04.1064694+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ 网易卡搭编程",
+          "Url": "https://kada.163.com/",
+          "Icon": "📦",
+          "CreatedAt": "2026-08-09T22:05:04.1064753+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐ 绘玩编程",
+          "Url": "https://www.huiwan.cn/",
+          "Icon": "🎨",
+          "CreatedAt": "2026-08-09T22:05:04.1064818+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        }
+      ]
+    },
+    {
+      "Name": "全科综合益智小游戏（学玩一体）",
+      "Icon": "🎮",
+      "Bookmarks": [
+        {
+          "Title": "⭐⭐⭐⭐ ABCya全科启蒙小游戏",
+          "Url": "https://www.abcya.com/",
+          "Icon": "🎯",
+          "CreatedAt": "2026-08-09T22:05:04.1064287+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ WithoutAD纯净益智站",
+          "Url": "https://withoutad.com",
+          "Icon": "🚫",
+          "CreatedAt": "2026-08-09T22:05:04.1064346+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ Topmarks英国小学全科资源站",
+          "Url": "https://www.topmarks.co.uk/",
+          "Icon": "🇬🇧",
+          "CreatedAt": "2026-08-09T22:05:04.1064416+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐ 欢乐学堂",
+          "Url": "http://www.s520.com/",
+          "Icon": "😄",
+          "CreatedAt": "2026-08-09T22:05:04.1064491+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        }
+      ]
+    },
+    {
+      "Name": "科学科普+自然探索",
+      "Icon": "🔬",
+      "Bookmarks": [
+        {
+          "Title": "⭐⭐⭐⭐⭐ 中国数字科技馆",
+          "Url": "https://www.cdstm.cn/",
+          "Icon": "🔭",
+          "CreatedAt": "2026-08-09T22:05:04.1063855+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ BrainPOP科普动画",
+          "Url": "https://www.brainpop.com/",
+          "Icon": "🧪",
+          "CreatedAt": "2026-08-09T22:05:04.1063915+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ 国家地理少儿版",
+          "Url": "https://kids.nationalgeographic.com/",
+          "Icon": "🌍",
+          "CreatedAt": "2026-08-09T22:05:04.1063977+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ 中国科普博览",
+          "Url": "https://www.kepu.net.cn/",
+          "Icon": "🔬",
+          "CreatedAt": "2026-08-09T22:05:04.1064042+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ 科普中国",
+          "Url": "https://www.kepuchina.cn",
+          "Icon": "🇨🇳",
+          "CreatedAt": "2026-08-09T22:05:04.10641+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ 中国科普网",
+          "Url": "https://www.kepu.gov.cn/",
+          "Icon": "📘",
+          "CreatedAt": "2026-08-09T22:05:04.1064161+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        }
+      ]
+    },
+    {
+      "Name": "历史地理+人文美育拓展",
+      "Icon": "🖼️",
+      "Bookmarks": [
+        {
+          "Title": "⭐⭐⭐⭐⭐ 国图公开课少儿专区",
+          "Url": "https://open.nlc.cn/onlineedu/children/index.htm",
+          "Icon": "📜",
+          "CreatedAt": "2026-08-09T22:05:04.1063514+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ Krokotak手工创意站",
+          "Url": "https://krokotak.com/",
+          "Icon": "✂️",
+          "CreatedAt": "2026-08-09T22:05:04.1063608+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ 观沧海",
+          "Url": "https://www.ageeye.cn/",
+          "Icon": "🗺️",
+          "CreatedAt": "2026-08-09T22:05:04.106367+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ 全历史",
+          "Url": "https://www.allhistory.com/",
+          "Icon": "🏛️",
+          "CreatedAt": "2026-08-09T22:05:04.1063728+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        }
+      ]
+    },
+    {
+      "Name": "阅读理解专项训练",
+      "Icon": "📖",
+      "Bookmarks": [
+        {
+          "Title": "⭐⭐⭐⭐⭐ ReadWorks",
+          "Url": "https://www.readworks.org/",
+          "Icon": "📄",
+          "CreatedAt": "2026-08-09T22:05:04.1061561+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ CommonLit",
+          "Url": "https://www.commonlit.org/",
+          "Icon": "📚",
+          "CreatedAt": "2026-08-09T22:05:04.1062919+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐ 学科网",
+          "Url": "https://www.zxxk.com/",
+          "Icon": "📐",
+          "CreatedAt": "2026-08-09T22:05:04.1063031+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ 亲近母语",
+          "Url": "https://www.qjmy.cn/",
+          "Icon": "🍃",
+          "CreatedAt": "2026-08-09T22:05:04.1063099+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐⭐ 中国国家图书馆少儿馆",
+          "Url": "https://kids.nlc.cn/",
+          "Icon": "🏛️",
+          "CreatedAt": "2026-08-09T22:05:04.1063158+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐ KidsKonnect",
+          "Url": "https://kidskonnect.com/",
+          "Icon": "🔗",
+          "CreatedAt": "2026-08-09T22:05:04.1063233+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ CK-12 Foundation",
+          "Url": "https://www.ck12.org/",
+          "Icon": "🧪",
+          "CreatedAt": "2026-08-09T22:05:04.1063293+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ Education.com",
+          "Url": "https://www.education.com/",
+          "Icon": "✏️",
+          "CreatedAt": "2026-08-09T22:05:04.1063353+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        }
+      ]
+    },
+    {
+      "Name": "逻辑思维能力训练",
+      "Icon": "🧩",
+      "Bookmarks": [
+        {
+          "Title": "⭐⭐⭐ 智通竞答 Online",
+          "Url": "https://zhitongjingda.com/",
+          "Icon": "🧠",
+          "CreatedAt": "2026-08-09T22:05:04.106112+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ Thinky Games",
+          "Url": "https://thinkygames.com/",
+          "Icon": "🎲",
+          "CreatedAt": "2026-08-09T22:05:04.1061322+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        },
+        {
+          "Title": "⭐⭐⭐⭐ Quandary",
+          "Url": "quandarygame.org/",
+          "Icon": "🤝",
+          "CreatedAt": "2026-08-09T22:05:04.1061395+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        }
+      ]
+    },
+    {
+      "Name": "默认分类",
+      "Icon": "📁",
+      "Bookmarks": [
+        {
+          "Title": "百度网盘",
+          "Url": "https://pan.baidu.com/disk/main?from=1026962h#/index?category=all",
+          "Icon": "🔗",
+          "CreatedAt": "2026-08-09T22:05:04.1031372+08:00",
+          "VisitCount": 0,
+          "LastVisited": "0001-01-01T00:00:00"
+        }
+      ]
+    }
+  ]
+}
