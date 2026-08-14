@@ -380,3 +380,4 @@ bak/
 docs/
 /LearningAssistant/appsettings.json
 temp_build/
+bin_verify/
