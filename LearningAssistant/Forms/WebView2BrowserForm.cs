@@ -10,6 +10,7 @@ using Microsoft.Web.WebView2.WinForms;
 using Newtonsoft.Json;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 
 namespace LearningAssistant.Forms
 {
@@ -23,6 +24,7 @@ namespace LearningAssistant.Forms
         private readonly IWebBookmarkService? _webBookmarkService;
         private readonly IThemeService? _themeService;
         private readonly IPendingContentService? _pendingContentService;
+        private readonly Services.PanAnalysis.IBaiduPanAnalysisOrchestrator? _analysisOrchestrator;
         private CoreWebView2Environment? _webViewEnvironment;
         private readonly Dictionary<TabPage, WebView2> _webViews = new();
         private string? _initialPrompt;
@@ -33,6 +35,7 @@ namespace LearningAssistant.Forms
         private ThemeMode _currentThemeMode = ThemeMode.Light;
         private int _tabCounter = 0;
         private int _zoomLevel = Config.DefaultZoomLevel;
+        private bool _isAwaitingPanAuth;
 
         /// <summary>
         /// 当前活动的 WebView2
@@ -150,13 +153,15 @@ namespace LearningAssistant.Forms
                                    ILogger? logger = null,
                                    IWebBookmarkService? webBookmarkService = null,
                                    IThemeService? themeService = null,
-                                   IPendingContentService? pendingContentService = null)
+                                   IPendingContentService? pendingContentService = null,
+                                   Services.PanAnalysis.IBaiduPanAnalysisOrchestrator? analysisOrchestrator = null)
         {
             _cloudStorageService = cloudStorageService;
             _logger = logger;
             _webBookmarkService = webBookmarkService;
             _themeService = themeService;
             _pendingContentService = pendingContentService;
+            _analysisOrchestrator = analysisOrchestrator;
             InitializeComponent();
             WindowState = FormWindowState.Maximized;
             InitializeProviderButtonMappings();
@@ -516,6 +521,21 @@ namespace LearningAssistant.Forms
             var webView = sender as CoreWebView2;
             if (webView == null) return;
 
+            // 捕获百度网盘 OAuth 回调授权码（TokenHelper 授权链接 → 回调 URL 携带 code）
+            if (_isAwaitingPanAuth && webView == CurrentWebView?.CoreWebView2)
+            {
+                var code = ParsePanAuthCode(e.Uri);
+                if (!string.IsNullOrEmpty(code))
+                {
+                    var capturedCode = code;
+                    BeginInvoke(new Action(async () =>
+                    {
+                        if (IsDisposed) return;
+                        await CompletePanAuthorizationAsync(capturedCode);
+                    }));
+                }
+            }
+
             var webViewCtrl = _webViews.FirstOrDefault(kvp => kvp.Value.CoreWebView2 == webView).Value;
             if (webViewCtrl != null && webViewCtrl.Tag is TabPage tabPage && tabPage == tabControl.SelectedTab)
             {
@@ -557,6 +577,46 @@ namespace LearningAssistant.Forms
             }));
 
             if (webView != CurrentWebView) return;
+
+            // 兜底：授权回调页面加载完成后，尝试从页面内容中提取授权码（兼容 oob 展示形式）
+            if (_isAwaitingPanAuth)
+            {
+                var navUrl = webView.Source?.ToString() ?? string.Empty;
+                if (navUrl.Contains("login_success", StringComparison.OrdinalIgnoreCase) ||
+                    navUrl.Contains("openapi.baidu.com/oauth", StringComparison.OrdinalIgnoreCase))
+                {
+                    BeginInvoke(new Action(async () =>
+                    {
+                        if (IsDisposed) return;
+                        try
+                        {
+                            if (CurrentWebView?.CoreWebView2 == null || !_isAwaitingPanAuth) return;
+
+                            const string js = @"(function() {
+                                try {
+                                    var m = window.location.href.match(/[?#&]code=([^&]+)/);
+                                    if (m) return decodeURIComponent(m[1]);
+                                    var text = document.body ? document.body.innerText : '';
+                                    var cm = text.match(/(?:授权码|code)[^\dA-Za-z]*([A-Za-z0-9._-]{10,})/i);
+                                    if (cm) return cm[1];
+                                    return '';
+                                } catch(e) { return ''; }
+                            })()";
+
+                            var result = await CurrentWebView.CoreWebView2.ExecuteScriptAsync(js);
+                            var code = JsonConvert.DeserializeObject<string>(result);
+                            if (!string.IsNullOrEmpty(code))
+                            {
+                                await CompletePanAuthorizationAsync(code);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogWarning(ex, "从授权回调页面提取授权码失败");
+                        }
+                    }));
+                }
+            }
 
             BeginInvoke(new Action(async () =>
             {
@@ -718,8 +778,8 @@ namespace LearningAssistant.Forms
             var isSelected = tabControl.SelectedIndex == e.Index;
             var tabRect = tabControl.GetTabRect(e.Index);
 
-            var colors = _currentThemeMode == ThemeMode.Dark 
-                ? ThemeService.GetColors(ThemeMode.Dark) 
+            var colors = _currentThemeMode == ThemeMode.Dark
+                ? ThemeService.GetColors(ThemeMode.Dark)
                 : ThemeService.GetColors(ThemeMode.Light);
 
             e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
@@ -1331,6 +1391,381 @@ namespace LearningAssistant.Forms
             NavigateToUrl(Urls.BaiduNetdisk);
         }
 
+        /// <summary>
+        /// AI 分析按钮：提取当前网盘路径并打开分析窗体
+        /// </summary>
+        private async void btnAiAnalyze_Click(object sender, EventArgs e)
+        {
+            if (_analysisOrchestrator == null)
+            {
+                MessageBox.Show("AI 分析服务不可用", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (!_analysisOrchestrator.IsAvailable)
+            {
+                // 若正在等待授权回调，但自动捕获未成功，则提供手动输入授权码的选项
+                if (_isAwaitingPanAuth)
+                {
+                    var manualResult = MessageBox.Show(
+                        "正在等待授权完成。若已获得授权码但未被自动识别，是否手动输入授权码？",
+                        "手动输入授权码",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question);
+
+                    if (manualResult == DialogResult.Yes)
+                    {
+                        var code = PromptManualAuthCode();
+                        if (!string.IsNullOrWhiteSpace(code))
+                        {
+                            await CompletePanAuthorizationAsync(code);
+                        }
+                        return;
+                    }
+                    // 未手动输入则继续询问是否重新发起授权
+                }
+
+                var result = MessageBox.Show(
+                    "百度网盘未授权或 Token 已过期，是否立即通过 OAuth 授权链接进行授权？",
+                    "授权提示",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+
+                if (result == DialogResult.Yes)
+                {
+                    await StartBaiduPanAuthorizationAsync();
+                }
+                return;
+            }
+
+            var url = CurrentWebView?.Source?.ToString();
+            if (string.IsNullOrEmpty(url) || !url.StartsWith(Urls.BaiduNetdisk, StringComparison.OrdinalIgnoreCase))
+            {
+                MessageBox.Show(Messages.NetdiskNavigatePrompt, "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            // 三层路径提取
+            var path = await ExtractPanPathViaJsAsync()
+                       ?? ExtractPanPathFromUrl(url)
+                       ?? PromptManualPathInput();
+
+            if (string.IsNullOrEmpty(path))
+            {
+                MessageBox.Show(Messages.NetdiskPathParseError, "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                using var form = new BaiduPanAnalysisForm(_analysisOrchestrator, path, _themeService!);
+                form.ShowDialog(this);
+
+                // 执行完成后刷新页面
+                if (form.ExecutedAny && CurrentWebView?.CoreWebView2 != null)
+                {
+                    CurrentWebView.CoreWebView2.Reload();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "打开百度网盘 AI 分析窗体失败");
+                MessageBox.Show($"打开分析窗体失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 启动百度网盘 OAuth 授权流程：
+        /// 1. 确保已配置 ClientId/ClientSecret（未配置则引导填写）
+        /// 2. 通过 GetAuthorizationUrlAsync 生成授权链接（与 TokenHelper/BaiduPanAuthCodeManager 同源）
+        /// 3. 在 WebView2 中打开授权页面，监听回调自动捕获授权码
+        /// </summary>
+        private async Task StartBaiduPanAuthorizationAsync()
+        {
+            try
+            {
+                if (_cloudStorageService == null)
+                {
+                    MessageBox.Show("百度网盘云存储服务不可用，无法生成授权链接。",
+                        "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                // 1. 确保已配置 API 凭证
+                if (!_cloudStorageService.IsConfigured)
+                {
+                    var (clientId, clientSecret) = PromptPanCredentials();
+                    if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret))
+                    {
+                        MessageBox.Show("已取消授权。需要先填写百度网盘应用的 ClientId（AppKey）和 ClientSecret（SecretKey）。",
+                            "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
+                    }
+
+                    _cloudStorageService.Configure(clientId, clientSecret);
+                    _logger?.LogInformation("百度网盘 API 凭证已配置");
+                }
+
+                // 2. 生成授权链接并打开
+                var authUrl = await _cloudStorageService.GetAuthorizationUrlAsync();
+                _logger?.LogInformation("生成百度网盘授权链接并打开授权页面");
+
+                _isAwaitingPanAuth = true;
+                NavigateToUrl(authUrl);
+
+                MessageBox.Show(
+                    "已打开百度网盘授权页面，请在页面中登录并点击「授权」。\n\n" +
+                    "授权完成后，本程序会自动捕获授权码并换取 Token。\n" +
+                    "若页面显示授权码但未被自动识别，请复制授权码后点击「AI 分析」按钮并粘贴。",
+                    "百度网盘授权",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "启动百度网盘授权流程失败");
+                MessageBox.Show($"授权流程启动失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 完成授权：用授权码换取 Token 并刷新编排器 Token 状态
+        /// </summary>
+        private async Task CompletePanAuthorizationAsync(string authCode)
+        {
+            // 防止重复处理（授权码一次性有效），仅允许在等待授权状态下手动/自动进入
+            if (!_isAwaitingPanAuth)
+                return;
+            _isAwaitingPanAuth = false;
+
+            if (_cloudStorageService == null || string.IsNullOrWhiteSpace(authCode))
+                return;
+
+            try
+            {
+                _logger?.LogInformation("捕获到授权码，正在换取 AccessToken...");
+
+                var success = await _cloudStorageService.AuthenticateAsync(authCode.Trim());
+                if (!success)
+                {
+                    MessageBox.Show("授权码换取 Token 失败，请重试或检查 ClientId/ClientSecret 是否正确。",
+                        "授权失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                // 刷新编排器的 Token 缓存，使 IsAvailable 变为可用
+                _analysisOrchestrator?.ReloadTokenState();
+
+                MessageBox.Show("百度网盘授权成功！请再次点击「AI 分析」开始分析。",
+                    "授权成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "百度网盘授权码换取 Token 失败");
+                MessageBox.Show($"授权失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 从回调 URL 中解析授权码 code 参数
+        /// </summary>
+        private static string? ParsePanAuthCode(string? url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return null;
+
+            string query;
+            try
+            {
+                var uri = new Uri(url);
+                query = uri.Query;
+                if (string.IsNullOrEmpty(query))
+                {
+                    // 兼容 fragment 形式：openapi.baidu.com/oauth/2.0/login_success#code=xxx
+                    query = uri.Fragment.TrimStart('#');
+                }
+            }
+            catch (Exception)
+            {
+                // URL 非标准格式时按原始字符串查找 code 参数
+                query = url;
+            }
+
+            var parts = query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var part in parts)
+            {
+                var idx = part.IndexOf('=');
+                if (idx <= 0) continue;
+                var key = part.Substring(0, idx);
+                if (string.Equals(key, "code", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Uri.UnescapeDataString(part.Substring(idx + 1));
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// 弹出对话框收集百度网盘应用的 ClientId 和 ClientSecret
+        /// </summary>
+        private (string ClientId, string ClientSecret) PromptPanCredentials()
+        {
+            using var dialog = new Form
+            {
+                Text = "百度网盘 API 凭证配置",
+                StartPosition = FormStartPosition.CenterParent,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MaximizeBox = false,
+                MinimizeBox = false,
+                ClientSize = new Size(460, 170)
+            };
+
+            var lblClientId = new Label { Text = "ClientId（AppKey）：", Location = new Point(16, 16), AutoSize = true };
+            var txtClientId = new TextBox { Location = new Point(170, 14), Width = 270 };
+            var lblSecret = new Label { Text = "ClientSecret（SecretKey）：", Location = new Point(16, 52), AutoSize = true };
+            var txtSecret = new TextBox { Location = new Point(170, 50), Width = 270 };
+            var btnOk = new Button { Text = "确定", DialogResult = DialogResult.OK, Location = new Point(280, 100), Width = 80 };
+            var btnCancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Location = new Point(368, 100), Width = 80 };
+
+            dialog.Controls.AddRange(new Control[] { lblClientId, txtClientId, lblSecret, txtSecret, btnOk, btnCancel });
+            dialog.AcceptButton = btnOk;
+            dialog.CancelButton = btnCancel;
+
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+                return (string.Empty, string.Empty);
+
+            return (txtClientId.Text.Trim(), txtSecret.Text.Trim());
+        }
+
+        /// <summary>
+        /// 弹出对话框手动输入百度网盘授权码（自动捕获失败时手动备用）
+        /// </summary>
+        private static string? PromptManualAuthCode()
+        {
+            using var dialog = new Form
+            {
+                Text = "输入授权码",
+                StartPosition = FormStartPosition.CenterParent,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MaximizeBox = false,
+                MinimizeBox = false,
+                ClientSize = new Size(520, 100)
+            };
+
+            var lblCode = new Label { Text = "授权码（Code）：", Location = new Point(16, 16), AutoSize = true };
+            var txtCode = new TextBox { Location = new Point(110, 14), Width = 290 };
+            var btnOk = new Button { Text = "确定", DialogResult = DialogResult.OK, Location = new Point(410, 12), Width = 80 };
+            var btnCancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Location = new Point(410, 42), Width = 80 };
+
+            dialog.Controls.AddRange(new Control[] { lblCode, txtCode, btnOk, btnCancel });
+            dialog.AcceptButton = btnOk;
+            dialog.CancelButton = btnCancel;
+
+            if (dialog.ShowDialog() != DialogResult.OK)
+                return null;
+
+            return txtCode.Text.Trim();
+        }
+
+        /// <summary>
+        /// 第一层：通过 JS 从网盘页面提取当前路径
+        /// </summary>
+        private async Task<string?> ExtractPanPathViaJsAsync()
+        {
+            if (CurrentWebView?.CoreWebView2 == null)
+                return null;
+
+            const string js = @"
+                (function() {
+                    try {
+                        var hash = window.location.hash || '';
+                        var m = hash.match(/path=([^&]*)/);
+                        if (m) return decodeURIComponent(m[1]);
+
+                        var search = window.location.search || '';
+                        m = search.match(/path=([^&]*)/);
+                        if (m) return decodeURIComponent(m[1]);
+
+                        var nav = document.querySelector('.g-breadcrumb') || document.querySelector('.breadcrumb');
+                        if (nav) {
+                            var items = nav.querySelectorAll('a');
+                            if (items.length > 0) {
+                                var last = items[items.length - 1];
+                                var text = last.textContent.trim();
+                                if (text && text !== '我的全部文件' && text !== '全部文件') {
+                                    return '/' + text;
+                                }
+                            }
+                        }
+                        return '';
+                    } catch (e) {
+                        return '';
+                    }
+                })()";
+
+            try
+            {
+                var result = await CurrentWebView.CoreWebView2.ExecuteScriptAsync(js);
+                var path = JsonConvert.DeserializeObject<string>(result);
+                return string.IsNullOrEmpty(path) ? null : path;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "JS 提取网盘路径失败");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 第二层：从 URL 中提取路径
+        /// </summary>
+        private static string? ExtractPanPathFromUrl(string url)
+        {
+            // 处理 hash fragment
+            if (url.Contains("#") && url.Contains("path="))
+            {
+                var hashPart = url.Substring(url.IndexOf('#'));
+                return ExtractPathFromQuery(hashPart);
+            }
+            if (url.Contains("path="))
+            {
+                return ExtractPathFromQuery(url);
+            }
+            return null;
+        }
+
+        private static string? ExtractPathFromQuery(string queryString)
+        {
+            var match = Regex.Match(queryString, @"path=([^&]*)");
+            return match.Success ? Uri.UnescapeDataString(match.Groups[1].Value) : null;
+        }
+
+        /// <summary>
+        /// 第三层：手动输入路径
+        /// </summary>
+        private static string? PromptManualPathInput()
+        {
+            using var dialog = new Form
+            {
+                Text = "请输入网盘路径",
+                Width = 500,
+                Height = 150,
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                StartPosition = FormStartPosition.CenterParent,
+                MaximizeBox = false,
+                MinimizeBox = false
+            };
+
+            var label = new Label { Text = "路径：", Left = 20, Top = 20, Width = 50 };
+            var textBox = new TextBox { Left = 80, Top = 18, Width = 370, Text = "/" };
+            var confirmBtn = new Button { Text = "确定", Left = 380, Top = 55, Width = 70, DialogResult = DialogResult.OK };
+
+            dialog.Controls.AddRange(new Control[] { label, textBox, confirmBtn });
+            dialog.AcceptButton = confirmBtn;
+
+            return dialog.ShowDialog() == DialogResult.OK ? textBox.Text.Trim() : null;
+        }
+
         private void btnOpenInBrowser_Click(object sender, EventArgs e)
         {
             var url = CurrentWebView?.Source?.ToString() ?? txtUrl.Text;
@@ -1560,6 +1995,7 @@ namespace LearningAssistant.Forms
         private ToolStripButton btnZoomIn;
         private ToolStripSeparator toolStripSeparatorTools;
         private ToolStripButton btnScreenshot;
+        private ToolStripButton btnAiAnalyze;
         private ToolStripProgressBar progressBarLoading;
         private ToolStripLabel lblLoadingStatus;
 
@@ -1591,6 +2027,7 @@ namespace LearningAssistant.Forms
             btnZoomIn = new ToolStripButton();
             toolStripSeparatorTools = new ToolStripSeparator();
             btnScreenshot = new ToolStripButton();
+            btnAiAnalyze = new ToolStripButton();
             progressBarLoading = new ToolStripProgressBar();
             lblLoadingStatus = new ToolStripLabel();
             tabControl = new TabControl();
@@ -1599,7 +2036,7 @@ namespace LearningAssistant.Forms
             // 
             // toolStrip
             // 
-            toolStrip.Items.AddRange(new ToolStripItem[] { btnBack, btnForward, btnRefresh, btnNewTab, comboBoxBookmarks, btnAddBookmark, btnManageBookmarks, toolStripSeparatorZoom, btnZoomOut, lblZoom, btnZoomIn, txtUrl, btnGo, toolStripSeparatorProvider, btnProviderDoubao, btnProviderDeepseek, btnProviderZhipu, btnProviderQwen, btnProviderSpark, btnProviderWenxin, toolStripSeparator, btnOpenNetdisk, toolStripSeparatorTools, btnScreenshot, btnOpenInBrowser, progressBarLoading, lblLoadingStatus });
+            toolStrip.Items.AddRange(new ToolStripItem[] { btnBack, btnForward, btnRefresh, btnNewTab, comboBoxBookmarks, btnAddBookmark, btnManageBookmarks, toolStripSeparatorZoom, btnZoomOut, lblZoom, btnZoomIn, txtUrl, btnGo, toolStripSeparatorProvider, btnProviderDoubao, btnProviderDeepseek, btnProviderZhipu, btnProviderQwen, btnProviderSpark, btnProviderWenxin, toolStripSeparator, btnOpenNetdisk, btnAiAnalyze, toolStripSeparatorTools, btnScreenshot, btnOpenInBrowser, progressBarLoading, lblLoadingStatus });
             toolStrip.Location = new Point(0, 0);
             toolStrip.Name = "toolStrip";
             toolStrip.Size = new Size(1160, 25);
@@ -1748,6 +2185,16 @@ namespace LearningAssistant.Forms
             btnOpenNetdisk.Text = "百度网盘";
             btnOpenNetdisk.Click += btnOpenNetdisk_Click;
             // 
+            // btnAiAnalyze
+            // 
+            btnAiAnalyze.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnAiAnalyze.ImageTransparentColor = Color.Magenta;
+            btnAiAnalyze.Name = "btnAiAnalyze";
+            btnAiAnalyze.Size = new Size(72, 22);
+            btnAiAnalyze.Text = "🤖 AI 分析";
+            btnAiAnalyze.ToolTipText = "分析当前网盘目录并给出整理建议";
+            btnAiAnalyze.Click += btnAiAnalyze_Click;
+            // 
             // btnOpenInBrowser
             // 
             btnOpenInBrowser.DisplayStyle = ToolStripItemDisplayStyle.Text;
@@ -1881,9 +2328,9 @@ namespace LearningAssistant.Forms
         {
             using var brush = new SolidBrush(_colors.Surface);
             e.Graphics.FillRectangle(brush, e.AffectedBounds);
-            
+
             using var borderPen = new Pen(_colors.Divider);
-            e.Graphics.DrawLine(borderPen, e.AffectedBounds.Left, e.AffectedBounds.Bottom - 1, 
+            e.Graphics.DrawLine(borderPen, e.AffectedBounds.Left, e.AffectedBounds.Bottom - 1,
                 e.AffectedBounds.Right, e.AffectedBounds.Bottom - 1);
         }
 
@@ -1912,7 +2359,7 @@ namespace LearningAssistant.Forms
         {
             var rect = e.Item.ContentRectangle;
             var centerY = rect.Y + rect.Height / 2;
-            
+
             using var pen = new Pen(_colors.Divider);
             e.Graphics.DrawLine(pen, rect.X + 4, centerY, rect.X + rect.Width - 4, centerY);
         }

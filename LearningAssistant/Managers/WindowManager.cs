@@ -271,8 +271,10 @@ namespace LearningAssistant.Managers
                 var logger = _serviceProvider.GetService<ILogger<WebView2BrowserForm>>();
                 var webBookmarkService = _serviceProvider.GetService<IWebBookmarkService>();
                 var themeService = _serviceProvider.GetService<IThemeService>();
+                var analysisOrchestrator = _serviceProvider.GetService<Services.PanAnalysis.IBaiduPanAnalysisOrchestrator>();
 
-                var form = new WebView2BrowserForm(cloudStorageService, logger, webBookmarkService, themeService);
+                var form = new WebView2BrowserForm(cloudStorageService, logger, webBookmarkService, themeService,
+                    analysisOrchestrator: analysisOrchestrator);
                 form.InitialPrompt = initialPrompt;
                 form.StartPosition = FormStartPosition.CenterParent;
                 form.ShowDialog();

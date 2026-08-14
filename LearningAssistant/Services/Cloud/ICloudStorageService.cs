@@ -21,6 +21,13 @@ namespace LearningAssistant.Services.Cloud
         bool IsConfigured { get; }
 
         /// <summary>
+        /// 配置 API 凭证（如 ClientId / ClientSecret）
+        /// </summary>
+        /// <param name="clientId">Client ID</param>
+        /// <param name="clientSecret">Client Secret</param>
+        void Configure(string clientId, string clientSecret);
+
+        /// <summary>
         /// 获取授权URL
         /// 用于引导用户到云存储服务进行授权
         /// </summary>

@@ -1,3 +1,4 @@
+using LearningAssistant.Baidu;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Services.Persistence;
 using Microsoft.Extensions.Logging;
@@ -11,7 +12,6 @@ namespace LearningAssistant.Services.Cloud
     /// </summary>
     public class BaiduNetdiskService : ICloudStorageService, IDisposable
     {
-        private const string AuthorizeUrl = "https://openapi.baidu.com/oauth/2.0/authorize";
         private const string TokenUrl = "https://openapi.baidu.com/oauth/2.0/token";
         private const string ListUrl = "https://pan.baidu.com/rest/2.0/xpan/file";
         private const string DownloadUrl = "https://d.pcs.baidu.com/rest/2.0/pcs/file";
@@ -102,7 +102,10 @@ namespace LearningAssistant.Services.Cloud
             return await GetAuthorizationUrlAsync(null, true, false);
         }
 
-        public async Task<string> GetAuthorizationUrlAsync(string? state = null, bool showQrcode = true, bool forceLogin = false)
+        /// <summary>
+        /// 生成百度网盘 OAuth 授权链接（通过 TokenHelper/BaiduPanAuthCodeManager 同源方式）
+        /// </summary>
+        public Task<string> GetAuthorizationUrlAsync(string? state = null, bool showQrcode = true, bool forceLogin = false)
         {
             CheckDisposed();
 
@@ -112,25 +115,24 @@ namespace LearningAssistant.Services.Cloud
                 throw new InvalidOperationException("百度网盘服务未配置，请先配置 Client ID 和 Client Secret");
             }
 
-            var query = new Dictionary<string, string>
+            // 与 TokenHelper 一致：使用 BaiduPanAuthCodeManager 生成授权链接
+            var authConfig = new BaiduPanAuthCodeManager.AuthCodeConfig
             {
-                { "response_type", "code" },
-                { "client_id", _config.BaiduClientId! },
-                { "redirect_uri", "oob" },
-                { "scope", "basic,netdisk" },
-                { "display", "popup" },
-                { "qrcode", showQrcode ? "1" : "0" },
-                { "force_login", forceLogin ? "1" : "0" }
+                ClientId = _config.BaiduClientId!,
+                ClientSecret = _config.BaiduClientSecret!,
+                RedirectUri = "oob",
+                Scope = "basic,netdisk"
             };
 
-            if (!string.IsNullOrWhiteSpace(state))
-            {
-                query.Add("state", state);
-            }
+            using var authManager = new BaiduPanAuthCodeManager(authConfig);
+            var authUrl = authManager.GenerateCodeRequestUrl(
+                display: "popup",
+                state: state ?? $"pan_auth_{Guid.NewGuid():N}",
+                qrcode: showQrcode ? 1 : 0,
+                forceLogin: forceLogin ? 1 : 0);
 
-            var queryString = BuildQueryString(query);
-            _logger?.LogInformation("生成百度网盘授权 URL");
-            return $"{AuthorizeUrl}?{queryString}";
+            _logger?.LogInformation("生成百度网盘授权 URL（BaiduPanAuthCodeManager 方式）");
+            return Task.FromResult(authUrl);
         }
 
         public async Task<bool> RefreshAccessTokenAsync()
@@ -234,42 +236,36 @@ namespace LearningAssistant.Services.Cloud
 
             try
             {
-                _logger?.LogInformation("开始百度网盘授权流程");
+                _logger?.LogInformation("开始百度网盘授权流程（BaiduPanAuthCodeManager 方式）");
 
-                var formData = new Dictionary<string, string>
+                // 与 TokenHelper 一致：使用 BaiduPanAuthCodeManager 用 Code 换取 Token（官方 GET 规范）
+                var authConfig = new BaiduPanAuthCodeManager.AuthCodeConfig
                 {
-                    { "grant_type", "authorization_code" },
-                    { "code", authCode },
-                    { "client_id", _config.BaiduClientId! },
-                    { "client_secret", _config.BaiduClientSecret! },
-                    { "redirect_uri", "oob" }
+                    ClientId = _config.BaiduClientId!,
+                    ClientSecret = _config.BaiduClientSecret!,
+                    RedirectUri = "oob",
+                    Scope = "basic,netdisk"
                 };
 
-                var content = new FormUrlEncodedContent(formData);
-                var response = await _httpClient.PostAsync(TokenUrl, content);
+                using var authManager = new BaiduPanAuthCodeManager(authConfig);
+                var tokenResponse = await authManager.ExchangeCodeForTokenAsync(authCode);
 
-                if (!response.IsSuccessStatusCode)
+                if (tokenResponse != null && !string.IsNullOrEmpty(tokenResponse.AccessToken))
                 {
-                    var errorContent = await response.Content.ReadAsStringAsync();
-                    _logger?.LogError("百度网盘授权请求失败: {StatusCode} - {Error}", response.StatusCode, errorContent);
-                    return false;
-                }
-
-                var json = await response.Content.ReadAsStringAsync();
-                var tokenResult = JsonSerializer.Deserialize<TokenResponse>(json);
-
-                if (tokenResult != null && !string.IsNullOrEmpty(tokenResult.AccessToken))
-                {
-                    _accessToken = tokenResult.AccessToken;
-                    _refreshToken = tokenResult.RefreshToken;
-                    _tokenExpireTime = DateTime.Now.AddSeconds(tokenResult.ExpiresIn);
+                    _accessToken = tokenResponse.AccessToken;
+                    _refreshToken = tokenResponse.RefreshToken;
+                    _tokenExpireTime = DateTime.Now.AddSeconds(tokenResponse.ExpiresIn);
                     SaveTokens();
                     await TryPersistConfigAsync();
-                    _logger?.LogInformation("百度网盘授权成功，令牌有效期: {ExpiresIn} 秒", tokenResult.ExpiresIn);
+                    _logger?.LogInformation("百度网盘授权成功，令牌有效期: {ExpiresIn} 秒", tokenResponse.ExpiresIn);
                     return true;
                 }
 
-                _logger?.LogWarning("百度网盘授权响应无效: {Json}", json);
+                _logger?.LogWarning("百度网盘授权响应无效");
+            }
+            catch (BaiduPanAuthCodeManager.BaiduPanAuthCodeException ex)
+            {
+                _logger?.LogError("百度网盘授权失败: 错误码={ErrorCode}，描述={Message}", ex.ErrorCode, ex.Message);
             }
             catch (Exception ex)
             {

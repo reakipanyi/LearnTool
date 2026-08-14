@@ -63,4 +63,15 @@ namespace LearningAssistant.Common
         public LearningContentException(string message, Exception innerException)
             : base(message, innerException) { }
     }
+
+    /// <summary>
+    /// 百度网盘授权相关异常 - Token 过期、刷新失败、未授权等时抛出
+    /// </summary>
+    public class PanAuthException : LearningAssistantException
+    {
+        public PanAuthException(string message) : base(message) { }
+
+        public PanAuthException(string message, Exception innerException)
+            : base(message, innerException) { }
+    }
 }

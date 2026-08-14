@@ -10,12 +10,14 @@ using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Backup;
 using LearningAssistant.Services.Backup.Providers;
 using LearningAssistant.Services.Cache;
+using LearningAssistant.Services.Cloud;
 using LearningAssistant.Services.DragDrop;
 using LearningAssistant.Services.Favorites;
 using LearningAssistant.Services.Feedback;
 using LearningAssistant.Services.Gamification;
 using LearningAssistant.Services.Hotkeys;
 using LearningAssistant.Services.Learning;
+using LearningAssistant.Services.PanAnalysis;
 //using LearningAssistant.Services.Migration;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Services.Persistence;
@@ -133,6 +135,15 @@ namespace LearningAssistant.Common
             services.AddSingleton<QuoteService>();
             services.AddSingleton<LearningReportService>();
             services.AddSingleton<IPdfContentLinkService, PdfContentLinkService>();
+
+            // 云存储服务（百度网盘）
+            services.AddSingleton<ICloudStorageService>(sp =>
+            {
+                var config = sp.GetRequiredService<CloudStorageConfig>();
+                var logger = sp.GetService<ILogger<BaiduNetdiskService>>();
+                var persistence = sp.GetService<IDataPersistenceService>();
+                return new BaiduNetdiskService(config, logger, persistence);
+            });
 
             return services;
         }
@@ -550,6 +561,28 @@ namespace LearningAssistant.Common
             services.AddScoped<IMainView>(sp => sp.GetRequiredService<MainForm>());
             services.AddScoped<IResultView>(sp => sp.GetRequiredService<ResultForm>());
             services.AddScoped<IContentEditorView>(sp => sp.GetRequiredService<ContentEditorForm>());
+
+            return services;
+        }
+
+        /// <summary>
+        /// 添加百度网盘 AI 分析服务
+        /// </summary>
+        public static IServiceCollection AddPanAnalysisServices(this IServiceCollection services)
+        {
+            // 缓存（供快照与分析结果缓存使用）
+            services.AddMemoryCache();
+
+            // Token 管理
+            services.AddSingleton<IPanTokenManager, PanTokenManager>();
+
+            // 分析组件
+            services.AddSingleton<IPanAnalysisPromptBuilder, PanAnalysisPromptBuilder>();
+            services.AddSingleton<IPanAnalysisResultParser, PanAnalysisResultParser>();
+            services.AddSingleton<IPanExecutionEngine, PanExecutionEngine>();
+
+            // 编排器
+            services.AddSingleton<IBaiduPanAnalysisOrchestrator, BaiduPanAnalysisOrchestrator>();
 
             return services;
         }

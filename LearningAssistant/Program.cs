@@ -35,6 +35,7 @@ namespace LearningAssistant
                 .AddLearningServices()
                 .AddLearningEnhancementServices()
                 .AddDatabaseServices()
+                .AddPanAnalysisServices()
                 .AddFormServices();
 
             return services.BuildServiceProvider();
