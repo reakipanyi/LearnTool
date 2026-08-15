@@ -30,6 +30,7 @@ namespace LearningAssistant.Forms
         private readonly ILogger<BaiduPanAnalysisForm>? _panAnalysisLogger;
         private readonly IAIPanelPopupService? _aiPanelPopupService;
         private readonly AiConfig? _aiConfig;
+        private readonly Services.PanAnalysis.IPanAnalysisPromptBuilder? _panPromptBuilder;
         private CoreWebView2Environment? _webViewEnvironment;
         private readonly Dictionary<TabPage, WebView2> _webViews = new();
         private string? _initialPrompt;
@@ -167,7 +168,8 @@ namespace LearningAssistant.Forms
                                    Services.PanAnalysis.IBaiduPanAnalysisOrchestrator? analysisOrchestrator = null,
                                    ILogger<BaiduPanAnalysisForm>? panAnalysisLogger = null,
                                    IAIPanelPopupService? aiPanelPopupService = null,
-                                   AiConfig? aiConfig = null)
+                                   AiConfig? aiConfig = null,
+                                   Services.PanAnalysis.IPanAnalysisPromptBuilder? panPromptBuilder = null)
         {
             _cloudStorageService = cloudStorageService;
             _logger = logger;
@@ -178,6 +180,7 @@ namespace LearningAssistant.Forms
             _panAnalysisLogger = panAnalysisLogger;
             _aiPanelPopupService = aiPanelPopupService;
             _aiConfig = aiConfig;
+            _panPromptBuilder = panPromptBuilder;
             InitializeComponent();
             WindowState = FormWindowState.Maximized;
             InitializeProviderButtonMappings();
@@ -1510,7 +1513,7 @@ namespace LearningAssistant.Forms
             {
                 try
                 {
-                    using (var form = new BaiduPanAnalysisForm(_analysisOrchestrator, path, _themeService!, _panAnalysisLogger, _aiPanelPopupService, _aiConfig))
+                    using (var form = new BaiduPanAnalysisForm(_analysisOrchestrator, path, _themeService!, _panAnalysisLogger, _aiPanelPopupService, _aiConfig, _panPromptBuilder))
                     {
                         form.ShowDialog(this);
 

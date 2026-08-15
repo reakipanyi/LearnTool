@@ -50,11 +50,12 @@ namespace LearningAssistant.Services
 
             if (_panelContainers.TryGetValue(parent, out var existingContainer))
             {
-                ShowExistingPanel(existingContainer, prompt, aiUrl, context);
+                // 内部实现为 Task，自行捕获异常并提示，避免 async void 吞掉异常
+                _ = OpenExistingPanelCoreAsync(parent, existingContainer, prompt, aiUrl, context);
                 return;
             }
 
-            CreateAndShowNewPanel(parent, prompt, aiUrl, context);
+            _ = OpenNewPanelCoreAsync(parent, prompt, aiUrl, context);
         }
 
         public void HideAIAbilityPanel(Form parent)
@@ -80,52 +81,62 @@ namespace LearningAssistant.Services
 
         #region 私有方法
 
-        private async void ShowExistingPanel(Panel container, string? prompt, string? aiUrl, string? context)
+        /// <summary>
+        /// 打开/复用父窗体上已存在的 AI 面板。
+        /// </summary>
+        private async Task OpenExistingPanelCoreAsync(Form parent, Panel container, string? prompt, string? aiUrl, string? context)
         {
-            container.Visible = true;
-            container.BringToFront();
-
-            var aiPanel = container.Controls.OfType<AIAbilityPanel>().FirstOrDefault();
-            if (aiPanel != null)
-            {
-                if (!string.IsNullOrEmpty(context))
-                    aiPanel.ContextText = context;
-
-                if (!string.IsNullOrEmpty(prompt))
-                    aiPanel.PromptText = prompt;
-
-                var urlToUse = !string.IsNullOrEmpty(aiUrl) ? aiUrl : aiPanel.CurrentAIUrl;
-                try
-                {
-                    await aiPanel.OpenWebViewAsync(urlToUse, prompt);
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"AI面板WebView加载失败: {ex.Message}");
-                }
-            }
-        }
-
-        private async void CreateAndShowNewPanel(Form parent, string? prompt, string? aiUrl, string? context)
-        {
-            var aiAbilityPanel = CreateAIAbilityPanel(prompt, context);
-            var containerPanel = CreateContainerPanel(aiAbilityPanel, parent);
-
-            parent.Controls.Add(containerPanel);
-            containerPanel.BringToFront();
-            _panelContainers[parent] = containerPanel;
-
-            var finalUrl = !string.IsNullOrEmpty(aiUrl) ? aiUrl : aiAbilityPanel.CurrentAIUrl;
             try
             {
-                await aiAbilityPanel.OpenWebViewAsync(finalUrl, prompt);
+                container.Visible = true;
+                container.BringToFront();
+
+                var aiPanel = container.Controls.OfType<AIAbilityPanel>().FirstOrDefault();
+                if (aiPanel != null)
+                {
+                    if (!string.IsNullOrEmpty(context))
+                        aiPanel.ContextText = context;
+
+                    if (!string.IsNullOrEmpty(prompt))
+                        aiPanel.PromptText = prompt;
+
+                    var urlToUse = !string.IsNullOrEmpty(aiUrl) ? aiUrl : aiPanel.CurrentAIUrl;
+                    await aiPanel.OpenWebViewAsync(urlToUse, prompt);
+                }
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"AI面板WebView加载失败: {ex.Message}");
+                ShowPanelError(parent, "AI 面板加载失败", ex);
             }
+        }
 
-            parent.FormClosed += ParentFormClosedHandler;
+        /// <summary>
+        /// 创建并打开新的 AI 面板。
+        /// </summary>
+        private async Task OpenNewPanelCoreAsync(Form parent, string? prompt, string? aiUrl, string? context)
+        {
+            try
+            {
+                var aiAbilityPanel = CreateAIAbilityPanel(prompt, context);
+                var containerPanel = CreateContainerPanel(aiAbilityPanel, parent);
+
+                parent.Controls.Add(containerPanel);
+                containerPanel.BringToFront();
+                _panelContainers[parent] = containerPanel;
+
+                var finalUrl = !string.IsNullOrEmpty(aiUrl) ? aiUrl : aiAbilityPanel.CurrentAIUrl;
+                await aiAbilityPanel.OpenWebViewAsync(finalUrl, prompt);
+
+                parent.FormClosed += ParentFormClosedHandler;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"AI面板WebView加载失败: {ex.Message}");
+                // 创建失败时清理已添加的容器，避免残留控件与事件泄漏
+                DisposePanel(parent);
+                ShowPanelError(parent, "AI 面板打开失败", ex);
+            }
         }
 
         private AIAbilityPanel CreateAIAbilityPanel(string? prompt, string? context)
@@ -177,6 +188,24 @@ namespace LearningAssistant.Services
             _closeButtons[parent] = closeButton;
 
             return containerPanel;
+        }
+
+        /// <summary>
+        /// 向用户展示 AI 面板错误提示（提示失败时静默，不影响主流程）。
+        /// </summary>
+        private static void ShowPanelError(Form parent, string title, Exception ex)
+        {
+            try
+            {
+                if (parent != null && !parent.IsDisposed)
+                {
+                    MessageBox.Show($"{title}：{ex.Message}", "AI 面板", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            catch
+            {
+                // 错误提示自身失败时不再抛出，避免影响主流程
+            }
         }
 
         private void ParentFormClosedHandler(object? sender, FormClosedEventArgs e)

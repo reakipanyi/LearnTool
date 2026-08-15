@@ -49,9 +49,9 @@ namespace LearningAssistant.Forms
             btnExecute = new Button();
             contentPanel = new SplitContainer();
             leftPanel = new Panel();
+            txtSummary = new TextBox();
             rightPanel = new Panel();
             lstRecommendations = new ListView();
-            txtSummary = new TextBox();
             txtLog = new TextBox();
             mainPanel.SuspendLayout();
             topPanel.SuspendLayout();
@@ -59,6 +59,7 @@ namespace LearningAssistant.Forms
             contentPanel.Panel1.SuspendLayout();
             contentPanel.Panel2.SuspendLayout();
             contentPanel.SuspendLayout();
+            leftPanel.SuspendLayout();
             rightPanel.SuspendLayout();
             SuspendLayout();
             // 
@@ -134,7 +135,6 @@ namespace LearningAssistant.Forms
             // 
             cmbDepth.DropDownStyle = ComboBoxStyle.DropDownList;
             cmbDepth.Items.AddRange(new object[] { 1, 2, 3, 5, 0 });
-            cmbDepth.SelectedIndex = 1; // 默认深度 2
             cmbDepth.Location = new Point(376, 12);
             cmbDepth.Margin = new Padding(2, 6, 8, 6);
             cmbDepth.Name = "cmbDepth";
@@ -201,7 +201,6 @@ namespace LearningAssistant.Forms
             contentPanel.Dock = DockStyle.Fill;
             contentPanel.Location = new Point(11, 55);
             contentPanel.Name = "contentPanel";
-            contentPanel.Size = new Size(1012, 475);
             // 
             // contentPanel.Panel1
             // 
@@ -210,16 +209,15 @@ namespace LearningAssistant.Forms
             // 
             // contentPanel.Panel2
             // 
-            // 注意：SplitterDistance 必须在 Panel2MinSize 之前设置，
-            // 否则在 WinForms 应用 Panel2MinSize 时会基于默认 SplitterDistance(50) 校验，
-            // 导致 50 < Panel1MinSize(260) 抛出 SplitterDistance 越界异常。
             contentPanel.Panel2.Controls.Add(rightPanel);
-            contentPanel.SplitterDistance = 508;
             contentPanel.Panel2MinSize = 500;
+            contentPanel.Size = new Size(1012, 475);
+            contentPanel.SplitterDistance = 508;
             contentPanel.TabIndex = 1;
             // 
             // leftPanel
             // 
+            leftPanel.Controls.Add(txtSummary);
             leftPanel.Dock = DockStyle.Fill;
             leftPanel.Location = new Point(0, 0);
             leftPanel.Name = "leftPanel";
@@ -227,10 +225,22 @@ namespace LearningAssistant.Forms
             leftPanel.Size = new Size(508, 475);
             leftPanel.TabIndex = 0;
             // 
+            // txtSummary
+            // 
+            txtSummary.BackColor = SystemColors.Info;
+            txtSummary.Dock = DockStyle.Fill;
+            txtSummary.Font = new Font("Microsoft YaHei UI", 9F);
+            txtSummary.Location = new Point(0, 4);
+            txtSummary.Multiline = true;
+            txtSummary.Name = "txtSummary";
+            txtSummary.ReadOnly = true;
+            txtSummary.ScrollBars = ScrollBars.Vertical;
+            txtSummary.Size = new Size(502, 471);
+            txtSummary.TabIndex = 1;
+            // 
             // rightPanel
             // 
             rightPanel.Controls.Add(lstRecommendations);
-            rightPanel.Controls.Add(txtSummary);
             rightPanel.Dock = DockStyle.Fill;
             rightPanel.Location = new Point(0, 0);
             rightPanel.Name = "rightPanel";
@@ -244,25 +254,12 @@ namespace LearningAssistant.Forms
             lstRecommendations.Dock = DockStyle.Fill;
             lstRecommendations.FullRowSelect = true;
             lstRecommendations.GridLines = true;
-            lstRecommendations.Location = new Point(6, 68);
+            lstRecommendations.Location = new Point(6, 4);
             lstRecommendations.Name = "lstRecommendations";
-            lstRecommendations.Size = new Size(494, 407);
+            lstRecommendations.Size = new Size(494, 471);
             lstRecommendations.TabIndex = 0;
             lstRecommendations.UseCompatibleStateImageBehavior = false;
             lstRecommendations.View = View.Details;
-            // 
-            // txtSummary
-            // 
-            txtSummary.BackColor = SystemColors.Info;
-            txtSummary.Dock = DockStyle.Top;
-            txtSummary.Font = new Font("Microsoft YaHei UI", 9F);
-            txtSummary.Location = new Point(6, 4);
-            txtSummary.Multiline = true;
-            txtSummary.Name = "txtSummary";
-            txtSummary.ReadOnly = true;
-            txtSummary.ScrollBars = ScrollBars.Vertical;
-            txtSummary.Size = new Size(494, 64);
-            txtSummary.TabIndex = 1;
             // 
             // txtLog
             // 
@@ -295,8 +292,9 @@ namespace LearningAssistant.Forms
             contentPanel.Panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)contentPanel).EndInit();
             contentPanel.ResumeLayout(false);
+            leftPanel.ResumeLayout(false);
+            leftPanel.PerformLayout();
             rightPanel.ResumeLayout(false);
-            rightPanel.PerformLayout();
             ResumeLayout(false);
         }
 

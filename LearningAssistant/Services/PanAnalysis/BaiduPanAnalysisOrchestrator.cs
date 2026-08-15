@@ -19,7 +19,7 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
     private readonly IPanExecutionEngine _executionEngine;
     private readonly IMemoryCache _cache;
     private readonly ILogger<BaiduPanAnalysisOrchestrator> _logger;
-    private readonly CancellationTokenSource _cancellationTokenSource = new();
+    private CancellationTokenSource _cancellationTokenSource = new();
 
     public bool IsAvailable => _tokenManager.IsTokenValid;
 
@@ -43,8 +43,24 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
 
     public void Cancel()
     {
+        if (_cancellationTokenSource.IsCancellationRequested)
+            return;
         _cancellationTokenSource.Cancel();
         _logger.LogInformation("用户取消了操作");
+    }
+
+    /// <summary>
+    /// 获取当前可用的取消源。取消后自动重建，保证一次取消后仍可再次发起操作
+    /// （CancellationTokenSource 一旦取消便不可复用）。
+    /// </summary>
+    private CancellationTokenSource GetOrCreateCancellationTokenSource()
+    {
+        if (_cancellationTokenSource.IsCancellationRequested)
+        {
+            _cancellationTokenSource.Dispose();
+            _cancellationTokenSource = new CancellationTokenSource();
+        }
+        return _cancellationTokenSource;
     }
 
     public void ReloadTokenState()
@@ -59,9 +75,10 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
         IProgress<PanAnalysisProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        var sharedCts = GetOrCreateCancellationTokenSource();
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
-            _cancellationTokenSource.Token);
+            sharedCts.Token);
 
         // 1. 获取快照
         var snapshot = await GetSnapshotAsync(
@@ -70,8 +87,9 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
             progress,
             linkedCts.Token);
 
-        // 2. 检查缓存
-        var cacheKey = $"pan_analysis_{directoryPath}_{options.MaxDepth}";
+        // 2. 检查缓存（key 附加模型名，切换 AI 模型后避免命中旧模型的分析结果）
+        var modelName = _aiService?.ModelName ?? "default";
+        var cacheKey = $"pan_analysis_{directoryPath}_{options.MaxDepth}_{modelName}";
         if (options.UseCache && _cache.TryGetValue(cacheKey, out PanAnalysisResult? cached) && cached != null)
         {
             progress?.Report(new PanAnalysisProgress
@@ -145,9 +163,10 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
         IProgress<PanAnalysisProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        var sharedCts = GetOrCreateCancellationTokenSource();
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
-            _cancellationTokenSource.Token);
+            sharedCts.Token);
 
         // 检查缓存
         var cacheKey = $"pan_snapshot_{directoryPath}_{options.MaxDepth}";
@@ -288,9 +307,10 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
         IProgress<PanAnalysisProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        var sharedCts = GetOrCreateCancellationTokenSource();
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
-            _cancellationTokenSource.Token);
+            sharedCts.Token);
 
         return await _executionEngine.ExecuteAsync(
             recommendations,

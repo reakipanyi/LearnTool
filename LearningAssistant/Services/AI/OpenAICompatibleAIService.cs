@@ -22,8 +22,9 @@ namespace LearningAssistant.Services.AI
             ILogger logger,
             HttpClient httpClient,
             string providerName,
-            string modelName)
-            : base(config, cacheService, logger, httpClient)
+            string modelName,
+            AiEndpoint? endpoint = null)
+            : base(config, cacheService, logger, httpClient, endpoint)
         {
             _providerName = providerName;
             _modelName = modelName;
@@ -72,7 +73,7 @@ namespace LearningAssistant.Services.AI
             {
                 var requestBody = new
                 {
-                    model = _config.Model,
+                    model = _endpoint.Model,
                     messages = new[]
                     {
                         new { role = "system", content = "你是一个专业的语言学习助手，请用简洁明了的方式解释词语和回答问题。" },
@@ -84,7 +85,7 @@ namespace LearningAssistant.Services.AI
 
                 var json = JsonSerializer.Serialize(requestBody);
 
-                using var request = new HttpRequestMessage(HttpMethod.Post, _config.BaseUrl);
+                using var request = new HttpRequestMessage(HttpMethod.Post, _endpoint.BaseUrl);
                 request.Content = new StringContent(json, Encoding.UTF8, "application/json");
 
                 string apiKey = ApiKey;
@@ -111,7 +112,8 @@ namespace LearningAssistant.Services.AI
                     }
 
                     _logger.LogError("{Provider} API调用失败: {Error}", _providerName, errorDetail);
-                    throw new HttpRequestException(errorDetail);
+                    // 附带状态码，便于上层（重试/fallback）区分瞬时与确定性错误
+                    throw new HttpRequestException(errorDetail, null, response.StatusCode);
                 }
 
                 using var resultDoc = JsonDocument.Parse(responseJson);

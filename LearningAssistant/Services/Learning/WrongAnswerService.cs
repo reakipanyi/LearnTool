@@ -986,6 +986,17 @@ namespace LearningAssistant.Services.Learning
             {
                 using var db = _dbContextFactory.CreateDbContext();
 
+                // SaveWrongAnswers 采用“全量替换”语义：删除列表中不存在的记录，
+                // 使 RemoveWrongAnswer / BatchRemove / RemoveTag 等删除操作真正生效。
+                var keepIds = items.Select(i => i.Id).ToHashSet();
+                var toDelete = db.WrongAnswers
+                    .Where(w => w.UserId == userId && !keepIds.Contains(w.Id))
+                    .ToList();
+                if (toDelete.Count > 0)
+                {
+                    db.WrongAnswers.RemoveRange(toDelete);
+                }
+
                 foreach (var item in items)
                 {
                     var existing = db.WrongAnswers.FirstOrDefault(e => e.Id == item.Id);

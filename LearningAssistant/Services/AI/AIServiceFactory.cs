@@ -29,32 +29,36 @@ namespace LearningAssistant.Services.AI
             var cacheService = _serviceProvider.GetRequiredService<ICacheService>();
             var httpClient = _serviceProvider.GetRequiredService<HttpClient>();
 
+            // 关键：按 provider 解析独立的 BaseUrl/Model/ApiKey，
+            // 使 fallback 切换到其他 provider 时使用各自配置，而非共享全局配置。
+            var endpoint = config.ResolveEndpoint(provider);
+
             return provider.ToLower() switch
             {
                 "doubao" or "豆包" => new DoubaoAIService(
                     config, cacheService,
                     _serviceProvider.GetRequiredService<ILogger<DoubaoAIService>>(),
-                    httpClient),
+                    httpClient, endpoint),
                 "deepseek" => new DeepseekAIService(
                     config, cacheService,
                     _serviceProvider.GetRequiredService<ILogger<DeepseekAIService>>(),
-                    httpClient),
+                    httpClient, endpoint),
                 "zhipu" or "glm" => new OpenAICompatibleAIService(
                     config, cacheService,
                     _serviceProvider.GetRequiredService<ILogger<OpenAICompatibleAIService>>(),
-                    httpClient, "zhipu", "GLM"),
+                    httpClient, "zhipu", "GLM", endpoint),
                 "qwen" or "dashscope" => new OpenAICompatibleAIService(
                     config, cacheService,
                     _serviceProvider.GetRequiredService<ILogger<OpenAICompatibleAIService>>(),
-                    httpClient, "qwen", "Qwen"),
+                    httpClient, "qwen", "Qwen", endpoint),
                 "spark" => new OpenAICompatibleAIService(
                     config, cacheService,
                     _serviceProvider.GetRequiredService<ILogger<OpenAICompatibleAIService>>(),
-                    httpClient, "spark", "Spark"),
+                    httpClient, "spark", "Spark", endpoint),
                 "wenxin" or "ernie" => new OpenAICompatibleAIService(
                     config, cacheService,
                     _serviceProvider.GetRequiredService<ILogger<OpenAICompatibleAIService>>(),
-                    httpClient, "wenxin", "ERNIE"),
+                    httpClient, "wenxin", "ERNIE", endpoint),
                 _ => throw new ArgumentException($"不支持的AI服务提供商: {provider}", nameof(provider))
             };
         }

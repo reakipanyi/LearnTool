@@ -1,21 +1,24 @@
 using LearningAssistant.Models.Config;
 using LearningAssistant.Services.Cache;
 using Microsoft.Extensions.Logging;
-using System.Net.Http;
-using System.Text;
-using System.Text.Json;
 
 namespace LearningAssistant.Services.AI
 {
-    public class DoubaoAIService : AbstractAIService
+    /// <summary>
+    /// 豆包 (Doubao) AI 服务 - 复用 OpenAICompatibleAIService 的通用实现，
+    /// 仅保留豆包特有的解释 Prompt 文案。
+    /// </summary>
+    public class DoubaoAIService : OpenAICompatibleAIService
     {
-        public DoubaoAIService(AiConfig config, ICacheService cacheService, ILogger<DoubaoAIService> logger, HttpClient httpClient)
-            : base(config, cacheService, logger, httpClient)
+        public DoubaoAIService(
+            AiConfig config,
+            ICacheService cacheService,
+            ILogger<DoubaoAIService> logger,
+            HttpClient httpClient,
+            AiEndpoint? endpoint = null)
+            : base(config, cacheService, logger, httpClient, "doubao", "Doubao", endpoint)
         {
         }
-
-        public override string ModelName => "Doubao";
-        public override string ProviderName => "doubao";
 
         protected override string BuildExplanationPrompt(string text, string language, string subType)
         {
@@ -48,70 +51,6 @@ namespace LearningAssistant.Services.AI
                     return $"请简要解析：{text}\n要求：控制在100字以内，简洁明了。格式：概要+要点+学习提示。";
                 }
                 return $"请简要解释{typeName}：{text}\n要求：控制在100字以内。格式：音标+中文释义+简单例句。";
-            }
-        }
-
-        protected override async Task<string> CallApiAsync(string prompt, CancellationToken cancellationToken = default)
-        {
-            try
-            {
-                var requestBody = new
-                {
-                    model = _config.Model,
-                    messages = new[]
-                    {
-                        new { role = "system", content = "你是一个专业的语言学习助手，请用简洁明了的方式解释词语和回答问题。" },
-                        new { role = "user", content = prompt }
-                    },
-                    max_tokens = 1000,
-                    temperature = 0.7
-                };
-
-                var json = JsonSerializer.Serialize(requestBody);
-                
-                using var request = new HttpRequestMessage(HttpMethod.Post, _config.BaseUrl);
-                request.Content = new StringContent(json, Encoding.UTF8, "application/json");
-                
-                string apiKey = ApiKey;
-                if (!string.IsNullOrEmpty(apiKey))
-                {
-                    request.Headers.Add("Authorization", $"Bearer {apiKey}");
-                }
-
-                var response = await _httpClient.SendAsync(request, cancellationToken);
-                var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    string errorDetail = $"豆包 API错误 ({response.StatusCode})";
-                    try
-                    {
-                        using var doc = JsonDocument.Parse(responseJson);
-                        if (doc.RootElement.TryGetProperty("error", out var errorElement))
-                            errorDetail += $": {errorElement.ToString()}";
-                    }
-                    catch (JsonException ex)
-                    {
-                        _logger.LogWarning("Failed to parse error response: {Ex}", ex.Message);
-                    }
-
-                    _logger.LogError("豆包 API调用失败: {Error}", errorDetail);
-                    throw new HttpRequestException(errorDetail);
-                }
-
-                using var resultDoc = JsonDocument.Parse(responseJson);
-                var choices = resultDoc.RootElement.GetProperty("choices");
-                if (choices.GetArrayLength() > 0)
-                {
-                    var message = choices[0].GetProperty("message");
-                    return message.GetProperty("content").GetString() ?? string.Empty;
-                }
-                return string.Empty;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "豆包 API调用异常");
-                throw;
             }
         }
     }

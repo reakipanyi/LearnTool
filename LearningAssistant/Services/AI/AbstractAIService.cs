@@ -14,12 +14,25 @@ namespace LearningAssistant.Services.AI
         protected readonly ILogger _logger;
         protected readonly HttpClient _httpClient;
 
-        protected AbstractAIService(AiConfig config, ICacheService cacheService, ILogger logger, HttpClient httpClient)
+        /// <summary>
+        /// 当前服务实际使用的端点配置（BaseUrl / Model / ApiKey）。
+        /// 由工厂按 provider 解析注入，保证 fallback 切换到其他 provider 时使用各自独立的配置。
+        /// </summary>
+        protected readonly AiEndpoint _endpoint;
+
+        protected AbstractAIService(
+            AiConfig config,
+            ICacheService cacheService,
+            ILogger logger,
+            HttpClient httpClient,
+            AiEndpoint? endpoint = null)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
             _cacheService = cacheService ?? throw new ArgumentNullException(nameof(cacheService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+            // 未显式注入端点时，按当前全局 Provider 解析（兼容直接 new 的用法）
+            _endpoint = endpoint ?? config.ResolveEndpoint(config.Provider);
         }
 
         public abstract string ModelName { get; }
@@ -128,13 +141,41 @@ namespace LearningAssistant.Services.AI
                 {
                     return await CallApiAsync(prompt, cancellationToken);
                 }
-                catch (Exception ex) when (i < maxRetries - 1)
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
-                    _logger.LogWarning(ex, "AI API调用失败，正在重试 ({Attempt}/{MaxRetries})", i + 1, maxRetries);
+                    // 用户主动取消，不再重试
+                    throw;
+                }
+                catch (Exception ex) when (i < maxRetries - 1 && IsTransientError(ex))
+                {
+                    _logger.LogWarning(ex, "AI API瞬时错误，正在重试 ({Attempt}/{MaxRetries})", i + 1, maxRetries);
                     await Task.Delay(1000 * (i + 1), cancellationToken);
                 }
             }
             throw new InvalidOperationException("AI API调用多次重试后仍然失败");
+        }
+
+        /// <summary>
+        /// 判断是否为可重试的瞬时错误：
+        /// - 超时 / 连接失败等网络层异常（无状态码的 HttpRequestException、TaskCanceledException）
+        /// - 服务端错误（5xx）
+        /// - 限流（429）
+        /// 4xx 客户端错误（认证失败、参数错误等）为确定性错误，直接抛出不重试。
+        /// </summary>
+        private static bool IsTransientError(Exception ex)
+        {
+            if (ex is TaskCanceledException)
+                return true;
+
+            if (ex is HttpRequestException httpEx && httpEx.StatusCode.HasValue)
+            {
+                var code = (int)httpEx.StatusCode.Value;
+                // 429 Too Many Requests 或 5xx 服务端错误为瞬时；其余（尤其 4xx）不重试
+                return code == 429 || code >= 500;
+            }
+
+            // 无状态码的 HttpRequestException 通常为连接层错误（DNS、连接被拒绝、超时等），视为瞬时
+            return ex is HttpRequestException;
         }
 
         protected string GetHash(string input)
@@ -144,7 +185,7 @@ namespace LearningAssistant.Services.AI
             return BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
         }
 
-        protected string ApiKey => _config.ApiKey ?? string.Empty;
+        protected string ApiKey => _endpoint.ApiKey;
 
         /// <summary>
         /// 检查API密钥是否有效

@@ -1,6 +1,7 @@
 using Xunit;
 using FluentAssertions;
 using LearningAssistant.Services.TTS;
+using LearningAssistant.Models.Config;
 using Microsoft.Extensions.Logging;
 using Moq;
 using System.Threading;
@@ -22,13 +23,13 @@ namespace LearningAssistant.Tests
             _mockTtsService.Setup(s => s.SpeakAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<float?>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync((string text, string lang, float? speed, CancellationToken ct) => text);
             
-            _coordinator = new SpeechCoordinator(_mockLogger.Object, _mockTtsService.Object);
+            _coordinator = new SpeechCoordinator(_mockLogger.Object, _mockTtsService.Object, new TtsConfig());
         }
 
         [Fact]
         public void Constructor_WithNullTtsService_ShouldNotThrow()
         {
-            var coordinator = new SpeechCoordinator(_mockLogger.Object, null);
+            var coordinator = new SpeechCoordinator(_mockLogger.Object, null, new TtsConfig());
             
             coordinator.Should().NotBeNull();
             coordinator.IsSpeaking.Should().BeFalse();

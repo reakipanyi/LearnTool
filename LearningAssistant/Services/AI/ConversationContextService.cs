@@ -129,7 +129,9 @@ namespace LearningAssistant.Services.AI
                 {
                     _logger?.LogError(ex, "AI请求失败");
                     turn.AiResponse = "抱歉，服务暂时不可用，请稍后再试。";
-                    session.AddTurn(turn);
+                    // 失败时也触发事件让界面停止加载并展示反馈，
+                    // 但不写入历史，避免失败响应污染后续对话上下文
+                    MessageReceived?.Invoke(this, turn);
                     return turn.AiResponse;
                 }
             }

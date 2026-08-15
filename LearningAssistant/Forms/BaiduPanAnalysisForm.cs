@@ -19,6 +19,7 @@ namespace LearningAssistant.Forms
         private readonly ILogger<BaiduPanAnalysisForm>? _logger;
         private readonly IAIPanelPopupService? _aiPanelPopupService;
         private readonly AiConfig? _aiConfig;
+        private readonly IPanAnalysisPromptBuilder? _promptBuilder;
         private CancellationTokenSource? _cts;
         private PanDirectorySnapshot? _snapshot;
         private PanAnalysisResult? _analysisResult;
@@ -46,7 +47,8 @@ namespace LearningAssistant.Forms
             IThemeService themeService,
             ILogger<BaiduPanAnalysisForm>? logger = null,
             IAIPanelPopupService? aiPanelPopupService = null,
-            AiConfig? aiConfig = null)
+            AiConfig? aiConfig = null,
+            IPanAnalysisPromptBuilder? promptBuilder = null)
         {
             _orchestrator = orchestrator;
             _directoryPath = directoryPath;
@@ -54,6 +56,7 @@ namespace LearningAssistant.Forms
             _logger = logger;
             _aiPanelPopupService = aiPanelPopupService;
             _aiConfig = aiConfig;
+            _promptBuilder = promptBuilder;
             InitializeComponent();
 
             // 运行时初始化（依赖构造参数，需放在 InitializeComponent 之后）
@@ -491,7 +494,9 @@ namespace LearningAssistant.Forms
                 {
                     var context = BuildSnapshotContext(_snapshot);
                     var prompt = "请帮我分析以下百度网盘目录结构，针对文件整理、分类、清理等给出具体建议：";
-                    var aiUrl = AiConfig.Providers.GetValueOrDefault("doubao")?.WebViewUrl
+                    // 网页版 AI 地址跟随用户当前配置的 provider，而非固定使用豆包
+                    var provider = _aiConfig?.Provider ?? "doubao";
+                    var aiUrl = AiConfig.Providers.GetValueOrDefault(provider)?.WebViewUrl
                                 ?? "https://www.doubao.com/chat";
                     _aiPanelPopupService.ShowAIAbilityPanel(this, prompt, aiUrl, context);
                     AppendLog("已打开网页版 AI 面板，可手动粘贴目录信息进行分析");
@@ -505,7 +510,9 @@ namespace LearningAssistant.Forms
         }
 
         /// <summary>
-        /// 将目录快照构造成可供网页版 AI 分析的文字上下文
+        /// 将目录快照构造成可供网页版 AI 分析的文字上下文。
+        /// 优先复用 PanAnalysisPromptBuilder 的上下文构建逻辑，避免重复实现；
+        /// 未注入时回退到本地实现。
         /// </summary>
         private string BuildSnapshotContext(PanDirectorySnapshot? snapshot)
         {
@@ -513,6 +520,11 @@ namespace LearningAssistant.Forms
 
             try
             {
+                if (_promptBuilder != null)
+                {
+                    return _promptBuilder.BuildUserPrompt(snapshot);
+                }
+
                 var sb = new System.Text.StringBuilder();
                 sb.AppendLine($"目录：{snapshot.DirectoryPath}");
                 sb.AppendLine($"文件数：{snapshot.Statistics?.TotalFileCount ?? 0:N0}");

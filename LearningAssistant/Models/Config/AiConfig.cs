@@ -43,6 +43,41 @@ namespace LearningAssistant.Models.Config
         public string BaseUrl { get; set; } = string.Empty;
         public int TimeoutSeconds { get; set; } = 30;
 
+        /// <summary>
+        /// 各 AI 提供商的独立配置（可选覆盖），key 为 provider 名（如 "deepseek"）。
+        /// 用于为不同 provider 分别配置 API Key / 模型 / 地址，使 fallback 切换真正生效。
+        /// </summary>
+        public Dictionary<string, AiProviderInfo> ProviderConfigs { get; set; } = new();
+
+        /// <summary>
+        /// 解析指定 provider 实际使用的端点配置。
+        /// 优先级：per-provider 覆盖配置 → 内置默认值（AiProviderInfo）→ 全局配置（仅对当前 provider 生效）。
+        /// </summary>
+        public AiEndpoint ResolveEndpoint(string provider)
+        {
+            var key = provider?.Trim().ToLowerInvariant() ?? string.Empty;
+
+            Providers.TryGetValue(key, out var defaults);
+            ProviderConfigs.TryGetValue(key, out var user);
+
+            var baseUrl = FirstNonEmpty(user?.BaseUrl, defaults?.BaseUrl, BaseUrl);
+            var model = FirstNonEmpty(user?.Model, defaults?.DefaultModel, Model);
+            // 全局 ApiKey 仅对当前 provider 生效；其余 provider 需通过 ProviderConfigs 单独配置
+            var apiKey = FirstNonEmpty(user?.ApiKey, key == Provider ? ApiKey : null, string.Empty);
+
+            return new AiEndpoint(baseUrl, model, apiKey);
+        }
+
+        private static string FirstNonEmpty(params string?[] values)
+        {
+            foreach (var v in values)
+            {
+                if (!string.IsNullOrWhiteSpace(v))
+                    return v!.Trim();
+            }
+            return string.Empty;
+        }
+
         public static readonly ImmutableDictionary<string, AiProviderInfo> Providers = new Dictionary<string, AiProviderInfo>()
         {
             {
@@ -151,7 +186,29 @@ namespace LearningAssistant.Models.Config
         public string Name { get; set; } = string.Empty;
         public string BaseUrl { get; set; } = string.Empty;
         public string DefaultModel { get; set; } = string.Empty;
+        /// <summary>该 provider 显式指定的模型（可选覆盖 DefaultModel）</summary>
+        public string Model { get; set; } = string.Empty;
+        /// <summary>该 provider 的 API Key（可选覆盖全局 Key）</summary>
+        public string ApiKey { get; set; } = string.Empty;
         public List<string> Models { get; set; } = new();
         public string WebViewUrl { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// 解析后的 AI 端点配置（BaseUrl / Model / ApiKey 均已确定，可直接使用）。
+    /// 由 <see cref="AiConfig.ResolveEndpoint"/> 根据 per-provider 覆盖配置、内置默认值与全局配置计算得出。
+    /// </summary>
+    public class AiEndpoint
+    {
+        public string BaseUrl { get; set; } = string.Empty;
+        public string Model { get; set; } = string.Empty;
+        public string ApiKey { get; set; } = string.Empty;
+
+        public AiEndpoint(string baseUrl, string model, string apiKey)
+        {
+            BaseUrl = baseUrl;
+            Model = model;
+            ApiKey = apiKey;
+        }
     }
 }

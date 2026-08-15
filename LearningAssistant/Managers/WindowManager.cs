@@ -277,12 +277,14 @@ namespace LearningAssistant.Managers
                 var panAnalysisLogger = _serviceProvider.GetService<ILogger<BaiduPanAnalysisForm>>();
                 var aiPanelPopupService = _serviceProvider.GetService<IAIPanelPopupService>();
                 var aiConfig = _serviceProvider.GetService<AiConfig>();
+                var panPromptBuilder = _serviceProvider.GetService<Services.PanAnalysis.IPanAnalysisPromptBuilder>();
 
                 var form = new WebView2BrowserForm(cloudStorageService, logger, webBookmarkService, themeService,
                     analysisOrchestrator: analysisOrchestrator,
                     panAnalysisLogger: panAnalysisLogger,
                     aiPanelPopupService: aiPanelPopupService,
-                    aiConfig: aiConfig);
+                    aiConfig: aiConfig,
+                    panPromptBuilder: panPromptBuilder);
                 form.InitialPrompt = initialPrompt;
                 form.StartPosition = FormStartPosition.CenterParent;
                 form.ShowDialog();
