@@ -55,6 +55,7 @@ namespace LearningAssistant.Forms
             rightPanel = new Panel();
             lstRecommendations = new ListView();
             txtLog = new TextBox();
+            splitContainer1 = new SplitContainer();
             mainPanel.SuspendLayout();
             topPanel.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)contentPanel).BeginInit();
@@ -63,6 +64,10 @@ namespace LearningAssistant.Forms
             contentPanel.SuspendLayout();
             leftPanel.SuspendLayout();
             rightPanel.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
+            splitContainer1.Panel1.SuspendLayout();
+            splitContainer1.Panel2.SuspendLayout();
+            splitContainer1.SuspendLayout();
             SuspendLayout();
             // 
             // mainPanel
@@ -202,7 +207,7 @@ namespace LearningAssistant.Forms
             // btnGoUp
             // 
             btnGoUp.Enabled = false;
-            btnGoUp.Location = new Point(976, 10);
+            btnGoUp.Location = new Point(8, 47);
             btnGoUp.Margin = new Padding(4);
             btnGoUp.Name = "btnGoUp";
             btnGoUp.Size = new Size(90, 23);
@@ -231,8 +236,7 @@ namespace LearningAssistant.Forms
             // 
             // leftPanel
             // 
-            leftPanel.Controls.Add(txtSummary);
-            leftPanel.Controls.Add(treeFolders);
+            leftPanel.Controls.Add(splitContainer1);
             leftPanel.Dock = DockStyle.Fill;
             leftPanel.Location = new Point(0, 0);
             leftPanel.Name = "leftPanel";
@@ -240,29 +244,29 @@ namespace LearningAssistant.Forms
             leftPanel.Size = new Size(508, 475);
             leftPanel.TabIndex = 0;
             // 
-            // treeFolders
-            // 
-            treeFolders.Dock = DockStyle.Top;
-            treeFolders.Font = new Font("Microsoft YaHei UI", 9F);
-            treeFolders.HideSelection = false;
-            treeFolders.Location = new Point(0, 4);
-            treeFolders.Name = "treeFolders";
-            treeFolders.Size = new Size(502, 150);
-            treeFolders.TabIndex = 2;
-            treeFolders.NodeMouseDoubleClick += treeFolders_NodeMouseDoubleClick;
-            // 
             // txtSummary
             // 
             txtSummary.BackColor = SystemColors.Info;
             txtSummary.Dock = DockStyle.Fill;
             txtSummary.Font = new Font("Microsoft YaHei UI", 9F);
-            txtSummary.Location = new Point(0, 4);
+            txtSummary.Location = new Point(0, 0);
             txtSummary.Multiline = true;
             txtSummary.Name = "txtSummary";
             txtSummary.ReadOnly = true;
             txtSummary.ScrollBars = ScrollBars.Vertical;
-            txtSummary.Size = new Size(502, 471);
+            txtSummary.Size = new Size(502, 135);
             txtSummary.TabIndex = 1;
+            // 
+            // treeFolders
+            // 
+            treeFolders.Dock = DockStyle.Fill;
+            treeFolders.Font = new Font("Microsoft YaHei UI", 9F);
+            treeFolders.HideSelection = false;
+            treeFolders.Location = new Point(0, 0);
+            treeFolders.Name = "treeFolders";
+            treeFolders.Size = new Size(502, 332);
+            treeFolders.TabIndex = 2;
+            treeFolders.NodeMouseDoubleClick += treeFolders_NodeMouseDoubleClick;
             // 
             // rightPanel
             // 
@@ -289,10 +293,8 @@ namespace LearningAssistant.Forms
             // 
             // txtLog
             // 
-            txtLog.BackColor = Color.Black;
             txtLog.Dock = DockStyle.Fill;
             txtLog.Font = new Font("Consolas", 9F);
-            txtLog.ForeColor = Color.LightGreen;
             txtLog.Location = new Point(11, 536);
             txtLog.Multiline = true;
             txtLog.Name = "txtLog";
@@ -300,6 +302,24 @@ namespace LearningAssistant.Forms
             txtLog.ScrollBars = ScrollBars.Vertical;
             txtLog.Size = new Size(1012, 134);
             txtLog.TabIndex = 2;
+            // 
+            // splitContainer1
+            // 
+            splitContainer1.Dock = DockStyle.Fill;
+            splitContainer1.Location = new Point(0, 4);
+            splitContainer1.Name = "splitContainer1";
+            splitContainer1.Orientation = Orientation.Horizontal;
+            // 
+            // splitContainer1.Panel1
+            // 
+            splitContainer1.Panel1.Controls.Add(treeFolders);
+            // 
+            // splitContainer1.Panel2
+            // 
+            splitContainer1.Panel2.Controls.Add(txtSummary);
+            splitContainer1.Size = new Size(502, 471);
+            splitContainer1.SplitterDistance = 332;
+            splitContainer1.TabIndex = 3;
             // 
             // BaiduPanAnalysisForm
             // 
@@ -319,8 +339,12 @@ namespace LearningAssistant.Forms
             ((System.ComponentModel.ISupportInitialize)contentPanel).EndInit();
             contentPanel.ResumeLayout(false);
             leftPanel.ResumeLayout(false);
-            leftPanel.PerformLayout();
             rightPanel.ResumeLayout(false);
+            splitContainer1.Panel1.ResumeLayout(false);
+            splitContainer1.Panel2.ResumeLayout(false);
+            splitContainer1.Panel2.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)splitContainer1).EndInit();
+            splitContainer1.ResumeLayout(false);
             ResumeLayout(false);
         }
 
@@ -349,5 +373,7 @@ namespace LearningAssistant.Forms
         private System.Windows.Forms.TextBox txtLog;
 
         #endregion
+
+        private SplitContainer splitContainer1;
     }
 }

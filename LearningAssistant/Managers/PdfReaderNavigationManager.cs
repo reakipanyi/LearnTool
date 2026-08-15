@@ -381,6 +381,13 @@ namespace LearningAssistant.Managers
 
                 if (e.Button == MouseButtons.Left)
                 {
+                    // Ctrl + 左键：按住拖动平移页面（覆盖当前工具模式，避免进入绘制）
+                    if ((Control.ModifierKeys & Keys.Control) == Keys.Control)
+                    {
+                        StartDragging(e.Location);
+                        return;
+                    }
+
                     switch (_currentToolMode)
                     {
                         case AnnotationToolMode.Select:
