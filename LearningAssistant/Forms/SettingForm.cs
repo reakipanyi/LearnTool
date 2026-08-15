@@ -178,6 +178,20 @@ namespace LearningAssistant.Forms
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public string BaiduPanAppKey
+        {
+            get => textBoxPanAppKey.Text;
+            set => textBoxPanAppKey.Text = value;
+        }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public string BaiduPanSecretKey
+        {
+            get => textBoxPanSecretKey.Text;
+            set => textBoxPanSecretKey.Text = value;
+        }
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public bool IsVoiceEnabled
         {
             get => checkBoxIsVoiceEnabled.Checked;
@@ -271,6 +285,11 @@ namespace LearningAssistant.Forms
         private Label labelBaiduSecret;
         private TextBox textBoxBaiduAppId;
         private Label labelBaiduAppId;
+        private GroupBox groupBoxBaiduPan;
+        private TextBox textBoxPanSecretKey;
+        private Label labelPanSecretKey;
+        private TextBox textBoxPanAppKey;
+        private Label labelPanAppKey;
         private Button buttonSave;
         private Button buttonCancel;
         private Panel headerPanel;
@@ -317,6 +336,11 @@ namespace LearningAssistant.Forms
             buttonCancel = new Button();
             headerPanel = new Panel();
             labelTitle = new Label();
+            groupBoxBaiduPan = new GroupBox();
+            textBoxPanAppKey = new TextBox();
+            labelPanAppKey = new Label();
+            textBoxPanSecretKey = new TextBox();
+            labelPanSecretKey = new Label();
             groupBoxLearningSettings = new GroupBox();
             checkBoxIsVoiceEnabled = new CheckBox();
             labelPronunciationScope = new Label();
@@ -333,6 +357,7 @@ namespace LearningAssistant.Forms
             groupBoxInterface.SuspendLayout();
             ((ISupportInitialize)numericUpDownFontSize).BeginInit();
             groupBoxTranslation.SuspendLayout();
+            groupBoxBaiduPan.SuspendLayout();
             headerPanel.SuspendLayout();
             groupBoxLearningSettings.SuspendLayout();
             ((ISupportInitialize)numericUpDownPronunciationScope).BeginInit();
@@ -498,7 +523,7 @@ namespace LearningAssistant.Forms
             groupBoxInterface.FlatStyle = FlatStyle.Flat;
             groupBoxInterface.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             groupBoxInterface.ForeColor = Color.FromArgb(33, 33, 33);
-            groupBoxInterface.Location = new Point(15, 487);
+            groupBoxInterface.Location = new Point(15, 583);
             groupBoxInterface.Name = "groupBoxInterface";
             groupBoxInterface.Size = new Size(550, 91);
             groupBoxInterface.TabIndex = 2;
@@ -608,6 +633,56 @@ namespace LearningAssistant.Forms
             labelBaiduAppId.TabIndex = 0;
             labelBaiduAppId.Text = "百度AppId:";
             // 
+            // groupBoxBaiduPan
+            // 
+            groupBoxBaiduPan.BackColor = Color.FromArgb(255, 250, 240);
+            groupBoxBaiduPan.Controls.Add(textBoxPanSecretKey);
+            groupBoxBaiduPan.Controls.Add(labelPanSecretKey);
+            groupBoxBaiduPan.Controls.Add(textBoxPanAppKey);
+            groupBoxBaiduPan.Controls.Add(labelPanAppKey);
+            groupBoxBaiduPan.FlatStyle = FlatStyle.Flat;
+            groupBoxBaiduPan.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            groupBoxBaiduPan.ForeColor = Color.FromArgb(33, 33, 33);
+            groupBoxBaiduPan.Location = new Point(15, 391);
+            groupBoxBaiduPan.Name = "groupBoxBaiduPan";
+            groupBoxBaiduPan.Size = new Size(550, 91);
+            groupBoxBaiduPan.TabIndex = 4;
+            groupBoxBaiduPan.TabStop = false;
+            groupBoxBaiduPan.Text = "📦 百度网盘应用维护";
+            // 
+            // textBoxPanAppKey
+            // 
+            textBoxPanAppKey.Location = new Point(95, 23);
+            textBoxPanAppKey.Name = "textBoxPanAppKey";
+            textBoxPanAppKey.Size = new Size(435, 25);
+            textBoxPanAppKey.TabIndex = 1;
+            // 
+            // labelPanAppKey
+            // 
+            labelPanAppKey.ForeColor = Color.FromArgb(33, 33, 33);
+            labelPanAppKey.Location = new Point(15, 26);
+            labelPanAppKey.Name = "labelPanAppKey";
+            labelPanAppKey.Size = new Size(80, 23);
+            labelPanAppKey.TabIndex = 0;
+            labelPanAppKey.Text = "AppKey:";
+            // 
+            // textBoxPanSecretKey
+            // 
+            textBoxPanSecretKey.Location = new Point(95, 57);
+            textBoxPanSecretKey.Name = "textBoxPanSecretKey";
+            textBoxPanSecretKey.PasswordChar = '*';
+            textBoxPanSecretKey.Size = new Size(435, 25);
+            textBoxPanSecretKey.TabIndex = 3;
+            // 
+            // labelPanSecretKey
+            // 
+            labelPanSecretKey.ForeColor = Color.FromArgb(33, 33, 33);
+            labelPanSecretKey.Location = new Point(15, 60);
+            labelPanSecretKey.Name = "labelPanSecretKey";
+            labelPanSecretKey.Size = new Size(80, 23);
+            labelPanSecretKey.TabIndex = 2;
+            labelPanSecretKey.Text = "SecretKey:";
+            // 
             // buttonSave
             // 
             buttonSave.BackColor = Color.FromArgb(76, 175, 80);
@@ -615,7 +690,7 @@ namespace LearningAssistant.Forms
             buttonSave.FlatStyle = FlatStyle.Flat;
             buttonSave.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             buttonSave.ForeColor = Color.White;
-            buttonSave.Location = new Point(315, 720);
+            buttonSave.Location = new Point(315, 816);
             buttonSave.Name = "buttonSave";
             buttonSave.Size = new Size(120, 45);
             buttonSave.TabIndex = 6;
@@ -632,7 +707,7 @@ namespace LearningAssistant.Forms
             buttonCancel.FlatStyle = FlatStyle.Flat;
             buttonCancel.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             buttonCancel.ForeColor = Color.White;
-            buttonCancel.Location = new Point(445, 720);
+            buttonCancel.Location = new Point(445, 816);
             buttonCancel.Name = "buttonCancel";
             buttonCancel.Size = new Size(120, 45);
             buttonCancel.TabIndex = 7;
@@ -673,7 +748,7 @@ namespace LearningAssistant.Forms
             groupBoxLearningSettings.FlatStyle = FlatStyle.Flat;
             groupBoxLearningSettings.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             groupBoxLearningSettings.ForeColor = Color.FromArgb(33, 33, 33);
-            groupBoxLearningSettings.Location = new Point(15, 391);
+            groupBoxLearningSettings.Location = new Point(15, 487);
             groupBoxLearningSettings.Name = "groupBoxLearningSettings";
             groupBoxLearningSettings.Size = new Size(550, 91);
             groupBoxLearningSettings.TabIndex = 5;
@@ -726,7 +801,7 @@ namespace LearningAssistant.Forms
             groupBoxUserManagement.FlatStyle = FlatStyle.Flat;
             groupBoxUserManagement.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             groupBoxUserManagement.ForeColor = Color.FromArgb(33, 33, 33);
-            groupBoxUserManagement.Location = new Point(15, 585);
+            groupBoxUserManagement.Location = new Point(15, 681);
             groupBoxUserManagement.Name = "groupBoxUserManagement";
             groupBoxUserManagement.Size = new Size(550, 130);
             groupBoxUserManagement.TabIndex = 6;
@@ -788,7 +863,7 @@ namespace LearningAssistant.Forms
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = Color.FromArgb(240, 240, 240);
-            ClientSize = new Size(580, 775);
+            ClientSize = new Size(580, 871);
             Controls.Add(buttonCancel);
             Controls.Add(buttonSave);
             Controls.Add(groupBoxUserManagement);
@@ -796,6 +871,7 @@ namespace LearningAssistant.Forms
             Controls.Add(groupBoxTranslation);
             Controls.Add(groupBoxInterface);
             Controls.Add(groupBoxTts);
+            Controls.Add(groupBoxBaiduPan);
             Controls.Add(headerPanel);
             Name = "SettingForm";
             Text = "⚙️ 系统设置";
@@ -807,6 +883,8 @@ namespace LearningAssistant.Forms
             ((ISupportInitialize)numericUpDownFontSize).EndInit();
             groupBoxTranslation.ResumeLayout(false);
             groupBoxTranslation.PerformLayout();
+            groupBoxBaiduPan.ResumeLayout(false);
+            groupBoxBaiduPan.PerformLayout();
             headerPanel.ResumeLayout(false);
             groupBoxLearningSettings.ResumeLayout(false);
             ((ISupportInitialize)numericUpDownPronunciationScope).EndInit();

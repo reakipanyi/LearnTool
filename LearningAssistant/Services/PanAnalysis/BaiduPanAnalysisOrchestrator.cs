@@ -171,38 +171,59 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
         // 确保 Token 有效
         var token = await _tokenManager.EnsureValidTokenAsync(linkedCts.Token);
 
-        // 获取文件列表
+        // 获取文件列表（共享 HttpClient）
         using var apiClient = new BaiduPanApiClient(token);
+
+        // Token 过期（errno=-6）时刷新后重试一次，避免分析中途因 Token 过期失败
+        const int TokenExpiredErrorCode = -6;
 
         var allFiles = new List<PanFileInfo>();
         var allFolders = new List<BaseFileInfo>();
         var totalSize = 0L;
 
-        await foreach (var (file, depth) in TraverseDirectoryAsync(
-            apiClient, directoryPath, options.MaxDepth, linkedCts.Token))
+        for (var attempt = 0; ; attempt++)
         {
-            if (file.IsDir == 1)
-            {
-                allFolders.Add(file);
-            }
-            else
-            {
-                var panFile = MapToPanFileInfo(file, directoryPath);
-                allFiles.Add(panFile);
-                totalSize += file.Size;
-            }
+            // 每次尝试都重新累积（失败重试时丢弃已遍历部分，保证结果完整一致）
+            allFiles = new List<PanFileInfo>();
+            allFolders = new List<BaseFileInfo>();
+            totalSize = 0L;
 
-            // 进度更新
-            var total = allFiles.Count + allFolders.Count;
-            if (total % 100 == 0)
+            try
             {
-                progress?.Report(new PanAnalysisProgress
+                await foreach (var (file, depth) in TraverseDirectoryAsync(
+                    apiClient, directoryPath, options.MaxDepth, linkedCts.Token))
                 {
-                    Phase = PanAnalysisPhase.Fetching,
-                    SubPhase = PanAnalysisSubPhase.FetchingPage,
-                    Message = $"已获取 {total} 个条目...",
-                    Current = total
-                });
+                    if (file.IsDir == 1)
+                    {
+                        allFolders.Add(file);
+                    }
+                    else
+                    {
+                        var panFile = MapToPanFileInfo(file, directoryPath);
+                        allFiles.Add(panFile);
+                        totalSize += file.Size;
+                    }
+
+                    // 进度更新
+                    var total = allFiles.Count + allFolders.Count;
+                    if (total % 100 == 0)
+                    {
+                        progress?.Report(new PanAnalysisProgress
+                        {
+                            Phase = PanAnalysisPhase.Fetching,
+                            SubPhase = PanAnalysisSubPhase.FetchingPage,
+                            Message = $"已获取 {total} 个条目...",
+                            Current = total
+                        });
+                    }
+                }
+                break; // 遍历成功完成
+            }
+            catch (PanApiException ex) when (ex.ErrorCode == TokenExpiredErrorCode && attempt == 0)
+            {
+                _logger.LogWarning("访问 Token 已过期（errno=-6），刷新后重试快照获取");
+                token = await _tokenManager.RefreshTokenAsync(linkedCts.Token);
+                apiClient.UpdateAccessToken(token);
             }
         }
 
@@ -293,18 +314,30 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
             var (currentPath, depth) = queue.Dequeue();
             cancellationToken.ThrowIfCancellationRequested();
 
-            var response = await apiClient.GetFileListAsync(currentPath, "name", 1, 0, 1000);
-            if (response.ErrorCode != 0 || response.FileList == null)
-                continue;
-
-            foreach (var file in response.FileList)
+            // 分页拉取目录列表（百度 list 接口单次最多返回 1000 条）
+            var start = 0;
+            while (true)
             {
-                yield return (file, depth);
+                var response = await apiClient.GetFileListAsync(currentPath, "name", 1, start, 1000);
+                if (response.ErrorCode != 0 || response.FileList == null)
+                    break;
 
-                if (file.IsDir == 1 && (maxDepth == 0 || depth < maxDepth))
+                foreach (var file in response.FileList)
                 {
-                    queue.Enqueue((file.Path, depth + 1));
+                    yield return (file, depth);
+
+                    if (file.IsDir == 1 && (maxDepth == 0 || depth < maxDepth))
+                    {
+                        queue.Enqueue((file.Path, depth + 1));
+                    }
                 }
+
+                // 未取满一页说明已到末尾，结束当前目录分页
+                if (response.FileList.Count < 1000)
+                    break;
+
+                start += response.FileList.Count;
+                await Task.Delay(200, cancellationToken);
             }
 
             // 限流延迟

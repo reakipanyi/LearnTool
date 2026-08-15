@@ -73,6 +73,8 @@ namespace LearningAssistant.Presenters
             _view.Theme = _appConfig.AppSettings.Theme;
             _view.BaiduAppId = _appConfig.TranslationConfig.BaiduAppId;
             _view.BaiduSecret = _appConfig.TranslationConfig.BaiduSecret;
+            _view.BaiduPanAppKey = _appConfig.CloudStorageConfig.BaiduClientId;
+            _view.BaiduPanSecretKey = _appConfig.CloudStorageConfig.BaiduClientSecret;
             _view.IsVoiceEnabled = _appConfig.AppSettings.IsVoiceEnabled;
             _view.PronunciationScope = _appConfig.AppSettings.PronunciationScope;
             _view.IsAIExplanationEnabled = _appConfig.AppSettings.IsAIExplanationEnabled;
@@ -96,6 +98,8 @@ namespace LearningAssistant.Presenters
                 _appConfig.AppSettings.Theme = _view.Theme;
                 _appConfig.TranslationConfig.BaiduAppId = _view.BaiduAppId;
                 _appConfig.TranslationConfig.BaiduSecret = _view.BaiduSecret;
+                _appConfig.CloudStorageConfig.BaiduClientId = _view.BaiduPanAppKey;
+                _appConfig.CloudStorageConfig.BaiduClientSecret = _view.BaiduPanSecretKey;
                 _appConfig.AppSettings.IsVoiceEnabled = _view.IsVoiceEnabled;
                 _appConfig.AppSettings.PronunciationScope = _view.PronunciationScope;
                 _appConfig.AppSettings.IsAIExplanationEnabled = _view.IsAIExplanationEnabled;

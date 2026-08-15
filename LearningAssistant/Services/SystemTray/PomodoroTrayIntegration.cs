@@ -5,6 +5,7 @@ using LearningAssistant.Services.Learning;
 using Microsoft.Extensions.Logging;
 using System.Drawing;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace LearningAssistant.Services.SystemTray
 {
@@ -19,9 +20,11 @@ namespace LearningAssistant.Services.SystemTray
         private readonly IHotkeyService _hotkeyService;
         private readonly ILogger<PomodoroTrayIntegration>? _logger;
         private readonly System.Windows.Forms.Timer _updateTimer;
+        private readonly SynchronizationContext? _syncContext;
 
         private bool _isInitialized;
         private bool _hotkeysRegistered;
+        private bool _disposed;
 
         // 图标缓存：避免每秒重复创建导致 GDI 句柄泄漏
         private readonly Dictionary<PomodoroState, Icon> _iconCache = new();
@@ -58,6 +61,47 @@ namespace LearningAssistant.Services.SystemTray
                 Interval = 1000 // 每秒更新托盘提示
             };
             _updateTimer.Tick += UpdateTimer_Tick;
+
+            // 捕获 UI 线程同步上下文：PomodoroService 的定时器在后台线程触发事件，
+            // 需借此将托盘/UI 更新调度回 UI 线程，避免跨线程访问控件导致程序崩溃。
+            _syncContext = WindowsFormsSynchronizationContext.Current ?? SynchronizationContext.Current;
+        }
+
+        /// <summary>
+        /// 将动作调度到 UI 线程执行（PomodoroService 事件可能在后台线程触发）。
+        /// 托盘控件的任何更新都必须在 UI 线程进行，并包裹异常防止崩溃。
+        /// </summary>
+        private void RunOnUiThread(Action action)
+        {
+            if (_disposed) return;
+
+            var ctx = _syncContext;
+            if (ctx != null && ctx != SynchronizationContext.Current)
+            {
+                ctx.Post(_ =>
+                {
+                    if (_disposed) return;
+                    try
+                    {
+                        action();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "UI 线程更新托盘状态失败");
+                    }
+                }, null);
+            }
+            else
+            {
+                try
+                {
+                    action();
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "更新托盘状态失败");
+                }
+            }
         }
 
         /// <summary>
@@ -193,34 +237,43 @@ namespace LearningAssistant.Services.SystemTray
 
         private void PomodoroService_StateChanged(object? sender, PomodoroStateChangedEventArgs e)
         {
-            UpdateTrayStatus();
+            RunOnUiThread(() =>
+            {
+                UpdateTrayStatus();
 
-            // 状态变化时的通知
-            if (e.NewState == PomodoroState.Studying)
-            {
-                ShowNotification("专注开始", $"开始 {FormatTime(_pomodoroService.TimeRemaining)} 的专注学习");
-            }
-            else if (e.NewState == PomodoroState.ShortBreak)
-            {
-                ShowNotification("短休息开始", $"休息 {_pomodoroService.Settings.ShortBreakMinutes} 分钟");
-            }
-            else if (e.NewState == PomodoroState.LongBreak)
-            {
-                ShowNotification("长休息开始", $"休息 {_pomodoroService.Settings.LongBreakMinutes} 分钟");
-            }
+                // 状态变化时的通知
+                if (e.NewState == PomodoroState.Studying)
+                {
+                    ShowNotification("专注开始", $"开始 {FormatTime(_pomodoroService.TimeRemaining)} 的专注学习");
+                }
+                else if (e.NewState == PomodoroState.ShortBreak)
+                {
+                    ShowNotification("短休息开始", $"休息 {_pomodoroService.Settings.ShortBreakMinutes} 分钟");
+                }
+                else if (e.NewState == PomodoroState.LongBreak)
+                {
+                    ShowNotification("长休息开始", $"休息 {_pomodoroService.Settings.LongBreakMinutes} 分钟");
+                }
+            });
         }
 
         private void PomodoroService_SessionCompleted(object? sender, EventArgs e)
         {
-            var completedCount = _pomodoroService.TodayCompletedPomodoros;
-            ShowNotification("🎉 番茄完成！", $"已完成第 {completedCount} 个番茄钟，休息一下吧！");
+            RunOnUiThread(() =>
+            {
+                var completedCount = _pomodoroService.TodayCompletedPomodoros;
+                ShowNotification("🎉 番茄完成！", $"已完成第 {completedCount} 个番茄钟，休息一下吧！");
 
-            PomodoroCompleted?.Invoke(this, new PomodoroCompletedEventArgs(completedCount));
+                PomodoroCompleted?.Invoke(this, new PomodoroCompletedEventArgs(completedCount));
+            });
         }
 
         private void PomodoroService_BreakCompleted(object? sender, EventArgs e)
         {
-            ShowNotification("休息结束", "休息结束，准备开始新的番茄钟！");
+            RunOnUiThread(() =>
+            {
+                ShowNotification("休息结束", "休息结束，准备开始新的番茄钟！");
+            });
         }
 
         private void PomodoroService_Tick(object? sender, TimeSpan remaining)
@@ -230,6 +283,7 @@ namespace LearningAssistant.Services.SystemTray
 
         private void UpdateTimer_Tick(object? sender, EventArgs e)
         {
+            if (_disposed) return;
             UpdateTrayStatus();
         }
 
@@ -263,18 +317,26 @@ namespace LearningAssistant.Services.SystemTray
         /// </summary>
         private void UpdateTrayStatus()
         {
-            var state = _pomodoroService.CurrentState;
-            var remaining = _pomodoroService.TimeRemaining;
+            try
+            {
+                var state = _pomodoroService.CurrentState;
+                var remaining = _pomodoroService.TimeRemaining;
 
-            // 更新托盘提示文字
-            var tooltip = GetTooltipText(state, remaining);
-            _trayIconService.SetTooltip(tooltip);
+                // 更新托盘提示文字
+                var tooltip = GetTooltipText(state, remaining);
+                _trayIconService.SetTooltip(tooltip);
 
-            // 更新菜单项状态
-            UpdateMenuItems(state);
+                // 更新菜单项状态
+                UpdateMenuItems(state);
 
-            // 尝试更新图标（根据状态显示不同颜色）
-            UpdateTrayIconColor(state);
+                // 尝试更新图标（根据状态显示不同颜色）
+                UpdateTrayIconColor(state);
+            }
+            catch (Exception ex)
+            {
+                // 托盘更新属于次要 UI 行为，任何异常都不应导致程序崩溃
+                _logger?.LogWarning(ex, "更新托盘状态失败");
+            }
         }
 
         /// <summary>
@@ -348,6 +410,13 @@ namespace LearningAssistant.Services.SystemTray
             {
                 var iconColor = GetStateColor(state);
                 var icon = CreateColoredIcon(iconColor);
+
+                // 释放该状态原有的缓存图标，避免覆盖后句柄泄漏
+                if (_iconCache.TryGetValue(state, out var oldIcon) && oldIcon != null && !ReferenceEquals(oldIcon, icon))
+                {
+                    oldIcon.Dispose();
+                }
+
                 _iconCache[state] = icon;
                 _lastIconState = state;
                 _trayIconService.SetIcon(icon);
@@ -452,6 +521,8 @@ namespace LearningAssistant.Services.SystemTray
 
         public void Dispose()
         {
+            _disposed = true;
+
             if (_isInitialized)
             {
                 _updateTimer.Stop();

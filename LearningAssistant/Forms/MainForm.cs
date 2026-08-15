@@ -204,6 +204,9 @@ namespace LearningAssistant.Forms
                 new() { Key = "dashboard", Icon = "🏠", Text = "首页", Order = 0, Group = "main" },
                 new() { Key = "learning", Icon = "📚", Text = "学习", Order = 1, Group = "main" },
                 new() { Key = "pdf", Icon = "📖", Text = "PDF阅读", Order = 2, Group = "main" },
+                new() { Key = "browser", Icon = "🌐", Text = "浏览器", Order = 11, Group = "tools" },
+                new() { Key = "editor", Icon = "✏️", Text = "模板编辑", Order = 12, Group = "tools" },
+                new() { Key = "settings", Icon = "⚙️", Text = "设置", Order = 99, Group = "system" }
                 //new() { Key = "mentor", Icon = "🤖", Text = "AI导师", Order = 3, Group = "main" },
                 //new() { Key = "flashcard", Icon = "🧠", Text = "闪卡复习", Order = 4, Group = "main" },
                 //new() { Key = "statistics", Icon = "📊", Text = "学习统计", Order = 5, Group = "main" },
@@ -212,9 +215,6 @@ namespace LearningAssistant.Forms
                 //new() { Key = "notes", Icon = "📝", Text = "笔记", Order = 8, Group = "tools" },
                 //new() { Key = "wrongbook", Icon = "📕", Text = "错题本", Order = 9, Group = "tools" },
                 //new() { Key = "graph", Icon = "🌐", Text = "知识图谱", Order = 10, Group = "tools" },
-                new() { Key = "browser", Icon = "🌐", Text = "浏览器", Order = 11, Group = "tools" },
-                new() { Key = "editor", Icon = "✏️", Text = "模板编辑", Order = 12, Group = "tools" },
-                new() { Key = "settings", Icon = "⚙️", Text = "设置", Order = 99, Group = "system" }
             });
 
         }
@@ -538,6 +538,12 @@ namespace LearningAssistant.Forms
                         break;
                     case "笔记":
                         _windowManager.OpenNotesWindow();
+                        break;
+                    case "模版编辑":
+                        OpenEditorClicked?.Invoke(this, EventArgs.Empty);
+                        break;
+                    case "浏览器":
+                        ButtonWebView2Browser_Click(null, EventArgs.Empty);
                         break;
                     case "设置":
                         _windowManager.OpenSettingsWindow();

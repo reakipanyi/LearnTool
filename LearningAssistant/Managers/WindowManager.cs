@@ -1,7 +1,9 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Forms;
+using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
+using LearningAssistant.Services;
 using LearningAssistant.Services.Cloud;
 using LearningAssistant.Services.Web;
 using LearningAssistant.Views;
@@ -272,9 +274,15 @@ namespace LearningAssistant.Managers
                 var webBookmarkService = _serviceProvider.GetService<IWebBookmarkService>();
                 var themeService = _serviceProvider.GetService<IThemeService>();
                 var analysisOrchestrator = _serviceProvider.GetService<Services.PanAnalysis.IBaiduPanAnalysisOrchestrator>();
+                var panAnalysisLogger = _serviceProvider.GetService<ILogger<BaiduPanAnalysisForm>>();
+                var aiPanelPopupService = _serviceProvider.GetService<IAIPanelPopupService>();
+                var aiConfig = _serviceProvider.GetService<AiConfig>();
 
                 var form = new WebView2BrowserForm(cloudStorageService, logger, webBookmarkService, themeService,
-                    analysisOrchestrator: analysisOrchestrator);
+                    analysisOrchestrator: analysisOrchestrator,
+                    panAnalysisLogger: panAnalysisLogger,
+                    aiPanelPopupService: aiPanelPopupService,
+                    aiConfig: aiConfig);
                 form.InitialPrompt = initialPrompt;
                 form.StartPosition = FormStartPosition.CenterParent;
                 form.ShowDialog();

@@ -1,6 +1,8 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Forms.Bookmark;
+using LearningAssistant.Models.Config;
+using LearningAssistant.Services;
 using LearningAssistant.Services.Cloud;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Web;
@@ -25,6 +27,9 @@ namespace LearningAssistant.Forms
         private readonly IThemeService? _themeService;
         private readonly IPendingContentService? _pendingContentService;
         private readonly Services.PanAnalysis.IBaiduPanAnalysisOrchestrator? _analysisOrchestrator;
+        private readonly ILogger<BaiduPanAnalysisForm>? _panAnalysisLogger;
+        private readonly IAIPanelPopupService? _aiPanelPopupService;
+        private readonly AiConfig? _aiConfig;
         private CoreWebView2Environment? _webViewEnvironment;
         private readonly Dictionary<TabPage, WebView2> _webViews = new();
         private string? _initialPrompt;
@@ -36,6 +41,11 @@ namespace LearningAssistant.Forms
         private int _tabCounter = 0;
         private int _zoomLevel = Config.DefaultZoomLevel;
         private bool _isAwaitingPanAuth;
+
+        /// <summary>
+        /// 百度网盘 OAuth 授权专用标签页（与网页浏览标签页分离，授权完成后自动关闭）
+        /// </summary>
+        private TabPage? _panAuthTabPage;
 
         /// <summary>
         /// 当前活动的 WebView2
@@ -154,7 +164,10 @@ namespace LearningAssistant.Forms
                                    IWebBookmarkService? webBookmarkService = null,
                                    IThemeService? themeService = null,
                                    IPendingContentService? pendingContentService = null,
-                                   Services.PanAnalysis.IBaiduPanAnalysisOrchestrator? analysisOrchestrator = null)
+                                   Services.PanAnalysis.IBaiduPanAnalysisOrchestrator? analysisOrchestrator = null,
+                                   ILogger<BaiduPanAnalysisForm>? panAnalysisLogger = null,
+                                   IAIPanelPopupService? aiPanelPopupService = null,
+                                   AiConfig? aiConfig = null)
         {
             _cloudStorageService = cloudStorageService;
             _logger = logger;
@@ -162,6 +175,9 @@ namespace LearningAssistant.Forms
             _themeService = themeService;
             _pendingContentService = pendingContentService;
             _analysisOrchestrator = analysisOrchestrator;
+            _panAnalysisLogger = panAnalysisLogger;
+            _aiPanelPopupService = aiPanelPopupService;
+            _aiConfig = aiConfig;
             InitializeComponent();
             WindowState = FormWindowState.Maximized;
             InitializeProviderButtonMappings();
@@ -522,21 +538,29 @@ namespace LearningAssistant.Forms
             if (webView == null) return;
 
             // 捕获百度网盘 OAuth 回调授权码（TokenHelper 授权链接 → 回调 URL 携带 code）
-            if (_isAwaitingPanAuth && webView == CurrentWebView?.CoreWebView2)
+            // 仅监听授权专用标签页（或授权时正在浏览的当前页），避免误捕获其他网页
+            // 注意：CoreWebView2 无 Tag 属性，需通过 _webViews 反查 WebView2 控件后再取其 Tag（所属标签页）
+            var webViewCtrl = _webViews.FirstOrDefault(kvp => kvp.Value.CoreWebView2 == webView).Value;
+            if (_isAwaitingPanAuth && webViewCtrl != null)
             {
-                var code = ParsePanAuthCode(e.Uri);
-                if (!string.IsNullOrEmpty(code))
+                var webViewTab = webViewCtrl.Tag as TabPage;
+                var isAuthTab = _panAuthTabPage != null && webViewTab == _panAuthTabPage;
+                var isCurrent = webView == CurrentWebView?.CoreWebView2;
+                if (isAuthTab || isCurrent)
                 {
-                    var capturedCode = code;
-                    BeginInvoke(new Action(async () =>
+                    var code = ParsePanAuthCode(e.Uri);
+                    if (!string.IsNullOrEmpty(code))
                     {
-                        if (IsDisposed) return;
-                        await CompletePanAuthorizationAsync(capturedCode);
-                    }));
+                        var capturedCode = code;
+                        BeginInvoke(new Action(async () =>
+                        {
+                            if (IsDisposed) return;
+                            await CompletePanAuthorizationAsync(capturedCode);
+                        }));
+                    }
                 }
             }
 
-            var webViewCtrl = _webViews.FirstOrDefault(kvp => kvp.Value.CoreWebView2 == webView).Value;
             if (webViewCtrl != null && webViewCtrl.Tag is TabPage tabPage && tabPage == tabControl.SelectedTab)
             {
                 BeginInvoke(new Action(() =>
@@ -576,10 +600,11 @@ namespace LearningAssistant.Forms
                 UpdateTabPageTitle(webView);
             }));
 
-            if (webView != CurrentWebView) return;
-
             // 兜底：授权回调页面加载完成后，尝试从页面内容中提取授权码（兼容 oob 展示形式）
-            if (_isAwaitingPanAuth)
+            // 授权页在独立标签页中打开，即使当前选中页不是授权页也要尝试提取
+            var isPanAuthTab = _panAuthTabPage != null && webView.Tag as TabPage == _panAuthTabPage;
+            var isCurrentTab = webView == CurrentWebView;
+            if (_isAwaitingPanAuth && (isPanAuthTab || isCurrentTab))
             {
                 var navUrl = webView.Source?.ToString() ?? string.Empty;
                 if (navUrl.Contains("login_success", StringComparison.OrdinalIgnoreCase) ||
@@ -590,7 +615,7 @@ namespace LearningAssistant.Forms
                         if (IsDisposed) return;
                         try
                         {
-                            if (CurrentWebView?.CoreWebView2 == null || !_isAwaitingPanAuth) return;
+                            if (webView.IsDisposed || webView.CoreWebView2 == null || !_isAwaitingPanAuth) return;
 
                             const string js = @"(function() {
                                 try {
@@ -603,7 +628,7 @@ namespace LearningAssistant.Forms
                                 } catch(e) { return ''; }
                             })()";
 
-                            var result = await CurrentWebView.CoreWebView2.ExecuteScriptAsync(js);
+                            var result = await webView.CoreWebView2.ExecuteScriptAsync(js);
                             var code = JsonConvert.DeserializeObject<string>(result);
                             if (!string.IsNullOrEmpty(code))
                             {
@@ -617,6 +642,9 @@ namespace LearningAssistant.Forms
                     }));
                 }
             }
+
+            // 非当前标签页的后续状态刷新逻辑跳过
+            if (!isCurrentTab) return;
 
             BeginInvoke(new Action(async () =>
             {
@@ -1396,6 +1424,22 @@ namespace LearningAssistant.Forms
         /// </summary>
         private async void btnAiAnalyze_Click(object sender, EventArgs e)
         {
+            try
+            {
+                await HandleAiAnalyzeAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "AI 分析操作失败");
+                MessageBox.Show($"AI 分析失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// AI 分析核心逻辑（授权检查 → 路径提取 → 打开分析窗体）
+        /// </summary>
+        private async Task HandleAiAnalyzeAsync()
+        {
             if (_analysisOrchestrator == null)
             {
                 MessageBox.Show("AI 分析服务不可用", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -1456,22 +1500,33 @@ namespace LearningAssistant.Forms
                 return;
             }
 
-            try
+            // 关键：不能在 ExecuteScriptAsync（WebView2 异步调用）的延续上下文里直接 ShowDialog。
+            // WebView2 运行时自带重入检测：若在其回调/延续尚未完全返回时启动模态消息循环，
+            // 宿主进程会在 EmbeddedBrowserWebView.dll 内触发 0x80000003（STATUS_BREAKPOINT）崩溃退出。
+            // （微软官方确认：WebView2Feedback #2542 / #4734，修复方式为把模态窗体调度到回调之外打开。）
+            // 这里通过 BeginInvoke 把模态窗体投递到 WebView2 回调完全返回后的新消息泵轮次再打开。
+            if (IsDisposed || !IsHandleCreated) return;
+            BeginInvoke(new Action(() =>
             {
-                using var form = new BaiduPanAnalysisForm(_analysisOrchestrator, path, _themeService!);
-                form.ShowDialog(this);
-
-                // 执行完成后刷新页面
-                if (form.ExecutedAny && CurrentWebView?.CoreWebView2 != null)
+                try
                 {
-                    CurrentWebView.CoreWebView2.Reload();
+                    using (var form = new BaiduPanAnalysisForm(_analysisOrchestrator, path, _themeService!, _panAnalysisLogger, _aiPanelPopupService, _aiConfig))
+                    {
+                        form.ShowDialog(this);
+
+                        // 执行完成后刷新页面
+                        if (form.ExecutedAny && CurrentWebView?.CoreWebView2 != null)
+                        {
+                            CurrentWebView.CoreWebView2.Reload();
+                        }
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "打开百度网盘 AI 分析窗体失败");
-                MessageBox.Show($"打开分析窗体失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "打开百度网盘 AI 分析窗体失败");
+                    MessageBox.Show($"打开分析窗体失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }));
         }
 
         /// <summary>
@@ -1506,16 +1561,23 @@ namespace LearningAssistant.Forms
                     _logger?.LogInformation("百度网盘 API 凭证已配置");
                 }
 
-                // 2. 生成授权链接并打开
+                // 2. 生成授权链接，并在独立标签页中打开（与当前网页浏览标签页分离）
                 var authUrl = await _cloudStorageService.GetAuthorizationUrlAsync();
-                _logger?.LogInformation("生成百度网盘授权链接并打开授权页面");
+                _logger?.LogInformation("生成百度网盘授权链接并打开独立授权标签页");
 
                 _isAwaitingPanAuth = true;
-                NavigateToUrl(authUrl);
+                var authWebView = await CreateNewTabAsync(authUrl, "百度网盘授权");
+                if (authWebView == null)
+                {
+                    // 授权标签页创建失败（如标签页已达上限），重置等待状态
+                    _isAwaitingPanAuth = false;
+                    return;
+                }
+                _panAuthTabPage = authWebView.Tag as TabPage;
 
                 MessageBox.Show(
-                    "已打开百度网盘授权页面，请在页面中登录并点击「授权」。\n\n" +
-                    "授权完成后，本程序会自动捕获授权码并换取 Token。\n" +
+                    "已在独立标签页打开百度网盘授权页面，请在页面中登录并点击「授权」。\n\n" +
+                    "授权完成后，本程序会自动捕获授权码并换取 Token，并自动关闭授权标签页。\n" +
                     "若页面显示授权码但未被自动识别，请复制授权码后点击「AI 分析」按钮并粘贴。",
                     "百度网盘授权",
                     MessageBoxButtons.OK,
@@ -1541,6 +1603,10 @@ namespace LearningAssistant.Forms
             if (_cloudStorageService == null || string.IsNullOrWhiteSpace(authCode))
                 return;
 
+            // 取走授权标签页引用并清空，防止授权页被重复关闭
+            var authTab = _panAuthTabPage;
+            _panAuthTabPage = null;
+
             try
             {
                 _logger?.LogInformation("捕获到授权码，正在换取 AccessToken...");
@@ -1563,6 +1629,21 @@ namespace LearningAssistant.Forms
             {
                 _logger?.LogError(ex, "百度网盘授权码换取 Token 失败");
                 MessageBox.Show($"授权失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                // 无论成功或失败，都关闭授权专用标签页，切回原网页浏览标签页
+                if (authTab != null && !authTab.IsDisposed && tabControl.TabPages.Contains(authTab))
+                {
+                    try
+                    {
+                        await CloseTabAsync(authTab);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "关闭百度网盘授权标签页失败");
+                    }
+                }
             }
         }
 

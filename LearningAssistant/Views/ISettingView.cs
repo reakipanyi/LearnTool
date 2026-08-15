@@ -48,6 +48,16 @@ namespace LearningAssistant.Views
         string BaiduSecret { get; set; }
 
         /// <summary>
+        /// 百度网盘应用 Key（AppKey）
+        /// </summary>
+        string BaiduPanAppKey { get; set; }
+
+        /// <summary>
+        /// 百度网盘应用密钥（SecretKey）
+        /// </summary>
+        string BaiduPanSecretKey { get; set; }
+
+        /// <summary>
         /// 是否启用语音
         /// </summary>
         bool IsVoiceEnabled { get; set; }

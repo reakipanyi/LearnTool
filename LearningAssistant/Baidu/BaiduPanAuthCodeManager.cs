@@ -113,7 +113,9 @@ namespace LearningAssistant.Baidu
         #endregion
 
         #region 私有字段
-        private readonly HttpClient _httpClient;
+        // 共享 HttpClient：避免每次授权/刷新都 new 导致 Socket 资源耗尽
+        private static readonly HttpClient _sharedHttpClient = CreateSharedHttpClient();
+        private readonly HttpClient _httpClient = _sharedHttpClient;
         private readonly AuthCodeConfig _config;
         private AuthTokenResponse _currentToken; // 当前Token缓存
         #endregion
@@ -128,14 +130,19 @@ namespace LearningAssistant.Baidu
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
             ValidateConfig();
+            // 共享 HttpClient 固定使用 30 秒超时，timeout 参数当前未被单独应用（现有调用方均为默认值）
+        }
 
-            _httpClient = new HttpClient
+        private static HttpClient CreateSharedHttpClient()
+        {
+            var client = new HttpClient
             {
-                Timeout = TimeSpan.FromSeconds(timeout)
+                Timeout = TimeSpan.FromSeconds(30)
             };
             // 设置官方要求的User-Agent
-            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("pan.baidu.com");
-            _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("pan.baidu.com");
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            return client;
         }
         #endregion
 
@@ -312,7 +319,7 @@ namespace LearningAssistant.Baidu
         #region 资源释放
         public void Dispose()
         {
-            _httpClient?.Dispose();
+            // 共享 HttpClient 为静态字段，不在此处释放
         }
         #endregion
     }

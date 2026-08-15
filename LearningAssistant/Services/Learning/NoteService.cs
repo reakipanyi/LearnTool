@@ -143,7 +143,7 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        private NoteItem ToModel(NoteEntity entity)
+        private static NoteItem ToModel(NoteEntity entity)
         {
             return new NoteItem
             {

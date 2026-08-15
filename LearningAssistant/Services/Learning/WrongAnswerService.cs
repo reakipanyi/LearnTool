@@ -1008,7 +1008,7 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        private WrongAnswerItem ToModel(WrongAnswerEntity entity)
+        private static WrongAnswerItem ToModel(WrongAnswerEntity entity)
         {
             return new WrongAnswerItem
             {

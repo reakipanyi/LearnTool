@@ -3,19 +3,53 @@ using System.Text;
 
 namespace LearningAssistant.Baidu
 {
+    /// <summary>
+    /// 百度网盘 API 业务错误（响应 errno != 0）
+    /// </summary>
+    public class PanApiException : Exception
+    {
+        /// <summary>业务错误码（如 -6 表示 access_token 无效/过期）</summary>
+        public int ErrorCode { get; }
+
+        public PanApiException(int errorCode, string message, Exception? inner = null)
+            : base(message, inner)
+        {
+            ErrorCode = errorCode;
+        }
+    }
+
     public class BaiduPanApiClient : IDisposable
     {
-        private readonly HttpClient _httpClient;
-        private readonly string _accessToken;
+        // 共享 HttpClient：避免每次分析/执行都 new 导致 Socket/TIME_WAIT 资源耗尽
+        private static readonly HttpClient _sharedHttpClient = CreateSharedHttpClient();
+
+        private readonly HttpClient _httpClient = _sharedHttpClient;
+        private string _accessToken;
         private const string BaseUrl = "https://pan.baidu.com";
+
+        // 最近一次请求时间（实例级共享，跨 GET/POST 调用生效，用于限流控制）
+        private DateTime _lastRequestTime = DateTime.MinValue;
 
         // 构造函数初始化
         public BaiduPanApiClient(string accessToken)
         {
             _accessToken = accessToken ?? throw new ArgumentNullException(nameof(accessToken));
-            _httpClient = new HttpClient { BaseAddress = new Uri(BaseUrl) };
-            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("pan.baidu.com");
-            _httpClient.Timeout = TimeSpan.FromSeconds(30);
+        }
+
+        private static HttpClient CreateSharedHttpClient()
+        {
+            var client = new HttpClient { BaseAddress = new Uri(BaseUrl) };
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("pan.baidu.com");
+            client.Timeout = TimeSpan.FromSeconds(30);
+            return client;
+        }
+
+        /// <summary>
+        /// 更新 AccessToken（Token 过期刷新后调用）
+        /// </summary>
+        public void UpdateAccessToken(string accessToken)
+        {
+            _accessToken = accessToken ?? throw new ArgumentNullException(nameof(accessToken));
         }
 
         #region 1. 获取文件列表（list接口）
@@ -452,8 +486,6 @@ namespace LearningAssistant.Baidu
             int rateLimitDelay = 7000)
         {
             int retryCount = 0;
-            // 记录上一次请求时间，用于限流控制
-            DateTime _lastRequestTime = DateTime.MinValue;
 
             while (retryCount <= maxRetryCount)
             {
@@ -490,6 +522,11 @@ namespace LearningAssistant.Baidu
                     // 5. 验证业务响应（如errno是否为0）
                     ValidateResponse(result);
                     return result;
+                }
+                catch (PanApiException)
+                {
+                    // 业务错误不重试（如 errno=-6 Token 过期，交由上层刷新后重试）
+                    throw;
                 }
                 catch (HttpRequestException ex)
                 {
@@ -555,8 +592,6 @@ namespace LearningAssistant.Baidu
       int rateLimitDelay = 10000)
         {
             int retryCount = 0;
-            // 静态变量共享限流时间（与GET请求共用，避免跨方法频控）
-            DateTime _lastRequestTime = DateTime.MinValue;
 
             // 深拷贝请求体（避免重试时请求体已释放/读取）
             HttpContent requestContent = CloneHttpContent(content);
@@ -606,6 +641,11 @@ namespace LearningAssistant.Baidu
 
                     //Console.WriteLine($"[POST成功] 请求{url}响应：{responseContent[..Math.Min(200, responseContent.Length)]}...");
                     return result;
+                }
+                catch (PanApiException)
+                {
+                    // 业务错误不重试（如 errno=-6 Token 过期，交由上层刷新后重试）
+                    throw;
                 }
                 catch (HttpRequestException ex)
                 {
@@ -697,7 +737,8 @@ namespace LearningAssistant.Baidu
             {
                 var errMsgProp = type.GetProperty("ErrorMsg") ?? type.GetProperty("error_msg");
                 var errMsg = errMsgProp?.GetValue(response)?.ToString() ?? "未知错误";
-                throw new Exception($"业务错误：错误码={errno}，描述={errMsg}");
+                // 使用专用异常类型携带错误码，便于上层识别（如 errno=-6 触发 Token 刷新）
+                throw new PanApiException(errno, $"业务错误：错误码={errno}，描述={errMsg}");
             }
         }
 
@@ -752,10 +793,9 @@ namespace LearningAssistant.Baidu
             }
         }
 
-        // 释放资源
+        // 释放资源（共享 HttpClient 为静态字段，不在此处释放）
         public void Dispose()
         {
-            _httpClient?.Dispose();
         }
         #endregion
     }

@@ -135,6 +135,8 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             // 学习核心
             AddFeatureCard("📚", "开始学习", "打开学习内容", Color.FromArgb(99, 102, 241), Color.FromArgb(139, 92, 246));
             AddFeatureCard("📖", "PDF阅读", "打开PDF阅读器", Color.FromArgb(34, 197, 94), Color.FromArgb(16, 185, 129));
+            AddFeatureCard("🧩", "模版编辑", "打开模版编辑器", Color.FromArgb(167, 139, 250), Color.FromArgb(192, 132, 252));
+            AddFeatureCard("🌐", "浏览器", "打开浏览器", Color.FromArgb(14, 165, 233), Color.FromArgb(59, 130, 246));
 
             // 游戏化
             //AddFeatureCard("🎯", "每日挑战", "完成每日任务", Color.FromArgb(236, 72, 153), Color.FromArgb(219, 39, 119));

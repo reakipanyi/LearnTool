@@ -61,6 +61,7 @@ namespace LearningAssistant.Services.Cloud
 
             _config.BaiduClientId = clientId;
             _config.BaiduClientSecret = clientSecret;
+            PersistConfigSync();
             _logger?.LogInformation("百度网盘服务配置已更新");
         }
 
@@ -523,6 +524,12 @@ namespace LearningAssistant.Services.Cloud
 
         private async Task TryPersistConfigAsync()
         {
+            // 与 Configure 保持一致，将最新凭据一并持久化，避免重启后需重新填写/重新授权
+            await Task.Run(PersistConfigSync);
+        }
+
+        private void PersistConfigSync()
+        {
             try
             {
                 if (_persistenceService != null)
@@ -530,6 +537,8 @@ namespace LearningAssistant.Services.Cloud
                     var fullConfig = _persistenceService.LoadConfig();
                     if (fullConfig.CloudStorageConfig != null)
                     {
+                        fullConfig.CloudStorageConfig.BaiduClientId = _config.BaiduClientId;
+                        fullConfig.CloudStorageConfig.BaiduClientSecret = _config.BaiduClientSecret;
                         fullConfig.CloudStorageConfig.BaiduAccessToken = _accessToken ?? "";
                         fullConfig.CloudStorageConfig.BaiduRefreshToken = _refreshToken ?? "";
                         fullConfig.CloudStorageConfig.BaiduTokenExpireTime = _tokenExpireTime;
