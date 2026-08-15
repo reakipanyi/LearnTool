@@ -10,6 +10,12 @@ public class AnalysisOptions
     /// <summary>最大递归深度（1=仅当前目录，0=全部）</summary>
     public int MaxDepth { get; set; } = 2;
 
+    /// <summary>
+    /// 文件数上限（0 = 不限制）。大目录下达到上限即停止遍历，
+    /// 快照会标记 IsComplete=false 并携带截断信息，避免大文件夹拉取过慢、上下文超限。
+    /// </summary>
+    public int MaxFileCount { get; set; } = 3000;
+
     /// <summary>是否包含重复检测</summary>
     public bool DetectDuplicates { get; set; } = true;
 

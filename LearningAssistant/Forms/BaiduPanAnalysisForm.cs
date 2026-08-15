@@ -25,6 +25,12 @@ namespace LearningAssistant.Forms
         private PanAnalysisResult? _analysisResult;
         private bool _isClosing;
 
+        /// <summary>首次分析的根目录路径（用于限制「返回上级」的范围）</summary>
+        private string _rootAnalysisPath = "";
+
+        /// <summary>当前正在/最近分析的目录路径（用于「返回上级」导航）</summary>
+        private string _currentAnalysisPath = "";
+
         /// <summary>是否已成功执行过任何操作（供父窗体判断是否刷新）</summary>
         public bool ExecutedAny { get; private set; }
 
@@ -127,83 +133,106 @@ namespace LearningAssistant.Forms
                     return;
                 }
 
-                _cts = new CancellationTokenSource();
-
-                // 禁用按钮
-                btnStartAnalysis.Enabled = false;
-                btnCancel.Enabled = true;
-                btnExecute.Enabled = false;
-                lstRecommendations.Items.Clear();
-                txtSummary.Clear();
-                txtLog.Clear();
-
-                var progress = new Progress<PanAnalysisProgress>(UpdateProgress);
-
-                try
-                {
-                    var options = new AnalysisOptions
-                    {
-                        MaxDepth = ParseDepth(),
-                        DetectDuplicates = chkDetectDuplicates.Checked,
-                        DetectJunkFiles = true,
-                        UseCache = chkUseCache.Checked
-                    };
-
-                    // 获取快照
-                    AppendLog("正在获取目录快照...");
-                    _snapshot = await _orchestrator.GetSnapshotAsync(
-                        _directoryPath, options, progress, _cts.Token);
-                    if (IsDisposed || _isClosing) return;
-
-                    // 检查 AI API Key 是否配置
-                    var apiKey = _aiConfig?.ApiKey ?? string.Empty;
-                    if (string.IsNullOrEmpty(apiKey) || apiKey.Length <= 10)
-                    {
-                        AppendLog("AI 分析不可用（未配置 API Key）");
-                        DisplayStatistics(_snapshot?.Statistics);
-                        ShowWebAiFallback();
-                        AppendLog("分析完成（仅本地统计，无 AI 建议）");
-                        btnExecute.Enabled = false;
-                        return;
-                    }
-
-                    // AI 分析
-                    AppendLog("正在调用 AI 进行分析...");
-                    _analysisResult = await _orchestrator.AnalyzeDirectoryAsync(
-                        _directoryPath, options, progress, _cts.Token);
-                    if (IsDisposed || _isClosing) return;
-
-                    // 展示结果
-                    DisplayStatistics(_snapshot?.Statistics);
-                    DisplayRecommendations(_analysisResult?.Recommendations);
-                    txtSummary.Text = _analysisResult?.Summary ?? string.Empty;
-                    AppendLog($"分析完成：共 {(_analysisResult?.Recommendations?.Count ?? 0)} 条建议，耗时 {_analysisResult?.AnalysisDuration?.TotalSeconds:F1}s");
-                }
-                catch (OperationCanceledException)
-                {
-                    AppendLog("分析已取消");
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogError(ex, "百度网盘 AI 分析失败，目录: {Path}", _directoryPath);
-                    AppendLog($"错误：{ex.Message}");
-
-                    // AI 服务不可用时，提供网页版替代方案
-                    if (ex.Message.Contains("所有AI服务都不可用"))
-                    {
-                        ShowWebAiFallback();
-                    }
-                    else
-                    {
-                        MessageBox.Show($"分析失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
-                }
+                await RunAnalysisFlowAsync(_directoryPath);
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "开始分析时发生未预期异常");
                 AppendLog($"未预期错误：{ex.Message}");
                 MessageBox.Show($"分析失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 完整的分析流程（获取快照 → 本地统计 → AI 分析 → 展示结果）。
+        /// 供「开始分析」按钮与子目录深入分析/返回上级共用。
+        /// </summary>
+        private async Task RunAnalysisFlowAsync(string path)
+        {
+            _cts = new CancellationTokenSource();
+            _currentAnalysisPath = path;
+            if (string.IsNullOrEmpty(_rootAnalysisPath))
+                _rootAnalysisPath = path;
+
+            // 禁用按钮、清空上次结果
+            btnStartAnalysis.Enabled = false;
+            btnCancel.Enabled = true;
+            btnExecute.Enabled = false;
+            lstRecommendations.Items.Clear();
+            txtSummary.Clear();
+            txtLog.Clear();
+            txtPath.Text = path;
+            UpdateGoUpButton();
+
+            var progress = new Progress<PanAnalysisProgress>(UpdateProgress);
+
+            try
+            {
+                var options = new AnalysisOptions
+                {
+                    MaxDepth = ParseDepth(),
+                    DetectDuplicates = chkDetectDuplicates.Checked,
+                    DetectJunkFiles = true,
+                    UseCache = chkUseCache.Checked
+                };
+
+                // 获取快照
+                AppendLog($"正在获取目录快照：{path}");
+                _snapshot = await _orchestrator.GetSnapshotAsync(
+                    path, options, progress, _cts.Token);
+                if (IsDisposed || _isClosing) return;
+
+                // 展示目录树（供子目录深入分析）
+                BuildFolderTree();
+
+                // 截断提示
+                if (!_snapshot.IsComplete && _snapshot.Scope.MaxFileCount > 0)
+                {
+                    AppendLog($"⚠️ 文件数已达上限 {_snapshot.Scope.MaxFileCount:N0}，快照被截断（仅分析部分数据，可对子目录逐一深入分析）");
+                }
+
+                // 检查 AI API Key 是否配置
+                var apiKey = _aiConfig?.ApiKey ?? string.Empty;
+                if (string.IsNullOrEmpty(apiKey) || apiKey.Length <= 10)
+                {
+                    AppendLog("AI 分析不可用（未配置 API Key）");
+                    DisplayStatistics(_snapshot.Statistics);
+                    ShowWebAiFallback();
+                    AppendLog("分析完成（仅本地统计，无 AI 建议）");
+                    btnExecute.Enabled = false;
+                    return;
+                }
+
+                // AI 分析
+                AppendLog("正在调用 AI 进行分析...");
+                _analysisResult = await _orchestrator.AnalyzeDirectoryAsync(
+                    path, options, progress, _cts.Token);
+                if (IsDisposed || _isClosing) return;
+
+                // 展示结果
+                DisplayStatistics(_snapshot.Statistics);
+                DisplayRecommendations(_analysisResult?.Recommendations);
+                txtSummary.Text = _analysisResult?.Summary ?? string.Empty;
+                AppendLog($"分析完成：共 {(_analysisResult?.Recommendations?.Count ?? 0)} 条建议，耗时 {_analysisResult?.AnalysisDuration?.TotalSeconds:F1}s");
+            }
+            catch (OperationCanceledException)
+            {
+                AppendLog("分析已取消");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "百度网盘 AI 分析失败，目录: {Path}", path);
+                AppendLog($"错误：{ex.Message}");
+
+                // AI 服务不可用时，提供网页版替代方案
+                if (ex.Message.Contains("所有AI服务都不可用"))
+                {
+                    ShowWebAiFallback();
+                }
+                else
+                {
+                    MessageBox.Show($"分析失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
             finally
             {
@@ -215,6 +244,7 @@ namespace LearningAssistant.Forms
                         btnStartAnalysis.Enabled = true;
                         btnCancel.Enabled = false;
                         btnExecute.Enabled = lstRecommendations.Items.Count > 0;
+                        UpdateGoUpButton();
                     }
                     catch (Exception ex)
                     {
@@ -223,6 +253,89 @@ namespace LearningAssistant.Forms
                 }
                 _cts?.Dispose();
                 _cts = null;
+            }
+        }
+
+        /// <summary>根据当前分析路径更新「返回上级」按钮可用性</summary>
+        private void UpdateGoUpButton()
+        {
+            if (btnGoUp == null) return;
+            btnGoUp.Enabled = !string.IsNullOrEmpty(_currentAnalysisPath)
+                              && _currentAnalysisPath != _rootAnalysisPath
+                              && !string.IsNullOrEmpty(GetParentApiPath(_currentAnalysisPath));
+        }
+
+        /// <summary>返回当前目录的上一级（网盘 API 路径，根级时返回自身）</summary>
+        private static string GetParentApiPath(string path)
+        {
+            var trimmed = path.TrimEnd('/');
+            var idx = trimmed.LastIndexOf('/');
+            if (idx <= 0) return trimmed; // 已是顶层
+            return trimmed.Substring(0, idx);
+        }
+
+        /// <summary>返回文件相对路径的直接父目录（"" 表示根目录）</summary>
+        private static string GetParentPath(string relativePath)
+        {
+            if (string.IsNullOrEmpty(relativePath)) return "";
+            var idx = relativePath.LastIndexOf('/');
+            return idx >= 0 ? relativePath.Substring(0, idx) : "";
+        }
+
+        private async void btnGoUp_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (_orchestrator == null || string.IsNullOrEmpty(_currentAnalysisPath)) return;
+                var parent = GetParentApiPath(_currentAnalysisPath);
+                if (parent == _currentAnalysisPath || string.IsNullOrEmpty(parent)) return;
+                await RunAnalysisFlowAsync(parent);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "返回上级目录分析失败");
+                AppendLog($"错误：{ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 双击目录树节点 → 对指定目录进行深入分析（渐进式分析）。
+        /// 子目录节点 = 深入子目录；根节点 = 重新分析当前快照根目录。
+        /// </summary>
+        private async void treeFolders_NodeMouseDoubleClick(object? sender, TreeNodeMouseClickEventArgs e)
+        {
+            try
+            {
+                if (_orchestrator == null) return;
+
+                string? targetPath = null;
+                var isSubFolder = false;
+                if (e.Node?.Tag is PanFolderInfo folder)
+                {
+                    targetPath = folder.Path;
+                    isSubFolder = true;
+                }
+                else if (e.Node?.Tag is string rootPath && !string.IsNullOrEmpty(rootPath))
+                {
+                    targetPath = rootPath;
+                }
+
+                if (string.IsNullOrEmpty(targetPath)) return;
+
+                var confirm = MessageBox.Show(
+                    $"将针对该目录进行分析：\n{targetPath}\n\n" +
+                    (isSubFolder ? "（子目录深入分析，文件数受上限控制，避免大目录拉取过慢）" : "（重新分析当前目录）"),
+                    "分析该目录",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+                if (confirm != DialogResult.Yes) return;
+
+                await RunAnalysisFlowAsync(targetPath);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "深入分析子目录失败");
+                AppendLog($"错误：{ex.Message}");
             }
         }
 
@@ -365,6 +478,11 @@ namespace LearningAssistant.Forms
             {
                 var sb = new System.Text.StringBuilder();
                 sb.AppendLine("===== 目录统计 =====");
+                if (_snapshot is { IsComplete: false, Scope.MaxFileCount: > 0 })
+                {
+                    sb.AppendLine($"⚠️ 文件数已达上限 {_snapshot.Scope.MaxFileCount:N0}，以下统计仅基于已遍历的部分文件");
+                    sb.AppendLine();
+                }
                 sb.AppendLine($"文件数：{stats.TotalFileCount:N0}");
                 sb.AppendLine($"文件夹数：{stats.TotalFolderCount:N0}");
                 sb.AppendLine($"总大小：{stats.TotalSizeFormatted}");
@@ -392,6 +510,60 @@ namespace LearningAssistant.Forms
             catch (Exception ex)
             {
                 _logger?.LogWarning(ex, "展示目录统计失败");
+            }
+        }
+
+        /// <summary>
+        /// 根据当前快照的目录信息构建目录树，双击子目录节点可深入分析（渐进式分析）。
+        /// </summary>
+        private void BuildFolderTree()
+        {
+            try
+            {
+                treeFolders.BeginUpdate();
+                treeFolders.Nodes.Clear();
+                if (_snapshot == null)
+                {
+                    treeFolders.EndUpdate();
+                    return;
+                }
+
+                var rootLabel = _snapshot.DirectoryPath.TrimEnd('/');
+                rootLabel = rootLabel.Substring(rootLabel.LastIndexOf('/') + 1);
+                if (string.IsNullOrEmpty(rootLabel)) rootLabel = "/";
+
+                var rootNode = new TreeNode(
+                    $"{rootLabel}  ({_snapshot.Statistics.TotalFileCount:N0} 个文件, {_snapshot.Statistics.TotalSizeFormatted})");
+                rootNode.Tag = _snapshot.DirectoryPath; // 根节点 Tag 存路径，双击可重新分析
+                treeFolders.Nodes.Add(rootNode);
+
+                // 相对路径 -> 节点 映射（父目录先于子目录，Folders 已按 Depth 升序）
+                var nodeMap = new Dictionary<string, TreeNode>(StringComparer.OrdinalIgnoreCase)
+                {
+                    [""] = rootNode
+                };
+
+                foreach (var folder in _snapshot.Folders
+                             .OrderBy(f => f.Depth)
+                             .ThenBy(f => f.RelativePath, StringComparer.OrdinalIgnoreCase))
+                {
+                    var parentRel = GetParentPath(folder.RelativePath);
+                    if (!nodeMap.TryGetValue(parentRel, out var parentNode))
+                        continue;
+
+                    var node = new TreeNode(folder.Name);
+                    node.Tag = folder; // 子目录节点 Tag 存 PanFolderInfo
+                    parentNode.Nodes.Add(node);
+                    nodeMap[folder.RelativePath] = node;
+                }
+
+                rootNode.Expand();
+                treeFolders.EndUpdate();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "构建目录树失败");
+                try { treeFolders.EndUpdate(); } catch { /* 忽略 */ }
             }
         }
 
@@ -530,6 +702,13 @@ namespace LearningAssistant.Forms
                 sb.AppendLine($"文件数：{snapshot.Statistics?.TotalFileCount ?? 0:N0}");
                 sb.AppendLine($"文件夹数：{snapshot.Statistics?.TotalFolderCount ?? 0:N0}");
                 sb.AppendLine($"总大小：{snapshot.Statistics?.TotalSizeFormatted ?? "-"}");
+                if (!snapshot.IsComplete && snapshot.Scope.MaxFileCount > 0)
+                    sb.AppendLine($"⚠️ 文件数已达上限 {snapshot.Scope.MaxFileCount:N0}，快照被截断，仅为基础分析样本");
+                sb.AppendLine();
+
+                // 目录结构（分层）
+                sb.AppendLine("【目录结构】");
+                sb.AppendLine(BuildFallbackDirectoryTree(snapshot));
                 sb.AppendLine();
 
                 // 文件类型分布
@@ -561,14 +740,25 @@ namespace LearningAssistant.Forms
                     sb.AppendLine();
                 }
 
-                // 文件列表
-                sb.AppendLine($"【文件列表（共 {snapshot.Files.Count} 个，展示前 200 个）】");
-                foreach (var file in snapshot.Files.Take(200))
+                // 重点关注文件：大文件 + 可疑文件
+                sb.AppendLine("【重点关注文件】");
+                foreach (var file in snapshot.Files.Where(f => !f.IsFolder).OrderByDescending(f => f.SizeBytes).Take(30))
+                    sb.AppendLine($"- 大文件：{file.RelativePath}（{file.SizeFormatted}）");
+                foreach (var file in snapshot.Files
+                             .Where(f => !f.IsFolder && (f.IsJunkFile || f.IsPotentialDuplicate))
+                             .Take(50))
+                    sb.AppendLine($"- {(file.IsJunkFile ? "无意义" : "疑似重复")}：{file.RelativePath}（{file.SizeFormatted}）");
+
+                // 小目录时附加完整文件列表
+                if (snapshot.Files.Count <= 200)
                 {
-                    sb.AppendLine($"{file.RelativePath} | {file.SizeFormatted} | {file.CategoryName}");
+                    sb.AppendLine();
+                    sb.AppendLine($"【文件列表（共 {snapshot.Files.Count} 个）】");
+                    foreach (var file in snapshot.Files.Take(200))
+                    {
+                        sb.AppendLine($"{file.RelativePath} | {file.SizeFormatted} | {file.CategoryName}");
+                    }
                 }
-                if (snapshot.Files.Count > 200)
-                    sb.AppendLine($"... 共 {snapshot.Files.Count} 个文件");
 
                 return sb.ToString();
             }
@@ -577,6 +767,47 @@ namespace LearningAssistant.Forms
                 _logger?.LogWarning(ex, "构建网页版 AI 上下文失败");
                 return snapshot.DirectoryPath;
             }
+        }
+
+        /// <summary>
+        /// 构建网页版 AI 兜底用的目录树（带各目录文件数与大小），与 AI Prompt 的目录结构保持一致。
+        /// </summary>
+        private string BuildFallbackDirectoryTree(PanDirectorySnapshot snapshot)
+        {
+            const int maxFoldersShown = 150;
+            var sb = new System.Text.StringBuilder();
+
+            var rootName = snapshot.DirectoryPath.TrimEnd('/');
+            var rootLabel = rootName.Substring(rootName.LastIndexOf('/') + 1);
+            if (string.IsNullOrEmpty(rootLabel)) rootLabel = "/";
+
+            // 汇总每个目录下直接文件数与大小
+            var dirAgg = new Dictionary<string, (int Count, long Size)>();
+            foreach (var file in snapshot.Files.Where(f => !f.IsFolder))
+            {
+                var parent = GetParentPath(file.RelativePath);
+                var cur = dirAgg.GetValueOrDefault(parent);
+                dirAgg[parent] = (cur.Count + 1, cur.Size + file.SizeBytes);
+            }
+
+            var rootStat = dirAgg.GetValueOrDefault("");
+            sb.AppendLine($"{rootLabel}/  ({rootStat.Count:N0} 个文件, {FormatSize(rootStat.Size)})");
+
+            foreach (var folder in snapshot.Folders
+                         .Where(f => !string.IsNullOrEmpty(f.RelativePath))
+                         .OrderBy(f => f.Depth)
+                         .ThenBy(f => f.RelativePath, StringComparer.OrdinalIgnoreCase)
+                         .Take(maxFoldersShown))
+            {
+                var stat = dirAgg.GetValueOrDefault(folder.RelativePath);
+                var indent = new string(' ', Math.Max(0, folder.Depth - 1) * 2);
+                sb.AppendLine($"{indent}└─ {folder.Name}/  ({stat.Count:N0} 个文件, {FormatSize(stat.Size)})");
+            }
+
+            if (snapshot.Folders.Count > maxFoldersShown)
+                sb.AppendLine($"... 还有 {snapshot.Folders.Count - maxFoldersShown} 个子目录未展示");
+
+            return sb.ToString();
         }
 
         #endregion
@@ -601,6 +832,11 @@ namespace LearningAssistant.Forms
             }
             if (cmbDepth != null) cmbDepth.BackColor = colors.Background;
             if (txtPath != null) txtPath.BackColor = colors.Surface;
+            if (treeFolders != null)
+            {
+                treeFolders.BackColor = colors.Background;
+                treeFolders.ForeColor = colors.TextPrimary;
+            }
         }
 
         #endregion

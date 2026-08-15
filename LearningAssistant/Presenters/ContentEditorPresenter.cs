@@ -45,6 +45,11 @@ namespace LearningAssistant.Presenters
         /// </summary>
         private bool _isDirty = false;
 
+        /// <summary>
+        /// 程序化加载数据标记，避免 DataGridView 绑定数据时触发的事件被误判为用户编辑操作
+        /// </summary>
+        private bool _isLoading = false;
+
 
 
         /// <summary>
@@ -132,7 +137,20 @@ namespace LearningAssistant.Presenters
             var subCategory = _view.SelectedSubCategory;
             var context = new LearningContext(GetCurrentUserId(), subject, subCategory);
             var items = _contentLoaderService.LoadItems(context);
-            _view.ItemData = ConvertToDataTable(items, subCategory);
+
+            // 程序化加载期间抑制网格事件：绑定 DataSource 时 RowsAdded 会触发，
+            // 若不做保护，加载完成后会被误判为“有未保存的更改”，导致关闭窗口时弹“JSON为空”提示
+            _isLoading = true;
+            try
+            {
+                _view.ItemData = ConvertToDataTable(items, subCategory);
+                UpdateJsonFromGrid();
+            }
+            finally
+            {
+                _isLoading = false;
+            }
+
             _isDirty = false;
             _view.UpdateDirtyStatus(false);
         }
@@ -316,21 +334,24 @@ namespace LearningAssistant.Presenters
         /// <summary>
         /// 保存更改
         /// </summary>
+        /// <param name="silent">是否静默保存（不弹提示框）。窗口关闭等场景下为 true，避免阻塞式提示打断关闭流程</param>
         /// <returns>保存是否成功</returns>
-        private bool SaveChanges()
+        private bool SaveChanges(bool silent = false)
         {
             var json = _view.CurrentEditItemJson;
             var category = _view.SelectedSubCategory;
 
-            if (string.IsNullOrEmpty(json))
+            if (string.IsNullOrWhiteSpace(json))
             {
-                _view.ShowMessage("请先输入或生成JSON内容！");
+                if (!silent) _view.ShowMessage("请先输入或生成JSON内容！");
                 return false;
             }
 
             try
             {
-                SaveFromJson(json, category);
+                if (!SaveFromJson(json, category, silent))
+                    return false;
+
                 _view.ClearEditForm();
                 LoadItems();
                 _view.UpdateDirtyStatus(false);
@@ -339,7 +360,7 @@ namespace LearningAssistant.Presenters
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to save items to category {Category}", category);
-                _view.ShowMessage($"保存失败：{ex.Message}");
+                if (!silent) _view.ShowMessage($"保存失败：{ex.Message}");
                 return false;
             }
         }
@@ -376,13 +397,13 @@ namespace LearningAssistant.Presenters
             return template.Keys.FirstOrDefault();
         }
 
-        private void SaveFromJson(string json, SubCategoryType category)
+        private bool SaveFromJson(string json, SubCategoryType category, bool silent = false)
         {
             var items = ParseJsonToItems(json, category.ToString());
             if (items.Count == 0)
             {
-                _view.ShowMessage("JSON为空或解析失败！");
-                return;
+                if (!silent) _view.ShowMessage("JSON为空或解析失败！");
+                return false;
             }
             var subject = _view.SelectedSubject;
             var context = new LearningContext(GetCurrentUserId(), subject, category);
@@ -410,6 +431,7 @@ namespace LearningAssistant.Presenters
 
             _contentLoaderService.SaveItems(context, itemsOld);
             _logger.LogInformation("Successfully saved {Count} items to category {Category}", itemsOld.Count, category);
+            return true;
         }
 
         /// <summary>
@@ -488,12 +510,15 @@ namespace LearningAssistant.Presenters
         /// </summary>
         private void OnGridValueChanged(object? sender, EventArgs e)
         {
+            // 程序化加载期间不置脏标记，避免加载完成后被误判为“有未保存的更改”
+            if (_isLoading) return;
             _isDirty = true;
             UpdateJsonFromGrid();
         }
 
         private void OnGridRowsAdded(object? sender, EventArgs e)
         {
+            if (_isLoading) return;
             _isDirty = true;
             UpdateJsonFromGrid();
         }
@@ -691,10 +716,11 @@ namespace LearningAssistant.Presenters
             {
                 try
                 {
-                    var saveResult = SaveChanges();
-                    if (!saveResult)
+                    // 窗口关闭时静默保存，不弹出任何提示框：
+                    // 若编辑内容为空（JSON 为空/解析后无条目），视为无可保存内容，仅记录日志
+                    if (!SaveChanges(silent: true))
                     {
-                        _logger.LogWarning("ContentEditorPresenter.Dispose - Failed to save unsaved changes");
+                        _logger.LogInformation("ContentEditorPresenter.Dispose - No changes to save (empty JSON)");
                     }
                 }
                 catch (Exception ex)

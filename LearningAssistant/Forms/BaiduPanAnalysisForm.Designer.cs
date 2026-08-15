@@ -47,9 +47,11 @@ namespace LearningAssistant.Forms
             btnStartAnalysis = new Button();
             btnCancel = new Button();
             btnExecute = new Button();
+            btnGoUp = new Button();
             contentPanel = new SplitContainer();
             leftPanel = new Panel();
             txtSummary = new TextBox();
+            treeFolders = new TreeView();
             rightPanel = new Panel();
             lstRecommendations = new ListView();
             txtLog = new TextBox();
@@ -93,6 +95,7 @@ namespace LearningAssistant.Forms
             topPanel.Controls.Add(btnStartAnalysis);
             topPanel.Controls.Add(btnCancel);
             topPanel.Controls.Add(btnExecute);
+            topPanel.Controls.Add(btnGoUp);
             topPanel.Dock = DockStyle.Fill;
             topPanel.Location = new Point(11, 11);
             topPanel.Name = "topPanel";
@@ -196,6 +199,17 @@ namespace LearningAssistant.Forms
             btnExecute.Text = "✅ 执行选中操作";
             btnExecute.Click += btnExecute_Click;
             // 
+            // btnGoUp
+            // 
+            btnGoUp.Enabled = false;
+            btnGoUp.Location = new Point(976, 10);
+            btnGoUp.Margin = new Padding(4);
+            btnGoUp.Name = "btnGoUp";
+            btnGoUp.Size = new Size(90, 23);
+            btnGoUp.TabIndex = 9;
+            btnGoUp.Text = "⬆️ 返回上级";
+            btnGoUp.Click += btnGoUp_Click;
+            // 
             // contentPanel
             // 
             contentPanel.Dock = DockStyle.Fill;
@@ -218,12 +232,24 @@ namespace LearningAssistant.Forms
             // leftPanel
             // 
             leftPanel.Controls.Add(txtSummary);
+            leftPanel.Controls.Add(treeFolders);
             leftPanel.Dock = DockStyle.Fill;
             leftPanel.Location = new Point(0, 0);
             leftPanel.Name = "leftPanel";
             leftPanel.Padding = new Padding(0, 4, 6, 0);
             leftPanel.Size = new Size(508, 475);
             leftPanel.TabIndex = 0;
+            // 
+            // treeFolders
+            // 
+            treeFolders.Dock = DockStyle.Top;
+            treeFolders.Font = new Font("Microsoft YaHei UI", 9F);
+            treeFolders.HideSelection = false;
+            treeFolders.Location = new Point(0, 4);
+            treeFolders.Name = "treeFolders";
+            treeFolders.Size = new Size(502, 150);
+            treeFolders.TabIndex = 2;
+            treeFolders.NodeMouseDoubleClick += treeFolders_NodeMouseDoubleClick;
             // 
             // txtSummary
             // 
@@ -316,6 +342,8 @@ namespace LearningAssistant.Forms
         private System.Windows.Forms.Button btnStartAnalysis;
         private System.Windows.Forms.Button btnCancel;
         private System.Windows.Forms.Button btnExecute;
+        private System.Windows.Forms.Button btnGoUp;
+        private System.Windows.Forms.TreeView treeFolders;
         private System.Windows.Forms.TextBox txtSummary; 
         private System.Windows.Forms.ListView lstRecommendations;
         private System.Windows.Forms.TextBox txtLog;

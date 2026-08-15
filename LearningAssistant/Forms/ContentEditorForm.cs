@@ -414,6 +414,13 @@ namespace LearningAssistant.Forms
 
         private void DataGridView_RowsAdded(object? sender, DataGridViewRowsAddedEventArgs e)
         {
+            // 忽略新增行占位符（DataGridView 绑定 DataSource 时也会为其触发 RowsAdded），
+            // 避免程序加载数据后被误判为“有未保存的更改”，导致关闭窗口时弹“JSON为空”提示
+            if (e.RowIndex >= 0 && e.RowIndex < dataGridView.Rows.Count && dataGridView.Rows[e.RowIndex].IsNewRow)
+            {
+                return;
+            }
+
             GridRowsAdded?.Invoke(this, EventArgs.Empty);
             UpdateDirtyStatus(true);
             UpdateStatusCount();

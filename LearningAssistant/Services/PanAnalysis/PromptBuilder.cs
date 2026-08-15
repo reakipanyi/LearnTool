@@ -87,6 +87,15 @@ public class PanAnalysisPromptBuilder : IPanAnalysisPromptBuilder
         sb.AppendLine($"- 文件数：{snapshot.Statistics.TotalFileCount:N0}");
         sb.AppendLine($"- 文件夹数：{snapshot.Statistics.TotalFolderCount:N0}");
         sb.AppendLine($"- 总大小：{snapshot.Statistics.TotalSizeFormatted}");
+        if (!snapshot.IsComplete && snapshot.Scope.MaxFileCount > 0)
+        {
+            sb.AppendLine($"- ⚠️ 文件数已达上限 {snapshot.Scope.MaxFileCount:N0}，快照被截断，以下仅为基础分析样本，建议对子目录逐一深入分析");
+        }
+        sb.AppendLine();
+
+        // 目录结构（分层上下文，帮助 AI 理解目录组织方式）
+        sb.AppendLine("### 目录结构");
+        sb.AppendLine(BuildDirectoryTree(snapshot));
         sb.AppendLine();
 
         // 文件类型分布
@@ -109,6 +118,7 @@ public class PanAnalysisPromptBuilder : IPanAnalysisPromptBuilder
         if (snapshot.Statistics.JunkFileCount > 0)
         {
             sb.AppendLine($"### ⚠️ 无意义文件：{snapshot.Statistics.JunkFileCount} 个，共 {snapshot.Statistics.JunkSizeFormatted}");
+            sb.AppendLine();
         }
 
         // 重复文件组
@@ -128,65 +138,124 @@ public class PanAnalysisPromptBuilder : IPanAnalysisPromptBuilder
             sb.AppendLine();
         }
 
-        // 文件列表（自适应）
-        var fileCount = snapshot.Files.Count;
-        sb.AppendLine("### 文件列表");
-
-        if (fileCount <= _maxFilesForFullList)
+        // 重点关注文件：大文件 + 可疑文件（供 AI 给出具体操作建议）
+        sb.AppendLine("### 📦 重点关注文件");
+        var largeFiles = snapshot.Files
+            .Where(f => !f.IsFolder)
+            .OrderByDescending(f => f.SizeBytes)
+            .Take(30)
+            .ToList();
+        if (largeFiles.Any())
         {
-            // 完整列表
-            sb.AppendLine("| 文件名 | 大小 | 类型 | 修改时间 | 路径 |");
-            sb.AppendLine("|--------|------|------|----------|------|");
-            foreach (var file in snapshot.Files.OrderBy(f => f.RelativePath))
-            {
-                var modified = file.ServerModifiedTime?.ToString("yyyy-MM-dd") ?? "-";
-                sb.AppendLine($"| {EscapeMarkdown(file.Name)} | {file.SizeFormatted} | {file.CategoryName} | {modified} | {EscapeMarkdown(file.RelativePath)} |");
-            }
-        }
-        else if (fileCount <= _maxFilesForCompactList)
-        {
-            // 精简列表（省略路径）
-            sb.AppendLine("| 文件名 | 大小 | 类型 | 修改时间 |");
-            sb.AppendLine("|--------|------|------|----------|");
-            foreach (var file in snapshot.Files.OrderBy(f => f.RelativePath).Take(_maxFilesForCompactList))
-            {
-                var modified = file.ServerModifiedTime?.ToString("yyyy-MM-dd") ?? "-";
-                sb.AppendLine($"| {EscapeMarkdown(file.Name)} | {file.SizeFormatted} | {file.CategoryName} | {modified} |");
-            }
-            if (fileCount > _maxFilesForCompactList)
-                sb.AppendLine($"| ... 还有 {fileCount - _maxFilesForCompactList} 个文件 | ... | ... | ... |");
-        }
-        else
-        {
-            // 摘要模式：仅列出大文件 + 可疑文件
-            sb.AppendLine($"（共 {fileCount} 个文件，列表过长，以下是重点关注项）");
-            sb.AppendLine();
-
-            // Top 50 大文件
-            sb.AppendLine("#### 📦 最大的 50 个文件");
-            foreach (var file in snapshot.Files.OrderByDescending(f => f.SizeBytes).Take(50))
+            sb.AppendLine("#### 最大的 30 个文件");
+            foreach (var file in largeFiles)
             {
                 sb.AppendLine($"- {EscapeMarkdown(file.Name)} ({file.SizeFormatted}) - {EscapeMarkdown(file.RelativePath)}");
             }
+            sb.AppendLine();
+        }
 
-            // 可疑文件
-            var suspicious = snapshot.Files
-                .Where(f => f.IsJunkFile || f.IsPotentialDuplicate)
-                .Take(100)
-                .ToList();
-            if (suspicious.Any())
+        var suspicious = snapshot.Files
+            .Where(f => !f.IsFolder && (f.IsJunkFile || f.IsPotentialDuplicate))
+            .Take(50)
+            .ToList();
+        if (suspicious.Any())
+        {
+            sb.AppendLine("#### ⚠️ 可疑文件（无意义文件/重复文件）");
+            foreach (var file in suspicious)
             {
-                sb.AppendLine();
-                sb.AppendLine("#### ⚠️ 可疑文件（无意义文件/重复文件）");
-                foreach (var file in suspicious)
+                var reason = file.IsJunkFile ? "无意义" : "疑似重复";
+                sb.AppendLine($"- {EscapeMarkdown(file.Name)} ({file.SizeFormatted}) - {reason} - {EscapeMarkdown(file.RelativePath)}");
+            }
+            sb.AppendLine();
+        }
+
+        // 文件列表（自适应：小目录给完整/精简列表，大目录仅给目录树+重点文件）
+        var fileCount = snapshot.Files.Count;
+        if (fileCount <= _maxFilesForCompactList)
+        {
+            sb.AppendLine("### 文件列表");
+            if (fileCount <= _maxFilesForFullList)
+            {
+                // 完整列表
+                sb.AppendLine("| 文件名 | 大小 | 类型 | 修改时间 | 路径 |");
+                sb.AppendLine("|--------|------|------|----------|------|");
+                foreach (var file in snapshot.Files.OrderBy(f => f.RelativePath))
                 {
-                    var reason = file.IsJunkFile ? "无意义" : "疑似重复";
-                    sb.AppendLine($"- {EscapeMarkdown(file.Name)} ({file.SizeFormatted}) - {reason} - {EscapeMarkdown(file.RelativePath)}");
+                    var modified = file.ServerModifiedTime?.ToString("yyyy-MM-dd") ?? "-";
+                    sb.AppendLine($"| {EscapeMarkdown(file.Name)} | {file.SizeFormatted} | {file.CategoryName} | {modified} | {EscapeMarkdown(file.RelativePath)} |");
                 }
+            }
+            else
+            {
+                // 精简列表（省略路径）
+                sb.AppendLine("| 文件名 | 大小 | 类型 | 修改时间 |");
+                sb.AppendLine("|--------|------|------|----------|");
+                foreach (var file in snapshot.Files.OrderBy(f => f.RelativePath).Take(_maxFilesForCompactList))
+                {
+                    var modified = file.ServerModifiedTime?.ToString("yyyy-MM-dd") ?? "-";
+                    sb.AppendLine($"| {EscapeMarkdown(file.Name)} | {file.SizeFormatted} | {file.CategoryName} | {modified} |");
+                }
+                if (fileCount > _maxFilesForCompactList)
+                    sb.AppendLine($"| ... 还有 {fileCount - _maxFilesForCompactList} 个文件 | ... | ... | ... |");
             }
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>
+    /// 构建目录树：按文件夹层级输出，附带各目录下直接文件数与大小，
+    /// 帮助 AI 在上下文有限时也能把握整体目录组织。
+    /// </summary>
+    private string BuildDirectoryTree(PanDirectorySnapshot snapshot)
+    {
+        const int maxFoldersShown = 150;
+        var sb = new StringBuilder();
+
+        var rootName = snapshot.DirectoryPath.TrimEnd('/');
+        var rootLabel = rootName.Substring(rootName.LastIndexOf('/') + 1);
+        if (string.IsNullOrEmpty(rootLabel)) rootLabel = "/";
+
+        // 汇总每个目录下直接包含的文件数与大小（文件相对路径的父目录 作为目录键）
+        var dirAgg = new Dictionary<string, (int Count, long Size)>();
+        foreach (var file in snapshot.Files.Where(f => !f.IsFolder))
+        {
+            var parent = GetParentPath(file.RelativePath);
+            var cur = dirAgg.GetValueOrDefault(parent);
+            dirAgg[parent] = (cur.Count + 1, cur.Size + file.SizeBytes);
+        }
+
+        // 根目录直接文件
+        var rootStat = dirAgg.GetValueOrDefault("");
+        sb.AppendLine($"{rootLabel}/  ({rootStat.Count:N0} 个文件, {FormatSize(rootStat.Size)})");
+
+        var folders = snapshot.Folders
+            .Where(f => !string.IsNullOrEmpty(f.RelativePath))
+            .OrderBy(f => f.Depth)
+            .ThenBy(f => f.RelativePath, StringComparer.OrdinalIgnoreCase)
+            .Take(maxFoldersShown)
+            .ToList();
+
+        foreach (var folder in folders)
+        {
+            var stat = dirAgg.GetValueOrDefault(folder.RelativePath);
+            var indent = new string(' ', Math.Max(0, folder.Depth - 1) * 2);
+            sb.AppendLine($"{indent}└─ {EscapeMarkdown(folder.Name)}/  ({stat.Count:N0} 个文件, {FormatSize(stat.Size)})");
+        }
+
+        if (snapshot.Folders.Count > maxFoldersShown)
+            sb.AppendLine($"... 还有 {snapshot.Folders.Count - maxFoldersShown} 个子目录未展示");
+
+        return sb.ToString();
+    }
+
+    /// <summary>返回文件相对路径的直接父目录（"" 表示根目录）</summary>
+    private static string GetParentPath(string relativePath)
+    {
+        if (string.IsNullOrEmpty(relativePath)) return "";
+        var idx = relativePath.LastIndexOf('/');
+        return idx >= 0 ? relativePath.Substring(0, idx) : "";
     }
 
     private static string EscapeMarkdown(string text)

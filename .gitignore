@@ -381,3 +381,7 @@ docs/
 /LearningAssistant/appsettings.json
 temp_build/
 bin_verify/
+/.diag-temp/diag.ps1
+/_diag_dumps.cmd
+/build.ps1
+/isolate_tests.ps1

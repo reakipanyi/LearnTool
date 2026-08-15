@@ -53,11 +53,26 @@ public class PanDirectorySnapshot
     public DateTime SnapshotTime { get; set; } = DateTime.UtcNow;
     public AnalysisScope Scope { get; set; } = new();
     public List<PanFileInfo> Files { get; set; } = new();
+
+    /// <summary>目录信息（供目录树展示与分层 AI 上下文使用）</summary>
+    public List<PanFolderInfo> Folders { get; set; } = new();
+
     public PanStatistics Statistics { get; set; } = new();
     public List<PanDuplicateGroup> Duplicates { get; set; } = new();
 
-    /// <summary>快照是否完整（文件数是否达到实际总数）</summary>
+    /// <summary>快照是否完整（达到文件数上限被截断时为 false）</summary>
     public bool IsComplete { get; set; }
+}
+
+/// <summary>
+/// 文件夹信息
+/// </summary>
+public class PanFolderInfo
+{
+    public string Path { get; set; } = "";              // API 路径
+    public string RelativePath { get; set; } = "";       // 相对于根目录
+    public string Name { get; set; } = "";
+    public int Depth { get; set; }
 }
 
 /// <summary>
@@ -69,6 +84,9 @@ public class AnalysisScope
     public int TotalFileCount { get; set; }
     public int TotalFolderCount { get; set; }
     public long TotalSizeBytes { get; set; }
+
+    /// <summary>文件数上限（0 = 不限制）。达到上限时快照会被截断（IsComplete=false）</summary>
+    public int MaxFileCount { get; set; }
 }
 
 /// <summary>

@@ -89,7 +89,7 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
 
         // 2. 检查缓存（key 附加模型名，切换 AI 模型后避免命中旧模型的分析结果）
         var modelName = _aiService?.ModelName ?? "default";
-        var cacheKey = $"pan_analysis_{directoryPath}_{options.MaxDepth}_{modelName}";
+        var cacheKey = $"pan_analysis_{directoryPath}_{options.MaxDepth}_{options.MaxFileCount}_{modelName}";
         if (options.UseCache && _cache.TryGetValue(cacheKey, out PanAnalysisResult? cached) && cached != null)
         {
             progress?.Report(new PanAnalysisProgress
@@ -168,8 +168,8 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
             cancellationToken,
             sharedCts.Token);
 
-        // 检查缓存
-        var cacheKey = $"pan_snapshot_{directoryPath}_{options.MaxDepth}";
+        // 检查缓存（key 附加 MaxFileCount，避免截断快照与完整快照互相误用）
+        var cacheKey = $"pan_snapshot_{directoryPath}_{options.MaxDepth}_{options.MaxFileCount}";
         if (options.UseCache && _cache.TryGetValue(cacheKey, out PanDirectorySnapshot? cached) && cached != null)
         {
             progress?.Report(new PanAnalysisProgress
@@ -199,6 +199,7 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
         var allFiles = new List<PanFileInfo>();
         var allFolders = new List<BaseFileInfo>();
         var totalSize = 0L;
+        var isTruncated = false;
 
         for (var attempt = 0; ; attempt++)
         {
@@ -206,6 +207,7 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
             allFiles = new List<PanFileInfo>();
             allFolders = new List<BaseFileInfo>();
             totalSize = 0L;
+            isTruncated = false;
 
             try
             {
@@ -218,6 +220,13 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
                     }
                     else
                     {
+                        // 文件数达到上限即停止遍历（大目录下避免拉取过慢、上下文超限）
+                        if (options.MaxFileCount > 0 && allFiles.Count >= options.MaxFileCount)
+                        {
+                            isTruncated = true;
+                            break;
+                        }
+
                         var panFile = MapToPanFileInfo(file, directoryPath);
                         allFiles.Add(panFile);
                         totalSize += file.Size;
@@ -249,7 +258,9 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
         progress?.Report(new PanAnalysisProgress
         {
             Phase = PanAnalysisPhase.PreComputing,
-            Message = $"获取完成：{allFiles.Count} 个文件，{allFolders.Count} 个文件夹",
+            Message = isTruncated
+                ? $"已达文件数上限（{options.MaxFileCount:N0}），快照已截断：{allFiles.Count} 个文件，{allFolders.Count} 个文件夹"
+                : $"获取完成：{allFiles.Count} 个文件，{allFolders.Count} 个文件夹",
             Total = 1
         });
 
@@ -277,14 +288,20 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
             Scope = new AnalysisScope
             {
                 MaxDepth = options.MaxDepth,
+                MaxFileCount = options.MaxFileCount,
                 TotalFileCount = allFiles.Count,
                 TotalFolderCount = allFolders.Count,
                 TotalSizeBytes = totalSize
             },
             Files = allFiles,
+            Folders = allFolders
+                .Select(f => MapToPanFolderInfo(f, directoryPath))
+                .OrderBy(f => f.Depth)
+                .ThenBy(f => f.RelativePath, StringComparer.OrdinalIgnoreCase)
+                .ToList(),
             Statistics = statistics,
             Duplicates = duplicates,
-            IsComplete = true
+            IsComplete = !isTruncated
         };
 
         // 缓存
@@ -296,7 +313,9 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
         progress?.Report(new PanAnalysisProgress
         {
             Phase = PanAnalysisPhase.Completed,
-            Message = $"快照完成：{allFiles.Count} 个文件，{duplicates.Count} 组重复"
+            Message = isTruncated
+                ? $"快照完成（已截断）：{allFiles.Count} 个文件，{duplicates.Count} 组重复"
+                : $"快照完成：{allFiles.Count} 个文件，{duplicates.Count} 组重复"
         });
 
         return snapshot;
@@ -385,6 +404,23 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
             Md5 = file.Md5,
             IsJunkFile = IsJunkFile(file.ServerFileName ?? "", file.Size),
             IsPotentialDuplicate = false
+        };
+    }
+
+    private PanFolderInfo MapToPanFolderInfo(BaseFileInfo folder, string rootPath)
+    {
+        var relativePath = folder.Path ?? "";
+        if (relativePath.StartsWith(rootPath, StringComparison.Ordinal))
+            relativePath = relativePath[rootPath.Length..].TrimStart('/');
+
+        return new PanFolderInfo
+        {
+            Path = folder.Path ?? "",
+            RelativePath = relativePath,
+            Name = folder.ServerFileName ?? "",
+            Depth = string.IsNullOrEmpty(relativePath)
+                ? 0
+                : relativePath.Split('/', StringSplitOptions.RemoveEmptyEntries).Length
         };
     }
 
