@@ -545,6 +545,9 @@ namespace LearningAssistant.Forms
                     case "浏览器":
                         ButtonWebView2Browser_Click(null, EventArgs.Empty);
                         break;
+                    case "单词消消乐":
+                        _windowManager.OpenWordMatchGameWindow();
+                        break;
                     case "设置":
                         _windowManager.OpenSettingsWindow();
                         break;

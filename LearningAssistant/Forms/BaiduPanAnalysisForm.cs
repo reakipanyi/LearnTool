@@ -3,6 +3,7 @@ using LearningAssistant.Common.Themes;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Models.PanAnalysis;
 using LearningAssistant.Services;
+using LearningAssistant.Services.Cloud;
 using LearningAssistant.Services.PanAnalysis;
 using Microsoft.Extensions.Logging;
 
@@ -20,6 +21,7 @@ namespace LearningAssistant.Forms
         private readonly IAIPanelPopupService? _aiPanelPopupService;
         private readonly AiConfig? _aiConfig;
         private readonly IPanAnalysisPromptBuilder? _promptBuilder;
+        private readonly ICloudStorageService? _cloudStorageService;
         private CancellationTokenSource? _cts;
         private PanDirectorySnapshot? _snapshot;
         private PanAnalysisResult? _analysisResult;
@@ -33,6 +35,9 @@ namespace LearningAssistant.Forms
 
         /// <summary>是否已成功执行过任何操作（供父窗体判断是否刷新）</summary>
         public bool ExecutedAny { get; private set; }
+
+        /// <summary>当前打标的完整列表（未筛选），供筛选/重置使用</summary>
+        private List<PanFileTag> _allFileTags = new();
 
         /// <summary>
         /// 设计视图专用无参构造函数。
@@ -54,7 +59,8 @@ namespace LearningAssistant.Forms
             ILogger<BaiduPanAnalysisForm>? logger = null,
             IAIPanelPopupService? aiPanelPopupService = null,
             AiConfig? aiConfig = null,
-            IPanAnalysisPromptBuilder? promptBuilder = null)
+            IPanAnalysisPromptBuilder? promptBuilder = null,
+            ICloudStorageService? cloudStorageService = null)
         {
             _orchestrator = orchestrator;
             _directoryPath = directoryPath;
@@ -63,12 +69,16 @@ namespace LearningAssistant.Forms
             _aiPanelPopupService = aiPanelPopupService;
             _aiConfig = aiConfig;
             _promptBuilder = promptBuilder;
+            _cloudStorageService = cloudStorageService;
             InitializeComponent();
 
             // 运行时初始化（依赖构造参数，需放在 InitializeComponent 之后）
             txtPath.Text = _directoryPath;
             AppendLog($"准备分析目录：{_directoryPath}");
             AppendLog("点击「开始分析」获取目录快照并生成整理建议。");
+
+            InitRecommendationsList();
+            InitFileTagsList();
 
             _themeService?.RegisterThemeable(this);
             ApplyTheme(_themeService?.CurrentColors ?? ThemeService.GetColors(ThemeMode.Light));
@@ -159,6 +169,8 @@ namespace LearningAssistant.Forms
             btnCancel.Enabled = true;
             btnExecute.Enabled = false;
             lstRecommendations.Items.Clear();
+            lstFileTags.Items.Clear();
+            _allFileTags = new List<PanFileTag>();
             txtSummary.Clear();
             txtLog.Clear();
             txtPath.Text = path;
@@ -184,6 +196,9 @@ namespace LearningAssistant.Forms
 
                 // 展示目录树（供子目录深入分析）
                 BuildFolderTree();
+
+                // 更新「AI 发送内容」标签页（指令 + 目录内容，供手动复制到 AI 网页）
+                UpdateAiPayloadTab();
 
                 // 截断提示
                 if (!_snapshot.IsComplete && _snapshot.Scope.MaxFileCount > 0)
@@ -212,8 +227,9 @@ namespace LearningAssistant.Forms
                 // 展示结果
                 DisplayStatistics(_snapshot.Statistics);
                 DisplayRecommendations(_analysisResult?.Recommendations);
+                DisplayFileTags(_analysisResult?.FileTags);
                 txtSummary.Text = _analysisResult?.Summary ?? string.Empty;
-                AppendLog($"分析完成：共 {(_analysisResult?.Recommendations?.Count ?? 0)} 条建议，耗时 {_analysisResult?.AnalysisDuration?.TotalSeconds:F1}s");
+                AppendLog($"分析完成：共 {(_analysisResult?.Recommendations?.Count ?? 0)} 条建议，{(_analysisResult?.FileTags?.Count ?? 0)} 个文件打标，耗时 {_analysisResult?.AnalysisDuration?.TotalSeconds:F1}s");
             }
             catch (OperationCanceledException)
             {
@@ -623,6 +639,319 @@ namespace LearningAssistant.Forms
             return result;
         }
 
+        #region 文件打标（展示 + 筛选 + 批量整理）
+
+        /// <summary>初始化整理建议列表的列（在构造函数中调用一次）</summary>
+        private void InitRecommendationsList()
+        {
+            try
+            {
+                lstRecommendations.Columns.Clear();
+                lstRecommendations.Columns.Add("选择", 40);
+                lstRecommendations.Columns.Add("操作", 70);
+                lstRecommendations.Columns.Add("优先级", 60);
+                lstRecommendations.Columns.Add("文件名", 150);
+                lstRecommendations.Columns.Add("目标", 120);
+                lstRecommendations.Columns.Add("原因", 300);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "初始化整理建议列表失败");
+            }
+        }
+
+        /// <summary>初始化打标列表的列（在构造函数中调用一次）</summary>
+        private void InitFileTagsList()
+        {
+            try
+            {
+                lstFileTags.Columns.Clear();
+                lstFileTags.Columns.Add("科目", 70);
+                lstFileTags.Columns.Add("价值观", 60);
+                lstFileTags.Columns.Add("年龄段", 70);
+                lstFileTags.Columns.Add("质量", 50);
+                lstFileTags.Columns.Add("文件名", 150);
+                lstFileTags.Columns.Add("内容摘要", 160);
+                lstFileTags.Columns.Add("同类对比", 180);
+                lstFileTags.Columns.Add("路径", 220);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "初始化文件打标列表失败");
+            }
+        }
+
+        /// <summary>展示 AI 打标结果，并填充筛选下拉框</summary>
+        private void DisplayFileTags(List<PanFileTag>? tags)
+        {
+            if (tags == null) return;
+            try
+            {
+                _allFileTags = tags;
+
+                // 填充筛选下拉框（去重、保持出现顺序）
+                PopulateTagFilter(cmbTagSubject, tags.Select(t => t.Subject));
+                PopulateTagFilter(cmbTagValues, tags.Select(t => t.ValuesOrientation));
+                PopulateTagFilter(cmbTagAge, tags.Select(t => t.AgeRange));
+
+                ApplyTagFilter();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "展示文件打标结果失败");
+            }
+        }
+
+        /// <summary>填充单个筛选下拉框：首项「全部」，后续为去重后的取值（保留出现顺序）</summary>
+        private static void PopulateTagFilter(ComboBox combo, IEnumerable<string> values)
+        {
+            var distinct = values
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Distinct()
+                .ToList();
+            combo.BeginUpdate();
+            combo.Items.Clear();
+            combo.Items.Add("全部");
+            foreach (var v in distinct)
+                combo.Items.Add(v);
+            combo.SelectedIndex = 0;
+            combo.EndUpdate();
+        }
+
+        /// <summary>按当前筛选条件刷新打标列表</summary>
+        private void ApplyTagFilter()
+        {
+            try
+            {
+                var subject = cmbTagSubject.SelectedItem?.ToString() ?? "全部";
+                var values = cmbTagValues.SelectedItem?.ToString() ?? "全部";
+                var age = cmbTagAge.SelectedItem?.ToString() ?? "全部";
+
+                var filtered = _allFileTags
+                    .Where(t =>
+                        (subject == "全部" || string.Equals(t.Subject, subject, StringComparison.OrdinalIgnoreCase)) &&
+                        (values == "全部" || string.Equals(t.ValuesOrientation, values, StringComparison.OrdinalIgnoreCase)) &&
+                        (age == "全部" || string.Equals(t.AgeRange, age, StringComparison.OrdinalIgnoreCase)))
+                    .ToList();
+
+                lstFileTags.BeginUpdate();
+                lstFileTags.Items.Clear();
+                foreach (var tag in filtered)
+                {
+                    var item = new ListViewItem(tag.Subject);
+                    item.SubItems.Add(tag.ValuesOrientation);
+                    item.SubItems.Add(tag.AgeRange);
+                    item.SubItems.Add(tag.Quality);
+                    item.SubItems.Add(tag.TargetName);
+                    item.SubItems.Add(tag.ContentSummary);
+                    item.SubItems.Add(tag.ComparisonNote);
+                    item.SubItems.Add(tag.TargetPath);
+                    item.Tag = tag;
+                    item.Checked = tag.IsSelected;
+                    lstFileTags.Items.Add(item);
+                }
+                lstFileTags.EndUpdate();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "应用文件打标筛选失败");
+                try { lstFileTags.EndUpdate(); } catch { /* 忽略 */ }
+            }
+        }
+
+        private void btnTagFilter_Click(object? sender, EventArgs e)
+        {
+            ApplyTagFilter();
+        }
+
+        private void btnTagReset_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (cmbTagSubject.Items.Count > 0) cmbTagSubject.SelectedIndex = 0;
+                if (cmbTagValues.Items.Count > 0) cmbTagValues.SelectedIndex = 0;
+                if (cmbTagAge.Items.Count > 0) cmbTagAge.SelectedIndex = 0;
+                ApplyTagFilter();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "重置文件打标筛选失败");
+            }
+        }
+
+        /// <summary>读取打标列表中勾选的项</summary>
+        private List<PanFileTag> GetSelectedFileTags()
+        {
+            var result = new List<PanFileTag>();
+            try
+            {
+                foreach (ListViewItem item in lstFileTags.Items)
+                {
+                    if (item.Checked && item.Tag is PanFileTag tag)
+                    {
+                        tag.IsSelected = true;
+                        result.Add(tag);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "读取选中打标文件失败");
+            }
+            return result;
+        }
+
+        /// <summary>将打标文件转为删除/移动的推荐操作并执行</summary>
+        private async Task ExecuteTaggedActionsAsync(
+            List<PanFileTag> tags,
+            PanRecommendationType type,
+            string? destinationPath)
+        {
+            if (_orchestrator == null || !tags.Any()) return;
+
+            var recommendations = tags.Select(t => new PanRecommendation
+            {
+                Type = type,
+                TargetPath = t.TargetPath,
+                TargetName = t.TargetName,
+                DestinationPath = destinationPath,
+                Reason = $"文件打标批量整理（{t.Subject}/{t.ValuesOrientation}/{t.AgeRange}）",
+                Priority = PanPriority.Medium,
+                AffectedFileId = t.Id
+            }).ToList();
+
+            _cts = new CancellationTokenSource();
+            btnDeleteTagged.Enabled = false;
+            btnMoveTagged.Enabled = false;
+            btnExecute.Enabled = false;
+            btnStartAnalysis.Enabled = false;
+            btnCancel.Enabled = true;
+
+            var progress = new Progress<PanAnalysisProgress>(UpdateProgress);
+
+            try
+            {
+                var report = await _orchestrator.ExecuteRecommendationsAsync(
+                    recommendations, progress, _cts.Token);
+                if (IsDisposed || _isClosing) return;
+
+                AppendLog($"打标批量整理完成：成功 {report.Succeeded}，失败 {report.Failed}，跳过 {report.Skipped}");
+                if (report.Failed > 0)
+                {
+                    foreach (var failed in report.Results.Where(r => !r.Success))
+                    {
+                        AppendLog($"  ✗ {failed.Recommendation.TargetName}: {failed.ErrorMessage}");
+                    }
+                }
+                MessageBox.Show(report.Summary, "执行结果", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ExecutedAny = report.Succeeded > 0;
+            }
+            catch (OperationCanceledException)
+            {
+                AppendLog("执行已取消");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "百度网盘打标批量整理失败");
+                AppendLog($"执行错误：{ex.Message}");
+                MessageBox.Show($"执行失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                if (!IsDisposed)
+                {
+                    try
+                    {
+                        btnDeleteTagged.Enabled = true;
+                        btnMoveTagged.Enabled = true;
+                        btnExecute.Enabled = lstRecommendations.Items.Count > 0;
+                        btnStartAnalysis.Enabled = true;
+                        btnCancel.Enabled = false;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "重置打标批量整理按钮状态失败");
+                    }
+                }
+                _cts?.Dispose();
+                _cts = null;
+            }
+        }
+
+        private async void btnDeleteTagged_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                var selected = GetSelectedFileTags();
+                if (!selected.Any())
+                {
+                    MessageBox.Show("请先勾选要删除的文件", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                var confirm = MessageBox.Show(
+                    $"将删除以下 {selected.Count} 个文件（进入回收站，可恢复）：\n" +
+                    string.Join("\n", selected.Take(10).Select(t => $"  - {t.TargetName}")) +
+                    (selected.Count > 10 ? $"\n  ... 等共 {selected.Count} 个" : "") +
+                    "\n\n确认执行？",
+                    "删除确认",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+                if (confirm != DialogResult.Yes) return;
+
+                await ExecuteTaggedActionsAsync(selected, PanRecommendationType.Delete, null);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "批量删除打标文件失败");
+                MessageBox.Show($"删除失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private async void btnMoveTagged_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                var selected = GetSelectedFileTags();
+                if (!selected.Any())
+                {
+                    MessageBox.Show("请先勾选要移动的文件", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                using var dialog = new Bookmark.InputDialog(
+                    "移动到目录",
+                    "请输入目标目录完整路径（以 / 结尾）：",
+                    GetParentApiPath(_currentAnalysisPath) + "/");
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+                var destination = dialog.InputText?.Trim();
+                if (string.IsNullOrEmpty(destination))
+                {
+                    MessageBox.Show("目标目录不能为空", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                if (!destination.EndsWith("/"))
+                    destination += "/";
+
+                var confirm = MessageBox.Show(
+                    $"将移动以下 {selected.Count} 个文件到：\n{destination}\n\n确认执行？",
+                    "移动确认",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+                if (confirm != DialogResult.Yes) return;
+
+                await ExecuteTaggedActionsAsync(selected, PanRecommendationType.Move, destination);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "批量移动打标文件失败");
+                MessageBox.Show($"移动失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        #endregion
+
         private void AppendLog(string message)
         {
             if (txtLog == null || txtLog.IsDisposed) return;
@@ -646,38 +975,457 @@ namespace LearningAssistant.Forms
         }
 
         /// <summary>
-        /// 当 AI 服务不可用时，提供网页版 AI 手动分析的替代方案
+        /// 当 AI 服务不可用时，提示用户手动使用「AI 发送内容」标签页。
+        /// 不自动打开 AI 面板，由用户点击「打开 AI 面板」按钮手动发起。
         /// </summary>
         private void ShowWebAiFallback()
         {
             if (IsDisposed || _isClosing) return;
 
+            AppendLog("AI 自动分析不可用（未配置 API Key 或所有 AI 服务均调用失败）");
+            AppendLog("您可切换到「📤 AI 发送内容」标签页：复制指令与目录内容手动粘贴到 AI 网页，或点击「打开 AI 面板」手动发起分析");
+
             try
             {
-                var useWebAi = MessageBox.Show(
+                MessageBox.Show(
                     "AI 自动分析不可用（未配置 API Key 或所有 AI 服务均调用失败）。\n\n" +
-                    "是否使用网页版 AI 手动分析？\n" +
-                    "（将打开 AI 网页，您可手动粘贴目录信息进行分析）",
+                    "请切换到「📤 AI 发送内容」标签页，点击「打开 AI 面板」手动进行分析；\n" +
+                    "或复制其中的指令与目录内容后，粘贴到浏览器 AI 网页。",
                     "AI 服务不可用",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question);
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "提示 AI 服务不可用失败");
+            }
+        }
 
-                if (useWebAi == DialogResult.Yes && _snapshot != null && _aiPanelPopupService != null)
+        /// <summary>
+        /// 生成发送给 AI 的指令提示词（供网页版 AI 面板与「AI 发送内容」标签页共用）。
+        /// 优先复用 PanAnalysisPromptBuilder 的完整 System Prompt（含严格 JSON 输出格式），
+        /// 保证手动粘贴到 AI 网页后返回的 JSON 可被「📥 解析AI结果」直接解析；
+        /// 未注入时回退到内置提示词。
+        /// </summary>
+        private string GetAiInstructionPrompt()
+        {
+            if (_promptBuilder != null)
+            {
+                try
                 {
-                    var context = BuildSnapshotContext(_snapshot);
-                    var prompt = "请帮我分析以下百度网盘目录结构，针对文件整理、分类、清理等给出具体建议：";
-                    // 网页版 AI 地址跟随用户当前配置的 provider，而非固定使用豆包
-                    var provider = _aiConfig?.Provider ?? "doubao";
-                    var aiUrl = AiConfig.Providers.GetValueOrDefault(provider)?.WebViewUrl
-                                ?? "https://www.doubao.com/chat";
-                    _aiPanelPopupService.ShowAIAbilityPanel(this, prompt, aiUrl, context);
-                    AppendLog("已打开网页版 AI 面板，可手动粘贴目录信息进行分析");
+                    return _promptBuilder.BuildSystemPrompt();
                 }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "构建 AI 指令失败，使用内置提示词");
+                }
+            }
+
+            return "请帮我分析以下百度网盘目录结构，要求：\n" +
+                   "1) 针对文件整理、分类、清理、重复文件等给出具体建议；\n" +
+                   "2) 请联网检索网评（豆瓣评分、家长测评等），对能识别的教材/影视/小说等做文件打标：内容摘要、科目、价值观取向、适合年龄段、内容质量（优/良/中/差）、同类资源对比；\n" +
+                   "3) 无法联网或查不到网评时，基于文件名/路径推断并在 reason 中注明。\n" +
+                   "请按 JSON 返回（summary + recommendations + fileTags）。";
+        }
+
+        /// <summary>
+        /// 打开网页版 AI 面板，并携带「指令 + 目录内容」供 AI 分析。
+        /// </summary>
+        private void OpenAiPanelWithPayload()
+        {
+            if (IsDisposed || _isClosing || _snapshot == null || _aiPanelPopupService == null) return;
+
+            try
+            {
+                var context = BuildSnapshotContext(_snapshot);
+                var prompt = GetAiInstructionPrompt();
+                // 网页版 AI 地址跟随用户当前配置的 provider，而非固定使用豆包
+                var provider = _aiConfig?.Provider ?? "doubao";
+                var aiUrl = AiConfig.Providers.GetValueOrDefault(provider)?.WebViewUrl
+                            ?? "https://www.doubao.com/chat";
+                _aiPanelPopupService.ShowAIAbilityPanel(this, prompt, aiUrl, context);
             }
             catch (Exception ex)
             {
                 _logger?.LogWarning(ex, "打开网页版 AI 面板失败");
-                MessageBox.Show($"打开网页版 AI 面板失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 更新「AI 发送内容」标签页：展示将发送给 AI 的指令与目录内容，供手动复制到浏览器。
+        /// </summary>
+        private void UpdateAiPayloadTab()
+        {
+            if (txtAiPayload == null || txtAiPayload.IsDisposed) return;
+            try
+            {
+                var context = _snapshot != null ? BuildSnapshotContext(_snapshot) : string.Empty;
+                txtAiPayload.Text =
+                    "【发送给 AI 的指令】\r\n" + GetAiInstructionPrompt() +
+                    "\r\n\r\n【目录内容（复制到 AI 网页输入框）】\r\n" + context;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "更新 AI 发送内容标签页失败");
+            }
+        }
+
+        private void btnCopyAiPayload_Click(object? sender, EventArgs e)
+        {
+            var text = txtAiPayload?.Text ?? string.Empty;
+            if (string.IsNullOrEmpty(text))
+            {
+                MessageBox.Show("AI 发送内容为空，请先完成分析。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            Clipboard.SetText(text);
+            AppendLog("AI 发送内容已复制到剪贴板");
+        }
+
+        private void btnOpenAiPanel_Click(object? sender, EventArgs e)
+        {
+            if (_snapshot == null)
+            {
+                MessageBox.Show("请先完成分析，再打开 AI 面板。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            OpenAiPanelWithPayload();
+            AppendLog("已打开网页版 AI 面板");
+        }
+
+        #region 手动解析 AI 结果（无需 AI API）
+
+        private void btnClearParseInput_Click(object? sender, EventArgs e)
+        {
+            txtAiResultInput?.Clear();
+            AppendLog("已清空解析输入框");
+        }
+
+        /// <summary>
+        /// 在解析输入框填入一份符合解析格式的示例 JSON，方便了解「整理建议」与「文件打标」的结构。
+        /// </summary>
+        private void btnSampleJson_Click(object? sender, EventArgs e)
+        {
+            txtAiResultInput.Text = """
+            {
+              "summary": "目录整体结构清晰，存在少量重复文件与无意义临时文件，建议清理后按科目/年龄段分类归档。",
+              "recommendations": [
+                {
+                  "type": "Delete",
+                  "targetPath": "/学习/教材/数学必修一_副本.pdf",
+                  "destinationPath": null,
+                  "newName": null,
+                  "reason": "与主文件重复，建议删除进入回收站",
+                  "priority": "High"
+                },
+                {
+                  "type": "Move",
+                  "targetPath": "/下载/数学练习册.pdf",
+                  "destinationPath": "/学习/教材/",
+                  "newName": null,
+                  "reason": "文件类型与目录语义不匹配，移入教材目录",
+                  "priority": "Medium"
+                },
+                {
+                  "type": "Rename",
+                  "targetPath": "/下载/新建文件夹",
+                  "destinationPath": null,
+                  "newName": "数学教辅整理",
+                  "reason": "无意义名称，改为可辨识名称",
+                  "priority": "Low"
+                }
+              ],
+              "fileTags": [
+                {
+                  "targetPath": "/学习/教材/数学必修一.pdf",
+                  "contentSummary": "高中数学必修一教材",
+                  "subject": "数学",
+                  "valuesOrientation": "中性",
+                  "ageRange": "13-18",
+                  "quality": "优",
+                  "comparisonNote": "人教A版经典教材，内容权威",
+                  "reason": "依据文件名推断，未见有效网评"
+                },
+                {
+                  "targetPath": "/影视/动画/宝宝巴士儿歌合集.mp4",
+                  "contentSummary": "低龄儿童儿歌动画合集",
+                  "subject": "艺术",
+                  "valuesOrientation": "积极",
+                  "ageRange": "6-12",
+                  "quality": "良",
+                  "comparisonNote": "适合学龄前儿童，语言启蒙",
+                  "reason": "依据文件名推断"
+                }
+              ]
+            }
+            """;
+            AppendLog("已填入示例 JSON，可点击「解析并填充」查看效果");
+        }
+
+        /// <summary>
+        /// 将手动粘贴的 AI 返回内容（JSON，可含 Markdown 代码块）解析并填充到界面：
+        /// 摘要 → 摘要框；整理建议 → 建议列表；文件打标 → 打标列表与筛选下拉框。
+        /// 全程不调用 AI API，保证在未配置 API Key 时也能正常工作。
+        /// </summary>
+        private void btnParseAiResult_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                var raw = txtAiResultInput?.Text ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(raw))
+                {
+                    MessageBox.Show("请先在下方粘贴 AI 返回的 JSON 结果。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                // 1. 解析 AI 结果（复用与自动分析相同的解析器，支持纯 JSON / Markdown 代码块 / 正则提取）
+                var parser = new Services.PanAnalysis.PanAnalysisResultParser(
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<Services.PanAnalysis.PanAnalysisResultParser>.Instance);
+                var result = parser.Parse(raw);
+
+                if (!result.ParseSuccess)
+                {
+                    AppendLog($"解析 AI 结果失败：{result.ParseError ?? "无法解析为 JSON"}");
+                    MessageBox.Show(
+                        "解析失败：无法从粘贴内容中识别出有效的 JSON 结果。\n\n" +
+                        "请确认粘贴的是 AI 返回的 JSON（可包含 Markdown 代码块），\n" +
+                        "需包含字段：summary、recommendations、fileTags。\n\n" +
+                        "提示：可切换到「📤 AI 发送内容」标签页复制完整指令与目录内容重新向 AI 提问。",
+                        "解析失败",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return;
+                }
+
+                // 2. 将 AI 返回的路径与当前快照的真实文件路径对齐，保证整理/删除/移动能命中真实文件
+                var reconciled = ReconcileTargetPaths(result);
+
+                // 3. 填充界面
+                _analysisResult = reconciled;
+                txtSummary.Text = reconciled.Summary ?? string.Empty;
+                DisplayRecommendations(reconciled.Recommendations);
+                DisplayFileTags(reconciled.FileTags);
+                btnExecute.Enabled = reconciled.Recommendations.Count > 0;
+
+                AppendLog($"解析成功：{reconciled.Recommendations.Count} 条建议，{reconciled.FileTags.Count} 个文件打标，已填充到界面。");
+
+                if (reconciled.Recommendations.Count == 0 && reconciled.FileTags.Count == 0)
+                {
+                    AppendLog("⚠️ 未能从粘贴内容中提取到任何建议或打标：请确认 JSON 含 recommendations / fileTags 数组，且每条含 targetPath（完整路径或文件名均可）。可点击「示例」查看格式。");
+                }
+
+                if (_snapshot == null)
+                    AppendLog("提示：尚未执行「开始分析」，无法将路径映射到真实网盘文件，批量整理可能失败。");
+
+                // 4. 自动切换到「整理建议」标签页，方便直接勾选执行
+                try
+                {
+                    tabControl.SelectedTab = tabRecommendations;
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "切换到整理建议标签页失败");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "手动解析 AI 结果失败");
+                MessageBox.Show($"解析失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 将 AI 返回的 targetPath 与当前快照中的真实文件路径对齐。
+        /// AI 上下文中的路径多为相对路径（甚至可能被 AI 截断/拼接），而执行删除/移动需要完整 API 路径。
+        /// 依次尝试：完整路径 → 相对路径 → 路径末尾匹配 → 文件名唯一匹配。
+        /// </summary>
+        private PanAnalysisResult ReconcileTargetPaths(PanAnalysisResult result)
+        {
+            if (_snapshot == null || _snapshot.Files.Count == 0)
+                return result;
+
+            try
+            {
+                // 建立查找索引：完整路径 / 相对路径 / 文件名（多候选）
+                var byPath = new Dictionary<string, PanFileInfo>(StringComparer.OrdinalIgnoreCase);
+                var byRelative = new Dictionary<string, PanFileInfo>(StringComparer.OrdinalIgnoreCase);
+                var byName = new Dictionary<string, List<PanFileInfo>>(StringComparer.OrdinalIgnoreCase);
+                foreach (var file in _snapshot.Files)
+                {
+                    byPath[file.Path] = file;
+                    if (!string.IsNullOrEmpty(file.RelativePath))
+                        byRelative[file.RelativePath] = file;
+                    if (!string.IsNullOrEmpty(file.Name))
+                    {
+                        if (!byName.TryGetValue(file.Name, out var list))
+                        {
+                            list = new List<PanFileInfo>();
+                            byName[file.Name] = list;
+                        }
+                        list.Add(file);
+                    }
+                }
+
+                PanFileInfo? Resolve(string? targetPath)
+                {
+                    if (string.IsNullOrWhiteSpace(targetPath)) return null;
+                    var tp = targetPath.Trim();
+
+                    if (byPath.TryGetValue(tp, out var f)) return f;
+                    if (byRelative.TryGetValue(tp, out f)) return f;
+
+                    // 路径末尾匹配（AI 可能带了根目录前缀或丢失前缀）
+                    var normalized = tp.TrimEnd('/');
+                    f = _snapshot.Files.FirstOrDefault(x =>
+                        x.RelativePath.EndsWith(normalized, StringComparison.OrdinalIgnoreCase) ||
+                        x.Path.EndsWith(normalized, StringComparison.OrdinalIgnoreCase));
+                    if (f != null) return f;
+
+                    // 仅文件名匹配（唯一时采用，避免误命中同名文件）
+                    var name = Path.GetFileName(normalized);
+                    if (!string.IsNullOrEmpty(name) &&
+                        byName.TryGetValue(name, out var candidates) && candidates.Count == 1)
+                        return candidates[0];
+
+                    return null;
+                }
+
+                foreach (var rec in result.Recommendations)
+                {
+                    var file = Resolve(rec.TargetPath);
+                    if (file != null)
+                    {
+                        rec.TargetPath = file.Path;
+                        rec.TargetName = file.Name;
+                        rec.AffectedFileId = file.FsId.ToString();
+                    }
+                    else if (string.IsNullOrEmpty(rec.TargetName))
+                    {
+                        rec.TargetName = Path.GetFileName(rec.TargetPath);
+                    }
+                }
+
+                foreach (var tag in result.FileTags)
+                {
+                    var file = Resolve(tag.TargetPath);
+                    if (file != null)
+                    {
+                        tag.TargetPath = file.Path;
+                        tag.TargetName = file.Name;
+                    }
+                    else if (string.IsNullOrEmpty(tag.TargetName))
+                    {
+                        tag.TargetName = Path.GetFileName(tag.TargetPath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "对齐 AI 结果路径失败，保留原路径");
+            }
+
+            return result;
+        }
+
+        #endregion
+
+        private void btnCopySummary_Click(object? sender, EventArgs e)
+        {
+            var text = txtSummary?.Text ?? string.Empty;
+            if (string.IsNullOrEmpty(text))
+            {
+                MessageBox.Show("摘要为空", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            Clipboard.SetText(text);
+            AppendLog("摘要已复制到剪贴板");
+        }
+
+        private void btnSaveSummary_Click(object? sender, EventArgs e)
+        {
+            var text = txtSummary?.Text ?? string.Empty;
+            if (string.IsNullOrEmpty(text))
+            {
+                MessageBox.Show("摘要为空", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using var dialog = new SaveFileDialog
+            {
+                Filter = "文本文件|*.txt|所有文件|*.*",
+                Title = "保存分析摘要",
+                FileName = $"目录分析摘要_{DateTime.Now:yyyyMMdd_HHmmss}.txt"
+            };
+            if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+            try
+            {
+                File.WriteAllText(dialog.FileName, text, System.Text.Encoding.UTF8);
+                AppendLog($"摘要已保存到：{dialog.FileName}");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "保存摘要失败");
+                MessageBox.Show($"保存失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 将摘要内容持久化并上传到网盘当前分析目录。
+        /// </summary>
+        private async void btnUploadSummary_Click(object? sender, EventArgs e)
+        {
+            var text = txtSummary?.Text ?? string.Empty;
+            if (string.IsNullOrEmpty(text))
+            {
+                MessageBox.Show("摘要为空，无法上传。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (_cloudStorageService == null)
+            {
+                MessageBox.Show("云存储服务不可用，无法上传到网盘。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(_currentAnalysisPath))
+            {
+                MessageBox.Show("当前分析目录为空，无法确定上传位置。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var fileName = $"目录分析摘要_{DateTime.Now:yyyyMMdd_HHmmss}.txt";
+            var localPath = Path.Combine(Path.GetTempPath(), fileName);
+            var cloudPath = _currentAnalysisPath.TrimEnd('/') + "/" + fileName;
+
+            try
+            {
+                File.WriteAllText(localPath, text, System.Text.Encoding.UTF8);
+                AppendLog($"正在上传摘要到：{cloudPath}");
+
+                btnUploadSummary.Enabled = false;
+                var ok = await _cloudStorageService.UploadFileAsync(localPath, cloudPath);
+                if (ok)
+                {
+                    AppendLog($"摘要已上传到网盘：{cloudPath}");
+                    MessageBox.Show($"摘要已上传到：\n{cloudPath}", "上传成功", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                else
+                {
+                    AppendLog("上传失败：云服务返回失败");
+                    MessageBox.Show("上传失败，请检查网盘授权与网络后重试。", "上传失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "上传摘要到网盘失败");
+                AppendLog($"上传错误：{ex.Message}");
+                MessageBox.Show($"上传失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                try { File.Delete(localPath); } catch { /* 忽略清理失败 */ }
+                if (!IsDisposed) btnUploadSummary.Enabled = true;
             }
         }
 
@@ -830,7 +1578,16 @@ namespace LearningAssistant.Forms
                 lstRecommendations.BackColor = colors.Background;
                 lstRecommendations.ForeColor = colors.TextPrimary;
             }
+            if (lstFileTags != null)
+            {
+                lstFileTags.BackColor = colors.Background;
+                lstFileTags.ForeColor = colors.TextPrimary;
+            }
             if (cmbDepth != null) cmbDepth.BackColor = colors.Background;
+            if (cmbTagSubject != null) cmbTagSubject.BackColor = colors.Background;
+            if (cmbTagValues != null) cmbTagValues.BackColor = colors.Background;
+            if (cmbTagAge != null) cmbTagAge.BackColor = colors.Background;
+            if (tabControl != null) tabControl.BackColor = colors.Background;
             if (txtPath != null) txtPath.BackColor = colors.Surface;
             if (treeFolders != null)
             {

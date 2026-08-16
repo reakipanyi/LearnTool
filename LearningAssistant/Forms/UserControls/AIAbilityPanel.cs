@@ -661,6 +661,9 @@ namespace LearningAssistant.Forms.UserControls
                 return;
             }
 
+            // 将「目录内容」等上下文一并拼入要发送给 AI 网页的文本，保证指令与内容一起注入输入框
+            var payload = BuildSendPayload(prompt);
+
             _historyService.AddToHistory(prompt);
             _historyService.SaveConversationRecord(prompt, CurrentAIName, _currentContext);
             UpdateHistoryComboBox();
@@ -680,13 +683,26 @@ namespace LearningAssistant.Forms.UserControls
                     }
                 }
 
-                await OpenWebViewAsync(CurrentAIUrl, prompt);
+                await OpenWebViewAsync(CurrentAIUrl, payload);
             }
             catch (Exception ex)
             {
                 ShowError($"发送失败: {ex.Message}");
                 _logger?.LogError(ex, "发送按钮异常");
             }
+        }
+
+        /// <summary>
+        /// 组装最终发送给 AI 网页的文本：指令 + 上下文（如目录内容）。
+        /// 若上下文已包含在指令文本中，则不再重复拼接，避免重复发送。
+        /// </summary>
+        private string BuildSendPayload(string prompt)
+        {
+            if (string.IsNullOrEmpty(_currentContext))
+                return prompt;
+            if (prompt.Contains(_currentContext, StringComparison.Ordinal))
+                return prompt;
+            return prompt + "\r\n\r\n【目录内容】\r\n" + _currentContext;
         }
 
         private void ButtonClear_Click(object? sender, EventArgs e)
@@ -949,22 +965,28 @@ namespace LearningAssistant.Forms.UserControls
 
             try
             {
-                var escapedPrompt = EscapeForJavaScript(_pendingPrompt);
+                var base64Prompt = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(_pendingPrompt));
                 string backupScript = string.Format(
                     @"
 (function(){{
+    var promptText = '';
+    try {{
+        var bytes = Uint8Array.from(atob('{0}'), function(c){{ return c.charCodeAt(0); }});
+        promptText = new TextDecoder('utf-8').decode(bytes);
+    }} catch(e) {{ return 'decode error'; }}
+
     var textareas = document.getElementsByTagName('textarea');
     for(var i=0;i<textareas.length;i++){{
         if(textareas[i].offsetParent !== null){{
-            textareas[i].value = '{0}';
+            textareas[i].value = promptText;
             textareas[i].focus();
-            textareas[i].dispatchEvent(new Event('input',{{bubbles:true}}));
+            textareas[i].dispatchEvent(new Event('input',{{bubbles:true,cancelable:true}}));
             return 'backup success';
         }}
     }}
     return 'backup failed';
 }})();
-", escapedPrompt);
+", base64Prompt);
                 await _webView.CoreWebView2.ExecuteScriptAsync(backupScript);
             }
             catch (Exception ex)
@@ -978,11 +1000,19 @@ namespace LearningAssistant.Forms.UserControls
             if (string.IsNullOrEmpty(host))
                 return "/* unknown host */";
 
-            var escapedPrompt = EscapeForJavaScript(prompt);
+            var base64Prompt = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(prompt ?? string.Empty));
 
             return string.Format(
                 @"
 (function(){{
+    var promptText = '';
+    try {{
+        var bytes = Uint8Array.from(atob('{0}'), function(c){{ return c.charCodeAt(0); }});
+        promptText = new TextDecoder('utf-8').decode(bytes);
+    }} catch(e) {{
+        return 'decode error';
+    }}
+
     var selectors = [
         'textarea',
         'textarea[placeholder]',
@@ -993,7 +1023,7 @@ namespace LearningAssistant.Forms.UserControls
         'input[placeholder*=""输入""]',
         'input[placeholder*=""问题""]',
         '[contenteditable=""true""]',
-        '[contenteditable]:not([contenteditable=""false""])'],
+        '[contenteditable]:not([contenteditable=""false""])',
         '.chat-input textarea',
         '#chat-input textarea',
         '.prompt-textarea',
@@ -1004,7 +1034,9 @@ namespace LearningAssistant.Forms.UserControls
 
     var targetEl = null;
     for(var i=0;i<selectors.length;i++){{
-        targetEl = document.querySelector(selectors[i]);
+        try {{
+            targetEl = document.querySelector(selectors[i]);
+        }} catch(e) {{ targetEl = null; }}
         if(targetEl) break;
     }}
 
@@ -1016,32 +1048,18 @@ namespace LearningAssistant.Forms.UserControls
 
     var tag = targetEl.tagName.toLowerCase();
     if(tag === 'textarea' || tag === 'input'){{
-        targetEl.value = '{0}';
+        targetEl.value = promptText;
     }}else if(targetEl.isContentEditable){{
-        targetEl.textContent = '{0}';
+        targetEl.textContent = promptText;
     }}
 
     targetEl.dispatchEvent(new Event('input',{{bubbles:true,cancelable:true}}));
     targetEl.dispatchEvent(new Event('change',{{bubbles:true,cancelable:true}}));
     targetEl.dispatchEvent(new KeyboardEvent('keydown',{{bubbles:true,cancelable:true,key:''}}));
     targetEl.focus();
-    return 'filled: ' + selectors[Array.from(selectors).indexOf(targetEl)];
+    return 'filled: ' + targetEl.tagName;
 }})();
-", escapedPrompt);
-        }
-
-        private static string EscapeForJavaScript(string text)
-        {
-            if (text == null) return string.Empty;
-            return text
-                .Replace(@"\", @"\\")
-                .Replace("'", @"\'")
-                .Replace("\"", "\\\"")
-                .Replace("\n", @"\n")
-                .Replace("\r", @"\r")
-                .Replace("\t", @"\t")
-                .Replace("\b", @"\b")
-                .Replace("\f", @"\f");
+", base64Prompt);
         }
         #endregion
 

@@ -255,6 +255,11 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
             }
         }
 
+        // 跳过空文件夹（无任何直接子项：既无文件也无子目录）。
+        // 遍历本身会继续访问下一级目录；此处仅把确认无子项的空目录从统计/目录树/AI 建议中剔除，
+        // 避免已清理过的空目录反复被提示"删除空文件夹"。
+        allFolders = FilterOutEmptyFolders(allFiles, allFolders);
+
         progress?.Report(new PanAnalysisProgress
         {
             Phase = PanAnalysisPhase.PreComputing,
@@ -422,6 +427,44 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
                 ? 0
                 : relativePath.Split('/', StringSplitOptions.RemoveEmptyEntries).Length
         };
+    }
+
+    /// <summary>
+    /// 过滤掉空文件夹（没有任何直接子项：既无文件也无子目录）。
+    /// 遍历逻辑本身会继续访问下一级目录，此处仅将确认无子项的空目录剔除，
+    /// 使其不再进入统计/目录树/AI 建议（用户已清理空目录，无需反复提示）。
+    /// </summary>
+    private static List<BaseFileInfo> FilterOutEmptyFolders(
+        List<PanFileInfo> files,
+        List<BaseFileInfo> folders)
+    {
+        if (folders.Count == 0) return folders;
+
+        // 统计每个目录的直接子项数（文件 + 子目录），子项数为 0 的目录视为空目录
+        var childCountByDir = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in files)
+        {
+            var parent = GetParentApiPath(file.Path);
+            childCountByDir[parent] = childCountByDir.GetValueOrDefault(parent) + 1;
+        }
+        foreach (var folder in folders)
+        {
+            var parent = GetParentApiPath(folder.Path ?? "");
+            childCountByDir[parent] = childCountByDir.GetValueOrDefault(parent) + 1;
+        }
+
+        return folders
+            .Where(f => childCountByDir.GetValueOrDefault(f.Path ?? "") > 0)
+            .ToList();
+    }
+
+    /// <summary>返回网盘 API 路径的直接父目录（顶层时返回 "/"）</summary>
+    private static string GetParentApiPath(string path)
+    {
+        var trimmed = (path ?? "").TrimEnd('/');
+        var idx = trimmed.LastIndexOf('/');
+        if (idx <= 0) return "/";
+        return trimmed.Substring(0, idx);
     }
 
     private bool IsJunkFile(string fileName, long size)

@@ -1,5 +1,5 @@
-using System.Text;
 using LearningAssistant.Models.PanAnalysis;
+using System.Text;
 
 namespace LearningAssistant.Services.PanAnalysis;
 
@@ -24,6 +24,11 @@ public class PanAnalysisPromptBuilder : IPanAnalysisPromptBuilder
     {
         return $@"
 你是百度网盘文件整理专家，请按以下规则分析文件列表并给出整理建议。
+
+## 联网能力（若可用）
+- 你具备联网检索能力。对教材、影视、小说等能识别的资源，请联网搜索网评（豆瓣评分、家长/读者测评、教育资源站口碑等），用于判断内容质量与年龄段适配。
+- 若无法联网或检索不到有效网评，则退回基于文件名/路径的推断，并在 reason 中注明（如 ""依据文件名推断，未见有效网评""）。
+- 网评仅供参考：价值观/年龄段仍以文件名与目录语义为主，避免仅凭单一评论下结论。
 
 ## 分析维度（按优先级从高到低）
 1. **无意义文件**（必须删除）：
@@ -51,6 +56,20 @@ public class PanAnalysisPromptBuilder : IPanAnalysisPromptBuilder
    - 单目录文件 > 100 个，建议按类型/日期拆分子目录
    - 嵌套层级 > 5，建议扁平化
 
+7. **文件打标**（输出 fileTags，用于内容筛选与批量整理）：
+   - 对文件名、目录路径能可靠推断的文件打标（无法推断的字段用 ""未知""）
+   - contentSummary：一句话内容摘要（如 ""高中数学必修一教材""）
+   - subject：科目，取值限 语文/数学/英语/物理/化学/生物/历史/地理/政治/计算机/艺术/音乐/体育/工具/影视/小说/其他/未知
+   - valuesOrientation：价值观取向，取值限 积极/中性/消极/不宜/未知
+     （依据文件名推断，如教材通常中性、涉黄赌毒/暴力血腥/低俗为不宜）
+   - ageRange：适合年龄段，取值限 全年龄/6-12/13-18/成人18+/未知
+     （儿童读物/动画=6-12，中学教材=13-18，涉成人内容=成人18+；有网评时结合网评佐证）
+   - quality：内容质量，取值限 优/良/中/差/未知
+     （优先依据网评口碑：高分/广泛好评为优，存在明显差评/侵权/低质为差，无网评时按文件名推断或为未知）
+   - comparisonNote：同类资源对比，用一句话说明相对同类知名资源的优劣
+     （如 ""口碑优于市面常见《XX》系列""、""与《XX》同类但更浅显""；无对比依据时留空）
+   - 打标数量：文件少（<=200）时全量打标；文件多时对能明确识别的前 100 个文件打标即可，其余忽略
+
 ## 输出格式（严格 JSON）
 {{
   ""summary"": ""总体评价（2-3句话）"",
@@ -63,6 +82,18 @@ public class PanAnalysisPromptBuilder : IPanAnalysisPromptBuilder
       ""reason"": ""操作原因"",
       ""priority"": ""High|Medium|Low""
     }}
+  ],
+  ""fileTags"": [
+    {{
+      ""targetPath"": ""/完整/路径"",
+      ""contentSummary"": ""内容摘要"",
+      ""subject"": ""科目"",
+      ""valuesOrientation"": ""积极|中性|消极|不宜|未知"",
+      ""ageRange"": ""全年龄|6-12|13-18|成人18+|未知"",
+      ""quality"": ""优|良|中|差|未知"",
+      ""comparisonNote"": ""同类资源对比（一句话，无则空字符串）"",
+      ""reason"": ""打标依据（含网评来源说明）""
+    }}
   ]
 }}
 
@@ -74,6 +105,7 @@ public class PanAnalysisPromptBuilder : IPanAnalysisPromptBuilder
 - type=Keep 时：仅标记，无需操作
 - 每个文件最多输出 1 条建议
 - 建议数量不超过文件总数的 30%
+- fileTags 的 targetPath 必须与输入中的路径完全一致；无法打标的文件不要放入 fileTags
 - 只输出 JSON，不要有任何额外文字
 ";
     }

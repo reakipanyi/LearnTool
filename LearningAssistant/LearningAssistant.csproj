@@ -93,6 +93,9 @@
 		<None Update="Data\*.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
+		<None Include="Resources\WordMatchGame\**">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
 		<None Update="Models\Config\SubjectTemplates.json">
 			<Link>AppData\config\SubjectTemplates.json</Link>
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

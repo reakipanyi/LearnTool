@@ -24,6 +24,7 @@ namespace LearningAssistant.Managers
         //void OpenPdfReaderWindowV1();
         void OpenNotesWindow();
         void OpenAIWebViewWindow(string? initialPrompt = null);
+        void OpenWordMatchGameWindow();
     }
 
     public class WindowManager : IWindowManager
@@ -161,6 +162,24 @@ namespace LearningAssistant.Managers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to open editor window");
+                throw;
+            }
+        }
+
+        public void OpenWordMatchGameWindow()
+        {
+            _logger.LogInformation("Opening word match game window");
+
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var form = scope.ServiceProvider.GetRequiredService<WordMatchGameForm>();
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to open word match game window");
                 throw;
             }
         }

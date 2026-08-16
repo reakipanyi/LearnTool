@@ -1513,7 +1513,7 @@ namespace LearningAssistant.Forms
             {
                 try
                 {
-                    using (var form = new BaiduPanAnalysisForm(_analysisOrchestrator, path, _themeService!, _panAnalysisLogger, _aiPanelPopupService, _aiConfig, _panPromptBuilder))
+                    using (var form = new BaiduPanAnalysisForm(_analysisOrchestrator, path, _themeService!, _panAnalysisLogger, _aiPanelPopupService, _aiConfig, _panPromptBuilder, _cloudStorageService))
                     {
                         form.ShowDialog(this);
 

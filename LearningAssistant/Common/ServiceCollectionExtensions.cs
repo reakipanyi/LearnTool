@@ -277,6 +277,13 @@ namespace LearningAssistant.Common
                 var eventBus = sp.GetService<IEventBus>();
                 return new WrongAnswerService(dbFactory, persistenceService, logger, eventBus);
             });
+            services.AddSingleton<WordMatchGameService>(sp =>
+            {
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var wrongAnswerService = sp.GetRequiredService<IWrongAnswerService>();
+                var logger = sp.GetService<ILogger<WordMatchGameService>>();
+                return new WordMatchGameService(contentLoaderService, wrongAnswerService, logger);
+            });
             services.AddSingleton<INoteService>(sp =>
             {
                 var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
@@ -519,6 +526,16 @@ namespace LearningAssistant.Common
                 var aiPanelPopupService = sp.GetRequiredService<IAIPanelPopupService>();
                 var themeService = sp.GetRequiredService<IThemeService>();
                 return new ContentEditorForm(logger, appConfig, aiPanelPopupService, themeService);
+            });
+            services.AddScoped<WordMatchGameForm>(sp =>
+            {
+                var gameService = sp.GetRequiredService<WordMatchGameService>();
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var wrongAnswerService = sp.GetRequiredService<IWrongAnswerService>();
+                var userSessionService = sp.GetRequiredService<IUserSessionService>();
+                var themeService = sp.GetRequiredService<IThemeService>();
+                var logger = sp.GetRequiredService<ILogger<WordMatchGameForm>>();
+                return new WordMatchGameForm(gameService, contentLoaderService, wrongAnswerService, userSessionService, themeService, logger);
             });
             services.AddScoped<LearningManagementForm>(sp =>
             {

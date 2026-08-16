@@ -220,6 +220,10 @@ public class PanAnalysisResult
 {
     public string Summary { get; set; } = "";
     public List<PanRecommendation> Recommendations { get; set; } = new();
+
+    /// <summary>文件打标结果（内容/科目/价值观/年龄段，供筛选与批量整理）</summary>
+    public List<PanFileTag> FileTags { get; set; } = new();
+
     public string RawAiResponse { get; set; } = "";
     public bool ParseSuccess { get; set; }
     public string? ParseError { get; set; }
@@ -228,6 +232,44 @@ public class PanAnalysisResult
     public int HighPriorityCount => Recommendations.Count(r => r.Priority == PanPriority.High);
     public int MediumPriorityCount => Recommendations.Count(r => r.Priority == PanPriority.Medium);
     public int LowPriorityCount => Recommendations.Count(r => r.Priority == PanPriority.Low);
+}
+
+/// <summary>
+/// 文件打标（AI 依据文件名/路径推断，用于内容筛选与批量整理）
+/// </summary>
+public class PanFileTag
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N").Substring(0, 8);
+
+    /// <summary>完整 API 路径（用于执行批量删除/移动）</summary>
+    public string TargetPath { get; set; } = "";
+
+    /// <summary>文件名（展示用）</summary>
+    public string TargetName { get; set; } = "";
+
+    /// <summary>内容摘要（一句话，如"高中数学必修一教材"）</summary>
+    public string ContentSummary { get; set; } = "";
+
+    /// <summary>科目（语文/数学/英语/物理/化学/生物/历史/地理/政治/计算机/艺术/工具/其他/未知）</summary>
+    public string Subject { get; set; } = "";
+
+    /// <summary>价值观取向（积极/中性/消极/不宜/未知）</summary>
+    public string ValuesOrientation { get; set; } = "";
+
+    /// <summary>适合年龄段（全年龄/6-12/13-18/成人18+/未知）</summary>
+    public string AgeRange { get; set; } = "";
+
+    /// <summary>内容质量（优/良/中/差/未知，优先依据网评口碑）</summary>
+    public string Quality { get; set; } = "";
+
+    /// <summary>同类资源对比（一句话说明相对同类知名资源的优劣）</summary>
+    public string ComparisonNote { get; set; } = "";
+
+    /// <summary>打标依据（简要说明推断来源）</summary>
+    public string Reason { get; set; } = "";
+
+    /// <summary>是否被用户勾选（批量整理用）</summary>
+    public bool IsSelected { get; set; } = true;
 }
 
 /// <summary>
