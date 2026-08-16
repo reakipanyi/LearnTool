@@ -68,6 +68,22 @@
         return new URLSearchParams(location.search).get("mock") === "1";
     }
 
+    // 卡片多彩配色：单词走冷色系、释义走暖色系
+    const WORD_COLORS = [
+        "linear-gradient(135deg, #6366f1, #8b5cf6)",
+        "linear-gradient(135deg, #06b6d4, #3b82f6)",
+        "linear-gradient(135deg, #2563eb, #06b6d4)",
+        "linear-gradient(135deg, #8b5cf6, #d946ef)",
+        "linear-gradient(135deg, #3b82f6, #6366f1)",
+    ];
+    const MEANING_COLORS = [
+        "linear-gradient(135deg, #ec4899, #f43f5e)",
+        "linear-gradient(135deg, #f97316, #f43f5e)",
+        "linear-gradient(135deg, #fb7185, #f97316)",
+        "linear-gradient(135deg, #db2777, #9333ea)",
+        "linear-gradient(135deg, #f43f5e, #ec4899)",
+    ];
+
     // ---------- 配牌 ----------
     function buildCards() {
         cards = [];
@@ -92,6 +108,18 @@
         cards.forEach((card, idx) => {
             const el = document.createElement("div");
             el.className = "card " + card.type;
+
+            // 随机多彩配色
+            const palette = card.type === "word" ? WORD_COLORS : MEANING_COLORS;
+            const colorIdx = Math.floor(Math.random() * palette.length);
+            el.style.setProperty("--card-grad", palette[colorIdx]);
+            // 随机轻微倾斜（-2deg ~ 2deg）
+            const tilt = (Math.random() * 4 - 2).toFixed(1);
+            el.style.setProperty("--tilt", tilt + "deg");
+            // 随机圆角（14px ~ 22px）
+            const radius = 14 + Math.floor(Math.random() * 9);
+            el.style.setProperty("--card-radius", radius + "px");
+
             if (card.type === "word") {
                 el.innerHTML = `<span class="word-text">${esc(card.item.word)}</span>` +
                     (card.item.phonetic ? `<span class="phonetic">${esc(card.item.phonetic)}</span>` : "") +

@@ -124,6 +124,11 @@ namespace LearningAssistant.Forms
             }
         }
 
+        /// <summary>
+        /// JSON文本框内容变更事件，用于通知Presenter脏状态
+        /// </summary>
+        public event EventHandler? JsonTextChanged;
+
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
 
@@ -388,6 +393,14 @@ namespace LearningAssistant.Forms
         {
             textBoxJson.Text = "";
             dataGridView.DataSource = null;
+        }
+
+        /// <summary>
+        /// JSON文本框内容变更时触发事件，交由Presenter处理脏状态
+        /// </summary>
+        private void TextBoxJson_TextChanged(object? sender, EventArgs e)
+        {
+            JsonTextChanged?.Invoke(this, EventArgs.Empty);
         }
 
         public void RefreshTreeView(TreeNodeCollection nodes)
@@ -681,6 +694,7 @@ namespace LearningAssistant.Forms
             textBoxJson.Size = new Size(1198, 605);
             textBoxJson.TabIndex = 2;
             textBoxJson.WordWrap = false;
+            textBoxJson.TextChanged += TextBoxJson_TextChanged;
             // 
             // buttonAdd
             // 
