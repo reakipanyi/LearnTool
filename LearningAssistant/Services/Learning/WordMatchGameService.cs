@@ -24,17 +24,32 @@ namespace LearningAssistant.Services.Learning
         }
 
         /// <summary>
-        /// 从词库构建游戏数据（仅保留单词与释义均非空的条目，随机抽取 maxCount 个）。
+        /// 从词库构建游戏数据（仅保留单词与释义均非空的条目，抽取 maxCount 个）。
         /// </summary>
-        public List<WordMatchItemDto> BuildItems(LearningContext context, int maxCount)
+        /// <param name="context">学习上下文。</param>
+        /// <param name="maxCount">抽取条数。</param>
+        /// <param name="selection">配牌策略，默认 <see cref="WordSelection.Random"/> 向后兼容。</param>
+        public List<WordMatchItemDto> BuildItems(LearningContext context, int maxCount, WordSelection selection = WordSelection.Random)
         {
             try
             {
                 var items = _contentLoaderService.LoadItems(context);
 
-                var valid = items
+                // 按选定策略排序：Random 随机；WrongFirst 优先低掌握度（错题优先）；ReviewDue 优先临近复习
+                IEnumerable<Models.Learning.LearningItem> ordered = selection switch
+                {
+                    WordSelection.WrongFirst => items
+                        .OrderBy(i => (int)i.Status)
+                        .ThenBy(i => i.ReviewCount)
+                        .ThenBy(_ => Guid.NewGuid()),
+                    WordSelection.ReviewDue => items
+                        .OrderBy(i => i.LastReviewedAt ?? DateTime.MinValue)
+                        .ThenBy(_ => Guid.NewGuid()),
+                    _ => items.OrderBy(_ => Guid.NewGuid())
+                };
+
+                var valid = ordered
                     .Where(i => !string.IsNullOrWhiteSpace(i.MainContent) && i.Meaning != null && !string.IsNullOrWhiteSpace(i.Meaning.Content))
-                    .OrderBy(_ => Guid.NewGuid())
                     .Take(Math.Max(1, maxCount))
                     .Select(i => new WordMatchItemDto
                     {
@@ -100,6 +115,19 @@ namespace LearningAssistant.Services.Learning
                 _logger.LogError(ex, "单词消消乐回写失败: userId={UserId}", userId);
             }
         }
+    }
+
+    /// <summary>
+    /// 游戏配牌策略。
+    /// </summary>
+    public enum WordSelection
+    {
+        /// <summary>完全随机抽取。</summary>
+        Random = 0,
+        /// <summary>优先低掌握度/复习次数少的词条（错题优先）。</summary>
+        WrongFirst = 1,
+        /// <summary>优先临近复习（长时间未复习）的词条。</summary>
+        ReviewDue = 2
     }
 
     /// <summary>

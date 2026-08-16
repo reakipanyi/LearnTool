@@ -470,7 +470,7 @@ namespace LearningAssistant.Forms
             panelContent.Controls.Clear();
             panelContent.Controls.Add(dashboardView);
             dashboardView.BringToFront();
-            Text = "🏠 学习助手 - 首页";
+            Text = "🏠 工具 - 首页";
         }
 
         private void ShowMentorPanel()
@@ -547,6 +547,18 @@ namespace LearningAssistant.Forms
                         break;
                     case "单词消消乐":
                         _windowManager.OpenWordMatchGameWindow();
+                        break;
+                    case "记忆翻牌":
+                        _windowManager.OpenMemoryMatchGameWindow();
+                        break;
+                    case "连连看":
+                        _windowManager.OpenLinkMatchGameWindow();
+                        break;
+                    case "单词拼写":
+                        _windowManager.OpenSpellingGameWindow();
+                        break;
+                    case "打地鼠":
+                        _windowManager.OpenWhackAMoleGameWindow();
                         break;
                     case "设置":
                         _windowManager.OpenSettingsWindow();
@@ -1109,7 +1121,7 @@ namespace LearningAssistant.Forms
             labelTopBarTitle.Name = "labelTopBarTitle";
             labelTopBarTitle.Size = new Size(74, 21);
             labelTopBarTitle.TabIndex = 1;
-            labelTopBarTitle.Text = "学习助手";
+            labelTopBarTitle.Text = "工具";
             labelTopBarTitle.TextAlign = ContentAlignment.MiddleLeft;
             // 
             // comboBoxNewLayoutUser
@@ -1167,7 +1179,7 @@ namespace LearningAssistant.Forms
             Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Regular, GraphicsUnit.Point, 134);
             Margin = new Padding(4);
             Name = "MainForm";
-            Text = "🏠 学习助手 - 首页";
+            Text = "🏠 工具 - 首页";
             groupBoxProgress.ResumeLayout(false);
             groupBoxProgress.PerformLayout();
             groupBoxUser.ResumeLayout(false);

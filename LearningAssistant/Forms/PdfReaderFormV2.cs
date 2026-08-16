@@ -183,7 +183,7 @@ namespace LearningAssistant.Forms
         private Point _lastClickLocation = Point.Empty;
         private const int DoubleClickTimeMs = 200;
         private const int DoubleClickDistance = 5;
-        private const string AppTitle = "学习助手";
+        private const string AppTitle = "PDF阅读工具";
         private const string WarningTitle = "警告";
         private const string ErrorTitle = "错误";
         private const string InfoTitle = "提示";

@@ -44,6 +44,11 @@ namespace LearningAssistant.Views
         event EventHandler? TemplateSaveClicked;
 
         /// <summary>
+        /// JSON编辑框内容变更事件
+        /// </summary>
+        event EventHandler? JsonTextChanged;
+
+        /// <summary>
         /// 模板删除点击事件
         /// </summary>
         event EventHandler? TemplateDeleteClicked;

@@ -1,0 +1,253 @@
+(() => {
+    "use strict";
+
+    const { toast, sendToHost, speak, esc, listenInit, isMock, applyTheme, shuffle } = window.GameUI;
+
+    // ---------- 状态 ----------
+    let allItems = [];    // 原始数据
+    let queue = [];       // 待做 [{item, wrongCount}]
+    let current = null;   // {item, wrongCount}
+    let typed = [];       // 已输入字母
+    let judging = false;
+    let totalItems = 0, completed = 0;
+    let score = 0, combo = 0, maxCombo = 0, rightAttempts = 0, wrongAttempts = 0;
+    let resultMap = new Map(); // id -> 最终 correct（一旦错过即 false）
+    let seconds = 0, timerId = null, started = false, finished = false;
+    let getIfRestart = false;
+
+    // ---------- DOM ----------
+    const $ = (id) => document.getElementById(id);
+    const slotsEl = $("slots"), meaningEl = $("qMeaning"), hintEl = $("qHint"),
+          scoreEl = $("score"), comboEl = $("combo"), progressEl = $("progress"),
+          timerEl = $("timer"), progressBar = $("progressBar");
+
+    const MOCK_ITEMS = [
+        { id: "m1", word: "apple", meaning: "苹果", phonetic: "/ˈæpl/" },
+        { id: "m2", word: "banana", meaning: "香蕉", phonetic: "/bəˈnɑːnə/" },
+        { id: "m3", word: "cat", meaning: "猫", phonetic: "/kæt/" },
+        { id: "m4", word: "dog", meaning: "狗", phonetic: "/dɒɡ/" },
+        { id: "m5", word: "fish", meaning: "鱼", phonetic: "/fɪʃ/" },
+        { id: "m6", word: "grape", meaning: "葡萄", phonetic: "/ɡreɪp/" },
+        { id: "m7", word: "house", meaning: "房子", phonetic: "/haʊs/" },
+        { id: "m8", word: "lemon", meaning: "柠檬", phonetic: "/ˈlemən/" },
+        { id: "m9", word: "moon", meaning: "月亮", phonetic: "/muːn/" },
+        { id: "m10", word: "peach", meaning: "桃子", phonetic: "/piːtʃ/" },
+    ];
+
+    // ---------- 出题 ----------
+    function startQuestion() {
+        if (queue.length === 0) { finishGame(); return; }
+        current = queue.shift();
+        typed = [];
+        judging = false;
+        const word = current.item.word;
+
+        meaningEl.textContent = current.item.meaning;
+        hintEl.textContent = current.item.phonetic ? `音标：${esc(current.item.phonetic)}　字母数：${word.length}` : `字母数：${word.length}`;
+        renderSlots(word.length);
+        updateProgress();
+    }
+
+    function renderSlots(len) {
+        slotsEl.innerHTML = "";
+        for (let i = 0; i < len; i++) {
+            const s = document.createElement("div");
+            s.className = "slot";
+            slotsEl.appendChild(s);
+        }
+    }
+
+    // ---------- 输入 ----------
+    function typeLetter(ch) {
+        if (finished || judging || !current) return;
+        if (!started) { started = true; startTimer(); }
+        if (typed.length >= current.item.word.length) return;
+        typed.push(ch);
+        renderTyped(false);
+        if (typed.length === current.item.word.length) judge();
+    }
+
+    function eraseLetter() {
+        if (finished || judging || !current) return;
+        typed.pop();
+        renderTyped(false);
+    }
+
+    function clearAll() {
+        if (finished || judging || !current) return;
+        typed = [];
+        renderTyped(false);
+    }
+
+    function renderTyped(mark) {
+        const slots = slotsEl.children;
+        const word = current.item.word;
+        for (let i = 0; i < slots.length; i++) {
+            slots[i].textContent = i < typed.length ? typed[i] : "";
+            slots[i].className = "slot";
+            if (mark) {
+                slots[i].classList.add(typed[i] === word[i] ? "right" : "wrong");
+            } else if (i < typed.length) {
+                slots[i].classList.add("filled");
+            }
+        }
+    }
+
+    // ---------- 判定 ----------
+    function judge() {
+        judging = true;
+        const word = current.item.word;
+        const input = typed.join("").toLowerCase();
+        const correct = input === word.toLowerCase();
+
+        if (correct) {
+            combo++;
+            maxCombo = Math.max(maxCombo, combo);
+            const gain = 10 + combo * 5;
+            score += gain;
+            scoreEl.textContent = score;
+            comboEl.textContent = combo;
+            rightAttempts++;
+            completed++;
+            if (!resultMap.has(current.item.id)) resultMap.set(current.item.id, true);
+            renderTyped(true);
+            speak(word);
+            toast(`✅ 正确 +${gain}  连击 x${combo}`);
+            hintEl.textContent = `${esc(word)}　拼写正确！`;
+            setTimeout(startQuestion, 900);
+        } else {
+            wrongAttempts++;
+            combo = 0;
+            comboEl.textContent = combo;
+            score = Math.max(0, score - 5);
+            scoreEl.textContent = score;
+            resultMap.set(current.item.id, false);
+            renderTyped(true);
+            // 错误即时闭环：本词排到队尾稍后再现
+            const redo = { item: current.item, wrongCount: (current.wrongCount || 0) + 1 };
+            queue.push(redo);
+            toast("❌ 拼错了，稍后这词会再次出现");
+            hintEl.textContent = `正确答案：${word}`;
+            setTimeout(startQuestion, 1500);
+        }
+    }
+
+    function updateProgress() {
+        progressEl.textContent = `${completed}/${totalItems}`;
+        progressBar.style.width = (totalItems ? (completed / totalItems) * 100 : 0) + "%";
+    }
+
+    // ---------- 计时 ----------
+    function startTimer() {
+        if (timerId) return;
+        timerId = setInterval(() => { seconds++; timerEl.textContent = seconds + "s"; }, 1000);
+    }
+    function stopTimer() { if (timerId) clearInterval(timerId); timerId = null; }
+
+    // ---------- 结算 ----------
+    function finishGame() {
+        if (finished) return;
+        finished = true;
+        stopTimer();
+
+        const rate = totalItems ? Math.round((rightAttempts >= 0 ? completed : 0) / totalItems * 100) : 0;
+        let stars = 3;
+        if (wrongAttempts > 2 || rate < 80) stars = 2;
+        if (wrongAttempts > 5 || rate < 50) stars = 1;
+        const emoji = stars >= 3 ? "🏆" : stars === 2 ? "🎉" : "😊";
+
+        $("resultEmoji").textContent = emoji;
+        $("resultTitle").textContent = stars === 1 ? "继续加油！" : "完成啦！";
+        $("resultStars").innerHTML =
+            `<span class="${stars >= 1 ? "lit" : "dim"}">★</span>` +
+            `<span class="${stars >= 2 ? "lit" : "dim"}">★</span>` +
+            `<span class="${stars >= 3 ? "lit" : "dim"}">★</span>`;
+        $("resultScore").textContent = score;
+        $("resultRight").textContent = `${rightAttempts}/${totalItems}`;
+        $("resultRate").textContent = rate + "%";
+        $("resultTime").textContent = seconds + "s";
+        $("resultOverlay").classList.remove("hidden");
+
+        const results = Array.from(resultMap.keys())
+            .map((id) => ({ id, correct: resultMap.get(id) }));
+        sendToHost({ type: "gameEnd", results, score, right: rightAttempts, errors: wrongAttempts, combo: maxCombo, seconds });
+    }
+
+    // ---------- 初始化 ----------
+    function boot(data, themeName) {
+        allItems = (data || []).filter((d) => d && d.word && d.meaning);
+        applyTheme(themeName);
+        resetGame();
+        if (allItems.length === 0) {
+            meaningEl.textContent = "词库为空";
+            hintEl.textContent = "请先在「内容编辑」中添加单词";
+            return;
+        }
+        queue = shuffle(allItems.map((it) => ({ item: it, wrongCount: 0 })));
+        startQuestion();
+    }
+
+    function resetGame() {
+        queue = []; current = null; typed = []; judging = false;
+        totalItems = allItems.length; completed = 0;
+        score = 0; combo = 0; maxCombo = 0; rightAttempts = 0; wrongAttempts = 0;
+        resultMap = new Map();
+        seconds = 0; started = false; finished = false;
+        scoreEl.textContent = "0";
+        comboEl.textContent = "0";
+        timerEl.textContent = "0s";
+        getIfRestart = false;
+        stopTimer();
+    }
+
+    function loadData() {
+        listenInit((data, theme) => boot(data, theme));
+        if (isMock()) boot(MOCK_ITEMS, "light");
+    }
+
+    // ---------- 虚拟键盘 ----------
+    function buildKeyboard() {
+        const kb = $("keyboard");
+        kb.innerHTML = "";
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").forEach((letter) => {
+            const k = document.createElement("button");
+            k.className = "key";
+            k.textContent = letter;
+            k.addEventListener("click", () => typeLetter(letter.toLowerCase()));
+            kb.appendChild(k);
+        });
+        const bs = document.createElement("button");
+        bs.className = "key ctrl";
+        bs.textContent = "⌫";
+        bs.addEventListener("click", eraseLetter);
+        kb.appendChild(bs);
+        const cl = document.createElement("button");
+        cl.className = "key ctrl";
+        cl.textContent = "清空";
+        cl.addEventListener("click", clearAll);
+        kb.appendChild(cl);
+    }
+
+    // 硬件键盘
+    window.addEventListener("keydown", (e) => {
+        if (getIfRestart) return;
+        if (/^[a-zA-Z]$/.test(e.key)) { e.preventDefault(); typeLetter(e.key.toLowerCase()); }
+        else if (e.key === "Backspace") { e.preventDefault(); eraseLetter(); }
+        else if (e.key === "Escape") { e.preventDefault(); clearAll(); }
+    });
+
+    // ---------- 按钮 ----------
+    $("btnSpeak").addEventListener("click", () => { if (current) speak(current.item.word); });
+    $("btnRestart").addEventListener("click", () => {
+        if (window.GameUI.bridge()) sendToHost({ type: "restart" });
+        else { resetGame(); queue = shuffle(allItems.map((it) => ({ item: it, wrongCount: 0 }))); startQuestion(); }
+    });
+    $("btnAgain").addEventListener("click", () => {
+        $("resultOverlay").classList.add("hidden");
+        resetGame(); queue = shuffle(allItems.map((it) => ({ item: it, wrongCount: 0 }))); startQuestion();
+    });
+    $("btnClose").addEventListener("click", () => $("resultOverlay").classList.add("hidden"));
+
+    buildKeyboard();
+    loadData();
+})();

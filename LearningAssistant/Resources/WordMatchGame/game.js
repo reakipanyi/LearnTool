@@ -1,6 +1,9 @@
 (() => {
     "use strict";
 
+    // 公共工具从 GameUI 取：GameUI.sendToHost / toast / speak / esc / listenInit / isMock
+    const { toast, sendToHost, speak, esc, listenInit, isMock, applyTheme } = window.GameUI;
+
     // ---------- 状态 ----------
     let items = [];        // 原始数据 [{id, word, meaning, phonetic, example}]
     let cards = [];        // 生成的卡片 [{key, type, item}]
@@ -14,43 +17,16 @@
     let started = false;
     let finished = false;
     let results = [];      // 每对结果 {id, correct}
-    let theme = "light";
 
     // ---------- DOM ----------
     const $ = (id) => document.getElementById(id);
     const board = $("board");
     const hint = $("hint");
-    const toast = $("toast");
     const scoreEl = $("score");
     const comboEl = $("combo");
     const remainingEl = $("remaining");
     const timerEl = $("timer");
     const progressEl = $("progress");
-
-    // ---------- 通信 ----------
-    function bridge() {
-        return window.chrome && window.chrome.webview ? window.chrome.webview : null;
-    }
-    function sendToHost(msg) {
-        const wb = bridge();
-        if (wb) wb.postMessage(msg); // 直接发送对象，WebView2 会自动序列化为 JSON
-    }
-    function toastMsg(text) {
-        toast.textContent = text;
-        toast.classList.add("show");
-        clearTimeout(toast._t);
-        toast._t = setTimeout(() => toast.classList.remove("show"), 1200);
-    }
-    function speakText(text) {
-        try {
-            if (!window.speechSynthesis) return;
-            const u = new SpeechSynthesisUtterance(text);
-            u.lang = "en-US";
-            u.rate = 0.9;
-            window.speechSynthesis.cancel();
-            window.speechSynthesis.speak(u);
-        } catch (e) { /* 静默降级 */ }
-    }
 
     // ---------- 数据 ----------
     const MOCK_ITEMS = [
@@ -63,10 +39,6 @@
         { id: "m7", word: "grape", meaning: "葡萄", phonetic: "/ɡreɪp/" },
         { id: "m8", word: "house", meaning: "房子", phonetic: "/haʊs/" },
     ];
-
-    function isMock() {
-        return new URLSearchParams(location.search).get("mock") === "1";
-    }
 
     // 卡片多彩配色：单词走冷色系、释义走暖色系
     const WORD_COLORS = [
@@ -93,12 +65,7 @@
             deck.push({ key, type: "word", item });
             deck.push({ key, type: "meaning", item });
         });
-        // Fisher-Yates 洗牌
-        for (let i = deck.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [deck[i], deck[j]] = [deck[j], deck[i]];
-        }
-        cards = deck;
+        cards = GameUI.shuffle(deck);
         remaining = deck.length;
         remainingEl.textContent = remaining;
     }
@@ -109,16 +76,10 @@
             const el = document.createElement("div");
             el.className = "card " + card.type;
 
-            // 随机多彩配色
             const palette = card.type === "word" ? WORD_COLORS : MEANING_COLORS;
-            const colorIdx = Math.floor(Math.random() * palette.length);
-            el.style.setProperty("--card-grad", palette[colorIdx]);
-            // 随机轻微倾斜（-2deg ~ 2deg）
-            const tilt = (Math.random() * 4 - 2).toFixed(1);
-            el.style.setProperty("--tilt", tilt + "deg");
-            // 随机圆角（14px ~ 22px）
-            const radius = 14 + Math.floor(Math.random() * 9);
-            el.style.setProperty("--card-radius", radius + "px");
+            el.style.setProperty("--card-grad", palette[Math.floor(Math.random() * palette.length)]);
+            el.style.setProperty("--tilt", (Math.random() * 4 - 2).toFixed(1) + "deg");
+            el.style.setProperty("--card-radius", (14 + Math.floor(Math.random() * 9)) + "px");
 
             if (card.type === "word") {
                 el.innerHTML = `<span class="word-text">${esc(card.item.word)}</span>` +
@@ -126,7 +87,7 @@
                     `<button class="speak" title="朗读">🔊</button>`;
                 el.querySelector(".speak").addEventListener("click", (e) => {
                     e.stopPropagation();
-                    speakText(card.item.word);
+                    speak(card.item.word);
                 });
             } else {
                 el.innerHTML = `<span class="meaning-text">${esc(card.item.meaning)}</span>`;
@@ -147,7 +108,6 @@
             startTimer();
         }
 
-        // 已选中一张卡片
         if (selected !== null) {
             const selEl = board.children[selected];
             const selCard = cards[selected];
@@ -159,7 +119,7 @@
                 return;
             }
 
-            // 两张同类卡片（都是单词或都是释义）：切换选中
+            // 两张同类卡片：切换选中
             if (card.type === selCard.type) {
                 selEl.classList.remove("selected");
                 selected = idx;
@@ -168,7 +128,7 @@
                 return;
             }
 
-            // 一张单词 + 一张释义：判断配对（按同一词条的唯一 key 匹配，避免词库 Id 为空导致误判）
+            // 一张单词 + 一张释义：按同一词条的局内 key 匹配（避免词库 Id 为空误判）
             const match = selCard.key === card.key;
             selEl.classList.remove("selected");
             selected = null;
@@ -186,14 +146,14 @@
                 comboEl.textContent = combo;
                 results.push({ id: wordItem.id, correct: true });
                 resolvePair(wordEl, meaningEl);
-                toastMsg(`✅ 正确 +${gain}  连击 x${combo}`);
+                toast(`✅ 正确 +${gain}  连击 x${combo}`);
             } else {
                 combo = 0;
                 comboEl.textContent = combo;
                 results.push({ id: wordItem.id, correct: false });
                 wordEl.classList.add("wrong");
                 meaningEl.classList.add("wrong");
-                toastMsg("❌ 不匹配，再试试");
+                toast("❌ 不匹配，再试试");
                 setTimeout(() => {
                     wordEl.classList.remove("wrong");
                     meaningEl.classList.remove("wrong");
@@ -202,7 +162,6 @@
             return;
         }
 
-        // 未选中：选中当前卡片（单词或释义均可）
         selected = idx;
         el.classList.add("selected");
         hint.textContent = "请点击该卡片的配对卡片（单词↔释义）";
@@ -253,23 +212,15 @@
         sendToHost({ type: "gameEnd", results, score, combo: maxCombo, seconds: timerSeconds });
     }
 
-    // ---------- 工具 ----------
-    function esc(text) {
-        return String(text == null ? "" : text)
-            .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-            .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-    }
-
     // ---------- 初始化 ----------
     function boot(data, themeName) {
         items = (data || []).filter((d) => d && d.word && d.meaning);
+        applyTheme(themeName);
+        resetGame();
         if (items.length === 0) {
             board.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px;">词库为空或不足，请先在「内容编辑」中添加单词</div>`;
             return;
         }
-        theme = themeName || "light";
-        document.body.setAttribute("data-theme", theme);
-        resetGame();
         buildCards();
         renderBoard();
     }
@@ -286,28 +237,18 @@
     }
 
     function loadData() {
-        const wb = bridge();
-        if (wb) {
-            wb.addEventListener("message", (e) => {
-                // PostWebMessageAsJson 到达时 e.data 已是对象；偶发字符串时则解析。
-                let msg = e.data;
-                if (typeof msg === "string") {
-                    try { msg = JSON.parse(msg); } catch (err) { return; }
-                }
-                if (msg && msg.type === "init") boot(msg.data, msg.theme);
-            });
-        }
+        listenInit((data, theme) => boot(data, theme));
         if (isMock()) boot(MOCK_ITEMS, "light");
     }
 
-    // 重新开始/换一组：重新洗牌
+    // 换一组：重新洗牌
     $("btnRestart").addEventListener("click", () => {
         if (items.length === 0) return;
         resetGame();
         buildCards();
         renderBoard();
     });
-    // 结算页再来一局
+    // 再来一局
     $("btnAgain").addEventListener("click", () => {
         $("resultOverlay").classList.add("hidden");
         $("btnRestart").click();

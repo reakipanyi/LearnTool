@@ -1,0 +1,38 @@
+<style>
+  :root { --surface:#fff; --surface-muted:#f5f6f9; --text:#1e293b; --text-muted:#94a3b8; --border:#e5e8ef; --brand:#7c3aed; --brand-soft:#f3edff; }
+  :root[data-widget-theme="dark"] { --surface:#1e293b; --surface-muted:#263548; --text:#e2e8f0; --text-muted:#94a3b8; --border:#334155; --brand:#a78bfa; --brand-soft:#2a2140; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  .wrap { font-family: system-ui, "Segoe UI", "微软雅黑", sans-serif; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .group { display: grid; gap: 8px; }
+  .group + .group { margin-top: 14px; }
+  .g-title { font-size: 13px; font-weight: 600; color: var(--text-muted); letter-spacing: .3px; padding-bottom: 2px; }
+  .row { display: flex; align-items: center; gap: 10px; background: var(--surface-muted); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+  .row.hot { border-color: var(--brand); background: var(--brand-soft); }
+  .name { font-size: 14px; font-weight: 600; min-width: 92px; }
+  .desc { font-size: 12px; color: var(--text-muted); flex: 1; line-height: 1.4; }
+  .chip { flex-shrink: 0; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--text-muted); }
+  .chip.high { background: var(--brand); border-color: var(--brand); color: #fff; }
+</style>
+<div class="wrap" data-dynamic-ui-widget data-template="comparison-cards">
+  <div class="group">
+    <div class="g-title">配对 / 记忆类（最贴合现有配对引擎）</div>
+    <div class="row hot"><span class="name">记忆翻牌</span><span class="desc">先浏览记住，再翻面配对，记忆挑战更强</span><span class="chip high">高</span></div>
+    <div class="row hot"><span class="name">连连看</span><span class="desc">找相同单词/释义连线消除，休闲耐玩</span><span class="chip high">高</span></div>
+    <div class="row"><span class="name">三消 Match-3</span><span class="desc">交换格子凑 3 连消除，玩法强、算法复杂</span><span class="chip high">中</span></div>
+  </div>
+  <div class="group">
+    <div class="g-title">反应 / 限时类</div>
+    <div class="row hot"><span class="name">打地鼠</span><span class="desc">听音辨词点中正确那只，反应力+词汇</span><span class="chip high">高</span></div>
+    <div class="row"><span class="name">极速 30 秒</span><span class="desc">限时冲刺，答对越多得分越高</span><span class="chip high">中</span></div>
+  </div>
+  <div class="group">
+    <div class="g-title">拼写 / 推理类</div>
+    <div class="row hot"><span class="name">字母重组拼词</span><span class="desc">打乱字母拼回单词，强化拼写</span><span class="chip high">高</span></div>
+    <div class="row"><span class="name">泡泡找词 Boggle</span><span class="desc">字母矩阵里连词，烧脑进阶</span><span class="chip high">中</span></div>
+  </div>
+  <div class="group">
+    <div class="g-title">闯关 / 竞争类</div>
+    <div class="row"><span class="name">关卡闯关</span><span class="desc">难度递进+成就，需接进度与徽章系统</span><span class="chip high">中</span></div>
+    <div class="row"><span class="name">排行榜 / 对战</span><span class="desc">竞争激励，需账号与多用户体系</span><span class="chip high">低</span></div>
+  </div>
+</div>

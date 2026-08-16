@@ -140,6 +140,10 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
 
             // 游戏化
             AddFeatureCard("🍬", "单词消消乐", "配对消除记单词", Color.FromArgb(236, 72, 153), Color.FromArgb(219, 39, 119));
+            AddFeatureCard("🧠", "记忆翻牌", "翻牌配对记单词", Color.FromArgb(99, 102, 241), Color.FromArgb(139, 92, 246));
+            AddFeatureCard("🔗", "连连看", "路径配对记单词", Color.FromArgb(14, 165, 233), Color.FromArgb(59, 130, 246));
+            AddFeatureCard("✍️", "单词拼写", "听音拼写记单词", Color.FromArgb(34, 197, 94), Color.FromArgb(16, 185, 129));
+            AddFeatureCard("🔨", "打地鼠", "限时配对记单词", Color.FromArgb(249, 115, 22), Color.FromArgb(234, 88, 12));
             //AddFeatureCard("🎯", "每日挑战", "完成每日任务", Color.FromArgb(236, 72, 153), Color.FromArgb(219, 39, 119));
             //AddFeatureCard("🏆", "成就徽章", "查看成就", Color.FromArgb(255, 193, 7), Color.FromArgb(251, 146, 60));
 

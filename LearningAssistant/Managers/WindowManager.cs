@@ -25,6 +25,10 @@ namespace LearningAssistant.Managers
         void OpenNotesWindow();
         void OpenAIWebViewWindow(string? initialPrompt = null);
         void OpenWordMatchGameWindow();
+        void OpenMemoryMatchGameWindow();
+        void OpenLinkMatchGameWindow();
+        void OpenSpellingGameWindow();
+        void OpenWhackAMoleGameWindow();
     }
 
     public class WindowManager : IWindowManager
@@ -180,6 +184,78 @@ namespace LearningAssistant.Managers
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to open word match game window");
+                throw;
+            }
+        }
+
+        public void OpenMemoryMatchGameWindow()
+        {
+            _logger.LogInformation("Opening memory match game window");
+
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var form = scope.ServiceProvider.GetRequiredService<MemoryMatchGameForm>();
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to open memory match game window");
+                throw;
+            }
+        }
+
+        public void OpenLinkMatchGameWindow()
+        {
+            _logger.LogInformation("Opening link match game window");
+
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var form = scope.ServiceProvider.GetRequiredService<LinkMatchGameForm>();
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to open link match game window");
+                throw;
+            }
+        }
+
+        public void OpenSpellingGameWindow()
+        {
+            _logger.LogInformation("Opening spelling game window");
+
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var form = scope.ServiceProvider.GetRequiredService<SpellingGameForm>();
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to open spelling game window");
+                throw;
+            }
+        }
+
+        public void OpenWhackAMoleGameWindow()
+        {
+            _logger.LogInformation("Opening whack-a-mole game window");
+
+            try
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var form = scope.ServiceProvider.GetRequiredService<WhackAMoleGameForm>();
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to open whack-a-mole game window");
                 throw;
             }
         }

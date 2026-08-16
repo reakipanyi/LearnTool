@@ -385,3 +385,4 @@ bin_verify/
 /_diag_dumps.cmd
 /build.ps1
 /isolate_tests.ps1
+_buildcheck/

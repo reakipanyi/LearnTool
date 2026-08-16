@@ -78,6 +78,7 @@ namespace LearningAssistant.Presenters
             _view.TemplateAddClicked += OnTemplateAddClicked;
             _view.TemplateSaveClicked += OnTemplateSaveClicked;
             _view.TemplateDeleteClicked += OnTemplateDeleteClicked;
+            _view.JsonTextChanged += OnJsonTextChanged;
             _view.ImportClicked += OnImportClicked;
             _view.ExportClicked += OnExportClicked;
             _view.GridCellEndEdit += OnGridValueChanged;
@@ -524,6 +525,17 @@ namespace LearningAssistant.Presenters
         }
 
         /// <summary>
+        /// JSON文本框内容变更事件处理方法。
+        /// 程序化加载期间不置脏标记，避免加载后被误判为“有未保存的更改”。
+        /// </summary>
+        private void OnJsonTextChanged(object? sender, EventArgs e)
+        {
+            if (_isLoading) return;
+            _isDirty = true;
+            _view.UpdateDirtyStatus(true);
+        }
+
+        /// <summary>
         /// 系统列名，不应序列化到编辑JSON中（避免空Id/CreatedAt/UpdatedAt 覆盖真实数据）
         /// </summary>
         private static readonly HashSet<string> SystemColumns = new(StringComparer.OrdinalIgnoreCase)
@@ -734,6 +746,7 @@ namespace LearningAssistant.Presenters
             _view.TemplateAddClicked -= OnTemplateAddClicked;
             _view.TemplateSaveClicked -= OnTemplateSaveClicked;
             _view.TemplateDeleteClicked -= OnTemplateDeleteClicked;
+            _view.JsonTextChanged -= OnJsonTextChanged;
             _view.ImportClicked -= OnImportClicked;
             _view.ExportClicked -= OnExportClicked;
             _view.GridCellEndEdit -= OnGridValueChanged;

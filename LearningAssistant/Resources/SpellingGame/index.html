@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>单词消消乐</title>
+    <title>单词拼写</title>
     <link rel="stylesheet" href="../Shared/shared.css" />
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
     <header class="topbar">
-        <div class="brand">🧩 单词消消乐</div>
+        <div class="brand">✍️ 单词拼写</div>
         <div class="stats">
             <div class="stat"><span class="stat-label">得分</span><span id="score" class="stat-value">0</span></div>
             <div class="stat"><span class="stat-label">连击</span><span id="combo" class="stat-value">0</span></div>
-            <div class="stat"><span class="stat-label">剩余</span><span id="remaining" class="stat-value">0</span></div>
+            <div class="stat"><span class="stat-label">进度</span><span id="progress" class="stat-value">0/0</span></div>
             <div class="stat"><span class="stat-label">计时</span><span id="timer" class="stat-value">0s</span></div>
         </div>
         <div class="actions">
@@ -21,11 +21,25 @@
         </div>
     </header>
 
-    <div class="progress-wrap"><div id="progress" class="progress"></div></div>
+    <div class="progress-wrap"><div id="progressBar" class="progress"></div></div>
 
-    <div id="board" class="board"></div>
+    <main class="stage">
+        <!-- 题干卡片 -->
+        <div class="question-card">
+            <div class="q-label">请拼出你看到的单词</div>
+            <div class="q-meaning" id="qMeaning">—</div>
+            <button id="btnSpeak" class="btn">🔊 听发音</button>
+            <div class="q-hint" id="qHint"></div>
+        </div>
 
-    <footer class="hint" id="hint">点击一张卡片，再点它的配对卡片（单词 ↔ 释义）即可消除</footer>
+        <!-- 字母格 -->
+        <div id="slots" class="slots"></div>
+
+        <!-- 虚拟键盘 -->
+        <div class="keyboard" id="keyboard"></div>
+    </main>
+
+    <footer class="hint" id="hint">看释义，键入英文单词；拼满字母即可自动判定，答错的词稍后会再次出现</footer>
 
     <div id="toast" class="toast"></div>
 
@@ -33,11 +47,12 @@
     <div id="resultOverlay" class="overlay hidden">
         <div class="result-card">
             <div class="result-emoji" id="resultEmoji">🎉</div>
-            <h2 id="resultTitle">通关啦！</h2>
+            <h2 id="resultTitle">完成！</h2>
+            <div class="stars" id="resultStars">★★★</div>
             <div class="result-details">
                 <div class="result-row"><span class="result-label">得分</span><b id="resultScore">0</b></div>
+                <div class="result-row"><span class="result-label">答对/总题</span><b id="resultRight">0/0</b></div>
                 <div class="result-row"><span class="result-label">正确率</span><b id="resultRate">0%</b></div>
-                <div class="result-row"><span class="result-label">最高连击</span><b id="resultCombo">0</b></div>
                 <div class="result-row"><span class="result-label">用时</span><b id="resultTime">0s</b></div>
             </div>
             <div class="result-btns">

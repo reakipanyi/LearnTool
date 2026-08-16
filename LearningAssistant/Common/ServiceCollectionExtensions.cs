@@ -531,11 +531,46 @@ namespace LearningAssistant.Common
             {
                 var gameService = sp.GetRequiredService<WordMatchGameService>();
                 var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
-                var wrongAnswerService = sp.GetRequiredService<IWrongAnswerService>();
                 var userSessionService = sp.GetRequiredService<IUserSessionService>();
                 var themeService = sp.GetRequiredService<IThemeService>();
                 var logger = sp.GetRequiredService<ILogger<WordMatchGameForm>>();
-                return new WordMatchGameForm(gameService, contentLoaderService, wrongAnswerService, userSessionService, themeService, logger);
+                return new WordMatchGameForm(gameService, contentLoaderService, userSessionService, themeService, logger);
+            });
+            services.AddScoped<MemoryMatchGameForm>(sp =>
+            {
+                var gameService = sp.GetRequiredService<WordMatchGameService>();
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var userSessionService = sp.GetRequiredService<IUserSessionService>();
+                var themeService = sp.GetRequiredService<IThemeService>();
+                var logger = sp.GetRequiredService<ILogger<MemoryMatchGameForm>>();
+                return new MemoryMatchGameForm(gameService, contentLoaderService, userSessionService, themeService, logger);
+            });
+            services.AddScoped<LinkMatchGameForm>(sp =>
+            {
+                var gameService = sp.GetRequiredService<WordMatchGameService>();
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var userSessionService = sp.GetRequiredService<IUserSessionService>();
+                var themeService = sp.GetRequiredService<IThemeService>();
+                var logger = sp.GetRequiredService<ILogger<LinkMatchGameForm>>();
+                return new LinkMatchGameForm(gameService, contentLoaderService, userSessionService, themeService, logger);
+            });
+            services.AddScoped<SpellingGameForm>(sp =>
+            {
+                var gameService = sp.GetRequiredService<WordMatchGameService>();
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var userSessionService = sp.GetRequiredService<IUserSessionService>();
+                var themeService = sp.GetRequiredService<IThemeService>();
+                var logger = sp.GetRequiredService<ILogger<SpellingGameForm>>();
+                return new SpellingGameForm(gameService, contentLoaderService, userSessionService, themeService, logger);
+            });
+            services.AddScoped<WhackAMoleGameForm>(sp =>
+            {
+                var gameService = sp.GetRequiredService<WordMatchGameService>();
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var userSessionService = sp.GetRequiredService<IUserSessionService>();
+                var themeService = sp.GetRequiredService<IThemeService>();
+                var logger = sp.GetRequiredService<ILogger<WhackAMoleGameForm>>();
+                return new WhackAMoleGameForm(gameService, contentLoaderService, userSessionService, themeService, logger);
             });
             services.AddScoped<LearningManagementForm>(sp =>
             {

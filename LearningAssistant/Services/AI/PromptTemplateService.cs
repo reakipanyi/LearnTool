@@ -3,7 +3,6 @@ using LearningAssistant.Models.AI;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace LearningAssistant.Services.AI
 {
@@ -505,7 +504,7 @@ namespace LearningAssistant.Services.AI
             {
                 new PromptTemplateCategory
                 {
-                    Name = "学习助手",
+                    Name = "工具",
                     Icon = "📚",
                     Order = 0,
                     Templates = new List<PromptTemplate>
