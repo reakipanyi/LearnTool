@@ -317,6 +317,23 @@ namespace LearningAssistant.Forms
                 {
                     StartGame();
                 }
+                // 前端监听器已就绪：若 init 已缓存且尚未发出，补发数据
+                else if (type == "__ready")
+                {
+                    if (_pendingPayload != null)
+                    {
+                        var payload = _pendingPayload;
+                        _pendingPayload = null;
+                        _webView.CoreWebView2.PostWebMessageAsJson(payload);
+                    }
+                }
+                // 前端请求朗读：用系统 TTS 播放，比 WebView2 speechSynthesis 更可靠
+                else if (type == "speak")
+                {
+                    var text = root.TryGetProperty("text", out var t) ? t.GetString() : "";
+                    var lang = root.TryGetProperty("lang", out var l) ? l.GetString() : "en-US";
+                    if (!string.IsNullOrWhiteSpace(text)) SpeakHost(text, lang);
+                }
                 // 诊断消息：前端脚本错误 / 页面加载快照
                 else if (type == "__diag")
                 {
@@ -350,6 +367,36 @@ namespace LearningAssistant.Forms
                     $"[{DateTime.Now:HH:mm:ss.fff}] {msg}\r\n");
             }
             catch { /* 诊断日志失败不影响功能 */ }
+        }
+
+        /// <summary>用系统 TTS 后台朗读文本（WebView2 前端 speechSynthesis 多不稳定，改用宿主发声）。</summary>
+        private void SpeakHost(string text, string lang)
+        {
+            Task.Run(() =>
+            {
+                try
+                {
+                    using var synth = new System.Speech.Synthesis.SpeechSynthesizer();
+                    synth.Rate = 0;
+                    synth.Volume = 100;
+                    // 尽量挑选匹配语种的声音（常见 en-US）
+                    var want = lang.StartsWith("en") ? "en" : (lang.StartsWith("zh") ? "zh" : null);
+                    if (want != null)
+                    {
+                        foreach (var v in synth.GetInstalledVoices())
+                        {
+                            var info = v.VoiceInfo;
+                            if (!string.IsNullOrEmpty(info.Culture?.Name) && info.Culture.Name.StartsWith(want, StringComparison.OrdinalIgnoreCase))
+                            {
+                                synth.SelectVoice(v.VoiceInfo.Name);
+                                break;
+                            }
+                        }
+                    }
+                    synth.Speak(text);
+                }
+                catch { /* 无语音输出时不抛错 */ }
+            });
         }
 
         private void FormBase_FormClosing(object? sender, FormClosingEventArgs e)

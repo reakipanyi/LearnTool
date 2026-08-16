@@ -35,8 +35,13 @@
             el._t = setTimeout(() => el.classList.remove("show"), duration);
         },
 
-        /** 朗读文本（WebView2 内置 speechSynthesis），无语音设备时静默降级。 */
+        /** 朗读文本。WebView2 内优先走宿主 TTS（系统语音更可靠）；无宿主（浏览器调试）时用 speechSynthesis 兜底。 */
         speak(text, lang = "en-US") {
+            const wb = getBridge();
+            if (wb) {
+                wb.postMessage({ type: "speak", text, lang });
+                return;
+            }
             try {
                 if (!window.speechSynthesis) return;
                 const u = new SpeechSynthesisUtterance(text);
@@ -70,6 +75,8 @@
                     }
                     if (msg && msg.type === "init") onInit(msg.data, msg.theme);
                 });
+                // 通知宿主监听器已就绪；若宿主在监听器注册前就下发了 init，会自动补发，避免数据丢失。
+                wb.postMessage({ type: "__ready" });
             }
         },
 
