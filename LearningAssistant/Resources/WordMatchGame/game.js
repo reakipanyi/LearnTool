@@ -241,14 +241,15 @@
         if (isMock()) boot(MOCK_ITEMS, "light");
     }
 
-    // 换一组：重新洗牌
+    // 换一组：请求宿主重新抽词并排除已答对；无宿主（浏览器调试）时本地重新洗牌
     $("btnRestart").addEventListener("click", () => {
+        if (window.GameUI.bridge()) { sendToHost({ type: "restart" }); return; }
         if (items.length === 0) return;
         resetGame();
         buildCards();
         renderBoard();
     });
-    // 再来一局
+    // 再来一局（=继续）：与"换一组"一致，请求宿主重新抽词并排除已答对
     $("btnAgain").addEventListener("click", () => {
         $("resultOverlay").classList.add("hidden");
         $("btnRestart").click();

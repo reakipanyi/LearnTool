@@ -8,8 +8,8 @@
     --radius: 16px;
 }
 body[data-theme="dark"] {
-    --bg: linear-gradient(135deg, #0f172a 0%, #1e1b3a 100%);
-    --card-face: linear-gradient(135deg, #4f46e5, #7c3aed);
+    --bg: linear-gradient(135deg, #182744 0%, #2a2a56 100%);
+    --card-face: linear-gradient(135deg, #5b63ea, #8b4ae8);
 }
 
 /* 盘面 */

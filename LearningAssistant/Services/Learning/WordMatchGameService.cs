@@ -29,7 +29,12 @@ namespace LearningAssistant.Services.Learning
         /// <param name="context">学习上下文。</param>
         /// <param name="maxCount">抽取条数。</param>
         /// <param name="selection">配牌策略，默认 <see cref="WordSelection.Random"/> 向后兼容。</param>
-        public List<WordMatchItemDto> BuildItems(LearningContext context, int maxCount, WordSelection selection = WordSelection.Random)
+        /// <param name="excludeIds">需排除的词条 Id（本局已答对、换一组不再出现）；排除后无剩余则回退全量。</param>
+        public List<WordMatchItemDto> BuildItems(
+            LearningContext context,
+            int maxCount,
+            WordSelection selection = WordSelection.Random,
+            IReadOnlyCollection<string>? excludeIds = null)
         {
             try
             {
@@ -48,8 +53,18 @@ namespace LearningAssistant.Services.Learning
                     _ => items.OrderBy(_ => Guid.NewGuid())
                 };
 
-                var valid = ordered
+                List<Models.Learning.LearningItem> valid = ordered
                     .Where(i => !string.IsNullOrWhiteSpace(i.MainContent) && i.Meaning != null && !string.IsNullOrWhiteSpace(i.Meaning.Content))
+                    .ToList();
+
+                // 排除「本局已答对」的词条（换一组不再出现）；若排除后无剩余，则回退全量避免误报词库为空
+                if (excludeIds != null && excludeIds.Count > 0)
+                {
+                    var remaining = valid.Where(i => !excludeIds.Contains(i.Id)).ToList();
+                    if (remaining.Count > 0) valid = remaining;
+                }
+
+                var result = valid
                     .Take(Math.Max(1, maxCount))
                     .Select(i => new WordMatchItemDto
                     {
@@ -61,7 +76,7 @@ namespace LearningAssistant.Services.Learning
                     })
                     .ToList();
 
-                return valid;
+                return result;
             }
             catch (Exception ex)
             {

@@ -31,7 +31,7 @@ namespace LearningAssistant.Forms
         /// <summary>从词库构建游戏数据；词库为空时提示并返回 null（不启动本局）。</summary>
         protected override object? BuildData(LearningContext context, string themeName)
         {
-            var items = _gameService.BuildItems(context, maxCount: 10);
+            var items = _gameService.BuildItems(context, maxCount: 10, excludeIds: ExcludeAnsweredCorrectIds());
             if (items.Count == 0)
             {
                 MessageBox.Show("当前词库没有可用的单词（需要有单词和释义），请先在「内容编辑」中添加内容。",

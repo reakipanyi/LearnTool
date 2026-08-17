@@ -278,13 +278,10 @@
             renderBoard();
         }
     });
-    // 结算页"再来一局"：同组重新洗牌翻回背面
+    // 结算页"再来一局"（=继续）：与"换一组"一致，请求宿主重新抽词并排除已答对
     $("btnAgain").addEventListener("click", () => {
         $("resultOverlay").classList.add("hidden");
-        if (items.length === 0) return;
-        resetGame();
-        buildCards();
-        renderBoard();
+        $("btnRestart").click();
     });
     $("btnClose").addEventListener("click", () => $("resultOverlay").classList.add("hidden"));
 

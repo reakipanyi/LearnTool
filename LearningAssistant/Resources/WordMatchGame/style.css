@@ -6,7 +6,7 @@
     --bg: linear-gradient(135deg, #f5f7fa 0%, #e4e9f0 100%);
 }
 body[data-theme="dark"] {
-    --bg: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+    --bg: linear-gradient(135deg, #182744 0%, #2b3a4f 100%);
 }
 
 /* 盘面 */

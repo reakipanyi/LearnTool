@@ -244,7 +244,7 @@
     });
     $("btnAgain").addEventListener("click", () => {
         $("resultOverlay").classList.add("hidden");
-        resetGame(); queue = shuffle(allItems.map((it) => ({ item: it, wrongCount: 0 }))); startQuestion();
+        $("btnRestart").click();
     });
     $("btnClose").addEventListener("click", () => $("resultOverlay").classList.add("hidden"));
 

@@ -4,7 +4,7 @@
     --bg: linear-gradient(135deg, #fffaf0 0%, #fef2f2 100%);
 }
 body[data-theme="dark"] {
-    --bg: linear-gradient(135deg, #0f172a 0%, #2a1a10 100%);
+    --bg: linear-gradient(135deg, #292039 0%, #3d2a17 100%);
 }
 
 /* 目标栏 */

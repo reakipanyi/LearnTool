@@ -5,7 +5,7 @@
     --bg: linear-gradient(135deg, #eef6ff 0%, #e6f7ec 100%);
 }
 body[data-theme="dark"] {
-    --bg: linear-gradient(135deg, #0f172a 0%, #13311f 100%);
+    --bg: linear-gradient(135deg, #182744 0%, #1d4631 100%);
 }
 
 /* 盘面：固定行列网格，卡片在格内 */

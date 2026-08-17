@@ -278,7 +278,7 @@
     });
     $("btnAgain").addEventListener("click", () => {
         $("resultOverlay").classList.add("hidden");
-        resetGame(); startTotalTimer(); startRound();
+        $("btnRestart").click();
     });
     $("btnClose").addEventListener("click", () => $("resultOverlay").classList.add("hidden"));
 

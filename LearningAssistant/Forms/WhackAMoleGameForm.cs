@@ -33,7 +33,7 @@ namespace LearningAssistant.Forms
         /// <summary>从词库构建游戏数据（干扰项多，取更多词条备用，随机为主）；词库不足时提示并返回 null。</summary>
         protected override object? BuildData(LearningContext context, string themeName)
         {
-            var items = _gameService.BuildItems(context, maxCount: 12, selection: WordSelection.Random);
+            var items = _gameService.BuildItems(context, maxCount: 12, selection: WordSelection.Random, excludeIds: ExcludeAnsweredCorrectIds());
             if (items.Count < 3)
             {
                 MessageBox.Show("当前词库可用单词不足，请先在「内容编辑」中添加单词。",

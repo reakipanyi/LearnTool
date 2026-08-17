@@ -33,7 +33,7 @@ namespace LearningAssistant.Forms
         /// <summary>从词库构建游戏数据（错题优先，每局 8 对共 16 张卡）；词库不足时提示并返回 null。</summary>
         protected override object? BuildData(LearningContext context, string themeName)
         {
-            var items = _gameService.BuildItems(context, maxCount: 8, selection: WordSelection.WrongFirst);
+            var items = _gameService.BuildItems(context, maxCount: 8, selection: WordSelection.WrongFirst, excludeIds: ExcludeAnsweredCorrectIds());
             if (items.Count == 0)
             {
                 MessageBox.Show("当前词库没有可用的单词（需要有单词和释义），请先在「内容编辑」中添加内容。",

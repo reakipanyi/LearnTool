@@ -20,16 +20,16 @@
 }
 
 body[data-theme="dark"] {
-    --bg: linear-gradient(135deg, #0f172a 0%, #1e1b3a 100%);
-    --surface: #1e293b;
-    --surface-hover: #263548;
-    --text: #e2e8f0;
-    --muted: #64748b;
-    --word-border: #818cf8;
-    --meaning-border: #f472b6;
+    --bg: linear-gradient(135deg, #16213a 0%, #24274d 100%);
+    --surface: #243346;
+    --surface-hover: #2d3b50;
+    --text: #eceff5;
+    --muted: #9ba9c2;
+    --word-border: #8a95fb;
+    --meaning-border: #f27bb8;
     --shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
     --shadow-hover: 0 10px 28px rgba(0, 0, 0, 0.45);
-    --progress-bg: #334155;
+    --progress-bg: #3b4a63;
     --overlay: rgba(2, 6, 23, 0.6);
 }
 

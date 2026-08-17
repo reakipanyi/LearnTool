@@ -40,6 +40,9 @@ namespace LearningAssistant.Forms
         /// <summary>当前游戏的科目上下文（开始游戏时构建，供 OnGameEnd 使用）。</summary>
         private LearningContext? _currentContext;
 
+        /// <summary>按用户记录"本窗口已答对"的词条 Id（区分用户，换一组时不再出现）。</summary>
+        private readonly Dictionary<string, HashSet<string>> _correctIdsByUser = new();
+
         /// <summary>JSON 序列化参数：统一 camelCase，避免前后端字段大小写不一致。</summary>
         protected static readonly JsonSerializerOptions SerializerOptions = new()
         {
@@ -310,6 +313,7 @@ namespace LearningAssistant.Forms
 
                 if (type == "gameEnd" && _currentContext != null)
                 {
+                    TrackAnsweredCorrect(root, CurrentUserId);
                     OnGameEnd(root, _currentContext);
                 }
                 // 前端"换一组"：按当前科目/子类别重新抽词并下发新数据
@@ -355,6 +359,32 @@ namespace LearningAssistant.Forms
             {
                 _logger.LogError(ex, "处理游戏消息失败");
             }
+        }
+
+        /// <summary>记录某用户本窗口"已答对"的词条 Id；换一组(BuildData)时据此排除。</summary>
+        private void TrackAnsweredCorrect(JsonElement gameRoot, string userId)
+        {
+            if (string.IsNullOrEmpty(userId) || !gameRoot.TryGetProperty("results", out var resultsProp)) return;
+            if (!_correctIdsByUser.TryGetValue(userId, out var set))
+            {
+                set = new HashSet<string>();
+                _correctIdsByUser[userId] = set;
+            }
+            foreach (var r in resultsProp.EnumerateArray())
+            {
+                if (!r.TryGetProperty("id", out var idProp) || !r.TryGetProperty("correct", out var cProp)) continue;
+                if (cProp.ValueKind != JsonValueKind.True) continue;
+                var id = idProp.GetString();
+                if (!string.IsNullOrEmpty(id)) set.Add(id);
+            }
+        }
+
+        /// <summary>当前用户在本次窗口已答对的词条 Id（换一组时排除；区分用户）。</summary>
+        protected IReadOnlyCollection<string> ExcludeAnsweredCorrectIds()
+        {
+            var uid = CurrentUserId;
+            if (string.IsNullOrEmpty(uid)) return Array.Empty<string>();
+            return _correctIdsByUser.TryGetValue(uid, out var set) ? set : (IReadOnlyCollection<string>)Array.Empty<string>();
         }
 
         /// <summary>写诊断日志到输出目录 game-diag.log，便于定位页面加载/启动问题。</summary>

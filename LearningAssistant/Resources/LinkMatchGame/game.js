@@ -412,11 +412,7 @@
 
     $("btnAgain").addEventListener("click", () => {
         $("resultOverlay").classList.add("hidden");
-        if (items.length === 0) return;
-        resetGame();
-        cards = buildDeck();
-        grid = initGrid(cards);
-        renderBoard();
+        $("btnRestart").click();
     });
     $("btnClose").addEventListener("click", () => $("resultOverlay").classList.add("hidden"));
 
