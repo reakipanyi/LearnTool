@@ -63,6 +63,19 @@ namespace LearningAssistant.Services.Learning
                     _logger?.LogWarning("提醒已存在: {ReminderId}", reminder.Id);
                     return;
                 }
+
+                // 提醒通过 UserId 外键关联 UserProfiles 表（级联删除）。
+                // 冷启动自动建提醒时用户档案可能尚未持久化，先确保父记录存在，避免保存提醒时外键约束失败。
+                if (!db.UserProfiles.Any(u => u.UserId == reminder.UserId))
+                {
+                    db.UserProfiles.Add(new UserProfileEntity
+                    {
+                        UserId = reminder.UserId,
+                        UserName = reminder.UserId,
+                        LastLoginTime = DateTime.Now
+                    });
+                    _logger?.LogInformation("提醒所属用户档案不存在，已自动创建: {UserId}", reminder.UserId);
+                }
                 
                 var entity = reminder.ToEntity();
                 db.Reminders.Add(entity);

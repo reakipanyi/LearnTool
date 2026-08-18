@@ -55,7 +55,7 @@
             hole.className = "hole";
             const wh = document.createElement("div");
             wh.className = "whack hidden";
-            wh.innerHTML = `<span class="w-word"></span><span class="w-phon"></span>`;
+            wh.innerHTML = `<span class="w-word"></span><span class="w-phon"></span><span class="w-meaning"></span>`;
             const g = HOLE_GRADS[Math.floor(Math.random() * HOLE_GRADS.length)];
             wh.style.setProperty("--grad-a", g[0]);
             wh.style.setProperty("--grad-b", g[1]);
@@ -107,6 +107,7 @@
             const wh = allWhacks[idx];
             wh.querySelector(".w-word").textContent = o.item.word;
             wh.querySelector(".w-phon").textContent = o.item.phonetic || "";
+            wh.querySelector(".w-meaning").textContent = o.item.meaning;
             wh.classList.remove("hidden");
             options.push({ item: o.item, correct: o.correct, wh, idx });
         });

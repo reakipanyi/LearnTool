@@ -16,7 +16,7 @@ body[data-theme="dark"] {
     padding: 14px 20px;
     flex-shrink: 0;
 }
-.target-label { font-size: 16px; color: var(--muted); }
+.target-label { font-size: 22px; font-weight: 700; color: var(--muted); }
 .target-card {
     display: flex;
     align-items: center;
@@ -94,8 +94,9 @@ body[data-theme="dark"] {
 .whack.miss { background: linear-gradient(135deg, #ef4444, #dc2626) !important; animation: shake 0.35s; }
 .whack.escaped { opacity: 0; transform: translateY(-34px); transition: all 0.4s; }
 
-.whack .w-word { font-size: 16px; font-weight: 800; line-height: 1.15; word-break: break-all; }
-.whack .w-phon { font-size: 11px; opacity: 0.85; margin-top: 2px; }
+.whack .w-word { font-size: 24px; font-weight: 800; line-height: 1.15; word-break: break-all; }
+.whack .w-phon { font-size: 13px; opacity: 0.9; margin-top: 4px; }
+.whack .w-meaning { font-size: 15px; font-weight: 600; margin-top: 6px; padding: 2px 8px; border-radius: 10px; background: rgba(255, 255, 255, 0.22); }
 
 @keyframes popUp {
     from { opacity: 0; transform: translateY(30px) scale(0.7); }
@@ -131,4 +132,10 @@ body[data-theme="dark"] {
 @keyframes floatUp {
     0% { opacity: 1; transform: translate(-50%, 0); }
     100% { opacity: 0; transform: translate(-50%, -26px); }
+}
+
+/* 提示从顶部下移到盘面下方，避免与"找到配对"目标栏重叠 */
+.toast {
+    top: auto;
+    bottom: 64px;
 }

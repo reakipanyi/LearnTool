@@ -127,6 +127,7 @@
                 selEl.classList.remove("selected");
                 selected = idx;
                 el.classList.add("selected");
+                if (card.type === "word") speak(card.item.word);
                 hint.textContent = "请点击该卡片的配对卡片";
                 return;
             }
@@ -167,6 +168,8 @@
 
         selected = idx;
         el.classList.add("selected");
+        // 选中单词卡时自动播放发音
+        if (card.type === "word") speak(card.item.word);
         hint.textContent = "请点击该卡片的配对卡片（单词↔释义）";
     }
 

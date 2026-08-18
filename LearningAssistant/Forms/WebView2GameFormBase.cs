@@ -1,6 +1,7 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Models.Learning;
+using LearningAssistant.Models.Learning.Status;
 using LearningAssistant.Services.Learning;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.WebView2.Core;
@@ -64,6 +65,9 @@ namespace LearningAssistant.Forms
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
+
+        /// <summary>WebView2 环境/核心初始化超时，避免 Runtime 异常或浏览器进程启动卡住时页面永久停在"加载中"。</summary>
+        private static readonly TimeSpan WebViewInitTimeout = TimeSpan.FromSeconds(20);
 
         /// <summary>游戏标题（窗体标题栏）。</summary>
         protected virtual string FormTitle => "WebView2 游戏";
@@ -199,25 +203,26 @@ namespace LearningAssistant.Forms
 
         /// <summary>
         /// 行/列配置变更：更新内存值并保存到本地设置，下次打开自动加载。
+        /// 注意：保存逻辑异步后台执行，避免在 UI 线程同步等待导致死锁卡死。
         /// </summary>
         private void OnLayoutConfigChanged()
         {
             _gameRows = (int)_numRows.Value;
             _gameCols = (int)_numCols.Value;
-            PersistLayoutConfig();
+            _ = PersistLayoutConfigAsync();
         }
 
-        /// <summary>保存行/列配置到用户设置。</summary>
-        private void PersistLayoutConfig()
+        /// <summary>异步保存行/列配置到用户设置。</summary>
+        private async Task PersistLayoutConfigAsync()
         {
             try
             {
                 var userId = _userSessionService.CurrentUserId;
                 if (string.IsNullOrEmpty(userId)) return;
-                var settings = _settingsService.LoadSettingsAsync(userId).GetAwaiter().GetResult();
+                var settings = await _settingsService.LoadSettingsAsync(userId);
                 settings.GameRows = _gameRows;
                 settings.GameColumns = _gameCols;
-                _ = _settingsService.SaveSettingsAsync(userId, settings);
+                await _settingsService.SaveSettingsAsync(userId, settings);
             }
             catch (Exception ex)
             {
@@ -225,16 +230,16 @@ namespace LearningAssistant.Forms
             }
         }
 
-        /// <summary>保存"跳过已知项"开关到用户设置。</summary>
-        private void PersistSkipKnown(bool value)
+        /// <summary>异步保存"跳过已知项"开关到用户设置。</summary>
+        private async Task PersistSkipKnownAsync(bool value)
         {
             try
             {
                 var userId = _userSessionService.CurrentUserId;
                 if (string.IsNullOrEmpty(userId)) return;
-                var settings = _settingsService.LoadSettingsAsync(userId).GetAwaiter().GetResult();
+                var settings = await _settingsService.LoadSettingsAsync(userId);
                 settings.SkipKnown = value;
-                _ = _settingsService.SaveSettingsAsync(userId, settings);
+                await _settingsService.SaveSettingsAsync(userId, settings);
             }
             catch (Exception ex)
             {
@@ -278,7 +283,7 @@ namespace LearningAssistant.Forms
 
         private async void FormBase_Load(object? sender, EventArgs e)
         {
-            LoadSavedSettings();
+            await LoadSavedSettingsAsync();
             try
             {
                 await InitializeWebViewAsync();
@@ -292,13 +297,13 @@ namespace LearningAssistant.Forms
         }
 
         /// <summary>加载本地保存的行/列与跳过已知项配置（下次打开自动恢复）。</summary>
-        private void LoadSavedSettings()
+        private async Task LoadSavedSettingsAsync()
         {
             try
             {
                 var userId = _userSessionService.CurrentUserId;
                 if (string.IsNullOrEmpty(userId)) return;
-                var settings = _settingsService.LoadSettingsAsync(userId).GetAwaiter().GetResult();
+                var settings = await _settingsService.LoadSettingsAsync(userId);
                 _gameRows = Math.Clamp(settings.GameRows, (int)_numRows.Minimum, (int)_numRows.Maximum);
                 _gameCols = Math.Clamp(settings.GameColumns, (int)_numCols.Minimum, (int)_numCols.Maximum);
                 _skipKnown = settings.SkipKnown;
@@ -318,12 +323,14 @@ namespace LearningAssistant.Forms
                 "LearningAssistant", "WebView2Cache");
             Directory.CreateDirectory(cacheDir);
 
-            _webViewEnvironment = await CoreWebView2Environment.CreateAsync(null, cacheDir);
+            _webViewEnvironment = await CoreWebView2Environment.CreateAsync(null, cacheDir)
+                .WaitAsync(WebViewInitTimeout);
 
             _webView = new WebView2 { Dock = DockStyle.Fill };
             _panelWeb.Controls.Add(_webView);
 
-            await _webView.EnsureCoreWebView2Async(_webViewEnvironment);
+            await _webView.EnsureCoreWebView2Async(_webViewEnvironment)
+                .WaitAsync(WebViewInitTimeout);
 
             if (_webView.CoreWebView2 != null)
             {
@@ -476,7 +483,7 @@ namespace LearningAssistant.Forms
                         (skProp.ValueKind == JsonValueKind.True || skProp.ValueKind == JsonValueKind.False))
                     {
                         _skipKnown = skProp.ValueKind == JsonValueKind.True;
-                        PersistSkipKnown(_skipKnown);
+                        _ = PersistSkipKnownAsync(_skipKnown);
                     }
                 }
                 // 前端监听器已就绪：若 init 已缓存且尚未发出，补发数据
@@ -542,7 +549,29 @@ namespace LearningAssistant.Forms
         {
             var uid = CurrentUserId;
             if (string.IsNullOrEmpty(uid)) return Array.Empty<string>();
-            return _correctIdsByUser.TryGetValue(uid, out var set) ? set : (IReadOnlyCollection<string>)Array.Empty<string>();
+
+            var exclude = _correctIdsByUser.TryGetValue(uid, out var set)
+                ? new HashSet<string>(set)
+                : new HashSet<string>();
+
+            // 勾选"跳过已知项"时，额外排除学习状态为 Known/Mastered 的词条，避免重复出题
+            if (SkipKnown && _currentContext != null)
+            {
+                try
+                {
+                    foreach (var item in _contentLoaderService.LoadItems(_currentContext))
+                    {
+                        if (item.Status == LearningStatus.Known || item.Status == LearningStatus.Mastered)
+                            exclude.Add(item.Id);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "加载已知项失败，已答对排除仍生效");
+                }
+            }
+
+            return exclude;
         }
 
         /// <summary>写诊断日志到输出目录 game-diag.log，便于定位页面加载/启动问题。</summary>
