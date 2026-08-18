@@ -86,6 +86,33 @@ namespace LearningAssistant.Services.Learning
         }
 
         /// <summary>
+        /// 统计当前词库中仍可学习的条目数（供前端展示"总剩余"）。
+        /// 过滤逻辑与 <see cref="BuildItems"/> 保持一致；excludeIds 为空或排除后无剩余时按全量统计。
+        /// </summary>
+        public int CountRemaining(LearningContext context, IReadOnlyCollection<string>? excludeIds = null)
+        {
+            try
+            {
+                var items = _contentLoaderService.LoadItems(context);
+                var valid = items
+                    .Where(i => !string.IsNullOrWhiteSpace(i.MainContent) && i.Meaning != null && !string.IsNullOrWhiteSpace(i.Meaning.Content))
+                    .ToList();
+
+                if (excludeIds != null && excludeIds.Count > 0)
+                {
+                    var remaining = valid.Where(i => !excludeIds.Contains(i.Id)).ToList();
+                    if (remaining.Count > 0) valid = remaining;
+                }
+                return valid.Count;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "统计游戏剩余条目失败: {Category}", context.SubCategory);
+                return 0;
+            }
+        }
+
+        /// <summary>
         /// 将游戏结果回写：更新每个单词的复习状态（Review），答错的写入错题本。
         /// </summary>
         public void ApplyResults(string userId, LearningContext context, IReadOnlyList<WordMatchResult> results)

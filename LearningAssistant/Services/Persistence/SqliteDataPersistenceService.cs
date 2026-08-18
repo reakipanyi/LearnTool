@@ -37,6 +37,8 @@ namespace LearningAssistant.Services.Persistence
             {
                 using var db = _dbContextFactory.CreateDbContext();
                 db.EnsureDatabaseCreated();
+                // 对已存在的数据库幂等补建缺失的表与索引（含 DailyRollups 预聚合表），不影响启动
+                db.RepairSchema();
             }
             catch (Exception ex)
             {

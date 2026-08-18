@@ -383,6 +383,47 @@ namespace LearningAssistant.Data.Database
     }
 
     /// <summary>
+    /// 每日统计快照表（预聚合 / 物化表）
+    /// 按 用户+日期 一行，预存当日时长/数量/正确数/错误数/正确率/连击/经验等汇总，
+    /// 由聚合写入链路在每日首次写入时更新，供日/周/月统计优先读取，避免长周期全表扫描。
+    /// </summary>
+    public class DailyRollupEntity : UserEntityBase
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Required]
+        public DateTime Date { get; set; }
+
+        public int TimeSpentMinutes { get; set; }
+
+        public int ItemsStudied { get; set; }
+
+        public int CorrectCount { get; set; }
+
+        public int WrongCount { get; set; }
+
+        public double Accuracy { get; set; }
+
+        public int StreakDays { get; set; }
+
+        public int XP { get; set; }
+
+        public int Level { get; set; }
+
+        public bool GoalCompleted { get; set; }
+
+        [MaxLength(100)]
+        public string TopCategory { get; set; } = string.Empty;
+
+        [MaxLength(100)]
+        public string WeakCategory { get; set; } = string.Empty;
+
+        /// <summary>用于增量更新的版本号</summary>
+        public int Version { get; set; } = 1;
+    }
+
+    /// <summary>
     /// 学习统计实体
     /// </summary>
     public class StudyStatsEntity : UserEntityBase

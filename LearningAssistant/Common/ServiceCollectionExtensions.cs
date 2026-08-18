@@ -533,8 +533,9 @@ namespace LearningAssistant.Common
                 var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
                 var userSessionService = sp.GetRequiredService<IUserSessionService>();
                 var themeService = sp.GetRequiredService<IThemeService>();
+                var settingsService = sp.GetRequiredService<IUserSettingsService>();
                 var logger = sp.GetRequiredService<ILogger<WordMatchGameForm>>();
-                return new WordMatchGameForm(gameService, contentLoaderService, userSessionService, themeService, logger);
+                return new WordMatchGameForm(gameService, contentLoaderService, userSessionService, themeService, settingsService, logger);
             });
             services.AddScoped<MemoryMatchGameForm>(sp =>
             {
@@ -542,8 +543,9 @@ namespace LearningAssistant.Common
                 var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
                 var userSessionService = sp.GetRequiredService<IUserSessionService>();
                 var themeService = sp.GetRequiredService<IThemeService>();
+                var settingsService = sp.GetRequiredService<IUserSettingsService>();
                 var logger = sp.GetRequiredService<ILogger<MemoryMatchGameForm>>();
-                return new MemoryMatchGameForm(gameService, contentLoaderService, userSessionService, themeService, logger);
+                return new MemoryMatchGameForm(gameService, contentLoaderService, userSessionService, themeService, settingsService, logger);
             });
             services.AddScoped<LinkMatchGameForm>(sp =>
             {
@@ -551,8 +553,9 @@ namespace LearningAssistant.Common
                 var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
                 var userSessionService = sp.GetRequiredService<IUserSessionService>();
                 var themeService = sp.GetRequiredService<IThemeService>();
+                var settingsService = sp.GetRequiredService<IUserSettingsService>();
                 var logger = sp.GetRequiredService<ILogger<LinkMatchGameForm>>();
-                return new LinkMatchGameForm(gameService, contentLoaderService, userSessionService, themeService, logger);
+                return new LinkMatchGameForm(gameService, contentLoaderService, userSessionService, themeService, settingsService, logger);
             });
             services.AddScoped<SpellingGameForm>(sp =>
             {
@@ -560,8 +563,9 @@ namespace LearningAssistant.Common
                 var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
                 var userSessionService = sp.GetRequiredService<IUserSessionService>();
                 var themeService = sp.GetRequiredService<IThemeService>();
+                var settingsService = sp.GetRequiredService<IUserSettingsService>();
                 var logger = sp.GetRequiredService<ILogger<SpellingGameForm>>();
-                return new SpellingGameForm(gameService, contentLoaderService, userSessionService, themeService, logger);
+                return new SpellingGameForm(gameService, contentLoaderService, userSessionService, themeService, settingsService, logger);
             });
             services.AddScoped<WhackAMoleGameForm>(sp =>
             {
@@ -569,8 +573,9 @@ namespace LearningAssistant.Common
                 var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
                 var userSessionService = sp.GetRequiredService<IUserSessionService>();
                 var themeService = sp.GetRequiredService<IThemeService>();
+                var settingsService = sp.GetRequiredService<IUserSettingsService>();
                 var logger = sp.GetRequiredService<ILogger<WhackAMoleGameForm>>();
-                return new WhackAMoleGameForm(gameService, contentLoaderService, userSessionService, themeService, logger);
+                return new WhackAMoleGameForm(gameService, contentLoaderService, userSessionService, themeService, settingsService, logger);
             });
             services.AddScoped<LearningManagementForm>(sp =>
             {

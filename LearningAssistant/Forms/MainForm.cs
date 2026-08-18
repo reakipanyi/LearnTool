@@ -203,9 +203,9 @@ namespace LearningAssistant.Forms
             {
                 new() { Key = "dashboard", Icon = "🏠", Text = "首页", Order = 0, Group = "main" },
                 new() { Key = "learning", Icon = "📚", Text = "学习", Order = 1, Group = "main" },
+                new() { Key = "editor", Icon = "✏️", Text = "内容编辑", Order = 12, Group = "tools" },
                 new() { Key = "pdf", Icon = "📖", Text = "PDF阅读", Order = 2, Group = "main" },
                 new() { Key = "browser", Icon = "🌐", Text = "浏览器", Order = 11, Group = "tools" },
-                new() { Key = "editor", Icon = "✏️", Text = "模板编辑", Order = 12, Group = "tools" },
                 new() { Key = "settings", Icon = "⚙️", Text = "设置", Order = 99, Group = "system" }
                 //new() { Key = "mentor", Icon = "🤖", Text = "AI导师", Order = 3, Group = "main" },
                 //new() { Key = "flashcard", Icon = "🧠", Text = "闪卡复习", Order = 4, Group = "main" },
@@ -902,7 +902,7 @@ namespace LearningAssistant.Forms
             buttonOpenEditor.Name = "buttonOpenEditor";
             buttonOpenEditor.Size = new Size(150, 51);
             buttonOpenEditor.TabIndex = 11;
-            buttonOpenEditor.Text = "📝 模板编辑";
+            buttonOpenEditor.Text = "📝 内容编辑";
             buttonOpenEditor.UseVisualStyleBackColor = false;
             buttonOpenEditor.Click += ButtonOpenEditor_Click;
             // 

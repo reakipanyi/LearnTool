@@ -1,3 +1,5 @@
+using LearningAssistant.Common;
+using LearningAssistant.Common.Themes;
 using System.ComponentModel;
 
 namespace LearningAssistant.Forms.UserControls
@@ -5,7 +7,7 @@ namespace LearningAssistant.Forms.UserControls
     /// <summary>
     /// 学习内容视图 - 中间内容显示区（主内容+详情列表+笔记面板+显示详情复选框）
     /// </summary>
-    public class LearningContentView : UserControl
+    public class LearningContentView : UserControl, IThemeable
     {
         #region Controls
 
@@ -182,6 +184,21 @@ namespace LearningAssistant.Forms.UserControls
         #endregion
 
         #region Public Methods
+
+        /// <summary>
+        /// 应用主题颜色（夜间模式下中间内容区背景与文字随主题切换）
+        /// </summary>
+        public void ApplyTheme(ThemeColors colors)
+        {
+            _panelContent.BackColor = colors.Surface;
+            _listBoxDisplay.BackColor = colors.Surface;
+            _listBoxDisplay.ForeColor = colors.TextPrimary;
+            _labelContent.ForeColor = colors.TextPrimary;
+            _panelNotes.BackColor = colors.Surface;
+            _richTextBoxNotes.BackColor = colors.Surface;
+            _richTextBoxNotes.ForeColor = colors.TextPrimary;
+            _labelNotesTitle.ForeColor = colors.TextPrimary;
+        }
 
         /// <summary>
         /// 设置主内容文本

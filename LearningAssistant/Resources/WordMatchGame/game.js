@@ -2,13 +2,14 @@
     "use strict";
 
     // 公共工具从 GameUI 取：GameUI.sendToHost / toast / speak / esc / listenInit / isMock
-    const { toast, sendToHost, speak, esc, listenInit, isMock, applyTheme } = window.GameUI;
+    const { toast, sendToHost, speak, esc, listenInit, isMock, applyTheme, initSkipKnownRadios, metaTotalRemaining } = window.GameUI;
 
     // ---------- 状态 ----------
     let items = [];        // 原始数据 [{id, word, meaning, phonetic, example}]
     let cards = [];        // 生成的卡片 [{key, type, item}]
     let selected = null;   // 当前选中的单词卡索引
-    let score = 0;
+    let score = 0;         // 本组得分
+    let totalScore = 0;    // 跨组累计总分（换一组不清零）
     let combo = 0;
     let maxCombo = 0;
     let remaining = 0;
@@ -23,8 +24,10 @@
     const board = $("board");
     const hint = $("hint");
     const scoreEl = $("score");
+    const totalScoreEl = $("totalScore");
     const comboEl = $("combo");
     const remainingEl = $("remaining");
+    const totalRemainingEl = $("totalRemaining");
     const timerEl = $("timer");
     const progressEl = $("progress");
 
@@ -40,20 +43,20 @@
         { id: "m8", word: "house", meaning: "房子", phonetic: "/haʊs/" },
     ];
 
-    // 卡片多彩配色：单词走冷色系、释义走暖色系
+    // 卡片多彩配色：单词走冷色系、释义走暖色系（浅色块块，降低视觉刺激）
     const WORD_COLORS = [
-        "linear-gradient(135deg, #6366f1, #8b5cf6)",
-        "linear-gradient(135deg, #06b6d4, #3b82f6)",
-        "linear-gradient(135deg, #2563eb, #06b6d4)",
-        "linear-gradient(135deg, #8b5cf6, #d946ef)",
-        "linear-gradient(135deg, #3b82f6, #6366f1)",
+        "linear-gradient(135deg, #e0e7ff, #c7d2fe)",
+        "linear-gradient(135deg, #cffafe, #a5f3fc)",
+        "linear-gradient(135deg, #dbeafe, #bfdbfe)",
+        "linear-gradient(135deg, #ede9fe, #ddd6fe)",
+        "linear-gradient(135deg, #e0f2fe, #bae6fd)",
     ];
     const MEANING_COLORS = [
-        "linear-gradient(135deg, #ec4899, #f43f5e)",
-        "linear-gradient(135deg, #f97316, #f43f5e)",
-        "linear-gradient(135deg, #fb7185, #f97316)",
-        "linear-gradient(135deg, #db2777, #9333ea)",
-        "linear-gradient(135deg, #f43f5e, #ec4899)",
+        "linear-gradient(135deg, #ffe4e6, #fecdd3)",
+        "linear-gradient(135deg, #ffedd5, #fed7aa)",
+        "linear-gradient(135deg, #fce7f3, #fbcfe8)",
+        "linear-gradient(135deg, #fff7ed, #fed7aa)",
+        "linear-gradient(135deg, #ffe4e6, #fda4af)",
     ];
 
     // ---------- 配牌 ----------
@@ -199,12 +202,15 @@
         if (finished) return;
         finished = true;
         stopTimer();
+        // 结算时总分把本组得分计入展示（累计到下一组由 resetGame 完成）
+        totalScoreEl.textContent = totalScore + score;
         const total = results.length || 1;
         const correct = results.filter((r) => r.correct).length;
         const rate = Math.round((correct / total) * 100);
         $("resultEmoji").textContent = rate >= 90 ? "🏆" : rate >= 70 ? "🎉" : rate >= 50 ? "😊" : "💪";
         $("resultTitle").textContent = won ? "通关啦！" : "游戏结束";
         $("resultScore").textContent = score;
+        $("resultTotal").textContent = totalScore + score;
         $("resultRate").textContent = rate + "%";
         $("resultCombo").textContent = maxCombo;
         $("resultTime").textContent = timerSeconds + "s";
@@ -213,7 +219,7 @@
     }
 
     // ---------- 初始化 ----------
-    function boot(data, themeName) {
+    function boot(data, themeName, meta) {
         items = (data || []).filter((d) => d && d.word && d.meaning);
         applyTheme(themeName);
         resetGame();
@@ -221,15 +227,30 @@
             board.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px;">词库为空或不足，请先在「内容编辑」中添加单词</div>`;
             return;
         }
+        // 按顶部"列"设置应用盘面列数
+        if (meta && meta.cols) {
+            board.style.gridTemplateColumns = `repeat(${meta.cols}, minmax(150px, 1fr))`;
+        }
+        // 总剩余条目数
+        totalRemainingEl.textContent = GameUI.metaTotalRemaining(meta);
+        // "跳过已知项/加载所有"单选，切换时通知宿主保存
+        const skipRadio = GameUI.initSkipKnownRadios("skipKnownGroup", (skip) => {
+            GameUI.sendToHost({ type: "setting", skipKnown: skip });
+        });
+        if (meta && typeof meta.skipKnown === "boolean") skipRadio.set(meta.skipKnown);
+
         buildCards();
         renderBoard();
     }
 
     function resetGame() {
+        // 换一组时总分在上一次基础上累计，不清零
+        totalScore += score;
         score = 0; combo = 0; maxCombo = 0; timerSeconds = 0;
         started = false; finished = false; results = [];
         selected = null;
         scoreEl.textContent = "0";
+        totalScoreEl.textContent = totalScore;
         comboEl.textContent = "0";
         timerEl.textContent = "0s";
         progressEl.style.width = "0%";
@@ -237,7 +258,7 @@
     }
 
     function loadData() {
-        listenInit((data, theme) => boot(data, theme));
+        listenInit((data, theme, meta) => boot(data, theme, meta));
         if (isMock()) boot(MOCK_ITEMS, "light");
     }
 

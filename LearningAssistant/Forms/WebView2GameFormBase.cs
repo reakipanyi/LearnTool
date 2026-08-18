@@ -31,11 +31,27 @@ namespace LearningAssistant.Forms
         private readonly ComboBox _comboSubject = new();
         private readonly ComboBox _comboSubCategory = new();
         private readonly Panel _panelWeb = new();
+        private readonly NumericUpDown _numRows = new();
+        private readonly NumericUpDown _numCols = new();
+        private readonly IUserSettingsService _settingsService;
 
         private SubjectType _subject = SubjectType.English;
         private SubCategoryType _subCategory = SubCategoryType.EnglishWord;
         private bool _webViewReady;
         private string? _pendingPayload;
+
+        /// <summary>每组展示行数（本地持久化，由顶部行数控件设置）。</summary>
+        protected int GameRows => _gameRows;
+
+        /// <summary>每组展示列数（本地持久化，由顶部列数控件设置）。</summary>
+        protected int GameColumns => _gameCols;
+
+        /// <summary>是否跳过已知项（false=加载所有）；由前端"换一组"旁的单选按钮控制。</summary>
+        protected bool SkipKnown => _skipKnown;
+
+        private int _gameRows = 5;
+        private int _gameCols = 8;
+        private bool _skipKnown = true;
 
         /// <summary>当前游戏的科目上下文（开始游戏时构建，供 OnGameEnd 使用）。</summary>
         private LearningContext? _currentContext;
@@ -59,11 +75,13 @@ namespace LearningAssistant.Forms
             IContentLoaderService contentLoaderService,
             IUserSessionService userSessionService,
             IThemeService themeService,
+            IUserSettingsService settingsService,
             ILogger logger)
         {
             _contentLoaderService = contentLoaderService;
             _userSessionService = userSessionService;
             _themeService = themeService;
+            _settingsService = settingsService;
             _logger = logger;
 
             BuildUi();
@@ -92,6 +110,39 @@ namespace LearningAssistant.Forms
             BackColor = Color.FromArgb(255, 244, 230);
 
             var topPanel = new Panel { Dock = DockStyle.Top, Height = 52, Padding = new Padding(8, 8, 8, 8) };
+
+            // 每组行/列配置（放在科目选择前面，用户可自由调整并保存到本地）
+            var labelRows = new Label
+            {
+                Text = "行",
+                Font = new Font("微软雅黑", 9F),
+                AutoSize = false,
+                Size = new Size(20, 34),
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            _numRows.Minimum = 2;
+            _numRows.Maximum = 8;
+            _numRows.Value = 5;
+            _numRows.Width = 50;
+            _numRows.Font = new Font("微软雅黑", 10F);
+            _numRows.TextAlign = HorizontalAlignment.Center;
+            _numRows.ValueChanged += (s, e) => OnLayoutConfigChanged();
+
+            var labelCols = new Label
+            {
+                Text = "列",
+                Font = new Font("微软雅黑", 9F),
+                AutoSize = false,
+                Size = new Size(20, 34),
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+            _numCols.Minimum = 2;
+            _numCols.Maximum = 12;
+            _numCols.Value = 8;
+            _numCols.Width = 50;
+            _numCols.Font = new Font("微软雅黑", 10F);
+            _numCols.TextAlign = HorizontalAlignment.Center;
+            _numCols.ValueChanged += (s, e) => OnLayoutConfigChanged();
 
             _comboSubject.DropDownStyle = ComboBoxStyle.DropDownList;
             _comboSubject.Font = new Font("微软雅黑", 10F);
@@ -122,13 +173,21 @@ namespace LearningAssistant.Forms
             btnStart.FlatAppearance.BorderSize = 0;
             btnStart.Click += (s, e) => StartGame();
 
+            topPanel.Controls.Add(labelRows);
+            topPanel.Controls.Add(_numRows);
+            topPanel.Controls.Add(labelCols);
+            topPanel.Controls.Add(_numCols);
             topPanel.Controls.Add(_comboSubject);
             topPanel.Controls.Add(_comboSubCategory);
             topPanel.Controls.Add(btnStart);
 
-            _comboSubject.Location = new Point(8, 8);
-            _comboSubCategory.Location = new Point(158, 8);
-            btnStart.Location = new Point(330, 8);
+            labelRows.Location = new Point(8, 8);
+            _numRows.Location = new Point(28, 8);
+            labelCols.Location = new Point(84, 8);
+            _numCols.Location = new Point(104, 8);
+            _comboSubject.Location = new Point(160, 8);
+            _comboSubCategory.Location = new Point(310, 8);
+            btnStart.Location = new Point(482, 8);
 
             _panelWeb.Dock = DockStyle.Fill;
 
@@ -137,6 +196,61 @@ namespace LearningAssistant.Forms
 
             RefreshSubCategories();
         }
+
+        /// <summary>
+        /// 行/列配置变更：更新内存值并保存到本地设置，下次打开自动加载。
+        /// </summary>
+        private void OnLayoutConfigChanged()
+        {
+            _gameRows = (int)_numRows.Value;
+            _gameCols = (int)_numCols.Value;
+            PersistLayoutConfig();
+        }
+
+        /// <summary>保存行/列配置到用户设置。</summary>
+        private void PersistLayoutConfig()
+        {
+            try
+            {
+                var userId = _userSessionService.CurrentUserId;
+                if (string.IsNullOrEmpty(userId)) return;
+                var settings = _settingsService.LoadSettingsAsync(userId).GetAwaiter().GetResult();
+                settings.GameRows = _gameRows;
+                settings.GameColumns = _gameCols;
+                _ = _settingsService.SaveSettingsAsync(userId, settings);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "保存游戏行/列配置失败");
+            }
+        }
+
+        /// <summary>保存"跳过已知项"开关到用户设置。</summary>
+        private void PersistSkipKnown(bool value)
+        {
+            try
+            {
+                var userId = _userSessionService.CurrentUserId;
+                if (string.IsNullOrEmpty(userId)) return;
+                var settings = _settingsService.LoadSettingsAsync(userId).GetAwaiter().GetResult();
+                settings.SkipKnown = value;
+                _ = _settingsService.SaveSettingsAsync(userId, settings);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "保存游戏跳过已知项配置失败");
+            }
+        }
+
+        /// <summary>
+        /// 按当前行/列配置计算每组词条数（每词条两张卡，卡片数为 行×列）。
+        /// </summary>
+        protected int MaxCountForGrid() => Math.Max(2, (_gameRows * _gameCols) / 2);
+
+        /// <summary>
+        /// 统计当前词库仍可学习的条目总数（供前端"总剩余"展示）。子类基于各自词库服务实现。
+        /// </summary>
+        protected virtual int CountRemainingTotal(LearningContext context) => 0;
 
         private void RefreshSubCategories()
         {
@@ -164,6 +278,7 @@ namespace LearningAssistant.Forms
 
         private async void FormBase_Load(object? sender, EventArgs e)
         {
+            LoadSavedSettings();
             try
             {
                 await InitializeWebViewAsync();
@@ -173,6 +288,27 @@ namespace LearningAssistant.Forms
                 _logger.LogError(ex, "初始化 WebView2 失败");
                 MessageBox.Show($"初始化 WebView2 失败：{ex.Message}\n\n可能需要安装 WebView2 Runtime。",
                     "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>加载本地保存的行/列与跳过已知项配置（下次打开自动恢复）。</summary>
+        private void LoadSavedSettings()
+        {
+            try
+            {
+                var userId = _userSessionService.CurrentUserId;
+                if (string.IsNullOrEmpty(userId)) return;
+                var settings = _settingsService.LoadSettingsAsync(userId).GetAwaiter().GetResult();
+                _gameRows = Math.Clamp(settings.GameRows, (int)_numRows.Minimum, (int)_numRows.Maximum);
+                _gameCols = Math.Clamp(settings.GameColumns, (int)_numCols.Minimum, (int)_numCols.Maximum);
+                _skipKnown = settings.SkipKnown;
+
+                _numRows.Value = _gameRows;
+                _numCols.Value = _gameCols;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "加载游戏行/列配置失败");
             }
         }
 
@@ -275,7 +411,19 @@ namespace LearningAssistant.Forms
                 return; // 子类已提示用户无可玩数据
             }
 
-            var payload = JsonSerializer.Serialize(new { type = "init", data, theme = themeName }, SerializerOptions);
+            var payload = JsonSerializer.Serialize(new
+            {
+                type = "init",
+                data,
+                theme = themeName,
+                meta = new
+                {
+                    rows = _gameRows,
+                    cols = _gameCols,
+                    skipKnown = _skipKnown,
+                    totalRemaining = CountRemainingTotal(_currentContext)
+                }
+            }, SerializerOptions);
             Diag($"StartGame ready={_webViewReady} 数据非空={data != null}");
             _pendingPayload = payload;
             if (_webViewReady)
@@ -320,6 +468,16 @@ namespace LearningAssistant.Forms
                 else if (type == "restart" && _webViewReady)
                 {
                     StartGame();
+                }
+                // 前端"换一组"旁单选按钮：跳过已知项 / 加载所有
+                else if (type == "setting")
+                {
+                    if (root.TryGetProperty("skipKnown", out var skProp) &&
+                        (skProp.ValueKind == JsonValueKind.True || skProp.ValueKind == JsonValueKind.False))
+                    {
+                        _skipKnown = skProp.ValueKind == JsonValueKind.True;
+                        PersistSkipKnown(_skipKnown);
+                    }
                 }
                 // 前端监听器已就绪：若 init 已缓存且尚未发出，补发数据
                 else if (type == "__ready")
@@ -444,6 +602,10 @@ namespace LearningAssistant.Forms
             _comboSubject.ForeColor = colors.TextPrimary;
             _comboSubCategory.BackColor = colors.Surface;
             _comboSubCategory.ForeColor = colors.TextPrimary;
+            _numRows.BackColor = colors.Surface;
+            _numRows.ForeColor = colors.TextPrimary;
+            _numCols.BackColor = colors.Surface;
+            _numCols.ForeColor = colors.TextPrimary;
         }
 
         protected override void Dispose(bool disposing)

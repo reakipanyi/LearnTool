@@ -1,3 +1,5 @@
+using LearningAssistant.Common;
+using LearningAssistant.Common.Themes;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.TTS;
 using System.ComponentModel;
@@ -5,7 +7,7 @@ using System.Drawing.Drawing2D;
 
 namespace LearningAssistant.Forms.UserControls
 {
-    public class LearningCard : Panel
+    public class LearningCard : Panel, IThemeable
     {
         #region 控件字段
         private readonly Panel _accentBar;
@@ -160,6 +162,25 @@ namespace LearningAssistant.Forms.UserControls
                     row.SpeechCoordinator = value;
                 }
             }
+        }
+        #endregion
+
+        #region 主题
+        /// <summary>
+        /// 应用主题颜色（夜间模式下卡片背景与文字随主题切换）
+        /// </summary>
+        public void ApplyTheme(ThemeColors colors)
+        {
+            this.BackColor = colors.SurfaceElevated;
+            _titleLabel.ForeColor = colors.TextPrimary;
+            _categoryLabel.BackColor = colors.ThemeMode == ThemeMode.Dark
+                ? Color.FromArgb(66, 66, 66)
+                : Color.FromArgb(108, 117, 125);
+            foreach (var row in _fieldRows)
+            {
+                row.ApplyTheme(colors);
+            }
+            this.Invalidate();
         }
         #endregion
 

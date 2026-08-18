@@ -32,6 +32,8 @@
     const movesEl = $("moves");
     const timerEl = $("timer");
     const progressEl = $("progress");
+    const totalScoreEl = $("totalScore");
+    const totalRemainingEl = $("totalRemaining");
 
     // ---------- 数据 ----------
     const MOCK_ITEMS = [
@@ -229,6 +231,7 @@
         $("resultStars").innerHTML =
             (stars >= 1 ? "★" : "☆") + (stars >= 2 ? "★" : "☆") + (stars >= 3 ? "★" : "☆");
         $("resultScore").textContent = score;
+        totalScoreEl.textContent = totalScore + score;
         $("resultMoves").textContent = moves + " 步";
         $("resultOptimal").textContent = pairsCount + " 步";
         $("resultTime").textContent = timerSeconds + "s";
@@ -238,24 +241,39 @@
     }
 
     // ---------- 初始化 ----------
-    function boot(data, themeName) {
+    function boot(data, themeName, meta) {
         items = (data || []).filter((d) => d && d.word && d.meaning);
         applyTheme(themeName);
+        // 按顶部"列"设置应用盘面列数
+        if (meta && meta.cols) {
+            board.style.gridTemplateColumns = `repeat(${meta.cols}, minmax(140px, 1fr))`;
+        }
         resetGame();
         if (items.length === 0) {
             board.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px;">词库为空或不足，请先在「内容编辑」中添加单词</div>`;
             return;
         }
+        // 总剩余条目数
+        totalRemainingEl.textContent = GameUI.metaTotalRemaining(meta);
+        // "跳过已知项/加载所有"单选，切换时通知宿主保存
+        const skipRadio = GameUI.initSkipKnownRadios("skipKnownGroup", (skip) => {
+            GameUI.sendToHost({ type: "setting", skipKnown: skip });
+        });
+        if (meta && typeof meta.skipKnown === "boolean") skipRadio.set(meta.skipKnown);
+
         buildCards();
         renderBoard();
     }
 
     function resetGame() {
+        // 换一组时总分在上一次基础上累计，不清零
+        totalScore += score;
         score = 0; combo = 0; maxCombo = 0; moves = 0; errors = 0;
         timerSeconds = 0; started = false; finished = false;
         matchedCount = 0; pairsCount = 0; wrongKeys = new Set(); results = [];
         flipped = []; locked = false;
         scoreEl.textContent = "0";
+        totalScoreEl.textContent = totalScore;
         comboEl.textContent = "0";
         movesEl.textContent = "0";
         timerEl.textContent = "0s";
@@ -264,7 +282,7 @@
     }
 
     function loadData() {
-        listenInit((data, theme) => boot(data, theme));
+        listenInit((data, theme, meta) => boot(data, theme, meta));
         if (isMock()) boot(MOCK_ITEMS, "light");
     }
 

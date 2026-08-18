@@ -64,7 +64,7 @@
             return new URLSearchParams(location.search).get("mock") === "1";
         },
 
-        /** 监听宿主注入的 {type:"init"} 消息；onInit(data, theme) 由各游戏实现。 */
+        /** 监听宿主注入的 {type:"init"} 消息；onInit(data, theme, meta) 由各游戏实现。 */
         listenInit(onInit) {
             const wb = getBridge();
             if (wb) {
@@ -73,7 +73,7 @@
                     if (typeof msg === "string") {
                         try { msg = JSON.parse(msg); } catch (err) { return; }
                     }
-                    if (msg && msg.type === "init") onInit(msg.data, msg.theme);
+                    if (msg && msg.type === "init") onInit(msg.data, msg.theme, msg.meta);
                 });
                 // 通知宿主监听器已就绪；若宿主在监听器注册前就下发了 init，会自动补发，避免数据丢失。
                 wb.postMessage({ type: "__ready" });
@@ -92,6 +92,38 @@
         /** 应用明暗主题：设置 body[data-theme]。 */
         applyTheme(theme) {
             document.body.setAttribute("data-theme", theme || "light");
+        },
+
+        /**
+         * 初始化"跳过已知项 / 加载所有"单选组（位于"换一组"旁）。
+         * @param groupId 单选组容器 id
+         * @param onChange 切换回调，参数为 boolean（true=跳过已知项）
+         * @returns {set} 用 set(meta.skipKnown) 同步前端初始状态
+         */
+        initSkipKnownRadios(groupId, onChange) {
+            const group = document.getElementById(groupId);
+            if (!group) return { set() {} };
+            if (!group._bound) {
+                group._bound = true;
+                group.querySelectorAll('input[name="skipKnown"]').forEach((r) => {
+                    r.addEventListener("change", () => {
+                        if (r.checked) onChange(r.value === "skip");
+                    });
+                });
+            }
+            return {
+                set(value) {
+                    const target = value ? "skip" : "all";
+                    group.querySelectorAll('input[name="skipKnown"]').forEach((r) => {
+                        r.checked = r.value === target;
+                    });
+                }
+            };
+        },
+
+        /** 读取当前 meta 中的总剩余条目数（无 meta 时返回 0）。 */
+        metaTotalRemaining(meta) {
+            return (meta && typeof meta.totalRemaining === "number") ? meta.totalRemaining : 0;
         }
     };
 })();

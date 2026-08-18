@@ -2,11 +2,11 @@
     "use strict";
 
     // 公共工具
-    const { toast, sendToHost, speak, esc, listenInit, isMock, applyTheme, shuffle } = window.GameUI;
+    const { toast, sendToHost, speak, esc, listenInit, isMock, applyTheme, shuffle, initSkipKnownRadios, metaTotalRemaining } = window.GameUI;
 
     // ---------- 常量 ----------
-    const ROWS = 5, COLS = 8;          // 内层盘面
-    const ER = ROWS + 2, EC = COLS + 2; // 扩展网格（带一圈空边界，允许绕边）
+    let ROWS = 5, COLS = 8;          // 内层盘面（由顶部"行/列"设置决定）
+    let ER = ROWS + 2, EC = COLS + 2; // 扩展网格（带一圈空边界，允许绕边）
 
     // ---------- 状态 ----------
     let items = [];      // 原始数据 [{id, word, meaning, phonetic}]
@@ -14,7 +14,8 @@
     let grid = [];       // ERxEC，元素 = card | 0
     let selected = -1;   // 第一张选中卡的全局索引
     let matchedCount = 0, pairsCount = 0;
-    let score = 0, combo = 0, maxCombo = 0, moves = 0, errors = 0;
+    let score = 0, totalScore = 0;   // score=本组得分，totalScore=跨组累计总分
+    let combo = 0, maxCombo = 0, moves = 0, errors = 0;
     let startTimerMs = 0, seconds = 0, timerId = null;
     let started = false, finished = false;
     let wrongKeys = new Set();
@@ -24,7 +25,8 @@
     const $ = (id) => document.getElementById(id);
     const board = $("board"), hint = $("hint");
     const scoreEl = $("score"), comboEl = $("combo"), movesEl = $("moves"),
-          remainingEl = $("remaining"), timerEl = $("timer"), progressEl = $("progress");
+          remainingEl = $("remaining"), timerEl = $("timer"), progressEl = $("progress"),
+          totalScoreEl = $("totalScore"), totalRemainingEl = $("totalRemaining");
 
     const MOCK_ITEMS = [
         { id: "m1", word: "apple", meaning: "苹果", phonetic: "/ˈæpl/" },
@@ -136,8 +138,9 @@
     function anySolvable() { return hasSolvablePair(grid); }
 
     // ---------- 渲染 ----------
-    const WORD_GRADS = [["#6366f1", "#8b5cf6"], ["#06b6d4", "#3b82f6"], ["#2563eb", "#06b6d4"], ["#8b5cf6", "#d946ef"], ["#0ea5e9", "#6366f1"]];
-    const MEANING_GRADS = [["#ec4899", "#f43f5e"], ["#f97316", "#f43f5e"], ["#fb7185", "#f97316"], ["#db2777", "#9333ea"], ["#f43f5e", "#ec4899"]];
+    // 浅色块块（冷色单词/暖色释义），降低视觉刺激；文字已用深色加粗区分
+    const WORD_GRADS = [["#e0e7ff", "#c7d2fe"], ["#cffafe", "#a5f3fc"], ["#dbeafe", "#bfdbfe"], ["#ede9fe", "#ddd6fe"], ["#e0f2fe", "#bae6fd"]];
+    const MEANING_GRADS = [["#ffe4e6", "#fecdd3"], ["#ffedd5", "#fed7aa"], ["#fce7f3", "#fbcfe8"], ["#fff7ed", "#fed7aa"], ["#ffe4e6", "#fda4af"]];
 
     function renderBoard() {
         board.innerHTML = "";
@@ -354,6 +357,7 @@
             `<span class="${stars >= 2 ? "lit" : "dim"}">★</span>` +
             `<span class="${stars >= 3 ? "lit" : "dim"}">★</span>`;
         $("resultScore").textContent = score;
+        totalScoreEl.textContent = totalScore + score;
         $("resultMoves").textContent = moves + " 步";
         $("resultErrors").textContent = errors;
         $("resultTime").textContent = seconds + "s";
@@ -363,26 +367,42 @@
     }
 
     // ---------- 初始化 ----------
-    function boot(data, themeName) {
+    function boot(data, themeName, meta) {
         items = (data || []).filter((d) => d && d.word && d.meaning);
         applyTheme(themeName);
+        // 由顶部"行/列"设置决定盘面尺寸（换一组时重新应用）
+        if (meta && meta.rows) ROWS = Math.max(2, meta.rows);
+        if (meta && meta.cols) COLS = Math.max(2, meta.cols);
+        ER = ROWS + 2; EC = COLS + 2;
+        board.style.gridTemplateColumns = `repeat(${COLS}, 1fr)`;
         resetGame();
         if (items.length < 2) {
             board.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px;">词库内容不足，请先在「内容编辑」中添加单词</div>`;
             return;
         }
+        // 总剩余条目数
+        totalRemainingEl.textContent = GameUI.metaTotalRemaining(meta);
+        // "跳过已知项/加载所有"单选，切换时通知宿主保存
+        const skipRadio = GameUI.initSkipKnownRadios("skipKnownGroup", (skip) => {
+            GameUI.sendToHost({ type: "setting", skipKnown: skip });
+        });
+        if (meta && typeof meta.skipKnown === "boolean") skipRadio.set(meta.skipKnown);
+
         cards = buildDeck();
         grid = initGrid(cards);
         renderBoard();
     }
 
     function resetGame() {
+        // 换一组时总分在上一次基础上累计，不清零
+        totalScore += score;
         score = 0; combo = 0; maxCombo = 0; moves = 0; errors = 0;
         seconds = 0; started = false; finished = false;
         matchedCount = 0; pairsCount = items.length;
         wrongKeys = new Set(); results = []; selected = -1;
         grid = []; lastPathSvg = null;
         scoreEl.textContent = "0";
+        totalScoreEl.textContent = totalScore;
         comboEl.textContent = "0";
         movesEl.textContent = "0";
         timerEl.textContent = "0s";
@@ -391,7 +411,7 @@
     }
 
     function loadData() {
-        listenInit((data, theme) => boot(data, theme));
+        listenInit((data, theme, meta) => boot(data, theme, meta));
         if (isMock()) boot(MOCK_ITEMS, "light");
     }
 

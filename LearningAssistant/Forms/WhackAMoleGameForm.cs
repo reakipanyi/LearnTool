@@ -24,8 +24,9 @@ namespace LearningAssistant.Forms
             IContentLoaderService contentLoaderService,
             IUserSessionService userSessionService,
             IThemeService themeService,
+            IUserSettingsService settingsService,
             ILogger<WhackAMoleGameForm> logger)
-            : base(contentLoaderService, userSessionService, themeService, logger)
+            : base(contentLoaderService, userSessionService, themeService, settingsService, logger)
         {
             _gameService = gameService;
         }
@@ -33,7 +34,8 @@ namespace LearningAssistant.Forms
         /// <summary>从词库构建游戏数据（干扰项多，取更多词条备用，随机为主）；词库不足时提示并返回 null。</summary>
         protected override object? BuildData(LearningContext context, string themeName)
         {
-            var items = _gameService.BuildItems(context, maxCount: 12, selection: WordSelection.Random, excludeIds: ExcludeAnsweredCorrectIds());
+            var items = _gameService.BuildItems(context, maxCount: Math.Max(12, MaxCountForGrid()), selection: WordSelection.Random,
+                excludeIds: SkipKnown ? ExcludeAnsweredCorrectIds() : null);
             if (items.Count < 3)
             {
                 MessageBox.Show("当前词库可用单词不足，请先在「内容编辑」中添加单词。",
@@ -42,6 +44,10 @@ namespace LearningAssistant.Forms
             }
             return items;
         }
+
+        /// <summary>统计当前词库仍可学习的条目总数（供前端"总剩余"展示）。</summary>
+        protected override int CountRemainingTotal(LearningContext context) =>
+            _gameService.CountRemaining(context, SkipKnown ? ExcludeAnsweredCorrectIds() : null);
 
         /// <summary>解析前端上报的命中结果并回写学习状态与错题本。</summary>
         protected override void OnGameEnd(JsonElement gameRoot, LearningContext context)

@@ -12,12 +12,18 @@
         <div class="brand">🔨 打地鼠</div>
         <div class="stats">
             <div class="stat"><span class="stat-label">得分</span><span id="score" class="stat-value">0</span></div>
+            <div class="stat"><span class="stat-label">总分</span><span id="totalScore" class="stat-value">0</span></div>
             <div class="stat"><span class="stat-label">连击</span><span id="combo" class="stat-value">0</span></div>
             <div class="stat"><span class="stat-label">正确</span><span id="right" class="stat-value">0</span></div>
             <div class="stat"><span class="stat-label">失误</span><span id="misses" class="stat-value">0</span></div>
+            <div class="stat"><span class="stat-label">总剩余</span><span id="totalRemaining" class="stat-value">0</span></div>
             <div class="stat"><span class="stat-label">时间</span><span id="time" class="stat-value">60</span></div>
         </div>
         <div class="actions">
+            <div class="radio-group" id="skipKnownGroup">
+                <label><input type="radio" name="skipKnown" value="skip" checked />跳过已知项</label>
+                <label><input type="radio" name="skipKnown" value="all" />加载所有</label>
+            </div>
             <button id="btnRestart" class="btn">🔄 换一组</button>
         </div>
     </header>
@@ -45,7 +51,8 @@
             <h2 id="resultTitle">时间到！</h2>
             <div class="stars" id="resultStars">★★★</div>
             <div class="result-details">
-                <div class="result-row"><span class="result-label">得分</span><b id="resultScore">0</b></div>
+                <div class="result-row"><span class="result-label">本组得分</span><b id="resultScore">0</b></div>
+                <div class="result-row"><span class="result-label">累计总分</span><b id="resultTotal">0</b></div>
                 <div class="result-row"><span class="result-label">正确</span><b id="resultRight">0</b></div>
                 <div class="result-row"><span class="result-label">失误</span><b id="resultMisses">0</b></div>
                 <div class="result-row"><span class="result-label">最高连击</span><b id="resultCombo">0</b></div>

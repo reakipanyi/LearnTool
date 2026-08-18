@@ -1,7 +1,7 @@
 (() => {
     "use strict";
 
-    const { toast, sendToHost, speak, esc, listenInit, isMock, applyTheme, shuffle } = window.GameUI;
+    const { toast, sendToHost, speak, esc, listenInit, isMock, applyTheme, shuffle, initSkipKnownRadios, metaTotalRemaining } = window.GameUI;
 
     // ---------- 常量 ----------
     const HOLE_COUNT = 12;       // 4 列 × 3 行
@@ -20,7 +20,7 @@
     let totalTimer = null;
     let timeLeft = TOTAL_SECONDS;
     let started = false, finished = false;
-    let score = 0, combo = 0, maxCombo = 0, correctCount = 0, missCount = 0, leakCount = 0;
+    let score = 0, totalScore = 0, combo = 0, maxCombo = 0, correctCount = 0, missCount = 0, leakCount = 0;
     let lastTargetId = null;
     let resultMap = new Map();   // id -> 最终 correct
 
@@ -28,7 +28,8 @@
     const $ = (id) => document.getElementById(id);
     const holesEl = $("holes"), targetText = $("targetText"),
           scoreEl = $("score"), comboEl = $("combo"), rightEl = $("right"),
-          missesEl = $("misses"), timeEl = $("time"), hintEl = $("hint");
+          missesEl = $("misses"), timeEl = $("time"), hintEl = $("hint"),
+          totalScoreEl = $("totalScore"), totalRemainingEl = $("totalRemaining");
 
     const MOCK_ITEMS = [
         { id: "m1", word: "apple", meaning: "苹果", phonetic: "/ˈæpl/" },
@@ -224,6 +225,8 @@
             `<span class="${stars >= 2 ? "lit" : "dim"}">★</span>` +
             `<span class="${stars >= 3 ? "lit" : "dim"}">★</span>`;
         $("resultScore").textContent = score;
+        totalScoreEl.textContent = totalScore + score;
+        $("resultTotal").textContent = totalScore + score;
         $("resultRight").textContent = correctCount;
         $("resultMisses").textContent = missCount;
         $("resultCombo").textContent = maxCombo;
@@ -235,7 +238,7 @@
     }
 
     // ---------- 初始化 ----------
-    function boot(data, themeName) {
+    function boot(data, themeName, meta) {
         items = (data || []).filter((d) => d && d.word && d.meaning);
         applyTheme(themeName);
         resetGame();
@@ -243,16 +246,26 @@
             hintEl.textContent = "词库内容不足，请先在「内容编辑」中添加单词";
             return;
         }
+        // 总剩余条目数
+        totalRemainingEl.textContent = GameUI.metaTotalRemaining(meta);
+        // "跳过已知项/加载所有"单选，切换时通知宿主保存
+        const skipRadio = GameUI.initSkipKnownRadios("skipKnownGroup", (skip) => {
+            GameUI.sendToHost({ type: "setting", skipKnown: skip });
+        });
+        if (meta && typeof meta.skipKnown === "boolean") skipRadio.set(meta.skipKnown);
         startTotalTimer();
         startRound();
     }
 
     function resetGame() {
+        // 换一组时总分在上一次基础上累计，不清零
+        totalScore += score;
         target = null; options = []; locked = false;
         timeLeft = TOTAL_SECONDS; started = false; finished = false;
         score = 0; combo = 0; maxCombo = 0; correctCount = 0; missCount = 0; leakCount = 0;
         lastTargetId = null; resultMap = new Map();
         scoreEl.textContent = "0";
+        totalScoreEl.textContent = totalScore;
         comboEl.textContent = "0";
         rightEl.textContent = "0";
         missesEl.textContent = "0";
@@ -264,7 +277,7 @@
     }
 
     function loadData() {
-        listenInit((data, theme) => boot(data, theme));
+        listenInit((data, theme, meta) => boot(data, theme, meta));
         if (isMock()) boot(MOCK_ITEMS, "light");
     }
 

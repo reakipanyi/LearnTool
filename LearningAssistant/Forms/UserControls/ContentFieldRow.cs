@@ -1,3 +1,5 @@
+using LearningAssistant.Common;
+using LearningAssistant.Common.Themes;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.TTS;
 using System.ComponentModel;
@@ -20,6 +22,7 @@ namespace LearningAssistant.Forms.UserControls
         private bool _isSpeaking;
         private ContentField? _field;
         private ISpeechCoordinator? _speechCoordinator;
+        private ThemeColors _themeColors = ThemeService.GetColors(ThemeMode.Light);
 
         public ContentFieldRow()
         {
@@ -136,6 +139,15 @@ namespace LearningAssistant.Forms.UserControls
             }
         }
 
+        public void ApplyTheme(ThemeColors colors)
+        {
+            _themeColors = colors;
+            _labelLabel.ForeColor = colors.ThemeMode == ThemeMode.Dark
+                ? Color.FromArgb(176, 176, 176)
+                : Color.FromArgb(108, 117, 125);
+            UpdateSpeakingState();
+        }
+
         private void UpdateDisplay()
         {
             if (_field == null)
@@ -194,7 +206,7 @@ namespace LearningAssistant.Forms.UserControls
                 _speakButton.Text = "🔊";
                 _speakButton.Enabled = _field?.HasSpeakText == true;
                 _speakButton.ForeColor = SystemColors.ControlText;
-                _valueLabel.ForeColor = Color.FromArgb(33, 33, 33);
+                _valueLabel.ForeColor = _themeColors.TextPrimary;
                 this.BackColor = Color.Transparent;
             }
         }

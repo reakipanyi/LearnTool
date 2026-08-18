@@ -91,9 +91,9 @@ namespace LearningAssistant.Forms
         // 列表绘制相关
         private readonly SolidBrush _selectedBackgroundBrush = new SolidBrush(Color.FromArgb(76, 175, 80));
         private readonly SolidBrush _selectedForegroundBrush = new SolidBrush(Color.White);
-        private readonly SolidBrush _normalForegroundBrush = new SolidBrush(Color.Black);
+        private SolidBrush _normalForegroundBrush = new SolidBrush(Color.Black);
         private readonly Pen _selectedBorderPen = new Pen(Color.White, 2);
-        private readonly SolidBrush _hoverBackgroundBrush = new SolidBrush(Color.FromArgb(232, 245, 233));
+        private SolidBrush _hoverBackgroundBrush = new SolidBrush(Color.FromArgb(232, 245, 233));
         private int _hoverIndex = -1;
         #endregion
 
@@ -236,6 +236,14 @@ namespace LearningAssistant.Forms
         {
             BackColor = colors.Background;
 
+            // 更新列表绘制画刷，避免夜间模式下未选中项黑字黑底对比度不足
+            _normalForegroundBrush.Dispose();
+            _normalForegroundBrush = new SolidBrush(colors.TextPrimary);
+            _hoverBackgroundBrush.Dispose();
+            _hoverBackgroundBrush = new SolidBrush(colors.ThemeMode == ThemeMode.Dark
+                ? Color.FromArgb(52, 62, 52)
+                : Color.FromArgb(232, 245, 233));
+
             if (panelContent != null)
             {
                 panelContent.BackColor = colors.Surface;
@@ -319,7 +327,21 @@ namespace LearningAssistant.Forms
                 labelListStatus.BackColor = colors.Surface;
             }
 
+            // 子视图应用主题：中间内容区 / 左侧列表 / 学习卡片
+            if (_contentView != null)
+            {
+                _contentView.ApplyTheme(colors);
+            }
 
+            if (_listView != null)
+            {
+                _listView.ApplyTheme(colors);
+            }
+
+            if (_learningCard != null)
+            {
+                _learningCard.ApplyTheme(colors);
+            }
 
             foreach (Control control in Controls)
             {
@@ -395,6 +417,8 @@ namespace LearningAssistant.Forms
             ApplySettings();
             EnableListHighlighting(true);
             InitializeEnhancedFeatures();
+            // 窗口加载完成后重新应用主题，确保学习卡片等延迟初始化的控件也随当前主题着色
+            ApplyTheme(_themeService.CurrentColors);
         }
 
 

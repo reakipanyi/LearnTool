@@ -65,6 +65,17 @@ body[data-theme="dark"] {
 .slot.right { border-color: var(--success); background: rgba(34, 197, 94, 0.12); color: var(--success); }
 .slot.wrong { border-color: var(--error); background: rgba(239, 68, 68, 0.12); color: var(--error); animation: shake 0.3s; }
 
+/* 空格格位：窄分隔槽，提示此处需输入空格 */
+.slot.space {
+    width: 24px;
+    background: transparent;
+    border: 2px dashed var(--progress-bg);
+    box-shadow: none;
+}
+.slot.space.filled { border-color: var(--word-border); transform: none; }
+.slot.space.right { border-color: var(--success); background: rgba(34, 197, 94, 0.12); }
+.slot.space.wrong { border-color: var(--error); background: rgba(239, 68, 68, 0.12); }
+
 /* 虚拟键盘 */
 .keyboard {
     display: grid;

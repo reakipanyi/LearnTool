@@ -1,3 +1,5 @@
+using LearningAssistant.Common;
+using LearningAssistant.Common.Themes;
 using System.ComponentModel;
 
 namespace LearningAssistant.Forms.UserControls
@@ -5,7 +7,7 @@ namespace LearningAssistant.Forms.UserControls
     /// <summary>
     /// 学习列表视图 - 左侧学习项列表
     /// </summary>
-    public class LearningListView : UserControl
+    public class LearningListView : UserControl, IThemeable
     {
         #region Controls
 
@@ -28,6 +30,7 @@ namespace LearningAssistant.Forms.UserControls
         private bool _showFavoritesOnly = false;
         private HashSet<string> _favoriteItems = new();
         private bool _isUpdatingItems = false;
+        private ThemeColors _themeColors = ThemeService.GetColors(ThemeMode.Light);
 
         #endregion
 
@@ -234,7 +237,7 @@ namespace LearningAssistant.Forms.UserControls
             if (_textBoxSearch.Text == "搜索...")
             {
                 _textBoxSearch.Text = "";
-                _textBoxSearch.ForeColor = Color.Black;
+                _textBoxSearch.ForeColor = _themeColors.TextPrimary;
             }
         }
 
@@ -273,6 +276,32 @@ namespace LearningAssistant.Forms.UserControls
         #endregion
 
         #region Public Methods
+
+        /// <summary>
+        /// 应用主题颜色（夜间模式下左侧列表背景与文字随主题切换）
+        /// </summary>
+        public void ApplyTheme(ThemeColors colors)
+        {
+            _themeColors = colors;
+            _panelList.BackColor = colors.Surface;
+            _listBoxItems.BackColor = colors.Surface;
+            _listBoxItems.ForeColor = colors.TextPrimary;
+            _panelSearch.BackColor = colors.ThemeMode == ThemeMode.Dark
+                ? Color.FromArgb(42, 42, 42)
+                : Color.FromArgb(240, 240, 245);
+            _textBoxSearch.BackColor = colors.SurfaceElevated;
+            _textBoxSearch.ForeColor = colors.TextPrimary;
+            _labelSearchIcon.ForeColor = colors.TextSecondary;
+            _labelListStatus.BackColor = colors.ThemeMode == ThemeMode.Dark
+                ? Color.FromArgb(42, 42, 42)
+                : Color.FromArgb(240, 240, 245);
+            _labelListStatus.ForeColor = colors.TextSecondary;
+            if (_textBoxSearch.Text == "搜索...")
+            {
+                _textBoxSearch.ForeColor = Color.Gray;
+            }
+            _listBoxItems.Invalidate();
+        }
 
         /// <summary>
         /// 设置列表项

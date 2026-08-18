@@ -30,6 +30,7 @@ namespace LearningAssistant.Data.Database
         public DbSet<ChallengeHistoryEntity> ChallengeHistory { get; set; }
         public DbSet<LearningGoalEntity> LearningGoals { get; set; }
         public DbSet<DailyGoalRecordEntity> DailyGoalRecords { get; set; }
+        public DbSet<DailyRollupEntity> DailyRollups { get; set; }
 
         private readonly string _dbPath;
 
@@ -205,6 +206,17 @@ namespace LearningAssistant.Data.Database
             modelBuilder.Entity<AppSessionEntity>()
                 .HasIndex(a => a.LastAccessTime);
 
+            // 每日统计快照配置
+            modelBuilder.Entity<DailyRollupEntity>()
+                .HasKey(d => d.Id);
+
+            modelBuilder.Entity<DailyRollupEntity>()
+                .HasIndex(d => new { d.UserId, d.Date })
+                .IsUnique();
+
+            modelBuilder.Entity<DailyRollupEntity>()
+                .HasIndex(d => d.Date);
+
             // 学习统计配置
             modelBuilder.Entity<StudyStatsEntity>()
                 .HasKey(s => s.Id);
@@ -293,6 +305,7 @@ namespace LearningAssistant.Data.Database
                 RepairChallengeHistoryTable();
                 RepairLearningGoalsTable();
                 RepairDailyGoalRecordsTable();
+                RepairDailyRollupsTable();
                 RepairNotesTable();
                 RepairLearningPathsTable();
                 RepairLearningPathItemsTable();
@@ -681,6 +694,37 @@ namespace LearningAssistant.Data.Database
             Database.ExecuteSqlRaw(sql);
 
             sql = @"CREATE INDEX IF NOT EXISTS IX_DailyGoalRecords_Date ON DailyGoalRecords(Date);";
+            Database.ExecuteSqlRaw(sql);
+        }
+
+        private void RepairDailyRollupsTable()
+        {
+            var sql = @"CREATE TABLE IF NOT EXISTS DailyRollups (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                UserId TEXT NOT NULL,
+                Date TEXT NOT NULL,
+                TimeSpentMinutes INTEGER NOT NULL DEFAULT 0,
+                ItemsStudied INTEGER NOT NULL DEFAULT 0,
+                CorrectCount INTEGER NOT NULL DEFAULT 0,
+                WrongCount INTEGER NOT NULL DEFAULT 0,
+                Accuracy REAL NOT NULL DEFAULT 0,
+                StreakDays INTEGER NOT NULL DEFAULT 0,
+                XP INTEGER NOT NULL DEFAULT 0,
+                Level INTEGER NOT NULL DEFAULT 1,
+                GoalCompleted INTEGER NOT NULL DEFAULT 0,
+                TopCategory TEXT NOT NULL DEFAULT '',
+                WeakCategory TEXT NOT NULL DEFAULT '',
+                Version INTEGER NOT NULL DEFAULT 1,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL,
+                IsActive INTEGER NOT NULL DEFAULT 1
+            );";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE UNIQUE INDEX IF NOT EXISTS IX_DailyRollups_UserId_Date ON DailyRollups(UserId, Date);";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_DailyRollups_Date ON DailyRollups(Date);";
             Database.ExecuteSqlRaw(sql);
         }
 

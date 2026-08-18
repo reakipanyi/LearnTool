@@ -1,7 +1,7 @@
 (() => {
     "use strict";
 
-    const { toast, sendToHost, speak, esc, listenInit, isMock, applyTheme, shuffle } = window.GameUI;
+    const { toast, sendToHost, speak, esc, listenInit, isMock, applyTheme, shuffle, initSkipKnownRadios, metaTotalRemaining } = window.GameUI;
 
     // ---------- 状态 ----------
     let allItems = [];    // 原始数据
@@ -10,7 +10,7 @@
     let typed = [];       // 已输入字母
     let judging = false;
     let totalItems = 0, completed = 0;
-    let score = 0, combo = 0, maxCombo = 0, rightAttempts = 0, wrongAttempts = 0;
+    let score = 0, totalScore = 0, combo = 0, maxCombo = 0, rightAttempts = 0, wrongAttempts = 0;
     let resultMap = new Map(); // id -> 最终 correct（一旦错过即 false）
     let seconds = 0, timerId = null, started = false, finished = false;
     let getIfRestart = false;
@@ -19,7 +19,8 @@
     const $ = (id) => document.getElementById(id);
     const slotsEl = $("slots"), meaningEl = $("qMeaning"), hintEl = $("qHint"),
           scoreEl = $("score"), comboEl = $("combo"), progressEl = $("progress"),
-          timerEl = $("timer"), progressBar = $("progressBar");
+          timerEl = $("timer"), progressBar = $("progressBar"),
+          totalScoreEl = $("totalScore"), totalRemainingEl = $("totalRemaining");
 
     const MOCK_ITEMS = [
         { id: "m1", word: "apple", meaning: "苹果", phonetic: "/ˈæpl/" },
@@ -43,16 +44,19 @@
         const word = current.item.word;
 
         meaningEl.textContent = current.item.meaning;
-        hintEl.textContent = current.item.phonetic ? `音标：${esc(current.item.phonetic)}　字母数：${word.length}` : `字母数：${word.length}`;
-        renderSlots(word.length);
+        // 含空格短语：字母数不计空格，避免误导
+        const letterCount = word.replace(/\s/g, "").length;
+        hintEl.textContent = current.item.phonetic ? `音标：${esc(current.item.phonetic)}　字母数：${letterCount}` : `字母数：${letterCount}`;
+        renderSlots(word);
         updateProgress();
     }
 
-    function renderSlots(len) {
+    // 空格用窄槽展示，形成单词间分隔并提示此处需输入空格
+    function renderSlots(word) {
         slotsEl.innerHTML = "";
-        for (let i = 0; i < len; i++) {
+        for (let i = 0; i < word.length; i++) {
             const s = document.createElement("div");
-            s.className = "slot";
+            s.className = word[i] === " " ? "slot space" : "slot";
             slotsEl.appendChild(s);
         }
     }
@@ -83,6 +87,14 @@
         const slots = slotsEl.children;
         const word = current.item.word;
         for (let i = 0; i < slots.length; i++) {
+            if (word[i] === " ") {
+                // 空格格位：不显示字符，仅以状态区分是否已输入
+                slots[i].textContent = "";
+                slots[i].className = "slot space";
+                if (mark) slots[i].classList.add(typed[i] === word[i] ? "right" : "wrong");
+                else if (i < typed.length) slots[i].classList.add("filled");
+                continue;
+            }
             slots[i].textContent = i < typed.length ? typed[i] : "";
             slots[i].className = "slot";
             if (mark) {
@@ -163,6 +175,8 @@
             `<span class="${stars >= 2 ? "lit" : "dim"}">★</span>` +
             `<span class="${stars >= 3 ? "lit" : "dim"}">★</span>`;
         $("resultScore").textContent = score;
+        totalScoreEl.textContent = totalScore + score;
+        $("resultTotal").textContent = totalScore + score;
         $("resultRight").textContent = `${rightAttempts}/${totalItems}`;
         $("resultRate").textContent = rate + "%";
         $("resultTime").textContent = seconds + "s";
@@ -174,7 +188,7 @@
     }
 
     // ---------- 初始化 ----------
-    function boot(data, themeName) {
+    function boot(data, themeName, meta) {
         allItems = (data || []).filter((d) => d && d.word && d.meaning);
         applyTheme(themeName);
         resetGame();
@@ -183,17 +197,27 @@
             hintEl.textContent = "请先在「内容编辑」中添加单词";
             return;
         }
+        // 总剩余条目数
+        totalRemainingEl.textContent = GameUI.metaTotalRemaining(meta);
+        // "跳过已知项/加载所有"单选，切换时通知宿主保存
+        const skipRadio = GameUI.initSkipKnownRadios("skipKnownGroup", (skip) => {
+            GameUI.sendToHost({ type: "setting", skipKnown: skip });
+        });
+        if (meta && typeof meta.skipKnown === "boolean") skipRadio.set(meta.skipKnown);
         queue = shuffle(allItems.map((it) => ({ item: it, wrongCount: 0 })));
         startQuestion();
     }
 
     function resetGame() {
+        // 换一组时总分在上一次基础上累计，不清零
+        totalScore += score;
         queue = []; current = null; typed = []; judging = false;
         totalItems = allItems.length; completed = 0;
         score = 0; combo = 0; maxCombo = 0; rightAttempts = 0; wrongAttempts = 0;
         resultMap = new Map();
         seconds = 0; started = false; finished = false;
         scoreEl.textContent = "0";
+        totalScoreEl.textContent = totalScore;
         comboEl.textContent = "0";
         timerEl.textContent = "0s";
         getIfRestart = false;
@@ -201,7 +225,7 @@
     }
 
     function loadData() {
-        listenInit((data, theme) => boot(data, theme));
+        listenInit((data, theme, meta) => boot(data, theme, meta));
         if (isMock()) boot(MOCK_ITEMS, "light");
     }
 
@@ -221,6 +245,12 @@
         bs.textContent = "⌫";
         bs.addEventListener("click", eraseLetter);
         kb.appendChild(bs);
+        // 空格键：支持含空格的短语
+        const sp = document.createElement("button");
+        sp.className = "key ctrl wide";
+        sp.textContent = "空格";
+        sp.addEventListener("click", () => typeLetter(" "));
+        kb.appendChild(sp);
         const cl = document.createElement("button");
         cl.className = "key ctrl";
         cl.textContent = "清空";
@@ -232,6 +262,7 @@
     window.addEventListener("keydown", (e) => {
         if (getIfRestart) return;
         if (/^[a-zA-Z]$/.test(e.key)) { e.preventDefault(); typeLetter(e.key.toLowerCase()); }
+        else if (e.key === " ") { e.preventDefault(); typeLetter(" "); }
         else if (e.key === "Backspace") { e.preventDefault(); eraseLetter(); }
         else if (e.key === "Escape") { e.preventDefault(); clearAll(); }
     });
