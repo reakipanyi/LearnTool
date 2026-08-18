@@ -25,6 +25,11 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
 
         public event EventHandler<LearningRecommendation>? RecommendationClicked;
 
+        /// <summary>
+        /// 首页统计卡片被点击（下钻到学习数据中心，参数为卡片序号 0-5，见 06 方案 3.4）。
+        /// </summary>
+        public event EventHandler<int>? StatCardClicked;
+
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string UserName
         {
@@ -119,15 +124,17 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             Controls.Add(_labelFeaturesTitle);
             Controls.Add(_panelFeatures);
 
-            AddStatCard("⏱️", "25分钟", "今日学习", "12%", StatCard.TrendDirection.Up,
+            // 统计卡片初始为空占位（06 方案 3.2 空状态），不再写死假数值，
+            // 由 MainPresenter 通过 UpdateDashboardStats 喂入真实聚合数据（06 方案 3.1/3.5）。
+            AddStatCard("⏱️", "—", "今日学习", "开始学习", StatCard.TrendDirection.None,
                 Color.FromArgb(63, 81, 181));
-            AddStatCard("🔥", "7天", "连续学习", "3天", StatCard.TrendDirection.Up,
+            AddStatCard("🔥", "—", "连续学习", "今天开始", StatCard.TrendDirection.None,
                 Color.FromArgb(255, 87, 34));
-            AddStatCard("⭐", "120", "总经验值", "+15", StatCard.TrendDirection.Up,
+            AddStatCard("⭐", "0", "总经验值", "继续加油", StatCard.TrendDirection.None,
                 Color.FromArgb(255, 193, 7));
-            AddStatCard("🏆", "Lv.5", "当前等级", "距离Lv.6 30XP", StatCard.TrendDirection.None,
+            AddStatCard("🏆", "Lv.1", "当前等级", "0/待计算", StatCard.TrendDirection.None,
                 Color.FromArgb(76, 175, 80));
-            AddStatCard("🎯", "0/3", "今日挑战", "待完成", StatCard.TrendDirection.None,
+            AddStatCard("🎯", "0/0", "今日挑战", "进行中", StatCard.TrendDirection.None,
                 Color.FromArgb(236, 72, 153));
             AddStatCard("📝", "0", "笔记数", "查看全部", StatCard.TrendDirection.None,
                 Color.FromArgb(33, 150, 243));
@@ -271,6 +278,8 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
                 Height = 100
             };
             _statCards.Add(card);
+            int index = _statCards.Count - 1;
+            card.CardClicked += (s, e) => StatCardClicked?.Invoke(this, index);
             _panelStats.Controls.Add(card);
         }
 
@@ -312,26 +321,43 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
         {
             if (_statCards.Count >= 6)
             {
+                bool isEmpty = todayStudyMinutes <= 0 && streakDays <= 0 && totalXP <= 0 && completedChallenges <= 0;
+
                 var studyCard = _statCards[0];
-                if (todayStudyMinutes >= 60)
+                if (todayStudyMinutes <= 0)
+                {
+                    studyCard.Value = "—";
+                    studyCard.Trend = isEmpty ? "暂无数据，开始学习吧" : "开始学习";
+                }
+                else if (todayStudyMinutes >= 60)
                 {
                     int hours = todayStudyMinutes / 60;
                     int mins = todayStudyMinutes % 60;
                     studyCard.Value = hours > 0 && mins > 0 ? $"{hours}时{mins}分" : $"{hours}小时";
+                    studyCard.Trend = "+" + todayStudyMinutes + "分";
                 }
                 else
                 {
                     studyCard.Value = $"{todayStudyMinutes}分钟";
+                    studyCard.Trend = "+" + todayStudyMinutes + "分";
                 }
                 studyCard.Label = "今日学习";
-                studyCard.Trend = todayStudyMinutes > 0 ? $"+{todayStudyMinutes}分" : "开始吧";
                 studyCard.TrendDir = todayStudyMinutes > 0 ? StatCard.TrendDirection.Up : StatCard.TrendDirection.None;
 
                 var streakCard = _statCards[1];
-                streakCard.Value = $"{streakDays}天";
+                if (streakDays > 0)
+                {
+                    streakCard.Value = $"{streakDays}天";
+                    streakCard.Trend = $"已坚持{streakDays}天";
+                    streakCard.TrendDir = StatCard.TrendDirection.Up;
+                }
+                else
+                {
+                    streakCard.Value = "—";
+                    streakCard.Trend = isEmpty ? "今天开始" : "今天开始";
+                    streakCard.TrendDir = StatCard.TrendDirection.None;
+                }
                 streakCard.Label = "连续学习";
-                streakCard.Trend = streakDays > 0 ? $"已坚持{streakDays}天" : "第1天";
-                streakCard.TrendDir = streakDays > 0 ? StatCard.TrendDirection.Up : StatCard.TrendDirection.None;
 
                 var xpCard = _statCards[2];
                 xpCard.Value = $"{totalXP}";

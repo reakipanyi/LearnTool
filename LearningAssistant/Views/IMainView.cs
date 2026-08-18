@@ -46,11 +46,6 @@ namespace LearningAssistant.Views
         event EventHandler? TabChanged;
 
         /// <summary>
-        /// 新建用户点击事件
-        /// </summary>
-        event EventHandler? NewUserClicked;
-
-        /// <summary>
         /// 用户对比(PK)点击事件
         /// </summary>
         event EventHandler? OpenUserComparisonClicked;

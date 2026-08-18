@@ -52,8 +52,10 @@ namespace LearningAssistant.Services.Migration
             public const string Session = "Session";
             public const string LearningItemStates = "LearningItemStates";
             public const string ReminderRepeatDays = "ReminderRepeatDays";
+            public const string Analytics = "Analytics";
             public const string Verification = "Verification";
             public static string User(string userId) => $"User:{userId}";
+            public static string AnalyticsUser(string userId) => $"Analytics:{userId}";
         }
 
         public event EventHandler<MigrationProgressEventArgs>? ProgressChanged;
@@ -172,6 +174,22 @@ namespace LearningAssistant.Services.Migration
                         {
                             _logger?.LogInformation("Session data needs migration");
                             needsMigration = true;
+                        }
+                    }
+                }
+
+                // 任一用户存在待迁移的学习分析 JSON（未完成 Analytics:user 检查点）则需迁移
+                if (!needsMigration)
+                {
+                    foreach (var userId in JsonUserIds)
+                    {
+                        if (IsStepCompleted(MigrationSteps.AnalyticsUser(userId)))
+                            continue;
+                        if (File.Exists(AnalyticsJsonPath(userId)))
+                        {
+                            _logger?.LogInformation("Analytics data for user {UserId} needs migration", userId);
+                            needsMigration = true;
+                            break;
                         }
                     }
                 }
@@ -348,6 +366,7 @@ namespace LearningAssistant.Services.Migration
 
         private string SpacedRepetitionJsonPath => Path.Combine(AppPaths.DataDir, "spaced_repetition.json");
         private string SessionJsonPath => AppPaths.LastSessionPath;
+        private static string AnalyticsJsonPath(string userId) => AppPaths.GetUserAnalyticsPath(userId);
 
         /// <summary>
         /// 执行迁移（支持断电/崩溃后断点续传）
@@ -509,6 +528,27 @@ namespace LearningAssistant.Services.Migration
                         _logger?.LogError(ex, "Failed to migrate reminder repeat days");
                         result.Errors.Add($"迁移提醒重复日期数据失败: {ex.Message}");
                         MarkStepStatus(MigrationSteps.ReminderRepeatDays, MigrationStepStatus.Failed, new { error = ex.Message });
+                    }
+                }
+
+                // ---- 学习分析数据迁移（JSON analytics → DailyRollup 物化表）----
+                ReportProgress(87, "正在迁移学习分析数据...");
+                if (!IsStepCompleted(MigrationSteps.Analytics))
+                {
+                    try
+                    {
+                        MarkStepStatus(MigrationSteps.Analytics, MigrationStepStatus.Running);
+                        var analytics = MigrateAnalyticsData(result);
+                        MarkStepStatus(MigrationSteps.Analytics, MigrationStepStatus.Completed,
+                            new { users = analytics.users, entries = analytics.entries });
+                        _logger?.LogInformation("Analytics data migrated: {Users} users, {Entries} entries",
+                            analytics.users, analytics.entries);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogError(ex, "Failed to migrate analytics data");
+                        result.Errors.Add($"迁移学习分析数据失败: {ex.Message}");
+                        MarkStepStatus(MigrationSteps.Analytics, MigrationStepStatus.Failed, new { error = ex.Message });
                     }
                 }
 
@@ -877,6 +917,88 @@ namespace LearningAssistant.Services.Migration
                 _logger?.LogError(ex, "Failed to migrate reminder repeat days within transaction");
                 return false;
             }
+        }
+
+        /// <summary>
+        /// 迁移学习分析数据：每用户 JSON UserAnalyticsData 的 DailyRecords → DailyRollup 物化表。
+        /// 幂等：按 用户+日期 唯一 upsert；若当日已存在则补充增量，避免覆盖实时写入的数据。
+        /// 每用户以独立检查点（Analytics:userId）保证断点续传与可重跑不重复。
+        /// </summary>
+        private (int users, int entries) MigrateAnalyticsData(MigrationResult result)
+        {
+            int totalUsers = 0, totalEntries = 0;
+
+            foreach (var userId in JsonUserIds)
+            {
+                var stepId = MigrationSteps.AnalyticsUser(userId);
+                if (IsStepCompleted(stepId))
+                    continue;
+
+                var path = AnalyticsJsonPath(userId);
+                if (!File.Exists(path))
+                {
+                    MarkStepStatus(stepId, MigrationStepStatus.Completed, new { skipped = "no-analytics-file" });
+                    continue;
+                }
+
+                try
+                {
+                    MarkStepStatus(stepId, MigrationStepStatus.Running);
+                    var userData = JsonHelper.LoadFromFile<UserAnalyticsData>(path);
+                    if (userData?.DailyRecords == null || userData.DailyRecords.Count == 0)
+                    {
+                        MarkStepStatus(stepId, MigrationStepStatus.Completed, new { entries = 0 });
+                        continue;
+                    }
+
+                    using var db = _dbContextFactory.CreateDbContext();
+                    using var tx = db.Database.BeginTransaction();
+                    var entries = 0;
+
+                    foreach (var daily in userData.DailyRecords.Values.OrderBy(d => d.Date))
+                    {
+                        var date = daily.Date.Date;
+                        var rollup = db.DailyRollups.FirstOrDefault(r => r.UserId == userId && r.Date.Date == date);
+                        if (rollup == null)
+                        {
+                            rollup = new DailyRollupEntity { UserId = userId, Date = date };
+                            db.DailyRollups.Add(rollup);
+                        }
+
+                        rollup.TimeSpentMinutes += Math.Max(0, daily.TotalMinutes);
+                        var items = Math.Max(daily.TotalItems, daily.ItemsLearned + daily.ItemsReviewed);
+                        rollup.ItemsStudied += Math.Max(0, items);
+                        rollup.CorrectCount += Math.Max(0, daily.CorrectCount);
+                        rollup.WrongCount += Math.Max(0, daily.WrongCount);
+                        rollup.Accuracy = Models.Learning.StatsAggregation.ComputeAccuracy(rollup.CorrectCount, rollup.WrongCount);
+
+                        if (daily.CategoryBreakdown != null && daily.CategoryBreakdown.Count > 0)
+                        {
+                            var top = daily.CategoryBreakdown.OrderByDescending(kv => kv.Value).First().Key;
+                            if (!string.IsNullOrEmpty(top)) rollup.TopCategory = top;
+                        }
+                        rollup.Version++;
+                        rollup.UpdatedAt = DateTime.Now;
+                        entries++;
+                    }
+
+                    db.SaveChanges();
+                    tx.Commit();
+
+                    totalUsers++;
+                    totalEntries += entries;
+                    MarkStepStatus(stepId, MigrationStepStatus.Completed, new { entries });
+                    _logger?.LogInformation("Migrated analytics for user {UserId}: {Entries} daily entries", userId, entries);
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "Failed to migrate analytics for user {UserId}", userId);
+                    result.Errors.Add($"迁移用户 {userId} 学习分析数据失败: {ex.Message}");
+                    MarkStepStatus(stepId, MigrationStepStatus.Failed, new { error = ex.Message });
+                }
+            }
+
+            return (totalUsers, totalEntries);
         }
 
         private void ReportProgress(int percentage, string message)

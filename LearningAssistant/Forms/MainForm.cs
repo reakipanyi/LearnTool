@@ -68,10 +68,9 @@ namespace LearningAssistant.Forms
             BackColor = colors.Background;
 
 
-            if (comboBoxUser != null)
+            if (userSwitcherControl != null)
             {
-                comboBoxUser.BackColor = colors.Surface;
-                comboBoxUser.ForeColor = colors.TextPrimary;
+                userSwitcherControl.ApplyTheme(colors);
             }
 
             if (textBoxProgress != null)
@@ -88,18 +87,6 @@ namespace LearningAssistant.Forms
             if (labelTopBarTitle != null)
             {
                 labelTopBarTitle.ForeColor = colors.TextPrimary;
-            }
-
-            if (comboBoxNewLayoutUser != null)
-            {
-                comboBoxNewLayoutUser.BackColor = colors.ThemeMode == ThemeMode.Dark ? colors.Surface : Color.FromArgb(245, 245, 250);
-                comboBoxNewLayoutUser.ForeColor = colors.TextPrimary;
-            }
-
-            if (buttonNewUser != null)
-            {
-                buttonNewUser.BackColor = colors.ThemeMode == ThemeMode.Dark ? colors.Surface : Color.FromArgb(245, 245, 250);
-                buttonNewUser.ForeColor = colors.TextPrimary;
             }
 
             if (buttonThemeToggle != null)
@@ -198,6 +185,13 @@ namespace LearningAssistant.Forms
                 card.CardClicked += this.FeatureCard_Clicked;
             }
 
+            // 首页统计卡片下钻：点击任一卡片打开学习数据中心（06 方案 3.4）
+            dashboardView.StatCardClicked += (s, index) =>
+            {
+                try { _windowManager.OpenStatisticsWindow(); }
+                catch (Exception ex) { _logger?.LogError(ex, "打开统计中心失败"); }
+            };
+
             RefreshDashboardChallengeProgress();
             sideNavigation.AddItems(new List<NavigationItem>
             {
@@ -206,6 +200,7 @@ namespace LearningAssistant.Forms
                 new() { Key = "editor", Icon = "✏️", Text = "内容编辑", Order = 12, Group = "tools" },
                 new() { Key = "pdf", Icon = "📖", Text = "PDF阅读", Order = 2, Group = "main" },
                 new() { Key = "browser", Icon = "🌐", Text = "浏览器", Order = 11, Group = "tools" },
+                new() { Key = "data", Icon = "📊", Text = "学习数据", Order = 6, Group = "main" },
                 new() { Key = "settings", Icon = "⚙️", Text = "设置", Order = 99, Group = "system" }
                 //new() { Key = "mentor", Icon = "🤖", Text = "AI导师", Order = 3, Group = "main" },
                 //new() { Key = "flashcard", Icon = "🧠", Text = "闪卡复习", Order = 4, Group = "main" },
@@ -408,8 +403,7 @@ namespace LearningAssistant.Forms
 
             int rightX = panelTopBar.Width - 16;
             buttonThemeToggle.Location = new Point(rightX - buttonThemeToggle.Width, (panelTopBar.Height - buttonThemeToggle.Height) / 2);
-            buttonNewUser.Location = new Point(buttonThemeToggle.Left - 8 - buttonNewUser.Width, (panelTopBar.Height - buttonNewUser.Height) / 2);
-            comboBoxNewLayoutUser.Location = new Point(buttonNewUser.Left - 12 - comboBoxNewLayoutUser.Width, (panelTopBar.Height - comboBoxNewLayoutUser.Height) / 2);
+            userSwitcherControl.Location = new Point(buttonThemeToggle.Left - 16 - userSwitcherControl.Width, (panelTopBar.Height - userSwitcherControl.Height) / 2);
         }
         #endregion
 
@@ -437,7 +431,8 @@ namespace LearningAssistant.Forms
                     ShowKnowledgeGraph();
                     break;
                 case "statistics":
-                    buttonOpenStatistics?.PerformClick();
+                case "data":
+                    _windowManager.OpenStatisticsWindow();
                     break;
                 case "notes":
                     _windowManager.OpenNotesWindow();
@@ -534,7 +529,7 @@ namespace LearningAssistant.Forms
                         ShowAchievementForm();
                         break;
                     case "学习统计":
-                        buttonOpenStatistics?.PerformClick();
+                        _windowManager.OpenStatisticsWindow();
                         break;
                     case "笔记":
                         _windowManager.OpenNotesWindow();
@@ -637,18 +632,11 @@ namespace LearningAssistant.Forms
         [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public string SelectedUser
         {
-            get
-            {
-                if (useNewLayout && comboBoxNewLayoutUser != null)
-                    return comboBoxNewLayoutUser.Text;
-                return comboBoxUser.Text;
-            }
+            get => userSwitcherControl?.UserName ?? string.Empty;
             set
             {
-                if (comboBoxUser != null)
-                    comboBoxUser.Text = value;
-                if (comboBoxNewLayoutUser != null)
-                    comboBoxNewLayoutUser.Text = value;
+                if (userSwitcherControl != null)
+                    userSwitcherControl.UserName = value;
                 if (dashboardView != null)
                     dashboardView.UserName = value;
             }
@@ -673,7 +661,6 @@ namespace LearningAssistant.Forms
         public event EventHandler? OpenSettingsClicked;
         public event EventHandler? OpenEditorClicked;
         public event EventHandler? TabChanged;
-        public event EventHandler? NewUserClicked;
         public event EventHandler? OpenUserComparisonClicked;
 
         public void ShowMessage(string msg)
@@ -685,35 +672,11 @@ namespace LearningAssistant.Forms
         {
             var userList = users.ToList();
 
-            comboBoxUser.Items.Clear();
-            foreach (var user in userList)
+            if (userSwitcherControl != null)
             {
-                comboBoxUser.Items.Add(user);
-            }
-
-            RefreshNewLayoutUserList(userList);
-        }
-
-        private void RefreshNewLayoutUserList(List<string>? users = null)
-        {
-            if (comboBoxNewLayoutUser == null) return;
-
-            var userList = users ?? comboBoxUser.Items.Cast<string>().ToList();
-            var currentUser = comboBoxNewLayoutUser.Text;
-
-            comboBoxNewLayoutUser.Items.Clear();
-            foreach (var user in userList)
-            {
-                comboBoxNewLayoutUser.Items.Add(user);
-            }
-
-            if (!string.IsNullOrEmpty(currentUser) && userList.Contains(currentUser))
-            {
-                comboBoxNewLayoutUser.Text = currentUser;
-            }
-            else if (userList.Count > 0)
-            {
-                comboBoxNewLayoutUser.Text = userList[0];
+                userSwitcherControl.SetUsers(userList);
+                if (string.IsNullOrEmpty(userSwitcherControl.UserName) && userList.Count > 0)
+                    userSwitcherControl.UserName = userList[0];
             }
         }
 
@@ -725,6 +688,9 @@ namespace LearningAssistant.Forms
 
         public void UpdateStreakInfo(int consecutiveDays, string studyTimeSummary)
         {
+            if (userSwitcherControl != null)
+                userSwitcherControl.StreakDays = consecutiveDays;
+
             if (labelStreakDays != null)
             {
                 labelStreakDays.Text = $"连续 {consecutiveDays} 天";
@@ -782,14 +748,10 @@ namespace LearningAssistant.Forms
 
         private System.ComponentModel.IContainer components = null;
         //private Panel panelMain;
-        private GroupBox groupBoxUser;
-        private ComboBox comboBoxUser;
-        private Label labelUser;
         private Button buttonLearning;
         private Button buttonSettings;
         private Button buttonOpenEditor;
         private Button buttonOpenPdfReader;
-        private Button buttonOpenStatistics;
         private Button buttonExportErrorBook;
         private GroupBox groupBoxProgress;
         private TextBox textBoxProgress;
@@ -810,8 +772,7 @@ namespace LearningAssistant.Forms
         private Panel panelTopBar;
         private Label labelTopBarTitle;
         private Label labelTopBarLogo;
-        private ComboBox comboBoxNewLayoutUser;
-        private Button buttonNewUser;
+        private UserSwitcherControl userSwitcherControl;
         private Button buttonThemeToggle;
         private bool useNewLayout = true;
 
@@ -824,9 +785,6 @@ namespace LearningAssistant.Forms
             buttonOpenEditor = new Button();
             buttonSettings = new Button();
             buttonLearning = new Button();
-            groupBoxUser = new GroupBox();
-            comboBoxUser = new ComboBox();
-            labelUser = new Label();
             panelStreakInfo = new Panel();
             labelStreakIcon = new Label();
             labelStreakDays = new Label();
@@ -842,11 +800,9 @@ namespace LearningAssistant.Forms
             panelTopBar = new Panel();
             labelTopBarLogo = new Label();
             labelTopBarTitle = new Label();
-            comboBoxNewLayoutUser = new ComboBox();
-            buttonNewUser = new Button();
+            userSwitcherControl = new UserSwitcherControl();
             buttonThemeToggle = new Button();
             groupBoxProgress.SuspendLayout();
-            groupBoxUser.SuspendLayout();
             panelStreakInfo.SuspendLayout();
             statusStrip1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainerMain).BeginInit();
@@ -933,35 +889,6 @@ namespace LearningAssistant.Forms
             buttonLearning.Text = "📖 学习";
             buttonLearning.UseVisualStyleBackColor = false;
             buttonLearning.Click += ButtonLearning_Click;
-            // 
-            // groupBoxUser
-            // 
-            groupBoxUser.Controls.Add(comboBoxUser);
-            groupBoxUser.Controls.Add(labelUser);
-            groupBoxUser.Controls.Add(panelStreakInfo);
-            groupBoxUser.Location = new Point(30, 17);
-            groupBoxUser.Name = "groupBoxUser";
-            groupBoxUser.Size = new Size(558, 74);
-            groupBoxUser.TabIndex = 0;
-            groupBoxUser.TabStop = false;
-            groupBoxUser.Text = "多玩家";
-            // 
-            // comboBoxUser
-            // 
-            comboBoxUser.FormattingEnabled = true;
-            comboBoxUser.Location = new Point(80, 34);
-            comboBoxUser.Name = "comboBoxUser";
-            comboBoxUser.Size = new Size(150, 25);
-            comboBoxUser.TabIndex = 1;
-            comboBoxUser.SelectedIndexChanged += ComboBoxUser_SelectedIndexChanged;
-            // 
-            // labelUser
-            // 
-            labelUser.Location = new Point(20, 37);
-            labelUser.Name = "labelUser";
-            labelUser.Size = new Size(50, 23);
-            labelUser.TabIndex = 0;
-            labelUser.Text = "玩家:";
             // 
             // panelStreakInfo
             // 
@@ -1092,8 +1019,7 @@ namespace LearningAssistant.Forms
             panelTopBar.BackColor = Color.White;
             panelTopBar.Controls.Add(labelTopBarLogo);
             panelTopBar.Controls.Add(labelTopBarTitle);
-            panelTopBar.Controls.Add(comboBoxNewLayoutUser);
-            panelTopBar.Controls.Add(buttonNewUser);
+            panelTopBar.Controls.Add(userSwitcherControl);
             panelTopBar.Controls.Add(buttonThemeToggle);
             panelTopBar.Dock = DockStyle.Top;
             panelTopBar.Location = new Point(0, 0);
@@ -1124,34 +1050,14 @@ namespace LearningAssistant.Forms
             labelTopBarTitle.Text = "工具";
             labelTopBarTitle.TextAlign = ContentAlignment.MiddleLeft;
             // 
-            // comboBoxNewLayoutUser
+            // userSwitcherControl
             // 
-            comboBoxNewLayoutUser.BackColor = Color.FromArgb(245, 245, 250);
-            comboBoxNewLayoutUser.Cursor = Cursors.Hand;
-            comboBoxNewLayoutUser.DropDownStyle = ComboBoxStyle.DropDownList;
-            comboBoxNewLayoutUser.FlatStyle = FlatStyle.Flat;
-            comboBoxNewLayoutUser.ForeColor = Color.FromArgb(33, 33, 33);
-            comboBoxNewLayoutUser.FormattingEnabled = true;
-            comboBoxNewLayoutUser.Location = new Point(105, 0);
-            comboBoxNewLayoutUser.Name = "comboBoxNewLayoutUser";
-            comboBoxNewLayoutUser.Size = new Size(140, 29);
-            comboBoxNewLayoutUser.TabIndex = 2;
-            comboBoxNewLayoutUser.SelectedIndexChanged += ComboBoxNewLayoutUser_SelectedIndexChanged;
-            // 
-            // buttonNewUser
-            // 
-            buttonNewUser.BackColor = Color.FromArgb(245, 245, 250);
-            buttonNewUser.Cursor = Cursors.Hand;
-            buttonNewUser.FlatAppearance.BorderSize = 0;
-            buttonNewUser.FlatStyle = FlatStyle.Flat;
-            buttonNewUser.ForeColor = Color.FromArgb(33, 33, 33);
-            buttonNewUser.Location = new Point(0, 0);
-            buttonNewUser.Name = "buttonNewUser";
-            buttonNewUser.Size = new Size(36, 28);
-            buttonNewUser.TabIndex = 3;
-            buttonNewUser.Text = "➕";
-            buttonNewUser.UseVisualStyleBackColor = false;
-            buttonNewUser.Click += ButtonNewUser_Click;
+            userSwitcherControl.Location = new Point(0, 0);
+            userSwitcherControl.Name = "userSwitcherControl";
+            userSwitcherControl.Size = new Size(160, 34);
+            userSwitcherControl.TabIndex = 2;
+            userSwitcherControl.UserSelected += UserSwitcherControl_UserSelected;
+            userSwitcherControl.OpenSettingsClicked += UserSwitcherControl_OpenSettingsClicked;
             // 
             // buttonThemeToggle
             // 
@@ -1182,7 +1088,6 @@ namespace LearningAssistant.Forms
             Text = "🏠 工具 - 首页";
             groupBoxProgress.ResumeLayout(false);
             groupBoxProgress.PerformLayout();
-            groupBoxUser.ResumeLayout(false);
             panelStreakInfo.ResumeLayout(false);
             statusStrip1.ResumeLayout(false);
             statusStrip1.PerformLayout();
@@ -1203,27 +1108,36 @@ namespace LearningAssistant.Forms
 
         #region Event Handlers
 
-        private void ComboBoxUser_SelectedIndexChanged(object? sender, EventArgs e)
+        private void UserSwitcherControl_UserSelected(object? sender, string userName)
         {
-            UserChanged?.Invoke(this, EventArgs.Empty);
-        }
-
-        private void ComboBoxNewLayoutUser_SelectedIndexChanged(object? sender, EventArgs e)
-        {
-            if (comboBoxUser != null && comboBoxUser.Text != comboBoxNewLayoutUser.Text)
-            {
-                comboBoxUser.Text = comboBoxNewLayoutUser.Text;
-            }
+            // 更新界面选中并通知 Presenter 切换用户会话（复用 UserChanged 链路，保持对外接口不变）
             if (dashboardView != null)
-            {
-                dashboardView.UserName = comboBoxNewLayoutUser.Text;
-            }
+                dashboardView.UserName = userName;
             UserChanged?.Invoke(this, EventArgs.Empty);
+
+            // 切换用户后为其幂等创建默认日报提醒（不存在才创建，保证新用户也能收到日报）
+            EnsureDailyReportReminder(userName);
         }
 
-        private void ButtonNewUser_Click(object? sender, EventArgs e)
+        private void EnsureDailyReportReminder(string userId)
         {
-            NewUserClicked?.Invoke(this, EventArgs.Empty);
+            try
+            {
+                if (string.IsNullOrWhiteSpace(userId)) return;
+                var svc = Program.GetService<ILearningDailyReportReminderService>();
+                if (svc == null) return;
+                svc.EnsureDefaultSummaryReminder(userId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "为用户创建默认日报提醒失败：{UserId}", userId);
+            }
+        }
+
+        private void UserSwitcherControl_OpenSettingsClicked(object? sender, EventArgs e)
+        {
+            // 添加/管理用户统一跳转设置窗体，首页不再内联新增（01 方案 3.2-3.4）
+            OpenSettingsClicked?.Invoke(this, EventArgs.Empty);
         }
 
         private void ButtonThemeToggle_Click(object? sender, EventArgs e)

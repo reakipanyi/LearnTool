@@ -36,7 +36,6 @@
 	  <Compile Remove="Services\AI\SiliconFlowAIService.cs" />
 	  <Compile Remove="Services\Cloud\BaiduPanFileManager.cs" />
 	  <Compile Remove="Services\Data\LearningItemMigrationService.cs" />
-	  <Compile Remove="Services\Migration\DataMigrationService.cs" />
 	</ItemGroup>
 	<ItemGroup>
 	  <EmbeddedResource Remove="Forms\BaiduNetdiskAuthForm.resx" />

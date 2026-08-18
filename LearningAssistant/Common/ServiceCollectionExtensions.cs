@@ -18,7 +18,7 @@ using LearningAssistant.Services.Gamification;
 using LearningAssistant.Services.Hotkeys;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.PanAnalysis;
-//using LearningAssistant.Services.Migration;
+using LearningAssistant.Services.Migration;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Services.Persistence;
 using LearningAssistant.Services.Recovery;
@@ -100,8 +100,8 @@ namespace LearningAssistant.Common
             services.AddSingleton<IContentLoaderService, ContentLoaderService>();
             services.AddSingleton<IUserSessionService, UserSessionService>();
             services.AddSingleton<ISubjectTemplateService, SubjectTemplateService>();
-            //services.AddSingleton<IDataMigrationService, DataMigrationService>();
-            //services.AddScoped<ILearningItemMigrationService, LearningItemMigrationService>();
+            // 历史 JSON → SQLite 迁移服务（含 analytics → DailyRollup 幂等迁移），启动后后台执行
+            services.AddSingleton<IDataMigrationService, DataMigrationService>();
 
             // 注：仓储层（IUserProfileRepository 等）当前未被任何服务消费，且 RepositoryBase 依赖 AppDbContext，
             // 而 AddDatabaseServices 仅注册了 IDbContextFactory<AppDbContext>（不注册 AppDbContext 本身），
@@ -165,6 +165,13 @@ namespace LearningAssistant.Common
             services.AddSingleton<AIPromptService>();
             services.AddSingleton<IConversationContextService, ConversationContextService>();
             services.AddSingleton<IPromptTemplateService, PromptTemplateService>();
+            // AI 报告总结（05 报告模块 3.3：失败回退规则文案 + 用户/周期缓存）
+            services.AddScoped<LearningReportAIService>(sp =>
+            {
+                var aiService = sp.GetRequiredService<IAIService>();
+                var logger = sp.GetService<ILogger<LearningReportAIService>>();
+                return new LearningReportAIService(aiService, logger);
+            });
             return services;
         }
 
@@ -228,11 +235,18 @@ namespace LearningAssistant.Common
                 var logger = sp.GetService<ILogger<SqliteLearningReminderService>>();
                 return new SqliteLearningReminderService(dbFactory, analyticsService, logger);
             });
+            // 日报自动提醒：复用提醒服务，每日推“昨日学习小结”（05 方案 3.4）
+            services.AddSingleton<ILearningDailyReportReminderService>(sp =>
+            {
+                var reminder = sp.GetRequiredService<ILearningReminderService>();
+                var aggregator = sp.GetRequiredService<ILearningStatsAggregator>();
+                var logger = sp.GetService<ILogger<LearningDailyReportReminderService>>();
+                return new LearningDailyReportReminderService(reminder, aggregator, logger);
+            });
             services.AddSingleton<IPendingContentService, PendingContentService>();
             services.AddSingleton<ISpacedRepetitionService, SqliteSpacedRepetitionService>();
             services.AddSingleton<LearningDataExportService>();
             services.AddSingleton<IHighlightSyncService, HighlightSyncService>();
-            services.AddSingleton<ILearningChartService, LearningChartService>();
             services.AddSingleton<Services.Web.IWebBookmarkService, Services.Web.WebBookmarkService>();
             services.AddSingleton<IEncouragementService, EncouragementService>();
             services.AddSingleton<IAchievementService, AchievementService>();
@@ -250,6 +264,15 @@ namespace LearningAssistant.Common
                 var logger = sp.GetRequiredService<ILogger<LearningGoalService>>();
                 var eventBus = sp.GetService<IEventBus>();
                 return new LearningGoalService(dbFactory, persistenceService, logger, eventBus);
+            });
+            // 统计底座：统一聚合服务（A2+A7+A8），订阅学习事件、批量落库并输出统一统计 DTO
+            services.AddSingleton<ILearningStatsAggregator>(sp =>
+            {
+                var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
+                var cache = sp.GetRequiredService<ICacheService>();
+                var eventBus = sp.GetService<IEventBus>();
+                var logger = sp.GetService<ILogger<LearningStatsAggregator>>();
+                return new LearningStatsAggregator(dbFactory, cache, eventBus, logger);
             });
             services.AddSingleton<FavoritesBackupProvider>();
             services.AddSingleton<StudyStatsBackupProvider>();
@@ -507,9 +530,8 @@ namespace LearningAssistant.Common
             {
                 var spacedRepetitionService = sp.GetService<ISpacedRepetitionService>();
                 var userSessionService = sp.GetService<IUserSessionService>();
-                var learningAnalyticsService = sp.GetService<ILearningAnalyticsService>();
                 var logger = sp.GetService<ILogger<LearningHubForm>>();
-                return new LearningHubForm(spacedRepetitionService, userSessionService, learningAnalyticsService, logger);
+                return new LearningHubForm(spacedRepetitionService, userSessionService, logger);
             });
             //services.AddScoped<PdfReaderForm>();
             services.AddScoped<PdfReaderFormV2>();
@@ -586,10 +608,13 @@ namespace LearningAssistant.Common
                 var goalService = sp.GetRequiredService<ILearningGoalService>();
                 var wrongAnswerService = sp.GetRequiredService<IWrongAnswerService>();
                 var spacedRepetitionService = sp.GetService<ISpacedRepetitionService>();
+                var aggregator = sp.GetService<ILearningStatsAggregator>();
+                var eventBus = sp.GetService<IEventBus>();
                 var logger = sp.GetService<ILogger<LearningManagementForm>>();
                 var themeService = sp.GetService<IThemeService>();
                 var userSessionService = sp.GetService<IUserSessionService>();
-                return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService, goalService, wrongAnswerService, spacedRepetitionService, logger, themeService, userSessionService);
+                var reportAiService = sp.GetService<LearningReportAIService>();
+                return new LearningManagementForm(analyticsService, reminderService, reportService, quoteService, goalService, wrongAnswerService, spacedRepetitionService, aggregator, eventBus, logger, themeService, userSessionService, null, reportAiService);
             });
 
             services.AddScoped<WrongAnswerForm>(sp =>

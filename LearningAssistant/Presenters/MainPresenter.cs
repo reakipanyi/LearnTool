@@ -24,6 +24,7 @@ namespace LearningAssistant.Presenters
         private readonly IDataPersistenceService _persistenceService;
         private readonly IGamificationService _gamificationService;
         private readonly ILearningRecommendationService _recommendationService;
+        private readonly ILearningStatsAggregator? _aggregator;
 
         private PdfPresenter? _pdfPresenter;
         private IMainView? _view;
@@ -44,7 +45,8 @@ namespace LearningAssistant.Presenters
             IWindowManager windowManager,
             IDataPersistenceService persistenceService,
             IGamificationService gamificationService,
-            ILearningRecommendationService recommendationService)
+            ILearningRecommendationService recommendationService,
+            ILearningStatsAggregator? aggregator = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _sessionService = sessionService ?? throw new ArgumentNullException(nameof(sessionService));
@@ -56,6 +58,7 @@ namespace LearningAssistant.Presenters
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _gamificationService = gamificationService ?? throw new ArgumentNullException(nameof(gamificationService));
             _recommendationService = recommendationService ?? throw new ArgumentNullException(nameof(recommendationService));
+            _aggregator = aggregator;
             _logger.LogInformation("MainPresenter initialized");
         }
 
@@ -84,7 +87,6 @@ namespace LearningAssistant.Presenters
             _view.OpenSettingsClicked += View_OpenSettingsClicked;
             _view.OpenEditorClicked += View_OpenEditorClicked;
             _view.TabChanged += View_TabChanged;
-            _view.NewUserClicked += View_NewUserClicked;
             _view.OpenUserComparisonClicked += View_OpenUserComparisonClicked;
         }
 
@@ -98,7 +100,6 @@ namespace LearningAssistant.Presenters
             _view.OpenSettingsClicked -= View_OpenSettingsClicked;
             _view.OpenEditorClicked -= View_OpenEditorClicked;
             _view.TabChanged -= View_TabChanged;
-            _view.NewUserClicked -= View_NewUserClicked;
             _view.OpenUserComparisonClicked -= View_OpenUserComparisonClicked;
         }
 
@@ -165,10 +166,32 @@ namespace LearningAssistant.Presenters
 
         private void UpdateDashboardStats()
         {
-            if (_currentUserProfile == null || _view == null) return;
+            if (_view == null) return;
 
             try
             {
+                // 真实数据优先来自统计底座聚合服务（06 方案 3.1）；
+                // 聚合不可用时回退到用户资料缓存，避免首页无数据。
+                int todayMinutes = 0;
+                int streakDays = 0;
+                int totalXP = _gamificationService.XP;
+                int currentLevel = _gamificationService.CurrentLevel;
+                int xpToNext = _gamificationService.XPToNextLevel;
+
+                if (_aggregator != null)
+                {
+                    var today = _aggregator.GetDailyOverview(_currentUserId, DateTime.Today);
+                    todayMinutes = today.TimeSpentMinutes;
+                    streakDays = today.StreakDays;
+                    if (today.XP > 0) totalXP = today.XP;
+                    if (today.Level > 0) currentLevel = today.Level;
+                }
+                else if (_currentUserProfile != null)
+                {
+                    todayMinutes = _currentUserProfile.TodayStudyTimeMinutes;
+                    streakDays = _currentUserProfile.ConsecutiveStudyDays;
+                }
+
                 var challenges = _gamificationService.GetDailyChallenges().ToList();
                 int completedChallenges = challenges.Count(c => c.Completed);
                 int totalChallenges = challenges.Count;
@@ -177,11 +200,11 @@ namespace LearningAssistant.Presenters
                 int todayNewNotes = 0;
 
                 _view.UpdateDashboardStats(
-                    _currentUserProfile.TodayStudyTimeMinutes,
-                    _currentUserProfile.ConsecutiveStudyDays,
-                    _gamificationService.XP,
-                    _gamificationService.CurrentLevel,
-                    _gamificationService.XPToNextLevel,
+                    todayMinutes,
+                    streakDays,
+                    totalXP,
+                    currentLevel,
+                    xpToNext,
                     completedChallenges,
                     totalChallenges,
                     noteCount,
@@ -315,11 +338,6 @@ namespace LearningAssistant.Presenters
             SaveSession();
         }
 
-        private void View_NewUserClicked(object? sender, EventArgs e)
-        {
-            CreateNewUser();
-        }
-
         private void View_OpenUserComparisonClicked(object? sender, EventArgs e)
         {
             LoadUserComparison();
@@ -376,37 +394,6 @@ namespace LearningAssistant.Presenters
             {
                 _logger.LogError(ex, "Failed to load user comparison data");
                 _view?.ShowMessage($"加载对比数据失败：{ex.Message}");
-            }
-        }
-
-        private void CreateNewUser()
-        {
-            try
-            {
-                var input = Microsoft.VisualBasic.Interaction.InputBox("请输入新玩家名称:", "新建玩家", "");
-                if (string.IsNullOrWhiteSpace(input))
-                    return;
-
-                var userId = input.Trim();
-
-                if (_sessionService.GetUserList().Contains(userId))
-                {
-                    _view?.ShowMessage("该玩家名称已存在，请使用其他名称！");
-                    return;
-                }
-
-                _persistenceService.CreateUserProfile(userId, userId);
-                // 同步文件路径层当前用户并创建用户目录，确保该用户在学习窗口列表中可见
-                // （列表以目录存在性/DB 为据），且专属文件路径解析正确。
-                AppPaths.SetCurrentUserId(userId);
-                RefreshUserList();
-                _view.SelectedUser = userId;
-                _view?.ShowMessage($"玩家 \"{userId}\" 创建成功！");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "创建新玩家失败");
-                _view?.ShowMessage($"创建玩家失败：{ex.Message}");
             }
         }
 

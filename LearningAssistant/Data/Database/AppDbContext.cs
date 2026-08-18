@@ -31,6 +31,7 @@ namespace LearningAssistant.Data.Database
         public DbSet<LearningGoalEntity> LearningGoals { get; set; }
         public DbSet<DailyGoalRecordEntity> DailyGoalRecords { get; set; }
         public DbSet<DailyRollupEntity> DailyRollups { get; set; }
+        public DbSet<MigrationCheckpointEntity> MigrationCheckpoints { get; set; }
 
         private readonly string _dbPath;
 
@@ -40,6 +41,15 @@ namespace LearningAssistant.Data.Database
         public AppDbContext()
         {
             _dbPath = GetDefaultDbPath();
+        }
+
+        /// <summary>
+        /// 供测试或需要自定义连接字符串的场景使用（如 SQLite 内存库）。
+        /// 传入的 options 已配置 provider，此时 OnConfiguring 不再覆盖连接串。
+        /// </summary>
+        public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
+        {
+            _dbPath = string.Empty;
         }
 
         /// <summary>
@@ -53,6 +63,9 @@ namespace LearningAssistant.Data.Database
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
+            if (optionsBuilder.IsConfigured)
+                return;
+
             try
             {
                 var dbDir = Path.GetDirectoryName(_dbPath);
@@ -306,6 +319,7 @@ namespace LearningAssistant.Data.Database
                 RepairLearningGoalsTable();
                 RepairDailyGoalRecordsTable();
                 RepairDailyRollupsTable();
+                RepairMigrationCheckpointsTable();
                 RepairNotesTable();
                 RepairLearningPathsTable();
                 RepairLearningPathItemsTable();
@@ -725,6 +739,18 @@ namespace LearningAssistant.Data.Database
             Database.ExecuteSqlRaw(sql);
 
             sql = @"CREATE INDEX IF NOT EXISTS IX_DailyRollups_Date ON DailyRollups(Date);";
+            Database.ExecuteSqlRaw(sql);
+        }
+
+        private void RepairMigrationCheckpointsTable()
+        {
+            var sql = @"CREATE TABLE IF NOT EXISTS MigrationCheckpoints (
+                StepId TEXT PRIMARY KEY,
+                Status TEXT NOT NULL DEFAULT 'Pending',
+                DetailJson TEXT NOT NULL DEFAULT '{}',
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL
+            );";
             Database.ExecuteSqlRaw(sql);
         }
 

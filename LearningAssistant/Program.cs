@@ -1,6 +1,7 @@
 using LearningAssistant.Common;
 using LearningAssistant.Forms;
 using LearningAssistant.Services.Learning;
+using LearningAssistant.Services.Migration;
 using LearningAssistant.Services.Persistence;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -68,8 +69,8 @@ namespace LearningAssistant
                 var persistenceService = ServiceProvider.GetService<IDataPersistenceService>();
                 persistenceService?.Initialize();
                 logger.LogInformation("数据库初始化完成");
-                /*
-                // 后台执行数据迁移（从 JSON 到 SQLite），不阻塞主窗体打开
+
+                // 后台执行数据迁移（从 JSON 到 SQLite，含 analytics→DailyRollup），不阻塞主窗体打开
                 var migrationService = ServiceProvider.GetService<IDataMigrationService>();
                 if (migrationService != null)
                 {
@@ -81,6 +82,7 @@ namespace LearningAssistant
                             if (migrationService.NeedsMigration())
                             {
                                 logger?.LogInformation("检测到需要迁移的数据，开始迁移...");
+                                migrationService.BackupBeforeMigration();
                                 var result = migrationService.PerformMigration();
                                 if (result.Success)
                                 {
@@ -99,7 +101,6 @@ namespace LearningAssistant
                         }
                     });
                 }
-                */
                 var reminderService = ServiceProvider.GetService<ILearningReminderService>();
                 if (reminderService != null)
                 {
@@ -133,6 +134,8 @@ namespace LearningAssistant
                 var scopedProvider = appScope.ServiceProvider;
 
                 var mainForm = scopedProvider.GetRequiredService<MainForm>();
+
+                WireDailyReportReminder(mainForm, logger);
 
                 logger.LogInformation("主窗体创建成功，启动应用程序");
                 Application.ApplicationExit += Application_ApplicationExit;
@@ -188,6 +191,61 @@ namespace LearningAssistant
             {
                 Console.WriteLine($"释放{serviceName}失败: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// 接线日报自动提醒（05 方案 3.4）：
+        /// - 订阅“昨日学习小结”提醒触发，构建小结并经由主窗体线程弹出通知；
+        /// - 为当前用户幂等创建默认日报提醒（默认 08:00）。
+        /// </summary>
+        private static void WireDailyReportReminder(MainForm mainForm, ILogger<MainForm>? logger)
+        {
+            try
+            {
+                var dailyReportService = ServiceProvider.GetService<ILearningDailyReportReminderService>();
+                if (dailyReportService == null) return;
+
+                dailyReportService.Start();
+                dailyReportService.DailyReportReady += (s, e) =>
+                {
+                    try
+                    {
+                        if (mainForm == null || !mainForm.IsHandleCreated) return;
+                        var title = e.Title;
+                        var summary = e.Summary;
+                        mainForm.BeginInvoke((Action)(() => ShowDailyReportPopup(title, summary)));
+                    }
+                    catch (Exception ex)
+                    {
+                        logger?.LogError(ex, "显示日报小结提醒失败");
+                    }
+                };
+
+                var userSession = ServiceProvider.GetService<IUserSessionService>();
+                var userId = userSession?.CurrentUserId;
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    dailyReportService.EnsureDefaultSummaryReminder(userId);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger?.LogError(ex, "日报自动提醒初始化失败");
+            }
+        }
+
+        /// <summary>以右下角弹出通知形式展示“昨日学习小结”。</summary>
+        private static void ShowDailyReportPopup(string title, string summary)
+        {
+            var popup = new ReminderNotificationForm
+            {
+                ReminderTitle = title,
+                ReminderMessage = summary,
+                ReminderTime = "学习统计",
+                ReminderIcon = "📋",
+                ReminderType = ReminderType.Study
+            };
+            popup.Show();
         }
 
         public static T GetRequiredService<T>() where T : notnull

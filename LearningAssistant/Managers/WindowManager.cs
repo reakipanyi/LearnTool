@@ -262,31 +262,10 @@ namespace LearningAssistant.Managers
 
         public void OpenStatisticsWindow()
         {
-            _logger.LogInformation("Opening statistics window");
-
-            try
-            {
-                using var scope = _serviceProvider.CreateScope();
-                var presenter = scope.ServiceProvider.GetRequiredService<ResultPresenter>();
-                presenter.Initialize();
-
-                var view = scope.ServiceProvider.GetRequiredService<IResultView>();
-                if (view is Form form)
-                {
-                    form.StartPosition = FormStartPosition.CenterParent;
-                    form.ShowDialog();
-                }
-                else
-                {
-                    _logger.LogError("IResultView is not implemented as Form");
-                    throw new InvalidOperationException("IResultView 未实现为 Form 类型。");
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to open statistics window");
-                throw;
-            }
+            // 04 数据中心：统计入口统一指向学习数据中心（LearningManagementForm），
+            // 不再由 ResultForm 承担“统计”角色。
+            _logger.LogInformation("Opening statistics window (learning data center)");
+            OpenLearningManagementWindow();
         }
 
         public void OpenLearningManagementWindow()
