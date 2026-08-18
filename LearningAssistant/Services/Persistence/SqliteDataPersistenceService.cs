@@ -35,15 +35,121 @@ namespace LearningAssistant.Services.Persistence
         {
             try
             {
-                using var db = _dbContextFactory.CreateDbContext();
-                db.EnsureDatabaseCreated();
-                // 对已存在的数据库幂等补建缺失的表与索引（含 DailyRollups 预聚合表），不影响启动
-                db.RepairSchema();
+                var dbPath = AppPaths.DatabasePath;
+                var dbDir = Path.GetDirectoryName(dbPath);
+                if (!string.IsNullOrEmpty(dbDir) && !Directory.Exists(dbDir))
+                {
+                    Directory.CreateDirectory(dbDir);
+                }
+
+                // 只有主库已包含真实数据（多于一页、有已提交表）时才视为可用；
+                // 空页头/损坏/残留旧 WAL 的场景一律重建为修正后的 schema。
+                if (!HasCommitedDatabase(dbPath))
+                {
+                    // 主库为空（仅页头）或结构异常：丢弃残留的 WAL/SHM，避免“空主库+旧WAL”
+                    // 导致 RepairSchema 解析失败（SQLite Error: Failure to parse ... Expected an ASCII digit）。
+                    CleanupStaleDatabaseFiles(dbPath);
+
+                    // 单独一个 DbContext 执行 EnsureCreated，随其 Dispose 提交全部 DDL，
+                    // 避免与后续 RepairSchema 复用同一连接时，SQLite Pooling/Shared 缓存导致
+                    // “CREATE TABLE 已执行但紧随其后的 CREATE INDEX 找不到表（no such table）”的问题。
+                    using (var db = _dbContextFactory.CreateDbContext())
+                    {
+                        db.EnsureDatabaseCreated();
+                    }
+                }
+
+                // 再补全 Schema：使用全新连接的上下文，对已存在的数据库幂等补建缺失的表与索引
+                // （含 DailyRollups 预聚合表），不影响启动。
+                using (var db = _dbContextFactory.CreateDbContext())
+                {
+                    db.RepairSchema();
+                }
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Failed to initialize database");
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// 判断数据库文件是否已包含真实数据。
+        /// 有效 SQLite 文件头魔数为 "SQLite format 3\0"；若主库只有单个空页（无已提交表），
+        /// 则视为空库并触发重建。文件缺失、损坏或为空时返回 false。
+        /// </summary>
+        private static bool HasCommitedDatabase(string dbPath)
+        {
+            if (string.IsNullOrEmpty(dbPath) || !File.Exists(dbPath))
+            {
+                return false;
+            }
+
+            var info = new FileInfo(dbPath);
+            if (info.Length < 100)
+            {
+                return false;
+            }
+
+            try
+            {
+                using var fs = new FileStream(dbPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                if (fs.Length < 100)
+                {
+                    return false;
+                }
+
+                var magic = new byte[16];
+                if (fs.Read(magic, 0, 16) != 16)
+                {
+                    return false;
+                }
+
+                // 校验文件头：必须是 SQLite 数据库
+                if (!magic.AsSpan(0, 15).SequenceEqual("SQLite format 3"u8) || magic[15] != 0)
+                {
+                    return false;
+                }
+
+                // 页大小位于文件头字节 16-17（大端），最小为 512
+                fs.Seek(16, SeekOrigin.Begin);
+                var pageSizeBytes = new byte[2];
+                if (fs.Read(pageSizeBytes, 0, 2) != 2)
+                {
+                    return false;
+                }
+                var pageSize = (pageSizeBytes[0] << 8) | pageSizeBytes[1];
+
+                // 仅当页大小合法且文件超过一个页（存在已提交表）才算真实库
+                return pageSize >= 512 && info.Length > pageSize;
+            }
+            catch
+            {
+                // 无法读取则视为不可用，交由上层重建
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 清理数据库残留的 WAL/SHM 附属文件（上一次非正常关闭留下，内容已过期且与旧 schema 绑定）。
+        /// </summary>
+        private static void CleanupStaleDatabaseFiles(string dbPath)
+        {
+            foreach (var suffix in new[] { "-wal", "-shm" })
+            {
+                var path = dbPath + suffix;
+                try
+                {
+                    if (File.Exists(path))
+                    {
+                        System.Diagnostics.Trace.TraceWarning($"清理残留的数据库附属文件: {path}");
+                        File.Delete(path);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Trace.TraceWarning($"清理数据库附属文件失败: {path}: {ex.Message}");
+                }
             }
         }
 

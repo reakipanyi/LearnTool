@@ -49,7 +49,9 @@ namespace LearningAssistant.Data.Database
         /// </summary>
         public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
         {
-            _dbPath = string.Empty;
+            // 即使由 DbContextFactory 以 options 构造，也保留真实数据库路径，
+            // 便于调试和 OnConfiguring 未配置时回退使用。
+            _dbPath = GetDefaultDbPath();
         }
 
         /// <summary>
@@ -347,7 +349,10 @@ namespace LearningAssistant.Data.Database
                 TotalLearnedCount INTEGER NOT NULL DEFAULT 0,
                 XP INTEGER NOT NULL DEFAULT 0,
                 LastStudyDate TEXT NOT NULL,
-                UpdatedAt TEXT NOT NULL
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -364,7 +369,9 @@ namespace LearningAssistant.Data.Database
                 Content TEXT NOT NULL,
                 IsKnown INTEGER NOT NULL DEFAULT 0,
                 CreatedAt TEXT NOT NULL,
-                UpdatedAt TEXT NOT NULL
+                UpdatedAt TEXT NOT NULL,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -403,9 +410,11 @@ namespace LearningAssistant.Data.Database
                 NextReviewAt TEXT,
                 FirstWrongAt TEXT NOT NULL,
                 LastWrongAt TEXT NOT NULL,
-                IsActive INTEGER NOT NULL DEFAULT 1,
                 Notes TEXT NOT NULL,
-                UpdatedAt TEXT NOT NULL
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -433,13 +442,16 @@ namespace LearningAssistant.Data.Database
                 ContentId TEXT NOT NULL,
                 Rating INTEGER NOT NULL,
                 Interval INTEGER NOT NULL DEFAULT 0,
-                EaseFactor REAL,
-                Stability REAL,
-                Difficulty REAL,
+                EaseFactor REAL NULL,
+                Stability REAL NULL,
+                Difficulty REAL NULL,
                 ReviewTime TEXT NOT NULL,
                 Duration INTEGER NOT NULL DEFAULT 0,
-                AlgorithmType TEXT,
-                CreatedAt TEXT NOT NULL
+                AlgorithmType TEXT NULL,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -459,13 +471,26 @@ namespace LearningAssistant.Data.Database
         private void RepairUserProfilesTable()
         {
             var sql = @"CREATE TABLE IF NOT EXISTS UserProfiles (
-                UserId TEXT PRIMARY KEY,
+                UserId TEXT CONSTRAINT PK_UserProfiles PRIMARY KEY NOT NULL,
                 UserName TEXT NOT NULL,
                 LastLoginTime TEXT NOT NULL,
-                AvatarPath TEXT NOT NULL DEFAULT '',
+                AvatarPath TEXT NOT NULL,
+                ConsecutiveStudyDays INTEGER NOT NULL,
+                LastStudyDate TEXT NULL,
+                TotalStudyTimeMinutes INTEGER NOT NULL,
+                TodayStudyTimeMinutes INTEGER NOT NULL,
+                TodayItemsStudied INTEGER NOT NULL,
+                XP INTEGER NOT NULL,
+                TotalXP INTEGER NOT NULL,
+                Level INTEGER NOT NULL,
+                Coins INTEGER NOT NULL,
+                TotalItemsStudied INTEGER NOT NULL,
+                StudyDays INTEGER NOT NULL,
+                LongestStreak INTEGER NOT NULL,
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
-                IsActive INTEGER NOT NULL DEFAULT 1
+                IsActive INTEGER NOT NULL,
+                RowVersion INTEGER NOT NULL
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -480,9 +505,16 @@ namespace LearningAssistant.Data.Database
                 CategoryName TEXT NOT NULL,
                 KnownItemsJson TEXT NOT NULL DEFAULT '[]',
                 UnknownItemsJson TEXT NOT NULL DEFAULT '[]',
+                TotalTestCount INTEGER NOT NULL DEFAULT 0,
+                CorrectCount INTEGER NOT NULL DEFAULT 0,
+                LastTestDate TEXT NOT NULL,
+                LastResumeIndex INTEGER NOT NULL DEFAULT 0,
+                QuickTestResumeIndex INTEGER NOT NULL DEFAULT 0,
+                LastStudyMode TEXT NOT NULL DEFAULT '',
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
                 IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (UserId, CategoryName)
             );";
             Database.ExecuteSqlRaw(sql);
@@ -501,12 +533,12 @@ namespace LearningAssistant.Data.Database
                 UserId TEXT NOT NULL,
                 ActivityType TEXT NOT NULL,
                 SubCategory TEXT NOT NULL DEFAULT '',
-                Content TEXT NOT NULL DEFAULT '',
-                Duration INTEGER NOT NULL DEFAULT 0,
+                Count INTEGER NOT NULL DEFAULT 1,
                 RecordDate TEXT NOT NULL,
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
-                IsActive INTEGER NOT NULL DEFAULT 1
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -524,13 +556,20 @@ namespace LearningAssistant.Data.Database
                 UserId TEXT NOT NULL,
                 Type TEXT NOT NULL DEFAULT 'Study',
                 Title TEXT NOT NULL,
-                Message TEXT NOT NULL DEFAULT '',
+                Description TEXT NOT NULL DEFAULT '',
                 Time TEXT NOT NULL,
+                RepeatType TEXT NOT NULL DEFAULT '',
+                RepeatDaysJson TEXT NOT NULL DEFAULT '[]',
                 Enabled INTEGER NOT NULL DEFAULT 1,
-                RepeatMode TEXT NOT NULL DEFAULT 'Once',
+                LastTriggered TEXT NULL,
+                TriggerCount INTEGER NOT NULL DEFAULT 0,
+                OpenCount INTEGER NOT NULL DEFAULT 0,
+                SnoozeCount INTEGER NOT NULL DEFAULT 0,
+                DismissCount INTEGER NOT NULL DEFAULT 0,
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
-                IsActive INTEGER NOT NULL DEFAULT 1
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -549,7 +588,8 @@ namespace LearningAssistant.Data.Database
                 DayOfWeek INTEGER NOT NULL,
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
-                IsActive INTEGER NOT NULL DEFAULT 1
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -568,15 +608,25 @@ namespace LearningAssistant.Data.Database
                 Content TEXT NOT NULL,
                 Answer TEXT NOT NULL DEFAULT '',
                 Interval INTEGER NOT NULL DEFAULT 0,
-                EaseFactor REAL NOT NULL DEFAULT 2.5,
-                Repetition INTEGER NOT NULL DEFAULT 0,
+                Repetitions INTEGER NOT NULL DEFAULT 0,
+                EFactor REAL NOT NULL DEFAULT 2.5,
                 NextReviewDate TEXT NOT NULL,
-                LastReviewDate TEXT,
-                Category TEXT NOT NULL DEFAULT '',
-                AlgorithmType TEXT,
+                WrongCount INTEGER NOT NULL DEFAULT 0,
+                CorrectCount INTEGER NOT NULL DEFAULT 0,
+                Stability REAL NOT NULL DEFAULT 0,
+                Difficulty REAL NOT NULL DEFAULT 5,
+                Retrievability REAL NOT NULL DEFAULT 1,
+                LearningStage INTEGER NOT NULL DEFAULT 0,
+                LastReviewDate TEXT NULL,
+                ReviewCount INTEGER NOT NULL DEFAULT 0,
+                CorrectStreak INTEGER NOT NULL DEFAULT 0,
+                AlgorithmType TEXT NULL,
+                Category TEXT NULL,
+                Subject TEXT NULL,
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
-                IsActive INTEGER NOT NULL DEFAULT 1
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -589,7 +639,7 @@ namespace LearningAssistant.Data.Database
             sql = @"CREATE INDEX IF NOT EXISTS IX_SpacedRepetitionItems_IsActive ON SpacedRepetitionItems(IsActive);";
             Database.ExecuteSqlRaw(sql);
 
-            sql = @"CREATE INDEX IF NOT EXISTS IX_SpacedRepetitionItems_LearningStage ON SpacedRepetitionItems(AlgorithmType);";
+            sql = @"CREATE INDEX IF NOT EXISTS IX_SpacedRepetitionItems_LearningStage ON SpacedRepetitionItems(LearningStage);";
             Database.ExecuteSqlRaw(sql);
         }
 
@@ -597,8 +647,12 @@ namespace LearningAssistant.Data.Database
         {
             var sql = @"CREATE TABLE IF NOT EXISTS AppSessions (
                 SessionKey TEXT PRIMARY KEY,
-                Value TEXT NOT NULL,
-                LastAccessTime TEXT NOT NULL
+                SessionDataJson TEXT NOT NULL DEFAULT '',
+                LastAccessTime TEXT NOT NULL,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -615,7 +669,8 @@ namespace LearningAssistant.Data.Database
                 UnlockedAt TEXT NOT NULL,
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
-                IsActive INTEGER NOT NULL DEFAULT 1
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -635,7 +690,8 @@ namespace LearningAssistant.Data.Database
                 ChallengesJson TEXT NOT NULL DEFAULT '[]',
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
-                IsActive INTEGER NOT NULL DEFAULT 1
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -659,7 +715,8 @@ namespace LearningAssistant.Data.Database
                 ChallengesJson TEXT NOT NULL DEFAULT '[]',
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
-                IsActive INTEGER NOT NULL DEFAULT 1
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -681,7 +738,8 @@ namespace LearningAssistant.Data.Database
                 Enabled INTEGER NOT NULL DEFAULT 0,
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
-                IsActive INTEGER NOT NULL DEFAULT 1
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -695,12 +753,13 @@ namespace LearningAssistant.Data.Database
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 UserId TEXT NOT NULL,
                 Date TEXT NOT NULL,
-                ProgressJson TEXT NOT NULL DEFAULT '{}',
-                CompletedJson TEXT NOT NULL DEFAULT '{}',
+                ProgressJson TEXT NOT NULL DEFAULT '{{}}',
+                CompletedJson TEXT NOT NULL DEFAULT '{{}}',
                 AllCompleted INTEGER NOT NULL DEFAULT 0,
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
-                IsActive INTEGER NOT NULL DEFAULT 1
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -731,7 +790,8 @@ namespace LearningAssistant.Data.Database
                 Version INTEGER NOT NULL DEFAULT 1,
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
-                IsActive INTEGER NOT NULL DEFAULT 1
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -747,7 +807,7 @@ namespace LearningAssistant.Data.Database
             var sql = @"CREATE TABLE IF NOT EXISTS MigrationCheckpoints (
                 StepId TEXT PRIMARY KEY,
                 Status TEXT NOT NULL DEFAULT 'Pending',
-                DetailJson TEXT NOT NULL DEFAULT '{}',
+                DetailJson TEXT NOT NULL DEFAULT '{{}}',
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL
             );";
@@ -757,16 +817,25 @@ namespace LearningAssistant.Data.Database
         private void RepairNotesTable()
         {
             var sql = @"CREATE TABLE IF NOT EXISTS Notes (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Id TEXT CONSTRAINT PK_Notes PRIMARY KEY NOT NULL,
                 UserId TEXT NOT NULL,
-                Category TEXT NOT NULL DEFAULT '',
-                SubCategory TEXT NOT NULL DEFAULT '',
                 Title TEXT NOT NULL DEFAULT '',
                 Content TEXT NOT NULL DEFAULT '',
-                ContentKey TEXT NOT NULL DEFAULT '',
+                Category TEXT NOT NULL DEFAULT '',
+                Tags TEXT NOT NULL DEFAULT '',
+                RelatedType TEXT NOT NULL DEFAULT '',
+                RelatedItemId TEXT NOT NULL DEFAULT '',
+                RelatedItemTitle TEXT NOT NULL DEFAULT '',
+                Importance INTEGER NOT NULL DEFAULT 3,
+                IsFavorite INTEGER NOT NULL DEFAULT 0,
+                LastReviewedAt TEXT,
+                ReviewCount INTEGER NOT NULL DEFAULT 0,
+                Color TEXT NOT NULL DEFAULT '',
+                Source TEXT NOT NULL DEFAULT '',
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
-                IsActive INTEGER NOT NULL DEFAULT 1
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -780,15 +849,21 @@ namespace LearningAssistant.Data.Database
         private void RepairLearningPathsTable()
         {
             var sql = @"CREATE TABLE IF NOT EXISTS LearningPaths (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Id TEXT CONSTRAINT PK_LearningPaths PRIMARY KEY NOT NULL,
                 UserId TEXT NOT NULL,
                 Name TEXT NOT NULL,
                 Description TEXT NOT NULL DEFAULT '',
-                Category TEXT NOT NULL DEFAULT '',
-                IsCustom INTEGER NOT NULL DEFAULT 0,
+                Goal TEXT NOT NULL DEFAULT '',
+                PathType TEXT NOT NULL DEFAULT 'custom',
+                Domain TEXT NOT NULL DEFAULT '',
+                Level TEXT NOT NULL DEFAULT '初级',
+                TotalEstimatedMinutes INTEGER NOT NULL DEFAULT 0,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                StartDate TEXT,
+                TargetDate TEXT,
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
-                IsActive INTEGER NOT NULL DEFAULT 1
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -799,20 +874,24 @@ namespace LearningAssistant.Data.Database
         private void RepairLearningPathItemsTable()
         {
             var sql = @"CREATE TABLE IF NOT EXISTS LearningPathItems (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                UserId TEXT NOT NULL,
-                PathId INTEGER NOT NULL,
-                Content TEXT NOT NULL,
+                Id TEXT CONSTRAINT PK_LearningPathItems PRIMARY KEY NOT NULL,
+                PathId TEXT NOT NULL,
+                Title TEXT NOT NULL,
+                Description TEXT NOT NULL DEFAULT '',
+                ContentType TEXT NOT NULL DEFAULT '',
+                ContentIds TEXT NOT NULL DEFAULT '[]',
+                EstimatedMinutes INTEGER NOT NULL DEFAULT 0,
+                DifficultyLevel INTEGER NOT NULL DEFAULT 1,
+                Prerequisites TEXT NOT NULL DEFAULT '[]',
                 OrderIndex INTEGER NOT NULL DEFAULT 0,
-                LearningStage INTEGER NOT NULL DEFAULT 0,
-                MasteryLevel INTEGER NOT NULL DEFAULT 0,
+                IsCompleted INTEGER NOT NULL DEFAULT 0,
+                CompletedAt TEXT,
+                Progress INTEGER NOT NULL DEFAULT 0,
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
-                IsActive INTEGER NOT NULL DEFAULT 1
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
-            Database.ExecuteSqlRaw(sql);
-
-            sql = @"CREATE INDEX IF NOT EXISTS IX_LearningPathItems_UserId ON LearningPathItems(UserId);";
             Database.ExecuteSqlRaw(sql);
 
             sql = @"CREATE INDEX IF NOT EXISTS IX_LearningPathItems_PathId ON LearningPathItems(PathId);";
@@ -822,27 +901,27 @@ namespace LearningAssistant.Data.Database
         private void RepairLearningItemsTable()
         {
             var sql = @"CREATE TABLE IF NOT EXISTS LearningItems (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
-                UserId TEXT NOT NULL,
-                Category TEXT NOT NULL,
+                Id TEXT CONSTRAINT PK_LearningItems PRIMARY KEY NOT NULL,
+                Subject TEXT NOT NULL,
                 SubCategory TEXT NOT NULL DEFAULT '',
-                Content TEXT NOT NULL,
-                Explanation TEXT NOT NULL DEFAULT '',
-                ExamplesJson TEXT NOT NULL DEFAULT '[]',
-                MasteryLevel INTEGER NOT NULL DEFAULT 0,
+                MainContent TEXT NOT NULL,
+                MeaningJson TEXT,
+                ExampleJson TEXT,
+                PronunciationJson TEXT,
+                CharacterFeaturesJson TEXT,
+                WordFeaturesJson TEXT,
+                ExtendedProperties TEXT NOT NULL DEFAULT '{{}}',
+                Status TEXT NOT NULL DEFAULT 'New',
                 ReviewCount INTEGER NOT NULL DEFAULT 0,
-                LastReviewAt TEXT,
-                NextReviewAt TEXT,
+                LastReviewedAt TEXT,
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
-                IsActive INTEGER NOT NULL DEFAULT 1
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
-            sql = @"CREATE INDEX IF NOT EXISTS IX_LearningItems_UserId ON LearningItems(UserId);";
-            Database.ExecuteSqlRaw(sql);
-
-            sql = @"CREATE INDEX IF NOT EXISTS IX_LearningItems_Category ON LearningItems(Category);";
+            sql = @"CREATE INDEX IF NOT EXISTS IX_LearningItems_Subject ON LearningItems(Subject);";
             Database.ExecuteSqlRaw(sql);
 
             sql = @"CREATE INDEX IF NOT EXISTS IX_LearningItems_SubCategory ON LearningItems(SubCategory);";
@@ -866,7 +945,8 @@ namespace LearningAssistant.Data.Database
                 Volume INTEGER NOT NULL DEFAULT 50,
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
-                IsActive INTEGER NOT NULL DEFAULT 1
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 
@@ -877,17 +957,20 @@ namespace LearningAssistant.Data.Database
         private void RepairPomodoroRecordsTable()
         {
             var sql = @"CREATE TABLE IF NOT EXISTS PomodoroRecords (
-                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Id TEXT CONSTRAINT PK_PomodoroRecords PRIMARY KEY NOT NULL,
                 UserId TEXT NOT NULL,
-                Type TEXT NOT NULL,
                 StartTime TEXT NOT NULL,
-                EndTime TEXT,
-                Duration INTEGER NOT NULL DEFAULT 0,
+                EndTime TEXT NOT NULL,
+                Type TEXT NOT NULL DEFAULT '',
+                DurationSeconds INTEGER NOT NULL DEFAULT 0,
+                PlannedDurationSeconds INTEGER NOT NULL DEFAULT 0,
                 Completed INTEGER NOT NULL DEFAULT 0,
-                Category TEXT NOT NULL DEFAULT '',
+                Task TEXT,
+                InterruptionCount INTEGER NOT NULL DEFAULT 0,
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
-                IsActive INTEGER NOT NULL DEFAULT 1
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
             );";
             Database.ExecuteSqlRaw(sql);
 

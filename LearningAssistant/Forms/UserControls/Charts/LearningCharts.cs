@@ -120,7 +120,10 @@ namespace LearningAssistant.Forms.UserControls.Charts
             }
 
             Plot.AxisAuto();
-            Plot.SetAxisLimitsY(0, double.MaxValue);
+            var yMax = 0.0;
+            if (yValues != null && yValues.Count > 0) yMax = yValues.Max();
+            if (accuracyValues != null && accuracyValues.Count > 0) yMax = Math.Max(yMax, accuracyValues.Max());
+            Plot.SetAxisLimitsY(0, Math.Max(1, yMax * 1.15));
             Refresh();
         }
 
@@ -167,8 +170,11 @@ namespace LearningAssistant.Forms.UserControls.Charts
                 line.MarkerShape = MarkerShape.filledSquare;
             }
 
+            var trendMax = ys.DefaultIfEmpty(0).Max();
+            if (accuracySeries != null && accuracySeries.Points.Count > 0)
+                trendMax = Math.Max(trendMax, accuracySeries.Points.Select(p => p.Value).Max());
             Plot.AxisAuto();
-            Plot.SetAxisLimitsY(0, double.MaxValue);
+            Plot.SetAxisLimitsY(0, Math.Max(1, trendMax * 1.15));
             Refresh();
         }
     }
@@ -242,7 +248,8 @@ namespace LearningAssistant.Forms.UserControls.Charts
 
             var xValues = Enumerable.Range(0, categories.Count).Select(i => (double)i).ToArray();
             Plot.XTicks(xValues, categories.ToArray());
-            Plot.SetAxisLimitsY(0, double.MaxValue);
+            var catMax = progressValues.Count > 0 ? progressValues.Max() : 0.0;
+            Plot.SetAxisLimitsY(0, Math.Max(1, catMax * 1.15));
             Refresh();
         }
 
@@ -380,7 +387,8 @@ namespace LearningAssistant.Forms.UserControls.Charts
             }
 
             Plot.XTicks(xs.ToArray(), users.ToArray());
-            Plot.SetAxisLimitsY(0, double.MaxValue);
+            var cmax = values.Count > 0 ? values.Max() : 0.0;
+            Plot.SetAxisLimitsY(0, Math.Max(1, cmax * 1.15));
             Refresh();
         }
     }
