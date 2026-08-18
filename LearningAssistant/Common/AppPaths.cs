@@ -52,14 +52,14 @@ namespace LearningAssistant.Common
         /// </summary>
         public static string CurrentUserDir => Path.Combine(UsersDir, _currentUserId);
 
-        private static string _currentUserId = "Default";
+        private static string _currentUserId = Constants.DefaultUserId;
 
         /// <summary>
         /// 设置当前用户ID
         /// </summary>
         public static void SetCurrentUserId(string userId)
         {
-            _currentUserId = string.IsNullOrWhiteSpace(userId) ? "Default" : userId;
+            _currentUserId = string.IsNullOrWhiteSpace(userId) ? Constants.DefaultUserId : userId;
             EnsureUserDirectoriesExist();
         }
 

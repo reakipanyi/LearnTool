@@ -30,7 +30,7 @@ namespace LearningAssistant.Presenters
         private readonly IPdfService _pdfService;
         private readonly IEventBus? _eventBus;
 
-        private string _currentUserId = "Default";
+        private string _currentUserId = Constants.DefaultUserId;
         private string _currentLanguage = Constants.Language.English;
         private string _currentSubCategory = Constants.SubCategory.EnglishWord;
 

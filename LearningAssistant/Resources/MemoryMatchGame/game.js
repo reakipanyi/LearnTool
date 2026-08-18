@@ -12,6 +12,7 @@
     let locked = false;    // 判定期间锁定翻牌
     let matchedCount = 0;  // 已配对数量
     let score = 0;
+    let totalScore = 0;    // 跨组累计总分（换一组不清零）
     let combo = 0;
     let maxCombo = 0;
     let moves = 0;         // 有效判定次数（配对成功/失败）
@@ -47,15 +48,6 @@
         { id: "m8", word: "house", meaning: "房子", phonetic: "/haʊs/" },
     ];
 
-    const WORD_GRADS = [
-        ["#6366f1", "#8b5cf6"], ["#06b6d4", "#3b82f6"], ["#2563eb", "#06b6d4"],
-        ["#8b5cf6", "#d946ef"], ["#3b82f6", "#6366f1"],
-    ];
-    const MEANING_GRADS = [
-        ["#ec4899", "#f43f5e"], ["#f97316", "#f43f5e"], ["#fb7185", "#f97316"],
-        ["#db2777", "#9333ea"], ["#f43f5e", "#ec4899"],
-    ];
-
     // ---------- 配牌 ----------
     function buildCards() {
         const deck = [];
@@ -74,30 +66,17 @@
             el.className = "card";
 
             const isWord = card.type === "word";
-            const grad = isWord
-                ? WORD_GRADS[Math.floor(Math.random() * WORD_GRADS.length)]
-                : MEANING_GRADS[Math.floor(Math.random() * MEANING_GRADS.length)];
-            el.style.setProperty("--grad-a", grad[0]);
-            el.style.setProperty("--grad-b", grad[1]);
-            el.style.setProperty("--card-tilt", (Math.random() * 2 - 1).toFixed(1) + "deg");
-            el.style.setProperty("--card-radius", (14 + Math.floor(Math.random() * 8)) + "px");
-
+            // 喇叭作为视觉标识（右上角），翻开单词卡即自动朗读
             const frontInner = isWord
-                ? `<span class="word-text">${esc(card.item.word)}</span>` +
-                  (card.item.phonetic ? `<span class="phonetic">${esc(card.item.phonetic)}</span>` : "") +
-                  `<button class="speak" title="朗读">🔊</button>`
+                ? `<span class="speak" aria-hidden="true">🔊</span>` +
+                  `<span class="word-text">${esc(card.item.word)}</span>` +
+                  (card.item.phonetic ? `<span class="phonetic">${esc(card.item.phonetic)}</span>` : "")
                 : `<span class="meaning-text">${esc(card.item.meaning)}</span>`;
 
             el.innerHTML = `
                 <div class="face face-back">🧠</div>
                 <div class="face face-front ${isWord ? "word" : "meaning"}">${frontInner}</div>`;
 
-            if (isWord) {
-                el.querySelector(".speak").addEventListener("click", (e) => {
-                    e.stopPropagation();
-                    speak(card.item.word);
-                });
-            }
             el.addEventListener("click", () => onCardClick(idx, el));
             el.style.animationDelay = (idx * 45) + "ms";
             board.appendChild(el);
@@ -116,6 +95,9 @@
 
         el.classList.add("flipped");
         flipped.push(idx);
+        // 翻开单词卡自动朗读（喇叭仅作视觉标识）
+        const card = cards[idx];
+        if (card.type === "word") speak(card.item.word);
 
         if (flipped.length === 2) {
             judge(idx);
@@ -163,6 +145,7 @@
             matchedCount++;
             aEl.classList.add("matched");
             bEl.classList.add("matched");
+            GameUI.playSound("match");
             toast(`✅ 正确 +${gain}  连击 x${combo}`);
             flipped = [];
             locked = false;
@@ -183,6 +166,7 @@
             scoreEl.textContent = score;
             aEl.classList.add("wrong");
             bEl.classList.add("wrong");
+            GameUI.playSound("error");
             toast("❌ 不配对，记住位置再试试");
             setTimeout(() => {
                 aEl.classList.remove("wrong", "flipped");

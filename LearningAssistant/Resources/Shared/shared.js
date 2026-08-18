@@ -35,6 +35,39 @@
             el._t = setTimeout(() => el.classList.remove("show"), duration);
         },
 
+        /**
+         * 轻量 WebAudio 音效（无需音频资源文件）。
+         * @param kind "match"=配对成功（轻快上行音），"error"=配对错误（柔和低音）。
+         */
+        playSound(kind) {
+            try {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                if (!AC) return;
+                if (!window._gameAudioCtx) window._gameAudioCtx = new AC();
+                const ctx = window._gameAudioCtx;
+                if (ctx.state === "suspended") ctx.resume();
+                const now = ctx.currentTime;
+                const tone = (freq, start, dur, type = "sine", vol = 0.12) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.0001, now + start);
+                    gain.gain.exponentialRampToValueAtTime(vol, now + start + 0.02);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + start + dur);
+                    osc.connect(gain).connect(ctx.destination);
+                    osc.start(now + start);
+                    osc.stop(now + start + dur + 0.05);
+                };
+                if (kind === "match") {
+                    tone(523.25, 0, 0.12);      // C5
+                    tone(783.99, 0.09, 0.16);   // G5
+                } else if (kind === "error") {
+                    tone(220, 0, 0.18, "sine", 0.08); // 柔和低音
+                }
+            } catch (e) { /* 无音频输出时静默 */ }
+        },
+
         /** 朗读文本。WebView2 内优先走宿主 TTS（系统语音更可靠）；无宿主（浏览器调试）时用 speechSynthesis 兜底。 */
         speak(text, lang = "en-US") {
             const wb = getBridge();

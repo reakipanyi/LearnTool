@@ -30,6 +30,7 @@
     const totalRemainingEl = $("totalRemaining");
     const timerEl = $("timer");
     const progressEl = $("progress");
+    const chkPhonetic = $("chkPhonetic");
 
     // ---------- 数据 ----------
     const MOCK_ITEMS = [
@@ -41,22 +42,6 @@
         { id: "m6", word: "fish", meaning: "鱼", phonetic: "/fɪʃ/" },
         { id: "m7", word: "grape", meaning: "葡萄", phonetic: "/ɡreɪp/" },
         { id: "m8", word: "house", meaning: "房子", phonetic: "/haʊs/" },
-    ];
-
-    // 卡片多彩配色：单词走冷色系、释义走暖色系（浅色块块，降低视觉刺激）
-    const WORD_COLORS = [
-        "linear-gradient(135deg, #e0e7ff, #c7d2fe)",
-        "linear-gradient(135deg, #cffafe, #a5f3fc)",
-        "linear-gradient(135deg, #dbeafe, #bfdbfe)",
-        "linear-gradient(135deg, #ede9fe, #ddd6fe)",
-        "linear-gradient(135deg, #e0f2fe, #bae6fd)",
-    ];
-    const MEANING_COLORS = [
-        "linear-gradient(135deg, #ffe4e6, #fecdd3)",
-        "linear-gradient(135deg, #ffedd5, #fed7aa)",
-        "linear-gradient(135deg, #fce7f3, #fbcfe8)",
-        "linear-gradient(135deg, #fff7ed, #fed7aa)",
-        "linear-gradient(135deg, #ffe4e6, #fda4af)",
     ];
 
     // ---------- 配牌 ----------
@@ -79,22 +64,17 @@
             const el = document.createElement("div");
             el.className = "card " + card.type;
 
-            const palette = card.type === "word" ? WORD_COLORS : MEANING_COLORS;
-            el.style.setProperty("--card-grad", palette[Math.floor(Math.random() * palette.length)]);
-            el.style.setProperty("--tilt", (Math.random() * 4 - 2).toFixed(1) + "deg");
-            el.style.setProperty("--card-radius", (14 + Math.floor(Math.random() * 9)) + "px");
-
             if (card.type === "word") {
-                el.innerHTML = `<span class="word-text">${esc(card.item.word)}</span>` +
-                    (card.item.phonetic ? `<span class="phonetic">${esc(card.item.phonetic)}</span>` : "") +
-                    `<button class="speak" title="朗读">🔊</button>`;
-                el.querySelector(".speak").addEventListener("click", (e) => {
-                    e.stopPropagation();
-                    speak(card.item.word);
-                });
+                el.innerHTML = `<span class="speak" aria-hidden="true">🔊</span>` +
+                    `<span class="word-text">${esc(card.item.word)}</span>` +
+                    (card.item.phonetic ? `<span class="phonetic">${esc(card.item.phonetic)}</span>` : "");
             } else {
-                el.innerHTML = `<span class="meaning-text">${esc(card.item.meaning)}</span>`;
+                // 长释义按长度缩小字号，避免超出卡片
+                const len = (card.item.meaning || "").length;
+                const sizeCls = len > 30 ? "xs" : (len > 18 ? "sm" : "");
+                el.innerHTML = `<span class="meaning-text ${sizeCls}">${esc(card.item.meaning)}</span>`;
             }
+            // 喇叭作为视觉标识（右上角），点击卡片任意位置即朗读 / 选择
             el.addEventListener("click", () => onCardClick(idx, el));
             board.appendChild(el);
         });
@@ -200,6 +180,23 @@
         timerId = null;
     }
 
+    // ---------- 音标开关 ----------
+    const PHONETIC_KEY = "wordgame_no_phonetic";
+    function applyPhoneticToggle() {
+        document.body.classList.toggle("no-phonetic", chkPhonetic && !chkPhonetic.checked);
+    }
+    function initPhoneticToggle() {
+        if (!chkPhonetic) return;
+        // 记忆上次选择（1=显示音标）
+        const saved = localStorage.getItem(PHONETIC_KEY);
+        if (saved !== null) chkPhonetic.checked = saved !== "0";
+        applyPhoneticToggle();
+        chkPhonetic.addEventListener("change", () => {
+            localStorage.setItem(PHONETIC_KEY, chkPhonetic.checked ? "1" : "0");
+            applyPhoneticToggle();
+        });
+    }
+
     // ---------- 结算 ----------
     function finishGame(won) {
         if (finished) return;
@@ -217,8 +214,27 @@
         $("resultRate").textContent = rate + "%";
         $("resultCombo").textContent = maxCombo;
         $("resultTime").textContent = timerSeconds + "s";
+        renderResultWords();
         $("resultOverlay").classList.remove("hidden");
         sendToHost({ type: "gameEnd", results, score, combo: maxCombo, seconds: timerSeconds });
+    }
+
+    /** 结算面板：按对结果列出本次所有单词，供课堂复盘听写。 */
+    function renderResultWords() {
+        const list = $("resultWordsList");
+        if (!list) return;
+        const okMap = {};
+        results.forEach((r) => { okMap[r.id] = okMap[r.id] === false ? false : r.correct; });
+        list.innerHTML = items.map((it) => {
+            const ok = okMap[it.id];
+            const status = ok === false ? "❌" : "✅";
+            return `<div class="rw-row">
+                <span class="rw-status">${status}</span>
+                <span class="rw-word">${esc(it.word)}</span>
+                ${it.phonetic ? `<span class="rw-phonetic">${esc(it.phonetic)}</span>` : ""}
+                <span class="rw-meaning">${esc(it.meaning)}</span>
+            </div>`;
+        }).join("");
     }
 
     // ---------- 初始化 ----------
@@ -230,9 +246,9 @@
             board.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px;">词库为空或不足，请先在「内容编辑」中添加单词</div>`;
             return;
         }
-        // 按顶部"列"设置应用盘面列数
+        // 按顶部"列"设置应用盘面列数（自适应窗口宽度，避免横向滚动）
         if (meta && meta.cols) {
-            board.style.gridTemplateColumns = `repeat(${meta.cols}, minmax(150px, 1fr))`;
+            board.style.gridTemplateColumns = `repeat(${meta.cols}, minmax(min(150px, 100%), 1fr))`;
         }
         // 总剩余条目数
         totalRemainingEl.textContent = GameUI.metaTotalRemaining(meta);
@@ -261,6 +277,7 @@
     }
 
     function loadData() {
+        initPhoneticToggle();
         listenInit((data, theme, meta) => boot(data, theme, meta));
         if (isMock()) boot(MOCK_ITEMS, "light");
     }

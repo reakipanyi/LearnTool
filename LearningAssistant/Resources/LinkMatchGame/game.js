@@ -26,7 +26,8 @@
     const board = $("board"), hint = $("hint");
     const scoreEl = $("score"), comboEl = $("combo"), movesEl = $("moves"),
           remainingEl = $("remaining"), timerEl = $("timer"), progressEl = $("progress"),
-          totalScoreEl = $("totalScore"), totalRemainingEl = $("totalRemaining");
+          totalScoreEl = $("totalScore"), totalRemainingEl = $("totalRemaining"),
+          chkPhonetic = $("chkPhonetic");
 
     const MOCK_ITEMS = [
         { id: "m1", word: "apple", meaning: "苹果", phonetic: "/ˈæpl/" },
@@ -138,9 +139,7 @@
     function anySolvable() { return hasSolvablePair(grid); }
 
     // ---------- 渲染 ----------
-    // 浅色块块（冷色单词/暖色释义），降低视觉刺激；文字已用深色加粗区分
-    const WORD_GRADS = [["#e0e7ff", "#c7d2fe"], ["#cffafe", "#a5f3fc"], ["#dbeafe", "#bfdbfe"], ["#ede9fe", "#ddd6fe"], ["#e0f2fe", "#bae6fd"]];
-    const MEANING_GRADS = [["#ffe4e6", "#fecdd3"], ["#ffedd5", "#fed7aa"], ["#fce7f3", "#fbcfe8"], ["#fff7ed", "#fed7aa"], ["#ffe4e6", "#fda4af"]];
+    // 统一双色系在 style.css 中定义：单词=淡蓝(.word)、释义=淡粉(.meaning)，不再随机配色
 
     function renderBoard() {
         board.innerHTML = "";
@@ -162,29 +161,27 @@
 
     function buildCardEl(card) {
         const el = document.createElement("div");
-        el.className = "card";
+        const isWord = card.type === "word";
+        el.className = "card " + card.type;
         el.dataset.key = card.key;
         el.dataset.type = card.type;
-        const isWord = card.type === "word";
-        const grad = isWord
-            ? WORD_GRADS[Math.floor(Math.random() * WORD_GRADS.length)]
-            : MEANING_GRADS[Math.floor(Math.random() * MEANING_GRADS.length)];
-        el.style.setProperty("--grad-a", grad[0]);
-        el.style.setProperty("--grad-b", grad[1]);
 
-        const content = isWord
-            ? `<span class="word-text">${esc(card.item.word)}</span>` +
-              (card.item.phonetic ? `<span class="phonetic">${esc(card.item.phonetic)}</span>` : "") +
-              `<button class="speak">🔊</button>`
-            : `<span class="meaning-text">${esc(card.item.meaning)}</span>`;
+        let content;
+        if (isWord) {
+            // 喇叭作为视觉标识（右上角），点击卡片任意位置即朗读 / 选择
+            content = `<span class="speak" aria-hidden="true">🔊</span>` +
+                `<span class="word-text">${esc(card.item.word)}</span>` +
+                (card.item.phonetic ? `<span class="phonetic">${esc(card.item.phonetic)}</span>` : "") +
+                `<span class="weak-dot">🔴</span>`;
+        } else {
+            // 长释义按长度缩小字号，避免超出卡片
+            const len = (card.item.meaning || "").length;
+            const sizeCls = len > 24 ? "sm" : "";
+            content = `<span class="meaning-text ${sizeCls}">${esc(card.item.meaning)}</span>` +
+                `<span class="weak-dot">🔴</span>`;
+        }
         el.innerHTML = content;
 
-        if (isWord) {
-            el.querySelector(".speak").addEventListener("click", (e) => {
-                e.stopPropagation();
-                speak(card.item.word);
-            });
-        }
         el.addEventListener("click", () => onCardClick(card, el));
         return el;
     }
@@ -197,6 +194,8 @@
         if (selected === -1) {
             selected = card;
             el.classList.add("selected");
+            // 选中单词卡时自动播放发音（喇叭仅作视觉标识）
+            if (card.type === "word") speak(card.item.word);
             hint.textContent = "再点一张与之配对且路径可通的卡片";
             return;
         }
@@ -218,6 +217,7 @@
             markWeak(first); markWeak(card);
             combo = 0; comboEl.textContent = combo;
             errors++;
+            GameUI.playSound("error");
             const penalty = first.type === card.type ? 4 : 8;
             score = Math.max(0, score - penalty);
             scoreEl.textContent = score;
@@ -234,6 +234,7 @@
         if (!path) {
             markWeak(first); markWeak(card);
             combo = 0;
+            GameUI.playSound("error");
             score = Math.max(0, score - 2);
             scoreEl.textContent = score;
             firstEl.classList.add("invalid");
@@ -279,6 +280,7 @@
         grid[b.r][b.c] = 0;
 
         showPath(path);
+        GameUI.playSound("match");
         toast(`✅ 正确 +${gain}  连击 x${combo}`);
         updateProgress();
 
@@ -338,6 +340,26 @@
         timerId = null;
     }
 
+    // ---------- 音标开关 ----------
+    const PHONETIC_KEY = "linkmatch_no_phonetic";
+    function applyPhoneticToggle() {
+        document.body.classList.toggle("no-phonetic", chkPhonetic && !chkPhonetic.checked);
+    }
+    function initPhoneticToggle() {
+        if (!chkPhonetic) return;
+        // 记忆上次选择（1=显示音标）
+        const saved = localStorage.getItem(PHONETIC_KEY);
+        if (saved !== null) chkPhonetic.checked = saved !== "0";
+        applyPhoneticToggle();
+        chkPhonetic.addEventListener("change", () => {
+            localStorage.setItem(PHONETIC_KEY, chkPhonetic.checked ? "1" : "0");
+            applyPhoneticToggle();
+        });
+        // 每次重绘盘面后仍维持开关状态
+        const origRender = renderBoard;
+        renderBoard = function () { origRender(); applyPhoneticToggle(); };
+    }
+
     // ---------- 结算 ----------
     function finishGame() {
         if (finished) return;
@@ -361,9 +383,28 @@
         $("resultMoves").textContent = moves + " 步";
         $("resultErrors").textContent = errors;
         $("resultTime").textContent = seconds + "s";
+        renderResultWords();
         $("resultOverlay").classList.remove("hidden");
 
         sendToHost({ type: "gameEnd", results, score, moves, errors, combo: maxCombo, seconds });
+    }
+
+    /** 结算面板：按对结果列出本次所有单词，供课堂复盘听写。 */
+    function renderResultWords() {
+        const list = $("resultWordsList");
+        if (!list) return;
+        const okMap = {};
+        results.forEach((r) => { okMap[r.id] = okMap[r.id] === false ? false : r.correct; });
+        list.innerHTML = items.map((it) => {
+            const ok = okMap[it.id];
+            const status = ok === false ? "❌" : "✅";
+            return `<div class="rw-row">
+                <span class="rw-status">${status}</span>
+                <span class="rw-word">${esc(it.word)}</span>
+                ${it.phonetic ? `<span class="rw-phonetic">${esc(it.phonetic)}</span>` : ""}
+                <span class="rw-meaning">${esc(it.meaning)}</span>
+            </div>`;
+        }).join("");
     }
 
     // ---------- 初始化 ----------
@@ -374,7 +415,7 @@
         if (meta && meta.rows) ROWS = Math.max(2, meta.rows);
         if (meta && meta.cols) COLS = Math.max(2, meta.cols);
         ER = ROWS + 2; EC = COLS + 2;
-        board.style.gridTemplateColumns = `repeat(${COLS}, 1fr)`;
+        board.style.setProperty("--cols", COLS);
         resetGame();
         if (items.length < 2) {
             board.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:40px;">词库内容不足，请先在「内容编辑」中添加单词</div>`;
@@ -411,6 +452,7 @@
     }
 
     function loadData() {
+        initPhoneticToggle();
         listenInit((data, theme, meta) => boot(data, theme, meta));
         if (isMock()) boot(MOCK_ITEMS, "light");
     }

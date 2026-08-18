@@ -29,7 +29,7 @@ namespace LearningAssistant.Presenters
         private PdfPresenter? _pdfPresenter;
         private IMainView? _view;
 
-        private string _currentUserId = "Default";
+        private string _currentUserId = Constants.DefaultUserId;
         private UserProfile? _currentUserProfile;
 
         public event EventHandler? OnOpenSettings;

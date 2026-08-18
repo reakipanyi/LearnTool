@@ -10,7 +10,7 @@ namespace LearningAssistant.Services.Pdf
         private readonly ILogger<PdfStudyIntegration> _logger;
         private readonly IStudyEngine _studyEngine;
 
-        private string _currentUserId = "Default";
+        private string _currentUserId = Constants.DefaultUserId;
         private string _currentLanguage = Constants.Language.English;
         private string _currentSubCategory = Constants.SubCategory.EnglishWord;
 

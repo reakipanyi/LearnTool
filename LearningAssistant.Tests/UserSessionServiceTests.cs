@@ -32,7 +32,7 @@ namespace LearningAssistant.Tests
         {
             var service = CreateService();
 
-            service.CurrentUserId.Should().Be("Default");
+            service.CurrentUserId.Should().Be(Constants.DefaultUserId);
         }
 
         [Fact]
@@ -57,7 +57,7 @@ namespace LearningAssistant.Tests
             var service = CreateService();
             var userId = service.LoadSession();
 
-            userId.Should().Be("Default");
+            userId.Should().Be(Constants.DefaultUserId);
         }
 
         [Fact]
@@ -86,7 +86,7 @@ namespace LearningAssistant.Tests
         }
 
         [Fact]
-        public void GetUserList_WithEmptyUserIds_ShouldCreateDefaultUser()
+        public void GetUserList_WithEmptyUserIds_ShouldReturnEmpty()
         {
             _mockPersistence.Setup(p => p.GetUserIds())
                 .Returns(new List<string>());
@@ -95,8 +95,8 @@ namespace LearningAssistant.Tests
             var users = service.GetUserList();
 
             users.Should().NotBeNull();
-            users.Should().Contain("Default");
-            _mockPersistence.Verify(p => p.CreateUserProfile("Default", "访客"), Times.Once);
+            users.Should().BeEmpty();
+            _mockPersistence.Verify(p => p.CreateUserProfile(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         }
 
         [Fact]

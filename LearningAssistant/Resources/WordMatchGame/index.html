@@ -19,6 +19,9 @@
             <div class="stat"><span class="stat-label">计时</span><span id="timer" class="stat-value">0s</span></div>
         </div>
         <div class="actions">
+            <label class="toggle-group" title="是否展示音标">
+                <input type="checkbox" id="chkPhonetic" checked />音标
+            </label>
             <div class="radio-group" id="skipKnownGroup">
                 <label><input type="radio" name="skipKnown" value="skip" checked />跳过已知项</label>
                 <label><input type="radio" name="skipKnown" value="all" />加载所有</label>
@@ -46,6 +49,11 @@
                 <div class="result-row"><span class="result-label">正确率</span><b id="resultRate">0%</b></div>
                 <div class="result-row"><span class="result-label">最高连击</span><b id="resultCombo">0</b></div>
                 <div class="result-row"><span class="result-label">用时</span><b id="resultTime">0s</b></div>
+            </div>
+            <!-- 本次单词复盘列表：课堂复盘听写 -->
+            <div class="result-words">
+                <div class="result-words-title">本次单词复盘</div>
+                <div id="resultWordsList"></div>
             </div>
             <div class="result-btns">
                 <button id="btnAgain" class="btn primary">🎮 再来一局</button>
