@@ -1,4 +1,4 @@
-namespace LearningAssistant.Models.PanAnalysis;
+﻿namespace LearningAssistant.Models.PanAnalysis;
 
 #region === 进度与状态 ===
 
@@ -312,6 +312,7 @@ public class PanRecommendation
 
 public enum PanRecommendationType
 {
+    CreateFolder,   // P0.4 DAG first
     Delete,
     Move,
     Rename,
@@ -343,6 +344,7 @@ public class PanExecutionReport
     public int Succeeded { get; set; }
     public int Failed { get; set; }
     public int Skipped { get; set; }
+    public bool IsDryRun { get; set; }
 
     public List<PanExecutionResult> Results { get; set; } = new();
 

@@ -1,4 +1,4 @@
-using LearningAssistant.Common;
+﻿using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Models.PanAnalysis;
@@ -39,6 +39,9 @@ namespace LearningAssistant.Forms
         /// <summary>当前打标的完整列表（未筛选），供筛选/重置使用</summary>
         private List<PanFileTag> _allFileTags = new();
 
+        /// <summary>ToolTip 组件已加入 components 容器的标记（避免后续重复绑定）</summary>
+        private static bool components_ForToolTipInitialized;
+
         /// <summary>
         /// 设计视图专用无参构造函数。
         /// 仅用于 Visual Studio 设计器预览，运行时请使用带参构造函数。
@@ -73,6 +76,23 @@ namespace LearningAssistant.Forms
             InitializeComponent();
 
             // 运行时初始化（依赖构造参数，需放在 InitializeComponent 之后）
+            // ---- 打开整理工具快捷键 + ToolTip 悬停提示（P0.1 补修：Ctrl+Shift+O 全局有效）----
+            var organizerToolTip = new ToolTip
+            {
+                AutoPopDelay = 3000,
+                InitialDelay = 400,
+                ReshowDelay = 200,
+                ShowAlways = true
+            };
+            organizerToolTip.SetToolTip(btnOpenOrganizer, "快捷键：Ctrl + Shift + O（全局有效，任意焦点下按此组合键打开整理工具）");
+            if (!components_ForToolTipInitialized)
+            {
+                // ToolTip 组件需随窗体释放，挂到 Dispose 链上
+                components = components ?? new System.ComponentModel.Container();
+                components.Add(organizerToolTip);
+                components_ForToolTipInitialized = true;
+            }
+
             txtPath.Text = _directoryPath;
             AppendLog($"准备分析目录：{_directoryPath}");
             AppendLog("点击「开始分析」获取目录快照并生成整理建议。");
@@ -112,6 +132,78 @@ namespace LearningAssistant.Forms
             {
                 _logger?.LogWarning(ex, "取消分析任务失败");
             }
+        }
+
+        /// <summary>
+        /// 打开网盘整理工具（PanOrganizerForm 骨架 v0.1 版）。
+        /// P0.1 仅展示双栏浏览 + 预览前 5 条 AI 建议，不执行实际操作。
+        /// </summary>
+        private void btnOpenOrganizer_Click(object? sender, EventArgs e)
+        {
+            try
+            {
+                if (_orchestrator == null || _themeService == null)
+                {
+                    MessageBox.Show("整理工具需要先初始化分析服务。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                if (_snapshot == null)
+                {
+                    MessageBox.Show("请先点击「🚀 开始分析」加载目录快照，再打开整理工具。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                List<PanRecommendation> recs;
+                if (_analysisResult?.Recommendations != null)
+                    recs = _analysisResult.Recommendations.ToList();
+                else
+                    recs = new List<PanRecommendation>();
+
+                var organizer = new PanOrganizerForm(
+                    orchestrator: _orchestrator,
+                    initialSnapshot: _snapshot,
+                    initialRecommendations: recs,
+                    themeService: _themeService,
+                    logger: null as ILogger<PanOrganizerForm>);   // 不同泛型，传 null 即可（不会崩，P0.4 再做专用日志）
+
+                organizer.FormClosed += (_, args) =>
+                {
+                    if (organizer.ExecutedAny)
+                        AppendLog("📌 整理工具执行过操作，建议重新分析以刷新快照。");
+                };
+                organizer.Show(this);   // 非模态，可同时看 AI 建议与整理窗口
+                AppendLog($"🧰 已打开网盘整理工具（快照：{_snapshot.DirectoryPath}，AI 建议 {recs.Count} 条预览）");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "打开整理工具 PanOrganizerForm 失败");
+                MessageBox.Show($"打开整理工具失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 覆写消息循环：捕获「打开整理工具」快捷键 Ctrl + Shift + O（O=Organizer，语义清晰）。
+        /// 全局 Form 级生效：即使焦点在 TextBox/ListView 上也能触发。
+        /// </summary>
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            // 捕获 Ctrl + Shift + O  → 打开整理工具
+            if (keyData == (Keys.Control | Keys.Shift | Keys.O))
+            {
+                try
+                {
+                    if (btnOpenOrganizer != null && btnOpenOrganizer.Enabled && !btnOpenOrganizer.IsDisposed)
+                    {
+                        btnOpenOrganizer.PerformClick();
+                        return true;   // 已处理，不再向下传递
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "快捷键 Ctrl+Shift+O 触发打开整理工具失败");
+                }
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
         }
 
         /// <summary>

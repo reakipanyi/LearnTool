@@ -103,6 +103,18 @@ namespace LearningAssistant.Views
         event EventHandler? DeleteUserClicked;
 
         /// <summary>
+        /// 用户列表发生变更（新增/删除用户成功）时触发，
+        /// 供外部（如主窗体）异步刷新用户下拉框，替代原先依赖模态关闭的同步刷新。
+        /// </summary>
+        event EventHandler? UsersChanged;
+
+        /// <summary>
+        /// 由 Presenter 在用户增删成功后调用，触发 <see cref="UsersChanged"/> 事件。
+        /// 注：接口事件必须通过 view 实现的 raising 方法触发，禁止外部直接 Invoke。
+        /// </summary>
+        void RaiseUsersChanged();
+
+        /// <summary>
         /// 显示消息
         /// </summary>
         /// <param name="msg">消息内容</param>

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
 		<TargetFramework>net10.0-windows7.0</TargetFramework>
 		<UseWindowsForms>true</UseWindowsForms>
@@ -131,4 +131,19 @@
 	    <SubType>UserControl</SubType>
 	  </Compile>
 	</ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Forms\UserControls\LearningProcessStatsView.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Forms\UserControls\PanNavigatorPanel.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Update="Forms\PanOrganizerForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="Forms\FolderRenameDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+  </ItemGroup>
 </Project>

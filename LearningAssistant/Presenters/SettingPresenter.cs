@@ -168,6 +168,8 @@ namespace LearningAssistant.Presenters
                 _view.ShowMessage($"用户 \"{userId}\" 创建成功。");
                 LoadUserList();
                 _view.SelectedUserId = userId;
+                // 通知外部（如主窗体）刷新用户下拉框，替代原先依赖模态关闭的同步刷新
+                _view.RaiseUsersChanged();
             }
             catch (Exception ex)
             {
@@ -217,11 +219,15 @@ namespace LearningAssistant.Presenters
                     _logger.LogInformation("User deleted: {UserId}", selected);
                     _view.ShowMessage($"用户 \"{selected}\" 已删除。");
                     LoadUserList();
+                    // 通知外部（如主窗体）刷新用户下拉框，替代原先依赖模态关闭的同步刷新
+                    _view.RaiseUsersChanged();
                 }
                 else
                 {
                     _view.ShowMessage($"未找到用户 \"{selected}\"，可能已被删除。");
                     LoadUserList();
+                    // 即使本次未删成，列表状态也可能与主窗体不同步，统一通知刷新
+                    _view.RaiseUsersChanged();
                 }
             }
             catch (Exception ex)

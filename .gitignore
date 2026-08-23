@@ -385,3 +385,4 @@ bin_verify/
 /build.ps1
 /isolate_tests.ps1
 _buildcheck/
+KnowledgeGraph/

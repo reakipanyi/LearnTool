@@ -216,6 +216,13 @@ namespace LearningAssistant.Forms
         public event EventHandler? CancelClicked;
         public event EventHandler? AddUserClicked;
         public event EventHandler? DeleteUserClicked;
+        public event EventHandler? UsersChanged;
+
+        /// <summary>
+        /// 由 SettingPresenter 在用户增删成功后调用，触发 UsersChanged 事件。
+        /// 接口事件通过 view 实现的 raising 方法触发，禁止外部直接 Invoke。
+        /// </summary>
+        public void RaiseUsersChanged() => UsersChanged?.Invoke(this, EventArgs.Empty);
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string SelectedUserId

@@ -169,6 +169,9 @@ namespace LearningAssistant.Forms
             _presenter.OnOpenSettings += Presenter_OnOpenSettings;
             _presenter.OnOpenEditor += Presenter_OnOpenEditor;
 
+            // 设置窗体改为非模态后，用户增删通过事件异步通知主窗体刷新下拉框
+            _windowManager.SettingUsersChanged += WindowManager_SettingUsersChanged;
+
             // 初始化系统托盘
             InitializeTray();
 
@@ -583,7 +586,12 @@ namespace LearningAssistant.Forms
         private void Presenter_OnOpenSettings(object? sender, EventArgs e)
         {
             _windowManager.OpenSettingsWindow();
-            // 设置窗体（模态）关闭后，用户列表可能已变更（新增/删除用户），需刷新首页下拉框
+            // 用户列表刷新改由 SettingUsersChanged 事件异步触发（设置窗体改为非模态后不再阻塞于此）
+        }
+
+        private void WindowManager_SettingUsersChanged(object? sender, EventArgs e)
+        {
+            // 设置窗体中用户增删成功后异步刷新首页下拉框
             _presenter?.RefreshUsers();
         }
 
@@ -1207,6 +1215,8 @@ namespace LearningAssistant.Forms
                     _presenter.OnOpenEditor -= Presenter_OnOpenEditor;
                     (_presenter as IDisposable)?.Dispose();
                 }
+
+                _windowManager.SettingUsersChanged -= WindowManager_SettingUsersChanged;
 
                 if (components != null)
                 {

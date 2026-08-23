@@ -14,6 +14,12 @@ namespace LearningAssistant.Managers
 {
     public interface IWindowManager
     {
+        /// <summary>
+        /// 设置窗体中用户列表发生变更（新增/删除）时触发，供主窗体刷新用户下拉框。
+        /// 替代原先"模态关闭后同步刷新"的阻塞式逻辑。
+        /// </summary>
+        event EventHandler? SettingUsersChanged;
+
         Task OpenLearningWindowAsync(string userId, string language, string subCategory, string wordBankFile, bool continueMode);
         void OpenSettingsWindow();
         void OpenEditorWindow();
@@ -35,6 +41,11 @@ namespace LearningAssistant.Managers
     {
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<WindowManager> _logger;
+
+        // 单实例聚焦：同类型窗口只保留一个，重复打开时聚焦已有窗口
+        private readonly Dictionary<Type, Form> _openForms = new();
+
+        public event EventHandler? SettingUsersChanged;
 
         public WindowManager(IServiceProvider serviceProvider, ILogger<WindowManager> logger)
         {
@@ -77,8 +88,8 @@ namespace LearningAssistant.Managers
                         }
                     };
 
-                    // 5. 显示窗口（不阻塞）
-                    form.ShowDialog();
+                    // 5. 显示窗口（非模态，允许多窗口并存）
+                    ShowNonModalScopedForm(scope, form);
                 }
                 else
                 {
@@ -86,10 +97,11 @@ namespace LearningAssistant.Managers
                     throw new InvalidOperationException("ILearningView 未实现为 Form 类型。");
                 }
             }
-            finally
+            catch
             {
-                // 在对话框关闭后释放 scope
+                // 创建/初始化失败时释放 scope；成功路径下 scope 由窗口关闭事件释放
                 scope.Dispose();
+                throw;
             }
         }
 
@@ -97,27 +109,32 @@ namespace LearningAssistant.Managers
         {
             _logger.LogInformation("Opening settings window");
 
+            // 单例聚焦：已有设置窗口则提到前台
+            if (TryFocusExisting(typeof(SettingForm))) return;
+
+            var scope = _serviceProvider.CreateScope();
             try
             {
-                using var scope = _serviceProvider.CreateScope();
                 var presenter = scope.ServiceProvider.GetRequiredService<SettingPresenter>();
                 presenter.Initialize();
 
                 var view = scope.ServiceProvider.GetRequiredService<ISettingView>();
-                if (view is Form form)
-                {
-                    form.StartPosition = FormStartPosition.CenterParent;
-                    form.ShowDialog();
-                }
-                else
+                if (view is not Form form)
                 {
                     _logger.LogError("ISettingView is not implemented as Form");
                     throw new InvalidOperationException("ISettingView 未实现为 Form 类型。");
                 }
+
+                // 桥接：设置窗体用户变更 → IWindowManager.SettingUsersChanged
+                view.UsersChanged += (s, e) => SettingUsersChanged?.Invoke(this, EventArgs.Empty);
+
+                form.StartPosition = FormStartPosition.CenterParent;
+                ShowNonModalScopedForm(scope, form);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to open settings window");
+                scope.Dispose();
                 throw;
             }
         }
@@ -131,9 +148,12 @@ namespace LearningAssistant.Managers
         {
             _logger.LogInformation("Opening editor window with context");
 
+            // 单例聚焦：已有编辑器窗口则提到前台
+            if (TryFocusExisting(typeof(ContentEditorForm))) return;
+
+            var scope = _serviceProvider.CreateScope();
             try
             {
-                using var scope = _serviceProvider.CreateScope();
                 var scopedProvider = scope.ServiceProvider;
 
                 // 获取 ContentEditorForm 实例
@@ -161,11 +181,12 @@ namespace LearningAssistant.Managers
                 }
 
                 form.StartPosition = FormStartPosition.CenterParent;
-                form.ShowDialog();
+                ShowNonModalScopedForm(scope, form);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to open editor window");
+                scope.Dispose();
                 throw;
             }
         }
@@ -173,91 +194,31 @@ namespace LearningAssistant.Managers
         public void OpenWordMatchGameWindow()
         {
             _logger.LogInformation("Opening word match game window");
-
-            try
-            {
-                using var scope = _serviceProvider.CreateScope();
-                var form = scope.ServiceProvider.GetRequiredService<WordMatchGameForm>();
-                form.StartPosition = FormStartPosition.CenterParent;
-                form.ShowDialog();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to open word match game window");
-                throw;
-            }
+            ShowScopedForm<WordMatchGameForm>();
         }
 
         public void OpenMemoryMatchGameWindow()
         {
             _logger.LogInformation("Opening memory match game window");
-
-            try
-            {
-                using var scope = _serviceProvider.CreateScope();
-                var form = scope.ServiceProvider.GetRequiredService<MemoryMatchGameForm>();
-                form.StartPosition = FormStartPosition.CenterParent;
-                form.ShowDialog();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to open memory match game window");
-                throw;
-            }
+            ShowScopedForm<MemoryMatchGameForm>();
         }
 
         public void OpenLinkMatchGameWindow()
         {
             _logger.LogInformation("Opening link match game window");
-
-            try
-            {
-                using var scope = _serviceProvider.CreateScope();
-                var form = scope.ServiceProvider.GetRequiredService<LinkMatchGameForm>();
-                form.StartPosition = FormStartPosition.CenterParent;
-                form.ShowDialog();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to open link match game window");
-                throw;
-            }
+            ShowScopedForm<LinkMatchGameForm>();
         }
 
         public void OpenSpellingGameWindow()
         {
             _logger.LogInformation("Opening spelling game window");
-
-            try
-            {
-                using var scope = _serviceProvider.CreateScope();
-                var form = scope.ServiceProvider.GetRequiredService<SpellingGameForm>();
-                form.StartPosition = FormStartPosition.CenterParent;
-                form.ShowDialog();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to open spelling game window");
-                throw;
-            }
+            ShowScopedForm<SpellingGameForm>();
         }
 
         public void OpenWhackAMoleGameWindow()
         {
             _logger.LogInformation("Opening whack-a-mole game window");
-
-            try
-            {
-                using var scope = _serviceProvider.CreateScope();
-                var form = scope.ServiceProvider.GetRequiredService<WhackAMoleGameForm>();
-                form.StartPosition = FormStartPosition.CenterParent;
-                form.ShowDialog();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to open whack-a-mole game window");
-                throw;
-            }
+            ShowScopedForm<WhackAMoleGameForm>();
         }
 
         public void OpenStatisticsWindow()
@@ -271,28 +232,19 @@ namespace LearningAssistant.Managers
         public void OpenLearningManagementWindow()
         {
             _logger.LogInformation("Opening learning management window");
-
-            try
-            {
-                using var scope = _serviceProvider.CreateScope();
-                var form = scope.ServiceProvider.GetRequiredService<LearningManagementForm>();
-                form.StartPosition = FormStartPosition.CenterParent;
-                form.ShowDialog();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to open learning management window");
-                throw;
-            }
+            ShowScopedForm<LearningManagementForm>();
         }
 
         public void OpenPdfReaderWindow()
         {
             _logger.LogInformation("Opening PDF reader window");
 
+            // 单例聚焦：已有 PDF 阅读器窗口则提到前台
+            if (TryFocusExisting(typeof(PdfReaderFormV2))) return;
+
+            var scope = _serviceProvider.CreateScope();
             try
             {
-                using var scope = _serviceProvider.CreateScope();
                 var scopedProvider = scope.ServiceProvider;
 
                 var form = scopedProvider.GetRequiredService<PdfReaderFormV2>();
@@ -300,11 +252,12 @@ namespace LearningAssistant.Managers
 
                 form.SetPresenter(presenter);
                 form.StartPosition = FormStartPosition.CenterParent;
-                form.ShowDialog();
+                ShowNonModalScopedForm(scope, form);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to open PDF reader window");
+                scope.Dispose();
                 throw;
             }
         }
@@ -341,6 +294,9 @@ namespace LearningAssistant.Managers
         {
             _logger.LogInformation("Opening AI WebView window");
 
+            // 单例聚焦：已有 AI 浏览器窗口则提到前台
+            if (TryFocusExisting(typeof(WebView2BrowserForm))) return;
+
             try
             {
                 var cloudStorageService = _serviceProvider.GetService<ICloudStorageService>();
@@ -361,7 +317,7 @@ namespace LearningAssistant.Managers
                     panPromptBuilder: panPromptBuilder);
                 form.InitialPrompt = initialPrompt;
                 form.StartPosition = FormStartPosition.CenterParent;
-                form.ShowDialog();
+                ShowNonModalForm(form);
             }
             catch (Exception ex)
             {
@@ -369,5 +325,96 @@ namespace LearningAssistant.Managers
                 throw;
             }
         }
+
+        #region 非模态窗口辅助方法
+
+        /// <summary>
+        /// 通用：从 DI scope 创建并显示一个窗口，把 scope 生命周期绑定到窗口关闭事件。
+        /// </summary>
+        private void ShowScopedForm<TForm>() where TForm : Form
+        {
+            if (TryFocusExisting(typeof(TForm))) return;
+
+            var scope = _serviceProvider.CreateScope();
+            TForm? form = null;
+            try
+            {
+                form = scope.ServiceProvider.GetRequiredService<TForm>();
+                form.StartPosition = FormStartPosition.CenterParent;
+                ShowNonModalScopedForm(scope, form);
+            }
+            catch
+            {
+                form?.Dispose();
+                scope.Dispose();
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// 显示一个由 scope 提供依赖的窗口（非模态），scope 在窗口关闭时释放。
+        /// 调用前需自行初始化 form 的 Presenter 等依赖，并把 scope 引用传入。
+        /// </summary>
+        private void ShowNonModalScopedForm(IServiceScope scope, Form form)
+        {
+            var type = form.GetType();
+            // 清理已被释放的旧占位
+            if (_openForms.TryGetValue(type, out var stale) && (stale == null || stale.IsDisposed))
+                _openForms.Remove(type);
+
+            // 注册并绑定关闭清理逻辑
+            _openForms[type] = form;
+            form.FormClosed += (s, e) =>
+            {
+                if (_openForms.TryGetValue(type, out var current) && ReferenceEquals(current, form))
+                    _openForms.Remove(type);
+                scope.Dispose();
+            };
+
+            // 非模态显示，允许多窗口并存
+            form.Show();
+        }
+
+        /// <summary>
+        /// 显示一个非 scope 来源的窗口（直接 new 出来的），无需 scope 释放。
+        /// </summary>
+        private void ShowNonModalForm(Form form)
+        {
+            var type = form.GetType();
+            if (_openForms.TryGetValue(type, out var stale) && (stale == null || stale.IsDisposed))
+                _openForms.Remove(type);
+
+            _openForms[type] = form;
+            form.FormClosed += (s, e) =>
+            {
+                if (_openForms.TryGetValue(type, out var current) && ReferenceEquals(current, form))
+                    _openForms.Remove(type);
+            };
+            form.Show();
+        }
+
+        /// <summary>
+        /// 若指定类型窗口已存在且未关闭，提到前台并返回 true；否则返回 false。
+        /// </summary>
+        private bool TryFocusExisting(Type type)
+        {
+            if (!_openForms.TryGetValue(type, out var existing))
+                return false;
+
+            if (existing == null || existing.IsDisposed)
+            {
+                _openForms.Remove(type);
+                return false;
+            }
+
+            if (existing.WindowState == FormWindowState.Minimized)
+                existing.WindowState = FormWindowState.Normal;
+            existing.Show();
+            existing.Activate();
+            existing.BringToFront();
+            return true;
+        }
+
+        #endregion
     }
 }

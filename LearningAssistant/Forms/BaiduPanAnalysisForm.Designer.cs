@@ -1,4 +1,4 @@
-using System.Drawing;
+﻿using System.Drawing;
 using System.Windows.Forms;
 
 namespace LearningAssistant.Forms
@@ -47,6 +47,7 @@ namespace LearningAssistant.Forms
             btnStartAnalysis = new Button();
             btnCancel = new Button();
             btnExecute = new Button();
+            btnOpenOrganizer = new Button();
             btnGoUp = new Button();
             contentPanel = new SplitContainer();
             leftPanel = new Panel();
@@ -139,6 +140,7 @@ namespace LearningAssistant.Forms
             topPanel.Controls.Add(btnStartAnalysis);
             topPanel.Controls.Add(btnCancel);
             topPanel.Controls.Add(btnExecute);
+            topPanel.Controls.Add(btnOpenOrganizer);
             topPanel.Controls.Add(btnGoUp);
             topPanel.Dock = DockStyle.Fill;
             topPanel.Location = new Point(11, 11);
@@ -242,6 +244,16 @@ namespace LearningAssistant.Forms
             btnExecute.TabIndex = 8;
             btnExecute.Text = "✅ 执行选中操作";
             btnExecute.Click += btnExecute_Click;
+            // 
+            // btnOpenOrganizer
+            // 
+            btnOpenOrganizer.Location = new Point(972, 10);
+            btnOpenOrganizer.Margin = new Padding(4);
+            btnOpenOrganizer.Name = "btnOpenOrganizer";
+            btnOpenOrganizer.Size = new Size(130, 23);
+            btnOpenOrganizer.TabIndex = 9;
+            btnOpenOrganizer.Text = "🧰 打开整理工具";
+            btnOpenOrganizer.Click += btnOpenOrganizer_Click;
             // 
             // btnGoUp
             // 
@@ -771,6 +783,7 @@ namespace LearningAssistant.Forms
         private System.Windows.Forms.Button btnStartAnalysis;
         private System.Windows.Forms.Button btnCancel;
         private System.Windows.Forms.Button btnExecute;
+        private System.Windows.Forms.Button btnOpenOrganizer;
         private System.Windows.Forms.Button btnGoUp;
         private System.Windows.Forms.TreeView treeFolders;
         private System.Windows.Forms.TextBox txtSummary; 
