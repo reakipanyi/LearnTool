@@ -1,4 +1,4 @@
-using System.Runtime.CompilerServices;
+﻿using System.Runtime.CompilerServices;
 using LearningAssistant.Baidu;
 using LearningAssistant.Models.PanAnalysis;
 using LearningAssistant.Services.AI;
@@ -18,6 +18,7 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
     private readonly IPanAnalysisResultParser _resultParser;
     private readonly IPanExecutionEngine _executionEngine;
     private readonly IMemoryCache _cache;
+    private readonly PanSnapshotCacheService _diskCache;
     private readonly ILogger<BaiduPanAnalysisOrchestrator> _logger;
     private CancellationTokenSource _cancellationTokenSource = new();
 
@@ -30,7 +31,8 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
         IPanAnalysisResultParser resultParser,
         IPanExecutionEngine executionEngine,
         IMemoryCache cache,
-        ILogger<BaiduPanAnalysisOrchestrator> logger)
+        ILogger<BaiduPanAnalysisOrchestrator> logger,
+        ILoggerFactory? loggerFactory = null)
     {
         _tokenManager = tokenManager;
         _aiService = aiService;
@@ -38,6 +40,7 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
         _resultParser = resultParser;
         _executionEngine = executionEngine;
         _cache = cache;
+        _diskCache = new PanSnapshotCacheService(loggerFactory?.CreateLogger<PanSnapshotCacheService>());
         _logger = logger;
     }
 
@@ -168,14 +171,28 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
             cancellationToken,
             sharedCts.Token);
 
-        // 检查缓存（key 附加 MaxFileCount，避免截断快照与完整快照互相误用）
-        var cacheKey = $"pan_snapshot_{directoryPath}_{options.MaxDepth}_{options.MaxFileCount}";
-        if (options.UseCache && _cache.TryGetValue(cacheKey, out PanDirectorySnapshot? cached) && cached != null)
+        // Step 1: 磁盘缓存（跨重启复用）→ 命中直接返回，同时写入内存缓存以便复用
+        var diskHit = _diskCache.TryLoad(directoryPath, options);
+        if (diskHit != null)
         {
+            if (options.UseCache) _cache.Set($"pan_snapshot_{directoryPath}_{options.MaxDepth}_{options.MaxFileCount}", diskHit, TimeSpan.FromMinutes(options.CacheExpirationMinutes));
             progress?.Report(new PanAnalysisProgress
             {
                 Phase = PanAnalysisPhase.Completed,
-                Message = $"使用缓存快照（{cached.Files.Count} 个文件）"
+                Message = $"使用磁盘缓存快照（{diskHit.Files.Count} 个文件，{(DateTime.UtcNow - diskHit.SnapshotTime).TotalHours:F1}h 前）"
+            });
+            return diskHit;
+        }
+
+        // Step 2: 内存缓存（进程内复用）
+        var cacheKey = $"pan_snapshot_{directoryPath}_{options.MaxDepth}_{options.MaxFileCount}";
+        if (options.UseCache && _cache.TryGetValue(cacheKey, out PanDirectorySnapshot? cached) && cached != null)
+        {
+            cached.Source = PanSnapshotSource.MemoryCache;
+            progress?.Report(new PanAnalysisProgress
+            {
+                Phase = PanAnalysisPhase.Completed,
+                Message = $"使用内存缓存快照（{cached.Files.Count} 个文件）"
             });
             return cached;
         }
@@ -227,9 +244,9 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
                             break;
                         }
 
-                        var panFile = MapToPanFileInfo(file, directoryPath);
+                        var panFile = MapToPanFileInfo(file, directoryPath, options.SkipFileSizeComputing);
                         allFiles.Add(panFile);
-                        totalSize += file.Size;
+                        if (!options.SkipFileSizeComputing) totalSize += file.Size;
                     }
 
                     // 进度更新
@@ -278,13 +295,19 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
             Total = 1
         });
 
-        var duplicates = options.DetectDuplicates
+        var duplicates = options.DetectDuplicates && !options.SkipFileSizeComputing
             ? DetectDuplicates(allFiles)
             : new List<PanDuplicateGroup>();
 
         var statistics = ComputeStatistics(allFiles, allFolders, options);
+        if (options.SkipFileSizeComputing)
+        {
+            statistics.TotalSizeBytes = 0;
+            statistics.JunkFileSizeBytes = 0;
+            foreach (var kv in statistics.SizeByExtension.Keys.ToList()) statistics.SizeByExtension[kv] = 0;
+            statistics.LargeFiles.Clear();
+        }
         statistics.JunkFileCount = allFiles.Count(f => f.IsJunkFile);
-        statistics.JunkFileSizeBytes = allFiles.Where(f => f.IsJunkFile).Sum(f => f.SizeBytes);
 
         var snapshot = new PanDirectorySnapshot
         {
@@ -296,7 +319,7 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
                 MaxFileCount = options.MaxFileCount,
                 TotalFileCount = allFiles.Count,
                 TotalFolderCount = allFolders.Count,
-                TotalSizeBytes = totalSize
+                TotalSizeBytes = options.SkipFileSizeComputing ? 0 : totalSize
             },
             Files = allFiles,
             Folders = allFolders
@@ -306,14 +329,17 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
                 .ToList(),
             Statistics = statistics,
             Duplicates = duplicates,
-            IsComplete = !isTruncated
+            IsComplete = !isTruncated,
+            Source = PanSnapshotSource.Api
         };
 
-        // 缓存
+        // 内存缓存
         if (options.UseCache)
         {
             _cache.Set(cacheKey, snapshot, TimeSpan.FromMinutes(options.CacheExpirationMinutes));
         }
+        // 磁盘持久化缓存（跨重启复用）
+        _diskCache.Save(snapshot, options);
 
         progress?.Report(new PanAnalysisProgress
         {
@@ -389,25 +415,26 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
         }
     }
 
-    private PanFileInfo MapToPanFileInfo(BaseFileInfo file, string rootPath)
+    private PanFileInfo MapToPanFileInfo(BaseFileInfo file, string rootPath, bool skipSizeComputing = false)
     {
         var relativePath = file.Path ?? "";
         if (relativePath.StartsWith(rootPath, StringComparison.Ordinal))
             relativePath = relativePath[rootPath.Length..].TrimStart('/');
 
+        var size = skipSizeComputing ? 0 : file.Size;
         return new PanFileInfo
         {
             FsId = file.FsId,
             Path = file.Path ?? "",
             Name = file.ServerFileName ?? "",
             RelativePath = relativePath,
-            SizeBytes = file.Size,
+            SizeBytes = size,
             Extension = Path.GetExtension(file.ServerFileName ?? "")?.ToLowerInvariant() ?? "",
             Category = file.Category,
             ServerModifiedTime = DateTimeOffset.FromUnixTimeSeconds(file.ServerMtime).LocalDateTime,
             IsFolder = file.IsDir == 1,
-            Md5 = file.Md5,
-            IsJunkFile = IsJunkFile(file.ServerFileName ?? "", file.Size),
+            Md5 = skipSizeComputing ? null : file.Md5,
+            IsJunkFile = IsJunkFile(file.ServerFileName ?? "", size),
             IsPotentialDuplicate = false
         };
     }

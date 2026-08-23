@@ -540,7 +540,7 @@ namespace LearningAssistant.Forms
             // checkBoxNightMode
             // 
             checkBoxNightMode.Appearance = Appearance.Button;
-            checkBoxNightMode.BackColor = Color.FromArgb(30, 30, 30);
+            checkBoxNightMode.BackColor = ThemeHelper.Colors.Gold;
             checkBoxNightMode.FlatAppearance.BorderSize = 0;
             checkBoxNightMode.FlatStyle = FlatStyle.Flat;
             checkBoxNightMode.Font = new Font("微软雅黑", 9F, FontStyle.Bold);

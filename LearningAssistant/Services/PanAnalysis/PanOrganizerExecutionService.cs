@@ -1,3 +1,5 @@
+using LearningAssistant.Baidu;
+using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
 using LearningAssistant.Models.PanAnalysis;
 using Microsoft.Extensions.Logging;
@@ -51,9 +53,10 @@ public enum ProgressLogLevel { Info, Success, Warning, Error, Debug }
 public class PanOrganizerExecutionService : IPanOrganizerExecutionService
 {
     private readonly ILogger<PanOrganizerExecutionService>? _logger;
+    private readonly IPanTokenManager? _tokenManager;
     private readonly Stack<PanUndoEntry> _undoStack = new();
     private IEventBus? _eventBus;
-    public PanOrganizerExecutionService(ILogger<PanOrganizerExecutionService>? logger = null) { _logger = logger; }
+    public PanOrganizerExecutionService(IPanTokenManager? tokenManager = null, ILogger<PanOrganizerExecutionService>? logger = null) { _tokenManager = tokenManager; _logger = logger; }
 
     public int UndoCount => _undoStack.Count;
 
@@ -65,16 +68,20 @@ public class PanOrganizerExecutionService : IPanOrganizerExecutionService
         if (recommendations == null) return todos;
         foreach (var rec in recommendations)
         {
+            if (rec == null) continue;
             if (rec.Type == PanRecommendationType.Keep) continue;
+            // P1 修复：AI 返回的 JSON 可能字段缺失，反序列化后 TargetPath/TargetName 为 null
+            var targetPath = rec.TargetPath ?? "";
+            var targetName = rec.TargetName ?? "";
             var todo = new PanTodoItem
             {
-                SourceRecommendationId = rec.Id, Type = rec.Type,
-                SourcePath = rec.TargetPath, SourceName = rec.TargetName,
+                SourceRecommendationId = rec.Id ?? "", Type = rec.Type,
+                SourcePath = targetPath, SourceName = targetName,
                 DestinationPath = rec.DestinationPath, NewName = rec.NewName,
-                Reason = rec.Reason,
+                Reason = rec.Reason ?? "",
                 Status = rec.IsSelected ? TodoStatus.Confirmed : TodoStatus.Skipped,
                 SourceFsId = long.TryParse(rec.AffectedFileId, out var fid) ? fid : null,
-                IsFolder = rec.TargetPath.EndsWith("/")
+                IsFolder = targetPath.EndsWith("/")
             };
             if (rec.Type == PanRecommendationType.CreateFolder) { todo.FolderName = rec.NewName ?? rec.TargetName; todo.ParentPath = rec.DestinationPath ?? "/"; }
             todos.Add(todo);
@@ -119,7 +126,7 @@ public class PanOrganizerExecutionService : IPanOrganizerExecutionService
         var results = new List<PreflightCheckResult>();
         if (snapshot == null) return results;
         var fsIds = new HashSet<long>();
-        foreach (var f in snapshot.Files) if (f.FsId != 0) fsIds.Add(f.FsId);
+        foreach (var f in snapshot.Files) if (f.FsId > 0) fsIds.Add(f.FsId);
         foreach (var batch in batches)
         {
             var result = new PreflightCheckResult { Batch = batch };
@@ -127,7 +134,8 @@ public class PanOrganizerExecutionService : IPanOrganizerExecutionService
             foreach (var item in batch.Items)
             {
                 if (item.Type == PanRecommendationType.CreateFolder) continue;
-                if (item.SourceFsId.HasValue && item.SourceFsId.Value != 0)
+                // 文件夹或 FsId<=0（占位符/默认值）时用 Path 查找；仅对真实 FsId(>0) 的文件用 FsId 查找
+                if (!item.IsFolder && item.SourceFsId.HasValue && item.SourceFsId.Value > 0)
                 {
                     if (!fsIds.Contains(item.SourceFsId.Value)) missing.Add($"FsId={item.SourceFsId.Value}({item.SourceName})");
                 }
@@ -153,7 +161,7 @@ public class PanOrganizerExecutionService : IPanOrganizerExecutionService
         void Rpt(PanTodoItem? item, PanTodoBatch? batch, PanExecutionResult? result, string msg, ProgressLogLevel level)
             => progress?.Report(new PanExecutionProgress { CurrentItem = item, CurrentBatch = batch, CompletedCount = completed, TotalCount = report.TotalRequested, Result = result, Message = msg, LogLevel = level });
 
-        Rpt(null, null, null, ">>> Start (memory simulation)", ProgressLogLevel.Info);
+        Rpt(null, null, null, _tokenManager != null ? ">>> Start (real API sync)" : ">>> Start (memory simulation, no token)", ProgressLogLevel.Info);
         foreach (var batch in batches)
         {
             if (ct.IsCancellationRequested) break;
@@ -175,6 +183,16 @@ public class PanOrganizerExecutionService : IPanOrganizerExecutionService
                 item.Status = TodoStatus.Executing;
                 try
                 {
+                    // 1. 先调用真实百度网盘 API 同步（filemanager / mkdir）
+                    var (apiOk, apiErr) = await ExecuteViaApiAsync(item, ct);
+                    if (!apiOk)
+                    {
+                        var failResult = new PanExecutionResult { Recommendation = new() { Type = item.Type, TargetPath = item.SourcePath, TargetName = item.SourceName, DestinationPath = item.DestinationPath, NewName = item.NewName }, Success = false, ErrorMessage = "API: " + apiErr };
+                        item.ExecutionResult = failResult; item.Status = TodoStatus.Failed; report.Results.Add(failResult); report.Failed++;
+                        Rpt(item, batch, failResult, $"[API FAIL] {item.SourceName}->{apiErr}", ProgressLogLevel.Error);
+                        completed++; continue;
+                    }
+                    // 2. API 成功后更新内存快照（保持 UI 一致）
                     var (success, msg) = ExecuteSingle(item, snapshot);
                     var result = new PanExecutionResult { Recommendation = new() { Type = item.Type, TargetPath = item.SourcePath, TargetName = item.SourceName, DestinationPath = item.DestinationPath, NewName = item.NewName }, Success = success, ErrorMessage = success ? null : msg };
                     item.ExecutionResult = result; item.Status = success ? TodoStatus.Succeeded : TodoStatus.Failed; report.Results.Add(result);
@@ -197,6 +215,93 @@ public class PanOrganizerExecutionService : IPanOrganizerExecutionService
         Rpt(null, null, null, $"<<< Done: {report.Succeeded} ok / {report.Failed} fail / {report.Skipped} skip {report.Duration.TotalSeconds:F1}s", ProgressLogLevel.Info);
         PublishCompletedEvent(report);
         return report;
+    }
+
+    /// <summary>
+    /// 调用真实百度网盘 API 执行操作（Move/Rename/Delete/CreateFolder）。
+    /// 成功后由调用方再调用 ExecuteSingle 更新内存快照。
+    /// </summary>
+    private async Task<(bool success, string? error)> ExecuteViaApiAsync(PanTodoItem item, CancellationToken ct)
+    {
+        if (_tokenManager == null)
+        {
+            _logger?.LogWarning("ExecuteViaApiAsync: _tokenManager 为 null，无法同步到网盘");
+            return (false, "Token 管理器未注入，无法同步到网盘");
+        }
+
+        try
+        {
+            var token = await _tokenManager.EnsureValidTokenAsync(ct);
+            if (string.IsNullOrEmpty(token))
+            {
+                _logger?.LogWarning("ExecuteViaApiAsync: 获取到的 token 为空");
+                return (false, "百度网盘 Token 为空，请先授权");
+            }
+            _logger?.LogInformation("ExecuteViaApiAsync: token 获取成功，开始调用 API: {Type} {Path} -> {NewName}",
+                item.Type, item.SourcePath, item.NewName ?? item.DestinationPath ?? "");
+
+            using var apiClient = new BaiduPanApiClient(token);
+
+            switch (item.Type)
+            {
+                case PanRecommendationType.CreateFolder:
+                {
+                    var p = (item.ParentPath ?? "/").TrimEnd('/');
+                    var n = item.FolderName ?? item.NewName ?? "NewFolder";
+                    var fp = p + "/" + n;
+                    var resp = await apiClient.CreateFolderAsync(fp);
+                    return (resp.ErrorCode == 0, resp.ErrorCode == 0 ? null : $"errno={resp.ErrorCode}");
+                }
+                case PanRecommendationType.Move:
+                {
+                    var dest = (item.DestinationPath ?? "/").TrimEnd('/');
+                    var fileList = new List<FileManagerFileItem>
+                    {
+                        new() { Path = item.SourcePath, Dest = dest }
+                    };
+                    var resp = await apiClient.ManageFileAsync(FileOperation.Move, fileList, async: 0, onDup: OnDupStrategy.NewCopy);
+                    return (resp.ErrorCode == 0, resp.ErrorCode == 0 ? null : $"errno={resp.ErrorCode}");
+                }
+                case PanRecommendationType.Rename:
+                {
+                    var fileList = new List<FileManagerFileItem>
+                    {
+                        new() { Path = item.SourcePath, NewName = item.NewName ?? "" }
+                    };
+                    var resp = await apiClient.ManageFileAsync(FileOperation.Rename, fileList, async: 0, onDup: OnDupStrategy.Fail);
+                    return (resp.ErrorCode == 0, resp.ErrorCode == 0 ? null : $"errno={resp.ErrorCode}");
+                }
+                case PanRecommendationType.Delete:
+                {
+                    var fileList = new List<FileManagerFileItem>
+                    {
+                        new() { Path = item.SourcePath }
+                    };
+                    var resp = await apiClient.ManageFileAsync(FileOperation.Delete, fileList, async: 0, onDup: OnDupStrategy.NewCopy);
+                    return (resp.ErrorCode == 0, resp.ErrorCode == 0 ? null : $"errno={resp.ErrorCode}");
+                }
+                default:
+                    return (false, $"不支持的操作类型: {item.Type}");
+            }
+        }
+        catch (PanApiException ex)
+        {
+            // 百度网盘业务错误（errno != 0）：ValidateResponse 抛出，携带错误码
+            _logger?.LogError(ex, "ExecuteViaApiAsync 百度API业务错误: errno={ErrorCode} type={Type} path={Path}",
+                ex.ErrorCode, item.Type, item.SourcePath);
+            return (false, $"百度API错误(errno={ex.ErrorCode}): {ex.Message}");
+        }
+        catch (PanAuthException ex)
+        {
+            // 授权失败（token 未配置/过期/刷新失败）
+            _logger?.LogError(ex, "ExecuteViaApiAsync 百度授权失败: {Message}", ex.Message);
+            return (false, $"百度授权失败: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "ExecuteViaApiAsync 异常: {Type} {Path}", item.Type, item.SourcePath);
+            return (false, ex.Message);
+        }
     }
 
     private (bool, string?) ExecuteSingle(PanTodoItem item, PanDirectorySnapshot snapshot)

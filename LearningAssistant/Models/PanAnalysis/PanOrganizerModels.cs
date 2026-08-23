@@ -1,4 +1,4 @@
-﻿using LearningAssistant.Models.PanAnalysis;
+using LearningAssistant.Models.PanAnalysis;
 
 // ReSharper disable once CheckNamespace
 namespace LearningAssistant.Models.PanAnalysis;
@@ -33,6 +33,17 @@ public class PanTodoItem
     public long? SourceFsId { get; set; }
     public bool IsFolder { get; set; }
     public FolderRenameOptions? RenameOptions { get; set; }
+}
+
+#endregion
+
+#region === 移动事件参数 ===
+
+/// <summary>移动完成事件参数（ExecuteMove 完成后触发）。</summary>
+public class PanMoveEventArgs : EventArgs
+{
+    public List<PanFileInfo> Items { get; set; } = new();
+    public string DestinationPath { get; set; } = "";
 }
 
 #endregion

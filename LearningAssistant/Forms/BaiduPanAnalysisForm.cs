@@ -147,12 +147,7 @@ namespace LearningAssistant.Forms
                     MessageBox.Show("整理工具需要先初始化分析服务。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
-                if (_snapshot == null)
-                {
-                    MessageBox.Show("请先点击「🚀 开始分析」加载目录快照，再打开整理工具。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    return;
-                }
-
+                // P1 优化：不再拦截 _snapshot == null——允许空模式打开，PanOrganizerForm 内部提供「输入路径拉取快照」按钮
                 List<PanRecommendation> recs;
                 if (_analysisResult?.Recommendations != null)
                     recs = _analysisResult.Recommendations.ToList();
@@ -172,12 +167,15 @@ namespace LearningAssistant.Forms
                         AppendLog("📌 整理工具执行过操作，建议重新分析以刷新快照。");
                 };
                 organizer.Show(this);   // 非模态，可同时看 AI 建议与整理窗口
-                AppendLog($"🧰 已打开网盘整理工具（快照：{_snapshot.DirectoryPath}，AI 建议 {recs.Count} 条预览）");
+                if (_snapshot != null)
+                    AppendLog($"🧰 已打开网盘整理工具（快照：{_snapshot.DirectoryPath}，AI 建议 {recs.Count} 条预览）");
+                else
+                    AppendLog("🧰 已打开网盘整理工具（空模式：请在整理工具内点击「📥 拉取快照」开始整理）");
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "打开整理工具 PanOrganizerForm 失败");
-                MessageBox.Show($"打开整理工具失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"打开整理工具失败：{ex}\n\n--- InnerException ---\n{ex.InnerException}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 

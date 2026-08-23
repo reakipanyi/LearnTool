@@ -25,11 +25,20 @@ public class AnalysisOptions
     /// <summary>大文件阈值（字节）</summary>
     public long LargeFileThreshold { get; set; } = 100 * 1024 * 1024; // 100MB
 
-    /// <summary>是否使用缓存</summary>
+    /// <summary>是否使用内存缓存</summary>
     public bool UseCache { get; set; } = true;
 
-    /// <summary>缓存过期时间（分钟）</summary>
+    /// <summary>是否使用磁盘持久化缓存（跨重启复用，默认 24h）。开启后大目录快照不用重复拉取。</summary>
+    public bool UseDiskCache { get; set; } = true;
+
+    /// <summary>内存缓存过期时间（分钟）</summary>
     public int CacheExpirationMinutes { get; set; } = 5;
+
+    /// <summary>磁盘缓存过期时间（小时），默认 24 小时。0 = 永不过期（仅手动清理）。</summary>
+    public int DiskCacheExpirationHours { get; set; } = 24;
+
+    /// <summary>跳过文件大小相关计算（文件夹大小聚合 / 统计），大目录下可显著加速。默认：不跳过。</summary>
+    public bool SkipFileSizeComputing { get; set; } = false;
 }
 
 /// <summary>

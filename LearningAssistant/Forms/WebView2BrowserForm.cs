@@ -1439,6 +1439,28 @@ namespace LearningAssistant.Forms
         }
 
         /// <summary>
+        /// 网盘整理工具独立入口：无需先进行 AI 分析，直接打开整理工具窗体。
+        /// 数据流已完全解耦：整理工具内部可通过「📥 拉取快照」/「📤 导入 AI 建议」自行获取数据。
+        /// </summary>
+        private void btnOpenPanOrganizer_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                // 使用无参 DI 构造函数，服务由 Program.ServiceProvider 自动注入
+                using (var form = new PanOrganizerForm())
+                {
+                    form.ShowDialog(this);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "打开网盘整理工具失败");
+                MessageBox.Show($"打开网盘整理工具失败：{ex.Message}", "错误",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
         /// AI 分析核心逻辑（授权检查 → 路径提取 → 打开分析窗体）
         /// </summary>
         private async Task HandleAiAnalyzeAsync()
@@ -2080,6 +2102,7 @@ namespace LearningAssistant.Forms
         private ToolStripSeparator toolStripSeparatorTools;
         private ToolStripButton btnScreenshot;
         private ToolStripButton btnAiAnalyze;
+        private ToolStripButton btnOpenPanOrganizer;
         private ToolStripProgressBar progressBarLoading;
         private ToolStripLabel lblLoadingStatus;
 
@@ -2112,6 +2135,7 @@ namespace LearningAssistant.Forms
             toolStripSeparatorTools = new ToolStripSeparator();
             btnScreenshot = new ToolStripButton();
             btnAiAnalyze = new ToolStripButton();
+            btnOpenPanOrganizer = new ToolStripButton();
             progressBarLoading = new ToolStripProgressBar();
             lblLoadingStatus = new ToolStripLabel();
             tabControl = new TabControl();
@@ -2120,7 +2144,7 @@ namespace LearningAssistant.Forms
             // 
             // toolStrip
             // 
-            toolStrip.Items.AddRange(new ToolStripItem[] { btnBack, btnForward, btnRefresh, btnNewTab, comboBoxBookmarks, btnAddBookmark, btnManageBookmarks, toolStripSeparatorZoom, btnZoomOut, lblZoom, btnZoomIn, txtUrl, btnGo, toolStripSeparatorProvider, btnProviderDoubao, btnProviderDeepseek, btnProviderZhipu, btnProviderQwen, btnProviderSpark, btnProviderWenxin, toolStripSeparator, btnOpenNetdisk, btnAiAnalyze, toolStripSeparatorTools, btnScreenshot, btnOpenInBrowser, progressBarLoading, lblLoadingStatus });
+            toolStrip.Items.AddRange(new ToolStripItem[] { btnBack, btnForward, btnRefresh, btnNewTab, comboBoxBookmarks, btnAddBookmark, btnManageBookmarks, toolStripSeparatorZoom, btnZoomOut, lblZoom, btnZoomIn, txtUrl, btnGo, toolStripSeparatorProvider, btnProviderDoubao, btnProviderDeepseek, btnProviderZhipu, btnProviderQwen, btnProviderSpark, btnProviderWenxin, toolStripSeparator, btnOpenNetdisk, btnAiAnalyze, btnOpenPanOrganizer, toolStripSeparatorTools, btnScreenshot, btnOpenInBrowser, progressBarLoading, lblLoadingStatus });
             toolStrip.Location = new Point(0, 0);
             toolStrip.Name = "toolStrip";
             toolStrip.Size = new Size(1160, 25);
@@ -2278,6 +2302,16 @@ namespace LearningAssistant.Forms
             btnAiAnalyze.Text = "🤖 AI 分析";
             btnAiAnalyze.ToolTipText = "分析当前网盘目录并给出整理建议";
             btnAiAnalyze.Click += btnAiAnalyze_Click;
+            //
+            // btnOpenPanOrganizer
+            //
+            btnOpenPanOrganizer.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnOpenPanOrganizer.ImageTransparentColor = Color.Magenta;
+            btnOpenPanOrganizer.Name = "btnOpenPanOrganizer";
+            btnOpenPanOrganizer.Size = new Size(96, 22);
+            btnOpenPanOrganizer.Text = "🧰 网盘整理工具";
+            btnOpenPanOrganizer.ToolTipText = "独立打开网盘整理工具（无需先进行 AI 分析）";
+            btnOpenPanOrganizer.Click += btnOpenPanOrganizer_Click;
             // 
             // btnOpenInBrowser
             // 

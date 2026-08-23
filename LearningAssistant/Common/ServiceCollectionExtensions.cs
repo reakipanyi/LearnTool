@@ -1,4 +1,4 @@
-using LearningAssistant.Common.Events;
+﻿using LearningAssistant.Common.Events;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Data.Database;
 using LearningAssistant.Forms;
@@ -666,6 +666,9 @@ namespace LearningAssistant.Common
             // 编排器
             services.AddSingleton<IBaiduPanAnalysisOrchestrator, BaiduPanAnalysisOrchestrator>();
 
+            // --- P2 解耦：整理工具独立服务（不再依赖 AI 分析界面）---
+            services.AddSingleton<PanSnapshotCacheService>();
+            services.AddSingleton<IPanOrganizerExecutionService, PanOrganizerExecutionService>();
             return services;
         }
 

@@ -465,6 +465,30 @@ namespace LearningAssistant.Baidu
         }
         #endregion
 
+        #region 12. 创建文件夹（mkdir 接口）
+        /// <summary>
+        /// 创建文件夹（百度网盘 mkdir API）
+        /// </summary>
+        /// <param name="folderPath">文件夹完整路径（如 /我的资源/新建文件夹）</param>
+        /// <returns>errno==0 表示成功</returns>
+        public async Task<FileManagerResponse> CreateFolderAsync(string folderPath)
+        {
+            if (string.IsNullOrWhiteSpace(folderPath))
+                throw new ArgumentException("文件夹路径不能为空", nameof(folderPath));
+
+            var queryParams = new Dictionary<string, string>
+            {
+                ["method"] = "mkdir",
+                ["access_token"] = _accessToken,
+                ["path"] = folderPath
+            };
+
+            var url = $"/rest/2.0/xpan/file?{BuildQueryString(queryParams)}";
+            var content = new FormUrlEncodedContent(new Dictionary<string, string>());
+            return await SendPostRequestAsync<FileManagerResponse>(url, content);
+        }
+        #endregion
+
         #region 私有工具方法
         // 构建查询字符串
         private string BuildQueryString(Dictionary<string, string> parameters)
