@@ -54,6 +54,15 @@ namespace LearningAssistant.Forms
 
         private System.ComponentModel.IContainer components = null;
         private TreeView _treeViewFiles;
+        // 文件树右键菜单：重命名/删除文件或文件夹
+        private ContextMenuStrip? _contextMenuFiles;
+        private ToolStripMenuItem? _menuItemRename;
+        private ToolStripMenuItem? _menuItemDelete;
+        // 当前根目录（加载文件夹的共同父目录），禁止删除/重命名根目录本身
+        private string _rootFolderPath = string.Empty;
+        // 右键菜单操作目标：路径与是否文件夹
+        private string? _contextMenuTargetPath;
+        private bool _contextMenuTargetIsFolder;
         private Panel _panelPdf;
         private PictureBox _pictureBoxPdf;
         private ContextMenuStrip _contextMenuPdf;
@@ -248,6 +257,7 @@ namespace LearningAssistant.Forms
             Resize += PdfReaderFormV2_Resize;
             KeyDown += PdfReaderFormV2_KeyDown;
 
+            InitializeFileContextMenu();
             InitializeManagers();
         }
 
@@ -1077,6 +1087,8 @@ namespace LearningAssistant.Forms
         public void SetFileList(IEnumerable<string> files)
         {
             _allFiles = files.ToList();
+            // 基于全量文件列表计算根目录，作为右键"删除/重命名"的刷新基准（禁止操作根目录本身）
+            _rootFolderPath = _allFiles.Count > 0 ? FindCommonRootDirectory(_allFiles) : string.Empty;
             _textBoxFilter.Clear();
             UpdateFileListDisplay();
         }
@@ -1155,6 +1167,8 @@ namespace LearningAssistant.Forms
                                 folderNode = targetNodes.Add(part);
                                 folderNode.ImageKey = "Folder";
                                 folderNode.SelectedImageKey = "Folder";
+                                // 存储文件夹完整路径，供右键菜单重命名/删除使用
+                                folderNode.Tag = currentPath;
                                 folderNodes[currentPath] = folderNode;
                             }
                             targetNodes = folderNode.Nodes;
@@ -2783,8 +2797,385 @@ namespace LearningAssistant.Forms
 
         private void TreeViewFiles_AfterSelect(object? sender, TreeViewEventArgs e)
         {
+            // 文件夹节点不触发 PDF 加载（其 Tag 为目录路径，非 PDF 文件）
+            if (e.Node != null && string.Equals(e.Node.ImageKey, "Folder", StringComparison.Ordinal))
+                return;
+
             FileSelected?.Invoke(this, EventArgs.Empty);
         }
+
+        #region 文件树右键菜单（重命名/删除）
+
+        /// <summary>
+        /// 初始化文件树右键菜单：包含"重命名"和"删除"两项。
+        /// </summary>
+        private void InitializeFileContextMenu()
+        {
+            _contextMenuFiles = new ContextMenuStrip();
+            _menuItemRename = new ToolStripMenuItem("重命名");
+            _menuItemDelete = new ToolStripMenuItem("删除");
+            _menuItemRename.Click += MenuItemRename_Click;
+            _menuItemDelete.Click += MenuItemDelete_Click;
+            _contextMenuFiles.Items.AddRange(new ToolStripItem[] { _menuItemRename, _menuItemDelete });
+
+            // 右键选中节点并弹出菜单
+            _treeViewFiles.NodeMouseClick += TreeViewFiles_NodeMouseClick;
+        }
+
+        /// <summary>
+        /// 右键点击文件树节点：选中目标节点、记录路径与类型、弹出菜单。
+        /// 根目录本身禁止操作（不弹菜单）。
+        /// </summary>
+        private void TreeViewFiles_NodeMouseClick(object? sender, TreeNodeMouseClickEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right) return;
+            if (_contextMenuFiles == null) return;
+
+            // 仅当节点携带路径 Tag 时才视为可操作目标
+            if (e.Node?.Tag is not string targetPath || string.IsNullOrEmpty(targetPath))
+                return;
+
+            // 禁止操作根目录本身（避免误删整个加载的文件夹）
+            if (!string.IsNullOrEmpty(_rootFolderPath) &&
+                string.Equals(targetPath, _rootFolderPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _treeViewFiles.SelectedNode = e.Node;
+            _contextMenuTargetPath = targetPath;
+            // 文件夹节点 ImageKey == "Folder"；文件节点无此 ImageKey
+            _contextMenuTargetIsFolder = string.Equals(e.Node.ImageKey, "Folder", StringComparison.Ordinal);
+
+            // 更新菜单文案
+            _menuItemRename!.Text = _contextMenuTargetIsFolder ? "重命名文件夹" : "重命名文件";
+            _menuItemDelete!.Text = _contextMenuTargetIsFolder ? "删除文件夹" : "删除文件";
+
+            _contextMenuFiles.Show(_treeViewFiles, e.Location);
+        }
+
+        /// <summary>
+        /// 重命名当前右键目标（文件或文件夹）。
+        /// 文件保留原扩展名；文件夹直接使用输入名。新名与旧名相同或为空则取消。
+        /// </summary>
+        private void MenuItemRename_Click(object? sender, EventArgs e)
+        {
+            var targetPath = _contextMenuTargetPath;
+            var isFolder = _contextMenuTargetIsFolder;
+            _contextMenuTargetPath = null;
+
+            if (string.IsNullOrEmpty(targetPath)) return;
+            if (!PathExists(targetPath, isFolder))
+            {
+                MessageBox.Show(this, "目标已不存在，可能已被移动或删除。", "重命名", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                RefreshFileListAfterFsChange();
+                return;
+            }
+
+            string oldName = Path.GetFileName(targetPath);
+            string parentDir = Path.GetDirectoryName(targetPath) ?? string.Empty;
+            string oldExt = isFolder ? string.Empty : Path.GetExtension(targetPath);
+
+            string input = Microsoft.VisualBasic.Interaction.InputBox(
+                $"请输入新的{GetTargetTypeName(isFolder)}名称：",
+                "重命名",
+                oldName);
+
+            if (string.IsNullOrWhiteSpace(input)) return;
+            string newName = input.Trim();
+
+            // 文件：若用户未带扩展名则自动补原扩展名
+            if (!isFolder && !string.IsNullOrEmpty(oldExt) &&
+                !newName.EndsWith(oldExt, StringComparison.OrdinalIgnoreCase))
+            {
+                newName = newName + oldExt;
+            }
+
+            if (string.Equals(newName, oldName, StringComparison.Ordinal))
+            {
+                return; // 名字未变化
+            }
+
+            string newPath = Path.Combine(parentDir, newName);
+            if (PathExists(newPath, isFolder) || (!isFolder && File.Exists(newPath)) || (isFolder && Directory.Exists(newPath)))
+            {
+                MessageBox.Show(this, $"已存在同名{GetTargetTypeName(isFolder)}，请使用其他名称。", "重命名", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                // 若目标包含当前打开的 PDF（文件本身或其所在文件夹被重命名），先释放文件句柄避免"文件被占用"
+                if (ShouldReleaseCurrentDocument(targetPath, isFolder))
+                {
+                    _presenter?.CloseCurrentDocument();
+                    var prevImg = _pictureBoxPdf.Image;
+                    _pictureBoxPdf.Image = null;
+                    prevImg?.Dispose();
+                    ClearThumbnails();
+                    GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true);
+                    GC.WaitForPendingFinalizers();
+                }
+
+                if (isFolder)
+                    MoveFolderWithRetry(targetPath, newPath);
+                else
+                    MoveFileWithRetry(targetPath, newPath);
+
+                // 若重命名的是当前打开的 PDF，同步更新引用
+                if (!isFolder && !string.IsNullOrEmpty(_currentPdfPath) &&
+                    string.Equals(_currentPdfPath, targetPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    _currentPdfPath = newPath;
+                }
+
+                // 若重命名的是当前 PDF 所在文件夹，把 _currentPdfPath 前缀替换为新路径
+                if (isFolder && !string.IsNullOrEmpty(_currentPdfPath) &&
+                    _currentPdfPath.StartsWith(targetPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                {
+                    _currentPdfPath = newPath + _currentPdfPath.Substring(targetPath.Length);
+                }
+
+                _logger?.LogInformation("Renamed {Type} \"{Old}\" -> \"{New}\"", isFolder ? "folder" : "file", targetPath, newPath);
+                RefreshFileListAfterFsChange();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to rename \"{Path}\"", targetPath);
+                MessageBox.Show(this, $"重命名失败：{ex.Message}", "重命名", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 删除当前右键目标（文件或文件夹）。文件夹递归删除，需二次确认。
+        /// </summary>
+        private void MenuItemDelete_Click(object? sender, EventArgs e)
+        {
+            var targetPath = _contextMenuTargetPath;
+            var isFolder = _contextMenuTargetIsFolder;
+            _contextMenuTargetPath = null;
+
+            if (string.IsNullOrEmpty(targetPath)) return;
+            if (!PathExists(targetPath, isFolder))
+            {
+                MessageBox.Show(this, "目标已不存在，可能已被删除。", "删除", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                RefreshFileListAfterFsChange();
+                return;
+            }
+
+            string prompt = isFolder
+                ? $"确定要删除文件夹 \"{Path.GetFileName(targetPath)}\" 及其所有内容吗？\n\n该操作不可恢复！"
+                : $"确定要删除文件 \"{Path.GetFileName(targetPath)}\" 吗？\n\n该操作不可恢复！";
+            if (MessageBox.Show(this, prompt, "确认删除", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                return;
+
+            try
+            {
+                // 若目标包含当前打开的 PDF（文件本身或其所在文件夹被删除），先释放文件句柄避免"文件被占用"
+                if (ShouldReleaseCurrentDocument(targetPath, isFolder))
+                {
+                    _presenter?.CloseCurrentDocument();
+                    // 显式 dispose 当前页面位图，避免 Image 关联的 SafeFileHandle 延迟回收仍锁定文件
+                    var prevImg = _pictureBoxPdf.Image;
+                    _pictureBoxPdf.Image = null;
+                    prevImg?.Dispose();
+                    ClearThumbnails();
+                    // 强制回收并等待终结器执行，彻底释放 PDFium/图片可能残留的非托管句柄
+                    GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true);
+                    GC.WaitForPendingFinalizers();
+                }
+
+                if (isFolder)
+                    DeleteFolderWithRetry(targetPath);
+                else
+                    DeleteFileWithRetry(targetPath);
+
+                // 若删除的是当前打开的 PDF（或其所在文件夹），清空引用并提示
+                if (ShouldReleaseCurrentDocument(targetPath, isFolder))
+                {
+                    _currentPdfPath = string.Empty;
+                    MessageBox.Show(this, "当前打开的文件已被删除，请从左侧列表选择其他文件。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+
+                _logger?.LogInformation("Deleted {Type} \"{Path}\"", isFolder ? "folder" : "file", targetPath);
+                RefreshFileListAfterFsChange();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to delete \"{Path}\"", targetPath);
+                MessageBox.Show(this, $"删除失败：{ex.Message}", "删除", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 文件系统变更后重新扫描根目录刷新文件树。
+        /// </summary>
+        private void RefreshFileListAfterFsChange()
+        {
+            if (string.IsNullOrEmpty(_rootFolderPath) || !Directory.Exists(_rootFolderPath))
+            {
+                // 根目录已不存在（极端情况），清空列表
+                _allFiles.Clear();
+                _rootFolderPath = string.Empty;
+                UpdateFileListDisplay();
+                return;
+            }
+            _presenter?.LoadFolder(_rootFolderPath);
+        }
+
+        private static bool PathExists(string path, bool isFolder)
+            => isFolder ? Directory.Exists(path) : File.Exists(path);
+
+        private static string GetTargetTypeName(bool isFolder) => isFolder ? "文件夹" : "文件";
+
+        // 删除/重命名的重试次数与间隔（毫秒）。"只读属性+句柄延迟释放"通常前3次内可成功。
+        private const int FsRetryCount = 4;
+        private static readonly int[] FsRetryDelaysMs = new[] { 50, 100, 200, 300 };
+
+        /// <summary>
+        /// 可靠删除文件：先清只读属性 + 最多 4 次指数级重试。
+        /// 处理：浏览器/网盘同步/资源管理器预览等常见只读/临时占用场景。
+        /// </summary>
+        private static void DeleteFileWithRetry(string filePath)
+        {
+            Exception? lastEx = null;
+            for (int attempt = 0; attempt < FsRetryCount; attempt++)
+            {
+                try
+                {
+                    if (!File.Exists(filePath)) return;
+                    // 先去除 ReadOnly / Archive / System / Encrypted / Offline 等任何影响写入的属性，置 Normal
+                    File.SetAttributes(filePath, FileAttributes.Normal);
+                    File.Delete(filePath);
+                    return;
+                }
+                catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
+                {
+                    lastEx = ex;
+                    if (attempt < FsRetryCount - 1)
+                        Thread.Sleep(FsRetryDelaysMs[attempt]);
+                }
+            }
+            throw new AggregateException($"文件删除失败，可能仍被占用或权限不足：{filePath}", lastEx);
+        }
+
+        /// <summary>
+        /// 可靠删除文件夹：递归清内部文件只读属性 + 整体重试。
+        /// 先遍历所有内部文件清属性，再删根目录；每一轮整体失败再重试。
+        /// </summary>
+        private static void DeleteFolderWithRetry(string folderPath)
+        {
+            Exception? lastEx = null;
+            for (int attempt = 0; attempt < FsRetryCount; attempt++)
+            {
+                try
+                {
+                    if (!Directory.Exists(folderPath)) return;
+                    // 递归清除内部所有文件/子文件夹的只读等属性
+                    foreach (var file in Directory.EnumerateFiles(folderPath, "*", SearchOption.AllDirectories))
+                    {
+                        try { File.SetAttributes(file, FileAttributes.Normal); }
+                        catch { /* 个别文件清属性失败不阻止继续 */ }
+                    }
+                    Directory.Delete(folderPath, recursive: true);
+                    return;
+                }
+                catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
+                {
+                    lastEx = ex;
+                    if (attempt < FsRetryCount - 1)
+                    {
+                        // 再追加一次 GC 回收，应对句柄延迟释放
+                        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true);
+                        GC.WaitForPendingFinalizers();
+                        Thread.Sleep(FsRetryDelaysMs[attempt]);
+                    }
+                }
+            }
+            throw new AggregateException($"文件夹删除失败，内部可能仍有文件被占用或权限不足：{folderPath}", lastEx);
+        }
+
+        /// <summary>
+        /// 可靠重命名文件：先清只读属性 + 重试。File.Move 对只读文件也会抛 UnauthorizedAccessException。
+        /// </summary>
+        private static void MoveFileWithRetry(string oldPath, string newPath)
+        {
+            Exception? lastEx = null;
+            for (int attempt = 0; attempt < FsRetryCount; attempt++)
+            {
+                try
+                {
+                    if (!File.Exists(oldPath))
+                        throw new FileNotFoundException("源文件不存在，可能已被删除或移动。", oldPath);
+                    File.SetAttributes(oldPath, FileAttributes.Normal);
+                    File.Move(oldPath, newPath);
+                    return;
+                }
+                catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
+                {
+                    lastEx = ex;
+                    if (attempt < FsRetryCount - 1)
+                    {
+                        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true);
+                        GC.WaitForPendingFinalizers();
+                        Thread.Sleep(FsRetryDelaysMs[attempt]);
+                    }
+                }
+            }
+            throw new AggregateException($"文件重命名失败，可能仍被占用或权限不足：{oldPath}", lastEx);
+        }
+
+        /// <summary>
+        /// 可靠重命名文件夹：重试整体 Directory.Move；重命名不涉及子文件属性，核心是句柄占用重试。
+        /// </summary>
+        private static void MoveFolderWithRetry(string oldPath, string newPath)
+        {
+            Exception? lastEx = null;
+            for (int attempt = 0; attempt < FsRetryCount; attempt++)
+            {
+                try
+                {
+                    if (!Directory.Exists(oldPath))
+                        throw new DirectoryNotFoundException($"源文件夹不存在：{oldPath}");
+                    Directory.Move(oldPath, newPath);
+                    return;
+                }
+                catch (Exception ex) when (ex is UnauthorizedAccessException || ex is IOException)
+                {
+                    lastEx = ex;
+                    if (attempt < FsRetryCount - 1)
+                    {
+                        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true);
+                        GC.WaitForPendingFinalizers();
+                        Thread.Sleep(FsRetryDelaysMs[attempt]);
+                    }
+                }
+            }
+            throw new AggregateException($"文件夹重命名失败，内部可能仍有文件被占用或权限不足：{oldPath}", lastEx);
+        }
+
+        /// <summary>
+        /// 判断目标（文件或文件夹）是否包含当前打开的 PDF，决定删除/重命名前是否需要释放文件句柄。
+        /// 文件：路径等于当前 PDF；文件夹：当前 PDF 位于该文件夹下（含分隔符，避免"abc"误匹配"abcd"）。
+        /// </summary>
+        private bool ShouldReleaseCurrentDocument(string targetPath, bool isFolder)
+        {
+            if (string.IsNullOrEmpty(_currentPdfPath)) return false;
+            if (string.IsNullOrEmpty(targetPath)) return false;
+
+            if (!isFolder)
+            {
+                return string.Equals(_currentPdfPath, targetPath, StringComparison.OrdinalIgnoreCase);
+            }
+
+            // 文件夹：当前 PDF 路径以"目标文件夹 + 分隔符"开头
+            string prefix = targetPath.EndsWith(Path.DirectorySeparatorChar) || targetPath.EndsWith(Path.AltDirectorySeparatorChar)
+                ? targetPath
+                : targetPath + Path.DirectorySeparatorChar;
+            return _currentPdfPath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        #endregion
 
         private void TextBoxFilter_TextChanged(object? sender, EventArgs e)
         {

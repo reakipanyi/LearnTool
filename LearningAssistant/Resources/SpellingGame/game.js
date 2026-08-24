@@ -44,19 +44,20 @@
         const word = current.item.word;
 
         meaningEl.textContent = current.item.meaning;
-        // 含空格短语：字母数不计空格，避免误导
-        const letterCount = word.replace(/\s/g, "").length;
+        // 含空格/连词符的词：字母数不计空格与连词符，避免误导
+        const letterCount = word.replace(/[\s-]/g, "").length;
         hintEl.textContent = current.item.phonetic ? `音标：${esc(current.item.phonetic)}　字母数：${letterCount}` : `字母数：${letterCount}`;
         renderSlots(word);
         updateProgress();
     }
 
-    // 空格用窄槽展示，形成单词间分隔并提示此处需输入空格
+    // 空格/连词符用窄槽展示，形成分隔并提示此处需输入对应字符
     function renderSlots(word) {
         slotsEl.innerHTML = "";
         for (let i = 0; i < word.length; i++) {
             const s = document.createElement("div");
-            s.className = word[i] === " " ? "slot space" : "slot";
+            const ch = word[i];
+            s.className = ch === " " ? "slot space" : ch === "-" ? "slot hyphen" : "slot";
             slotsEl.appendChild(s);
         }
     }
@@ -91,6 +92,14 @@
                 // 空格格位：不显示字符，仅以状态区分是否已输入
                 slots[i].textContent = "";
                 slots[i].className = "slot space";
+                if (mark) slots[i].classList.add(typed[i] === word[i] ? "right" : "wrong");
+                else if (i < typed.length) slots[i].classList.add("filled");
+                continue;
+            }
+            if (word[i] === "-") {
+                // 连词符格位：窄槽展示，需输入连词符
+                slots[i].textContent = i < typed.length ? typed[i] : "";
+                slots[i].className = "slot hyphen";
                 if (mark) slots[i].classList.add(typed[i] === word[i] ? "right" : "wrong");
                 else if (i < typed.length) slots[i].classList.add("filled");
                 continue;
@@ -140,7 +149,10 @@
             queue.push(redo);
             toast("❌ 拼错了，稍后这词会再次出现");
             hintEl.textContent = `正确答案：${word}`;
-            setTimeout(startQuestion, 1500);
+            // 错误停留时长：基础 2 秒，字母数超过 5 后每字母增加 100ms，上限 4 秒
+            const errLetterCount = word.replace(/[\s-]/g, "").length;
+            const wrongDelay = Math.min(2000 + Math.max(0, errLetterCount - 5) * 100, 4000);
+            setTimeout(startQuestion, wrongDelay);
         }
     }
 
@@ -251,6 +263,12 @@
         sp.textContent = "空格";
         sp.addEventListener("click", () => typeLetter(" "));
         kb.appendChild(sp);
+        // 连词符键：支持含连词符的单词（如 well-known）
+        const hy = document.createElement("button");
+        hy.className = "key ctrl";
+        hy.textContent = "-";
+        hy.addEventListener("click", () => typeLetter("-"));
+        kb.appendChild(hy);
         const cl = document.createElement("button");
         cl.className = "key ctrl";
         cl.textContent = "清空";
@@ -263,6 +281,7 @@
         if (getIfRestart) return;
         if (/^[a-zA-Z]$/.test(e.key)) { e.preventDefault(); typeLetter(e.key.toLowerCase()); }
         else if (e.key === " ") { e.preventDefault(); typeLetter(" "); }
+        else if (e.key === "-") { e.preventDefault(); typeLetter("-"); }
         else if (e.key === "Backspace") { e.preventDefault(); eraseLetter(); }
         else if (e.key === "Escape") { e.preventDefault(); clearAll(); }
     });

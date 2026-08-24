@@ -45,6 +45,24 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
+        /// <summary>
+        /// 卸载当前已加载的 PDF 文档并释放其文件句柄（PdfDocument.Load 默认以 FileStream 锁定文件），
+        /// 但保留服务实例以便再次 Load。用于在删除/重命名当前打开的 PDF 前释放文件锁。
+        /// </summary>
+        public void Unload()
+        {
+            lock (_lockObj)
+            {
+                if (_pdf != null)
+                {
+                    _pdf.Dispose();
+                    _pdf = null;
+                    _filePath = string.Empty;
+                    _logger.LogInformation("PDF document unloaded, file handle released");
+                }
+            }
+        }
+
         public int PageCount
         {
             get

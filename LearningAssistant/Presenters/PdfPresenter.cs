@@ -187,6 +187,22 @@ namespace LearningAssistant.Presenters
             _pdfFileManager.LoadFolder(folder);
         }
 
+        /// <summary>
+        /// 关闭并释放当前已加载的 PDF 文档（释放文件句柄），供删除/重命名当前打开的 PDF 前调用，
+        /// 避免 PdfDocument 持有的 FileStream 锁定文件导致"文件被占用"。
+        /// </summary>
+        public void CloseCurrentDocument()
+        {
+            try
+            {
+                _pdfService.Unload();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to unload current PDF document");
+            }
+        }
+
         public void LoadImageFolder(string folder)
         {
             _pdfFileManager.LoadFolder(folder);

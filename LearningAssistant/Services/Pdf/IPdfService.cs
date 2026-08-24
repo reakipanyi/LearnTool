@@ -13,6 +13,12 @@ namespace LearningAssistant.Services.Pdf
         void Load(string path);
 
         /// <summary>
+        /// 卸载当前已加载的 PDF 文档并释放其文件句柄，但保留服务实例以便再次 Load。
+        /// 用于在删除/重命名当前打开的 PDF 前释放文件锁。
+        /// </summary>
+        void Unload();
+
+        /// <summary>
         /// PDF总页数
         /// </summary>
         int PageCount { get; }
