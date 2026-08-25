@@ -1,6 +1,7 @@
 using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Forms.UserControls;
+using LearningAssistant.Forms.UserControls.Ai;
 using System.Collections.Concurrent;
 using System.Windows.Forms;
 

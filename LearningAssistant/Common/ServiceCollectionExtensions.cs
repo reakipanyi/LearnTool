@@ -1,7 +1,11 @@
 using LearningAssistant.Common.Events;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Data.Database;
-using LearningAssistant.Forms;
+using LearningAssistant.Forms.Gamification;
+using LearningAssistant.Forms.Games;
+using LearningAssistant.Forms.Learning;
+using LearningAssistant.Forms.Main;
+using LearningAssistant.Forms.Pdf;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;

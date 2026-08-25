@@ -1,5 +1,8 @@
 using LearningAssistant.Common;
 using LearningAssistant.Forms;
+using LearningAssistant.Forms.Main;
+using LearningAssistant.Forms.Notification;
+using LearningAssistant.Forms.Web;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Migration;
 using LearningAssistant.Services.Persistence;
