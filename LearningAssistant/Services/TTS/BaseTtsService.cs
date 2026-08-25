@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using Microsoft.Extensions.Logging;
 using NAudio.Wave;
@@ -9,6 +10,7 @@ namespace LearningAssistant.Services.TTS
     public abstract class BaseTtsService : ITTSService, IDisposable
     {
         protected readonly ILogger? _logger;
+        private readonly IAppPaths _appPaths;
         protected const long MaxCacheSizeBytes = 100 * 1024 * 1024;
 
         private WaveOutEvent? _waveOut;
@@ -32,9 +34,10 @@ namespace LearningAssistant.Services.TTS
             }
         }
 
-        protected BaseTtsService(ILogger? logger)
+        protected BaseTtsService(ILogger? logger, IAppPaths appPaths)
         {
             _logger = logger;
+            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
         }
 
         public abstract Task<string?> SpeakAsync(string text, string? language = null, float? speed = null, CancellationToken cancellationToken = default);
@@ -42,6 +45,8 @@ namespace LearningAssistant.Services.TTS
         public abstract Task<byte[]?> SpeakStreamAsync(string text, string? language = null, float? speed = null, string? format = null);
 
         public abstract Task<string?> SpeakToCacheAsync(string text, string? language = null, float? speed = null, CancellationToken cancellationToken = default);
+
+        public virtual void ReloadSettings() { }
 
         protected async Task PlayAudioAsync(string filePath, float volume = 1.0f, float speed = 1.0f, CancellationToken cancellationToken = default)
         {
@@ -410,16 +415,16 @@ namespace LearningAssistant.Services.TTS
             var hash = sha1.ComputeHash(Encoding.UTF8.GetBytes(meta));
             var sb = new StringBuilder();
             foreach (var b in hash) sb.Append(b.ToString("x2"));
-            return Path.Combine(AppPaths.GetTtsCacheDir(), sb.ToString() + ".wav");
+            return Path.Combine(_appPaths.GetTtsCacheDir(), sb.ToString() + ".wav");
         }
 
         protected void CleanupOldCache()
         {
             try
             {
-                if (!Directory.Exists(AppPaths.GetTtsCacheDir())) return;
+                if (!Directory.Exists(_appPaths.GetTtsCacheDir())) return;
 
-                var files = new DirectoryInfo(AppPaths.GetTtsCacheDir())
+                var files = new DirectoryInfo(_appPaths.GetTtsCacheDir())
                     .GetFiles("*.wav")
                     .OrderByDescending(f => f.LastWriteTimeUtc)
                     .ToList();

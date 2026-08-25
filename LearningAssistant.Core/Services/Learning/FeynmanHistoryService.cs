@@ -3,6 +3,8 @@ using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using LearningAssistant.Common;
 
+using LearningAssistant.Abstractions;
+
 namespace LearningAssistant.Services.Learning
 {
     /// <summary>
@@ -15,12 +17,14 @@ namespace LearningAssistant.Services.Learning
         private readonly ILogger<FeynmanHistoryService>? _logger;
         private readonly object _lock = new();
         private FeynmanHistoryStore _store = new();
+        private readonly IAppPaths _appPaths;
 
-        public FeynmanHistoryService(ILogger<FeynmanHistoryService>? logger = null)
+        public FeynmanHistoryService(ILogger<FeynmanHistoryService>? logger = null, IAppPaths appPaths = null)
         {
             _logger = logger;
-            _storagePath = Path.Combine(AppPaths.CurrentUserDir, "feynman_history.json");
-            AppPaths.EnsureDirectoryExists(Path.GetDirectoryName(_storagePath));
+            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
+            _storagePath = Path.Combine(_appPaths.CurrentUserDir, "feynman_history.json");
+            _appPaths.EnsureDirectoryExists(Path.GetDirectoryName(_storagePath));
             Load();
         }
 

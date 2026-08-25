@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Learning;
@@ -25,6 +26,7 @@ namespace LearningAssistant.Presenters
         private readonly IGamificationService _gamificationService;
         private readonly ILearningRecommendationService _recommendationService;
         private readonly ILearningStatsAggregator? _aggregator;
+        private readonly IDialogService _dialogService;
 
         private PdfPresenter? _pdfPresenter;
         private IMainView? _view;
@@ -46,6 +48,7 @@ namespace LearningAssistant.Presenters
             IDataPersistenceService persistenceService,
             IGamificationService gamificationService,
             ILearningRecommendationService recommendationService,
+            IDialogService dialogService,
             ILearningStatsAggregator? aggregator = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -58,6 +61,7 @@ namespace LearningAssistant.Presenters
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _gamificationService = gamificationService ?? throw new ArgumentNullException(nameof(gamificationService));
             _recommendationService = recommendationService ?? throw new ArgumentNullException(nameof(recommendationService));
+            _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
             _aggregator = aggregator;
             _logger.LogInformation("MainPresenter initialized");
         }
@@ -312,7 +316,7 @@ namespace LearningAssistant.Presenters
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to open learning window");
-                MessageBox.Show($"打开学习窗口失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                await _dialogService.ShowMessageAsync("错误", $"打开学习窗口失败: {ex.Message}");
             }
         }
 

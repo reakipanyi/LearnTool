@@ -240,7 +240,7 @@ namespace LearningAssistant.Presenters
         {
             try
             {
-                Clipboard.SetText(e.Value);
+                _view.CopyToClipboard(e.Value);
             }
             catch (Exception ex)
             {

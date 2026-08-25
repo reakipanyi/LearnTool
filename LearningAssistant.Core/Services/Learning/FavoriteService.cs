@@ -3,6 +3,8 @@ using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Text.Json;
 
+using LearningAssistant.Abstractions;
+
 namespace LearningAssistant.Services.Learning
 {
     /// <summary>
@@ -15,10 +17,12 @@ namespace LearningAssistant.Services.Learning
         private readonly ILogger<FavoriteService> _logger;
         private readonly ConcurrentDictionary<string, CachedFavorites> _favoritesCache;
         private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(10);
+        private readonly IAppPaths _appPaths;
 
-        public FavoriteService(ILogger<FavoriteService> logger)
+        public FavoriteService(ILogger<FavoriteService> logger, IAppPaths appPaths)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _appPaths = appPaths;
             _favoritesCache = new ConcurrentDictionary<string, CachedFavorites>();
         }
 
@@ -188,7 +192,7 @@ namespace LearningAssistant.Services.Learning
         /// </summary>
         private string GetFavoritesPath(string userId)
         {
-            var userDir = Path.Combine(AppPaths.UsersDir, userId);
+            var userDir = Path.Combine(_appPaths.UsersDir, userId);
             if (!Directory.Exists(userDir))
                 Directory.CreateDirectory(userDir);
             return Path.Combine(userDir, "favorites.json");

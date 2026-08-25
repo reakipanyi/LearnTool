@@ -56,19 +56,7 @@ namespace LearningAssistant.Services.Gamification
         void Save();
         #endregion
 
-        #region UI Integration (Backward Compatibility)
-        [Obsolete("Use events instead of SetUI pattern for better separation of concerns")]
-        void SetStatsUI(Label studyTime, Label score, Label todayCount, Label streak,
-            Label? level, Label? xp, ProgressBar? progressXp);
-
-        [Obsolete("Use events instead of SetUI pattern for better separation of concerns")]
-        void SetBadgeUI(FlowLayoutPanel panel, ToolTip toolTip);
-
-        [Obsolete("Use events instead of SetUI pattern for better separation of concerns")]
-        void SetChallengeUI(FlowLayoutPanel panel, object? soundService = null);
-
         void UpdateAllDisplays();
-        #endregion
     }
 
     public class ScoreChangedEventArgs : EventArgs

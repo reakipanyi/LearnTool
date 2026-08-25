@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
 using LearningAssistant.Models.Config;
@@ -7,7 +8,6 @@ using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
-using System.Drawing;
 
 namespace LearningAssistant.Presenters
 {
@@ -27,6 +27,7 @@ namespace LearningAssistant.Presenters
         private readonly IAnnotationService _annotationService;
         private readonly IHighlightService _highlightService;
         private readonly IPdfService _pdfService;
+        private readonly IImageProcessor _imageProcessor;
         private readonly IEventBus? _eventBus;
 
         private string _currentUserId = Constants.DefaultUserId;
@@ -47,6 +48,7 @@ namespace LearningAssistant.Presenters
             IAnnotationService annotationService,
             IHighlightService highlightService,
             IPdfService pdfService,
+            IImageProcessor imageProcessor,
             TtsConfig ttsConfig,
             IEventBus? eventBus = null)
         {
@@ -63,6 +65,7 @@ namespace LearningAssistant.Presenters
             _annotationService = annotationService ?? throw new ArgumentNullException(nameof(annotationService));
             _highlightService = highlightService ?? throw new ArgumentNullException(nameof(highlightService));
             _pdfService = pdfService ?? throw new ArgumentNullException(nameof(pdfService));
+            _imageProcessor = imageProcessor ?? throw new ArgumentNullException(nameof(imageProcessor));
             _eventBus = eventBus;
 
             SubscribeToServiceEvents();
@@ -204,7 +207,8 @@ namespace LearningAssistant.Presenters
             _pdfFileManager.LoadFolder(folder);
         }
 
-        public async Task<Bitmap?> RenderPageAsync(int pageIndex, int width, int height)
+        public async Task<byte[]?> RenderPageAsync(int pageIndex,
+            int width, int height)
         {
             return await _pdfRenderer.RenderPageAsync(pageIndex, width, height);
         }
@@ -263,7 +267,7 @@ namespace LearningAssistant.Presenters
 
                 var firstPageTask = _pdfRenderer.RenderPageAsync(currentIndex, renderWidth, renderHeight);
 
-                Task<Bitmap?>? secondPageTask = null;
+                Task<byte[]?>? secondPageTask = null;
                 bool isDual = _view.IsDualPage;
                 int nextIndex = currentIndex + 1;
                 if (isDual && nextIndex < _pdfRenderer.PageCount)
@@ -271,16 +275,16 @@ namespace LearningAssistant.Presenters
                     secondPageTask = _pdfRenderer.RenderPageAsync(nextIndex, renderWidth, renderHeight);
                 }
 
-                var bitmap = await firstPageTask;
-                if (bitmap != null)
+                var imageData = await firstPageTask;
+                if (imageData != null)
                 {
-                    _view?.DisplayImage(bitmap);
+                    _view?.DisplayImage(imageData);
                 }
 
                 if (secondPageTask != null)
                 {
-                    var secondBitmap = await secondPageTask;
-                    _view?.SetSecondPageImage(secondBitmap);
+                    var secondImageData = await secondPageTask;
+                    _view?.SetSecondPageImage(secondImageData);
                 }
                 else if (isDual)
                 {
@@ -339,10 +343,7 @@ namespace LearningAssistant.Presenters
         {
             try
             {
-                using (var graphics = Graphics.FromHwnd(IntPtr.Zero))
-                {
-                    return graphics.DpiX / 96f;
-                }
+                return _imageProcessor.GetDpiScaleFactor();
             }
             catch
             {
@@ -355,9 +356,9 @@ namespace LearningAssistant.Presenters
             return _pdfOcrService.IsAvailable;
         }
 
-        public async Task<string?> OcrBitmapAsync(Bitmap bmp)
+        public async Task<string?> OcrBitmapAsync(byte[] imageData)
         {
-            return await _pdfOcrService.RecognizeTextAsync(bmp);
+            return await _pdfOcrService.RecognizeTextAsync(imageData);
         }
 
         public async Task<string?> TranslateAsync(string text)
@@ -380,7 +381,7 @@ namespace LearningAssistant.Presenters
             return _pdfTtsService?.IsAvailable ?? false;
         }
 
-        public async Task OcrCropAndTranslateAsync(Bitmap img, Rectangle selRect, Rectangle imgDisplayRect)
+        public async Task OcrCropAndTranslateAsync(byte[] imageData, RectInt selRect, RectInt imgDisplayRect)
         {
             if (!_pdfOcrService.IsAvailable)
             {
@@ -389,7 +390,14 @@ namespace LearningAssistant.Presenters
                 return;
             }
 
-            if (img == null || img.Width == 0 || img.Height == 0)
+            if (imageData == null || imageData.Length == 0)
+            {
+                _view?.ShowWarning("图像无效");
+                return;
+            }
+
+            var (imgWidth, imgHeight) = _imageProcessor.GetImageSize(imageData);
+            if (imgWidth == 0 || imgHeight == 0)
             {
                 _view?.ShowWarning("图像无效");
                 return;
@@ -399,12 +407,12 @@ namespace LearningAssistant.Presenters
             {
                 if (_view?.AutoTranslateAfterOcr == true)
                 {
-                    var result = await _pdfTranslationService.OcrAndTranslateAsync(img);
+                    var result = await _pdfTranslationService.OcrAndTranslateAsync(imageData);
                     UpdateOcrResult(result.Original, result.Translation);
                 }
                 else
                 {
-                    var original = await OcrBitmapAsync(img);
+                    var original = await OcrBitmapAsync(imageData);
                     UpdateOcrResult(original, null);
                 }
                 return;
@@ -417,8 +425,8 @@ namespace LearningAssistant.Presenters
                 return;
             }
 
-            float scaleX = (float)img.Width / imageDisplayRect.Width;
-            float scaleY = (float)img.Height / imageDisplayRect.Height;
+            float scaleX = (float)imgWidth / imageDisplayRect.Width;
+            float scaleY = (float)imgHeight / imageDisplayRect.Height;
 
             float actualX = (selRect.X - imageDisplayRect.X) * scaleX;
             float actualY = (selRect.Y - imageDisplayRect.Y) * scaleY;
@@ -428,14 +436,14 @@ namespace LearningAssistant.Presenters
             actualX = Math.Max(0, actualX);
             actualY = Math.Max(0, actualY);
 
-            if (actualX >= img.Width || actualY >= img.Height)
+            if (actualX >= imgWidth || actualY >= imgHeight)
             {
                 _view?.ShowWarning("选择区域超出图像范围");
                 return;
             }
 
-            actualWidth = Math.Min(img.Width - actualX, actualWidth);
-            actualHeight = Math.Min(img.Height - actualY, actualHeight);
+            actualWidth = Math.Min(imgWidth - actualX, actualWidth);
+            actualHeight = Math.Min(imgHeight - actualY, actualHeight);
 
             if (actualWidth <= 0 || actualHeight <= 0)
             {
@@ -449,7 +457,7 @@ namespace LearningAssistant.Presenters
                 return;
             }
 
-            var intRect = new Rectangle(
+            var intRect = new RectInt(
                 (int)Math.Round(actualX),
                 (int)Math.Round(actualY),
                 (int)Math.Round(actualWidth),
@@ -459,17 +467,18 @@ namespace LearningAssistant.Presenters
             {
                 if (_view?.AutoTranslateAfterOcr == true)
                 {
-                    var result = await _pdfTranslationService.OcrAndTranslateAsync(img, intRect);
+                    var result = await _pdfTranslationService.OcrAndTranslateAsync(imageData, intRect);
                     UpdateOcrResult(result.Original, result.Translation);
                 }
                 else
                 {
-                    using var cropped = new Bitmap(intRect.Width, intRect.Height);
-                    using (var g = Graphics.FromImage(cropped))
+                    var croppedData = _imageProcessor.CropImage(imageData, intRect);
+                    if (croppedData == null)
                     {
-                        g.DrawImage(img, new Rectangle(0, 0, intRect.Width, intRect.Height), intRect, GraphicsUnit.Pixel);
+                        _view?.ShowError("图像裁剪失败");
+                        return;
                     }
-                    var original = await OcrBitmapAsync(cropped);
+                    var original = await OcrBitmapAsync(croppedData);
                     UpdateOcrResult(original, null);
                 }
             }
@@ -767,7 +776,7 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        public Bitmap? LoadAnnotationForCurrentPage(int targetWidth, int targetHeight)
+        public byte[]? LoadAnnotationForCurrentPage(int targetWidth, int targetHeight)
         {
             try
             {
@@ -790,7 +799,7 @@ namespace LearningAssistant.Presenters
         /// <summary>
         /// 加载指定页面的标注位图（可后台线程调用，显式传参避免并发读取当前状态）。
         /// </summary>
-        public Bitmap? LoadAnnotationForPage(string pdfPath, int pageIndex, int targetWidth, int targetHeight)
+        public byte[]? LoadAnnotationForPage(string pdfPath, int pageIndex, int targetWidth, int targetHeight)
         {
             try
             {
@@ -1181,12 +1190,12 @@ namespace LearningAssistant.Presenters
         {
             try
             {
-                var img = _view?.GetCurrentImage() as Bitmap;
+                var img = _view?.GetCurrentImage();
                 var selection = _view?.GetSelectionRect();
                 var displayRect = _view?.GetDisplayRect();
                 if (img != null && selection.HasValue)
                 {
-                    await OcrCropAndTranslateAsync(img, selection.Value, displayRect ?? Rectangle.Empty);
+                    await OcrCropAndTranslateAsync(img, selection.Value, displayRect ?? RectInt.Empty);
                 }
             }
             catch (Exception ex)

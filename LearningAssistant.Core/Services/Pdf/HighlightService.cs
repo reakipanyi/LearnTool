@@ -1,9 +1,9 @@
 using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Models.Pdf;
 
@@ -14,10 +14,12 @@ namespace LearningAssistant.Services.Pdf
         private readonly Dictionary<string, PdfHighlightCollection> _highlightsCache = new();
         private readonly object _cacheLock = new object();
         private readonly ILogger<HighlightService>? _logger;
+        private readonly IAppPaths? _appPaths;
 
-        public HighlightService(ILogger<HighlightService>? logger = null)
+        public HighlightService(ILogger<HighlightService>? logger = null, IAppPaths? appPaths = null)
         {
             _logger = logger;
+            _appPaths = appPaths;
         }
 
         public List<PdfHighlight> GetHighlights(string pdfPath)
@@ -332,7 +334,7 @@ namespace LearningAssistant.Services.Pdf
             {
                 folderName = $"{folderName}_{hash.Substring(0, Math.Min(8, hash.Length))}";
             }
-            return Path.Combine(AppPaths.GetUserHighlightsDir(), $"{folderName}_highlights.json");
+            return Path.Combine(_appPaths?.GetUserHighlightsDir() ?? AppPaths.GetUserHighlightsDir(), $"{folderName}_highlights.json");
         }
 
         private string? ComputeFolderHash(string folderPath)
@@ -404,16 +406,16 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
-        public static Color GetHighlightColor(HighlightColor highlightColor)
+        public static ColorInfo GetHighlightColor(HighlightColor highlightColor)
         {
             return highlightColor switch
             {
-                HighlightColor.Yellow => Color.FromArgb(70, 255, 255, 0),
-                HighlightColor.Green => Color.FromArgb(70, 0, 255, 0),
-                HighlightColor.Blue => Color.FromArgb(70, 0, 191, 255),
-                HighlightColor.Pink => Color.FromArgb(70, 255, 192, 203),
-                HighlightColor.Orange => Color.FromArgb(70, 255, 165, 0),
-                _ => Color.FromArgb(70, 255, 255, 0)
+                HighlightColor.Yellow => ColorInfo.FromArgb(70, 255, 255, 0),
+                HighlightColor.Green => ColorInfo.FromArgb(70, 0, 255, 0),
+                HighlightColor.Blue => ColorInfo.FromArgb(70, 0, 191, 255),
+                HighlightColor.Pink => ColorInfo.FromArgb(70, 255, 192, 203),
+                HighlightColor.Orange => ColorInfo.FromArgb(70, 255, 165, 0),
+                _ => ColorInfo.FromArgb(70, 255, 255, 0)
             };
         }
 
@@ -424,7 +426,7 @@ namespace LearningAssistant.Services.Pdf
         /// <param name="screenWidth">屏幕宽度</param>
         /// <param name="screenHeight">屏幕高度</param>
         /// <returns>屏幕坐标矩形</returns>
-        public static (float x, float y, float width, float height) NormalizeToScreen(RectangleF normalizedRect, float screenWidth, float screenHeight)
+        public static (float x, float y, float width, float height) NormalizeToScreen(RectFInfo normalizedRect, float screenWidth, float screenHeight)
         {
             return (
                 normalizedRect.X * screenWidth,
@@ -441,7 +443,7 @@ namespace LearningAssistant.Services.Pdf
         /// <param name="screenWidth">屏幕宽度</param>
         /// <param name="screenHeight">屏幕高度</param>
         /// <returns>归一化矩形（0-1范围）</returns>
-        public static (float x, float y, float width, float height) NormalizeFromScreen(RectangleF screenRect, float screenWidth, float screenHeight)
+        public static (float x, float y, float width, float height) NormalizeFromScreen(RectFInfo screenRect, float screenWidth, float screenHeight)
         {
             return (
                 screenRect.X / screenWidth,

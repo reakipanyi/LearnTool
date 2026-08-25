@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Models.PanAnalysis;
 using Microsoft.Extensions.Logging;
@@ -18,11 +19,13 @@ public class PanSnapshotCacheService
     private readonly ILogger<PanSnapshotCacheService>? _logger;
     private readonly string _cacheDir;
     private readonly object _lock = new();
+    private readonly IAppPaths? _appPaths;
 
-    public PanSnapshotCacheService(ILogger<PanSnapshotCacheService>? logger = null)
+    public PanSnapshotCacheService(ILogger<PanSnapshotCacheService>? logger = null, IAppPaths? appPaths = null)
     {
         _logger = logger;
-        _cacheDir = Path.Combine(AppPaths.CacheDir, "pan_snapshots");
+        _appPaths = appPaths;
+        _cacheDir = Path.Combine(_appPaths?.CacheDir ?? AppPaths.CacheDir, "pan_snapshots");
         try { Directory.CreateDirectory(_cacheDir); } catch { /* ignore */ }
     }
 

@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
 using LearningAssistant.Models.Pdf;
@@ -16,6 +17,7 @@ namespace LearningAssistant.Managers
         private bool _disposed = false;
         private readonly IAnnotationService? _annotationService;
         private readonly IEventBus? _eventBus;
+        private readonly IAppPaths? _appPaths;
 
         private Bitmap? _highlightBitmap;
         private Graphics? _highlightGraphics;
@@ -34,13 +36,14 @@ namespace LearningAssistant.Managers
         public event EventHandler? UndoActionRecorded;
 
         public PdfReaderHighlightManager(ILogger logger, IPdfReaderFormAccess form, IHighlightService highlightService,
-            IAnnotationService? annotationService = null, IEventBus? eventBus = null)
+            IAnnotationService? annotationService = null, IEventBus? eventBus = null, IAppPaths? appPaths = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _form = form ?? throw new ArgumentNullException(nameof(form));
             _highlightService = highlightService ?? throw new ArgumentNullException(nameof(highlightService));
             _annotationService = annotationService;
             _eventBus = eventBus;
+            _appPaths = appPaths;
         }
 
         public void UpdateHighlightLayer()
@@ -400,7 +403,7 @@ namespace LearningAssistant.Managers
                 {
                     _eventBus.Publish(new PDFHighlightEvent
                     {
-                        UserId = AppPaths.GetCurrentUserId(),
+                        UserId = _appPaths?.GetCurrentUserId() ?? AppPaths.GetCurrentUserId(),
                         PdfFileName = Path.GetFileName(currentPdfPath),
                         HighlightedText = ocrText,
                         SourceUrl = currentPdfPath,
@@ -462,7 +465,9 @@ namespace LearningAssistant.Managers
 
             try
             {
-                var result = await _form.Presenter.OcrBitmapAsync(cropped);
+                using var ocrStream = new MemoryStream();
+                cropped.Save(ocrStream, System.Drawing.Imaging.ImageFormat.Png);
+                var result = await _form.Presenter.OcrBitmapAsync(ocrStream.ToArray());
                 return result ?? string.Empty;
             }
             catch (Exception ex)

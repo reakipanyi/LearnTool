@@ -1,4 +1,5 @@
-using KidWinApp.Services;
+using LearningAssistant.Abstractions;
+using LearningAssistant.Common;
 using Microsoft.Extensions.Logging;
 using System.Drawing.Drawing2D;
 
@@ -20,7 +21,7 @@ namespace LearningAssistant.Services.Pdf
 
         public string? InitErrorMessage => _ocrService.InitErrorMessage;
 
-        public async Task<string?> RecognizeTextAsync(Bitmap image)
+        public async Task<string?> RecognizeTextAsync(byte[] image)
         {
             if (!_ocrService.IsAvailable)
                 return null;
@@ -28,7 +29,7 @@ namespace LearningAssistant.Services.Pdf
             return await _ocrService.RecognizeTextAsync(image);
         }
 
-        public async Task<string?> RecognizeTextAsync(Bitmap image, Rectangle region)
+        public async Task<string?> RecognizeTextAsync(byte[] image, RectInt region)
         {
             if (!_ocrService.IsAvailable)
                 return null;
@@ -38,19 +39,23 @@ namespace LearningAssistant.Services.Pdf
                 return await _ocrService.RecognizeTextAsync(image);
             }
 
-            if (region.X < 0 || region.Y < 0 ||
-                region.X + region.Width > image.Width ||
-                region.Y + region.Height > image.Height)
+            var bmp = BytesToBitmap(image);
+            if (bmp == null) return null;
+            var rect = new Rectangle(region.X, region.Y, region.Width, region.Height);
+
+            if (rect.X < 0 || rect.Y < 0 ||
+                rect.X + rect.Width > bmp.Width ||
+                rect.Y + rect.Height > bmp.Height)
             {
                 _logger.LogWarning("OCR region out of bounds");
                 return null;
             }
 
-            using var cropped = CropImage(image, region);
-            return await _ocrService.RecognizeTextAsync(cropped);
+            using var cropped = CropImage(bmp, rect);
+            return await _ocrService.RecognizeTextAsync(BitmapToBytes(cropped));
         }
 
-        public async Task<string?> RecognizeTextWithAutoLanguageAsync(Bitmap image)
+        public async Task<string?> RecognizeTextWithAutoLanguageAsync(byte[] image)
         {
             if (!_ocrService.IsAvailable)
                 return null;
@@ -63,7 +68,7 @@ namespace LearningAssistant.Services.Pdf
             return recognizedText;
         }
 
-        public async Task<string?> RecognizeTextWithAutoLanguageAsync(Bitmap image, Rectangle region)
+        public async Task<string?> RecognizeTextWithAutoLanguageAsync(byte[] image, RectInt region)
         {
             if (!_ocrService.IsAvailable)
                 return null;
@@ -76,16 +81,20 @@ namespace LearningAssistant.Services.Pdf
             }
             else
             {
-                if (region.X < 0 || region.Y < 0 ||
-                    region.X + region.Width > image.Width ||
-                    region.Y + region.Height > image.Height)
+                var bmp = BytesToBitmap(image);
+                if (bmp == null) return null;
+                var rect = new Rectangle(region.X, region.Y, region.Width, region.Height);
+
+                if (rect.X < 0 || rect.Y < 0 ||
+                    rect.X + rect.Width > bmp.Width ||
+                    rect.Y + rect.Height > bmp.Height)
                 {
                     _logger.LogWarning("OCR region out of bounds");
                     return null;
                 }
 
-                using var cropped = CropImage(image, region);
-                recognizedText = await _ocrService.RecognizeTextAsync(cropped);
+                using var cropped = CropImage(bmp, rect);
+                recognizedText = await _ocrService.RecognizeTextAsync(BitmapToBytes(cropped));
             }
 
             if (!string.IsNullOrWhiteSpace(recognizedText))
@@ -142,6 +151,21 @@ namespace LearningAssistant.Services.Pdf
             graphics.DrawImage(source, new Rectangle(0, 0, region.Width, region.Height),
                               region, GraphicsUnit.Pixel);
             return cropped;
+        }
+
+        private static byte[]? BitmapToBytes(Bitmap? bmp)
+        {
+            if (bmp == null) return null;
+            using var ms = new MemoryStream();
+            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            return ms.ToArray();
+        }
+
+        private static Bitmap? BytesToBitmap(byte[]? data)
+        {
+            if (data == null || data.Length == 0) return null;
+            using var ms = new MemoryStream(data);
+            return new Bitmap(ms);
         }
     }
 }

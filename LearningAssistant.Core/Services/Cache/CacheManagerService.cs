@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Models.Cache;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
@@ -13,15 +14,17 @@ namespace LearningAssistant.Services.Cache
     public class CacheManagerService : ICacheManagerService, IDisposable
     {
         private readonly ILogger<CacheManagerService>? _logger;
+        private readonly IAppPaths? _appPaths;
         private CacheCleanupConfig _config;
         private Timer? _cleanupTimer;
         private readonly object _lock = new();
 
         public DateTime? LastCleanupTime { get; private set; }
 
-        public CacheManagerService(ILogger<CacheManagerService>? logger = null)
+        public CacheManagerService(ILogger<CacheManagerService>? logger = null, IAppPaths? appPaths = null)
         {
             _logger = logger;
+            _appPaths = appPaths;
             _config = LoadConfig();
 
             if (_config.CleanupOnStartup)
@@ -320,11 +323,11 @@ namespace LearningAssistant.Services.Cache
 
             var defaultDirs = new List<CacheDirectory>
             {
-                new() { Name = "临时文件", Path =Path.Combine( AppPaths.CacheDir, "temp"), Enabled = true, ExpiryDays = 7 },
-                new() { Name = "PDF缓存", Path = Path.Combine(AppPaths.CacheDir, "pdf"), Enabled = true, ExpiryDays = 30 },
-                new() { Name = "图片缓存", Path = Path.Combine(AppPaths.CacheDir, "images"), Enabled = true, ExpiryDays = 30 },
-                new() { Name = "AI缓存", Path = Path.Combine(AppPaths.CacheDir, "ai"), Enabled = true, ExpiryDays = 15 },
-                new() { Name = "缩略图缓存", Path = Path.Combine(AppPaths.CacheDir, "thumbnails"), Enabled = true, ExpiryDays = 60 }
+                new() { Name = "临时文件", Path =Path.Combine(_appPaths?.CacheDir ?? AppPaths.CacheDir, "temp"), Enabled = true, ExpiryDays = 7 },
+                new() { Name = "PDF缓存", Path = Path.Combine(_appPaths?.CacheDir ?? AppPaths.CacheDir, "pdf"), Enabled = true, ExpiryDays = 30 },
+                new() { Name = "图片缓存", Path = Path.Combine(_appPaths?.CacheDir ?? AppPaths.CacheDir, "images"), Enabled = true, ExpiryDays = 30 },
+                new() { Name = "AI缓存", Path = Path.Combine(_appPaths?.CacheDir ?? AppPaths.CacheDir, "ai"), Enabled = true, ExpiryDays = 15 },
+                new() { Name = "缩略图缓存", Path = Path.Combine(_appPaths?.CacheDir ?? AppPaths.CacheDir, "thumbnails"), Enabled = true, ExpiryDays = 60 }
             };
 
             _config.CacheDirectories = defaultDirs;
@@ -335,7 +338,7 @@ namespace LearningAssistant.Services.Cache
         {
             try
             {
-                var configPath = Path.Combine(AppPaths.ConfigDir, "CacheSettings.json");
+                var configPath = Path.Combine(_appPaths?.ConfigDir ?? AppPaths.ConfigDir, "CacheSettings.json");
                 if (File.Exists(configPath))
                 {
                     var json = File.ReadAllText(configPath);
@@ -356,7 +359,7 @@ namespace LearningAssistant.Services.Cache
         {
             try
             {
-                var configPath = Path.Combine(AppPaths.ConfigDir, "CacheSettings.json");
+                var configPath = Path.Combine(_appPaths?.ConfigDir ?? AppPaths.ConfigDir, "CacheSettings.json");
                 var directory = Path.GetDirectoryName(configPath);
                 if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                 {

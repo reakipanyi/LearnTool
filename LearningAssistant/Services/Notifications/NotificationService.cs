@@ -1,4 +1,5 @@
 
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common.Events;
 
 namespace LearningAssistant.Services.Notifications
@@ -7,11 +8,13 @@ namespace LearningAssistant.Services.Notifications
     {
         private readonly IEventBus _eventBus;
         private readonly Form _mainForm;
+        private readonly IDialogService? _dialogService;
 
-        public NotificationService(IEventBus eventBus, Form mainForm)
+        public NotificationService(IEventBus eventBus, Form mainForm, IDialogService? dialogService = null)
         {
             _eventBus = eventBus ?? throw new ArgumentNullException(nameof(eventBus));
             _mainForm = mainForm ?? throw new ArgumentNullException(nameof(mainForm));
+            _dialogService = dialogService;
             SubscribeToEvents();
         }
 
@@ -65,11 +68,13 @@ namespace LearningAssistant.Services.Notifications
 
         private void ShowNotificationInternal(Notification notification)
         {
-            // 简单的 MessageBox 实现，实际可以用更美观的自定义通知
-            MessageBox.Show($"{notification.Title}\n\n{notification.Message}", 
-                notification.Type.ToString(), 
-                MessageBoxButtons.OK, 
-                GetIcon(notification.Type));
+            if (_dialogService != null)
+                _dialogService.ShowMessageAsync(notification.Type.ToString(), $"{notification.Title}\n\n{notification.Message}").GetAwaiter().GetResult();
+            else
+                MessageBox.Show($"{notification.Title}\n\n{notification.Message}",
+                    notification.Type.ToString(),
+                    MessageBoxButtons.OK,
+                    GetIcon(notification.Type));
         }
 
         public void ShowAchievementUnlock(string icon, string title, string message)

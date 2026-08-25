@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.Logging;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Models.Pdf;
 
@@ -11,10 +12,12 @@ namespace LearningAssistant.Services.Pdf
         private readonly Dictionary<string, List<PdfBookmark>> _bookmarksCache = new();
         private readonly object _cacheLock = new object();
         private readonly ILogger<BookmarkService>? _logger;
+        private readonly IAppPaths? _appPaths;
 
-        public BookmarkService(ILogger<BookmarkService>? logger = null)
+        public BookmarkService(ILogger<BookmarkService>? logger = null, IAppPaths? appPaths = null)
         {
             _logger = logger;
+            _appPaths = appPaths;
         }
 
         public List<PdfBookmark> GetBookmarks(string pdfPath)
@@ -169,7 +172,7 @@ namespace LearningAssistant.Services.Pdf
 
         private string GetBookmarkPath(string pdfPath)
         {
-            return AppPaths.GetUserPdfBookmarkPath(pdfPath);
+            return _appPaths?.GetUserPdfBookmarkPath(pdfPath) ?? AppPaths.GetUserPdfBookmarkPath(pdfPath);
         }
     }
 }

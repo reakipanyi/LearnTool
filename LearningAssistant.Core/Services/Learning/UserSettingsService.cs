@@ -3,6 +3,8 @@ using LearningAssistant.Models.User;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
+using LearningAssistant.Abstractions;
+
 namespace LearningAssistant.Services.Learning
 {
     /// <summary>
@@ -17,10 +19,12 @@ namespace LearningAssistant.Services.Learning
         private string? _cachedUserId;
 
         public event EventHandler<SettingsChangedEventArgs>? SettingsChanged;
+        private readonly IAppPaths _appPaths;
 
-        public UserSettingsService(ILogger<UserSettingsService> logger)
+        public UserSettingsService(ILogger<UserSettingsService> logger, IAppPaths appPaths)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _appPaths = appPaths;
         }
 
         public async Task<Settings> LoadSettingsAsync(string userId)
@@ -114,7 +118,7 @@ namespace LearningAssistant.Services.Learning
 
         public string GetSettingsPath(string userId)
         {
-            var userDir = Path.Combine(AppPaths.UsersDir, userId);
+            var userDir = Path.Combine(_appPaths.UsersDir, userId);
             if (!Directory.Exists(userDir))
                 Directory.CreateDirectory(userDir);
             return Path.Combine(userDir, "settings.json");

@@ -5,6 +5,8 @@ using LearningAssistant.Services.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
+using LearningAssistant.Abstractions;
+
 namespace LearningAssistant.Services.Learning
 {
     /// <summary>
@@ -18,6 +20,7 @@ namespace LearningAssistant.Services.Learning
         private readonly ILearningAnalyticsService _analyticsService;
         private readonly IWrongAnswerService _wrongAnswerService;
         private readonly ILogger<LearningPathService> _logger;
+        private readonly IAppPaths _appPaths;
         private readonly object _lock = new object();
 
         public LearningPathService(
@@ -25,13 +28,15 @@ namespace LearningAssistant.Services.Learning
             IDataPersistenceService persistenceService,
             ILearningAnalyticsService analyticsService,
             IWrongAnswerService wrongAnswerService,
-            ILogger<LearningPathService> logger)
+            ILogger<LearningPathService> logger,
+            IAppPaths appPaths)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _analyticsService = analyticsService ?? throw new ArgumentNullException(nameof(analyticsService));
             _wrongAnswerService = wrongAnswerService ?? throw new ArgumentNullException(nameof(wrongAnswerService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
             MigrateFromJsonToDb();
         }
 
@@ -39,10 +44,10 @@ namespace LearningAssistant.Services.Learning
         {
             try
             {
-                var pathsDir = AppPaths.LearningPathsDir;
+                var pathsDir = _appPaths.LearningPathsDir;
                 if (!Directory.Exists(pathsDir))
                 {
-                    pathsDir = Path.Combine(AppPaths.UsersDir, "learning_paths");
+                    pathsDir = Path.Combine(_appPaths.UsersDir, "learning_paths");
                     if (!Directory.Exists(pathsDir)) return;
                 }
 

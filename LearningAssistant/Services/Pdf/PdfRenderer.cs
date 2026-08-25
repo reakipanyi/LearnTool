@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Models.Pdf;
 using Microsoft.Extensions.Logging;
 using System.Threading;
@@ -89,10 +90,10 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
-        public async Task<Bitmap?> RenderPageAsync(int pageIndex, int width, int height)
+        public async Task<byte[]?> RenderPageAsync(int pageIndex, int width, int height)
         {
             Bitmap? bitmap;
-            
+
             if (_isImageMode)
             {
                 bitmap = await LoadImageAsync(pageIndex);
@@ -115,7 +116,8 @@ namespace LearningAssistant.Services.Pdf
                 bitmap = await GetRenderedPageAsync(pageIndex, renderWidth, renderHeight);
             }
 
-            return ApplyNightMode(bitmap);
+            var bitmapBytes = BitmapToBytes(bitmap);
+            return bitmapBytes != null ? ApplyNightMode(bitmapBytes) : null;
         }
 
         private async Task<Bitmap?> LoadImageAsync(int index)
@@ -372,18 +374,18 @@ namespace LearningAssistant.Services.Pdf
                 {
                     w = Math.Max(1, (int)Math.Round(renderH * pageRatio));
                 }
-                return _pdfService.RenderPage(pageIndex, w, h);
+                return BytesToBitmap(_pdfService.RenderPage(pageIndex, w, h));
             }
-            return _pdfService.RenderPage(pageIndex, renderW, renderH);
+            return BytesToBitmap(_pdfService.RenderPage(pageIndex, renderW, renderH));
         }
 
-        public async Task<Bitmap?> GetThumbnailAsync(int pageIndex)
+        public async Task<byte[]?> GetThumbnailAsync(int pageIndex)
         {
             lock (_renderLock)
             {
                 if (_thumbnailCache.TryGetValue(pageIndex, out var cached))
                 {
-                    return CreateDeepCopy(cached);
+                    return BitmapToBytes(CreateDeepCopy(cached));
                 }
             }
 
@@ -398,7 +400,7 @@ namespace LearningAssistant.Services.Pdf
                     }
                 }
             }
-            return thumbnail;
+            return BitmapToBytes(thumbnail);
         }
 
         public async Task GenerateThumbnailsAsync()
@@ -517,12 +519,13 @@ namespace LearningAssistant.Services.Pdf
             _preRenderSemaphore.Dispose();
         }
 
-        public Bitmap ApplyNightMode(Bitmap bitmap)
+        public byte[] ApplyNightMode(byte[] bitmap)
         {
-            if (!_isNightMode || bitmap == null)
+            var bmp = BytesToBitmap(bitmap);
+            if (!_isNightMode || bmp == null)
                 return bitmap;
 
-            var inverted = new Bitmap(bitmap.Width, bitmap.Height);
+            var inverted = new Bitmap(bmp.Width, bmp.Height);
             using (var graphics = Graphics.FromImage(inverted))
             {
                 var colorMatrix = new System.Drawing.Imaging.ColorMatrix(
@@ -538,12 +541,27 @@ namespace LearningAssistant.Services.Pdf
                 using (var attributes = new System.Drawing.Imaging.ImageAttributes())
                 {
                     attributes.SetColorMatrix(colorMatrix);
-                    graphics.DrawImage(bitmap, new Rectangle(0, 0, bitmap.Width, bitmap.Height),
-                        0, 0, bitmap.Width, bitmap.Height, GraphicsUnit.Pixel, attributes);
+                    graphics.DrawImage(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height),
+                        0, 0, bmp.Width, bmp.Height, GraphicsUnit.Pixel, attributes);
                 }
             }
 
-            return inverted;
+            return BitmapToBytes(inverted);
+        }
+
+        private static byte[]? BitmapToBytes(Bitmap? bmp)
+        {
+            if (bmp == null) return null;
+            using var ms = new MemoryStream();
+            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            return ms.ToArray();
+        }
+
+        private static Bitmap? BytesToBitmap(byte[]? data)
+        {
+            if (data == null || data.Length == 0) return null;
+            using var ms = new MemoryStream(data);
+            return new Bitmap(ms);
         }
     }
 }

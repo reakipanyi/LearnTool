@@ -7,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
+using LearningAssistant.Abstractions;
+
 namespace LearningAssistant.Services.Persistence
 {
     /// <summary>
@@ -18,16 +20,19 @@ namespace LearningAssistant.Services.Persistence
         private readonly IConfiguration _configuration;
         private readonly ICacheService _cacheService;
         private readonly ILogger<SqliteDataPersistenceService>? _logger;
+        private readonly IAppPaths _appPaths;
 
         public SqliteDataPersistenceService(
             IDbContextFactory<AppDbContext> dbContextFactory,
             IConfiguration configuration,
             ICacheService cacheService,
+            IAppPaths appPaths,
             ILogger<SqliteDataPersistenceService>? logger = null)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             _cacheService = cacheService ?? throw new ArgumentNullException(nameof(cacheService));
+            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
             _logger = logger;
         }
 
@@ -35,7 +40,7 @@ namespace LearningAssistant.Services.Persistence
         {
             try
             {
-                var dbPath = AppPaths.DatabasePath;
+                var dbPath = _appPaths.DatabasePath;
                 var dbDir = Path.GetDirectoryName(dbPath);
                 if (!string.IsNullOrEmpty(dbDir) && !Directory.Exists(dbDir))
                 {
@@ -181,7 +186,7 @@ namespace LearningAssistant.Services.Persistence
                 var configToSave = Common.JsonHelper.Deserialize<AppConfig>(configJson) ?? new AppConfig();
                 ConfigEncryptionHelper.EncryptSensitiveConfig(configToSave);
 
-                var path = AppPaths.AppSettingsPath;
+                var path = _appPaths.AppSettingsPath;
                 Common.JsonHelper.SaveToFile(path, configToSave);
             }
             catch (Exception ex)
@@ -418,11 +423,11 @@ namespace LearningAssistant.Services.Persistence
             }
         }
 
-        private static void TryCleanupUserDirectory(string userId)
+        private void TryCleanupUserDirectory(string userId)
         {
             try
             {
-                var userDir = AppPaths.GetUserDir(userId);
+                var userDir = _appPaths.GetUserDir(userId);
                 if (Directory.Exists(userDir))
                     Directory.Delete(userDir, recursive: true);
             }
@@ -488,7 +493,7 @@ namespace LearningAssistant.Services.Persistence
                 }
 
                 // 尝试从旧的 JSON 文件迁移
-                var path = AppPaths.LastSessionPath;
+                var path = _appPaths.LastSessionPath;
                 if (File.Exists(path))
                 {
                     var oldSession = Common.JsonHelper.LoadFromFile<SessionData>(path);

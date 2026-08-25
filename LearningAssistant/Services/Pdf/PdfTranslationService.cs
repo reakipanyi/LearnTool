@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using Microsoft.Extensions.Logging;
 using System.Drawing.Drawing2D;
 
@@ -34,7 +35,7 @@ namespace LearningAssistant.Services.Pdf
             return await _translationService.TranslateAsync(text, "auto", targetLanguage);
         }
 
-        public async Task<(string? Original, string? Translation)> OcrAndTranslateAsync(Bitmap image)
+        public async Task<(string? Original, string? Translation)> OcrAndTranslateAsync(byte[] image)
         {
             if (!_ocrService.IsAvailable)
                 return (null, null);
@@ -55,7 +56,7 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
-        public async Task<(string? Original, string? Translation)> OcrAndTranslateAsync(Bitmap image, Rectangle region)
+        public async Task<(string? Original, string? Translation)> OcrAndTranslateAsync(byte[] image, RectInt region)
         {
             if (!_ocrService.IsAvailable)
                 return (null, null);
@@ -67,17 +68,23 @@ namespace LearningAssistant.Services.Pdf
 
             try
             {
-                if (region.X < 0 || region.Y < 0 ||
-                    region.X + region.Width > image.Width ||
-                    region.Y + region.Height > image.Height)
+                var bmp = BytesToBitmap(image);
+                if (bmp == null)
+                    return (null, null);
+
+                var rect = new Rectangle(region.X, region.Y, region.Width, region.Height);
+
+                if (rect.X < 0 || rect.Y < 0 ||
+                    rect.X + rect.Width > bmp.Width ||
+                    rect.Y + rect.Height > bmp.Height)
                 {
                     _logger.LogWarning("OCR region out of bounds");
                     return (null, null);
                 }
 
-                using var cropped = CropImage(image, region);
-                var recognizedText = await _ocrService.RecognizeTextAsync(cropped);
-                
+                using var cropped = CropImage(bmp, rect);
+                var recognizedText = await _ocrService.RecognizeTextAsync(BitmapToBytes(cropped));
+
                 if (string.IsNullOrWhiteSpace(recognizedText))
                     return (null, null);
 
@@ -101,6 +108,21 @@ namespace LearningAssistant.Services.Pdf
             graphics.DrawImage(source, new Rectangle(0, 0, region.Width, region.Height),
                               region, GraphicsUnit.Pixel);
             return cropped;
+        }
+
+        private static byte[]? BitmapToBytes(Bitmap? bmp)
+        {
+            if (bmp == null) return null;
+            using var ms = new MemoryStream();
+            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            return ms.ToArray();
+        }
+
+        private static Bitmap? BytesToBitmap(byte[]? data)
+        {
+            if (data == null || data.Length == 0) return null;
+            using var ms = new MemoryStream(data);
+            return new Bitmap(ms);
         }
     }
 }

@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
 using Microsoft.Extensions.Logging;
@@ -13,10 +14,12 @@ namespace LearningAssistant.Services.AI
         private AIPromptConfig _config;
         private readonly ILogger<AIPromptService>? _logger;
         private readonly object _lock = new object();
+        private readonly IAppPaths _appPaths;
 
-        public AIPromptService(ILogger<AIPromptService>? logger = null)
+        public AIPromptService(ILogger<AIPromptService>? logger = null, IAppPaths appPaths = null!)
         {
             _logger = logger;
+            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
             _config = LoadConfig();
         }
 
@@ -27,7 +30,7 @@ namespace LearningAssistant.Services.AI
                 // 尝试从多个位置加载配置
                 string[] configPaths = new[]
                 {
-                    AppPaths.AiPromptsPath
+                    _appPaths.AiPromptsPath
                 };
 
                 foreach (var configPath in configPaths)

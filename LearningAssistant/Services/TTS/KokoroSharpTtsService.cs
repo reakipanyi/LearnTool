@@ -1,6 +1,7 @@
 using KokoroSharp;
 using KokoroSharp.Core;
 using KokoroSharp.Processing;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
 using Microsoft.Extensions.Logging;
@@ -11,6 +12,7 @@ namespace LearningAssistant.Services.TTS
     public class KokoroSharpTtsService : BaseTtsService
     {
         private readonly TtsConfig _config;
+        private readonly IAppPaths _appPaths;
         private KokoroTTS? _tts;
         private KokoroVoice? _defaultVoice;
         private const int SynthesizeTimeoutMs = 300000;
@@ -29,10 +31,11 @@ namespace LearningAssistant.Services.TTS
         private volatile bool _isLoading = false;
         private readonly object _initLock = new object();
 
-        public KokoroSharpTtsService(TtsConfig config, ILogger<KokoroSharpTtsService>? logger = null)
-            : base(logger)
+        public KokoroSharpTtsService(TtsConfig config, ILogger<KokoroSharpTtsService>? logger = null, IAppPaths appPaths = null!)
+            : base(logger, appPaths)
         {
             _config = config ?? throw new ArgumentNullException(nameof(config));
+            _appPaths = appPaths;
         }
 
         private void EnsureInitialized()
@@ -162,6 +165,8 @@ namespace LearningAssistant.Services.TTS
             StartBackgroundInitialization();
         }
 
+        public override void ReloadSettings() => ReloadVoiceSettings();
+
         private string GetModelPath()
         {
             if (!string.IsNullOrWhiteSpace(_config.Model) && File.Exists(_config.Model))
@@ -175,8 +180,8 @@ namespace LearningAssistant.Services.TTS
                 Path.Combine(assemblyDir, "kokoro.onnx"),
                 Path.Combine(assemblyDir, "models", "kokoro.onnx"),
                 Path.Combine(assemblyDir, "KokoroModels", "kokoro.onnx"),
-                Path.Combine(AppPaths.DataRoot, "kokoro.onnx"),
-                Path.Combine(AppPaths.DataRoot, "models", "kokoro.onnx"),
+                Path.Combine(_appPaths.DataRoot, "kokoro.onnx"),
+                Path.Combine(_appPaths.DataRoot, "models", "kokoro.onnx"),
             };
 
             foreach (var path in searchPaths)
@@ -232,7 +237,7 @@ namespace LearningAssistant.Services.TTS
 
             try
             {
-                Directory.CreateDirectory(AppPaths.GetTtsCacheDir());
+                Directory.CreateDirectory(_appPaths.GetTtsCacheDir());
 
                 string paddedText = PadShortText(text);
                 float actualSpeed = speed ?? _config.Speed;
@@ -316,7 +321,7 @@ namespace LearningAssistant.Services.TTS
 
             try
             {
-                Directory.CreateDirectory(AppPaths.GetTtsCacheDir());
+                Directory.CreateDirectory(_appPaths.GetTtsCacheDir());
 
                 var actualVoice = SelectVoiceForSegment(language ?? "en", language) ?? _defaultVoice;
                 string paddedText = PadShortText(text);
@@ -597,7 +602,7 @@ namespace LearningAssistant.Services.TTS
         {
             if (wavBytes == null || wavBytes.Length == 0 || _stopRequested || cancellationToken.IsCancellationRequested) return;
 
-            string tempFile = Path.Combine(AppPaths.GetTtsCacheDir(), $"_temp_{Guid.NewGuid():N}.wav");
+            string tempFile = Path.Combine(_appPaths.GetTtsCacheDir(), $"_temp_{Guid.NewGuid():N}.wav");
             try
             {
                 await File.WriteAllBytesAsync(tempFile, wavBytes, cancellationToken).ConfigureAwait(false);

@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using Microsoft.Extensions.Logging;
 
@@ -6,10 +7,12 @@ namespace LearningAssistant.Services.TTS
     public class QwenTtsService : BaseTtsService
     {
         private readonly QwenTtsClient? _client;
+        private readonly IAppPaths _appPaths;
 
-        public QwenTtsService(string? apiKey, string? endpoint, ILogger<QwenTtsService>? logger = null)
-            : base(logger)
+        public QwenTtsService(string? apiKey, string? endpoint, ILogger<QwenTtsService>? logger = null, IAppPaths appPaths = null!)
+            : base(logger, appPaths)
         {
+            _appPaths = appPaths;
             try
             {
                 _client = new QwenTtsClient(apiKey, endpoint);
@@ -33,7 +36,7 @@ namespace LearningAssistant.Services.TTS
 
             try
             {
-                Directory.CreateDirectory(AppPaths.GetTtsCacheDir());
+                Directory.CreateDirectory(_appPaths.GetTtsCacheDir());
 
                 string lang = MapLanguageCode(language ?? "English");
                 float actualSpeed = speed ?? 1.0f;
@@ -77,7 +80,7 @@ namespace LearningAssistant.Services.TTS
 
             try
             {
-                Directory.CreateDirectory(AppPaths.GetTtsCacheDir());
+                Directory.CreateDirectory(_appPaths.GetTtsCacheDir());
 
                 string lang = MapLanguageCode(language ?? "English");
                 float actualSpeed = speed ?? 1.0f;

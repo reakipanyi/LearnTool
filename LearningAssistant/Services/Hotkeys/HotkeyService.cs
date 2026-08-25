@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Models.Hotkeys;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,7 @@ namespace LearningAssistant.Services.Hotkeys
         private readonly Dictionary<string, EventHandler<HotkeyPressedEventArgs>> _handlers;
         private readonly Dictionary<int, string> _hotkeyIdToAction;
         private int _nextHotkeyId;
+        private readonly IAppPaths _appPaths;
 
         public event EventHandler<HotkeyPressedEventArgs>? HotkeyPressed;
 
@@ -26,9 +28,10 @@ namespace LearningAssistant.Services.Hotkeys
 
         private static IntPtr? _windowHandle;
 
-        public HotkeyService(ILogger<HotkeyService>? logger = null)
+        public HotkeyService(ILogger<HotkeyService>? logger = null, IAppPaths appPaths = null!)
         {
             _logger = logger;
+            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
             _config = new HotkeyConfig();
             _hotkeyMappings = new Dictionary<string, HotkeyMapping>();
             _handlers = new Dictionary<string, EventHandler<HotkeyPressedEventArgs>>();
@@ -217,7 +220,7 @@ namespace LearningAssistant.Services.Hotkeys
                     WriteIndented = true
                 });
 
-                var configPath = Path.Combine(AppPaths.ConfigDir, "HotkeySettings.json");
+                var configPath = Path.Combine(_appPaths.ConfigDir, "HotkeySettings.json");
                 File.WriteAllText(configPath, json);
             }
             catch (Exception ex)
@@ -231,7 +234,7 @@ namespace LearningAssistant.Services.Hotkeys
         {
             try
             {
-                var configPath = Path.Combine(AppPaths.ConfigDir, "HotkeySettings.json");
+                var configPath = Path.Combine(_appPaths.ConfigDir, "HotkeySettings.json");
                 if (!File.Exists(configPath))
                     return;
 

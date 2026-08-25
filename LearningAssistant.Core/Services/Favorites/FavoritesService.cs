@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common.Events;
 using LearningAssistant.Models.Favorites;
 using Microsoft.Extensions.Logging;
@@ -15,11 +16,13 @@ namespace LearningAssistant.Services.Favorites
         private readonly IEventBus? _eventBus;
         private List<FavoriteFolder> _folders = new();
         private List<FavoriteItem> _items = new();
-        private string _dataFilePath => AppPaths.GetUserFavoritesPath();
+        private string _dataFilePath => _appPaths?.GetUserFavoritesPath() ?? AppPaths.GetUserFavoritesPath();
+        private readonly IAppPaths? _appPaths;
 
-        public FavoritesService(ILogger<FavoritesService>? logger = null, IEventBus? eventBus = null)
+        public FavoritesService(ILogger<FavoritesService>? logger = null, IEventBus? eventBus = null, IAppPaths? appPaths = null)
         {
             _logger = logger;
+            _appPaths = appPaths;
             _eventBus = eventBus;
             LoadData();
         }
@@ -155,7 +158,7 @@ namespace LearningAssistant.Services.Favorites
             {
                 _eventBus.Publish(new FavoriteAddedEvent
                 {
-                    UserId = AppPaths.GetCurrentUserId(),
+                    UserId = _appPaths?.GetCurrentUserId() ?? AppPaths.GetCurrentUserId(),
                     ItemId = item.Id,
                     ItemContent = content
                 });
@@ -503,7 +506,7 @@ namespace LearningAssistant.Services.Favorites
                 {
                     Version = "1.0",
                     ExportedAt = DateTime.Now,
-                    UserId = AppPaths.GetCurrentUserId(),
+                    UserId = _appPaths?.GetCurrentUserId() ?? AppPaths.GetCurrentUserId(),
                     Folders = foldersToExport,
                     Items = itemsToExport
                 };

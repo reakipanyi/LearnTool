@@ -1,4 +1,3 @@
-using System.Drawing;
 using LearningAssistant.Models.Pdf;
 
 namespace LearningAssistant.Services.Pdf

@@ -83,7 +83,7 @@ namespace LearningAssistant.Services.Gamification
         /// <summary>
         /// 获取最近的反馈记录
         /// </summary>
-        /// <param name="count">返回条数（默认 10）</param>
+        /// <param name="count">返回条数（默认 10）param>
         List<InstantFeedback> GetRecentFeedbacks(int count = 10);
 
         /// <summary>

@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Forms.UserControls;
 using System.Collections.Concurrent;
@@ -38,6 +39,12 @@ namespace LearningAssistant.Services
         private readonly ConcurrentDictionary<Form, Button> _closeButtons = new();
         private readonly Color _closeButtonNormalColor = Color.FromArgb(240, 240, 240);
         private readonly Color _closeButtonHoverColor = Color.FromArgb(220, 220, 220);
+        private readonly IDialogService? _dialogService;
+
+        public AIPanelPopupService(IDialogService? dialogService = null)
+        {
+            _dialogService = dialogService;
+        }
 
         #endregion
 
@@ -193,13 +200,16 @@ namespace LearningAssistant.Services
         /// <summary>
         /// 向用户展示 AI 面板错误提示（提示失败时静默，不影响主流程）。
         /// </summary>
-        private static void ShowPanelError(Form parent, string title, Exception ex)
+        private void ShowPanelError(Form parent, string title, Exception ex)
         {
             try
             {
                 if (parent != null && !parent.IsDisposed)
                 {
-                    MessageBox.Show($"{title}：{ex.Message}", "AI 面板", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    if (_dialogService != null)
+                        _dialogService.ShowMessageAsync("AI 面板", $"{title}：{ex.Message}").GetAwaiter().GetResult();
+                    else
+                        MessageBox.Show($"{title}：{ex.Message}", "AI 面板", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
             catch

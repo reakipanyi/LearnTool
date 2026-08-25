@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
 using LearningAssistant.Data.Database;
@@ -10,7 +11,7 @@ using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Services.Gamification
 {
-    public class GamificationService : IGamificationService, IDisposable
+    public class GamificationService : IGamificationService, IGamificationUIBinding, IDisposable
     {
         private readonly ILogger<GamificationService>? _logger;
         private readonly IEventBus? _eventBus;
@@ -59,7 +60,8 @@ namespace LearningAssistant.Services.Gamification
         public GamificationService(
             IDbContextFactory<AppDbContext> dbContextFactory,
             ILoggerFactory? loggerFactory = null,
-            IEventBus? eventBus = null)
+            IEventBus? eventBus = null,
+            IAppPaths? appPaths = null)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _logger = loggerFactory?.CreateLogger<GamificationService>();
@@ -70,9 +72,10 @@ namespace LearningAssistant.Services.Gamification
                 loggerFactory?.CreateLogger<StudyStatsManager>(),
                 OnLevelUp,
                 OnScoreChanged,
-                OnXPChanged);
+                OnXPChanged,
+                appPaths);
 
-            _badgeManager = new BadgeManager(dbContextFactory, loggerFactory?.CreateLogger<BadgeManager>());
+            _badgeManager = new BadgeManager(dbContextFactory, loggerFactory?.CreateLogger<BadgeManager>(), null, appPaths);
             _badgeManager.BadgesUnlocked += OnBadgesUnlocked;
 
             _challengeManager = new ChallengeManager(
@@ -81,7 +84,8 @@ namespace LearningAssistant.Services.Gamification
                 OnScoreChanged,
                 OnXPChanged,
                 OnLevelUp,
-                OnChallengeCompleted);
+                OnChallengeCompleted,
+                appPaths);
 
             SubscribeToEvents();
         }

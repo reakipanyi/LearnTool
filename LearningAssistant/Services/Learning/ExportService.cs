@@ -151,13 +151,15 @@ namespace LearningAssistant.Services.Learning
 
                 var renderWidth = 1000;
                 var renderHeight = (int)(renderWidth * pageSize.Height / pageSize.Width);
-                var pageBitmap = pdfService.RenderPage(highlight.PageIndex, renderWidth, renderHeight);
+                var pageBytes = pdfService.RenderPage(highlight.PageIndex, renderWidth, renderHeight);
 
-                if (pageBitmap == null)
+                if (pageBytes == null)
                 {
                     _logger.LogWarning($"Failed to render page {highlight.PageIndex}");
                     return null;
                 }
+
+                var pageBitmap = new Bitmap(new MemoryStream(pageBytes));
 
                 var cropX = (int)(highlight.NormalizedX * renderWidth);
                 var cropY = (int)(highlight.NormalizedY * renderHeight);
@@ -378,11 +380,11 @@ namespace LearningAssistant.Services.Learning
                             {
                                 var renderWidth = 1000;
                                 var renderHeight = (int)(renderWidth * pageSize.Height / pageSize.Width);
-                                var pageBitmap = pdfService.RenderPage(stroke.PageIndex, renderWidth, renderHeight);
+                                var pageBytes = pdfService.RenderPage(stroke.PageIndex, renderWidth, renderHeight);
 
-                                if (pageBitmap != null)
+                                if (pageBytes != null)
                                 {
-                                    using (pageBitmap)
+                                    using (var pageBitmap = new Bitmap(new MemoryStream(pageBytes)))
                                     {
                                         float minX = float.MaxValue, minY = float.MaxValue;
                                         float maxX = float.MinValue, maxY = float.MinValue;

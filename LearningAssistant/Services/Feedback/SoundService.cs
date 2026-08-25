@@ -1,5 +1,6 @@
 using System.IO;
 using System.Media;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Services.TTS;
 
@@ -8,6 +9,7 @@ namespace LearningAssistant.Services.Feedback
     public class SoundService : ISoundService
     {
         private readonly ITTSService? _ttsService;
+        private readonly IAppPaths _appPaths;
         private static readonly string CacheDirectory = CachePaths.Sound;
         private static readonly string HoorayCachePath = Path.Combine(CacheDirectory, "hooray.wav");
         private static readonly string OopsCachePath = Path.Combine(CacheDirectory, "oops.wav");
@@ -15,10 +17,11 @@ namespace LearningAssistant.Services.Feedback
         private static readonly string AchievementCachePath = Path.Combine(CacheDirectory, "achievement.wav");
         private static readonly string ClickCachePath = Path.Combine(CacheDirectory, "click.wav");
 
-        public SoundService(ITTSService? ttsService = null)
+        public SoundService(ITTSService? ttsService = null, IAppPaths appPaths = null!)
         {
             _ttsService = ttsService;
-            AppPaths.EnsureDirectoryExists(CacheDirectory);
+            _appPaths = appPaths;
+            _appPaths.EnsureDirectoryExists(CacheDirectory);
         }
         
         public void PlaySuccess()

@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Models.Pdf;
 using Microsoft.Extensions.Logging;
@@ -13,7 +14,7 @@ namespace LearningAssistant.Services.Pdf
             _logger = logger;
         }
 
-        public Bitmap? LoadAnnotation(string pdfPath, int pageIndex, int targetWidth, int targetHeight, SizeF pageOriginalSize)
+        public byte[]? LoadAnnotation(string pdfPath, int pageIndex, int targetWidth, int targetHeight, SizeFInfo pageOriginalSize)
         {
             try
             {
@@ -104,7 +105,7 @@ namespace LearningAssistant.Services.Pdf
                     g.DrawString(text.Content, font, brush, x, y);
                 }
 
-                return bitmap;
+                return BitmapToBytes(bitmap);
             }
             catch (Exception ex)
             {
@@ -352,6 +353,21 @@ namespace LearningAssistant.Services.Pdf
         private string GetAnnotationPath(string pdfPath, int pageIndex)
         {
             return AppPaths.GetUserAnnotationPath(pdfPath, pageIndex);
+        }
+
+        private static byte[]? BitmapToBytes(Bitmap? bmp)
+        {
+            if (bmp == null) return null;
+            using var ms = new MemoryStream();
+            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            return ms.ToArray();
+        }
+
+        private static Bitmap? BytesToBitmap(byte[]? data)
+        {
+            if (data == null || data.Length == 0) return null;
+            using var ms = new MemoryStream(data);
+            return new Bitmap(ms);
         }
     }
 }

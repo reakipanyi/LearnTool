@@ -1,7 +1,7 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
 using LearningAssistant.Services.Learning;
-using KidWinApp.Services;
+using LearningAssistant.Common;
 using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Services.Favorites

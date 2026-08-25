@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using PdfiumViewer;
 using System.Drawing.Printing;
 using Microsoft.Extensions.Logging;
@@ -74,7 +75,7 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
-        public Bitmap? RenderPage(int pageIndex, int width, int height)
+        public byte[]? RenderPage(int pageIndex, int width, int height)
         {
             if (pageIndex < 0)
                 throw new ArgumentOutOfRangeException(nameof(pageIndex), "Page index cannot be negative.");
@@ -97,7 +98,7 @@ namespace LearningAssistant.Services.Pdf
                     using var img = _pdf.Render(pageIndex, width, height, 96, 96, PdfRenderFlags.Annotations);
                     var result = img != null ? new Bitmap(img) : null;
                     _logger.LogDebug("Page {PageIndex} rendered successfully", pageIndex);
-                    return result;
+                    return BitmapToBytes(result);
                 }
                 catch (Exception ex)
                 {
@@ -107,7 +108,7 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
-        public System.Drawing.SizeF GetPageSize(int pageIndex)
+        public SizeFInfo GetPageSize(int pageIndex)
         {
             if (pageIndex < 0)
                 throw new ArgumentOutOfRangeException(nameof(pageIndex), "Page index cannot be negative.");
@@ -115,15 +116,18 @@ namespace LearningAssistant.Services.Pdf
             lock (_lockObj)
             {
                 if (_pdf == null)
-                    return System.Drawing.SizeF.Empty;
+                    return SizeFInfo.Empty;
 
                 if (pageIndex >= _pdf.PageCount)
-                    return System.Drawing.SizeF.Empty;
+                    return SizeFInfo.Empty;
 
                 if (_pdf.PageSizes != null && _pdf.PageSizes.Count > pageIndex)
-                    return _pdf.PageSizes[pageIndex];
+                {
+                    var size = _pdf.PageSizes[pageIndex];
+                    return new SizeFInfo(size.Width, size.Height);
+                }
 
-                return System.Drawing.SizeF.Empty;
+                return SizeFInfo.Empty;
             }
         }
 
@@ -260,6 +264,21 @@ namespace LearningAssistant.Services.Pdf
                     _pdf = null;
                 }
             }
+        }
+
+        private static byte[]? BitmapToBytes(Bitmap? bmp)
+        {
+            if (bmp == null) return null;
+            using var ms = new MemoryStream();
+            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            return ms.ToArray();
+        }
+
+        private static Bitmap? BytesToBitmap(byte[]? data)
+        {
+            if (data == null || data.Length == 0) return null;
+            using var ms = new MemoryStream(data);
+            return new Bitmap(ms);
         }
     }
 }

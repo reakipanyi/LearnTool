@@ -1,4 +1,4 @@
-using System.Drawing;
+using LearningAssistant.Abstractions;
 
 namespace LearningAssistant.Services.Pdf
 {
@@ -23,16 +23,16 @@ namespace LearningAssistant.Services.Pdf
         /// <summary>
         /// OCR识别图片内容并翻译
         /// </summary>
-        /// <param name="image">图片Bitmap</param>
+        /// <param name="image">图片byte[]</param>
         /// <returns>元组(原始识别文本, 翻译文本)</returns>
-        Task<(string? Original, string? Translation)> OcrAndTranslateAsync(Bitmap image);
+        Task<(string? Original, string? Translation)> OcrAndTranslateAsync(byte[] image);
 
         /// <summary>
         /// OCR识别图片指定区域内容并翻译
         /// </summary>
-        /// <param name="image">图片Bitmap</param>
+        /// <param name="image">图片byte[]</param>
         /// <param name="region">要识别的矩形区域</param>
         /// <returns>元组(原始识别文本, 翻译文本)</returns>
-        Task<(string? Original, string? Translation)> OcrAndTranslateAsync(Bitmap image, Rectangle region);
+        Task<(string? Original, string? Translation)> OcrAndTranslateAsync(byte[] image, RectInt region);
     }
 }

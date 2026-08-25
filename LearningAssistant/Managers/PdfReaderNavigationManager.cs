@@ -182,7 +182,7 @@ namespace LearningAssistant.Managers
                     var bmp = await _form.Presenter!.RenderPageAsync(page, Math.Max(1, targetW), Math.Max(1, targetH));
                     if (bmp != null)
                     {
-                        _form.Form.BeginInvoke(() => _form.DisplayImage(bmp));
+                        _form.Form.BeginInvoke(() => _form.DisplayImage(new Bitmap(new MemoryStream(bmp))));
                     }
                 }
                 catch (OperationCanceledException)
@@ -217,7 +217,7 @@ namespace LearningAssistant.Managers
                             var bmp = await _form.Presenter!.RenderPageAsync(page, Math.Max(1, targetW), Math.Max(1, targetH));
                             if (bmp != null)
                             {
-                                _form.Form.BeginInvoke(() => _form.DisplayImage(bmp));
+                                _form.Form.BeginInvoke(() => _form.DisplayImage(new Bitmap(new MemoryStream(bmp))));
                             }
                         }
                         catch (OperationCanceledException)
@@ -274,7 +274,7 @@ namespace LearningAssistant.Managers
                     var bmp = await _form.Presenter!.RenderPageAsync(page, _form.PictureBoxPdf.ClientSize.Width, _form.PictureBoxPdf.ClientSize.Height);
                     if (bmp != null)
                     {
-                        _form.Form.BeginInvoke(() => _form.DisplayImage(bmp));
+                        _form.Form.BeginInvoke(() => _form.DisplayImage(new Bitmap(new MemoryStream(bmp))));
                     }
                 }
                 catch (OperationCanceledException)
@@ -994,8 +994,8 @@ namespace LearningAssistant.Managers
                 int imgWidth = _form.CurrentPageImage.Width;
                 int imgHeight = _form.CurrentPageImage.Height;
 
-                var annotationBitmap = _form.Presenter.LoadAnnotationForCurrentPage(imgWidth, imgHeight);
-                ApplyLoadedAnnotationBitmap(annotationBitmap);
+                var annotationBytes = _form.Presenter.LoadAnnotationForCurrentPage(imgWidth, imgHeight);
+                ApplyLoadedAnnotationBitmap(annotationBytes != null ? new Bitmap(new MemoryStream(annotationBytes)) : null);
             }
             catch (Exception ex)
             {

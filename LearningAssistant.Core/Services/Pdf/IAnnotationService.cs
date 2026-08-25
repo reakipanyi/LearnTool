@@ -1,5 +1,5 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Models.Pdf;
-using System.Drawing;
 
 namespace LearningAssistant.Services.Pdf
 {
@@ -17,8 +17,8 @@ namespace LearningAssistant.Services.Pdf
         /// <param name="targetWidth">目标渲染宽度</param>
         /// <param name="targetHeight">目标渲染高度</param>
         /// <param name="pageOriginalSize">页面原始尺寸（用于坐标转换）</param>
-        /// <returns>标注图层Bitmap，若无标注则返回null</returns>
-        Bitmap? LoadAnnotation(string pdfPath, int pageIndex, int targetWidth, int targetHeight, SizeF pageOriginalSize);
+        /// <returns>标注图层byte[]，若无标注则返回null</returns>
+        byte[]? LoadAnnotation(string pdfPath, int pageIndex, int targetWidth, int targetHeight, SizeFInfo pageOriginalSize);
 
         /// <summary>
         /// 保存页面标注

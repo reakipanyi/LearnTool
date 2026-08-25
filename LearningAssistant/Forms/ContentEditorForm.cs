@@ -403,7 +403,7 @@ namespace LearningAssistant.Forms
             JsonTextChanged?.Invoke(this, EventArgs.Empty);
         }
 
-        public void RefreshTreeView(TreeNodeCollection nodes)
+        public void RefreshTreeView(object? nodes)
         {
             // 树形视图刷新方法 - 如果需要可以在此实现
         }
@@ -1053,9 +1053,27 @@ namespace LearningAssistant.Forms
             MessageBox.Show(msg, "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        public DialogResult ShowConfirm(string message, string title)
+        public bool? ShowConfirm(string message, string title)
         {
-            return MessageBox.Show(message, title, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+            var result = MessageBox.Show(message, title, MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+            return result switch
+            {
+                DialogResult.Yes => true,
+                DialogResult.No => false,
+                _ => null
+            };
+        }
+
+        public string? ShowOpenFileDialog(string filter, string title, string defaultFileName)
+        {
+            using var dialog = new OpenFileDialog { Filter = filter, FileName = defaultFileName, Title = title };
+            return dialog.ShowDialog() == DialogResult.OK ? dialog.FileName : null;
+        }
+
+        public string? ShowSaveFileDialog(string filter, string title, string defaultFileName)
+        {
+            using var dialog = new SaveFileDialog { Filter = filter, FileName = defaultFileName, Title = title };
+            return dialog.ShowDialog() == DialogResult.OK ? dialog.FileName : null;
         }
 
         public void ApplyTheme(ThemeColors colors)

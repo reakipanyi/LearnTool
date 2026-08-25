@@ -1,3 +1,5 @@
+using LearningAssistant.Abstractions;
+using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
 using LearningAssistant.Forms.UserControls;
 using LearningAssistant.Models.Config;
@@ -1236,8 +1238,9 @@ namespace LearningAssistant.Forms
         /// 显示PDF页面图像
         /// </summary>
         /// <param name="bmp">要显示的Bitmap图像</param>
-        public void DisplayImage(Bitmap bmp)
+        public void DisplayImage(byte[] imageData)
         {
+            Bitmap bmp = new Bitmap(new MemoryStream(imageData));
             try
             {
                 CleanupAnnotationBitmap();
@@ -1277,6 +1280,13 @@ namespace LearningAssistant.Forms
             }
         }
 
+        void IPdfReaderFormAccess.DisplayImage(Bitmap bmp)
+        {
+            using var ms = new MemoryStream();
+            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            DisplayImage(ms.ToArray());
+        }
+
         private async Task LoadAnnotationsAsync(int pageIndex, string pdfPath)
         {
             try
@@ -1298,7 +1308,9 @@ namespace LearningAssistant.Forms
                 Bitmap? annotationBmp = null;
                 if (_presenter != null && !string.IsNullOrEmpty(pdfPath) && imgW > 0 && imgH > 0)
                 {
-                    annotationBmp = _presenter.LoadAnnotationForPage(pdfPath, pageIndex, imgW, imgH);
+                    var annotationBytes = _presenter.LoadAnnotationForPage(pdfPath, pageIndex, imgW, imgH);
+                    if (annotationBytes != null)
+                        annotationBmp = new Bitmap(new MemoryStream(annotationBytes));
                 }
 
                 if (IsDisposed || _pictureBoxPdf.IsDisposed) return;
@@ -1334,8 +1346,9 @@ namespace LearningAssistant.Forms
         /// 设置双页模式下第二页的图像
         /// </summary>
         /// <param name="bmp">第二页的Bitmap图像，null则清除</param>
-        public void SetSecondPageImage(Bitmap? bmp)
+        public void SetSecondPageImage(byte[]? imageData)
         {
+            Bitmap? bmp = imageData != null ? new Bitmap(new MemoryStream(imageData)) : null;
             try
             {
                 SafeReplaceImage(ref _secondPageImage, bmp);
@@ -1478,14 +1491,15 @@ namespace LearningAssistant.Forms
             }
         }
 
-        public void AddThumbnail(int pageIndex, Image thumbnail)
+        public void AddThumbnail(int pageIndex, byte[] thumbnailData)
         {
             // PDF 模式：directoryPath 为空，保持原有行为不分组
-            AddThumbnail(pageIndex, thumbnail, string.Empty);
+            AddThumbnail(pageIndex, thumbnailData, string.Empty);
         }
 
-        public void AddThumbnail(int pageIndex, Image thumbnail, string directoryPath)
+        public void AddThumbnail(int pageIndex, byte[] thumbnailData, string directoryPath)
         {
+            Image thumbnail = new Bitmap(new MemoryStream(thumbnailData));
             if (_flowLayoutPanelThumbnails == null || thumbnail == null) return;
 
             // 图片模式下，按目录分组：每个新目录前插入一个分组标题
@@ -1678,31 +1692,44 @@ namespace LearningAssistant.Forms
             _textBoxOriginal.Text = text;
         }
 
-        public Image? GetCurrentImage()
+        public byte[]? GetCurrentImage()
         {
-            return _currentPageImage;
+            return BitmapToBytes(_currentPageImage);
         }
 
-        public Rectangle? GetSelectionRect()
+        private static byte[]? BitmapToBytes(Bitmap? bmp)
         {
-            return _lastSelectionRect;
+            if (bmp == null) return null;
+            using var ms = new MemoryStream();
+            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            return ms.ToArray();
         }
 
-        public Rectangle GetDisplayRect()
+        public RectInt? GetSelectionRect()
         {
-            return _pictureBoxPdf.ClientRectangle;
+            var rect = _lastSelectionRect;
+            return rect.HasValue ? new RectInt(rect.Value.X, rect.Value.Y, rect.Value.Width, rect.Value.Height) : null;
+        }
+
+        public RectInt GetDisplayRect()
+        {
+            var rect = _pictureBoxPdf.ClientRectangle;
+            return new RectInt(rect.X, rect.Y, rect.Width, rect.Height);
         }
 
         /// <summary>
         /// 获取图片在PictureBox中的显示矩形（考虑缩放和偏移）
         /// </summary>
         /// <returns>图片显示区域的矩形坐标</returns>
-        public Rectangle GetImageDisplayRect()
+        public RectInt GetImageDisplayRect()
         {
             try
             {
                 if (_currentPageImage == null)
-                    return _pictureBoxPdf?.ClientRectangle ?? Rectangle.Empty;
+                {
+                    var r = _pictureBoxPdf?.ClientRectangle ?? Rectangle.Empty;
+                    return new RectInt(r.X, r.Y, r.Width, r.Height);
+                }
 
                 var image = _currentPageImage;
                 int imgWidth, imgHeight;
@@ -1714,7 +1741,8 @@ namespace LearningAssistant.Forms
                 catch (ObjectDisposedException)
                 {
                     _logger.LogWarning("Image disposed in GetImageDisplayRect");
-                    return _pictureBoxPdf?.ClientRectangle ?? Rectangle.Empty;
+                    var r = _pictureBoxPdf?.ClientRectangle ?? Rectangle.Empty;
+                    return new RectInt(r.X, r.Y, r.Width, r.Height);
                 }
 
                 var controlWidth = _pictureBoxPdf.ClientSize.Width;
@@ -1744,14 +1772,19 @@ namespace LearningAssistant.Forms
                 displayX = (controlWidth - displayWidth) / 2 + offset.X;
                 displayY = (controlHeight - displayHeight) / 2 + offset.Y;
 
-                return new Rectangle(displayX, displayY, displayWidth, displayHeight);
+                return new RectInt(displayX, displayY, displayWidth, displayHeight);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in GetImageDisplayRect");
-                return _pictureBoxPdf?.ClientRectangle ?? Rectangle.Empty;
+                var r = _pictureBoxPdf?.ClientRectangle ?? Rectangle.Empty;
+                return new RectInt(r.X, r.Y, r.Width, r.Height);
             }
         }
+
+        Rectangle IPdfReaderFormAccess.GetImageDisplayRect() => ToRectangle(GetImageDisplayRect());
+
+        private static Rectangle ToRectangle(RectInt rect) => new Rectangle(rect.X, rect.Y, rect.Width, rect.Height);
 
         public (int pageIndex, Rectangle pageRect, Bitmap? pageImage) GetPageAtPoint(Point clientPoint)
         {
@@ -1773,12 +1806,13 @@ namespace LearningAssistant.Forms
                 }
             }
 
-            var imgRect = GetImageDisplayRect();
+            var imgRect = ToRectangle(GetImageDisplayRect());
             return (_currentPageIndex, imgRect, _currentPageImage);
         }
 
-        public void ShowOcrOverlay(Bitmap? image)
+        public void ShowOcrOverlay(byte[]? imageData)
         {
+            Bitmap? image = imageData != null ? new Bitmap(new MemoryStream(imageData)) : null;
             if (_ocrPanel != null && _ocrPictureBox != null && _ocrCloseButton != null)
             {
                 if (_ocrPictureBox.Image != null)
@@ -2172,7 +2206,7 @@ namespace LearningAssistant.Forms
             {
                 try
                 {
-                    var imgRect = GetImageDisplayRect();
+                    var imgRect = ToRectangle(GetImageDisplayRect());
                     float relX = (float)(location.X - imgRect.X) / imgRect.Width;
                     float relY = (float)(location.Y - imgRect.Y) / imgRect.Height;
 
@@ -2362,7 +2396,7 @@ namespace LearningAssistant.Forms
             }
             else
             {
-                g.DrawImage(_currentPageImage, GetImageDisplayRect());
+                g.DrawImage(_currentPageImage, ToRectangle(GetImageDisplayRect()));
             }
         }
 
@@ -2375,7 +2409,7 @@ namespace LearningAssistant.Forms
 
             if (isHighlightMode)
             {
-                var color = HighlightService.GetHighlightColor(_highlightManager?.CurrentHighlightColor ?? _currentHighlightColor);
+                var color = HighlightService.GetHighlightColor(_highlightManager?.CurrentHighlightColor ?? _currentHighlightColor).ToColor();
                 using var brush = new SolidBrush(Color.FromArgb(color.A, color.R, color.G, color.B));
                 using var pen = new Pen(Color.FromArgb(color.A + 50, color.R, color.G, color.B), 2);
                 g.FillRectangle(brush, rect);
@@ -2405,7 +2439,7 @@ namespace LearningAssistant.Forms
             }
             else
             {
-                _navigationManager.DrawAnnotations(g, GetImageDisplayRect());
+                _navigationManager.DrawAnnotations(g, ToRectangle(GetImageDisplayRect()));
             }
         }
 

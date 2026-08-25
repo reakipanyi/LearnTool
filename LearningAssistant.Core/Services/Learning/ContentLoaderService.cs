@@ -1,5 +1,6 @@
 using LearningAssistant.Common;
 using LearningAssistant.Models.Learning;
+using LearningAssistant.Abstractions;
 using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Services.Learning
@@ -50,10 +51,12 @@ namespace LearningAssistant.Services.Learning
 
         private readonly Dictionary<string, CacheEntry> _fileCache = new Dictionary<string, CacheEntry>();
         private readonly object _cacheLock = new object();
+        private readonly IAppPaths _appPaths;
 
-        public ContentLoaderService(ILogger<ContentLoaderService> logger)
+        public ContentLoaderService(ILogger<ContentLoaderService> logger, IAppPaths appPaths)
         {
             _logger = logger;
+            _appPaths = appPaths;
         }
 
         public List<LearningItem> LoadItems(LearningContext context)
@@ -234,7 +237,7 @@ namespace LearningAssistant.Services.Learning
         {
             try
             {
-                var dataDir = AppPaths.DataDir;
+                var dataDir = _appPaths.DataDir;
                 var defaultFile = _categoryFileMap.GetValueOrDefault(subCategory, "");
 
                 var categoryPrefix = GetCategoryFilePrefix(subCategory);
@@ -310,7 +313,7 @@ namespace LearningAssistant.Services.Learning
         {
             try
             {
-                var userContentDir = Path.Combine(AppPaths.DataDir, "UserContent");
+                var userContentDir = Path.Combine(_appPaths.DataDir, "UserContent");
                 Directory.CreateDirectory(userContentDir);
 
                 var safeUserId = SanitizeFileName(content.UserId);
@@ -342,16 +345,16 @@ namespace LearningAssistant.Services.Learning
         {
             if (!string.IsNullOrWhiteSpace(wordBankFile))
             {
-                return Path.Combine(AppPaths.DataDir, wordBankFile);
+                return Path.Combine(_appPaths.DataDir, wordBankFile);
             }
-            return Path.Combine(AppPaths.DataDir, _categoryFileMap.GetValueOrDefault(subCategory, "data.json"));
+            return Path.Combine(_appPaths.DataDir, _categoryFileMap.GetValueOrDefault(subCategory, "data.json"));
         }
 
         private bool IsPathSafe(string filePath)
         {
             try
             {
-                var dataDir = new DirectoryInfo(AppPaths.DataDir).FullName;
+                var dataDir = new DirectoryInfo(_appPaths.DataDir).FullName;
                 var fullPath = new FileInfo(filePath).FullName;
                 return fullPath.Equals(dataDir, StringComparison.OrdinalIgnoreCase)
                     || fullPath.StartsWith(dataDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);

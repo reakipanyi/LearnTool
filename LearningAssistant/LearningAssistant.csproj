@@ -136,6 +136,35 @@
 		<Compile Remove="Services\Pdf\PdfStudyIntegration.cs" />
 		<Compile Remove="Presenters\PdfPresenter.cs" />
 		<Compile Remove="Views\IPdfView.cs" />
+
+		<Compile Remove="Services\Quiz\QuizEngineService.cs" />
+
+		<Compile Remove="Services\Quiz\IQuizEngineService.cs" />
+
+		<Compile Remove="Services\Quiz\VoiceRecallService.cs" />
+
+		<Compile Remove="Services\Quiz\IVoiceRecallService.cs" />
+
+		<Compile Remove="Services\Learning\WordMatchGameService.cs" />
+
+		<Compile Remove="Services\Speech\IWebSpeechService.cs" />
+
+		<Compile Remove="Services\AI\IAiQuestionService.cs" />
+
+		<Compile Remove="Services\Web\WebBookmarkService.cs" />
+
+		<Compile Remove="Services\Cloud\BaiduNetdiskService.cs" />
+
+		<Compile Remove="Services\Cloud\ICloudStorageService.cs" />
+
+		<Compile Remove="Presenters\ContentEditorPresenter.cs" />
+
+		<Compile Remove="Views\IContentEditorView.cs" />
+
+		<Compile Remove="Services\SubjectTemplateService.cs" />
+
+
+		<Compile Remove="Common\\StringLanguageDetector.cs" />
 	</ItemGroup>
 	<ItemGroup>
 		<EmbeddedResource Remove="Forms\BaiduNetdiskAuthForm.resx" />

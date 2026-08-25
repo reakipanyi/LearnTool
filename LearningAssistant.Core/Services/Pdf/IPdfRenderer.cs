@@ -1,4 +1,4 @@
-using System.Drawing;
+using LearningAssistant.Abstractions;
 
 namespace LearningAssistant.Services.Pdf
 {
@@ -14,15 +14,15 @@ namespace LearningAssistant.Services.Pdf
         /// <param name="pageIndex">页码索引（从0开始）</param>
         /// <param name="width">渲染宽度（像素）</param>
         /// <param name="height">渲染高度（像素）</param>
-        /// <returns>渲染后的Bitmap，若失败返回null</returns>
-        Task<Bitmap?> RenderPageAsync(int pageIndex, int width, int height);
+        /// <returns>渲染后的byte[]，若失败返回null</returns>
+        Task<byte[]?> RenderPageAsync(int pageIndex, int width, int height);
 
         /// <summary>
         /// 获取页面缩略图
         /// </summary>
         /// <param name="pageIndex">页码索引（从0开始）</param>
-        /// <returns>缩略图Bitmap</returns>
-        Task<Bitmap?> GetThumbnailAsync(int pageIndex);
+        /// <returns>缩略图byte[]</returns>
+        Task<byte[]?> GetThumbnailAsync(int pageIndex);
 
         /// <summary>
         /// 清空渲染缓存
@@ -76,12 +76,12 @@ namespace LearningAssistant.Services.Pdf
         Task GenerateVisibleThumbnailsAsync(int currentPage, int visibleCount = 5);
 
         /// <summary>
-        /// 对Bitmap应用夜间模式滤镜
+        /// 对byte[]应用夜间模式滤镜
         /// 将浅色背景变深，减少眼睛疲劳
         /// </summary>
-        /// <param name="bitmap">原始Bitmap</param>
-        /// <returns>应用夜间模式后的Bitmap</returns>
-        Bitmap ApplyNightMode(Bitmap bitmap);
+        /// <param name="bitmap">原始byte[]</param>
+        /// <returns>应用夜间模式后的byte[]</returns>
+        byte[] ApplyNightMode(byte[] bitmap);
 
         /// <summary>
         /// 缩略图生成完成事件
@@ -102,7 +102,7 @@ namespace LearningAssistant.Services.Pdf
         /// <summary>
         /// 生成的缩略图
         /// </summary>
-        public Bitmap? Thumbnail { get; set; }
+        public byte[]? Thumbnail { get; set; }
 
         /// <summary>
         /// 缩略图所属目录路径（图片模式下用于按目录分组；PDF 模式为空字符串）

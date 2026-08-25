@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Forms;
 using LearningAssistant.Services.AI;
@@ -39,6 +40,7 @@ namespace LearningAssistant.Managers
     {
         private readonly IAiQuestionService? _aiService;
         private readonly IProgressiveHintStateService? _hintStateService;
+        private readonly IDialogService? _dialogService;
         private readonly string _userId = Constants.DefaultUserId;
 
         #region 构造函数
@@ -53,14 +55,23 @@ namespace LearningAssistant.Managers
         /// <summary>
         /// 带 AI 服务的构造函数
         /// </summary>
-        public ThinkingStimulator(IAiQuestionService? aiService, IProgressiveHintStateService? hintStateService = null, string userId = Constants.DefaultUserId)
+        public ThinkingStimulator(IAiQuestionService? aiService, IProgressiveHintStateService? hintStateService = null, string userId = Constants.DefaultUserId, IDialogService? dialogService = null)
         {
             _aiService = aiService;
             _hintStateService = hintStateService;
             _userId = userId;
+            _dialogService = dialogService;
         }
 
         #endregion
+
+        private void ShowMessage(string title, string message)
+        {
+            if (_dialogService != null)
+                _dialogService.ShowMessageAsync(title, message).GetAwaiter().GetResult();
+            else
+                MessageBox.Show(message, title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
 
         #region 核心功能方法
 
@@ -142,7 +153,7 @@ namespace LearningAssistant.Managers
             // 检查是否有可复习的内容
             if (reviewItems == null || reviewItems.Count == 0)
             {
-                MessageBox.Show("没有需要复习的内容！", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                ShowMessage("提示", "没有需要复习的内容！");
                 return;
             }
 
@@ -294,7 +305,7 @@ namespace LearningAssistant.Managers
             message += "\n完成思考后，你的理解会更深刻！";
 
             // 显示任务对话框
-            MessageBox.Show(message, "🧠 思考任务", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            ShowMessage("🧠 思考任务", message);
         }
 
         #endregion

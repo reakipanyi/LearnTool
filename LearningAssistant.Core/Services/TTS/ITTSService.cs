@@ -12,5 +12,6 @@ namespace LearningAssistant.Services.TTS
         Task StopAsync();
         bool IsSpeaking { get; }
         bool Available { get; }
+        void ReloadSettings();
     }
 }

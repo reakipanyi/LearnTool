@@ -1,4 +1,4 @@
-using System.Drawing;
+using LearningAssistant.Abstractions;
 
 namespace LearningAssistant.Services.Pdf
 {
@@ -26,20 +26,20 @@ namespace LearningAssistant.Services.Pdf
         int PageCount { get; }
 
         /// <summary>
-        /// 渲染指定页面为Bitmap图像
+        /// 渲染指定页面为byte[]图像
         /// </summary>
         /// <param name="pageIndex">页码索引（从0开始）</param>
         /// <param name="width">渲染宽度（像素）</param>
         /// <param name="height">渲染高度（像素）</param>
-        /// <returns>渲染后的Bitmap图像对象，失败时返回null</returns>
-        Bitmap? RenderPage(int pageIndex, int width, int height);
+        /// <returns>渲染后的byte[]图像对象，失败时返回null</returns>
+        byte[]? RenderPage(int pageIndex, int width, int height);
 
         /// <summary>
         /// 获取指定页面的原始尺寸
         /// </summary>
         /// <param name="pageIndex">页码索引（从0开始）</param>
         /// <returns>页面的宽高尺寸（单位：点/pt）</returns>
-        SizeF GetPageSize(int pageIndex);
+        SizeFInfo GetPageSize(int pageIndex);
 
         /// <summary>
         /// 提取指定页面的文本内容

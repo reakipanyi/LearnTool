@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Services.Persistence;
@@ -5,7 +6,6 @@ using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.VisualBasic;
 
 namespace LearningAssistant.Presenters
 {
@@ -16,15 +16,19 @@ namespace LearningAssistant.Presenters
         private readonly IDataPersistenceService _persistenceService;
         private readonly AppConfig _appConfig;
         private readonly IServiceProvider _serviceProvider;
+        private readonly IDialogService _dialogService;
+        private readonly IAppPaths _appPaths;
         private string? _currentUserId;
 
-        public SettingPresenter(ILogger<SettingPresenter> logger, ISettingView view, IDataPersistenceService persistenceService, AppConfig appConfig, IServiceProvider serviceProvider)
+        public SettingPresenter(ILogger<SettingPresenter> logger, ISettingView view, IDataPersistenceService persistenceService, AppConfig appConfig, IServiceProvider serviceProvider, IDialogService dialogService, IAppPaths appPaths)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _view = view ?? throw new ArgumentNullException(nameof(view));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _appConfig = appConfig ?? throw new ArgumentNullException(nameof(appConfig));
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+            _dialogService = dialogService ?? throw new ArgumentNullException(nameof(dialogService));
+            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
 
             _view.SaveClicked += View_SaveClicked;
             _view.CancelClicked += View_CancelClicked;
@@ -129,11 +133,8 @@ namespace LearningAssistant.Presenters
             try
             {
                 var ttsService = _serviceProvider.GetService<ITTSService>();
-                if (ttsService is KokoroSharpTtsService kokoroService)
-                {
-                    kokoroService.ReloadVoiceSettings();
-                    _logger.LogInformation("Notified KokoroSharp TTS service to reload voice settings");
-                }
+                ttsService?.ReloadSettings();
+                _logger.LogInformation("Notified TTS service to reload settings");
             }
             catch (Exception ex)
             {
@@ -146,11 +147,11 @@ namespace LearningAssistant.Presenters
             _view.CloseView();
         }
 
-        private void View_AddUserClicked(object? sender, EventArgs e)
+        private async void View_AddUserClicked(object? sender, EventArgs e)
         {
             try
             {
-                var input = Microsoft.VisualBasic.Interaction.InputBox("请输入新用户名称:", "添加用户", "");
+                var input = await _dialogService.PromptAsync("添加用户", "");
                 if (string.IsNullOrWhiteSpace(input))
                     return;
 
@@ -163,7 +164,7 @@ namespace LearningAssistant.Presenters
                 }
 
                 _persistenceService.CreateUserProfile(userId, userId);
-                AppPaths.EnsureUserDirectoriesExist(userId);
+                _appPaths.EnsureUserDirectoriesExist(userId);
                 _logger.LogInformation("User created: {UserId}", userId);
                 _view.ShowMessage($"用户 \"{userId}\" 创建成功。");
                 LoadUserList();
@@ -178,7 +179,7 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        private void View_DeleteUserClicked(object? sender, EventArgs e)
+        private async void View_DeleteUserClicked(object? sender, EventArgs e)
         {
             try
             {
@@ -204,13 +205,11 @@ namespace LearningAssistant.Presenters
                     return;
                 }
 
-                var confirm = MessageBox.Show(
-                    $"确定要删除用户 \"{selected}\" 吗？\n\n该操作将清除该用户的所有学习数据（进度、收藏、错题、笔记等），且不可恢复！",
+                var confirm = await _dialogService.ConfirmAsync(
                     "确认删除用户",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning);
+                    $"确定要删除用户 \"{selected}\" 吗？\n\n该操作将清除该用户的所有学习数据（进度、收藏、错题、笔记等），且不可恢复！");
 
-                if (confirm != DialogResult.Yes)
+                if (!confirm)
                     return;
 
                 var deleted = _persistenceService.DeleteUserProfile(selected);

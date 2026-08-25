@@ -148,6 +148,11 @@ namespace LearningAssistant.Views
         /// 字段复制请求事件
         /// </summary>
         event EventHandler<FieldCopyEventArgs>? FieldCopyRequested;
+
+        /// <summary>
+        /// 将文本复制到剪贴板
+        /// </summary>
+        void CopyToClipboard(string text);
     }
 
     public class FieldSpeakEventArgs : EventArgs

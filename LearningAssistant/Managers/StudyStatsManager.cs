@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Data.Database;
 using LearningAssistant.Models.Learning;
@@ -14,6 +15,7 @@ namespace LearningAssistant.Managers
     {
         private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
         private readonly ILogger<StudyStatsManager>? _logger;
+        private readonly IAppPaths? _appPaths;
         private string _currentUserId = "default";
         private readonly List<string> _levelTitles = new() {
             "小白", "学徒", "学者", "秀才", "举人", "进士", "翰林", "大师", "宗师", "圣人"
@@ -52,13 +54,15 @@ namespace LearningAssistant.Managers
             ILogger<StudyStatsManager>? logger = null,
             Action? onLevelUp = null,
             Action<int>? onScoreChanged = null,
-            Action<int>? onXPChanged = null)
+            Action<int>? onXPChanged = null,
+            IAppPaths? appPaths = null)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _logger = logger;
             _onLevelUp = onLevelUp;
             _onScoreChanged = onScoreChanged;
             _onXPChanged = onXPChanged;
+            _appPaths = appPaths;
         }
 
         /// <summary>
@@ -85,9 +89,9 @@ namespace LearningAssistant.Managers
         /// <summary>
         /// 获取用户统计数据文件路径（用于迁移）
         /// </summary>
-        private static string GetUserStatsPath(string userId)
+        private string GetUserStatsPath(string userId)
         {
-            var userDir = Path.Combine(AppPaths.UsersDir, userId);
+            var userDir = Path.Combine(_appPaths?.UsersDir ?? AppPaths.UsersDir, userId);
             return Path.Combine(userDir, "study_stats.json");
         }
 
@@ -190,7 +194,7 @@ namespace LearningAssistant.Managers
                 var statsPath = GetUserStatsPath(userId);
                 if (!File.Exists(statsPath)) return;
 
-                var migratedMarker = Path.Combine(AppPaths.UsersDir, userId, ".stats_migrated");
+                var migratedMarker = Path.Combine(_appPaths?.UsersDir ?? AppPaths.UsersDir, userId, ".stats_migrated");
                 if (File.Exists(migratedMarker)) return;
 
                 var json = File.ReadAllText(statsPath);

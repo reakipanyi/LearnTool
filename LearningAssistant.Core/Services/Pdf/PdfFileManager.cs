@@ -2,6 +2,8 @@ using LearningAssistant.Common;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
+using LearningAssistant.Abstractions;
+
 namespace LearningAssistant.Services.Pdf
 {
     public class PdfFileManager : IPdfFileManager
@@ -19,11 +21,13 @@ namespace LearningAssistant.Services.Pdf
 
         public event EventHandler<FileLoadedEventArgs>? FileLoaded;
         public event EventHandler<FolderLoadedEventArgs>? FolderLoaded;
+        private readonly IAppPaths _appPaths;
 
-        public PdfFileManager(ILogger<PdfFileManager> logger, IPdfService pdfService)
+        public PdfFileManager(ILogger<PdfFileManager> logger, IPdfService pdfService, IAppPaths appPaths)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _pdfService = pdfService ?? throw new ArgumentNullException(nameof(pdfService));
+            _appPaths = appPaths;
         }
 
         public string CurrentFilePath => _currentPdfPath;
@@ -63,7 +67,7 @@ namespace LearningAssistant.Services.Pdf
             {
                 var data = new SessionData(_lastFolderPath, _currentPdfPath, new Dictionary<string, int>(_filePageMap));
                 var json = JsonSerializer.Serialize(data);
-                File.WriteAllText(AppPaths.LastSessionPath, json);
+                File.WriteAllText(_appPaths.LastSessionPath, json);
             }
             catch (Exception ex)
             {
@@ -75,8 +79,8 @@ namespace LearningAssistant.Services.Pdf
         {
             try
             {
-                if (!File.Exists(AppPaths.LastSessionPath)) return (null, null, null);
-                var json = File.ReadAllText(AppPaths.LastSessionPath);
+                if (!File.Exists(_appPaths.LastSessionPath)) return (null, null, null);
+                var json = File.ReadAllText(_appPaths.LastSessionPath);
                 var data = JsonSerializer.Deserialize<SessionData>(json);
                 if (data == null) return (null, null, null);
                 return (data.Folder, data.FilePath, data.FilePageMap);

@@ -4,6 +4,8 @@ using LearningAssistant.Services.Persistence;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
+using LearningAssistant.Abstractions;
+
 namespace LearningAssistant.Services.Learning
 {
     public class LearningRecommendationService : ILearningRecommendationService
@@ -14,6 +16,7 @@ namespace LearningAssistant.Services.Learning
         private readonly ILearningPathService _learningPathService;
         private readonly IPomodoroService? _pomodoroService;
         private readonly ILogger<LearningRecommendationService> _logger;
+        private readonly IAppPaths _appPaths;
         private readonly string _feedbackDir;
         private readonly Dictionary<string, RecommendationWeights> _userWeights = new Dictionary<string, RecommendationWeights>();
         private readonly Dictionary<string, List<string>> _recentCategories = new Dictionary<string, List<string>>();
@@ -25,6 +28,7 @@ namespace LearningAssistant.Services.Learning
             ILearningAnalyticsService analyticsService,
             ILearningPathService learningPathService,
             ILogger<LearningRecommendationService> logger,
+            IAppPaths appPaths,
             IPomodoroService? pomodoroService = null)
         {
             _spacedRepetitionService = spacedRepetitionService ?? throw new ArgumentNullException(nameof(spacedRepetitionService));
@@ -33,7 +37,8 @@ namespace LearningAssistant.Services.Learning
             _learningPathService = learningPathService ?? throw new ArgumentNullException(nameof(learningPathService));
             _pomodoroService = pomodoroService;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _feedbackDir = AppPaths.RecommendationFeedbackDir;
+            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
+            _feedbackDir = _appPaths.RecommendationFeedbackDir;
             EnsureDirectoryExists();
             MigrateFromOldLocation();
         }
@@ -48,7 +53,7 @@ namespace LearningAssistant.Services.Learning
 
         private void MigrateFromOldLocation()
         {
-            var oldDir = Path.Combine(AppPaths.UsersDir, "recommendation_feedback");
+            var oldDir = Path.Combine(_appPaths.UsersDir, "recommendation_feedback");
             if (!Directory.Exists(oldDir)) return;
 
             try

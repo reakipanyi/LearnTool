@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Data.Database;
 using LearningAssistant.Models.User;
@@ -43,6 +44,7 @@ namespace LearningAssistant.Services.Migration
 
         private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
         private readonly ILogger<DataMigrationService>? _logger;
+        private readonly IAppPaths _appPaths;
 
         /// <summary>迁移步骤常量（用于检查点）</summary>
         private static class MigrationSteps
@@ -66,9 +68,11 @@ namespace LearningAssistant.Services.Migration
 
         public DataMigrationService(
             IDbContextFactory<AppDbContext> dbContextFactory,
+            IAppPaths appPaths,
             ILogger<DataMigrationService>? logger = null)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
+            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
             _logger = logger;
         }
 
@@ -210,7 +214,7 @@ namespace LearningAssistant.Services.Migration
         {
             try
             {
-                var backupDir = Path.Combine(AppPaths.DataDir, "MigrationBackups", DateTime.Now.ToString("yyyyMMdd_HHmmss"));
+                var backupDir = Path.Combine(_appPaths.DataDir, "MigrationBackups", DateTime.Now.ToString("yyyyMMdd_HHmmss"));
                 Directory.CreateDirectory(backupDir);
 
                 _logger?.LogInformation("Starting backup to {BackupDir}", backupDir);
@@ -218,12 +222,12 @@ namespace LearningAssistant.Services.Migration
 
                 var backupSuccess = true;
 
-                if (Directory.Exists(AppPaths.UsersDir))
+                if (Directory.Exists(_appPaths.UsersDir))
                 {
                     var userBackupDir = Path.Combine(backupDir, "Users");
                     Directory.CreateDirectory(userBackupDir);
 
-                    foreach (var file in Directory.GetFiles(AppPaths.UsersDir, "*.json"))
+                    foreach (var file in Directory.GetFiles(_appPaths.UsersDir, "*.json"))
                     {
                         try
                         {
@@ -343,7 +347,7 @@ namespace LearningAssistant.Services.Migration
                 {
                     try
                     {
-                        var dir = AppPaths.UsersDir;
+                        var dir = _appPaths.UsersDir;
                         if (Directory.Exists(dir))
                         {
                             _jsonUserIds = Directory.EnumerateFiles(dir, "*.json")
@@ -364,9 +368,9 @@ namespace LearningAssistant.Services.Migration
             }
         }
 
-        private string SpacedRepetitionJsonPath => Path.Combine(AppPaths.DataDir, "spaced_repetition.json");
-        private string SessionJsonPath => AppPaths.LastSessionPath;
-        private static string AnalyticsJsonPath(string userId) => AppPaths.GetUserAnalyticsPath(userId);
+        private string SpacedRepetitionJsonPath => Path.Combine(_appPaths.DataDir, "spaced_repetition.json");
+        private string SessionJsonPath => _appPaths.LastSessionPath;
+        private string AnalyticsJsonPath(string userId) => _appPaths.GetUserAnalyticsPath(userId);
 
         /// <summary>
         /// 执行迁移（支持断电/崩溃后断点续传）
@@ -380,7 +384,7 @@ namespace LearningAssistant.Services.Migration
 
                 // ---- 备份步骤 ----
                 ReportProgress(5, "开始备份...");
-                var backupDir = Path.Combine(AppPaths.DataDir, "MigrationBackups", DateTime.Now.ToString("yyyyMMdd_HHmmss"));
+                var backupDir = Path.Combine(_appPaths.DataDir, "MigrationBackups", DateTime.Now.ToString("yyyyMMdd_HHmmss"));
                 result.BackupPath = backupDir;
 
                 if (!IsStepCompleted(MigrationSteps.Backup))
@@ -755,7 +759,7 @@ namespace LearningAssistant.Services.Migration
         {
             try
             {
-                var path = AppPaths.GetUserProgressPath(userId);
+                var path = _appPaths.GetUserProgressPath(userId);
                 return Common.JsonHelper.LoadFromFile<UserProfile>(path);
             }
             catch (Exception ex)

@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Models.AI;
 using Microsoft.Extensions.Logging;
@@ -14,10 +15,12 @@ namespace LearningAssistant.Services.AI
         private readonly ILogger<PromptTemplateService>? _logger;
         private ConcurrentBag<PromptTemplateCategory> _categories = new();
         private readonly object _lock = new();
+        private readonly IAppPaths _appPaths;
 
-        public PromptTemplateService(ILogger<PromptTemplateService>? logger = null)
+        public PromptTemplateService(ILogger<PromptTemplateService>? logger = null, IAppPaths appPaths = null!)
         {
             _logger = logger;
+            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
             LoadFromFile();
         }
 
@@ -434,13 +437,13 @@ namespace LearningAssistant.Services.AI
                     WriteIndented = true
                 });
 
-                var directory = Path.GetDirectoryName(AppPaths.PromptTemplatesPath);
+                var directory = Path.GetDirectoryName(_appPaths.PromptTemplatesPath);
                 if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                 {
                     Directory.CreateDirectory(directory);
                 }
 
-                File.WriteAllText(AppPaths.PromptTemplatesPath, json);
+                File.WriteAllText(_appPaths.PromptTemplatesPath, json);
             }
             catch (Exception ex)
             {
@@ -453,9 +456,9 @@ namespace LearningAssistant.Services.AI
         {
             try
             {
-                if (File.Exists(AppPaths.PromptTemplatesPath))
+                if (File.Exists(_appPaths.PromptTemplatesPath))
                 {
-                    var json = File.ReadAllText(AppPaths.PromptTemplatesPath);
+                    var json = File.ReadAllText(_appPaths.PromptTemplatesPath);
                     using var doc = JsonDocument.Parse(json);
                     var root = doc.RootElement;
 

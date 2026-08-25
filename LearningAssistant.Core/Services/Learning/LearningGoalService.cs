@@ -7,6 +7,8 @@ using LearningAssistant.Services.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
+using LearningAssistant.Abstractions;
+
 namespace LearningAssistant.Services.Learning
 {
     /// <summary>
@@ -19,6 +21,7 @@ namespace LearningAssistant.Services.Learning
         private readonly IDataPersistenceService _persistenceService;
         private readonly ILogger<LearningGoalService> _logger;
         private readonly IEventBus? _eventBus;
+        private readonly IAppPaths _appPaths;
         private readonly HashSet<string> _completedGoalsToday = new();
         private string _userId = Constants.DefaultUserId;
 
@@ -29,11 +32,13 @@ namespace LearningAssistant.Services.Learning
             IDbContextFactory<AppDbContext> dbContextFactory,
             IDataPersistenceService persistenceService,
             ILogger<LearningGoalService> logger,
+            IAppPaths appPaths,
             IEventBus? eventBus = null)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
             _eventBus = eventBus;
 
             MigrateFromJsonToDb();
@@ -74,7 +79,7 @@ namespace LearningAssistant.Services.Learning
         {
             try
             {
-                var goalsDir = Path.Combine(AppPaths.UsersDir, "goals");
+                var goalsDir = Path.Combine(_appPaths.UsersDir, "goals");
                 if (!Directory.Exists(goalsDir)) return;
 
                 var migratedMarker = Path.Combine(goalsDir, ".migrated_to_db");

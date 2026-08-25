@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Data.Database;
 using LearningAssistant.Models.User;
@@ -10,6 +11,8 @@ namespace LearningAssistant.Managers
     {
         private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
         private readonly ILogger<BadgeManager>? _logger;
+        private readonly IDialogService? _dialogService;
+        private readonly IAppPaths? _appPaths;
         private string _currentUserId = Constants.DefaultUserId;
         private readonly Dictionary<string, Badge> _badges = new();
         private readonly List<string> _unlockedBadges = new();
@@ -19,11 +22,21 @@ namespace LearningAssistant.Managers
 
         public event Action<List<string>>? BadgesUnlocked;
 
-        public BadgeManager(IDbContextFactory<AppDbContext> dbContextFactory, ILogger<BadgeManager>? logger = null)
+        public BadgeManager(IDbContextFactory<AppDbContext> dbContextFactory, ILogger<BadgeManager>? logger = null, IDialogService? dialogService = null, IAppPaths? appPaths = null)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _logger = logger;
+            _dialogService = dialogService;
+            _appPaths = appPaths;
             InitializeBadges();
+        }
+
+        private void ShowMessage(string title, string message)
+        {
+            if (_dialogService != null)
+                _dialogService.ShowMessageAsync(title, message).GetAwaiter().GetResult();
+            else
+                MessageBox.Show(message, title, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         private void InitializeBadges()
@@ -214,7 +227,7 @@ namespace LearningAssistant.Managers
         {
             try
             {
-                var userDir = Path.Combine(AppPaths.UsersDir, userId);
+                var userDir = Path.Combine(_appPaths?.UsersDir ?? AppPaths.UsersDir, userId);
                 if (!Directory.Exists(userDir)) return;
 
                 var migratedMarker = Path.Combine(userDir, ".badges_migrated");
@@ -350,7 +363,7 @@ namespace LearningAssistant.Managers
                 }
             }
             message += "获得 50 积分奖励！";
-            MessageBox.Show(message, "成就解锁", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            ShowMessage("成就解锁", message);
         }
 
         public void UpdateDisplay()
@@ -379,11 +392,9 @@ namespace LearningAssistant.Managers
         {
             if (sender is Label label && label.Tag is Badge badge)
             {
-                MessageBox.Show(
-                    $"{badge.Icon} {badge.Name}\n\n{badge.Description}",
+                ShowMessage(
                     badge.IsUnlocked ? "成就详情" : "锁定的成就",
-                    MessageBoxButtons.OK,
-                    badge.IsUnlocked ? MessageBoxIcon.Information : MessageBoxIcon.Question);
+                    $"{badge.Icon} {badge.Name}\n\n{badge.Description}");
             }
         }
 

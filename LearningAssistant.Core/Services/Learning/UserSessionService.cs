@@ -3,6 +3,8 @@ using LearningAssistant.Common;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services.Persistence;
 
+using LearningAssistant.Abstractions;
+
 namespace LearningAssistant.Services.Learning
 {
     public class UserSessionService : IUserSessionService
@@ -12,11 +14,13 @@ namespace LearningAssistant.Services.Learning
         private string _currentUserId = Constants.DefaultUserId;
 
         public string CurrentUserId => _currentUserId;
+        private readonly IAppPaths _appPaths;
 
-        public UserSessionService(ILogger<UserSessionService> logger, IDataPersistenceService persistenceService)
+        public UserSessionService(ILogger<UserSessionService> logger, IDataPersistenceService persistenceService, IAppPaths appPaths)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
+            _appPaths = appPaths;
         }
 
         public string LoadSession()
@@ -28,16 +32,16 @@ namespace LearningAssistant.Services.Learning
             }
             // 启动恢复上次用户时，同步文件路径层的当前用户标识，
             // 确保 CurrentUserDir/书签/收藏/设置等路径解析到正确用户。
-            AppPaths.SetCurrentUserId(_currentUserId);
+            _appPaths.SetCurrentUserId(_currentUserId);
             return _currentUserId;
         }
 
         public void SaveSession(string userId)
         {
             _currentUserId = userId;
-            // 切换/保存用户时同步文件路径层，避免 AppPaths._currentUserId 与实际当前用户脱节
+            // 切换/保存用户时同步文件路径层，避免 _appPaths._currentUserId 与实际当前用户脱节
             // 造成用户专属文件数据读写到错误用户目录（跨用户数据污染）。
-            AppPaths.SetCurrentUserId(userId);
+            _appPaths.SetCurrentUserId(userId);
             var session = _persistenceService.LoadSession();
             session.CurrentUserId = userId;
             session.LastAccessTime = DateTime.Now;

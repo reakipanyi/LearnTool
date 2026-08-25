@@ -1,4 +1,4 @@
-﻿using LearningAssistant.Common.Events;
+using LearningAssistant.Common.Events;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Data.Database;
 using LearningAssistant.Forms;
@@ -28,6 +28,8 @@ using LearningAssistant.Views;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using LearningAssistant.Abstractions;
+using LearningAssistant.Platform;
 using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Common
@@ -121,11 +123,13 @@ namespace LearningAssistant.Common
                 {
                     case TtsProviders.Qwen:
                         var qwenLogger = sp.GetService<ILogger<QwenTtsService>>();
-                        return new QwenTtsService(ttsConfig.ApiKey, ttsConfig.BaseUrl, qwenLogger);
+                        var qwenAppPaths = sp.GetRequiredService<IAppPaths>();
+                        return new QwenTtsService(ttsConfig.ApiKey, ttsConfig.BaseUrl, qwenLogger, qwenAppPaths);
                     case TtsProviders.KokoroSharp:
                     default:
                         var kokoroLogger = sp.GetService<ILogger<KokoroSharpTtsService>>();
-                        var kokoroService = new KokoroSharpTtsService(ttsConfig, kokoroLogger);
+                        var kokoroAppPaths = sp.GetRequiredService<IAppPaths>();
+                        var kokoroService = new KokoroSharpTtsService(ttsConfig, kokoroLogger, kokoroAppPaths);
                         kokoroService.StartBackgroundInitialization();
                         return kokoroService;
                 }
@@ -226,7 +230,8 @@ namespace LearningAssistant.Common
             {
                 var logger = sp.GetService<ILogger<LearningAnalyticsService>>();
                 var persistenceService = sp.GetService<IDataPersistenceService>();
-                return new LearningAnalyticsService(logger, persistenceService);
+                var appPathsLas = sp.GetRequiredService<IAppPaths>();
+                return new LearningAnalyticsService(logger, persistenceService, appPathsLas);
             });
             services.AddSingleton<ILearningReminderService>(sp =>
             {
@@ -255,15 +260,17 @@ namespace LearningAssistant.Common
                 var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
                 var loggerFactory = sp.GetService<ILoggerFactory>();
                 var eventBus = sp.GetService<IEventBus>();
-                return new GamificationService(dbFactory, loggerFactory, eventBus);
+                var appPaths = sp.GetService<IAppPaths>();
+                return new GamificationService(dbFactory, loggerFactory, eventBus, appPaths);
             });
             services.AddSingleton<ILearningGoalService>(sp =>
             {
                 var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
                 var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
                 var logger = sp.GetRequiredService<ILogger<LearningGoalService>>();
+                var appPaths = sp.GetRequiredService<IAppPaths>();
                 var eventBus = sp.GetService<IEventBus>();
-                return new LearningGoalService(dbFactory, persistenceService, logger, eventBus);
+                return new LearningGoalService(dbFactory, persistenceService, logger, appPaths, eventBus);
             });
             // 统计底座：统一聚合服务（A2+A7+A8），订阅学习事件、批量落库并输出统一统计 DTO
             services.AddSingleton<ILearningStatsAggregator>(sp =>
@@ -297,8 +304,9 @@ namespace LearningAssistant.Common
                 var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
                 var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
                 var logger = sp.GetService<ILogger<WrongAnswerService>>();
+                var appPaths = sp.GetRequiredService<IAppPaths>();
                 var eventBus = sp.GetService<IEventBus>();
-                return new WrongAnswerService(dbFactory, persistenceService, logger, eventBus);
+                return new WrongAnswerService(dbFactory, persistenceService, logger, appPaths, eventBus);
             });
             services.AddSingleton<WordMatchGameService>(sp =>
             {
@@ -312,8 +320,9 @@ namespace LearningAssistant.Common
                 var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
                 var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
                 var logger = sp.GetService<ILogger<NoteService>>();
+                var appPaths = sp.GetRequiredService<IAppPaths>();
                 var eventBus = sp.GetService<IEventBus>();
-                return new NoteService(dbFactory, logger, persistenceService, eventBus);
+                return new NoteService(dbFactory, logger, persistenceService, appPaths, eventBus);
             });
             services.AddSingleton<IFavoritesService>(sp =>
             {
@@ -328,7 +337,8 @@ namespace LearningAssistant.Common
                 var analyticsService = sp.GetRequiredService<ILearningAnalyticsService>();
                 var wrongAnswerService = sp.GetRequiredService<IWrongAnswerService>();
                 var logger = sp.GetService<ILogger<LearningPathService>>();
-                return new LearningPathService(dbFactory, persistenceService, analyticsService, wrongAnswerService, logger);
+                var appPathsLps = sp.GetRequiredService<IAppPaths>();
+                return new LearningPathService(dbFactory, persistenceService, analyticsService, wrongAnswerService, logger, appPathsLps);
             });
             // P-001: 统一学习入口服务
             services.AddSingleton<IUnifiedStudyEntryService>(sp =>
@@ -348,16 +358,18 @@ namespace LearningAssistant.Common
                 var learningPathService = sp.GetRequiredService<ILearningPathService>();
                 var logger = sp.GetService<ILogger<LearningRecommendationService>>();
                 var pomodoroService = sp.GetService<IPomodoroService>();
+                var appPathsLrs = sp.GetRequiredService<IAppPaths>();
                 return new LearningRecommendationService(spacedRepetitionService, wrongAnswerService, analyticsService,
-                    learningPathService, logger, pomodoroService);
+                    learningPathService, logger, appPathsLrs, pomodoroService);
             });
             services.AddSingleton<IPomodoroService>(sp =>
             {
                 var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
                 var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
                 var logger = sp.GetService<ILogger<PomodoroService>>();
+                var appPathsPomo = sp.GetRequiredService<IAppPaths>();
                 var eventBus = sp.GetService<IEventBus>();
-                return new PomodoroService(dbFactory, persistenceService, logger, eventBus);
+                return new PomodoroService(dbFactory, persistenceService, logger, appPathsPomo, eventBus);
             });
             services.AddSingleton<IDataImportService, DataImportService>();
 
@@ -462,11 +474,12 @@ namespace LearningAssistant.Common
                 var annotationService = sp.GetRequiredService<IAnnotationService>();
                 var highlightService = sp.GetRequiredService<IHighlightService>();
                 var pdfService = sp.GetRequiredService<IPdfService>();
+                var imageProcessor = sp.GetRequiredService<IImageProcessor>();
                 var ttsConfig = sp.GetRequiredService<TtsConfig>();
                 var eventBus = sp.GetService<IEventBus>();
                 return new PdfPresenter(logger, pdfRenderer, pdfFileManager, pdfOcrService, pdfTranslationService,
                     aiService, pdfTtsService, pdfStudyIntegration, exportService,
-                    annotationService, highlightService, pdfService, ttsConfig, eventBus);
+                    annotationService, highlightService, pdfService, imageProcessor, ttsConfig, eventBus);
             });
 
             services.AddScoped<MainForm>(sp =>
@@ -644,6 +657,21 @@ namespace LearningAssistant.Common
             services.AddScoped<IResultView>(sp => sp.GetRequiredService<ResultForm>());
             services.AddScoped<IContentEditorView>(sp => sp.GetRequiredService<ContentEditorForm>());
 
+            return services;
+        }
+
+        /// <summary>
+        /// 添加 WinForms 平台实现（IAppPaths/IAudioPlayer/IDialogService/IUiThreadInvoker/IResourceLoader/INotificationService）
+        /// </summary>
+        public static IServiceCollection AddWindowsFormsPlatform(this IServiceCollection services)
+        {
+            services.AddSingleton<IAppPaths, WinFormsAppPaths>();
+            services.AddSingleton<IAudioPlayer, WinFormsAudioPlayer>();
+            services.AddSingleton<IDialogService, WinFormsDialogService>();
+            services.AddSingleton<IUiThreadInvoker, WinFormsUiThreadInvoker>();
+            services.AddSingleton<IResourceLoader, WinFormsResourceLoader>();
+            services.AddSingleton<INotificationService, WinFormsNotificationService>();
+            services.AddSingleton<IImageProcessor, WinFormsImageProcessor>();
             return services;
         }
 

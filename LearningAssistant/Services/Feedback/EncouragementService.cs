@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services.TTS;
@@ -15,11 +16,13 @@ namespace LearningAssistant.Services.Feedback
         private readonly ITTSService _ttsService;
         private readonly EncouragementConfig _config;
         private readonly Random _random = new Random();
+        private readonly IAppPaths _appPaths;
 
-        public EncouragementService(ILogger<EncouragementService> logger, ITTSService ttsService)
+        public EncouragementService(ILogger<EncouragementService> logger, ITTSService ttsService, IAppPaths appPaths)
         {
             _logger = logger;
             _ttsService = ttsService;
+            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
             _config = LoadConfig();
         }
 
@@ -31,7 +34,7 @@ namespace LearningAssistant.Services.Feedback
         {
             try
             {
-                string configPath = AppPaths.EncouragementConfigPath;
+                string configPath = _appPaths.EncouragementConfigPath;
                 if (File.Exists(configPath))
                 {
                     string json = File.ReadAllText(configPath);
@@ -108,14 +111,14 @@ namespace LearningAssistant.Services.Feedback
         {
             string[] possiblePaths = new[]
             {
-                Path.Combine(AppPaths.AudioDir, $"{audioName}.wav"),
-                Path.Combine(AppPaths.AudioDir, $"{audioName}.mp3"),
-                Path.Combine(AppPaths.AudioDir, "known", $"{audioName}.wav"),
-                Path.Combine(AppPaths.AudioDir, "known", $"{audioName}.mp3"),
-                Path.Combine(AppPaths.AudioDir, "unknown", $"{audioName}.wav"),
-                Path.Combine(AppPaths.AudioDir, "unknown", $"{audioName}.mp3"),
-                Path.Combine(AppPaths.AudioDir, $"{audioName}.wav"),
-                Path.Combine(AppPaths.AudioDir, $"{audioName}.mp3")
+                Path.Combine(_appPaths.AudioDir, $"{audioName}.wav"),
+                Path.Combine(_appPaths.AudioDir, $"{audioName}.mp3"),
+                Path.Combine(_appPaths.AudioDir, "known", $"{audioName}.wav"),
+                Path.Combine(_appPaths.AudioDir, "known", $"{audioName}.mp3"),
+                Path.Combine(_appPaths.AudioDir, "unknown", $"{audioName}.wav"),
+                Path.Combine(_appPaths.AudioDir, "unknown", $"{audioName}.mp3"),
+                Path.Combine(_appPaths.AudioDir, $"{audioName}.wav"),
+                Path.Combine(_appPaths.AudioDir, $"{audioName}.mp3")
             };
 
             return possiblePaths.FirstOrDefault(File.Exists);

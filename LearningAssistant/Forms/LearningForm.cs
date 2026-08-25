@@ -33,6 +33,7 @@ namespace LearningAssistant.Forms
         private IThemeService _themeService => _services.ThemeService;
         private IEncouragementService _encouragementService => _services.GamificationServices.EncouragementService;
         private IGamificationService _gamificationService => _services.GamificationServices.GamificationService;
+        private IGamificationUIBinding? _gamificationUI => _gamificationService as IGamificationUIBinding;
         private IEventBus? _eventBus => _services.NotificationServices.EventBus;
         private IUserSessionService? _userSessionService => _services.UserSessionService;
         private IDataPersistenceService? _persistenceService => _services.PersistenceService;
@@ -1169,18 +1170,18 @@ namespace LearningAssistant.Forms
 
             if (flowLayoutPanelBadges != null)
             {
-                _gamificationService.SetBadgeUI(flowLayoutPanelBadges, _toolTip);
+                _gamificationUI?.SetBadgeUI(flowLayoutPanelBadges, _toolTip);
             }
 
             if (labelStudyTime != null && labelScore != null && labelTodayCount != null &&
                 labelStreak != null && labelLevel != null && labelXP != null && progressXP != null)
             {
-                _gamificationService.SetStatsUI(labelStudyTime, labelScore, labelTodayCount, labelStreak, labelLevel, labelXP, progressXP);
+                _gamificationUI?.SetStatsUI(labelStudyTime, labelScore, labelTodayCount, labelStreak, labelLevel, labelXP, progressXP);
             }
 
             if (flowLayoutPanelChallenges != null)
             {
-                _gamificationService.SetChallengeUI(flowLayoutPanelChallenges, _soundService);
+                _gamificationUI?.SetChallengeUI(flowLayoutPanelChallenges, _soundService);
             }
 
             _confettiManager.SetTargetControl(mainTableLayoutPanel);
@@ -1850,6 +1851,11 @@ namespace LearningAssistant.Forms
         public event EventHandler<FieldSpeakEventArgs>? FieldSpeakRequested;
         public event EventHandler<FieldSpeakEventArgs>? FieldStopRequested;
         public event EventHandler<FieldCopyEventArgs>? FieldCopyRequested;
+
+        public void CopyToClipboard(string text)
+        {
+            Clipboard.SetText(text);
+        }
 
         #endregion
 

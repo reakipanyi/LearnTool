@@ -6,6 +6,8 @@ using LearningAssistant.Services.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
+using LearningAssistant.Abstractions;
+
 namespace LearningAssistant.Services.Learning
 {
     /// <summary>
@@ -18,17 +20,20 @@ namespace LearningAssistant.Services.Learning
         private readonly ILogger<NoteService> _logger;
         private readonly IEventBus? _eventBus;
         private readonly IDataPersistenceService _persistenceService;
+        private readonly IAppPaths _appPaths;
         private readonly object _lock = new object();
 
         public NoteService(
             IDbContextFactory<AppDbContext> dbContextFactory,
             ILogger<NoteService> logger,
             IDataPersistenceService persistenceService,
+            IAppPaths appPaths,
             IEventBus? eventBus = null)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
+            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
             _eventBus = eventBus;
             MigrateFromJsonToDb();
         }
@@ -37,10 +42,10 @@ namespace LearningAssistant.Services.Learning
         {
             try
             {
-                var notesDir = AppPaths.NotesDir;
+                var notesDir = _appPaths.NotesDir;
                 if (!Directory.Exists(notesDir))
                 {
-                    notesDir = Path.Combine(AppPaths.UsersDir, "notes");
+                    notesDir = Path.Combine(_appPaths.UsersDir, "notes");
                     if (!Directory.Exists(notesDir)) return;
                 }
 

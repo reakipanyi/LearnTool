@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
 using Microsoft.Extensions.Logging;
@@ -15,11 +16,13 @@ namespace LearningAssistant.Services.Pdf
         private string _currentLanguage = "eng";
         private string _tessDataPath = string.Empty;
         private bool _enablePreprocessing = true;
+        private readonly IAppPaths _appPaths;
 
 
-        public TesseractOcrService(OcrConfig config, ILogger<TesseractOcrService>? logger = null)
+        public TesseractOcrService(OcrConfig config, IAppPaths appPaths, ILogger<TesseractOcrService>? logger = null)
         {
             _config = config;
+            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
             _logger = logger;
             _currentLanguage = string.IsNullOrWhiteSpace(_config.Language) ? "eng" : _config.Language;
             StartBackgroundInitialization();
@@ -60,27 +63,27 @@ namespace LearningAssistant.Services.Pdf
             try
             {
 
-                if (!Directory.Exists(AppPaths.TesseractDataDir))
+                if (!Directory.Exists(_appPaths.TesseractDataDir))
                 {
-                    _initErrorMessage = $"Tesseract数据目录不存在，已在 {AppPaths.TesseractDataDir} 创建目录。\n\n请从 https://github.com/tesseract-ocr/tessdata 下载语言数据文件（如 chi_sim.traineddata、eng.traineddata）并放入该目录";
+                    _initErrorMessage = $"Tesseract数据目录不存在，已在 {_appPaths.TesseractDataDir} 创建目录。\n\n请从 https://github.com/tesseract-ocr/tessdata 下载语言数据文件（如 chi_sim.traineddata、eng.traineddata）并放入该目录";
                     return false;
                 }
 
-                _tessDataPath = AppPaths.TesseractDataDir;
+                _tessDataPath = _appPaths.TesseractDataDir;
 
                 var langFiles = language.Split('+')
-                    .Select(lang => Path.Combine(AppPaths.TesseractDataDir, $"{lang}.traineddata"))
+                    .Select(lang => Path.Combine(_appPaths.TesseractDataDir, $"{lang}.traineddata"))
                     .ToList();
 
                 var missingFiles = langFiles.Where(f => !File.Exists(f)).ToList();
                 if (missingFiles.Any())
                 {
                     var missingList = string.Join("\n", missingFiles);
-                    _initErrorMessage = $"缺少语言数据文件:\n{missingList}\n\n当前目录: {AppPaths.TesseractDataDir}\n\n请从 https://github.com/tesseract-ocr/tessdata 下载所需的语言数据文件";
+                    _initErrorMessage = $"缺少语言数据文件:\n{missingList}\n\n当前目录: {_appPaths.TesseractDataDir}\n\n请从 https://github.com/tesseract-ocr/tessdata 下载所需的语言数据文件";
                     return false;
                 }
 
-                _engine = new TesseractEngine(AppPaths.TesseractDataDir, language, EngineMode.Default);
+                _engine = new TesseractEngine(_appPaths.TesseractDataDir, language, EngineMode.Default);
                 _engine.DefaultPageSegMode = PageSegMode.Auto;
                 _currentLanguage = language;
                 _initErrorMessage = null;
@@ -131,9 +134,12 @@ namespace LearningAssistant.Services.Pdf
             return await RecognizeTextAsync(image, new Rectangle(0, 0, image.Width, image.Height));
         } 
         */
-        public async Task<string> RecognizeTextAsync(Bitmap bmp)
+        public async Task<string> RecognizeTextAsync(byte[] image)
         {
             if (_engine == null) return string.Empty;
+
+            var bmp = BytesToBitmap(image);
+            if (bmp == null) return string.Empty;
 
             return await Task.Run(() =>
             {
@@ -154,17 +160,23 @@ namespace LearningAssistant.Services.Pdf
             });
         }
 
-        public async Task<string> RecognizeTextAsync(Bitmap image, Rectangle region)
+        public async Task<string> RecognizeTextAsync(byte[] image, RectInt region)
         {
-            if (_engine == null || image == null)
+            if (_engine == null)
                 return string.Empty;
+
+            var bmp = BytesToBitmap(image);
+            if (bmp == null)
+                return string.Empty;
+
+            var rect = new Rectangle(region.X, region.Y, region.Width, region.Height);
 
             return await Task.Run(() =>
             {
                 try
                 {
-                    bool needCrop = region.X > 0 || region.Y > 0 ||
-                                    region.Width < image.Width || region.Height < image.Height;
+                    bool needCrop = rect.X > 0 || rect.Y > 0 ||
+                                    rect.Width < bmp.Width || rect.Height < bmp.Height;
 
                     Bitmap processedImage = null;
                     Bitmap imageToProcess = null;
@@ -172,8 +184,8 @@ namespace LearningAssistant.Services.Pdf
 
                     try
                     {
-                        processedImage = _enablePreprocessing ? PreprocessImage(image) : (Bitmap)image.Clone();
-                        imageToProcess = needCrop ? processedImage.Clone(region, processedImage.PixelFormat) : processedImage;
+                        processedImage = _enablePreprocessing ? PreprocessImage(bmp) : (Bitmap)bmp.Clone();
+                        imageToProcess = needCrop ? processedImage.Clone(rect, processedImage.PixelFormat) : processedImage;
 
                         using (var ms = new MemoryStream())
                         {
@@ -199,7 +211,7 @@ namespace LearningAssistant.Services.Pdf
 
                     try
                     {
-                        originalToProcess = needCrop ? image.Clone(region, image.PixelFormat) : image;
+                        originalToProcess = needCrop ? bmp.Clone(rect, bmp.PixelFormat) : bmp;
 
                         using (var originalMs = new MemoryStream())
                         {
@@ -216,7 +228,7 @@ namespace LearningAssistant.Services.Pdf
                     }
                     finally
                     {
-                        if (originalToProcess != null && !object.ReferenceEquals(originalToProcess, image))
+                        if (originalToProcess != null && !object.ReferenceEquals(originalToProcess, bmp))
                             originalToProcess.Dispose();
                     }
                 }
@@ -376,12 +388,19 @@ namespace LearningAssistant.Services.Pdf
             _engine?.Dispose();
         }
 
+        private static byte[]? BitmapToBytes(Bitmap? bmp)
+        {
+            if (bmp == null) return null;
+            using var ms = new MemoryStream();
+            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            return ms.ToArray();
+        }
 
-
-
-
-
-
-
+        private static Bitmap? BytesToBitmap(byte[]? data)
+        {
+            if (data == null || data.Length == 0) return null;
+            using var ms = new MemoryStream(data);
+            return new Bitmap(ms);
+        }
     }
 }

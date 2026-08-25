@@ -3,12 +3,12 @@ namespace LearningAssistant.Services.TTS
     public class SpeakStateChangedEventArgs : EventArgs
     {
         public string SpeakKey { get; }
-        public bool IsSpeaking { get; }
+        public bool IsPlaying { get; }
 
-        public SpeakStateChangedEventArgs(string speakKey, bool isSpeaking)
+        public SpeakStateChangedEventArgs(string speakKey, bool isPlaying)
         {
             SpeakKey = speakKey;
-            IsSpeaking = isSpeaking;
+            IsPlaying = isPlaying;
         }
     }
 }

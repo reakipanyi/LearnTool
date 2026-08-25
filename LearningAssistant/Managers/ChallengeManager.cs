@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Data.Database;
 using LearningAssistant.Models;
@@ -20,6 +21,7 @@ namespace LearningAssistant.Managers
         private readonly Action<int>? _onXPChanged;
         private readonly Action? _onLevelUp;
         private readonly Action? _onChallengeCompleted;
+        private readonly IAppPaths? _appPaths;
 
         private string _currentUserId = Constants.DefaultUserId;
         private List<Challenge> _dailyChallenges = new();
@@ -46,7 +48,8 @@ namespace LearningAssistant.Managers
             Action<int>? onScoreChanged = null,
             Action<int>? onXPChanged = null,
             Action? onLevelUp = null,
-            Action? onChallengeCompleted = null)
+            Action? onChallengeCompleted = null,
+            IAppPaths? appPaths = null)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _logger = logger;
@@ -54,6 +57,7 @@ namespace LearningAssistant.Managers
             _onXPChanged = onXPChanged;
             _onLevelUp = onLevelUp;
             _onChallengeCompleted = onChallengeCompleted;
+            _appPaths = appPaths;
         }
 
         /// <summary>
@@ -133,7 +137,7 @@ namespace LearningAssistant.Managers
         {
             try
             {
-                var userDir = Path.Combine(AppPaths.UsersDir, userId);
+                var userDir = Path.Combine(_appPaths?.UsersDir ?? AppPaths.UsersDir, userId);
                 if (!Directory.Exists(userDir)) return;
 
                 var migratedMarker = Path.Combine(userDir, ".challenges_migrated");

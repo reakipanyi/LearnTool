@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Forms;
@@ -12,31 +13,6 @@ using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Managers
 {
-    public interface IWindowManager
-    {
-        /// <summary>
-        /// 设置窗体中用户列表发生变更（新增/删除）时触发，供主窗体刷新用户下拉框。
-        /// 替代原先"模态关闭后同步刷新"的阻塞式逻辑。
-        /// </summary>
-        event EventHandler? SettingUsersChanged;
-
-        Task OpenLearningWindowAsync(string userId, string language, string subCategory, string wordBankFile, bool continueMode);
-        void OpenSettingsWindow();
-        void OpenEditorWindow();
-        void OpenEditorWindowWithContext(string? text, string? language, string? subCategory);
-        void OpenStatisticsWindow();
-        void OpenLearningManagementWindow();
-        void OpenPdfReaderWindow();
-        //void OpenPdfReaderWindowV1();
-        void OpenNotesWindow();
-        void OpenAIWebViewWindow(string? initialPrompt = null);
-        void OpenWordMatchGameWindow();
-        void OpenMemoryMatchGameWindow();
-        void OpenLinkMatchGameWindow();
-        void OpenSpellingGameWindow();
-        void OpenWhackAMoleGameWindow();
-    }
-
     public class WindowManager : IWindowManager
     {
         private readonly IServiceProvider _serviceProvider;

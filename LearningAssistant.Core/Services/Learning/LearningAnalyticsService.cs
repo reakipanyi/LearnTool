@@ -7,6 +7,7 @@ using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 using LearningAssistant.Common;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Data.Database;
 using LearningAssistant.Services.Persistence;
 
@@ -24,14 +25,17 @@ namespace LearningAssistant.Services.Learning
         private readonly ISpacedRepetitionAlgorithm? _sm2Algorithm;
         private readonly ISpacedRepetitionAlgorithm? _fsrsAlgorithm;
         private bool _isLoaded = false;
+        private readonly IAppPaths? _appPaths;
 
         public LearningAnalyticsService(
             ILogger<LearningAnalyticsService>? logger = null,
             IDataPersistenceService? persistenceService = null,
+            IAppPaths? appPaths = null,
             IDbContextFactory<AppDbContext>? dbContextFactory = null)
         {
             _logger = logger;
             _persistenceService = persistenceService;
+            _appPaths = appPaths;
             _dbContextFactory = dbContextFactory;
             _sm2Algorithm = new SM2Algorithm();
             _fsrsAlgorithm = new FSRSAlgorithm();
@@ -60,7 +64,7 @@ namespace LearningAssistant.Services.Learning
 
         private void LoadFromOldConfig()
         {
-            var oldPath = AppPaths.AnalyticsPath;
+            var oldPath = AppPaths.AnalyticsPath; // Obsolete, not in IAppPaths
             if (!File.Exists(oldPath)) return;
 
             try
@@ -91,9 +95,9 @@ namespace LearningAssistant.Services.Learning
                 foreach (var uid in _persistenceService.GetUserIds())
                     userIds.Add(uid);
             }
-            if (Directory.Exists(AppPaths.UsersDir))
+            if (Directory.Exists(_appPaths?.UsersDir ?? AppPaths.UsersDir))
             {
-                foreach (var dir in Directory.EnumerateDirectories(AppPaths.UsersDir))
+                foreach (var dir in Directory.EnumerateDirectories(_appPaths?.UsersDir ?? AppPaths.UsersDir))
                 {
                     var name = Path.GetFileName(dir);
                     if (!string.IsNullOrEmpty(name))
@@ -103,7 +107,7 @@ namespace LearningAssistant.Services.Learning
 
             foreach (var userId in userIds)
             {
-                var userPath = AppPaths.GetUserAnalyticsPath(userId);
+                var userPath = _appPaths?.GetUserAnalyticsPath(userId) ?? AppPaths.GetUserAnalyticsPath(userId);
                 if (!File.Exists(userPath)) continue;
 
                 try
@@ -286,7 +290,7 @@ namespace LearningAssistant.Services.Learning
             {
                 var userId = kvp.Key;
                 var userData = kvp.Value;
-                var userPath = AppPaths.GetUserAnalyticsPath(userId);
+                var userPath = _appPaths?.GetUserAnalyticsPath(userId) ?? AppPaths.GetUserAnalyticsPath(userId);
 
                 for (int attempt = 1; attempt <= maxRetries; attempt++)
                 {

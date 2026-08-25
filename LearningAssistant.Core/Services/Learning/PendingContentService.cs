@@ -1,6 +1,9 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
+
+using LearningAssistant.Abstractions;
 
 namespace LearningAssistant.Services.Learning
 {
@@ -48,12 +51,14 @@ namespace LearningAssistant.Services.Learning
         private readonly ILogger<PendingContentService>? _logger;
         private readonly ConcurrentBag<PendingContentItem> _pendingItems = new();
         private readonly string _filePath;
+        private readonly IAppPaths _appPaths;
 
-        public PendingContentService(ILogger<PendingContentService>? logger = null)
+        public PendingContentService(ILogger<PendingContentService>? logger = null, IAppPaths appPaths = null)
         {
             _logger = logger;
-            _filePath = AppPaths.PendingContentPath;
-            Directory.CreateDirectory(AppPaths.ConfigDir);
+            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
+            _filePath = _appPaths.PendingContentPath;
+            Directory.CreateDirectory(_appPaths.ConfigDir);
             LoadFromFile();
         }
 

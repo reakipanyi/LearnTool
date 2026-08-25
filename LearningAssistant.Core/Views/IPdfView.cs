@@ -1,4 +1,4 @@
-﻿using System.Drawing;
+﻿using LearningAssistant.Abstractions;
 using LearningAssistant.Models.Config;
 
 namespace LearningAssistant.Views
@@ -55,14 +55,14 @@ namespace LearningAssistant.Views
         /// <summary>
         /// 显示图片
         /// </summary>
-        /// <param name="bmp">要显示的Bitmap图像</param>
-        void DisplayImage(Bitmap bmp);
+        /// <param name="imageData">PNG 格式的图片字节数组</param>
+        void DisplayImage(byte[] imageData);
 
         /// <summary>
         /// 设置第二页图像（双页模式）
         /// </summary>
-        /// <param name="bmp">第二页Bitmap图像</param>
-        void SetSecondPageImage(Bitmap? bmp);
+        /// <param name="imageData">第二页 PNG 格式图片字节数组</param>
+        void SetSecondPageImage(byte[]? imageData);
 
         /// <summary>
         /// 显示警告消息
@@ -132,16 +132,16 @@ namespace LearningAssistant.Views
         /// 添加缩略图
         /// </summary>
         /// <param name="pageIndex">页面索引</param>
-        /// <param name="thumbnail">缩略图</param>
-        void AddThumbnail(int pageIndex, Image thumbnail);
+        /// <param name="thumbnailData">缩略图 PNG 字节数组</param>
+        void AddThumbnail(int pageIndex, byte[] thumbnailData);
 
         /// <summary>
         /// 添加缩略图（带所属目录路径，用于图片模式按目录分组展示）
         /// </summary>
         /// <param name="pageIndex">页面索引</param>
-        /// <param name="thumbnail">缩略图</param>
+        /// <param name="thumbnailData">缩略图 PNG 字节数组</param>
         /// <param name="directoryPath">所属目录路径，为空时不分组</param>
-        void AddThumbnail(int pageIndex, Image thumbnail, string directoryPath);
+        void AddThumbnail(int pageIndex, byte[] thumbnailData, string directoryPath);
 
         /// <summary>
         /// 高亮指定页面的缩略图
@@ -218,32 +218,32 @@ namespace LearningAssistant.Views
         /// <summary>
         /// 获取当前显示的图片
         /// </summary>
-        /// <returns>当前图片，无则返回null</returns>
-        Image? GetCurrentImage();
+        /// <returns>当前图片 PNG 字节数组，无则返回null</returns>
+        byte[]? GetCurrentImage();
 
         /// <summary>
         /// 获取用户选择的矩形区域
         /// </summary>
         /// <returns>选择矩形，无则返回null</returns>
-        Rectangle? GetSelectionRect();
+        RectInt? GetSelectionRect();
 
         /// <summary>
         /// 获取显示区域矩形
         /// </summary>
         /// <returns>显示区域矩形</returns>
-        Rectangle GetDisplayRect();
+        RectInt GetDisplayRect();
 
         /// <summary>
         /// 获取图片显示矩形
         /// </summary>
         /// <returns>图片显示矩形</returns>
-        Rectangle GetImageDisplayRect();
+        RectInt GetImageDisplayRect();
 
         /// <summary>
         /// 显示OCR叠加层
         /// </summary>
-        /// <param name="image">叠加图像，null则清除</param>
-        void ShowOcrOverlay(Bitmap? image);
+        /// <param name="imageData">叠加图像 PNG 字节数组，null则清除</param>
+        void ShowOcrOverlay(byte[]? imageData);
 
         /// <summary>
         /// 隐藏OCR叠加层

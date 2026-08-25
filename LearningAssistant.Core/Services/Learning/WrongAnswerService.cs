@@ -7,6 +7,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Text;
 
+using LearningAssistant.Abstractions;
+
 namespace LearningAssistant.Services.Learning
 {
     /// <summary>
@@ -19,6 +21,7 @@ namespace LearningAssistant.Services.Learning
         private readonly IDataPersistenceService _persistenceService;
         private readonly ILogger<WrongAnswerService> _logger;
         private readonly IEventBus? _eventBus;
+        private readonly IAppPaths _appPaths;
         private readonly object _lock = new object();
         private bool _disposed = false;
 
@@ -26,11 +29,13 @@ namespace LearningAssistant.Services.Learning
             IDbContextFactory<AppDbContext> dbContextFactory,
             IDataPersistenceService persistenceService,
             ILogger<WrongAnswerService> logger,
+            IAppPaths appPaths,
             IEventBus? eventBus = null)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
             _eventBus = eventBus;
 
             MigrateFromJsonToDb();
@@ -106,10 +111,10 @@ namespace LearningAssistant.Services.Learning
         {
             try
             {
-                var wrongAnswersDir = AppPaths.WrongAnswersDir;
+                var wrongAnswersDir = _appPaths.WrongAnswersDir;
                 if (!Directory.Exists(wrongAnswersDir))
                 {
-                    wrongAnswersDir = Path.Combine(AppPaths.UsersDir, "wrong_answers");
+                    wrongAnswersDir = Path.Combine(_appPaths.UsersDir, "wrong_answers");
                     if (!Directory.Exists(wrongAnswersDir)) return;
                 }
 

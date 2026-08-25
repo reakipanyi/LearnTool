@@ -1,3 +1,4 @@
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Models.Recovery;
 using Microsoft.Extensions.Logging;
@@ -18,6 +19,7 @@ namespace LearningAssistant.Services.Recovery
         private readonly List<IAutoSaveProvider> _providers = new();
         private readonly object _lock = new();
         private bool _disposed;
+        private readonly IAppPaths _appPaths;
 
         public bool AutoSaveEnabled
         {
@@ -51,9 +53,10 @@ namespace LearningAssistant.Services.Recovery
 
         public event EventHandler? AutoSaveStateChanged;
 
-        public CrashRecoveryService(ILogger<CrashRecoveryService>? logger = null)
+        public CrashRecoveryService(ILogger<CrashRecoveryService>? logger = null, IAppPaths appPaths = null!)
         {
             _logger = logger;
+            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
             _config = LoadConfig();
             EnsureAutoSaveDirectory();
         }
@@ -453,7 +456,7 @@ namespace LearningAssistant.Services.Recovery
                 return _config.AutoSaveDirectory;
             }
 
-            return Path.Combine(AppPaths.UserDataDir, "autosave");
+            return Path.Combine(_appPaths.UserDataDir, "autosave");
         }
 
         private void EnsureAutoSaveDirectory()
@@ -496,7 +499,7 @@ namespace LearningAssistant.Services.Recovery
         {
             try
             {
-                var configPath = Path.Combine(AppPaths.ConfigDir, "AutoSaveSettings.json");
+                var configPath = Path.Combine(_appPaths.ConfigDir, "AutoSaveSettings.json");
                 if (File.Exists(configPath))
                 {
                     var json = File.ReadAllText(configPath);
@@ -517,7 +520,7 @@ namespace LearningAssistant.Services.Recovery
         {
             try
             {
-                var configPath = Path.Combine(AppPaths.ConfigDir, "AutoSaveSettings.json");
+                var configPath = Path.Combine(_appPaths.ConfigDir, "AutoSaveSettings.json");
                 var directory = Path.GetDirectoryName(configPath);
                 if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                 {

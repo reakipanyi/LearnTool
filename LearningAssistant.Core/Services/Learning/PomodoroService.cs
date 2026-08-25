@@ -6,6 +6,8 @@ using LearningAssistant.Services.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
+using LearningAssistant.Abstractions;
+
 namespace LearningAssistant.Services.Learning
 {
     public class PomodoroService : IPomodoroService, IDisposable
@@ -14,6 +16,7 @@ namespace LearningAssistant.Services.Learning
         private readonly IDataPersistenceService _persistenceService;
         private readonly ILogger<PomodoroService> _logger;
         private readonly IEventBus? _eventBus;
+        private readonly IAppPaths _appPaths;
         private readonly System.Timers.Timer _timer;
         private readonly object _lock = new object();
         private readonly SynchronizationContext? _syncContext;
@@ -52,11 +55,13 @@ namespace LearningAssistant.Services.Learning
             IDbContextFactory<AppDbContext> dbContextFactory,
             IDataPersistenceService persistenceService,
             ILogger<PomodoroService> logger,
+            IAppPaths appPaths,
             IEventBus? eventBus = null)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
             _eventBus = eventBus;
             _syncContext = SynchronizationContext.Current;
 
@@ -69,7 +74,7 @@ namespace LearningAssistant.Services.Learning
             LoadSettings();
         }
 
-        private string StatsDir => Path.Combine(AppPaths.UsersDir, "pomodoro_stats");
+        private string StatsDir => Path.Combine(_appPaths.UsersDir, "pomodoro_stats");
 
         private string DataFilePath => Path.Combine(StatsDir, "pomodoro_records.json");
         private string SettingsFilePath => Path.Combine(StatsDir, "pomodoro_settings.json");
