@@ -1,5 +1,5 @@
-using LearningAssistant.Baidu;
 using LearningAssistant.Models.Config;
+using LearningAssistant.Services.Baidu;
 using LearningAssistant.Services.Persistence;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;

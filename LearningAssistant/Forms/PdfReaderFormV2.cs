@@ -1,5 +1,6 @@
 using LearningAssistant.Common.Events;
 using LearningAssistant.Forms.UserControls;
+using LearningAssistant.Models.Config;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Presenters;
@@ -394,6 +395,14 @@ namespace LearningAssistant.Forms
         }
 
         public bool IsDualPage => _isDualPage;
+
+        public void ApplyTtsConfig(TtsConfig ttsConfig)
+        {
+            if (_speedSelector != null)
+            {
+                _speedSelector.TtsConfig = ttsConfig;
+            }
+        }
         public bool IsNightMode => _nightModeManager?.IsNightMode ?? false;
 
         public PictureBox PictureBoxPdf => _pictureBoxPdf;

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>LearningAssistant</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Platforms>AnyCPU;x64</Platforms>
+    <!-- 阶段 0：空骨架项目，跨平台公共类库，不引用 WinForms/NAudio/Pdfium 等平台专属包 -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- DI / 配置 / 日志 -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.8" />
+    <!-- EF Core + SQLite -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.8" />
+    <!-- JSON -->
+    <PackageReference Include="System.Text.Json" Version="10.0.8" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <!-- Excel 导出 -->
+    <PackageReference Include="EPPlus" Version="8.6.0" />
+    <PackageReference Include="EPPlus.Interfaces" Version="8.4.0" />
+    <!-- 跨平台图像（无 .Views.Maui） -->
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0-preview.4.25261.4" />
+      <PackageReference Include="System.Drawing.Common" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.8" />
+</ItemGroup>
+
+</Project>
