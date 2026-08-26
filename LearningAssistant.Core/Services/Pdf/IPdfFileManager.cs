@@ -61,6 +61,11 @@ namespace LearningAssistant.Services.Pdf
         List<string> ImageFiles { get; }
 
         /// <summary>
+        /// 最近打开的文件列表（最多10个）
+        /// </summary>
+        List<string> RecentFiles { get; }
+
+        /// <summary>
         /// 文件加载完成事件
         /// </summary>
         event EventHandler<FileLoadedEventArgs>? FileLoaded;

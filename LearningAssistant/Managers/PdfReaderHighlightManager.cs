@@ -210,25 +210,18 @@ namespace LearningAssistant.Managers
             if (rect.Width <= 0 || rect.Height <= 0 || rect.X < 0 || rect.Y < 0)
                 return;
 
-            int alpha1 = color.A;
-            int alpha2 = Math.Max(0, color.A - 20);
-            int alpha3 = Math.Min(255, color.A + 120);
+            // 荧光笔效果：半透明纯色填充，无硬边框，保留文字可见性
+            using var fillBrush = new SolidBrush(Color.FromArgb(color.A, color.R, color.G, color.B));
+            g.FillRectangle(fillBrush, rect);
 
-            using var gradientBrush = new LinearGradientBrush(
-                rect,
-                Color.FromArgb(alpha1, color.R, color.G, color.B),
-                Color.FromArgb(alpha2, color.R, color.G, color.B),
-                LinearGradientMode.ForwardDiagonal);
-
-            g.FillRectangle(gradientBrush, rect);
-
-            using var pen = new Pen(Color.FromArgb(alpha3, color.R, color.G, color.B), 2.5f);
-            g.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
+            // 极淡的内发光边框（仅用于视觉界定区域，不喧宾夺主）
+            using var innerPen = new Pen(Color.FromArgb(Math.Min(80, color.A + 10), color.R, color.G, color.B), 1f);
+            g.DrawRectangle(innerPen, rect.X, rect.Y, rect.Width, rect.Height);
 
             if (!string.IsNullOrEmpty(highlight.Note))
             {
                 using var font = new Font("Microsoft YaHei UI", 10F);
-                using var textBrush = new SolidBrush(Color.Black);
+                using var textBrush = new SolidBrush(Color.FromArgb(180, 0, 0, 0));
                 g.DrawString("📝", font, textBrush, rect.Location);
             }
         }
@@ -578,6 +571,17 @@ namespace LearningAssistant.Managers
             RefreshHighlightList();
             UpdateHighlightLayer();
             _form.PictureBoxPdf?.Invalidate();
+
+            // 清除标注图层缓存后，需要重新加载当前页的标注以刷新笔触图层
+            if (_form.Presenter != null)
+            {
+                _ = _form.Presenter.RenderAndDisplayCurrentPageAsync();
+            }
+            else
+            {
+                _form.PictureBoxPdf?.Invalidate();
+            }
+
             _form.ShowMessage($"已成功删除 {highlightCount} 个高亮、{strokeCount} 个笔画和 {textCount} 个文字标注", "删除完成");
         }
 
@@ -807,15 +811,12 @@ namespace LearningAssistant.Managers
 
                     var rect = new RectangleF(x, y, width, height);
 
-                    int alpha1 = Math.Max(0, color.A - 0);
-                    int alpha2 = Math.Max(0, color.A - 20);
-                    int alpha3 = Math.Min(255, color.A + 120);
-
-                    using var brush = new SolidBrush(Color.FromArgb(alpha1, color.R, color.G, color.B));
+                    // 荧光笔效果：半透明纯色填充，无硬边框
+                    using var brush = new SolidBrush(Color.FromArgb(color.A, color.R, color.G, color.B));
                     g.FillRectangle(brush, rect);
 
-                    using var pen = new Pen(Color.FromArgb(alpha3, color.R, color.G, color.B), 2.5f);
-                    pen.DashStyle = DashStyle.Solid;
+                    // 极淡内发光边框
+                    using var pen = new Pen(Color.FromArgb(Math.Min(80, color.A + 10), color.R, color.G, color.B), 1f);
                     g.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
                 }
             }

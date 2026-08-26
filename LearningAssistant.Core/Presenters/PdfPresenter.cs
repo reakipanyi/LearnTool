@@ -226,6 +226,11 @@ namespace LearningAssistant.Presenters
             }
         }
 
+        public List<string> GetRecentFiles()
+        {
+            return _pdfFileManager.RecentFiles;
+        }
+
         public async Task RenderPage(int pageIndex)
         {
             int maxPage = _pdfRenderer.PageCount;

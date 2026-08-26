@@ -17,6 +17,8 @@ namespace LearningAssistant.Services.Pdf
         private bool _isImageMode = false;
         private readonly List<string> _imageFiles = new List<string>();
         private readonly Dictionary<string, int> _filePageMap = new Dictionary<string, int>();
+        private readonly List<string> _recentFiles = new List<string>();
+        private const int MaxRecentFiles = 10;
 
 
         public event EventHandler<FileLoadedEventArgs>? FileLoaded;
@@ -55,17 +57,20 @@ namespace LearningAssistant.Services.Pdf
 
         public List<string> ImageFiles => _imageFiles;
 
+        public List<string> RecentFiles => _recentFiles;
+
         private record SessionData(
             string? Folder,
             string? FilePath,
-            Dictionary<string, int> FilePageMap
+            Dictionary<string, int> FilePageMap,
+            List<string>? RecentFiles
         );
 
         public void SaveSession()
         {
             try
             {
-                var data = new SessionData(_lastFolderPath, _currentPdfPath, new Dictionary<string, int>(_filePageMap));
+                var data = new SessionData(_lastFolderPath, _currentPdfPath, new Dictionary<string, int>(_filePageMap), new List<string>(_recentFiles));
                 var json = JsonSerializer.Serialize(data);
                 File.WriteAllText(_appPaths.LastSessionPath, json);
             }
@@ -83,6 +88,17 @@ namespace LearningAssistant.Services.Pdf
                 var json = File.ReadAllText(_appPaths.LastSessionPath);
                 var data = JsonSerializer.Deserialize<SessionData>(json);
                 if (data == null) return (null, null, null);
+
+                if (data.RecentFiles != null)
+                {
+                    _recentFiles.Clear();
+                    foreach (var f in data.RecentFiles)
+                    {
+                        if (File.Exists(f))
+                            _recentFiles.Add(f);
+                    }
+                }
+
                 return (data.Folder, data.FilePath, data.FilePageMap);
             }
             catch (Exception ex)
@@ -253,6 +269,8 @@ namespace LearningAssistant.Services.Pdf
                 }
 
                 SaveSession();
+
+                AddToRecentFiles(filePath);
             }
             catch (Exception ex)
             {
@@ -295,6 +313,16 @@ namespace LearningAssistant.Services.Pdf
             {
                 _currentPdfPath = string.Empty;
                 _logger.LogWarning("No image files found in folder: {Folder}", folder);
+            }
+        }
+
+        private void AddToRecentFiles(string filePath)
+        {
+            _recentFiles.Remove(filePath);
+            _recentFiles.Insert(0, filePath);
+            if (_recentFiles.Count > MaxRecentFiles)
+            {
+                _recentFiles.RemoveAt(_recentFiles.Count - 1);
             }
         }
     }

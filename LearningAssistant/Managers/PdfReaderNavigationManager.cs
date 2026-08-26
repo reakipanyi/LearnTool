@@ -16,7 +16,8 @@ namespace LearningAssistant.Managers
         Pen,
         Mosaic,
         Strikethrough,
-        Text
+        Text,
+        Eraser
     }
 
     public enum SelectionInteractionState
@@ -109,6 +110,10 @@ namespace LearningAssistant.Managers
         private const float HandleSize = 8f;
         private const float SelectionBorderWidth = 2f;
 
+        // 橡皮擦模式下悬停的笔划
+        private AnnotationStroke? _hoveredStroke;
+        private int _hoveredStrokeIndex = -1;
+
         /// <summary>
         /// 标注被选中时触发，携带(selectedStroke, selectedIndex, isDoubleClick)
         /// </summary>
@@ -127,6 +132,7 @@ namespace LearningAssistant.Managers
         public List<PointF>? CurrentStrokePoints => _currentStrokePoints;
         public AnnotationStroke? SelectedStroke => _selectedStroke;
         public int SelectedStrokeIndex => _selectedStrokeIndex;
+        public AnnotationStroke? HoveredStroke => _hoveredStroke;
         public SelectionInteractionState SelectionState => _selectionState;
 
         public Func<bool>? IsHighlightModeCallback { get; set; }
@@ -195,18 +201,75 @@ namespace LearningAssistant.Managers
 
         private Pen CreatePen(Color color, float width)
         {
-            float alpha = _penType switch
+            var pen = _penType switch
             {
-                "Pencil" => 180f,
-                "Marker" => 120f,
-                _ => 255f
+                "Pencil" => CreatePencilPen(color, width),
+                "Marker" => CreateMarkerPen(color, width),
+                _ => CreatePenPen(color, width)
             };
-            int a = Math.Max(0, Math.Min(255, (int)alpha));
-            var pen = new Pen(Color.FromArgb(a, color.R, color.G, color.B), width);
+            return pen;
+        }
+
+        /// <summary>创建钢笔（水笔）画笔：完全不透明，线条干净利落，连接处圆润</summary>
+        private static Pen CreatePenPen(Color color, float width)
+        {
+            var pen = new Pen(Color.FromArgb(255, color.R, color.G, color.B), width);
             pen.StartCap = LineCap.Round;
             pen.EndCap = LineCap.Round;
             pen.LineJoin = LineJoin.Round;
+            pen.Alignment = PenAlignment.Center;
             return pen;
+        }
+
+        /// <summary>创建铅笔画笔：半透明 + 轻微锯齿纹理，模拟铅笔素描质感</summary>
+        private static Pen CreatePencilPen(Color color, float width)
+        {
+            var pen = new Pen(Color.FromArgb(200, color.R, color.G, color.B), Math.Max(1, width - 0.5f));
+            pen.StartCap = LineCap.Round;
+            pen.EndCap = LineCap.Round;
+            pen.LineJoin = LineJoin.Round;
+            // 使用自定义虚线模拟铅笔纹理：短线段 + 小间隙，产生铅笔素描的断续感
+            pen.DashPattern = new float[] { 4, 1, 4, 1, 3, 2, 5, 1 };
+            pen.Alignment = PenAlignment.Center;
+            return pen;
+        }
+
+        /// <summary>创建马克笔画笔：高度透明 + 较粗笔触，模拟荧光笔/马克笔效果</summary>
+        private static Pen CreateMarkerPen(Color color, float width)
+        {
+            var pen = new Pen(Color.FromArgb(100, color.R, color.G, color.B), width + 2f);
+            pen.StartCap = LineCap.Round;
+            pen.EndCap = LineCap.Round;
+            pen.LineJoin = LineJoin.Round;
+            pen.Alignment = PenAlignment.Center;
+            return pen;
+        }
+
+        /// <summary>
+        /// 使用 Cardinal 样条曲线绘制平滑曲线，并保持直线段依然笔直。
+        /// 2点 → 直线（DrawLines），3点以上 → 张力曲线（DrawCurve）。
+        /// 张力值 0.5 在平滑度和直线保持之间取得良好平衡。
+        /// </summary>
+        private static void DrawSmoothCurve(Graphics g, Pen pen, PointF[] points)
+        {
+            if (points == null || points.Length < 2) return;
+
+            if (points.Length == 2)
+            {
+                g.DrawLine(pen, points[0], points[1]);
+                return;
+            }
+
+            // 3点以上用 Cardinal 样条曲线，tension=0.5 使弧线平滑但不过度弯曲
+            g.DrawCurve(pen, points, 0.5f);
+        }
+
+        /// <summary>Point[] 重载，自动转换为 PointF[]</summary>
+        private static void DrawSmoothCurve(Graphics g, Pen pen, Point[] points)
+        {
+            if (points == null || points.Length < 2) return;
+            var pts = Array.ConvertAll(points, p => (PointF)p);
+            DrawSmoothCurve(g, pen, pts);
         }
 
         private void InitializeLongPressTimer()
@@ -496,6 +559,10 @@ namespace LearningAssistant.Managers
                             _logger.LogInformation("MouseDown Left: Text tool clicked at {X},{Y}", e.Location.X, e.Location.Y);
                             AddTextCallback?.Invoke(e.Location);
                             break;
+                        case AnnotationToolMode.Eraser:
+                            _logger.LogInformation("MouseDown Left: Eraser clicked at {X},{Y}", e.Location.X, e.Location.Y);
+                            HandleEraserModeClick(e.Location);
+                            return;
                     }
                     return;
                 }
@@ -684,6 +751,12 @@ namespace LearningAssistant.Managers
                     // 检测鼠标悬停在手柄上，改变光标
                     UpdateCursorForHandleHit(e.Location);
                 }
+
+                // 橡皮擦模式：检测悬停笔划
+                if (_currentToolMode == AnnotationToolMode.Eraser)
+                {
+                    HandleEraserHover(e.Location);
+                }
             }
             catch (Exception ex)
             {
@@ -724,7 +797,7 @@ namespace LearningAssistant.Managers
 
                             using var drawPen = CreatePen(drawColor, drawWidth);
 
-                            activeGfx.DrawLines(drawPen, _currentStrokePoints.ToArray());
+                            DrawSmoothCurve(activeGfx, drawPen, _currentStrokePoints.ToArray());
                             _form.Presenter?.SaveAnnotationForPage(_drawingPageIndex);
                             var imgW = activeBmp.Width;
                             var imgH = activeBmp.Height;
@@ -1470,12 +1543,17 @@ namespace LearningAssistant.Managers
                         float top = Math.Min(y1, y2);
                         float bottom = Math.Max(y1, y2);
 
+                        // 边缘命中检测（点击在边框附近）
                         bool nearLeftEdge = Math.Abs(imgPoint.X - left) < hitThreshold && imgPoint.Y >= top - hitThreshold && imgPoint.Y <= bottom + hitThreshold;
                         bool nearRightEdge = Math.Abs(imgPoint.X - right) < hitThreshold && imgPoint.Y >= top - hitThreshold && imgPoint.Y <= bottom + hitThreshold;
                         bool nearTopEdge = Math.Abs(imgPoint.Y - top) < hitThreshold && imgPoint.X >= left - hitThreshold && imgPoint.X <= right + hitThreshold;
                         bool nearBottomEdge = Math.Abs(imgPoint.Y - bottom) < hitThreshold && imgPoint.X >= left - hitThreshold && imgPoint.X <= right + hitThreshold;
 
-                        return nearLeftEdge || nearRightEdge || nearTopEdge || nearBottomEdge;
+                        // 内部点击检测（点击在形状内部区域，便于选中后调整）
+                        bool insideRect = imgPoint.X >= left + hitThreshold && imgPoint.X <= right - hitThreshold &&
+                                          imgPoint.Y >= top + hitThreshold && imgPoint.Y <= bottom - hitThreshold;
+
+                        return nearLeftEdge || nearRightEdge || nearTopEdge || nearBottomEdge || insideRect;
                     }
                 case "Mosaic":
                     {
@@ -1578,6 +1656,78 @@ namespace LearningAssistant.Managers
             _form.PictureBoxPdf.Invalidate();
         }
 
+        /// <summary>
+        /// 橡皮擦模式：鼠标点击时删除悬停的笔划
+        /// </summary>
+        private void HandleEraserModeClick(Point clientPoint)
+        {
+            if (_hoveredStrokeIndex < 0 || _form.Presenter == null)
+            {
+                // 如果没有悬停笔划，尝试直接点击检测
+                var imgPoint = ClientToImage(clientPoint);
+                var strokes = GetCurrentPageStrokes();
+                for (int i = strokes.Count - 1; i >= 0; i--)
+                {
+                    if (HitTestStroke(strokes[i], imgPoint))
+                    {
+                        _hoveredStrokeIndex = i;
+                        _hoveredStroke = strokes[i];
+                        break;
+                    }
+                }
+                if (_hoveredStrokeIndex < 0) return;
+            }
+
+            _logger.LogInformation("Eraser deleting stroke at index {Index}", _hoveredStrokeIndex);
+
+            // 保存到撤销栈
+            if (_hoveredStroke != null)
+            {
+                PushStrokeToUndoStack(_hoveredStroke);
+            }
+
+            _form.Presenter.RemoveStrokeAtCurrentPage(_hoveredStrokeIndex);
+            _hoveredStroke = null;
+            _hoveredStrokeIndex = -1;
+
+            LoadAnnotationsForCurrentPage();
+            _form.PictureBoxPdf.Invalidate();
+        }
+
+        /// <summary>
+        /// 橡皮擦模式：鼠标移动时检测笔划悬停
+        /// </summary>
+        private void HandleEraserHover(Point clientPoint)
+        {
+            var imgPoint = ClientToImage(clientPoint);
+            var strokes = GetCurrentPageStrokes();
+
+            // 从最上层（最后绘制）开始检测
+            for (int i = strokes.Count - 1; i >= 0; i--)
+            {
+                if (HitTestStroke(strokes[i], imgPoint))
+                {
+                    if (_hoveredStroke != strokes[i])
+                    {
+                        _hoveredStroke = strokes[i];
+                        _hoveredStrokeIndex = i;
+                        _form.PictureBoxPdf.Cursor = Cursors.Hand;
+                        _form.PictureBoxPdf.Invalidate();
+                    }
+                    return;
+                }
+            }
+
+            // 没有悬停笔划
+            if (_hoveredStroke != null)
+            {
+                _hoveredStroke = null;
+                _hoveredStrokeIndex = -1;
+                _form.PictureBoxPdf.Cursor = Cursors.Default;
+                _form.PictureBoxPdf.Invalidate();
+            }
+        }
+
         public void UpdateSelectedStrokeColor(Color color)
         {
             if (_selectedStroke == null || _selectedStrokeIndex < 0) return;
@@ -1648,7 +1798,7 @@ namespace LearningAssistant.Managers
                     pen.StartCap = LineCap.Round;
                     pen.EndCap = LineCap.Round;
                     pen.LineJoin = LineJoin.Round;
-                    g.DrawLines(pen, screenPoints.ToArray());
+                    DrawSmoothCurve(g, pen, screenPoints.ToArray());
                 }
 
                 if (_isDrawingShape && _shapeStartPoint.HasValue && _shapeEndPoint.HasValue)
@@ -1717,6 +1867,12 @@ namespace LearningAssistant.Managers
 
                 // 绘制选中标注的视觉反馈（选中框 + 手柄）
                 DrawSelectionVisual(g, imgRect, pageIndex);
+
+                // 橡皮擦模式：绘制悬停笔划的红色高亮效果
+                if (_currentToolMode == AnnotationToolMode.Eraser && _hoveredStroke != null && pageIndex >= 0 && pageIndex == _form.CurrentPageIndex)
+                {
+                    DrawEraserHoverVisual(g, imgRect, pageIndex);
+                }
             }
             catch (Exception ex)
             {
@@ -1812,6 +1968,26 @@ namespace LearningAssistant.Managers
             g.FillRectangle(fillBrush, bounds.X, bounds.Y, bounds.Width, bounds.Height);
 
             using var borderPen = new Pen(Color.FromArgb(64, 150, 255), 2f);
+            borderPen.DashStyle = DashStyle.Dash;
+            g.DrawRectangle(borderPen, bounds.X, bounds.Y, bounds.Width, bounds.Height);
+        }
+
+        /// <summary>
+        /// 绘制橡皮擦悬停笔划的红色高亮效果
+        /// </summary>
+        private void DrawEraserHoverVisual(Graphics g, Rectangle imgRect, int pageIndex)
+        {
+            if (_hoveredStroke == null || _form.CurrentPageImage == null) return;
+
+            var (bounds, _, _) = GetSelectionBounds(_hoveredStroke, _form.CurrentPageImage);
+            if (bounds.Width <= 0 && bounds.Height <= 0) return;
+
+            // 红色半透明填充
+            using var fillBrush = new SolidBrush(Color.FromArgb(40, 255, 0, 0));
+            g.FillRectangle(fillBrush, bounds.X, bounds.Y, bounds.Width, bounds.Height);
+
+            // 红色边框
+            using var borderPen = new Pen(Color.FromArgb(200, 255, 0, 0), 3f);
             borderPen.DashStyle = DashStyle.Dash;
             g.DrawRectangle(borderPen, bounds.X, bounds.Y, bounds.Width, bounds.Height);
         }
