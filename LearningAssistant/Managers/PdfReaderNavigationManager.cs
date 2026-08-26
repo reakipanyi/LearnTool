@@ -1369,6 +1369,22 @@ namespace LearningAssistant.Managers
             }
         }
 
+        /// <summary>仅清理第二页标注缓存（双页模式切换时使用）</summary>
+        public void CleanupSecondAnnotationBitmap()
+        {
+            try
+            {
+                _secondAnnotationGraphics?.Dispose();
+                _secondAnnotationBitmap?.Dispose();
+                _secondAnnotationGraphics = null;
+                _secondAnnotationBitmap = null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error cleaning up second annotation bitmap");
+            }
+        }
+
         public void LoadAnnotationsForCurrentPage()
         {
             try
@@ -1413,6 +1429,38 @@ namespace LearningAssistant.Managers
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error applying loaded annotation bitmap");
+            }
+        }
+
+        /// <summary>应用第二页标注位图（双页模式）</summary>
+        public void ApplySecondLoadedAnnotationBitmap(Bitmap? annotationBitmap)
+        {
+            try
+            {
+                if (annotationBitmap != null)
+                {
+                    _secondAnnotationGraphics?.Dispose();
+                    _secondAnnotationBitmap?.Dispose();
+                    _secondAnnotationBitmap = new Bitmap(annotationBitmap);
+                    _secondAnnotationGraphics = Graphics.FromImage(_secondAnnotationBitmap);
+                    _secondAnnotationGraphics.SmoothingMode = SmoothingMode.AntiAlias;
+                }
+                else
+                {
+                    // 创建空白的透明位图
+                    if (_form.SecondPageImage != null)
+                    {
+                        _secondAnnotationBitmap?.Dispose();
+                        _secondAnnotationGraphics?.Dispose();
+                        _secondAnnotationBitmap = new Bitmap(_form.SecondPageImage.Width, _form.SecondPageImage.Height);
+                        _secondAnnotationGraphics = Graphics.FromImage(_secondAnnotationBitmap);
+                        _secondAnnotationGraphics.Clear(Color.Transparent);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error applying second annotation bitmap");
             }
         }
 
