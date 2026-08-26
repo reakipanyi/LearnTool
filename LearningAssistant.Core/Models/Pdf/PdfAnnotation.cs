@@ -18,6 +18,10 @@ namespace LearningAssistant.Models.Pdf
         public int ColorArgb { get; set; }
         public float Thickness { get; set; }
         public string? ShapeType { get; set; }
+        /// <summary>实线(Solid)/虚线(Dash)</summary>
+        public string DashStyle { get; set; } = "Dash";
+        /// <summary>画笔类型: Pencil(铅笔)/Pen(水笔)/Marker(马克笔)</summary>
+        public string PenType { get; set; } = "Pen";
         public DateTime CreatedAt { get; set; } = DateTime.Now;
     }
 

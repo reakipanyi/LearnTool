@@ -840,6 +840,58 @@ namespace LearningAssistant.Presenters
             }
         }
 
+        /// <summary>
+        /// 更新当前页面的指定笔划
+        /// </summary>
+        public void UpdateStrokeAtCurrentPage(int index, AnnotationStroke stroke)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath)) return;
+                _annotationService.UpdateStrokeAt(_pdfFileManager.CurrentFilePath, _pdfFileManager.CurrentPageIndex, index, stroke);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to update stroke at index {Index}", index);
+            }
+        }
+
+        /// <summary>
+        /// 获取指定索引的笔划
+        /// </summary>
+        public AnnotationStroke? GetStrokeAtCurrentPage(int index)
+        {
+            try
+            {
+                var strokes = GetCurrentPageStrokes().ToList();
+                if (index >= 0 && index < strokes.Count)
+                    return strokes[index];
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get stroke at index {Index}", index);
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// 获取当前页面所有文字注解
+        /// </summary>
+        public IEnumerable<AnnotationText> GetCurrentPageTexts()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath))
+                    return Enumerable.Empty<AnnotationText>();
+                return _annotationService.GetTexts(_pdfFileManager.CurrentFilePath, _pdfFileManager.CurrentPageIndex);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get texts for current page");
+                return Enumerable.Empty<AnnotationText>();
+            }
+        }
+
         public void RemoveStrokeAtCurrentPage(int index)
         {
             try
@@ -1145,7 +1197,6 @@ namespace LearningAssistant.Presenters
             }
 
             _ = FireAndForgetWithLogging(RenderAndDisplayCurrentPageAsync(), "RenderAndDisplayCurrentPageAsync");
-            _ = FireAndForgetWithLogging(_pdfRenderer.GenerateThumbnailsAsync(), "GenerateThumbnailsAsync");
         }
 
         private void OnFolderLoaded(object? sender, FolderLoadedEventArgs e)
@@ -1153,10 +1204,26 @@ namespace LearningAssistant.Presenters
             _view?.SetFileList(e.Files);
         }
 
+        /// <summary>
+        /// 按需生成缩略图并清空已有缩略图缓存，确保重新加载时数据最新
+        /// </summary>
+        public void GenerateThumbnails()
+        {
+            _view?.ClearThumbnails();
+            _pdfRenderer.ClearCache();
+            _ = FireAndForgetWithLogging(_pdfRenderer.GenerateThumbnailsAsync(), "GenerateThumbnailsAsync");
+        }
+
         private void OnThumbnailGenerated(object? sender, ThumbnailGeneratedEventArgs e)
         {
             // 图片模式下传入 DirectoryPath 以便按目录分组展示，PDF 模式 DirectoryPath 为空
             _view?.AddThumbnail(e.PageIndex, e.Thumbnail, e.DirectoryPath);
+
+            // 如果当前页的缩略图已生成，立即高亮选中
+            if (e.PageIndex == _pdfFileManager.CurrentPageIndex)
+            {
+                _view?.HighlightThumbnail(e.PageIndex);
+            }
         }
 
         private void OnWordAdded(object? sender, WordAddedEventArgs e)

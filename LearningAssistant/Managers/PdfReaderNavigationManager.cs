@@ -19,6 +19,17 @@ namespace LearningAssistant.Managers
         Text
     }
 
+    public enum SelectionInteractionState
+    {
+        None,
+        Idle,
+        Moving,
+        ResizingTopLeft,
+        ResizingTopRight,
+        ResizingBottomLeft,
+        ResizingBottomRight
+    }
+
     public class PdfReaderNavigationManager : IDisposable
     {
         private readonly ILogger _logger;
@@ -69,6 +80,8 @@ namespace LearningAssistant.Managers
         private Pen? _drawingPen;
         private Color _penColor = Color.Black;
         private float _penWidth = 3f;
+        private bool _isDashed = false;
+        private string _penType = "Pen"; // Pencil, Pen, Marker
 
         private PointF? _shapeStartPoint;
         private PointF? _shapeEndPoint;
@@ -85,9 +98,21 @@ namespace LearningAssistant.Managers
         /// </summary>
         public event EventHandler? UndoActionRecorded;
 
+        // === 选中/编辑状态 ===
         private AnnotationStroke? _selectedStroke;
         private int _selectedStrokeIndex = -1;
+        private SelectionInteractionState _selectionState = SelectionInteractionState.None;
+        private PointF _selectionDragStart = PointF.Empty;
+        private PointF _selectionOriginalPoint1 = PointF.Empty;
+        private PointF _selectionOriginalPoint2 = PointF.Empty;
         private const float HitTestThreshold = 25f;
+        private const float HandleSize = 8f;
+        private const float SelectionBorderWidth = 2f;
+
+        /// <summary>
+        /// 标注被选中时触发，携带(selectedStroke, selectedIndex, isDoubleClick)
+        /// </summary>
+        public event Action<AnnotationStroke, int, bool>? AnnotationSelected;
 
         public int ZoomLevel => _zoomLevel;
         public bool IsLocked => _isLocked;
@@ -96,8 +121,13 @@ namespace LearningAssistant.Managers
         public AnnotationToolMode CurrentToolMode => _currentToolMode;
         public Color PenColor => _penColor;
         public float PenWidth => _penWidth;
+        public bool IsDashed => _isDashed;
+        public string PenType => _penType;
         public bool IsDrawing => _isDrawing;
         public List<PointF>? CurrentStrokePoints => _currentStrokePoints;
+        public AnnotationStroke? SelectedStroke => _selectedStroke;
+        public int SelectedStrokeIndex => _selectedStrokeIndex;
+        public SelectionInteractionState SelectionState => _selectionState;
 
         public Func<bool>? IsHighlightModeCallback { get; set; }
         public Action<Rectangle>? AddHighlightCallback { get; set; }
@@ -108,10 +138,7 @@ namespace LearningAssistant.Managers
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _form = form ?? throw new ArgumentNullException(nameof(form));
 
-            _drawingPen = new Pen(_penColor, _penWidth);
-            _drawingPen.StartCap = LineCap.Round;
-            _drawingPen.EndCap = LineCap.Round;
-            _drawingPen.LineJoin = LineJoin.Round;
+            _drawingPen = CreatePen(_penColor, _penWidth);
             InitializeLongPressTimer();
         }
 
@@ -121,12 +148,11 @@ namespace LearningAssistant.Managers
             _isDrawing = false;
             _isSelecting = false;
             _currentStrokePoints = null;
-            _selectedStroke = null;
-            _selectedStrokeIndex = -1;
+            ClearSelection();
 
             if (_form.PictureBoxPdf != null)
             {
-                _form.PictureBoxPdf.Cursor = mode == AnnotationToolMode.Select ? Cursors.Hand : Cursors.Default;
+                _form.PictureBoxPdf.Cursor = mode == AnnotationToolMode.Select ? Cursors.SizeAll : Cursors.Default;
             }
 
             _form.PictureBoxPdf.Invalidate();
@@ -139,10 +165,7 @@ namespace LearningAssistant.Managers
             {
                 _drawingPen.Dispose();
             }
-            _drawingPen = new Pen(_penColor, _penWidth);
-            _drawingPen.StartCap = LineCap.Round;
-            _drawingPen.EndCap = LineCap.Round;
-            _drawingPen.LineJoin = LineJoin.Round;
+            _drawingPen = CreatePen(_penColor, _penWidth);
         }
 
         public void SetPenWidth(float width)
@@ -152,10 +175,38 @@ namespace LearningAssistant.Managers
             {
                 _drawingPen.Dispose();
             }
-            _drawingPen = new Pen(_penColor, _penWidth);
-            _drawingPen.StartCap = LineCap.Round;
-            _drawingPen.EndCap = LineCap.Round;
-            _drawingPen.LineJoin = LineJoin.Round;
+            _drawingPen = CreatePen(_penColor, _penWidth);
+        }
+
+        public void SetDashStyle(bool dashed)
+        {
+            _isDashed = dashed;
+        }
+
+        public void SetPenType(string penType)
+        {
+            _penType = penType switch
+            {
+                "Pencil" => "Pencil",
+                "Marker" => "Marker",
+                _ => "Pen"
+            };
+        }
+
+        private Pen CreatePen(Color color, float width)
+        {
+            float alpha = _penType switch
+            {
+                "Pencil" => 180f,
+                "Marker" => 120f,
+                _ => 255f
+            };
+            int a = Math.Max(0, Math.Min(255, (int)alpha));
+            var pen = new Pen(Color.FromArgb(a, color.R, color.G, color.B), width);
+            pen.StartCap = LineCap.Round;
+            pen.EndCap = LineCap.Round;
+            pen.LineJoin = LineJoin.Round;
+            return pen;
         }
 
         private void InitializeLongPressTimer()
@@ -608,6 +659,30 @@ namespace LearningAssistant.Managers
                     _imageOffset = new Point(_imageOffset.X + deltaX, _imageOffset.Y + deltaY);
                     _dragStart = e.Location;
                     _form.PictureBoxPdf.Invalidate();
+                    return;
+                }
+
+                // 选中标注的拖拽移动/缩放
+                if (_currentToolMode == AnnotationToolMode.Select && _selectedStroke != null)
+                {
+                    if (_selectionState == SelectionInteractionState.Moving)
+                    {
+                        HandleSelectionDragMove(e.Location);
+                        _form.PictureBoxPdf.Invalidate();
+                        return;
+                    }
+                    else if (_selectionState == SelectionInteractionState.ResizingTopLeft ||
+                             _selectionState == SelectionInteractionState.ResizingTopRight ||
+                             _selectionState == SelectionInteractionState.ResizingBottomLeft ||
+                             _selectionState == SelectionInteractionState.ResizingBottomRight)
+                    {
+                        HandleSelectionResize(e.Location);
+                        _form.PictureBoxPdf.Invalidate();
+                        return;
+                    }
+
+                    // 检测鼠标悬停在手柄上，改变光标
+                    UpdateCursorForHandleHit(e.Location);
                 }
             }
             catch (Exception ex)
@@ -647,10 +722,7 @@ namespace LearningAssistant.Managers
                             Color drawColor = _currentToolMode == AnnotationToolMode.Strikethrough ? Color.Red : _penColor;
                             float drawWidth = _currentToolMode == AnnotationToolMode.Strikethrough ? 6f : _penWidth;
 
-                            using var drawPen = new Pen(drawColor, drawWidth);
-                            drawPen.StartCap = LineCap.Round;
-                            drawPen.EndCap = LineCap.Round;
-                            drawPen.LineJoin = LineJoin.Round;
+                            using var drawPen = CreatePen(drawColor, drawWidth);
 
                             activeGfx.DrawLines(drawPen, _currentStrokePoints.ToArray());
                             _form.Presenter?.SaveAnnotationForPage(_drawingPageIndex);
@@ -743,11 +815,11 @@ namespace LearningAssistant.Managers
                                 switch (_currentToolMode)
                                 {
                                     case AnnotationToolMode.Rectangle:
-                                        drawPen.DashStyle = DashStyle.Dash;
+                                        if (_isDashed) drawPen.DashStyle = DashStyle.Dash;
                                         activeGfx.DrawRectangle(drawPen, rect.X, rect.Y, rect.Width, rect.Height);
                                         break;
                                     case AnnotationToolMode.Ellipse:
-                                        drawPen.DashStyle = DashStyle.Dash;
+                                        if (_isDashed) drawPen.DashStyle = DashStyle.Dash;
                                         activeGfx.DrawEllipse(drawPen, rect);
                                         break;
                                     case AnnotationToolMode.Arrow:
@@ -776,6 +848,8 @@ namespace LearningAssistant.Managers
                                     ColorArgb = _penColor.ToArgb(),
                                     Thickness = _penWidth,
                                     ShapeType = _currentToolMode.ToString(),
+                                    DashStyle = _isDashed ? "Dash" : "Solid",
+                                    PenType = _penType,
                                     CreatedAt = DateTime.Now
                                 };
 
@@ -837,6 +911,19 @@ namespace LearningAssistant.Managers
                     _longPressDragStarted = false;
                     _form.PictureBoxPdf.Cursor = Cursors.Default;
                 }
+
+                // 结束选中标注的拖拽操作
+                if (_currentToolMode == AnnotationToolMode.Select &&
+                    (_selectionState == SelectionInteractionState.Moving ||
+                     _selectionState == SelectionInteractionState.ResizingTopLeft ||
+                     _selectionState == SelectionInteractionState.ResizingTopRight ||
+                     _selectionState == SelectionInteractionState.ResizingBottomLeft ||
+                     _selectionState == SelectionInteractionState.ResizingBottomRight))
+                {
+                    _selectionState = SelectionInteractionState.Idle;
+                    _form.PictureBoxPdf.Cursor = Cursors.SizeAll;
+                    _form.Presenter?.SaveAnnotationForCurrentPage();
+                }
             }
             catch (Exception ex)
             {
@@ -884,6 +971,230 @@ namespace LearningAssistant.Managers
                 _form.PictureBoxPdf?.Invalidate();
             };
             _clearPendingHighlightTimer.Start();
+        }
+
+        private void HandleSelectionDragMove(Point clientPoint)
+        {
+            if (_selectedStroke == null || _form.CurrentPageImage == null) return;
+            if (_selectedStroke.Points == null || _selectedStroke.Points.Length < 4) return;
+
+            var imgPoint = ClientToImage(clientPoint);
+            var dragDelta = new PointF(
+                imgPoint.X - _selectionDragStart.X,
+                imgPoint.Y - _selectionDragStart.Y);
+
+            _selectionDragStart = imgPoint;
+
+            var pageSize = _form.Presenter?.GetPageSize() ?? (0f, 0f);
+            float pageWidth = pageSize.Width > 0 ? pageSize.Width : _form.CurrentPageImage.Width;
+            float pageHeight = pageSize.Height > 0 ? pageSize.Height : _form.CurrentPageImage.Height;
+
+            // 更新所有点的坐标
+            for (int i = 0; i < _selectedStroke.Points.Length - 1; i += 2)
+            {
+                float newX = _selectedStroke.Points[i] * pageWidth + dragDelta.X;
+                float newY = _selectedStroke.Points[i + 1] * pageHeight + dragDelta.Y;
+
+                _selectedStroke.Points[i] = Math.Max(0, Math.Min(pageWidth, newX)) / pageWidth;
+                _selectedStroke.Points[i + 1] = Math.Max(0, Math.Min(pageHeight, newY)) / pageHeight;
+            }
+
+            // 更新到服务层
+            _form.Presenter?.UpdateStrokeAtCurrentPage(_selectedStrokeIndex, _selectedStroke);
+        }
+
+        private void HandleSelectionResize(Point clientPoint)
+        {
+            if (_selectedStroke == null || _form.CurrentPageImage == null) return;
+            if (_selectedStroke.Points == null || _selectedStroke.Points.Length < 4) return;
+
+            var imgPoint = ClientToImage(clientPoint);
+            var pageSize = _form.Presenter?.GetPageSize() ?? (0f, 0f);
+            float pageWidth = pageSize.Width > 0 ? pageSize.Width : _form.CurrentPageImage.Width;
+            float pageHeight = pageSize.Height > 0 ? pageSize.Height : _form.CurrentPageImage.Height;
+            float scaleX = pageWidth;
+            float scaleY = pageHeight;
+
+            float x1 = _selectionOriginalPoint1.X;
+            float y1 = _selectionOriginalPoint1.Y;
+            float x2 = _selectionOriginalPoint2.X;
+            float y2 = _selectionOriginalPoint2.Y;
+
+            float left = Math.Min(x1, x2);
+            float right = Math.Max(x1, x2);
+            float top = Math.Min(y1, y2);
+            float bottom = Math.Max(y1, y2);
+
+            switch (_selectionState)
+            {
+                case SelectionInteractionState.ResizingTopLeft:
+                    left = Math.Min(right - 10, imgPoint.X);
+                    top = Math.Min(bottom - 10, imgPoint.Y);
+                    break;
+                case SelectionInteractionState.ResizingTopRight:
+                    right = Math.Max(left + 10, imgPoint.X);
+                    top = Math.Min(bottom - 10, imgPoint.Y);
+                    break;
+                case SelectionInteractionState.ResizingBottomLeft:
+                    left = Math.Min(right - 10, imgPoint.X);
+                    bottom = Math.Max(top + 10, imgPoint.Y);
+                    break;
+                case SelectionInteractionState.ResizingBottomRight:
+                    right = Math.Max(left + 10, imgPoint.X);
+                    bottom = Math.Max(top + 10, imgPoint.Y);
+                    break;
+            }
+
+            // 更新为归一化坐标
+            _selectedStroke.Points[0] = Math.Max(0, Math.Min(1, left / scaleX));
+            _selectedStroke.Points[1] = Math.Max(0, Math.Min(1, top / scaleY));
+            _selectedStroke.Points[2] = Math.Max(0, Math.Min(1, right / scaleX));
+            _selectedStroke.Points[3] = Math.Max(0, Math.Min(1, bottom / scaleY));
+
+            _form.Presenter?.UpdateStrokeAtCurrentPage(_selectedStrokeIndex, _selectedStroke);
+        }
+
+        private void UpdateCursorForHandleHit(Point clientPoint)
+        {
+            if (_selectedStroke == null || _form.CurrentPageImage == null) return;
+
+            var imgPoint = ClientToImage(clientPoint);
+            var (_, _, handles) = GetSelectionBounds(_selectedStroke, _form.CurrentPageImage);
+
+            foreach (var (handleRect, state) in handles)
+            {
+                var imgRect = ClientRectFromScreenRect(handleRect);
+                if (imgRect.Contains((int)imgPoint.X, (int)imgPoint.Y))
+                {
+                    _form.PictureBoxPdf.Cursor = state switch
+                    {
+                        SelectionInteractionState.ResizingTopLeft => Cursors.SizeNWSE,
+                        SelectionInteractionState.ResizingTopRight => Cursors.SizeNESW,
+                        SelectionInteractionState.ResizingBottomLeft => Cursors.SizeNESW,
+                        SelectionInteractionState.ResizingBottomRight => Cursors.SizeNWSE,
+                        _ => Cursors.SizeAll
+                    };
+                    return;
+                }
+            }
+
+            _form.PictureBoxPdf.Cursor = Cursors.SizeAll;
+        }
+
+        /// <summary>
+        /// 计算选中标注的屏幕边界框和手柄位置
+        /// </summary>
+        public (RectangleF bounds, List<PointF> corners, List<(Rectangle handleRect, SelectionInteractionState state)> handles) GetSelectionBounds(AnnotationStroke stroke, Bitmap? pageImage)
+        {
+            var result = (bounds: RectangleF.Empty, corners: new List<PointF>(), handles: new List<(Rectangle, SelectionInteractionState)>());
+
+            if (stroke == null || stroke.Points == null || stroke.Points.Length < 4 || pageImage == null)
+                return result;
+
+            int imgWidth = pageImage.Width;
+            int imgHeight = pageImage.Height;
+            var pageSize = _form.Presenter?.GetPageSize() ?? (0f, 0f);
+            float pageW = pageSize.Width > 0 ? pageSize.Width : imgWidth;
+            float pageH = pageSize.Height > 0 ? pageSize.Height : imgHeight;
+            float scaleX = (float)imgWidth / pageW;
+            float scaleY = (float)imgHeight / pageH;
+
+            var imgRect = _form.GetImageDisplayRect();
+
+            if (_form.IsDualPage)
+            {
+                // 简化处理：使用当前页面的显示区域
+                if (_form.SecondPageImage != null && stroke.PageIndex > _form.CurrentPageIndex)
+                {
+                    var (_, rightRect, _) = _form.GetPageAtPoint(new Point(imgRect.X + imgRect.Width / 2, imgRect.Y + imgRect.Height / 2));
+                    // 使用右页
+                }
+            }
+
+            float screenScaleX = (float)imgRect.Width / imgWidth;
+            float screenScaleY = (float)imgRect.Height / imgHeight;
+
+            // 计算所有点的屏幕坐标
+            var screenPoints = new List<PointF>();
+            for (int i = 0; i < stroke.Points.Length - 1; i += 2)
+            {
+                float nx = stroke.Points[i] * pageW * scaleX * screenScaleX + imgRect.X;
+                float ny = stroke.Points[i + 1] * pageH * scaleY * screenScaleY + imgRect.Y;
+                screenPoints.Add(new PointF(nx, ny));
+            }
+
+            if (screenPoints.Count < 2) return result;
+
+            var shapeType = stroke.ShapeType ?? string.Empty;
+            if (shapeType is "Rectangle" or "Ellipse" or "Mosaic" or "Arrow" or "")
+            {
+                float x1 = screenPoints[0].X;
+                float y1 = screenPoints[0].Y;
+                float x2 = screenPoints[screenPoints.Count - 2].X;
+                float y2 = screenPoints[screenPoints.Count - 1].Y;
+
+                float left = Math.Min(x1, x2);
+                float top = Math.Min(y1, y2);
+                float right = Math.Max(x1, x2);
+                float bottom = Math.Max(y1, y2);
+
+                // 对于自由画笔，计算所有点的包围盒
+                if (string.IsNullOrEmpty(shapeType) || shapeType == "Pen" || shapeType == "Strikethrough")
+                {
+                    left = screenPoints.Min(p => p.X);
+                    top = screenPoints.Min(p => p.Y);
+                    right = screenPoints.Max(p => p.X);
+                    bottom = screenPoints.Max(p => p.Y);
+                }
+
+                float padding = 4f;
+                left -= padding;
+                top -= padding;
+                right += padding;
+                bottom += padding;
+
+                result.bounds = new RectangleF(left, top, right - left, bottom - top);
+
+                // 四个角
+                var corners = new List<PointF>
+                {
+                    new PointF(left, top),
+                    new PointF(right, top),
+                    new PointF(left, bottom),
+                    new PointF(right, bottom)
+                };
+                result.corners = corners;
+
+                // 四个手柄
+                float halfHandle = HandleSize / 2;
+                result.handles = new List<(Rectangle, SelectionInteractionState)>
+                {
+                    (new Rectangle((int)(left - halfHandle), (int)(top - halfHandle), (int)HandleSize, (int)HandleSize), SelectionInteractionState.ResizingTopLeft),
+                    (new Rectangle((int)(right - halfHandle), (int)(top - halfHandle), (int)HandleSize, (int)HandleSize), SelectionInteractionState.ResizingTopRight),
+                    (new Rectangle((int)(left - halfHandle), (int)(bottom - halfHandle), (int)HandleSize, (int)HandleSize), SelectionInteractionState.ResizingBottomLeft),
+                    (new Rectangle((int)(right - halfHandle), (int)(bottom - halfHandle), (int)HandleSize, (int)HandleSize), SelectionInteractionState.ResizingBottomRight)
+                };
+            }
+
+            return result;
+        }
+
+        private RectangleF ClientRectFromScreenRect(Rectangle screenRect)
+        {
+            if (_form.CurrentPageImage == null) return screenRect;
+
+            var imgRect = _form.GetImageDisplayRect();
+            int imgWidth = _form.CurrentPageImage.Width;
+            int imgHeight = _form.CurrentPageImage.Height;
+
+            float scaleX = (float)imgWidth / imgRect.Width;
+            float scaleY = (float)imgHeight / imgRect.Height;
+
+            return new RectangleF(
+                (screenRect.X - imgRect.X) * scaleX,
+                (screenRect.Y - imgRect.Y) * scaleY,
+                screenRect.Width * scaleX,
+                screenRect.Height * scaleY);
         }
 
         private void LongPressTimer_Tick(object? sender, EventArgs e)
@@ -1039,24 +1350,90 @@ namespace LearningAssistant.Managers
             var imgPoint = ClientToImage(clientPoint);
             var strokes = GetCurrentPageStrokes();
 
-            _logger.LogInformation("Select mode click: client={ClientX},{ClientY}, img={ImgX},{ImgY}, strokes count={Count}",
-                clientPoint.X, clientPoint.Y, imgPoint.X, imgPoint.Y, strokes.Count);
+            // 检测是否点击了选中标注的手柄（进行缩放操作）
+            if (_selectedStroke != null && _selectionState != SelectionInteractionState.None)
+            {
+                var (_, _, handles) = GetSelectionBounds(_selectedStroke, _form.CurrentPageImage);
+                foreach (var (handleRect, state) in handles)
+                {
+                    var imgRect = ClientRectFromScreenRect(handleRect);
+                    if (imgRect.Contains((int)imgPoint.X, (int)imgPoint.Y))
+                    {
+                        _selectionState = state;
+                        _selectionDragStart = imgPoint;
+                        // 保存原始端点坐标，用于缩放计算
+                        if (_selectedStroke.Points.Length >= 4)
+                        {
+                            float pageWidth = _form.CurrentPageImage.Width;
+                            float pageHeight = _form.CurrentPageImage.Height;
+                            var pageSize = _form.Presenter?.GetPageSize() ?? (0f, 0f);
+                            float imgW = pageWidth;
+                            float imgH = pageHeight;
+                            float scaleX = pageSize.Width > 0 ? imgW / pageSize.Width : 1f;
+                            float scaleY = pageSize.Height > 0 ? imgH / pageSize.Height : 1f;
 
+                            _selectionOriginalPoint1 = new PointF(
+                                _selectedStroke.Points[0] * pageSize.Width * scaleX,
+                                _selectedStroke.Points[1] * pageSize.Height * scaleY);
+                            _selectionOriginalPoint2 = new PointF(
+                                _selectedStroke.Points[2] * pageSize.Width * scaleX,
+                                _selectedStroke.Points[3] * pageSize.Height * scaleY);
+                        }
+                        _form.PictureBoxPdf.Invalidate();
+                        return;
+                    }
+                }
+            }
+
+            // 检测是否选中了标注（点击在标注上）
             for (int i = strokes.Count - 1; i >= 0; i--)
             {
                 var stroke = strokes[i];
                 if (HitTestStroke(stroke, imgPoint))
                 {
+                    if (_selectedStroke == stroke && _selectedStrokeIndex == i)
+                    {
+                        // 已选中状态，检测是否为双击
+                        var now = DateTime.Now;
+                        var timeDiff = (now - _lastClickTime).TotalMilliseconds;
+                        if (timeDiff < DoubleClickTime_ms && timeDiff > 0)
+                        {
+                            // 双击 -> 触发编辑（打开编辑对话框/属性面板）
+                            AnnotationSelected?.Invoke(stroke, i, true);
+                            _lastClickTime = DateTime.MinValue;
+                        }
+                        else
+                        {
+                            // 单击已选中标注 -> 准备拖拽移动
+                            _selectionState = SelectionInteractionState.Moving;
+                            _selectionDragStart = imgPoint;
+                            _lastClickTime = now;
+                            _lastClickLocation = clientPoint;
+                        }
+                        return;
+                    }
+
+                    // 新选中一个标注
                     _selectedStroke = stroke;
                     _selectedStrokeIndex = i;
-                    _logger.LogInformation("Selected stroke at index {Index}, type={ShapeType}, deleting...", i, stroke.ShapeType);
-                    DeleteSelectedStroke();
+                    _selectionState = SelectionInteractionState.Idle;
+                    _lastClickTime = DateTime.Now;
+                    _lastClickLocation = clientPoint;
+
+                    _logger.LogInformation("Selected stroke at index {Index}, type={ShapeType}", i, stroke.ShapeType);
+                    AnnotationSelected?.Invoke(stroke, i, false);
+                    _form.PictureBoxPdf.Invalidate();
                     return;
                 }
             }
 
-            _selectedStroke = null;
-            _selectedStrokeIndex = -1;
+            // 点击空白区域 -> 取消选中
+            if (_selectedStroke != null)
+            {
+                ClearSelection();
+                _form.PictureBoxPdf.Invalidate();
+            }
+            _lastClickTime = DateTime.MinValue;
             _logger.LogInformation("No stroke hit - click at {X},{Y}", imgPoint.X, imgPoint.Y);
         }
 
@@ -1187,6 +1564,7 @@ namespace LearningAssistant.Managers
             _form.Presenter.RemoveStrokeAtCurrentPage(_selectedStrokeIndex);
             _selectedStroke = null;
             _selectedStrokeIndex = -1;
+            _selectionState = SelectionInteractionState.None;
 
             LoadAnnotationsForCurrentPage();
             _form.PictureBoxPdf.Invalidate();
@@ -1196,6 +1574,25 @@ namespace LearningAssistant.Managers
         {
             _selectedStroke = null;
             _selectedStrokeIndex = -1;
+            _selectionState = SelectionInteractionState.None;
+            _form.PictureBoxPdf.Invalidate();
+        }
+
+        public void UpdateSelectedStrokeColor(Color color)
+        {
+            if (_selectedStroke == null || _selectedStrokeIndex < 0) return;
+            _selectedStroke.ColorArgb = color.ToArgb();
+            _form.Presenter?.UpdateStrokeAtCurrentPage(_selectedStrokeIndex, _selectedStroke);
+            LoadAnnotationsForCurrentPage();
+            _form.PictureBoxPdf.Invalidate();
+        }
+
+        public void UpdateSelectedStrokeThickness(float thickness)
+        {
+            if (_selectedStroke == null || _selectedStrokeIndex < 0) return;
+            _selectedStroke.Thickness = Math.Max(1f, Math.Min(20f, thickness));
+            _form.Presenter?.UpdateStrokeAtCurrentPage(_selectedStrokeIndex, _selectedStroke);
+            LoadAnnotationsForCurrentPage();
             _form.PictureBoxPdf.Invalidate();
         }
 
@@ -1282,7 +1679,7 @@ namespace LearningAssistant.Managers
                         Math.Abs(screenEnd.Y - screenStart.Y));
 
                     using var pen = new Pen(_penColor, _penWidth);
-                    pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                    if (_isDashed) pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
                     pen.StartCap = LineCap.Round;
                     pen.EndCap = LineCap.Round;
 
@@ -1309,18 +1706,114 @@ namespace LearningAssistant.Managers
                             break;
                         case AnnotationToolMode.Mosaic:
                             {
-                                using var brush = new SolidBrush(Color.FromArgb(80, 128, 128, 128));
+                                using var brush = new SolidBrush(Color.FromArgb(80, 255, 255, 255));
                                 g.FillRectangle(brush, rect);
+                                if (_isDashed) pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
                                 g.DrawRectangle(pen, rect);
                                 break;
                             }
                     }
                 }
+
+                // 绘制选中标注的视觉反馈（选中框 + 手柄）
+                DrawSelectionVisual(g, imgRect, pageIndex);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error drawing annotations");
             }
+        }
+
+        /// <summary>
+        /// 绘制选中标注的边框和缩放手柄
+        /// </summary>
+        private void DrawSelectionVisual(Graphics g, Rectangle imgRect, int pageIndex)
+        {
+            if (_selectedStroke == null || _form.CurrentPageImage == null) return;
+
+            // 只在当前页面显示选中效果
+            if (pageIndex >= 0 && pageIndex != _form.CurrentPageIndex)
+                return;
+
+            // 只对 2D 形状（有shapeType）显示选中框，自由画笔不显示手柄
+            var shapeType = _selectedStroke.ShapeType ?? string.Empty;
+            if (shapeType is "Pen" or "Strikethrough" && _selectedStroke.Points.Length > 4)
+            {
+                // 自由画笔仅显示简化的选中框，不显示手柄
+                DrawSimpleSelectionBox(g, imgRect);
+                return;
+            }
+
+            if (_selectedStroke.Points == null || _selectedStroke.Points.Length < 4) return;
+
+            var (bounds, _, handles) = GetSelectionBounds(_selectedStroke, _form.CurrentPageImage);
+            if (bounds.Width <= 0 && bounds.Height <= 0) return;
+
+            // 绘制半透明选中遮罩（增强选中视觉反馈）
+            using var fillBrush = new SolidBrush(Color.FromArgb(20, 64, 150, 255));
+            g.FillRectangle(fillBrush, bounds.X, bounds.Y, bounds.Width, bounds.Height);
+
+            // 绘制选中边框（主边框 + 内发光效果）
+            using var borderPenOuter = new Pen(Color.FromArgb(120, 64, 150, 255), SelectionBorderWidth + 2);
+            borderPenOuter.DashStyle = DashStyle.Dash;
+            g.DrawRectangle(borderPenOuter, bounds.X - 1, bounds.Y - 1, bounds.Width + 2, bounds.Height + 2);
+
+            using var borderPenInner = new Pen(Color.FromArgb(200, 64, 150, 255), SelectionBorderWidth);
+            g.DrawRectangle(borderPenInner, bounds.X, bounds.Y, bounds.Width, bounds.Height);
+
+            // 绘制角标（小方块提示可拖拽）- 使用更亮的颜色
+            float cornerLen = Math.Min(14, Math.Min(bounds.Width / 3, bounds.Height / 3));
+            if (cornerLen > 4)
+            {
+                using var cornerPen = new Pen(Color.FromArgb(64, 150, 255), 3);
+                cornerPen.StartCap = LineCap.Round;
+                cornerPen.EndCap = LineCap.Round;
+                // 左上角
+                g.DrawLine(cornerPen, bounds.X, bounds.Y + cornerLen, bounds.X, bounds.Y);
+                g.DrawLine(cornerPen, bounds.X, bounds.Y, bounds.X + cornerLen, bounds.Y);
+                // 右上角
+                g.DrawLine(cornerPen, bounds.Right - cornerLen, bounds.Y, bounds.Right, bounds.Y);
+                g.DrawLine(cornerPen, bounds.Right, bounds.Y, bounds.Right, bounds.Y + cornerLen);
+                // 左下角
+                g.DrawLine(cornerPen, bounds.X, bounds.Bottom - cornerLen, bounds.X, bounds.Bottom);
+                g.DrawLine(cornerPen, bounds.X, bounds.Bottom, bounds.X + cornerLen, bounds.Bottom);
+                // 右下角
+                g.DrawLine(cornerPen, bounds.Right - cornerLen, bounds.Bottom, bounds.Right, bounds.Bottom);
+                g.DrawLine(cornerPen, bounds.Right, bounds.Bottom, bounds.Right, bounds.Bottom - cornerLen);
+            }
+
+            // 绘制缩放手柄（圆形，类似参考图片中的圆点手柄）
+            float handleRadius = HandleSize / 2;
+            foreach (var (handleRect, state) in handles)
+            {
+                // 外圈发光
+                using var glowBrush = new SolidBrush(Color.FromArgb(60, 64, 150, 255));
+                g.FillEllipse(glowBrush, handleRect.X - 2, handleRect.Y - 2, handleRect.Width + 4, handleRect.Height + 4);
+
+                // 白色填充
+                using var handleBrush = new SolidBrush(Color.White);
+                g.FillEllipse(handleBrush, handleRect);
+
+                // 蓝色边框
+                using var handlePen = new Pen(Color.FromArgb(64, 150, 255), 1.5f);
+                g.DrawEllipse(handlePen, handleRect);
+            }
+        }
+
+        private void DrawSimpleSelectionBox(Graphics g, Rectangle imgRect)
+        {
+            if (_selectedStroke == null || _form.CurrentPageImage == null) return;
+
+            var (bounds, _, _) = GetSelectionBounds(_selectedStroke, _form.CurrentPageImage);
+            if (bounds.Width <= 0 && bounds.Height <= 0) return;
+
+            // 半透明填充
+            using var fillBrush = new SolidBrush(Color.FromArgb(15, 64, 150, 255));
+            g.FillRectangle(fillBrush, bounds.X, bounds.Y, bounds.Width, bounds.Height);
+
+            using var borderPen = new Pen(Color.FromArgb(64, 150, 255), 2f);
+            borderPen.DashStyle = DashStyle.Dash;
+            g.DrawRectangle(borderPen, bounds.X, bounds.Y, bounds.Width, bounds.Height);
         }
 
         private PointF ClientToImage(Point clientPt)
@@ -1502,7 +1995,7 @@ namespace LearningAssistant.Managers
 
                 if (w <= 0 || h <= 0) return;
 
-                using var mosaicPen = new SolidBrush(Color.FromArgb(128, 128, 128));
+                using var mosaicPen = new SolidBrush(Color.FromArgb(220, 255, 255, 255));
                 for (int blockY = y; blockY < y + h; blockY += blockSize)
                 {
                     for (int blockX = x; blockX < x + w; blockX += blockSize)

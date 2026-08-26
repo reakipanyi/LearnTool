@@ -119,5 +119,15 @@ namespace LearningAssistant.Services.Pdf
         /// <param name="pdfPath">PDF文件路径</param>
         /// <param name="pageIndex">页码索引</param>
         void ClearAllTexts(string pdfPath, int pageIndex);
+
+        /// <summary>
+        /// 更新指定索引的笔划（用于编辑笔划属性）
+        /// </summary>
+        void UpdateStrokeAt(string pdfPath, int pageIndex, int index, AnnotationStroke stroke);
+
+        /// <summary>
+        /// 获取指定页面的标注数据（包含笔划和文字）
+        /// </summary>
+        PdfAnnotation? GetAnnotation(string pdfPath, int pageIndex);
     }
 }

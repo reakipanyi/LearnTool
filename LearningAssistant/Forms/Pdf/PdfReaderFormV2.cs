@@ -139,10 +139,12 @@ namespace LearningAssistant.Forms.Pdf
         private Button _buttonClearAllAnnotations;
         private Button _buttonSelectMode;
         private Panel _panelAnnotationOptions;
-        private Panel _panelThickness;
-        private Button _buttonThickness1;
-        private Button _buttonThickness2;
-        private Button _buttonThickness3;
+        private TrackBar _trackBarThickness;
+        private Label _labelThicknessValue;
+        private Button _buttonDashStyle;
+        private Button _buttonPenTypePencil;
+        private Button _buttonPenTypePen;
+        private Button _buttonPenTypeMarker;
         private Panel _panelColor;
         private Button _buttonColorBlue;
         private Button _buttonColorGreen;
@@ -150,6 +152,38 @@ namespace LearningAssistant.Forms.Pdf
         private Button _buttonColorRed;
         private Button _buttonColorBlack;
         private Button _buttonColorWhite;
+        private Button _buttonColorPurple;
+        private Button _buttonColorCyan;
+        private Button _buttonColorTeal;
+        private Button _buttonColorPink;
+        private Button _buttonColorBrown;
+        private Button _buttonColorGray;
+        private Button _buttonColorYellow;
+        private Button _buttonColorLime;
+        private Button _buttonColorVioletRed;
+        private Button _buttonColorDodgerBlue;
+        private Button _buttonColorMore;
+
+        // 16色面板 + 更多颜色按钮
+        private static readonly Color[] AnnotationColors = new[]
+        {
+            Color.Black,      // 0: 黑色
+            Color.White,      // 1: 白色
+            Color.RoyalBlue,  // 2: 蓝色
+            Color.LimeGreen,  // 3: 绿色
+            Color.Orange,     // 4: 橙色
+            Color.Red,        // 5: 红色
+            Color.Purple,     // 6: 紫色
+            Color.Cyan,       // 7: 青色
+            Color.Teal,       // 8: 蓝绿色
+            Color.HotPink,    // 9: 粉色
+            Color.SaddleBrown,// 10: 棕色
+            Color.Gray,       // 11: 灰色
+            Color.Gold,       // 12: 金色
+            Color.Lime,       // 13: 亮绿
+            Color.MediumVioletRed, // 14: 紫红
+            Color.DodgerBlue  // 15: 亮蓝
+        };
         private Panel? _statusBar;
         private Label? _statusLabelLeft;
         private Label? _statusLabelRight;
@@ -171,6 +205,11 @@ namespace LearningAssistant.Forms.Pdf
         /// 取代原先书签面板中只针对高亮的撤销按钮。
         /// </summary>
         private readonly Stack<UndoActionKind> _unifiedUndoStack = new Stack<UndoActionKind>();
+
+        /// <summary>
+        /// 标记当前文档的缩略图是否已加载，切换到缩略图选项卡时按需加载
+        /// </summary>
+        private bool _thumbnailsLoaded = false;
 
 
         private Bitmap? _currentPageImage;
@@ -281,6 +320,9 @@ namespace LearningAssistant.Forms.Pdf
             _navigationManager.AddHighlightCallback = rect => _highlightManager?.AddHighlight(rect);
             _navigationManager.AddTextCallback = point => ShowTextAnnotationDialog(point);
 
+            // 标注选中事件：双击触发编辑，单击显示选中状态
+            _navigationManager.AnnotationSelected += OnAnnotationSelected;
+
             if (_pictureBoxPdf != null)
             {
                 _pictureBoxPdf.MouseDown += _navigationManager.MouseDown;
@@ -290,6 +332,83 @@ namespace LearningAssistant.Forms.Pdf
 
             InitializeHighlightColorButtonEvents();
             InitializeToolbarButtonHoverEffects();
+        }
+
+        private void OnAnnotationSelected(AnnotationStroke stroke, int index, bool isDoubleClick)
+        {
+            if (isDoubleClick)
+            {
+                // 双击标注 -> 打开编辑
+                string shapeType = stroke.ShapeType ?? string.Empty;
+                if (shapeType == "Text")
+                {
+                    // 查找对应的文字标注并编辑
+                    var texts = _presenter?.GetCurrentPageTexts().ToList();
+                    if (texts != null)
+                    {
+                        foreach (var text in texts)
+                        {
+                            // 匹配位置相近的文字标注
+                            if (stroke.Points.Length >= 4)
+                            {
+                                float nx = stroke.Points[0];
+                                float ny = stroke.Points[1];
+                                if (Math.Abs(text.NormalizedX - nx) < 0.01 && Math.Abs(text.NormalizedY - ny) < 0.01)
+                                {
+                                    var item = new PdfAnnotationItem
+                                    {
+                                        Id = text.Id,
+                                        Type = AnnotationType.Text,
+                                        PdfPath = _currentPdfPath,
+                                        PageIndex = _currentPageIndex,
+                                        Text = text.Content,
+                                        ColorArgb = text.ColorArgb,
+                                        FontSize = text.FontSize,
+                                        NormalizedX = text.NormalizedX,
+                                        NormalizedY = text.NormalizedY
+                                    };
+                                    EditTextAnnotation(item);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    // 形状标注 -> 打开属性编辑面板
+                    ShowAnnotationPropertiesPanel(stroke);
+                }
+            }
+            else
+            {
+                // 单击选中 -> 更新UI状态，显示选中信息
+                UpdateStatusBar();
+                // 如果颜色面板可见，同步选中标注的颜色
+                SyncSelectionColorToPanel(stroke);
+            }
+        }
+
+        private void ShowAnnotationPropertiesPanel(AnnotationStroke stroke)
+        {
+            if (stroke == null) return;
+
+            // 使用现有的颜色面板来显示当前选中标注的颜色
+            var currentColor = Color.FromArgb(stroke.ColorArgb);
+            SetAnnotationColor(currentColor);
+            SetAnnotationThicknessFromSlider();
+            if (_trackBarThickness != null)
+                _trackBarThickness.Value = (int)Math.Round(Math.Max(1, Math.Min(20, stroke.Thickness)));
+
+            ShowToast($"已选中标注: {stroke.ShapeType ?? "画笔"} 颜色: #{currentColor.R:X2}{currentColor.G:X2}{currentColor.B:X2} 粗细: {stroke.Thickness:F0}");
+        }
+
+        private void SyncSelectionColorToPanel(AnnotationStroke stroke)
+        {
+            if (stroke == null) return;
+            var color = Color.FromArgb(stroke.ColorArgb);
+            // 在颜色面板中高亮对应的颜色
+            UpdateAnnotationColorSelection(color);
         }
 
         private void InitializeToolbarButtonHoverEffects()
@@ -493,11 +612,20 @@ namespace LearningAssistant.Forms.Pdf
 
         private void PdfReaderFormV2_Load(object? sender, EventArgs e)
         {
+            _tabControlLeft.SelectedIndexChanged += TabControlLeft_SelectedIndexChanged;
+
             AdjustPanelPdfSize();
             _presenter?.LoadLastSessionAndRestore();
             UpdateStatusBar();
             UpdateAnnotationColorSelection(Color.Black);
-            UpdateAnnotationThicknessSelection(2);
+            if (_trackBarThickness != null)
+            {
+                _trackBarThickness.Value = 3;
+                _labelThicknessValue.Text = "3px";
+            }
+            _navigationManager?.SetPenWidth(3f);
+            UpdateDashStyleButtonState();
+            UpdatePenTypeButtonState();
         }
 
         private void PdfReaderFormV2_KeyDown(object? sender, KeyEventArgs e)
@@ -1075,6 +1203,7 @@ namespace LearningAssistant.Forms.Pdf
         {
             CleanupHighlightLayer();
             ClearThumbnails();
+            _thumbnailsLoaded = false;
             _currentPdfPath = pdfPath;
             _bookmarkManager?.ClearCache();
 
@@ -1982,6 +2111,7 @@ namespace LearningAssistant.Forms.Pdf
 
         private void ButtonPenMode_Click(object? sender, EventArgs e)
         {
+            _navigationManager?.SetPenType("Pen");
             SetAnnotationToolMode(AnnotationToolMode.Pen);
         }
 
@@ -2003,38 +2133,53 @@ namespace LearningAssistant.Forms.Pdf
 
         private void UpdateAnnotationColorSelection(Color color)
         {
-            if (_buttonColorBlue != null) _buttonColorBlue.FlatAppearance.BorderSize = color == Color.RoyalBlue ? 2 : 0;
-            if (_buttonColorGreen != null) _buttonColorGreen.FlatAppearance.BorderSize = color == Color.LimeGreen ? 2 : 0;
-            if (_buttonColorOrange != null) _buttonColorOrange.FlatAppearance.BorderSize = color == Color.Orange ? 2 : 0;
-            if (_buttonColorRed != null) _buttonColorRed.FlatAppearance.BorderSize = color == Color.Red ? 2 : 0;
-            if (_buttonColorBlack != null) _buttonColorBlack.FlatAppearance.BorderSize = color == Color.Black ? 2 : 0;
-            if (_buttonColorWhite != null) _buttonColorWhite.FlatAppearance.BorderSize = color == Color.White ? 2 : 0;
+            var allButtons = new[]
+            {
+                _buttonColorBlue, _buttonColorGreen, _buttonColorOrange, _buttonColorRed,
+                _buttonColorBlack, _buttonColorWhite, _buttonColorPurple, _buttonColorCyan,
+                _buttonColorTeal, _buttonColorPink, _buttonColorBrown, _buttonColorGray,
+                _buttonColorYellow, _buttonColorLime, _buttonColorVioletRed, _buttonColorDodgerBlue
+            };
+
+            for (int i = 0; i < allButtons.Length && i < AnnotationColors.Length; i++)
+            {
+                if (allButtons[i] != null)
+                {
+                    bool isMatch = color.ToArgb() == AnnotationColors[i].ToArgb();
+                    // 选中态：显示品牌色外圈，模拟参考图片中的选中环效果
+                    allButtons[i].FlatAppearance.BorderSize = isMatch ? 3 : 0;
+                    allButtons[i].FlatAppearance.BorderColor = Color.FromArgb(64, 150, 255);
+                }
+            }
         }
 
-        private void SetAnnotationThickness(int level)
+        /// <summary>
+        /// 将按钮设置为圆形 Region
+        /// </summary>
+        private static void MakeButtonCircular(Button button)
         {
-            float[] widths = { 2f, 4f, 6f };
-            float width = widths[Math.Clamp(level - 1, 0, widths.Length - 1)];
-            _navigationManager?.SetPenWidth(width);
-            UpdateAnnotationThicknessSelection(level);
+            if (button == null || button.Width <= 0 || button.Height <= 0) return;
+            try
+            {
+                var path = new System.Drawing.Drawing2D.GraphicsPath();
+                path.AddEllipse(0, 0, button.Width, button.Height);
+                button.Region = new Region(path);
+                path.Dispose();
+            }
+            catch
+            {
+                // 忽略 Region 设置失败
+            }
         }
 
-        private void UpdateAnnotationThicknessSelection(int level)
+        private void SetAnnotationThicknessFromSlider()
         {
-            if (_buttonThickness1 != null)
+            if (_trackBarThickness != null)
             {
-                _buttonThickness1.FlatAppearance.BorderSize = level == 1 ? 2 : 0;
-                _buttonThickness1.FlatAppearance.BorderColor = Color.FromArgb(64, 150, 255);
-            }
-            if (_buttonThickness2 != null)
-            {
-                _buttonThickness2.FlatAppearance.BorderSize = level == 2 ? 2 : 0;
-                _buttonThickness2.FlatAppearance.BorderColor = Color.FromArgb(64, 150, 255);
-            }
-            if (_buttonThickness3 != null)
-            {
-                _buttonThickness3.FlatAppearance.BorderSize = level == 3 ? 2 : 0;
-                _buttonThickness3.FlatAppearance.BorderColor = Color.FromArgb(64, 150, 255);
+                float width = _trackBarThickness.Value;
+                _navigationManager?.SetPenWidth(width);
+                if (_labelThicknessValue != null)
+                    _labelThicknessValue.Text = $"{width}px";
             }
         }
 
@@ -2042,6 +2187,26 @@ namespace LearningAssistant.Forms.Pdf
         {
             if (_panelAnnotationOptions != null)
                 _panelAnnotationOptions.Visible = show;
+        }
+
+        private void SyncAnnotationOptionsToManager()
+        {
+            if (_navigationManager == null) return;
+
+            // 同步虚线状态
+            UpdateDashStyleButtonState();
+
+            // 同步画笔类型状态
+            UpdatePenTypeButtonState();
+
+            // 同步粗细滑块和标签
+            if (_trackBarThickness != null && _labelThicknessValue != null)
+            {
+                int width = (int)Math.Round(_navigationManager.PenWidth);
+                width = Math.Max(1, Math.Min(20, width));
+                _trackBarThickness.Value = width;
+                _labelThicknessValue.Text = $"{width}px";
+            }
         }
 
         private void ButtonEllipseMode_Click(object? sender, EventArgs e)
@@ -2131,6 +2296,26 @@ namespace LearningAssistant.Forms.Pdf
                              mode == AnnotationToolMode.Mosaic;
             ShowAnnotationOptions(showOptions);
 
+            if (showOptions)
+            {
+                SyncAnnotationOptionsToManager();
+
+                // 根据模式显示/隐藏第一排的画笔类型按钮
+                bool isPenMode = mode == AnnotationToolMode.Pen;
+                if (_buttonPenTypePencil != null)
+                    _buttonPenTypePencil.Visible = isPenMode;
+                if (_buttonPenTypePen != null)
+                    _buttonPenTypePen.Visible = isPenMode;
+                if (_buttonPenTypeMarker != null)
+                    _buttonPenTypeMarker.Visible = isPenMode;
+
+                // 根据模式显示/隐藏第二排的控件
+                bool isShapeMode = mode == AnnotationToolMode.Rectangle || mode == AnnotationToolMode.Ellipse;
+                // 虚线实线切换：仅矩形/椭圆需要
+                if (_buttonDashStyle != null)
+                    _buttonDashStyle.Visible = isShapeMode;
+            }
+
             UpdateToolButtonState(_buttonSelectMode, mode == AnnotationToolMode.Select);
             UpdateToolButtonState(_buttonHighlightMode, mode == AnnotationToolMode.Highlight);
             UpdateToolButtonState(_buttonRectangleMode, mode == AnnotationToolMode.Rectangle);
@@ -2139,6 +2324,7 @@ namespace LearningAssistant.Forms.Pdf
             UpdateToolButtonState(_buttonPenMode, mode == AnnotationToolMode.Pen);
             UpdateToolButtonState(_buttonMosaicMode, mode == AnnotationToolMode.Mosaic);
             UpdateToolButtonState(_buttonTextMode, mode == AnnotationToolMode.Text);
+            UpdatePenTypeButtonState();
 
             if (_highlightManager != null)
             {
@@ -2152,8 +2338,22 @@ namespace LearningAssistant.Forms.Pdf
         private void UpdateToolButtonState(Button? button, bool isActive)
         {
             if (button == null) return;
-            button.BackColor = isActive ? Color.FromArgb(230, 244, 255) : Color.Transparent;
-            button.FlatAppearance.BorderColor = isActive ? Color.FromArgb(64, 150, 255) : Color.FromArgb(217, 217, 217);
+            if (isActive)
+            {
+                // 选中态：浅蓝背景 + 品牌色边框，类似参考图片的 active 风格
+                button.BackColor = Color.FromArgb(230, 244, 255);
+                button.FlatAppearance.BorderColor = Color.FromArgb(64, 150, 255);
+                button.FlatAppearance.BorderSize = 2;
+                button.Font = new Font(button.Font, FontStyle.Bold);
+            }
+            else
+            {
+                // 非选中态：透明背景 + 浅灰边框
+                button.BackColor = Color.Transparent;
+                button.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+                button.FlatAppearance.BorderSize = 1;
+                button.Font = new Font(button.Font, FontStyle.Regular);
+            }
         }
 
         private void ConfigureButtonAppearance(Button button, bool isToolbarButton, Color backColor, int borderSize, Color borderColor)
@@ -2663,19 +2863,61 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
-        private void ButtonThickness1_Click(object? sender, EventArgs e)
+        private void TrackBarThickness_Scroll(object? sender, EventArgs e)
         {
-            SetAnnotationThickness(1);
+            if (_trackBarThickness != null)
+            {
+                float width = _trackBarThickness.Value;
+                _navigationManager?.SetPenWidth(width);
+                if (_labelThicknessValue != null)
+                    _labelThicknessValue.Text = $"{width}px";
+            }
         }
 
-        private void ButtonThickness2_Click(object? sender, EventArgs e)
+        private void ButtonDashStyle_Click(object? sender, EventArgs e)
         {
-            SetAnnotationThickness(2);
+            if (_navigationManager == null) return;
+            bool newDashed = !_navigationManager.IsDashed;
+            _navigationManager.SetDashStyle(newDashed);
+            UpdateDashStyleButtonState();
         }
 
-        private void ButtonThickness3_Click(object? sender, EventArgs e)
+        private void UpdateDashStyleButtonState()
         {
-            SetAnnotationThickness(3);
+            if (_buttonDashStyle == null || _navigationManager == null) return;
+            bool isDashed = _navigationManager.IsDashed;
+            _buttonDashStyle.Text = isDashed ? "┅" : "—";
+            _buttonDashStyle.FlatAppearance.BorderColor = isDashed ? Color.FromArgb(64, 150, 255) : Color.FromArgb(217, 217, 217);
+            _buttonDashStyle.FlatAppearance.BorderSize = isDashed ? 2 : 1;
+            _buttonDashStyle.BackColor = isDashed ? Color.FromArgb(230, 244, 255) : Color.Transparent;
+            _toolTip.SetToolTip(_buttonDashStyle, isDashed ? "虚线 (点击切换实线)" : "实线 (点击切换虚线)");
+        }
+
+        private void UpdatePenTypeButtonState()
+        {
+            if (_navigationManager == null) return;
+            string penType = _navigationManager.PenType;
+            UpdateToolButtonState(_buttonPenTypePencil, penType == "Pencil");
+            UpdateToolButtonState(_buttonPenTypePen, penType == "Pen");
+            UpdateToolButtonState(_buttonPenTypeMarker, penType == "Marker");
+        }
+
+        private void ButtonPenTypePencil_Click(object? sender, EventArgs e)
+        {
+            _navigationManager?.SetPenType("Pencil");
+            SetAnnotationToolMode(AnnotationToolMode.Pen);
+        }
+
+        private void ButtonPenTypePen_Click(object? sender, EventArgs e)
+        {
+            _navigationManager?.SetPenType("Pen");
+            SetAnnotationToolMode(AnnotationToolMode.Pen);
+        }
+
+        private void ButtonPenTypeMarker_Click(object? sender, EventArgs e)
+        {
+            _navigationManager?.SetPenType("Marker");
+            SetAnnotationToolMode(AnnotationToolMode.Pen);
         }
 
         private void ButtonColorBlue_Click(object? sender, EventArgs e)
@@ -2706,6 +2948,67 @@ namespace LearningAssistant.Forms.Pdf
         private void ButtonColorWhite_Click(object? sender, EventArgs e)
         {
             SetAnnotationColor(Color.White);
+        }
+
+        private void ButtonColorPurple_Click(object? sender, EventArgs e)
+        {
+            SetAnnotationColor(Color.Purple);
+        }
+
+        private void ButtonColorCyan_Click(object? sender, EventArgs e)
+        {
+            SetAnnotationColor(Color.Cyan);
+        }
+
+        private void ButtonColorTeal_Click(object? sender, EventArgs e)
+        {
+            SetAnnotationColor(Color.Teal);
+        }
+
+        private void ButtonColorPink_Click(object? sender, EventArgs e)
+        {
+            SetAnnotationColor(Color.HotPink);
+        }
+
+        private void ButtonColorBrown_Click(object? sender, EventArgs e)
+        {
+            SetAnnotationColor(Color.SaddleBrown);
+        }
+
+        private void ButtonColorGray_Click(object? sender, EventArgs e)
+        {
+            SetAnnotationColor(Color.Gray);
+        }
+
+        private void ButtonColorYellow_Click(object? sender, EventArgs e)
+        {
+            SetAnnotationColor(Color.Gold);
+        }
+
+        private void ButtonColorLime_Click(object? sender, EventArgs e)
+        {
+            SetAnnotationColor(Color.Lime);
+        }
+
+        private void ButtonColorVioletRed_Click(object? sender, EventArgs e)
+        {
+            SetAnnotationColor(Color.MediumVioletRed);
+        }
+
+        private void ButtonColorDodgerBlue_Click(object? sender, EventArgs e)
+        {
+            SetAnnotationColor(Color.DodgerBlue);
+        }
+
+        private void ButtonColorMore_Click(object? sender, EventArgs e)
+        {
+            using var colorDialog = new ColorDialog();
+            colorDialog.Color = _navigationManager?.PenColor ?? Color.Black;
+            colorDialog.FullOpen = true;
+            if (colorDialog.ShowDialog(this) == DialogResult.OK)
+            {
+                SetAnnotationColor(colorDialog.Color);
+            }
         }
 
         private void MenuItemHighlight_Click(object? sender, EventArgs e)
@@ -3295,10 +3598,12 @@ namespace LearningAssistant.Forms.Pdf
             _buttonAskAi = new Button();
             _buttonOpenFolder = new Button();
             _panelAnnotationOptions = new Panel();
-            _panelThickness = new Panel();
-            _buttonThickness1 = new Button();
-            _buttonThickness2 = new Button();
-            _buttonThickness3 = new Button();
+            _trackBarThickness = new TrackBar();
+            _labelThicknessValue = new Label();
+            _buttonDashStyle = new Button();
+            _buttonPenTypePencil = new Button();
+            _buttonPenTypePen = new Button();
+            _buttonPenTypeMarker = new Button();
             _panelColor = new Panel();
             _buttonColorBlue = new Button();
             _buttonColorGreen = new Button();
@@ -3306,6 +3611,17 @@ namespace LearningAssistant.Forms.Pdf
             _buttonColorRed = new Button();
             _buttonColorBlack = new Button();
             _buttonColorWhite = new Button();
+            _buttonColorPurple = new Button();
+            _buttonColorCyan = new Button();
+            _buttonColorTeal = new Button();
+            _buttonColorPink = new Button();
+            _buttonColorBrown = new Button();
+            _buttonColorGray = new Button();
+            _buttonColorYellow = new Button();
+            _buttonColorLime = new Button();
+            _buttonColorVioletRed = new Button();
+            _buttonColorDodgerBlue = new Button();
+            _buttonColorMore = new Button();
             _buttonClearAllAnnotations = new Button();
             _loadingIndicator = new LoadingIndicator();
             _statusBar = new Panel();
@@ -3389,7 +3705,7 @@ namespace LearningAssistant.Forms.Pdf
             _toolbarGroupMode.SuspendLayout();
             _toolbarGroupTools.SuspendLayout();
             _panelAnnotationOptions.SuspendLayout();
-            _panelThickness.SuspendLayout();
+            ((ISupportInitialize)_trackBarThickness).BeginInit();
             _panelColor.SuspendLayout();
             _statusBar.SuspendLayout();
             ((ISupportInitialize)_pictureBoxPdf).BeginInit();
@@ -3456,7 +3772,7 @@ namespace LearningAssistant.Forms.Pdf
             _panelNavigation.Location = new Point(0, 0);
             _panelNavigation.Name = "_panelNavigation";
             _panelNavigation.Padding = new Padding(8);
-            _panelNavigation.Size = new Size(1127, 80);
+            _panelNavigation.Size = new Size(1127, 112);
             _panelNavigation.TabIndex = 3;
             _panelNavigation.MouseDown += PanelNavigation_MouseDown;
             _panelNavigation.MouseMove += PanelNavigation_MouseMove;
@@ -3697,13 +4013,15 @@ namespace LearningAssistant.Forms.Pdf
             _toolbarGroupTools.Controls.Add(_buttonEllipseMode);
             _toolbarGroupTools.Controls.Add(_buttonArrowMode);
             _toolbarGroupTools.Controls.Add(_buttonPenMode);
+            _toolbarGroupTools.Controls.Add(_buttonPenTypePencil);
+            _toolbarGroupTools.Controls.Add(_buttonPenTypePen);
+            _toolbarGroupTools.Controls.Add(_buttonPenTypeMarker);
             _toolbarGroupTools.Controls.Add(_buttonMosaicMode);
             _toolbarGroupTools.Controls.Add(_buttonTextMode);
             _toolbarGroupTools.Controls.Add(_buttonUndoAnnotation);
             _toolbarGroupTools.Controls.Add(_buttonAskAi);
             _toolbarGroupTools.Controls.Add(_buttonOpenFolder);
             _toolbarGroupTools.Controls.Add(_panelAnnotationOptions);
-            _toolbarGroupTools.Controls.Add(_buttonClearAllAnnotations);
             _toolbarGroupTools.Dock = DockStyle.Left;
             _toolbarGroupTools.Location = new Point(8, 8);
             _toolbarGroupTools.Name = "_toolbarGroupTools";
@@ -3717,7 +4035,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonSelectMode.Font = new Font("Microsoft YaHei UI", 11F);
             _buttonSelectMode.Location = new Point(10, 2);
             _buttonSelectMode.Name = "_buttonSelectMode";
-            _buttonSelectMode.Size = new Size(32, 32);
+            _buttonSelectMode.Size = new Size(28, 28);
             _buttonSelectMode.TabIndex = 0;
             _buttonSelectMode.Text = "👆";
             _buttonSelectMode.UseVisualStyleBackColor = false;
@@ -3728,9 +4046,9 @@ namespace LearningAssistant.Forms.Pdf
             _buttonHighlightMode.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonHighlightMode.FlatStyle = FlatStyle.Flat;
             _buttonHighlightMode.Font = new Font("Microsoft YaHei UI", 11F);
-            _buttonHighlightMode.Location = new Point(48, 2);
+            _buttonHighlightMode.Location = new Point(42, 2);
             _buttonHighlightMode.Name = "_buttonHighlightMode";
-            _buttonHighlightMode.Size = new Size(32, 32);
+            _buttonHighlightMode.Size = new Size(28, 28);
             _buttonHighlightMode.TabIndex = 1;
             _buttonHighlightMode.Text = "⭐";
             _buttonHighlightMode.UseVisualStyleBackColor = false;
@@ -3741,9 +4059,9 @@ namespace LearningAssistant.Forms.Pdf
             _buttonRectangleMode.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonRectangleMode.FlatStyle = FlatStyle.Flat;
             _buttonRectangleMode.Font = new Font("Microsoft YaHei UI", 12F);
-            _buttonRectangleMode.Location = new Point(86, 2);
+            _buttonRectangleMode.Location = new Point(74, 2);
             _buttonRectangleMode.Name = "_buttonRectangleMode";
-            _buttonRectangleMode.Size = new Size(32, 32);
+            _buttonRectangleMode.Size = new Size(28, 28);
             _buttonRectangleMode.TabIndex = 1;
             _buttonRectangleMode.Text = "▢";
             _buttonRectangleMode.UseVisualStyleBackColor = false;
@@ -3754,9 +4072,9 @@ namespace LearningAssistant.Forms.Pdf
             _buttonEllipseMode.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonEllipseMode.FlatStyle = FlatStyle.Flat;
             _buttonEllipseMode.Font = new Font("Microsoft YaHei UI", 12F);
-            _buttonEllipseMode.Location = new Point(124, 2);
+            _buttonEllipseMode.Location = new Point(106, 2);
             _buttonEllipseMode.Name = "_buttonEllipseMode";
-            _buttonEllipseMode.Size = new Size(32, 32);
+            _buttonEllipseMode.Size = new Size(28, 28);
             _buttonEllipseMode.TabIndex = 2;
             _buttonEllipseMode.Text = "◯";
             _buttonEllipseMode.UseVisualStyleBackColor = false;
@@ -3767,9 +4085,9 @@ namespace LearningAssistant.Forms.Pdf
             _buttonArrowMode.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonArrowMode.FlatStyle = FlatStyle.Flat;
             _buttonArrowMode.Font = new Font("Microsoft YaHei UI", 12F);
-            _buttonArrowMode.Location = new Point(162, 2);
+            _buttonArrowMode.Location = new Point(138, 2);
             _buttonArrowMode.Name = "_buttonArrowMode";
-            _buttonArrowMode.Size = new Size(32, 32);
+            _buttonArrowMode.Size = new Size(28, 28);
             _buttonArrowMode.TabIndex = 3;
             _buttonArrowMode.Text = "━";
             _buttonArrowMode.UseVisualStyleBackColor = false;
@@ -3780,22 +4098,67 @@ namespace LearningAssistant.Forms.Pdf
             _buttonPenMode.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonPenMode.FlatStyle = FlatStyle.Flat;
             _buttonPenMode.Font = new Font("Microsoft YaHei UI", 11F);
-            _buttonPenMode.Location = new Point(200, 2);
+            _buttonPenMode.Location = new Point(170, 2);
             _buttonPenMode.Name = "_buttonPenMode";
-            _buttonPenMode.Size = new Size(32, 32);
+            _buttonPenMode.Size = new Size(28, 28);
             _buttonPenMode.TabIndex = 4;
             _buttonPenMode.Text = "✎";
             _buttonPenMode.UseVisualStyleBackColor = false;
             _buttonPenMode.Click += ButtonPenMode_Click;
+            // 
+            // _buttonPenTypePencil — 铅笔（第一排）
+            // 
+            _buttonPenTypePencil.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _buttonPenTypePencil.FlatStyle = FlatStyle.Flat;
+            _buttonPenTypePencil.FlatAppearance.BorderSize = 1;
+            _buttonPenTypePencil.Font = new Font("Microsoft YaHei UI", 10F);
+            _buttonPenTypePencil.Location = new Point(202, 2);
+            _buttonPenTypePencil.Name = "_buttonPenTypePencil";
+            _buttonPenTypePencil.Size = new Size(28, 28);
+            _buttonPenTypePencil.TabIndex = 15;
+            _buttonPenTypePencil.Text = "✎";
+            _buttonPenTypePencil.UseVisualStyleBackColor = false;
+            _buttonPenTypePencil.Click += ButtonPenTypePencil_Click;
+            _toolTip.SetToolTip(_buttonPenTypePencil, "铅笔");
+            // 
+            // _buttonPenTypePen — 水笔（第一排）
+            // 
+            _buttonPenTypePen.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _buttonPenTypePen.FlatStyle = FlatStyle.Flat;
+            _buttonPenTypePen.FlatAppearance.BorderSize = 1;
+            _buttonPenTypePen.Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold);
+            _buttonPenTypePen.Location = new Point(234, 2);
+            _buttonPenTypePen.Name = "_buttonPenTypePen";
+            _buttonPenTypePen.Size = new Size(28, 28);
+            _buttonPenTypePen.TabIndex = 16;
+            _buttonPenTypePen.Text = "✒";
+            _buttonPenTypePen.UseVisualStyleBackColor = false;
+            _buttonPenTypePen.Click += ButtonPenTypePen_Click;
+            _toolTip.SetToolTip(_buttonPenTypePen, "水笔");
+            // 
+            // _buttonPenTypeMarker — 马克笔（第一排）
+            // 
+            _buttonPenTypeMarker.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _buttonPenTypeMarker.FlatStyle = FlatStyle.Flat;
+            _buttonPenTypeMarker.FlatAppearance.BorderSize = 1;
+            _buttonPenTypeMarker.Font = new Font("Microsoft YaHei UI", 10F);
+            _buttonPenTypeMarker.Location = new Point(266, 2);
+            _buttonPenTypeMarker.Name = "_buttonPenTypeMarker";
+            _buttonPenTypeMarker.Size = new Size(28, 28);
+            _buttonPenTypeMarker.TabIndex = 17;
+            _buttonPenTypeMarker.Text = "▮";
+            _buttonPenTypeMarker.UseVisualStyleBackColor = false;
+            _buttonPenTypeMarker.Click += ButtonPenTypeMarker_Click;
+            _toolTip.SetToolTip(_buttonPenTypeMarker, "马克笔");
             // 
             // _buttonMosaicMode
             // 
             _buttonMosaicMode.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonMosaicMode.FlatStyle = FlatStyle.Flat;
             _buttonMosaicMode.Font = new Font("Microsoft YaHei UI", 10F);
-            _buttonMosaicMode.Location = new Point(238, 2);
+            _buttonMosaicMode.Location = new Point(298, 2);
             _buttonMosaicMode.Name = "_buttonMosaicMode";
-            _buttonMosaicMode.Size = new Size(32, 32);
+            _buttonMosaicMode.Size = new Size(28, 28);
             _buttonMosaicMode.TabIndex = 5;
             _buttonMosaicMode.Text = "▦";
             _buttonMosaicMode.UseVisualStyleBackColor = false;
@@ -3806,9 +4169,9 @@ namespace LearningAssistant.Forms.Pdf
             _buttonTextMode.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonTextMode.FlatStyle = FlatStyle.Flat;
             _buttonTextMode.Font = new Font("Microsoft YaHei UI", 11F, FontStyle.Bold);
-            _buttonTextMode.Location = new Point(276, 2);
+            _buttonTextMode.Location = new Point(330, 2);
             _buttonTextMode.Name = "_buttonTextMode";
-            _buttonTextMode.Size = new Size(32, 32);
+            _buttonTextMode.Size = new Size(28, 28);
             _buttonTextMode.TabIndex = 6;
             _buttonTextMode.Text = "T";
             _buttonTextMode.UseVisualStyleBackColor = false;
@@ -3819,9 +4182,9 @@ namespace LearningAssistant.Forms.Pdf
             _buttonUndoAnnotation.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonUndoAnnotation.FlatStyle = FlatStyle.Flat;
             _buttonUndoAnnotation.Font = new Font("Microsoft YaHei UI", 10F);
-            _buttonUndoAnnotation.Location = new Point(314, 2);
+            _buttonUndoAnnotation.Location = new Point(362, 2);
             _buttonUndoAnnotation.Name = "_buttonUndoAnnotation";
-            _buttonUndoAnnotation.Size = new Size(32, 32);
+            _buttonUndoAnnotation.Size = new Size(28, 28);
             _buttonUndoAnnotation.TabIndex = 7;
             _buttonUndoAnnotation.Text = "↩";
             _buttonUndoAnnotation.UseVisualStyleBackColor = false;
@@ -3832,9 +4195,9 @@ namespace LearningAssistant.Forms.Pdf
             _buttonAskAi.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonAskAi.FlatStyle = FlatStyle.Flat;
             _buttonAskAi.Font = new Font("Microsoft YaHei UI", 10F);
-            _buttonAskAi.Location = new Point(390, 2);
+            _buttonAskAi.Location = new Point(426, 2);
             _buttonAskAi.Name = "_buttonAskAi";
-            _buttonAskAi.Size = new Size(32, 32);
+            _buttonAskAi.Size = new Size(28, 28);
             _buttonAskAi.TabIndex = 9;
             _buttonAskAi.Text = "🤖";
             _buttonAskAi.UseVisualStyleBackColor = false;
@@ -3845,9 +4208,9 @@ namespace LearningAssistant.Forms.Pdf
             _buttonOpenFolder.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonOpenFolder.FlatStyle = FlatStyle.Flat;
             _buttonOpenFolder.Font = new Font("Microsoft YaHei UI", 10F);
-            _buttonOpenFolder.Location = new Point(428, 2);
+            _buttonOpenFolder.Location = new Point(426, 2);
             _buttonOpenFolder.Name = "_buttonOpenFolder";
-            _buttonOpenFolder.Size = new Size(32, 32);
+            _buttonOpenFolder.Size = new Size(28, 28);
             _buttonOpenFolder.TabIndex = 9;
             _buttonOpenFolder.Text = "📂";
             _buttonOpenFolder.UseVisualStyleBackColor = false;
@@ -3855,148 +4218,139 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // _panelAnnotationOptions
             // 
-            _panelAnnotationOptions.Controls.Add(_panelThickness);
+            _panelAnnotationOptions.Controls.Add(_buttonDashStyle);
+            _panelAnnotationOptions.Controls.Add(_trackBarThickness);
+            _panelAnnotationOptions.Controls.Add(_labelThicknessValue);
             _panelAnnotationOptions.Controls.Add(_panelColor);
+            _panelAnnotationOptions.Controls.Add(_buttonClearAllAnnotations);
             _panelAnnotationOptions.Location = new Point(50, 38);
             _panelAnnotationOptions.Name = "_panelAnnotationOptions";
-            _panelAnnotationOptions.Size = new Size(260, 28);
+            _panelAnnotationOptions.Size = new Size(580, 56);
             _panelAnnotationOptions.TabIndex = 9;
             _panelAnnotationOptions.Visible = false;
             // 
-            // _panelThickness
+            // _buttonDashStyle — 虚线/实线切换
             // 
-            _panelThickness.Controls.Add(_buttonThickness1);
-            _panelThickness.Controls.Add(_buttonThickness2);
-            _panelThickness.Controls.Add(_buttonThickness3);
-            _panelThickness.Location = new Point(0, 4);
-            _panelThickness.Name = "_panelThickness";
-            _panelThickness.Size = new Size(72, 22);
-            _panelThickness.TabIndex = 0;
+            _buttonDashStyle.FlatStyle = FlatStyle.Flat;
+            _buttonDashStyle.FlatAppearance.BorderSize = 1;
+            _buttonDashStyle.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _buttonDashStyle.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
+            _buttonDashStyle.Location = new Point(4, 16);
+            _buttonDashStyle.Name = "_buttonDashStyle";
+            _buttonDashStyle.Size = new Size(32, 24);
+            _buttonDashStyle.TabIndex = 0;
+            _buttonDashStyle.Text = "—";
+            _buttonDashStyle.UseVisualStyleBackColor = false;
+            _buttonDashStyle.Click += ButtonDashStyle_Click;
+            _toolTip.SetToolTip(_buttonDashStyle, "切换实线/虚线");
             // 
-            // _buttonThickness1
+            // _trackBarThickness — 画笔粗细滑块
             // 
-            _buttonThickness1.BackColor = Color.Black;
-            _buttonThickness1.FlatAppearance.BorderSize = 0;
-            _buttonThickness1.FlatStyle = FlatStyle.Flat;
-            _buttonThickness1.Location = new Point(2, 8);
-            _buttonThickness1.Name = "_buttonThickness1";
-            _buttonThickness1.Size = new Size(18, 4);
-            _buttonThickness1.TabIndex = 0;
-            _buttonThickness1.UseVisualStyleBackColor = false;
-            _buttonThickness1.Click += ButtonThickness1_Click;
+            _trackBarThickness.AutoSize = false;
+            _trackBarThickness.Location = new Point(44, 6);
+            _trackBarThickness.Minimum = 1;
+            _trackBarThickness.Maximum = 20;
+            _trackBarThickness.Value = 3;
+            _trackBarThickness.Name = "_trackBarThickness";
+            _trackBarThickness.Size = new Size(100, 28);
+            _trackBarThickness.TabIndex = 4;
+            _trackBarThickness.TickStyle = TickStyle.None;
+            _trackBarThickness.Scroll += TrackBarThickness_Scroll;
             // 
-            // _buttonThickness2
+            // _labelThicknessValue — 粗细值显示
             // 
-            _buttonThickness2.BackColor = Color.Black;
-            _buttonThickness2.FlatAppearance.BorderSize = 0;
-            _buttonThickness2.FlatStyle = FlatStyle.Flat;
-            _buttonThickness2.Location = new Point(26, 5);
-            _buttonThickness2.Name = "_buttonThickness2";
-            _buttonThickness2.Size = new Size(18, 10);
-            _buttonThickness2.TabIndex = 1;
-            _buttonThickness2.UseVisualStyleBackColor = false;
-            _buttonThickness2.Click += ButtonThickness2_Click;
+            _labelThicknessValue.AutoSize = true;
+            _labelThicknessValue.Font = new Font("Microsoft YaHei UI", 9F);
+            _labelThicknessValue.ForeColor = Color.FromArgb(102, 102, 102);
+            _labelThicknessValue.Location = new Point(148, 16);
+            _labelThicknessValue.Name = "_labelThicknessValue";
+            _labelThicknessValue.Size = new Size(22, 17);
+            _labelThicknessValue.TabIndex = 5;
+            _labelThicknessValue.Text = "3px";
             // 
-            // _buttonThickness3
+            // _panelColor — 16色缩略面板 + 更多颜色按钮
             // 
-            _buttonThickness3.BackColor = Color.Black;
-            _buttonThickness3.FlatAppearance.BorderSize = 0;
-            _buttonThickness3.FlatStyle = FlatStyle.Flat;
-            _buttonThickness3.Location = new Point(50, 2);
-            _buttonThickness3.Name = "_buttonThickness3";
-            _buttonThickness3.Size = new Size(18, 16);
-            _buttonThickness3.TabIndex = 2;
-            _buttonThickness3.UseVisualStyleBackColor = false;
-            _buttonThickness3.Click += ButtonThickness3_Click;
-            // 
-            // _panelColor
-            // 
+            _panelColor.Controls.Add(_buttonColorBlack);
+            _panelColor.Controls.Add(_buttonColorWhite);
             _panelColor.Controls.Add(_buttonColorBlue);
             _panelColor.Controls.Add(_buttonColorGreen);
             _panelColor.Controls.Add(_buttonColorOrange);
             _panelColor.Controls.Add(_buttonColorRed);
-            _panelColor.Controls.Add(_buttonColorBlack);
-            _panelColor.Controls.Add(_buttonColorWhite);
-            _panelColor.Location = new Point(80, 0);
+            _panelColor.Controls.Add(_buttonColorPurple);
+            _panelColor.Controls.Add(_buttonColorCyan);
+            _panelColor.Controls.Add(_buttonColorTeal);
+            _panelColor.Controls.Add(_buttonColorPink);
+            _panelColor.Controls.Add(_buttonColorBrown);
+            _panelColor.Controls.Add(_buttonColorGray);
+            _panelColor.Controls.Add(_buttonColorYellow);
+            _panelColor.Controls.Add(_buttonColorLime);
+            _panelColor.Controls.Add(_buttonColorVioletRed);
+            _panelColor.Controls.Add(_buttonColorDodgerBlue);
+            _panelColor.Controls.Add(_buttonColorMore);
+            _panelColor.Location = new Point(186, 0);
             _panelColor.Name = "_panelColor";
-            _panelColor.Size = new Size(170, 28);
+            _panelColor.Size = new Size(260, 56);
             _panelColor.TabIndex = 1;
-            // 
-            // _buttonColorBlue
-            // 
-            _buttonColorBlue.BackColor = Color.RoyalBlue;
-            _buttonColorBlue.FlatStyle = FlatStyle.Flat;
-            _buttonColorBlue.Location = new Point(2, 4);
-            _buttonColorBlue.Name = "_buttonColorBlue";
-            _buttonColorBlue.Size = new Size(20, 20);
-            _buttonColorBlue.TabIndex = 0;
-            _buttonColorBlue.UseVisualStyleBackColor = false;
-            _buttonColorBlue.Click += ButtonColorBlue_Click;
-            // 
-            // _buttonColorGreen
-            // 
-            _buttonColorGreen.BackColor = Color.LimeGreen;
-            _buttonColorGreen.FlatStyle = FlatStyle.Flat;
-            _buttonColorGreen.Location = new Point(28, 4);
-            _buttonColorGreen.Name = "_buttonColorGreen";
-            _buttonColorGreen.Size = new Size(20, 20);
-            _buttonColorGreen.TabIndex = 1;
-            _buttonColorGreen.UseVisualStyleBackColor = false;
-            _buttonColorGreen.Click += ButtonColorGreen_Click;
-            // 
-            // _buttonColorOrange
-            // 
-            _buttonColorOrange.BackColor = Color.Orange;
-            _buttonColorOrange.FlatStyle = FlatStyle.Flat;
-            _buttonColorOrange.Location = new Point(54, 4);
-            _buttonColorOrange.Name = "_buttonColorOrange";
-            _buttonColorOrange.Size = new Size(20, 20);
-            _buttonColorOrange.TabIndex = 2;
-            _buttonColorOrange.UseVisualStyleBackColor = false;
-            _buttonColorOrange.Click += ButtonColorOrange_Click;
-            // 
-            // _buttonColorRed
-            // 
-            _buttonColorRed.BackColor = Color.Red;
-            _buttonColorRed.FlatStyle = FlatStyle.Flat;
-            _buttonColorRed.Location = new Point(80, 4);
-            _buttonColorRed.Name = "_buttonColorRed";
-            _buttonColorRed.Size = new Size(20, 20);
-            _buttonColorRed.TabIndex = 3;
-            _buttonColorRed.UseVisualStyleBackColor = false;
-            _buttonColorRed.Click += ButtonColorRed_Click;
-            // 
-            // _buttonColorBlack
-            // 
-            _buttonColorBlack.BackColor = Color.Black;
-            _buttonColorBlack.FlatStyle = FlatStyle.Flat;
-            _buttonColorBlack.Location = new Point(106, 4);
-            _buttonColorBlack.Name = "_buttonColorBlack";
-            _buttonColorBlack.Size = new Size(20, 20);
-            _buttonColorBlack.TabIndex = 4;
-            _buttonColorBlack.UseVisualStyleBackColor = false;
-            _buttonColorBlack.Click += ButtonColorBlack_Click;
-            // 
-            // _buttonColorWhite
-            // 
-            _buttonColorWhite.BackColor = Color.White;
-            _buttonColorWhite.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
-            _buttonColorWhite.FlatStyle = FlatStyle.Flat;
-            _buttonColorWhite.Location = new Point(132, 4);
-            _buttonColorWhite.Name = "_buttonColorWhite";
-            _buttonColorWhite.Size = new Size(20, 20);
-            _buttonColorWhite.TabIndex = 5;
-            _buttonColorWhite.UseVisualStyleBackColor = false;
-            _buttonColorWhite.Click += ButtonColorWhite_Click;
+
+            // 使用 AnnotationColors 数组驱动颜色按钮布局：8列 x 2行
+            var colorButtons = new[] {
+                _buttonColorBlack, _buttonColorWhite, _buttonColorBlue, _buttonColorGreen,
+                _buttonColorOrange, _buttonColorRed, _buttonColorPurple, _buttonColorCyan,
+                _buttonColorTeal, _buttonColorPink, _buttonColorBrown, _buttonColorGray,
+                _buttonColorYellow, _buttonColorLime, _buttonColorVioletRed, _buttonColorDodgerBlue
+            };
+            var colorHandlers = new EventHandler[] {
+                ButtonColorBlack_Click, ButtonColorWhite_Click, ButtonColorBlue_Click, ButtonColorGreen_Click,
+                ButtonColorOrange_Click, ButtonColorRed_Click, ButtonColorPurple_Click, ButtonColorCyan_Click,
+                ButtonColorTeal_Click, ButtonColorPink_Click, ButtonColorBrown_Click, ButtonColorGray_Click,
+                ButtonColorYellow_Click, ButtonColorLime_Click, ButtonColorVioletRed_Click, ButtonColorDodgerBlue_Click
+            };
+
+            const int columns = 8;
+            for (int i = 0; i < colorButtons.Length; i++)
+            {
+                var btn = colorButtons[i];
+                btn.BackColor = AnnotationColors[i];
+                btn.FlatStyle = FlatStyle.Flat;
+                btn.FlatAppearance.BorderSize = 0;
+                int row = i / columns;
+                int col = i % columns;
+                btn.Location = new Point(2 + col * 28, 4 + row * 26);
+                btn.Size = new Size(22, 22);
+                btn.Name = $"_buttonColor{i}";
+                btn.TabIndex = i;
+                btn.UseVisualStyleBackColor = false;
+                btn.Click += colorHandlers[i];
+                MakeButtonCircular(btn);
+                if (AnnotationColors[i] == Color.White)
+                {
+                    btn.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
+                    btn.FlatAppearance.BorderSize = 1;
+                }
+            }
+
+            // _buttonColorMore — 更多颜色（圆形按钮，位于第8列第2行）
+            _buttonColorMore.BackColor = Color.FromArgb(240, 240, 240);
+            _buttonColorMore.FlatStyle = FlatStyle.Flat;
+            _buttonColorMore.FlatAppearance.BorderSize = 1;
+            _buttonColorMore.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
+            _buttonColorMore.Location = new Point(2 + 8 * 28, 4 + 1 * 26);
+            _buttonColorMore.Size = new Size(22, 22);
+            _buttonColorMore.Text = "+";
+            _buttonColorMore.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
+            _buttonColorMore.TabIndex = 14;
+            _buttonColorMore.Click += ButtonColorMore_Click;
+            MakeButtonCircular(_buttonColorMore);
+            _buttonColorMore.FlatAppearance.MouseOverBackColor = Color.FromArgb(220, 220, 220);
             // 
             // _buttonClearAllAnnotations
             // 
             _buttonClearAllAnnotations.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonClearAllAnnotations.FlatStyle = FlatStyle.Flat;
             _buttonClearAllAnnotations.Font = new Font("Microsoft YaHei UI", 10F);
-            _buttonClearAllAnnotations.Location = new Point(352, 2);
+            _buttonClearAllAnnotations.Location = new Point(460, 16);
             _buttonClearAllAnnotations.Name = "_buttonClearAllAnnotations";
-            _buttonClearAllAnnotations.Size = new Size(32, 32);
+            _buttonClearAllAnnotations.Size = new Size(28, 28);
             _buttonClearAllAnnotations.TabIndex = 8;
             _buttonClearAllAnnotations.Text = "🗑";
             _buttonClearAllAnnotations.UseVisualStyleBackColor = false;
@@ -4766,7 +5120,7 @@ namespace LearningAssistant.Forms.Pdf
             _toolbarGroupMode.ResumeLayout(false);
             _toolbarGroupTools.ResumeLayout(false);
             _panelAnnotationOptions.ResumeLayout(false);
-            _panelThickness.ResumeLayout(false);
+            ((ISupportInitialize)_trackBarThickness).EndInit();
             _panelColor.ResumeLayout(false);
             _statusBar.ResumeLayout(false);
             _statusBar.PerformLayout();
@@ -4992,6 +5346,21 @@ namespace LearningAssistant.Forms.Pdf
             {
                 _logger.LogError(ex, "Error handling drag drop");
                 ShowError("打开文件失败: " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// 左侧选项卡切换事件：切换到缩略图选项卡时按需加载缩略图
+        /// </summary>
+        private void TabControlLeft_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            if (_tabControlLeft.SelectedTab == _tabPageThumbnails)
+            {
+                if (!_thumbnailsLoaded && _presenter != null)
+                {
+                    _thumbnailsLoaded = true;
+                    _presenter.GenerateThumbnails();
+                }
             }
         }
     }

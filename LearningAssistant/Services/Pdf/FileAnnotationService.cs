@@ -57,7 +57,7 @@ namespace LearningAssistant.Services.Pdf
                                     Math.Min(points[0].Y, points[1].Y),
                                     Math.Abs(points[1].X - points[0].X),
                                     Math.Abs(points[1].Y - points[0].Y));
-                                pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                                if (stroke.DashStyle == "Dash") pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
                                 g.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
                             }
                             else if (shapeType == "Ellipse" && points.Count >= 2)
@@ -67,7 +67,7 @@ namespace LearningAssistant.Services.Pdf
                                     Math.Min(points[0].Y, points[1].Y),
                                     Math.Abs(points[1].X - points[0].X),
                                     Math.Abs(points[1].Y - points[0].Y));
-                                pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                                if (stroke.DashStyle == "Dash") pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
                                 g.DrawEllipse(pen, rect);
                             }
                             else if (shapeType == "Arrow" && points.Count >= 2)
@@ -82,13 +82,23 @@ namespace LearningAssistant.Services.Pdf
                                     Math.Min(points[0].Y, points[1].Y),
                                     Math.Abs(points[1].X - points[0].X),
                                     Math.Abs(points[1].Y - points[0].Y));
-                                using var brush = new SolidBrush(Color.FromArgb(80, 128, 128, 128));
+                                using var brush = new SolidBrush(Color.FromArgb(80, 255, 255, 255));
                                 g.FillRectangle(brush, rect);
-                                pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                                if (stroke.DashStyle == "Dash") pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
                                 g.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
                             }
                             else
                             {
+                                // 根据画笔类型应用透明度效果
+                                string penType = stroke.PenType ?? "Pen";
+                                int alpha = penType switch
+                                {
+                                    "Pencil" => 180,
+                                    "Marker" => 120,
+                                    _ => 255
+                                };
+                                var penColor = Color.FromArgb(stroke.ColorArgb);
+                                pen.Color = Color.FromArgb(alpha, penColor.R, penColor.G, penColor.B);
                                 g.DrawLines(pen, points.ToArray());
                             }
                         }
@@ -321,6 +331,29 @@ namespace LearningAssistant.Services.Pdf
         {
             var annotation = LoadAnnotationData(pdfPath, pageIndex);
             return annotation?.Strokes ?? Enumerable.Empty<AnnotationStroke>();
+        }
+
+        public void UpdateStrokeAt(string pdfPath, int pageIndex, int index, AnnotationStroke stroke)
+        {
+            try
+            {
+                var annotation = LoadAnnotationData(pdfPath, pageIndex);
+                if (annotation != null && index >= 0 && index < annotation.Strokes.Count)
+                {
+                    annotation.Strokes[index] = stroke;
+                    annotation.UpdatedAt = DateTime.Now;
+                    SaveAnnotationData(pdfPath, pageIndex, annotation);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Failed to update stroke at index {Index} for {PdfPath} page {PageIndex}", index, pdfPath, pageIndex);
+            }
+        }
+
+        public PdfAnnotation? GetAnnotation(string pdfPath, int pageIndex)
+        {
+            return LoadAnnotationData(pdfPath, pageIndex);
         }
 
         private PdfAnnotation? LoadAnnotationData(string pdfPath, int pageIndex)
