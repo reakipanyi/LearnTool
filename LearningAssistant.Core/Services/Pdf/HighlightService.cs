@@ -144,9 +144,25 @@ namespace LearningAssistant.Services.Pdf
                 _logger?.LogInformation("更新高亮注释: {HighlightId}", highlightId);
             }
             else
-            {
                 _logger?.LogWarning("未找到要高亮注释: {HighlightId}", highlightId);
+        }
+
+        public void UpdateHighlight(string pdfPath, PdfHighlight highlight)
+        {
+            var folderPath = Path.GetDirectoryName(pdfPath) ?? "";
+            var collection = GetOrCreateFolderCollection(folderPath);
+            var existing = collection.Highlights.FirstOrDefault(h => h.Id == highlight.Id);
+            if (existing != null)
+            {
+                existing.NormalizedX = highlight.NormalizedX;
+                existing.NormalizedY = highlight.NormalizedY;
+                existing.NormalizedWidth = highlight.NormalizedWidth;
+                existing.NormalizedHeight = highlight.NormalizedHeight;
+                SaveHighlightsToFolder(folderPath, collection);
+                _logger?.LogInformation("更新高亮位置: {HighlightId}", highlight.Id);
             }
+            else
+                _logger?.LogWarning("未找到要更新的高亮: {HighlightId}", highlight.Id);
         }
 
         public void RemoveHighlight(string pdfPath, string highlightId)

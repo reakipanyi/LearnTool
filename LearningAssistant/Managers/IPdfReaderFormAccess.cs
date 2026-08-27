@@ -1,5 +1,7 @@
 using LearningAssistant.Presenters;
 
+using LearningAssistant.Services.Pdf;
+
 namespace LearningAssistant.Managers
 {
     public interface IPdfReaderFormAccess
@@ -80,5 +82,8 @@ namespace LearningAssistant.Managers
         void OnSelectOcrClicked();
 
         Form Form { get; }
+
+        /// <summary>高亮服务，用于 Select 模式调整高亮位置/大小后的持久化</summary>
+        IHighlightService? HighlightService { get; }
     }
 }

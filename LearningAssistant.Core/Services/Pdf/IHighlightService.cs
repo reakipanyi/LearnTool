@@ -81,12 +81,19 @@ namespace LearningAssistant.Services.Pdf
         void AddHighlightWithNote(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text, string note, HighlightColor color = HighlightColor.Yellow);
 
         /// <summary>
-        /// 更新高亮的笔记
+        /// 更新高亮的笔记内容
         /// </summary>
         /// <param name="pdfPath">PDF文件路径</param>
         /// <param name="highlightId">高亮唯一ID</param>
         /// <param name="note">新的笔记内容</param>
         void UpdateHighlightNote(string pdfPath, string highlightId, string note);
+
+        /// <summary>
+        /// 更新高亮的位置和大小（用于 Select 模式拖拽移动和缩放调整后持久化）
+        /// </summary>
+        /// <param name="pdfPath">PDF文件路径</param>
+        /// <param name="highlight">已更新位置/大小的高亮对象</param>
+        void UpdateHighlight(string pdfPath, PdfHighlight highlight);
 
         /// <summary>
         /// 删除高亮

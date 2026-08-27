@@ -320,6 +320,7 @@ namespace LearningAssistant.Forms.Pdf
             _navigationManager.IsHighlightModeCallback = () => _highlightManager?.IsHighlightMode ?? true;
             _navigationManager.AddHighlightCallback = rect => _highlightManager?.AddHighlight(rect);
             _navigationManager.AddTextCallback = point => ShowTextAnnotationDialog(point);
+            _navigationManager.UpdateHighlightLayerCallback = () => _highlightManager?.UpdateHighlightLayer();
 
             // 标注选中事件：双击触发编辑，单击显示选中状态
             _navigationManager.AnnotationSelected += OnAnnotationSelected;
@@ -603,6 +604,8 @@ namespace LearningAssistant.Forms.Pdf
         public Pen Pen => _pen;
 
         public Form Form => this;
+
+        IHighlightService? IPdfReaderFormAccess.HighlightService => _highlightService;
 
         public Button? ButtonLanguage => null;
 
@@ -2436,10 +2439,10 @@ namespace LearningAssistant.Forms.Pdf
         {
             if (_presenter == null || string.IsNullOrEmpty(_currentPdfPath)) return;
 
-            if (!ShowConfirm("确定要清除当前PDF的所有涂改痕迹吗？此操作不可撤销。", "清屏确认"))
+            if (!ShowConfirm("确定要清除当前PDF的所有笔划标注吗？此操作不可撤销。", "清空确认"))
                 return;
 
-            _presenter.ClearAllAnnotations(_currentPdfPath);
+            _navigationManager?.ClearAllStrokes();
             _ = _presenter.RenderAndDisplayCurrentPageAsync();
             UpdateStatusBar();
         }
