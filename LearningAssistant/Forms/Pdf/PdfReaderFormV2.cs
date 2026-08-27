@@ -98,6 +98,8 @@ namespace LearningAssistant.Forms.Pdf
         private TabControl _tabControlLeft;
         private TabPage _tabPageFiles;
         private TabPage _tabPageThumbnails;
+        private TabPage _tabPageAnnotationSummary;
+        private ListView _listViewAnnotationSummary;
         private Panel _panelLeftContainer;
 
         private Panel _bookmarkContainer;
@@ -734,8 +736,16 @@ namespace LearningAssistant.Forms.Pdf
                         e.Handled = true;
                         break;
                     case Keys.L:
-                        SetAnnotationToolMode(AnnotationToolMode.Ellipse);
-                        e.Handled = true;
+                        if (e.Shift)
+                        {
+                            SetAnnotationToolMode(AnnotationToolMode.LaserPointer);
+                            e.Handled = true;
+                        }
+                        else
+                        {
+                            SetAnnotationToolMode(AnnotationToolMode.Ellipse);
+                            e.Handled = true;
+                        }
                         break;
                     case Keys.A:
                         SetAnnotationToolMode(AnnotationToolMode.Arrow);
@@ -3835,6 +3845,8 @@ namespace LearningAssistant.Forms.Pdf
             _labelOriginal = new Label();
             _buttonTranslate = new Button();
             _tabPageBookmarksAndHighlights = new TabPage();
+            _tabPageAnnotationSummary = new TabPage();
+            _listViewAnnotationSummary = new ListView();
             _groupBoxHighlights = new GroupBox();
             _groupBoxHighlightColor = new GroupBox();
             _radioHighlightYellow = new RadioButton();
@@ -4822,6 +4834,7 @@ namespace LearningAssistant.Forms.Pdf
             _tabControlLeft.Controls.Add(_tabPageThumbnails);
             _tabControlLeft.Controls.Add(_tabPageTranslate);
             _tabControlLeft.Controls.Add(_tabPageBookmarksAndHighlights);
+            _tabControlLeft.Controls.Add(_tabPageAnnotationSummary);
             _tabControlLeft.Dock = DockStyle.Fill;
             _tabControlLeft.Font = new Font("Microsoft YaHei UI", 9F);
             _tabControlLeft.Location = new Point(0, 0);
@@ -5062,6 +5075,39 @@ namespace LearningAssistant.Forms.Pdf
             _tabPageBookmarksAndHighlights.TabIndex = 3;
             _tabPageBookmarksAndHighlights.Text = "📑 书签/高亮";
             _tabPageBookmarksAndHighlights.UseVisualStyleBackColor = true;
+
+            // 
+            // _tabPageAnnotationSummary
+            // 
+            _tabPageAnnotationSummary.Controls.Add(_listViewAnnotationSummary);
+            _tabPageAnnotationSummary.Location = new Point(4, 26);
+            _tabPageAnnotationSummary.Name = "_tabPageAnnotationSummary";
+            _tabPageAnnotationSummary.Padding = new Padding(3);
+            _tabPageAnnotationSummary.Size = new Size(322, 870);
+            _tabPageAnnotationSummary.TabIndex = 4;
+            _tabPageAnnotationSummary.Text = "📝 标注摘要";
+            _tabPageAnnotationSummary.UseVisualStyleBackColor = true;
+
+            // 
+            // _listViewAnnotationSummary
+            // 
+            _listViewAnnotationSummary.Dock = DockStyle.Fill;
+            _listViewAnnotationSummary.Font = new Font("Microsoft YaHei UI", 9F);
+            _listViewAnnotationSummary.FullRowSelect = true;
+            _listViewAnnotationSummary.GridLines = true;
+            _listViewAnnotationSummary.HeaderStyle = ColumnHeaderStyle.Nonclickable;
+            _listViewAnnotationSummary.HideSelection = false;
+            _listViewAnnotationSummary.Location = new Point(3, 3);
+            _listViewAnnotationSummary.Name = "_listViewAnnotationSummary";
+            _listViewAnnotationSummary.Size = new Size(316, 864);
+            _listViewAnnotationSummary.TabIndex = 0;
+            _listViewAnnotationSummary.UseCompatibleStateImageBehavior = false;
+            _listViewAnnotationSummary.View = View.Details;
+            _listViewAnnotationSummary.MultiSelect = false;
+            _listViewAnnotationSummary.Columns.Add("页面", 46, HorizontalAlignment.Left);
+            _listViewAnnotationSummary.Columns.Add("类型", 46, HorizontalAlignment.Left);
+            _listViewAnnotationSummary.Columns.Add("内容", 200, HorizontalAlignment.Left);
+            _listViewAnnotationSummary.DoubleClick += ListViewAnnotationSummary_DoubleClick;
             // 
             // _groupBoxHighlights
             // 
@@ -5394,6 +5440,7 @@ namespace LearningAssistant.Forms.Pdf
             _groupBoxBookmarks.ResumeLayout(false);
             _groupBoxBookmarks.PerformLayout();
             _buttonPanel.ResumeLayout(false);
+            _tabPageAnnotationSummary.ResumeLayout(false);
             ResumeLayout(false);
             PerformLayout();
         }
@@ -5610,6 +5657,89 @@ namespace LearningAssistant.Forms.Pdf
                     _thumbnailsLoaded = true;
                     _presenter.GenerateThumbnails();
                 }
+            }
+            else if (_tabControlLeft.SelectedTab == _tabPageAnnotationSummary)
+            {
+                PopulateAnnotationSummary();
+            }
+        }
+
+        private void ListViewAnnotationSummary_DoubleClick(object? sender, EventArgs e)
+        {
+            if (_listViewAnnotationSummary.SelectedItems.Count == 0) return;
+
+            var item = _listViewAnnotationSummary.SelectedItems[0];
+            if (item.Tag is int pageIndex && pageIndex >= 0 && pageIndex < (_presenter?.PageCount ?? 0))
+            {
+                _presenter?.RenderPage(pageIndex);
+            }
+        }
+
+        private void PopulateAnnotationSummary()
+        {
+            try
+            {
+                _listViewAnnotationSummary.Items.Clear();
+
+                if (_presenter == null || string.IsNullOrEmpty(_currentPdfPath))
+                    return;
+
+                int pageCount = _presenter.PageCount;
+                int totalAnnotations = 0;
+
+                for (int pageIndex = 0; pageIndex < pageCount; pageIndex++)
+                {
+                    // 获取笔划
+                    var strokes = _presenter.GetCurrentPageStrokesForPage(pageIndex);
+                    foreach (var stroke in strokes)
+                    {
+                        var typeText = stroke.ShapeType switch
+                        {
+                            "Rectangle" => "矩形",
+                            "Ellipse" => "椭圆",
+                            "Arrow" => "箭头",
+                            "Mosaic" => "马赛克",
+                            "Pen" => "画笔",
+                            _ => stroke.ShapeType ?? "未知"
+                        };
+                        var item = new ListViewItem(new[] { $"第{pageIndex + 1}页", typeText, "" });
+                        item.Tag = pageIndex;
+                        _listViewAnnotationSummary.Items.Add(item);
+                        totalAnnotations++;
+                    }
+
+                    // 获取高亮
+                    var highlights = _highlightService?.GetHighlightsForPage(_currentPdfPath, pageIndex);
+                    if (highlights != null)
+                    {
+                        foreach (var hl in highlights)
+                        {
+                            var text = string.IsNullOrEmpty(hl.Text) ? "" : hl.Text;
+                            var colorName = hl.Color switch
+                            {
+                                HighlightColor.Yellow => "黄",
+                                HighlightColor.Green => "绿",
+                                HighlightColor.Blue => "蓝",
+                                HighlightColor.Pink => "粉",
+                                HighlightColor.Orange => "橙",
+                                HighlightColor.Red => "红",
+                                _ => "黄"
+                            };
+                            var item = new ListViewItem(new[] { $"第{pageIndex + 1}页", $"高亮({colorName})", text });
+                            item.Tag = pageIndex;
+                            _listViewAnnotationSummary.Items.Add(item);
+                            totalAnnotations++;
+                        }
+                    }
+                }
+
+                _tabPageAnnotationSummary.Text = totalAnnotations > 0
+                    ? $"📝 标注({totalAnnotations})"
+                    : "📝 标注摘要";
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "填充标注摘要失败");
             }
         }
     }

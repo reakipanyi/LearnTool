@@ -17,7 +17,8 @@ namespace LearningAssistant.Managers
         Mosaic,
         Strikethrough,
         Text,
-        Eraser
+        Eraser,
+        LaserPointer
     }
 
     public enum SelectionInteractionState
@@ -119,6 +120,15 @@ namespace LearningAssistant.Managers
         private AnnotationStroke? _hoveredStroke;
         private int _hoveredStrokeIndex = -1;
 
+        // 区域擦除：拖拽选择矩形
+        private bool _isEraserDragging = false;
+        private Point _eraserDragStart = Point.Empty;
+        private Point _eraserDragEnd = Point.Empty;
+
+        // 激光笔模式
+        private bool _isLaserPointerActive = false;
+        private Point _laserPointerPosition = Point.Empty;
+
         /// <summary>
         /// 标注被选中时触发，携带(selectedStroke, selectedIndex, isDoubleClick)
         /// </summary>
@@ -161,6 +171,7 @@ namespace LearningAssistant.Managers
             _isDrawing = false;
             _isSelecting = false;
             _currentStrokePoints = null;
+            _isLaserPointerActive = (mode == AnnotationToolMode.LaserPointer);
             ClearSelection();
 
             if (_form.PictureBoxPdf != null)
@@ -567,8 +578,13 @@ namespace LearningAssistant.Managers
                             AddTextCallback?.Invoke(e.Location);
                             break;
                         case AnnotationToolMode.Eraser:
-                            _logger.LogInformation("MouseDown Left: Eraser clicked at {X},{Y}", e.Location.X, e.Location.Y);
-                            HandleEraserModeClick(e.Location);
+                            _logger.LogInformation("MouseDown Left: Eraser at {X},{Y}", e.Location.X, e.Location.Y);
+                            _isEraserDragging = true;
+                            _eraserDragStart = e.Location;
+                            _eraserDragEnd = e.Location;
+                            _hoveredStroke = null;
+                            _hoveredStrokeIndex = -1;
+                            _form.PictureBoxPdf.Cursor = Cursors.Cross;
                             return;
                     }
                     return;
@@ -766,10 +782,25 @@ namespace LearningAssistant.Managers
                     UpdateCursorForHandleHit(e.Location);
                 }
 
-                // 橡皮擦模式：检测悬停笔划
+                // 橡皮擦模式：区域拖拽或悬停检测
                 if (_currentToolMode == AnnotationToolMode.Eraser)
                 {
-                    HandleEraserHover(e.Location);
+                    if (_isEraserDragging)
+                    {
+                        _eraserDragEnd = e.Location;
+                        _form.PictureBoxPdf.Invalidate();
+                    }
+                    else
+                    {
+                        HandleEraserHover(e.Location);
+                    }
+                }
+
+                // 激光笔模式：更新鼠标位置
+                if (_currentToolMode == AnnotationToolMode.LaserPointer && _isLaserPointerActive)
+                {
+                    _laserPointerPosition = e.Location;
+                    _form.PictureBoxPdf.Invalidate();
                 }
             }
             catch (Exception ex)
@@ -1027,6 +1058,53 @@ namespace LearningAssistant.Managers
                     // 重新加载标注位图，使调整后的位置立即生效
                     LoadAnnotationsForCurrentPage();
                     _form.PictureBoxPdf.Invalidate();
+                }
+
+                // 橡皮擦模式：区域擦除完成
+                if (_isEraserDragging)
+                {
+                    _isEraserDragging = false;
+                    _form.PictureBoxPdf.Cursor = Cursors.Default;
+
+                    var dragRect = GetNormalizedDragRect(_eraserDragStart, _eraserDragEnd);
+                    bool isClick = dragRect.Width < 5 && dragRect.Height < 5;
+
+                    if (isClick)
+                    {
+                        // 点击行为：删除单条笔划（原行为）
+                        HandleEraserModeClick(_eraserDragStart);
+                    }
+                    else
+                    {
+                        // 区域擦除：删除区域内所有笔划
+                        var imgPoint1 = ClientToImage(_eraserDragStart);
+                        var imgPoint2 = ClientToImage(_eraserDragEnd);
+                        var eraserRect = new RectangleF(
+                            Math.Min(imgPoint1.X, imgPoint2.X),
+                            Math.Min(imgPoint1.Y, imgPoint2.Y),
+                            Math.Abs(imgPoint2.X - imgPoint1.X),
+                            Math.Abs(imgPoint2.Y - imgPoint1.Y));
+
+                        _logger.LogInformation("Eraser area: {Rect}", eraserRect);
+
+                        var strokes = GetCurrentPageStrokes();
+                        int deletedCount = 0;
+
+                        for (int i = strokes.Count - 1; i >= 0; i--)
+                        {
+                            if (StrokeIntersectsRect(strokes[i], eraserRect))
+                            {
+                                PushStrokeToUndoStack(strokes[i]);
+                                _form.Presenter.RemoveStrokeAtCurrentPage(i);
+                                deletedCount++;
+                            }
+                        }
+
+                        _logger.LogInformation("Eraser area deleted {Count} strokes", deletedCount);
+
+                        LoadAnnotationsForCurrentPage();
+                        _form.PictureBoxPdf.Invalidate();
+                    }
                 }
             }
             catch (Exception ex)
@@ -2060,6 +2138,49 @@ namespace LearningAssistant.Managers
             }
         }
 
+        /// <summary>
+        /// 判断笔划的包围盒是否与指定矩形相交（用于区域擦除）
+        /// </summary>
+        private bool StrokeIntersectsRect(AnnotationStroke stroke, RectangleF rect)
+        {
+            if (stroke.Points == null || stroke.Points.Length < 2) return false;
+
+            if (_form.CurrentPageImage == null) return false;
+            int imgWidth = _form.CurrentPageImage.Width;
+            int imgHeight = _form.CurrentPageImage.Height;
+
+            // 计算笔划的包围盒
+            float minX = float.MaxValue, minY = float.MaxValue;
+            float maxX = float.MinValue, maxY = float.MinValue;
+
+            for (int i = 0; i < stroke.Points.Length - 1; i += 2)
+            {
+                float px = stroke.Points[i] * imgWidth;
+                float py = stroke.Points[i + 1] * imgHeight;
+                minX = Math.Min(minX, px);
+                minY = Math.Min(minY, py);
+                maxX = Math.Max(maxX, px);
+                maxY = Math.Max(maxY, py);
+            }
+
+            if (maxX < minX || maxY < minY) return false;
+
+            var strokeBounds = new RectangleF(minX, minY, maxX - minX, maxY - minY);
+            return strokeBounds.IntersectsWith(rect);
+        }
+
+        /// <summary>
+        /// 获取归一化拖拽矩形（确保宽高为正，坐标正序）
+        /// </summary>
+        private static Rectangle GetNormalizedDragRect(Point p1, Point p2)
+        {
+            return new Rectangle(
+                Math.Min(p1.X, p2.X),
+                Math.Min(p1.Y, p2.Y),
+                Math.Abs(p2.X - p1.X),
+                Math.Abs(p2.Y - p1.Y));
+        }
+
         public void UpdateSelectedStrokeColor(Color color)
         {
             if (_selectedStroke == null || _selectedStrokeIndex < 0) return;
@@ -2204,6 +2325,37 @@ namespace LearningAssistant.Managers
                 if (_currentToolMode == AnnotationToolMode.Eraser && _hoveredStroke != null && pageIndex >= 0 && pageIndex == _form.CurrentPageIndex)
                 {
                     DrawEraserHoverVisual(g, imgRect, pageIndex);
+                }
+
+                // 橡皮擦模式：绘制区域擦除选择矩形
+                if (_currentToolMode == AnnotationToolMode.Eraser && _isEraserDragging && pageIndex >= 0 && pageIndex == _form.CurrentPageIndex)
+                {
+                    var dragRect = GetNormalizedDragRect(_eraserDragStart, _eraserDragEnd);
+                    if (dragRect.Width > 2 && dragRect.Height > 2)
+                    {
+                        using var fillBrush = new SolidBrush(Color.FromArgb(30, 255, 0, 0));
+                        g.FillRectangle(fillBrush, dragRect);
+                        using var borderPen = new Pen(Color.FromArgb(180, 255, 0, 0), 2f);
+                        borderPen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                        g.DrawRectangle(borderPen, dragRect);
+                    }
+                }
+
+                // 激光笔模式：绘制红点 + 射线
+                if (_currentToolMode == AnnotationToolMode.LaserPointer && _isLaserPointerActive && pageIndex >= 0 && pageIndex == _form.CurrentPageIndex)
+                {
+                    var pt = _laserPointerPosition;
+                    // 射线：从红点向外延伸的淡红色线条
+                    using var rayPen = new Pen(Color.FromArgb(60, 255, 50, 50), 1f);
+                    rayPen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dot;
+                    g.DrawLine(rayPen, pt.X - 30, pt.Y, pt.X + 30, pt.Y);
+                    g.DrawLine(rayPen, pt.X, pt.Y - 30, pt.X, pt.Y + 30);
+                    // 外圈光晕
+                    using var glowPen = new Pen(Color.FromArgb(100, 255, 50, 50), 2f);
+                    g.DrawEllipse(glowPen, pt.X - 10, pt.Y - 10, 20, 20);
+                    // 红点
+                    using var dotBrush = new SolidBrush(Color.FromArgb(220, 255, 0, 0));
+                    g.FillEllipse(dotBrush, pt.X - 4, pt.Y - 4, 8, 8);
                 }
             }
             catch (Exception ex)

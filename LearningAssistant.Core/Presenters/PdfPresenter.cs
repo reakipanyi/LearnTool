@@ -846,6 +846,25 @@ namespace LearningAssistant.Presenters
         }
 
         /// <summary>
+        /// 获取指定页面的所有笔划（用于标注摘要视图跨页面查询）
+        /// </summary>
+        public IEnumerable<AnnotationStroke> GetCurrentPageStrokesForPage(int pageIndex)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath))
+                    return Enumerable.Empty<AnnotationStroke>();
+
+                return _annotationService.GetStrokes(_pdfFileManager.CurrentFilePath, pageIndex);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get strokes for page {PageIndex}", pageIndex);
+                return Enumerable.Empty<AnnotationStroke>();
+            }
+        }
+
+        /// <summary>
         /// 更新当前页面的指定笔划
         /// </summary>
         public void UpdateStrokeAtCurrentPage(int index, AnnotationStroke stroke)

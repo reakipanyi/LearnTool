@@ -207,10 +207,9 @@ namespace LearningAssistant.Forms.Main
                 new() { Key = "pdf", Icon = "📖", Text = "PDF阅读", Order = 2, Group = "main" },
                 new() { Key = "browser", Icon = "🌐", Text = "浏览器", Order = 11, Group = "tools" },
                 new() { Key = "data", Icon = "📊", Text = "学习数据", Order = 6, Group = "main" },
+                new() { Key = "statistics", Icon = "📊", Text = "学习统计", Order = 5, Group = "main" },
                 new() { Key = "settings", Icon = "⚙️", Text = "设置", Order = 99, Group = "system" }
                 //new() { Key = "mentor", Icon = "🤖", Text = "AI导师", Order = 3, Group = "main" },
-                //new() { Key = "flashcard", Icon = "🧠", Text = "闪卡复习", Order = 4, Group = "main" },
-                //new() { Key = "statistics", Icon = "📊", Text = "学习统计", Order = 5, Group = "main" },
                 //new() { Key = "challenges", Icon = "🎯", Text = "每日挑战", Order = 6, Group = "main" },
                 //new() { Key = "achievements", Icon = "🏆", Text = "成就徽章", Order = 7, Group = "main" },
                 //new() { Key = "notes", Icon = "📝", Text = "笔记", Order = 8, Group = "tools" },
