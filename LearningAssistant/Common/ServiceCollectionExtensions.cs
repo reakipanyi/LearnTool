@@ -551,7 +551,7 @@ namespace LearningAssistant.Common
                 return new LearningHubForm(spacedRepetitionService, userSessionService, logger);
             });
             //services.AddScoped<PdfReaderForm>();
-            services.AddScoped<PdfReaderFormV2>();
+            services.AddScoped<PdfReaderForm>();
             services.AddScoped<ResultForm>(sp =>
             {
                 var logger = sp.GetService<ILogger<ResultForm>>();
@@ -674,7 +674,7 @@ namespace LearningAssistant.Common
 
             services.AddScoped<ISettingView>(sp => sp.GetRequiredService<SettingForm>());
             services.AddScoped<ILearningView>(sp => sp.GetRequiredService<LearningForm>());
-            services.AddScoped<IPdfView>(sp => sp.GetRequiredService<PdfReaderFormV2>());
+            services.AddScoped<IPdfView>(sp => sp.GetRequiredService<PdfReaderForm>());
             services.AddScoped<IMainView>(sp => sp.GetRequiredService<MainForm>());
             services.AddScoped<IResultView>(sp => sp.GetRequiredService<ResultForm>());
             services.AddScoped<IContentEditorView>(sp => sp.GetRequiredService<ContentEditorForm>());

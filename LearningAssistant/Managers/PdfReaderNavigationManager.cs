@@ -1518,7 +1518,7 @@ namespace LearningAssistant.Managers
             // 检查高亮手柄
             if (_selectedHighlight != null)
             {
-                var handles = GetHighlightHandles(_selectedHighlight, _form.CurrentPageImage);
+                var handles = GetHighlightHandles(_selectedHighlight, _form.CurrentPageImage, GetCurrentDisplayRect(clientPoint));
                 foreach (var (handleRect, state) in handles)
                 {
                     var imgRect = ClientRectFromScreenRect(handleRect);
@@ -1542,7 +1542,7 @@ namespace LearningAssistant.Managers
             // 检查文字注解手柄
             if (_selectedText != null)
             {
-                var handles = GetTextHandles(_selectedText, _form.CurrentPageImage);
+                var handles = GetTextHandles(_selectedText, _form.CurrentPageImage, GetCurrentDisplayRect(clientPoint));
                 foreach (var (handleRect, state) in handles)
                 {
                     var imgRect = ClientRectFromScreenRect(handleRect);
@@ -1565,7 +1565,7 @@ namespace LearningAssistant.Managers
 
             if (_selectedStroke == null || _form.CurrentPageImage == null) return;
 
-            var (_, _, strokeHandles) = GetSelectionBounds(_selectedStroke, _form.CurrentPageImage);
+            var (_, _, strokeHandles) = GetSelectionBounds(_selectedStroke, _form.CurrentPageImage, GetCurrentDisplayRect(clientPoint));
 
             foreach (var (handleRect, state) in strokeHandles)
             {
@@ -1590,7 +1590,8 @@ namespace LearningAssistant.Managers
         /// <summary>
         /// 计算选中标注的屏幕边界框和手柄位置
         /// </summary>
-        public (RectangleF bounds, List<PointF> corners, List<(Rectangle handleRect, SelectionInteractionState state)> handles) GetSelectionBounds(AnnotationStroke stroke, Bitmap? pageImage)
+        public (RectangleF bounds, List<PointF> corners, List<(Rectangle handleRect, SelectionInteractionState state)> handles)
+    GetSelectionBounds(AnnotationStroke stroke, Bitmap? pageImage, Rectangle? displayRect = null)
         {
             var result = (bounds: RectangleF.Empty, corners: new List<PointF>(), handles: new List<(Rectangle, SelectionInteractionState)>());
 
@@ -1600,17 +1601,7 @@ namespace LearningAssistant.Managers
             int imgWidth = pageImage.Width;
             int imgHeight = pageImage.Height;
 
-            var imgRect = _form.GetImageDisplayRect();
-
-            if (_form.IsDualPage)
-            {
-                // 简化处理：使用当前页面的显示区域
-                if (_form.SecondPageImage != null && stroke.PageIndex > _form.CurrentPageIndex)
-                {
-                    var (_, rightRect, _) = _form.GetPageAtPoint(new Point(imgRect.X + imgRect.Width / 2, imgRect.Y + imgRect.Height / 2));
-                    // 使用右页
-                }
-            }
+            var imgRect = displayRect ?? _form.GetImageDisplayRect();
 
             float screenScaleX = (float)imgRect.Width / imgWidth;
             float screenScaleY = (float)imgRect.Height / imgHeight;
@@ -1685,12 +1676,12 @@ namespace LearningAssistant.Managers
         /// <summary>
         /// 计算高亮的屏幕边界框
         /// </summary>
-        private RectangleF GetHighlightScreenBounds(PdfHighlight highlight, Bitmap? pageImage)
+        private RectangleF GetHighlightScreenBounds(PdfHighlight highlight, Bitmap? pageImage, Rectangle? displayRect = null)
         {
             if (highlight == null || pageImage == null)
                 return RectangleF.Empty;
 
-            var imgRect = _form.GetImageDisplayRect();
+            var imgRect = displayRect ?? _form.GetImageDisplayRect();
             int imgWidth = pageImage.Width;
             int imgHeight = pageImage.Height;
 
@@ -1708,12 +1699,12 @@ namespace LearningAssistant.Managers
         /// <summary>
         /// 计算高亮选中时的4个缩放手柄
         /// </summary>
-        private List<(Rectangle handleRect, SelectionInteractionState state)> GetHighlightHandles(PdfHighlight highlight, Bitmap? pageImage)
+        private List<(Rectangle handleRect, SelectionInteractionState state)> GetHighlightHandles(PdfHighlight highlight, Bitmap? pageImage, Rectangle? displayRect = null)
         {
             var result = new List<(Rectangle, SelectionInteractionState)>();
             if (highlight == null || pageImage == null) return result;
 
-            var bounds = GetHighlightScreenBounds(highlight, pageImage);
+            var bounds = GetHighlightScreenBounds(highlight, pageImage, displayRect);
             if (bounds.Width <= 0 || bounds.Height <= 0) return result;
 
             float halfHandle = HandleSize / 2;
@@ -1730,12 +1721,12 @@ namespace LearningAssistant.Managers
         /// 计算文字注解的屏幕边界框
         /// 使用 TextRenderer.MeasureText 测量，与标注位图渲染尺寸一致
         /// </summary>
-        private RectangleF GetTextScreenBounds(AnnotationText text, Bitmap? pageImage)
+        private RectangleF GetTextScreenBounds(AnnotationText text, Bitmap? pageImage, Rectangle? displayRect = null)
         {
             if (text == null || pageImage == null)
                 return RectangleF.Empty;
 
-            var imgRect = _form.GetImageDisplayRect();
+            var imgRect = displayRect ?? _form.GetImageDisplayRect();
             int imgWidth = pageImage.Width;
             int imgHeight = pageImage.Height;
 
@@ -1758,12 +1749,12 @@ namespace LearningAssistant.Managers
         /// <summary>
         /// 计算文字注解选中时的4个缩放手柄
         /// </summary>
-        private List<(Rectangle handleRect, SelectionInteractionState state)> GetTextHandles(AnnotationText text, Bitmap? pageImage)
+        private List<(Rectangle handleRect, SelectionInteractionState state)> GetTextHandles(AnnotationText text, Bitmap? pageImage, Rectangle? displayRect = null)
         {
             var result = new List<(Rectangle, SelectionInteractionState)>();
             if (text == null || pageImage == null) return result;
 
-            var bounds = GetTextScreenBounds(text, pageImage);
+            var bounds = GetTextScreenBounds(text, pageImage, displayRect);
             if (bounds.Width <= 0 || bounds.Height <= 0) return result;
 
             float halfHandle = HandleSize / 2;
@@ -2044,7 +2035,7 @@ namespace LearningAssistant.Managers
             // 检测是否点击了选中标注的手柄（进行缩放操作）
             if (_selectedStroke != null && _selectionState != SelectionInteractionState.None)
             {
-                var (_, _, handles) = GetSelectionBounds(_selectedStroke, _form.CurrentPageImage);
+                var (_, _, handles) = GetSelectionBounds(_selectedStroke, _form.CurrentPageImage, GetCurrentDisplayRect(clientPoint));
                 foreach (var (handleRect, state) in handles)
                 {
                     var imgRect = ClientRectFromScreenRect(handleRect);
@@ -2114,7 +2105,7 @@ namespace LearningAssistant.Managers
             // 检测是否点击了选中高亮的手柄（进行缩放操作）
             if (_selectedHighlight != null && _selectionState != SelectionInteractionState.None)
             {
-                var handles = GetHighlightHandles(_selectedHighlight, _form.CurrentPageImage);
+                var handles = GetHighlightHandles(_selectedHighlight, _form.CurrentPageImage, GetCurrentDisplayRect(clientPoint));
                 foreach (var (handleRect, state) in handles)
                 {
                     var imgRect = ClientRectFromScreenRect(handleRect);
@@ -2165,7 +2156,7 @@ namespace LearningAssistant.Managers
             // 检测是否点击了选中文字注解的手柄（进行缩放操作）
             if (_selectedText != null && _selectionState != SelectionInteractionState.None)
             {
-                var handles = GetTextHandles(_selectedText, _form.CurrentPageImage);
+                var handles = GetTextHandles(_selectedText, _form.CurrentPageImage, GetCurrentDisplayRect(clientPoint));
                 foreach (var (handleRect, state) in handles)
                 {
                     var imgRect = ClientRectFromScreenRect(handleRect);
@@ -2806,30 +2797,8 @@ namespace LearningAssistant.Managers
                     g.FillEllipse(dotBrush, pt.X - 4, pt.Y - 4, 8, 8);
                 }
 
-                // 聚光灯模式：鼠标周围高亮，其余区域变暗
-                if (_currentToolMode == AnnotationToolMode.Spotlight && _spotlightActive)
-                {
-                    // 仅在鼠标位于当前页区域时绘制聚光灯效果
-                    if (imgRect.Contains(_spotlightPosition))
-                    {
-                        var pt = _spotlightPosition;
-                        // 用半透明黑色覆盖当前页区域
-                        using var dimBrush = new SolidBrush(Color.FromArgb(180, 0, 0, 0));
-                        var fullRect = imgRect;
-                        // 用圆形区域挖空
-                        var spotlightRadius = 120;
-                        var path = new System.Drawing.Drawing2D.GraphicsPath();
-                        path.AddRectangle(fullRect);
-                        path.AddEllipse(pt.X - spotlightRadius, pt.Y - spotlightRadius, spotlightRadius * 2, spotlightRadius * 2);
-                        g.FillPath(dimBrush, path);
-                        // 外圈高亮
-                        using var glowPen2 = new Pen(Color.FromArgb(120, 255, 255, 200), 3f);
-                        g.DrawEllipse(glowPen2, pt.X - spotlightRadius, pt.Y - spotlightRadius, spotlightRadius * 2, spotlightRadius * 2);
-                        // 内圈光晕
-                        using var innerGlow = new Pen(Color.FromArgb(60, 255, 255, 200), 1f);
-                        g.DrawEllipse(innerGlow, pt.X - spotlightRadius + 5, pt.Y - spotlightRadius + 5, (spotlightRadius - 5) * 2, (spotlightRadius - 5) * 2);
-                    }
-                }
+                // 聚光灯模式：鼠标周围高亮，其余区域变暗（实际在 DrawSpotlightOverlay 中绘制）
+                // 这里保留空块以兼容双页模式下的绘制顺序
             }
             catch (Exception ex)
             {
@@ -2849,6 +2818,35 @@ namespace LearningAssistant.Managers
         }
 
         /// <summary>
+        /// 绘制聚光灯效果覆盖层（支持双页模式，覆盖整个视图区域）
+        /// </summary>
+        public void DrawSpotlightOverlay(Graphics g, Rectangle totalRect)
+        {
+            if (_currentToolMode != AnnotationToolMode.Spotlight || !_spotlightActive)
+                return;
+
+            var pt = _spotlightPosition;
+            if (!totalRect.Contains(pt) && !totalRect.Contains(new Point(pt.X + 1, pt.Y + 1)))
+                return;
+
+            // 用半透明黑色覆盖整个视图区域
+            using var dimBrush = new SolidBrush(Color.FromArgb(180, 0, 0, 0));
+            var spotlightRadius = 120;
+            var path = new System.Drawing.Drawing2D.GraphicsPath();
+            path.AddRectangle(totalRect);
+            path.AddEllipse(pt.X - spotlightRadius, pt.Y - spotlightRadius, spotlightRadius * 2, spotlightRadius * 2);
+            g.FillPath(dimBrush, path);
+
+            // 外圈高亮
+            using var glowPen2 = new Pen(Color.FromArgb(120, 255, 255, 200), 3f);
+            g.DrawEllipse(glowPen2, pt.X - spotlightRadius, pt.Y - spotlightRadius, spotlightRadius * 2, spotlightRadius * 2);
+
+            // 内圈光晕
+            using var innerGlow = new Pen(Color.FromArgb(60, 255, 255, 200), 1f);
+            g.DrawEllipse(innerGlow, pt.X - spotlightRadius + 5, pt.Y - spotlightRadius + 5, (spotlightRadius - 5) * 2, (spotlightRadius - 5) * 2);
+        }
+
+        /// <summary>
         /// 绘制选中标注的边框和缩放手柄
         /// </summary>
         private void DrawSelectionVisual(Graphics g, Rectangle imgRect, int pageIndex)
@@ -2860,7 +2858,7 @@ namespace LearningAssistant.Managers
             // 绘制高亮选中框和手柄
             if (_selectedHighlight != null && _form.CurrentPageImage != null)
             {
-                var hlBounds = GetHighlightScreenBounds(_selectedHighlight, _form.CurrentPageImage);
+                var hlBounds = GetHighlightScreenBounds(_selectedHighlight, _form.CurrentPageImage, imgRect);
                 if (hlBounds.Width > 0 && hlBounds.Height > 0)
                 {
                     // 绘制半透明选中遮罩
@@ -2876,7 +2874,7 @@ namespace LearningAssistant.Managers
                     g.DrawRectangle(hlBorderPenInner, hlBounds.X, hlBounds.Y, hlBounds.Width, hlBounds.Height);
 
                     // 绘制缩放手柄
-                    var hlHandles = GetHighlightHandles(_selectedHighlight, _form.CurrentPageImage);
+                    var hlHandles = GetHighlightHandles(_selectedHighlight, _form.CurrentPageImage, imgRect);
                     DrawResizeHandles(g, hlHandles);
                 }
                 return;
@@ -2885,7 +2883,7 @@ namespace LearningAssistant.Managers
             // 绘制文字注解选中框和手柄
             if (_selectedText != null && _form.CurrentPageImage != null)
             {
-                var textBounds = GetTextScreenBounds(_selectedText, _form.CurrentPageImage);
+                var textBounds = GetTextScreenBounds(_selectedText, _form.CurrentPageImage, imgRect);
                 if (textBounds.Width > 0 && textBounds.Height > 0)
                 {
                     // 绘制半透明选中遮罩
@@ -2901,7 +2899,7 @@ namespace LearningAssistant.Managers
                     g.DrawRectangle(textBorderPenInner, textBounds.X, textBounds.Y, textBounds.Width, textBounds.Height);
 
                     // 绘制缩放手柄
-                    var textHandles = GetTextHandles(_selectedText, _form.CurrentPageImage);
+                    var textHandles = GetTextHandles(_selectedText, _form.CurrentPageImage, imgRect);
                     DrawResizeHandles(g, textHandles);
                 }
                 return;
@@ -2920,7 +2918,7 @@ namespace LearningAssistant.Managers
 
             if (_selectedStroke.Points == null || _selectedStroke.Points.Length < 4) return;
 
-            var (bounds, _, handles) = GetSelectionBounds(_selectedStroke, _form.CurrentPageImage);
+            var (bounds, _, handles) = GetSelectionBounds(_selectedStroke, _form.CurrentPageImage, imgRect);
             if (bounds.Width <= 0 && bounds.Height <= 0) return;
 
             // 绘制半透明选中遮罩（增强选中视觉反馈）
@@ -2985,7 +2983,7 @@ namespace LearningAssistant.Managers
         {
             if (_selectedStroke == null || _form.CurrentPageImage == null) return;
 
-            var (bounds, _, _) = GetSelectionBounds(_selectedStroke, _form.CurrentPageImage);
+            var (bounds, _, _) = GetSelectionBounds(_selectedStroke, _form.CurrentPageImage, imgRect);
             if (bounds.Width <= 0 && bounds.Height <= 0) return;
 
             // 半透明填充
@@ -3004,7 +3002,7 @@ namespace LearningAssistant.Managers
         {
             if (_hoveredStroke == null || _form.CurrentPageImage == null) return;
 
-            var (bounds, _, _) = GetSelectionBounds(_hoveredStroke, _form.CurrentPageImage);
+            var (bounds, _, _) = GetSelectionBounds(_hoveredStroke, _form.CurrentPageImage, imgRect);
             if (bounds.Width <= 0 && bounds.Height <= 0) return;
 
             // 红色半透明填充
@@ -3015,6 +3013,20 @@ namespace LearningAssistant.Managers
             using var borderPen = new Pen(Color.FromArgb(200, 255, 0, 0), 3f);
             borderPen.DashStyle = DashStyle.Dash;
             g.DrawRectangle(borderPen, bounds.X, bounds.Y, bounds.Width, bounds.Height);
+        }
+
+        /// <summary>
+        /// 获取当前鼠标位置对应的显示区域矩形（支持双页模式）
+        /// </summary>
+        private Rectangle GetCurrentDisplayRect(Point clientPoint)
+        {
+            if (_form.IsDualPage && _form.CurrentPageImage != null)
+            {
+                var (_, pageRect, _) = _form.GetPageAtPoint(clientPoint);
+                if (pageRect.Width > 0 && pageRect.Height > 0)
+                    return pageRect;
+            }
+            return _form.GetImageDisplayRect();
         }
 
         private PointF ClientToImage(Point clientPt)

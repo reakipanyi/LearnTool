@@ -233,14 +233,14 @@ namespace LearningAssistant.Managers
             _logger.LogInformation("Opening PDF reader window");
 
             // 单例聚焦：已有 PDF 阅读器窗口则提到前台
-            if (TryFocusExisting(typeof(PdfReaderFormV2))) return;
+            if (TryFocusExisting(typeof(PdfReaderForm))) return;
 
             var scope = _serviceProvider.CreateScope();
             try
             {
                 var scopedProvider = scope.ServiceProvider;
 
-                var form = scopedProvider.GetRequiredService<PdfReaderFormV2>();
+                var form = scopedProvider.GetRequiredService<PdfReaderForm>();
                 var presenter = scopedProvider.GetRequiredService<PdfPresenter>();
 
                 form.SetPresenter(presenter);
