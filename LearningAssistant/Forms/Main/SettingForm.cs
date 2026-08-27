@@ -566,11 +566,12 @@ namespace LearningAssistant.Forms.Main
             // comboBoxTheme
             // 
             comboBoxTheme.FormattingEnabled = true;
-            comboBoxTheme.Items.AddRange(new object[] { "Light", "Dark" });
+            comboBoxTheme.Items.AddRange(new object[] { "Light", "Dark", "EyeCare", "HighContrast" });
             comboBoxTheme.Location = new Point(250, 32);
             comboBoxTheme.Name = "comboBoxTheme";
             comboBoxTheme.Size = new Size(170, 27);
             comboBoxTheme.TabIndex = 2;
+            comboBoxTheme.SelectedIndexChanged += ComboBoxTheme_SelectedIndexChanged;
             // 
             // numericUpDownFontSize
             // 
@@ -950,9 +951,23 @@ namespace LearningAssistant.Forms.Main
         private void CheckBoxNightMode_CheckedChanged(object? sender, EventArgs e)
         {
             _isDarkMode = checkBoxNightMode.Checked;
-            comboBoxTheme.Text = _isDarkMode ? "Dark" : "Light";
+            var theme = _isDarkMode ? ThemeMode.Dark : ThemeMode.Light;
+            comboBoxTheme.Text = theme.ToString();
+            _themeService.SetTheme(theme);
+        }
 
-            _themeService.SetTheme(_isDarkMode ? ThemeMode.Dark : ThemeMode.Light);
+        private void ComboBoxTheme_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            if (_isProgrammaticChange) return;
+            var selected = comboBoxTheme.SelectedItem?.ToString();
+            var theme = selected switch
+            {
+                "Dark" => ThemeMode.Dark,
+                "EyeCare" => ThemeMode.EyeCare,
+                "HighContrast" => ThemeMode.HighContrast,
+                _ => ThemeMode.Light
+            };
+            _themeService.SetTheme(theme);
         }
 
         private void ApplyTheme(bool isDark)

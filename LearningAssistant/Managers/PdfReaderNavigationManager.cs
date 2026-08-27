@@ -18,7 +18,10 @@ namespace LearningAssistant.Managers
         Strikethrough,
         Text,
         Eraser,
-        LaserPointer
+        LaserPointer,
+        Checklist,
+        ImageEmbed,
+        Spotlight
     }
 
     public enum SelectionInteractionState
@@ -84,6 +87,11 @@ namespace LearningAssistant.Managers
         private float _penWidth = 3f;
         private bool _isDashed = false;
         private string _penType = "Pen"; // Pencil, Pen, Marker
+        private string _strokeStyle = "Solid"; // Solid, DotLine, ArrowLine
+        private bool _annotationLayerVisible = true;
+        private bool _spotlightActive = false;
+        private Point _spotlightPosition = Point.Empty;
+        private bool _favoriteToolbarActive = false;
 
         private PointF? _shapeStartPoint;
         private PointF? _shapeEndPoint;
@@ -149,6 +157,15 @@ namespace LearningAssistant.Managers
         public int SelectedStrokeIndex => _selectedStrokeIndex;
         public AnnotationStroke? HoveredStroke => _hoveredStroke;
         public SelectionInteractionState SelectionState => _selectionState;
+        public bool AnnotationLayerVisible
+        {
+            get => _annotationLayerVisible;
+            set
+            {
+                _annotationLayerVisible = value;
+                _form.PictureBoxPdf.Invalidate();
+            }
+        }
 
         public Func<bool>? IsHighlightModeCallback { get; set; }
         public Action<Rectangle>? AddHighlightCallback { get; set; }
@@ -172,6 +189,7 @@ namespace LearningAssistant.Managers
             _isSelecting = false;
             _currentStrokePoints = null;
             _isLaserPointerActive = (mode == AnnotationToolMode.LaserPointer);
+            _spotlightActive = (mode == AnnotationToolMode.Spotlight);
             ClearSelection();
 
             if (_form.PictureBoxPdf != null)
@@ -216,6 +234,24 @@ namespace LearningAssistant.Managers
                 _ => "Pen"
             };
         }
+
+        public void SetStrokeStyle(string style)
+        {
+            _strokeStyle = style switch
+            {
+                "DotLine" => "DotLine",
+                "ArrowLine" => "ArrowLine",
+                _ => "Solid"
+            };
+        }
+
+        public void ToggleFavoriteToolbar()
+        {
+            _favoriteToolbarActive = !_favoriteToolbarActive;
+            _form.ShowMessage(_favoriteToolbarActive ? "已启用收藏工具栏布局" : "已恢复默认工具栏布局", "收藏工具栏");
+        }
+
+        public bool IsFavoriteToolbarActive => _favoriteToolbarActive;
 
         private Pen CreatePen(Color color, float width)
         {
@@ -563,6 +599,7 @@ namespace LearningAssistant.Managers
                         case AnnotationToolMode.Ellipse:
                         case AnnotationToolMode.Arrow:
                         case AnnotationToolMode.Mosaic:
+                        case AnnotationToolMode.Checklist:
                             _logger.LogInformation("MouseDown Left: Starting shape drawing ({Mode}) at {X},{Y}", _currentToolMode, e.Location.X, e.Location.Y);
                             _isDrawingShape = true;
                             _drawingPageIndex = _form.GetPageAtPoint(e.Location).pageIndex;
@@ -586,6 +623,23 @@ namespace LearningAssistant.Managers
                             _hoveredStrokeIndex = -1;
                             _form.PictureBoxPdf.Cursor = Cursors.Cross;
                             return;
+                        case AnnotationToolMode.ImageEmbed:
+                            _logger.LogInformation("MouseDown Left: Image embed at {X},{Y}", e.Location.X, e.Location.Y);
+                            _shapeStartPoint = ClientToImage(e.Location);
+                            _shapeEndPoint = _shapeStartPoint;
+                            _isDrawingShape = true;
+                            _drawingPageIndex = _form.GetPageAtPoint(e.Location).pageIndex;
+                            EnsureAnnotationBitmap();
+                            _selectStart = e.Location;
+                            _selectEnd = e.Location;
+                            _form.PictureBoxPdf.Invalidate();
+                            break;
+                        case AnnotationToolMode.Spotlight:
+                            _logger.LogInformation("MouseDown Left: Spotlight at {X},{Y}", e.Location.X, e.Location.Y);
+                            _spotlightActive = true;
+                            _spotlightPosition = e.Location;
+                            _form.PictureBoxPdf.Invalidate();
+                            break;
                     }
                     return;
                 }
@@ -802,6 +856,13 @@ namespace LearningAssistant.Managers
                     _laserPointerPosition = e.Location;
                     _form.PictureBoxPdf.Invalidate();
                 }
+
+                // 聚光灯模式：更新鼠标位置
+                if (_currentToolMode == AnnotationToolMode.Spotlight && _spotlightActive)
+                {
+                    _spotlightPosition = e.Location;
+                    _form.PictureBoxPdf.Invalidate();
+                }
             }
             catch (Exception ex)
             {
@@ -858,6 +919,8 @@ namespace LearningAssistant.Managers
                                 Points = pts.ToArray(),
                                 ColorArgb = drawColor.ToArgb(),
                                 Thickness = drawWidth,
+                                PenType = _penType,
+                                StrokeStyle = _strokeStyle,
                                 CreatedAt = DateTime.Now
                             };
 
@@ -934,19 +997,53 @@ namespace LearningAssistant.Managers
                                 {
                                     case AnnotationToolMode.Rectangle:
                                         if (_isDashed) drawPen.DashStyle = DashStyle.Dash;
+                                        if (_strokeStyle == "DotLine") drawPen.DashStyle = DashStyle.Dot;
                                         activeGfx.DrawRectangle(drawPen, rect.X, rect.Y, rect.Width, rect.Height);
                                         break;
                                     case AnnotationToolMode.Ellipse:
                                         if (_isDashed) drawPen.DashStyle = DashStyle.Dash;
+                                        if (_strokeStyle == "DotLine") drawPen.DashStyle = DashStyle.Dot;
                                         activeGfx.DrawEllipse(drawPen, rect);
                                         break;
                                     case AnnotationToolMode.Arrow:
-                                        drawPen.EndCap = LineCap.ArrowAnchor;
+                                        if (_strokeStyle == "ArrowLine") drawPen.EndCap = LineCap.ArrowAnchor;
+                                        if (_strokeStyle == "DotLine") drawPen.DashStyle = DashStyle.Dot;
                                         activeGfx.DrawLine(drawPen, startPt, endPt);
                                         break;
                                     case AnnotationToolMode.Mosaic:
                                         ApplyMosaic(rect, 10, activeGfx, activeBmp);
                                         break;
+                                    case AnnotationToolMode.Checklist:
+                                        {
+                                            var checkSize = Math.Min(rect.Width, rect.Height);
+                                            if (checkSize < 10) checkSize = 20;
+                                            using var checkBrush = new SolidBrush(Color.FromArgb(60, 0, 150, 0));
+                                            activeGfx.FillRectangle(checkBrush, (int)rect.X, (int)rect.Y, (int)checkSize, (int)checkSize);
+                                            using var checkPen = new Pen(Color.FromArgb(0, 150, 0), 2);
+                                            activeGfx.DrawRectangle(checkPen, (int)rect.X, (int)rect.Y, (int)checkSize, (int)checkSize);
+                                            break;
+                                        }
+                                    case AnnotationToolMode.ImageEmbed:
+                                        {
+                                            // 嵌入图片：选择图片文件并绘制到标注层
+                                            var embedImgW = _form.CurrentPageImage?.Width ?? 1;
+                                            var embedImgH = _form.CurrentPageImage?.Height ?? 1;
+                                            using var ofd = new OpenFileDialog();
+                                            ofd.Filter = "图片文件|*.png;*.jpg;*.jpeg;*.gif;*.bmp";
+                                            if (ofd.ShowDialog() == DialogResult.OK)
+                                            {
+                                                try
+                                                {
+                                                    using var embedImg = Image.FromFile(ofd.FileName);
+                                                    activeGfx.DrawImage(embedImg, (int)rect.X, (int)rect.Y, (int)rect.Width, (int)rect.Height);
+                                                }
+                                                catch (Exception ex)
+                                                {
+                                                    _logger.LogWarning(ex, "Failed to embed image");
+                                                }
+                                            }
+                                            break;
+                                        }
                                 }
 
                                 _form.Presenter?.SaveAnnotationForPage(_drawingPageIndex);
@@ -968,6 +1065,7 @@ namespace LearningAssistant.Managers
                                     ShapeType = _currentToolMode.ToString(),
                                     DashStyle = _isDashed ? "Dash" : "Solid",
                                     PenType = _penType,
+                                    StrokeStyle = _strokeStyle,
                                     CreatedAt = DateTime.Now
                                 };
 
@@ -2206,6 +2304,7 @@ namespace LearningAssistant.Managers
 
         public void DrawAnnotations(Graphics g, Rectangle imgRect, int pageIndex)
         {
+            if (!_annotationLayerVisible) return;
             try
             {
                 // 双页模式下，_annotationBitmap 属于左页，_secondAnnotationBitmap 属于右页
@@ -2251,6 +2350,8 @@ namespace LearningAssistant.Managers
                     pen.StartCap = LineCap.Round;
                     pen.EndCap = LineCap.Round;
                     pen.LineJoin = LineJoin.Round;
+                    if (_strokeStyle == "DotLine")
+                        pen.DashStyle = DashStyle.Dot;
                     DrawSmoothCurve(g, pen, screenPoints.ToArray());
                 }
 
@@ -2283,6 +2384,7 @@ namespace LearningAssistant.Managers
 
                     using var pen = new Pen(_penColor, _penWidth);
                     if (_isDashed) pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                    if (_strokeStyle == "DotLine") pen.DashStyle = DashStyle.Dot;
                     pen.StartCap = LineCap.Round;
                     pen.EndCap = LineCap.Round;
 
@@ -2307,6 +2409,17 @@ namespace LearningAssistant.Managers
                             pen.EndCap = LineCap.ArrowAnchor;
                             g.DrawLine(pen, screenStart, screenEnd);
                             break;
+                        case AnnotationToolMode.Checklist:
+                            {
+                                // 绘制一个方框表示待办项
+                                var checkSize = Math.Min(rect.Width, rect.Height);
+                                if (checkSize < 10) checkSize = 20;
+                                using var checkBrush = new SolidBrush(Color.FromArgb(60, 0, 150, 0));
+                                g.FillRectangle(checkBrush, new Rectangle(rect.Left, rect.Top, checkSize, checkSize));
+                                using var checkPen = new Pen(Color.FromArgb(0, 150, 0), 2);
+                                g.DrawRectangle(checkPen, new Rectangle(rect.Left, rect.Top, checkSize, checkSize));
+                                break;
+                            }
                         case AnnotationToolMode.Mosaic:
                             {
                                 using var brush = new SolidBrush(Color.FromArgb(80, 255, 255, 255));
@@ -2357,10 +2470,42 @@ namespace LearningAssistant.Managers
                     using var dotBrush = new SolidBrush(Color.FromArgb(220, 255, 0, 0));
                     g.FillEllipse(dotBrush, pt.X - 4, pt.Y - 4, 8, 8);
                 }
+
+                // 聚光灯模式：鼠标周围高亮，其余区域变暗
+                if (_currentToolMode == AnnotationToolMode.Spotlight && _spotlightActive && pageIndex >= 0 && pageIndex == _form.CurrentPageIndex)
+                {
+                    var pt = _spotlightPosition;
+                    // 用半透明黑色覆盖全图
+                    using var dimBrush = new SolidBrush(Color.FromArgb(180, 0, 0, 0));
+                    var fullRect = new Rectangle(0, 0, imgRect.Width, imgRect.Height);
+                    // 用圆形区域挖空
+                    var spotlightRadius = 120;
+                    var path = new System.Drawing.Drawing2D.GraphicsPath();
+                    path.AddRectangle(fullRect);
+                    path.AddEllipse(pt.X - spotlightRadius, pt.Y - spotlightRadius, spotlightRadius * 2, spotlightRadius * 2);
+                    g.FillPath(dimBrush, path);
+                    // 外圈高亮
+                    using var glowPen2 = new Pen(Color.FromArgb(120, 255, 255, 200), 3f);
+                    g.DrawEllipse(glowPen2, pt.X - spotlightRadius, pt.Y - spotlightRadius, spotlightRadius * 2, spotlightRadius * 2);
+                    // 内圈光晕
+                    using var innerGlow = new Pen(Color.FromArgb(60, 255, 255, 200), 1f);
+                    g.DrawEllipse(innerGlow, pt.X - spotlightRadius + 5, pt.Y - spotlightRadius + 5, (spotlightRadius - 5) * 2, (spotlightRadius - 5) * 2);
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error drawing annotations");
+            }
+        }
+
+        /// <summary>
+        /// 将当前页的标注图层渲染到指定的 Graphics 对象上（用于导出为图片）。
+        /// </summary>
+        public void DrawAnnotationsToGraphics(Graphics g, Rectangle destRect)
+        {
+            if (_annotationBitmap != null)
+            {
+                g.DrawImage(_annotationBitmap, destRect);
             }
         }
 

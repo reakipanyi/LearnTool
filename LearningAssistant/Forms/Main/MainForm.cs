@@ -198,6 +198,20 @@ namespace LearningAssistant.Forms.Main
                 catch (Exception ex) { _logger?.LogError(ex, "打开统计中心失败"); }
             };
 
+            dashboardView.EmptyStateAction += (s, action) =>
+            {
+                try
+                {
+                    switch (action)
+                    {
+                        case "learning": OnNavigationItemClicked(null, "learning"); break;
+                        case "pdf": OnNavigationItemClicked(null, "pdf"); break;
+                        case "editor": OnNavigationItemClicked(null, "editor"); break;
+                    }
+                }
+                catch (Exception ex) { _logger?.LogError(ex, "空状态引导导航失败"); }
+            };
+
             RefreshDashboardChallengeProgress();
             sideNavigation.AddItems(new List<NavigationItem>
             {
@@ -1155,12 +1169,22 @@ namespace LearningAssistant.Forms.Main
             if (_themeService == null) return;
 
             var currentTheme = _themeService.CurrentTheme;
-            var newTheme = currentTheme == ThemeMode.Light
-                ? ThemeMode.Dark
-                : ThemeMode.Light;
+            var newTheme = currentTheme switch
+            {
+                ThemeMode.Light => ThemeMode.Dark,
+                ThemeMode.Dark => ThemeMode.EyeCare,
+                ThemeMode.EyeCare => ThemeMode.HighContrast,
+                _ => ThemeMode.Light
+            };
             _themeService.SetTheme(newTheme);
 
-            buttonThemeToggle.Text = newTheme == ThemeMode.Light ? "🌙" : "☀️";
+            buttonThemeToggle.Text = newTheme switch
+            {
+                ThemeMode.Dark => "☀️",
+                ThemeMode.EyeCare => "🌿",
+                ThemeMode.HighContrast => "🔲",
+                _ => "🌙"
+            };
         }
 
         private void ButtonLearning_Click(object? sender, EventArgs e)

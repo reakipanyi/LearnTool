@@ -21,6 +21,7 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
         private Panel _panelFeatures = null!;
         private Panel _panelRecommend = null!;
         private Label _labelRecommendTitle = null!;
+        private Panel _panelEmptyState = null!;
         private string _userName = "同学";
 
         public event EventHandler<LearningRecommendation>? RecommendationClicked;
@@ -29,6 +30,11 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
         /// 首页统计卡片被点击（下钻到学习数据中心，参数为卡片序号 0-5，见 06 方案 3.4）。
         /// </summary>
         public event EventHandler<int>? StatCardClicked;
+
+        /// <summary>
+        /// 空状态引导按钮点击事件（参数：learning/pdf/editor）
+        /// </summary>
+        public event EventHandler<string>? EmptyStateAction;
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string UserName
@@ -162,7 +168,102 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             //AddFeatureCard("📊", "学习统计", "查看学习数据", Color.FromArgb(14, 165, 233), Color.FromArgb(59, 130, 246));
             AddFeatureCard("⚙️", "设置", "应用设置", Color.FromArgb(108, 117, 125), Color.FromArgb(75, 85, 99));
 
+            InitializeEmptyStatePanel();
             InitializeRecommendPanel();
+        }
+
+        private void InitializeEmptyStatePanel()
+        {
+            _panelEmptyState = new Panel
+            {
+                BackColor = Color.Transparent,
+                Dock = DockStyle.Fill,
+                Visible = false
+            };
+
+            var iconLabel = new Label
+            {
+                AutoSize = true,
+                Font = new Font("Segoe UI Emoji", 48F),
+                Text = "🎯",
+                BackColor = Color.Transparent
+            };
+
+            var titleLabel = new Label
+            {
+                AutoSize = true,
+                Font = new Font("微软雅黑", 16F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(33, 33, 33),
+                Text = "欢迎来到学习助手！",
+                BackColor = Color.Transparent
+            };
+
+            var descLabel = new Label
+            {
+                AutoSize = true,
+                Font = new Font("微软雅黑", 10F),
+                ForeColor = Color.FromArgb(117, 117, 117),
+                Text = "你还没有任何学习数据，开始学习之旅吧！",
+                MaximumSize = new Size(400, 0),
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent
+            };
+
+            var btnStart = new Button
+            {
+                Text = "📚 开始学习",
+                Font = new Font("微软雅黑", 10F, FontStyle.Bold),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(99, 102, 241),
+                ForeColor = Color.White,
+                Size = new Size(150, 42),
+                FlatAppearance = { BorderSize = 0 }
+            };
+
+            var btnPdf = new Button
+            {
+                Text = "📖 打开PDF",
+                Font = new Font("微软雅黑", 10F, FontStyle.Bold),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(34, 197, 94),
+                ForeColor = Color.White,
+                Size = new Size(150, 42),
+                FlatAppearance = { BorderSize = 0 }
+            };
+
+            var btnEdit = new Button
+            {
+                Text = "🧩 添加内容",
+                Font = new Font("微软雅黑", 10F, FontStyle.Bold),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(167, 139, 250),
+                ForeColor = Color.White,
+                Size = new Size(150, 42),
+                FlatAppearance = { BorderSize = 0 }
+            };
+
+            _panelEmptyState.Controls.AddRange(new Control[] { iconLabel, titleLabel, descLabel, btnStart, btnPdf, btnEdit });
+
+            // 居中布局
+            _panelEmptyState.Resize += (s, e) =>
+            {
+                int cx = _panelEmptyState.Width / 2;
+                int cy = _panelEmptyState.Height / 2 - 60;
+                iconLabel.Location = new Point(cx - iconLabel.Width / 2, cy - 40);
+                titleLabel.Location = new Point(cx - titleLabel.Width / 2, iconLabel.Bottom + 8);
+                descLabel.Location = new Point(cx - descLabel.Width / 2, titleLabel.Bottom + 12);
+                btnStart.Location = new Point(cx - 235, descLabel.Bottom + 24);
+                btnPdf.Location = new Point(cx - 75, descLabel.Bottom + 24);
+                btnEdit.Location = new Point(cx + 85, descLabel.Bottom + 24);
+            };
+
+            // 事件
+            btnStart.Click += (s, e) => OnEmptyStateAction("learning");
+            btnPdf.Click += (s, e) => OnEmptyStateAction("pdf");
+            btnEdit.Click += (s, e) => OnEmptyStateAction("editor");
+
+            Controls.Add(_panelEmptyState);
+            _panelEmptyState.BringToFront();
         }
 
         private void InitializeRecommendPanel()
@@ -319,9 +420,16 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             int noteCount = 0,
             int todayNewNotes = 0)
         {
+            bool isEmpty = todayStudyMinutes <= 0 && streakDays <= 0 && totalXP <= 0 && completedChallenges <= 0;
+
+            // 空状态引导：无数据时覆盖显示引导面板，有数据时隐藏
+            if (_panelEmptyState != null)
+            {
+                _panelEmptyState.Visible = isEmpty;
+            }
+
             if (_statCards.Count >= 6)
             {
-                bool isEmpty = todayStudyMinutes <= 0 && streakDays <= 0 && totalXP <= 0 && completedChallenges <= 0;
 
                 var studyCard = _statCards[0];
                 if (todayStudyMinutes <= 0)
@@ -394,6 +502,11 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
                 challengeCard.Trend = completed >= total ? "已完成" : "进行中";
                 challengeCard.TrendDir = completed >= total ? StatCard.TrendDirection.Up : StatCard.TrendDirection.None;
             }
+        }
+
+        private void OnEmptyStateAction(string action)
+        {
+            EmptyStateAction?.Invoke(this, action);
         }
 
         protected override void OnResize(EventArgs e)

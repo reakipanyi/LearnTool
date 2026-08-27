@@ -69,7 +69,9 @@ namespace LearningAssistant.Common
     public enum ThemeMode
     {
         Light,
-        Dark
+        Dark,
+        EyeCare,
+        HighContrast
     }
 
     public static class EnumExtensions

@@ -139,8 +139,16 @@ namespace LearningAssistant.Forms.Pdf
         private Button _buttonTextMode;
         private Button _buttonUndoAnnotation;
         private Button _buttonClearAllAnnotations;
+        private Button _buttonToggleAnnotationLayer;
+        private Button _buttonExportAnnotationsAsImage;
         private Button _buttonSelectMode;
         private Button _buttonEraserMode;
+        private Button _buttonChecklistMode;
+        private Button _buttonImageEmbedMode;
+        private Button _buttonSpotlightMode;
+        private Button _buttonStrokeStyleDot;
+        private Button _buttonStrokeStyleArrow;
+        private Button _buttonFavoriteToolbar;
         private Panel _panelAnnotationOptions;
         private TrackBar _trackBarThickness;
         private Label _labelThicknessValue;
@@ -813,6 +821,18 @@ namespace LearningAssistant.Forms.Pdf
                             ButtonDualPage_Click(this, EventArgs.Empty);
                             e.Handled = true;
                         }
+                        break;
+                    case Keys.C:
+                        SetAnnotationToolMode(AnnotationToolMode.Checklist);
+                        e.Handled = true;
+                        break;
+                    case Keys.I:
+                        SetAnnotationToolMode(AnnotationToolMode.ImageEmbed);
+                        e.Handled = true;
+                        break;
+                    case Keys.K:
+                        SetAnnotationToolMode(AnnotationToolMode.Spotlight);
+                        e.Handled = true;
                         break;
                 }
             }
@@ -2455,6 +2475,63 @@ namespace LearningAssistant.Forms.Pdf
             _navigationManager?.ClearAllStrokes();
             _ = _presenter.RenderAndDisplayCurrentPageAsync();
             UpdateStatusBar();
+        }
+
+        private void ButtonToggleAnnotationLayer_Click(object? sender, EventArgs e)
+        {
+            if (_navigationManager == null) return;
+            _navigationManager.AnnotationLayerVisible = !_navigationManager.AnnotationLayerVisible;
+            _buttonToggleAnnotationLayer.BackColor = _navigationManager.AnnotationLayerVisible ? Color.White : Color.FromArgb(230, 244, 255);
+        }
+
+        private void ExportAnnotationsAsImage_Click(object? sender, EventArgs e)
+        {
+            if (_navigationManager == null || _currentPageImage == null) return;
+            using var saveDialog = new SaveFileDialog();
+            saveDialog.Filter = "PNG图片|*.png";
+            saveDialog.FileName = $"标注_{Path.GetFileNameWithoutExtension(_currentPdfPath)}_第{_currentPageIndex + 1}页.png";
+            if (saveDialog.ShowDialog() == DialogResult.OK)
+            {
+                using var bmp = new Bitmap(_currentPageImage.Width, _currentPageImage.Height);
+                using var g = Graphics.FromImage(bmp);
+                g.Clear(Color.Transparent);
+                _navigationManager.DrawAnnotationsToGraphics(g, new Rectangle(0, 0, bmp.Width, bmp.Height));
+                bmp.Save(saveDialog.FileName, System.Drawing.Imaging.ImageFormat.Png);
+            }
+        }
+
+        private void ButtonChecklistMode_Click(object? sender, EventArgs e)
+        {
+            SetAnnotationToolMode(AnnotationToolMode.Checklist);
+        }
+
+        private void ButtonImageEmbedMode_Click(object? sender, EventArgs e)
+        {
+            SetAnnotationToolMode(AnnotationToolMode.ImageEmbed);
+        }
+
+        private void ButtonSpotlightMode_Click(object? sender, EventArgs e)
+        {
+            SetAnnotationToolMode(AnnotationToolMode.Spotlight);
+        }
+
+        private void ButtonStrokeStyleDot_Click(object? sender, EventArgs e)
+        {
+            _navigationManager?.SetStrokeStyle("DotLine");
+            _buttonStrokeStyleDot.BackColor = Color.FromArgb(230, 244, 255);
+            _buttonStrokeStyleArrow.BackColor = Color.White;
+        }
+
+        private void ButtonStrokeStyleArrow_Click(object? sender, EventArgs e)
+        {
+            _navigationManager?.SetStrokeStyle("ArrowLine");
+            _buttonStrokeStyleArrow.BackColor = Color.FromArgb(230, 244, 255);
+            _buttonStrokeStyleDot.BackColor = Color.White;
+        }
+
+        private void ButtonFavoriteToolbar_Click(object? sender, EventArgs e)
+        {
+            _navigationManager?.ToggleFavoriteToolbar();
         }
 
         private void ButtonSelectMode_Click(object? sender, EventArgs e)
@@ -4193,6 +4270,14 @@ namespace LearningAssistant.Forms.Pdf
             _toolbarGroupTools.Controls.Add(_buttonHighlightMode);
             _toolbarGroupTools.Controls.Add(_buttonRectangleMode);
             _toolbarGroupTools.Controls.Add(_buttonClearAllAnnotations);
+            _toolbarGroupTools.Controls.Add(_buttonToggleAnnotationLayer);
+            _toolbarGroupTools.Controls.Add(_buttonExportAnnotationsAsImage);
+            _toolbarGroupTools.Controls.Add(_buttonChecklistMode);
+            _toolbarGroupTools.Controls.Add(_buttonImageEmbedMode);
+            _toolbarGroupTools.Controls.Add(_buttonSpotlightMode);
+            _toolbarGroupTools.Controls.Add(_buttonStrokeStyleDot);
+            _toolbarGroupTools.Controls.Add(_buttonStrokeStyleArrow);
+            _toolbarGroupTools.Controls.Add(_buttonFavoriteToolbar);
             _toolbarGroupTools.Controls.Add(_buttonEllipseMode);
             _toolbarGroupTools.Controls.Add(_buttonArrowMode);
             _toolbarGroupTools.Controls.Add(_buttonPenTypePencil);
@@ -4205,7 +4290,7 @@ namespace LearningAssistant.Forms.Pdf
             _toolbarGroupTools.Dock = DockStyle.Left;
             _toolbarGroupTools.Location = new Point(8, 8);
             _toolbarGroupTools.Name = "_toolbarGroupTools";
-            _toolbarGroupTools.Size = new Size(526, 96);
+            _toolbarGroupTools.Size = new Size(750, 96);
             _toolbarGroupTools.TabIndex = 3;
             // 
             // _buttonSelectMode
@@ -4608,6 +4693,126 @@ namespace LearningAssistant.Forms.Pdf
             _buttonClearAllAnnotations.Text = "🗑";
             _buttonClearAllAnnotations.UseVisualStyleBackColor = false;
             _buttonClearAllAnnotations.Click += ButtonClearAllAnnotations_Click;
+            // 
+            // _buttonToggleAnnotationLayer
+            // 
+            _buttonToggleAnnotationLayer = new Button();
+            _buttonToggleAnnotationLayer.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _buttonToggleAnnotationLayer.FlatStyle = FlatStyle.Flat;
+            _buttonToggleAnnotationLayer.Font = new Font("Microsoft YaHei UI", 10F);
+            _buttonToggleAnnotationLayer.Location = new Point(462, 1);
+            _buttonToggleAnnotationLayer.Name = "_buttonToggleAnnotationLayer";
+            _buttonToggleAnnotationLayer.Size = new Size(28, 28);
+            _buttonToggleAnnotationLayer.TabIndex = 20;
+            _buttonToggleAnnotationLayer.Text = "👁";
+            _toolTip.SetToolTip(_buttonToggleAnnotationLayer, "显示/隐藏标注层");
+            _buttonToggleAnnotationLayer.UseVisualStyleBackColor = false;
+            _buttonToggleAnnotationLayer.Click += ButtonToggleAnnotationLayer_Click;
+            // 
+            // _buttonExportAnnotationsAsImage
+            // 
+            _buttonExportAnnotationsAsImage = new Button();
+            _buttonExportAnnotationsAsImage.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _buttonExportAnnotationsAsImage.FlatStyle = FlatStyle.Flat;
+            _buttonExportAnnotationsAsImage.Font = new Font("Microsoft YaHei UI", 10F);
+            _buttonExportAnnotationsAsImage.Location = new Point(496, 1);
+            _buttonExportAnnotationsAsImage.Name = "_buttonExportAnnotationsAsImage";
+            _buttonExportAnnotationsAsImage.Size = new Size(28, 28);
+            _buttonExportAnnotationsAsImage.TabIndex = 21;
+            _buttonExportAnnotationsAsImage.Text = "📷";
+            _toolTip.SetToolTip(_buttonExportAnnotationsAsImage, "导出标注为图片");
+            _buttonExportAnnotationsAsImage.UseVisualStyleBackColor = false;
+            _buttonExportAnnotationsAsImage.Click += ExportAnnotationsAsImage_Click;
+            //
+            // _buttonChecklistMode
+            //
+            _buttonChecklistMode = new Button();
+            _buttonChecklistMode.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _buttonChecklistMode.FlatStyle = FlatStyle.Flat;
+            _buttonChecklistMode.Font = new Font("Microsoft YaHei UI", 10F);
+            _buttonChecklistMode.Location = new Point(530, 1);
+            _buttonChecklistMode.Name = "_buttonChecklistMode";
+            _buttonChecklistMode.Size = new Size(28, 28);
+            _buttonChecklistMode.TabIndex = 22;
+            _buttonChecklistMode.Text = "☑";
+            _toolTip.SetToolTip(_buttonChecklistMode, "核对清单 (C)");
+            _buttonChecklistMode.UseVisualStyleBackColor = false;
+            _buttonChecklistMode.Click += ButtonChecklistMode_Click;
+            //
+            // _buttonImageEmbedMode
+            //
+            _buttonImageEmbedMode = new Button();
+            _buttonImageEmbedMode.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _buttonImageEmbedMode.FlatStyle = FlatStyle.Flat;
+            _buttonImageEmbedMode.Font = new Font("Microsoft YaHei UI", 10F);
+            _buttonImageEmbedMode.Location = new Point(564, 1);
+            _buttonImageEmbedMode.Name = "_buttonImageEmbedMode";
+            _buttonImageEmbedMode.Size = new Size(28, 28);
+            _buttonImageEmbedMode.TabIndex = 23;
+            _buttonImageEmbedMode.Text = "🖼";
+            _toolTip.SetToolTip(_buttonImageEmbedMode, "嵌入图片 (I)");
+            _buttonImageEmbedMode.UseVisualStyleBackColor = false;
+            _buttonImageEmbedMode.Click += ButtonImageEmbedMode_Click;
+            //
+            // _buttonSpotlightMode
+            //
+            _buttonSpotlightMode = new Button();
+            _buttonSpotlightMode.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _buttonSpotlightMode.FlatStyle = FlatStyle.Flat;
+            _buttonSpotlightMode.Font = new Font("Microsoft YaHei UI", 10F);
+            _buttonSpotlightMode.Location = new Point(598, 1);
+            _buttonSpotlightMode.Name = "_buttonSpotlightMode";
+            _buttonSpotlightMode.Size = new Size(28, 28);
+            _buttonSpotlightMode.TabIndex = 24;
+            _buttonSpotlightMode.Text = "🔦";
+            _toolTip.SetToolTip(_buttonSpotlightMode, "聚光灯 (K)");
+            _buttonSpotlightMode.UseVisualStyleBackColor = false;
+            _buttonSpotlightMode.Click += ButtonSpotlightMode_Click;
+            //
+            // _buttonStrokeStyleDot
+            //
+            _buttonStrokeStyleDot = new Button();
+            _buttonStrokeStyleDot.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _buttonStrokeStyleDot.FlatStyle = FlatStyle.Flat;
+            _buttonStrokeStyleDot.Font = new Font("Microsoft YaHei UI", 10F);
+            _buttonStrokeStyleDot.Location = new Point(632, 1);
+            _buttonStrokeStyleDot.Name = "_buttonStrokeStyleDot";
+            _buttonStrokeStyleDot.Size = new Size(28, 28);
+            _buttonStrokeStyleDot.TabIndex = 25;
+            _buttonStrokeStyleDot.Text = "⋯";
+            _toolTip.SetToolTip(_buttonStrokeStyleDot, "点线样式");
+            _buttonStrokeStyleDot.UseVisualStyleBackColor = false;
+            _buttonStrokeStyleDot.Click += ButtonStrokeStyleDot_Click;
+            //
+            // _buttonStrokeStyleArrow
+            //
+            _buttonStrokeStyleArrow = new Button();
+            _buttonStrokeStyleArrow.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _buttonStrokeStyleArrow.FlatStyle = FlatStyle.Flat;
+            _buttonStrokeStyleArrow.Font = new Font("Microsoft YaHei UI", 10F);
+            _buttonStrokeStyleArrow.Location = new Point(666, 1);
+            _buttonStrokeStyleArrow.Name = "_buttonStrokeStyleArrow";
+            _buttonStrokeStyleArrow.Size = new Size(28, 28);
+            _buttonStrokeStyleArrow.TabIndex = 26;
+            _buttonStrokeStyleArrow.Text = "→";
+            _toolTip.SetToolTip(_buttonStrokeStyleArrow, "箭头线样式");
+            _buttonStrokeStyleArrow.UseVisualStyleBackColor = false;
+            _buttonStrokeStyleArrow.Click += ButtonStrokeStyleArrow_Click;
+            //
+            // _buttonFavoriteToolbar
+            //
+            _buttonFavoriteToolbar = new Button();
+            _buttonFavoriteToolbar.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _buttonFavoriteToolbar.FlatStyle = FlatStyle.Flat;
+            _buttonFavoriteToolbar.Font = new Font("Microsoft YaHei UI", 10F);
+            _buttonFavoriteToolbar.Location = new Point(700, 1);
+            _buttonFavoriteToolbar.Name = "_buttonFavoriteToolbar";
+            _buttonFavoriteToolbar.Size = new Size(28, 28);
+            _buttonFavoriteToolbar.TabIndex = 27;
+            _buttonFavoriteToolbar.Text = "⭐";
+            _toolTip.SetToolTip(_buttonFavoriteToolbar, "收藏工具栏配置");
+            _buttonFavoriteToolbar.UseVisualStyleBackColor = false;
+            _buttonFavoriteToolbar.Click += ButtonFavoriteToolbar_Click;
             // 
             // _loadingIndicator
             // 
