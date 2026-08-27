@@ -692,13 +692,11 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        public void AddAnnotationStroke(float[] normalizedPoints, int colorArgb, float thickness, int imageWidth, int imageHeight, string? shapeType = null)
+        public void AddAnnotationStroke(float[] normalizedPoints, int colorArgb, float thickness, int imageWidth, int imageHeight, string? shapeType = null, int pageIndex = -1, string strokeStyle = "Solid")
         {
-            AddAnnotationStroke(normalizedPoints, colorArgb, thickness, imageWidth, imageHeight, shapeType, _pdfFileManager.CurrentPageIndex);
-        }
+            if (pageIndex < 0)
+                pageIndex = _pdfFileManager.CurrentPageIndex;
 
-        public void AddAnnotationStroke(float[] normalizedPoints, int colorArgb, float thickness, int imageWidth, int imageHeight, string? shapeType, int pageIndex)
-        {
             try
             {
                 if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath)) return;
@@ -722,7 +720,8 @@ namespace LearningAssistant.Presenters
                     Points = pts.ToArray(),
                     ColorArgb = colorArgb,
                     Thickness = thickness,
-                    ShapeType = shapeType
+                    ShapeType = shapeType,
+                    StrokeStyle = strokeStyle
                 };
                 _annotationService.AddStroke(_pdfFileManager.CurrentFilePath, pageIndex, stroke);
             }
@@ -750,7 +749,7 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        public void AddAnnotationText(float normalizedX, float normalizedY, string text, int colorArgb, float fontSize, string fontFamily, int imageWidth, int imageHeight)
+        public void AddAnnotationText(float normalizedX, float normalizedY, string text, int colorArgb, float fontSize, string fontFamily, int imageWidth, int imageHeight, long? audioTimestampMs = null)
         {
             try
             {
@@ -771,7 +770,8 @@ namespace LearningAssistant.Presenters
                     Content = text,
                     ColorArgb = colorArgb,
                     FontSize = fontSize,
-                    FontFamily = fontFamily
+                    FontFamily = fontFamily,
+                    AudioTimestampMs = audioTimestampMs
                 };
                 _annotationService.AddText(_pdfFileManager.CurrentFilePath, _pdfFileManager.CurrentPageIndex, annotationText);
             }
@@ -916,6 +916,24 @@ namespace LearningAssistant.Presenters
             }
         }
 
+        /// <summary>
+        /// 获取指定页面的所有文字注解（用于标注摘要视图跨页面查询）
+        /// </summary>
+        public IEnumerable<AnnotationText> GetCurrentPageTextsForPage(int pageIndex)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath))
+                    return Enumerable.Empty<AnnotationText>();
+                return _annotationService.GetTexts(_pdfFileManager.CurrentFilePath, pageIndex);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get texts for page {PageIndex}", pageIndex);
+                return Enumerable.Empty<AnnotationText>();
+            }
+        }
+
         public void RemoveStrokeAtCurrentPage(int index)
         {
             try
@@ -928,6 +946,32 @@ namespace LearningAssistant.Presenters
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to remove stroke at index {Index}", index);
+            }
+        }
+
+        public void UpdateTextAtCurrentPage(int index, AnnotationText text)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath)) return;
+                _annotationService.UpdateTextAt(_pdfFileManager.CurrentFilePath, _pdfFileManager.CurrentPageIndex, index, text);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to update text at index {Index}", index);
+            }
+        }
+
+        public void RemoveTextAtCurrentPage(int index)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_pdfFileManager.CurrentFilePath)) return;
+                _annotationService.RemoveTextAt(_pdfFileManager.CurrentFilePath, _pdfFileManager.CurrentPageIndex, index);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to remove text at index {Index}", index);
             }
         }
 

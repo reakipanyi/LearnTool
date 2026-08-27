@@ -286,13 +286,53 @@ namespace LearningAssistant.Forms.Games
             await LoadSavedSettingsAsync();
             try
             {
+                // 先检查 WebView2 Runtime 是否可用，避免 E_ABORT 等异常
+                if (!IsWebView2RuntimeAvailable())
+                {
+                    _logger.LogError("WebView2 Runtime 未安装或不可用");
+                    MessageBox.Show("初始化 WebView2 失败：未检测到 WebView2 Runtime。\n\n" +
+                        "请从 https://developer.microsoft.com/microsoft-edge/webview2/ 下载并安装 WebView2 Runtime。",
+                        "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
                 await InitializeWebViewAsync();
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogWarning("WebView2 初始化被取消（可能窗口已关闭）");
+            }
+            catch (Exception ex) when (ex.HResult == unchecked((int)0x80004004) || ex.Message?.Contains("E_ABORT") == true)
+            {
+                _logger.LogWarning(ex, "WebView2 初始化中止（E_ABORT），可能窗口正在关闭或 Runtime 异常");
+                if (!IsDisposed && Visible)
+                {
+                    MessageBox.Show("WebView2 初始化被中止，请确认已安装 WebView2 Runtime 后重试。",
+                        "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "初始化 WebView2 失败");
-                MessageBox.Show($"初始化 WebView2 失败：{ex.Message}\n\n可能需要安装 WebView2 Runtime。",
-                    "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                if (!IsDisposed && Visible)
+                {
+                    MessageBox.Show($"初始化 WebView2 失败：{ex.Message}\n\n可能需要安装 WebView2 Runtime。",
+                        "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        /// <summary>检查 WebView2 Runtime 是否已安装。</summary>
+        private static bool IsWebView2RuntimeAvailable()
+        {
+            try
+            {
+                var version = CoreWebView2Environment.GetAvailableBrowserVersionString();
+                return !string.IsNullOrEmpty(version);
+            }
+            catch
+            {
+                return false;
             }
         }
 

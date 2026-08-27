@@ -26,6 +26,8 @@ namespace LearningAssistant.Models.Pdf
         public string PenType { get; set; } = "Pen";
         /// <summary>笔划样式: 默认(Solid)/点线(DotLine)/箭头线(ArrowLine)</summary>
         public string StrokeStyle { get; set; } = "Solid";
+        /// <summary>关联的音频时间戳(毫秒)，录制时创建标注自动记录</summary>
+        public long? AudioTimestampMs { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.Now;
     }
 
@@ -38,6 +40,8 @@ namespace LearningAssistant.Models.Pdf
         public int ColorArgb { get; set; }
         public float FontSize { get; set; } = 14f;
         public string FontFamily { get; set; } = "Microsoft YaHei UI";
+        /// <summary>关联的音频时间戳(毫秒)，录制时创建标注自动记录</summary>
+        public long? AudioTimestampMs { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.Now;
     }
 

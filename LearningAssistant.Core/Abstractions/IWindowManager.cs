@@ -18,5 +18,7 @@ namespace LearningAssistant.Abstractions
         void OpenLinkMatchGameWindow();
         void OpenSpellingGameWindow();
         void OpenWhackAMoleGameWindow();
+        void OpenSchulteGameWindow();
+        void OpenSudokuGameWindow();
     }
 }

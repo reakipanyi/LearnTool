@@ -217,18 +217,20 @@ namespace LearningAssistant.Forms.Main
             {
                 new() { Key = "dashboard", Icon = "🏠", Text = "首页", Order = 0, Group = "main" },
                 new() { Key = "learning", Icon = "📚", Text = "学习", Order = 1, Group = "main" },
-                new() { Key = "editor", Icon = "✏️", Text = "内容编辑", Order = 12, Group = "tools" },
                 new() { Key = "pdf", Icon = "📖", Text = "PDF阅读", Order = 2, Group = "main" },
-                new() { Key = "browser", Icon = "🌐", Text = "浏览器", Order = 11, Group = "tools" },
-                new() { Key = "data", Icon = "📊", Text = "学习数据", Order = 6, Group = "main" },
-                new() { Key = "statistics", Icon = "📊", Text = "学习统计", Order = 5, Group = "main" },
+                new() { Key = "data", Icon = "📊", Text = "学习数据", Order = 5, Group = "main" },
+                // 游戏区
+                new() { Key = "wordmatch", Icon = "🍬", Text = "单词消消乐", Order = 10, Group = "games" },
+                new() { Key = "memorymatch", Icon = "🧠", Text = "记忆翻牌", Order = 11, Group = "games" },
+                new() { Key = "linkmatch", Icon = "🔗", Text = "连连看", Order = 12, Group = "games" },
+                new() { Key = "spelling", Icon = "✍️", Text = "单词拼写", Order = 13, Group = "games" },
+                new() { Key = "whackamole", Icon = "🔨", Text = "打地鼠", Order = 14, Group = "games" },
+                new() { Key = "schulte", Icon = "🔢", Text = "舒尔特方格", Order = 15, Group = "games" },
+                new() { Key = "sudoku", Icon = "🧩", Text = "数独", Order = 16, Group = "games" },
+                // 工具区
+                new() { Key = "browser", Icon = "🌐", Text = "浏览器", Order = 20, Group = "tools" },
+                new() { Key = "editor", Icon = "✏️", Text = "内容编辑", Order = 21, Group = "tools" },
                 new() { Key = "settings", Icon = "⚙️", Text = "设置", Order = 99, Group = "system" }
-                //new() { Key = "mentor", Icon = "🤖", Text = "AI导师", Order = 3, Group = "main" },
-                //new() { Key = "challenges", Icon = "🎯", Text = "每日挑战", Order = 6, Group = "main" },
-                //new() { Key = "achievements", Icon = "🏆", Text = "成就徽章", Order = 7, Group = "main" },
-                //new() { Key = "notes", Icon = "📝", Text = "笔记", Order = 8, Group = "tools" },
-                //new() { Key = "wrongbook", Icon = "📕", Text = "错题本", Order = 9, Group = "tools" },
-                //new() { Key = "graph", Icon = "🌐", Text = "知识图谱", Order = 10, Group = "tools" },
             });
 
         }
@@ -467,6 +469,27 @@ namespace LearningAssistant.Forms.Main
                     break;
                 case "settings":
                     OpenSettingsClicked?.Invoke(this, EventArgs.Empty);
+                    break;
+                case "wordmatch":
+                    _windowManager.OpenWordMatchGameWindow();
+                    break;
+                case "memorymatch":
+                    _windowManager.OpenMemoryMatchGameWindow();
+                    break;
+                case "linkmatch":
+                    _windowManager.OpenLinkMatchGameWindow();
+                    break;
+                case "spelling":
+                    _windowManager.OpenSpellingGameWindow();
+                    break;
+                case "whackamole":
+                    _windowManager.OpenWhackAMoleGameWindow();
+                    break;
+                case "schulte":
+                    _windowManager.OpenSchulteGameWindow();
+                    break;
+                case "sudoku":
+                    _windowManager.OpenSudokuGameWindow();
                     break;
                 case "challenges":
                     ShowChallengeForm();

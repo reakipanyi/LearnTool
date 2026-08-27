@@ -1,4 +1,4 @@
-using LearningAssistant.Abstractions;
+﻿using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
 using LearningAssistant.Forms.UserControls;
@@ -22,13 +22,11 @@ namespace LearningAssistant.Forms.Pdf
         private readonly IAIPanelPopupService? _aiPanelPopupService;
         private readonly Services.Learning.IPendingContentService? _pendingContentService;
         private readonly IHighlightService _highlightService;
-        private readonly IBookmarkService _bookmarkService;
         private readonly IAnnotationService? _annotationService;
         private readonly IEventBus? _eventBus;
 
         private PdfReaderNightModeManager? _nightModeManager;
         private PdfReaderHighlightManager? _highlightManager;
-        private PdfReaderBookmarkManager? _bookmarkManager;
         private PdfReaderNavigationManager? _navigationManager;
 
         private readonly Pen _pen = new Pen(Color.Red, 4f);
@@ -40,12 +38,6 @@ namespace LearningAssistant.Forms.Pdf
 
         private LoadingIndicator? _loadingIndicator;
         private bool _isTranslationEnabled = false;
-
-        private GroupBox? _groupBoxBookmarks;
-        private ListBox? _listBoxBookmarks;
-        private Button? _buttonAddBookmark;
-        private Button? _buttonRemoveBookmark;
-        private TextBox? _textBoxBookmarkTitle;
 
         private GroupBox? _groupBoxHighlights;
         private ListBox? _listBoxHighlights;
@@ -98,12 +90,8 @@ namespace LearningAssistant.Forms.Pdf
         private TabControl _tabControlLeft;
         private TabPage _tabPageFiles;
         private TabPage _tabPageThumbnails;
-        private TabPage _tabPageAnnotationSummary;
-        private ListView _listViewAnnotationSummary;
         private Panel _panelLeftContainer;
 
-        private Panel _bookmarkContainer;
-        private FlowLayoutPanel _buttonPanel;
         private Panel _highlightContainer;
         private FlowLayoutPanel _highlightButtonPanel;
 
@@ -295,7 +283,7 @@ namespace LearningAssistant.Forms.Pdf
         private SplitContainer _splitContainerMain;
 
 
-        public PdfReaderFormV2(ILogger<PdfReaderFormV2> logger, IAIPanelPopupService? aiPanelPopupService = null, Services.Learning.IPendingContentService? pendingContentService = null, IHighlightService? highlightService = null, IBookmarkService? bookmarkService = null, IAnnotationService? annotationService = null, IEventBus? eventBus = null)
+        public PdfReaderFormV2(ILogger<PdfReaderFormV2> logger, IAIPanelPopupService? aiPanelPopupService = null, Services.Learning.IPendingContentService? pendingContentService = null, IHighlightService? highlightService = null, IAnnotationService? annotationService = null, IEventBus? eventBus = null)
         {
             InitializeComponent();
             WindowState = FormWindowState.Maximized;
@@ -303,7 +291,6 @@ namespace LearningAssistant.Forms.Pdf
             _aiPanelPopupService = aiPanelPopupService;
             _pendingContentService = pendingContentService;
             _highlightService = highlightService ?? new HighlightService();
-            _bookmarkService = bookmarkService ?? new BookmarkService();
             _annotationService = annotationService;
             _eventBus = eventBus;
             KeyPreview = true;
@@ -319,7 +306,6 @@ namespace LearningAssistant.Forms.Pdf
         {
             _nightModeManager = new PdfReaderNightModeManager(_logger, this);
             _highlightManager = new PdfReaderHighlightManager(_logger, this, _highlightService, _annotationService, _eventBus);
-            _bookmarkManager = new PdfReaderBookmarkManager(_logger, this, _bookmarkService);
             _navigationManager = new PdfReaderNavigationManager(_logger, this);
 
             // 订阅两个 Manager 的撤销动作入栈事件，统一记录到 _unifiedUndoStack，
@@ -582,11 +568,6 @@ namespace LearningAssistant.Forms.Pdf
         }
 
         public TabPage? TabPageBookmarksAndHighlights => _tabPageBookmarksAndHighlights;
-        public GroupBox? GroupBoxBookmarks => _groupBoxBookmarks;
-        public ListBox? ListBoxBookmarks => _listBoxBookmarks;
-        public TextBox? TextBoxBookmarkTitle => _textBoxBookmarkTitle;
-        public Button? ButtonAddBookmark => _buttonAddBookmark;
-        public Button? ButtonRemoveBookmark => _buttonRemoveBookmark;
 
         public GroupBox? GroupBoxHighlights => _groupBoxHighlights;
         public ListBox? ListBoxHighlights => _listBoxHighlights;
@@ -616,6 +597,9 @@ namespace LearningAssistant.Forms.Pdf
         public Form Form => this;
 
         IHighlightService? IPdfReaderFormAccess.HighlightService => _highlightService;
+
+        public TabPage? TabPageAudio => null;
+        public IAudioRecorderService? AudioRecorderService => null;
 
         public Button? ButtonLanguage => null;
 
@@ -966,21 +950,11 @@ namespace LearningAssistant.Forms.Pdf
                     }
                 }
 
-                _groupBoxBookmarks?.Dispose();
-                _listBoxBookmarks?.Dispose();
-                _buttonAddBookmark?.Dispose();
-                _buttonRemoveBookmark?.Dispose();
-                _textBoxBookmarkTitle?.Dispose();
                 _groupBoxHighlights?.Dispose();
                 _listBoxHighlights?.Dispose();
                 _buttonRemoveHighlight?.Dispose();
                 _buttonBatchRemoveHighlight?.Dispose();
 
-                _groupBoxBookmarks = null;
-                _listBoxBookmarks = null;
-                _buttonAddBookmark = null;
-                _buttonRemoveBookmark = null;
-                _textBoxBookmarkTitle = null;
                 _groupBoxHighlights = null;
                 _listBoxHighlights = null;
                 _buttonRemoveHighlight = null;
@@ -1037,24 +1011,6 @@ namespace LearningAssistant.Forms.Pdf
             {
                 radio.FlatAppearance.BorderSize = 0;
             }
-        }
-
-        private void ListBoxBookmarks_DoubleClick(object? sender, EventArgs e)
-        {
-            if (_listBoxBookmarks?.SelectedItem is PdfBookmark bookmark)
-            {
-                _bookmarkManager?.NavigateToBookmark(bookmark);
-            }
-        }
-
-        private void ButtonAddBookmark_Click(object? sender, EventArgs e)
-        {
-            _bookmarkManager?.AddBookmark();
-        }
-
-        private void ButtonRemoveBookmark_Click(object? sender, EventArgs e)
-        {
-            _bookmarkManager?.RemoveBookmark();
         }
 
         private void ListBoxHighlights_DoubleClick(object? sender, EventArgs e)
@@ -1201,15 +1157,15 @@ namespace LearningAssistant.Forms.Pdf
 
             var result = dialog.ShowDialog(this);
 
-            if (result.Confirmed)
+            if (result == DialogResult.OK)
             {
                 try
                 {
                     _presenter?.UpdateTextAnnotation(
                         annotation,
-                        result.Text,
-                        result.SelectedColor.ToArgb(),
-                        result.FontSize,
+                        dialog.InitialText,
+                        dialog.SelectedColor.ToArgb(),
+                        dialog.SelectedFontSize,
                         "Microsoft YaHei UI");
 
                     RefreshHighlightList();
@@ -1231,11 +1187,6 @@ namespace LearningAssistant.Forms.Pdf
         private void ButtonBatchRemoveHighlight_Click(object? sender, EventArgs e)
         {
             _highlightManager?.BatchRemoveHighlights();
-        }
-
-        private void RefreshBookmarkList()
-        {
-            _bookmarkManager?.RefreshBookmarkList();
         }
 
         private void RefreshHighlightList()
@@ -1273,9 +1224,6 @@ namespace LearningAssistant.Forms.Pdf
             ClearThumbnails();
             _thumbnailsLoaded = false;
             _currentPdfPath = pdfPath;
-            _bookmarkManager?.ClearCache();
-
-            RefreshBookmarkList();
             RefreshHighlightList();
 
             LoadHighlightsForCurrentPage();
@@ -2656,7 +2604,7 @@ namespace LearningAssistant.Forms.Pdf
             using var dialog = new TextAnnotationDialog("添加文字注解");
             var result = dialog.ShowDialog(this);
 
-            if (result.Confirmed && _currentPageImage != null && !string.IsNullOrEmpty(_currentPdfPath))
+            if (result == DialogResult.OK && _currentPageImage != null && !string.IsNullOrEmpty(_currentPdfPath))
             {
                 try
                 {
@@ -2668,9 +2616,9 @@ namespace LearningAssistant.Forms.Pdf
                     relY = Math.Clamp(relY, 0, 1);
 
                     _presenter?.AddAnnotationText(
-                        relX, relY, result.Text,
-                        result.SelectedColor.ToArgb(),
-                        result.FontSize,
+                        relX, relY, dialog.InitialText,
+                        dialog.SelectedColor.ToArgb(),
+                        dialog.SelectedFontSize,
                         "Microsoft YaHei UI",
                         _currentPageImage.Width, _currentPageImage.Height);
 
@@ -3922,8 +3870,6 @@ namespace LearningAssistant.Forms.Pdf
             _labelOriginal = new Label();
             _buttonTranslate = new Button();
             _tabPageBookmarksAndHighlights = new TabPage();
-            _tabPageAnnotationSummary = new TabPage();
-            _listViewAnnotationSummary = new ListView();
             _groupBoxHighlights = new GroupBox();
             _groupBoxHighlightColor = new GroupBox();
             _radioHighlightYellow = new RadioButton();
@@ -3937,12 +3883,6 @@ namespace LearningAssistant.Forms.Pdf
             _buttonEditHighlight = new Button();
             _buttonBatchRemoveHighlight = new Button();
             _buttonExportHighlights = new Button();
-            _groupBoxBookmarks = new GroupBox();
-            _listBoxBookmarks = new ListBox();
-            _textBoxBookmarkTitle = new TextBox();
-            _buttonPanel = new FlowLayoutPanel();
-            _buttonAddBookmark = new Button();
-            _buttonRemoveBookmark = new Button();
             _buttonPenMode = new Button();
             _toolTip = new ToolTip(components);
             _buttonStrikethroughMode = new Button();
@@ -3980,8 +3920,6 @@ namespace LearningAssistant.Forms.Pdf
             _groupBoxHighlights.SuspendLayout();
             _groupBoxHighlightColor.SuspendLayout();
             _highlightButtonPanel.SuspendLayout();
-            _groupBoxBookmarks.SuspendLayout();
-            _buttonPanel.SuspendLayout();
             SuspendLayout();
             // 
             // _splitContainerMain
@@ -5039,7 +4977,6 @@ namespace LearningAssistant.Forms.Pdf
             _tabControlLeft.Controls.Add(_tabPageThumbnails);
             _tabControlLeft.Controls.Add(_tabPageTranslate);
             _tabControlLeft.Controls.Add(_tabPageBookmarksAndHighlights);
-            _tabControlLeft.Controls.Add(_tabPageAnnotationSummary);
             _tabControlLeft.Dock = DockStyle.Fill;
             _tabControlLeft.Font = new Font("Microsoft YaHei UI", 9F);
             _tabControlLeft.Location = new Point(0, 0);
@@ -5151,11 +5088,11 @@ namespace LearningAssistant.Forms.Pdf
             // 
             _textBoxTranslation.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             _textBoxTranslation.BorderStyle = BorderStyle.FixedSingle;
-            _textBoxTranslation.Location = new Point(10, 320);
+            _textBoxTranslation.Location = new Point(10, 325);
             _textBoxTranslation.Multiline = true;
             _textBoxTranslation.Name = "_textBoxTranslation";
             _textBoxTranslation.ScrollBars = ScrollBars.Vertical;
-            _textBoxTranslation.Size = new Size(294, 386);
+            _textBoxTranslation.Size = new Size(294, 420);
             _textBoxTranslation.TabIndex = 7;
             // 
             // _buttonSpeakTranslation
@@ -5163,7 +5100,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonSpeakTranslation.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             _buttonSpeakTranslation.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonSpeakTranslation.FlatStyle = FlatStyle.Flat;
-            _buttonSpeakTranslation.Location = new Point(10, 716);
+            _buttonSpeakTranslation.Location = new Point(10, 755);
             _buttonSpeakTranslation.Name = "_buttonSpeakTranslation";
             _buttonSpeakTranslation.Size = new Size(75, 28);
             _buttonSpeakTranslation.TabIndex = 6;
@@ -5176,7 +5113,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonAddToLearningContent.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
             _buttonAddToLearningContent.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonAddToLearningContent.FlatStyle = FlatStyle.Flat;
-            _buttonAddToLearningContent.Location = new Point(164, 716);
+            _buttonAddToLearningContent.Location = new Point(164, 755);
             _buttonAddToLearningContent.Name = "_buttonAddToLearningContent";
             _buttonAddToLearningContent.Size = new Size(140, 28);
             _buttonAddToLearningContent.TabIndex = 5;
@@ -5192,7 +5129,7 @@ namespace LearningAssistant.Forms.Pdf
             _textBoxOriginal.Multiline = true;
             _textBoxOriginal.Name = "_textBoxOriginal";
             _textBoxOriginal.ScrollBars = ScrollBars.Vertical;
-            _textBoxOriginal.Size = new Size(294, 179);
+            _textBoxOriginal.Size = new Size(294, 200);
             _textBoxOriginal.TabIndex = 4;
             // 
             // _buttonSpeakOriginal
@@ -5211,7 +5148,7 @@ namespace LearningAssistant.Forms.Pdf
             // _checkBoxAutoTranslate
             // 
             _checkBoxAutoTranslate.AutoSize = true;
-            _checkBoxAutoTranslate.Location = new Point(102, 282);
+            _checkBoxAutoTranslate.Location = new Point(102, 296);
             _checkBoxAutoTranslate.Name = "_checkBoxAutoTranslate";
             _checkBoxAutoTranslate.Size = new Size(107, 21);
             _checkBoxAutoTranslate.TabIndex = 8;
@@ -5241,7 +5178,7 @@ namespace LearningAssistant.Forms.Pdf
             // _labelTranslation
             // 
             _labelTranslation.AutoSize = true;
-            _labelTranslation.Location = new Point(10, 284);
+            _labelTranslation.Location = new Point(10, 298);
             _labelTranslation.Name = "_labelTranslation";
             _labelTranslation.Size = new Size(44, 17);
             _labelTranslation.TabIndex = 2;
@@ -5261,7 +5198,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonTranslate.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             _buttonTranslate.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonTranslate.FlatStyle = FlatStyle.Flat;
-            _buttonTranslate.Location = new Point(229, 277);
+            _buttonTranslate.Location = new Point(229, 291);
             _buttonTranslate.Name = "_buttonTranslate";
             _buttonTranslate.Size = new Size(70, 30);
             _buttonTranslate.TabIndex = 0;
@@ -5272,57 +5209,24 @@ namespace LearningAssistant.Forms.Pdf
             // _tabPageBookmarksAndHighlights
             // 
             _tabPageBookmarksAndHighlights.Controls.Add(_groupBoxHighlights);
-            _tabPageBookmarksAndHighlights.Controls.Add(_groupBoxBookmarks);
             _tabPageBookmarksAndHighlights.Location = new Point(4, 26);
             _tabPageBookmarksAndHighlights.Name = "_tabPageBookmarksAndHighlights";
             _tabPageBookmarksAndHighlights.Padding = new Padding(3);
             _tabPageBookmarksAndHighlights.Size = new Size(322, 870);
             _tabPageBookmarksAndHighlights.TabIndex = 3;
-            _tabPageBookmarksAndHighlights.Text = "📑 书签/高亮";
+            _tabPageBookmarksAndHighlights.Text = "📑 高亮";
             _tabPageBookmarksAndHighlights.UseVisualStyleBackColor = true;
 
             // 
-            // _tabPageAnnotationSummary
-            // 
-            _tabPageAnnotationSummary.Controls.Add(_listViewAnnotationSummary);
-            _tabPageAnnotationSummary.Location = new Point(4, 26);
-            _tabPageAnnotationSummary.Name = "_tabPageAnnotationSummary";
-            _tabPageAnnotationSummary.Padding = new Padding(3);
-            _tabPageAnnotationSummary.Size = new Size(322, 870);
-            _tabPageAnnotationSummary.TabIndex = 4;
-            _tabPageAnnotationSummary.Text = "📝 标注摘要";
-            _tabPageAnnotationSummary.UseVisualStyleBackColor = true;
-
-            // 
-            // _listViewAnnotationSummary
-            // 
-            _listViewAnnotationSummary.Dock = DockStyle.Fill;
-            _listViewAnnotationSummary.Font = new Font("Microsoft YaHei UI", 9F);
-            _listViewAnnotationSummary.FullRowSelect = true;
-            _listViewAnnotationSummary.GridLines = true;
-            _listViewAnnotationSummary.HeaderStyle = ColumnHeaderStyle.Nonclickable;
-            _listViewAnnotationSummary.HideSelection = false;
-            _listViewAnnotationSummary.Location = new Point(3, 3);
-            _listViewAnnotationSummary.Name = "_listViewAnnotationSummary";
-            _listViewAnnotationSummary.Size = new Size(316, 864);
-            _listViewAnnotationSummary.TabIndex = 0;
-            _listViewAnnotationSummary.UseCompatibleStateImageBehavior = false;
-            _listViewAnnotationSummary.View = View.Details;
-            _listViewAnnotationSummary.MultiSelect = false;
-            _listViewAnnotationSummary.Columns.Add("页面", 46, HorizontalAlignment.Left);
-            _listViewAnnotationSummary.Columns.Add("类型", 46, HorizontalAlignment.Left);
-            _listViewAnnotationSummary.Columns.Add("内容", 200, HorizontalAlignment.Left);
-            _listViewAnnotationSummary.DoubleClick += ListViewAnnotationSummary_DoubleClick;
-            // 
             // _groupBoxHighlights
             // 
-            _groupBoxHighlights.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            _groupBoxHighlights.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             _groupBoxHighlights.Controls.Add(_groupBoxHighlightColor);
             _groupBoxHighlights.Controls.Add(_listBoxHighlights);
             _groupBoxHighlights.Controls.Add(_highlightButtonPanel);
             _groupBoxHighlights.Location = new Point(4, 5);
             _groupBoxHighlights.Name = "_groupBoxHighlights";
-            _groupBoxHighlights.Size = new Size(315, 380);
+            _groupBoxHighlights.Size = new Size(315, 478);
             _groupBoxHighlights.TabIndex = 0;
             _groupBoxHighlights.TabStop = false;
             _groupBoxHighlights.Text = "高亮";
@@ -5421,11 +5325,12 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // _listBoxHighlights
             // 
+            _listBoxHighlights.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             _listBoxHighlights.BorderStyle = BorderStyle.FixedSingle;
             _listBoxHighlights.FormattingEnabled = true;
             _listBoxHighlights.Location = new Point(10, 85);
             _listBoxHighlights.Name = "_listBoxHighlights";
-            _listBoxHighlights.Size = new Size(298, 223);
+            _listBoxHighlights.Size = new Size(298, 310);
             _listBoxHighlights.TabIndex = 1;
             _listBoxHighlights.DoubleClick += ListBoxHighlights_DoubleClick;
             // 
@@ -5435,7 +5340,8 @@ namespace LearningAssistant.Forms.Pdf
             _highlightButtonPanel.Controls.Add(_buttonEditHighlight);
             _highlightButtonPanel.Controls.Add(_buttonBatchRemoveHighlight);
             _highlightButtonPanel.Controls.Add(_buttonExportHighlights);
-            _highlightButtonPanel.Location = new Point(6, 315);
+            _highlightButtonPanel.Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            _highlightButtonPanel.Location = new Point(6, 400);
             _highlightButtonPanel.Name = "_highlightButtonPanel";
             _highlightButtonPanel.Size = new Size(302, 50);
             _highlightButtonPanel.TabIndex = 2;
@@ -5487,70 +5393,6 @@ namespace LearningAssistant.Forms.Pdf
             _buttonExportHighlights.Text = "导出";
             _buttonExportHighlights.UseVisualStyleBackColor = false;
             _buttonExportHighlights.Click += ButtonExportHighlights_Click;
-            // 
-            // _groupBoxBookmarks
-            // 
-            _groupBoxBookmarks.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            _groupBoxBookmarks.Controls.Add(_listBoxBookmarks);
-            _groupBoxBookmarks.Controls.Add(_textBoxBookmarkTitle);
-            _groupBoxBookmarks.Controls.Add(_buttonPanel);
-            _groupBoxBookmarks.Location = new Point(4, 388);
-            _groupBoxBookmarks.Name = "_groupBoxBookmarks";
-            _groupBoxBookmarks.Size = new Size(315, 328);
-            _groupBoxBookmarks.TabIndex = 1;
-            _groupBoxBookmarks.TabStop = false;
-            _groupBoxBookmarks.Text = "书签";
-            // 
-            // _listBoxBookmarks
-            // 
-            _listBoxBookmarks.BorderStyle = BorderStyle.FixedSingle;
-            _listBoxBookmarks.FormattingEnabled = true;
-            _listBoxBookmarks.Location = new Point(10, 50);
-            _listBoxBookmarks.Name = "_listBoxBookmarks";
-            _listBoxBookmarks.Size = new Size(298, 274);
-            _listBoxBookmarks.TabIndex = 0;
-            _listBoxBookmarks.DoubleClick += ListBoxBookmarks_DoubleClick;
-            // 
-            // _textBoxBookmarkTitle
-            // 
-            _textBoxBookmarkTitle.BorderStyle = BorderStyle.FixedSingle;
-            _textBoxBookmarkTitle.Location = new Point(10, 20);
-            _textBoxBookmarkTitle.Name = "_textBoxBookmarkTitle";
-            _textBoxBookmarkTitle.Size = new Size(200, 23);
-            _textBoxBookmarkTitle.TabIndex = 1;
-            // 
-            // _buttonPanel
-            // 
-            _buttonPanel.Controls.Add(_buttonAddBookmark);
-            _buttonPanel.Controls.Add(_buttonRemoveBookmark);
-            _buttonPanel.Location = new Point(216, 16);
-            _buttonPanel.Name = "_buttonPanel";
-            _buttonPanel.Size = new Size(92, 30);
-            _buttonPanel.TabIndex = 2;
-            // 
-            // _buttonAddBookmark
-            // 
-            _buttonAddBookmark.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
-            _buttonAddBookmark.FlatStyle = FlatStyle.Flat;
-            _buttonAddBookmark.Location = new Point(3, 3);
-            _buttonAddBookmark.Name = "_buttonAddBookmark";
-            _buttonAddBookmark.Size = new Size(40, 28);
-            _buttonAddBookmark.TabIndex = 1;
-            _buttonAddBookmark.Text = "添加";
-            _buttonAddBookmark.UseVisualStyleBackColor = false;
-            _buttonAddBookmark.Click += ButtonAddBookmark_Click;
-            // 
-            // _buttonRemoveBookmark
-            // 
-            _buttonRemoveBookmark.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
-            _buttonRemoveBookmark.FlatStyle = FlatStyle.Flat;
-            _buttonRemoveBookmark.Location = new Point(49, 3);
-            _buttonRemoveBookmark.Name = "_buttonRemoveBookmark";
-            _buttonRemoveBookmark.Size = new Size(40, 28);
-            _buttonRemoveBookmark.TabIndex = 0;
-            _buttonRemoveBookmark.Text = "删除";
-            _buttonRemoveBookmark.UseVisualStyleBackColor = false;
-            _buttonRemoveBookmark.Click += ButtonRemoveBookmark_Click;
             // 
             // _buttonPenMode
             // 
@@ -5642,10 +5484,6 @@ namespace LearningAssistant.Forms.Pdf
             _groupBoxHighlights.ResumeLayout(false);
             _groupBoxHighlightColor.ResumeLayout(false);
             _highlightButtonPanel.ResumeLayout(false);
-            _groupBoxBookmarks.ResumeLayout(false);
-            _groupBoxBookmarks.PerformLayout();
-            _buttonPanel.ResumeLayout(false);
-            _tabPageAnnotationSummary.ResumeLayout(false);
             ResumeLayout(false);
             PerformLayout();
         }
@@ -5674,7 +5512,6 @@ namespace LearningAssistant.Forms.Pdf
                 // 释放Manager资源
                 _nightModeManager?.Dispose();
                 _highlightManager?.Dispose();
-                _bookmarkManager?.Dispose();
                 _navigationManager?.Dispose();
 
                 // 释放Timer资源
@@ -5862,89 +5699,6 @@ namespace LearningAssistant.Forms.Pdf
                     _thumbnailsLoaded = true;
                     _presenter.GenerateThumbnails();
                 }
-            }
-            else if (_tabControlLeft.SelectedTab == _tabPageAnnotationSummary)
-            {
-                PopulateAnnotationSummary();
-            }
-        }
-
-        private void ListViewAnnotationSummary_DoubleClick(object? sender, EventArgs e)
-        {
-            if (_listViewAnnotationSummary.SelectedItems.Count == 0) return;
-
-            var item = _listViewAnnotationSummary.SelectedItems[0];
-            if (item.Tag is int pageIndex && pageIndex >= 0 && pageIndex < (_presenter?.PageCount ?? 0))
-            {
-                _presenter?.RenderPage(pageIndex);
-            }
-        }
-
-        private void PopulateAnnotationSummary()
-        {
-            try
-            {
-                _listViewAnnotationSummary.Items.Clear();
-
-                if (_presenter == null || string.IsNullOrEmpty(_currentPdfPath))
-                    return;
-
-                int pageCount = _presenter.PageCount;
-                int totalAnnotations = 0;
-
-                for (int pageIndex = 0; pageIndex < pageCount; pageIndex++)
-                {
-                    // 获取笔划
-                    var strokes = _presenter.GetCurrentPageStrokesForPage(pageIndex);
-                    foreach (var stroke in strokes)
-                    {
-                        var typeText = stroke.ShapeType switch
-                        {
-                            "Rectangle" => "矩形",
-                            "Ellipse" => "椭圆",
-                            "Arrow" => "箭头",
-                            "Mosaic" => "马赛克",
-                            "Pen" => "画笔",
-                            _ => stroke.ShapeType ?? "未知"
-                        };
-                        var item = new ListViewItem(new[] { $"第{pageIndex + 1}页", typeText, "" });
-                        item.Tag = pageIndex;
-                        _listViewAnnotationSummary.Items.Add(item);
-                        totalAnnotations++;
-                    }
-
-                    // 获取高亮
-                    var highlights = _highlightService?.GetHighlightsForPage(_currentPdfPath, pageIndex);
-                    if (highlights != null)
-                    {
-                        foreach (var hl in highlights)
-                        {
-                            var text = string.IsNullOrEmpty(hl.Text) ? "" : hl.Text;
-                            var colorName = hl.Color switch
-                            {
-                                HighlightColor.Yellow => "黄",
-                                HighlightColor.Green => "绿",
-                                HighlightColor.Blue => "蓝",
-                                HighlightColor.Pink => "粉",
-                                HighlightColor.Orange => "橙",
-                                HighlightColor.Red => "红",
-                                _ => "黄"
-                            };
-                            var item = new ListViewItem(new[] { $"第{pageIndex + 1}页", $"高亮({colorName})", text });
-                            item.Tag = pageIndex;
-                            _listViewAnnotationSummary.Items.Add(item);
-                            totalAnnotations++;
-                        }
-                    }
-                }
-
-                _tabPageAnnotationSummary.Text = totalAnnotations > 0
-                    ? $"📝 标注({totalAnnotations})"
-                    : "📝 标注摘要";
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "填充标注摘要失败");
             }
         }
     }

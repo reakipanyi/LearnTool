@@ -616,6 +616,24 @@ namespace LearningAssistant.Common
                 var logger = sp.GetRequiredService<ILogger<WhackAMoleGameForm>>();
                 return new WhackAMoleGameForm(gameService, contentLoaderService, userSessionService, themeService, settingsService, logger);
             });
+            services.AddScoped<SchulteGameForm>(sp =>
+            {
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var userSessionService = sp.GetRequiredService<IUserSessionService>();
+                var themeService = sp.GetRequiredService<IThemeService>();
+                var settingsService = sp.GetRequiredService<IUserSettingsService>();
+                var logger = sp.GetRequiredService<ILogger<SchulteGameForm>>();
+                return new SchulteGameForm(contentLoaderService, userSessionService, themeService, settingsService, logger);
+            });
+            services.AddScoped<SudokuGameForm>(sp =>
+            {
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var userSessionService = sp.GetRequiredService<IUserSessionService>();
+                var themeService = sp.GetRequiredService<IThemeService>();
+                var settingsService = sp.GetRequiredService<IUserSettingsService>();
+                var logger = sp.GetRequiredService<ILogger<SudokuGameForm>>();
+                return new SudokuGameForm(contentLoaderService, userSessionService, themeService, settingsService, logger);
+            });
             services.AddScoped<LearningManagementForm>(sp =>
             {
                 var analyticsService = sp.GetRequiredService<ILearningAnalyticsService>();
@@ -671,6 +689,7 @@ namespace LearningAssistant.Common
         {
             services.AddSingleton<IAppPaths, WinFormsAppPaths>();
             services.AddSingleton<IAudioPlayer, WinFormsAudioPlayer>();
+            services.AddSingleton<IAudioRecorderService, NAudioRecorderService>();
             services.AddSingleton<IDialogService, WinFormsDialogService>();
             services.AddSingleton<IUiThreadInvoker, WinFormsUiThreadInvoker>();
             services.AddSingleton<IResourceLoader, WinFormsResourceLoader>();

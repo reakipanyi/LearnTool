@@ -1,10 +1,9 @@
 using System.ComponentModel;
+using System.Drawing.Drawing2D;
+using System.Drawing.Text;
 
 namespace LearningAssistant.Forms.UserControls.Common
 {
-    /// <summary>
-    /// 文本注解对话框结果
-    /// </summary>
     public class TextAnnotationDialogResult
     {
         public string Text { get; set; } = string.Empty;
@@ -14,47 +13,65 @@ namespace LearningAssistant.Forms.UserControls.Common
         public bool Confirmed { get; set; }
     }
 
-    /// <summary>
-    /// 文本注解对话框 - 用于创建和编辑PDF文本注解
-    /// </summary>
     public partial class TextAnnotationDialog : Form
     {
-        #region 控件字段统一声明
         private TextBox _textBox;
-        private ComboBox _colorCombo;
-        private ComboBox _sizeCombo;
-        private ComboBox _fontCombo;
         private Label _labelWordCount;
+        private Panel _colorPanel;
+        private ComboBox _fontCombo;
+        private Panel _sizePanel;
+        private TrackBar _sizeSlider;
+        private Label _sizeValueLabel;
+        private Panel _previewPanel;
+        private Label _previewLabel;
         private Button _okButton;
         private Button _cancelButton;
         private Label _labelContent;
-        private Label _labelColor;
-        private Label _labelSize;
-        private Label _labelFont;
-        #endregion
 
-        /// <summary>
-        /// 预设的颜色选项
-        /// </summary>
-        public static readonly Color[] AvailableColors =
+        private Color _selectedColor = Color.Red;
+        private float _selectedFontSize = 16f;
+        private string _selectedFontFamily = "Microsoft YaHei UI";
+
+        private static readonly (Color Color, string Name)[] AvailableColors =
         {
-            Color.RoyalBlue, Color.LimeGreen, Color.Orange, Color.Red, Color.Black, Color.White
+            (Color.FromArgb(244, 67, 54),  "红色"),
+            (Color.FromArgb(255, 87, 34), "橙色"),
+            (Color.FromArgb(255, 152, 0), "琥珀"),
+            (Color.FromArgb(255, 193, 7), "黄色"),
+            (Color.FromArgb(255, 235, 59), "亮黄"),
+            (Color.FromArgb(139, 195, 74), "浅绿"),
+            (Color.FromArgb(76, 175, 80),  "绿色"),
+            (Color.FromArgb(0, 150, 136),  "青色"),
+            (Color.FromArgb(0, 172, 193),  "青蓝"),
+            (Color.FromArgb(33, 150, 243), "蓝色"),
+            (Color.FromArgb(63, 81, 181),  "靛蓝"),
+            (Color.FromArgb(156, 39, 176), "紫色"),
+            (Color.FromArgb(233, 30, 99),  "玫红"),
+            (Color.FromArgb(121, 85, 72),  "棕色"),
+            (Color.FromArgb(96, 96, 96),   "灰色"),
+            (Color.Black,                  "黑色"),
+            (Color.White,                  "白色"),
+            (Color.FromArgb(240, 240, 240),"浅灰"),
         };
 
-        /// <summary>
-        /// 预设的字号选项
-        /// </summary>
-        public static readonly (string Display, float Size)[] AvailableSizes =
+        private static readonly (float Size, string Label)[] AvailableSizes =
         {
-            ("小 (12)", 12f),
-            ("中 (16)", 16f),
-            ("大 (20)", 20f),
-            ("特大 (28)", 28f)
+            (12f, "12"), (14f, "14"), (16f, "16"), (18f, "18"),
+            (20f, "20"), (24f, "24"), (28f, "28"), (36f, "36"), (48f, "48")
         };
 
-        /// <summary>
-        /// 初始文本内容
-        /// </summary>
+        private static readonly string[] CommonFonts =
+        {
+            "Microsoft YaHei UI", "SimSun", "SimHei", "KaiTi",
+            "Arial", "Times New Roman", "Consolas", "Segoe UI"
+        };
+
+        private static Color _panelBg = Color.FromArgb(245, 245, 250);
+        private static Color _sectionBg = Color.White;
+        private static Color _accentColor = Color.FromArgb(25, 118, 210);
+        private static Color _textPrimary = Color.FromArgb(50, 50, 60);
+        private static Color _textSecondary = Color.FromArgb(140, 140, 150);
+
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string InitialText
         {
@@ -62,72 +79,25 @@ namespace LearningAssistant.Forms.UserControls.Common
             set => _textBox.Text = value;
         }
 
-        /// <summary>
-        /// 选中的颜色
-        /// </summary>
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Color SelectedColor
         {
-            get
-            {
-                var index = _colorCombo.SelectedIndex;
-                return index >= 0 && index < AvailableColors.Length
-                    ? AvailableColors[index]
-                    : Color.Red;
-            }
-            set
-            {
-                var index = Array.IndexOf(AvailableColors, value);
-                _colorCombo.SelectedIndex = index >= 0 ? index : 3;
-            }
+            get => _selectedColor;
+            set => _selectedColor = value;
         }
 
-        /// <summary>
-        /// 选中的字号
-        /// </summary>
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public float SelectedFontSize
         {
-            get
-            {
-                var index = _sizeCombo.SelectedIndex;
-                return index >= 0 && index < AvailableSizes.Length
-                    ? AvailableSizes[index].Size
-                    : 16f;
-            }
-            set
-            {
-                for (int i = 0; i < AvailableSizes.Length; i++)
-                {
-                    if (Math.Abs(AvailableSizes[i].Size - value) < 1)
-                    {
-                        _sizeCombo.SelectedIndex = i;
-                        return;
-                    }
-                }
-                _sizeCombo.SelectedIndex = 1;
-            }
+            get => _selectedFontSize;
+            set => _selectedFontSize = value;
         }
 
-        /// <summary>
-        /// 选中的字体
-        /// </summary>
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public string SelectedFontFamily
         {
-            get => _fontCombo.SelectedItem?.ToString() ?? "Microsoft YaHei UI";
-            set
-            {
-                for (int i = 0; i < _fontCombo.Items.Count; i++)
-                {
-                    if (string.Equals(_fontCombo.Items[i].ToString(), value, StringComparison.OrdinalIgnoreCase))
-                    {
-                        _fontCombo.SelectedIndex = i;
-                        return;
-                    }
-                }
-                _fontCombo.SelectedIndex = 0;
-            }
+            get => _selectedFontFamily;
+            set => _selectedFontFamily = value;
         }
 
         private IContainer components = null;
@@ -135,20 +105,10 @@ namespace LearningAssistant.Forms.UserControls.Common
         protected override void Dispose(bool disposing)
         {
             if (disposing && components != null)
-            {
                 components.Dispose();
-            }
             base.Dispose(disposing);
         }
 
-        /// <summary>
-        /// 构造函数
-        /// </summary>
-        /// <param name="title">对话框标题</param>
-        /// <param name="initialText">初始文本（用于编辑模式）</param>
-        /// <param name="initialColor">初始颜色</param>
-        /// <param name="initialFontSize">初始字号</param>
-        /// <param name="initialFontFamily">初始字体</param>
         public TextAnnotationDialog(
             string title = "文字注解",
             string initialText = "",
@@ -156,180 +116,560 @@ namespace LearningAssistant.Forms.UserControls.Common
             float initialFontSize = 16f,
             string? initialFontFamily = null)
         {
+            _selectedColor = initialColor ?? Color.Red;
+            _selectedFontSize = initialFontSize;
+            if (!string.IsNullOrEmpty(initialFontFamily))
+                _selectedFontFamily = initialFontFamily;
+
             InitializeComponent(title);
             InitialText = initialText;
-            SelectedColor = initialColor ?? Color.Red;
-            SelectedFontSize = initialFontSize;
-            if (!string.IsNullOrEmpty(initialFontFamily))
-                SelectedFontFamily = initialFontFamily;
+            InitializeColorPanel();
+            InitializeFontCombo();
+            InitializeSizePanel();
+            UpdatePreview();
         }
 
-        #region Windows Form Designer generated code
         private void InitializeComponent(string formTitle)
         {
-            this._labelContent = new Label();
-            this._textBox = new TextBox();
-            this._labelWordCount = new Label();
-            this._labelColor = new Label();
-            this._colorCombo = new ComboBox();
-            this._labelFont = new Label();
-            this._fontCombo = new ComboBox();
-            this._labelSize = new Label();
-            this._sizeCombo = new ComboBox();
-            this._okButton = new Button();
-            this._cancelButton = new Button();
-            this.SuspendLayout();
-
-            // 
-            // _labelContent
-            // 
-            this._labelContent.Text = "请输入文字内容：";
-            this._labelContent.Location = new Point(20, 15);
-            this._labelContent.Size = new Size(150, 20);
-            this._labelContent.Name = "_labelContent";
-            this._labelContent.TabIndex = 0;
-
-            // 
-            // _textBox
-            // 
-            this._textBox.Location = new Point(20, 40);
-            this._textBox.Size = new Size(360, 80);
-            this._textBox.Multiline = true;
-            this._textBox.ScrollBars = ScrollBars.Vertical;
-            this._textBox.Name = "_textBox";
-            this._textBox.TabIndex = 1;
-            this._textBox.TextChanged += TextBox_TextChanged;
-
-            // 
-            // _labelWordCount
-            // 
-            this._labelWordCount.Text = "字数: 0";
-            this._labelWordCount.Location = new Point(20, 125);
-            this._labelWordCount.Size = new Size(150, 20);
-            this._labelWordCount.Name = "_labelWordCount";
-            this._labelWordCount.ForeColor = Color.Gray;
-            this._labelWordCount.TabIndex = 8;
-
-            // 
-            // _labelColor
-            // 
-            this._labelColor.Text = "颜色：";
-            this._labelColor.Location = new Point(20, 155);
-            this._labelColor.Size = new Size(40, 20);
-            this._labelColor.Name = "_labelColor";
-            this._labelColor.TabIndex = 2;
-
-            // 
-            // _colorCombo
-            // 
-            this._colorCombo.DropDownStyle = ComboBoxStyle.DropDownList;
-            this._colorCombo.Location = new Point(60, 152);
-            this._colorCombo.Size = new Size(80, 25);
-            this._colorCombo.Items.AddRange(new object[] { "蓝色", "绿色", "橙色", "红色", "黑色", "白色" });
-            this._colorCombo.SelectedIndex = 3;
-            this._colorCombo.Name = "_colorCombo";
-            this._colorCombo.TabIndex = 3;
-
-            // 
-            // _labelFont
-            // 
-            this._labelFont.Text = "字体：";
-            this._labelFont.Location = new Point(150, 155);
-            this._labelFont.Size = new Size(40, 20);
-            this._labelFont.Name = "_labelFont";
-            this._labelFont.TabIndex = 6;
-
-            // 
-            // _fontCombo
-            // 
-            this._fontCombo.DropDownStyle = ComboBoxStyle.DropDownList;
-            this._fontCombo.Location = new Point(190, 152);
-            this._fontCombo.Size = new Size(190, 25);
-            this._fontCombo.Name = "_fontCombo";
-            this._fontCombo.TabIndex = 7;
-            this._fontCombo.Items.AddRange(GetSystemFonts());
-            this._fontCombo.SelectedIndex = 0;
-
-            // 
-            // _labelSize
-            // 
-            this._labelSize.Text = "字号：";
-            this._labelSize.Location = new Point(20, 190);
-            this._labelSize.Size = new Size(40, 20);
-            this._labelSize.Name = "_labelSize";
-            this._labelSize.TabIndex = 4;
-
-            // 
-            // _sizeCombo
-            // 
-            this._sizeCombo.DropDownStyle = ComboBoxStyle.DropDownList;
-            this._sizeCombo.Location = new Point(60, 187);
-            this._sizeCombo.Size = new Size(100, 25);
-            this._sizeCombo.Items.AddRange(AvailableSizes.Select(s => s.Display).ToArray());
-            this._sizeCombo.SelectedIndex = 1;
-            this._sizeCombo.Name = "_sizeCombo";
-            this._sizeCombo.TabIndex = 5;
-
-            // 
-            // _okButton
-            // 
-            this._okButton.Text = "确定";
-            this._okButton.Location = new Point(240, 230);
-            this._okButton.Size = new Size(70, 30);
-            this._okButton.DialogResult = DialogResult.OK;
-            this._okButton.Name = "_okButton";
-            this._okButton.TabIndex = 6;
-
-            // 
-            // _cancelButton
-            // 
-            this._cancelButton.Text = "取消";
-            this._cancelButton.Location = new Point(320, 230);
-            this._cancelButton.Size = new Size(70, 30);
-            this._cancelButton.DialogResult = DialogResult.Cancel;
-            this._cancelButton.Name = "_cancelButton";
-            this._cancelButton.TabIndex = 7;
-
-            // 
-            // TextAnnotationDialog
-            // 
             this.Text = formTitle;
-            this.Size = new Size(420, 310);
+            this.Size = new Size(520, 620);
+            this.MinimumSize = new Size(520, 620);
             this.StartPosition = FormStartPosition.CenterParent;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.ShowInTaskbar = false;
-            this.AcceptButton = this._okButton;
-            this.CancelButton = this._cancelButton;
-            this.Controls.Add(this._cancelButton);
-            this.Controls.Add(this._okButton);
-            this.Controls.Add(this._sizeCombo);
-            this.Controls.Add(this._labelSize);
-            this.Controls.Add(this._fontCombo);
-            this.Controls.Add(this._labelFont);
-            this.Controls.Add(this._colorCombo);
-            this.Controls.Add(this._labelColor);
-            this.Controls.Add(this._labelWordCount);
-            this.Controls.Add(this._textBox);
-            this.Controls.Add(this._labelContent);
-            this.Name = "TextAnnotationDialog";
+            this.BackColor = _panelBg;
+            this.Padding = new Padding(0);
 
+            _labelContent = new Label();
+            _textBox = new TextBox();
+            _labelWordCount = new Label();
+            _colorPanel = new Panel();
+            _fontCombo = new ComboBox();
+            _sizePanel = new Panel();
+            _sizeSlider = new TrackBar();
+            _sizeValueLabel = new Label();
+            _previewPanel = new Panel();
+            _previewLabel = new Label();
+            _okButton = new Button();
+            _cancelButton = new Button();
+
+            int margin = 24;
+            int width = 472;
+
+            // 
+            // _labelContent
+            // 
+            _labelContent.Text = "✏ 文字内容";
+            _labelContent.Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold);
+            _labelContent.ForeColor = _textPrimary;
+            _labelContent.Location = new Point(margin, 18);
+            _labelContent.Size = new Size(120, 22);
+
+            // 
+            // _textBox
+            // 
+            _textBox.Location = new Point(margin, 46);
+            _textBox.Size = new Size(width, 70);
+            _textBox.Multiline = true;
+            _textBox.ScrollBars = ScrollBars.Vertical;
+            _textBox.BorderStyle = BorderStyle.FixedSingle;
+            _textBox.Font = new Font("Microsoft YaHei UI", 10F);
+            _textBox.TextChanged += TextBox_TextChanged;
+
+            // 
+            // _labelWordCount
+            // 
+            _labelWordCount.Text = "字数: 0";
+            _labelWordCount.ForeColor = _textSecondary;
+            _labelWordCount.Font = new Font("Microsoft YaHei UI", 9F);
+            _labelWordCount.Location = new Point(margin, 120);
+            _labelWordCount.Size = new Size(100, 18);
+
+            // 
+            // _colorPanel
+            // 
+            _colorPanel.Location = new Point(margin, 148);
+            _colorPanel.Size = new Size(width, 80);
+            _colorPanel.BackColor = _sectionBg;
+            _colorPanel.Paint += ColorPanel_Paint;
+
+            // 
+            // _fontCombo
+            // 
+            _fontCombo.Location = new Point(margin, 248);
+            _fontCombo.Size = new Size(width, 28);
+            _fontCombo.DropDownStyle = ComboBoxStyle.DropDownList;
+            _fontCombo.DrawMode = DrawMode.OwnerDrawVariable;
+            _fontCombo.ItemHeight = 28;
+            _fontCombo.DropDownHeight = 280;
+            _fontCombo.MaxDropDownItems = 10;
+            _fontCombo.DrawItem += FontCombo_DrawItem;
+            _fontCombo.MeasureItem += FontCombo_MeasureItem;
+            _fontCombo.SelectedIndexChanged += FontCombo_SelectedIndexChanged;
+
+            // 
+            // _sizeSlider
+            // 
+            _sizeSlider.Location = new Point(margin + 4, 293);
+            _sizeSlider.Size = new Size(width - 80, 30);
+            _sizeSlider.Minimum = 8;
+            _sizeSlider.Maximum = 72;
+            _sizeSlider.TickFrequency = 8;
+            _sizeSlider.SmallChange = 2;
+            _sizeSlider.LargeChange = 8;
+            _sizeSlider.TickStyle = TickStyle.None;
+            _sizeSlider.Value = (int)_selectedFontSize;
+            _sizeSlider.ValueChanged += SizeSlider_ValueChanged;
+
+            _sizeValueLabel.Text = _selectedFontSize.ToString("0");
+            _sizeValueLabel.Font = new Font("Microsoft YaHei UI", 12F, FontStyle.Bold);
+            _sizeValueLabel.ForeColor = _accentColor;
+            _sizeValueLabel.Location = new Point(margin + width - 58, 292);
+            _sizeValueLabel.Size = new Size(50, 28);
+            _sizeValueLabel.TextAlign = ContentAlignment.MiddleRight;
+
+            // 
+            // _sizePanel
+            // 
+            _sizePanel.Location = new Point(margin, 328);
+            _sizePanel.Size = new Size(width, 48);
+            _sizePanel.BackColor = Color.Transparent;
+
+            // 
+            // _previewPanel
+            // 
+            _previewPanel.Location = new Point(margin, 390);
+            _previewPanel.Size = new Size(width, 100);
+            _previewPanel.BackColor = _sectionBg;
+            _previewPanel.Paint += PreviewPanel_Paint;
+            _previewPanel.Padding = new Padding(16, 8, 16, 8);
+
+            _previewLabel = new Label
+            {
+                AutoSize = false,
+                Location = new Point(16, 8),
+                Size = new Size(width - 32, 84),
+                TextAlign = ContentAlignment.MiddleCenter,
+                ForeColor = _selectedColor,
+                BackColor = Color.Transparent,
+                Font = new Font(_selectedFontFamily, Math.Min(_selectedFontSize, 36f))
+            };
+            _previewPanel.Controls.Add(_previewLabel);
+
+            // 
+            // _okButton
+            // 
+            _okButton.Text = "确定";
+            _okButton.Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold);
+            _okButton.ForeColor = Color.White;
+            _okButton.BackColor = _accentColor;
+            _okButton.FlatStyle = FlatStyle.Flat;
+            _okButton.FlatAppearance.BorderSize = 0;
+            _okButton.Location = new Point(margin + width - 180, 510);
+            _okButton.Size = new Size(80, 38);
+            _okButton.Cursor = Cursors.Hand;
+            _okButton.DialogResult = DialogResult.OK;
+            _okButton.Paint += (s, e) =>
+            {
+                var btn = (Button)s!;
+                var r = new Rectangle(0, 0, btn.Width, btn.Height);
+                using var path = new GraphicsPath();
+                path.AddArc(r.X, r.Y, 6, 6, 180, 90);
+                path.AddArc(r.Right - 6, r.Y, 6, 6, 270, 90);
+                path.AddArc(r.Right - 6, r.Bottom - 6, 6, 6, 0, 90);
+                path.AddArc(r.X, r.Bottom - 6, 6, 6, 90, 90);
+                path.CloseFigure();
+                btn.Region = new Region(path);
+            };
+            _okButton.Click += (s, e) => { _textBox.Text = _textBox.Text.Trim(); };
+
+            // 
+            // _cancelButton
+            // 
+            _cancelButton.Text = "取消";
+            _cancelButton.Font = new Font("Microsoft YaHei UI", 10F);
+            _cancelButton.ForeColor = _textPrimary;
+            _cancelButton.BackColor = Color.FromArgb(230, 230, 235);
+            _cancelButton.FlatStyle = FlatStyle.Flat;
+            _cancelButton.FlatAppearance.BorderSize = 0;
+            _cancelButton.Location = new Point(margin + width - 88, 510);
+            _cancelButton.Size = new Size(80, 38);
+            _cancelButton.Cursor = Cursors.Hand;
+            _cancelButton.DialogResult = DialogResult.Cancel;
+            _cancelButton.Paint += (s, e) =>
+            {
+                var btn = (Button)s!;
+                var r = new Rectangle(0, 0, btn.Width, btn.Height);
+                using var path = new GraphicsPath();
+                path.AddArc(r.X, r.Y, 6, 6, 180, 90);
+                path.AddArc(r.Right - 6, r.Y, 6, 6, 270, 90);
+                path.AddArc(r.Right - 6, r.Bottom - 6, 6, 6, 0, 90);
+                path.AddArc(r.X, r.Bottom - 6, 6, 6, 90, 90);
+                path.CloseFigure();
+                btn.Region = new Region(path);
+            };
+
+            // 
+            // TextAnnotationDialog
+            // 
+            this.SuspendLayout();
+            var headerPanel = new Panel
+            {
+                Size = new Size(520, 2),
+                Location = new Point(0, 0),
+                BackColor = _accentColor
+            };
+            this.Controls.Add(headerPanel);
+            this.Controls.AddRange(new Control[]
+            {
+                _labelContent, _textBox, _labelWordCount,
+                _colorPanel, _fontCombo,
+                _sizeSlider, _sizeValueLabel, _sizePanel,
+                _previewPanel, _okButton, _cancelButton
+            });
             this.ResumeLayout(false);
             this.PerformLayout();
-        }
-        #endregion
 
-        /// <summary>
-        /// 获取系统字体列表
-        /// </summary>
+            this.AcceptButton = _okButton;
+            this.CancelButton = _cancelButton;
+        }
+
+        private void ColorPanel_Paint(object? sender, PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            using var bgBrush = new SolidBrush(_sectionBg);
+            g.FillRectangle(bgBrush, _colorPanel.ClientRectangle);
+
+            using var titleFont = new Font("Microsoft YaHei UI", 8F, FontStyle.Bold);
+            using var titleBrush = new SolidBrush(_textSecondary);
+            g.DrawString("颜色", titleFont, titleBrush, 2, 4);
+        }
+
+        private void InitializeColorPanel()
+        {
+            int startX = 6;
+            int startY = 22;
+            int circleSize = 28;
+            int spacing = 10;
+            int cols = 9;
+
+            var colorWithNames = new[]
+            {
+                (Color.FromArgb(244, 67, 54),  "红色"),
+                (Color.FromArgb(255, 87, 34), "橙色"),
+                (Color.FromArgb(255, 152, 0), "琥珀"),
+                (Color.FromArgb(255, 193, 7), "黄色"),
+                (Color.FromArgb(255, 235, 59), "亮黄"),
+                (Color.FromArgb(139, 195, 74), "浅绿"),
+                (Color.FromArgb(76, 175, 80),  "绿色"),
+                (Color.FromArgb(0, 150, 136),  "青色"),
+                (Color.FromArgb(0, 172, 193),  "青蓝"),
+                (Color.FromArgb(33, 150, 243), "蓝色"),
+                (Color.FromArgb(63, 81, 181),  "靛蓝"),
+                (Color.FromArgb(156, 39, 176), "紫色"),
+                (Color.FromArgb(233, 30, 99),  "玫红"),
+                (Color.FromArgb(121, 85, 72),  "棕色"),
+                (Color.FromArgb(96, 96, 96),   "灰色"),
+                (Color.Black,                  "黑色"),
+                (Color.White,                  "白色"),
+                (Color.FromArgb(240, 240, 240),"浅灰"),
+            };
+
+            for (int i = 0; i < colorWithNames.Length; i++)
+            {
+                var (color, name) = colorWithNames[i];
+                var col = i % cols;
+                var row = i / cols;
+                var x = startX + col * (circleSize + spacing);
+                var y = startY + row * (circleSize + spacing + 4);
+
+                var btn = new Button
+                {
+                    Size = new Size(circleSize, circleSize),
+                    Location = new Point(x, y),
+                    FlatStyle = FlatStyle.Flat,
+                    FlatAppearance = { BorderSize = 0 },
+                    BackColor = color,
+                    Cursor = Cursors.Hand,
+                    Tag = color,
+                    TabStop = false
+                };
+
+                Color borderColor = (color == Color.White || color == Color.FromArgb(240, 240, 240))
+                    ? Color.FromArgb(200, 200, 200)
+                    : Color.FromArgb(60, 60, 60);
+
+                var capturedName = name;
+                var capturedColor = color;
+                var capturedBorder = borderColor;
+
+                btn.Paint += (s, e) =>
+                {
+                    var g = e.Graphics;
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    var isSelected = capturedColor.ToArgb() == _selectedColor.ToArgb();
+
+                    var rect = new Rectangle(2, 2, circleSize - 4, circleSize - 4);
+                    g.FillEllipse(new SolidBrush(capturedColor), rect);
+
+                    if (capturedColor == Color.White || capturedColor == Color.FromArgb(240, 240, 240))
+                        g.DrawEllipse(new Pen(Color.FromArgb(200, 200, 200), 1), rect);
+                    else
+                        g.DrawEllipse(new Pen(Color.FromArgb(60, 60, 60, 60), 1), rect);
+
+                    if (isSelected)
+                    {
+                        using var selPen = new Pen(_accentColor, 3f);
+                        g.DrawEllipse(selPen, new Rectangle(0, 0, circleSize - 1, circleSize - 1));
+
+                        using var checkBrush = new SolidBrush(
+                            capturedColor.GetBrightness() > 0.6 ? _accentColor : Color.White);
+                        using var checkFont = new Font("Segoe UI", 11F, FontStyle.Bold);
+                        var textSize = g.MeasureString("✓", checkFont);
+                        g.DrawString("✓", checkFont, checkBrush,
+                            (circleSize - textSize.Width) / 2,
+                            (circleSize - textSize.Height) / 2);
+                    }
+                };
+
+                btn.MouseHover += (s, e) =>
+                {
+                    _toolTip?.Dispose();
+                    _toolTip = new ToolTip();
+                    _toolTip.SetToolTip(btn, capturedName);
+                };
+
+                btn.Click += (s, e) =>
+                {
+                    _selectedColor = capturedColor;
+                    _colorPanel.Invalidate();
+                    foreach (Control c in _colorPanel.Controls)
+                        c.Invalidate();
+                    UpdatePreview();
+                };
+
+                _colorPanel.Controls.Add(btn);
+            }
+        }
+
+        private ToolTip _toolTip;
+
+        private void InitializeFontCombo()
+        {
+            _fontCombo.Items.Clear();
+            var fonts = GetSystemFonts();
+
+            if (fonts.Length > 8)
+            {
+                foreach (var f in CommonFonts)
+                    if (fonts.Contains(f))
+                        _fontCombo.Items.Add(f);
+
+                _fontCombo.Items.Add(new FontSeparator());
+
+                foreach (var f in fonts)
+                    if (!CommonFonts.Contains(f))
+                        _fontCombo.Items.Add(f);
+            }
+            else
+            {
+                foreach (var f in fonts)
+                    _fontCombo.Items.Add(f);
+            }
+
+            for (int i = 0; i < _fontCombo.Items.Count; i++)
+            {
+                if (_fontCombo.Items[i] is string s &&
+                    string.Equals(s, _selectedFontFamily, StringComparison.OrdinalIgnoreCase))
+                {
+                    _fontCombo.SelectedIndex = i;
+                    return;
+                }
+            }
+            _fontCombo.SelectedIndex = 0;
+        }
+
+        private void FontCombo_MeasureItem(object? sender, MeasureItemEventArgs e)
+        {
+            if (_fontCombo.Items[e.Index] is FontSeparator)
+            {
+                e.ItemHeight = 6;
+                return;
+            }
+            e.ItemHeight = 28;
+        }
+
+        private void FontCombo_DrawItem(object? sender, DrawItemEventArgs e)
+        {
+            if (e.Index < 0) return;
+            e.DrawBackground();
+
+            if (_fontCombo.Items[e.Index] is FontSeparator)
+            {
+                var midY = e.Bounds.Y + e.Bounds.Height / 2;
+                using var sepPen = new Pen(Color.FromArgb(200, 200, 210));
+                e.Graphics.DrawLine(sepPen, e.Bounds.X + 4, midY, e.Bounds.Right - 4, midY);
+                return;
+            }
+
+            var fontName = _fontCombo.Items[e.Index].ToString() ?? "Microsoft YaHei UI";
+            var isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            var isComboEdit = (e.State & DrawItemState.ComboBoxEdit) == DrawItemState.ComboBoxEdit;
+
+            var bgColor = isSelected
+                ? Color.FromArgb(230, 244, 255)
+                : Color.White;
+            using var bgBrush = new SolidBrush(bgColor);
+            e.Graphics.FillRectangle(bgBrush, e.Bounds);
+
+            try
+            {
+                using var previewFont = new Font(fontName, isComboEdit ? 10f : 11f, FontStyle.Regular);
+                var textColor = isSelected ? _accentColor : Color.FromArgb(50, 50, 50);
+                using var textBrush = new SolidBrush(textColor);
+                e.Graphics.DrawString(fontName, previewFont, textBrush,
+                    e.Bounds.X + 8, e.Bounds.Y + (isComboEdit ? 2 : 4));
+            }
+            catch
+            {
+                using var fallbackFont = new Font("Microsoft YaHei UI", 11f);
+                using var textBrush = new SolidBrush(isSelected ? _accentColor : Color.FromArgb(50, 50, 50));
+                e.Graphics.DrawString(fontName, fallbackFont, textBrush,
+                    e.Bounds.X + 8, e.Bounds.Y + 4);
+            }
+
+            e.DrawFocusRectangle();
+        }
+
+        private void FontCombo_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            if (_fontCombo.SelectedItem is string fontName)
+            {
+                _selectedFontFamily = fontName;
+                UpdatePreview();
+            }
+        }
+
+        private void InitializeSizePanel()
+        {
+            _sizePanel.Controls.Clear();
+            int btnW = 48, btnH = 34;
+            int spacing = 6;
+            int totalW = AvailableSizes.Length * btnW + (AvailableSizes.Length - 1) * spacing;
+            int startX = (_sizePanel.Width - totalW) / 2;
+            if (startX < 0) startX = 0;
+
+            for (int i = 0; i < AvailableSizes.Length; i++)
+            {
+                var (size, label) = AvailableSizes[i];
+                var x = startX + i * (btnW + spacing);
+                var isSelected = Math.Abs(size - _selectedFontSize) < 0.5f;
+
+                var btn = new Button
+                {
+                    Text = label,
+                    Font = new Font("Microsoft YaHei UI", size >= 28 ? 9F : 10F,
+                        isSelected ? FontStyle.Bold : FontStyle.Regular),
+                    Size = new Size(btnW, btnH),
+                    Location = new Point(x, 6),
+                    FlatStyle = FlatStyle.Flat,
+                    FlatAppearance = { BorderSize = 0 },
+                    BackColor = isSelected ? _accentColor : _sectionBg,
+                    ForeColor = isSelected ? Color.White : _textPrimary,
+                    Cursor = Cursors.Hand,
+                    Tag = size,
+                    TabStop = false
+                };
+                btn.FlatAppearance.MouseOverBackColor = isSelected ? _accentColor : Color.FromArgb(240, 240, 248);
+                btn.Click += (s, e) =>
+                {
+                    _selectedFontSize = (float)((Button)s!).Tag!;
+                    _sizeSlider.Value = Math.Max(_sizeSlider.Minimum, Math.Min(_sizeSlider.Maximum, (int)_selectedFontSize));
+                    UpdateSizeButtons();
+                    UpdatePreview();
+                };
+                _sizePanel.Controls.Add(btn);
+            }
+        }
+
+        private void UpdateSizeButtons()
+        {
+            foreach (Control c in _sizePanel.Controls)
+            {
+                if (c is Button btn && btn.Tag is float size)
+                {
+                    var isSelected = Math.Abs(size - _selectedFontSize) < 0.5f;
+                    btn.BackColor = isSelected ? _accentColor : _sectionBg;
+                    btn.ForeColor = isSelected ? Color.White : _textPrimary;
+                    btn.Font = new Font("Microsoft YaHei UI", size >= 28 ? 9F : 10F,
+                        isSelected ? FontStyle.Bold : FontStyle.Regular);
+                    btn.FlatAppearance.MouseOverBackColor = isSelected ? _accentColor : Color.FromArgb(240, 240, 248);
+                }
+            }
+        }
+
+        private void SizeSlider_ValueChanged(object? sender, EventArgs e)
+        {
+            _selectedFontSize = _sizeSlider.Value;
+            _sizeValueLabel.Text = _selectedFontSize.ToString("0");
+            UpdateSizeButtons();
+            UpdatePreview();
+        }
+
+        private void PreviewPanel_Paint(object? sender, PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            using var bgBrush = new SolidBrush(_sectionBg);
+            g.FillRectangle(bgBrush, _previewPanel.ClientRectangle);
+
+            using var borderPen = new Pen(Color.FromArgb(220, 220, 230));
+            var r = _previewPanel.ClientRectangle;
+            g.DrawRectangle(borderPen, r.X, r.Y, r.Width - 1, r.Height - 1);
+
+            using var titleFont = new Font("Microsoft YaHei UI", 8F, FontStyle.Bold);
+            using var titleBrush = new SolidBrush(_textSecondary);
+            var titleSize = g.MeasureString("预览效果", titleFont);
+            using var titleBgBrush = new SolidBrush(_sectionBg);
+            g.FillRectangle(titleBgBrush, r.X + 12, r.Y, titleSize.Width + 8, titleSize.Height);
+            g.DrawString("预览效果", titleFont, titleBrush, r.X + 16, r.Y + 2);
+        }
+
+        private void UpdatePreview()
+        {
+            try
+            {
+                var displaySize = Math.Min(_selectedFontSize, 42f);
+                _previewLabel.Font = new Font(_selectedFontFamily, displaySize,
+                    _selectedFontSize >= 36 ? FontStyle.Bold : FontStyle.Regular);
+            }
+            catch
+            {
+                _previewLabel.Font = new Font("Microsoft YaHei UI", 16f);
+            }
+            _previewLabel.ForeColor = _selectedColor;
+            _previewLabel.Text = string.IsNullOrWhiteSpace(_textBox.Text)
+                ? "预览文字效果"
+                : _textBox.Text;
+        }
+
+        private void TextBox_TextChanged(object? sender, EventArgs e)
+        {
+            _labelWordCount.Text = $"字数: {_textBox.Text.Length}";
+            UpdatePreview();
+        }
+
         private static string[] GetSystemFonts()
         {
             try
             {
-                using var fontCollection = new System.Drawing.Text.InstalledFontCollection();
-                return fontCollection
-                    .Families
+                using var fontCollection = new InstalledFontCollection();
+                return fontCollection.Families
                     .Select(f => f.Name)
                     .Where(name => !string.IsNullOrEmpty(name))
                     .OrderBy(name => name)
@@ -337,70 +677,10 @@ namespace LearningAssistant.Forms.UserControls.Common
             }
             catch
             {
-                return new[] { "Microsoft YaHei UI", "Arial", "Times New Roman", "Consolas" };
+                return new[] { "Microsoft YaHei UI", "Arial", "Times New Roman", "Consolas", "Segoe UI" };
             }
         }
 
-        /// <summary>
-        /// 文本框内容变化时更新字数统计
-        /// </summary>
-        private void TextBox_TextChanged(object? sender, EventArgs e)
-        {
-            UpdateWordCount();
-        }
-
-        /// <summary>
-        /// 更新字数统计显示
-        /// </summary>
-        private void UpdateWordCount()
-        {
-            string text = _textBox.Text;
-            int charCount = text.Length;
-            int wordCount = 0;
-
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                // 检测是否包含中文字符（中文按字数统计）
-                bool hasChinese = text.Any(c => c >= 0x4E00 && c <= 0x9FFF);
-                if (hasChinese)
-                {
-                    // 中文字符按字符数，英文单词按空格分隔
-                    int chineseChars = text.Count(c => c >= 0x4E00 && c <= 0x9FFF);
-                    int nonChineseWords = text
-                        .Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries)
-                        .Sum(s => s.Count(c => c < 0x4E00 || c > 0x9FFF) > 0 ? 1 : 0);
-                    wordCount = chineseChars + nonChineseWords;
-                }
-                else
-                {
-                    wordCount = text.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
-                }
-            }
-
-            _labelWordCount.Text = $"字数: {charCount} | 词数: {wordCount}";
-        }
-
-        /// <summary>
-        /// 显示对话框并获取结果
-        /// </summary>
-        public new TextAnnotationDialogResult ShowDialog(IWin32Window? owner = null)
-        {
-            var result = new TextAnnotationDialogResult();
-
-            if (base.ShowDialog(owner) == DialogResult.OK && !string.IsNullOrWhiteSpace(_textBox.Text))
-            {
-                result.Text = _textBox.Text;
-                result.SelectedColor = SelectedColor;
-                result.FontSize = SelectedFontSize;
-                result.FontFamily = SelectedFontFamily;
-                result.Confirmed = true;
-            }
-            else
-            {
-                result.Confirmed = false;
-            }
-
-            return result;
-        }
+        private class FontSeparator { }
     }
 }

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>舒尔特方格</title>
+    <link rel="stylesheet" href="../Shared/shared.css" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <!-- HUD -->
+    <header class="topbar">
+        <div class="brand">🔢 舒尔特方格</div>
+        <div class="stats">
+            <div class="stat"><span class="stat-label">找</span><span id="nextTarget" class="stat-value target-num">1</span></div>
+            <div class="stat"><span class="stat-label">用时</span><span id="timer" class="stat-value">0.0s</span></div>
+            <div class="stat"><span class="stat-label">错误</span><span id="errors" class="stat-value">0</span></div>
+            <div class="stat"><span class="stat-label">得分</span><span id="score" class="stat-value">0</span></div>
+        </div>
+        <div class="actions">
+            <button id="btnRestart" class="btn">🔄 重新开始</button>
+        </div>
+    </header>
+
+    <div class="progress-wrap"><div id="progress" class="progress"></div></div>
+
+    <!-- 蜂巢盘面 -->
+    <div id="board" class="board"></div>
+
+    <!-- 底部提示 -->
+    <footer class="hint" id="hint">在蜂巢中找到数字，按顺序点击 1 → N</footer>
+
+    <div id="toast" class="toast"></div>
+
+    <!-- 结算弹层 -->
+    <div id="resultOverlay" class="overlay hidden">
+        <div class="result-card">
+            <div class="result-emoji" id="resultEmoji">🎉</div>
+            <h2 id="resultTitle">完成！</h2>
+            <div class="stars" id="resultStars"></div>
+            <div class="result-details">
+                <div class="result-row"><span class="result-label">得分</span><b id="resultScore">0</b></div>
+                <div class="result-row"><span class="result-label">用时</span><b id="resultTime">0s</b></div>
+                <div class="result-row"><span class="result-label">错误次数</span><b id="resultErrors">0</b></div>
+                <div class="result-row"><span class="result-label">盘面规格</span><b id="resultGrid">0×0</b></div>
+            </div>
+            <div class="result-btns">
+                <button id="btnAgain" class="btn primary">🎮 再来一局</button>
+                <button id="btnClose" class="btn">✕ 关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../Shared/shared.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>

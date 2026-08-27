@@ -1,0 +1,103 @@
+/* ============ 舒尔特方格 - 蜂巢异形版 ============
+   蜂巢六边形布局 + 视觉干扰（随机颜色/大小/旋转） */
+
+/* 盘面：蜂巢容器，相对定位让 JS 放置六边形 */
+.board {
+    flex: 1;
+    position: relative;
+    width: 100%;
+    max-width: 520px;
+    margin: 0 auto;
+    overflow: visible;
+    min-height: 200px;
+}
+
+/* 六边形蜂巢格 */
+.cell {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    cursor: pointer;
+    user-select: none;
+    font-weight: 800;
+    transition: transform 0.15s, box-shadow 0.15s;
+    animation: hexIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    will-change: transform;
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.12),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+/* 蜂巢被点击后——不变色，只加极淡的标记点 */
+.cell.done {
+    cursor: default;
+    filter: brightness(0.85) saturate(0.6);
+}
+.cell.done::after {
+    content: '✓';
+    position: absolute;
+    bottom: 3px;
+    right: 4px;
+    font-size: 10px;
+    opacity: 0.45;
+    font-weight: 400;
+    pointer-events: none;
+}
+
+/* 悬停态——轻微浮起 */
+.cell:not(.done):hover {
+    transform: translateY(-2px) scale(1.04);
+    z-index: 10;
+}
+
+/* 点击瞬间微反馈 */
+.cell:not(.done):active {
+    transform: scale(0.95);
+}
+
+/* 错误反馈——很淡的抖动，不改变颜色 */
+.cell.wrong {
+    animation: subtleShake 0.35s;
+}
+
+/* 目标数字提示——小字显示在顶部 */
+.target-num {
+    color: var(--word-accent);
+    font-size: 32px;
+    font-weight: 900;
+}
+
+/* 暗色主题适配 */
+body[data-theme="dark"] .cell {
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+body[data-theme="dark"] .cell.done {
+    filter: brightness(0.55) saturate(0.4);
+}
+
+/* 蜂巢入场动画 */
+@keyframes hexIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.8) translateY(12px) rotate(15deg);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0) rotate(0deg);
+    }
+}
+
+/* 轻微抖动（错误时无色彩反馈） */
+@keyframes subtleShake {
+    0%, 100% { transform: translateX(0) rotate(0deg); }
+    15% { transform: translateX(-3px) rotate(-0.5deg); }
+    30% { transform: translateX(3px) rotate(0.5deg); }
+    45% { transform: translateX(-2px); }
+    60% { transform: translateX(2px); }
+    75% { transform: translateX(-1px); }
+    90% { transform: translateX(1px); }
+}

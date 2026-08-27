@@ -1,0 +1,208 @@
+/* ============ 数独 - 游戏专属样式 ============ */
+
+.board-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    overflow: auto;
+}
+
+/* 数独盘面 */
+.sudoku-board {
+    border-collapse: collapse;
+    border: 3px solid var(--text);
+    background: var(--surface);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    user-select: none;
+}
+
+.sudoku-board td {
+    width: 44px;
+    height: 44px;
+    text-align: center;
+    vertical-align: middle;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    border: 1px solid #b0b8c8;
+    cursor: pointer;
+    transition: background 0.15s;
+    position: relative;
+}
+
+/* 3×3 宫格粗边框 */
+.sudoku-board td:nth-child(3n) {
+    border-right: 3px solid var(--text);
+}
+.sudoku-board tr:nth-child(3n) td {
+    border-bottom: 3px solid var(--text);
+}
+.sudoku-board td:first-child {
+    border-left: 3px solid var(--text);
+}
+.sudoku-board tr:first-child td {
+    border-top: 3px solid var(--text);
+}
+
+/* 选中态 */
+.sudoku-board td.selected {
+    background: #dbeafe !important;
+    outline: 2px solid #3b82f6;
+    outline-offset: -2px;
+}
+
+/* 同数字高亮 */
+.sudoku-board td.highlighted {
+    background: #e8f0fe;
+}
+
+/* 同宫格高亮 */
+.sudoku-board td.same-box {
+    background: #f0f4ff;
+}
+
+/* 预填数字（题目） */
+.sudoku-board td.given {
+    font-weight: 900;
+    color: #1e293b;
+    cursor: default;
+}
+
+/* 玩家填入 */
+.sudoku-board td.player {
+    color: #3b82f6;
+    font-weight: 700;
+}
+
+/* 错误标记 */
+.sudoku-board td.error {
+    background: #fef2f2 !important;
+    color: #ef4444 !important;
+    animation: pulse 0.6s;
+}
+
+/* 笔记模式小字 */
+.sudoku-board td .notes {
+    position: absolute;
+    inset: 1px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    font-size: 10px;
+    font-weight: 600;
+    color: #94a3b8;
+    pointer-events: none;
+}
+.sudoku-board td .notes span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 暗色主题 */
+body[data-theme="dark"] .sudoku-board {
+    background: #1e293b;
+    border-color: #94a3b8;
+}
+body[data-theme="dark"] .sudoku-board td {
+    border-color: #475569;
+    color: #e2e8f0;
+}
+body[data-theme="dark"] .sudoku-board td.given {
+    color: #f1f5f9;
+}
+body[data-theme="dark"] .sudoku-board td.player {
+    color: #60a5fa;
+}
+body[data-theme="dark"] .sudoku-board td.selected {
+    background: #1e3a5f !important;
+}
+body[data-theme="dark"] .sudoku-board td.highlighted {
+    background: #1e293b;
+}
+body[data-theme="dark"] .sudoku-board td.same-box {
+    background: #1e2d4a;
+}
+body[data-theme="dark"] .sudoku-board td.error {
+    background: #3b1a1a !important;
+}
+
+/* 数字按钮 */
+.num-pad {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 16px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.num-btn {
+    width: 42px;
+    height: 42px;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 20px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.15s, box-shadow 0.15s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+.num-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    background: var(--surface-hover);
+}
+.num-btn:active {
+    transform: scale(0.94);
+}
+.num-btn.active {
+    background: #3b82f6;
+    color: #fff;
+    border-color: #3b82f6;
+}
+.erase-btn {
+    color: #ef4444;
+    font-size: 18px;
+}
+
+/* 控制按钮 */
+.controls {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    padding: 4px 16px 10px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.ctrl-btn {
+    padding: 8px 18px;
+    border: 1px solid #d1d5db;
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s, box-shadow 0.15s;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+}
+.ctrl-btn:hover {
+    background: var(--surface-hover);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+.ctrl-btn.active {
+    background: #f59e0b;
+    color: #fff;
+    border-color: #f59e0b;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.08); }
+}

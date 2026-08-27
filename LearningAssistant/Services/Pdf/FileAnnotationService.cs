@@ -58,6 +58,7 @@ namespace LearningAssistant.Services.Pdf
                                     Math.Abs(points[1].X - points[0].X),
                                     Math.Abs(points[1].Y - points[0].Y));
                                 if (stroke.DashStyle == "Dash") pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                                if (stroke.StrokeStyle == "DotLine") pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dot;
                                 g.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
                             }
                             else if (shapeType == "Ellipse" && points.Count >= 2)
@@ -68,11 +69,13 @@ namespace LearningAssistant.Services.Pdf
                                     Math.Abs(points[1].X - points[0].X),
                                     Math.Abs(points[1].Y - points[0].Y));
                                 if (stroke.DashStyle == "Dash") pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                                if (stroke.StrokeStyle == "DotLine") pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dot;
                                 g.DrawEllipse(pen, rect);
                             }
                             else if (shapeType == "Arrow" && points.Count >= 2)
                             {
-                                pen.EndCap = System.Drawing.Drawing2D.LineCap.ArrowAnchor;
+                                if (stroke.StrokeStyle == "ArrowLine") pen.EndCap = System.Drawing.Drawing2D.LineCap.ArrowAnchor;
+                                if (stroke.StrokeStyle == "DotLine") pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dot;
                                 g.DrawLine(pen, points[0], points[1]);
                             }
                             else if (shapeType == "Mosaic" && points.Count >= 2)
@@ -85,6 +88,7 @@ namespace LearningAssistant.Services.Pdf
                                 using var brush = new SolidBrush(Color.FromArgb(80, 255, 255, 255));
                                 g.FillRectangle(brush, rect);
                                 if (stroke.DashStyle == "Dash") pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
+                                if (stroke.StrokeStyle == "DotLine") pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dot;
                                 g.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
                             }
                             else
@@ -99,6 +103,7 @@ namespace LearningAssistant.Services.Pdf
                                 };
                                 var penColor = Color.FromArgb(stroke.ColorArgb);
                                 pen.Color = Color.FromArgb(alpha, penColor.R, penColor.G, penColor.B);
+                                if (stroke.StrokeStyle == "DotLine") pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dot;
                                 g.DrawLines(pen, points.ToArray());
                             }
                         }

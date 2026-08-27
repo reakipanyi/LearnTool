@@ -202,10 +202,22 @@ namespace LearningAssistant.Managers
             ShowScopedForm<WhackAMoleGameForm>();
         }
 
+        public void OpenSchulteGameWindow()
+        {
+            _logger.LogInformation("Opening schulte grid game window");
+            ShowScopedForm<SchulteGameForm>();
+        }
+
+        public void OpenSudokuGameWindow()
+        {
+            _logger.LogInformation("Opening sudoku game window");
+            ShowScopedForm<SudokuGameForm>();
+        }
+
         public void OpenStatisticsWindow()
         {
             // 04 数据中心：统计入口统一指向学习数据中心（LearningManagementForm），
-            // 不再由 ResultForm 承担“统计”角色。
+            // 不再由 ResultForm 承担"统计"角色。
             _logger.LogInformation("Opening statistics window (learning data center)");
             OpenLearningManagementWindow();
         }

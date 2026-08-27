@@ -28,11 +28,6 @@ namespace LearningAssistant.Managers
             {
                 _form.ButtonNightMode.Text = _isNightMode ? "☀️" : "🌙";
             }
-
-            if (_form.Presenter != null)
-            {
-                _ = _form.Presenter.RenderAndDisplayCurrentPageAsync();
-            }
         }
 
         public void ApplyNightMode()
@@ -116,12 +111,6 @@ namespace LearningAssistant.Managers
         {
             ApplyControlBackColor(_form.TabPageBookmarksAndHighlights, _isNightMode);
             
-            ApplyGroupBoxNightMode(_form.GroupBoxBookmarks);
-            ApplyListBoxNightMode(_form.ListBoxBookmarks);
-            ApplyTextBoxNightMode(_form.TextBoxBookmarkTitle);
-            ApplyButtonNightMode(_form.ButtonAddBookmark);
-            ApplyButtonNightMode(_form.ButtonRemoveBookmark);
-
             ApplyGroupBoxNightMode(_form.GroupBoxHighlights);
             ApplyListBoxNightMode(_form.ListBoxHighlights);
             ApplyGroupBoxNightMode(_form.GroupBoxHighlightColor);

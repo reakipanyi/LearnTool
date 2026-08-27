@@ -37,11 +37,6 @@ namespace LearningAssistant.Managers
         Button? ButtonSpeakTranslation { get; }
 
         TabPage? TabPageBookmarksAndHighlights { get; }
-        GroupBox? GroupBoxBookmarks { get; }
-        ListBox? ListBoxBookmarks { get; }
-        TextBox? TextBoxBookmarkTitle { get; }
-        Button? ButtonAddBookmark { get; }
-        Button? ButtonRemoveBookmark { get; }
 
         GroupBox? GroupBoxHighlights { get; }
         ListBox? ListBoxHighlights { get; }
@@ -85,5 +80,10 @@ namespace LearningAssistant.Managers
 
         /// <summary>高亮服务，用于 Select 模式调整高亮位置/大小后的持久化</summary>
         IHighlightService? HighlightService { get; }
+
+        /// <summary>音频录制侧边栏标签页</summary>
+        TabPage? TabPageAudio { get; }
+        /// <summary>音频录制服务</summary>
+        IAudioRecorderService? AudioRecorderService { get; }
     }
 }
