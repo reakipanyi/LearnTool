@@ -27,6 +27,7 @@ namespace LearningAssistant.Managers
             if (_form.ButtonNightMode != null)
             {
                 _form.ButtonNightMode.Text = _isNightMode ? "☀️" : "🌙";
+                _form.ButtonNightMode.ForeColor = _isNightMode ? Color.White : Color.Black;
             }
         }
 
@@ -84,6 +85,7 @@ namespace LearningAssistant.Managers
         {
             if (button == null) return;
             button.BackColor = isNightMode ? Color.FromArgb(45, 45, 45) : Color.White;
+            button.ForeColor = isNightMode ? Color.White : Color.Black;
         }
 
         private void UpdateButtonAiColor(Button? button, bool isNightMode)

@@ -1148,12 +1148,14 @@ namespace LearningAssistant.Forms.Pdf
         private void EditTextAnnotation(PdfAnnotationItem annotation)
         {
             Color currentColor = Color.FromArgb(annotation.ColorArgb);
+            string currentFontFamily = string.IsNullOrEmpty(annotation.FontFamily) ? "Microsoft YaHei UI" : annotation.FontFamily;
 
             using var dialog = new TextAnnotationDialog(
                 "编辑文字注解",
                 annotation.Text,
                 currentColor,
-                annotation.FontSize);
+                annotation.FontSize,
+                currentFontFamily);
 
             var result = dialog.ShowDialog(this);
 
@@ -1166,7 +1168,7 @@ namespace LearningAssistant.Forms.Pdf
                         dialog.InitialText,
                         dialog.SelectedColor.ToArgb(),
                         dialog.SelectedFontSize,
-                        "Microsoft YaHei UI");
+                        dialog.SelectedFontFamily);
 
                     RefreshHighlightList();
                     _navigationManager?.LoadAnnotationsForCurrentPage();
@@ -4172,6 +4174,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonNightMode.Size = new Size(32, 32);
             _buttonNightMode.TabIndex = 0;
             _buttonNightMode.Text = "🌙";
+            _toolTip.SetToolTip(_buttonNightMode, "夜间模式");
             _buttonNightMode.UseVisualStyleBackColor = false;
             _buttonNightMode.Click += ButtonNightMode_Click;
             // 
@@ -4269,6 +4272,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonHighlightMode.Size = new Size(28, 28);
             _buttonHighlightMode.TabIndex = 1;
             _buttonHighlightMode.Text = "⭐";
+            _toolTip.SetToolTip(_buttonHighlightMode, "高亮 (H)");
             _buttonHighlightMode.UseVisualStyleBackColor = false;
             _buttonHighlightMode.Click += ButtonHighlightMode_Click;
             // 
@@ -4282,6 +4286,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonRectangleMode.Size = new Size(28, 28);
             _buttonRectangleMode.TabIndex = 1;
             _buttonRectangleMode.Text = "▢";
+            _toolTip.SetToolTip(_buttonRectangleMode, "矩形 (R)");
             _buttonRectangleMode.UseVisualStyleBackColor = false;
             _buttonRectangleMode.Click += ButtonRectangleMode_Click;
             // 
@@ -4295,6 +4300,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonEllipseMode.Size = new Size(28, 28);
             _buttonEllipseMode.TabIndex = 2;
             _buttonEllipseMode.Text = "◯";
+            _toolTip.SetToolTip(_buttonEllipseMode, "椭圆 (E)");
             _buttonEllipseMode.UseVisualStyleBackColor = false;
             _buttonEllipseMode.Click += ButtonEllipseMode_Click;
             // 
@@ -4308,6 +4314,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonArrowMode.Size = new Size(28, 28);
             _buttonArrowMode.TabIndex = 3;
             _buttonArrowMode.Text = "━";
+            _toolTip.SetToolTip(_buttonArrowMode, "箭头 (A)");
             _buttonArrowMode.UseVisualStyleBackColor = false;
             _buttonArrowMode.Click += ButtonArrowMode_Click;
             // 
@@ -4376,6 +4383,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonTextMode.Size = new Size(28, 28);
             _buttonTextMode.TabIndex = 6;
             _buttonTextMode.Text = "T";
+            _toolTip.SetToolTip(_buttonTextMode, "文字 (T)");
             _buttonTextMode.UseVisualStyleBackColor = false;
             _buttonTextMode.Click += ButtonTextMode_Click;
             // 
@@ -4389,6 +4397,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonUndoAnnotation.Size = new Size(28, 28);
             _buttonUndoAnnotation.TabIndex = 7;
             _buttonUndoAnnotation.Text = "↩";
+            _toolTip.SetToolTip(_buttonUndoAnnotation, "撤销 (Ctrl+Z)");
             _buttonUndoAnnotation.UseVisualStyleBackColor = false;
             _buttonUndoAnnotation.Click += ButtonUndoAnnotation_Click;
             // 
@@ -4629,6 +4638,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonClearAllAnnotations.Size = new Size(28, 28);
             _buttonClearAllAnnotations.TabIndex = 8;
             _buttonClearAllAnnotations.Text = "🗑";
+            _toolTip.SetToolTip(_buttonClearAllAnnotations, "清除所有标注");
             _buttonClearAllAnnotations.UseVisualStyleBackColor = false;
             _buttonClearAllAnnotations.Click += ButtonClearAllAnnotations_Click;
             // 
@@ -5088,11 +5098,11 @@ namespace LearningAssistant.Forms.Pdf
             // 
             _textBoxTranslation.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             _textBoxTranslation.BorderStyle = BorderStyle.FixedSingle;
-            _textBoxTranslation.Location = new Point(10, 325);
+            _textBoxTranslation.Location = new Point(10, 385);
             _textBoxTranslation.Multiline = true;
             _textBoxTranslation.Name = "_textBoxTranslation";
             _textBoxTranslation.ScrollBars = ScrollBars.Vertical;
-            _textBoxTranslation.Size = new Size(294, 420);
+            _textBoxTranslation.Size = new Size(294, 360);
             _textBoxTranslation.TabIndex = 7;
             // 
             // _buttonSpeakTranslation
@@ -5129,7 +5139,7 @@ namespace LearningAssistant.Forms.Pdf
             _textBoxOriginal.Multiline = true;
             _textBoxOriginal.Name = "_textBoxOriginal";
             _textBoxOriginal.ScrollBars = ScrollBars.Vertical;
-            _textBoxOriginal.Size = new Size(294, 200);
+            _textBoxOriginal.Size = new Size(294, 260);
             _textBoxOriginal.TabIndex = 4;
             // 
             // _buttonSpeakOriginal
@@ -5148,7 +5158,7 @@ namespace LearningAssistant.Forms.Pdf
             // _checkBoxAutoTranslate
             // 
             _checkBoxAutoTranslate.AutoSize = true;
-            _checkBoxAutoTranslate.Location = new Point(102, 296);
+            _checkBoxAutoTranslate.Location = new Point(102, 356);
             _checkBoxAutoTranslate.Name = "_checkBoxAutoTranslate";
             _checkBoxAutoTranslate.Size = new Size(107, 21);
             _checkBoxAutoTranslate.TabIndex = 8;
@@ -5178,7 +5188,7 @@ namespace LearningAssistant.Forms.Pdf
             // _labelTranslation
             // 
             _labelTranslation.AutoSize = true;
-            _labelTranslation.Location = new Point(10, 298);
+            _labelTranslation.Location = new Point(10, 358);
             _labelTranslation.Name = "_labelTranslation";
             _labelTranslation.Size = new Size(44, 17);
             _labelTranslation.TabIndex = 2;
@@ -5198,7 +5208,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonTranslate.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             _buttonTranslate.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonTranslate.FlatStyle = FlatStyle.Flat;
-            _buttonTranslate.Location = new Point(229, 291);
+            _buttonTranslate.Location = new Point(229, 351);
             _buttonTranslate.Name = "_buttonTranslate";
             _buttonTranslate.Size = new Size(70, 30);
             _buttonTranslate.TabIndex = 0;
@@ -5432,6 +5442,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonTranslationToggle.Size = new Size(32, 32);
             _buttonTranslationToggle.TabIndex = 1;
             _buttonTranslationToggle.Text = "译";
+            _toolTip.SetToolTip(_buttonTranslationToggle, "翻译模式");
             _buttonTranslationToggle.UseVisualStyleBackColor = false;
             _buttonTranslationToggle.Click += ButtonTranslationToggle_Click;
             // 
