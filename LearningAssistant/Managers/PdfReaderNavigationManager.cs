@@ -143,7 +143,7 @@ namespace LearningAssistant.Managers
             _pageTransitionAnimator = new PageTransitionAnimator(logger, form);
             _zoomController = new PdfZoomController(logger, form);
             _annotationLayerManager = new AnnotationLayerManager(logger, form);
-            _selectionManager = new AnnotationSelectionManager(logger, form, _annotationLayerManager);
+            _selectionManager = new AnnotationSelectionManager(logger, form);
             _toolHandler = new AnnotationToolHandler(logger, form, _annotationLayerManager);
             InitializeSelectionManagerDelegates();
             InitializeToolHandlerDelegates();
@@ -914,11 +914,11 @@ namespace LearningAssistant.Managers
             {
                 if (_form.Presenter == null || string.IsNullOrEmpty(_form.CurrentPdfPath))
                 {
-                    _logger?.LogWarning("ClearAllStrokes: Presenter or PdfPath is null");
+                    _logger.LogWarning("ClearAllStrokes: Presenter or PdfPath is null");
                     return;
                 }
 
-                _logger?.LogInformation("清除所有笔划标注: {PdfPath}", _form.CurrentPdfPath);
+                _logger.LogInformation("清除所有笔划标注: {PdfPath}", _form.CurrentPdfPath);
 
                 _form.Presenter.ClearAllAnnotations(_form.CurrentPdfPath);
                 _selectionManager.ClearSelection();
@@ -929,11 +929,11 @@ namespace LearningAssistant.Managers
                 _annotationLayerManager.LoadAnnotationsForCurrentPage();
                 _form.PictureBoxPdf?.Invalidate();
 
-                _logger?.LogInformation("所有笔划标注已清除");
+                _logger.LogInformation("所有笔划标注已清除");
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "清除所有笔划标注时出错");
+                _logger.LogError(ex, "清除所有笔划标注时出错");
             }
         }
 

@@ -9,7 +9,6 @@ namespace LearningAssistant.Managers
     {
         private readonly ILogger _logger;
         private readonly IPdfReaderFormAccess _form;
-        private readonly AnnotationLayerManager _layerManager;
 
         // 选中状态
         public AnnotationStroke? SelectedStroke { get; set; }
@@ -57,11 +56,10 @@ namespace LearningAssistant.Managers
         public Action<AnnotationText, int>? EditTextCallback { get; set; }
         public Action<PdfHighlight>? UpdateHighlightCallback { get; set; }
 
-        public AnnotationSelectionManager(ILogger logger, IPdfReaderFormAccess form, AnnotationLayerManager layerManager)
+        public AnnotationSelectionManager(ILogger logger, IPdfReaderFormAccess form)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _form = form ?? throw new ArgumentNullException(nameof(form));
-            _layerManager = layerManager ?? throw new ArgumentNullException(nameof(layerManager));
         }
 
         #region 选中管理
@@ -96,7 +94,7 @@ namespace LearningAssistant.Managers
         {
             if (SelectedTextIndex < 0) return;
 
-            RemoveTextAtCurrentPage?.Invoke(SelectedTextIndex, SelectedText);
+            RemoveTextAtCurrentPage?.Invoke(SelectedTextIndex, SelectedText!);
             SelectedText = null;
             SelectedTextIndex = -1;
             SelectionState = SelectionInteractionState.None;
