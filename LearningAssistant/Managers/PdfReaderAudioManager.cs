@@ -31,9 +31,9 @@ namespace LearningAssistant.Managers
         private string? _currentPdfPath;
         private WaveOutEvent? _playbackOut;
         private AudioFileReader? _playbackReader;
-        private System.Windows.Forms.Timer? _playbackTimer;
         private bool _isPlaying;
         private bool _isDraggingPosition;
+        private int _levelPulseCount;
 
         private static Color _accentColor = Color.FromArgb(25, 118, 210);
         private static Color _recordRed = Color.FromArgb(244, 67, 54);
@@ -356,8 +356,18 @@ namespace LearningAssistant.Managers
 
         private void LevelTimer_Tick(object? sender, EventArgs e)
         {
-            if (_recorder.State != AudioRecorderState.Recording) return;
-            _levelFill.Width = (int)(_levelMeter.Width * 0.3f);
+            // 录制时显示脉冲动画，直观指示录制状态
+            if (_recorder.State != AudioRecorderState.Recording)
+            {
+                _levelFill.Width = 0;
+                _levelPulseCount = 0;
+                return;
+            }
+
+            _levelPulseCount++;
+            // 正弦波脉冲：10%~40% 之间平滑变化
+            float pulse = 0.10f + 0.15f * (1f + (float)Math.Sin(_levelPulseCount * 0.3f)) * 0.5f;
+            _levelFill.Width = (int)(_levelMeter.Width * pulse);
         }
 
         private void StartPlayback(AudioRecording recording)
@@ -396,10 +406,6 @@ namespace LearningAssistant.Managers
 
         private void StopPlayback()
         {
-            _playbackTimer?.Stop();
-            _playbackTimer?.Dispose();
-            _playbackTimer = null;
-
             _playbackOut?.Stop();
             _playbackOut?.Dispose();
             _playbackOut = null;

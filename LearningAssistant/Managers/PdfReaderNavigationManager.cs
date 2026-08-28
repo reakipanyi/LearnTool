@@ -347,30 +347,9 @@ namespace LearningAssistant.Managers
             if (_isLocked) return;
 
             _zoomLevel = value;
+            _form.TrackBarZoom.Value = value;
             _form.LabelZoom.Text = $"{_zoomLevel}%";
-
-            Task.Run(async () =>
-            {
-                try
-                {
-                    var page = int.TryParse(_form.TextBoxPage.Text, out var p) ? p - 1 : 0;
-                    int targetW = (int)(_form.PictureBoxPdf.ClientSize.Width * _zoomLevel / 100.0);
-                    int targetH = (int)(_form.PictureBoxPdf.ClientSize.Height * _zoomLevel / 100.0);
-                    var bmp = await _form.Presenter!.RenderPageAsync(page, Math.Max(1, targetW), Math.Max(1, targetH));
-                    if (bmp != null)
-                    {
-                        _form.Form.BeginInvoke(() => _form.DisplayImage(new Bitmap(new MemoryStream(bmp))));
-                    }
-                }
-                catch (OperationCanceledException)
-                {
-                    // Zoom operation cancelled, ignore
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error rendering page during zoom");
-                }
-            });
+            _ = RenderPageAtZoomAsync();
         }
 
         public void ZoomByMouseWheel(int delta, bool ctrlDown)
@@ -384,41 +363,16 @@ namespace LearningAssistant.Managers
                     if (delta > 0) _zoomLevel = Math.Min(400, _zoomLevel + 10);
                     else _zoomLevel = Math.Max(10, _zoomLevel - 10);
 
-                    Task.Run(async () =>
-                    {
-                        try
-                        {
-                            var page = int.TryParse(_form.TextBoxPage.Text, out var p) ? p - 1 : 0;
-                            int targetW = (int)(_form.PictureBoxPdf.ClientSize.Width * _zoomLevel / 100.0);
-                            int targetH = (int)(_form.PictureBoxPdf.ClientSize.Height * _zoomLevel / 100.0);
-                            var bmp = await _form.Presenter!.RenderPageAsync(page, Math.Max(1, targetW), Math.Max(1, targetH));
-                            if (bmp != null)
-                            {
-                                _form.Form.BeginInvoke(() => _form.DisplayImage(new Bitmap(new MemoryStream(bmp))));
-                            }
-                        }
-                        catch (OperationCanceledException)
-                        {
-                            // Render cancelled, ignore
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogError(ex, "Error rendering page during zoom");
-                        }
-                    });
+                    _form.TrackBarZoom.Value = _zoomLevel;
+                    _form.LabelZoom.Text = $"{_zoomLevel}%";
+                    _ = RenderPageAtZoomAsync();
                 }
                 else
                 {
                     if (_form.Presenter != null)
                     {
-                        if (delta < 0)
-                        {
-                            _form.Presenter.NextPage();
-                        }
-                        else
-                        {
-                            _form.Presenter.PreviousPage();
-                        }
+                        if (delta < 0) _form.Presenter.NextPage();
+                        else _form.Presenter.PreviousPage();
                     }
                 }
             }
@@ -442,27 +396,30 @@ namespace LearningAssistant.Managers
             _imageOffset = Point.Empty;
             _form.TrackBarZoom.Value = 100;
             _form.LabelZoom.Text = "100%";
+            _ = RenderPageAtZoomAsync();
+        }
 
-            Task.Run(async () =>
+        private async Task RenderPageAtZoomAsync()
+        {
+            try
             {
-                try
+                var page = int.TryParse(_form.TextBoxPage.Text, out var p) ? p - 1 : 0;
+                int targetW = (int)(_form.PictureBoxPdf.ClientSize.Width * _zoomLevel / 100.0);
+                int targetH = (int)(_form.PictureBoxPdf.ClientSize.Height * _zoomLevel / 100.0);
+                var bmp = await _form.Presenter!.RenderPageAsync(page, Math.Max(1, targetW), Math.Max(1, targetH));
+                if (bmp != null)
                 {
-                    var page = int.TryParse(_form.TextBoxPage.Text, out var p) ? p - 1 : 0;
-                    var bmp = await _form.Presenter!.RenderPageAsync(page, _form.PictureBoxPdf.ClientSize.Width, _form.PictureBoxPdf.ClientSize.Height);
-                    if (bmp != null)
-                    {
-                        _form.Form.BeginInvoke(() => _form.DisplayImage(new Bitmap(new MemoryStream(bmp))));
-                    }
+                    _form.Form.BeginInvoke(() => _form.DisplayImage(new Bitmap(new MemoryStream(bmp))));
                 }
-                catch (OperationCanceledException)
-                {
-                    // Reset cancelled, ignore
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error resetting zoom");
-                }
-            });
+            }
+            catch (OperationCanceledException)
+            {
+                // Render cancelled, ignore
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error rendering page during zoom");
+            }
         }
 
         public void ToggleLockView()
@@ -514,39 +471,50 @@ namespace LearningAssistant.Managers
 
         public void PageTransitionTimer_Tick()
         {
-            if (_form.PageTransitionOverlay == null || !_isAnimating) return;
-
-            _transitionStep++;
-
-            bool isNightMode = _form.IsNightMode;
-
-            int baseR = isNightMode ? 30 : 255;
-            int baseG = isNightMode ? 30 : 255;
-            int baseB = isNightMode ? 30 : 255;
-
-            if (_transitionFadeOut)
+            try
             {
-                int alpha = 255 - (_transitionStep * 30);
-                if (alpha <= 0)
+                if (_form.PageTransitionOverlay == null || !_isAnimating) return;
+
+                _transitionStep++;
+
+                bool isNightMode = _form.IsNightMode;
+
+                int baseR = isNightMode ? 30 : 255;
+                int baseG = isNightMode ? 30 : 255;
+                int baseB = isNightMode ? 30 : 255;
+
+                if (_transitionFadeOut)
                 {
-                    alpha = 0;
-                    _transitionFadeOut = false;
-                    _transitionStep = 0;
+                    int alpha = 255 - (_transitionStep * 30);
+                    if (alpha <= 0)
+                    {
+                        alpha = 0;
+                        _transitionFadeOut = false;
+                        _transitionStep = 0;
+                    }
+                    _form.PageTransitionOverlay.BackColor = Color.FromArgb(alpha, baseR, baseG, baseB);
                 }
-                _form.PageTransitionOverlay.BackColor = Color.FromArgb(alpha, baseR, baseG, baseB);
+                else
+                {
+                    int alpha = _transitionStep * 30;
+                    if (alpha >= 255)
+                    {
+                        alpha = 255;
+                        _form.PageTransitionTimer?.Stop();
+                        _isAnimating = false;
+                        _form.PageTransitionOverlay.Visible = false;
+                        return;
+                    }
+                    _form.PageTransitionOverlay.BackColor = Color.FromArgb(alpha, baseR, baseG, baseB);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                int alpha = _transitionStep * 30;
-                if (alpha >= 255)
-                {
-                    alpha = 255;
-                    _form.PageTransitionTimer?.Stop();
-                    _isAnimating = false;
+                _logger.LogError(ex, "Error in page transition animation");
+                _isAnimating = false;
+                _form.PageTransitionTimer?.Stop();
+                if (_form.PageTransitionOverlay != null)
                     _form.PageTransitionOverlay.Visible = false;
-                    return;
-                }
-                _form.PageTransitionOverlay.BackColor = Color.FromArgb(alpha, baseR, baseG, baseB);
             }
         }
 
@@ -1922,12 +1890,7 @@ namespace LearningAssistant.Managers
                 ClearSelection();
 
                 // 3. 清除内存中的笔划位图缓存
-                _annotationBitmap?.Dispose();
-                _annotationBitmap = null;
-                _annotationGraphics?.Dispose();
-                _annotationGraphics = null;
-                _secondAnnotationBitmap?.Dispose();
-                _secondAnnotationBitmap = null;
+                CleanupAnnotationBitmap();
                 _currentStrokePoints?.Clear();
                 _hoveredStroke = null;
                 _hoveredStrokeIndex = -1;
