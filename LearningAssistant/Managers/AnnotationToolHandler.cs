@@ -396,7 +396,7 @@ namespace LearningAssistant.Managers
             g.DrawLine(pen, startPt, endPt);
         }
 
-        private static void DrawChecklistShape(Graphics g, RectangleF rect)
+        private void DrawChecklistShape(Graphics g, RectangleF rect)
         {
             var checkSize = Math.Min(rect.Width, rect.Height);
             if (checkSize < 10) checkSize = 20;

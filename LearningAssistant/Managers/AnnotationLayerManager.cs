@@ -159,6 +159,5 @@ namespace LearningAssistant.Managers
                 _logger.LogWarning(ex, "Error applying second annotation bitmap");
             }
         }
-
-        }
+    }
 }

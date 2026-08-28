@@ -94,6 +94,8 @@ namespace LearningAssistant.Managers
         private bool _isLaserPointerActive = false;
         private Point _laserPointerPosition = Point.Empty;
 
+        private System.Windows.Forms.Timer? _clearPendingHighlightTimer;
+
         /// <summary>
         /// 标注被选中时触发，携带(selectedStroke, selectedIndex, isDoubleClick)
         /// </summary>
@@ -809,24 +811,22 @@ namespace LearningAssistant.Managers
             _isLongPressPending = false;
         }
 
-        private System.Windows.Forms.Timer? _clearPendingHighlightTimer;
-
         private void StartClearPendingHighlightTimer()
         {
-            // 先停止旧的定时器
             _clearPendingHighlightTimer?.Stop();
             _clearPendingHighlightTimer?.Dispose();
 
-            // 创建新的定时器，延迟清除待处理高亮矩形
             _clearPendingHighlightTimer = new System.Windows.Forms.Timer();
-            _clearPendingHighlightTimer.Interval = 100; // 100ms 延迟
-            _clearPendingHighlightTimer.Tick += (s, e) =>
-            {
-                _clearPendingHighlightTimer?.Stop();
-                _pendingHighlightRect = null;
-                _form.PictureBoxPdf?.Invalidate();
-            };
+            _clearPendingHighlightTimer.Interval = 100;
+            _clearPendingHighlightTimer.Tick += ClearPendingHighlight_Tick;
             _clearPendingHighlightTimer.Start();
+        }
+
+        private void ClearPendingHighlight_Tick(object? sender, EventArgs e)
+        {
+            _clearPendingHighlightTimer?.Stop();
+            _pendingHighlightRect = null;
+            _form.PictureBoxPdf?.Invalidate();
         }
 
         private void LongPressTimer_Tick(object? sender, EventArgs e)
