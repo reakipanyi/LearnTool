@@ -1,4 +1,4 @@
-﻿using LearningAssistant.Abstractions;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
 using LearningAssistant.Models.Pdf;
@@ -661,56 +661,74 @@ namespace LearningAssistant.Managers
         {
             if (_form.ListBoxHighlights == null || string.IsNullOrEmpty(_form.CurrentPdfPath)) return;
 
-            _form.ListBoxHighlights.Items.Clear();
-
-            var highlights = _highlightService.GetHighlights(_form.CurrentPdfPath);
-            foreach (var highlight in highlights)
+            var listBox = _form.ListBoxHighlights;
+            listBox.BeginUpdate();
+            try
             {
-                _form.ListBoxHighlights.Items.Add(highlight);
-            }
+                listBox.Items.Clear();
 
-            if (_annotationService != null)
-            {
-                for (int pageIndex = 0; pageIndex < _form.Presenter?.PageCount; pageIndex++)
+                // 使用 HashSet 按 Id 去重，防止同一高亮/标注被重复添加
+                var addedIds = new HashSet<string>();
+
+                var highlights = _highlightService.GetHighlights(_form.CurrentPdfPath);
+                foreach (var highlight in highlights)
                 {
-                    var strokes = _annotationService.GetStrokes(_form.CurrentPdfPath, pageIndex);
-                    foreach (var stroke in strokes)
+                    if (addedIds.Add(highlight.Id))
                     {
-                        var annotationItem = new PdfAnnotationItem
-                        {
-                            Id = stroke.Id,
-                            PdfPath = _form.CurrentPdfPath,
-                            PageIndex = pageIndex,
-                            Type = AnnotationType.Stroke,
-                            ColorArgb = stroke.ColorArgb,
-                            Thickness = stroke.Thickness,
-                            StrokePoints = stroke.Points,
-                            CreatedAt = stroke.CreatedAt
-                        };
-                        _form.ListBoxHighlights.Items.Add(annotationItem);
-
-                    }
-
-                    var texts = _annotationService.GetTexts(_form.CurrentPdfPath, pageIndex);
-                    foreach (var text in texts)
-                    {
-                        var annotationItem = new PdfAnnotationItem
-                        {
-                            Id = text.Id,
-                            PdfPath = _form.CurrentPdfPath,
-                            PageIndex = pageIndex,
-                            Type = AnnotationType.Text,
-                            NormalizedX = text.NormalizedX,
-                            NormalizedY = text.NormalizedY,
-                            ColorArgb = text.ColorArgb,
-                            Text = text.Content,
-                            FontSize = text.FontSize,
-                            FontFamily = text.FontFamily,
-                            CreatedAt = text.CreatedAt
-                        };
-                        _form.ListBoxHighlights.Items.Add(annotationItem);
+                        listBox.Items.Add(highlight);
                     }
                 }
+
+                if (_annotationService != null)
+                {
+                    for (int pageIndex = 0; pageIndex < (_form.Presenter?.PageCount ?? 0); pageIndex++)
+                    {
+                        var strokes = _annotationService.GetStrokes(_form.CurrentPdfPath, pageIndex);
+                        foreach (var stroke in strokes)
+                        {
+                            if (!addedIds.Add(stroke.Id)) continue;
+
+                            var annotationItem = new PdfAnnotationItem
+                            {
+                                Id = stroke.Id,
+                                PdfPath = _form.CurrentPdfPath,
+                                PageIndex = pageIndex,
+                                Type = AnnotationType.Stroke,
+                                ColorArgb = stroke.ColorArgb,
+                                Thickness = stroke.Thickness,
+                                StrokePoints = stroke.Points,
+                                CreatedAt = stroke.CreatedAt
+                            };
+                            listBox.Items.Add(annotationItem);
+                        }
+
+                        var texts = _annotationService.GetTexts(_form.CurrentPdfPath, pageIndex);
+                        foreach (var text in texts)
+                        {
+                            if (!addedIds.Add(text.Id)) continue;
+
+                            var annotationItem = new PdfAnnotationItem
+                            {
+                                Id = text.Id,
+                                PdfPath = _form.CurrentPdfPath,
+                                PageIndex = pageIndex,
+                                Type = AnnotationType.Text,
+                                NormalizedX = text.NormalizedX,
+                                NormalizedY = text.NormalizedY,
+                                ColorArgb = text.ColorArgb,
+                                Text = text.Content,
+                                FontSize = text.FontSize,
+                                FontFamily = text.FontFamily,
+                                CreatedAt = text.CreatedAt
+                            };
+                            listBox.Items.Add(annotationItem);
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                listBox.EndUpdate();
             }
         }
 

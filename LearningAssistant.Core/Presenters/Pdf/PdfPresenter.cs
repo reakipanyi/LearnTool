@@ -1422,7 +1422,52 @@ namespace LearningAssistant.Presenters
 
         private async void View_TranslateClicked(object? sender, EventArgs e)
         {
-            await TranslateTextAsync();
+            await TranslateFullPageAsync();
+        }
+
+        /// <summary>
+        /// 整页翻译：对当前页做 OCR 识别 + 翻译，结果写入原文/翻译文本框。
+        /// </summary>
+        private async Task TranslateFullPageAsync()
+        {
+            // 如果原文框已有文本，直接翻译（走框内翻译路径）
+            var originalText = _view?.GetOriginalText();
+            if (!string.IsNullOrWhiteSpace(originalText))
+            {
+                await TranslateTextAsync();
+                return;
+            }
+
+            // 原文框为空 → 整页 OCR + 翻译
+            if (!_pdfOcrService.IsAvailable)
+            {
+                var errorMsg = _pdfOcrService.InitErrorMessage ?? "OCR服务未配置";
+                _view?.ShowWarning($"OCR服务未初始化:\n{errorMsg}");
+                return;
+            }
+
+            var img = _view?.GetCurrentImage();
+            if (img == null || img.Length == 0)
+            {
+                _view?.ShowWarning("当前页面无效，无法翻译");
+                return;
+            }
+
+            _view?.SetLoadingState(true);
+            try
+            {
+                var result = await _pdfTranslationService.OcrAndTranslateAsync(img);
+                UpdateOcrResult(result.Original, result.Translation);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in TranslateFullPageAsync");
+                _view?.ShowError("整页翻译失败: " + ex.Message);
+            }
+            finally
+            {
+                _view?.SetLoadingState(false);
+            }
         }
 
         private async Task TranslateTextAsync()

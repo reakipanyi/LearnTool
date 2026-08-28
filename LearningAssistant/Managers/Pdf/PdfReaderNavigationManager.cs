@@ -1002,6 +1002,61 @@ namespace LearningAssistant.Managers
             _form.PictureBoxPdf.Invalidate();
         }
 
+        /// <summary>
+        /// 按 Id 选中当前页的标注/高亮，供列表点击调用。
+        /// </summary>
+        public bool SelectAnnotationById(string id)
+        {
+            // 切换到选择模式
+            SetToolMode(AnnotationToolMode.Select);
+
+            _selectionManager.ClearSelection();
+
+            // 1. 在笔画中查找
+            var strokes = _selectionManager.GetCurrentPageStrokes();
+            for (int i = 0; i < strokes.Count; i++)
+            {
+                if (strokes[i].Id == id)
+                {
+                    _selectionManager.SelectedStroke = strokes[i];
+                    _selectionManager.SelectedStrokeIndex = i;
+                    _selectionManager.SelectionState = SelectionInteractionState.Idle;
+                    _form.PictureBoxPdf?.Invalidate();
+                    return true;
+                }
+            }
+
+            // 2. 在文字标注中查找
+            var texts = _selectionManager.GetCurrentPageTexts();
+            for (int i = 0; i < texts.Count; i++)
+            {
+                if (texts[i].Id == id)
+                {
+                    _selectionManager.SelectedText = texts[i];
+                    _selectionManager.SelectedTextIndex = i;
+                    _selectionManager.SelectionState = SelectionInteractionState.Idle;
+                    _form.PictureBoxPdf?.Invalidate();
+                    return true;
+                }
+            }
+
+            // 3. 在高亮中查找
+            var highlights = _selectionManager.GetCurrentPageHighlights();
+            for (int i = 0; i < highlights.Count; i++)
+            {
+                if (highlights[i].Id == id)
+                {
+                    _selectionManager.SelectedHighlight = highlights[i];
+                    _selectionManager.SelectedHighlightIndex = i;
+                    _selectionManager.SelectionState = SelectionInteractionState.Idle;
+                    _form.PictureBoxPdf?.Invalidate();
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public void UpdateSelectedStrokeColor(Color color)
         {
             _selectionManager.UpdateSelectedStrokeColor(color);
