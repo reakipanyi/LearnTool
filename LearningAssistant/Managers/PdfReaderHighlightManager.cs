@@ -187,7 +187,8 @@ namespace LearningAssistant.Managers
 
         private static void DrawHighlightToGraphics(Graphics g, PdfHighlight highlight, int imgWidth, int imgHeight)
         {
-            var color = HighlightService.GetHighlightColor(highlight.Color);
+            var colorInfo = HighlightService.GetHighlightColor(highlight.Color);
+            var color = Color.FromArgb(colorInfo.A, colorInfo.R, colorInfo.G, colorInfo.B);
 
             float x, y, width, height;
             if (highlight.NormalizedWidth > 0)
@@ -788,7 +789,8 @@ namespace LearningAssistant.Managers
 
                 foreach (var highlight in highlights)
                 {
-                    var color = HighlightService.GetHighlightColor(highlight.Color);
+                    var colorInfo = HighlightService.GetHighlightColor(highlight.Color);
+                    var color = Color.FromArgb(colorInfo.A, colorInfo.R, colorInfo.G, colorInfo.B);
 
                     float x, y, width, height;
                     if (highlight.NormalizedWidth > 0)

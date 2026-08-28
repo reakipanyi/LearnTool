@@ -41,18 +41,15 @@ namespace LearningAssistant.Managers
         private readonly IPdfReaderFormAccess _form;
         private bool _disposed = false;
 
-        private int _zoomLevel = 100;
         private bool _isSelecting = false;
         private bool _isDrawing = false;
         private bool _isDragging = false;
-        private bool _isLocked = false;
 
         private AnnotationToolMode _currentToolMode = AnnotationToolMode.Highlight;
 
         private Point _selectStart = Point.Empty;
         private Point _selectEnd = Point.Empty;
         private Point _dragStart = Point.Empty;
-        private Point _imageOffset = Point.Empty;
         private Rectangle? _lastSelectionRect = null;
         private Rectangle? _pendingHighlightRect = null;
 
@@ -73,14 +70,10 @@ namespace LearningAssistant.Managers
         private bool _isNavPanelDragging = false;
         private Point _navPanelStartPoint = Point.Empty;
 
-        private bool _isAnimating = false;
-        private int _transitionStep = 0;
-        private bool _transitionFadeOut = false;
+        private readonly PageTransitionAnimator _pageTransitionAnimator;
+        private readonly PdfZoomController _zoomController;
+        private readonly AnnotationLayerManager _annotationLayerManager;
 
-        private Bitmap? _annotationBitmap;
-        private Graphics? _annotationGraphics;
-        private Bitmap? _secondAnnotationBitmap;
-        private Graphics? _secondAnnotationGraphics;
         private List<PointF>? _currentStrokePoints;
         private Pen? _drawingPen;
         private Color _penColor = Color.Black;
@@ -148,10 +141,10 @@ namespace LearningAssistant.Managers
         /// </summary>
         public event Action<AnnotationStroke, int, bool>? AnnotationSelected;
 
-        public int ZoomLevel => _zoomLevel;
-        public bool IsLocked => _isLocked;
+        public int ZoomLevel => _zoomController.ZoomLevel;
+        public bool IsLocked => _zoomController.IsLocked;
         public Rectangle? LastSelectionRect => _lastSelectionRect ?? _pendingHighlightRect;
-        public Point ImageOffset => _imageOffset;
+        public Point ImageOffset => _zoomController.ImageOffset;
         public AnnotationToolMode CurrentToolMode => _currentToolMode;
         public Color PenColor => _penColor;
         public float PenWidth => _penWidth;
@@ -188,6 +181,9 @@ namespace LearningAssistant.Managers
             _form = form ?? throw new ArgumentNullException(nameof(form));
 
             _drawingPen = CreatePen(_penColor, _penWidth);
+            _pageTransitionAnimator = new PageTransitionAnimator(logger, form);
+            _zoomController = new PdfZoomController(logger, form);
+            _annotationLayerManager = new AnnotationLayerManager(logger, form);
             InitializeLongPressTimer();
         }
 
@@ -344,12 +340,7 @@ namespace LearningAssistant.Managers
 
         public void Zoom(int value)
         {
-            if (_isLocked) return;
-
-            _zoomLevel = value;
-            _form.TrackBarZoom.Value = value;
-            _form.LabelZoom.Text = $"{_zoomLevel}%";
-            _ = RenderPageAtZoomAsync();
+            _zoomController.Zoom(value);
         }
 
         public void ZoomByMouseWheel(int delta, bool ctrlDown)
@@ -360,12 +351,7 @@ namespace LearningAssistant.Managers
 
                 if (ctrlDown)
                 {
-                    if (delta > 0) _zoomLevel = Math.Min(400, _zoomLevel + 10);
-                    else _zoomLevel = Math.Max(10, _zoomLevel - 10);
-
-                    _form.TrackBarZoom.Value = _zoomLevel;
-                    _form.LabelZoom.Text = $"{_zoomLevel}%";
-                    _ = RenderPageAtZoomAsync();
+                    _zoomController.ZoomByMouseWheel(delta);
                 }
                 else
                 {
@@ -392,46 +378,12 @@ namespace LearningAssistant.Managers
 
         public void ResetZoom()
         {
-            _zoomLevel = 100;
-            _imageOffset = Point.Empty;
-            _form.TrackBarZoom.Value = 100;
-            _form.LabelZoom.Text = "100%";
-            _ = RenderPageAtZoomAsync();
-        }
-
-        private async Task RenderPageAtZoomAsync()
-        {
-            try
-            {
-                var page = int.TryParse(_form.TextBoxPage.Text, out var p) ? p - 1 : 0;
-                int targetW = (int)(_form.PictureBoxPdf.ClientSize.Width * _zoomLevel / 100.0);
-                int targetH = (int)(_form.PictureBoxPdf.ClientSize.Height * _zoomLevel / 100.0);
-                var bmp = await _form.Presenter!.RenderPageAsync(page, Math.Max(1, targetW), Math.Max(1, targetH));
-                if (bmp != null)
-                {
-                    _form.Form.BeginInvoke(() => _form.DisplayImage(new Bitmap(new MemoryStream(bmp))));
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // Render cancelled, ignore
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error rendering page during zoom");
-            }
+            _zoomController.ResetZoom();
         }
 
         public void ToggleLockView()
         {
-            _isLocked = !_isLocked;
-            if (_form.ButtonLockView != null)
-            {
-                _form.ButtonLockView.Text = _isLocked ? "🔒" : "🔓";
-                _form.ButtonLockView.BackColor = _isLocked ? Color.LightSalmon : Color.White;
-            }
-
-            _form.TrackBarZoom.Enabled = !_isLocked;
+            _zoomController.ToggleLockView();
         }
 
         public void NavigateToPage(int pageIndex)
@@ -451,71 +403,12 @@ namespace LearningAssistant.Managers
 
         public void StartPageTransition(bool forward)
         {
-            if (_isAnimating || _form.PageTransitionOverlay == null) return;
-
-            _isAnimating = true;
-            _transitionStep = 0;
-            _transitionFadeOut = true;
-
-            bool isNightMode = _form.IsNightMode;
-
-            _form.PageTransitionOverlay.Visible = true;
-            _form.PageTransitionOverlay.BackColor = isNightMode ? Color.FromArgb(30, 30, 30) : Color.White;
-
-            if (_form.PageTransitionTimer != null)
-            {
-                _form.PageTransitionTimer.Interval = 25;
-                _form.PageTransitionTimer.Start();
-            }
+            _pageTransitionAnimator.StartPageTransition(forward);
         }
 
         public void PageTransitionTimer_Tick()
         {
-            try
-            {
-                if (_form.PageTransitionOverlay == null || !_isAnimating) return;
-
-                _transitionStep++;
-
-                bool isNightMode = _form.IsNightMode;
-
-                int baseR = isNightMode ? 30 : 255;
-                int baseG = isNightMode ? 30 : 255;
-                int baseB = isNightMode ? 30 : 255;
-
-                if (_transitionFadeOut)
-                {
-                    int alpha = 255 - (_transitionStep * 30);
-                    if (alpha <= 0)
-                    {
-                        alpha = 0;
-                        _transitionFadeOut = false;
-                        _transitionStep = 0;
-                    }
-                    _form.PageTransitionOverlay.BackColor = Color.FromArgb(alpha, baseR, baseG, baseB);
-                }
-                else
-                {
-                    int alpha = _transitionStep * 30;
-                    if (alpha >= 255)
-                    {
-                        alpha = 255;
-                        _form.PageTransitionTimer?.Stop();
-                        _isAnimating = false;
-                        _form.PageTransitionOverlay.Visible = false;
-                        return;
-                    }
-                    _form.PageTransitionOverlay.BackColor = Color.FromArgb(alpha, baseR, baseG, baseB);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in page transition animation");
-                _isAnimating = false;
-                _form.PageTransitionTimer?.Stop();
-                if (_form.PageTransitionOverlay != null)
-                    _form.PageTransitionOverlay.Visible = false;
-            }
+            _pageTransitionAnimator.PageTransitionTimer_Tick();
         }
 
         public void MouseDown(object? sender, MouseEventArgs e)
@@ -700,7 +593,7 @@ namespace LearningAssistant.Managers
         {
             try
             {
-                if (_isLocked) return;
+                if (_zoomController.IsLocked) return;
 
                 if (_isLongPressPending && !_longPressDragStarted)
                 {
@@ -778,7 +671,7 @@ namespace LearningAssistant.Managers
                 {
                     var deltaX = e.Location.X - _dragStart.X;
                     var deltaY = e.Location.Y - _dragStart.Y;
-                    _imageOffset = new Point(_imageOffset.X + deltaX, _imageOffset.Y + deltaY);
+                    _zoomController.SetImageOffset(new Point(_zoomController.ImageOffset.X + deltaX, _zoomController.ImageOffset.Y + deltaY));
                     _dragStart = e.Location;
                     _form.PictureBoxPdf.Invalidate();
                     return;
@@ -868,11 +761,11 @@ namespace LearningAssistant.Managers
                     _isDrawing = false;
                     try
                     {
-                        if (_annotationBitmap != null && _currentStrokePoints != null && _currentStrokePoints.Count >= 2)
+                        if (_annotationLayerManager.AnnotationBitmap != null && _currentStrokePoints != null && _currentStrokePoints.Count >= 2)
                         {
                             bool isSecondPage = _drawingPageIndex > _form.CurrentPageIndex;
-                            Graphics activeGfx = isSecondPage ? _secondAnnotationGraphics! : _annotationGraphics!;
-                            Bitmap activeBmp = isSecondPage ? _secondAnnotationBitmap! : _annotationBitmap!;
+                            Graphics activeGfx = isSecondPage ? _annotationLayerManager.SecondAnnotationGraphics! : _annotationLayerManager.AnnotationGraphics!;
+                            Bitmap activeBmp = isSecondPage ? _annotationLayerManager.SecondAnnotationBitmap! : _annotationLayerManager.AnnotationBitmap!;
 
                             activeGfx.SmoothingMode = SmoothingMode.AntiAlias;
 
@@ -921,7 +814,7 @@ namespace LearningAssistant.Managers
                     _isDrawingShape = false;
                     try
                     {
-                        if (_annotationBitmap != null && _shapeStartPoint.HasValue && _shapeEndPoint.HasValue)
+                        if (_annotationLayerManager.AnnotationBitmap != null && _shapeStartPoint.HasValue && _shapeEndPoint.HasValue)
                         {
                             var startPt = _shapeStartPoint.Value;
                             var endPt = _shapeEndPoint.Value;
@@ -963,8 +856,8 @@ namespace LearningAssistant.Managers
                             else
                             {
                                 bool isSecondPage = _drawingPageIndex > _form.CurrentPageIndex;
-                                Graphics activeGfx = isSecondPage ? _secondAnnotationGraphics! : _annotationGraphics!;
-                                Bitmap activeBmp = isSecondPage ? _secondAnnotationBitmap! : _annotationBitmap!;
+                                Graphics activeGfx = isSecondPage ? _annotationLayerManager.SecondAnnotationGraphics! : _annotationLayerManager.AnnotationGraphics!;
+                                Bitmap activeBmp = isSecondPage ? _annotationLayerManager.SecondAnnotationBitmap! : _annotationLayerManager.AnnotationBitmap!;
 
                                 activeGfx.SmoothingMode = SmoothingMode.AntiAlias;
 
@@ -1765,7 +1658,7 @@ namespace LearningAssistant.Managers
 
         private void StartDragging(Point startLocation)
         {
-            if (_isLocked) return;
+            if (_zoomController.IsLocked) return;
 
             _isDragging = true;
             _longPressDragStarted = true;
@@ -1795,78 +1688,39 @@ namespace LearningAssistant.Managers
                     return;
                 }
 
-                ref Bitmap? bmpRef = ref isSecondPage ? ref _secondAnnotationBitmap : ref _annotationBitmap;
-                ref Graphics? gfxRef = ref isSecondPage ? ref _secondAnnotationGraphics : ref _annotationGraphics;
-
-                if (bmpRef != null)
+                if (isSecondPage)
                 {
-                    try
+                    var bmp = _annotationLayerManager.SecondAnnotationBitmap;
+                    var gfx = _annotationLayerManager.SecondAnnotationGraphics;
+                    if (bmp != null)
                     {
-                        if (bmpRef.Width != imgWidth ||
-                            bmpRef.Height != imgHeight)
-                        {
-                            gfxRef?.Dispose();
-                            bmpRef?.Dispose();
-                            bmpRef = null;
-                            gfxRef = null;
-                        }
+                        if (bmp.Width != imgWidth || bmp.Height != imgHeight)
+                            _annotationLayerManager.CleanupSecondAnnotationBitmap();
                     }
-                    catch (ObjectDisposedException)
-                    {
-                        gfxRef?.Dispose();
-                        bmpRef?.Dispose();
-                        bmpRef = null;
-                        gfxRef = null;
-                    }
+                    if (_annotationLayerManager.SecondAnnotationBitmap == null)
+                        _annotationLayerManager.EnsureSecondAnnotationBitmap(imgWidth, imgHeight);
                 }
-
-                if (bmpRef == null)
+                else
                 {
-                    bmpRef = new Bitmap(imgWidth, imgHeight);
-                    gfxRef = Graphics.FromImage(bmpRef);
+                    _annotationLayerManager.EnsureAnnotationBitmap();
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in EnsureAnnotationBitmap");
-                CleanupAnnotationBitmap();
+                _annotationLayerManager.CleanupAnnotationBitmap();
             }
         }
 
         public void CleanupAnnotationBitmap()
         {
-            try
-            {
-                _annotationGraphics?.Dispose();
-                _annotationBitmap?.Dispose();
-                _annotationGraphics = null;
-                _annotationBitmap = null;
-
-                _secondAnnotationGraphics?.Dispose();
-                _secondAnnotationBitmap?.Dispose();
-                _secondAnnotationGraphics = null;
-                _secondAnnotationBitmap = null;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error cleaning up annotation bitmap");
-            }
+            _annotationLayerManager.CleanupAnnotationBitmap();
         }
 
         /// <summary>仅清理第二页标注缓存（双页模式切换时使用）</summary>
         public void CleanupSecondAnnotationBitmap()
         {
-            try
-            {
-                _secondAnnotationGraphics?.Dispose();
-                _secondAnnotationBitmap?.Dispose();
-                _secondAnnotationGraphics = null;
-                _secondAnnotationBitmap = null;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error cleaning up second annotation bitmap");
-            }
+            _annotationLayerManager.CleanupSecondAnnotationBitmap();
         }
 
         /// <summary>
@@ -1884,22 +1738,13 @@ namespace LearningAssistant.Managers
 
                 _logger?.LogInformation("清除所有笔划标注: {PdfPath}", _form.CurrentPdfPath);
 
-                // 1. 清除持久化存储中的所有标注
                 _form.Presenter.ClearAllAnnotations(_form.CurrentPdfPath);
-
-                // 2. 清除选中状态
                 ClearSelection();
-
-                // 3. 清除内存中的笔划位图缓存
-                CleanupAnnotationBitmap();
+                _annotationLayerManager.CleanupAnnotationBitmap();
                 _currentStrokePoints?.Clear();
                 _hoveredStroke = null;
                 _hoveredStrokeIndex = -1;
-
-                // 4. 重新加载空标注层
-                LoadAnnotationsForCurrentPage();
-
-                // 5. 刷新显示
+                _annotationLayerManager.LoadAnnotationsForCurrentPage();
                 _form.PictureBoxPdf?.Invalidate();
 
                 _logger?.LogInformation("所有笔划标注已清除");
@@ -1912,20 +1757,9 @@ namespace LearningAssistant.Managers
 
         public void LoadAnnotationsForCurrentPage()
         {
-            try
-            {
-                if (_form.CurrentPageImage == null || _form.Presenter == null) return;
-
-                int imgWidth = _form.CurrentPageImage.Width;
-                int imgHeight = _form.CurrentPageImage.Height;
-
-                var annotationBytes = _form.Presenter.LoadAnnotationForCurrentPage(imgWidth, imgHeight);
-                ApplyLoadedAnnotationBitmap(annotationBytes != null ? new Bitmap(new MemoryStream(annotationBytes)) : null);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error loading annotations for current page");
-            }
+            _annotationLayerManager.LoadAnnotationsForCurrentPage();
+            _selectedStroke = null;
+            _selectedStrokeIndex = -1;
         }
 
         /// <summary>
@@ -1934,59 +1768,15 @@ namespace LearningAssistant.Managers
         /// </summary>
         public void ApplyLoadedAnnotationBitmap(Bitmap? annotationBitmap)
         {
-            try
-            {
-                if (annotationBitmap != null)
-                {
-                    CleanupAnnotationBitmap();
-                    _annotationBitmap = new Bitmap(annotationBitmap);
-                    _annotationGraphics = Graphics.FromImage(_annotationBitmap);
-                    _annotationGraphics.SmoothingMode = SmoothingMode.AntiAlias;
-                }
-                else
-                {
-                    EnsureAnnotationBitmap();
-                }
-
-                _selectedStroke = null;
-                _selectedStrokeIndex = -1;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error applying loaded annotation bitmap");
-            }
+            _annotationLayerManager.ApplyLoadedAnnotationBitmap(annotationBitmap);
+            _selectedStroke = null;
+            _selectedStrokeIndex = -1;
         }
 
         /// <summary>应用第二页标注位图（双页模式）</summary>
         public void ApplySecondLoadedAnnotationBitmap(Bitmap? annotationBitmap)
         {
-            try
-            {
-                if (annotationBitmap != null)
-                {
-                    _secondAnnotationGraphics?.Dispose();
-                    _secondAnnotationBitmap?.Dispose();
-                    _secondAnnotationBitmap = new Bitmap(annotationBitmap);
-                    _secondAnnotationGraphics = Graphics.FromImage(_secondAnnotationBitmap);
-                    _secondAnnotationGraphics.SmoothingMode = SmoothingMode.AntiAlias;
-                }
-                else
-                {
-                    // 创建空白的透明位图
-                    if (_form.SecondPageImage != null)
-                    {
-                        _secondAnnotationBitmap?.Dispose();
-                        _secondAnnotationGraphics?.Dispose();
-                        _secondAnnotationBitmap = new Bitmap(_form.SecondPageImage.Width, _form.SecondPageImage.Height);
-                        _secondAnnotationGraphics = Graphics.FromImage(_secondAnnotationBitmap);
-                        _secondAnnotationGraphics.Clear(Color.Transparent);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error applying second annotation bitmap");
-            }
+            _annotationLayerManager.ApplySecondLoadedAnnotationBitmap(annotationBitmap);
         }
 
         private void HandleSelectModeClick(Point clientPoint)
@@ -2597,19 +2387,19 @@ namespace LearningAssistant.Managers
             if (!_annotationLayerVisible) return;
             try
             {
-                // 双页模式下，_annotationBitmap 属于左页，_secondAnnotationBitmap 属于右页
+                // 双页模式下，_annotationLayerManager.AnnotationBitmap 属于左页，_annotationLayerManager.SecondAnnotationBitmap 属于右页
                 if (pageIndex < 0 || pageIndex == _form.CurrentPageIndex)
                 {
-                    if (_annotationBitmap != null)
+                    if (_annotationLayerManager.AnnotationBitmap != null)
                     {
-                        g.DrawImage(_annotationBitmap, imgRect);
+                        g.DrawImage(_annotationLayerManager.AnnotationBitmap, imgRect);
                     }
                 }
                 else if (pageIndex == _form.CurrentPageIndex + 1)
                 {
-                    if (_secondAnnotationBitmap != null)
+                    if (_annotationLayerManager.SecondAnnotationBitmap != null)
                     {
-                        g.DrawImage(_secondAnnotationBitmap, imgRect);
+                        g.DrawImage(_annotationLayerManager.SecondAnnotationBitmap, imgRect);
                     }
                 }
 
@@ -2682,6 +2472,7 @@ namespace LearningAssistant.Managers
                     switch (_currentToolMode)
                     {
                         case AnnotationToolMode.Highlight:
+                            {
                                 var highlightColor = Color.FromArgb(120, 255, 255, 0);
                                 using var brush = new SolidBrush(highlightColor);
                                 g.FillRectangle(brush, rect);
@@ -2712,8 +2503,8 @@ namespace LearningAssistant.Managers
                             }
                         case AnnotationToolMode.Mosaic:
                             {
-                                using var brush = new SolidBrush(Color.FromArgb(80, 255, 255, 255));
-                                g.FillRectangle(brush, rect);
+                                using var mosaicBrush = new SolidBrush(Color.FromArgb(80, 255, 255, 255));
+                                g.FillRectangle(mosaicBrush, rect);
                                 if (_isDashed) pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
                                 g.DrawRectangle(pen, rect);
                                 break;
@@ -2775,9 +2566,9 @@ namespace LearningAssistant.Managers
         /// </summary>
         public void DrawAnnotationsToGraphics(Graphics g, Rectangle destRect)
         {
-            if (_annotationBitmap != null)
+            if (_annotationLayerManager.AnnotationBitmap != null)
             {
-                g.DrawImage(_annotationBitmap, destRect);
+                g.DrawImage(_annotationLayerManager.AnnotationBitmap, destRect);
             }
         }
 
@@ -3149,7 +2940,7 @@ namespace LearningAssistant.Managers
 
         private void ApplyMosaic(RectangleF rect, int blockSize)
         {
-            ApplyMosaic(rect, blockSize, _annotationGraphics!, _annotationBitmap!);
+            ApplyMosaic(rect, blockSize, _annotationLayerManager.AnnotationGraphics!, _annotationLayerManager.AnnotationBitmap!);
         }
 
         private void ApplyMosaic(RectangleF rect, int blockSize, Graphics g, Bitmap bmp)
