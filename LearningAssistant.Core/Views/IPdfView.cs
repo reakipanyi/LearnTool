@@ -6,6 +6,7 @@ namespace LearningAssistant.Views
     /// <summary>
     /// PDF视图接口 - 提供PDF阅读界面的显示和交互功能
     /// 支持PDF模式、图片模式和OCR标注
+    /// TODO: 建议按功能拆分为子接口（IPdfNavigationView / IPdfAnnotationView / IPdfOcrView / IPdfTranslationView 等）
     /// </summary>
     public interface IPdfView
     {

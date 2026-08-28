@@ -533,6 +533,7 @@ namespace LearningAssistant.Managers
                         return;
                     }
 
+                    // 标注工具模式分发：选择 / 高亮 / 自由绘制 / 形状 / 文字 / 橡皮擦 / 特殊工具
                     switch (_currentToolMode)
                     {
                         case AnnotationToolMode.Select:
@@ -2677,10 +2678,10 @@ namespace LearningAssistant.Managers
                     pen.StartCap = LineCap.Round;
                     pen.EndCap = LineCap.Round;
 
+                    // 实时预览绘制分发：高亮 / 形状 / 文字 / 选框
                     switch (_currentToolMode)
                     {
                         case AnnotationToolMode.Highlight:
-                            {
                                 var highlightColor = Color.FromArgb(120, 255, 255, 0);
                                 using var brush = new SolidBrush(highlightColor);
                                 g.FillRectangle(brush, rect);

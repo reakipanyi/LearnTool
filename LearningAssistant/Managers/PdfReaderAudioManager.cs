@@ -120,7 +120,7 @@ namespace LearningAssistant.Managers
                 Cursor = Cursors.Hand,
                 Tag = "record"
             };
-            _buttonRecord.Click += ButtonRecord_Click;
+            _buttonRecord.Click += _buttonRecord_Click;
             buttonPanel.Controls.Add(_buttonRecord, 0, 0);
 
             _buttonStop = new Button
@@ -137,7 +137,7 @@ namespace LearningAssistant.Managers
                 Enabled = false,
                 Tag = "stop"
             };
-            _buttonStop.Click += ButtonStop_Click;
+            _buttonStop.Click += _buttonStop_Click;
             buttonPanel.Controls.Add(_buttonStop, 1, 0);
 
             _buttonPlay = new Button
@@ -154,7 +154,7 @@ namespace LearningAssistant.Managers
                 Enabled = false,
                 Tag = "play"
             };
-            _buttonPlay.Click += ButtonPlay_Click;
+            _buttonPlay.Click += _buttonPlay_Click;
             buttonPanel.Controls.Add(_buttonPlay, 2, 0);
 
             layout.Controls.Add(buttonPanel, 0, 1);
@@ -245,7 +245,7 @@ namespace LearningAssistant.Managers
                 Cursor = Cursors.Hand,
                 Tag = "delete"
             };
-            buttonDelete.Click += ButtonDelete_Click;
+            buttonDelete.Click += _buttonDelete_Click;
             layout.Controls.Add(buttonDelete, 0, 7);
 
             _tabPage.Controls.Add(layout);
@@ -260,7 +260,7 @@ namespace LearningAssistant.Managers
             _levelTimer.Start();
         }
 
-        private void ButtonRecord_Click(object? sender, EventArgs e)
+        private void _buttonRecord_Click(object? sender, EventArgs e)
         {
             if (_recorder.State == AudioRecorderState.Recording)
             {
@@ -282,13 +282,13 @@ namespace LearningAssistant.Managers
             UpdateUIState();
         }
 
-        private void ButtonStop_Click(object? sender, EventArgs e)
+        private void _buttonStop_Click(object? sender, EventArgs e)
         {
             if (_recorder.State == AudioRecorderState.Recording)
                 _recorder.StopRecording();
         }
 
-        private void ButtonPlay_Click(object? sender, EventArgs e)
+        private void _buttonPlay_Click(object? sender, EventArgs e)
         {
             if (_isPlaying)
             {
@@ -300,7 +300,7 @@ namespace LearningAssistant.Managers
                 StartPlayback(selected);
         }
 
-        private void ButtonDelete_Click(object? sender, EventArgs e)
+        private void _buttonDelete_Click(object? sender, EventArgs e)
         {
             if (_listRecordings.SelectedItem is AudioRecording selected)
             {
