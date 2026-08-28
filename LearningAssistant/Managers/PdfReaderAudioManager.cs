@@ -66,15 +66,46 @@ namespace LearningAssistant.Managers
 
             _tabPage.SuspendLayout();
 
+            var layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(12, 10, 12, 10),
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink
+            };
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+
+            // 行定义：状态/按钮行/时间/进度条/电平/列表标题/列表/删除按钮
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));  // 0: _labelStatus
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));  // 1: 按钮行
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));  // 2: _labelTime
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));  // 3: _trackBarPosition
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 16));  // 4: _levelMeter
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));  // 5: 录音列表标题
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F)); // 6: 列表 / 无录音提示
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));  // 7: 删除按钮
+
             _labelStatus = new Label
             {
                 Text = "就绪",
                 Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
                 ForeColor = _textColor,
-                Location = new Point(12, 10),
-                Size = new Size(200, 20)
+                Anchor = AnchorStyles.Left | AnchorStyles.Top,
+                AutoSize = true
             };
-            _tabPage.Controls.Add(_labelStatus);
+            layout.Controls.Add(_labelStatus, 0, 0);
+
+            // 按钮容器（录制/停止/播放三按钮水平排列）
+            var buttonPanel = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 3,
+                RowCount = 1,
+                Margin = Padding.Empty
+            };
+            buttonPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
+            buttonPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
+            buttonPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.34F));
 
             _buttonRecord = new Button
             {
@@ -84,13 +115,13 @@ namespace LearningAssistant.Managers
                 BackColor = _recordRed,
                 FlatStyle = FlatStyle.Flat,
                 FlatAppearance = { BorderSize = 0 },
-                Location = new Point(12, 36),
-                Size = new Size(90, 32),
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 3, 0),
                 Cursor = Cursors.Hand,
                 Tag = "record"
             };
             _buttonRecord.Click += ButtonRecord_Click;
-            _tabPage.Controls.Add(_buttonRecord);
+            buttonPanel.Controls.Add(_buttonRecord, 0, 0);
 
             _buttonStop = new Button
             {
@@ -100,14 +131,14 @@ namespace LearningAssistant.Managers
                 BackColor = Color.FromArgb(100, 100, 100),
                 FlatStyle = FlatStyle.Flat,
                 FlatAppearance = { BorderSize = 0 },
-                Location = new Point(108, 36),
-                Size = new Size(90, 32),
+                Dock = DockStyle.Fill,
+                Margin = new Padding(3, 0, 3, 0),
                 Cursor = Cursors.Hand,
                 Enabled = false,
                 Tag = "stop"
             };
             _buttonStop.Click += ButtonStop_Click;
-            _tabPage.Controls.Add(_buttonStop);
+            buttonPanel.Controls.Add(_buttonStop, 1, 0);
 
             _buttonPlay = new Button
             {
@@ -117,14 +148,16 @@ namespace LearningAssistant.Managers
                 BackColor = _accentColor,
                 FlatStyle = FlatStyle.Flat,
                 FlatAppearance = { BorderSize = 0 },
-                Location = new Point(204, 36),
-                Size = new Size(90, 32),
+                Dock = DockStyle.Fill,
+                Margin = new Padding(3, 0, 0, 0),
                 Cursor = Cursors.Hand,
                 Enabled = false,
                 Tag = "play"
             };
             _buttonPlay.Click += ButtonPlay_Click;
-            _tabPage.Controls.Add(_buttonPlay);
+            buttonPanel.Controls.Add(_buttonPlay, 2, 0);
+
+            layout.Controls.Add(buttonPanel, 0, 1);
 
             _labelTime = new Label
             {
@@ -132,15 +165,15 @@ namespace LearningAssistant.Managers
                 Font = new Font("Consolas", 9F),
                 ForeColor = _textColor,
                 TextAlign = ContentAlignment.MiddleCenter,
-                Location = new Point(12, 76),
-                Size = new Size(282, 20)
+                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top,
+                Height = 20
             };
-            _tabPage.Controls.Add(_labelTime);
+            layout.Controls.Add(_labelTime, 0, 2);
 
             _trackBarPosition = new TrackBar
             {
-                Location = new Point(12, 98),
-                Size = new Size(282, 30),
+                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top,
+                Height = 30,
                 Minimum = 0,
                 Maximum = 1000,
                 TickStyle = TickStyle.None,
@@ -148,13 +181,14 @@ namespace LearningAssistant.Managers
             };
             _trackBarPosition.MouseDown += (s, e) => _isDraggingPosition = true;
             _trackBarPosition.MouseUp += TrackBarPosition_MouseUp;
-            _tabPage.Controls.Add(_trackBarPosition);
+            layout.Controls.Add(_trackBarPosition, 0, 3);
 
             _levelMeter = new Panel
             {
-                Location = new Point(12, 130),
-                Size = new Size(282, 12),
-                BackColor = Color.FromArgb(220, 220, 230)
+                Height = 12,
+                Width = 200,
+                BackColor = Color.FromArgb(220, 220, 230),
+                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
             };
             _levelFill = new Panel
             {
@@ -163,17 +197,17 @@ namespace LearningAssistant.Managers
                 BackColor = _accentColor
             };
             _levelMeter.Controls.Add(_levelFill);
-            _tabPage.Controls.Add(_levelMeter);
+            layout.Controls.Add(_levelMeter, 0, 4);
 
             var labelList = new Label
             {
                 Text = "录音列表",
                 Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
                 ForeColor = _textColor,
-                Location = new Point(12, 150),
-                Size = new Size(200, 18)
+                Anchor = AnchorStyles.Left | AnchorStyles.Top,
+                AutoSize = true
             };
-            _tabPage.Controls.Add(labelList);
+            layout.Controls.Add(labelList, 0, 5);
 
             _labelNoRecordings = new Label
             {
@@ -181,15 +215,13 @@ namespace LearningAssistant.Managers
                 Font = new Font("Microsoft YaHei UI", 9F),
                 ForeColor = Color.FromArgb(160, 160, 170),
                 TextAlign = ContentAlignment.MiddleCenter,
-                Location = new Point(12, 170),
-                Size = new Size(282, 24)
+                Dock = DockStyle.Fill
             };
-            _tabPage.Controls.Add(_labelNoRecordings);
+            layout.Controls.Add(_labelNoRecordings, 0, 6);
 
             _listRecordings = new ListBox
             {
-                Location = new Point(12, 170),
-                Size = new Size(282, 130),
+                Dock = DockStyle.Fill,
                 BorderStyle = BorderStyle.FixedSingle,
                 DrawMode = DrawMode.OwnerDrawFixed,
                 ItemHeight = 36,
@@ -198,7 +230,7 @@ namespace LearningAssistant.Managers
             _listRecordings.DrawItem += ListRecordings_DrawItem;
             _listRecordings.SelectedIndexChanged += ListRecordings_SelectedIndexChanged;
             _listRecordings.MouseDoubleClick += ListRecordings_MouseDoubleClick;
-            _tabPage.Controls.Add(_listRecordings);
+            layout.Controls.Add(_listRecordings, 0, 6);
 
             var buttonDelete = new Button
             {
@@ -208,14 +240,15 @@ namespace LearningAssistant.Managers
                 BackColor = Color.FromArgb(230, 230, 235),
                 FlatStyle = FlatStyle.Flat,
                 FlatAppearance = { BorderSize = 0 },
-                Location = new Point(12, 308),
+                Anchor = AnchorStyles.Left | AnchorStyles.Top,
                 Size = new Size(60, 26),
                 Cursor = Cursors.Hand,
                 Tag = "delete"
             };
             buttonDelete.Click += ButtonDelete_Click;
-            _tabPage.Controls.Add(buttonDelete);
+            layout.Controls.Add(buttonDelete, 0, 7);
 
+            _tabPage.Controls.Add(layout);
             _tabPage.ResumeLayout(false);
 
             _uiTimer = new System.Windows.Forms.Timer { Interval = 200 };
