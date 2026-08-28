@@ -1027,7 +1027,7 @@ namespace LearningAssistant.Forms.Pdf
 
         private void PageTransitionTimer_Tick(object? sender, EventArgs e)
         {
-            _navigationManager?.PageTransitionTimer_Tick();
+            _navigationManager?.OnPageTransitionTick();
         }
 
         private void RadioHighlightColor_CheckedChanged(object? sender, EventArgs e)

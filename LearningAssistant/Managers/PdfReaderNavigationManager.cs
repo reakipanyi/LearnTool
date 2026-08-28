@@ -299,9 +299,9 @@ namespace LearningAssistant.Managers
             _pageTransitionAnimator.StartPageTransition(forward);
         }
 
-        public void PageTransitionTimer_Tick()
+        public void OnPageTransitionTick()
         {
-            _pageTransitionAnimator.PageTransitionTimer_Tick();
+            _pageTransitionAnimator.OnPageTransitionTick();
         }
 
         public void MouseDown(object? sender, MouseEventArgs e)

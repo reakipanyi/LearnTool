@@ -1076,43 +1076,13 @@ namespace LearningAssistant.Managers
 
             if (SelectedHighlight != null && _form.CurrentPageImage != null)
             {
-                var hlBounds = GetHighlightScreenBounds(SelectedHighlight, _form.CurrentPageImage, imgRect);
-                if (hlBounds.Width > 0 && hlBounds.Height > 0)
-                {
-                    using var hlFillBrush = new SolidBrush(Color.FromArgb(20, 64, 150, 255));
-                    g.FillRectangle(hlFillBrush, hlBounds.X, hlBounds.Y, hlBounds.Width, hlBounds.Height);
-
-                    using var hlBorderPenOuter = new Pen(Color.FromArgb(120, 64, 150, 255), SelectionBorderWidth + 2);
-                    hlBorderPenOuter.DashStyle = DashStyle.Dash;
-                    g.DrawRectangle(hlBorderPenOuter, hlBounds.X - 1, hlBounds.Y - 1, hlBounds.Width + 2, hlBounds.Height + 2);
-
-                    using var hlBorderPenInner = new Pen(Color.FromArgb(200, 64, 150, 255), SelectionBorderWidth);
-                    g.DrawRectangle(hlBorderPenInner, hlBounds.X, hlBounds.Y, hlBounds.Width, hlBounds.Height);
-
-                    var hlHandles = GetHighlightHandles(SelectedHighlight, _form.CurrentPageImage, imgRect);
-                    DrawResizeHandles(g, hlHandles);
-                }
+                DrawHighlightSelection(g, imgRect);
                 return;
             }
 
             if (SelectedText != null && _form.CurrentPageImage != null)
             {
-                var textBounds = GetTextScreenBounds(SelectedText, _form.CurrentPageImage, imgRect);
-                if (textBounds.Width > 0 && textBounds.Height > 0)
-                {
-                    using var textFillBrush = new SolidBrush(Color.FromArgb(20, 64, 150, 255));
-                    g.FillRectangle(textFillBrush, textBounds.X, textBounds.Y, textBounds.Width, textBounds.Height);
-
-                    using var textBorderPenOuter = new Pen(Color.FromArgb(120, 64, 150, 255), SelectionBorderWidth + 2);
-                    textBorderPenOuter.DashStyle = DashStyle.Dash;
-                    g.DrawRectangle(textBorderPenOuter, textBounds.X - 1, textBounds.Y - 1, textBounds.Width + 2, textBounds.Height + 2);
-
-                    using var textBorderPenInner = new Pen(Color.FromArgb(200, 64, 150, 255), SelectionBorderWidth);
-                    g.DrawRectangle(textBorderPenInner, textBounds.X, textBounds.Y, textBounds.Width, textBounds.Height);
-
-                    var textHandles = GetTextHandles(SelectedText, _form.CurrentPageImage, imgRect);
-                    DrawResizeHandles(g, textHandles);
-                }
+                DrawTextSelection(g, imgRect);
                 return;
             }
 
@@ -1130,6 +1100,33 @@ namespace LearningAssistant.Managers
             var (bounds, _, handles) = GetSelectionBounds(SelectedStroke, _form.CurrentPageImage, imgRect);
             if (bounds.Width <= 0 && bounds.Height <= 0) return;
 
+            DrawSelectionFillAndBorder(g, bounds);
+            DrawCornerIndicators(g, bounds);
+            DrawResizeHandles(g, handles);
+        }
+
+        private void DrawHighlightSelection(Graphics g, Rectangle imgRect)
+        {
+            var hlBounds = GetHighlightScreenBounds(SelectedHighlight!, _form.CurrentPageImage!, imgRect);
+            if (hlBounds.Width <= 0 || hlBounds.Height <= 0) return;
+
+            DrawSelectionFillAndBorder(g, hlBounds);
+            var hlHandles = GetHighlightHandles(SelectedHighlight!, _form.CurrentPageImage!, imgRect);
+            DrawResizeHandles(g, hlHandles);
+        }
+
+        private void DrawTextSelection(Graphics g, Rectangle imgRect)
+        {
+            var textBounds = GetTextScreenBounds(SelectedText!, _form.CurrentPageImage!, imgRect);
+            if (textBounds.Width <= 0 || textBounds.Height <= 0) return;
+
+            DrawSelectionFillAndBorder(g, textBounds);
+            var textHandles = GetTextHandles(SelectedText!, _form.CurrentPageImage!, imgRect);
+            DrawResizeHandles(g, textHandles);
+        }
+
+        private static void DrawSelectionFillAndBorder(Graphics g, RectangleF bounds)
+        {
             using var fillBrush = new SolidBrush(Color.FromArgb(20, 64, 150, 255));
             g.FillRectangle(fillBrush, bounds.X, bounds.Y, bounds.Width, bounds.Height);
 
@@ -1139,24 +1136,24 @@ namespace LearningAssistant.Managers
 
             using var borderPenInner = new Pen(Color.FromArgb(200, 64, 150, 255), SelectionBorderWidth);
             g.DrawRectangle(borderPenInner, bounds.X, bounds.Y, bounds.Width, bounds.Height);
+        }
 
+        private static void DrawCornerIndicators(Graphics g, RectangleF bounds)
+        {
             float cornerLen = Math.Min(14, Math.Min(bounds.Width / 3, bounds.Height / 3));
-            if (cornerLen > 4)
-            {
-                using var cornerPen = new Pen(Color.FromArgb(64, 150, 255), 3);
-                cornerPen.StartCap = LineCap.Round;
-                cornerPen.EndCap = LineCap.Round;
-                g.DrawLine(cornerPen, bounds.X, bounds.Y + cornerLen, bounds.X, bounds.Y);
-                g.DrawLine(cornerPen, bounds.X, bounds.Y, bounds.X + cornerLen, bounds.Y);
-                g.DrawLine(cornerPen, bounds.Right - cornerLen, bounds.Y, bounds.Right, bounds.Y);
-                g.DrawLine(cornerPen, bounds.Right, bounds.Y, bounds.Right, bounds.Y + cornerLen);
-                g.DrawLine(cornerPen, bounds.X, bounds.Bottom - cornerLen, bounds.X, bounds.Bottom);
-                g.DrawLine(cornerPen, bounds.X, bounds.Bottom, bounds.X + cornerLen, bounds.Bottom);
-                g.DrawLine(cornerPen, bounds.Right - cornerLen, bounds.Bottom, bounds.Right, bounds.Bottom);
-                g.DrawLine(cornerPen, bounds.Right, bounds.Bottom, bounds.Right, bounds.Bottom - cornerLen);
-            }
+            if (cornerLen <= 4) return;
 
-            DrawResizeHandles(g, handles);
+            using var cornerPen = new Pen(Color.FromArgb(64, 150, 255), 3);
+            cornerPen.StartCap = LineCap.Round;
+            cornerPen.EndCap = LineCap.Round;
+            g.DrawLine(cornerPen, bounds.X, bounds.Y + cornerLen, bounds.X, bounds.Y);
+            g.DrawLine(cornerPen, bounds.X, bounds.Y, bounds.X + cornerLen, bounds.Y);
+            g.DrawLine(cornerPen, bounds.Right - cornerLen, bounds.Y, bounds.Right, bounds.Y);
+            g.DrawLine(cornerPen, bounds.Right, bounds.Y, bounds.Right, bounds.Y + cornerLen);
+            g.DrawLine(cornerPen, bounds.X, bounds.Bottom - cornerLen, bounds.X, bounds.Bottom);
+            g.DrawLine(cornerPen, bounds.X, bounds.Bottom, bounds.X + cornerLen, bounds.Bottom);
+            g.DrawLine(cornerPen, bounds.Right - cornerLen, bounds.Bottom, bounds.Right, bounds.Bottom);
+            g.DrawLine(cornerPen, bounds.Right, bounds.Bottom, bounds.Right, bounds.Bottom - cornerLen);
         }
 
         public void DrawSimpleSelectionBox(Graphics g, Rectangle imgRect)

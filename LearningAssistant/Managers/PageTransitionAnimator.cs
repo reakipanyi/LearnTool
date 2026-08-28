@@ -38,7 +38,7 @@ namespace LearningAssistant.Managers
             }
         }
 
-        public void PageTransitionTimer_Tick()
+        public void OnPageTransitionTick()
         {
             try
             {

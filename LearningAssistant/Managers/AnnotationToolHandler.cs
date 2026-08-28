@@ -312,61 +312,7 @@ namespace LearningAssistant.Managers
 
             activeGfx.SmoothingMode = SmoothingMode.AntiAlias;
 
-            using var drawPen = new Pen(PenColor, PenWidth);
-            drawPen.StartCap = LineCap.Round;
-            drawPen.EndCap = LineCap.Round;
-
-            switch (mode)
-            {
-                case AnnotationToolMode.Rectangle:
-                    if (IsDashed) drawPen.DashStyle = DashStyle.Dash;
-                    if (StrokeStyle == "DotLine") drawPen.DashStyle = DashStyle.Dot;
-                    activeGfx.DrawRectangle(drawPen, rect.X, rect.Y, rect.Width, rect.Height);
-                    break;
-                case AnnotationToolMode.Ellipse:
-                    if (IsDashed) drawPen.DashStyle = DashStyle.Dash;
-                    if (StrokeStyle == "DotLine") drawPen.DashStyle = DashStyle.Dot;
-                    activeGfx.DrawEllipse(drawPen, rect);
-                    break;
-                case AnnotationToolMode.Arrow:
-                    if (StrokeStyle == "ArrowLine") drawPen.EndCap = LineCap.ArrowAnchor;
-                    if (StrokeStyle == "DotLine") drawPen.DashStyle = DashStyle.Dot;
-                    activeGfx.DrawLine(drawPen, startPt, endPt);
-                    break;
-                case AnnotationToolMode.Mosaic:
-                    ApplyMosaic(rect, 10, activeGfx, activeBmp);
-                    break;
-                case AnnotationToolMode.Checklist:
-                    {
-                        var checkSize = Math.Min(rect.Width, rect.Height);
-                        if (checkSize < 10) checkSize = 20;
-                        using var checkBrush = new SolidBrush(Color.FromArgb(60, 0, 150, 0));
-                        activeGfx.FillRectangle(checkBrush, (int)rect.X, (int)rect.Y, (int)checkSize, (int)checkSize);
-                        using var checkPen = new Pen(Color.FromArgb(0, 150, 0), 2);
-                        activeGfx.DrawRectangle(checkPen, (int)rect.X, (int)rect.Y, (int)checkSize, (int)checkSize);
-                        break;
-                    }
-                case AnnotationToolMode.ImageEmbed:
-                    {
-                        var embedImgW = _form.CurrentPageImage?.Width ?? 1;
-                        var embedImgH = _form.CurrentPageImage?.Height ?? 1;
-                        using var ofd = new OpenFileDialog();
-                        ofd.Filter = "图片文件|*.png;*.jpg;*.jpeg;*.gif;*.bmp";
-                        if (ofd.ShowDialog() == DialogResult.OK)
-                        {
-                            try
-                            {
-                                using var embedImg = Image.FromFile(ofd.FileName);
-                                activeGfx.DrawImage(embedImg, (int)rect.X, (int)rect.Y, (int)rect.Width, (int)rect.Height);
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogWarning(ex, "Failed to embed image");
-                            }
-                        }
-                        break;
-                    }
-            }
+            DrawShapeOnLayer(activeGfx, activeBmp, mode, startPt, endPt, rect);
 
             SaveAnnotationForPage?.Invoke(DrawingPageIndex);
 
@@ -397,6 +343,85 @@ namespace LearningAssistant.Managers
 
             ResetDrawingState();
             return stroke;
+        }
+
+        /// <summary>在标注层上绘制形状，按工具模式分发到对应绘制方法</summary>
+        private void DrawShapeOnLayer(Graphics activeGfx, Bitmap activeBmp, AnnotationToolMode mode, PointF startPt, PointF endPt, RectangleF rect)
+        {
+            using var drawPen = new Pen(PenColor, PenWidth);
+            drawPen.StartCap = LineCap.Round;
+            drawPen.EndCap = LineCap.Round;
+
+            switch (mode)
+            {
+                case AnnotationToolMode.Rectangle:
+                    DrawRectangleShape(activeGfx, drawPen, rect);
+                    break;
+                case AnnotationToolMode.Ellipse:
+                    DrawEllipseShape(activeGfx, drawPen, rect);
+                    break;
+                case AnnotationToolMode.Arrow:
+                    DrawArrowShape(activeGfx, drawPen, startPt, endPt);
+                    break;
+                case AnnotationToolMode.Mosaic:
+                    ApplyMosaic(rect, 10, activeGfx, activeBmp);
+                    break;
+                case AnnotationToolMode.Checklist:
+                    DrawChecklistShape(activeGfx, rect);
+                    break;
+                case AnnotationToolMode.ImageEmbed:
+                    DrawImageEmbedShape(activeGfx, rect);
+                    break;
+            }
+        }
+
+        private void DrawRectangleShape(Graphics g, Pen pen, RectangleF rect)
+        {
+            if (IsDashed) pen.DashStyle = DashStyle.Dash;
+            if (StrokeStyle == "DotLine") pen.DashStyle = DashStyle.Dot;
+            g.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
+        }
+
+        private void DrawEllipseShape(Graphics g, Pen pen, RectangleF rect)
+        {
+            if (IsDashed) pen.DashStyle = DashStyle.Dash;
+            if (StrokeStyle == "DotLine") pen.DashStyle = DashStyle.Dot;
+            g.DrawEllipse(pen, rect);
+        }
+
+        private void DrawArrowShape(Graphics g, Pen pen, PointF startPt, PointF endPt)
+        {
+            if (StrokeStyle == "ArrowLine") pen.EndCap = LineCap.ArrowAnchor;
+            if (StrokeStyle == "DotLine") pen.DashStyle = DashStyle.Dot;
+            g.DrawLine(pen, startPt, endPt);
+        }
+
+        private static void DrawChecklistShape(Graphics g, RectangleF rect)
+        {
+            var checkSize = Math.Min(rect.Width, rect.Height);
+            if (checkSize < 10) checkSize = 20;
+            using var checkBrush = new SolidBrush(Color.FromArgb(60, 0, 150, 0));
+            g.FillRectangle(checkBrush, (int)rect.X, (int)rect.Y, (int)checkSize, (int)checkSize);
+            using var checkPen = new Pen(Color.FromArgb(0, 150, 0), 2);
+            g.DrawRectangle(checkPen, (int)rect.X, (int)rect.Y, (int)checkSize, (int)checkSize);
+        }
+
+        private void DrawImageEmbedShape(Graphics g, RectangleF rect)
+        {
+            using var ofd = new OpenFileDialog();
+            ofd.Filter = "图片文件|*.png;*.jpg;*.jpeg;*.gif;*.bmp";
+            if (ofd.ShowDialog() == DialogResult.OK)
+            {
+                try
+                {
+                    using var embedImg = Image.FromFile(ofd.FileName);
+                    g.DrawImage(embedImg, (int)rect.X, (int)rect.Y, (int)rect.Width, (int)rect.Height);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to embed image");
+                }
+            }
         }
 
         #endregion

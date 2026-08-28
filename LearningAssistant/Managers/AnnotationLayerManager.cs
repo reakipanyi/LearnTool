@@ -15,6 +15,11 @@ namespace LearningAssistant.Managers
             _form = form ?? throw new ArgumentNullException(nameof(form));
         }
 
+        public Bitmap? AnnotationBitmap { get; private set; }
+        public Graphics? AnnotationGraphics { get; private set; }
+        public Bitmap? SecondAnnotationBitmap { get; private set; }
+        public Graphics? SecondAnnotationGraphics { get; private set; }
+
         public void EnsureAnnotationBitmap()
         {
             try
@@ -155,9 +160,5 @@ namespace LearningAssistant.Managers
             }
         }
 
-        public Bitmap? AnnotationBitmap { get; private set; }
-        public Graphics? AnnotationGraphics { get; private set; }
-        public Bitmap? SecondAnnotationBitmap { get; private set; }
-        public Graphics? SecondAnnotationGraphics { get; private set; }
-    }
+        }
 }
