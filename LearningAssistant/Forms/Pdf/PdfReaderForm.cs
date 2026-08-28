@@ -735,7 +735,7 @@ namespace LearningAssistant.Forms.Pdf
                         }
                         break;
                     case Keys.Delete:
-                        _navigationManager?.DeleteSelectedStroke();
+                        _navigationManager?.DeleteSelectedAnnotation();
                         e.Handled = true;
                         break;
                     case Keys.F:
@@ -1447,6 +1447,9 @@ namespace LearningAssistant.Forms.Pdf
         public void SetCurrentPageIndex(int pageIndex)
         {
             bool isForward = pageIndex > _currentPageIndex;
+            // 翻页（页码变化）时同步清除上一页的选中状态，避免选中残留到新页
+            if (pageIndex != _currentPageIndex)
+                _navigationManager?.ClearSelection();
             _currentPageIndex = pageIndex;
             _textBoxPage.Text = (pageIndex + 1).ToString();
             _progressBarPage.Value = pageIndex + 1;
@@ -2472,6 +2475,10 @@ namespace LearningAssistant.Forms.Pdf
         private void ButtonClearAllAnnotations_Click(object? sender, EventArgs e)
         {
             if (_presenter == null || string.IsNullOrEmpty(_currentPdfPath)) return;
+
+            // 有选中标注时优先删除单个选中标注；无选中时才清除所有标注
+            if (_navigationManager != null && _navigationManager.DeleteSelectedAnnotation())
+                return;
 
             if (!ShowConfirm("确定要清除当前PDF的所有笔划标注吗？此操作不可撤销。", "清空确认"))
                 return;
@@ -3891,7 +3898,6 @@ namespace LearningAssistant.Forms.Pdf
             _panelAnnotationOptions = new Panel();
             _panelColor = new Panel();
             _buttonColorBlack = new Button();
-            _buttonColorWhite = new Button();
             _buttonColorBlue = new Button();
             _buttonColorGreen = new Button();
             _buttonColorOrange = new Button();
@@ -3907,6 +3913,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonColorVioletRed = new Button();
             _buttonColorDodgerBlue = new Button();
             _buttonColorMore = new Button();
+            _buttonColorWhite = new Button();
             _trackBarThickness = new TrackBar();
             _labelThicknessValue = new Label();
             _loadingIndicator = new LoadingIndicator();
@@ -4097,7 +4104,7 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // _progressBarPage
             // 
-            _progressBarPage.Location = new Point(195, 7);
+            _progressBarPage.Location = new Point(211, 7);
             _progressBarPage.Maximum = 1;
             _progressBarPage.Minimum = 1;
             _progressBarPage.Name = "_progressBarPage";
@@ -4110,7 +4117,7 @@ namespace LearningAssistant.Forms.Pdf
             // 
             _textBoxPage.BorderStyle = BorderStyle.FixedSingle;
             _textBoxPage.Font = new Font("Microsoft YaHei UI", 10F);
-            _textBoxPage.Location = new Point(78, 7);
+            _textBoxPage.Location = new Point(74, 7);
             _textBoxPage.Name = "_textBoxPage";
             _textBoxPage.Size = new Size(40, 24);
             _textBoxPage.TabIndex = 1;
@@ -4123,7 +4130,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonNext.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonNext.FlatStyle = FlatStyle.Flat;
             _buttonNext.Font = new Font("Microsoft YaHei UI", 10F);
-            _buttonNext.Location = new Point(155, 3);
+            _buttonNext.Location = new Point(171, 3);
             _buttonNext.Name = "_buttonNext";
             _buttonNext.Size = new Size(32, 32);
             _buttonNext.TabIndex = 3;
@@ -4134,11 +4141,11 @@ namespace LearningAssistant.Forms.Pdf
             // _labelPageCount
             // 
             _labelPageCount.AutoSize = true;
-            _labelPageCount.Font = new Font("Microsoft YaHei UI", 10F);
+            _labelPageCount.Font = new Font("Microsoft YaHei UI", 8.25F, FontStyle.Regular, GraphicsUnit.Point, 134);
             _labelPageCount.ForeColor = Color.FromArgb(102, 102, 102);
-            _labelPageCount.Location = new Point(123, 9);
+            _labelPageCount.Location = new Point(120, 11);
             _labelPageCount.Name = "_labelPageCount";
-            _labelPageCount.Size = new Size(27, 20);
+            _labelPageCount.Size = new Size(21, 16);
             _labelPageCount.TabIndex = 2;
             _labelPageCount.Text = "/ 1";
             // 
@@ -4641,13 +4648,6 @@ namespace LearningAssistant.Forms.Pdf
             _buttonColorBlack.Size = new Size(25, 25);
             _buttonColorBlack.TabIndex = 0;
             // 
-            // _buttonColorWhite
-            // 
-            _buttonColorWhite.Location = new Point(0, 0);
-            _buttonColorWhite.Name = "_buttonColorWhite";
-            _buttonColorWhite.Size = new Size(25, 25);
-            _buttonColorWhite.TabIndex = 1;
-            // 
             // _buttonColorBlue
             // 
             _buttonColorBlue.Location = new Point(0, 0);
@@ -4760,6 +4760,13 @@ namespace LearningAssistant.Forms.Pdf
             _buttonColorMore.Text = "+";
             _buttonColorMore.UseVisualStyleBackColor = false;
             _buttonColorMore.Click += ButtonColorMore_Click;
+            // 
+            // _buttonColorWhite
+            // 
+            _buttonColorWhite.Location = new Point(0, 0);
+            _buttonColorWhite.Name = "_buttonColorWhite";
+            _buttonColorWhite.Size = new Size(25, 25);
+            _buttonColorWhite.TabIndex = 1;
             // 
             // _trackBarThickness
             // 

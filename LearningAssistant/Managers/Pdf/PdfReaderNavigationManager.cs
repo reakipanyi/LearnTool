@@ -1,4 +1,4 @@
-﻿using LearningAssistant.Forms;
+using LearningAssistant.Forms;
 using LearningAssistant.Models.Pdf;
 using Microsoft.Extensions.Logging;
 using System.Drawing.Drawing2D;
@@ -946,11 +946,13 @@ namespace LearningAssistant.Managers
         /// <summary>
         /// 用已加载好的标注位图直接设置当前标注图层，避免再次读磁盘。
         /// 当 annotationBitmap 为 null 时创建空的透明图层。
+        /// 注意：仅刷新标注渲染缓存，不清除当前选中——该方法由异步标注加载回调调用，
+        /// 同一页的异步加载发生在用户正在交互期间，清除选中会导致 Delete/垃圾桶删除失效。
+        /// 翻页清选中由同步入口 SetCurrentPageIndex 负责。
         /// </summary>
         public void ApplyLoadedAnnotationBitmap(Bitmap? annotationBitmap)
         {
             _annotationLayerManager.ApplyLoadedAnnotationBitmap(annotationBitmap);
-            _selectionManager.ClearSelection();
         }
 
         /// <summary>应用第二页标注位图（双页模式）</summary>
@@ -973,6 +975,25 @@ namespace LearningAssistant.Managers
             if (_selectionManager.SelectedTextIndex < 0)
                 LoadAnnotationsForCurrentPage();
             _form.PictureBoxPdf.Invalidate();
+        }
+
+        /// <summary>
+        /// 删除当前选中的标注（笔画或文本）。返回是否实际删除了某个标注。
+        /// 供 Delete 键与垃圾桶按钮统一调用：无任何选中时不执行删除并返回 false。
+        /// </summary>
+        public bool DeleteSelectedAnnotation()
+        {
+            if (_selectionManager.SelectedStrokeIndex >= 0)
+            {
+                DeleteSelectedStroke();
+                return true;
+            }
+            if (_selectionManager.SelectedTextIndex >= 0)
+            {
+                DeleteSelectedText();
+                return true;
+            }
+            return false;
         }
 
         public void ClearSelection()
