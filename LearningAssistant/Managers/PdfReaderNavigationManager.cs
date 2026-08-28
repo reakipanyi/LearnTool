@@ -3108,16 +3108,10 @@ namespace LearningAssistant.Managers
         {
             if (_strokeUndoStack.Count >= MaxUndoStackSize)
             {
-                var tempStack = new Stack<AnnotationStroke>();
-                for (int i = 0; i < MaxUndoStackSize - 1; i++)
-                {
-                    tempStack.Push(_strokeUndoStack.Pop());
-                }
+                var items = _strokeUndoStack.ToArray();
                 _strokeUndoStack.Clear();
-                while (tempStack.Count > 0)
-                {
-                    _strokeUndoStack.Push(tempStack.Pop());
-                }
+                for (int i = items.Length - 2; i >= 0; i--)
+                    _strokeUndoStack.Push(items[i]);
             }
             _strokeUndoStack.Push(stroke);
             UndoActionRecorded?.Invoke(this, EventArgs.Empty);

@@ -220,34 +220,21 @@ namespace LearningAssistant.Managers
 
         public Image InvertImage(Image image)
         {
-            using Bitmap bitmap = new Bitmap(image);
-            var rect = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
-            var data = bitmap.LockBits(rect, System.Drawing.Imaging.ImageLockMode.ReadWrite, bitmap.PixelFormat);
-            try
+            var dest = new Bitmap(image.Width, image.Height, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            using var g = Graphics.FromImage(dest);
+            // 使用 ColorMatrix 进行 GPU 加速的颜色反色变换
+            using var ia = new System.Drawing.Imaging.ImageAttributes();
+            var cm = new System.Drawing.Imaging.ColorMatrix(new float[][]
             {
-                int bytesPerPixel = Image.GetPixelFormatSize(bitmap.PixelFormat) / 8;
-                IntPtr ptr = data.Scan0;
-                int bytes = Math.Abs(data.Stride) * bitmap.Height;
-                byte[] rgbValues = new byte[bytes];
-                System.Runtime.InteropServices.Marshal.Copy(ptr, rgbValues, 0, bytes);
-
-                for (int i = 0; i < rgbValues.Length; i += bytesPerPixel)
-                {
-                    if (bytesPerPixel >= 3)
-                    {
-                        rgbValues[i] = (byte)(255 - rgbValues[i]);
-                        rgbValues[i + 1] = (byte)(255 - rgbValues[i + 1]);
-                        rgbValues[i + 2] = (byte)(255 - rgbValues[i + 2]);
-                    }
-                }
-
-                System.Runtime.InteropServices.Marshal.Copy(rgbValues, 0, ptr, bytes);
-            }
-            finally
-            {
-                bitmap.UnlockBits(data);
-            }
-            return new Bitmap(bitmap);
+                new float[] { -1, 0, 0, 0, 0 },
+                new float[] { 0, -1, 0, 0, 0 },
+                new float[] { 0, 0, -1, 0, 0 },
+                new float[] { 0, 0, 0, 1, 0 },
+                new float[] { 1, 1, 1, 0, 1 }
+            });
+            ia.SetColorMatrix(cm);
+            g.DrawImage(image, new Rectangle(0, 0, dest.Width, dest.Height), 0, 0, image.Width, image.Height, GraphicsUnit.Pixel, ia);
+            return dest;
         }
 
         public void UpdateThumbnailPanelColor(Panel panel)

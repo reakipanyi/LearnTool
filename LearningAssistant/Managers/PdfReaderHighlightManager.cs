@@ -210,13 +210,7 @@ namespace LearningAssistant.Managers
             if (rect.Width <= 0 || rect.Height <= 0 || rect.X < 0 || rect.Y < 0)
                 return;
 
-            // 荧光笔效果：半透明纯色填充，无硬边框，保留文字可见性
-            using var fillBrush = new SolidBrush(Color.FromArgb(color.A, color.R, color.G, color.B));
-            g.FillRectangle(fillBrush, rect);
-
-            // 极淡的内发光边框（仅用于视觉界定区域，不喧宾夺主）
-            using var innerPen = new Pen(Color.FromArgb(Math.Min(80, color.A + 10), color.R, color.G, color.B), 1f);
-            g.DrawRectangle(innerPen, rect.X, rect.Y, rect.Width, rect.Height);
+            DrawHighlightFill(g, color, rect);
 
             if (!string.IsNullOrEmpty(highlight.Note))
             {
@@ -224,6 +218,17 @@ namespace LearningAssistant.Managers
                 using var textBrush = new SolidBrush(Color.FromArgb(180, 0, 0, 0));
                 g.DrawString("📝", font, textBrush, rect.Location);
             }
+        }
+
+        private static void DrawHighlightFill(Graphics g, Color color, RectangleF rect)
+        {
+            // 荧光笔效果：半透明纯色填充，无硬边框，保留文字可见性
+            using var fillBrush = new SolidBrush(Color.FromArgb(color.A, color.R, color.G, color.B));
+            g.FillRectangle(fillBrush, rect);
+
+            // 极淡的内发光边框（仅用于视觉界定区域，不喧宾夺主）
+            using var innerPen = new Pen(Color.FromArgb(Math.Min(80, color.A + 10), color.R, color.G, color.B), 1f);
+            g.DrawRectangle(innerPen, rect.X, rect.Y, rect.Width, rect.Height);
         }
 
         public void CleanupHighlightLayer()
@@ -477,18 +482,10 @@ namespace LearningAssistant.Managers
         {
             if (_undoStack.Count >= MaxUndoStackSize)
             {
-                // 移除最旧的撤销记录
-                var tempStack = new Stack<HighlightUndoAction>();
-                for (int i = 0; i < MaxUndoStackSize - 1; i++)
-                {
-                    tempStack.Push(_undoStack.Pop());
-                }
+                var items = _undoStack.ToArray();
                 _undoStack.Clear();
-                while (tempStack.Count > 0)
-                {
-                    _undoStack.Push(tempStack.Pop());
-                }
-                _logger.LogDebug("UndoHighlight: 撤销栈已满，移除最旧的记录");
+                for (int i = items.Length - 2; i >= 0; i--)
+                    _undoStack.Push(items[i]);
             }
             _undoStack.Push(action);
             UndoActionRecorded?.Invoke(this, EventArgs.Empty);
@@ -811,13 +808,7 @@ namespace LearningAssistant.Managers
 
                     var rect = new RectangleF(x, y, width, height);
 
-                    // 荧光笔效果：半透明纯色填充，无硬边框
-                    using var brush = new SolidBrush(Color.FromArgb(color.A, color.R, color.G, color.B));
-                    g.FillRectangle(brush, rect);
-
-                    // 极淡内发光边框
-                    using var pen = new Pen(Color.FromArgb(Math.Min(80, color.A + 10), color.R, color.G, color.B), 1f);
-                    g.DrawRectangle(pen, rect.X, rect.Y, rect.Width, rect.Height);
+                    DrawHighlightFill(g, color, rect);
                 }
             }
             catch (Exception ex)
