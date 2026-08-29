@@ -1,0 +1,229 @@
+/* ========== 搜索网格（通用） ========== */
+.search-grid, .layered-grid, .saccade-grid {
+    display: grid;
+    gap: 4px;
+    justify-content: center;
+    margin: 0 auto;
+    user-select: none;
+}
+
+.search-grid .cell {
+    width: 52px;
+    height: 52px;
+    border: 2px solid var(--border, rgba(23,23,23,0.12));
+    border-radius: 8px;
+    background: var(--surface, #F7F7F8);
+    font-size: 26px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.12s ease;
+}
+
+.search-grid .cell:hover {
+    border-color: var(--brand, #4B3FE3);
+    transform: scale(1.05);
+}
+
+.search-grid .cell.hit {
+    background: #1DC981;
+    border-color: #1DC981;
+    transform: scale(0.95);
+    cursor: default;
+}
+
+.search-grid .cell.miss {
+    background: #E8463A;
+    border-color: #E8463A;
+    animation: shake 0.3s ease;
+}
+
+.search-grid .cell:disabled {
+    cursor: default;
+    opacity: 0.6;
+}
+
+.search-grid .cell:disabled:hover {
+    transform: none;
+    border-color: var(--border, rgba(23,23,23,0.12));
+}
+
+/* ========== 目标提示 ========== */
+.target-hint {
+    font-size: 15px;
+    color: var(--text, #171717);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+}
+
+.target-icons {
+    font-size: 24px;
+    letter-spacing: 4px;
+}
+
+/* ========== 双重搜索 ========== */
+.dual-targets {
+    display: flex;
+    gap: 24px;
+    justify-content: center;
+    margin-bottom: 4px;
+}
+
+.dual-targets .dt-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    border: 2px solid var(--brand, #4B3FE3);
+    border-radius: 10px;
+    background: var(--brand-soft, #F2F7FF);
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.dual-targets .dt-item .dt-icon {
+    font-size: 22px;
+}
+
+/* ========== 分层干扰 ========== */
+.layered-grid {
+    display: grid;
+    gap: 5px;
+    justify-content: center;
+}
+
+.layered-grid .lcell {
+    width: 60px;
+    height: 60px;
+    border: 2px solid var(--border, rgba(23,23,23,0.12));
+    border-radius: 8px;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    overflow: hidden;
+}
+
+.layered-grid .lcell:hover {
+    border-color: var(--brand, #4B3FE3);
+    transform: scale(1.05);
+}
+
+.layered-grid .lcell .top-symbol {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 24px;
+    font-weight: bold;
+    z-index: 2;
+}
+
+.layered-grid .lcell .bottom-symbol {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 32px;
+    opacity: 0.3;
+    z-index: 1;
+}
+
+.layered-grid .lcell.selected {
+    border-color: #1DC981;
+    background: rgba(29, 201, 129, 0.1);
+}
+
+.layered-grid .lcell.wrong {
+    border-color: #E8463A;
+    background: rgba(232, 70, 58, 0.1);
+    animation: shake 0.3s ease;
+}
+
+.layered-grid .lcell:disabled {
+    cursor: default;
+    opacity: 0.6;
+}
+
+.layered-grid .lcell:disabled:hover {
+    transform: none;
+    border-color: var(--border, rgba(23,23,23,0.12));
+}
+
+/* ========== 扫视挑战 ========== */
+.saccade-grid .scell {
+    width: 64px;
+    height: 64px;
+    border: 2px solid var(--border, rgba(23,23,23,0.12));
+    border-radius: 8px;
+    background: var(--surface-muted, #EFEFF2);
+    cursor: pointer;
+    transition: all 0.1s ease;
+    font-size: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.saccade-grid .scell.has-target {
+    background: var(--surface, #F7F7F8);
+    font-size: 36px;
+    border-color: var(--brand, #4B3FE3);
+    box-shadow: 0 0 12px rgba(75, 63, 227, 0.4);
+    animation: pulse 0.5s ease infinite alternate;
+}
+
+.saccade-grid .scell.found {
+    background: #1DC981;
+    border-color: #1DC981;
+    font-size: 36px;
+    animation: none;
+}
+
+.saccade-grid .scell.missed {
+    background: #E8463A;
+    border-color: #E8463A;
+    animation: none;
+}
+
+.saccade-grid .scell:disabled {
+    cursor: default;
+}
+
+/* ========== 通用 ========== */
+.search-area {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+}
+
+.hidden { display: none !important; }
+
+/* ========== 动画 ========== */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-8px); }
+    50% { transform: translateX(8px); }
+    75% { transform: translateX(-8px); }
+}
+
+@keyframes pulse {
+    from { box-shadow: 0 0 8px rgba(75, 63, 227, 0.3); }
+    to { box-shadow: 0 0 18px rgba(75, 63, 227, 0.6); }
+}
+
+/* 深色模式 */
+body[data-theme="dark"] .search-grid .cell,
+body[data-theme="dark"] .layered-grid .lcell,
+body[data-theme="dark"] .saccade-grid .scell {
+    background: var(--surface, #262626);
+    border-color: var(--border, rgba(229,229,229,0.12));
+}
+
+body[data-theme="dark"] .dual-targets .dt-item {
+    background: var(--brand-soft, #1A1759);
+}

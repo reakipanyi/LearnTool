@@ -101,21 +101,25 @@ namespace LearningAssistant.Services.TTS
                     try
                     {
                         if (!string.IsNullOrWhiteSpace(item.Text))
-                            {
-                                _logger?.LogInformation("Speaking from queue: {Text}, Key: {SpeakKey}, Speed: {Speed}", item.Text, item.SpeakKey, _ttsConfig.Speed);
-                                await _ttsService?.SpeakAsync(item.Text, item.Language, speed: _ttsConfig.Speed, cancellationToken: linkedCts.Token);
-                                
-                                if (!linkedCts.Token.IsCancellationRequested)
-                                {
-                                    await Task.Delay(200, linkedCts.Token);
-                                }
-                            }
+                        {
+                            var textLang = DetectLanguage(item.Text);
+                            _logger?.LogInformation("Speaking from queue: {Text}, Key: {SpeakKey}, Speed: {Speed}, lang={Lang}",
+                                item.Text, item.SpeakKey, _ttsConfig.Speed, textLang);
+                            await _ttsService?.SpeakAsync(item.Text, textLang, speed: _ttsConfig.Speed, cancellationToken: linkedCts.Token);
 
-                            if (!string.IsNullOrWhiteSpace(item.Explanation) && !linkedCts.Token.IsCancellationRequested)
+                            if (!linkedCts.Token.IsCancellationRequested)
                             {
-                                _logger?.LogInformation("Speaking explanation: {Explanation}, Key: {SpeakKey}, Speed: {Speed}", item.Explanation, item.SpeakKey, _ttsConfig.Speed);
-                                await _ttsService?.SpeakAsync(item.Explanation, item.Language, speed: _ttsConfig.Speed, cancellationToken: linkedCts.Token);
+                                await Task.Delay(200, linkedCts.Token);
                             }
+                        }
+
+                        if (!string.IsNullOrWhiteSpace(item.Explanation) && !linkedCts.Token.IsCancellationRequested)
+                        {
+                            var explLang = DetectLanguage(item.Explanation);
+                            _logger?.LogInformation("Speaking explanation: {Explanation}, Key: {SpeakKey}, Speed: {Speed}, lang={Lang}",
+                                item.Explanation, item.SpeakKey, _ttsConfig.Speed, explLang);
+                            await _ttsService?.SpeakAsync(item.Explanation, explLang, speed: _ttsConfig.Speed, cancellationToken: linkedCts.Token);
+                        }
                     }
                     catch (OperationCanceledException)
                     {
@@ -152,6 +156,19 @@ namespace LearningAssistant.Services.TTS
         {
             _currentSpeakKey = speakKey;
             SpeakStateChanged?.Invoke(this, new SpeakStateChangedEventArgs(speakKey, isSpeaking));
+        }
+
+        private static string DetectLanguage(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return "en";
+
+            foreach (char c in text)
+            {
+                if ((c >= 0x4E00 && c <= 0x9FFF) || (c >= 0x3400 && c <= 0x4DBF))
+                    return "zh";
+            }
+            return "en";
         }
 
         private record SpeechQueueItem(string Text, string Language, string? Explanation, string SpeakKey);

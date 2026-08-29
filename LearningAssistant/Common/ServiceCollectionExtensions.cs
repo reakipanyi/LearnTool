@@ -634,6 +634,78 @@ namespace LearningAssistant.Common
                 var logger = sp.GetRequiredService<ILogger<SudokuGameForm>>();
                 return new SudokuGameForm(contentLoaderService, userSessionService, themeService, settingsService, logger);
             });
+            services.AddScoped<StroopGameForm>(sp =>
+            {
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var userSessionService = sp.GetRequiredService<IUserSessionService>();
+                var themeService = sp.GetRequiredService<IThemeService>();
+                var settingsService = sp.GetRequiredService<IUserSettingsService>();
+                var logger = sp.GetRequiredService<ILogger<StroopGameForm>>();
+                return new StroopGameForm(contentLoaderService, userSessionService, themeService, settingsService, logger);
+            });
+            services.AddScoped<InhibitionGameForm>(sp =>
+            {
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var userSessionService = sp.GetRequiredService<IUserSessionService>();
+                var themeService = sp.GetRequiredService<IThemeService>();
+                var settingsService = sp.GetRequiredService<IUserSettingsService>();
+                var logger = sp.GetRequiredService<ILogger<InhibitionGameForm>>();
+                return new InhibitionGameForm(contentLoaderService, userSessionService, themeService, settingsService, logger);
+            });
+            services.AddScoped<MemoryGameForm>(sp =>
+            {
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var userSessionService = sp.GetRequiredService<IUserSessionService>();
+                var themeService = sp.GetRequiredService<IThemeService>();
+                var settingsService = sp.GetRequiredService<IUserSettingsService>();
+                var logger = sp.GetRequiredService<ILogger<MemoryGameForm>>();
+                return new MemoryGameForm(contentLoaderService, userSessionService, themeService, settingsService, logger);
+            });
+            services.AddScoped<SearchGameForm>(sp =>
+            {
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var userSessionService = sp.GetRequiredService<IUserSessionService>();
+                var themeService = sp.GetRequiredService<IThemeService>();
+                var settingsService = sp.GetRequiredService<IUserSettingsService>();
+                var logger = sp.GetRequiredService<ILogger<SearchGameForm>>();
+                return new SearchGameForm(contentLoaderService, userSessionService, themeService, settingsService, logger);
+            });
+            services.AddScoped<TraceGameForm>(sp =>
+            {
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var userSessionService = sp.GetRequiredService<IUserSessionService>();
+                var themeService = sp.GetRequiredService<IThemeService>();
+                var settingsService = sp.GetRequiredService<IUserSettingsService>();
+                var logger = sp.GetRequiredService<ILogger<TraceGameForm>>();
+                return new TraceGameForm(contentLoaderService, userSessionService, themeService, settingsService, logger);
+            });
+            services.AddScoped<FlexGameForm>(sp =>
+            {
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var userSessionService = sp.GetRequiredService<IUserSessionService>();
+                var themeService = sp.GetRequiredService<IThemeService>();
+                var settingsService = sp.GetRequiredService<IUserSettingsService>();
+                var logger = sp.GetRequiredService<ILogger<FlexGameForm>>();
+                return new FlexGameForm(contentLoaderService, userSessionService, themeService, settingsService, logger);
+            });
+            services.AddScoped<AttentionGameForm>(sp =>
+            {
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var userSessionService = sp.GetRequiredService<IUserSessionService>();
+                var themeService = sp.GetRequiredService<IThemeService>();
+                var settingsService = sp.GetRequiredService<IUserSettingsService>();
+                var logger = sp.GetRequiredService<ILogger<AttentionGameForm>>();
+                return new AttentionGameForm(contentLoaderService, userSessionService, themeService, settingsService, logger);
+            });
+            services.AddScoped<PlanGameForm>(sp =>
+            {
+                var contentLoaderService = sp.GetRequiredService<IContentLoaderService>();
+                var userSessionService = sp.GetRequiredService<IUserSessionService>();
+                var themeService = sp.GetRequiredService<IThemeService>();
+                var settingsService = sp.GetRequiredService<IUserSettingsService>();
+                var logger = sp.GetRequiredService<ILogger<PlanGameForm>>();
+                return new PlanGameForm(contentLoaderService, userSessionService, themeService, settingsService, logger);
+            });
             services.AddScoped<LearningManagementForm>(sp =>
             {
                 var analyticsService = sp.GetRequiredService<ILearningAnalyticsService>();

@@ -1,0 +1,202 @@
+/* ========== 通用 ========== */
+.mode-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    gap: 16px;
+}
+
+/* ========== 卡片分类 ========== */
+.cs-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.cs-rule {
+    font-size: 20px;
+    font-weight: bold;
+    color: var(--text, #1F2937);
+    padding: 8px 20px;
+    background: var(--surface, #F7F7F8);
+    border-radius: 10px;
+    border: 2px solid var(--border, rgba(23,23,23,0.12));
+}
+
+.cs-change-badge {
+    font-size: 13px;
+    color: #F59E0B;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+.cs-change-badge.show { opacity: 1; }
+
+.cs-card {
+    width: 200px;
+    height: 160px;
+    background: var(--surface, #fff);
+    border: 3px solid var(--border, rgba(23,23,23,0.15));
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 60px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    transition: all 0.2s;
+}
+
+.cs-card-preview {
+    line-height: 1.2;
+    text-align: center;
+    user-select: none;
+}
+
+.cs-options {
+    display: flex;
+    gap: 16px;
+}
+
+.cs-option {
+    width: 140px;
+    height: 60px;
+    font-size: 18px;
+    font-weight: bold;
+    border: 2px solid var(--border, rgba(23,23,23,0.15));
+    border-radius: 12px;
+    background: var(--surface, #fff);
+    color: var(--text, #1F2937);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.cs-option:hover {
+    border-color: #6366F1;
+    background: rgba(99,102,241,0.08);
+    transform: translateY(-2px);
+}
+.cs-option:active { transform: translateY(0); }
+.cs-option.correct {
+    border-color: #1DC981;
+    background: rgba(29,201,129,0.12);
+}
+.cs-option.wrong {
+    border-color: #E8463A;
+    background: rgba(232,70,58,0.1);
+}
+
+.cs-feedback {
+    font-size: 16px;
+    min-height: 24px;
+    color: var(--text-muted, #52525B);
+}
+
+/* ========== 任务切换 ========== */
+.ts-cue {
+    font-size: 80px;
+    line-height: 1;
+    user-select: none;
+    transition: transform 0.2s;
+}
+.ts-cue.circle { color: #6366F1; }
+.ts-cue.square { color: #F59E0B; }
+
+.ts-stimulus {
+    font-size: 96px;
+    font-weight: bold;
+    color: var(--text, #1F2937);
+    user-select: none;
+    min-width: 100px;
+    text-align: center;
+}
+
+.ts-task-label {
+    font-size: 18px;
+    color: var(--text-muted, #52525B);
+    padding: 4px 16px;
+    border-radius: 8px;
+    background: var(--surface, #F7F7F8);
+}
+
+.ts-buttons {
+    display: flex;
+    gap: 40px;
+}
+
+.ts-btn {
+    width: 120px;
+    height: 60px;
+    font-size: 20px;
+    font-weight: bold;
+    border: 2px solid var(--border, rgba(23,23,23,0.15));
+    border-radius: 14px;
+    background: var(--surface, #fff);
+    color: var(--text, #1F2937);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.ts-btn:hover {
+    border-color: #6366F1;
+    background: rgba(99,102,241,0.08);
+    transform: translateY(-2px);
+}
+.ts-btn:active { transform: translateY(0); }
+.ts-btn.correct {
+    border-color: #1DC981;
+    background: rgba(29,201,129,0.12);
+}
+.ts-btn.wrong {
+    border-color: #E8463A;
+    background: rgba(232,70,58,0.1);
+}
+
+.ts-feedback {
+    font-size: 16px;
+    min-height: 24px;
+    color: var(--text-muted, #52525B);
+}
+
+/* ========== 连线交替 ========== */
+.canvas-wrap {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    max-height: calc(100vh - 200px);
+}
+
+#trailCanvas {
+    border: 2px solid var(--border, rgba(23,23,23,0.12));
+    border-radius: 12px;
+    background: var(--surface, #F7F7F8);
+    max-width: 100%;
+    max-height: 100%;
+    cursor: pointer;
+}
+
+.tm-info {
+    display: flex;
+    gap: 24px;
+    font-size: 15px;
+    color: var(--text-muted, #52525B);
+    padding: 4px 0;
+}
+
+.tm-next {
+    font-weight: bold;
+    color: var(--text, #1F2937);
+}
+
+/* 深色模式 */
+body[data-theme="dark"] #trailCanvas {
+    background: var(--surface, #262626);
+    border-color: var(--border, rgba(229,229,229,0.12));
+}
+body[data-theme="dark"] .cs-card {
+    background: var(--surface, #262626);
+}
+body[data-theme="dark"] .cs-rule {
+    background: var(--surface, #262626);
+}

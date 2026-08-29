@@ -20,5 +20,13 @@ namespace LearningAssistant.Abstractions
         void OpenWhackAMoleGameWindow();
         void OpenSchulteGameWindow();
         void OpenSudokuGameWindow();
+        void OpenStroopGameWindow();
+        void OpenInhibitionGameWindow();
+        void OpenMemoryGameWindow();
+        void OpenSearchGameWindow();
+        void OpenTraceGameWindow();
+        void OpenFlexGameWindow();
+        void OpenAttentionGameWindow();
+        void OpenPlanGameWindow();
     }
 }

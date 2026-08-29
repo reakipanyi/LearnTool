@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>斯特鲁普</title>
+    <link rel="stylesheet" href="../Shared/shared.css" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <!-- HUD -->
+    <header class="topbar">
+        <div class="brand">🧠 斯特鲁普</div>
+        <div class="stats">
+            <div class="stat"><span class="stat-label">得分</span><span id="score" class="stat-value">0</span></div>
+            <div class="stat"><span class="stat-label">正确</span><span id="correct" class="stat-value">0</span></div>
+            <div class="stat"><span class="stat-label">剩余</span><span id="remain" class="stat-value">0</span></div>
+            <div class="stat"><span class="stat-label">计时</span><span id="timer" class="stat-value">0s</span></div>
+        </div>
+        <div class="actions">
+            <button id="btnRestart" class="btn">🔄 换一组</button>
+        </div>
+    </header>
+
+    <div class="progress-wrap"><div id="progress" class="progress"></div></div>
+
+    <main class="stage">
+        <!-- 模式提示 -->
+        <div class="mode-hint" id="modeHint">请说出字体颜色，忽略文字含义</div>
+
+        <!-- 刺激显示区 -->
+        <div class="stimulus-wrap">
+            <div id="stimulus" class="stimulus">红</div>
+        </div>
+
+        <!-- 选项按钮区 -->
+        <div id="options" class="options"></div>
+
+        <!-- 底部提示 -->
+        <footer class="hint" id="hint">说出答案即可，也可点击按钮选择</footer>
+    </main>
+
+    <div id="toast" class="toast"></div>
+
+    <!-- 结算弹层 -->
+    <div id="resultOverlay" class="overlay hidden">
+        <div class="result-card">
+            <div class="result-emoji" id="resultEmoji">🎉</div>
+            <h2 id="resultTitle">完成！</h2>
+            <div class="stars" id="resultStars"></div>
+            <div class="result-details">
+                <div class="result-row"><span class="result-label">得分</span><b id="resultScore">0</b></div>
+                <div class="result-row"><span class="result-label">正确率</span><b id="resultRate">0%</b></div>
+                <div class="result-row"><span class="result-label">正确/总题</span><b id="resultRight">0/0</b></div>
+                <div class="result-row"><span class="result-label">用时</span><b id="resultTime">0s</b></div>
+                <div class="result-row"><span class="result-label">模式</span><b id="resultMode">—</b></div>
+            </div>
+            <div class="result-btns">
+                <button id="btnAgain" class="btn primary">🎮 再来一局</button>
+                <button id="btnClose" class="btn">✕ 关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="../Shared/shared.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>

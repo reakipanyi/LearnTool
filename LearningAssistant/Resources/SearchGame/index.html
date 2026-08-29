@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>视觉搜索实验室</title>
+    <link rel="stylesheet" href="../Shared/shared.css" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div class="topbar">
+        <div class="brand">👁️ 视觉搜索实验室</div>
+        <div class="stats">
+            <div class="stat"><span class="stat-label">得分</span><span class="stat-value" id="score">0</span></div>
+            <div class="stat"><span class="stat-label">正确</span><span class="stat-value" id="correct">0</span></div>
+            <div class="stat"><span class="stat-label">回合</span><span class="stat-value" id="round">0/0</span></div>
+            <div class="stat"><span class="stat-label">用时</span><span class="stat-value" id="timer">0s</span></div>
+        </div>
+    </div>
+
+    <div class="progress-wrap">
+        <div class="progress" id="progress" style="width:0%"></div>
+    </div>
+
+    <div class="game-stage">
+        <div class="game-title" id="modeHint">加载中...</div>
+        <div class="hint" id="hint"></div>
+
+        <!-- 动态划消 -->
+        <div id="cancelArea" class="search-area hidden">
+            <div id="cancelGrid" class="search-grid"></div>
+            <div class="target-hint">目标符号：<span id="cancelTargets" class="target-icons"></span></div>
+        </div>
+
+        <!-- 双重搜索 -->
+        <div id="dualSearchArea" class="search-area hidden">
+            <div id="dualTargets" class="dual-targets"></div>
+            <div id="dualGrid" class="search-grid"></div>
+        </div>
+
+        <!-- 分层干扰 -->
+        <div id="layeredArea" class="search-area hidden">
+            <div class="target-hint">找上层符号：<span id="layeredTarget" class="target-icons"></span> <span id="layeredHint" style="font-size:13px;color:var(--text-muted)"></span></div>
+            <div id="layeredGrid" class="layered-grid"></div>
+        </div>
+
+        <!-- 扫视挑战 -->
+        <div id="saccadeArea" class="search-area hidden">
+            <div id="saccadeGrid" class="saccade-grid"></div>
+            <div class="target-hint" id="saccadeHint">找到 ★ 并点击</div>
+        </div>
+    </div>
+
+    <div class="overlay hidden" id="resultOverlay">
+        <div class="result-card">
+            <div class="result-emoji" id="resultEmoji">🏆</div>
+            <div class="result-title" id="resultTitle">完成！</div>
+            <div class="stars" id="resultStars"><span class="lit">★</span><span class="lit">★</span><span class="lit">★</span></div>
+            <div class="result-details">
+                <div class="result-row"><span class="result-label">得分</span><span class="result-value" id="resultScore">0</span></div>
+                <div class="result-row"><span class="result-label">正确率</span><span class="result-value" id="resultRate">0%</span></div>
+                <div class="result-row"><span class="result-label">正确/总题</span><span class="result-value" id="resultRight">0/0</span></div>
+                <div class="result-row"><span class="result-label">用时</span><span class="result-value" id="resultTime">0s</span></div>
+                <div class="result-row"><span class="result-label">模式</span><span class="result-value" id="resultMode">—</span></div>
+            </div>
+            <div class="result-btns">
+                <button class="btn primary" onclick="window.GameUI.sendToHost({type:'restart'})">🔄 再来一局</button>
+                <button class="btn" onclick="window.GameUI.sendToHost({type:'close'})">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="../Shared/shared.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>

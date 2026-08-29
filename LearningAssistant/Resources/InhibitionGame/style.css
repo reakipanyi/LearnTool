@@ -1,0 +1,145 @@
+/* ========== 刺激区域 ========== */
+.stimulus {
+    font-size: 96px;
+    font-weight: bold;
+    text-align: center;
+    line-height: 1.2;
+    min-height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    padding: 20px;
+}
+
+/* 反向反应箭头 */
+.stimulus.arrow-up { color: var(--brand, #4B3FE3); }
+.stimulus.arrow-down { color: var(--brand, #4B3FE3); }
+.stimulus.arrow-left { color: var(--brand, #4B3FE3); }
+.stimulus.arrow-right { color: var(--brand, #4B3FE3); }
+
+/* 西蒙说指令 */
+.stimulus.simon-cmd {
+    font-size: 48px;
+    color: var(--text, #171717);
+}
+
+/* ========== Go-NoGo 特殊样式 ========== */
+.stimulus.go-sign {
+    font-size: 120px;
+    color: #1DC981;
+}
+
+.stimulus.no-sign {
+    font-size: 120px;
+    color: #E8463A;
+}
+
+/* ========== 西蒙说操作按钮 ========== */
+.simon-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    max-width: 420px;
+}
+
+.simon-btn {
+    font-size: 18px;
+    padding: 16px 28px;
+    border: 2px solid var(--border, rgba(23,23,23,0.12));
+    border-radius: 12px;
+    background: var(--surface, #F7F7F8);
+    color: var(--text, #171717);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    min-width: 100px;
+    user-select: none;
+}
+
+.simon-btn:hover {
+    border-color: var(--brand, #4B3FE3);
+    background: var(--brand-soft, #F2F7FF);
+    transform: translateY(-1px);
+}
+
+.simon-btn:active {
+    transform: translateY(0);
+}
+
+.simon-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* 正确/错误反馈 */
+.stimulus.feedback-correct {
+    color: #1DC981;
+    animation: popIn 0.3s ease;
+}
+
+.stimulus.feedback-wrong {
+    color: #E8463A;
+    animation: shake 0.3s ease;
+}
+
+/* ========== 键盘操作提示 ========== */
+.key-hint {
+    font-size: 13px;
+    color: var(--text-muted, #52525B);
+    text-align: center;
+    margin-top: 8px;
+}
+
+.key-hint .key {
+    display: inline-block;
+    padding: 1px 8px;
+    border: 1px solid var(--border, rgba(23,23,23,0.12));
+    border-radius: 4px;
+    background: var(--surface-muted, #EFEFF2);
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--font-mono, "Consolas", monospace);
+}
+
+/* ========== 隐藏 ========== */
+.hidden { display: none !important; }
+
+/* ========== 动画 ========== */
+@keyframes popIn {
+    0% { transform: scale(0.8); opacity: 0.5; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-10px); }
+    50% { transform: translateX(10px); }
+    75% { transform: translateX(-10px); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.stimulus {
+    animation: fadeIn 0.3s ease;
+}
+
+/* 深色模式适配 */
+body[data-theme="dark"] .simon-btn {
+    background: var(--surface, #262626);
+    border-color: var(--border, rgba(229,229,229,0.12));
+}
+
+body[data-theme="dark"] .simon-btn:hover {
+    border-color: var(--brand, #6054F1);
+    background: var(--brand-soft, #1A1759);
+}
+
+body[data-theme="dark"] .key-hint .key {
+    background: var(--surface-muted, #262626);
+    border-color: var(--border, rgba(229,229,229,0.12));
+}

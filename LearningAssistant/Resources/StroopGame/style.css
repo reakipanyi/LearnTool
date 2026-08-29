@@ -1,0 +1,159 @@
+/* ============ 斯特鲁普 - 专属样式 ============ */
+
+:root {
+    --bg: linear-gradient(135deg, #f0f4ff 0%, #fdf2f8 100%);
+}
+body[data-theme="dark"] {
+    --bg: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+}
+
+/* 主舞台 */
+.stage {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 20px 24px 40px;
+}
+
+/* 模式提示 */
+.mode-hint {
+    font-size: 15px;
+    color: var(--muted);
+    background: var(--surface);
+    border-radius: 12px;
+    padding: 8px 20px;
+    box-shadow: var(--shadow);
+    text-align: center;
+    max-width: 480px;
+}
+
+/* 刺激显示区 */
+.stimulus-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 160px;
+    width: 100%;
+    max-width: 480px;
+    background: var(--surface);
+    border-radius: 24px;
+    box-shadow: var(--shadow-hover);
+    padding: 24px;
+    position: relative;
+}
+
+.stimulus {
+    text-align: center;
+    user-select: none;
+    transition: all 0.3s;
+    animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 图形标签 */
+.shape-label {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 18px;
+    font-weight: 700;
+    color: #64748b;
+    letter-spacing: 2px;
+}
+
+/* 选项区 */
+.options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    max-width: 520px;
+}
+
+.option-btn {
+    min-width: 80px;
+    height: 56px;
+    padding: 0 20px;
+    border: 2px solid var(--progress-bg);
+    border-radius: 14px;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    box-shadow: var(--shadow);
+    transition: transform 0.12s, border-color 0.2s, box-shadow 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.option-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+    border-color: var(--word-border);
+    box-shadow: var(--shadow-hover);
+}
+.option-btn:active:not(:disabled) {
+    transform: scale(0.95);
+}
+.option-btn:disabled {
+    cursor: default;
+    opacity: 0.7;
+}
+.option-btn.correct {
+    border-color: var(--success);
+    background: rgba(34, 197, 94, 0.12);
+    box-shadow: 0 0 12px rgba(34, 197, 94, 0.3);
+}
+.option-btn.wrong {
+    border-color: var(--error);
+    background: rgba(239, 68, 68, 0.12);
+    animation: shake 0.35s;
+}
+
+/* 入场动画 */
+@keyframes scaleIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.85);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
+}
+
+/* 暗色主题适配 */
+body[data-theme="dark"] .stimulus-wrap {
+    background: var(--surface);
+}
+body[data-theme="dark"] .shape-label {
+    color: #94a3b8;
+}
+body[data-theme="dark"] .option-btn {
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* 语音识别监听指示器 */
+body.listening .stimulus-wrap::after {
+    content: '🎤';
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    font-size: 20px;
+    animation: micPulse 1s ease-in-out infinite;
+}
+@keyframes micPulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.25); }
+}

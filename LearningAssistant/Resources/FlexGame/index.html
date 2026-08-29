@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>认知灵活性训练营</title>
+    <link rel="stylesheet" href="../Shared/shared.css" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div class="topbar">
+        <div class="brand">🔄 认知灵活性</div>
+        <div class="stats">
+            <div class="stat"><span class="stat-label">得分</span><span class="stat-value" id="score">0</span></div>
+            <div class="stat"><span class="stat-label">正确</span><span class="stat-value" id="correct">0</span></div>
+            <div class="stat"><span class="stat-label">轮次</span><span class="stat-value" id="round">0</span></div>
+            <div class="stat"><span class="stat-label">用时</span><span class="stat-value" id="timer">0s</span></div>
+        </div>
+    </div>
+
+    <div class="progress-wrap">
+        <div class="progress" id="progress" style="width:0%"></div>
+    </div>
+
+    <div class="game-stage">
+        <div class="game-title" id="modeHint">加载中...</div>
+        <div class="hint" id="hint">准备开始</div>
+
+        <!-- 卡片分类模式 -->
+        <div id="cardsortArea" class="mode-area hidden">
+            <div class="cs-header">
+                <div class="cs-rule" id="csRule">规则：按颜色分类</div>
+                <div class="cs-change-badge" id="csChangeBadge">🔄 规则已切换</div>
+            </div>
+            <div class="cs-card" id="csCard">
+                <div class="cs-card-preview" id="csCardPreview">●</div>
+            </div>
+            <div class="cs-options" id="csOptions">
+                <button class="cs-option" data-idx="0">红色</button>
+                <button class="cs-option" data-idx="1">蓝色</button>
+                <button class="cs-option" data-idx="2">绿色</button>
+            </div>
+            <div class="cs-feedback" id="csFeedback"></div>
+        </div>
+
+        <!-- 任务切换模式 -->
+        <div id="taskswitchArea" class="mode-area hidden">
+            <div class="ts-cue" id="tsCue">○</div>
+            <div class="ts-stimulus" id="tsStimulus">5</div>
+            <div class="ts-task-label" id="tsTaskLabel">判断奇偶</div>
+            <div class="ts-buttons">
+                <button class="ts-btn" id="tsBtnLeft">←</button>
+                <button class="ts-btn" id="tsBtnRight">→</button>
+            </div>
+            <div class="ts-feedback" id="tsFeedback"></div>
+        </div>
+
+        <!-- 连线交替模式 -->
+        <div id="trailmakingArea" class="mode-area hidden">
+            <div class="canvas-wrap">
+                <canvas id="trailCanvas"></canvas>
+            </div>
+            <div class="tm-info">
+                <span class="tm-next" id="tmNext">下一个：1</span>
+                <span class="tm-switch" id="tmSwitch">模式：数字→字母</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="overlay hidden" id="resultOverlay">
+        <div class="result-card">
+            <div class="result-emoji" id="resultEmoji">🏆</div>
+            <div class="result-title" id="resultTitle">完成！</div>
+            <div class="stars" id="resultStars"><span class="lit">★</span><span class="lit">★</span><span class="lit">★</span></div>
+            <div class="result-details">
+                <div class="result-row"><span class="result-label">得分</span><span class="result-value" id="resultScore">0</span></div>
+                <div class="result-row"><span class="result-label">正确率</span><span class="result-value" id="resultRate">0%</span></div>
+                <div class="result-row"><span class="result-label">正确/总题</span><span class="result-value" id="resultRight">0/0</span></div>
+                <div class="result-row"><span class="result-label">用时</span><span class="result-value" id="resultTime">0s</span></div>
+                <div class="result-row"><span class="result-label">模式</span><span class="result-value" id="resultMode">—</span></div>
+            </div>
+            <div class="result-btns">
+                <button class="btn primary" onclick="window.GameUI.sendToHost({type:'restart'})">🔄 再来一局</button>
+                <button class="btn" onclick="window.GameUI.sendToHost({type:'close'})">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="../Shared/shared.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>

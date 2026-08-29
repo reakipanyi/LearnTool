@@ -20,7 +20,8 @@
     const slotsEl = $("slots"), meaningEl = $("qMeaning"), hintEl = $("qHint"),
           scoreEl = $("score"), comboEl = $("combo"), progressEl = $("progress"),
           timerEl = $("timer"), progressBar = $("progressBar"),
-          totalScoreEl = $("totalScore"), totalRemainingEl = $("totalRemaining");
+          totalScoreEl = $("totalScore"), totalRemainingEl = $("totalRemaining"),
+          continueBtn = $("btnContinue");
 
     const MOCK_ITEMS = [
         { id: "m1", word: "apple", meaning: "苹果", phonetic: "/ˈæpl/" },
@@ -49,6 +50,8 @@
         hintEl.textContent = current.item.phonetic ? `音标：${esc(current.item.phonetic)}　字母数：${letterCount}` : `字母数：${letterCount}`;
         renderSlots(word);
         updateProgress();
+        // 隐藏继续按钮
+        continueBtn.classList.add("hidden");
     }
 
     // 空格/连词符用窄槽展示，形成分隔并提示此处需输入对应字符
@@ -168,12 +171,12 @@
             queue.push(redo);
             toast("❌ 拼错了，稍后这词会再次出现");
             hintEl.textContent = `正确答案：${word}`;
-            // 先显示错误标记 700ms，再填充正确单词保留 2s
+            // 先显示错误标记 700ms，再填充正确单词，然后显示"继续"按钮等待用户手动点击
             setTimeout(() => {
                 renderCorrectAnswer();
                 speak(word);
+                continueBtn.classList.remove("hidden");
             }, 700);
-            setTimeout(startQuestion, 700 + 2000);
         }
     }
 
@@ -309,6 +312,11 @@
 
     // ---------- 按钮 ----------
     $("btnSpeak").addEventListener("click", () => { if (current) speak(current.item.word); });
+    $("btnContinue").addEventListener("click", () => {
+        if (!judging) return;
+        continueBtn.classList.add("hidden");
+        startQuestion();
+    });
     $("btnRestart").addEventListener("click", () => {
         if (window.GameUI.bridge()) sendToHost({ type: "restart" });
         else { resetGame(); queue = shuffle(allItems.map((it) => ({ item: it, wrongCount: 0 }))); startQuestion(); }

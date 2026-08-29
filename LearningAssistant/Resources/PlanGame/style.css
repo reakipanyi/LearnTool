@@ -1,0 +1,189 @@
+/* ========== 通用 ========== */
+.mode-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    gap: 12px;
+}
+
+.canvas-wrap {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    max-height: calc(100vh - 200px);
+}
+
+/* ========== 路径规划 ========== */
+.pp-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.pp-steps {
+    font-size: 15px;
+    font-weight: bold;
+    color: var(--text, #1F2937);
+}
+
+.pp-btn {
+    padding: 6px 16px;
+    font-size: 14px;
+    font-weight: bold;
+    border: 2px solid var(--border, rgba(23,23,23,0.15));
+    border-radius: 8px;
+    background: var(--surface, #fff);
+    color: var(--text, #1F2937);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.pp-btn:hover { border-color: #6366F1; background: rgba(99,102,241,0.08); }
+.pp-btn.primary {
+    background: #6366F1;
+    color: #fff;
+    border-color: #6366F1;
+}
+.pp-btn.primary:hover { background: #4F46E5; }
+
+#ppCanvas {
+    border: 2px solid var(--border, rgba(23,23,23,0.12));
+    border-radius: 12px;
+    background: var(--surface, #F7F7F8);
+    max-width: 100%;
+    max-height: 100%;
+    cursor: pointer;
+}
+
+.pp-instruction {
+    font-size: 14px;
+    color: var(--text-muted, #52525B);
+}
+
+/* ========== 汉诺塔 ========== */
+.hn-info {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.hn-moves, .hn-min, .hn-status {
+    font-size: 15px;
+    font-weight: bold;
+    color: var(--text, #1F2937);
+}
+.hn-status { font-weight: normal; color: var(--text-muted, #52525B); }
+
+#hnCanvas {
+    border: 2px solid var(--border, rgba(23,23,23,0.12));
+    border-radius: 12px;
+    background: var(--surface, #F7F7F8);
+    max-width: 100%;
+    max-height: 100%;
+    cursor: pointer;
+}
+
+.hn-instruction {
+    font-size: 14px;
+    color: var(--text-muted, #52525B);
+}
+
+/* ========== 时间估计 ========== */
+.te-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+.te-visual {
+    width: 200px;
+    height: 200px;
+    border: 3px solid var(--border, rgba(23,23,23,0.15));
+    border-radius: 50%;
+    background: var(--surface, #F7F7F8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+}
+
+.te-circle {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: #6366F1;
+    transition: all 0.3s;
+    opacity: 0.3;
+}
+
+.te-circle.active {
+    opacity: 1;
+    transform: scale(1.1);
+    box-shadow: 0 0 30px rgba(99,102,241,0.4);
+}
+
+.te-circle.ready {
+    opacity: 0.6;
+    background: #F59E0B;
+}
+
+.te-info {
+    display: flex;
+    gap: 24px;
+    font-size: 16px;
+}
+
+.te-target {
+    font-weight: bold;
+    color: var(--text, #1F2937);
+}
+
+.te-result {
+    font-weight: bold;
+    color: var(--text-muted, #52525B);
+}
+
+.te-controls {
+    display: flex;
+    gap: 16px;
+}
+
+.te-btn {
+    padding: 10px 28px;
+    font-size: 16px;
+    font-weight: bold;
+    border: 2px solid var(--border, rgba(23,23,23,0.15));
+    border-radius: 10px;
+    background: var(--surface, #fff);
+    color: var(--text, #1F2937);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.te-btn:hover { border-color: #6366F1; background: rgba(99,102,241,0.08); }
+.te-btn.primary {
+    background: #6366F1;
+    color: #fff;
+    border-color: #6366F1;
+}
+.te-btn.primary:hover { background: #4F46E5; }
+
+.te-feedback {
+    font-size: 16px;
+    min-height: 24px;
+    color: var(--text-muted, #52525B);
+}
+
+/* 深色模式 */
+body[data-theme="dark"] #ppCanvas,
+body[data-theme="dark"] #hnCanvas {
+    background: var(--surface, #262626);
+    border-color: var(--border, rgba(229,229,229,0.12));
+}
+body[data-theme="dark"] .te-visual {
+    background: var(--surface, #262626);
+}

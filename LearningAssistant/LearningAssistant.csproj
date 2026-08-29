@@ -16,6 +16,19 @@
 		<None Remove="AppData\config\appsettings.json" />
 		<None Remove="AppData\config\SubjectTemplates.json" />
 		<None Remove="AppData\config\WebBookmarks.json" />
+		<None Remove="Resources\InhibitionGame\game.js" />
+		<None Remove="Resources\InhibitionGame\index.html" />
+		<None Remove="Resources\InhibitionGame\style.css" />
+		<None Remove="Resources\KnowledgeGraph\kg-visualization.html" />
+		<None Remove="Resources\MemoryGame\game.js" />
+		<None Remove="Resources\MemoryGame\index.html" />
+		<None Remove="Resources\MemoryGame\style.css" />
+		<None Remove="Resources\SearchGame\game.js" />
+		<None Remove="Resources\SearchGame\index.html" />
+		<None Remove="Resources\SearchGame\style.css" />
+		<None Remove="Resources\StroopGame\game.js" />
+		<None Remove="Resources\StroopGame\index.html" />
+		<None Remove="Resources\StroopGame\style.css" />
 	</ItemGroup>
 	<ItemGroup>
 		<Content Include="icon.ico" />
@@ -29,6 +42,117 @@
 		</EmbeddedResource>
 		<EmbeddedResource Include="AppData\config\WebBookmarks.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\InhibitionGame\game.js">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\InhibitionGame\index.html">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\InhibitionGame\style.css">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\KnowledgeGraph\kg-visualization.html">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\LinkMatchGame\game.js">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\LinkMatchGame\index.html">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\LinkMatchGame\style.css">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\MemoryGame\game.js">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\MemoryGame\index.html">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\MemoryGame\style.css">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\MemoryMatchGame\game.js">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\MemoryMatchGame\index.html">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\MemoryMatchGame\style.css">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\SchulteGame\game.js">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\SchulteGame\index.html">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\SchulteGame\style.css">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\SearchGame\game.js">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\SearchGame\index.html">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\SearchGame\style.css">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\Shared\shared.css">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\Shared\shared.js">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\SpellingGame\game.js">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\SpellingGame\index.html">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\SpellingGame\style.css">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\StroopGame\game.js">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\StroopGame\index.html">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\StroopGame\style.css">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\SudokuGame\game.js">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\SudokuGame\index.html">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\SudokuGame\style.css">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\SudokuGame\sudoku-engine.js">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\WhackAMoleGame\game.js">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\WhackAMoleGame\index.html">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\WhackAMoleGame\style.css">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\WordMatchGame\game.js">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\WordMatchGame\index.html">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</EmbeddedResource>
+		<EmbeddedResource Include="Resources\WordMatchGame\style.css">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</EmbeddedResource>
 	</ItemGroup>
 	<ItemGroup>
@@ -84,14 +208,32 @@
 			<None Include="Resources\SudokuGame\**">
 				<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 			</None>
+			<None Remove="Resources\LinkMatchGame\game.js" />
+			<None Remove="Resources\LinkMatchGame\index.html" />
+			<None Remove="Resources\LinkMatchGame\style.css" />
+			<None Remove="Resources\MemoryMatchGame\game.js" />
+			<None Remove="Resources\MemoryMatchGame\index.html" />
+			<None Remove="Resources\MemoryMatchGame\style.css" />
+			<None Remove="Resources\SchulteGame\game.js" />
+			<None Remove="Resources\SchulteGame\index.html" />
+			<None Remove="Resources\SchulteGame\style.css" />
+			<None Remove="Resources\Shared\shared.css" />
+			<None Remove="Resources\Shared\shared.js" />
+			<None Remove="Resources\SpellingGame\game.js" />
+			<None Remove="Resources\SpellingGame\index.html" />
+			<None Remove="Resources\SpellingGame\style.css" />
+			<None Remove="Resources\SudokuGame\game.js" />
+			<None Remove="Resources\SudokuGame\index.html" />
+			<None Remove="Resources\SudokuGame\style.css" />
+			<None Remove="Resources\SudokuGame\sudoku-engine.js" />
+			<None Remove="Resources\WhackAMoleGame\game.js" />
+			<None Remove="Resources\WhackAMoleGame\index.html" />
+			<None Remove="Resources\WhackAMoleGame\style.css" />
+			<None Remove="Resources\WordMatchGame\game.js" />
+			<None Remove="Resources\WordMatchGame\index.html" />
+			<None Remove="Resources\WordMatchGame\style.css" />
 			<None Update="Models\Config\SubjectTemplates.json">
 			<Link>AppData\config\SubjectTemplates.json</Link>
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-		</None>
-		<None Update="Resources\Shared\shared.css">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-		</None>
-		<None Update="Resources\Shared\shared.js">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>
 	</ItemGroup>

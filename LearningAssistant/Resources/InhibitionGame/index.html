@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>抑制控制训练场</title>
+    <link rel="stylesheet" href="../Shared/shared.css" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <!-- 顶部统计栏 -->
+    <div class="topbar">
+        <div class="brand">🧠 抑制控制训练场</div>
+        <div class="stats">
+            <div class="stat">
+                <span class="stat-label">得分</span>
+                <span class="stat-value" id="score">0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">正确</span>
+                <span class="stat-value" id="correct">0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">剩余</span>
+                <span class="stat-value" id="remain">0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">用时</span>
+                <span class="stat-value" id="timer">0s</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- 进度条 -->
+    <div class="progress-wrap">
+        <div class="progress" id="progress" style="width:0%"></div>
+    </div>
+
+    <!-- 游戏主舞台 -->
+    <div class="game-stage">
+        <!-- 模式提示 -->
+        <div class="game-title" id="modeHint">加载中...</div>
+
+        <!-- 刺激区域 -->
+        <div id="stimulus" class="stimulus">—</div>
+
+        <!-- 操作提示（Go-NoGo / 反向反应） -->
+        <div class="hint" id="hint"></div>
+
+        <!-- 西蒙说操作按钮 -->
+        <div id="simonActions" class="simon-actions hidden"></div>
+
+        <!-- 键盘操作提示 -->
+        <div class="key-hint" id="keyHint">
+            <span class="key">空格</span> 确认 &nbsp;|&nbsp; <span class="key">R</span> 重新开始
+        </div>
+    </div>
+
+    <!-- 结果浮层 -->
+    <div class="overlay hidden" id="resultOverlay">
+        <div class="result-card">
+            <div class="result-emoji" id="resultEmoji">🏆</div>
+            <div class="result-title" id="resultTitle">完成！</div>
+            <div class="stars" id="resultStars">
+                <span class="lit">★</span><span class="lit">★</span><span class="lit">★</span>
+            </div>
+            <div class="result-details">
+                <div class="result-row"><span class="result-label">得分</span><span class="result-value" id="resultScore">0</span></div>
+                <div class="result-row"><span class="result-label">正确率</span><span class="result-value" id="resultRate">0%</span></div>
+                <div class="result-row"><span class="result-label">正确/总题</span><span class="result-value" id="resultRight">0/0</span></div>
+                <div class="result-row"><span class="result-label">用时</span><span class="result-value" id="resultTime">0s</span></div>
+                <div class="result-row"><span class="result-label">模式</span><span class="result-value" id="resultMode">—</span></div>
+            </div>
+            <div class="result-btns">
+                <button class="btn primary" onclick="window.GameUI.sendToHost({type:'restart'})">🔄 再来一局</button>
+                <button class="btn" onclick="window.GameUI.sendToHost({type:'close'})">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+
+    <script src="../Shared/shared.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>

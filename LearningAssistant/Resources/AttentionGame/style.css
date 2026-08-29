@@ -1,0 +1,300 @@
+/* ========== 通用 ========== */
+.mode-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    gap: 16px;
+}
+
+/* ========== 双任务反应 ========== */
+.dt-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+.dt-visual {
+    width: 260px;
+    height: 180px;
+    border: 3px solid var(--border, rgba(23,23,23,0.15));
+    border-radius: 16px;
+    background: var(--surface, #F7F7F8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+}
+
+.dt-stimulus {
+    font-size: 64px;
+    line-height: 1;
+    user-select: none;
+    transition: all 0.1s;
+}
+
+.dt-controls {
+    display: flex;
+    gap: 20px;
+}
+
+.dt-btn {
+    width: 130px;
+    height: 54px;
+    font-size: 17px;
+    font-weight: bold;
+    border: 2px solid var(--border, rgba(23,23,23,0.15));
+    border-radius: 12px;
+    background: var(--surface, #fff);
+    color: var(--text, #1F2937);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.dt-btn:hover {
+    border-color: #6366F1;
+    background: rgba(99,102,241,0.08);
+    transform: translateY(-2px);
+}
+.dt-btn:active { transform: translateY(0); }
+.dt-btn.small {
+    width: auto;
+    height: 36px;
+    padding: 0 16px;
+    font-size: 14px;
+}
+.dt-btn.correct {
+    border-color: #1DC981;
+    background: rgba(29,201,129,0.12);
+}
+.dt-btn.wrong {
+    border-color: #E8463A;
+    background: rgba(232,70,58,0.1);
+}
+
+.dt-audio-task {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    background: var(--surface, #F7F7F8);
+    border-radius: 10px;
+    border: 1px solid var(--border, rgba(23,23,23,0.1));
+}
+
+.dt-audio-label {
+    font-size: 15px;
+    color: var(--text-muted, #52525B);
+}
+
+.dt-audio-count {
+    font-size: 15px;
+    font-weight: bold;
+    color: var(--text, #1F2937);
+}
+
+.dt-feedback {
+    font-size: 16px;
+    min-height: 24px;
+    color: var(--text-muted, #52525B);
+}
+
+/* ========== 多重目标追踪 ========== */
+.mot-info {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.mot-targets {
+    font-size: 15px;
+    color: var(--text, #1F2937);
+}
+
+.mot-btn {
+    padding: 8px 20px;
+    font-size: 15px;
+    font-weight: bold;
+    border: 2px solid var(--border, rgba(23,23,23,0.15));
+    border-radius: 10px;
+    background: var(--surface, #fff);
+    color: var(--text, #1F2937);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.mot-btn:hover {
+    border-color: #6366F1;
+    background: rgba(99,102,241,0.08);
+}
+.mot-btn.primary {
+    background: #6366F1;
+    color: #fff;
+    border-color: #6366F1;
+}
+.mot-btn.primary:hover {
+    background: #4F46E5;
+}
+
+.canvas-wrap {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    max-height: calc(100vh - 220px);
+}
+
+#motCanvas {
+    border: 2px solid var(--border, rgba(23,23,23,0.12));
+    border-radius: 12px;
+    background: var(--surface, #F7F7F8);
+    max-width: 100%;
+    max-height: 100%;
+    cursor: pointer;
+}
+
+.mot-select-info {
+    font-size: 14px;
+    color: var(--text-muted, #52525B);
+}
+
+.mot-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.mot-selected {
+    font-size: 15px;
+    font-weight: bold;
+    color: var(--text, #1F2937);
+}
+
+/* ========== 双任务计数 ========== */
+.dc-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+.dc-task-info {
+    display: flex;
+    gap: 12px;
+}
+
+.dc-task-tag {
+    padding: 4px 14px;
+    font-size: 14px;
+    font-weight: bold;
+    border-radius: 8px;
+    background: var(--surface, #F7F7F8);
+    border: 1px solid var(--border, rgba(23,23,23,0.12));
+    color: var(--text, #1F2937);
+}
+
+.dc-stimulus-wrap {
+    width: 200px;
+    height: 160px;
+    border: 3px solid var(--border, rgba(23,23,23,0.15));
+    border-radius: 16px;
+    background: var(--surface, #F7F7F8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.dc-stimulus {
+    font-size: 80px;
+    font-weight: bold;
+    color: var(--text, #1F2937);
+    user-select: none;
+    transition: all 0.1s;
+}
+
+.dc-controls {
+    display: flex;
+    gap: 20px;
+}
+
+.dc-btn {
+    width: 160px;
+    height: 50px;
+    font-size: 16px;
+    font-weight: bold;
+    border: 2px solid var(--border, rgba(23,23,23,0.15));
+    border-radius: 12px;
+    background: var(--surface, #fff);
+    color: var(--text, #1F2937);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.dc-btn:hover {
+    border-color: #6366F1;
+    background: rgba(99,102,241,0.08);
+}
+.dc-btn:active { transform: translateY(0); }
+.dc-btn.primary {
+    background: #6366F1;
+    color: #fff;
+    border-color: #6366F1;
+}
+.dc-btn.primary:hover {
+    background: #4F46E5;
+}
+
+.dc-report {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 24px;
+    border: 2px solid var(--border, rgba(23,23,23,0.12));
+    border-radius: 14px;
+    background: var(--surface, #F7F7F8);
+}
+
+.dc-report-title {
+    font-size: 17px;
+    font-weight: bold;
+    color: var(--text, #1F2937);
+}
+
+.dc-report-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+    color: var(--text, #1F2937);
+}
+
+.dc-input {
+    width: 60px;
+    height: 34px;
+    font-size: 16px;
+    text-align: center;
+    border: 2px solid var(--border, rgba(23,23,23,0.15));
+    border-radius: 8px;
+    background: var(--surface, #fff);
+    color: var(--text, #1F2937);
+}
+
+.dc-feedback {
+    font-size: 16px;
+    min-height: 24px;
+    color: var(--text-muted, #52525B);
+}
+
+/* 深色模式 */
+body[data-theme="dark"] #motCanvas {
+    background: var(--surface, #262626);
+    border-color: var(--border, rgba(229,229,229,0.12));
+}
+body[data-theme="dark"] .dt-visual {
+    background: var(--surface, #262626);
+}
+body[data-theme="dark"] .dc-stimulus-wrap {
+    background: var(--surface, #262626);
+}

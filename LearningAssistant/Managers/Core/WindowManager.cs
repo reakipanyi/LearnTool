@@ -1,4 +1,4 @@
-﻿using LearningAssistant.Abstractions;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Forms;
@@ -212,6 +212,54 @@ namespace LearningAssistant.Managers
         {
             _logger.LogInformation("Opening sudoku game window");
             ShowScopedForm<SudokuGameForm>();
+        }
+
+        public void OpenStroopGameWindow()
+        {
+            _logger.LogInformation("Opening stroop game window");
+            ShowScopedForm<StroopGameForm>();
+        }
+
+        public void OpenInhibitionGameWindow()
+        {
+            _logger.LogInformation("Opening inhibition game window");
+            ShowScopedForm<InhibitionGameForm>();
+        }
+
+        public void OpenMemoryGameWindow()
+        {
+            _logger.LogInformation("Opening memory game window");
+            ShowScopedForm<MemoryGameForm>();
+        }
+
+        public void OpenSearchGameWindow()
+        {
+            _logger.LogInformation("Opening search game window");
+            ShowScopedForm<SearchGameForm>();
+        }
+
+        public void OpenTraceGameWindow()
+        {
+            _logger.LogInformation("Opening trace game window");
+            ShowScopedForm<TraceGameForm>();
+        }
+
+        public void OpenFlexGameWindow()
+        {
+            _logger.LogInformation("Opening flex game window");
+            ShowScopedForm<FlexGameForm>();
+        }
+
+        public void OpenAttentionGameWindow()
+        {
+            _logger.LogInformation("Opening attention game window");
+            ShowScopedForm<AttentionGameForm>();
+        }
+
+        public void OpenPlanGameWindow()
+        {
+            _logger.LogInformation("Opening plan game window");
+            ShowScopedForm<PlanGameForm>();
         }
 
         public void OpenStatisticsWindow()

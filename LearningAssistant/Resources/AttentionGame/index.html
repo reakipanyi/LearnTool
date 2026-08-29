@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>分配注意力训练营</title>
+    <link rel="stylesheet" href="../Shared/shared.css" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div class="topbar">
+        <div class="brand">🎯 分配注意力</div>
+        <div class="stats">
+            <div class="stat"><span class="stat-label">得分</span><span class="stat-value" id="score">0</span></div>
+            <div class="stat"><span class="stat-label">正确</span><span class="stat-value" id="correct">0</span></div>
+            <div class="stat"><span class="stat-label">轮次</span><span class="stat-value" id="round">0</span></div>
+            <div class="stat"><span class="stat-label">用时</span><span class="stat-value" id="timer">0s</span></div>
+        </div>
+    </div>
+
+    <div class="progress-wrap">
+        <div class="progress" id="progress" style="width:0%"></div>
+    </div>
+
+    <div class="game-stage">
+        <div class="game-title" id="modeHint">加载中...</div>
+        <div class="hint" id="hint">准备开始</div>
+
+        <!-- 双任务反应模式 -->
+        <div id="dualtaskArea" class="mode-area hidden">
+            <div class="dt-container">
+                <div class="dt-visual" id="dtVisual">
+                    <div class="dt-stimulus" id="dtStimulus">●</div>
+                </div>
+                <div class="dt-controls">
+                    <button class="dt-btn" id="dtBtnYes">✓ 目标</button>
+                    <button class="dt-btn" id="dtBtnNo">✗ 非目标</button>
+                </div>
+                <div class="dt-audio-task">
+                    <div class="dt-audio-label">🎵 音频任务：</div>
+                    <div class="dt-audio-count" id="dtAudioCount">计数值：? / ?</div>
+                    <button class="dt-btn small" id="dtAudioReport">报告音频数</button>
+                </div>
+            </div>
+            <div class="dt-feedback" id="dtFeedback"></div>
+        </div>
+
+        <!-- 多重目标追踪模式 -->
+        <div id="motArea" class="mode-area hidden">
+            <div class="mot-info">
+                <span class="mot-targets" id="motTargets">目标：</span>
+                <button class="mot-btn" id="motBtnStart">开始追踪</button>
+            </div>
+            <div class="canvas-wrap">
+                <canvas id="motCanvas"></canvas>
+            </div>
+            <div class="mot-select-info" id="motSelectInfo">点击选中你认为是目标的圆圈，然后点击"确认"</div>
+            <div class="mot-actions hidden" id="motActions">
+                <button class="mot-btn primary" id="motBtnConfirm">确认选择</button>
+                <span class="mot-selected" id="motSelected">已选 0 个</span>
+            </div>
+        </div>
+
+        <!-- 双任务计数模式 -->
+        <div id="dualcountArea" class="mode-area hidden">
+            <div class="dc-container">
+                <div class="dc-task-info">
+                    <div class="dc-task-tag">任务A：点击偶数</div>
+                    <div class="dc-task-tag">任务B：数"7"出现次数</div>
+                </div>
+                <div class="dc-stimulus-wrap">
+                    <div class="dc-stimulus" id="dcStimulus">—</div>
+                </div>
+                <div class="dc-controls">
+                    <button class="dc-btn" id="dcBtnClick">点击（偶数时按下）</button>
+                </div>
+                <div class="dc-report hidden" id="dcReport">
+                    <div class="dc-report-title">本轮结束！请回答：</div>
+                    <div class="dc-report-row">
+                        <span>数字7出现了几次？</span>
+                        <input type="number" class="dc-input" id="dcInputCount" min="0" max="20" value="0" />
+                    </div>
+                    <button class="dc-btn primary" id="dcBtnReport">确认回答</button>
+                </div>
+            </div>
+            <div class="dc-feedback" id="dcFeedback"></div>
+        </div>
+    </div>
+
+    <div class="overlay hidden" id="resultOverlay">
+        <div class="result-card">
+            <div class="result-emoji" id="resultEmoji">🏆</div>
+            <div class="result-title" id="resultTitle">完成！</div>
+            <div class="stars" id="resultStars"><span class="lit">★</span><span class="lit">★</span><span class="lit">★</span></div>
+            <div class="result-details">
+                <div class="result-row"><span class="result-label">得分</span><span class="result-value" id="resultScore">0</span></div>
+                <div class="result-row"><span class="result-label">正确率</span><span class="result-value" id="resultRate">0%</span></div>
+                <div class="result-row"><span class="result-label">正确/总题</span><span class="result-value" id="resultRight">0/0</span></div>
+                <div class="result-row"><span class="result-label">用时</span><span class="result-value" id="resultTime">0s</span></div>
+                <div class="result-row"><span class="result-label">模式</span><span class="result-value" id="resultMode">—</span></div>
+            </div>
+            <div class="result-btns">
+                <button class="btn primary" onclick="window.GameUI.sendToHost({type:'restart'})">🔄 再来一局</button>
+                <button class="btn" onclick="window.GameUI.sendToHost({type:'close'})">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script src="../Shared/shared.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
