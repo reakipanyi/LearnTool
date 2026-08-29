@@ -24,7 +24,7 @@ namespace LearningAssistant.Services.Pdf
             _config = config;
             _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
             _logger = logger;
-            _currentLanguage = string.IsNullOrWhiteSpace(_config.Language) ? "eng" : _config.Language;
+            _currentLanguage = string.IsNullOrWhiteSpace(_config.Language) ? "chi_sim+eng" : _config.Language;
             StartBackgroundInitialization();
         }
 
@@ -71,21 +71,13 @@ namespace LearningAssistant.Services.Pdf
 
                 _tessDataPath = _appPaths.TesseractDataDir;
 
-                var langFiles = language.Split('+')
-                    .Select(lang => Path.Combine(_appPaths.TesseractDataDir, $"{lang}.traineddata"))
-                    .ToList();
-
-                var missingFiles = langFiles.Where(f => !File.Exists(f)).ToList();
-                if (missingFiles.Any())
-                {
-                    var missingList = string.Join("\n", missingFiles);
-                    _initErrorMessage = $"缺少语言数据文件:\n{missingList}\n\n当前目录: {_appPaths.TesseractDataDir}\n\n请从 https://github.com/tesseract-ocr/tessdata 下载所需的语言数据文件";
+                var resolvedLanguage = ResolveLanguageWithFallback(language);
+                if (resolvedLanguage == null)
                     return false;
-                }
 
-                _engine = new TesseractEngine(_appPaths.TesseractDataDir, language, EngineMode.Default);
+                _engine = new TesseractEngine(_appPaths.TesseractDataDir, resolvedLanguage, EngineMode.Default);
                 _engine.DefaultPageSegMode = PageSegMode.Auto;
-                _currentLanguage = language;
+                _currentLanguage = resolvedLanguage;
                 _initErrorMessage = null;
                 return true;
             }
@@ -99,6 +91,36 @@ namespace LearningAssistant.Services.Pdf
                 _initErrorMessage = $"OCR引擎初始化失败: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}";
                 return false;
             }
+        }
+
+        /// <summary>
+        /// 解析语言参数，若目标语言的数据文件缺失则自动降级。
+        /// 优先返回所有文件均存在的语言组合；若纯英语文件也不存在则返回 null。
+        /// </summary>
+        private string? ResolveLanguageWithFallback(string language)
+        {
+            var langs = language.Split('+');
+            var missing = new List<string>();
+            foreach (var lang in langs)
+            {
+                var path = Path.Combine(_appPaths.TesseractDataDir, $"{lang}.traineddata");
+                if (!File.Exists(path))
+                    missing.Add(lang);
+            }
+
+            if (missing.Count == 0)
+                return language;
+
+            // 组合语言中部分缺失 → 尝试降级为仅 eng
+            _logger?.LogWarning("OCR语言数据文件缺失: {Missing}，降级为 eng", string.Join(", ", missing));
+            var engPath = Path.Combine(_appPaths.TesseractDataDir, "eng.traineddata");
+            if (File.Exists(engPath))
+                return "eng";
+
+            // eng 也不存在 → 报错
+            var missingList = string.Join("\n", langs.Select(l => Path.Combine(_appPaths.TesseractDataDir, $"{l}.traineddata")));
+            _initErrorMessage = $"缺少语言数据文件:\n{missingList}\n\n当前目录: {_appPaths.TesseractDataDir}\n\n请从 https://github.com/tesseract-ocr/tessdata 下载所需的语言数据文件";
+            return null;
         }
 
         private void InitializeEngine()

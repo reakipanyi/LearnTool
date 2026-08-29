@@ -114,6 +114,25 @@
         }
     }
 
+    // 将正确单词填入格子（用于拼错后展示正确答案）
+    function renderCorrectAnswer() {
+        const slots = slotsEl.children;
+        const word = current.item.word;
+        for (let i = 0; i < slots.length; i++) {
+            const ch = word[i];
+            if (ch === " ") {
+                slots[i].textContent = "";
+                slots[i].className = "slot space right";
+            } else if (ch === "-") {
+                slots[i].textContent = "-";
+                slots[i].className = "slot hyphen right";
+            } else {
+                slots[i].textContent = ch;
+                slots[i].className = "slot right";
+            }
+        }
+    }
+
     // ---------- 判定 ----------
     function judge() {
         judging = true;
@@ -149,10 +168,12 @@
             queue.push(redo);
             toast("❌ 拼错了，稍后这词会再次出现");
             hintEl.textContent = `正确答案：${word}`;
-            // 错误停留时长：基础 2 秒，字母数超过 5 后每字母增加 100ms，上限 4 秒
-            const errLetterCount = word.replace(/[\s-]/g, "").length;
-            const wrongDelay = Math.min(2000 + Math.max(0, errLetterCount - 5) * 100, 4000);
-            setTimeout(startQuestion, wrongDelay);
+            // 先显示错误标记 700ms，再填充正确单词保留 2s
+            setTimeout(() => {
+                renderCorrectAnswer();
+                speak(word);
+            }, 700);
+            setTimeout(startQuestion, 700 + 2000);
         }
     }
 

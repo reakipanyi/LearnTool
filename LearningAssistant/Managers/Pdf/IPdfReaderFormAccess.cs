@@ -1,4 +1,4 @@
-﻿using LearningAssistant.Presenters;
+using LearningAssistant.Presenters;
 
 using LearningAssistant.Services.Pdf;
 
@@ -80,6 +80,9 @@ namespace LearningAssistant.Managers
 
         /// <summary>高亮服务，用于 Select 模式调整高亮位置/大小后的持久化</summary>
         IHighlightService? HighlightService { get; }
+
+        /// <summary>高亮控制器，用于删除选中/刷新图层</summary>
+        PdfReaderHighlightManager? HighlightManager { get; }
 
         /// <summary>音频录制侧边栏标签页</summary>
         TabPage? TabPageAudio { get; }

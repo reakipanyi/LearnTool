@@ -47,9 +47,9 @@
     // 六边形基础尺寸，按难度缩放
     const HEX_BASE_W = 76;     // 基础宽度 px
     const HEX_ASPECT = 1.1547; // 2/√3
-    // 蜂巢排列间距
-    const H_SPACING_RATIO = 0.72; // 水平间距 / 宽度
-    const V_SPACING_RATIO = 0.5;  // 垂直间距 / 高度
+    // 蜂巢排列间距（尖顶六边形规则蜂巢排列 + 安全余量容纳尺寸扰动）
+    const H_SPACING_RATIO = 1.10; // 水平间距 / 宽度（完美邻接 1.0 + 10% 余量）
+    const V_SPACING_RATIO = 0.82; // 垂直间距 / 高度（完美嵌入 0.75 + 7% 余量）
 
     // ---------- 盘面生成 ----------
     function generateNumbers(n) {
@@ -81,8 +81,8 @@
         const fontAssignments = [];
         for (let i = 0; i < total; i++) {
             colorAssignments.push(COLOR_PALETTE[Math.floor(Math.random() * COLOR_PALETTE.length)]);
-            // 大小偏差：±12%，但至少保证数字可见
-            const sizeFactor = 1 + (Math.random() - 0.5) * 0.24;
+            // 大小偏差：±8%，在保持视觉干扰的同时避免遮挡
+            const sizeFactor = 1 + (Math.random() - 0.5) * 0.16;
             sizeAssignments.push(sizeFactor);
             // 旋转：约 35% 的格子有 ±5° 旋转
             rotAssignments.push(Math.random() > 0.65 ? (Math.random() - 0.5) * 10 : 0);

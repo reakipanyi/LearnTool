@@ -721,6 +721,7 @@ namespace LearningAssistant.Forms.Pdf
         public Form Form => this;
 
         IHighlightService? IPdfReaderFormAccess.HighlightService => _highlightService;
+        PdfReaderHighlightManager? IPdfReaderFormAccess.HighlightManager => _highlightManager;
 
         public TabPage? TabPageAudio => _tabPageAudio;
         public IAudioRecorderService? AudioRecorderService => _audioRecorderService;
@@ -2993,7 +2994,10 @@ namespace LearningAssistant.Forms.Pdf
 
                 if (!string.IsNullOrEmpty(_currentPdfPath) && _currentPageImage != null)
                 {
-                    DrawHighlightsFromLayer(e.Graphics);
+                    if (_navigationManager?.AnnotationLayerVisible ?? true)
+                    {
+                        DrawHighlightsFromLayer(e.Graphics);
+                    }
                 }
 
                 DrawAnnotations(e.Graphics);
@@ -3018,19 +3022,16 @@ namespace LearningAssistant.Forms.Pdf
         {
             if (_currentPageImage == null) return;
 
-            bool isNight = _nightModeManager?.IsNightMode ?? _isNightMode;
-
             if (_isDualPage)
             {
-                DrawDualPageLayout(g, isNight);
+                DrawDualPageLayout(g);
             }
             else
             {
                 var rect = ToRectangle(GetImageDisplayRect());
-                if (isNight)
-                    DrawInvertedImage(g, _currentPageImage, rect);
-                else
-                    g.DrawImage(_currentPageImage, rect);
+                // 夜间模式图像已由 PdfRenderer.ApplyNightMode 在渲染阶段完成 ColorMatrix 反色，
+                // 此处直接绘制，避免与显示层 DrawInvertedImage 叠加造成"双重反色=原色"。
+                g.DrawImage(_currentPageImage, rect);
             }
         }
 
@@ -3098,7 +3099,7 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
-        private void DrawDualPageLayout(Graphics g, bool isNight)
+        private void DrawDualPageLayout(Graphics g)
         {
             try
             {
@@ -3107,20 +3108,16 @@ namespace LearningAssistant.Forms.Pdf
 
                 var (leftRect, rightRect) = GetDualPageRects();
 
-                if (isNight)
-                    DrawInvertedImage(g, _currentPageImage, leftRect);
-                else
-                    g.DrawImage(_currentPageImage, leftRect);
+                // 夜间模式图像已由 PdfRenderer.ApplyNightMode 在渲染阶段完成反色，直接绘制
+                g.DrawImage(_currentPageImage, leftRect);
 
                 if (_secondPageImage != null)
                 {
-                    if (isNight)
-                        DrawInvertedImage(g, _secondPageImage, rightRect);
-                    else
-                        g.DrawImage(_secondPageImage, rightRect);
+                    g.DrawImage(_secondPageImage, rightRect);
                 }
                 else
                 {
+                    bool isNight = _nightModeManager?.IsNightMode ?? _isNightMode;
                     using var brush = new SolidBrush(isNight ? Color.FromArgb(20, 20, 20) : Color.White);
                     g.FillRectangle(brush, rightRect);
                 }

@@ -93,6 +93,10 @@ namespace LearningAssistant.Models.Pdf
         public string PdfPath { get; set; } = string.Empty;
         public int PageIndex { get; set; }
         public AnnotationType Type { get; set; }
+        /// <summary>形状类型（Rectangle/Ellipse/Arrow/Strikethrough 等），仅在 Type=Stroke 时有值</summary>
+        public string? ShapeType { get; set; }
+        /// <summary>画笔类型（Pencil/Pen/Marker），仅在 Type=Stroke 时有值</summary>
+        public string? PenType { get; set; }
 
         public float NormalizedX { get; set; }
         public float NormalizedY { get; set; }
@@ -118,7 +122,7 @@ namespace LearningAssistant.Models.Pdf
             string typeName = Type switch
             {
                 AnnotationType.Highlight => "高亮",
-                AnnotationType.Stroke => "标注",
+                AnnotationType.Stroke => GetStrokeTypeName(),
                 AnnotationType.Text => "文字",
                 _ => ""
             };
@@ -138,6 +142,35 @@ namespace LearningAssistant.Models.Pdf
             }
 
             return $"{typeIcon} {fileName} P{pageNum} {typeName}";
+        }
+
+        private string GetStrokeTypeName()
+        {
+            if (!string.IsNullOrEmpty(ShapeType))
+            {
+                return ShapeType switch
+                {
+                    "Rectangle" => "矩形",
+                    "Ellipse" => "椭圆",
+                    "Arrow" => "箭头",
+                    "Strikethrough" => "删除线",
+                    "Mosaic" => "马赛克",
+                    "Pen" => PenType switch
+                    {
+                        "Pencil" => "铅笔",
+                        "Marker" => "马克笔",
+                        _ => "水笔"
+                    },
+                    _ => ShapeType
+                };
+            }
+            // 无 ShapeType 的笔划按画笔类型归类
+            return PenType switch
+            {
+                "Pencil" => "铅笔",
+                "Marker" => "马克笔",
+                _ => "水笔"
+            };
         }
 
         private string GetColorName(HighlightColor color)

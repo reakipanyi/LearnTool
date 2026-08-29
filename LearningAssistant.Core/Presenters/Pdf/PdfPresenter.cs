@@ -649,6 +649,9 @@ namespace LearningAssistant.Presenters
                     _annotationService.ClearAllStrokes(pdfPath, pageIndex);
                     _annotationService.ClearAllTexts(pdfPath, pageIndex);
                 }
+
+                // 同时清除该 PDF 的所有高亮，与笔划标注保持一致
+                _highlightService.RemoveAllHighlights(pdfPath);
             }
             catch (Exception ex)
             {
@@ -1513,7 +1516,10 @@ namespace LearningAssistant.Presenters
         private void View_ToggleNightMode(object? sender, EventArgs e)
         {
             _pdfRenderer.SetNightMode(!_pdfRenderer.IsNightMode);
-            _ = RenderAndDisplayCurrentPageAsync();
+            // 夜间模式反色由 PdfRenderer.ApplyNightMode 在渲染阶段 ColorMatrix 实现，
+            // 切换模式后必须重新渲染，把已正确反色的图像载入视图；
+            // 视图端 Paint 的 DrawInvertedImage 已停用以避免双重反色。
+            _ = FireAndForgetWithLogging(RenderAndDisplayCurrentPageAsync(), "NightModeRender");
         }
 
         private void View_LanguageChanged(object? sender, EventArgs e)

@@ -697,6 +697,8 @@ namespace LearningAssistant.Managers
                                 ColorArgb = stroke.ColorArgb,
                                 Thickness = stroke.Thickness,
                                 StrokePoints = stroke.Points,
+                                ShapeType = stroke.ShapeType,
+                                PenType = stroke.PenType,
                                 CreatedAt = stroke.CreatedAt
                             };
                             listBox.Items.Add(annotationItem);

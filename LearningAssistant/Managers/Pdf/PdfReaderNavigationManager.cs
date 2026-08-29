@@ -607,6 +607,7 @@ namespace LearningAssistant.Managers
                 {
                     _toolHandler.FinalizeStroke(_currentToolMode);
                     _form.PictureBoxPdf.Invalidate();
+                    _form.HighlightManager?.RefreshHighlightList();
                     return;
                 }
 
@@ -662,6 +663,7 @@ namespace LearningAssistant.Managers
                         _toolHandler.ResetDrawingState();
                     }
                     _form.PictureBoxPdf.Invalidate();
+                    _form.HighlightManager?.RefreshHighlightList();
                     return;
                 }
 
@@ -967,6 +969,7 @@ namespace LearningAssistant.Managers
             if (_selectionManager.SelectedStrokeIndex < 0)
                 LoadAnnotationsForCurrentPage();
             _form.PictureBoxPdf.Invalidate();
+            _form.HighlightManager?.RefreshHighlightList();
         }
 
         public void DeleteSelectedText()
@@ -975,6 +978,7 @@ namespace LearningAssistant.Managers
             if (_selectionManager.SelectedTextIndex < 0)
                 LoadAnnotationsForCurrentPage();
             _form.PictureBoxPdf.Invalidate();
+            _form.HighlightManager?.RefreshHighlightList();
         }
 
         /// <summary>
@@ -983,6 +987,12 @@ namespace LearningAssistant.Managers
         /// </summary>
         public bool DeleteSelectedAnnotation()
         {
+            // 选中高亮 → 删除高亮
+            if (_selectionManager.SelectedHighlightIndex >= 0 && _selectionManager.SelectedHighlight != null)
+            {
+                DeleteSelectedHighlight();
+                return true;
+            }
             if (_selectionManager.SelectedStrokeIndex >= 0)
             {
                 DeleteSelectedStroke();
@@ -994,6 +1004,27 @@ namespace LearningAssistant.Managers
                 return true;
             }
             return false;
+        }
+
+        private void DeleteSelectedHighlight()
+        {
+            if (_selectionManager.SelectedHighlight == null || _selectionManager.SelectedHighlightIndex < 0) return;
+
+            var highlightService = _form.HighlightService;
+            if (highlightService != null && !string.IsNullOrEmpty(_form.CurrentPdfPath))
+            {
+                highlightService.RemoveHighlight(_form.CurrentPdfPath, _selectionManager.SelectedHighlight.Id);
+            }
+
+            _selectionManager.SelectedHighlight = null;
+            _selectionManager.SelectedHighlightIndex = -1;
+            _selectionManager.SelectionState = SelectionInteractionState.None;
+
+            // 触发高亮列表和图层刷新
+            _form.HighlightManager?.RefreshHighlightList();
+            _form.HighlightManager?.UpdateHighlightLayer();
+            _form.HighlightManager?.UpdateSecondHighlightLayer();
+            _form.PictureBoxPdf?.Invalidate();
         }
 
         public void ClearSelection()
