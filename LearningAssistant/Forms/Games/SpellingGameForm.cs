@@ -7,17 +7,22 @@ using System.Text.Json;
 
 namespace LearningAssistant.Forms.Games
 {
-    /// <summary>
-    /// 单词拼写游戏窗体：看释义/听发音 → 键盘键入单词，锻炼产出式记忆。
-    /// 继承 <see cref="WebView2GameFormBase"/>，复用 WebView2 初始化、数据注入与成绩回写。
-    /// </summary>
     public partial class SpellingGameForm : WebView2GameFormBase
     {
         private readonly WordMatchGameService _gameService;
 
+        private readonly Label _labelTotal = new();
+        private readonly Label _labelCorrect = new();
+        private readonly Label _labelWrong = new();
+        private readonly Label _labelRemaining = new();
+
+        private int _currentGameTotalItems;
+
         protected override string FormTitle => "✍️ 单词拼写";
 
         protected override string HtmlFileRelativePath => Path.Combine("Resources", "SpellingGame", "index.html");
+
+        protected override bool ShowRowColConfig => false;
 
         public SpellingGameForm(
             WordMatchGameService gameService,
@@ -31,7 +36,32 @@ namespace LearningAssistant.Forms.Games
             _gameService = gameService;
         }
 
-        /// <summary>从词库构建游戏数据（错题优先，每组题量按 行×列 计算）；词库不足时提示并返回 null。</summary>
+        protected override void OnTopPanelBuilt(Panel topPanel)
+        {
+            void SetupLabel(Label lbl, string text, int x, Color color)
+            {
+                lbl.Text = text;
+                lbl.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+                lbl.AutoSize = false;
+                lbl.Size = new Size(100, 34);
+                lbl.TextAlign = ContentAlignment.MiddleLeft;
+                lbl.Location = new Point(x, 8);
+                lbl.ForeColor = color;
+            }
+
+            SetupLabel(_labelTotal, "总共: 0", 8, Color.FromArgb(59, 130, 246));
+            SetupLabel(_labelCorrect, "正确: 0", 118, Color.FromArgb(34, 197, 94));
+            SetupLabel(_labelWrong, "错误: 0", 228, Color.FromArgb(239, 68, 68));
+            SetupLabel(_labelRemaining, "剩余: 0", 338, Color.FromArgb(234, 179, 8));
+
+            topPanel.Controls.Add(_labelTotal);
+            topPanel.Controls.Add(_labelCorrect);
+            topPanel.Controls.Add(_labelWrong);
+            topPanel.Controls.Add(_labelRemaining);
+
+            _currentGameTotalItems = 0;
+        }
+
         protected override object? BuildData(LearningContext context, string themeName)
         {
             var items = _gameService.BuildItems(context, maxCount: MaxCountForGrid(), selection: WordSelection.WrongFirst,
@@ -42,14 +72,24 @@ namespace LearningAssistant.Forms.Games
                     "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return null;
             }
+            _currentGameTotalItems = items.Count;
             return items;
         }
 
-        /// <summary>统计当前词库仍可学习的条目总数（供前端"总剩余"展示）。</summary>
+        protected override void StartGame()
+        {
+            _currentGameTotalItems = 0;
+            base.StartGame();
+
+            _labelTotal.Text = $"总共: {_currentGameTotalItems}";
+            _labelCorrect.Text = "正确: 0";
+            _labelWrong.Text = "错误: 0";
+            _labelRemaining.Text = $"剩余: {_currentGameTotalItems}";
+        }
+
         protected override int CountRemainingTotal(LearningContext context) =>
             _gameService.CountRemaining(context, SkipKnown ? ExcludeAnsweredCorrectIds() : null);
 
-        /// <summary>解析前端上报的拼写结果并回写学习状态与错题本。</summary>
         protected override void OnGameEnd(JsonElement gameRoot, LearningContext context)
         {
             if (!gameRoot.TryGetProperty("results", out var resultsProp)) return;
@@ -64,6 +104,14 @@ namespace LearningAssistant.Forms.Games
 
             _gameService.ApplyResults(CurrentUserId, context, results);
             _logger.LogInformation("单词拼写收到游戏结束消息，共 {Count} 个结果", results.Count);
+
+            int right = gameRoot.TryGetProperty("right", out var r) ? r.GetInt32() : 0;
+            int errors = gameRoot.TryGetProperty("errors", out var e) ? e.GetInt32() : 0;
+            int remaining = _currentGameTotalItems - right - errors;
+
+            _labelCorrect.Text = $"正确: {right}";
+            _labelWrong.Text = $"错误: {errors}";
+            _labelRemaining.Text = $"剩余: {Math.Max(0, remaining)}";
         }
     }
 }

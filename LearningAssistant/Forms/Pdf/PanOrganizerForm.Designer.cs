@@ -27,6 +27,7 @@ partial class PanOrganizerForm
        this.btnExecuteTodos = new System.Windows.Forms.ToolStripButton();
        this.btnPullSnapshot = new System.Windows.Forms.ToolStripButton();
        this.btnImportRecs = new System.Windows.Forms.ToolStripButton();
+       this.btnClearCache = new System.Windows.Forms.ToolStripButton();
        this.splitMainBottom = new System.Windows.Forms.SplitContainer();
        this.splitContainerMain = new System.Windows.Forms.SplitContainer();
        this.navigatorLeft = new LearningAssistant.Forms.UserControls.Pan.PanNavigatorPanel();
@@ -89,7 +90,8 @@ partial class PanOrganizerForm
            this.btnDryRun,
            this.btnExecuteTodos,
            this.btnPullSnapshot,
-           this.btnImportRecs});
+           this.btnImportRecs,
+           this.btnClearCache});
        this.toolStripTop.Location = new System.Drawing.Point(0, 0);
        this.toolStripTop.Name = "toolStripTop";
        this.toolStripTop.Padding = new System.Windows.Forms.Padding(8, 6, 1, 6);
@@ -227,6 +229,17 @@ partial class PanOrganizerForm
        this.btnImportRecs.Text = "📤 导入 AI 建议";
        this.btnImportRecs.ToolTipText = "数据流解耦：从剪贴板/JSON 文件导入 AI 生成的 PanRecommendation 建议列表，替代构造函数绑定";
        this.btnImportRecs.Click += new System.EventHandler(this.btnImportRecs_Click);
+       //
+       // btnClearCache
+       //
+       this.btnClearCache.AutoSize = false;
+       this.btnClearCache.ImageTransparentColor = System.Drawing.Color.Magenta;
+       this.btnClearCache.Margin = new System.Windows.Forms.Padding(0, 2, 8, 2);
+       this.btnClearCache.Name = "btnClearCache";
+       this.btnClearCache.Size = new System.Drawing.Size(110, 26);
+       this.btnClearCache.Text = "🗑️ 清除缓存";
+       this.btnClearCache.ToolTipText = "清除所有网盘快照缓存（内存+磁盘），下次拉取将重新获取最新数据";
+       this.btnClearCache.Click += new System.EventHandler(this.btnClearCache_Click);
        //
        // splitMainBottom (上: 双栏浏览器, 下: Tab)
        //
@@ -423,6 +436,7 @@ partial class PanOrganizerForm
    private System.Windows.Forms.ToolStripButton btnExecuteTodos;
    private System.Windows.Forms.ToolStripButton btnPullSnapshot;
    private System.Windows.Forms.ToolStripButton btnImportRecs;
+   private System.Windows.Forms.ToolStripButton btnClearCache;
    private System.Windows.Forms.SplitContainer splitMainBottom;
    private System.Windows.Forms.SplitContainer splitContainerMain;
    private PanNavigatorPanel navigatorLeft;

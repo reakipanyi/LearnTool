@@ -43,6 +43,7 @@ namespace LearningAssistant.Forms.Web
         private int _tabCounter = 0;
         private int _zoomLevel = Config.DefaultZoomLevel;
         private bool _isAwaitingPanAuth;
+        private ToolStripButton btnPanTool;
 
         /// <summary>
         /// 百度网盘 OAuth 授权专用标签页（与网页浏览标签页分离，授权完成后自动关闭）
@@ -2115,28 +2116,26 @@ namespace LearningAssistant.Forms.Web
             btnRefresh = new ToolStripButton();
             btnNewTab = new ToolStripButton();
             comboBoxBookmarks = new ToolStripComboBox();
-            txtUrl = new ToolStripTextBox();
-            btnGo = new ToolStripButton();
-            toolStripSeparatorProvider = new ToolStripSeparator();
-            btnProviderDeepseek = new ToolStripButton();
-            btnProviderDoubao = new ToolStripButton();
-            btnProviderZhipu = new ToolStripButton();
-            btnProviderQwen = new ToolStripButton();
-            btnProviderSpark = new ToolStripButton();
-            btnProviderWenxin = new ToolStripButton();
-            toolStripSeparator = new ToolStripSeparator();
-            btnOpenNetdisk = new ToolStripButton();
-            btnOpenInBrowser = new ToolStripButton();
             btnAddBookmark = new ToolStripButton();
             btnManageBookmarks = new ToolStripButton();
             toolStripSeparatorZoom = new ToolStripSeparator();
             btnZoomOut = new ToolStripButton();
             lblZoom = new ToolStripLabel();
             btnZoomIn = new ToolStripButton();
+            txtUrl = new ToolStripTextBox();
+            btnGo = new ToolStripButton();
+            toolStripSeparatorProvider = new ToolStripSeparator();
+            btnProviderDoubao = new ToolStripButton();
+            btnProviderDeepseek = new ToolStripButton();
+            btnProviderZhipu = new ToolStripButton();
+            btnProviderQwen = new ToolStripButton();
+            btnProviderSpark = new ToolStripButton();
+            btnProviderWenxin = new ToolStripButton();
+            toolStripSeparator = new ToolStripSeparator();
+            btnOpenNetdisk = new ToolStripButton();
+            btnPanTool = new ToolStripButton();
             toolStripSeparatorTools = new ToolStripSeparator();
-            btnScreenshot = new ToolStripButton();
-            btnAiAnalyze = new ToolStripButton();
-            btnOpenPanOrganizer = new ToolStripButton();
+            btnOpenInBrowser = new ToolStripButton();
             progressBarLoading = new ToolStripProgressBar();
             lblLoadingStatus = new ToolStripLabel();
             tabControl = new TabControl();
@@ -2145,10 +2144,10 @@ namespace LearningAssistant.Forms.Web
             // 
             // toolStrip
             // 
-            toolStrip.Items.AddRange(new ToolStripItem[] { btnBack, btnForward, btnRefresh, btnNewTab, comboBoxBookmarks, btnAddBookmark, btnManageBookmarks, toolStripSeparatorZoom, btnZoomOut, lblZoom, btnZoomIn, txtUrl, btnGo, toolStripSeparatorProvider, btnProviderDoubao, btnProviderDeepseek, btnProviderZhipu, btnProviderQwen, btnProviderSpark, btnProviderWenxin, toolStripSeparator, btnOpenNetdisk, btnAiAnalyze, btnOpenPanOrganizer, toolStripSeparatorTools, btnScreenshot, btnOpenInBrowser, progressBarLoading, lblLoadingStatus });
+            toolStrip.Items.AddRange(new ToolStripItem[] { btnBack, btnForward, btnRefresh, btnNewTab, comboBoxBookmarks, btnAddBookmark, btnManageBookmarks, toolStripSeparatorZoom, btnZoomOut, lblZoom, btnZoomIn, txtUrl, btnGo, toolStripSeparatorProvider, btnProviderDoubao, btnProviderDeepseek, btnProviderZhipu, btnProviderQwen, btnProviderSpark, btnProviderWenxin, toolStripSeparator, btnOpenNetdisk, btnPanTool, toolStripSeparatorTools, btnOpenInBrowser, progressBarLoading, lblLoadingStatus });
             toolStrip.Location = new Point(0, 0);
             toolStrip.Name = "toolStrip";
-            toolStrip.Size = new Size(1160, 25);
+            toolStrip.Size = new Size(1566, 25);
             toolStrip.TabIndex = 0;
             toolStrip.Text = "toolStrip1";
             // 
@@ -2186,7 +2185,7 @@ namespace LearningAssistant.Forms.Web
             btnNewTab.DisplayStyle = ToolStripItemDisplayStyle.Text;
             btnNewTab.ImageTransparentColor = Color.Magenta;
             btnNewTab.Name = "btnNewTab";
-            btnNewTab.Size = new Size(36, 22);
+            btnNewTab.Size = new Size(56, 22);
             btnNewTab.Text = "➕ 新页";
             btnNewTab.ToolTipText = "新建标签页";
             btnNewTab.Click += btnNewTab_Click;
@@ -2194,141 +2193,17 @@ namespace LearningAssistant.Forms.Web
             // comboBoxBookmarks
             // 
             comboBoxBookmarks.DropDownStyle = ComboBoxStyle.DropDownList;
+            comboBoxBookmarks.DropDownWidth = 450;
             comboBoxBookmarks.Name = "comboBoxBookmarks";
             comboBoxBookmarks.Size = new Size(200, 25);
-            comboBoxBookmarks.DropDownWidth = 450;
             comboBoxBookmarks.SelectedIndexChanged += ComboBoxBookmarks_SelectedIndexChanged;
-            // 
-            // txtUrl
-            // 
-            txtUrl.Name = "txtUrl";
-            txtUrl.Size = new Size(300, 25);
-            txtUrl.Text = Urls.BaiduNetdisk;
-            txtUrl.KeyDown += txtUrl_KeyDown;
-            // 
-            // btnGo
-            // 
-            btnGo.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            btnGo.ImageTransparentColor = Color.Magenta;
-            btnGo.Name = "btnGo";
-            btnGo.Size = new Size(36, 22);
-            btnGo.Text = "跳转";
-            btnGo.Click += btnGo_Click;
-            // 
-            // toolStripSeparatorProvider
-            // 
-            toolStripSeparatorProvider.Name = "toolStripSeparatorProvider";
-            toolStripSeparatorProvider.Size = new Size(6, 25);
-            // 
-            // btnProviderDeepseek
-            // 
-            btnProviderDeepseek.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            btnProviderDeepseek.ImageTransparentColor = Color.Magenta;
-            btnProviderDeepseek.Name = "btnProviderDeepseek";
-            btnProviderDeepseek.Size = new Size(71, 22);
-            btnProviderDeepseek.Text = "DeepSeek";
-            btnProviderDeepseek.Tag = Urls.DeepSeek;
-            btnProviderDeepseek.Click += ProviderButton_Click;
-            // 
-            // btnProviderDoubao
-            // 
-            btnProviderDoubao.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            btnProviderDoubao.ImageTransparentColor = Color.Magenta;
-            btnProviderDoubao.Name = "btnProviderDoubao";
-            btnProviderDoubao.Size = new Size(36, 22);
-            btnProviderDoubao.Text = "豆包";
-            btnProviderDoubao.Tag = Urls.Doubao;
-            btnProviderDoubao.Click += ProviderButton_Click;
-            // 
-            // btnProviderZhipu
-            // 
-            btnProviderZhipu.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            btnProviderZhipu.ImageTransparentColor = Color.Magenta;
-            btnProviderZhipu.Name = "btnProviderZhipu";
-            btnProviderZhipu.Size = new Size(36, 22);
-            btnProviderZhipu.Text = "智谱";
-            btnProviderZhipu.Tag = Urls.Zhipu;
-            btnProviderZhipu.Click += ProviderButton_Click;
-            // 
-            // btnProviderQwen
-            // 
-            btnProviderQwen.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            btnProviderQwen.ImageTransparentColor = Color.Magenta;
-            btnProviderQwen.Name = "btnProviderQwen";
-            btnProviderQwen.Size = new Size(36, 22);
-            btnProviderQwen.Text = "千问";
-            btnProviderQwen.Tag = Urls.Qwen;
-            btnProviderQwen.Click += ProviderButton_Click;
-            // 
-            // btnProviderSpark
-            // 
-            btnProviderSpark.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            btnProviderSpark.ImageTransparentColor = Color.Magenta;
-            btnProviderSpark.Name = "btnProviderSpark";
-            btnProviderSpark.Size = new Size(36, 22);
-            btnProviderSpark.Text = "讯飞";
-            btnProviderSpark.Tag = Urls.Spark;
-            btnProviderSpark.Click += ProviderButton_Click;
-            // 
-            // btnProviderWenxin
-            // 
-            btnProviderWenxin.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            btnProviderWenxin.ImageTransparentColor = Color.Magenta;
-            btnProviderWenxin.Name = "btnProviderWenxin";
-            btnProviderWenxin.Size = new Size(36, 22);
-            btnProviderWenxin.Text = "文心";
-            btnProviderWenxin.Tag = Urls.Wenxin;
-            btnProviderWenxin.Click += ProviderButton_Click;
-            // 
-            // toolStripSeparator
-            // 
-            toolStripSeparator.Name = "toolStripSeparator";
-            toolStripSeparator.Size = new Size(6, 25);
-            // 
-            // btnOpenNetdisk
-            // 
-            btnOpenNetdisk.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            btnOpenNetdisk.ImageTransparentColor = Color.Magenta;
-            btnOpenNetdisk.Name = "btnOpenNetdisk";
-            btnOpenNetdisk.Size = new Size(60, 22);
-            btnOpenNetdisk.Text = "百度网盘";
-            btnOpenNetdisk.Click += btnOpenNetdisk_Click;
-            // 
-            // btnAiAnalyze
-            // 
-            btnAiAnalyze.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            btnAiAnalyze.ImageTransparentColor = Color.Magenta;
-            btnAiAnalyze.Name = "btnAiAnalyze";
-            btnAiAnalyze.Size = new Size(72, 22);
-            btnAiAnalyze.Text = "🤖 AI 分析";
-            btnAiAnalyze.ToolTipText = "分析当前网盘目录并给出整理建议";
-            btnAiAnalyze.Click += btnAiAnalyze_Click;
-            //
-            // btnOpenPanOrganizer
-            //
-            btnOpenPanOrganizer.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            btnOpenPanOrganizer.ImageTransparentColor = Color.Magenta;
-            btnOpenPanOrganizer.Name = "btnOpenPanOrganizer";
-            btnOpenPanOrganizer.Size = new Size(96, 22);
-            btnOpenPanOrganizer.Text = "🧰 网盘整理工具";
-            btnOpenPanOrganizer.ToolTipText = "独立打开网盘整理工具（无需先进行 AI 分析）";
-            btnOpenPanOrganizer.Click += btnOpenPanOrganizer_Click;
-            // 
-            // btnOpenInBrowser
-            // 
-            btnOpenInBrowser.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            btnOpenInBrowser.ImageTransparentColor = Color.Magenta;
-            btnOpenInBrowser.Name = "btnOpenInBrowser";
-            btnOpenInBrowser.Size = new Size(84, 22);
-            btnOpenInBrowser.Text = "🌐 在浏览器中打开";
-            btnOpenInBrowser.Click += btnOpenInBrowser_Click;
             // 
             // btnAddBookmark
             // 
             btnAddBookmark.DisplayStyle = ToolStripItemDisplayStyle.Text;
             btnAddBookmark.ImageTransparentColor = Color.Magenta;
             btnAddBookmark.Name = "btnAddBookmark";
-            btnAddBookmark.Size = new Size(36, 22);
+            btnAddBookmark.Size = new Size(50, 22);
             btnAddBookmark.Text = "⭐ 添加";
             btnAddBookmark.ToolTipText = "添加当前页面到书签";
             btnAddBookmark.Click += btnAddBookmark_Click;
@@ -2338,7 +2213,7 @@ namespace LearningAssistant.Forms.Web
             btnManageBookmarks.DisplayStyle = ToolStripItemDisplayStyle.Text;
             btnManageBookmarks.ImageTransparentColor = Color.Magenta;
             btnManageBookmarks.Name = "btnManageBookmarks";
-            btnManageBookmarks.Size = new Size(36, 22);
+            btnManageBookmarks.Size = new Size(55, 22);
             btnManageBookmarks.Text = "📚 管理";
             btnManageBookmarks.ToolTipText = "书签管理器";
             btnManageBookmarks.Click += btnManageBookmarks_Click;
@@ -2361,8 +2236,8 @@ namespace LearningAssistant.Forms.Web
             // lblZoom
             // 
             lblZoom.Name = "lblZoom";
-            lblZoom.Size = new Size(48, 22);
-            lblZoom.Text = Config.DefaultZoomLevel + "%";
+            lblZoom.Size = new Size(29, 22);
+            lblZoom.Text = "100";
             lblZoom.ToolTipText = "缩放比例";
             // 
             // btnZoomIn
@@ -2375,34 +2250,137 @@ namespace LearningAssistant.Forms.Web
             btnZoomIn.ToolTipText = "放大";
             btnZoomIn.Click += btnZoomIn_Click;
             // 
+            // txtUrl
+            // 
+            txtUrl.Name = "txtUrl";
+            txtUrl.Size = new Size(300, 25);
+            txtUrl.Text = "https://pan.baidu.com";
+            txtUrl.KeyDown += txtUrl_KeyDown;
+            // 
+            // btnGo
+            // 
+            btnGo.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnGo.ImageTransparentColor = Color.Magenta;
+            btnGo.Name = "btnGo";
+            btnGo.Size = new Size(36, 22);
+            btnGo.Text = "跳转";
+            btnGo.Click += btnGo_Click;
+            // 
+            // toolStripSeparatorProvider
+            // 
+            toolStripSeparatorProvider.Name = "toolStripSeparatorProvider";
+            toolStripSeparatorProvider.Size = new Size(6, 25);
+            // 
+            // btnProviderDoubao
+            // 
+            btnProviderDoubao.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnProviderDoubao.ImageTransparentColor = Color.Magenta;
+            btnProviderDoubao.Name = "btnProviderDoubao";
+            btnProviderDoubao.Size = new Size(36, 22);
+            btnProviderDoubao.Tag = "https://www.doubao.com/chat";
+            btnProviderDoubao.Text = "豆包";
+            btnProviderDoubao.Click += ProviderButton_Click;
+            // 
+            // btnProviderDeepseek
+            // 
+            btnProviderDeepseek.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnProviderDeepseek.ImageTransparentColor = Color.Magenta;
+            btnProviderDeepseek.Name = "btnProviderDeepseek";
+            btnProviderDeepseek.Size = new Size(71, 22);
+            btnProviderDeepseek.Tag = "https://chat.deepseek.com/";
+            btnProviderDeepseek.Text = "DeepSeek";
+            btnProviderDeepseek.Click += ProviderButton_Click;
+            // 
+            // btnProviderZhipu
+            // 
+            btnProviderZhipu.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnProviderZhipu.ImageTransparentColor = Color.Magenta;
+            btnProviderZhipu.Name = "btnProviderZhipu";
+            btnProviderZhipu.Size = new Size(36, 22);
+            btnProviderZhipu.Tag = "https://chatglm.cn";
+            btnProviderZhipu.Text = "智谱";
+            btnProviderZhipu.Click += ProviderButton_Click;
+            // 
+            // btnProviderQwen
+            // 
+            btnProviderQwen.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnProviderQwen.ImageTransparentColor = Color.Magenta;
+            btnProviderQwen.Name = "btnProviderQwen";
+            btnProviderQwen.Size = new Size(36, 22);
+            btnProviderQwen.Tag = "https://tongyi.aliyun.com/qianwen";
+            btnProviderQwen.Text = "千问";
+            btnProviderQwen.Click += ProviderButton_Click;
+            // 
+            // btnProviderSpark
+            // 
+            btnProviderSpark.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnProviderSpark.ImageTransparentColor = Color.Magenta;
+            btnProviderSpark.Name = "btnProviderSpark";
+            btnProviderSpark.Size = new Size(36, 22);
+            btnProviderSpark.Tag = "https://xinghuo.xfyun.cn";
+            btnProviderSpark.Text = "讯飞";
+            btnProviderSpark.Click += ProviderButton_Click;
+            // 
+            // btnProviderWenxin
+            // 
+            btnProviderWenxin.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnProviderWenxin.ImageTransparentColor = Color.Magenta;
+            btnProviderWenxin.Name = "btnProviderWenxin";
+            btnProviderWenxin.Size = new Size(36, 22);
+            btnProviderWenxin.Tag = "https://yiyan.baidu.com";
+            btnProviderWenxin.Text = "文心";
+            btnProviderWenxin.Click += ProviderButton_Click;
+            // 
+            // toolStripSeparator
+            // 
+            toolStripSeparator.Name = "toolStripSeparator";
+            toolStripSeparator.Size = new Size(6, 25);
+            // 
+            // btnOpenNetdisk
+            // 
+            btnOpenNetdisk.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnOpenNetdisk.ImageTransparentColor = Color.Magenta;
+            btnOpenNetdisk.Name = "btnOpenNetdisk";
+            btnOpenNetdisk.Size = new Size(60, 22);
+            btnOpenNetdisk.Text = "百度网盘";
+            btnOpenNetdisk.Click += btnOpenNetdisk_Click;
+            // 
+            // btnPanTool
+            // 
+            btnPanTool.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnPanTool.ImageTransparentColor = Color.Magenta;
+            btnPanTool.Name = "btnPanTool";
+            btnPanTool.Size = new Size(104, 22);
+            btnPanTool.Text = "\U0001f9f0 网盘整理工具";
+            btnPanTool.ToolTipText = "分析当前网盘目录并给出整理建议";
+            btnPanTool.Click += btnAiAnalyze_Click;
+            // 
             // toolStripSeparatorTools
             // 
             toolStripSeparatorTools.Name = "toolStripSeparatorTools";
             toolStripSeparatorTools.Size = new Size(6, 25);
             // 
-            // btnScreenshot
+            // btnOpenInBrowser
             // 
-            btnScreenshot.DisplayStyle = ToolStripItemDisplayStyle.Text;
-            btnScreenshot.ImageTransparentColor = Color.Magenta;
-            btnScreenshot.Name = "btnScreenshot";
-            btnScreenshot.Size = new Size(60, 22);
-            btnScreenshot.Text = "📷 截图";
-            btnScreenshot.ToolTipText = "截取当前页面";
-            btnScreenshot.Click += btnScreenshot_Click;
+            btnOpenInBrowser.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnOpenInBrowser.ImageTransparentColor = Color.Magenta;
+            btnOpenInBrowser.Name = "btnOpenInBrowser";
+            btnOpenInBrowser.Size = new Size(116, 22);
+            btnOpenInBrowser.Text = "🌐 在浏览器中打开";
+            btnOpenInBrowser.Click += btnOpenInBrowser_Click;
             // 
             // progressBarLoading
             // 
+            progressBarLoading.MarqueeAnimationSpeed = 30;
             progressBarLoading.Name = "progressBarLoading";
             progressBarLoading.Size = new Size(120, 18);
-            progressBarLoading.Visible = false;
             progressBarLoading.Style = ProgressBarStyle.Marquee;
-            progressBarLoading.MarqueeAnimationSpeed = 30;
+            progressBarLoading.Visible = false;
             // 
             // lblLoadingStatus
             // 
             lblLoadingStatus.Name = "lblLoadingStatus";
-            lblLoadingStatus.Size = new Size(80, 22);
-            lblLoadingStatus.Text = "";
+            lblLoadingStatus.Size = new Size(0, 0);
             lblLoadingStatus.Visible = false;
             // 
             // tabControl
@@ -2411,7 +2389,7 @@ namespace LearningAssistant.Forms.Web
             tabControl.Location = new Point(0, 25);
             tabControl.Name = "tabControl";
             tabControl.SelectedIndex = 0;
-            tabControl.Size = new Size(1160, 577);
+            tabControl.Size = new Size(1566, 577);
             tabControl.TabIndex = 1;
             tabControl.SelectedIndexChanged += TabControl_SelectedIndexChanged;
             tabControl.MouseDown += TabControl_MouseDown;
@@ -2420,7 +2398,7 @@ namespace LearningAssistant.Forms.Web
             // 
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(1160, 602);
+            ClientSize = new Size(1566, 602);
             Controls.Add(tabControl);
             Controls.Add(toolStrip);
             Name = "WebView2BrowserForm";

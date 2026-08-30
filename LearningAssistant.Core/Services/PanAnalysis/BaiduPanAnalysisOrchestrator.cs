@@ -1,9 +1,11 @@
 using System.Runtime.CompilerServices;
+using System.Text;
 using LearningAssistant.Models.PanAnalysis;
 using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Baidu;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 
 namespace LearningAssistant.Services.PanAnalysis;
 
@@ -13,63 +15,30 @@ namespace LearningAssistant.Services.PanAnalysis;
 public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
 {
     private readonly IPanTokenManager _tokenManager;
-    private readonly IAIService _aiService;
-    private readonly IPanAnalysisPromptBuilder _promptBuilder;
-    private readonly IPanAnalysisResultParser _resultParser;
-    private readonly IPanExecutionEngine _executionEngine;
     private readonly IMemoryCache _cache;
     private readonly PanSnapshotCacheService _diskCache;
     private readonly ILogger<BaiduPanAnalysisOrchestrator> _logger;
-    private CancellationTokenSource _cancellationTokenSource = new();
+    private readonly IPanExecutionEngine _executionEngine;
+    private readonly PanAiService? _aiService;
+    private readonly string _defaultModelName;
+
+    private CancellationTokenSource? _cancellationTokenSource;
 
     public bool IsAvailable => _tokenManager.IsTokenValid;
 
     public BaiduPanAnalysisOrchestrator(
         IPanTokenManager tokenManager,
-        IAIService aiService,
-        IPanAnalysisPromptBuilder promptBuilder,
-        IPanAnalysisResultParser resultParser,
-        IPanExecutionEngine executionEngine,
         IMemoryCache cache,
-        ILogger<BaiduPanAnalysisOrchestrator> logger,
-        ILoggerFactory? loggerFactory = null)
+        ILoggerFactory? loggerFactory = null,
+        PanAiService? aiService = null)
     {
         _tokenManager = tokenManager;
-        _aiService = aiService;
-        _promptBuilder = promptBuilder;
-        _resultParser = resultParser;
-        _executionEngine = executionEngine;
         _cache = cache;
+        _logger = loggerFactory?.CreateLogger<BaiduPanAnalysisOrchestrator>() ?? null!;
         _diskCache = new PanSnapshotCacheService(loggerFactory?.CreateLogger<PanSnapshotCacheService>());
-        _logger = logger;
-    }
-
-    public void Cancel()
-    {
-        if (_cancellationTokenSource.IsCancellationRequested)
-            return;
-        _cancellationTokenSource.Cancel();
-        _logger.LogInformation("用户取消了操作");
-    }
-
-    /// <summary>
-    /// 获取当前可用的取消源。取消后自动重建，保证一次取消后仍可再次发起操作
-    /// （CancellationTokenSource 一旦取消便不可复用）。
-    /// </summary>
-    private CancellationTokenSource GetOrCreateCancellationTokenSource()
-    {
-        if (_cancellationTokenSource.IsCancellationRequested)
-        {
-            _cancellationTokenSource.Dispose();
-            _cancellationTokenSource = new CancellationTokenSource();
-        }
-        return _cancellationTokenSource;
-    }
-
-    public void ReloadTokenState()
-    {
-        _tokenManager.ReloadFromConfig();
-        _logger.LogInformation("Token 状态已重新加载，当前可用：{IsAvailable}", IsAvailable);
+        _executionEngine = new PanExecutionEngine(_tokenManager, loggerFactory?.CreateLogger<PanExecutionEngine>() ?? null!);
+        _aiService = aiService;
+        _defaultModelName = "deepseek-v3-241226";
     }
 
     public async Task<PanAnalysisResult> AnalyzeDirectoryAsync(
@@ -78,85 +47,57 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
         IProgress<PanAnalysisProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        var sharedCts = GetOrCreateCancellationTokenSource();
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            sharedCts.Token);
+        progress?.Report(new PanAnalysisProgress { Phase = PanAnalysisPhase.Fetching, Current = 0, Total = 100, Message = "正在获取目录快照..." });
 
         // 1. 获取快照
-        var snapshot = await GetSnapshotAsync(
-            directoryPath,
-            options,
-            progress,
-            linkedCts.Token);
+        var snapshot = await GetSnapshotAsync(directoryPath, options, progress, cancellationToken);
 
-        // 2. 检查缓存（key 附加模型名，切换 AI 模型后避免命中旧模型的分析结果）
-        var modelName = _aiService?.ModelName ?? "default";
-        var cacheKey = $"pan_analysis_{directoryPath}_{options.MaxDepth}_{options.MaxFileCount}_{modelName}";
+        progress?.Report(new PanAnalysisProgress { Phase = PanAnalysisPhase.Analyzing, Current = 85, Total = 100, Message = "正在 AI 分析..." });
+
+        // 2. 检查内存缓存
+        var cacheKey = $"pan_analysis_{directoryPath}_{options.MaxDepth}_{options.MaxFileCount}_{_defaultModelName}";
         if (options.UseCache && _cache.TryGetValue(cacheKey, out PanAnalysisResult? cached) && cached != null)
         {
-            progress?.Report(new PanAnalysisProgress
-            {
-                Phase = PanAnalysisPhase.Completed,
-                Message = $"使用缓存结果（{cached.Recommendations.Count} 条建议）"
-            });
+            progress?.Report(new PanAnalysisProgress { Phase = PanAnalysisPhase.Completed, Current = 100, Total = 100, Message = "使用缓存的分析结果" });
             return cached;
         }
 
-        // 3. 构建 Prompt
-        progress?.Report(new PanAnalysisProgress
+        // 3. 调用 AI 分析
+        PanAnalysisResult result;
+        if (_aiService != null)
         {
-            Phase = PanAnalysisPhase.Analyzing,
-            SubPhase = PanAnalysisSubPhase.BuildingPrompt,
-            Message = "构建 AI 分析指令...",
-            Total = 1
-        });
-
-        var systemPrompt = _promptBuilder.BuildSystemPrompt();
-        var userPrompt = _promptBuilder.BuildUserPrompt(snapshot);
-
-        // 4. 调用 AI
-        progress?.Report(new PanAnalysisProgress
+            try
+            {
+                var prompt = BuildAnalysisPrompt(snapshot);
+                var aiResponse = await _aiService.ChatAsync(prompt, _defaultModelName, cancellationToken);
+                result = ParseAiResponse(aiResponse, snapshot);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "AI 分析失败，返回空结果");
+                result = new PanAnalysisResult
+                {
+                    Recommendations = new List<PanRecommendation>(),
+                    Summary = "AI 分析失败：" + ex.Message
+                };
+            }
+        }
+        else
         {
-            Phase = PanAnalysisPhase.Analyzing,
-            SubPhase = PanAnalysisSubPhase.CallingAI,
-            Message = "AI 分析中...",
-            Total = 1
-        });
+            result = new PanAnalysisResult
+            {
+                Recommendations = new List<PanRecommendation>(),
+                Summary = "AI 服务未配置（PanAiService 未注册），跳过 AI 分析"
+            };
+        }
 
-        var startTime = DateTime.UtcNow;
-        var aiResponse = await _aiService.AskQuestionAsync(
-            question: userPrompt,
-            context: systemPrompt,
-            cancellationToken: linkedCts.Token);
-        var duration = DateTime.UtcNow - startTime;
-
-        // 5. 解析结果
-        progress?.Report(new PanAnalysisProgress
-        {
-            Phase = PanAnalysisPhase.Analyzing,
-            SubPhase = PanAnalysisSubPhase.ParsingResponse,
-            Message = "解析 AI 响应...",
-            Total = 1
-        });
-
-        var result = _resultParser.Parse(aiResponse);
-        result.AnalysisDuration = duration;
-
-        // 6. 缓存结果
-        if (options.UseCache && result.ParseSuccess)
+        // 4. 缓存结果
+        if (options.UseCache && result.Recommendations.Count > 0)
         {
             _cache.Set(cacheKey, result, TimeSpan.FromMinutes(options.CacheExpirationMinutes));
         }
 
-        progress?.Report(new PanAnalysisProgress
-        {
-            Phase = PanAnalysisPhase.Completed,
-            Message = $"分析完成，共 {result.Recommendations.Count} 条建议",
-            Total = 1,
-            Current = 1
-        });
-
+        progress?.Report(new PanAnalysisProgress { Phase = PanAnalysisPhase.Completed, Current = 100, Total = 100, Message = "分析完成" });
         return result;
     }
 
@@ -166,190 +107,157 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
         IProgress<PanAnalysisProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
-        var sharedCts = GetOrCreateCancellationTokenSource();
-        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-            cancellationToken,
-            sharedCts.Token);
-
-        // Step 1: 磁盘缓存（跨重启复用）→ 命中直接返回，同时写入内存缓存以便复用
+        // 1. 尝试磁盘缓存
         var diskHit = _diskCache.TryLoad(directoryPath, options);
         if (diskHit != null)
         {
-            if (options.UseCache) _cache.Set($"pan_snapshot_{directoryPath}_{options.MaxDepth}_{options.MaxFileCount}", diskHit, TimeSpan.FromMinutes(options.CacheExpirationMinutes));
-            progress?.Report(new PanAnalysisProgress
-            {
-                Phase = PanAnalysisPhase.Completed,
-                Message = $"使用磁盘缓存快照（{diskHit.Files.Count} 个文件，{(DateTime.UtcNow - diskHit.SnapshotTime).TotalHours:F1}h 前）"
-            });
+            if (options.UseCache)
+                _cache.Set($"pan_snapshot_{directoryPath}_{options.MaxDepth}_{options.MaxFileCount}", diskHit, TimeSpan.FromMinutes(options.CacheExpirationMinutes));
+            progress?.Report(new PanAnalysisProgress { Phase = PanAnalysisPhase.Completed, Current = 100, Total = 100, Message = "使用磁盘缓存快照" });
             return diskHit;
         }
 
-        // Step 2: 内存缓存（进程内复用）
+        // 2. 尝试内存缓存
         var cacheKey = $"pan_snapshot_{directoryPath}_{options.MaxDepth}_{options.MaxFileCount}";
         if (options.UseCache && _cache.TryGetValue(cacheKey, out PanDirectorySnapshot? cached) && cached != null)
         {
-            cached.Source = PanSnapshotSource.MemoryCache;
-            progress?.Report(new PanAnalysisProgress
-            {
-                Phase = PanAnalysisPhase.Completed,
-                Message = $"使用内存缓存快照（{cached.Files.Count} 个文件）"
-            });
+            progress?.Report(new PanAnalysisProgress { Phase = PanAnalysisPhase.Completed, Current = 100, Total = 100, Message = "使用内存缓存快照" });
             return cached;
         }
 
-        progress?.Report(new PanAnalysisProgress
-        {
-            Phase = PanAnalysisPhase.Fetching,
-            Message = $"获取文件列表：{directoryPath}",
-            Total = 0
-        });
+        // 3. 从 API 拉取
+        var sharedCts = GetOrCreateCancellationTokenSource();
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, sharedCts.Token);
 
-        // 确保 Token 有效
-        var token = await _tokenManager.EnsureValidTokenAsync(linkedCts.Token);
+        // 刷新 Token
+        var token = await _tokenManager.EnsureValidTokenAsync();
+        if (string.IsNullOrEmpty(token))
+            throw new InvalidOperationException("Token 无效或已过期，请重新授权");
 
-        // 获取文件列表（共享 HttpClient）
+        progress?.Report(new PanAnalysisProgress { Phase = PanAnalysisPhase.Fetching, Current = 5, Total = 100, Message = "正在遍历目录..." });
+
+        // 遍历目录
         using var apiClient = new BaiduPanApiClient(token);
-
-        // Token 过期（errno=-6）时刷新后重试一次，避免分析中途因 Token 过期失败
-        const int TokenExpiredErrorCode = -6;
-
+        var rootPath = directoryPath.TrimEnd('/');
         var allFiles = new List<PanFileInfo>();
-        var allFolders = new List<BaseFileInfo>();
-        var totalSize = 0L;
-        var isTruncated = false;
+        var rawFolders = new List<BaseFileInfo>();
+        long totalSize = 0;
+        int totalFiles = 0;
 
-        for (var attempt = 0; ; attempt++)
+        await foreach (var (file, depth) in TraverseDirectoryAsync(apiClient, rootPath, options.MaxDepth, linkedCts.Token))
         {
-            // 每次尝试都重新累积（失败重试时丢弃已遍历部分，保证结果完整一致）
-            allFiles = new List<PanFileInfo>();
-            allFolders = new List<BaseFileInfo>();
-            totalSize = 0L;
-            isTruncated = false;
-
-            try
+            if (file.IsDir == 1)
             {
-                await foreach (var (file, depth) in TraverseDirectoryAsync(
-                    apiClient, directoryPath, options.MaxDepth, linkedCts.Token))
-                {
-                    if (file.IsDir == 1)
-                    {
-                        allFolders.Add(file);
-                    }
-                    else
-                    {
-                        // 文件数达到上限即停止遍历（大目录下避免拉取过慢、上下文超限）
-                        if (options.MaxFileCount > 0 && allFiles.Count >= options.MaxFileCount)
-                        {
-                            isTruncated = true;
-                            break;
-                        }
-
-                        var panFile = MapToPanFileInfo(file, directoryPath, options.SkipFileSizeComputing);
-                        allFiles.Add(panFile);
-                        if (!options.SkipFileSizeComputing) totalSize += file.Size;
-                    }
-
-                    // 进度更新
-                    var total = allFiles.Count + allFolders.Count;
-                    if (total % 100 == 0)
-                    {
-                        progress?.Report(new PanAnalysisProgress
-                        {
-                            Phase = PanAnalysisPhase.Fetching,
-                            SubPhase = PanAnalysisSubPhase.FetchingPage,
-                            Message = $"已获取 {total} 个条目...",
-                            Current = total
-                        });
-                    }
-                }
-                break; // 遍历成功完成
+                rawFolders.Add(file);
             }
-            catch (PanApiException ex) when (ex.ErrorCode == TokenExpiredErrorCode && attempt == 0)
+            else
             {
-                _logger.LogWarning("访问 Token 已过期（errno=-6），刷新后重试快照获取");
-                token = await _tokenManager.RefreshTokenAsync(linkedCts.Token);
-                apiClient.UpdateAccessToken(token);
+                allFiles.Add(MapToPanFileInfo(file, rootPath, options.SkipFileSizeComputing));
+                totalSize += options.SkipFileSizeComputing ? 0 : file.Size;
+                totalFiles++;
             }
+
+            // 进度报告
+            if (totalFiles % 500 == 0)
+            {
+                var pct = Math.Min(10 + (int)((double)totalFiles / Math.Max(options.MaxFileCount, 1) * 70), 80);
+                progress?.Report(new PanAnalysisProgress { Phase = PanAnalysisPhase.Fetching, Current = pct, Total = 100, Message = $"已遍历 {totalFiles} 个文件..." });
+            }
+
+            // 文件数上限截断
+            if (options.MaxFileCount > 0 && allFiles.Count >= options.MaxFileCount)
+            {
+                _logger?.LogInformation("达到文件数上限 {Max}, 截断遍历", options.MaxFileCount);
+                break;
+            }
+
+            linkedCts.Token.ThrowIfCancellationRequested();
         }
 
-        // 跳过空文件夹（无任何直接子项：既无文件也无子目录）。
-        // 遍历本身会继续访问下一级目录；此处仅把确认无子项的空目录从统计/目录树/AI 建议中剔除，
-        // 避免已清理过的空目录反复被提示"删除空文件夹"。
-        allFolders = FilterOutEmptyFolders(allFiles, allFolders);
+        progress?.Report(new PanAnalysisProgress { Phase = PanAnalysisPhase.PreComputing, Current = 85, Total = 100, Message = "正在构建快照..." });
 
-        progress?.Report(new PanAnalysisProgress
-        {
-            Phase = PanAnalysisPhase.PreComputing,
-            Message = isTruncated
-                ? $"已达文件数上限（{options.MaxFileCount:N0}），快照已截断：{allFiles.Count} 个文件，{allFolders.Count} 个文件夹"
-                : $"获取完成：{allFiles.Count} 个文件，{allFolders.Count} 个文件夹",
-            Total = 1
-        });
+        // 过滤空文件夹
+        var folders = FilterOutEmptyFolders(allFiles, rawFolders);
 
-        // 本地预计算
-        progress?.Report(new PanAnalysisProgress
-        {
-            Phase = PanAnalysisPhase.PreComputing,
-            SubPhase = PanAnalysisSubPhase.DetectingDuplicates,
-            Message = "检测重复文件...",
-            Total = 1
-        });
-
-        var duplicates = options.DetectDuplicates && !options.SkipFileSizeComputing
-            ? DetectDuplicates(allFiles)
-            : new List<PanDuplicateGroup>();
-
-        var statistics = ComputeStatistics(allFiles, allFolders, options);
-        if (options.SkipFileSizeComputing)
-        {
-            statistics.TotalSizeBytes = 0;
-            statistics.JunkFileSizeBytes = 0;
-            foreach (var kv in statistics.SizeByExtension.Keys.ToList()) statistics.SizeByExtension[kv] = 0;
-            statistics.LargeFiles.Clear();
-        }
-        statistics.JunkFileCount = allFiles.Count(f => f.IsJunkFile);
-
+        // 构建快照
         var snapshot = new PanDirectorySnapshot
         {
-            DirectoryPath = directoryPath,
-            SnapshotTime = DateTime.UtcNow,
+            DirectoryPath = rootPath,
+            Files = allFiles,
+            Folders = folders.Select(f => MapToPanFolderInfo(f, rootPath)).ToList(),
             Scope = new AnalysisScope
             {
-                MaxDepth = options.MaxDepth,
-                MaxFileCount = options.MaxFileCount,
                 TotalFileCount = allFiles.Count,
-                TotalFolderCount = allFolders.Count,
-                TotalSizeBytes = options.SkipFileSizeComputing ? 0 : totalSize
+                TotalFolderCount = folders.Count,
+                TotalSizeBytes = totalSize,
+                MaxDepth = options.MaxDepth,
+                MaxFileCount = options.MaxFileCount
             },
-            Files = allFiles,
-            Folders = allFolders
-                .Select(f => MapToPanFolderInfo(f, directoryPath))
-                .OrderBy(f => f.Depth)
-                .ThenBy(f => f.RelativePath, StringComparer.OrdinalIgnoreCase)
-                .ToList(),
-            Statistics = statistics,
-            Duplicates = duplicates,
-            IsComplete = !isTruncated,
-            Source = PanSnapshotSource.Api
+            IsComplete = options.MaxFileCount <= 0 || allFiles.Count < options.MaxFileCount,
+            Source = PanSnapshotSource.Api,
+            Statistics = ComputeStatistics(allFiles, folders, options)
         };
 
-        // 内存缓存
-        if (options.UseCache)
+        // 重复检测
+        if (options.DetectDuplicates)
         {
-            _cache.Set(cacheKey, snapshot, TimeSpan.FromMinutes(options.CacheExpirationMinutes));
+            snapshot.Duplicates = DetectDuplicates(allFiles);
+            _logger?.LogInformation("重复检测完成：{Count} 组", snapshot.Duplicates.Count);
         }
-        // 磁盘持久化缓存（跨重启复用）
+
+        // 缓存结果
+        if (options.UseCache)
+            _cache.Set(cacheKey, snapshot, TimeSpan.FromMinutes(options.CacheExpirationMinutes));
         _diskCache.Save(snapshot, options);
 
-        progress?.Report(new PanAnalysisProgress
-        {
-            Phase = PanAnalysisPhase.Completed,
-            Message = isTruncated
-                ? $"快照完成（已截断）：{allFiles.Count} 个文件，{duplicates.Count} 组重复"
-                : $"快照完成：{allFiles.Count} 个文件，{duplicates.Count} 组重复"
-        });
-
+        progress?.Report(new PanAnalysisProgress { Phase = PanAnalysisPhase.Completed, Current = 100, Total = 100, Message = "快照获取完成" });
         return snapshot;
+    }
+
+    public void Cancel()
+    {
+        var cts = Interlocked.Exchange(ref _cancellationTokenSource, null);
+        cts?.Cancel();
+        cts?.Dispose();
+    }
+
+    public void ReloadTokenState()
+    {
+        // TokenManager 内部会重新加载配置
+    }
+
+    public void ClearCache()
+    {
+        try
+        {
+            // 清除内存缓存
+            if (_cache is MemoryCache mc)
+                mc.Compact(1.0);
+            // 清除磁盘缓存
+            var removed = _diskCache.ClearAll();
+            _logger?.LogInformation("网盘缓存已清除：内存缓存已清空，清理了 {Count} 个磁盘缓存文件", removed);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "清除网盘缓存时发生异常");
+        }
+    }
+
+    public void ClearCacheByPath(string directoryPath, AnalysisOptions options)
+    {
+        try
+        {
+            // 清除内存缓存
+            var cacheKey = $"pan_snapshot_{directoryPath}_{options.MaxDepth}_{options.MaxFileCount}";
+            _cache.Remove(cacheKey);
+            // 清除磁盘缓存
+            var removed = _diskCache.ClearByPath(directoryPath, options);
+            _logger?.LogInformation("网盘快照缓存已清除：{Dir}（磁盘缓存{Removed}）", directoryPath, removed ? "已删除" : "未找到");
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "清除指定路径网盘缓存时发生异常：{Dir}", directoryPath);
+        }
     }
 
     public async Task<PanExecutionReport> ExecuteRecommendationsAsync(
@@ -370,6 +278,123 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
 
     #region 私有辅助方法
 
+    private CancellationTokenSource GetOrCreateCancellationTokenSource()
+    {
+        if (_cancellationTokenSource == null || _cancellationTokenSource.IsCancellationRequested)
+        {
+            var newCts = new CancellationTokenSource();
+            var old = Interlocked.Exchange(ref _cancellationTokenSource, newCts);
+            if (old != null && old != newCts && !old.IsCancellationRequested)
+            {
+                try { old.Cancel(); } catch { /* ignore */ }
+                old.Dispose();
+            }
+        }
+        return _cancellationTokenSource;
+    }
+
+    private string BuildAnalysisPrompt(PanDirectorySnapshot snapshot)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("你是一个网盘整理专家。请分析以下文件列表，输出整理建议。");
+        sb.AppendLine();
+        sb.AppendLine($"## 目录信息");
+        sb.AppendLine($"- 路径：{snapshot.DirectoryPath}");
+        sb.AppendLine($"- 总文件数：{snapshot.Files.Count}");
+        sb.AppendLine($"- 总文件夹数：{snapshot.Folders.Count}");
+        sb.AppendLine();
+
+        sb.AppendLine("## 文件列表");
+        foreach (var file in snapshot.Files.OrderBy(f => f.Path))
+        {
+            var sizeStr = file.SizeBytes >= 1024 * 1024
+                ? $"{file.SizeBytes / 1024.0 / 1024.0:F1}MB"
+                : file.SizeBytes >= 1024
+                    ? $"{file.SizeBytes / 1024.0:F1}KB"
+                    : $"{file.SizeBytes}B";
+            sb.AppendLine($"- {file.Path} ({sizeStr}, {file.ServerModifiedTime:yyyy-MM-dd})");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("## 输出格式");
+        sb.AppendLine("请以 JSON 格式输出，格式如下：");
+        sb.AppendLine(@"{
+  ""summary"": ""分析总结"",
+  ""recommendations"": [
+    {
+      ""type"": ""Move|Delete|Rename"",
+      ""sourcePath"": ""原路径"",
+      ""destinationPath"": ""目标路径（仅 Move 类型需要）"",
+      ""newName"": ""新名称（仅 Rename 类型需要）"",
+      ""reason"": ""原因""
+    }
+  ]
+}");
+        sb.AppendLine();
+        sb.AppendLine("请确保返回合法的 JSON，不要包含其他说明文字。");
+        return sb.ToString();
+    }
+
+    private PanAnalysisResult ParseAiResponse(string aiResponse, PanDirectorySnapshot snapshot)
+    {
+        var result = new PanAnalysisResult
+        {
+            RawAiResponse = aiResponse
+        };
+
+        try
+        {
+            // 尝试提取 JSON 部分
+            var jsonStart = aiResponse.IndexOf('{');
+            var jsonEnd = aiResponse.LastIndexOf('}');
+            if (jsonStart >= 0 && jsonEnd > jsonStart)
+            {
+                var json = aiResponse.Substring(jsonStart, jsonEnd - jsonStart + 1);
+                var parsed = JsonConvert.DeserializeAnonymousType(json, new
+                {
+                    summary = "",
+                    recommendations = new[] { new { type = "", sourcePath = "", destinationPath = "", newName = "", reason = "" } }
+                });
+
+                if (parsed != null)
+                {
+                    result.Summary = parsed.summary ?? "";
+                    result.ParseSuccess = true;
+
+                    if (parsed.recommendations != null)
+                    {
+                        foreach (var rec in parsed.recommendations)
+                        {
+                            Enum.TryParse<PanRecommendationType>(rec.type, true, out var type);
+                            result.Recommendations.Add(new PanRecommendation
+                            {
+                                Type = type,
+                                TargetPath = rec.sourcePath ?? "",
+                                DestinationPath = rec.destinationPath,
+                                NewName = rec.newName,
+                                Reason = rec.reason ?? ""
+                            });
+                        }
+                    }
+                }
+            }
+
+            if (!result.ParseSuccess)
+            {
+                result.Summary = "AI 响应解析失败，请检查响应格式";
+                result.ParseError = "无法从响应中提取有效 JSON";
+            }
+        }
+        catch (Exception ex)
+        {
+            result.ParseSuccess = false;
+            result.ParseError = ex.Message;
+            result.Summary = "AI 响应解析异常";
+        }
+
+        return result;
+    }
+
     private async IAsyncEnumerable<(BaseFileInfo File, int Depth)> TraverseDirectoryAsync(
         BaiduPanApiClient apiClient,
         string path,
@@ -389,7 +414,12 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
             while (true)
             {
                 var response = await apiClient.GetFileListAsync(currentPath, "name", 1, start, 1000);
-                if (response.ErrorCode != 0 || response.FileList == null)
+                if (response.ErrorCode != 0)
+                {
+                    _logger?.LogWarning("API 返回错误码 {ErrorCode}，路径={Path}，start={Start}", response.ErrorCode, currentPath, start);
+                    throw new InvalidOperationException($"百度网盘 API 返回错误 (errno={response.ErrorCode})，路径：{currentPath}。请检查 Token 是否有效或路径是否正确。");
+                }
+                if (response.FileList == null)
                     break;
 
                 foreach (var file in response.FileList)

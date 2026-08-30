@@ -342,6 +342,11 @@ public class PanOrganizerExecutionService : IPanOrganizerExecutionService
                         fie.RelativePath = (string.IsNullOrEmpty(rp) ? "" : rp + "/") + sn;
                         return (true, null);
                     }
+                    // 拖拽移动已直接修改了快照，检查目标是否已存在
+                    var destPath = dp + sn;
+                    bool alreadyMoved = snapshot.Folders.Any(f => f.Path.Equals(destPath, StringComparison.OrdinalIgnoreCase))
+                                     || snapshot.Files.Any(f => f.Path.Equals(destPath, StringComparison.OrdinalIgnoreCase));
+                    if (alreadyMoved) return (true, null);
                     return (false, "not found");
                 }
             case PanRecommendationType.Rename:

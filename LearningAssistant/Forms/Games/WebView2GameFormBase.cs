@@ -47,6 +47,12 @@ namespace LearningAssistant.Forms.Games
         /// <summary>每组展示列数（本地持久化，由顶部列数控件设置）。</summary>
         protected int GameColumns => _gameCols;
 
+        /// <summary>是否显示顶部的行/列配置控件。子类可重写为 false 以隐藏行/列，并自行替换为其他控件。</summary>
+        protected virtual bool ShowRowColConfig => true;
+
+        /// <summary>自定义顶部面板的扩展点。子类可在此添加/移除控件。</summary>
+        protected virtual void OnTopPanelBuilt(Panel topPanel) { }
+
         /// <summary>是否跳过已知项（false=加载所有）；由前端"换一组"旁的单选按钮控制。</summary>
         protected bool SkipKnown => _skipKnown;
 
@@ -115,38 +121,54 @@ namespace LearningAssistant.Forms.Games
 
             var topPanel = new Panel { Dock = DockStyle.Top, Height = 52, Padding = new Padding(8, 8, 8, 8) };
 
-            // 每组行/列配置（放在科目选择前面，用户可自由调整并保存到本地）
-            var labelRows = new Label
-            {
-                Text = "行",
-                Font = new Font("微软雅黑", 9F),
-                AutoSize = false,
-                Size = new Size(20, 34),
-                TextAlign = ContentAlignment.MiddleCenter
-            };
-            _numRows.Minimum = 2;
-            _numRows.Maximum = 8;
-            _numRows.Value = 5;
-            _numRows.Width = 50;
-            _numRows.Font = new Font("微软雅黑", 10F);
-            _numRows.TextAlign = HorizontalAlignment.Center;
-            _numRows.ValueChanged += (s, e) => OnLayoutConfigChanged();
+            int nextX = 8;
 
-            var labelCols = new Label
+            // 每组行/列配置（放在科目选择前面，用户可自由调整并保存到本地）
+            if (ShowRowColConfig)
             {
-                Text = "列",
-                Font = new Font("微软雅黑", 9F),
-                AutoSize = false,
-                Size = new Size(20, 34),
-                TextAlign = ContentAlignment.MiddleCenter
-            };
-            _numCols.Minimum = 2;
-            _numCols.Maximum = 12;
-            _numCols.Value = 8;
-            _numCols.Width = 50;
-            _numCols.Font = new Font("微软雅黑", 10F);
-            _numCols.TextAlign = HorizontalAlignment.Center;
-            _numCols.ValueChanged += (s, e) => OnLayoutConfigChanged();
+                var labelRows = new Label
+                {
+                    Text = "行",
+                    Font = new Font("微软雅黑", 9F),
+                    AutoSize = false,
+                    Size = new Size(20, 34),
+                    TextAlign = ContentAlignment.MiddleCenter
+                };
+                _numRows.Minimum = 2;
+                _numRows.Maximum = 8;
+                _numRows.Value = 5;
+                _numRows.Width = 50;
+                _numRows.Font = new Font("微软雅黑", 10F);
+                _numRows.TextAlign = HorizontalAlignment.Center;
+                _numRows.ValueChanged += (s, e) => OnLayoutConfigChanged();
+
+                var labelCols = new Label
+                {
+                    Text = "列",
+                    Font = new Font("微软雅黑", 9F),
+                    AutoSize = false,
+                    Size = new Size(20, 34),
+                    TextAlign = ContentAlignment.MiddleCenter
+                };
+                _numCols.Minimum = 2;
+                _numCols.Maximum = 12;
+                _numCols.Value = 8;
+                _numCols.Width = 50;
+                _numCols.Font = new Font("微软雅黑", 10F);
+                _numCols.TextAlign = HorizontalAlignment.Center;
+                _numCols.ValueChanged += (s, e) => OnLayoutConfigChanged();
+
+                topPanel.Controls.Add(labelRows);
+                topPanel.Controls.Add(_numRows);
+                topPanel.Controls.Add(labelCols);
+                topPanel.Controls.Add(_numCols);
+
+                labelRows.Location = new Point(nextX, 8);
+                _numRows.Location = new Point(nextX + 20, 8);
+                labelCols.Location = new Point(nextX + 76, 8);
+                _numCols.Location = new Point(nextX + 96, 8);
+                nextX += 152;
+            }
 
             _comboSubject.DropDownStyle = ComboBoxStyle.DropDownList;
             _comboSubject.Font = new Font("微软雅黑", 10F);
@@ -177,21 +199,16 @@ namespace LearningAssistant.Forms.Games
             btnStart.FlatAppearance.BorderSize = 0;
             btnStart.Click += (s, e) => StartGame();
 
-            topPanel.Controls.Add(labelRows);
-            topPanel.Controls.Add(_numRows);
-            topPanel.Controls.Add(labelCols);
-            topPanel.Controls.Add(_numCols);
             topPanel.Controls.Add(_comboSubject);
             topPanel.Controls.Add(_comboSubCategory);
             topPanel.Controls.Add(btnStart);
 
-            labelRows.Location = new Point(8, 8);
-            _numRows.Location = new Point(28, 8);
-            labelCols.Location = new Point(84, 8);
-            _numCols.Location = new Point(104, 8);
-            _comboSubject.Location = new Point(160, 8);
-            _comboSubCategory.Location = new Point(310, 8);
-            btnStart.Location = new Point(482, 8);
+            _comboSubject.Location = new Point(nextX, 8);
+            _comboSubCategory.Location = new Point(nextX + 150, 8);
+            btnStart.Location = new Point(nextX + 322, 8);
+
+            // 子类自定义扩展点
+            OnTopPanelBuilt(topPanel);
 
             _panelWeb.Dock = DockStyle.Fill;
 

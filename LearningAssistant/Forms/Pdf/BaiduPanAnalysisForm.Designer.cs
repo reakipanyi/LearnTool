@@ -1,4 +1,4 @@
-﻿using System.Drawing;
+using System.Drawing;
 using System.Windows.Forms;
 
 namespace LearningAssistant.Forms.Pdf
@@ -44,7 +44,9 @@ namespace LearningAssistant.Forms.Pdf
             cmbDepth = new ComboBox();
             chkDetectDuplicates = new CheckBox();
             chkUseCache = new CheckBox();
-            btnStartAnalysis = new Button();
+            btnPullSnapshot = new Button();
+            btnAIAnalysis = new Button();
+            btnClearSnapshot = new Button();
             btnCancel = new Button();
             btnExecute = new Button();
             btnOpenOrganizer = new Button();
@@ -137,7 +139,9 @@ namespace LearningAssistant.Forms.Pdf
             topPanel.Controls.Add(cmbDepth);
             topPanel.Controls.Add(chkDetectDuplicates);
             topPanel.Controls.Add(chkUseCache);
-            topPanel.Controls.Add(btnStartAnalysis);
+            topPanel.Controls.Add(btnPullSnapshot);
+            topPanel.Controls.Add(btnAIAnalysis);
+            topPanel.Controls.Add(btnClearSnapshot);
             topPanel.Controls.Add(btnCancel);
             topPanel.Controls.Add(btnExecute);
             topPanel.Controls.Add(btnOpenOrganizer);
@@ -214,55 +218,77 @@ namespace LearningAssistant.Forms.Pdf
             chkUseCache.TabIndex = 5;
             chkUseCache.Text = "使用缓存";
             // 
-            // btnStartAnalysis
+            // btnPullSnapshot
             // 
-            btnStartAnalysis.Location = new Point(632, 10);
-            btnStartAnalysis.Margin = new Padding(8, 4, 4, 4);
-            btnStartAnalysis.Name = "btnStartAnalysis";
-            btnStartAnalysis.Size = new Size(110, 23);
-            btnStartAnalysis.TabIndex = 6;
-            btnStartAnalysis.Text = "🚀 开始分析";
-            btnStartAnalysis.Click += btnStartAnalysis_Click;
+            btnPullSnapshot.Location = new Point(632, 10);
+            btnPullSnapshot.Margin = new Padding(8, 4, 4, 4);
+            btnPullSnapshot.Name = "btnPullSnapshot";
+            btnPullSnapshot.Size = new Size(100, 23);
+            btnPullSnapshot.TabIndex = 6;
+            btnPullSnapshot.Text = "📥 拉取快照";
+            btnPullSnapshot.Click += btnPullSnapshot_Click;
+            // 
+            // btnAIAnalysis
+            // 
+            btnAIAnalysis.Enabled = false;
+            btnAIAnalysis.Location = new Point(740, 10);
+            btnAIAnalysis.Margin = new Padding(4);
+            btnAIAnalysis.Name = "btnAIAnalysis";
+            btnAIAnalysis.Size = new Size(90, 23);
+            btnAIAnalysis.TabIndex = 7;
+            btnAIAnalysis.Text = "🤖 AI分析";
+            btnAIAnalysis.Click += btnAIAnalysis_Click;
+            // 
+            // btnClearSnapshot
+            // 
+            btnClearSnapshot.Enabled = false;
+            btnClearSnapshot.Location = new Point(838, 10);
+            btnClearSnapshot.Margin = new Padding(4);
+            btnClearSnapshot.Name = "btnClearSnapshot";
+            btnClearSnapshot.Size = new Size(90, 23);
+            btnClearSnapshot.TabIndex = 8;
+            btnClearSnapshot.Text = "🗑 清除快照";
+            btnClearSnapshot.Click += btnClearSnapshot_Click;
             // 
             // btnCancel
             // 
             btnCancel.Enabled = false;
-            btnCancel.Location = new Point(750, 10);
+            btnCancel.Location = new Point(936, 10);
             btnCancel.Margin = new Padding(4);
             btnCancel.Name = "btnCancel";
             btnCancel.Size = new Size(70, 23);
-            btnCancel.TabIndex = 7;
+            btnCancel.TabIndex = 9;
             btnCancel.Text = "取消";
             btnCancel.Click += btnCancel_Click;
             // 
             // btnExecute
             // 
-            btnExecute.Location = new Point(828, 10);
+            btnExecute.Location = new Point(8, 47);
             btnExecute.Margin = new Padding(4);
             btnExecute.Name = "btnExecute";
             btnExecute.Size = new Size(140, 23);
-            btnExecute.TabIndex = 8;
+            btnExecute.TabIndex = 10;
             btnExecute.Text = "✅ 执行选中操作";
             btnExecute.Click += btnExecute_Click;
             // 
             // btnOpenOrganizer
             // 
-            btnOpenOrganizer.Location = new Point(972, 10);
+            btnOpenOrganizer.Location = new Point(152, 47);
             btnOpenOrganizer.Margin = new Padding(4);
             btnOpenOrganizer.Name = "btnOpenOrganizer";
             btnOpenOrganizer.Size = new Size(130, 23);
-            btnOpenOrganizer.TabIndex = 9;
+            btnOpenOrganizer.TabIndex = 11;
             btnOpenOrganizer.Text = "🧰 打开整理工具";
             btnOpenOrganizer.Click += btnOpenOrganizer_Click;
             // 
             // btnGoUp
             // 
             btnGoUp.Enabled = false;
-            btnGoUp.Location = new Point(8, 47);
+            btnGoUp.Location = new Point(286, 47);
             btnGoUp.Margin = new Padding(4);
             btnGoUp.Name = "btnGoUp";
             btnGoUp.Size = new Size(90, 23);
-            btnGoUp.TabIndex = 9;
+            btnGoUp.TabIndex = 12;
             btnGoUp.Text = "⬆️ 返回上级";
             btnGoUp.Click += btnGoUp_Click;
             // 
@@ -780,7 +806,9 @@ namespace LearningAssistant.Forms.Pdf
         private System.Windows.Forms.ComboBox cmbDepth;
         private System.Windows.Forms.CheckBox chkDetectDuplicates;
         private System.Windows.Forms.CheckBox chkUseCache;
-        private System.Windows.Forms.Button btnStartAnalysis;
+        private System.Windows.Forms.Button btnPullSnapshot;
+        private System.Windows.Forms.Button btnAIAnalysis;
+        private System.Windows.Forms.Button btnClearSnapshot;
         private System.Windows.Forms.Button btnCancel;
         private System.Windows.Forms.Button btnExecute;
         private System.Windows.Forms.Button btnOpenOrganizer;

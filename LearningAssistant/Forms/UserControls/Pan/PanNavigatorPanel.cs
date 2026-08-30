@@ -1287,6 +1287,9 @@ public partial class PanNavigatorPanel : UserControl, IThemeable
                 }
                 moved++;
                 movedNames.Add(oldName + " → " + System.IO.Path.GetFileName(newPath.TrimEnd('/')));
+                // 生成移动待办 → 供"执行待办"同步到百度网盘 API
+                var todo = new PanTodoItem { Type = PanRecommendationType.Move, SourcePath = oldPath, SourceName = oldName, DestinationPath = target, Reason = $"拖拽移动：{oldName} → {target}", Status = TodoStatus.Confirmed, SourceFsId = fi.FsId, IsFolder = fi.IsFolder };
+                TodoGenerated?.Invoke(this, todo);
             }
 
             if (moved > 0)

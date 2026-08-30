@@ -1,4 +1,4 @@
-﻿using LearningAssistant.Common;
+using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Models.PanAnalysis;
@@ -222,30 +222,292 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
-        private async void btnStartAnalysis_Click(object sender, EventArgs e)
+        private async void btnPullSnapshot_Click(object sender, EventArgs e)
         {
             try
             {
                 if (_orchestrator == null)
                 {
                     AppendLog("错误：分析服务未初始化（Orchestrator 为 null）。");
-                    MessageBox.Show("分析服务未初始化，无法开始分析。", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("分析服务未初始化，无法拉取快照。", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return;
                 }
 
-                await RunAnalysisFlowAsync(_directoryPath);
+                await PullSnapshotAsync(_directoryPath);
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "开始分析时发生未预期异常");
+                _logger?.LogError(ex, "拉取快照时发生未预期异常");
                 AppendLog($"未预期错误：{ex.Message}");
-                MessageBox.Show($"分析失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"拉取快照失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private async void btnAIAnalysis_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (_orchestrator == null)
+                {
+                    AppendLog("错误：分析服务未初始化（Orchestrator 为 null）。");
+                    MessageBox.Show("分析服务未初始化，无法进行 AI 分析。", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                if (_snapshot == null)
+                {
+                    AppendLog("请先拉取快照，再进行 AI 分析。");
+                    MessageBox.Show("请先点击「拉取快照」获取目录文件列表，再进行 AI 分析。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+
+                await RunAiAnalysisAsync(_currentAnalysisPath);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "AI 分析时发生未预期异常");
+                AppendLog($"未预期错误：{ex.Message}");
+                MessageBox.Show($"AI 分析失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void btnClearSnapshot_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (_orchestrator == null || string.IsNullOrEmpty(_directoryPath)) return;
+
+                var options = new AnalysisOptions
+                {
+                    MaxDepth = ParseDepth(),
+                    DetectDuplicates = chkDetectDuplicates.Checked,
+                    UseCache = chkUseCache.Checked
+                };
+
+                _orchestrator.ClearCacheByPath(_directoryPath, options);
+
+                // 清除本地快照引用
+                _snapshot = null;
+                _analysisResult = null;
+                treeFolders.Nodes.Clear();
+                lstRecommendations.Items.Clear();
+                lstFileTags.Items.Clear();
+                _allFileTags = new List<PanFileTag>();
+                txtSummary.Clear();
+                txtLog.Clear();
+                AppendLog($"已清除路径「{_directoryPath}」的快照缓存，可重新拉取。");
+
+                // 更新按钮状态
+                btnAIAnalysis.Enabled = false;
+                btnClearSnapshot.Enabled = false;
+                btnExecute.Enabled = false;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "清除快照缓存时发生异常");
+                AppendLog($"清除快照失败：{ex.Message}");
+                MessageBox.Show($"清除快照失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        #region 快照拉取与 AI 分析
+
+        /// <summary>
+        /// 仅拉取目录快照（不调用 AI），展示目录树和统计信息
+        /// </summary>
+        private async Task PullSnapshotAsync(string path)
+        {
+            _cts = new CancellationTokenSource();
+            _currentAnalysisPath = path;
+            if (string.IsNullOrEmpty(_rootAnalysisPath))
+                _rootAnalysisPath = path;
+
+            // 禁用按钮、清空上次结果
+            btnPullSnapshot.Enabled = false;
+            btnAIAnalysis.Enabled = false;
+            btnClearSnapshot.Enabled = false;
+            btnCancel.Enabled = true;
+            btnExecute.Enabled = false;
+            lstRecommendations.Items.Clear();
+            lstFileTags.Items.Clear();
+            _allFileTags = new List<PanFileTag>();
+            txtSummary.Clear();
+            txtLog.Clear();
+            txtPath.Text = path;
+            UpdateGoUpButton();
+
+            var progress = new Progress<PanAnalysisProgress>(UpdateProgress);
+
+            try
+            {
+                var options = new AnalysisOptions
+                {
+                    MaxDepth = ParseDepth(),
+                    DetectDuplicates = chkDetectDuplicates.Checked,
+                    DetectJunkFiles = true,
+                    UseCache = chkUseCache.Checked
+                };
+
+                // 获取快照
+                AppendLog($"正在获取目录快照：{path}");
+                _snapshot = await _orchestrator.GetSnapshotAsync(
+                    path, options, progress, _cts.Token);
+                if (IsDisposed || _isClosing) return;
+
+                // 展示目录树
+                BuildFolderTree();
+
+                // 更新「AI 发送内容」标签页
+                UpdateAiPayloadTab();
+
+                // 截断提示
+                if (!_snapshot.IsComplete && _snapshot.Scope.MaxFileCount > 0)
+                {
+                    AppendLog($"⚠️ 文件数已达上限 {_snapshot.Scope.MaxFileCount:N0}，快照被截断（仅分析部分数据，可对子目录逐一深入分析）");
+                }
+
+                // 展示统计信息
+                DisplayStatistics(_snapshot.Statistics);
+                AppendLog($"快照获取完成：共 {_snapshot.Files.Count} 个文件，{_snapshot.Folders.Count} 个文件夹");
+
+                // 启用 AI 分析和清除快照按钮
+                btnAIAnalysis.Enabled = true;
+                btnClearSnapshot.Enabled = true;
+            }
+            catch (OperationCanceledException)
+            {
+                AppendLog("快照拉取已取消");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "百度网盘快照拉取失败，目录: {Path}", path);
+                AppendLog($"错误：{ex.Message}");
+
+                if (ex.Message.Contains("所有AI服务都不可用"))
+                {
+                    ShowWebAiFallback();
+                }
+                else
+                {
+                    // 不弹窗，让用户看到日志中的错误信息
+                }
+            }
+            finally
+            {
+                if (!IsDisposed)
+                {
+                    try
+                    {
+                        btnPullSnapshot.Enabled = true;
+                        btnCancel.Enabled = false;
+                        UpdateGoUpButton();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "重置按钮状态失败");
+                    }
+                }
+                _cts?.Dispose();
+                _cts = null;
             }
         }
 
         /// <summary>
+        /// 仅进行 AI 分析（基于已有快照），展示整理建议
+        /// </summary>
+        private async Task RunAiAnalysisAsync(string path)
+        {
+            _cts = new CancellationTokenSource();
+
+            // 禁用按钮
+            btnPullSnapshot.Enabled = false;
+            btnAIAnalysis.Enabled = false;
+            btnClearSnapshot.Enabled = false;
+            btnCancel.Enabled = true;
+
+            var progress = new Progress<PanAnalysisProgress>(UpdateProgress);
+
+            try
+            {
+                var options = new AnalysisOptions
+                {
+                    MaxDepth = ParseDepth(),
+                    DetectDuplicates = chkDetectDuplicates.Checked,
+                    DetectJunkFiles = true,
+                    UseCache = chkUseCache.Checked
+                };
+
+                // 检查 AI API Key 是否配置
+                var apiKey = _aiConfig?.ApiKey ?? string.Empty;
+                if (string.IsNullOrEmpty(apiKey) || apiKey.Length <= 10)
+                {
+                    AppendLog("AI 分析不可用（未配置 API Key）");
+                    ShowWebAiFallback();
+                    AppendLog("请配置 API Key 后重试，或使用「解析AI结果」标签页手动粘贴 AI 返回结果。");
+                    btnAIAnalysis.Enabled = true;
+                    btnClearSnapshot.Enabled = true;
+                    return;
+                }
+
+                // AI 分析
+                AppendLog("正在调用 AI 进行分析...");
+                _analysisResult = await _orchestrator.AnalyzeDirectoryAsync(
+                    path, options, progress, _cts.Token);
+                if (IsDisposed || _isClosing) return;
+
+                // 展示结果
+                DisplayStatistics(_snapshot?.Statistics);
+                DisplayRecommendations(_analysisResult?.Recommendations);
+                DisplayFileTags(_analysisResult?.FileTags);
+                txtSummary.Text = _analysisResult?.Summary ?? string.Empty;
+                AppendLog($"AI 分析完成：共 {(_analysisResult?.Recommendations?.Count ?? 0)} 条建议，{(_analysisResult?.FileTags?.Count ?? 0)} 个文件打标，耗时 {_analysisResult?.AnalysisDuration?.TotalSeconds:F1}s");
+            }
+            catch (OperationCanceledException)
+            {
+                AppendLog("AI 分析已取消");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "百度网盘 AI 分析失败，目录: {Path}", path);
+                AppendLog($"错误：{ex.Message}");
+
+                if (ex.Message.Contains("所有AI服务都不可用"))
+                {
+                    ShowWebAiFallback();
+                }
+                else
+                {
+                    MessageBox.Show($"AI 分析失败：{ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+            finally
+            {
+                if (!IsDisposed)
+                {
+                    try
+                    {
+                        btnPullSnapshot.Enabled = true;
+                        btnAIAnalysis.Enabled = _snapshot != null;
+                        btnClearSnapshot.Enabled = _snapshot != null;
+                        btnCancel.Enabled = false;
+                        btnExecute.Enabled = lstRecommendations.Items.Count > 0;
+                        UpdateGoUpButton();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "重置 AI 分析按钮状态失败");
+                    }
+                }
+                _cts?.Dispose();
+                _cts = null;
+            }
+        }
+
+        #endregion
+
+        /// <summary>
         /// 完整的分析流程（获取快照 → 本地统计 → AI 分析 → 展示结果）。
-        /// 供「开始分析」按钮与子目录深入分析/返回上级共用。
+        /// 供子目录深入分析/返回上级共用。
         /// </summary>
         private async Task RunAnalysisFlowAsync(string path)
         {
@@ -255,7 +517,9 @@ namespace LearningAssistant.Forms.Pdf
                 _rootAnalysisPath = path;
 
             // 禁用按钮、清空上次结果
-            btnStartAnalysis.Enabled = false;
+            btnPullSnapshot.Enabled = false;
+            btnAIAnalysis.Enabled = false;
+            btnClearSnapshot.Enabled = false;
             btnCancel.Enabled = true;
             btnExecute.Enabled = false;
             lstRecommendations.Items.Clear();
@@ -347,7 +611,9 @@ namespace LearningAssistant.Forms.Pdf
                 {
                     try
                     {
-                        btnStartAnalysis.Enabled = true;
+                        btnPullSnapshot.Enabled = true;
+                        btnAIAnalysis.Enabled = _snapshot != null;
+                        btnClearSnapshot.Enabled = _snapshot != null;
                         btnCancel.Enabled = false;
                         btnExecute.Enabled = lstRecommendations.Items.Count > 0;
                         UpdateGoUpButton();
@@ -473,7 +739,9 @@ namespace LearningAssistant.Forms.Pdf
 
                 _cts = new CancellationTokenSource();
                 btnExecute.Enabled = false;
-                btnStartAnalysis.Enabled = false;
+                btnPullSnapshot.Enabled = false;
+                btnAIAnalysis.Enabled = false;
+                btnClearSnapshot.Enabled = false;
                 btnCancel.Enabled = true;
 
                 var progress = new Progress<PanAnalysisProgress>(UpdateProgress);
@@ -519,7 +787,9 @@ namespace LearningAssistant.Forms.Pdf
                     try
                     {
                         btnExecute.Enabled = true;
-                        btnStartAnalysis.Enabled = true;
+                        btnPullSnapshot.Enabled = true;
+                        btnAIAnalysis.Enabled = _snapshot != null;
+                        btnClearSnapshot.Enabled = _snapshot != null;
                         btnCancel.Enabled = false;
                     }
                     catch (Exception ex)
@@ -914,7 +1184,9 @@ namespace LearningAssistant.Forms.Pdf
             btnDeleteTagged.Enabled = false;
             btnMoveTagged.Enabled = false;
             btnExecute.Enabled = false;
-            btnStartAnalysis.Enabled = false;
+            btnPullSnapshot.Enabled = false;
+            btnAIAnalysis.Enabled = false;
+            btnClearSnapshot.Enabled = false;
             btnCancel.Enabled = true;
 
             var progress = new Progress<PanAnalysisProgress>(UpdateProgress);
@@ -955,7 +1227,9 @@ namespace LearningAssistant.Forms.Pdf
                         btnDeleteTagged.Enabled = true;
                         btnMoveTagged.Enabled = true;
                         btnExecute.Enabled = lstRecommendations.Items.Count > 0;
-                        btnStartAnalysis.Enabled = true;
+                        btnPullSnapshot.Enabled = true;
+                        btnAIAnalysis.Enabled = _snapshot != null;
+                        btnClearSnapshot.Enabled = _snapshot != null;
                         btnCancel.Enabled = false;
                     }
                     catch (Exception ex)

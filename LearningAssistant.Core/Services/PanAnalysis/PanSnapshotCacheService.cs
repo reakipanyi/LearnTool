@@ -99,6 +99,52 @@ public class PanSnapshotCacheService
         }
     }
 
+    /// <summary>清除指定路径的磁盘缓存文件</summary>
+    public bool ClearByPath(string directoryPath, AnalysisOptions options)
+    {
+        try
+        {
+            var key = BuildCacheKey(directoryPath, options);
+            var path = GetCacheFilePath(key);
+            lock (_lock)
+            {
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                    _logger?.LogInformation("已清除磁盘快照缓存：{Dir}", directoryPath);
+                    return true;
+                }
+            }
+            _logger?.LogDebug("未找到磁盘快照缓存：{Dir}", directoryPath);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "清除磁盘快照缓存失败：{Dir}", directoryPath);
+            return false;
+        }
+    }
+
+    /// <summary>清除所有磁盘缓存文件，返回清理数量</summary>
+    public int ClearAll()
+    {
+        int removed = 0;
+        try
+        {
+            lock (_lock)
+            {
+                foreach (var f in Directory.GetFiles(_cacheDir, "snap_*.json"))
+                {
+                    try { File.Delete(f); removed++; }
+                    catch { /* ignore */ }
+                }
+            }
+            _logger?.LogInformation("已清除 {Count} 个磁盘快照缓存文件", removed);
+        }
+        catch (Exception ex) { _logger?.LogWarning(ex, "清除磁盘缓存失败"); }
+        return removed;
+    }
+
     /// <summary>清理超过 N 天的缓存文件（启动时调用），返回清理数量</summary>
     public int CleanupOldCache(int olderThanDays = 7)
     {

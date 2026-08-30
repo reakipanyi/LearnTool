@@ -23,8 +23,8 @@ public partial class PanOrganizerForm : Form, IThemeable
    private readonly IBaiduPanAnalysisOrchestrator? _orchestrator;
    private readonly IThemeService? _themeService;
    private readonly ILogger<PanOrganizerForm>? _logger;
-   private readonly PanDirectorySnapshot? _initialSnapshot;
-   private readonly List<PanRecommendation> _initialRecommendations;
+   private PanDirectorySnapshot? _initialSnapshot;
+   private List<PanRecommendation> _initialRecommendations;
    private PanNavigatorPanel _focusedPanel;   // 当前焦点栏（⬆️返回上级/📁新建等按钮作用的目标）
    private string _leftPath = "/";
    private string _rightPath = "/";
@@ -282,7 +282,7 @@ public partial class PanOrganizerForm : Form, IThemeable
 
            tabLog.Controls.Clear();
            tabLog.Padding = new Padding(3);
-           var txtLog = new RichTextBox
+           this.txtLog = new RichTextBox
            {
                Dock = DockStyle.Fill,
                Multiline = true,
@@ -290,11 +290,11 @@ public partial class PanOrganizerForm : Form, IThemeable
                ScrollBars = RichTextBoxScrollBars.Vertical,
                Font = new Font("Consolas", 9F)
            };
-           txtLog.AppendText($"[{DateTime.Now:HH:mm:ss}] PanOrganizerForm 打开（P0.2 基础手动整理 · 内存模拟模式）\r\n");
-           txtLog.AppendText($"[{DateTime.Now:HH:mm:ss}] 操作说明：双击文件夹进入 · F2 重命名 · Delete 删除 · 工具栏 📁新建文件夹 · ⬆️返回上级\r\n");
+           this.txtLog.AppendText($"[{DateTime.Now:HH:mm:ss}] PanOrganizerForm 打开（P0.2 基础手动整理 · 内存模拟模式）\r\n");
+           this.txtLog.AppendText($"[{DateTime.Now:HH:mm:ss}] 操作说明：双击文件夹进入 · F2 重命名 · Delete 删除 · 工具栏 📁新建文件夹 · ⬆️返回上级\r\n");
            if (_initialSnapshot != null)
-               txtLog.AppendText($"[{DateTime.Now:HH:mm:ss}] 已载入快照：{_initialSnapshot.DirectoryPath}，文件 {_initialSnapshot.Statistics.TotalFileCount:N0} / 文件夹 {_initialSnapshot.Statistics.TotalFolderCount:N0}\r\n");
-           tabLog.Controls.Add(txtLog);
+               this.txtLog.AppendText($"[{DateTime.Now:HH:mm:ss}] 已载入快照：{_initialSnapshot.DirectoryPath}，文件 {_initialSnapshot.Statistics.TotalFileCount:N0} / 文件夹 {_initialSnapshot.Statistics.TotalFolderCount:N0}\r\n");
+           tabLog.Controls.Add(this.txtLog);
        }
        catch (Exception ex) { _logger?.LogWarning(ex, "PanOrganizerForm InitBottomTabs 失败，忽略"); }
    }
@@ -706,7 +706,24 @@ public partial class PanOrganizerForm : Form, IThemeable
            if (args.Action == "Move")
            {
                ExecutedAny = true;
-               AppendLog($"📦 {side}：{actionLabel} {count} 项 → {args.TargetPath}");
+               // 为每个移动项生成 PanTodoItem，加入待办列表，使"执行选中待办"可识别
+               foreach (var fi in args.Items ?? new List<PanFileInfo>())
+               {
+                   var todo = new PanTodoItem
+                   {
+                       Type = PanRecommendationType.Move,
+                       SourcePath = fi.Path,
+                       SourceName = fi.Name,
+                       DestinationPath = args.TargetPath,
+                       Reason = $"手动移动：{fi.Name} → {args.TargetPath}",
+                       Status = TodoStatus.Confirmed,
+                       SourceFsId = fi.FsId,
+                       IsFolder = fi.IsFolder
+                   };
+                   _allTodos.Add(todo);
+               }
+               LoadAllTodosToListView();
+               AppendLog($"📦 {side}：{actionLabel} {count} 项 → {args.TargetPath}（已生成 {count} 条移动待办）");
            }
            else
            {
@@ -976,13 +993,27 @@ public partial class PanOrganizerForm : Form, IThemeable
    {
        if (_isExecuting) { MessageBox.Show("正在执行中...", "提示"); return; }
        if (_initialSnapshot == null || _executionService == null) { MessageBox.Show("快照未加载", "提示"); return; }
-       var confirmed = _allTodos.Where(t => t.Status == TodoStatus.Confirmed).ToList();
-       if (confirmed.Count == 0) { MessageBox.Show("没有已确认的待办可执行", "提示"); return; }
-       var sorted = _executionService.TopologicalSort(_allTodos);
+       // 获取 ListView 中选中的待办项；若无选中则退化为全部已确认待办
+       List<PanTodoItem> selectedTodos;
+       if (tabTodos.Controls.Count > 0 && tabTodos.Controls[0] is ListView lstTodos && lstTodos.SelectedItems.Count > 0)
+       {
+           selectedTodos = lstTodos.SelectedItems
+               .Cast<ListViewItem>()
+               .Select(item => item.Tag as PanTodoItem)
+               .Where(t => t != null && t.Status == TodoStatus.Confirmed)
+               .Cast<PanTodoItem>()
+               .ToList();
+       }
+       else
+       {
+           selectedTodos = _allTodos.Where(t => t.Status == TodoStatus.Confirmed).ToList();
+       }
+       if (selectedTodos.Count == 0) { MessageBox.Show("没有已确认的待办可执行", "提示"); return; }
+       var sorted = _executionService.TopologicalSort(selectedTodos);
        var batches = _executionService.MergeBatches(sorted);
        var preflight = _executionService.PreflightCheck(batches, _initialSnapshot);
        var preflightFail = preflight.Count(p => !p.Passed);
-       var msg = $"即将执行 {confirmed.Count} 项待办（{batches.Count} 批次）。";
+       var msg = $"即将执行 {selectedTodos.Count} 项待办（{batches.Count} 批次）。";
        if (preflightFail > 0) msg += $"\n⚠️ {preflightFail} 批次未通过预检（快照过时），将自动跳过。";
        msg += "\n\n确认开始执行？（将真实同步到百度网盘）";
        if (MessageBox.Show(msg, "执行确认", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) != DialogResult.OK) return;
@@ -1092,9 +1123,23 @@ public partial class PanOrganizerForm : Form, IThemeable
         try
         {
             if (_initialSnapshot == null || _executionService == null) { MessageBox.Show("快照未加载。请先点击「📥 拉取快照」。", "提示"); return; }
-            var confirmed = _allTodos.Where(t => t.Status == TodoStatus.Confirmed).ToList();
-            if (confirmed.Count == 0) { MessageBox.Show("没有已确认的待办。", "提示"); return; }
-            var sorted = _executionService.TopologicalSort(_allTodos);
+            // 获取选中待办；若无选中则退化为全部已确认待办（与 btnExecuteTodos_Click 逻辑一致）
+            List<PanTodoItem> selectedTodos;
+            if (tabTodos.Controls.Count > 0 && tabTodos.Controls[0] is ListView lstTodos && lstTodos.SelectedItems.Count > 0)
+            {
+                selectedTodos = lstTodos.SelectedItems
+                    .Cast<ListViewItem>()
+                    .Select(item => item.Tag as PanTodoItem)
+                    .Where(t => t != null && t.Status == TodoStatus.Confirmed)
+                    .Cast<PanTodoItem>()
+                    .ToList();
+            }
+            else
+            {
+                selectedTodos = _allTodos.Where(t => t.Status == TodoStatus.Confirmed).ToList();
+            }
+            if (selectedTodos.Count == 0) { MessageBox.Show("没有已确认的待办。", "提示"); return; }
+            var sorted = _executionService.TopologicalSort(selectedTodos);
             var batches = _executionService.MergeBatches(sorted);
             var preflight = _executionService.PreflightCheck(batches, _initialSnapshot);
             var report = _executionService.DryRun(batches, _initialSnapshot);
@@ -1131,11 +1176,8 @@ public partial class PanOrganizerForm : Form, IThemeable
                 MessageBox.Show("未接入编排器，无法拉取快照。请检查 DI 注册。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
-            if (!_orchestrator.IsAvailable)
-            {
-                MessageBox.Show("网盘授权未就绪，请先在「AI 分析窗口」或「WebView2」完成百度网盘授权。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
+            // IsAvailable 检查已移除：GetSnapshotAsync 内部通过 EnsureValidTokenAsync 自动处理 Token 验证/刷新。
+            // 用户可直接从独立入口拉取快照，无需先经过 AI 分析窗口。
             using var form = new PanPullSnapshotDialog(_lastPulledPath);
             if (form.ShowDialog(this) != DialogResult.OK) return;
             var directoryPath = (form.DirectoryPath ?? "").Trim();
@@ -1183,10 +1225,8 @@ public partial class PanOrganizerForm : Form, IThemeable
                 Text = "🧰 网盘整理工具（已与 AI 分析完全解耦）";
             }
 
-            // 写 _initialSnapshot 私有字段
-            var fSnapshot = typeof(PanOrganizerForm).GetField("_initialSnapshot",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            if (fSnapshot != null) fSnapshot.SetValue(this, snapshot);
+            // 直接赋值 _initialSnapshot
+            _initialSnapshot = snapshot;
 
             var root = snapshot.DirectoryPath;
             _leftPath = root; _rightPath = root;
@@ -1262,16 +1302,17 @@ public partial class PanOrganizerForm : Form, IThemeable
             foreach (var r in recs) if (!string.IsNullOrEmpty(r.Id)) merged[r.Id] = r;
             var finalList = merged.Values.ToList();
 
-            // 反射写 _initialRecommendations
-            var fld = typeof(PanOrganizerForm).GetField("_initialRecommendations",
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            if (fld != null) fld.SetValue(this, finalList);
+            // 直接赋值 _initialRecommendations
+            _initialRecommendations = finalList;
 
             navigatorLeft.AIRecommendations = finalList;
             navigatorRight.AIRecommendations = finalList;
             if (_executionService != null)
             {
-                _allTodos = _executionService.BuildTodosFromRecommendations(finalList);
+                // 保留手工操作生成的待办（无 SourceRecommendationId 的拖拽/重命名等），合并 AI 新生成待办
+                var manualTodos = _allTodos.Where(t => string.IsNullOrEmpty(t.SourceRecommendationId)).ToList();
+                var newTodos = _executionService.BuildTodosFromRecommendations(finalList);
+                _allTodos = manualTodos.Concat(newTodos).ToList();
                 LoadAllTodosToListView();
             }
             AppendLog("📤 已导入 " + finalList.Count + " 条 AI 建议，生成待办 " + _allTodos.Count + " 条");
@@ -1283,6 +1324,30 @@ public partial class PanOrganizerForm : Form, IThemeable
             _logger?.LogError(ex, "btnImportRecs 失败");
             MessageBox.Show("导入 AI 建议失败：" + ex.Message, "错误",
                 MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+    #endregion
+
+    #region === P2.1: 🗑️ 清除缓存 ===
+    private void btnClearCache_Click(object sender, EventArgs e)
+    {
+        if (_orchestrator == null)
+        {
+            AppendLog("⚠️ 未接入编排器，无法清除缓存");
+            return;
+        }
+        var confirm = MessageBox.Show("确定要清除所有网盘快照缓存吗？\n下次拉取快照将重新从 API 获取最新数据。",
+            "清除缓存", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (confirm != DialogResult.Yes) return;
+        try
+        {
+            _orchestrator.ClearCache();
+            AppendLog("🗑️ 网盘缓存已清除（内存缓存 + 磁盘缓存）");
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "btnClearCache 失败");
+            AppendLog("❌ 清除缓存失败：" + ex.Message);
         }
     }
     #endregion

@@ -1068,11 +1068,12 @@ namespace LearningAssistant.Forms.Main
             // 
             // sideNavigation
             // 
+            sideNavigation.AutoScroll = true;
             sideNavigation.BackColor = Color.FromArgb(248, 248, 252);
             sideNavigation.Dock = DockStyle.Fill;
             sideNavigation.Location = new Point(0, 0);
             sideNavigation.Name = "sideNavigation";
-            sideNavigation.Size = new Size(121, 690);
+            sideNavigation.Size = new Size(200, 690);
             sideNavigation.TabIndex = 0;
             sideNavigation.NavigationItemClicked += OnNavigationItemClicked;
             // 
@@ -1126,7 +1127,7 @@ namespace LearningAssistant.Forms.Main
             labelTopBarTitle.ForeColor = Color.FromArgb(33, 33, 33);
             labelTopBarTitle.Location = new Point(34, 0);
             labelTopBarTitle.Name = "labelTopBarTitle";
-            labelTopBarTitle.Size = new Size(74, 21);
+            labelTopBarTitle.Size = new Size(42, 21);
             labelTopBarTitle.TabIndex = 1;
             labelTopBarTitle.Text = "工具";
             labelTopBarTitle.TextAlign = ContentAlignment.MiddleLeft;

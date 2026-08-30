@@ -74,4 +74,10 @@ public interface IBaiduPanAnalysisOrchestrator
 
     /// <summary>重新加载 Token 状态（授权成功后调用，使 IsAvailable 反映最新凭据）</summary>
     void ReloadTokenState();
+
+    /// <summary>清除所有缓存（内存缓存 + 磁盘缓存），下次拉取将重新从 API 获取</summary>
+    void ClearCache();
+
+    /// <summary>清除指定路径的快照缓存（内存缓存 + 磁盘缓存）</summary>
+    void ClearCacheByPath(string directoryPath, AnalysisOptions options);
 }
