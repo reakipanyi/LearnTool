@@ -92,6 +92,7 @@ namespace LearningAssistant.Forms.UserControls.Navigation
                 ControlStyles.ResizeRedraw,
                 true);
 
+            AutoScroll = true;
             Width = _expandedWidth;
             BackColor = Color.FromArgb(248, 248, 252);
 
@@ -276,6 +277,9 @@ namespace LearningAssistant.Forms.UserControls.Navigation
                     }
                 }
             }
+
+            // 设置滚动区域高度
+            AutoScrollMinSize = new Size(0, y + 10);
         }
 
         protected override void OnResize(EventArgs e)
