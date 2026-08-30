@@ -11,6 +11,7 @@ namespace LearningAssistant.Forms.UserControls.Navigation
     {
         private readonly List<NavigationItem> _items = new();
         private readonly List<NavButton> _buttons = new();
+        private readonly Dictionary<string, List<NavigationItem>> _parentChildMap = new();
         private string? _selectedKey;
         private bool _collapsed;
         private int _itemHeight = 48;
@@ -112,6 +113,14 @@ namespace LearningAssistant.Forms.UserControls.Navigation
         {
             _items.Add(item);
             CreateButton(item);
+            if (item.Children != null && item.Children.Count > 0)
+            {
+                _parentChildMap[item.Key] = item.Children;
+                foreach (var child in item.Children)
+                {
+                    CreateButton(child, parentKey: item.Key);
+                }
+            }
             LayoutButtons();
         }
 
@@ -121,6 +130,14 @@ namespace LearningAssistant.Forms.UserControls.Navigation
             {
                 _items.Add(item);
                 CreateButton(item);
+                if (item.Children != null && item.Children.Count > 0)
+                {
+                    _parentChildMap[item.Key] = item.Children;
+                    foreach (var child in item.Children)
+                    {
+                        CreateButton(child, parentKey: item.Key);
+                    }
+                }
             }
             LayoutButtons();
         }
@@ -128,6 +145,7 @@ namespace LearningAssistant.Forms.UserControls.Navigation
         public void ClearItems()
         {
             _items.Clear();
+            _parentChildMap.Clear();
             foreach (var btn in _buttons)
             {
                 Controls.Remove(btn);
@@ -139,6 +157,22 @@ namespace LearningAssistant.Forms.UserControls.Navigation
         public void SelectItem(string key)
         {
             _selectedKey = key;
+            // 如果选中的是子项，确保父级展开
+            foreach (var kvp in _parentChildMap)
+            {
+                if (kvp.Value.Any(c => c.Key == key))
+                {
+                    var parent = _items.FirstOrDefault(i => i.Key == kvp.Key);
+                    if (parent != null)
+                    {
+                        parent.IsExpanded = true;
+                        var parentBtn = _buttons.FirstOrDefault(b => b.Item.Key == parent.Key);
+                        if (parentBtn != null) parentBtn.IsExpanded = true;
+                    }
+                    break;
+                }
+            }
+            LayoutButtons();
             foreach (var btn in _buttons)
             {
                 btn.IsSelected = btn.Item.Key == key;
@@ -150,7 +184,7 @@ namespace LearningAssistant.Forms.UserControls.Navigation
             Collapsed = !_collapsed;
         }
 
-        private void CreateButton(NavigationItem item)
+        private void CreateButton(NavigationItem item, string? parentKey = null)
         {
             var btn = new NavButton(item, _collapsed)
             {
@@ -160,7 +194,10 @@ namespace LearningAssistant.Forms.UserControls.Navigation
                 SelectedTextColor = _selectedTextColor,
                 TextColor = _textColor,
                 IconSize = _iconSize,
-                ItemPadding = _itemPadding
+                ItemPadding = _itemPadding,
+                Depth = parentKey != null ? 1 : 0,
+                IsParent = item.Children != null && item.Children.Count > 0,
+                IsExpanded = item.IsExpanded
             };
             btn.Click += OnNavButtonClick;
             _buttons.Add(btn);
@@ -171,6 +208,16 @@ namespace LearningAssistant.Forms.UserControls.Navigation
         {
             if (sender is NavButton btn && btn.Item != null)
             {
+                // 父级菜单点击：展开/折叠
+                if (btn.IsParent)
+                {
+                    btn.Item.IsExpanded = !btn.Item.IsExpanded;
+                    btn.IsExpanded = btn.Item.IsExpanded;
+                    LayoutButtons();
+                    return;
+                }
+
+                // 子项/普通项点击：触发导航事件
                 _selectedKey = btn.Item.Key;
                 foreach (var b in _buttons)
                 {
@@ -200,8 +247,34 @@ namespace LearningAssistant.Forms.UserControls.Navigation
                 btn.Location = new Point(0, y);
                 btn.Width = Width;
                 btn.Collapsed = _collapsed;
+                btn.Visible = true;
                 y += _itemHeight;
                 lastGroup = item.Group;
+
+                // 父级展开时显示子项
+                if (_parentChildMap.TryGetValue(item.Key, out var children) && item.IsExpanded)
+                {
+                    foreach (var child in children)
+                    {
+                        var childBtn = _buttons.FirstOrDefault(b => b.Item.Key == child.Key);
+                        if (childBtn == null) continue;
+
+                        childBtn.Location = new Point(0, y);
+                        childBtn.Width = Width;
+                        childBtn.Collapsed = _collapsed;
+                        childBtn.Visible = true;
+                        y += _itemHeight;
+                    }
+                }
+                else if (_parentChildMap.ContainsKey(item.Key))
+                {
+                    // 父级折叠时隐藏子项
+                    foreach (var child in _parentChildMap[item.Key])
+                    {
+                        var childBtn = _buttons.FirstOrDefault(b => b.Item.Key == child.Key);
+                        if (childBtn != null) childBtn.Visible = false;
+                    }
+                }
             }
         }
 
@@ -253,6 +326,24 @@ namespace LearningAssistant.Forms.UserControls.Navigation
             public int IconSize { get; set; }
             [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
             public int ItemPadding { get; set; }
+
+            /// <summary>
+            /// 层级深度（0=顶级，1=子级）
+            /// </summary>
+            [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+            public int Depth { get; set; }
+
+            /// <summary>
+            /// 是否为父级菜单（有子项）
+            /// </summary>
+            [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+            public bool IsParent { get; set; }
+
+            /// <summary>
+            /// 父级菜单是否展开
+            /// </summary>
+            [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+            public bool IsExpanded { get; set; }
 
             public NavButton(NavigationItem item, bool collapsed)
             {
@@ -310,9 +401,11 @@ namespace LearningAssistant.Forms.UserControls.Navigation
                     g.FillRoundedRectangle(indicatorBrush, new Rectangle(4, Height / 2 - 12, 4, 24), new Size(2, 2));
                 }
 
+                // 子级菜单增加缩进
+                var depthPadding = Depth * 16;
                 var iconFont = new Font("Segoe UI Emoji", IconSize / 1.8f);
                 var iconSize = g.MeasureString(Item.Icon, iconFont);
-                var iconX = ItemPadding;
+                var iconX = ItemPadding + depthPadding;
                 var iconY = (Height - iconSize.Height) / 2;
 
                 if (Collapsed)
@@ -332,6 +425,19 @@ namespace LearningAssistant.Forms.UserControls.Navigation
 
                     using var textBrush = new SolidBrush(IsSelected ? SelectedTextColor : TextColor);
                     g.DrawString(Item.Text, textFont, textBrush, textX, textY);
+
+                    // 父级菜单显示展开/折叠箭头
+                    if (IsParent)
+                    {
+                        var arrowFont = new Font("Segoe UI", 9F);
+                        var arrowText = IsExpanded ? "▼" : "▶";
+                        var arrowSize = g.MeasureString(arrowText, arrowFont);
+                        var arrowX = Width - (int)arrowSize.Width - 12;
+                        var arrowY = (Height - arrowSize.Height) / 2;
+
+                        using var arrowBrush = new SolidBrush(Color.FromArgb(150, 150, 150));
+                        g.DrawString(arrowText, arrowFont, arrowBrush, arrowX, arrowY);
+                    }
                 }
             }
 

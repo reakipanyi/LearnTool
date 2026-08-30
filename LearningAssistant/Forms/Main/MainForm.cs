@@ -6,7 +6,6 @@ using LearningAssistant.Forms.Learning;
 using LearningAssistant.Forms.UserControls.Cards;
 using LearningAssistant.Forms.UserControls.Dashboard;
 using LearningAssistant.Forms.UserControls.Navigation;
-using LearningAssistant.Managers;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services.Gamification;
@@ -218,27 +217,31 @@ namespace LearningAssistant.Forms.Main
                 new() { Key = "dashboard", Icon = "🏠", Text = "首页", Order = 0, Group = "main" },
                 new() { Key = "learning", Icon = "📚", Text = "学习", Order = 1, Group = "main" },
                 new() { Key = "pdf", Icon = "📖", Text = "PDF阅读", Order = 2, Group = "main" },
+                new() { Key = "browser", Icon = "🌐", Text = "浏览器", Order = 3, Group = "tools" },
+                new() { Key = "editor", Icon = "✏️", Text = "内容编辑", Order = 4, Group = "tools" },
                 new() { Key = "data", Icon = "📊", Text = "学习数据", Order = 5, Group = "main" },
-                // 游戏区
-                new() { Key = "wordmatch", Icon = "🍬", Text = "单词消消乐", Order = 10, Group = "games" },
-                new() { Key = "memorymatch", Icon = "🧠", Text = "记忆翻牌", Order = 11, Group = "games" },
-                new() { Key = "linkmatch", Icon = "🔗", Text = "连连看", Order = 12, Group = "games" },
-                new() { Key = "spelling", Icon = "✍️", Text = "单词拼写", Order = 13, Group = "games" },
-                new() { Key = "whackamole", Icon = "🔨", Text = "打地鼠", Order = 14, Group = "games" },
-                new() { Key = "schulte", Icon = "🔢", Text = "舒尔特方格", Order = 15, Group = "games" },
-                new() { Key = "stroop", Icon = "🧠", Text = "斯特鲁普", Order = 16, Group = "games" },
-                new() { Key = "inhibition", Icon = "⛔", Text = "抑制控制", Order = 17, Group = "games" },
-                new() { Key = "memory", Icon = "💾", Text = "工作记忆", Order = 18, Group = "games" },
-                new() { Key = "search", Icon = "🔍", Text = "视觉搜索", Order = 19, Group = "games" },
-                new() { Key = "trace", Icon = "🌀", Text = "线条追踪", Order = 20, Group = "games" },
-                new() { Key = "flex", Icon = "🔄", Text = "认知灵活", Order = 21, Group = "games" },
-                new() { Key = "attention", Icon = "🎯", Text = "分配注意", Order = 22, Group = "games" },
-                new() { Key = "plan", Icon = "🧩", Text = "计划预判", Order = 23, Group = "games" },
-                new() { Key = "sudoku", Icon = "🧩", Text = "数独", Order = 20, Group = "games" },
-                // 工具区
-                new() { Key = "browser", Icon = "🌐", Text = "浏览器", Order = 20, Group = "tools" },
-                new() { Key = "editor", Icon = "✏️", Text = "内容编辑", Order = 21, Group = "tools" },
-                new() { Key = "settings", Icon = "⚙️", Text = "设置", Order = 99, Group = "system" }
+                new() { Key = "settings", Icon = "⚙️", Text = "设置", Order = 6, Group = "system" },
+                new() {
+                    Key = "games", Icon = "🎮", Text = "游戏", Order = 7, Group = "main",
+                    Children = new List<NavigationItem>
+                    {
+                        new() { Key = "spelling", Icon = "✍️", Text = "单词拼写", Order = 11 },
+                        new() { Key = "inhibition", Icon = "⛔", Text = "抑制控制", Order = 12 },
+                        new() { Key = "memory", Icon = "💾", Text = "工作记忆", Order = 13 },
+                        new() { Key = "search", Icon = "🔍", Text = "视觉搜索", Order = 14 },
+                        new() { Key = "trace", Icon = "🌀", Text = "线条追踪", Order = 15 },
+                        new() { Key = "flex", Icon = "🔄", Text = "认知灵活", Order = 16 },
+                        new() { Key = "plan", Icon = "🧩", Text = "计划预判", Order = 17 },
+                        new() { Key = "attention", Icon = "🎯", Text = "分配注意", Order = 18 },
+                        new() { Key = "wordmatch", Icon = "🍬", Text = "单词消消乐", Order = 21 },
+                        new() { Key = "memorymatch", Icon = "🧠", Text = "记忆翻牌", Order = 22 },
+                        new() { Key = "linkmatch", Icon = "🔗", Text = "连连看", Order = 23 },
+                        new() { Key = "schulte", Icon = "🔢", Text = "舒尔特方格", Order = 25 },
+                        new() { Key = "stroop", Icon = "🧠", Text = "斯特鲁普", Order = 26 },
+                        new() { Key = "sudoku", Icon = "🧩", Text = "数独", Order = 27 },
+                        new() { Key = "whackamole", Icon = "🔨", Text = "打地鼠", Order = 24 },
+                    }
+                }
             });
 
         }

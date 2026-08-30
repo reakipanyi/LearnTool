@@ -39,5 +39,15 @@ namespace LearningAssistant.Forms.UserControls.Navigation
         /// 分组（用于分隔线）
         /// </summary>
         public string Group { get; set; } = "default";
+
+        /// <summary>
+        /// 子导航项（用于二级菜单）
+        /// </summary>
+        public List<NavigationItem>? Children { get; set; }
+
+        /// <summary>
+        /// 是否展开（仅对父级菜单有效）
+        /// </summary>
+        public bool IsExpanded { get; set; }
     }
 }
