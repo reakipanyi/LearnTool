@@ -53,13 +53,22 @@ namespace LearningAssistant.Forms.Pdf
             btnGoUp = new Button();
             contentPanel = new SplitContainer();
             leftPanel = new Panel();
-            txtSummary = new TextBox();
+            splitContainer1 = new SplitContainer();
             treeFolders = new TreeView();
+            txtSummary = new TextBox();
+            pnlSummaryActions = new FlowLayoutPanel();
+            btnUploadSummary = new Button();
+            btnSaveSummary = new Button();
+            btnCopySummary = new Button();
             rightPanel = new Panel();
             tabControl = new TabControl();
             tabRecommendations = new TabPage();
             lstRecommendations = new ListView();
             tabTags = new TabPage();
+            pnlTagActions = new FlowLayoutPanel();
+            btnDeleteTagged = new Button();
+            btnMoveTagged = new Button();
+            lstFileTags = new ListView();
             pnlTagFilter = new FlowLayoutPanel();
             lblTagSubject = new Label();
             cmbTagSubject = new ComboBox();
@@ -69,30 +78,19 @@ namespace LearningAssistant.Forms.Pdf
             cmbTagAge = new ComboBox();
             btnTagFilter = new Button();
             btnTagReset = new Button();
-            lstFileTags = new ListView();
-            pnlTagActions = new FlowLayoutPanel();
-            btnDeleteTagged = new Button();
-            btnMoveTagged = new Button();
-            txtLog = new TextBox();
-            splitContainer1 = new SplitContainer();
-            pnlSummaryActions = new FlowLayoutPanel();
-            btnCopySummary = new Button();
-            btnSaveSummary = new Button();
-            btnUploadSummary = new Button();
             tabAiPayload = new TabPage();
             pnlAiPayloadActions = new FlowLayoutPanel();
             btnCopyAiPayload = new Button();
             btnOpenAiPanel = new Button();
             txtAiPayload = new TextBox();
             tabParseResult = new TabPage();
-            pnlParseActions = new FlowLayoutPanel();
+            txtAiResultInput = new TextBox();
             lblParseHint = new Label();
+            pnlParseActions = new FlowLayoutPanel();
             btnParseAiResult = new Button();
             btnClearParseInput = new Button();
             btnSampleJson = new Button();
-            txtAiResultInput = new TextBox();
-            tabParseResult.SuspendLayout();
-            pnlParseActions.SuspendLayout();
+            txtLog = new TextBox();
             mainPanel.SuspendLayout();
             topPanel.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)contentPanel).BeginInit();
@@ -100,16 +98,21 @@ namespace LearningAssistant.Forms.Pdf
             contentPanel.Panel2.SuspendLayout();
             contentPanel.SuspendLayout();
             leftPanel.SuspendLayout();
-            rightPanel.SuspendLayout();
-            tabControl.SuspendLayout();
-            tabRecommendations.SuspendLayout();
-            tabTags.SuspendLayout();
-            pnlTagFilter.SuspendLayout();
-            pnlTagActions.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).BeginInit();
             splitContainer1.Panel1.SuspendLayout();
             splitContainer1.Panel2.SuspendLayout();
             splitContainer1.SuspendLayout();
+            pnlSummaryActions.SuspendLayout();
+            rightPanel.SuspendLayout();
+            tabControl.SuspendLayout();
+            tabRecommendations.SuspendLayout();
+            tabTags.SuspendLayout();
+            pnlTagActions.SuspendLayout();
+            pnlTagFilter.SuspendLayout();
+            tabAiPayload.SuspendLayout();
+            pnlAiPayloadActions.SuspendLayout();
+            tabParseResult.SuspendLayout();
+            pnlParseActions.SuspendLayout();
             SuspendLayout();
             // 
             // mainPanel
@@ -128,7 +131,7 @@ namespace LearningAssistant.Forms.Pdf
             mainPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
             mainPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             mainPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 140F));
-            mainPanel.Size = new Size(1034, 681);
+            mainPanel.Size = new Size(1488, 627);
             mainPanel.TabIndex = 0;
             // 
             // topPanel
@@ -150,7 +153,7 @@ namespace LearningAssistant.Forms.Pdf
             topPanel.Location = new Point(11, 11);
             topPanel.Name = "topPanel";
             topPanel.Padding = new Padding(4, 6, 4, 6);
-            topPanel.Size = new Size(1012, 38);
+            topPanel.Size = new Size(1466, 38);
             topPanel.TabIndex = 0;
             // 
             // lblPath
@@ -263,7 +266,7 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // btnExecute
             // 
-            btnExecute.Location = new Point(8, 47);
+            btnExecute.Location = new Point(1014, 10);
             btnExecute.Margin = new Padding(4);
             btnExecute.Name = "btnExecute";
             btnExecute.Size = new Size(140, 23);
@@ -273,18 +276,18 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // btnOpenOrganizer
             // 
-            btnOpenOrganizer.Location = new Point(152, 47);
+            btnOpenOrganizer.Location = new Point(1162, 10);
             btnOpenOrganizer.Margin = new Padding(4);
             btnOpenOrganizer.Name = "btnOpenOrganizer";
-            btnOpenOrganizer.Size = new Size(130, 23);
+            btnOpenOrganizer.Size = new Size(93, 23);
             btnOpenOrganizer.TabIndex = 11;
-            btnOpenOrganizer.Text = "🧰 打开整理工具";
+            btnOpenOrganizer.Text = "\U0001f9f0 手工整理";
             btnOpenOrganizer.Click += btnOpenOrganizer_Click;
             // 
             // btnGoUp
             // 
             btnGoUp.Enabled = false;
-            btnGoUp.Location = new Point(286, 47);
+            btnGoUp.Location = new Point(1263, 10);
             btnGoUp.Margin = new Padding(4);
             btnGoUp.Name = "btnGoUp";
             btnGoUp.Size = new Size(90, 23);
@@ -307,8 +310,8 @@ namespace LearningAssistant.Forms.Pdf
             // 
             contentPanel.Panel2.Controls.Add(rightPanel);
             contentPanel.Panel2MinSize = 500;
-            contentPanel.Size = new Size(1012, 475);
-            contentPanel.SplitterDistance = 508;
+            contentPanel.Size = new Size(1466, 421);
+            contentPanel.SplitterDistance = 735;
             contentPanel.TabIndex = 1;
             // 
             // leftPanel
@@ -318,20 +321,49 @@ namespace LearningAssistant.Forms.Pdf
             leftPanel.Location = new Point(0, 0);
             leftPanel.Name = "leftPanel";
             leftPanel.Padding = new Padding(0, 4, 6, 0);
-            leftPanel.Size = new Size(508, 475);
+            leftPanel.Size = new Size(735, 421);
             leftPanel.TabIndex = 0;
+            // 
+            // splitContainer1
+            // 
+            splitContainer1.Dock = DockStyle.Fill;
+            splitContainer1.Location = new Point(0, 4);
+            splitContainer1.Name = "splitContainer1";
+            splitContainer1.Orientation = Orientation.Horizontal;
+            // 
+            // splitContainer1.Panel1
+            // 
+            splitContainer1.Panel1.Controls.Add(treeFolders);
+            // 
+            // splitContainer1.Panel2
+            // 
+            splitContainer1.Panel2.Controls.Add(txtSummary);
+            splitContainer1.Panel2.Controls.Add(pnlSummaryActions);
+            splitContainer1.Size = new Size(729, 417);
+            splitContainer1.SplitterDistance = 293;
+            splitContainer1.TabIndex = 3;
+            // 
+            // treeFolders
+            // 
+            treeFolders.Dock = DockStyle.Fill;
+            treeFolders.Font = new Font("Microsoft YaHei UI", 9F);
+            treeFolders.HideSelection = false;
+            treeFolders.Location = new Point(0, 0);
+            treeFolders.Name = "treeFolders";
+            treeFolders.Size = new Size(729, 293);
+            treeFolders.TabIndex = 2;
+            treeFolders.NodeMouseDoubleClick += treeFolders_NodeMouseDoubleClick;
             // 
             // txtSummary
             // 
             txtSummary.BackColor = SystemColors.Info;
             txtSummary.Dock = DockStyle.Fill;
             txtSummary.Font = new Font("Microsoft YaHei UI", 9F);
-            txtSummary.Location = new Point(0, 0);
+            txtSummary.Location = new Point(0, 34);
             txtSummary.Multiline = true;
             txtSummary.Name = "txtSummary";
-            txtSummary.ReadOnly = false;
             txtSummary.ScrollBars = ScrollBars.Vertical;
-            txtSummary.Size = new Size(502, 135);
+            txtSummary.Size = new Size(729, 86);
             txtSummary.TabIndex = 1;
             // 
             // pnlSummaryActions
@@ -343,50 +375,36 @@ namespace LearningAssistant.Forms.Pdf
             pnlSummaryActions.FlowDirection = FlowDirection.RightToLeft;
             pnlSummaryActions.Location = new Point(0, 0);
             pnlSummaryActions.Name = "pnlSummaryActions";
-            pnlSummaryActions.Padding = new Padding(2, 2, 2, 2);
-            pnlSummaryActions.Size = new Size(502, 34);
+            pnlSummaryActions.Padding = new Padding(2);
+            pnlSummaryActions.Size = new Size(729, 34);
             pnlSummaryActions.TabIndex = 2;
-            // 
-            // btnCopySummary
-            // 
-            btnCopySummary.Location = new Point(424, 2);
-            btnCopySummary.Margin = new Padding(3, 3, 3, 3);
-            btnCopySummary.Name = "btnCopySummary";
-            btnCopySummary.Size = new Size(76, 28);
-            btnCopySummary.TabIndex = 2;
-            btnCopySummary.Text = "📋 复制";
-            btnCopySummary.Click += btnCopySummary_Click;
-            // 
-            // btnSaveSummary
-            // 
-            btnSaveSummary.Location = new Point(341, 2);
-            btnSaveSummary.Margin = new Padding(3, 3, 3, 3);
-            btnSaveSummary.Name = "btnSaveSummary";
-            btnSaveSummary.Size = new Size(77, 28);
-            btnSaveSummary.TabIndex = 1;
-            btnSaveSummary.Text = "💾 本地保存";
-            btnSaveSummary.Click += btnSaveSummary_Click;
             // 
             // btnUploadSummary
             // 
-            btnUploadSummary.Location = new Point(243, 2);
-            btnUploadSummary.Margin = new Padding(3, 3, 3, 3);
+            btnUploadSummary.Location = new Point(630, 5);
             btnUploadSummary.Name = "btnUploadSummary";
             btnUploadSummary.Size = new Size(92, 28);
             btnUploadSummary.TabIndex = 0;
             btnUploadSummary.Text = "📤 上传网盘";
             btnUploadSummary.Click += btnUploadSummary_Click;
             // 
-            // treeFolders
+            // btnSaveSummary
             // 
-            treeFolders.Dock = DockStyle.Fill;
-            treeFolders.Font = new Font("Microsoft YaHei UI", 9F);
-            treeFolders.HideSelection = false;
-            treeFolders.Location = new Point(0, 0);
-            treeFolders.Name = "treeFolders";
-            treeFolders.Size = new Size(502, 332);
-            treeFolders.TabIndex = 2;
-            treeFolders.NodeMouseDoubleClick += treeFolders_NodeMouseDoubleClick;
+            btnSaveSummary.Location = new Point(547, 5);
+            btnSaveSummary.Name = "btnSaveSummary";
+            btnSaveSummary.Size = new Size(77, 28);
+            btnSaveSummary.TabIndex = 1;
+            btnSaveSummary.Text = "💾 本地保存";
+            btnSaveSummary.Click += btnSaveSummary_Click;
+            // 
+            // btnCopySummary
+            // 
+            btnCopySummary.Location = new Point(465, 5);
+            btnCopySummary.Name = "btnCopySummary";
+            btnCopySummary.Size = new Size(76, 28);
+            btnCopySummary.TabIndex = 2;
+            btnCopySummary.Text = "📋 复制";
+            btnCopySummary.Click += btnCopySummary_Click;
             // 
             // rightPanel
             // 
@@ -395,7 +413,7 @@ namespace LearningAssistant.Forms.Pdf
             rightPanel.Location = new Point(0, 0);
             rightPanel.Name = "rightPanel";
             rightPanel.Padding = new Padding(6, 4, 0, 0);
-            rightPanel.Size = new Size(500, 475);
+            rightPanel.Size = new Size(727, 421);
             rightPanel.TabIndex = 0;
             // 
             // tabControl
@@ -409,7 +427,7 @@ namespace LearningAssistant.Forms.Pdf
             tabControl.Location = new Point(6, 4);
             tabControl.Name = "tabControl";
             tabControl.SelectedIndex = 0;
-            tabControl.Size = new Size(494, 471);
+            tabControl.Size = new Size(721, 417);
             tabControl.TabIndex = 0;
             // 
             // tabRecommendations
@@ -418,7 +436,7 @@ namespace LearningAssistant.Forms.Pdf
             tabRecommendations.Location = new Point(4, 26);
             tabRecommendations.Name = "tabRecommendations";
             tabRecommendations.Padding = new Padding(3);
-            tabRecommendations.Size = new Size(486, 441);
+            tabRecommendations.Size = new Size(713, 387);
             tabRecommendations.TabIndex = 0;
             tabRecommendations.Text = "📋 整理建议";
             tabRecommendations.UseVisualStyleBackColor = true;
@@ -431,7 +449,7 @@ namespace LearningAssistant.Forms.Pdf
             lstRecommendations.GridLines = true;
             lstRecommendations.Location = new Point(3, 3);
             lstRecommendations.Name = "lstRecommendations";
-            lstRecommendations.Size = new Size(480, 435);
+            lstRecommendations.Size = new Size(707, 381);
             lstRecommendations.TabIndex = 0;
             lstRecommendations.UseCompatibleStateImageBehavior = false;
             lstRecommendations.View = View.Details;
@@ -444,10 +462,53 @@ namespace LearningAssistant.Forms.Pdf
             tabTags.Location = new Point(4, 26);
             tabTags.Name = "tabTags";
             tabTags.Padding = new Padding(3);
-            tabTags.Size = new Size(486, 441);
+            tabTags.Size = new Size(713, 387);
             tabTags.TabIndex = 1;
             tabTags.Text = "🏷️ 文件打标";
             tabTags.UseVisualStyleBackColor = true;
+            // 
+            // pnlTagActions
+            // 
+            pnlTagActions.Controls.Add(btnDeleteTagged);
+            pnlTagActions.Controls.Add(btnMoveTagged);
+            pnlTagActions.Dock = DockStyle.Bottom;
+            pnlTagActions.FlowDirection = FlowDirection.RightToLeft;
+            pnlTagActions.Location = new Point(3, 342);
+            pnlTagActions.Name = "pnlTagActions";
+            pnlTagActions.Padding = new Padding(2);
+            pnlTagActions.Size = new Size(707, 42);
+            pnlTagActions.TabIndex = 2;
+            // 
+            // btnDeleteTagged
+            // 
+            btnDeleteTagged.Location = new Point(622, 5);
+            btnDeleteTagged.Name = "btnDeleteTagged";
+            btnDeleteTagged.Size = new Size(78, 30);
+            btnDeleteTagged.TabIndex = 0;
+            btnDeleteTagged.Text = "🗑️ 删除选中";
+            btnDeleteTagged.Click += btnDeleteTagged_Click;
+            // 
+            // btnMoveTagged
+            // 
+            btnMoveTagged.Location = new Point(538, 5);
+            btnMoveTagged.Name = "btnMoveTagged";
+            btnMoveTagged.Size = new Size(78, 30);
+            btnMoveTagged.TabIndex = 1;
+            btnMoveTagged.Text = "📦 移动选中";
+            btnMoveTagged.Click += btnMoveTagged_Click;
+            // 
+            // lstFileTags
+            // 
+            lstFileTags.CheckBoxes = true;
+            lstFileTags.Dock = DockStyle.Fill;
+            lstFileTags.FullRowSelect = true;
+            lstFileTags.GridLines = true;
+            lstFileTags.Location = new Point(3, 41);
+            lstFileTags.Name = "lstFileTags";
+            lstFileTags.Size = new Size(707, 343);
+            lstFileTags.TabIndex = 1;
+            lstFileTags.UseCompatibleStateImageBehavior = false;
+            lstFileTags.View = View.Details;
             // 
             // pnlTagFilter
             // 
@@ -463,7 +524,7 @@ namespace LearningAssistant.Forms.Pdf
             pnlTagFilter.Location = new Point(3, 3);
             pnlTagFilter.Name = "pnlTagFilter";
             pnlTagFilter.Padding = new Padding(2, 4, 2, 2);
-            pnlTagFilter.Size = new Size(480, 38);
+            pnlTagFilter.Size = new Size(707, 38);
             pnlTagFilter.TabIndex = 0;
             // 
             // lblTagSubject
@@ -491,14 +552,14 @@ namespace LearningAssistant.Forms.Pdf
             lblTagValues.Location = new Point(163, 11);
             lblTagValues.Margin = new Padding(3, 7, 2, 3);
             lblTagValues.Name = "lblTagValues";
-            lblTagValues.Size = new Size(75, 17);
+            lblTagValues.Size = new Size(56, 17);
             lblTagValues.TabIndex = 2;
             lblTagValues.Text = "价值观：";
             // 
             // cmbTagValues
             // 
             cmbTagValues.DropDownStyle = ComboBoxStyle.DropDownList;
-            cmbTagValues.Location = new Point(243, 7);
+            cmbTagValues.Location = new Point(224, 7);
             cmbTagValues.Margin = new Padding(3, 3, 10, 3);
             cmbTagValues.Name = "cmbTagValues";
             cmbTagValues.Size = new Size(70, 25);
@@ -507,17 +568,17 @@ namespace LearningAssistant.Forms.Pdf
             // lblTagAge
             // 
             lblTagAge.AutoSize = true;
-            lblTagAge.Location = new Point(326, 11);
+            lblTagAge.Location = new Point(307, 11);
             lblTagAge.Margin = new Padding(3, 7, 2, 3);
             lblTagAge.Name = "lblTagAge";
-            lblTagAge.Size = new Size(60, 17);
+            lblTagAge.Size = new Size(56, 17);
             lblTagAge.TabIndex = 4;
             lblTagAge.Text = "年龄段：";
             // 
             // cmbTagAge
             // 
             cmbTagAge.DropDownStyle = ComboBoxStyle.DropDownList;
-            cmbTagAge.Location = new Point(391, 7);
+            cmbTagAge.Location = new Point(368, 7);
             cmbTagAge.Margin = new Padding(3, 3, 10, 3);
             cmbTagAge.Name = "cmbTagAge";
             cmbTagAge.Size = new Size(80, 25);
@@ -525,8 +586,7 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // btnTagFilter
             // 
-            btnTagFilter.Location = new Point(484, 7);
-            btnTagFilter.Margin = new Padding(3, 3, 3, 3);
+            btnTagFilter.Location = new Point(461, 7);
             btnTagFilter.Name = "btnTagFilter";
             btnTagFilter.Size = new Size(72, 24);
             btnTagFilter.TabIndex = 6;
@@ -535,58 +595,12 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // btnTagReset
             // 
-            btnTagReset.Location = new Point(562, 7);
-            btnTagReset.Margin = new Padding(3, 3, 3, 3);
+            btnTagReset.Location = new Point(539, 7);
             btnTagReset.Name = "btnTagReset";
             btnTagReset.Size = new Size(60, 24);
             btnTagReset.TabIndex = 7;
             btnTagReset.Text = "重置";
             btnTagReset.Click += btnTagReset_Click;
-            // 
-            // lstFileTags
-            // 
-            lstFileTags.CheckBoxes = true;
-            lstFileTags.Dock = DockStyle.Fill;
-            lstFileTags.FullRowSelect = true;
-            lstFileTags.GridLines = true;
-            lstFileTags.Location = new Point(3, 41);
-            lstFileTags.Name = "lstFileTags";
-            lstFileTags.Size = new Size(480, 355);
-            lstFileTags.TabIndex = 1;
-            lstFileTags.UseCompatibleStateImageBehavior = false;
-            lstFileTags.View = View.Details;
-            // 
-            // pnlTagActions
-            // 
-            pnlTagActions.Controls.Add(btnDeleteTagged);
-            pnlTagActions.Controls.Add(btnMoveTagged);
-            pnlTagActions.Dock = DockStyle.Bottom;
-            pnlTagActions.FlowDirection = FlowDirection.RightToLeft;
-            pnlTagActions.Location = new Point(3, 396);
-            pnlTagActions.Name = "pnlTagActions";
-            pnlTagActions.Padding = new Padding(2);
-            pnlTagActions.Size = new Size(480, 42);
-            pnlTagActions.TabIndex = 2;
-            // 
-            // btnDeleteTagged
-            // 
-            btnDeleteTagged.Location = new Point(396, 5);
-            btnDeleteTagged.Margin = new Padding(3, 3, 3, 3);
-            btnDeleteTagged.Name = "btnDeleteTagged";
-            btnDeleteTagged.Size = new Size(78, 30);
-            btnDeleteTagged.TabIndex = 0;
-            btnDeleteTagged.Text = "🗑️ 删除选中";
-            btnDeleteTagged.Click += btnDeleteTagged_Click;
-            // 
-            // btnMoveTagged
-            // 
-            btnMoveTagged.Location = new Point(312, 5);
-            btnMoveTagged.Margin = new Padding(3, 3, 3, 3);
-            btnMoveTagged.Name = "btnMoveTagged";
-            btnMoveTagged.Size = new Size(78, 30);
-            btnMoveTagged.TabIndex = 1;
-            btnMoveTagged.Text = "📦 移动选中";
-            btnMoveTagged.Click += btnMoveTagged_Click;
             // 
             // tabAiPayload
             // 
@@ -595,7 +609,7 @@ namespace LearningAssistant.Forms.Pdf
             tabAiPayload.Location = new Point(4, 26);
             tabAiPayload.Name = "tabAiPayload";
             tabAiPayload.Padding = new Padding(3);
-            tabAiPayload.Size = new Size(486, 441);
+            tabAiPayload.Size = new Size(713, 387);
             tabAiPayload.TabIndex = 2;
             tabAiPayload.Text = "📤 AI 发送内容";
             tabAiPayload.UseVisualStyleBackColor = true;
@@ -608,14 +622,13 @@ namespace LearningAssistant.Forms.Pdf
             pnlAiPayloadActions.FlowDirection = FlowDirection.RightToLeft;
             pnlAiPayloadActions.Location = new Point(3, 3);
             pnlAiPayloadActions.Name = "pnlAiPayloadActions";
-            pnlAiPayloadActions.Padding = new Padding(2, 2, 2, 2);
-            pnlAiPayloadActions.Size = new Size(480, 36);
+            pnlAiPayloadActions.Padding = new Padding(2);
+            pnlAiPayloadActions.Size = new Size(707, 36);
             pnlAiPayloadActions.TabIndex = 0;
             // 
             // btnCopyAiPayload
             // 
-            btnCopyAiPayload.Location = new Point(394, 2);
-            btnCopyAiPayload.Margin = new Padding(3, 3, 3, 3);
+            btnCopyAiPayload.Location = new Point(616, 5);
             btnCopyAiPayload.Name = "btnCopyAiPayload";
             btnCopyAiPayload.Size = new Size(84, 28);
             btnCopyAiPayload.TabIndex = 1;
@@ -624,8 +637,7 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // btnOpenAiPanel
             // 
-            btnOpenAiPanel.Location = new Point(268, 2);
-            btnOpenAiPanel.Margin = new Padding(3, 3, 3, 3);
+            btnOpenAiPanel.Location = new Point(490, 5);
             btnOpenAiPanel.Name = "btnOpenAiPanel";
             btnOpenAiPanel.Size = new Size(120, 28);
             btnOpenAiPanel.TabIndex = 0;
@@ -636,12 +648,12 @@ namespace LearningAssistant.Forms.Pdf
             // 
             txtAiPayload.Dock = DockStyle.Fill;
             txtAiPayload.Font = new Font("Consolas", 9F);
-            txtAiPayload.Location = new Point(3, 39);
+            txtAiPayload.Location = new Point(3, 3);
             txtAiPayload.Multiline = true;
             txtAiPayload.Name = "txtAiPayload";
             txtAiPayload.ReadOnly = true;
             txtAiPayload.ScrollBars = ScrollBars.Both;
-            txtAiPayload.Size = new Size(480, 399);
+            txtAiPayload.Size = new Size(707, 381);
             txtAiPayload.TabIndex = 1;
             txtAiPayload.WordWrap = false;
             // 
@@ -653,10 +665,32 @@ namespace LearningAssistant.Forms.Pdf
             tabParseResult.Location = new Point(4, 26);
             tabParseResult.Name = "tabParseResult";
             tabParseResult.Padding = new Padding(3);
-            tabParseResult.Size = new Size(486, 441);
+            tabParseResult.Size = new Size(713, 387);
             tabParseResult.TabIndex = 3;
             tabParseResult.Text = "📥 解析AI结果";
             tabParseResult.UseVisualStyleBackColor = true;
+            // 
+            // txtAiResultInput
+            // 
+            txtAiResultInput.Dock = DockStyle.Fill;
+            txtAiResultInput.Font = new Font("Consolas", 9F);
+            txtAiResultInput.Location = new Point(3, 79);
+            txtAiResultInput.Multiline = true;
+            txtAiResultInput.Name = "txtAiResultInput";
+            txtAiResultInput.ScrollBars = ScrollBars.Both;
+            txtAiResultInput.Size = new Size(707, 305);
+            txtAiResultInput.TabIndex = 2;
+            txtAiResultInput.WordWrap = false;
+            // 
+            // lblParseHint
+            // 
+            lblParseHint.Dock = DockStyle.Top;
+            lblParseHint.Location = new Point(3, 39);
+            lblParseHint.Name = "lblParseHint";
+            lblParseHint.Padding = new Padding(4, 3, 4, 3);
+            lblParseHint.Size = new Size(707, 40);
+            lblParseHint.TabIndex = 1;
+            lblParseHint.Text = "将 AI 返回的 JSON 结果粘贴到下方（可包含 Markdown 代码块），支持中文 type 与常见字段别名。\r\n点击「解析并填充」后，整理建议与文件打标将自动生成，无需 AI API；可点「示例」查看格式。";
             // 
             // pnlParseActions
             // 
@@ -667,14 +701,13 @@ namespace LearningAssistant.Forms.Pdf
             pnlParseActions.FlowDirection = FlowDirection.RightToLeft;
             pnlParseActions.Location = new Point(3, 3);
             pnlParseActions.Name = "pnlParseActions";
-            pnlParseActions.Padding = new Padding(2, 2, 2, 2);
-            pnlParseActions.Size = new Size(480, 36);
+            pnlParseActions.Padding = new Padding(2);
+            pnlParseActions.Size = new Size(707, 36);
             pnlParseActions.TabIndex = 0;
             // 
             // btnParseAiResult
             // 
-            btnParseAiResult.Location = new Point(381, 2);
-            btnParseAiResult.Margin = new Padding(3, 3, 3, 3);
+            btnParseAiResult.Location = new Point(606, 5);
             btnParseAiResult.Name = "btnParseAiResult";
             btnParseAiResult.Size = new Size(94, 28);
             btnParseAiResult.TabIndex = 0;
@@ -683,80 +716,37 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // btnClearParseInput
             // 
-            btnClearParseInput.Location = new Point(300, 2);
-            btnClearParseInput.Margin = new Padding(3, 3, 3, 3);
+            btnClearParseInput.Location = new Point(522, 5);
             btnClearParseInput.Name = "btnClearParseInput";
             btnClearParseInput.Size = new Size(78, 28);
             btnClearParseInput.TabIndex = 1;
-            btnClearParseInput.Text = "🧹 清空";
+            btnClearParseInput.Text = "\U0001f9f9 清空";
             btnClearParseInput.Click += btnClearParseInput_Click;
             // 
             // btnSampleJson
             // 
-            btnSampleJson.Location = new Point(200, 2);
-            btnSampleJson.Margin = new Padding(3, 3, 3, 3);
+            btnSampleJson.Location = new Point(438, 5);
             btnSampleJson.Name = "btnSampleJson";
             btnSampleJson.Size = new Size(78, 28);
             btnSampleJson.TabIndex = 2;
             btnSampleJson.Text = "📄 示例";
             btnSampleJson.Click += btnSampleJson_Click;
             // 
-            // lblParseHint
-            // 
-            lblParseHint.Dock = DockStyle.Top;
-            lblParseHint.Location = new Point(3, 39);
-            lblParseHint.Name = "lblParseHint";
-            lblParseHint.Padding = new Padding(4, 3, 4, 3);
-            lblParseHint.Size = new Size(480, 40);
-            lblParseHint.TabIndex = 1;
-            lblParseHint.Text = "将 AI 返回的 JSON 结果粘贴到下方（可包含 Markdown 代码块），支持中文 type 与常见字段别名。\r\n点击「解析并填充」后，整理建议与文件打标将自动生成，无需 AI API；可点「示例」查看格式。";
-            // 
-            // txtAiResultInput
-            // 
-            txtAiResultInput.Dock = DockStyle.Fill;
-            txtAiResultInput.Font = new Font("Consolas", 9F);
-            txtAiResultInput.Location = new Point(3, 79);
-            txtAiResultInput.Multiline = true;
-            txtAiResultInput.Name = "txtAiResultInput";
-            txtAiResultInput.ScrollBars = ScrollBars.Both;
-            txtAiResultInput.Size = new Size(480, 359);
-            txtAiResultInput.TabIndex = 2;
-            txtAiResultInput.WordWrap = false;
-            // 
             // txtLog
             // 
             txtLog.Dock = DockStyle.Fill;
             txtLog.Font = new Font("Consolas", 9F);
-            txtLog.Location = new Point(11, 536);
+            txtLog.Location = new Point(11, 482);
             txtLog.Multiline = true;
             txtLog.Name = "txtLog";
             txtLog.ReadOnly = true;
             txtLog.ScrollBars = ScrollBars.Vertical;
-            txtLog.Size = new Size(1012, 134);
+            txtLog.Size = new Size(1466, 134);
             txtLog.TabIndex = 2;
-            // 
-            // splitContainer1
-            // 
-            splitContainer1.Dock = DockStyle.Fill;
-            splitContainer1.Location = new Point(0, 4);
-            splitContainer1.Name = "splitContainer1";
-            splitContainer1.Orientation = Orientation.Horizontal;
-            // 
-            // splitContainer1.Panel1
-            // 
-            splitContainer1.Panel1.Controls.Add(treeFolders);
-            // 
-            // splitContainer1.Panel2
-            // 
-            splitContainer1.Panel2.Controls.Add(txtSummary);
-            splitContainer1.Panel2.Controls.Add(pnlSummaryActions);
-            splitContainer1.Size = new Size(502, 471);
-            splitContainer1.SplitterDistance = 332;
-            splitContainer1.TabIndex = 3;
             // 
             // BaiduPanAnalysisForm
             // 
-            ClientSize = new Size(1034, 681);
+            ClientSize = new Size(1488, 627);
             Controls.Add(mainPanel);
             MinimumSize = new Size(900, 600);
             Name = "BaiduPanAnalysisForm";
@@ -772,22 +762,25 @@ namespace LearningAssistant.Forms.Pdf
             ((System.ComponentModel.ISupportInitialize)contentPanel).EndInit();
             contentPanel.ResumeLayout(false);
             leftPanel.ResumeLayout(false);
-            rightPanel.ResumeLayout(false);
-            tabControl.ResumeLayout(false);
-            tabRecommendations.ResumeLayout(false);
-            tabTags.ResumeLayout(false);
-            tabParseResult.ResumeLayout(false);
-            pnlParseActions.ResumeLayout(false);
-            pnlParseActions.PerformLayout();
-            pnlTagFilter.ResumeLayout(false);
-            pnlTagFilter.PerformLayout();
-            pnlTagActions.ResumeLayout(false);
-            pnlTagActions.PerformLayout();
             splitContainer1.Panel1.ResumeLayout(false);
             splitContainer1.Panel2.ResumeLayout(false);
             splitContainer1.Panel2.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)splitContainer1).EndInit();
             splitContainer1.ResumeLayout(false);
+            pnlSummaryActions.ResumeLayout(false);
+            rightPanel.ResumeLayout(false);
+            tabControl.ResumeLayout(false);
+            tabRecommendations.ResumeLayout(false);
+            tabTags.ResumeLayout(false);
+            pnlTagActions.ResumeLayout(false);
+            pnlTagFilter.ResumeLayout(false);
+            pnlTagFilter.PerformLayout();
+            tabAiPayload.ResumeLayout(false);
+            tabAiPayload.PerformLayout();
+            pnlAiPayloadActions.ResumeLayout(false);
+            tabParseResult.ResumeLayout(false);
+            tabParseResult.PerformLayout();
+            pnlParseActions.ResumeLayout(false);
             ResumeLayout(false);
         }
 

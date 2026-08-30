@@ -34,6 +34,8 @@ public partial class PanOrganizerForm : Form, IThemeable
    private List<PanTodoItem> _allTodos = new();
    private bool _isExecuting;
    private string _lastPulledPath = ""; // 最后一次输入的拉取路径（默认填空）
+   private int _sortColumn = -1;        // 上次点击排序列（-1 = 未排序）
+   private SortOrder _sortOrder = SortOrder.None;
    #endregion
 
    #region === 构造函数 ===
@@ -259,6 +261,7 @@ public partial class PanOrganizerForm : Form, IThemeable
            lstTodos.Columns.Add("源文件", 180);
            lstTodos.Columns.Add("目标/新名称", 180);
            lstTodos.Columns.Add("原因", 260);
+           lstTodos.ColumnClick += LstTodos_ColumnClick;
            tabTodos.Controls.Add(lstTodos);
 
            foreach (var rec in _initialRecommendations.Take(5))
@@ -1352,4 +1355,60 @@ public partial class PanOrganizerForm : Form, IThemeable
     }
     #endregion
     #endregion  // === P0.4: AI 待办执行 ===
+
+    #region === 列表排序 ===
+
+    /// <summary>
+    /// 点击列头排序
+    /// </summary>
+    private void LstTodos_ColumnClick(object? sender, ColumnClickEventArgs e)
+    {
+        if (sender is not ListView lstTodos) return;
+
+        // 点击同一列：切换排序方向；其他列：升序
+        if (e.Column == _sortColumn)
+            _sortOrder = _sortOrder == SortOrder.Ascending ? SortOrder.Descending : SortOrder.Ascending;
+        else
+        {
+            _sortColumn = e.Column;
+            _sortOrder = SortOrder.Ascending;
+        }
+
+        // 设置排序箭头指示
+        lstTodos.ListViewItemSorter = new ListViewItemComparer(e.Column, _sortOrder);
+    }
+
+    /// <summary>
+    /// ListView 列比较器（按指定列文本排序）
+    /// </summary>
+    private class ListViewItemComparer : System.Collections.IComparer
+    {
+        private readonly int _column;
+        private readonly SortOrder _order;
+
+        public ListViewItemComparer(int column, SortOrder order)
+        {
+            _column = column;
+            _order = order;
+        }
+
+        public int Compare(object? x, object? y)
+        {
+            if (x is not ListViewItem a || y is not ListViewItem b) return 0;
+
+            var textA = a.SubItems.Count > _column ? a.SubItems[_column].Text : "";
+            var textB = b.SubItems.Count > _column ? b.SubItems[_column].Text : "";
+
+            // 尝试按数字排序（如文件大小、数量）
+            if (long.TryParse(textA, out var numA) && long.TryParse(textB, out var numB))
+                return _order == SortOrder.Ascending ? numA.CompareTo(numB) : numB.CompareTo(numA);
+
+            // 默认按字符串排序
+            return _order == SortOrder.Ascending
+                ? string.Compare(textA, textB, StringComparison.CurrentCultureIgnoreCase)
+                : string.Compare(textB, textA, StringComparison.CurrentCultureIgnoreCase);
+        }
+    }
+
+    #endregion
 }

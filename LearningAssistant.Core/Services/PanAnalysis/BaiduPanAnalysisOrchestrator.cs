@@ -134,7 +134,7 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
         if (string.IsNullOrEmpty(token))
             throw new InvalidOperationException("Token 无效或已过期，请重新授权");
 
-        progress?.Report(new PanAnalysisProgress { Phase = PanAnalysisPhase.Fetching, Current = 5, Total = 100, Message = "正在遍历目录..." });
+        progress?.Report(new PanAnalysisProgress { Phase = PanAnalysisPhase.Fetching, Current = 5, Total = 100, Message = "正在准备遍历目录..." });
 
         // 遍历目录
         using var apiClient = new BaiduPanApiClient(token);
@@ -144,7 +144,7 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
         long totalSize = 0;
         int totalFiles = 0;
 
-        await foreach (var (file, depth) in TraverseDirectoryAsync(apiClient, rootPath, options.MaxDepth, linkedCts.Token))
+        await foreach (var (file, depth) in TraverseDirectoryAsync(apiClient, rootPath, options.MaxDepth, progress, totalFiles, linkedCts.Token))
         {
             if (file.IsDir == 1)
             {
@@ -157,8 +157,8 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
                 totalFiles++;
             }
 
-            // 进度报告
-            if (totalFiles % 500 == 0)
+            // 进度报告（每 100 个文件报告一次，降低首次反馈时间）
+            if (totalFiles % 100 == 0)
             {
                 var pct = Math.Min(10 + (int)((double)totalFiles / Math.Max(options.MaxFileCount, 1) * 70), 80);
                 progress?.Report(new PanAnalysisProgress { Phase = PanAnalysisPhase.Fetching, Current = pct, Total = 100, Message = $"已遍历 {totalFiles} 个文件..." });
@@ -399,20 +399,38 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
         BaiduPanApiClient apiClient,
         string path,
         int maxDepth,
+        IProgress<PanAnalysisProgress>? progress,
+        int? totalFiles,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var queue = new Queue<(string Path, int Depth)>();
         queue.Enqueue((path, 0));
+        var localFileCount = totalFiles ?? 0;
 
         while (queue.Count > 0 && (maxDepth == 0 || queue.Peek().Depth <= maxDepth))
         {
             var (currentPath, depth) = queue.Dequeue();
             cancellationToken.ThrowIfCancellationRequested();
 
+            // 报告当前正在遍历的目录
+            var dirName = string.IsNullOrEmpty(currentPath) || currentPath == "/"
+                ? "根目录"
+                : currentPath.TrimEnd('/').Split('/').LastOrDefault() ?? currentPath;
+            progress?.Report(new PanAnalysisProgress
+            {
+                Phase = PanAnalysisPhase.Fetching,
+                Current = 5,
+                Total = 100,
+                Message = $"正在遍历目录【{dirName}】..."
+            });
+
+            _logger?.LogInformation("开始遍历目录: {Path}, 深度={Depth}, 当前已发现文件数={Count}", currentPath, depth, localFileCount);
+
             // 分页拉取目录列表（百度 list 接口单次最多返回 1000 条）
             var start = 0;
             while (true)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var response = await apiClient.GetFileListAsync(currentPath, "name", 1, start, 1000);
                 if (response.ErrorCode != 0)
                 {
@@ -422,8 +440,12 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
                 if (response.FileList == null)
                     break;
 
+                var fileCount = response.FileList.Count;
+                _logger?.LogDebug("API 响应: 路径={Path}, start={Start}, 返回={Count} 个条目", currentPath, start, fileCount);
+
                 foreach (var file in response.FileList)
                 {
+                    localFileCount++;
                     yield return (file, depth);
 
                     if (file.IsDir == 1 && (maxDepth == 0 || depth < maxDepth))
@@ -432,11 +454,20 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
                     }
                 }
 
+                // 报告进度（每页报告一次，及时反馈）
+                progress?.Report(new PanAnalysisProgress
+                {
+                    Phase = PanAnalysisPhase.Fetching,
+                    Current = Math.Min(10 + (int)((double)localFileCount / Math.Max(1000, 1) * 70), 80),
+                    Total = 100,
+                    Message = $"已获取 {localFileCount} 个文件，正在遍历【{dirName}】..."
+                });
+
                 // 未取满一页说明已到末尾，结束当前目录分页
-                if (response.FileList.Count < 1000)
+                if (fileCount < 1000)
                     break;
 
-                start += response.FileList.Count;
+                start += fileCount;
                 await Task.Delay(200, cancellationToken);
             }
 
