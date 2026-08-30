@@ -21,7 +21,8 @@ namespace LearningAssistant.Managers
         LaserPointer,
         Checklist,
         ImageEmbed,
-        Spotlight
+        Spotlight,
+        Magnifier
     }
 
     public enum SelectionInteractionState
@@ -129,6 +130,8 @@ namespace LearningAssistant.Managers
         public Func<bool>? IsHighlightModeCallback { get; set; }
         public Action<Rectangle>? AddHighlightCallback { get; set; }
         public Action<Point>? AddTextCallback { get; set; }
+        /// <summary>放大镜模式下点击时触发，携带点击位置</summary>
+        public Action<Point>? ShowMagnifierCallback { get; set; }
         public Action<AnnotationText, int>? EditTextCallback { get; set; }
         /// <summary>拖拽高亮时触发，通知外部刷新高亮图层渲染</summary>
         public Action? UpdateHighlightLayerCallback { get; set; }
@@ -388,6 +391,10 @@ namespace LearningAssistant.Managers
                             _spotlightPosition = e.Location;
                             _form.PictureBoxPdf.Invalidate();
                             break;
+                        case AnnotationToolMode.Magnifier:
+                            _logger.LogInformation("MouseDown Left: Magnifier at {X},{Y}", e.Location.X, e.Location.Y);
+                            ShowMagnifierCallback?.Invoke(e.Location);
+                            return;
                     }
                     return;
                 }

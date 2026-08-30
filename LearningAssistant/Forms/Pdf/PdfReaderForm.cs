@@ -135,6 +135,7 @@ namespace LearningAssistant.Forms.Pdf
         private Button _buttonChecklistMode;
         private Button _buttonImageEmbedMode;
         private Button _buttonSpotlightMode;
+        private Button _buttonMagnifierMode;
         private Button _buttonStrokeStyleDot;
         private Button _buttonStrokeStyleArrow;
         //private Button _buttonFavoriteToolbar;
@@ -322,6 +323,7 @@ namespace LearningAssistant.Forms.Pdf
             _navigationManager.IsHighlightModeCallback = () => _highlightManager?.IsHighlightMode ?? true;
             _navigationManager.AddHighlightCallback = rect => _highlightManager?.AddHighlight(rect);
             _navigationManager.AddTextCallback = point => ShowTextAnnotationDialog(point);
+            _navigationManager.ShowMagnifierCallback = point => ShowMagnifier(point);
             _navigationManager.UpdateHighlightLayerCallback = () => _highlightManager?.UpdateHighlightLayer();
 
             // 标注选中事件：双击触发编辑，单击显示选中状态
@@ -404,7 +406,7 @@ namespace LearningAssistant.Forms.Pdf
                 _buttonMosaicMode, _buttonTextMode, _buttonStrikethroughMode, _buttonEraserMode,
                 _buttonUndoAnnotation, _buttonClearAllAnnotations, _buttonDashStyle,
                 _buttonToggleAnnotationLayer, _buttonChecklistMode, _buttonImageEmbedMode,
-                _buttonSpotlightMode, _buttonAskAi, _buttonTranslationToggle, _buttonCollapseNav,
+                _buttonSpotlightMode, _buttonMagnifierMode, _buttonAskAi, _buttonTranslationToggle, _buttonCollapseNav,
                 _buttonPrev, _buttonNext, _buttonZoomOut, _buttonZoomIn, _buttonResetView,
                 _buttonRotate, _buttonLockView, _buttonNightMode, _buttonDualPage, _buttonFullscreen,
                 _buttonTranslate, _buttonSpeakOriginal, _buttonSpeakTranslation, _buttonAddToLearningContent
@@ -521,7 +523,7 @@ namespace LearningAssistant.Forms.Pdf
                 _buttonMosaicMode, _buttonTextMode, _buttonStrikethroughMode,
                 _buttonUndoAnnotation, _buttonClearAllAnnotations, _buttonDashStyle,
                 _buttonToggleAnnotationLayer, _buttonChecklistMode, _buttonImageEmbedMode,
-                _buttonSpotlightMode, _buttonAskAi, _buttonTranslationToggle, _buttonCollapseNav
+                _buttonSpotlightMode, _buttonMagnifierMode, _buttonAskAi, _buttonTranslationToggle, _buttonCollapseNav
             };
         }
 
@@ -2685,6 +2687,11 @@ namespace LearningAssistant.Forms.Pdf
             SetAnnotationToolMode(AnnotationToolMode.Spotlight);
         }
 
+        private void ButtonMagnifierMode_Click(object? sender, EventArgs e)
+        {
+            SetAnnotationToolMode(AnnotationToolMode.Magnifier);
+        }
+
         private void ButtonStrokeStyleDot_Click(object? sender, EventArgs e)
         {
             _navigationManager?.SetStrokeStyle("DotLine");
@@ -2753,6 +2760,8 @@ namespace LearningAssistant.Forms.Pdf
             UpdateToolButtonState(_buttonTextMode, mode == AnnotationToolMode.Text);
             UpdateToolButtonState(_buttonPenMode, isPenMode);
             UpdateToolButtonState(_buttonStrikethroughMode, mode == AnnotationToolMode.Strikethrough);
+            UpdateToolButtonState(_buttonSpotlightMode, mode == AnnotationToolMode.Spotlight);
+            UpdateToolButtonState(_buttonMagnifierMode, mode == AnnotationToolMode.Magnifier);
             UpdatePenTypeButtonState();
 
             if (_highlightManager != null)
@@ -2859,6 +2868,27 @@ namespace LearningAssistant.Forms.Pdf
                     _logger.LogError(ex, "Error adding text annotation");
                 }
             }
+        }
+
+        private void ShowMagnifier(Point location)
+        {
+            if (_currentPageImage == null) return;
+
+            var imgRect = ToRectangle(GetImageDisplayRect());
+            float relX = (float)(location.X - imgRect.X) / imgRect.Width;
+            float relY = (float)(location.Y - imgRect.Y) / imgRect.Height;
+
+            relX = Math.Clamp(relX, 0, 1);
+            relY = Math.Clamp(relY, 0, 1);
+
+            int imgX = (int)(relX * _currentPageImage.Width);
+            int imgY = (int)(relY * _currentPageImage.Height);
+
+            var magnifier = new MagnifierForm(_currentPageImage, new Point(imgX, imgY));
+            magnifier.Location = new Point(
+                Math.Max(0, Math.Min(location.X - magnifier.Width / 2, Screen.PrimaryScreen.WorkingArea.Width - magnifier.Width)),
+                Math.Max(0, Math.Min(location.Y + 30, Screen.PrimaryScreen.WorkingArea.Height - magnifier.Height)));
+            magnifier.Show(this);
         }
 
         private void ButtonDualPage_Click(object? sender, EventArgs e)
@@ -4062,6 +4092,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonChecklistMode = new Button();
             _buttonImageEmbedMode = new Button();
             _buttonSpotlightMode = new Button();
+            _buttonMagnifierMode = new Button();
             _buttonEllipseMode = new Button();
             _buttonArrowMode = new Button();
             _buttonPenMode = new Button();
@@ -4259,6 +4290,7 @@ namespace LearningAssistant.Forms.Pdf
             _toolbarGroupTools.Controls.Add(_buttonChecklistMode);
             _toolbarGroupTools.Controls.Add(_buttonImageEmbedMode);
             _toolbarGroupTools.Controls.Add(_buttonSpotlightMode);
+            _toolbarGroupTools.Controls.Add(_buttonMagnifierMode);
             _toolbarGroupTools.Controls.Add(_buttonEllipseMode);
             _toolbarGroupTools.Controls.Add(_buttonArrowMode);
             _toolbarGroupTools.Controls.Add(_buttonPenMode);
@@ -4655,6 +4687,20 @@ namespace LearningAssistant.Forms.Pdf
             _toolTip.SetToolTip(_buttonSpotlightMode, "聚光灯 (K)");
             _buttonSpotlightMode.UseVisualStyleBackColor = false;
             _buttonSpotlightMode.Click += ButtonSpotlightMode_Click;
+            // 
+            // _buttonMagnifierMode
+            // 
+            _buttonMagnifierMode.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _buttonMagnifierMode.FlatStyle = FlatStyle.Flat;
+            _buttonMagnifierMode.Font = new Font("Microsoft YaHei UI", 10F);
+            _buttonMagnifierMode.Location = new Point(487, 2);
+            _buttonMagnifierMode.Name = "_buttonMagnifierMode";
+            _buttonMagnifierMode.Size = new Size(28, 31);
+            _buttonMagnifierMode.TabIndex = 25;
+            _buttonMagnifierMode.Text = "🔍";
+            _toolTip.SetToolTip(_buttonMagnifierMode, "放大镜 (L)");
+            _buttonMagnifierMode.UseVisualStyleBackColor = false;
+            _buttonMagnifierMode.Click += ButtonMagnifierMode_Click;
             // 
             // _buttonEllipseMode
             // 
