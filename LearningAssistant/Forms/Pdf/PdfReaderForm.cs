@@ -122,6 +122,7 @@ namespace LearningAssistant.Forms.Pdf
         private Button _buttonEllipseMode;
         private Button _buttonArrowMode;
         private Button _buttonPenMode;
+        private Button _buttonTemporaryPenMode;
         private Button _buttonMosaicMode;
         private Button _buttonStrikethroughMode;
         private Button _buttonCollapseNav;
@@ -402,7 +403,7 @@ namespace LearningAssistant.Forms.Pdf
             var tabStopButtons = new Control?[]
             {
                 _buttonHighlightMode, _buttonRectangleMode, _buttonEllipseMode,
-                _buttonArrowMode, _buttonPenMode, _buttonPenTypePencil, _buttonPenTypePen, _buttonPenTypeMarker,
+                _buttonArrowMode, _buttonPenMode, _buttonTemporaryPenMode, _buttonPenTypePencil, _buttonPenTypePen, _buttonPenTypeMarker,
                 _buttonMosaicMode, _buttonTextMode, _buttonStrikethroughMode, _buttonEraserMode,
                 _buttonUndoAnnotation, _buttonClearAllAnnotations, _buttonDashStyle,
                 _buttonToggleAnnotationLayer, _buttonChecklistMode, _buttonImageEmbedMode,
@@ -519,7 +520,7 @@ namespace LearningAssistant.Forms.Pdf
                 _buttonRotate, _buttonLockView, _buttonNightMode,
                 _buttonDualPage, _buttonFullscreen,
                 _buttonEraserMode, _buttonHighlightMode, _buttonRectangleMode, _buttonEllipseMode,
-                _buttonArrowMode, _buttonPenMode, _buttonPenTypePencil, _buttonPenTypePen, _buttonPenTypeMarker,
+                _buttonArrowMode, _buttonPenMode, _buttonTemporaryPenMode, _buttonPenTypePencil, _buttonPenTypePen, _buttonPenTypeMarker,
                 _buttonMosaicMode, _buttonTextMode, _buttonStrikethroughMode,
                 _buttonUndoAnnotation, _buttonClearAllAnnotations, _buttonDashStyle,
                 _buttonToggleAnnotationLayer, _buttonChecklistMode, _buttonImageEmbedMode,
@@ -2404,6 +2405,12 @@ namespace LearningAssistant.Forms.Pdf
             SetAnnotationToolMode(AnnotationToolMode.Pen);
         }
 
+        private void ButtonTemporaryPenMode_Click(object? sender, EventArgs e)
+        {
+            _navigationManager?.SetPenType("Pen");
+            SetAnnotationToolMode(AnnotationToolMode.TemporaryPen, isOneTime: true);
+        }
+
         private void ButtonStrikethroughMode_Click(object? sender, EventArgs e)
         {
             SetAnnotationToolMode(AnnotationToolMode.Strikethrough);
@@ -2448,8 +2455,17 @@ namespace LearningAssistant.Forms.Pdf
 
         private void SetAnnotationColor(Color color)
         {
-            _navigationManager?.SetPenColor(color);
-            UpdateAnnotationColorSelection(color);
+            // 临时笔模式使用独立的颜色，不影响普通画笔颜色
+            if (_navigationManager?.CurrentToolMode == AnnotationToolMode.TemporaryPen)
+            {
+                _navigationManager?.SetTemporaryPenColor(color);
+                UpdateAnnotationColorSelection(color);
+            }
+            else
+            {
+                _navigationManager?.SetPenColor(color);
+                UpdateAnnotationColorSelection(color);
+            }
         }
 
         private void UpdateAnnotationColorSelection(Color color)
@@ -2721,14 +2737,15 @@ namespace LearningAssistant.Forms.Pdf
             SetAnnotationToolMode(AnnotationToolMode.Eraser);
         }
 
-        private void SetAnnotationToolMode(AnnotationToolMode mode)
+        private void SetAnnotationToolMode(AnnotationToolMode mode, bool isOneTime = false)
         {
-            _navigationManager?.SetToolMode(mode);
+            _navigationManager?.SetToolMode(mode, isOneTime);
 
             bool showOptions = mode == AnnotationToolMode.Rectangle ||
                              mode == AnnotationToolMode.Ellipse ||
                              mode == AnnotationToolMode.Arrow ||
                              mode == AnnotationToolMode.Pen ||
+                             mode == AnnotationToolMode.TemporaryPen ||
                              mode == AnnotationToolMode.Mosaic ||
                              mode == AnnotationToolMode.Strikethrough;
             _lastToolModeNeedsOptions = showOptions;
@@ -2745,8 +2762,8 @@ namespace LearningAssistant.Forms.Pdf
                 SyncAnnotationOptionsToManager();
             }
 
-            // 画笔子类型按钮仅在 Pen 模式下可见
-            bool isPenMode = mode == AnnotationToolMode.Pen;
+            // 画笔子类型按钮在 Pen 和 TemporaryPen 模式下可见
+            bool isPenMode = mode == AnnotationToolMode.Pen || mode == AnnotationToolMode.TemporaryPen;
             if (_buttonPenTypePencil != null) _buttonPenTypePencil.Visible = isPenMode;
             if (_buttonPenTypePen != null) _buttonPenTypePen.Visible = isPenMode;
             if (_buttonPenTypeMarker != null) _buttonPenTypeMarker.Visible = isPenMode;
@@ -2758,7 +2775,8 @@ namespace LearningAssistant.Forms.Pdf
             UpdateToolButtonState(_buttonArrowMode, mode == AnnotationToolMode.Arrow);
             UpdateToolButtonState(_buttonMosaicMode, mode == AnnotationToolMode.Mosaic);
             UpdateToolButtonState(_buttonTextMode, mode == AnnotationToolMode.Text);
-            UpdateToolButtonState(_buttonPenMode, isPenMode);
+            UpdateToolButtonState(_buttonPenMode, mode == AnnotationToolMode.Pen);
+            UpdateToolButtonState(_buttonTemporaryPenMode, mode == AnnotationToolMode.TemporaryPen);
             UpdateToolButtonState(_buttonStrikethroughMode, mode == AnnotationToolMode.Strikethrough);
             UpdateToolButtonState(_buttonSpotlightMode, mode == AnnotationToolMode.Spotlight);
             UpdateToolButtonState(_buttonMagnifierMode, mode == AnnotationToolMode.Magnifier);
@@ -2769,6 +2787,12 @@ namespace LearningAssistant.Forms.Pdf
                 _highlightManager.IsHighlightMode = mode == AnnotationToolMode.Highlight;
             }
             _isHighlightMode = mode == AnnotationToolMode.Highlight;
+
+            // 进入临时笔模式时，同步颜色选择高亮显示为临时笔颜色
+            if (mode == AnnotationToolMode.TemporaryPen && _navigationManager != null)
+            {
+                UpdateAnnotationColorSelection(_navigationManager.TemporaryPenColor);
+            }
 
             UpdateStatusBar();
         }
@@ -3499,7 +3523,9 @@ namespace LearningAssistant.Forms.Pdf
         private void ButtonColorMore_Click(object? sender, EventArgs e)
         {
             using var colorDialog = new ColorDialog();
-            colorDialog.Color = _navigationManager?.PenColor ?? Color.Black;
+            colorDialog.Color = _navigationManager?.CurrentToolMode == AnnotationToolMode.TemporaryPen
+                ? (_navigationManager?.TemporaryPenColor ?? Color.Red)
+                : (_navigationManager?.PenColor ?? Color.Black);
             colorDialog.FullOpen = true;
             if (colorDialog.ShowDialog(this) == DialogResult.OK)
             {
@@ -4093,6 +4119,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonImageEmbedMode = new Button();
             _buttonSpotlightMode = new Button();
             _buttonMagnifierMode = new Button();
+            _buttonTemporaryPenMode = new Button();
             _buttonEllipseMode = new Button();
             _buttonArrowMode = new Button();
             _buttonPenMode = new Button();
@@ -4294,6 +4321,7 @@ namespace LearningAssistant.Forms.Pdf
             _toolbarGroupTools.Controls.Add(_buttonEllipseMode);
             _toolbarGroupTools.Controls.Add(_buttonArrowMode);
             _toolbarGroupTools.Controls.Add(_buttonPenMode);
+            _toolbarGroupTools.Controls.Add(_buttonTemporaryPenMode);
             _toolbarGroupTools.Controls.Add(_buttonMosaicMode);
             _toolbarGroupTools.Controls.Add(_buttonTextMode);
             _toolbarGroupTools.Controls.Add(_buttonUndoAnnotation);
@@ -4743,6 +4771,20 @@ namespace LearningAssistant.Forms.Pdf
             _toolTip.SetToolTip(_buttonPenMode, "画笔 (P)");
             _buttonPenMode.UseVisualStyleBackColor = false;
             _buttonPenMode.Click += ButtonPenMode_Click;
+            // 
+            // _buttonTemporaryPenMode
+            // 
+            _buttonTemporaryPenMode.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _buttonTemporaryPenMode.FlatStyle = FlatStyle.Flat;
+            _buttonTemporaryPenMode.Font = new Font("Microsoft YaHei UI", 10F);
+            _buttonTemporaryPenMode.Location = new Point(263, 2);
+            _buttonTemporaryPenMode.Name = "_buttonTemporaryPenMode";
+            _buttonTemporaryPenMode.Size = new Size(28, 31);
+            _buttonTemporaryPenMode.TabIndex = 26;
+            _buttonTemporaryPenMode.Text = "🖊";
+            _toolTip.SetToolTip(_buttonTemporaryPenMode, "临时笔 (一次性，笔迹2秒后自动消失)");
+            _buttonTemporaryPenMode.UseVisualStyleBackColor = false;
+            _buttonTemporaryPenMode.Click += ButtonTemporaryPenMode_Click;
             // 
             // _buttonMosaicMode
             // 

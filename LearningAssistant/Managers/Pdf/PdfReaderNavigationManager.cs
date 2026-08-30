@@ -14,6 +14,7 @@ namespace LearningAssistant.Managers
         Ellipse,
         Arrow,
         Pen,
+        TemporaryPen,
         Mosaic,
         Strikethrough,
         Text,
@@ -95,6 +96,16 @@ namespace LearningAssistant.Managers
         private bool _isLaserPointerActive = false;
         private Point _laserPointerPosition = Point.Empty;
 
+        // 一次性工具模式：工具使用完后自动恢复到默认模式
+        private bool _isOneTimeTool = false;
+        private AnnotationToolMode _defaultToolMode = AnnotationToolMode.None;
+
+        // 临时笔模式：绘制的笔迹暂时显示后自动消失
+        private List<PointF>? _temporaryPenPoints = null;
+        private int _temporaryPenPageIndex = -1;
+        private Color _temporaryPenColor = Color.Red;
+        private System.Windows.Forms.Timer? _temporaryPenClearTimer;
+
         private System.Windows.Forms.Timer? _clearPendingHighlightTimer;
 
         /// <summary>
@@ -108,6 +119,7 @@ namespace LearningAssistant.Managers
         public Point ImageOffset => _zoomController.ImageOffset;
         public AnnotationToolMode CurrentToolMode => _currentToolMode;
         public Color PenColor => _toolHandler.PenColor;
+        public Color TemporaryPenColor => _temporaryPenColor;
         public float PenWidth => _toolHandler.PenWidth;
         public bool IsDashed => _toolHandler.IsDashed;
         public string PenType => _toolHandler.PenType;
@@ -178,15 +190,17 @@ namespace LearningAssistant.Managers
             _toolHandler.ClientToImage = ClientToImage;
         }
 
-        public void SetToolMode(AnnotationToolMode mode)
+        public void SetToolMode(AnnotationToolMode mode, bool isOneTime = false)
         {
             _currentToolMode = mode;
+            _isOneTimeTool = isOneTime;
             _toolHandler.IsDrawing = false;
             _isSelecting = false;
             _toolHandler.CurrentStrokePoints = null;
             _isLaserPointerActive = (mode == AnnotationToolMode.LaserPointer);
             _spotlightActive = (mode == AnnotationToolMode.Spotlight);
             _selectionManager.ClearSelection();
+            ClearTemporaryPen();
 
             if (_form.PictureBoxPdf != null)
             {
@@ -196,9 +210,34 @@ namespace LearningAssistant.Managers
             _form.PictureBoxPdf.Invalidate();
         }
 
+        /// <summary>
+        /// 如果当前是一次性工具，完成操作后自动恢复到默认模式
+        /// </summary>
+        public void RevertIfOneTimeTool()
+        {
+            if (_isOneTimeTool)
+            {
+                _isOneTimeTool = false;
+                SetToolMode(_defaultToolMode);
+            }
+        }
+
+        /// <summary>
+        /// 设置默认工具模式（不触发工具切换，仅记录默认值）
+        /// </summary>
+        public void SetDefaultToolMode(AnnotationToolMode mode)
+        {
+            _defaultToolMode = mode;
+        }
+
         public void SetPenColor(Color color)
         {
             _toolHandler.SetPenColor(color);
+        }
+
+        public void SetTemporaryPenColor(Color color)
+        {
+            _temporaryPenColor = color;
         }
 
         public void SetPenWidth(float width)
@@ -339,6 +378,7 @@ namespace LearningAssistant.Managers
                             _form.PictureBoxPdf.Invalidate();
                             break;
                         case AnnotationToolMode.Pen:
+                        case AnnotationToolMode.TemporaryPen:
                             _logger.LogInformation("MouseDown Left: Starting pen drawing at {X},{Y}", e.Location.X, e.Location.Y);
                             EnsureAnnotationBitmap();
                             _toolHandler.BeginStroke(e.Location, _form.GetPageAtPoint(e.Location).pageIndex);
@@ -360,6 +400,7 @@ namespace LearningAssistant.Managers
                         case AnnotationToolMode.Mosaic:
                         case AnnotationToolMode.Checklist:
                             _logger.LogInformation("MouseDown Left: Starting shape drawing ({Mode}) at {X},{Y}", _currentToolMode, e.Location.X, e.Location.Y);
+                            EnsureAnnotationBitmap();
                             _toolHandler.BeginShape(e.Location, _form.GetPageAtPoint(e.Location).pageIndex);
                             _selectStart = e.Location;
                             _selectEnd = e.Location;
@@ -420,7 +461,7 @@ namespace LearningAssistant.Managers
                     _lastClickTime = now;
                     _lastClickLocation = e.Location;
 
-                    if (_currentToolMode == AnnotationToolMode.Pen || _currentToolMode == AnnotationToolMode.Strikethrough || _toolHandler.IsDrawing)
+                    if (_currentToolMode == AnnotationToolMode.Pen || _currentToolMode == AnnotationToolMode.TemporaryPen || _currentToolMode == AnnotationToolMode.Strikethrough || _toolHandler.IsDrawing)
                     {
                         _logger.LogInformation("MouseDown Right: Drawing mode, starting annotation");
                         _toolHandler.IsDrawing = true;
@@ -615,6 +656,15 @@ namespace LearningAssistant.Managers
                     _toolHandler.FinalizeStroke(_currentToolMode);
                     _form.PictureBoxPdf.Invalidate();
                     _form.HighlightManager?.RefreshHighlightList();
+
+                    // 临时笔模式：记录笔迹并启动定时清除
+                    if (_currentToolMode == AnnotationToolMode.TemporaryPen)
+                    {
+                        StartTemporaryPenClear();
+                    }
+
+                    // 一次性工具使用完成后自动恢复默认模式
+                    RevertIfOneTimeTool();
                     return;
                 }
 
@@ -671,6 +721,9 @@ namespace LearningAssistant.Managers
                     }
                     _form.PictureBoxPdf.Invalidate();
                     _form.HighlightManager?.RefreshHighlightList();
+
+                    // 一次性工具：形状绘制完成后自动恢复默认模式
+                    RevertIfOneTimeTool();
                     return;
                 }
 
@@ -1144,6 +1197,9 @@ namespace LearningAssistant.Managers
                     _toolHandler.DrawShapePreview(g, imgRect, pageIndex, srcImage, _currentToolMode);
                 }
 
+                // 绘制临时笔迹（叠加层，会在2秒后自动消失）
+                DrawTemporaryPen(g, imgRect, pageIndex);
+
                 // 绘制选中标注的视觉反馈（选中框 + 手柄）
                 _selectionManager.DrawSelectionVisual(g, imgRect, pageIndex);
 
@@ -1401,6 +1457,76 @@ namespace LearningAssistant.Managers
             }
         }
 
+        #region 临时笔（TemporaryPen）支持
+
+        /// <summary>
+        /// 启动临时笔迹清除定时器（2秒后自动清除临时笔迹）
+        /// </summary>
+        private void StartTemporaryPenClear()
+        {
+            // 记录当前笔迹点用于临时渲染
+            _temporaryPenPoints = _toolHandler.CurrentStrokePoints != null
+                ? new List<PointF>(_toolHandler.CurrentStrokePoints)
+                : null;
+            _temporaryPenPageIndex = _form.CurrentPageIndex;
+
+            // 启动定时器，2秒后清除临时笔迹
+            if (_temporaryPenClearTimer == null)
+            {
+                _temporaryPenClearTimer = new System.Windows.Forms.Timer();
+                _temporaryPenClearTimer.Tick += (s, e) =>
+                {
+                    ClearTemporaryPen();
+                    _form.PictureBoxPdf.Invalidate();
+                };
+            }
+            _temporaryPenClearTimer.Interval = 2000;
+            _temporaryPenClearTimer.Start();
+        }
+
+        /// <summary>
+        /// 清除临时笔迹
+        /// </summary>
+        private void ClearTemporaryPen()
+        {
+            if (_temporaryPenClearTimer != null)
+            {
+                _temporaryPenClearTimer.Stop();
+            }
+            _temporaryPenPoints = null;
+            _temporaryPenPageIndex = -1;
+        }
+
+        /// <summary>
+        /// 在图片上绘制临时笔迹（叠加层，不写入标注层）
+        /// </summary>
+        private void DrawTemporaryPen(Graphics g, Rectangle imgRect, int pageIndex)
+        {
+            if (_temporaryPenPoints == null || _temporaryPenPoints.Count < 2 || pageIndex != _temporaryPenPageIndex)
+                return;
+
+            var pen = _toolHandler.CreatePen(_temporaryPenColor, _toolHandler.PenWidth);
+            if (pen == null) return;
+
+            try
+            {
+                // 将图片坐标的笔迹点转换为屏幕坐标
+                float scaleX = (float)imgRect.Width / _form.CurrentPageImage!.Width;
+                float scaleY = (float)imgRect.Height / _form.CurrentPageImage.Height;
+
+                var screenPoints = _temporaryPenPoints.Select(pt =>
+                    new PointF(pt.X * scaleX + imgRect.X, pt.Y * scaleY + imgRect.Y)).ToArray();
+
+                g.DrawLines(pen, screenPoints);
+            }
+            finally
+            {
+                pen.Dispose();
+            }
+        }
+
+        #endregion
+
         public void Dispose()
         {
             Dispose(true);
@@ -1437,6 +1563,20 @@ namespace LearningAssistant.Managers
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Error disposing tool handler");
+                }
+
+                try
+                {
+                    if (_temporaryPenClearTimer != null)
+                    {
+                        _temporaryPenClearTimer.Stop();
+                        _temporaryPenClearTimer.Dispose();
+                        _temporaryPenClearTimer = null;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error disposing temporary pen timer");
                 }
             }
 

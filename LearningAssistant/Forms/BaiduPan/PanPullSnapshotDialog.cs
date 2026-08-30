@@ -1,6 +1,6 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 
-namespace LearningAssistant.Forms.Pdf;
+namespace LearningAssistant.Forms.BaiduPan;
 
 /// <summary>
 /// P1 独立入口：拉取快照参数对话框（路径 + 深度 + 文件上限 + 快速模式勾选）。

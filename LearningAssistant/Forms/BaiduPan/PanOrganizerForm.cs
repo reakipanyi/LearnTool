@@ -1032,10 +1032,35 @@ public partial class PanOrganizerForm : Form, IThemeable
            var progress = new Progress<PanExecutionProgress>(p => OnExecutionProgress(p));
            var cts = new CancellationTokenSource();
            var report = await _executionService!.ExecuteAsync(batches, _initialSnapshot!, progress, cts.Token);
+           ExecutedAny = true;
+
+           // 收集受影响目录，用于执行后刷新快照
+           var affectedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+           foreach (var batch in batches)
+           {
+               foreach (var item in batch.Items)
+               {
+                   if (!string.IsNullOrEmpty(item.SourcePath))
+                   {
+                       var dir = System.IO.Path.GetDirectoryName(item.SourcePath)?.Replace('\\', '/') ?? "/";
+                       if (string.IsNullOrEmpty(dir)) dir = "/";
+                       affectedDirs.Add(dir);
+                   }
+                   // 移动操作的目标目录也加入刷新
+                   if (item.Type == PanRecommendationType.Move && !string.IsNullOrEmpty(item.DestinationPath))
+                       affectedDirs.Add(item.DestinationPath.TrimEnd('/'));
+               }
+           }
+
+           // 刷新导航栏
            navigatorLeft.RefreshCurrent();
            navigatorRight.RefreshCurrent();
            LoadAllTodosToListView();
-           ExecutedAny = true;
+
+           // 异步拉取受影响目录的最新快照，更新现有快照
+           if (affectedDirs.Count > 0 && _orchestrator != null)
+               await RefreshSnapshotAfterExecution(affectedDirs);
+
            // P2-3: 执行完成后弹出 AI 总结
            var summary = _executionService.GenerateSummary(report);
            if (!string.IsNullOrEmpty(summary))
@@ -1054,6 +1079,103 @@ public partial class PanOrganizerForm : Form, IThemeable
            _isExecuting = false;
            btnExecuteTodos.Enabled = true;
        }
+   }
+
+   /// <summary>
+   /// 执行完成后，拉取受影响目录的最新快照并更新到现有快照中
+   /// </summary>
+   private async Task RefreshSnapshotAfterExecution(HashSet<string> affectedDirs)
+   {
+       try
+       {
+           if (_initialSnapshot == null || _orchestrator == null) return;
+
+           var rootPath = _initialSnapshot.DirectoryPath;
+           // 只刷新根目录下的子目录，避免跨根目录刷新
+           var dirsToRefresh = affectedDirs
+               .Where(d => d.StartsWith(rootPath, StringComparison.OrdinalIgnoreCase))
+               .Distinct(StringComparer.OrdinalIgnoreCase)
+               .Take(5) // 最多刷新 5 个目录，避免大量请求
+               .ToList();
+
+           if (dirsToRefresh.Count == 0) return;
+
+           AppendLog($"正在拉取 {dirsToRefresh.Count} 个受影响目录的最新快照...");
+
+           var options = new AnalysisOptions
+           {
+               MaxDepth = 1, // 只刷新当前层，不递归
+               MaxFileCount = 1000,
+               DetectDuplicates = false,
+               UseCache = false,
+               UseDiskCache = false
+           };
+
+           foreach (var dir in dirsToRefresh)
+           {
+               try
+               {
+                   var freshSnapshot = await _orchestrator.GetSnapshotAsync(dir, options);
+                   if (freshSnapshot?.Files == null) continue;
+
+                   // 从现有快照中移除该目录下的旧文件
+                   var prefix = dir.TrimEnd('/') + "/";
+                   _initialSnapshot.Files.RemoveAll(f =>
+                       f.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+
+                   // 添加新文件
+                   _initialSnapshot.Files.AddRange(freshSnapshot.Files);
+
+                   // 更新文件夹列表
+                   _initialSnapshot.Folders.RemoveAll(f =>
+                       f.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && f.Path != dir);
+                   if (freshSnapshot.Folders != null)
+                   {
+                       // 过滤掉根目录本身
+                       var newFolders = freshSnapshot.Folders
+                           .Where(f => !string.IsNullOrEmpty(f.RelativePath))
+                           .ToList();
+                       _initialSnapshot.Folders.AddRange(newFolders);
+                   }
+
+                   // 重新计算统计
+                   RecomputeSnapshotStats();
+
+                   AppendLog($"✅ 已刷新目录「{dir}」快照（{freshSnapshot.Files.Count} 个文件）");
+               }
+               catch (Exception ex)
+               {
+                   _logger?.LogWarning(ex, "刷新目录快照失败: {Dir}", dir);
+                   AppendLog($"⚠️ 刷新目录「{dir}」快照失败: {ex.Message}");
+               }
+           }
+
+           // 刷新 UI
+           navigatorLeft.RefreshCurrent();
+           navigatorRight.RefreshCurrent();
+       }
+       catch (Exception ex)
+       {
+           _logger?.LogWarning(ex, "RefreshSnapshotAfterExecution 异常");
+           AppendLog("⚠️ 执行后自动刷新快照时发生异常，请手动点击「📥 拉取快照」刷新");
+       }
+   }
+
+   /// <summary>
+   /// 重新计算快照统计信息
+   /// </summary>
+   private void RecomputeSnapshotStats()
+   {
+       if (_initialSnapshot == null) return;
+       var allFiles = _initialSnapshot.Files;
+       _initialSnapshot.Scope.TotalFileCount = allFiles.Count;
+       _initialSnapshot.Scope.TotalSizeBytes = allFiles.Sum(f => f.SizeBytes);
+       _initialSnapshot.Statistics = new PanStatistics
+       {
+           TotalFileCount = allFiles.Count,
+           TotalFolderCount = _initialSnapshot.Folders.Count,
+           TotalSizeBytes = allFiles.Sum(f => f.SizeBytes)
+       };
    }
 
    private void OnExecutionProgress(PanExecutionProgress p)

@@ -1,4 +1,4 @@
-﻿using LearningAssistant.Abstractions;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Models.Pdf;
 using Microsoft.Extensions.Logging;
 using System.Drawing.Drawing2D;
@@ -391,7 +391,8 @@ namespace LearningAssistant.Managers
 
         private void DrawArrowShape(Graphics g, Pen pen, PointF startPt, PointF endPt)
         {
-            if (StrokeStyle == "ArrowLine") pen.EndCap = LineCap.ArrowAnchor;
+            // 箭头模式始终显示箭头头，与预览保持一致
+            pen.EndCap = LineCap.ArrowAnchor;
             if (StrokeStyle == "DotLine") pen.DashStyle = DashStyle.Dot;
             g.DrawLine(pen, startPt, endPt);
         }
