@@ -26,7 +26,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\LearningAssistant\LearningAssistant.csproj" />
+    <ProjectReference Include="..\LearningAssistant\LearningAssistant.WinApp.csproj" />
   </ItemGroup>
 
 </Project>

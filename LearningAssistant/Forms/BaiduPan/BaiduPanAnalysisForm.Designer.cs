@@ -143,12 +143,12 @@ namespace LearningAssistant.Forms.Pdf
             topPanel.Controls.Add(chkDetectDuplicates);
             topPanel.Controls.Add(chkUseCache);
             topPanel.Controls.Add(btnPullSnapshot);
+            topPanel.Controls.Add(btnGoUp);
             topPanel.Controls.Add(btnAIAnalysis);
             topPanel.Controls.Add(btnClearSnapshot);
             topPanel.Controls.Add(btnCancel);
             topPanel.Controls.Add(btnExecute);
             topPanel.Controls.Add(btnOpenOrganizer);
-            topPanel.Controls.Add(btnGoUp);
             topPanel.Dock = DockStyle.Fill;
             topPanel.Location = new Point(11, 11);
             topPanel.Name = "topPanel";
@@ -234,7 +234,7 @@ namespace LearningAssistant.Forms.Pdf
             // btnAIAnalysis
             // 
             btnAIAnalysis.Enabled = false;
-            btnAIAnalysis.Location = new Point(740, 10);
+            btnAIAnalysis.Location = new Point(838, 10);
             btnAIAnalysis.Margin = new Padding(4);
             btnAIAnalysis.Name = "btnAIAnalysis";
             btnAIAnalysis.Size = new Size(90, 23);
@@ -245,7 +245,7 @@ namespace LearningAssistant.Forms.Pdf
             // btnClearSnapshot
             // 
             btnClearSnapshot.Enabled = false;
-            btnClearSnapshot.Location = new Point(838, 10);
+            btnClearSnapshot.Location = new Point(936, 10);
             btnClearSnapshot.Margin = new Padding(4);
             btnClearSnapshot.Name = "btnClearSnapshot";
             btnClearSnapshot.Size = new Size(90, 23);
@@ -256,7 +256,7 @@ namespace LearningAssistant.Forms.Pdf
             // btnCancel
             // 
             btnCancel.Enabled = false;
-            btnCancel.Location = new Point(936, 10);
+            btnCancel.Location = new Point(1034, 10);
             btnCancel.Margin = new Padding(4);
             btnCancel.Name = "btnCancel";
             btnCancel.Size = new Size(70, 23);
@@ -266,7 +266,7 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // btnExecute
             // 
-            btnExecute.Location = new Point(1014, 10);
+            btnExecute.Location = new Point(1112, 10);
             btnExecute.Margin = new Padding(4);
             btnExecute.Name = "btnExecute";
             btnExecute.Size = new Size(140, 23);
@@ -276,7 +276,7 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // btnOpenOrganizer
             // 
-            btnOpenOrganizer.Location = new Point(1162, 10);
+            btnOpenOrganizer.Location = new Point(1260, 10);
             btnOpenOrganizer.Margin = new Padding(4);
             btnOpenOrganizer.Name = "btnOpenOrganizer";
             btnOpenOrganizer.Size = new Size(93, 23);
@@ -287,7 +287,7 @@ namespace LearningAssistant.Forms.Pdf
             // btnGoUp
             // 
             btnGoUp.Enabled = false;
-            btnGoUp.Location = new Point(1263, 10);
+            btnGoUp.Location = new Point(740, 10);
             btnGoUp.Margin = new Padding(4);
             btnGoUp.Name = "btnGoUp";
             btnGoUp.Size = new Size(90, 23);

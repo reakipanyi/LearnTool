@@ -16,5 +16,7 @@ namespace LearningAssistant.Models.User
         public int GameRows { get; set; } = 5; // 游戏每组展示行数
         public int GameColumns { get; set; } = 8; // 游戏每组展示列数
         public bool SkipKnown { get; set; } = true; // 游戏换组时是否跳过已知项（false=加载所有）
+        public string GameContentMode { get; set; } = "SkipKnown"; // 游戏内容模式：SkipKnown / All / Range
+        public string GameRangeIds { get; set; } = ""; // 指定范围模式下选中的词条 Id（逗号分隔）
     }
 }

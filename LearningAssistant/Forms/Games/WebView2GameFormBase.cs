@@ -54,11 +54,22 @@ namespace LearningAssistant.Forms.Games
         protected virtual void OnTopPanelBuilt(Panel topPanel) { }
 
         /// <summary>是否跳过已知项（false=加载所有）；由前端"换一组"旁的单选按钮控制。</summary>
-        protected bool SkipKnown => _skipKnown;
+        protected bool SkipKnown => _contentMode == "SkipKnown";
 
         private int _gameRows = 5;
         private int _gameCols = 8;
-        private bool _skipKnown = true;
+
+        /// <summary>游戏内容模式：SkipKnown=跳过已知项，All=加载所有，Range=指定范围（只学勾选词条）。</summary>
+        private string _contentMode = "SkipKnown";
+
+        /// <summary>指定范围模式下勾选的词条 Id。</summary>
+        private readonly HashSet<string> _rangeIds = new();
+
+        /// <summary>
+        /// 指定范围模式下需仅使用的词条 Id；模式非 Range，或未勾选任何词条时返回 null（此时等同加载所有）。
+        /// </summary>
+        protected IReadOnlyCollection<string>? RangeOnlyIds() =>
+            _contentMode == "Range" && _rangeIds.Count > 0 ? new List<string>(_rangeIds) : null;
 
         /// <summary>当前游戏的科目上下文（开始游戏时构建，供 OnGameEnd 使用）。</summary>
         private LearningContext? _currentContext;
@@ -247,20 +258,22 @@ namespace LearningAssistant.Forms.Games
             }
         }
 
-        /// <summary>异步保存"跳过已知项"开关到用户设置。</summary>
-        private async Task PersistSkipKnownAsync(bool value)
+        /// <summary>异步保存"内容模式/指定范围勾选词条"到用户设置。</summary>
+        private async Task PersistContentModeAsync(string mode, IReadOnlyCollection<string> rangeIds)
         {
             try
             {
                 var userId = _userSessionService.CurrentUserId;
                 if (string.IsNullOrEmpty(userId)) return;
                 var settings = await _settingsService.LoadSettingsAsync(userId);
-                settings.SkipKnown = value;
+                settings.GameContentMode = mode;
+                settings.GameRangeIds = rangeIds == null ? "" : string.Join(",", rangeIds);
+                settings.SkipKnown = mode == "SkipKnown";
                 await _settingsService.SaveSettingsAsync(userId, settings);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "保存游戏跳过已知项配置失败");
+                _logger.LogError(ex, "保存游戏内容模式配置失败");
             }
         }
 
@@ -273,6 +286,25 @@ namespace LearningAssistant.Forms.Games
         /// 统计当前词库仍可学习的条目总数（供前端"总剩余"展示）。子类基于各自词库服务实现。
         /// </summary>
         protected virtual int CountRemainingTotal(LearningContext context) => 0;
+
+        /// <summary>
+        /// 构建"指定范围"模式可供勾选的词条列表（单词+释义），供前端选择要学习的条目。
+        /// </summary>
+        private object BuildSelectableItems(LearningContext context)
+        {
+            try
+            {
+                return _contentLoaderService.LoadItems(context)
+                    .Where(i => !string.IsNullOrWhiteSpace(i.MainContent) && i.Meaning != null && !string.IsNullOrWhiteSpace(i.Meaning.Content))
+                    .Select(i => new { i.Id, word = i.MainContent, meaning = i.Meaning!.Content })
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "构建指定范围可选列表失败");
+                return Array.Empty<object>();
+            }
+        }
 
         private void RefreshSubCategories()
         {
@@ -363,7 +395,12 @@ namespace LearningAssistant.Forms.Games
                 var settings = await _settingsService.LoadSettingsAsync(userId);
                 _gameRows = Math.Clamp(settings.GameRows, (int)_numRows.Minimum, (int)_numRows.Maximum);
                 _gameCols = Math.Clamp(settings.GameColumns, (int)_numCols.Minimum, (int)_numCols.Maximum);
-                _skipKnown = settings.SkipKnown;
+                _contentMode = settings.GameContentMode is "SkipKnown" or "All" or "Range"
+                    ? settings.GameContentMode
+                    : (settings.SkipKnown ? "SkipKnown" : "All");
+                _rangeIds.Clear();
+                foreach (var id in (settings.GameRangeIds ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    _rangeIds.Add(id);
 
                 _numRows.Value = _gameRows;
                 _numCols.Value = _gameCols;
@@ -484,7 +521,10 @@ namespace LearningAssistant.Forms.Games
                 {
                     rows = _gameRows,
                     cols = _gameCols,
-                    skipKnown = _skipKnown,
+                    skipKnown = SkipKnown,
+                    contentMode = _contentMode,
+                    rangeIds = _rangeIds.ToArray(),
+                    selectable = BuildSelectableItems(_currentContext),
                     totalRemaining = CountRemainingTotal(_currentContext)
                 }
             }, SerializerOptions);
@@ -533,14 +573,32 @@ namespace LearningAssistant.Forms.Games
                 {
                     StartGame();
                 }
-                // 前端"换一组"旁单选按钮：跳过已知项 / 加载所有
+                // 前端"换一组"旁单选按钮：跳过已知项 / 加载所有 / 指定范围
                 else if (type == "setting")
                 {
-                    if (root.TryGetProperty("skipKnown", out var skProp) &&
+                    var mode = root.TryGetProperty("mode", out var modeProp) ? modeProp.GetString() : null;
+                    if (mode is "SkipKnown" or "All" or "Range")
+                    {
+                        // 指定范围模式：更新勾选词条
+                        if (mode == "Range" && root.TryGetProperty("ids", out var idsProp) &&
+                            idsProp.ValueKind == JsonValueKind.Array)
+                        {
+                            _rangeIds.Clear();
+                            foreach (var id in idsProp.EnumerateArray())
+                            {
+                                var s = id.GetString();
+                                if (!string.IsNullOrWhiteSpace(s)) _rangeIds.Add(s);
+                            }
+                        }
+                        _contentMode = mode;
+                        _ = PersistContentModeAsync(_contentMode, _rangeIds);
+                    }
+                    // 兼容旧前端：仅携带 skipKnown 布尔
+                    else if (root.TryGetProperty("skipKnown", out var skProp) &&
                         (skProp.ValueKind == JsonValueKind.True || skProp.ValueKind == JsonValueKind.False))
                     {
-                        _skipKnown = skProp.ValueKind == JsonValueKind.True;
-                        _ = PersistSkipKnownAsync(_skipKnown);
+                        _contentMode = skProp.ValueKind == JsonValueKind.True ? "SkipKnown" : "All";
+                        _ = PersistContentModeAsync(_contentMode, _rangeIds);
                     }
                 }
                 // 前端监听器已就绪：若 init 已缓存且尚未发出，补发数据

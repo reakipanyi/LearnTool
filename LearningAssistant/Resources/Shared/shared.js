@@ -285,30 +285,142 @@
         // ==================== 设置同步 ====================
 
         /**
-         * 初始化"跳过已知项 / 加载所有"单选组（位于"换一组"旁）。
+         * 初始化"跳过已知项 / 加载所有 / 指定范围"单选组（位于"换一组"旁）。
+         * "指定范围"模式打开勾选弹窗，用户勾选要学习的词条。
          * @param groupId 单选组容器 id
-         * @param onChange 切换回调，参数为 boolean（true=跳过已知项）
-         * @returns {set} 用 set(meta.skipKnown) 同步前端初始状态
+         * @param onChange 切换回调 (mode, ids)：
+         *   mode = "skip" | "all" | "range"；ids 仅在 range 模式返回选中的词条 Id 数组
+         * @returns {{set: Function, rangeCount: Function}}
+         *   set(meta)：meta={contentMode, rangeIds, selectable}，用宿主数据同步前端初始状态
          */
         initSkipKnownRadios(groupId, onChange) {
             const group = document.getElementById(groupId);
-            if (!group) return { set() {} };
+            if (!group) return { set() {}, rangeCount() { return 0; } };
+            const self = this;
+
+            // 缓存后端下发的可选词条与当前已选项
+            if (!group._selectable) group._selectable = [];
+            if (!group._selectedIds) group._selectedIds = new Set();
+
             if (!group._bound) {
                 group._bound = true;
                 group.querySelectorAll('input[name="skipKnown"]').forEach((r) => {
                     r.addEventListener("change", () => {
-                        if (r.checked) onChange(r.value === "skip");
+                        if (!r.checked) return;
+                        if (r.value === "range") {
+                            self.openRangePicker(group, onChange);
+                        } else {
+                            onChange(r.value === "skip" ? "skip" : "all", []);
+                        }
                     });
                 });
             }
+
             return {
-                set(value) {
-                    const target = value ? "skip" : "all";
+                /** set(meta)：meta = { contentMode, rangeIds, selectable }。 */
+                set(meta) {
+                    if (!meta) return;
+                    group._selectable = Array.isArray(meta.selectable) ? meta.selectable : [];
+                    if (Array.isArray(meta.rangeIds)) group._selectedIds = new Set(meta.rangeIds);
+                    const mode = meta.contentMode === "Range" ? "range"
+                        : meta.contentMode === "All" ? "all" : "skip";
                     group.querySelectorAll('input[name="skipKnown"]').forEach((r) => {
-                        r.checked = r.value === target;
+                        r.checked = r.value === mode;
                     });
-                }
+                    self.updateRangeBadge(group);
+                },
+                rangeCount() { return group._selectedIds.size; }
             };
+        },
+
+        /** 更新"指定范围"标签旁已选数量角标（如 (5词)）。 */
+        updateRangeBadge(group) {
+            const n = (group._selectedIds || new Set()).size;
+            let badge = group.querySelector(".range-badge");
+            if (!badge) {
+                badge = document.createElement("span");
+                badge.className = "range-badge";
+                const rangeRadio = group.querySelector('input[name="skipKnown"][value="range"]');
+                const label = rangeRadio && rangeRadio.closest("label");
+                if (label) label.appendChild(badge);
+            }
+            badge.textContent = n > 0 ? `(${n})` : "";
+        },
+
+        /** 打开"指定范围"勾选弹窗；确定后回调 onChange("range", ids)。 */
+        openRangePicker(group, onChange) {
+            const list = group._selectable || [];
+            if (list.length === 0) {
+                this.toast("当前词库没有可选的单词", 1600);
+                return;
+            }
+            // 首次打开默认全选；之前确认过的保留上次勾选
+            if (group._selectedIds.size === 0) group._selectedIds = new Set(list.map((x) => x.id));
+            const selected = group._selectedIds;
+
+            const overlay = document.createElement("div");
+            overlay.className = "range-overlay";
+            const box = document.createElement("div");
+            box.className = "range-picker";
+            box.innerHTML =
+                '<div class="range-picker-head"><b>选择本次要学习的条目</b>' +
+                '<span class="range-picker-count"></span></div>' +
+                '<div class="range-picker-list"></div>' +
+                '<div class="range-picker-actions">' +
+                '<button type="button" class="btn range-btn" data-act="all">全选</button>' +
+                '<button type="button" class="btn range-btn" data-act="none">清空</button>' +
+                '<span class="range-picker-spacer"></span>' +
+                '<button type="button" class="btn range-btn primary" data-act="ok">确定</button>' +
+                '<button type="button" class="btn range-btn" data-act="cancel">取消</button></div>';
+
+            const listBox = box.querySelector(".range-picker-list");
+            const countEl = box.querySelector(".range-picker-count");
+
+            const updateCount = () => { countEl.textContent = `已选 ${selected.size} / ${list.length}`; };
+
+            const renderChecks = () => {
+                listBox.innerHTML = "";
+                list.forEach((x) => {
+                    const lab = document.createElement("label");
+                    lab.className = "range-item";
+                    lab.innerHTML = '<input type="checkbox" /><span class="range-item-word"></span>' +
+                        '<span class="range-item-mean"></span>';
+                    const cb = lab.querySelector("input");
+                    cb.checked = selected.has(x.id);
+                    lab.querySelector(".range-item-word").textContent = x.word || "";
+                    lab.querySelector(".range-item-mean").textContent = x.meaning || "";
+                    cb.addEventListener("change", () => {
+                        if (cb.checked) selected.add(x.id); else selected.delete(x.id);
+                        updateCount();
+                    });
+                    listBox.appendChild(lab);
+                });
+                updateCount();
+            };
+
+            box.querySelectorAll(".range-btn").forEach((btn) => {
+                btn.addEventListener("click", () => {
+                    const act = btn.getAttribute("data-act");
+                    if (act === "ok") {
+                        onChange("range", Array.from(selected));
+                        this.updateRangeBadge(group);
+                        overlay.remove();
+                    } else if (act === "cancel") {
+                        overlay.remove();
+                    } else if (act === "all") {
+                        list.forEach((x) => selected.add(x.id));
+                        renderChecks();
+                    } else if (act === "none") {
+                        selected.clear();
+                        renderChecks();
+                    }
+                });
+            });
+
+            overlay.appendChild(box);
+            overlay.addEventListener("click", (ev) => { if (ev.target === overlay) overlay.remove(); });
+            document.body.appendChild(overlay);
+            renderChecks();
         },
 
         /** 读取当前 meta 中的总剩余条目数（无 meta 时返回 0）。 */

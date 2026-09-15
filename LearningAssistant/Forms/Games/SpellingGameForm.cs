@@ -65,7 +65,8 @@ namespace LearningAssistant.Forms.Games
         protected override object? BuildData(LearningContext context, string themeName)
         {
             var items = _gameService.BuildItems(context, maxCount: MaxCountForGrid(), selection: WordSelection.WrongFirst,
-                excludeIds: SkipKnown ? ExcludeAnsweredCorrectIds() : null);
+                excludeIds: SkipKnown ? ExcludeAnsweredCorrectIds() : null,
+                onlyIds: RangeOnlyIds());
             if (items.Count == 0)
             {
                 MessageBox.Show("当前词库没有可用的单词，请先在「内容编辑」中添加内容。",
@@ -88,7 +89,7 @@ namespace LearningAssistant.Forms.Games
         }
 
         protected override int CountRemainingTotal(LearningContext context) =>
-            _gameService.CountRemaining(context, SkipKnown ? ExcludeAnsweredCorrectIds() : null);
+            _gameService.CountRemaining(context, SkipKnown ? ExcludeAnsweredCorrectIds() : null, onlyIds: RangeOnlyIds());
 
         protected override void OnGameEnd(JsonElement gameRoot, LearningContext context)
         {

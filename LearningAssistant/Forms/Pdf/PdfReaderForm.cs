@@ -4119,10 +4119,10 @@ namespace LearningAssistant.Forms.Pdf
             _buttonImageEmbedMode = new Button();
             _buttonSpotlightMode = new Button();
             _buttonMagnifierMode = new Button();
-            _buttonTemporaryPenMode = new Button();
             _buttonEllipseMode = new Button();
             _buttonArrowMode = new Button();
             _buttonPenMode = new Button();
+            _buttonTemporaryPenMode = new Button();
             _buttonMosaicMode = new Button();
             _buttonTextMode = new Button();
             _buttonUndoAnnotation = new Button();
@@ -4154,7 +4154,6 @@ namespace LearningAssistant.Forms.Pdf
             _buttonColorVioletRed = new Button();
             _buttonColorDodgerBlue = new Button();
             _buttonColorMore = new Button();
-            //_buttonColorWhite = new Button();
             _loadingIndicator = new LoadingIndicator();
             _statusBar = new Panel();
             _statusLabelLeft = new Label();
@@ -4341,7 +4340,7 @@ namespace LearningAssistant.Forms.Pdf
             panel2.Controls.Add(_buttonPenTypePen);
             panel2.Location = new Point(660, 38);
             panel2.Name = "panel2";
-            panel2.Size = new Size(103, 32);
+            panel2.Size = new Size(104, 32);
             panel2.TabIndex = 31;
             // 
             // _buttonPenTypePencil
@@ -4981,7 +4980,6 @@ namespace LearningAssistant.Forms.Pdf
             _panelColor.Controls.Add(_buttonColorVioletRed);
             _panelColor.Controls.Add(_buttonColorDodgerBlue);
             _panelColor.Controls.Add(_buttonColorMore);
-            // _panelColor.Controls.Add(_buttonColorWhite);
             _panelColor.Location = new Point(167, 6);
             _panelColor.Name = "_panelColor";
             _panelColor.Size = new Size(478, 27);
@@ -5106,13 +5104,6 @@ namespace LearningAssistant.Forms.Pdf
             _buttonColorMore.Text = "+";
             _buttonColorMore.UseVisualStyleBackColor = false;
             _buttonColorMore.Click += ButtonColorMore_Click;
-            // 
-            // _buttonColorWhite
-            // 
-            //_buttonColorWhite.Location = new Point(0, 0);
-            //_buttonColorWhite.Name = "_buttonColorWhite";
-            //_buttonColorWhite.Size = new Size(25, 25);
-            //_buttonColorWhite.TabIndex = 1;
             // 
             // _loadingIndicator
             // 

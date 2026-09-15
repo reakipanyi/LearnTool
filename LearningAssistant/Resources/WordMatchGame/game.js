@@ -252,11 +252,11 @@
         }
         // 总剩余条目数
         totalRemainingEl.textContent = GameUI.metaTotalRemaining(meta);
-        // "跳过已知项/加载所有"单选，切换时通知宿主保存
-        const skipRadio = GameUI.initSkipKnownRadios("skipKnownGroup", (skip) => {
-            GameUI.sendToHost({ type: "setting", skipKnown: skip });
+        // "跳过已知项/加载所有/指定范围"内容模式单选，切换时通知宿主保存
+        const skipRadio = GameUI.initSkipKnownRadios("skipKnownGroup", (mode, ids) => {
+            GameUI.sendToHost({ type: "setting", mode, ids });
         });
-        if (meta && typeof meta.skipKnown === "boolean") skipRadio.set(meta.skipKnown);
+        if (meta) skipRadio.set(meta);
 
         buildCards();
         renderBoard();

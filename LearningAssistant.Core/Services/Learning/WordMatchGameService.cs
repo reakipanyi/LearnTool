@@ -30,11 +30,13 @@ namespace LearningAssistant.Services.Learning
         /// <param name="maxCount">抽取条数。</param>
         /// <param name="selection">配牌策略，默认 <see cref="WordSelection.Random"/> 向后兼容。</param>
         /// <param name="excludeIds">需排除的词条 Id（本局已答对、换一组不再出现）；排除后无剩余则回退全量。</param>
+        /// <param name="onlyIds">指定范围模式：仅保留用户勾选的词条 Id（null 或不传时加载全部）。</param>
         public List<WordMatchItemDto> BuildItems(
             LearningContext context,
             int maxCount,
             WordSelection selection = WordSelection.Random,
-            IReadOnlyCollection<string>? excludeIds = null)
+            IReadOnlyCollection<string>? excludeIds = null,
+            IReadOnlyCollection<string>? onlyIds = null)
         {
             try
             {
@@ -56,6 +58,10 @@ namespace LearningAssistant.Services.Learning
                 List<Models.Learning.LearningItem> valid = ordered
                     .Where(i => !string.IsNullOrWhiteSpace(i.MainContent) && i.Meaning != null && !string.IsNullOrWhiteSpace(i.Meaning.Content))
                     .ToList();
+
+                // 指定范围模式：只保留用户勾选的词条；勾选为空视为加载全部（与加载所有一致）
+                if (onlyIds != null && onlyIds.Count > 0)
+                    valid = valid.Where(i => onlyIds.Contains(i.Id)).ToList();
 
                 // 排除「本局已答对」的词条（换一组不再出现）；若排除后无剩余，则回退全量避免误报词库为空
                 if (excludeIds != null && excludeIds.Count > 0)
@@ -89,7 +95,8 @@ namespace LearningAssistant.Services.Learning
         /// 统计当前词库中仍可学习的条目数（供前端展示"总剩余"）。
         /// 过滤逻辑与 <see cref="BuildItems"/> 保持一致；excludeIds 为空或排除后无剩余时按全量统计。
         /// </summary>
-        public int CountRemaining(LearningContext context, IReadOnlyCollection<string>? excludeIds = null)
+        public int CountRemaining(LearningContext context, IReadOnlyCollection<string>? excludeIds = null,
+            IReadOnlyCollection<string>? onlyIds = null)
         {
             try
             {
@@ -97,6 +104,9 @@ namespace LearningAssistant.Services.Learning
                 var valid = items
                     .Where(i => !string.IsNullOrWhiteSpace(i.MainContent) && i.Meaning != null && !string.IsNullOrWhiteSpace(i.Meaning.Content))
                     .ToList();
+
+                if (onlyIds != null && onlyIds.Count > 0)
+                    valid = valid.Where(i => onlyIds.Contains(i.Id)).ToList();
 
                 if (excludeIds != null && excludeIds.Count > 0)
                 {
