@@ -386,3 +386,14 @@ bin_verify/
 /isolate_tests.ps1
 _buildcheck/
 KnowledgeGraph/
+.trae/
+apm_modules/
+build_verify/
+/docs/MAUI ANDROID 安卓壳.txt
+/docs/MAUI_Android_安卓壳_实施方案 -deepseeek优化版.md
+/Keystore/sodx.keystore
+/Keystore/签名信息.txt
+/dlog/dlog.mmap
+/uplog/uplog.mmap
+/apm.yml
+/cert.pem
