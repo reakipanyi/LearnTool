@@ -198,6 +198,9 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
             Statistics = ComputeStatistics(allFiles, folders, options)
         };
 
+        // 逐个文件夹统计总大小/文件数/子文件夹数（自底向上聚合），写入快照供整理界面展示
+        ComputeFolderSizes(snapshot.Folders, snapshot.Files);
+
         // 重复检测
         if (options.DetectDuplicates)
         {
@@ -223,7 +226,10 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
 
     public void ReloadTokenState()
     {
-        // TokenManager 内部会重新加载配置
+        // 授权成功后 OAuth 流程会把新凭据写入共享的 CloudStorageConfig，
+        // 此处让 TokenManager 从配置重新加载，使 IsAvailable 反映最新凭据，
+        // 避免授权成功后再次点整理仍被判定为未授权。
+        _tokenManager.ReloadFromConfig();
     }
 
     public void ClearCache()
@@ -247,18 +253,22 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
     {
         try
         {
-            // 清除内存缓存
-            var cacheKey = $"pan_snapshot_{directoryPath}_{options.MaxDepth}_{options.MaxFileCount}";
-            _cache.Remove(cacheKey);
-            // 清除磁盘缓存
+            // 清除内存缓存（快照 key 含目录+参数，简单起见整体压缩；内存缓存分钟级，代价低）
+            if (_cache is MemoryCache mc)
+                mc.Compact(1.0);
+            // 清除磁盘缓存（仅该目录的历史快照文件，其他目录保留）
             var removed = _diskCache.ClearByPath(directoryPath, options);
-            _logger?.LogInformation("网盘快照缓存已清除：{Dir}（磁盘缓存{Removed}）", directoryPath, removed ? "已删除" : "未找到");
+            _logger?.LogInformation("网盘快照缓存已清除：{Dir}（删除 {Count} 个磁盘快照文件）", directoryPath, removed);
         }
         catch (Exception ex)
         {
             _logger?.LogWarning(ex, "清除指定路径网盘缓存时发生异常：{Dir}", directoryPath);
         }
     }
+
+    /// <summary>加载最近一次成功拉取的磁盘快照（可选按目录过滤），用于打开整理工具时自动恢复上次快照。</summary>
+    public PanDirectorySnapshot? LoadLatestSnapshot(string? directoryPath = null)
+        => _diskCache.LoadLatest(directoryPath);
 
     public async Task<PanExecutionReport> ExecuteRecommendationsAsync(
         List<PanRecommendation> recommendations,
@@ -498,6 +508,47 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
             IsJunkFile = IsJunkFile(file.ServerFileName ?? "", size),
             IsPotentialDuplicate = false
         };
+    }
+
+    /// <summary>
+    /// 快照拉取完成后，自底向上聚合每个文件夹的总大小 / 子孙文件数 / 直接子文件夹数。
+    /// 深度越大的目录先处理，把自身汇总到父目录，父目录再汇总自己，复杂度 O(文件数 + 文件夹数)。
+    /// </summary>
+    private static void ComputeFolderSizes(List<PanFolderInfo> folders, List<PanFileInfo> files)
+    {
+        if (folders == null || folders.Count == 0) return;
+
+        var sizeByDir = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var countByDir = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        // 每个目录的直接文件大小/数量
+        foreach (var file in files)
+        {
+            if (string.IsNullOrEmpty(file.Path)) continue;
+            var parent = GetParentApiPath(file.Path);
+            sizeByDir[parent] = sizeByDir.GetValueOrDefault(parent) + file.SizeBytes;
+            countByDir[parent] = countByDir.GetValueOrDefault(parent) + 1;
+        }
+
+        // 每个目录的直接子文件夹数
+        var subCountByParent = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var folder in folders)
+        {
+            var parent = GetParentApiPath(folder.Path);
+            subCountByParent[parent] = subCountByParent.GetValueOrDefault(parent) + 1;
+        }
+
+        // 深度从大到小：子目录先把自己汇总进父目录，父目录再读取（已含子孙）并继续向上聚合
+        foreach (var folder in folders.OrderByDescending(f => f.Depth))
+        {
+            folder.SizeBytes = sizeByDir.GetValueOrDefault(folder.Path);
+            folder.FileCount = countByDir.GetValueOrDefault(folder.Path);
+            folder.SubFolderCount = subCountByParent.GetValueOrDefault(folder.Path);
+
+            var parent = GetParentApiPath(folder.Path);
+            sizeByDir[parent] = sizeByDir.GetValueOrDefault(parent) + folder.SizeBytes;
+            countByDir[parent] = countByDir.GetValueOrDefault(parent) + folder.FileCount;
+        }
     }
 
     private PanFolderInfo MapToPanFolderInfo(BaseFileInfo folder, string rootPath)

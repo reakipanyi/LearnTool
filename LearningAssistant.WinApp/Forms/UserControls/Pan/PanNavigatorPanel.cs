@@ -266,6 +266,21 @@ public partial class PanNavigatorPanel : UserControl, IThemeable
    public void RefreshFileListOnly() { if (_snapshot != null) PopulateFileListFromSnapshot(CurrentPath); }
 
    public void RefreshCurrent() { if (_snapshot != null) LoadFromSnapshot(_snapshot, CurrentPath); }
+
+   /// <summary>清空当前快照展示（清除快照时调用），重置到空目录态。</summary>
+   public void ClearSnapshot()
+   {
+       try
+       {
+           _snapshot = null;
+           CurrentPath = "/";
+           lstFiles.BeginUpdate(); lstFiles.Items.Clear(); lstFiles.EndUpdate();
+           treeFolders.BeginUpdate(); treeFolders.Nodes.Clear(); treeFolders.EndUpdate();
+           cboPath.BeginUpdate(); cboPath.Items.Clear(); cboPath.Items.Add("/"); cboPath.SelectedIndex = 0; cboPath.EndUpdate();
+           DirectoryChanged?.Invoke(this, CurrentPath);
+       }
+       catch (Exception ex) { _logger?.LogWarning(ex, "ClearSnapshot 失败"); }
+   }
    #endregion
 
    #region === 路径比较辅助（解决 Ordinal 大小写敏感 + 尾斜杠不统一 导致的路径切换不刷新）===
@@ -711,7 +726,8 @@ public partial class PanNavigatorPanel : UserControl, IThemeable
                        IsFolder = true, SizeBytes = 0, Category = 6, FsId = -2
                    }
                };
-               item.SubItems.Add("-");
+               // 文件夹大小：拉取快照时已逐个聚合（含子孙文件），快速模式下为 0 显示 "-"
+               item.SubItems.Add(folder.SizeBytes > 0 ? folder.SizeFormatted : "-");
                item.SubItems.Add("文件夹");
                item.SubItems.Add("-");
                lstFiles.Items.Add(item);

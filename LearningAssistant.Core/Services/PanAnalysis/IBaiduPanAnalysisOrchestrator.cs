@@ -80,4 +80,7 @@ public interface IBaiduPanAnalysisOrchestrator
 
     /// <summary>清除指定路径的快照缓存（内存缓存 + 磁盘缓存）</summary>
     void ClearCacheByPath(string directoryPath, AnalysisOptions options);
+
+    /// <summary>加载最近一次成功拉取的磁盘快照（可选按目录过滤），用于打开整理工具时自动恢复上次快照</summary>
+    PanDirectorySnapshot? LoadLatestSnapshot(string? directoryPath = null);
 }

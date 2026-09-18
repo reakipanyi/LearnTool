@@ -77,6 +77,30 @@ public string Path { get; set; } = "";              // API 路径
 public string RelativePath { get; set; } = "";       // 相对于根目录
 public string Name { get; set; } = "";
 public int Depth { get; set; }
+
+/// <summary>文件夹总大小（字节，含所有子孙文件）。快照拉取完成后由本地聚合计算并写入快照文件。</summary>
+public long SizeBytes { get; set; }
+
+/// <summary>子孙文件总数（含子目录内的文件）</summary>
+public int FileCount { get; set; }
+
+/// <summary>直接子文件夹数</summary>
+public int SubFolderCount { get; set; }
+
+public string SizeFormatted => FormatFileSize(SizeBytes);
+
+private static string FormatFileSize(long bytes)
+{
+string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+double len = bytes;
+int order = 0;
+while (len >= 1024 && order < sizes.Length - 1)
+{
+order++;
+len /= 1024;
+}
+return $"{len:0.##} {sizes[order]}";
+}
 }
 
 /// <summary>

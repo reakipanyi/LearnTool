@@ -322,7 +322,34 @@ public partial class PanOrganizerForm : Form, IThemeable
         }
         else
         {
+            // 未传入快照：自动载入最近一次成功拉取的磁盘快照（历史快照）
+            TryAutoLoadLatestSnapshot();
             UpdateStatusPath();
+        }
+    }
+
+    /// <summary>打开整理工具时自动载入磁盘上最近一次成功拉取的快照，避免每次都要手动「📥 拉取快照」。</summary>
+    private void TryAutoLoadLatestSnapshot()
+    {
+        try
+        {
+            if (_orchestrator == null) return;
+            var latest = _orchestrator.LoadLatestSnapshot();
+            if (latest == null) return;
+
+            _initialSnapshot = latest;
+            var root = latest.DirectoryPath;
+            _leftPath = root; _rightPath = root;
+            navigatorLeft.LoadFromSnapshot(latest, root);
+            navigatorRight.LoadFromSnapshot(latest, root);
+            navigatorLeft.SnapshotRootPath = root;
+            navigatorRight.SnapshotRootPath = root;
+            SetFocusedPanel(navigatorLeft);
+            AppendLog($"📂 已自动载入上次快照：{root}，文件 {latest.Files.Count:N0} / 文件夹 {latest.Folders.Count:N0}（来源：磁盘历史快照）");
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning(ex, "自动载入上次快照失败");
         }
     }
 
@@ -1456,26 +1483,44 @@ public partial class PanOrganizerForm : Form, IThemeable
     }
     #endregion
 
-    #region === P2.1: 🗑️ 清除缓存 ===
+    #region === P2.1: 🗑️ 清除快照（仅当前目录，保留其他目录历史快照） ===
     private void btnClearCache_Click(object sender, EventArgs e)
     {
         if (_orchestrator == null)
         {
-            AppendLog("⚠️ 未接入编排器，无法清除缓存");
+            AppendLog("⚠️ 未接入编排器，无法清除快照");
             return;
         }
-        var confirm = MessageBox.Show("确定要清除所有网盘快照缓存吗？\n下次拉取快照将重新从 API 获取最新数据。",
-            "清除缓存", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        var targetPath = _initialSnapshot?.DirectoryPath;
+        if (string.IsNullOrEmpty(targetPath))
+            targetPath = _focusedPanel?.CurrentPath ?? "/";
+        var confirm = MessageBox.Show($"确定要清除当前目录「{targetPath}」的全部历史快照吗？\n其他目录的快照将保留。",
+            "清除快照", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
         if (confirm != DialogResult.Yes) return;
         try
         {
-            _orchestrator.ClearCache();
-            AppendLog("🗑️ 网盘缓存已清除（内存缓存 + 磁盘缓存）");
+            var options = new AnalysisOptions
+            {
+                MaxDepth = 2,
+                MaxFileCount = 3000,
+                UseCache = true,
+                UseDiskCache = true,
+                SkipFileSizeComputing = false
+            };
+            _orchestrator.ClearCacheByPath(targetPath, options);
+
+            // 同时清空当前展示的快照（与拉取入口状态保持一致）
+            _initialSnapshot = null;
+            navigatorLeft.ClearSnapshot();
+            navigatorRight.ClearSnapshot();
+            _leftPath = "/"; _rightPath = "/";
+            UpdateStatusPath();
+            AppendLog($"🗑️ 已清除「{targetPath}」的快照（仅当前目录，其他目录历史快照保留）");
         }
         catch (Exception ex)
         {
             _logger?.LogError(ex, "btnClearCache 失败");
-            AppendLog("❌ 清除缓存失败：" + ex.Message);
+            AppendLog("❌ 清除快照失败：" + ex.Message);
         }
     }
     #endregion

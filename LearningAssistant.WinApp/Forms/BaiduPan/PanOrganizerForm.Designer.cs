@@ -237,8 +237,8 @@ partial class PanOrganizerForm
        this.btnClearCache.Margin = new System.Windows.Forms.Padding(0, 2, 8, 2);
        this.btnClearCache.Name = "btnClearCache";
        this.btnClearCache.Size = new System.Drawing.Size(110, 26);
-       this.btnClearCache.Text = "🗑️ 清除缓存";
-       this.btnClearCache.ToolTipText = "清除所有网盘快照缓存（内存+磁盘），下次拉取将重新获取最新数据";
+       this.btnClearCache.Text = "🗑️ 清除快照";
+       this.btnClearCache.ToolTipText = "清除当前目录的全部历史快照（其他目录保留）";
        this.btnClearCache.Click += new System.EventHandler(this.btnClearCache_Click);
        //
        // splitMainBottom (上: 双栏浏览器, 下: Tab)
