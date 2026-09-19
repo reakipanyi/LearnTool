@@ -39,6 +39,9 @@ public class AnalysisOptions
 
     /// <summary>跳过文件大小相关计算（文件夹大小聚合 / 统计），大目录下可显著加速。默认：不跳过。</summary>
     public bool SkipFileSizeComputing { get; set; } = false;
+
+    /// <summary>仅拉取文件夹（不拉取文件条目），用于快速查看目录结构。默认：false。</summary>
+    public bool FoldersOnly { get; set; } = false;
 }
 
 /// <summary>

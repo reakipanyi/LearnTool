@@ -405,6 +405,8 @@
                         onChange("range", Array.from(selected));
                         this.updateRangeBadge(group);
                         overlay.remove();
+                        // 保存勾选后立即重新加载，让游戏只出选中的词条
+                        this.sendToHost({ type: "restart" });
                     } else if (act === "cancel") {
                         overlay.remove();
                     } else if (act === "all") {

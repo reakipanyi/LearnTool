@@ -144,7 +144,7 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
         long totalSize = 0;
         int totalFiles = 0;
 
-        await foreach (var (file, depth) in TraverseDirectoryAsync(apiClient, rootPath, options.MaxDepth, progress, totalFiles, linkedCts.Token))
+        await foreach (var (file, depth) in TraverseDirectoryAsync(apiClient, rootPath, options.MaxDepth, progress, totalFiles, linkedCts.Token, options.FoldersOnly))
         {
             if (file.IsDir == 1)
             {
@@ -193,7 +193,7 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
                 MaxDepth = options.MaxDepth,
                 MaxFileCount = options.MaxFileCount
             },
-            IsComplete = options.MaxFileCount <= 0 || allFiles.Count < options.MaxFileCount,
+            IsComplete = options.FoldersOnly || options.MaxFileCount <= 0 || allFiles.Count < options.MaxFileCount,
             Source = PanSnapshotSource.Api,
             Statistics = ComputeStatistics(allFiles, folders, options)
         };
@@ -411,7 +411,8 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
         int maxDepth,
         IProgress<PanAnalysisProgress>? progress,
         int? totalFiles,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
+        [EnumeratorCancellation] CancellationToken cancellationToken,
+        bool foldersOnly = false)
     {
         var queue = new Queue<(string Path, int Depth)>();
         queue.Enqueue((path, 0));
@@ -455,6 +456,10 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
 
                 foreach (var file in response.FileList)
                 {
+                    // 仅拉取文件夹：跳过文件条目（不 yield、不计数），只保留文件夹用于下钻
+                    if (foldersOnly && file.IsDir != 1)
+                        continue;
+
                     localFileCount++;
                     yield return (file, depth);
 
