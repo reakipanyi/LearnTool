@@ -88,7 +88,10 @@ public class PanSnapshotCacheService
                         continue;   // 过期：命中下一个更早的快照；全部过期则返回 null 走 API
 
                     var snapshot = Deserialize(path);
-                    if (snapshot == null || !PathEqualsIgnoreCase(snapshot.DirectoryPath, directoryPath)) continue;
+                    if (snapshot == null
+                        || !PathEqualsIgnoreCase(snapshot.DirectoryPath, directoryPath)
+                        || snapshot.IsFoldersOnly != options.FoldersOnly)   // 区分「仅文件夹/完整」快照，避免串用
+                        continue;
                     snapshot.Source = PanSnapshotSource.DiskCache;
                     _logger?.LogInformation("使用磁盘快照缓存：{Dir}（{Count} 个文件）", directoryPath, snapshot.Files.Count);
                     return snapshot;

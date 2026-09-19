@@ -63,6 +63,9 @@ public List<PanDuplicateGroup> Duplicates { get; set; } = new();
 /// <summary>快照是否完整（达到文件数上限被截断时为 false）</summary>
 public bool IsComplete { get; set; }
 
+/// <summary>是否仅拉取文件夹的快照（无文件条目）。用于区分「仅文件夹」与「完整」快照，避免缓存串用。</summary>
+public bool IsFoldersOnly { get; set; }
+
 /// <summary>快照来源（标记是 API 拉取/内存缓存/磁盘缓存命中）</summary>
 [Newtonsoft.Json.JsonIgnore]
 public PanSnapshotSource Source { get; set; } = PanSnapshotSource.Api;

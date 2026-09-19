@@ -1346,10 +1346,12 @@ public partial class PanOrganizerForm : Form, IThemeable
                 UseCache = true,
                 UseDiskCache = true,
                 DiskCacheExpirationHours = 24,
-                SkipFileSizeComputing = form.SkipSizeComputing
+                SkipFileSizeComputing = form.SkipSizeComputing,
+                FoldersOnly = form.FoldersOnly
             };
             Text = "🧰 网盘整理工具（拉取快照中...）";
             AppendLog("📥 开始拉取快照：" + directoryPath + " （深度=" + options.MaxDepth + "，上限=" + options.MaxFileCount.ToString("N0") + "，"
+                    + (options.FoldersOnly ? "仅拉取文件夹=✅" : "")
                     + (options.SkipFileSizeComputing ? "快速模式=✅ 跳过大小/重复" : "完整模式=含大小/重复检测") + "）");
             btnPullSnapshot.Enabled = false;
 

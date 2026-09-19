@@ -107,18 +107,20 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
         IProgress<PanAnalysisProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        // 缓存 key 需区分「仅文件夹 / 完整」，避免两类快照串用
+        var cacheKey = BuildSnapshotCacheKey(directoryPath, options);
+
         // 1. 尝试磁盘缓存
         var diskHit = _diskCache.TryLoad(directoryPath, options);
         if (diskHit != null)
         {
             if (options.UseCache)
-                _cache.Set($"pan_snapshot_{directoryPath}_{options.MaxDepth}_{options.MaxFileCount}", diskHit, TimeSpan.FromMinutes(options.CacheExpirationMinutes));
+                _cache.Set(cacheKey, diskHit, TimeSpan.FromMinutes(options.CacheExpirationMinutes));
             progress?.Report(new PanAnalysisProgress { Phase = PanAnalysisPhase.Completed, Current = 100, Total = 100, Message = "使用磁盘缓存快照" });
             return diskHit;
         }
 
         // 2. 尝试内存缓存
-        var cacheKey = $"pan_snapshot_{directoryPath}_{options.MaxDepth}_{options.MaxFileCount}";
         if (options.UseCache && _cache.TryGetValue(cacheKey, out PanDirectorySnapshot? cached) && cached != null)
         {
             progress?.Report(new PanAnalysisProgress { Phase = PanAnalysisPhase.Completed, Current = 100, Total = 100, Message = "使用内存缓存快照" });
@@ -195,6 +197,7 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
             },
             IsComplete = options.FoldersOnly || options.MaxFileCount <= 0 || allFiles.Count < options.MaxFileCount,
             Source = PanSnapshotSource.Api,
+            IsFoldersOnly = options.FoldersOnly,
             Statistics = ComputeStatistics(allFiles, folders, options)
         };
 
@@ -601,6 +604,10 @@ public class BaiduPanAnalysisOrchestrator : IBaiduPanAnalysisOrchestrator
             .Where(f => childCountByDir.GetValueOrDefault(f.Path ?? "") > 0)
             .ToList();
     }
+
+    /// <summary>快照缓存 key（区分「仅文件夹 / 完整」，避免两类快照串用）</summary>
+    private static string BuildSnapshotCacheKey(string directoryPath, AnalysisOptions options)
+        => $"pan_snapshot_{directoryPath}_{options.MaxDepth}_{options.MaxFileCount}_{(options.FoldersOnly ? "folders" : "all")}";
 
     /// <summary>返回网盘 API 路径的直接父目录（顶层时返回 "/"）</summary>
     private static string GetParentApiPath(string path)

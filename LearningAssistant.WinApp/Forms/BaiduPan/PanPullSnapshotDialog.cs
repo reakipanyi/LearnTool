@@ -12,6 +12,7 @@ public class PanPullSnapshotDialog : Form
     private readonly NumericUpDown _numDepth;
     private readonly NumericUpDown _numMaxFiles;
     private readonly CheckBox _chkSkipSize;
+    private readonly CheckBox _chkFoldersOnly;
     private readonly Button _btnOk;
     private readonly Button _btnCancel;
 
@@ -19,6 +20,7 @@ public class PanPullSnapshotDialog : Form
     public int MaxDepth => (int)_numDepth.Value;
     public int MaxFileCount => (int)_numMaxFiles.Value;
     public bool SkipSizeComputing => _chkSkipSize.Checked;
+    public bool FoldersOnly => _chkFoldersOnly.Checked;
 
     public PanPullSnapshotDialog(string? defaultPath = null)
     {
@@ -28,7 +30,7 @@ public class PanPullSnapshotDialog : Form
         StartPosition = FormStartPosition.CenterParent;
         MaximizeBox = false;
         MinimizeBox = false;
-        Size = new Size(520, 250);
+        Size = new Size(520, 290);
 
         var lbl = new Label
         {
@@ -87,17 +89,30 @@ public class PanPullSnapshotDialog : Form
                 : "📊 完整模式：包含大小统计+重复检测（耗时更久）";
         };
 
+        _chkFoldersOnly = new CheckBox
+        {
+            Text = "📁 仅拉取文件夹：只获取目录结构，不拉取文件（最快）",
+            AutoSize = true,
+            Location = new Point(14, 170)
+        };
+        // 勾选「仅拉取文件夹」时自动禁用快速模式（文件夹无需大小统计）
+        _chkFoldersOnly.CheckedChanged += (_, _) =>
+        {
+            _chkSkipSize.Enabled = !_chkFoldersOnly.Checked;
+            if (_chkFoldersOnly.Checked) _chkSkipSize.Checked = true;
+        };
+
         _btnOk = new Button
         {
             Text = "开始拉取", Size = new Size(120, 32),
-            Location = new Point(240, 180), DialogResult = DialogResult.OK,
+            Location = new Point(240, 208), DialogResult = DialogResult.OK,
             BackColor = Color.FromArgb(66, 133, 244), ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat, Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold)
         };
         _btnCancel = new Button
         {
             Text = "取消", Size = new Size(90, 32),
-            Location = new Point(370, 180), DialogResult = DialogResult.Cancel
+            Location = new Point(370, 208), DialogResult = DialogResult.Cancel
         };
         AcceptButton = _btnOk;
         CancelButton = _btnCancel;
@@ -120,6 +135,7 @@ public class PanPullSnapshotDialog : Form
         Controls.Add(_numMaxFiles);
         Controls.Add(tipMax);
         Controls.Add(_chkSkipSize);
+        Controls.Add(_chkFoldersOnly);
         Controls.Add(_btnOk);
         Controls.Add(_btnCancel);
     }
