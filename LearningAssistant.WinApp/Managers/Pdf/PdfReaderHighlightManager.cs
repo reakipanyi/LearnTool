@@ -262,121 +262,30 @@ namespace LearningAssistant.Managers
         private async Task AddHighlightFromSelectionAsync(Rectangle selectionRect)
         {
             Bitmap? pageImageCopy = null;
-            int targetPageIndex = 0;
-            Rectangle imgRect = Rectangle.Empty;
-            string currentPdfPath = string.Empty;
-            HighlightColor currentHighlightColor = CurrentHighlightColor;
+            string currentPdfPath = _form.CurrentPdfPath;
 
             try
             {
-                // 在异步操作开始前捕获所有必要状态，避免竞态条件
-                currentPdfPath = _form.CurrentPdfPath;
-                
-                var centerPoint = new Point(selectionRect.X + selectionRect.Width / 2, selectionRect.Y + selectionRect.Height / 2);
-                var (pageIndex, rect, pageImage) = _form.GetPageAtPoint(centerPoint);
-                
-                targetPageIndex = pageIndex;
-                imgRect = rect;
-
-                _logger.LogInformation("AddHighlightFromSelectionAsync: PdfPath={Path}, PageIndex={Page}, ImageSize={Width}x{Height}",
-                    currentPdfPath, targetPageIndex, pageImage?.Width, pageImage?.Height);
-
-                if (pageImage == null || string.IsNullOrEmpty(currentPdfPath))
-                {
-                    _logger.LogWarning("AddHighlightFromSelectionAsync: targetPageImage or currentPdfPath is null");
+                // 解析鼠标选中位置对应的 PDF 页面及图片，并创建图片副本防止异步期间被释放
+                if (!TryGetSelectionPage(selectionRect, currentPdfPath, out int targetPageIndex, out Rectangle imgRect, out pageImageCopy))
                     return;
-                }
 
-                // 创建图片副本，防止异步操作期间原始图片被释放
-                pageImageCopy = new Bitmap(pageImage);
-
-                _logger.LogInformation("AddHighlightFromSelectionAsync: imgRect={X},{Y} {Width}x{Height}",
-                    imgRect.X, imgRect.Y, imgRect.Width, imgRect.Height);
-
-                if (imgRect.Width <= 0 || imgRect.Height <= 0)
-                {
-                    _logger.LogWarning("AddHighlightFromSelectionAsync: imgRect has invalid size");
+                // 将屏幕选中矩形换算为标准化（0-1）的 PDF 坐标
+                if (!TryComputeNormalizedRect(selectionRect, imgRect, pageImageCopy, out RectangleF normalizedRect))
                     return;
-                }
-
-                int originalWidth = pageImageCopy.Width;
-                int originalHeight = pageImageCopy.Height;
-
-                float scaleX = (float)originalWidth / imgRect.Width;
-                float scaleY = (float)originalHeight / imgRect.Height;
-
-                float x = Math.Max(0, (selectionRect.X - imgRect.X) * scaleX);
-                float y = Math.Max(0, (selectionRect.Y - imgRect.Y) * scaleY);
-                float width = Math.Min(selectionRect.Width * scaleX, originalWidth - x);
-                float height = Math.Min(selectionRect.Height * scaleY, originalHeight - y);
-
-                var normalizedRect = new RectangleF(
-                    x / originalWidth,
-                    y / originalHeight,
-                    width / originalWidth,
-                    height / originalHeight
-                );
-
-                _logger.LogInformation("AddHighlightFromSelectionAsync: normalizedRect={X},{Y} {Width}x{Height}",
-                    normalizedRect.X, normalizedRect.Y, normalizedRect.Width, normalizedRect.Height);
-
-                if (normalizedRect.Width < 0.001f || normalizedRect.Height < 0.001f)
-                {
-                    _logger.LogWarning("AddHighlightFromSelectionAsync: normalizedRect too small");
-                    return;
-                }
 
                 // 使用图片副本进行OCR识别
                 string ocrText = await GetOcrTextFromSelectionAsync(selectionRect, pageImageCopy, imgRect);
 
-                if (string.IsNullOrEmpty(ocrText))
-                {
-                    if (_form.Presenter != null && !_form.Presenter.IsOcrAvailable())
-                    {
-                        _form.ShowWarning("OCR服务不可用，无法识别文字。\n请检查 tessdata 目录和语言数据文件是否存在。");
-                    }
-                }
+                HandleOcrUnavailable(ocrText);
 
-                var highlight = new PdfHighlight
-                {
-                    PdfPath = currentPdfPath,
-                    PageIndex = targetPageIndex,
-                    NormalizedX = normalizedRect.X,
-                    NormalizedY = normalizedRect.Y,
-                    NormalizedWidth = normalizedRect.Width,
-                    NormalizedHeight = normalizedRect.Height,
-                    Text = ocrText,
-                    Color = currentHighlightColor,
-                    CreatedAt = DateTime.Now
-                };
-
-                var highlightId = await _highlightService.AddHighlightAsync(
-                    currentPdfPath,
-                    targetPageIndex,
-                    normalizedRect.X,
-                    normalizedRect.Y,
-                    normalizedRect.Width,
-                    normalizedRect.Height,
-                    ocrText,
-                    currentHighlightColor
-                );
-
-                highlight.Id = highlightId;
-
-                PushUndoAction(new HighlightUndoAction
-                {
-                    ActionType = HighlightActionType.Add,
-                    Highlight = highlight
-                });
+                // 落库保存高亮并记录撤销动作
+                var highlight = await PersistHighlightAsync(currentPdfPath, targetPageIndex, normalizedRect, ocrText, CurrentHighlightColor);
 
                 _logger.LogInformation("AddHighlightFromSelectionAsync: RefreshHighlightList and UpdateHighlightLayer");
-                
+
                 // 检查当前页面是否仍然是目标页面，防止页面已切换
-                bool isTargetPageVisible = _form.CurrentPdfPath == currentPdfPath &&
-                    (_form.CurrentPageIndex == targetPageIndex || 
-                     (_form.IsDualPage && _form.CurrentPageIndex + 1 == targetPageIndex));
-                
-                if (isTargetPageVisible)
+                if (IsTargetPageVisible(currentPdfPath, targetPageIndex))
                 {
                     RefreshHighlightList();
                     UpdateHighlightLayer();
@@ -384,32 +293,11 @@ namespace LearningAssistant.Managers
                     _form.PictureBoxPdf?.Invalidate();
                 }
 
-                if (!string.IsNullOrEmpty(ocrText) && _form.TextBoxOriginal != null)
-                {
-                    _form.TextBoxOriginal.Text = ocrText;
-                    if (_form.AutoTranslateAfterOcr)
-                    {
-                        _form.OnTranslateClicked();
-                    }
+                // 把识别文本同步到原文面板，并在需要时触发自动翻译/朗读
+                SyncOcrTextToPanel(ocrText);
 
-                    if (_form.AutoSpeakAfterOcr)
-                    {
-                        _ = _form.Presenter?.TryAutoSpeakAsync(ocrText);
-                    }
-                }
-
-                if (_eventBus != null && !string.IsNullOrEmpty(ocrText))
-                {
-                    _eventBus.Publish(new PDFHighlightEvent
-                    {
-                        UserId = _appPaths?.GetCurrentUserId() ?? AppPaths.GetCurrentUserId(),
-                        PdfFileName = Path.GetFileName(currentPdfPath),
-                        HighlightedText = ocrText,
-                        SourceUrl = currentPdfPath,
-                        HighlightedAt = DateTime.Now
-                    });
-                    _logger.LogInformation("Published PDFHighlightEvent for text: {Text}", ocrText.Substring(0, Math.Min(30, ocrText.Length)));
-                }
+                // 发布高亮事件供其他模块（如学习积分）消费
+                PublishHighlightEvent(currentPdfPath, ocrText);
             }
             catch (Exception ex)
             {
@@ -420,6 +308,180 @@ namespace LearningAssistant.Managers
                 // 释放图片副本
                 pageImageCopy?.Dispose();
             }
+        }
+
+        /// <summary>
+        /// 解析鼠标选中位置对应的 PDF 页面及显示区域，并创建图片副本，防止异步操作期间原始图片被释放。
+        /// 返回 false 表示无法解析（目标未命中或无有效图片），调用方应直接退出。
+        /// </summary>
+        private bool TryGetSelectionPage(Rectangle selectionRect, string currentPdfPath, out int pageIndex, out Rectangle imgRect, out Bitmap? pageImageCopy)
+        {
+            pageIndex = 0;
+            imgRect = Rectangle.Empty;
+            pageImageCopy = null;
+
+            var centerPoint = new Point(selectionRect.X + selectionRect.Width / 2, selectionRect.Y + selectionRect.Height / 2);
+            var (resolvedPageIndex, rect, pageImage) = _form.GetPageAtPoint(centerPoint);
+            pageIndex = resolvedPageIndex;
+            imgRect = rect;
+
+            _logger.LogInformation("AddHighlightFromSelectionAsync: PdfPath={Path}, PageIndex={Page}, ImageSize={Width}x{Height}",
+                currentPdfPath, pageIndex, pageImage?.Width, pageImage?.Height);
+
+            if (pageImage == null || string.IsNullOrEmpty(currentPdfPath))
+            {
+                _logger.LogWarning("AddHighlightFromSelectionAsync: targetPageImage or currentPdfPath is null");
+                return false;
+            }
+
+            _logger.LogInformation("AddHighlightFromSelectionAsync: imgRect={X},{Y} {Width}x{Height}",
+                imgRect.X, imgRect.Y, imgRect.Width, imgRect.Height);
+
+            if (imgRect.Width <= 0 || imgRect.Height <= 0)
+            {
+                _logger.LogWarning("AddHighlightFromSelectionAsync: imgRect has invalid size");
+                return false;
+            }
+
+            // 创建图片副本，防止异步操作期间原始图片被释放
+            pageImageCopy = new Bitmap(pageImage);
+            return true;
+        }
+
+        /// <summary>
+        /// 将鼠标选中矩形换算为标准化的 PDF 坐标，并做边界裁剪与极小尺寸过滤。
+        /// 返回 false 表示选中区域过小或无意义，调用方应直接退出。
+        /// </summary>
+        private bool TryComputeNormalizedRect(Rectangle selectionRect, Rectangle imgRect, Bitmap pageImage, out RectangleF normalizedRect)
+        {
+            normalizedRect = RectangleF.Empty;
+
+            int originalWidth = pageImage.Width;
+            int originalHeight = pageImage.Height;
+
+            float scaleX = (float)originalWidth / imgRect.Width;
+            float scaleY = (float)originalHeight / imgRect.Height;
+
+            float x = Math.Max(0, (selectionRect.X - imgRect.X) * scaleX);
+            float y = Math.Max(0, (selectionRect.Y - imgRect.Y) * scaleY);
+            float width = Math.Min(selectionRect.Width * scaleX, originalWidth - x);
+            float height = Math.Min(selectionRect.Height * scaleY, originalHeight - y);
+
+            normalizedRect = new RectangleF(
+                x / originalWidth,
+                y / originalHeight,
+                width / originalWidth,
+                height / originalHeight
+            );
+
+            _logger.LogInformation("AddHighlightFromSelectionAsync: normalizedRect={X},{Y} {Width}x{Height}",
+                normalizedRect.X, normalizedRect.Y, normalizedRect.Width, normalizedRect.Height);
+
+            if (normalizedRect.Width < 0.001f || normalizedRect.Height < 0.001f)
+            {
+                _logger.LogWarning("AddHighlightFromSelectionAsync: normalizedRect too small");
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 当 OCR 未识别到文字且 OCR 服务不可用时，向用户提示服务配置问题。
+        /// </summary>
+        private void HandleOcrUnavailable(string ocrText)
+        {
+            if (string.IsNullOrEmpty(ocrText) && _form.Presenter != null && !_form.Presenter.IsOcrAvailable())
+            {
+                _form.ShowWarning("OCR服务不可用，无法识别文字。\n请检查 tessdata 目录和语言数据文件是否存在。");
+            }
+        }
+
+        /// <summary>
+        /// 判断目标页面是否仍显示在当前视图（同一 PDF、页索引命中，含双页模式下的第二页）。
+        /// </summary>
+        private bool IsTargetPageVisible(string currentPdfPath, int targetPageIndex)
+        {
+            return _form.CurrentPdfPath == currentPdfPath &&
+                   (_form.CurrentPageIndex == targetPageIndex ||
+                    (_form.IsDualPage && _form.CurrentPageIndex + 1 == targetPageIndex));
+        }
+
+        /// <summary>
+        /// 构建并落库保存高亮，同时把本操作压入撤销栈。返回带 Id 的高亮实体。
+        /// </summary>
+        private async Task<PdfHighlight> PersistHighlightAsync(string pdfPath, int pageIndex, RectangleF normalizedRect, string ocrText, HighlightColor color)
+        {
+            var highlight = new PdfHighlight
+            {
+                PdfPath = pdfPath,
+                PageIndex = pageIndex,
+                NormalizedX = normalizedRect.X,
+                NormalizedY = normalizedRect.Y,
+                NormalizedWidth = normalizedRect.Width,
+                NormalizedHeight = normalizedRect.Height,
+                Text = ocrText,
+                Color = color,
+                CreatedAt = DateTime.Now
+            };
+
+            var highlightId = await _highlightService.AddHighlightAsync(
+                pdfPath,
+                pageIndex,
+                normalizedRect.X,
+                normalizedRect.Y,
+                normalizedRect.Width,
+                normalizedRect.Height,
+                ocrText,
+                color
+            );
+
+            highlight.Id = highlightId;
+
+            PushUndoAction(new HighlightUndoAction
+            {
+                ActionType = HighlightActionType.Add,
+                Highlight = highlight
+            });
+
+            return highlight;
+        }
+
+        /// <summary>
+        /// 把 OCR 识别文本同步到原文面板，并在需要时触发自动翻译/朗读。
+        /// </summary>
+        private void SyncOcrTextToPanel(string ocrText)
+        {
+            if (string.IsNullOrEmpty(ocrText) || _form.TextBoxOriginal == null) return;
+
+            _form.TextBoxOriginal.Text = ocrText;
+            if (_form.AutoTranslateAfterOcr)
+            {
+                _form.OnTranslateClicked();
+            }
+
+            if (_form.AutoSpeakAfterOcr)
+            {
+                _ = _form.Presenter?.TryAutoSpeakAsync(ocrText);
+            }
+        }
+
+        /// <summary>
+        /// 发布高亮事件（供学习积分等模块消费）。
+        /// </summary>
+        private void PublishHighlightEvent(string pdfPath, string ocrText)
+        {
+            if (_eventBus == null || string.IsNullOrEmpty(ocrText)) return;
+
+            _eventBus.Publish(new PDFHighlightEvent
+            {
+                UserId = _appPaths?.GetCurrentUserId() ?? AppPaths.GetCurrentUserId(),
+                PdfFileName = Path.GetFileName(pdfPath),
+                HighlightedText = ocrText,
+                SourceUrl = pdfPath,
+                HighlightedAt = DateTime.Now
+            });
+            _logger.LogInformation("Published PDFHighlightEvent for text: {Text}", ocrText.Substring(0, Math.Min(30, ocrText.Length)));
         }
 
         private async Task<string> GetOcrTextFromSelectionAsync(Rectangle selectionRect, Bitmap currentPageImage, Rectangle imgRect)
