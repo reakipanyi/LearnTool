@@ -927,7 +927,7 @@ namespace LearningAssistant.Forms.Pdf
                     case Keys.P:
                         if (e.Control)
                         {
-                            _presenter?.PrintPdf();
+                            PrintCurrentPdf();
                             e.Handled = true;
                         }
                         else
@@ -3358,12 +3358,14 @@ namespace LearningAssistant.Forms.Pdf
 
             var checkCase = new CheckBox();
             checkCase.Text = "区分大小写";
+            checkCase.Tag = "searchCase";
             checkCase.Location = new Point(15, 55);
             checkCase.AutoSize = true;
             searchForm.Controls.Add(checkCase);
 
             var checkWhole = new CheckBox();
             checkWhole.Text = "全字匹配";
+            checkWhole.Tag = "searchWhole";
             checkWhole.Location = new Point(120, 55);
             checkWhole.AutoSize = true;
             searchForm.Controls.Add(checkWhole);
@@ -3371,7 +3373,44 @@ namespace LearningAssistant.Forms.Pdf
             searchForm.ShowDialog();
         }
 
-        private void ButtonFind_Click(object? sender, EventArgs e)
+        private void PrintCurrentPdf()
+        {
+            // 打印走 PdfiumViewer 原始渲染，不包含当前界面的旋转角度与高亮/标注，先行提示避免误打印
+            if (_rotationAngle != 0 || HasHighlights())
+            {
+                var warnings = new List<string>();
+                if (_rotationAngle != 0)
+                    warnings.Add($"当前页面已旋转 {_rotationAngle}°");
+                if (HasHighlights())
+                    warnings.Add("存在高亮/标注");
+
+                var result = MessageBox.Show(
+                    $"打印输出的将是 PDF 原始内容，不会包含：{string.Join("、", warnings)}。\n\n是否仍要继续打印？",
+                    "打印提示", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (result != DialogResult.Yes)
+                    return;
+            }
+
+            _presenter?.PrintPdf();
+        }
+
+        private bool HasHighlights()
+        {
+            if (string.IsNullOrEmpty(_currentPdfPath) || _highlightService == null)
+                return false;
+
+            try
+            {
+                var list = _highlightService.GetHighlights(_currentPdfPath);
+                return list != null && list.Count > 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private async void ButtonFind_Click(object? sender, EventArgs e)
         {
             var button = sender as Button;
             if (button?.Parent is not Form searchForm) return;
@@ -3379,8 +3418,17 @@ namespace LearningAssistant.Forms.Pdf
             var textBox = searchForm.Controls.OfType<TextBox>().FirstOrDefault();
             if (textBox != null && !string.IsNullOrWhiteSpace(textBox.Text))
             {
-                _presenter?.SearchText(textBox.Text);
+                // 读取搜索选项：区分大小写 / 全字匹配
+                bool caseSensitive = GetSearchOption(searchForm, checkTag: "searchCase");
+                bool wholeWord = GetSearchOption(searchForm, checkTag: "searchWhole");
+                await (_presenter?.SearchTextAsync(textBox.Text, caseSensitive, wholeWord) ?? Task.CompletedTask);
             }
+        }
+
+        private static bool GetSearchOption(Form searchForm, string checkTag)
+        {
+            var check = searchForm.Controls.OfType<CheckBox>().FirstOrDefault(c => c.Tag as string == checkTag);
+            return check != null && check.Checked;
         }
 
         private void TrackBarThickness_Scroll(object? sender, EventArgs e)

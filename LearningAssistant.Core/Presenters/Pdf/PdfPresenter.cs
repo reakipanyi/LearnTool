@@ -112,7 +112,7 @@ namespace LearningAssistant.Presenters
             _logger.LogInformation("Received SendToPdfSearchEvent: {SearchText}", @event.SearchText);
             if (!string.IsNullOrEmpty(@event.SearchText))
             {
-                SearchText(@event.SearchText);
+                _ = SearchTextAsync(@event.SearchText);
             }
         }
 
@@ -1067,8 +1067,16 @@ namespace LearningAssistant.Presenters
 
         private List<int> _searchResults = new List<int>();
         private int _currentSearchIndex = -1;
+        private CancellationTokenSource? _searchCts;
 
-        public void SearchText(string text)
+        /// <summary>
+        /// 在 PDF 正文中搜索指定文本。支持区分大小写/全字匹配选项；
+        /// 计算在后台线程执行，避免大文档搜索时冻结 UI。
+        /// </summary>
+        /// <param name="text">搜索内容</param>
+        /// <param name="caseSensitive">是否区分大小写</param>
+        /// <param name="wholeWord">是否全字匹配（按词边界判断）</param>
+        public async Task SearchTextAsync(string text, bool caseSensitive = false, bool wholeWord = false)
         {
             if (string.IsNullOrWhiteSpace(text))
             {
@@ -1082,36 +1090,99 @@ namespace LearningAssistant.Presenters
                 return;
             }
 
+            // 取消上一次仍在进行的搜索，避免结果错乱
+            _searchCts?.Cancel();
+            _searchCts?.Dispose();
+            var cts = new CancellationTokenSource();
+            _searchCts = cts;
+
+            StringComparison comparison = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+
+            // 记录调用方的同步上下文（WinForms 为 UI 线程），用于把结果安全地回显到界面
+            SynchronizationContext? uiContext = SynchronizationContext.Current;
+
             _searchResults.Clear();
             _currentSearchIndex = -1;
 
             try
             {
-                for (int i = 0; i < PageCount; i++)
+                var pageResults = await Task.Run(() =>
                 {
-                    string pageText = _pdfService.GetPdfText(i);
-                    if (!string.IsNullOrEmpty(pageText) && pageText.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0)
+                    var found = new List<int>();
+                    for (int i = 0; i < PageCount; i++)
                     {
-                        _searchResults.Add(i);
+                        cts.Token.ThrowIfCancellationRequested();
+                        string pageText = _pdfService.GetPdfText(i);
+                        if (!string.IsNullOrEmpty(pageText) && ContainsText(pageText, text, comparison, wholeWord))
+                        {
+                            found.Add(i);
+                        }
+                    }
+                    return found;
+                });
+
+                _searchResults = pageResults;
+
+                void ShowResult()
+                {
+                    if (_searchResults.Count > 0)
+                    {
+                        _currentSearchIndex = 0;
+                        RenderPage(_searchResults[0]);
+                        _view?.ShowMessage($"找到 {_searchResults.Count} 个匹配结果", "搜索结果");
+                    }
+                    else
+                    {
+                        _view?.ShowMessage("未找到匹配内容", "搜索结果");
                     }
                 }
 
-                if (_searchResults.Count > 0)
-                {
-                    _currentSearchIndex = 0;
-                    RenderPage(_searchResults[0]);
-                    _view?.ShowMessage($"找到 {_searchResults.Count} 个匹配结果", "搜索结果");
-                }
+                if (uiContext != null)
+                    uiContext.Post(_ => ShowResult(), null);
                 else
-                {
-                    _view?.ShowMessage("未找到匹配内容", "搜索结果");
-                }
+                    ShowResult();
+            }
+            catch (OperationCanceledException)
+            {
+                // 搜索结果被新一次的搜索取消，无需提示
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "SearchText failed: {Text}", text);
                 _view?.ShowError("搜索失败：" + ex.Message);
             }
+        }
+
+        /// <summary>
+        /// 判断页面文本是否包含目标文本，并按选项应用区分大小写与全字匹配。
+        /// </summary>
+        private static bool ContainsText(string pageText, string text, StringComparison comparison, bool wholeWord)
+        {
+            int index = pageText.IndexOf(text, comparison);
+            while (index >= 0)
+            {
+                if (!wholeWord || IsWordBoundary(pageText, index, text.Length))
+                {
+                    return true;
+                }
+                index = pageText.IndexOf(text, index + text.Length, comparison);
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// 判断指定位置的文本两端是否都是词边界（非字母/数字字符或文档边界）。
+        /// </summary>
+        private static bool IsWordBoundary(string pageText, int index, int length)
+        {
+            // 前一个字符
+            if (index > 0 && char.IsLetterOrDigit(pageText[index - 1]))
+                return false;
+            // 后一个字符
+            int end = index + length;
+            if (end < pageText.Length && char.IsLetterOrDigit(pageText[end]))
+                return false;
+            return true;
         }
 
         public void SearchNext()
