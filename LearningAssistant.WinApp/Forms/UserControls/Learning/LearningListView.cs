@@ -115,7 +115,8 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _panelList
             // 
-            _panelList.BackColor = Color.FromArgb(248, 248, 252);
+            // 面板色：浅色 Surface #F8FAFC（与设计系统 Surface 对齐）
+            _panelList.BackColor = Color.FromArgb(248, 250, 252);
             _panelList.BorderStyle = BorderStyle.FixedSingle;
             _panelList.Controls.Add(_labelListStatus);
             _panelList.Controls.Add(_listBoxItems);
@@ -129,7 +130,8 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _labelListTitle
             // 
-            _labelListTitle.BackColor = Color.FromArgb(66, 133, 244);
+            // 标题栏主色：紫色 #8B5CF6 + 白字（与设计系统 Primary 对齐）
+            _labelListTitle.BackColor = Color.FromArgb(139, 92, 246);
             _labelListTitle.Dock = DockStyle.Top;
             _labelListTitle.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _labelListTitle.ForeColor = Color.White;
@@ -142,7 +144,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _panelSearch
             // 
-            _panelSearch.BackColor = Color.FromArgb(240, 240, 245);
+            _panelSearch.BackColor = Color.FromArgb(248, 250, 252);
             _panelSearch.Dock = DockStyle.Top;
             _panelSearch.Location = new Point(0, 40);
             _panelSearch.Name = "_panelSearch";
@@ -190,10 +192,10 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _labelListStatus
             // 
-            _labelListStatus.BackColor = Color.FromArgb(240, 240, 245);
+            _labelListStatus.BackColor = Color.FromArgb(248, 250, 252);
             _labelListStatus.Dock = DockStyle.Bottom;
             _labelListStatus.Font = new Font("微软雅黑", 9F);
-            _labelListStatus.ForeColor = Color.FromArgb(80, 100, 120);
+            _labelListStatus.ForeColor = Color.FromArgb(71, 85, 105);
             _labelListStatus.Location = new Point(0, 934);
             _labelListStatus.Name = "_labelListStatus";
             _labelListStatus.Size = new Size(258, 45);
@@ -286,16 +288,18 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _panelList.BackColor = colors.Surface;
             _listBoxItems.BackColor = colors.Surface;
             _listBoxItems.ForeColor = colors.TextPrimary;
-            _panelSearch.BackColor = colors.ThemeMode == ThemeMode.Dark
-                ? Color.FromArgb(42, 42, 42)
-                : Color.FromArgb(240, 240, 245);
+            // 搜索/底部状态面板统一用 Surface 作为浅色面板底色
+            _panelSearch.BackColor = colors.Surface;
             _textBoxSearch.BackColor = colors.SurfaceElevated;
             _textBoxSearch.ForeColor = colors.TextPrimary;
             _labelSearchIcon.ForeColor = colors.TextSecondary;
-            _labelListStatus.BackColor = colors.ThemeMode == ThemeMode.Dark
-                ? Color.FromArgb(42, 42, 42)
-                : Color.FromArgb(240, 240, 245);
+            _labelListStatus.BackColor = colors.Surface;
             _labelListStatus.ForeColor = colors.TextSecondary;
+            // 标题栏保留品牌紫（浅色用 Primary，深色用提亮的 PrimaryLight 保证对比度）
+            _labelListTitle.BackColor = colors.ThemeMode == ThemeMode.Dark
+                ? colors.PrimaryLight
+                : colors.Primary;
+            _labelListTitle.ForeColor = Color.White;
             if (_textBoxSearch.Text == "搜索...")
             {
                 _textBoxSearch.ForeColor = Color.Gray;

@@ -64,8 +64,9 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _labelStudyTime
             // 
+            // 前景色：次级文本 #475569（与设计系统 TextSecondary 对齐）
             _labelStudyTime.Font = new Font("微软雅黑", 8.5F);
-            _labelStudyTime.ForeColor = Color.FromArgb(70, 90, 110);
+            _labelStudyTime.ForeColor = Color.FromArgb(71, 85, 105);
             _labelStudyTime.Location = new Point(18, 2);
             _labelStudyTime.Name = "_labelStudyTime";
             _labelStudyTime.Size = new Size(120, 24);
@@ -75,7 +76,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // _labelScore
             // 
             _labelScore.Font = new Font("微软雅黑", 8.5F);
-            _labelScore.ForeColor = Color.FromArgb(70, 90, 110);
+            _labelScore.ForeColor = Color.FromArgb(71, 85, 105);
             _labelScore.Location = new Point(144, 2);
             _labelScore.Name = "_labelScore";
             _labelScore.Size = new Size(120, 24);
@@ -85,7 +86,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // _labelTodayCount
             // 
             _labelTodayCount.Font = new Font("微软雅黑", 8.5F);
-            _labelTodayCount.ForeColor = Color.FromArgb(70, 90, 110);
+            _labelTodayCount.ForeColor = Color.FromArgb(71, 85, 105);
             _labelTodayCount.Location = new Point(270, 2);
             _labelTodayCount.Name = "_labelTodayCount";
             _labelTodayCount.Size = new Size(120, 24);
@@ -94,8 +95,9 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _labelStreak
             // 
+            // 连续天数：橙色 #F59E0B（与设计系统 Warning 对齐）
             _labelStreak.Font = new Font("微软雅黑", 8.5F, FontStyle.Bold);
-            _labelStreak.ForeColor = Color.FromArgb(255, 152, 0);
+            _labelStreak.ForeColor = Color.FromArgb(245, 158, 11);
             _labelStreak.Location = new Point(396, 2);
             _labelStreak.Name = "_labelStreak";
             _labelStreak.Size = new Size(100, 24);
@@ -104,9 +106,10 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _labelEncouragement
             // 
+            // 鼓励语：次级文本 #475569（与设计系统 TextSecondary 对齐，斜体保持）
             _labelEncouragement.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             _labelEncouragement.Font = new Font("微软雅黑", 9F, FontStyle.Italic);
-            _labelEncouragement.ForeColor = Color.FromArgb(100, 150, 180);
+            _labelEncouragement.ForeColor = Color.FromArgb(71, 85, 105);
             _labelEncouragement.Location = new Point(502, 2);
             _labelEncouragement.Name = "_labelEncouragement";
             _labelEncouragement.Size = new Size(220, 24);

@@ -49,6 +49,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             InitChildControls();
 
             this.MinimumSize = new Size(120, 160);
+            // 卡片背景：白/浅色 Surface（与设计系统 Surface 对齐）
             this.BackColor = Color.White;
             this.BorderStyle = BorderStyle.None;
             this.Padding = new Padding(0);
@@ -63,7 +64,8 @@ namespace LearningAssistant.Forms.UserControls.Learning
         {
             _accentBar.Dock = DockStyle.Left;
             _accentBar.Width = 4;
-            _accentBar.BackColor = Color.FromArgb(76, 175, 80);
+            // 学科/分类 accent 条：绿色 #22C55E（与设计系统 Success 对齐，SubjectAccent 默认）
+            _accentBar.BackColor = Color.FromArgb(34, 197, 94);
 
             _innerLayout.ColumnCount = 1;
             _innerLayout.RowCount = 3;
@@ -79,7 +81,8 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _iconLabel.Dock = DockStyle.Fill;
 
             _titleLabel.Font = _fontTitle;
-            _titleLabel.ForeColor = Color.FromArgb(33, 33, 33);
+            // 主词色：主要文本 #0F172A（与设计系统 TextPrimary 对齐）
+            _titleLabel.ForeColor = Color.FromArgb(15, 23, 42);
             _titleLabel.Dock = DockStyle.Fill;
             _titleLabel.TextAlign = ContentAlignment.MiddleCenter;
             _titleLabel.UseMnemonic = false;
@@ -290,29 +293,29 @@ namespace LearningAssistant.Forms.UserControls.Learning
                 path.CloseAllFigures();
                 this.Region = new Region(path);
 
-                // 悬浮/选中描边
+                // 悬浮/选中描边（绿 #22C55E 与设计系统 Success 对齐）
                 if (_isHovered || _isSelected)
                 {
-                    using (Pen pen = new Pen(Color.FromArgb(76, 175, 80), 2))
+                    using (Pen pen = new Pen(Color.FromArgb(34, 197, 94), 2))
                     {
                         g.DrawPath(pen, path);
                     }
                 }
             }
 
-            // 悬浮浅底色
+            // 悬浮浅底色（Success 搭配透明绿）
             if (_isHovered)
             {
-                using (SolidBrush brush = new SolidBrush(Color.FromArgb(5, 76, 175, 80)))
+                using (SolidBrush brush = new SolidBrush(Color.FromArgb(5, 34, 197, 94)))
                 {
                     g.FillRectangle(brush, rect);
                 }
             }
 
-            // 选中加深底色
+            // 选中加深底色（Success 搭配透明绿）
             if (_isSelected)
             {
-                using (SolidBrush brush = new SolidBrush(Color.FromArgb(10, 76, 175, 80)))
+                using (SolidBrush brush = new SolidBrush(Color.FromArgb(10, 34, 197, 94)))
                 {
                     g.FillRectangle(brush, rect);
                 }

@@ -151,6 +151,15 @@ namespace LearningAssistant.Forms.Learning
         private TableLayoutPanel mainTableLayoutPanel = null!;
         private Panel middlePanel = null!;
         private TableLayoutPanel middleTableLayoutPanel = null!;
+        // 圣杯布局外层容器：0=顶栏 1=分隔线 2=主体(mainTableLayoutPanel)
+        private TableLayoutPanel outerTableLayoutPanel = null!;
+        // 顶栏内容（品牌标题 + 玩家 + 主题切换 + 退出，经 Tag="layout" 由 ApplyTheme 显式着色）
+        private TableLayoutPanel topBarLayoutPanel = null!;
+        private Panel topBarDivider = null!;
+        private Label labelBrandTitle = null!;
+        private Label labelTopPlayer = null!;
+        // 中央大卡片居中容器（3列：左右自适应留白 + 中列约680px）
+        private TableLayoutPanel centerCardTable = null!;
         #endregion
 
         #region === 游戏相关控件 ===
@@ -279,11 +288,17 @@ namespace LearningAssistant.Forms.Learning
 
             if (buttonKnown != null)
             {
+                // 设计系统：主操作按钮【认识】为绿色实心
+                buttonKnown.BackColor = colors.Success;
+                buttonKnown.FlatAppearance.BorderColor = colors.Success;
                 buttonKnown.ForeColor = Color.White;
             }
 
             if (buttonUnknown != null)
             {
+                // 设计系统：危险操作按钮【不认识】为红色
+                buttonUnknown.BackColor = colors.Error;
+                buttonUnknown.FlatAppearance.BorderColor = colors.Error;
                 buttonUnknown.ForeColor = Color.White;
             }
 
@@ -315,6 +330,35 @@ namespace LearningAssistant.Forms.Learning
             if (labelDailyGoal != null)
             {
                 labelDailyGoal.ForeColor = colors.TextSecondary;
+            }
+
+            // 顶栏容器背景采用 Elevated（浅色白 / 深色 #334155），并绘制底部分隔线
+            if (topBarLayoutPanel != null)
+            {
+                topBarLayoutPanel.BackColor = colors.ThemeMode == ThemeMode.Dark
+                    ? Color.FromArgb(51, 65, 85)
+                    : colors.Surface;
+            }
+            if (topBarDivider != null)
+            {
+                topBarDivider.BackColor = colors.Divider;
+            }
+            // 中央大卡片外留白容器与内容区同底色（Surface），保持卡片居中视觉
+            if (centerCardTable != null)
+            {
+                centerCardTable.BackColor = colors.Surface;
+            }
+            // 每日目标进度环主题化（浅:橙 #F59E0B / 深:橙 #FBBF24），文字随主题切换
+            if (_dailyGoalProgress != null && !_dailyGoalProgress.IsDisposed)
+            {
+                var isDark = colors.ThemeMode == ThemeMode.Dark;
+                _dailyGoalProgress.ProgressColor = isDark
+                    ? Color.FromArgb(251, 191, 36)
+                    : Color.FromArgb(245, 158, 11);
+                _dailyGoalProgress.TrackColor = isDark
+                    ? Color.FromArgb(51, 65, 85)
+                    : Color.FromArgb(226, 232, 240);
+                _dailyGoalProgress.TextColor = colors.TextPrimary;
             }
 
             if (labelQuizHint != null)
@@ -360,11 +404,20 @@ namespace LearningAssistant.Forms.Learning
         {
             if (control is Label label)
             {
+                // 带 Tag=="title" 的标题栏（如右侧设置栏紫色标题）保持其自绘前景色（白字紫底），不被主题级联覆盖
+                if (label.Tag is string tag && StringComparer.Ordinal.Equals(tag, "title"))
+                {
+                    return;
+                }
                 label.ForeColor = colors.TextPrimary;
             }
             else if (control is Panel panel)
             {
-                panel.BackColor = colors.Surface;
+                // Tag=="layout" 的布局容器（顶栏/分隔线）已在 ApplyTheme 显式着色，跳过递归默认覆盖（仍会递归子控件）
+                if (!(panel.Tag is string layoutTag && StringComparer.Ordinal.Equals(layoutTag, "layout")))
+                {
+                    panel.BackColor = colors.Surface;
+                }
             }
             else if (control is GroupBox groupBox)
             {
@@ -401,7 +454,11 @@ namespace LearningAssistant.Forms.Learning
             }
             else if (control is TableLayoutPanel tableLayoutPanel)
             {
-                tableLayoutPanel.BackColor = colors.Background;
+                // Tag=="layout" 的布局容器（顶栏/中央卡片容器）已在 ApplyTheme 显式着色，跳过递归默认覆盖（仍会递归子控件）
+                if (!(tableLayoutPanel.Tag is string layoutTag && StringComparer.Ordinal.Equals(layoutTag, "layout")))
+                {
+                    tableLayoutPanel.BackColor = colors.Background;
+                }
             }
             else if (control is ListBox listBox)
             {
@@ -1048,9 +1105,17 @@ namespace LearningAssistant.Forms.Learning
             mainTableLayoutPanel = new TableLayoutPanel();
             middlePanel = new Panel();
             middleTableLayoutPanel = new TableLayoutPanel();
+            // 圣杯布局：外层容器 + 顶栏 + 分隔线
+            outerTableLayoutPanel = new TableLayoutPanel();
+            topBarLayoutPanel = new TableLayoutPanel();
+            topBarDivider = new Panel();
+            labelBrandTitle = new Label();
+            labelTopPlayer = new Label();
             mainTableLayoutPanel.SuspendLayout();
             middlePanel.SuspendLayout();
             middleTableLayoutPanel.SuspendLayout();
+            outerTableLayoutPanel.SuspendLayout();
+            topBarLayoutPanel.SuspendLayout();
             SuspendLayout();
             // 
             // _listView
@@ -1092,6 +1157,94 @@ namespace LearningAssistant.Forms.Learning
             _settingsView.Dock = DockStyle.Fill;
             _settingsView.Name = "_settingsView";
             _settingsView.TabIndex = 0;
+            // 
+            // topBarLayoutPanel - 顶栏（从左到右：品牌标题 / 玩家 / 主题切换 / 退出）
+            // 
+            topBarLayoutPanel.BackColor = Color.White;
+            topBarLayoutPanel.ColumnCount = 4;
+            topBarLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            topBarLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            topBarLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            topBarLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            topBarLayoutPanel.Controls.Add(labelBrandTitle, 0, 0);
+            topBarLayoutPanel.Controls.Add(labelTopPlayer, 1, 0);
+            // 复用右侧设置里的主题切换按钮，移入顶栏右侧（控件引用与事件不变）
+            _settingsView.PanelConfig.Controls.Remove(_settingsView.ButtonThemeToggle);
+            topBarLayoutPanel.Controls.Add(_settingsView.ButtonThemeToggle, 2, 0);
+            // 复用底部操作条的退出按钮，移入顶栏最右（控件引用与事件不变）
+            _buttonsView.ButtonsPanel.Controls.Remove(_buttonsView.ButtonExit);
+            topBarLayoutPanel.Controls.Add(_buttonsView.ButtonExit, 3, 0);
+            topBarLayoutPanel.Dock = DockStyle.Fill;
+            topBarLayoutPanel.Location = new Point(0, 0);
+            topBarLayoutPanel.Name = "topBarLayoutPanel";
+            topBarLayoutPanel.Padding = new Padding(16, 0, 16, 0);
+            topBarLayoutPanel.RowCount = 1;
+            topBarLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            // 布局容器标记：背景色由 ApplyTheme 显式设置为 Elevated，跳过递归主题的 Background 覆盖
+            topBarLayoutPanel.Tag = "layout";
+            topBarLayoutPanel.Size = new Size(1587, 56);
+            topBarLayoutPanel.TabIndex = 0;
+            // 
+            // labelBrandTitle
+            // 
+            labelBrandTitle.Dock = DockStyle.Fill;
+            labelBrandTitle.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
+            labelBrandTitle.ForeColor = Color.FromArgb(15, 23, 42);
+            labelBrandTitle.Name = "labelBrandTitle";
+            labelBrandTitle.Size = new Size(1100, 56);
+            labelBrandTitle.TabIndex = 0;
+            labelBrandTitle.Text = "✨ 学习模式 ✨";
+            labelBrandTitle.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // labelTopPlayer
+            // 
+            labelTopPlayer.Dock = DockStyle.Fill;
+            labelTopPlayer.Font = new Font("微软雅黑", 10F);
+            labelTopPlayer.ForeColor = Color.FromArgb(71, 85, 105);
+            labelTopPlayer.Margin = new Padding(0, 0, 16, 0);
+            labelTopPlayer.Name = "labelTopPlayer";
+            labelTopPlayer.Size = new Size(60, 56);
+            labelTopPlayer.TabIndex = 0;
+            labelTopPlayer.Text = "👤 玩家";
+            labelTopPlayer.TextAlign = ContentAlignment.MiddleLeft;
+            // 
+            // 顶栏直角按钮布局重置（复用控件，仅调整 Dock/Margin/字号适配顶栏高度）
+            // 
+            _settingsView.ButtonThemeToggle.Dock = DockStyle.Fill;
+            _settingsView.ButtonThemeToggle.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            _settingsView.ButtonThemeToggle.Margin = new Padding(6, 8, 6, 8);
+            _settingsView.ButtonThemeToggle.Size = new Size(120, 40);
+            _buttonsView.ButtonExit.Dock = DockStyle.Fill;
+            _buttonsView.ButtonExit.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            _buttonsView.ButtonExit.Margin = new Padding(6, 8, 0, 8);
+            _buttonsView.ButtonExit.Size = new Size(86, 40);
+            // 
+            // topBarDivider - 顶栏底部分隔线
+            // 
+            topBarDivider.BackColor = Color.FromArgb(226, 232, 240);
+            topBarDivider.Dock = DockStyle.Fill;
+            topBarDivider.Location = new Point(0, 56);
+            topBarDivider.Name = "topBarDivider";
+            topBarDivider.Size = new Size(1587, 1);
+            topBarDivider.TabIndex = 0;
+            topBarDivider.Tag = "layout";
+            // 
+            // outerTableLayoutPanel - 圣杯布局最外层容器（0=顶栏 1=分隔线 2=主体）
+            // 
+            outerTableLayoutPanel.ColumnCount = 1;
+            outerTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            outerTableLayoutPanel.Controls.Add(topBarLayoutPanel, 0, 0);
+            outerTableLayoutPanel.Controls.Add(topBarDivider, 0, 1);
+            outerTableLayoutPanel.Controls.Add(mainTableLayoutPanel, 0, 2);
+            outerTableLayoutPanel.Dock = DockStyle.Fill;
+            outerTableLayoutPanel.Location = new Point(0, 0);
+            outerTableLayoutPanel.Name = "outerTableLayoutPanel";
+            outerTableLayoutPanel.RowCount = 3;
+            outerTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 56F));
+            outerTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 1F));
+            outerTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            outerTableLayoutPanel.Size = new Size(1587, 844);
+            outerTableLayoutPanel.TabIndex = 0;
             // 
             // mainTableLayoutPanel
             // 
@@ -1143,9 +1296,9 @@ namespace LearningAssistant.Forms.Learning
             // 
             AutoScaleDimensions = new SizeF(7F, 17F);
             AutoScaleMode = AutoScaleMode.Font;
-            BackColor = Color.FromArgb(250, 245, 235);
+            BackColor = Color.White;
             ClientSize = new Size(1587, 844);
-            Controls.Add(mainTableLayoutPanel);
+            Controls.Add(outerTableLayoutPanel);
             DoubleBuffered = true;
             MinimumSize = new Size(1024, 768);
             Name = "LearningForm";
@@ -1154,6 +1307,8 @@ namespace LearningAssistant.Forms.Learning
             mainTableLayoutPanel.ResumeLayout(false);
             middlePanel.ResumeLayout(false);
             middleTableLayoutPanel.ResumeLayout(false);
+            outerTableLayoutPanel.ResumeLayout(false);
+            topBarLayoutPanel.ResumeLayout(false);
             ResumeLayout(false);
         }
         #endregion
@@ -1361,7 +1516,8 @@ namespace LearningAssistant.Forms.Learning
         {
             _dailyGoalProgress = new CircularProgressControl
             {
-                Size = new Size(100, 100),
+                // 尺寸适配 74px 底部操作条（原 100x100 过大）
+                Size = new Size(62, 62),
                 MaxValue = _settings.DailyGoal,
                 CurrentValue = _gamificationService.TodayLearnedCount,
                 ProgressColor = Color.FromArgb(255, 152, 0),
@@ -1369,9 +1525,20 @@ namespace LearningAssistant.Forms.Learning
                 TextColor = Color.Black
             };
 
+            // 每日目标文本（复用现有 labelDailyGoal），显示在圆环旁靠左
+            labelDailyGoal.AutoSize = true;
+            labelDailyGoal.Text = $"每日目标 {_gamificationService.TodayLearnedCount}/{_settings.DailyGoal}";
+            labelDailyGoal.ForeColor = Color.FromArgb(71, 85, 105);
+            labelDailyGoal.Margin = new Padding(8, 0, 12, 0);
 
-            _dailyGoalProgress.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-            _dailyGoalProgress.Location = new Point(20, 20);
+            // 将每日目标进度环及其文本移入底部操作条最左（不复用坐标，改由 ButtonsPanel 流式布局）
+            _dailyGoalProgress.Dock = DockStyle.None;
+            _dailyGoalProgress.Anchor = AnchorStyles.None;
+            _dailyGoalProgress.Margin = new Padding(12, 6, 4, 6);
+            _buttonsView.ButtonsPanel.Controls.Add(_dailyGoalProgress);
+            _buttonsView.ButtonsPanel.Controls.Add(labelDailyGoal);
+            _buttonsView.ButtonsPanel.Controls.SetChildIndex(_dailyGoalProgress, 0);
+            _buttonsView.ButtonsPanel.Controls.SetChildIndex(labelDailyGoal, 1);
 
             InitializeShortcutHint();
         }
@@ -1384,6 +1551,20 @@ namespace LearningAssistant.Forms.Learning
 
         private void InitializeLearningCard()
         {
+            // 中央大卡片：居中窄卡片布局（外层3列容器：左右自适应留白 + 中列约680px，卡片随之左右居中；缩放时仍能保持居中）
+            centerCardTable = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(248, 250, 252),
+                ColumnCount = 3,
+                RowCount = 1,
+                Tag = "layout"
+            };
+            centerCardTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            centerCardTable.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 680F));
+            centerCardTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            centerCardTable.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
             _learningCard = new LearningCard
             {
                 Dock = DockStyle.Fill,
@@ -1394,8 +1575,9 @@ namespace LearningAssistant.Forms.Learning
 
             if (panelContent != null)
             {
-                panelContent.Controls.Add(_learningCard);
-                panelContent.Controls.SetChildIndex(_learningCard, 0);
+                panelContent.Controls.Add(centerCardTable);
+                centerCardTable.Controls.Add(_learningCard, 1, 0);
+                panelContent.Controls.SetChildIndex(centerCardTable, 0);
             }
 
         }
@@ -1406,6 +1588,7 @@ namespace LearningAssistant.Forms.Learning
             if (_dailyGoalProgress != null && !_dailyGoalProgress.IsDisposed)
             {
                 _dailyGoalProgress.CurrentValue = _gamificationService.TodayLearnedCount;
+                labelDailyGoal.Text = $"每日目标 {_gamificationService.TodayLearnedCount}/{_settings.DailyGoal}";
             }
         }
 
@@ -2233,6 +2416,12 @@ namespace LearningAssistant.Forms.Learning
                 {
                     _settingsView.ComboBoxUser.SelectedIndex = 0;
                 }
+
+                // 顶栏当前玩家显示随所选用户同步
+                if (labelTopPlayer != null)
+                {
+                    labelTopPlayer.Text = $"👤 {_settingsView.ComboBoxUser.Text}";
+                }
             }
             catch (Exception ex)
             {
@@ -2253,6 +2442,12 @@ namespace LearningAssistant.Forms.Learning
                 InvalidateLearningStateCache();
                 _cachedFavorites = null;
                 _favoritesCacheTime = DateTime.MinValue;
+
+                // 顶栏当前玩家显示随所改用户同步
+                if (labelTopPlayer != null)
+                {
+                    labelTopPlayer.Text = $"👤 {selectedUser}";
+                }
 
                 SettingsChanged?.Invoke(this, EventArgs.Empty);
             }

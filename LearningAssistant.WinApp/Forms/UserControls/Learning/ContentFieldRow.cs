@@ -57,7 +57,8 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 55F));
 
             _labelLabel.Font = new Font("微软雅黑", 11F, FontStyle.Bold, GraphicsUnit.Point, 134);
-            _labelLabel.ForeColor = Color.FromArgb(108, 117, 125);
+            // 标签色：次级文本 #475569（与设计系统 TextSecondary 对齐）
+            _labelLabel.ForeColor = Color.FromArgb(71, 85, 105);
             _labelLabel.TextAlign = ContentAlignment.MiddleLeft;
             _labelLabel.UseMnemonic = false;
             _labelLabel.AutoSize = false;
@@ -65,7 +66,8 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _labelLabel.Padding = new Padding(0, 0, 4, 0);
 
             _valueLabel.Font = new Font("微软雅黑", 11F, FontStyle.Regular, GraphicsUnit.Point, 134);
-            _valueLabel.ForeColor = Color.FromArgb(33, 33, 33);
+            // 值色：主要文本 #0F172A（与设计系统 TextPrimary 对齐）
+            _valueLabel.ForeColor = Color.FromArgb(15, 23, 42);
             _valueLabel.TextAlign = ContentAlignment.MiddleLeft;
             _valueLabel.UseMnemonic = false;
             _valueLabel.AutoSize = false;
@@ -142,9 +144,10 @@ namespace LearningAssistant.Forms.UserControls.Learning
         public void ApplyTheme(ThemeColors colors)
         {
             _themeColors = colors;
+            // 标签色随主题：深色用灰，浅色用次级文本 #475569
             _labelLabel.ForeColor = colors.ThemeMode == ThemeMode.Dark
                 ? Color.FromArgb(176, 176, 176)
-                : Color.FromArgb(108, 117, 125);
+                : Color.FromArgb(71, 85, 105);
             UpdateSpeakingState();
         }
 
@@ -187,8 +190,8 @@ namespace LearningAssistant.Forms.UserControls.Learning
                 _isSpeaking = true;
                 _speakButton.Text = "⏸";
                 _speakButton.Enabled = true;
-                _speakButton.ForeColor = Color.FromArgb(76, 175, 80);
-                _valueLabel.ForeColor = Color.FromArgb(76, 175, 80);
+                _speakButton.ForeColor = Color.FromArgb(34, 197, 94);
+                _valueLabel.ForeColor = Color.FromArgb(34, 197, 94);
                 this.BackColor = Color.FromArgb(245, 255, 245);
             }
             else if (isOtherSpeaking)
@@ -268,7 +271,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
                 Clipboard.SetText(_field.Value);
                 string originalText = _copyButton.Text;
                 _copyButton.Text = "✓";
-                _copyButton.ForeColor = Color.FromArgb(76, 175, 80);
+                _copyButton.ForeColor = Color.FromArgb(34, 197, 94);
                 
                 Task.Run(async () =>
                 {

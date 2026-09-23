@@ -276,10 +276,11 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _buttonNext
             // 
-            _buttonNext.BackColor = Color.FromArgb(76, 175, 80);
+            // 语义色：绿色 #22C55E = 成功/主操作（与设计系统 Success 对齐）
+            _buttonNext.BackColor = Color.FromArgb(34, 197, 94);
             _buttonNext.FlatAppearance.BorderSize = 0;
-            _buttonNext.FlatAppearance.MouseDownBackColor = Color.FromArgb(66, 155, 70);
-            _buttonNext.FlatAppearance.MouseOverBackColor = Color.FromArgb(86, 185, 90);
+            _buttonNext.FlatAppearance.MouseDownBackColor = Color.FromArgb(22, 163, 74);
+            _buttonNext.FlatAppearance.MouseOverBackColor = Color.FromArgb(74, 222, 128);
             _buttonNext.FlatStyle = FlatStyle.Flat;
             _buttonNext.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonNext.ForeColor = Color.White;
@@ -294,17 +295,18 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _buttonKnown
             // 
-            _buttonKnown.BackColor = Color.FromArgb(76, 175, 80);
+            // 主操作：绿色实心 #22C55E，加大加粗突出（Width 约为普通按钮的1.6倍，字号14F bold）
+            _buttonKnown.BackColor = Color.FromArgb(34, 197, 94);
             _buttonKnown.FlatAppearance.BorderSize = 0;
-            _buttonKnown.FlatAppearance.MouseDownBackColor = Color.FromArgb(66, 155, 70);
-            _buttonKnown.FlatAppearance.MouseOverBackColor = Color.FromArgb(86, 185, 90);
+            _buttonKnown.FlatAppearance.MouseDownBackColor = Color.FromArgb(22, 163, 74);
+            _buttonKnown.FlatAppearance.MouseOverBackColor = Color.FromArgb(74, 222, 128);
             _buttonKnown.FlatStyle = FlatStyle.Flat;
-            _buttonKnown.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
+            _buttonKnown.Font = new Font("微软雅黑", 14F, FontStyle.Bold);
             _buttonKnown.ForeColor = Color.White;
             _buttonKnown.Location = new Point(215, 12);
             _buttonKnown.Margin = new Padding(5, 6, 5, 6);
             _buttonKnown.Name = "_buttonKnown";
-            _buttonKnown.Size = new Size(100, 51);
+            _buttonKnown.Size = new Size(160, 51);
             _buttonKnown.TabIndex = 2;
             _buttonKnown.Text = "✅ 会了";
             _buttonKnown.UseVisualStyleBackColor = false;
@@ -312,10 +314,11 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _buttonUnknown
             // 
-            _buttonUnknown.BackColor = Color.FromArgb(244, 67, 54);
+            // 危险操作：红色实心 #EF4444（与设计系统 Error 对齐），保持普通尺寸
+            _buttonUnknown.BackColor = Color.FromArgb(239, 68, 68);
             _buttonUnknown.FlatAppearance.BorderSize = 0;
-            _buttonUnknown.FlatAppearance.MouseDownBackColor = Color.FromArgb(234, 57, 44);
-            _buttonUnknown.FlatAppearance.MouseOverBackColor = Color.FromArgb(254, 77, 64);
+            _buttonUnknown.FlatAppearance.MouseDownBackColor = Color.FromArgb(220, 38, 38);
+            _buttonUnknown.FlatAppearance.MouseOverBackColor = Color.FromArgb(248, 113, 113);
             _buttonUnknown.FlatStyle = FlatStyle.Flat;
             _buttonUnknown.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonUnknown.ForeColor = Color.White;
@@ -337,10 +340,11 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _buttonFavorite
             // 
-            _buttonFavorite.BackColor = Color.FromArgb(255, 193, 7);
+            // 语义色：橙色 #F59E0B = 收藏（与设计系统 Warning/Favorite 对齐）
+            _buttonFavorite.BackColor = Color.FromArgb(245, 158, 11);
             _buttonFavorite.FlatAppearance.BorderSize = 0;
-            _buttonFavorite.FlatAppearance.MouseDownBackColor = Color.FromArgb(245, 183, 0);
-            _buttonFavorite.FlatAppearance.MouseOverBackColor = Color.FromArgb(255, 203, 27);
+            _buttonFavorite.FlatAppearance.MouseDownBackColor = Color.FromArgb(217, 119, 6);
+            _buttonFavorite.FlatAppearance.MouseOverBackColor = Color.FromArgb(251, 191, 36);
             _buttonFavorite.FlatStyle = FlatStyle.Flat;
             _buttonFavorite.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _buttonFavorite.ForeColor = Color.White;
@@ -380,10 +384,11 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _buttonStats
             // 
-            _buttonStats.BackColor = Color.FromArgb(156, 39, 176);
+            // 语义色：紫色 #8B5CF6 = 主色（与设计系统 Primary 对齐）
+            _buttonStats.BackColor = Color.FromArgb(139, 92, 246);
             _buttonStats.FlatAppearance.BorderSize = 0;
-            _buttonStats.FlatAppearance.MouseDownBackColor = Color.FromArgb(146, 29, 166);
-            _buttonStats.FlatAppearance.MouseOverBackColor = Color.FromArgb(166, 49, 186);
+            _buttonStats.FlatAppearance.MouseDownBackColor = Color.FromArgb(124, 58, 237);
+            _buttonStats.FlatAppearance.MouseOverBackColor = Color.FromArgb(167, 139, 250);
             _buttonStats.FlatStyle = FlatStyle.Flat;
             _buttonStats.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             _buttonStats.ForeColor = Color.White;
@@ -397,10 +402,11 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _buttonChallenge
             // 
-            _buttonChallenge.BackColor = Color.FromArgb(255, 87, 34);
+            // 语义色：橙色 #F59E0B = 警告/挑战（与设计系统 Warning 对齐）
+            _buttonChallenge.BackColor = Color.FromArgb(245, 158, 11);
             _buttonChallenge.FlatAppearance.BorderSize = 0;
-            _buttonChallenge.FlatAppearance.MouseDownBackColor = Color.FromArgb(245, 77, 24);
-            _buttonChallenge.FlatAppearance.MouseOverBackColor = Color.FromArgb(255, 97, 44);
+            _buttonChallenge.FlatAppearance.MouseDownBackColor = Color.FromArgb(217, 119, 6);
+            _buttonChallenge.FlatAppearance.MouseOverBackColor = Color.FromArgb(251, 191, 36);
             _buttonChallenge.FlatStyle = FlatStyle.Flat;
             _buttonChallenge.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             _buttonChallenge.ForeColor = Color.White;
@@ -414,10 +420,11 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _buttonAchievement
             // 
-            _buttonAchievement.BackColor = Color.FromArgb(255, 193, 7);
+            // 语义色：橙色 #F59E0B = 成就/收藏（与设计系统 Warning/Favorite 对齐）
+            _buttonAchievement.BackColor = Color.FromArgb(245, 158, 11);
             _buttonAchievement.FlatAppearance.BorderSize = 0;
-            _buttonAchievement.FlatAppearance.MouseDownBackColor = Color.FromArgb(245, 183, 0);
-            _buttonAchievement.FlatAppearance.MouseOverBackColor = Color.FromArgb(255, 203, 27);
+            _buttonAchievement.FlatAppearance.MouseDownBackColor = Color.FromArgb(217, 119, 6);
+            _buttonAchievement.FlatAppearance.MouseOverBackColor = Color.FromArgb(251, 191, 36);
             _buttonAchievement.FlatStyle = FlatStyle.Flat;
             _buttonAchievement.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             _buttonAchievement.ForeColor = Color.White;
@@ -431,10 +438,11 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _buttonWrongBook
             // 
-            _buttonWrongBook.BackColor = Color.FromArgb(244, 67, 54);
+            // 语义色：红色 #EF4444 = 危险/错题（与设计系统 Error 对齐）
+            _buttonWrongBook.BackColor = Color.FromArgb(239, 68, 68);
             _buttonWrongBook.FlatAppearance.BorderSize = 0;
-            _buttonWrongBook.FlatAppearance.MouseDownBackColor = Color.FromArgb(234, 57, 44);
-            _buttonWrongBook.FlatAppearance.MouseOverBackColor = Color.FromArgb(254, 77, 64);
+            _buttonWrongBook.FlatAppearance.MouseDownBackColor = Color.FromArgb(220, 38, 38);
+            _buttonWrongBook.FlatAppearance.MouseOverBackColor = Color.FromArgb(248, 113, 113);
             _buttonWrongBook.FlatStyle = FlatStyle.Flat;
             _buttonWrongBook.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             _buttonWrongBook.ForeColor = Color.White;

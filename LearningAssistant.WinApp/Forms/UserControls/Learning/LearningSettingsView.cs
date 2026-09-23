@@ -174,7 +174,8 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _panelConfig
             // 
-            _panelConfig.BackColor = Color.FromArgb(245, 245, 250);
+            // 面板背景：浅色 Surface #F8FAFC（与设计系统 Surface 对齐）
+            _panelConfig.BackColor = Color.FromArgb(248, 250, 252);
             _panelConfig.BorderStyle = BorderStyle.FixedSingle;
             _panelConfig.Controls.Add(_labelConfigTitle);
             _panelConfig.Controls.Add(_groupBoxMode);
@@ -197,12 +198,15 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _labelConfigTitle
             // 
-            _labelConfigTitle.BackColor = Color.FromArgb(103, 58, 183);
+            // 标题栏主色：紫色 #8B5CF6 + 白字（与设计系统 Primary 对齐）
+            _labelConfigTitle.BackColor = Color.FromArgb(139, 92, 246);
             _labelConfigTitle.Dock = DockStyle.Top;
             _labelConfigTitle.Font = new Font("微软雅黑", 11F, FontStyle.Bold);
             _labelConfigTitle.ForeColor = Color.White;
             _labelConfigTitle.Location = new Point(0, 0);
             _labelConfigTitle.Name = "_labelConfigTitle";
+            // Tag 标记为标题，主题应用时跳过其前景色覆盖以保留白字紫底
+            _labelConfigTitle.Tag = "title";
             _labelConfigTitle.Size = new Size(218, 40);
             _labelConfigTitle.TabIndex = 0;
             _labelConfigTitle.Text = "⚙️ 设置";
@@ -442,10 +446,11 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // _buttonThemeToggle
             // 
             _buttonThemeToggle.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            _buttonThemeToggle.BackColor = Color.FromArgb(103, 58, 183);
+            // 语义色：紫色 #8B5CF6 = 主色（与设计系统 Primary 对齐）
+            _buttonThemeToggle.BackColor = Color.FromArgb(139, 92, 246);
             _buttonThemeToggle.FlatAppearance.BorderSize = 0;
-            _buttonThemeToggle.FlatAppearance.MouseDownBackColor = Color.FromArgb(93, 48, 173);
-            _buttonThemeToggle.FlatAppearance.MouseOverBackColor = Color.FromArgb(113, 68, 193);
+            _buttonThemeToggle.FlatAppearance.MouseDownBackColor = Color.FromArgb(124, 58, 237);
+            _buttonThemeToggle.FlatAppearance.MouseOverBackColor = Color.FromArgb(167, 139, 250);
             _buttonThemeToggle.FlatStyle = FlatStyle.Flat;
             _buttonThemeToggle.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
             _buttonThemeToggle.ForeColor = Color.White;

@@ -87,7 +87,8 @@ namespace LearningAssistant.Forms.UserControls.Learning
             // 
             // _panelContent
             // 
-            _panelContent.BackColor = Color.White;
+            // 面板背景：浅色 Surface #F8FAFC（与设计系统 Surface 对齐）
+            _panelContent.BackColor = Color.FromArgb(248, 250, 252);
             _panelContent.Controls.Add(_listBoxDisplay);
             _panelContent.Controls.Add(_labelContent);
             _panelContent.Dock = DockStyle.Fill;
