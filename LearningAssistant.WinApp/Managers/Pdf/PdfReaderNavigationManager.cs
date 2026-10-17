@@ -54,6 +54,14 @@ namespace LearningAssistant.Managers
         private Rectangle? _lastSelectionRect = null;
         private Rectangle? _pendingHighlightRect = null;
 
+        // 拖动中的预览脏区跟踪：只重绘「上一帧预览包围盒 ∪ 当前包围盒」，
+        // 避免每次 MouseMove 触发整页位图 + 全部标注层的全控件重绘。
+        private Rectangle _previewInvalidRect = Rectangle.Empty;
+        private bool _hasPreviewInvalidRect = false;
+        private Point _lastPreviewPoint = Point.Empty;
+        private bool _hasLastPreviewPoint = false;
+        private const int PreviewInvalidMargin = 8;
+
         private bool _isOcrPanelDragging = false;
         private Point _ocrPanelStartPoint = Point.Empty;
         private bool _isDoubleClickPending = false;
@@ -123,6 +131,7 @@ namespace LearningAssistant.Managers
         public float PenWidth => _toolHandler.PenWidth;
         public bool IsDashed => _toolHandler.IsDashed;
         public string PenType => _toolHandler.PenType;
+        public Color HighlightPreviewColor => _toolHandler.HighlightPreviewColor;
         public bool IsDrawing => _toolHandler.IsDrawing;
         public List<PointF>? CurrentStrokePoints => _toolHandler.CurrentStrokePoints;
         public AnnotationStroke? SelectedStroke => _selectionManager.SelectedStroke;
@@ -260,6 +269,15 @@ namespace LearningAssistant.Managers
             _toolHandler.SetStrokeStyle(style);
         }
 
+        /// <summary>
+        /// 设置高亮预览使用的颜色，使高亮预览与实际落笔的高亮颜色保持一致
+        /// （此前形状预览里的高亮色是硬编码的，不随所选高亮颜色变化）。
+        /// </summary>
+        public void SetHighlightPreviewColor(Color color)
+        {
+            _toolHandler.HighlightPreviewColor = color;
+        }
+
         public void ToggleFavoriteToolbar()
         {
             _favoriteToolbarActive = !_favoriteToolbarActive;
@@ -364,6 +382,7 @@ namespace LearningAssistant.Managers
                     }
 
                     // 标注工具模式分发：选择 / 高亮 / 自由绘制 / 形状 / 文字 / 橡皮擦 / 特殊工具
+                    ResetPreviewInvalidation();
                     switch (_currentToolMode)
                     {
                         case AnnotationToolMode.Select:
@@ -515,6 +534,92 @@ namespace LearningAssistant.Managers
             }
         }
 
+        /// <summary>
+        /// 计算当前绘制预览（自由笔划/形状）在控件客户区中的包围盒。
+        /// 无法确定（双页模式、跨页预览、缺少图像）时返回 null，调用方回退到全控件重绘。
+        /// </summary>
+        private Rectangle? GetPreviewClientRect()
+        {
+            // 双页模式的第二页预览暂不做局部重绘，保持行为安全
+            if (_form.IsDualPage) return null;
+
+            var srcImage = _form.CurrentPageImage;
+            if (srcImage == null) return null;
+            if (_toolHandler.DrawingPageIndex >= 0 && _toolHandler.DrawingPageIndex != _form.CurrentPageIndex) return null;
+
+            var imgRect = _form.GetImageDisplayRect();
+            if (imgRect.Width <= 0 || imgRect.Height <= 0) return null;
+
+            float scaleX = (float)imgRect.Width / srcImage.Width;
+            float scaleY = (float)imgRect.Height / srcImage.Height;
+
+            float minX = float.MaxValue, minY = float.MaxValue;
+            float maxX = float.MinValue, maxY = float.MinValue;
+
+            if (_toolHandler.IsDrawing && _toolHandler.CurrentStrokePoints != null && _toolHandler.CurrentStrokePoints.Count > 0)
+            {
+                foreach (var pt in _toolHandler.CurrentStrokePoints)
+                {
+                    if (pt.X < minX) minX = pt.X;
+                    if (pt.Y < minY) minY = pt.Y;
+                    if (pt.X > maxX) maxX = pt.X;
+                    if (pt.Y > maxY) maxY = pt.Y;
+                }
+            }
+            else if (_toolHandler.IsDrawingShape && _toolHandler.ShapeStartPoint.HasValue && _toolHandler.ShapeEndPoint.HasValue)
+            {
+                var a = _toolHandler.ShapeStartPoint.Value;
+                var b = _toolHandler.ShapeEndPoint.Value;
+                minX = Math.Min(a.X, b.X);
+                minY = Math.Min(a.Y, b.Y);
+                maxX = Math.Max(a.X, b.X);
+                maxY = Math.Max(a.Y, b.Y);
+            }
+            else
+            {
+                return null;
+            }
+
+            int left = (int)Math.Floor(minX * scaleX) + imgRect.X - PreviewInvalidMargin;
+            int top = (int)Math.Floor(minY * scaleY) + imgRect.Y - PreviewInvalidMargin;
+            int right = (int)Math.Ceiling(maxX * scaleX) + imgRect.X + PreviewInvalidMargin;
+            int bottom = (int)Math.Ceiling(maxY * scaleY) + imgRect.Y + PreviewInvalidMargin;
+
+            var rect = Rectangle.FromLTRB(left, top, right, bottom);
+            rect.Intersect(_form.PictureBoxPdf.ClientRectangle);
+            return rect;
+        }
+
+        /// <summary>
+        /// 请求重绘当前绘制预览：优先只重绘「上一帧 ∪ 当前」预览包围盒，避免整页重绘。
+        /// </summary>
+        private void InvalidatePreview()
+        {
+            var current = GetPreviewClientRect();
+            if (!current.HasValue || current.Value.Width <= 0 || current.Value.Height <= 0)
+            {
+                _hasPreviewInvalidRect = false;
+                _form.PictureBoxPdf.Invalidate();
+                return;
+            }
+
+            var dirty = current.Value;
+            if (_hasPreviewInvalidRect)
+                dirty = Rectangle.Union(dirty, _previewInvalidRect);
+
+            _previewInvalidRect = current.Value;
+            _hasPreviewInvalidRect = true;
+            _form.PictureBoxPdf.Invalidate(dirty);
+        }
+
+        /// <summary>开始一次新的绘制时重置预览脏区跟踪</summary>
+        private void ResetPreviewInvalidation()
+        {
+            _previewInvalidRect = Rectangle.Empty;
+            _hasPreviewInvalidRect = false;
+            _hasLastPreviewPoint = false;
+        }
+
         public void MouseMove(object? sender, MouseEventArgs e)
         {
             try
@@ -539,19 +644,26 @@ namespace LearningAssistant.Managers
                 if (_toolHandler.IsDrawing)
                 {
                     _selectEnd = e.Location;
+                    // 同一位置的重复移动直接跳过，减少无意义的预览重绘
+                    if (_hasLastPreviewPoint && e.Location == _lastPreviewPoint) return;
+                    _lastPreviewPoint = e.Location;
+                    _hasLastPreviewPoint = true;
                     var imgPt = ClientToImage(e.Location);
                     _toolHandler.AddStrokePoint(imgPt);
-                    _form.PictureBoxPdf.Invalidate();
+                    InvalidatePreview();
                     return;
                 }
 
                 if (_toolHandler.IsDrawingShape)
                 {
                     _selectEnd = e.Location;
+                    if (_hasLastPreviewPoint && e.Location == _lastPreviewPoint) return;
+                    _lastPreviewPoint = e.Location;
+                    _hasLastPreviewPoint = true;
                     var endPt = ClientToImage(e.Location);
 
                     _toolHandler.UpdateShapeEnd(endPt, _toolHandler.ShapeStartPoint, _currentToolMode, (Control.ModifierKeys & Keys.Shift) == Keys.Shift);
-                    _form.PictureBoxPdf.Invalidate();
+                    InvalidatePreview();
                     return;
                 }
 
@@ -642,6 +754,8 @@ namespace LearningAssistant.Managers
             {
                 StopLongPressTimer();
                 _isLongPressPending = false;
+                // 绘制结束后会全量重绘一次，这里清理预览脏区跟踪
+                ResetPreviewInvalidation();
 
                 if (_isDoubleClickPending)
                 {

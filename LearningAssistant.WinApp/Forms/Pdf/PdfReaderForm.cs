@@ -172,6 +172,18 @@ namespace LearningAssistant.Forms.Pdf
         private Button _buttonColorDodgerBlue;
         private Button _buttonColorMore;
 
+        /// <summary>「更多」按钮：承载低频工具，对应工具栏一级图标条的收口入口</summary>
+        private Button _buttonMoreTools;
+
+        /// <summary>高亮色圆形按钮（仅在「高亮」工具下显示，与标注色共用同一颜色面板）</summary>
+        private Button[] _buttonHighlightColors = Array.Empty<Button>();
+
+        private static readonly HighlightColor[] HighlightPalette =
+        {
+            HighlightColor.Yellow, HighlightColor.Green, HighlightColor.Blue,
+            HighlightColor.Pink, HighlightColor.Orange
+        };
+
         // 16色面板 + 更多颜色按钮
         private static readonly Color[] AnnotationColors = new[]
         {
@@ -426,7 +438,9 @@ namespace LearningAssistant.Forms.Pdf
 
             InitializeHighlightColorButtonEvents();
             InitializeColorButtonLayout();
+            InitializeHighlightColorSwatches();
             InitializeToolbarButtonHoverEffects();
+            InitializeAnnotationToolStrip();
 
             // 画笔子类型按钮初始隐藏，仅在进入 Pen 模式后显示
             if (_buttonPenTypePencil != null) _buttonPenTypePencil.Visible = false;
@@ -543,7 +557,7 @@ namespace LearningAssistant.Forms.Pdf
         private static readonly Color ToolbarPressedNight = Color.FromArgb(42, 42, 42);   // #2a2a2a
 
         // 工具栏组间分隔线 X 坐标
-        private const int ToolbarSepX1 = 454;   // 标注工具组 ↔ 视图/模式组
+        private const int ToolbarSepX1 = 343;   // 绘制/编辑工具组 ↔ 视图与智能组
         private const int ToolbarSepX2 = 710;   // 视图/模式组 ↔ 缩放视图组
         private const int ToolbarSepX3 = 1091;  // 缩放视图组 ↔ 页码导航组
 
@@ -2465,7 +2479,7 @@ namespace LearningAssistant.Forms.Pdf
             {
                 _panelNavigation.Height = 90;
                 if (_buttonCollapseNav != null) _buttonCollapseNav.Text = "▾";
-                ShowAnnotationOptions(_lastToolModeNeedsOptions);
+                UpdateAnnotationOptions(_navigationManager?.CurrentToolMode ?? AnnotationToolMode.Select);
             }
             else
             {
@@ -2475,8 +2489,6 @@ namespace LearningAssistant.Forms.Pdf
             }
             AdjustPanelPdfSize();
         }
-
-        private bool _lastToolModeNeedsOptions = false;
 
         private void ToolbarGroupTools_Paint(object? sender, PaintEventArgs e)
         {
@@ -2577,6 +2589,81 @@ namespace LearningAssistant.Forms.Pdf
         }
 
         /// <summary>
+        /// 初始化高亮色圆形按钮并放入标注颜色面板，
+        /// 让「高亮」与「添加标注」共用同一个颜色入口，消除两处颜色选择不一致。
+        /// </summary>
+        private void InitializeHighlightColorSwatches()
+        {
+            if (_panelColor == null) return;
+            _buttonHighlightColors = new Button[HighlightPalette.Length];
+            for (int i = 0; i < HighlightPalette.Length; i++)
+            {
+                var color = HighlightService.GetHighlightColor(HighlightPalette[i]).ToColor();
+                var button = new Button
+                {
+                    Name = $"_buttonHighlightColor{i}",
+                    Size = new Size(22, 22),
+                    Location = new Point(2 + i * 28, 4),
+                    FlatStyle = FlatStyle.Flat,
+                    BackColor = ToSwatchSurface(color),
+                    UseVisualStyleBackColor = false,
+                    Visible = false,
+                    TabIndex = 200 + i
+                };
+                button.FlatAppearance.BorderSize = 1;
+                button.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
+                var paletteColor = HighlightPalette[i];
+                button.Click += (s, e) => SelectHighlightColor(paletteColor);
+                _toolTip.SetToolTip(button, $"高亮色：{paletteColor}");
+                MakeButtonCircular(button);
+                _panelColor.Controls.Add(button);
+                _buttonHighlightColors[i] = button;
+            }
+        }
+
+        /// <summary>将带透明度的荧光色合成为不透明色，用于色板按钮显示</summary>
+        private static Color ToSwatchSurface(Color color)
+        {
+            int alpha = color.A;
+            if (alpha >= 255) return color;
+            int Mix(int value) => (value * alpha + 255 * (255 - alpha)) / 255;
+            return Color.FromArgb(Mix(color.R), Mix(color.G), Mix(color.B));
+        }
+
+        /// <summary>从颜色面板选择高亮颜色，并同步高亮标签页的单选项</summary>
+        private void SelectHighlightColor(HighlightColor color)
+        {
+            _currentHighlightColor = color;
+            if (_highlightManager != null) _highlightManager.CurrentHighlightColor = color;
+
+            var radios = new[] { _radioHighlightYellow, _radioHighlightGreen, _radioHighlightBlue, _radioHighlightPink, _radioHighlightOrange };
+            int index = Array.IndexOf(HighlightPalette, color);
+            if (index >= 0 && index < radios.Length && radios[index] != null && !radios[index].Checked)
+                radios[index].Checked = true;
+
+            if (_navigationManager != null)
+                _navigationManager.SetHighlightPreviewColor(HighlightService.GetHighlightColor(color).ToColor());
+
+            UpdateHighlightColorSelection(color);
+            _pictureBoxPdf?.Invalidate();
+        }
+
+        private void UpdateHighlightColorSelection(HighlightColor color)
+        {
+            if (_buttonHighlightColors == null) return;
+            for (int i = 0; i < _buttonHighlightColors.Length && i < HighlightPalette.Length; i++)
+            {
+                var button = _buttonHighlightColors[i];
+                if (button == null) continue;
+                bool isMatch = HighlightPalette[i] == color;
+                button.FlatAppearance.BorderSize = isMatch ? 3 : 1;
+                button.FlatAppearance.BorderColor = isMatch
+                    ? Color.FromArgb(64, 150, 255)
+                    : Color.FromArgb(200, 200, 200);
+            }
+        }
+
+        /// <summary>
         /// 将按钮设置为圆形 Region
         /// </summary>
         private static void MakeButtonCircular(Button button)
@@ -2606,11 +2693,231 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
-        private void ShowAnnotationOptions(bool show)
+        /// <summary>
+        /// 参照微信截图工具栏重整标注工具条：一级图标条只保留高频工具，
+        /// 低频工具收进「更多」下拉，并重新紧凑排布以消除原有的按钮位置重叠。
+        /// </summary>
+        private void InitializeAnnotationToolStrip()
         {
-            if (_panelAnnotationOptions != null)
-                _panelAnnotationOptions.Visible = show;
+            if (_toolbarGroupTools == null) return;
+
+            var moreMenu = new ContextMenuStrip(components) { ShowImageMargin = false };
+            AddMoreMenuItem(moreMenu, "删除线", () => ButtonStrikethroughMode_Click(this, EventArgs.Empty));
+            AddMoreMenuItem(moreMenu, "标注图层显隐", () => ButtonToggleAnnotationLayer_Click(this, EventArgs.Empty));
+            AddMoreMenuItem(moreMenu, "导出标注为图片", () => ExportAnnotationsAsImage_Click(this, EventArgs.Empty));
+            AddMoreMenuItem(moreMenu, "检查清单", () => ButtonChecklistMode_Click(this, EventArgs.Empty));
+            AddMoreMenuItem(moreMenu, "插入图片", () => ButtonImageEmbedMode_Click(this, EventArgs.Empty));
+            AddMoreMenuItem(moreMenu, "聚光灯", () => ButtonSpotlightMode_Click(this, EventArgs.Empty));
+            AddMoreMenuItem(moreMenu, "放大镜", () => ButtonMagnifierMode_Click(this, EventArgs.Empty));
+            AddMoreMenuItem(moreMenu, "临时画笔", () => ButtonTemporaryPenMode_Click(this, EventArgs.Empty));
+
+            // 低频工具按钮退出一级图标条
+            HideFromToolStrip(_buttonStrikethroughMode);
+            HideFromToolStrip(_buttonToggleAnnotationLayer);
+            HideFromToolStrip(_buttonExportAnnotationsAsImage);
+            HideFromToolStrip(_buttonChecklistMode);
+            HideFromToolStrip(_buttonImageEmbedMode);
+            HideFromToolStrip(_buttonSpotlightMode);
+            HideFromToolStrip(_buttonMagnifierMode);
+            HideFromToolStrip(_buttonTemporaryPenMode);
+
+            _buttonMoreTools = new Button
+            {
+                Name = "_buttonMoreTools",
+                Text = "⋯",
+                Size = new Size(28, 31),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft YaHei UI", 10F),
+                UseVisualStyleBackColor = false,
+                TabIndex = 200
+            };
+            _buttonMoreTools.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _toolTip.SetToolTip(_buttonMoreTools, "更多工具");
+            _buttonMoreTools.Click += (s, e) => moreMenu.Show(_buttonMoreTools, new Point(0, _buttonMoreTools.Height));
+            _toolbarGroupTools.Controls.Add(_buttonMoreTools);
+            // 后加的控件默认位于 z-order 最底层，需提到最前避免被同级按钮遮盖
+            _buttonMoreTools.BringToFront();
+
+            LayoutAnnotationToolStrip();
         }
+
+        private static void AddMoreMenuItem(ContextMenuStrip menu, string text, Action action)
+        {
+            var item = new ToolStripMenuItem(text);
+            item.Click += (s, e) => action();
+            menu.Items.Add(item);
+        }
+
+        private static void HideFromToolStrip(Button? button)
+        {
+            if (button != null) button.Visible = false;
+        }
+
+        /// <summary>按分组顺序重排一级图标条：绘制工具 → 编辑动作 → 更多 → 视图与智能</summary>
+        private void LayoutAnnotationToolStrip()
+        {
+            const int y = 2;
+            const int size = 28;
+            const int gap = 4;
+            const int groupGap = 12;
+            int x = 5;
+
+            x = PlaceInToolStrip(_buttonHighlightMode, x, y, size, gap);
+            x = PlaceInToolStrip(_buttonRectangleMode, x, y, size, gap);
+            x = PlaceInToolStrip(_buttonEllipseMode, x, y, size, gap);
+            x = PlaceInToolStrip(_buttonArrowMode, x, y, size, gap);
+            x = PlaceInToolStrip(_buttonPenMode, x, y, size, gap);
+            x = PlaceInToolStrip(_buttonMosaicMode, x, y, size, gap);
+            x = PlaceInToolStrip(_buttonTextMode, x, y, size, gap);
+            x = PlaceInToolStrip(_buttonEraserMode, x, y, size, groupGap);
+
+            x = PlaceInToolStrip(_buttonUndoAnnotation, x, y, size, groupGap);
+
+            x = PlaceInToolStrip(_buttonMoreTools, x, y, size, groupGap);
+
+            x = PlaceInToolStrip(_buttonNightMode, x, y, size, gap);
+            x = PlaceInToolStrip(_buttonAskAi, x, y, size, gap);
+            x = PlaceInToolStrip(_buttonTranslationToggle, x, y, size, gap);
+            PlaceInToolStrip(_buttonClearAllAnnotations, x, y, size, gap);
+        }
+
+        // 注意：不能在这里判断 control.Visible —— 构造函数阶段窗体尚未显示，
+        // Control.Visible 会沿父链返回 false，导致重排被整体跳过。
+        private static int PlaceInToolStrip(Control? control, int x, int y, int size, int gap)
+        {
+            if (control == null) return x;
+            control.Location = new Point(x, y);
+            control.Size = new Size(size, 31);
+            return x + size + gap;
+        }
+
+        /// <summary>当前工具需要的选项分组：颜色 / 粗细 / 虚实线</summary>
+        private static (bool color, bool thickness, bool dash) GetOptionGroups(AnnotationToolMode mode)
+        {
+            switch (mode)
+            {
+                // 形状类：颜色 + 粗细 + 虚实线
+                case AnnotationToolMode.Rectangle:
+                case AnnotationToolMode.Ellipse:
+                case AnnotationToolMode.Arrow:
+                case AnnotationToolMode.Strikethrough:
+                    return (true, true, true);
+                // 手绘 / 高亮：颜色 + 粗细
+                case AnnotationToolMode.Pen:
+                case AnnotationToolMode.TemporaryPen:
+                case AnnotationToolMode.Highlight:
+                    return (true, true, false);
+                // 文字：仅颜色
+                case AnnotationToolMode.Text:
+                    return (true, false, false);
+                default:
+                    return (false, false, false);
+            }
+        }
+
+        /// <summary>
+        /// 工具切换后更新上下文选项区：只显示当前工具需要的分组，并按可见顺序紧凑重排，
+        /// 避免出现「控件还在但被隐藏」造成的空洞与错位。
+        /// </summary>
+        private void UpdateAnnotationOptions(AnnotationToolMode mode)
+        {
+            if (_panelAnnotationOptions == null) return;
+
+            var groups = GetOptionGroups(mode);
+            bool showOptions = (groups.color || groups.thickness || groups.dash) && _isNavPanelExpanded;
+
+            _panelAnnotationOptions.Visible = showOptions;
+            if (!showOptions) return;
+
+            int x = 3;
+
+            if (_buttonDashStyle != null)
+            {
+                _buttonDashStyle.Visible = groups.dash;
+                if (groups.dash)
+                {
+                    _buttonDashStyle.Location = new Point(x, 3);
+                    x += _buttonDashStyle.Width + 9;
+                }
+            }
+
+            if (_trackBarThickness != null)
+            {
+                _trackBarThickness.Visible = groups.thickness;
+                if (_labelThicknessValue != null) _labelThicknessValue.Visible = groups.thickness;
+                if (groups.thickness)
+                {
+                    _trackBarThickness.Location = new Point(x, 5);
+                    x += _trackBarThickness.Width + 4;
+                    if (_labelThicknessValue != null)
+                    {
+                        _labelThicknessValue.Location = new Point(x, 9);
+                        x += _labelThicknessValue.Width + 3;
+                    }
+                }
+            }
+
+            LayoutColorPanel(groups.color, mode == AnnotationToolMode.Highlight);
+            if (_panelColor != null)
+            {
+                _panelColor.Location = new Point(x, 6);
+                _panelAnnotationOptions.Width = x + _panelColor.Width + 3;
+            }
+
+            // 画笔笔型子面板紧跟选项区右侧，避免与变宽后的选项区重叠
+            if (panel2 != null)
+                panel2.Location = new Point(_panelAnnotationOptions.Right + 12, panel2.Location.Y);
+
+            SyncAnnotationOptionsToManager();
+        }
+
+        /// <summary>
+        /// 颜色面板模式切换：高亮使用半透明荧光色，其余工具使用实色标注色。
+        /// 使「高亮」与「添加标注」共用同一套颜色入口，避免两处颜色选择不一致。
+        /// </summary>
+        private void LayoutColorPanel(bool visible, bool highlightMode)
+        {
+            if (_panelColor == null) return;
+            _panelColor.Visible = visible;
+
+            foreach (var button in GetSolidColorButtons())
+            {
+                if (button != null) button.Visible = visible && !highlightMode;
+            }
+            if (_buttonColorMore != null) _buttonColorMore.Visible = visible && !highlightMode;
+
+            if (_buttonHighlightColors != null)
+            {
+                foreach (var button in _buttonHighlightColors)
+                {
+                    if (button != null) button.Visible = visible && highlightMode;
+                }
+            }
+
+            if (!visible) return;
+
+            if (highlightMode)
+            {
+                // 进入高亮工具时同步预览色，确保预览与实际落笔颜色一致
+                if (_navigationManager != null)
+                    _navigationManager.SetHighlightPreviewColor(HighlightService.GetHighlightColor(_currentHighlightColor).ToColor());
+                UpdateHighlightColorSelection(_currentHighlightColor);
+            }
+            else
+            {
+                Color current = _navigationManager?.CurrentToolMode == AnnotationToolMode.TemporaryPen
+                    ? (_navigationManager?.TemporaryPenColor ?? Color.RoyalBlue)
+                    : (_navigationManager?.PenColor ?? Color.RoyalBlue);
+                UpdateAnnotationColorSelection(current);
+            }
+        }
+
+        private Button[] GetSolidColorButtons() => new[]
+        {
+            _buttonColorBlack, _buttonColorBlue, _buttonColorGreen, _buttonColorOrange, _buttonColorRed,
+            _buttonColorPurple, _buttonColorCyan, _buttonColorTeal, _buttonColorPink, _buttonColorBrown,
+            _buttonColorGray, _buttonColorYellow, _buttonColorLime, _buttonColorVioletRed, _buttonColorDodgerBlue
+        };
 
         private void SyncAnnotationOptionsToManager()
         {
@@ -2783,26 +3090,8 @@ namespace LearningAssistant.Forms.Pdf
         {
             _navigationManager?.SetToolMode(mode, isOneTime);
 
-            bool showOptions = mode == AnnotationToolMode.Rectangle ||
-                             mode == AnnotationToolMode.Ellipse ||
-                             mode == AnnotationToolMode.Arrow ||
-                             mode == AnnotationToolMode.Pen ||
-                             mode == AnnotationToolMode.TemporaryPen ||
-                             mode == AnnotationToolMode.Mosaic ||
-                             mode == AnnotationToolMode.Strikethrough;
-            _lastToolModeNeedsOptions = showOptions;
-            ShowAnnotationOptions(showOptions);
-
-            // 虚线切换按钮仅在矩形/椭圆/箭头/删除线模式下可见
-            bool showDashStyle = mode == AnnotationToolMode.Rectangle ||
-                                mode == AnnotationToolMode.Ellipse ||
-                                mode == AnnotationToolMode.Arrow ||
-                                mode == AnnotationToolMode.Strikethrough;
-
-            if (showOptions)
-            {
-                SyncAnnotationOptionsToManager();
-            }
+            // 上下文选项：只显示当前工具需要的选项分组，并重新紧凑排布
+            UpdateAnnotationOptions(mode);
 
             // 画笔子类型按钮在 Pen 和 TemporaryPen 模式下可见
             bool isPenMode = mode == AnnotationToolMode.Pen || mode == AnnotationToolMode.TemporaryPen;
@@ -3093,7 +3382,7 @@ namespace LearningAssistant.Forms.Pdf
         {
             try
             {
-                ClearBackground(e.Graphics);
+                ClearBackground(e.Graphics, e.ClipRectangle);
                 DrawPageImage(e.Graphics);
                 DrawSelectionRect(e.Graphics);
 
@@ -3117,10 +3406,25 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
-        private void ClearBackground(Graphics g)
+        /// <summary>
+        /// 开启双缓冲的 PictureBox，减少拖动绘制/缩放时的闪烁并降低重绘的感知延迟。
+        /// </summary>
+        private sealed class BufferedPictureBox : PictureBox
+        {
+            public BufferedPictureBox()
+            {
+                DoubleBuffered = true;
+            }
+        }
+
+        private void ClearBackground(Graphics g, Rectangle clip)
         {
             bool isNight = _nightModeManager?.IsNightMode ?? _isNightMode;
-            g.Clear(isNight ? Color.FromArgb(20, 20, 20) : Color.White);
+            // 只填充本次需要重绘的区域，使局部 Invalidate 生效（原先 g.Clear 会清空整个控件，
+            // 导致拖动绘制时无法做脏区重绘）
+            if (clip.Width <= 0 || clip.Height <= 0) return;
+            using var brush = new SolidBrush(isNight ? Color.FromArgb(20, 20, 20) : Color.White);
+            g.FillRectangle(brush, clip);
         }
 
         private void DrawPageImage(Graphics g)
@@ -3514,20 +3818,21 @@ namespace LearningAssistant.Forms.Pdf
 
         private void ButtonPenTypePencil_Click(object? sender, EventArgs e)
         {
+            // 笔型是画笔的上下文选项，切换笔型不再改变当前工具模式
             _navigationManager?.SetPenType("Pencil");
-            SetAnnotationToolMode(AnnotationToolMode.Pen);
+            UpdatePenTypeButtonState();
         }
 
         private void ButtonPenTypePen_Click(object? sender, EventArgs e)
         {
             _navigationManager?.SetPenType("Pen");
-            SetAnnotationToolMode(AnnotationToolMode.Pen);
+            UpdatePenTypeButtonState();
         }
 
         private void ButtonPenTypeMarker_Click(object? sender, EventArgs e)
         {
             _navigationManager?.SetPenType("Marker");
-            SetAnnotationToolMode(AnnotationToolMode.Pen);
+            UpdatePenTypeButtonState();
         }
 
         private void ButtonColorBlue_Click(object? sender, EventArgs e)
@@ -4248,7 +4553,7 @@ namespace LearningAssistant.Forms.Pdf
             _statusBar = new Panel();
             _statusLabelLeft = new Label();
             _statusLabelRight = new Label();
-            _pictureBoxPdf = new PictureBox();
+            _pictureBoxPdf = new BufferedPictureBox();
             _contextMenuPdf = new ContextMenuStrip(components);
             menuItemCopy = new ToolStripMenuItem();
             menuItemSearch = new ToolStripMenuItem();
