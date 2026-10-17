@@ -144,6 +144,11 @@ namespace LearningAssistant.Common
         public static string AudioDir => Path.Combine(DataDir, "Audio");
 
         /// <summary>
+        /// PDF 配套音频 profile 目录（按 PDF 哈希存 sidecar）
+        /// </summary>
+        public static string AudioProfilesDir => Path.Combine(AudioDir, "Profiles");
+
+        /// <summary>
         /// TTS 缓存目录
         /// </summary>
         public static string TTSCacheDir => Path.Combine(CacheDir, "tts");
@@ -249,6 +254,7 @@ namespace LearningAssistant.Common
             EnsureDirectoryExists(HighlightsDir);
             EnsureDirectoryExists(ThumbnailsDir);
             EnsureDirectoryExists(AudioDir);
+            EnsureDirectoryExists(AudioProfilesDir);
             EnsureDirectoryExists(TTSCacheDir);
             EnsureDirectoryExists(TesseractDataDir);
         }

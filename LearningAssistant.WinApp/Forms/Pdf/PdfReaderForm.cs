@@ -7,6 +7,7 @@ using LearningAssistant.Models.Config;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
+using LearningAssistant.Services.Media;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
@@ -28,6 +29,11 @@ namespace LearningAssistant.Forms.Pdf
         private PdfReaderHighlightManager? _highlightManager;
         private PdfReaderNavigationManager? _navigationManager;
         private PdfReaderAudioManager? _audioManager;
+        private PdfAudioTrackManager? _audioTrackManager;
+        private PdfAudioPanel? _audioPanel;
+        private TabControl? _audioSubTabs;
+        private TabPage? _tabPageCompanion;
+        private TabPage? _tabPageRecording;
         private readonly IAudioRecorderService? _audioRecorderService;
 
         private readonly Pen _pen = new Pen(Color.Red, 4f);
@@ -357,7 +363,39 @@ namespace LearningAssistant.Forms.Pdf
                 _pictureBoxPdf.MouseUp += _navigationManager.MouseUp;
             }
 
-            // 初始化音频管理器（如果音频录制服务可用）
+            // 音频 Tab 采用「配套音频 / 我的录音」双面板结构
+            TabPage? recordingPage = _tabPageAudio;
+            if (_tabPageAudio != null)
+            {
+                _tabPageCompanion = new TabPage("🎵 配套音频");
+                _tabPageRecording = new TabPage("🎤 我的录音");
+                recordingPage = _tabPageRecording;
+                _audioSubTabs = new TabControl { Dock = DockStyle.Fill };
+                _audioSubTabs.TabPages.Add(_tabPageCompanion);
+                _audioSubTabs.TabPages.Add(_tabPageRecording);
+                _tabPageAudio.Controls.Add(_audioSubTabs);
+            }
+
+            // 初始化配套音频跟踪管理器（与录音服务解耦，独立于录音可用性）
+            try
+            {
+                var matcher = Program.ServiceProvider?.GetService(typeof(IPdfAudioMatcher)) as IPdfAudioMatcher;
+                var scanner = Program.ServiceProvider?.GetService(typeof(IPdfAudioDirectoryScanner)) as IPdfAudioDirectoryScanner;
+                var store = Program.ServiceProvider?.GetService(typeof(IPdfAudioProfileStore)) as IPdfAudioProfileStore;
+                var subParser = Program.ServiceProvider?.GetService(typeof(ISubtitleParser)) as ISubtitleParser;
+                if (matcher != null && scanner != null && store != null && subParser != null)
+                {
+                    _audioTrackManager = new PdfAudioTrackManager(_logger, matcher, scanner, store, subParser);
+                    if (_tabPageCompanion != null)
+                    {
+                        _audioPanel = new PdfAudioPanel(_audioTrackManager, this) { Dock = DockStyle.Fill };
+                        _tabPageCompanion.Controls.Add(_audioPanel);
+                    }
+                }
+            }
+            catch { /* 配套音频管理器初始化失败，不阻断 PDF 阅读 */ }
+
+            // 初始化音频录制管理器（如果音频录制服务可用）
             var audioRecorderService = _audioRecorderService;
             if (audioRecorderService == null)
             {
@@ -366,13 +404,13 @@ namespace LearningAssistant.Forms.Pdf
             }
             if (audioRecorderService != null)
             {
-                _audioManager = new PdfReaderAudioManager(_logger, this, audioRecorderService);
+                _audioManager = new PdfReaderAudioManager(_logger, this, audioRecorderService) { MountTabPage = recordingPage };
                 _audioManager.Initialize();
             }
             else
             {
-                // 录音服务不可用时，在音频Tab页上显示提示
-                if (_tabPageAudio != null)
+                // 录音服务不可用时，在「我的录音」子页上显示提示
+                if (recordingPage != null)
                 {
                     var lbl = new Label
                     {
@@ -382,7 +420,7 @@ namespace LearningAssistant.Forms.Pdf
                         TextAlign = ContentAlignment.MiddleCenter,
                         Dock = DockStyle.Fill
                     };
-                    _tabPageAudio.Controls.Add(lbl);
+                    recordingPage.Controls.Add(lbl);
                 }
             }
 
@@ -1397,6 +1435,8 @@ namespace LearningAssistant.Forms.Pdf
             _thumbnailsLoaded = false;
             _currentPdfPath = pdfPath;
             RefreshHighlightList();
+            _audioTrackManager?.LoadProfile(pdfPath, _presenter?.PageCount ?? 0);
+            _audioPanel?.RefreshData();
 
             LoadHighlightsForCurrentPage();
             Text = $"{AppTitle} - {Path.GetFileName(pdfPath)}";
@@ -1568,6 +1608,8 @@ namespace LearningAssistant.Forms.Pdf
             if (pageIndex != _currentPageIndex)
                 _navigationManager?.ClearSelection();
             _currentPageIndex = pageIndex;
+            _audioTrackManager?.OnPageChanged(pageIndex);
+            _audioPanel?.RefreshData();
             _textBoxPage.Text = (pageIndex + 1).ToString();
             _progressBarPage.Value = pageIndex + 1;
             StartPageTransition(isForward);
@@ -5898,6 +5940,7 @@ namespace LearningAssistant.Forms.Pdf
                 _highlightManager?.Dispose();
                 _navigationManager?.Dispose();
                 _audioManager?.Dispose();
+                _audioTrackManager?.Dispose();
 
                 // 释放Timer资源
                 _longPressTimer?.Stop();

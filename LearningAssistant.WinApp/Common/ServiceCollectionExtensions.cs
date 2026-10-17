@@ -1,4 +1,4 @@
-﻿using LearningAssistant.Common.Events;
+using LearningAssistant.Common.Events;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Data.Database;
 using LearningAssistant.Forms.Gamification;
@@ -21,6 +21,7 @@ using LearningAssistant.Services.Feedback;
 using LearningAssistant.Services.Gamification;
 using LearningAssistant.Services.Hotkeys;
 using LearningAssistant.Services.Learning;
+using LearningAssistant.Services.Media;
 using LearningAssistant.Services.PanAnalysis;
 using LearningAssistant.Services.Migration;
 using LearningAssistant.Services.Pdf;
@@ -202,6 +203,12 @@ namespace LearningAssistant.Common
             services.AddScoped<IPdfTtsService, PdfTtsService>();
             services.AddScoped<IPdfStudyIntegration, PdfStudyIntegration>();
             services.AddSingleton<IExportService>(sp => sp.GetRequiredService<ExportService>());
+
+            // PDF 配套音频：字幕解析、目录扫描、匹配引擎、profile 持久化
+            services.AddSingleton<ISubtitleParser, SubtitleParser>();
+            services.AddSingleton<IPdfAudioDirectoryScanner, PdfAudioDirectoryScanner>();
+            services.AddSingleton<IPdfAudioMatcher, PdfAudioMatcher>();
+            services.AddSingleton<IPdfAudioProfileStore, PdfAudioProfileStore>();
 
             return services;
         }

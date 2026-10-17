@@ -1,4 +1,4 @@
-﻿using LearningAssistant.Common;
+using LearningAssistant.Common;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.Pdf;
 using Microsoft.Extensions.Logging;
@@ -14,6 +14,9 @@ namespace LearningAssistant.Managers
         private bool _disposed;
 
         private TabPage? _tabPage;
+
+        /// <summary>录音 UI 的挂载页（默认挂到「音频」Tab；双面板模式下指向「我的录音」子页）</summary>
+        public TabPage? MountTabPage { get; set; }
         private Button _buttonRecord;
         private Button _buttonStop;
         private Button _buttonPlay;
@@ -51,7 +54,7 @@ namespace LearningAssistant.Managers
 
         public void Initialize()
         {
-            _tabPage = _form.TabPageAudio;
+            _tabPage = MountTabPage ?? _form.TabPageAudio;
             if (_tabPage == null) return;
 
             CreateControls();
