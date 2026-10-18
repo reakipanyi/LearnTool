@@ -991,31 +991,23 @@ namespace LearningAssistant.Presenters
             }
         }
 
+        // 翻页始终按 1 页步进，双页模式下当前页为左页、右页自动顺延为下一页，
+        // 避免双页模式下每次翻页跳过一整屏（2 页），保证鼠标滚轮/方向键与工具栏按钮行为一致。
         public void NextPage()
         {
-            int step = (_view.IsDualPage) ? 2 : 1;
-            var nextPage = _pdfFileManager.CurrentPageIndex + step;
+            var nextPage = _pdfFileManager.CurrentPageIndex + 1;
             if (nextPage < _pdfRenderer.PageCount)
             {
                 _ = FireAndForgetWithLogging(RenderPage(nextPage), "RenderPage");
-            }
-            else if (_pdfFileManager.CurrentPageIndex < _pdfRenderer.PageCount - 1)
-            {
-                _ = FireAndForgetWithLogging(RenderPage(_pdfRenderer.PageCount - 1), "RenderPage");
             }
         }
 
         public void PreviousPage()
         {
-            int step = (_view.IsDualPage) ? 2 : 1;
-            var prevPage = _pdfFileManager.CurrentPageIndex - step;
+            var prevPage = _pdfFileManager.CurrentPageIndex - 1;
             if (prevPage >= 0)
             {
                 _ = FireAndForgetWithLogging(RenderPage(prevPage), "RenderPage");
-            }
-            else if (_pdfFileManager.CurrentPageIndex > 0)
-            {
-                _ = FireAndForgetWithLogging(RenderPage(0), "RenderPage");
             }
         }
 

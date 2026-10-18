@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PDF 标注工具栏 布局预览</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #F1F2F4;
+    --surface: #FFFFFF;
+    --surface-muted: #EFEFF2;
+    --text: #1F1F1F;
+    --text-muted: #5A5A62;
+    --border: #D9D9D9;
+    --border-strong: #C4C4C4;
+    --brand: #8B5CF6;
+    --selected-border: #4096FF;
+    --selected-fill: #F0F7FF;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+    --radius: 8px;
+    --radius-card: 12px;
+    --gap-4: 4px;
+    --gap-8: 8px;
+    --gap-12: 12px;
+    --gap-16: 16px;
+    --gap-24: 24px;
+  }
+  body.night {
+    color-scheme: dark;
+    --page: #14161A;
+    --surface: #1E293B;
+    --surface-muted: #26334A;
+    --text: #F8FAFC;
+    --text-muted: #A8B3C4;
+    --border: #334155;
+    --border-strong: #475569;
+    --selected-border: #60A5FA;
+    --selected-fill: #2A3B57;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: var(--gap-24);
+    background: var(--page);
+    color: var(--text);
+    font: 14px/20px "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: var(--gap-16); }
+  .head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--gap-16); flex-wrap: wrap; }
+  h1 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+  .sub { margin: 0; color: var(--text-muted); font-size: 12px; line-height: 18px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-card);
+    padding: var(--gap-16);
+    box-shadow: var(--shadow);
+  }
+  .card > h2 { margin: 0 0 var(--gap-12); font-size: 14px; font-weight: 600; }
+  .strip-wrap { position: relative; }
+  .strip {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--gap-4);
+    padding: var(--gap-8);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .tb {
+    width: 28px;
+    height: 31px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font: 14px/1 "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease;
+  }
+  .tb:hover { background: var(--surface-muted); }
+  .tb.on {
+    font-weight: 700;
+    border: 2px solid var(--selected-border);
+    background: var(--selected-fill);
+  }
+  .sep { width: 1px; height: 20px; background: var(--border); margin: 0 var(--gap-8); }
+  .groups {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--gap-16);
+    margin-top: var(--gap-8);
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 18px;
+  }
+  /* 二级选项浮层：与「更多」同为按需弹出，不占工具栏高度 */
+  .popover {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 20;
+    align-items: center;
+    gap: var(--gap-8);
+    padding: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.18);
+  }
+  .popover.open { display: flex; }
+  .popover.menu { flex-direction: column; align-items: stretch; gap: 0; padding: var(--gap-4) 0; min-width: 260px; }
+  .pop-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 31px;
+    min-width: 28px;
+    padding: 0 6px;
+    font: 13px/1 "Microsoft YaHei UI", "Segoe UI", system-ui, sans-serif;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .pop-item:hover { background: var(--surface-muted); }
+  .pop-item.on { font-weight: 700; border: 2px solid var(--selected-border); background: var(--selected-fill); }
+  .pop-val { font-size: 12px; color: var(--text-muted); min-width: 30px; text-align: center; }
+  .swset { display: flex; align-items: center; gap: 6px; }
+  .sw {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    padding: 0;
+  }
+  .sw:hover { transform: scale(1.08); }
+  .sw.on { box-shadow: 0 0 0 2px var(--selected-border); }
+  .sw.more { font: 12px/18px "Microsoft YaHei UI", sans-serif; color: var(--text-muted); background: var(--surface-muted); }
+  .pop-sep { width: 1px; height: 22px; background: var(--border); margin: 0 2px; }
+  input[type="range"] { width: 100px; }
+  .mi {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-12);
+    padding: var(--gap-8) var(--gap-12);
+    border-left: 2px solid transparent;
+    cursor: pointer;
+  }
+  .mi:hover { background: var(--surface-muted); }
+  .mi.on { border-left-color: var(--selected-border); background: var(--selected-fill); }
+  .ic {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font: 13px/16px "Segoe UI Emoji", "Segoe UI Symbol", "Microsoft YaHei UI", sans-serif;
+    color: var(--text-muted);
+  }
+  .lbl { font-size: 14px; }
+  .hint { margin-left: auto; color: var(--text-muted); font-size: 12px; }
+  ul.changes { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: var(--gap-4); }
+  ul.changes li { color: var(--text); }
+  ul.changes li span { color: var(--text-muted); }
+  .btn {
+    padding: 6px 12px;
+    font: 13px/18px "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+  .btn:hover { background: var(--surface-muted); }
+  .tip { color: var(--text-muted); font-size: 12px; line-height: 18px; }
+  code { font: 12px/18px Consolas, "Courier New", monospace; color: var(--text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <div>
+      <h1>PDF 标注工具栏 · 布局预览</h1>
+      <p class="sub">按代码里的真实顺序与符号 1:1 复刻（按钮 28×31、图标来自各工具在一级条上的符号）。本页是预览稿，不是应用截图。</p>
+    </div>
+    <button class="btn" id="night">切换夜间模式</button>
+  </div>
+
+  <div class="card">
+    <h2>① 一级图标条（单行，可点按钮看二级浮层）</h2>
+    <div class="strip-wrap">
+      <div class="strip" id="strip">
+        <button class="tb" data-id="hl" data-pop="highlight" title="高亮 (H)">⭐</button>
+        <button class="tb" data-id="rect" data-pop="shape" title="矩形 (R)">▢</button>
+        <button class="tb" data-id="ellipse" data-pop="shape" title="椭圆 (E)">◯</button>
+        <button class="tb" data-id="arrow" data-pop="shape" title="箭头 (A)">━</button>
+        <button class="tb" data-id="pen" data-pop="pen" title="画笔 (P)">✒</button>
+        <button class="tb" data-id="mosaic" title="马赛克">▦</button>
+        <button class="tb" data-id="text" data-pop="text" title="文字 (T)">T</button>
+        <span class="sep"></span>
+        <button class="tb" data-id="eraser" title="橡皮擦">🧽</button>
+        <span class="sep"></span>
+        <button class="tb" data-id="undo" title="撤销 (Ctrl+Z)">↩</button>
+        <span class="sep"></span>
+        <button class="tb" data-id="more" data-pop="more" title="更多工具">⋯</button>
+        <span class="sep"></span>
+        <button class="tb" data-id="night" title="夜间模式">🌙</button>
+        <button class="tb" data-id="ai" title="AI 问答">🤖</button>
+        <button class="tb" data-id="translate" title="翻译模式">译</button>
+        <button class="tb" data-id="clear" title="清除所有标注">🗑</button>
+      </div>
+
+      <!-- 形状类（矩形/椭圆/箭头）：虚实线 + 粗细 + 颜色 -->
+      <div class="popover" id="popShape">
+        <button class="pop-item" data-kind="dash" title="切换实线/虚线">—</button>
+        <span class="pop-sep"></span>
+        <input type="range" min="1" max="20" value="3" />
+        <span class="pop-val">3px</span>
+        <span class="pop-sep"></span>
+        <span class="swset" data-kind="solid"></span>
+      </div>
+
+      <!-- 画笔：粗细 + 颜色 + 笔型（铅笔/钢笔/马克笔） -->
+      <div class="popover" id="popPen">
+        <input type="range" min="1" max="20" value="3" />
+        <span class="pop-val">3px</span>
+        <span class="pop-sep"></span>
+        <span class="swset" data-kind="solid"></span>
+        <span class="pop-sep"></span>
+        <button class="pop-item" title="铅笔">✎</button>
+        <button class="pop-item" title="马克笔">▮</button>
+        <button class="pop-item" title="钢笔">✒</button>
+      </div>
+
+      <!-- 高亮：粗细 + 5 个半透明荧光色 -->
+      <div class="popover" id="popHighlight">
+        <input type="range" min="1" max="20" value="3" />
+        <span class="pop-val">3px</span>
+        <span class="pop-sep"></span>
+        <span class="swset" data-kind="highlight"></span>
+      </div>
+
+      <!-- 文字：仅颜色 -->
+      <div class="popover" id="popText">
+        <span class="swset" data-kind="solid"></span>
+      </div>
+
+      <!-- 「更多」菜单（与二级选项同为按需弹出） -->
+      <div class="popover menu" id="menuMore">
+        <div class="mi" title="删除线 (W)"><span class="ic">S</span><span class="lbl">删除线</span><span class="hint">W</span></div>
+        <div class="mi" title="显示/隐藏标注层"><span class="ic">👁</span><span class="lbl">标注图层显隐</span></div>
+        <div class="mi" title="导出标注为图片"><span class="ic">📷</span><span class="lbl">导出标注为图片</span></div>
+        <div class="mi" title="核对清单 (C)"><span class="ic">☑</span><span class="lbl">检查清单</span><span class="hint">C</span></div>
+        <div class="mi" title="嵌入图片 (I)"><span class="ic">🖼</span><span class="lbl">插入图片</span><span class="hint">I</span></div>
+        <div class="mi" title="聚光灯 (K)"><span class="ic">🔦</span><span class="lbl">聚光灯</span><span class="hint">K</span></div>
+        <div class="mi" title="放大镜 (L)"><span class="ic">🔍</span><span class="lbl">放大镜</span><span class="hint">L</span></div>
+        <div class="mi" title="临时笔（一次性，笔迹 2 秒后自动消失）"><span class="ic">🖊</span><span class="lbl">临时画笔</span></div>
+      </div>
+    </div>
+    <div class="groups">
+      <span>绘制工具（高亮 · 矩形 · 椭圆 · 箭头 · 画笔 · 马赛克 · 文字）</span>
+      <span>橡皮</span>
+      <span>撤销</span>
+      <span>⋯ 更多</span>
+      <span>视图与智能（夜间 · AI · 翻译 · 清除标注）</span>
+    </div>
+    <p class="tip" style="margin: 12px 0 0">
+      单击带二级选项的按钮（⭐ ▢ ◯ ━ ✒ T）或 ⋯，会在该按钮下方弹出浮层，再点一次或切换工具即收起 —— 与「更多」完全同一种交互。
+      工具栏右侧原来的折叠/展开按钮（▾/▴）已隐藏，一级条不再有第二行。
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>② 二级选项浮层（不占工具栏高度）</h2>
+    <ul class="changes">
+      <li>矩形 / 椭圆 / 箭头：<span>虚实线 + 粗细滑块（1–20px）+ 实色颜色面板。</span></li>
+      <li>画笔 / 临时画笔：<span>粗细 + 实色颜色面板 + 笔型（铅笔 ✎ / 钢笔 ✒ / 马克笔 ▮）。</span></li>
+      <li>高亮：<span>粗细 + 5 个半透明荧光色（黄 / 绿 / 蓝 / 粉 / 橙），预览色与落笔色一致。</span></li>
+      <li>文字：<span>仅颜色面板。</span></li>
+      <li>橡皮 / 马赛克 / 选择等无选项工具：<span>不弹出浮层。</span></li>
+    </ul>
+    <p class="tip" style="margin: 12px 0 0">
+      浮层锚点：矩形/椭圆/箭头/画笔/文字/高亮 → 各自按钮；删除线、临时画笔（在「更多」里）→ 锚定 ⋯ 按钮。
+      浮层图元尺寸（28×31 按钮、1px 浅灰边框、选中态 2px 蓝边框）与真实控件一致，色板颜色为预览近似取色。
+    </p>
+  </div>
+
+  <div class="card">
+    <h2>③ 本次改动要点</h2>
+    <ul class="changes">
+      <li>二级选项改按需浮层：<span>虚线/粗细/颜色/笔型不再常驻工具栏第二行，改为选中带选项的工具时贴在该按钮下方弹出（与「更多」同一套交互）。</span></li>
+      <li>工具栏回到单行高度：<span>二级选项移出后不再为其预留高度，画布可用高度随之增加。</span></li>
+      <li>隐藏折叠/展开按钮：<span>右侧的 ▾/▴ 按钮及配套的折叠逻辑一并移除。</span></li>
+      <li>一级图标条分组重排：绘制工具 → 橡皮 → 撤销 → ⋯ → 视图与智能，<span>并消除了原有按钮重叠（临时画笔/撤销、放大镜/夜间模式）。</span></li>
+      <li>低频工具收进「更多」：删除线、标注图层显隐、导出标注为图片、检查清单、插入图片、聚光灯、放大镜、临时画笔。<span>一级条只留高频操作。图标取自对应工具的符号，用 GDI 现场绘制成 16×16 位图，无需图标资源文件。</span></li>
+      <li>颜色体系统一：<span>高亮用 5 个半透明荧光色，线条用实色色板；高亮预览色不再硬编码为黄色。</span></li>
+      <li>翻页行为统一：<span>按钮 / 方向键 / 空格 / 滚轮在单页与双页模式下都只前进 1 页。</span></li>
+    </ul>
+    <p class="tip" style="margin: 12px 0 0">真实渲染效果需本地运行应用确认：<code>dotnet run --project LearningAssistant.WinApp</code>，然后在 PDF 阅读器里看标注工具栏。</p>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var body = document.body;
+    var nightBtn = document.getElementById('night');
+    if (nightBtn) {
+      nightBtn.addEventListener('click', function () { body.classList.toggle('night'); });
+    }
+
+    // 实色色板（近似取色）与高亮荧光色板
+    var solidColors = [
+      '#000000', '#0000FF', '#00B050', '#FFA500', '#FF0000',
+      '#800080', '#00FFFF', '#008080', '#FF69B4', '#8B4513',
+      '#808080', '#FFFF00', '#7CFC00', '#C71585', '#1E90FF'
+    ];
+    var highlightColors = [
+      'rgba(255,235,59,.5)', 'rgba(76,175,80,.45)', 'rgba(33,150,243,.45)',
+      'rgba(255,64,129,.4)', 'rgba(255,152,0,.45)'
+    ];
+    document.querySelectorAll('.swset').forEach(function (set) {
+      var kind = set.dataset.kind;
+      var colors = kind === 'highlight' ? highlightColors : solidColors;
+      colors.forEach(function (c, i) {
+        var dot = document.createElement('button');
+        dot.className = 'sw';
+        dot.style.background = c;
+        dot.title = kind === 'highlight' ? '高亮色 ' + (i + 1) : '标注色 ' + (i + 1);
+        set.appendChild(dot);
+      });
+      if (kind !== 'highlight') {
+        var more = document.createElement('button');
+        more.className = 'sw more';
+        more.textContent = '＋';
+        more.title = '自定义颜色';
+        set.appendChild(more);
+      }
+    });
+
+    function bindSingleSelect(container, selector) {
+      if (!container) return;
+      container.addEventListener('click', function (e) {
+        var target = e.target.closest(selector);
+        if (!target) return;
+        container.querySelectorAll(selector).forEach(function (el) { el.classList.remove('on'); });
+        target.classList.add('on');
+      });
+    }
+    bindSingleSelect(document.getElementById('strip'), '.tb');
+    bindSingleSelect(document.getElementById('menuMore'), '.mi');
+    bindSingleSelect(document.getElementById('popPen'), '.pop-item');
+    bindSingleSelect(document.getElementById('popShape'), '.pop-item');
+
+    // 二级选项 / 「更多」统一按需弹出：锚定被点击的按钮，再点或点空白收起
+    var strip = document.getElementById('strip');
+    var pops = {
+      shape: document.getElementById('popShape'),
+      pen: document.getElementById('popPen'),
+      highlight: document.getElementById('popHighlight'),
+      text: document.getElementById('popText'),
+      more: document.getElementById('menuMore')
+    };
+
+    function hideAll() {
+      Object.keys(pops).forEach(function (k) { pops[k].classList.remove('open'); });
+    }
+
+    strip.addEventListener('click', function (e) {
+      var btn = e.target.closest('.tb');
+      if (!btn) return;
+      var pop = pops[btn.dataset.pop];
+      var sameAnchor = pop && pop.classList.contains('open') && pop.dataset.anchor === btn.dataset.id;
+      hideAll();
+      if (!pop || sameAnchor) return;
+      pop.dataset.anchor = btn.dataset.id;
+      pop.style.left = btn.offsetLeft + 'px';
+      pop.classList.add('open');
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('.popover') && !e.target.closest('.tb')) hideAll();
+    });
+
+    // 粗细滑块实时联动数值
+    document.querySelectorAll('.popover input[type="range"]').forEach(function (r) {
+      r.addEventListener('input', function () {
+        var label = r.parentElement.querySelector('.pop-val');
+        if (label) label.textContent = r.value + 'px';
+      });
+    });
+
+    // 虚实线切换
+    var dashBtn = document.querySelector('#popShape .pop-item[data-kind="dash"]');
+    if (dashBtn) {
+      var dashed = false;
+      dashBtn.addEventListener('click', function () {
+        dashed = !dashed;
+        dashBtn.textContent = dashed ? '┄' : '—';
+      });
+    }
+  })();
+</script>
+</body>
+</html>

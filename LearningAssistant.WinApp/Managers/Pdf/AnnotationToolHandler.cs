@@ -15,6 +15,9 @@ namespace LearningAssistant.Managers
         public Color PenColor { get; set; } = Color.Black;
         public float PenWidth { get; set; } = 3f;
         public bool IsDashed { get; set; }
+
+        /// <summary>高亮预览填充色，由外部与当前所选高亮颜色保持同步</summary>
+        public Color HighlightPreviewColor { get; set; } = Color.FromArgb(70, 255, 255, 0);
         public string PenType { get; set; } = "Pen"; // Pencil, Pen, Marker
         public string StrokeStyle { get; set; } = "Solid"; // Solid, DotLine, ArrowLine
 
@@ -496,10 +499,11 @@ namespace LearningAssistant.Managers
             {
                 case AnnotationToolMode.Highlight:
                     {
-                        var highlightColor = Color.FromArgb(120, 255, 255, 0);
-                        using var brush = new SolidBrush(highlightColor);
+                        // 使用当前所选高亮颜色，避免预览与落笔结果不一致
+                        var fill = HighlightPreviewColor;
+                        using var brush = new SolidBrush(Color.FromArgb(Math.Min((int)fill.A, 120), fill));
                         g.FillRectangle(brush, rect);
-                        using var highlightPen = new Pen(Color.FromArgb(180, 255, 150, 0), 2);
+                        using var highlightPen = new Pen(Color.FromArgb(180, fill.R, fill.G, fill.B), 2);
                         g.DrawRectangle(highlightPen, rect);
                         break;
                     }
