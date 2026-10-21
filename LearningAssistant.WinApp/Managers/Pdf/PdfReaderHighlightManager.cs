@@ -180,6 +180,21 @@ namespace LearningAssistant.Managers
             }
         }
 
+        /// <summary>
+        /// 按高亮所在页码刷新对应的高亮图层（双页模式下第二页需单独刷新）。
+        /// </summary>
+        public void RefreshHighlightLayerForPage(int pageIndex)
+        {
+            if (_form.IsDualPage && pageIndex == _form.CurrentPageIndex + 1)
+            {
+                UpdateSecondHighlightLayer();
+            }
+            else
+            {
+                UpdateHighlightLayer();
+            }
+        }
+
         private void DrawHighlight(PdfHighlight highlight, int imgWidth, int imgHeight)
         {
             DrawHighlightToGraphics(_highlightGraphics!, highlight, imgWidth, imgHeight);
@@ -518,7 +533,7 @@ namespace LearningAssistant.Managers
                 (int)Math.Round(actualHeight)
             );
 
-            var cropped = new Bitmap(cropRect.Width, cropRect.Height, currentPageImage.PixelFormat);
+            using var cropped = new Bitmap(cropRect.Width, cropRect.Height, currentPageImage.PixelFormat);
             using (var g = Graphics.FromImage(cropped))
             {
                 g.DrawImage(currentPageImage, new Rectangle(0, 0, cropRect.Width, cropRect.Height), cropRect, GraphicsUnit.Pixel);
@@ -571,7 +586,7 @@ namespace LearningAssistant.Managers
                 _form.ListBoxHighlights.Items.Remove(highlight);
             }
 
-            UpdateHighlightLayer();
+            RefreshHighlightLayerForPage(highlight.PageIndex);
             _form.PictureBoxPdf?.Invalidate();
         }
 
@@ -715,7 +730,7 @@ namespace LearningAssistant.Managers
             }
 
             RefreshHighlightList();
-            UpdateHighlightLayer();
+            RefreshHighlightLayerForPage(lastAction.Highlight?.PageIndex ?? _form.CurrentPageIndex);
             _form.PictureBoxPdf?.Invalidate();
         }
 

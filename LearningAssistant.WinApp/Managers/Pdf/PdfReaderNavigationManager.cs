@@ -894,12 +894,17 @@ namespace LearningAssistant.Managers
 
                     if (_selectionManager.SelectedHighlight != null)
                     {
+                        var selectedHighlight = _selectionManager.SelectedHighlight;
+
                         // 持久化高亮位置变化
                         var highlightService = _form.HighlightService;
                         if (highlightService != null && !string.IsNullOrEmpty(_form.CurrentPdfPath))
                         {
-                            highlightService.UpdateHighlight(_form.CurrentPdfPath, _selectionManager.SelectedHighlight);
+                            highlightService.UpdateHighlight(_form.CurrentPdfPath, selectedHighlight);
                         }
+
+                        // 重建高亮离屏图层，使拖动/缩放后的位置立即生效（双页时按页码选择图层）
+                        _form.HighlightManager?.RefreshHighlightLayerForPage(selectedHighlight.PageIndex);
                     }
                     else
                     {
@@ -1007,8 +1012,10 @@ namespace LearningAssistant.Managers
 
         private void LongPressTimer_Tick(object? sender, EventArgs e)
         {
+            // 必须先保存待定状态：StopLongPressTimer 内部会把 _isLongPressPending 置为 false
+            bool shouldStartDragging = _isLongPressPending;
             StopLongPressTimer();
-            if (_isLongPressPending)
+            if (shouldStartDragging)
             {
                 StartDragging(_longPressStartLocation);
             }
@@ -1389,7 +1396,7 @@ namespace LearningAssistant.Managers
             // 用半透明黑色覆盖整个视图区域
             using var dimBrush = new SolidBrush(Color.FromArgb(180, 0, 0, 0));
             var spotlightRadius = 120;
-            var path = new System.Drawing.Drawing2D.GraphicsPath();
+            using var path = new System.Drawing.Drawing2D.GraphicsPath();
             path.AddRectangle(totalRect);
             path.AddEllipse(pt.X - spotlightRadius, pt.Y - spotlightRadius, spotlightRadius * 2, spotlightRadius * 2);
             g.FillPath(dimBrush, path);

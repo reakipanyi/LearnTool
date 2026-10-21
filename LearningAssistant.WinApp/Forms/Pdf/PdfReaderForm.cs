@@ -242,7 +242,6 @@ namespace LearningAssistant.Forms.Pdf
 
         private int CurrentZoomLevel => _navigationManager?.ZoomLevel ?? _zoomLevel;
         private Point CurrentImageOffset => _navigationManager?.ImageOffset ?? _imageOffset;
-        private Rectangle? _lastSelectionRect;
 
         private bool _isNavPanelDragging = false;
         private Point _navPanelStartPoint = Point.Empty;
@@ -2189,7 +2188,8 @@ namespace LearningAssistant.Forms.Pdf
 
         public RectInt? GetSelectionRect()
         {
-            var rect = _lastSelectionRect;
+            // 选区结果由导航管理器维护（PictureBox 客户区坐标），供 OCR/翻译按显示区域换算
+            var rect = _navigationManager?.LastSelectionRect;
             return rect.HasValue ? new RectInt(rect.Value.X, rect.Value.Y, rect.Value.Width, rect.Value.Height) : null;
         }
 
