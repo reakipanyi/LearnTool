@@ -1,4 +1,4 @@
-﻿using System.Drawing;
+using System.Drawing;
 using System.Windows.Forms;
 using Microsoft.Extensions.Logging;
 
@@ -78,6 +78,16 @@ namespace LearningAssistant.Managers
 
                 UpdateButtonNightModeColor(_form.ButtonNightMode, false);
                 UpdateButtonAiColor(_form.ButtonAskAi, false);
+            }
+
+            // 左侧 5 个页签的底色统一跟随主题，避免页签内空白区域夜间仍为白色
+            if (_form.TabControlLeft != null)
+            {
+                foreach (TabPage page in _form.TabControlLeft.TabPages)
+                {
+                    page.UseVisualStyleBackColor = false;
+                    page.BackColor = _isNightMode ? Color.FromArgb(40, 40, 40) : Color.White;
+                }
             }
         }
 
@@ -189,7 +199,7 @@ namespace LearningAssistant.Managers
         private void ApplyStatusLabelNightMode(Label? label)
         {
             if (label == null) return;
-            label.ForeColor = _isNightMode ? Color.FromArgb(180, 180, 180) : Color.FromArgb(153, 153, 153);
+            label.ForeColor = _isNightMode ? Color.FromArgb(180, 180, 180) : Color.FromArgb(71, 85, 105);
         }
 
         public void UpdateThumbnailsBackground()
