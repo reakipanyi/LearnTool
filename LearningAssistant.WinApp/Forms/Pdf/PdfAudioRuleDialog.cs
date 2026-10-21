@@ -1,7 +1,6 @@
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.Pdf;
-using System.Text.RegularExpressions;
 
 namespace LearningAssistant.Forms.Pdf;
 
@@ -17,6 +16,7 @@ public class PdfAudioRuleDialog : Form
     };
     private readonly TextBox _txtName = new() { Dock = DockStyle.Top };
     private readonly TextBox _txtPattern = new() { Dock = DockStyle.Top };
+    private readonly ComboBox _cmbSyntax = new() { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _cmbMode = new() { Dock = DockStyle.Top, DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox _txtCapture = new() { Dock = DockStyle.Top };
     private readonly NumericUpDown _numOffset = new() { Dock = DockStyle.Top, Minimum = -1000, Maximum = 10000 };
@@ -55,6 +55,9 @@ public class PdfAudioRuleDialog : Form
         ClientSize = new Size(820, 560);
         MinimumSize = new Size(720, 480);
         BuildLayout();
+        _cmbSyntax.Items.Add("正则表达式");
+        _cmbSyntax.Items.Add("通配符");
+        _cmbSyntax.SelectedIndex = 0;
         foreach (var m in _modes) _cmbMode.Items.Add(m.ToString());
         foreach (var r in _rules) AddListItem(r);
         if (_lvRules.Items.Count > 0) _lvRules.Items[0].Selected = true;
@@ -68,7 +71,7 @@ public class PdfAudioRuleDialog : Form
         _lvRules.Columns.Add("模式", 90);
         _lvRules.Columns.Add("优先级", 60);
         _lvRules.Columns.Add("启用", 50);
-        _lvRules.Columns.Add("正则", 360);
+        _lvRules.Columns.Add("匹配内容", 360);
 
         var btnAdd = new Button { Text = "新增", Width = 70 };
         var btnDelete = new Button { Text = "删除", Width = 70 };
@@ -91,7 +94,7 @@ public class PdfAudioRuleDialog : Form
             if (!ValidateAllRules(out var message))
             {
                 btnOk.DialogResult = DialogResult.None;
-                MessageBox.Show(this, message, "正则非法", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show(this, message, "匹配规则不可用", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
             btnOk.DialogResult = DialogResult.OK;
@@ -106,7 +109,8 @@ public class PdfAudioRuleDialog : Form
         editPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         int row = 0;
         AddField(editPanel, ref row, "名称", _txtName);
-        AddField(editPanel, ref row, "正则", _txtPattern);
+        AddField(editPanel, ref row, "匹配内容", _txtPattern);
+        AddField(editPanel, ref row, "写法", _cmbSyntax);
         AddSpanField(editPanel, ref row, _labelModeHint);
         AddField(editPanel, ref row, "模式", _cmbMode);
         AddField(editPanel, ref row, "捕获组(1起)", _txtCapture);
@@ -137,10 +141,10 @@ public class PdfAudioRuleDialog : Form
         // 编辑项变化时延后 200ms 重算试算，避免逐字符触发
         _previewTimer.Tick += (_, _) => { _previewTimer.Stop(); RefreshPreview(); };
         _txtName.TextChanged += (_, _) => SchedulePreview();
-        _txtPattern.PlaceholderText = @"例：P(\d+)\.mp3";
-        _tooltip.SetToolTip(_txtPattern, @"对相对路径做不区分大小写的正则匹配，捕获组序号从 1 开始");
         _txtPattern.TextChanged += (_, _) => { ValidatePatternField(); SchedulePreview(); };
+        _cmbSyntax.SelectedIndexChanged += (_, _) => { UpdatePatternHint(); ValidatePatternField(); SchedulePreview(); };
         _cmbMode.SelectedIndexChanged += (_, _) => { UpdateModeHint(); SchedulePreview(); };
+        UpdatePatternHint();
         _txtCapture.TextChanged += (_, _) => SchedulePreview();
         _numOffset.ValueChanged += (_, _) => SchedulePreview();
         _numPagesPerUnit.ValueChanged += (_, _) => SchedulePreview();
@@ -207,6 +211,7 @@ public class PdfAudioRuleDialog : Form
             Id = r.Id,
             Name = r.Name,
             FileNamePattern = r.FileNamePattern,
+            PatternMode = r.PatternMode,
             CaptureGroupIndex = r.CaptureGroupIndex,
             CaptureGroupName = r.CaptureGroupName,
             MapMode = r.MapMode,
@@ -229,7 +234,12 @@ public class PdfAudioRuleDialog : Form
 
     private void OnAdd()
     {
-        var rule = new AudioMatchRule { Name = "新规则", FileNamePattern = @"(?:^|[\\/])(\d+)\.(?:mp3|wav|m4a|aac|flac|ogg|wma)$" };
+        var rule = new AudioMatchRule
+        {
+            Name = "新规则",
+            PatternMode = AudioPatternMode.Wildcard,
+            FileNamePattern = "*.mp3"
+        };
         _rules.Add(rule);
         AddListItem(rule);
         _lvRules.Items[_lvRules.Items.Count - 1].Selected = true;
@@ -278,6 +288,7 @@ public class PdfAudioRuleDialog : Form
         {
             _txtName.Text = r.Name;
             _txtPattern.Text = r.FileNamePattern;
+            _cmbSyntax.SelectedIndex = r.PatternMode == AudioPatternMode.Wildcard ? 1 : 0;
             _cmbMode.SelectedIndex = Math.Max(0, _modes.IndexOf(r.MapMode));
             _txtCapture.Text = r.CaptureGroupIndex?.ToString() ?? "";
             _numOffset.Value = Math.Clamp(r.PageOffset, -1000m, 10000m);
@@ -299,6 +310,7 @@ public class PdfAudioRuleDialog : Form
         if (_lvRules.SelectedItems[0].Tag is not AudioMatchRule r) return;
         r.Name = _txtName.Text.Trim();
         r.FileNamePattern = _txtPattern.Text;
+        r.PatternMode = GetSelectedPatternMode();
         r.MapMode = _modes[Math.Max(0, _cmbMode.SelectedIndex)];
         r.CaptureGroupIndex = int.TryParse(_txtCapture.Text.Trim(), out var g) ? g : null;
         r.PageOffset = (int)_numOffset.Value;
@@ -338,6 +350,7 @@ public class PdfAudioRuleDialog : Form
             Id = selected.Id,
             Name = string.IsNullOrWhiteSpace(_txtName.Text) ? "未命名规则" : _txtName.Text.Trim(),
             FileNamePattern = _txtPattern.Text,
+            PatternMode = GetSelectedPatternMode(),
             CaptureGroupIndex = int.TryParse(_txtCapture.Text.Trim(), out var group) ? group : null,
             MapMode = _modes[Math.Max(0, _cmbMode.SelectedIndex)],
             PageOffset = (int)_numOffset.Value,
@@ -382,6 +395,18 @@ public class PdfAudioRuleDialog : Form
             : "";
     }
 
+    private AudioPatternMode GetSelectedPatternMode()
+        => _cmbSyntax.SelectedIndex == 1 ? AudioPatternMode.Wildcard : AudioPatternMode.Regex;
+
+    private void UpdatePatternHint()
+    {
+        var wildcard = GetSelectedPatternMode() == AudioPatternMode.Wildcard;
+        _txtPattern.PlaceholderText = wildcard ? "例：*.mp3、第?课.mp3" : @"例：P(\d+)\.mp3";
+        _tooltip.SetToolTip(_txtPattern, wildcard
+            ? "通配符：* 匹配任意字符，? 匹配单个字符；优先匹配文件名，未命中再匹配相对路径；页码取文件名中的第一个数字"
+            : "正则：捕获组序号从 1 开始；未写捕获组时自动取文件名中的第一个数字");
+    }
+
     private bool ValidatePatternField()
     {
         var pattern = _txtPattern.Text;
@@ -390,35 +415,31 @@ public class PdfAudioRuleDialog : Form
             _txtPattern.BackColor = Color.MistyRose;
             return false;
         }
-        try
+
+        var probe = new AudioMatchRule
         {
-            _ = new Regex(pattern);
-            _txtPattern.BackColor = SystemColors.Window;
-            return true;
-        }
-        catch (ArgumentException)
+            Name = "当前规则",
+            FileNamePattern = pattern,
+            PatternMode = GetSelectedPatternMode()
+        };
+
+        if (PdfAudioPatternCompiler.TryCompile(probe, out _) == null)
         {
             _txtPattern.BackColor = Color.MistyRose;
             return false;
         }
+
+        _txtPattern.BackColor = SystemColors.Window;
+        return true;
     }
 
     private bool ValidateAllRules(out string message)
     {
         foreach (var rule in _rules.Where(r => r.Enabled))
         {
-            if (string.IsNullOrWhiteSpace(rule.FileNamePattern))
+            if (PdfAudioPatternCompiler.TryCompile(rule, out var diagnostic) == null)
             {
-                message = $"规则「{rule.Name}」正则不能为空";
-                return false;
-            }
-            try
-            {
-                _ = new Regex(rule.FileNamePattern);
-            }
-            catch (ArgumentException ex)
-            {
-                message = $"规则「{rule.Name}」正则非法：{ex.Message}";
+                message = diagnostic ?? $"规则「{rule.Name}」匹配内容不可用";
                 return false;
             }
         }

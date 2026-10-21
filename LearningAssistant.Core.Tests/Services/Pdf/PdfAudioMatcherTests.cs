@@ -80,4 +80,66 @@ public class PdfAudioMatcherTests
         var r = Matcher.Match(@"C:\pdf\a.pdf", 3, new[] { T("P1.mp3") }, new[] { rule }, null);
         r.UnmatchedPages.Should().Contain(1).And.Contain(2);
     }
+
+    [Fact]
+    public void 文件名优先_目录中的数字不干扰匹配()
+    {
+        var track = new AudioTrack
+        {
+            FileName = "P5.mp3",
+            RelativePath = @"第2单元\P5.mp3",
+            FilePath = @"C:\pdf\第2单元\P5.mp3"
+        };
+        var rule = new AudioMatchRule { FileNamePattern = @"(\d+)", MapMode = AudioPageMapMode.PageIndex };
+
+        var r = Matcher.Match(@"C:\pdf\a.pdf", 20, new[] { track }, new[] { rule }, null);
+
+        r.PageIndex[4].FileName.Should().Be("P5.mp3");
+    }
+
+    [Fact]
+    public void 通配符模式_无捕获组时按文件名数字映射()
+    {
+        var rule = new AudioMatchRule
+        {
+            PatternMode = AudioPatternMode.Wildcard,
+            FileNamePattern = "*.mp3",
+            MapMode = AudioPageMapMode.PageIndex
+        };
+
+        var r = Matcher.Match(@"C:\pdf\a.pdf", 20, new[] { T("P12.mp3") }, new[] { rule }, null);
+
+        r.PageIndex[11].FileName.Should().Be("P12.mp3");
+    }
+
+    [Fact]
+    public void 正则未写捕获组_自动取文件名第一个数字()
+    {
+        var rule = new AudioMatchRule { FileNamePattern = @"P\d+", MapMode = AudioPageMapMode.PageIndex };
+
+        var r = Matcher.Match(@"C:\pdf\a.pdf", 20, new[] { T("P12.mp3") }, new[] { rule }, null);
+
+        r.PageIndex[11].FileName.Should().Be("P12.mp3");
+    }
+
+    [Fact]
+    public void 非法正则含星号_自动按通配符解释()
+    {
+        var rule = new AudioMatchRule { Name = "星号误写", FileNamePattern = "*.mp3", MapMode = AudioPageMapMode.PageIndex };
+
+        var r = Matcher.Match(@"C:\pdf\a.pdf", 20, new[] { T("P12.mp3") }, new[] { rule }, null);
+
+        r.PageIndex[11].FileName.Should().Be("P12.mp3");
+        Matcher.Diagnostics.Should().Contain(d => d.Contains("通配符"));
+    }
+
+    [Fact]
+    public void 规则未命中任何音频_输出诊断()
+    {
+        var rule = new AudioMatchRule { Name = "WAV规则", FileNamePattern = "*.wav" };
+
+        Matcher.Match(@"C:\pdf\a.pdf", 5, new[] { T("P1.mp3") }, new[] { rule }, null);
+
+        Matcher.Diagnostics.Should().Contain(d => d.Contains("未匹配到任何音频") && d.Contains("P1.mp3"));
+    }
 }

@@ -18,18 +18,26 @@ public class PdfAudioMatcher : IPdfAudioMatcher
 
         foreach (var rule in rules.Where(r => r.Enabled).OrderByDescending(r => r.Priority))
         {
-            Regex regex;
-            try { regex = new Regex(rule.FileNamePattern, RegexOptions.IgnoreCase); }
-            catch (ArgumentException) { _diagnostics.Add($"规则 '{rule.Name}' 正则非法，已跳过"); continue; }
+            var regex = PdfAudioPatternCompiler.TryCompile(rule, out var patternDiagnostic);
+            if (patternDiagnostic != null)
+                _diagnostics.Add(patternDiagnostic);
+            if (regex == null) continue;
 
             var hits = new List<(AudioTrack Track, int? Value)>();
             foreach (var track in tracks)
             {
-                var m = regex.Match(track.RelativePath);
+                // 文件名优先，避免上级目录中的数字先被匹配；文件名不中时再回退完整相对路径
+                var m = regex.Match(track.FileName);
+                if (!m.Success) m = regex.Match(track.RelativePath);
                 if (!m.Success) continue;
-                hits.Add((track, ExtractValue(m, rule)));
+                hits.Add((track, ExtractValue(m, rule, track)));
             }
-            if (hits.Count == 0) continue;
+
+            if (hits.Count == 0)
+            {
+                _diagnostics.Add($"规则「{rule.Name}」未匹配到任何音频（示例：{SampleTrackNames(tracks)}）");
+                continue;
+            }
 
             if (rule.MapMode == AudioPageMapMode.Custom)
             {
@@ -87,14 +95,43 @@ public class PdfAudioMatcher : IPdfAudioMatcher
         return result;
     }
 
-    private static int? ExtractValue(Match m, AudioMatchRule rule)
+    private static int? ExtractValue(Match m, AudioMatchRule rule, AudioTrack track)
     {
-        if (!string.IsNullOrEmpty(rule.CaptureGroupName) && m.Groups[rule.CaptureGroupName].Success)
-            return int.TryParse(m.Groups[rule.CaptureGroupName].Value, out var n) ? n : null;
-        var idx = rule.CaptureGroupIndex ?? 1;
-        if (idx >= 1 && idx < m.Groups.Count && m.Groups[idx].Success)
-            return int.TryParse(m.Groups[idx].Value, out var c) ? c : null;
+        if (!string.IsNullOrEmpty(rule.CaptureGroupName))
+        {
+            var named = m.Groups[rule.CaptureGroupName];
+            if (named.Success && int.TryParse(named.Value, out var namedValue))
+                return namedValue;
+        }
+
+        if (rule.CaptureGroupIndex is int idx)
+        {
+            if (idx >= 1 && idx < m.Groups.Count && m.Groups[idx].Success
+                && int.TryParse(m.Groups[idx].Value, out var configured))
+                return configured;
+        }
+        else if (m.Groups.Count > 1 && m.Groups[1].Success
+                 && int.TryParse(m.Groups[1].Value, out var firstGroup))
+        {
+            return firstGroup;
+        }
+
+        // 没有可用的捕获组时，退化为取文件名中的第一个数字，
+        // 避免“明明匹配上了却因为没写捕获组而映射不到页码”
+        var fallback = Regex.Match(track.FileName, @"\d+");
+        if (fallback.Success && int.TryParse(fallback.Value, out var number))
+            return number;
+
         return null;
+    }
+
+    private static string SampleTrackNames(IReadOnlyList<AudioTrack> tracks)
+    {
+        if (tracks.Count == 0) return "目录下没有音频文件";
+
+        var names = tracks.Take(3)
+            .Select(t => string.IsNullOrEmpty(t.FileName) ? t.RelativePath : t.FileName);
+        return string.Join("、", names);
     }
 
     private static void Assign(Dictionary<int, AudioTrack> pageIndex, Dictionary<int, int> priorityMap,
