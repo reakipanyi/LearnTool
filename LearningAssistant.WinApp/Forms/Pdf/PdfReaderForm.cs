@@ -2733,6 +2733,93 @@ namespace LearningAssistant.Forms.Pdf
             ShowAiResponseDialog("选中内容 AI 解释", response, allowSave: true, allowAddToEditor: true);
         }
 
+        /// <summary>导出多页/全文 AI 学习笔记为 Markdown，复用批量导出的目录与重名处理</summary>
+        private async Task ExportAiStudyNotesAsync()
+        {
+            if (_pdfAiService == null)
+            {
+                MessageBox.Show(this, "AI 服务不可用，请先完成 AI 配置", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (_presenter == null || _presenter.PageCount <= 0 || string.IsNullOrWhiteSpace(_currentPdfPath))
+            {
+                MessageBox.Show(this, "当前没有打开的 PDF 文档", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var documentName = Path.GetFileNameWithoutExtension(_currentPdfPath);
+            using var optionsDialog = new PdfAiNotesExportDialog(_presenter.PageCount, documentName);
+            if (optionsDialog.ShowDialog(this) != DialogResult.OK) return;
+
+            var options = optionsDialog.Options;
+
+            PdfAiResponse response;
+            UseWaitCursor = true;
+            try
+            {
+                response = await _pdfAiService.GenerateStudyNotesAsync(
+                    _currentPdfPath, options.StartPageIndex, options.EndPageIndex).ConfigureAwait(true);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+            }
+
+            if (!response.Success)
+            {
+                MessageBox.Show(this, response.ErrorMessage ?? "笔记生成失败", "AI 学习笔记导出",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var content = StripCodeFence(response.Content ?? string.Empty);
+            var rangeText = options.StartPageIndex < 0
+                ? $"全部页面（共 {_presenter.PageCount} 页）"
+                : $"第 {options.StartPageIndex + 1}-{Math.Min(options.EndPageIndex, _presenter.PageCount - 1) + 1} 页";
+
+            var builder = new StringBuilder();
+            builder.AppendLine($"# {documentName} 学习笔记");
+            builder.AppendLine();
+            builder.AppendLine($"> 范围：{rangeText}　生成时间：{DateTime.Now:yyyy-MM-dd HH:mm}");
+            builder.AppendLine();
+            builder.AppendLine(content);
+            builder.AppendLine();
+
+            if (response.ReferencedPages.Count > 0)
+            {
+                builder.AppendLine("## 参考页");
+                builder.AppendLine();
+                foreach (var page in response.ReferencedPages.OrderBy(p => p))
+                {
+                    builder.AppendLine($"- 第 {page} 页");
+                }
+            }
+
+            var outputPath = GetUniqueOutputPath(Path.Combine(
+                options.OutputDirectory,
+                SanitizeFileName(documentName) + "_学习笔记.md"));
+
+            await File.WriteAllTextAsync(outputPath, builder.ToString(), new UTF8Encoding(false));
+            ShowMessage($"学习笔记已导出：\n{outputPath}", "AI 学习笔记导出");
+        }
+
+        /// <summary>去掉 AI 返回内容外层的 Markdown 代码围栏</summary>
+        private static string StripCodeFence(string content)
+        {
+            var text = content.Trim();
+            if (!text.StartsWith("```", StringComparison.Ordinal)) return text;
+
+            int firstLineEnd = text.IndexOf('\n');
+            if (firstLineEnd < 0) return text;
+
+            text = text[(firstLineEnd + 1)..].TrimEnd();
+            if (text.EndsWith("```", StringComparison.Ordinal))
+            {
+                text = text[..^3].TrimEnd();
+            }
+            return text;
+        }
+
         /// <summary>展示 AI 结果窗口，可按需保存为当前页标注</summary>
         private void ShowAiResponseDialog(string title, PdfAiResponse response, bool allowSave,
             bool allowAddToEditor = false)
@@ -4250,6 +4337,8 @@ namespace LearningAssistant.Forms.Pdf
             menu.Items.Add("总结选中内容", null, async (_, _) => await SummarizeSelectionAsync());
             menu.Items.Add("解释选中内容", null, async (_, _) => await ExplainSelectionAsync());
             menu.Items.Add("全文检索问答", null, async (_, _) => await AskDocumentByRetrievalAsync());
+            menu.Items.Add(new ToolStripSeparator());
+            menu.Items.Add("导出 AI 学习笔记…", null, async (_, _) => await ExportAiStudyNotesAsync());
 
             if (sender is Control anchor)
             {
