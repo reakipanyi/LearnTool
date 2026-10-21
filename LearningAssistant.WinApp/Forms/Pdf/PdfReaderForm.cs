@@ -71,6 +71,9 @@ namespace LearningAssistant.Forms.Pdf
         private BufferedPictureBox _pictureBoxPdf;
         private ContextMenuStrip _contextMenuPdf;
         private Label? _toastLabel;
+
+        // 复用同一个提示标签，新提示到来时取消前一条的隐藏计时
+        private CancellationTokenSource? _toastCts;
         private Panel _panelThumbnails;
         private FlowLayoutPanel _flowLayoutPanelThumbnails;
         private TabPage _tabPageTranslate;
@@ -6664,35 +6667,58 @@ namespace LearningAssistant.Forms.Pdf
 
         public void ShowToast(string message, int duration = 2000)
         {
-            if (_toastLabel == null) return;
+            if (_toastLabel == null || _toastLabel.IsDisposed) return;
+
+            // 取消上一条提示的隐藏计时，避免连续操作时后一条提示被前一条提前关闭
+            _toastCts?.Cancel();
+            _toastCts?.Dispose();
+            var cts = new CancellationTokenSource();
+            _toastCts = cts;
 
             _toastLabel.Text = message;
             _toastLabel.Visible = true;
-            _toastLabel.Location = new Point(
-                ClientSize.Width / 2 - _toastLabel.Width / 2,
-                ClientSize.Height / 2 - _toastLabel.Height / 2);
+
+            // 以阅读画布中心定位，而不是整窗中心（侧栏会让提示视觉上偏左）
+            Control? canvas = (_pictureBoxPdf != null && _pictureBoxPdf.IsHandleCreated && _pictureBoxPdf.Visible)
+                ? _pictureBoxPdf
+                : null;
+            Point center = canvas != null
+                ? PointToClient(canvas.PointToScreen(new Point(canvas.ClientSize.Width / 2, canvas.ClientSize.Height / 2)))
+                : new Point(ClientSize.Width / 2, ClientSize.Height / 2);
+            _toastLabel.Location = new Point(center.X - _toastLabel.Width / 2, center.Y - _toastLabel.Height / 2);
             _toastLabel.BringToFront();
 
-            Task.Delay(duration).ContinueWith(_ =>
+            _ = HideToastAfterDelayAsync(cts.Token, duration);
+        }
+
+        private async Task HideToastAfterDelayAsync(CancellationToken token, int duration)
+        {
+            try
             {
-                if (_toastLabel != null && !_toastLabel.IsDisposed)
+                await Task.Delay(duration, token).ConfigureAwait(false);
+            }
+            catch (TaskCanceledException)
+            {
+                return;
+            }
+
+            if (token.IsCancellationRequested || IsDisposed || !IsHandleCreated) return;
+
+            try
+            {
+                BeginInvoke(() =>
                 {
-                    try
-                    {
-                        if (InvokeRequired)
-                        {
-                            Invoke(() => _toastLabel.Visible = false);
-                        }
-                        else
-                        {
-                            _toastLabel.Visible = false;
-                        }
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                    }
-                }
-            }, TaskScheduler.Default);
+                    // 期间可能已有新提示复用同一标签，此时不能隐藏
+                    if (token.IsCancellationRequested || _toastLabel == null || _toastLabel.IsDisposed) return;
+                    _toastLabel.Visible = false;
+                });
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (InvalidOperationException)
+            {
+            }
         }
 
         private void PdfReaderFormV2_DragEnter(object? sender, DragEventArgs e)
