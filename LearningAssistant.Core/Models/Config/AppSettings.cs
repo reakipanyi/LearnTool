@@ -12,5 +12,7 @@ namespace LearningAssistant.Models.Config
         public bool IsVoiceEnabled { get; set; } = false;
         public int PronunciationScope { get; set; } = 1;
         public bool IsAIExplanationEnabled { get; set; } = false;
+        /// <summary>主页风格：Dashboard（完整卡片版）/ Simple（简洁版）</summary>
+        public string HomeStyle { get; set; } = "Dashboard";
     }
 }

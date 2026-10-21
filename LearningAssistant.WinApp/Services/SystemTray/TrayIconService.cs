@@ -125,7 +125,9 @@ namespace LearningAssistant.Services.SystemTray
                 return;
 
             _mainWindow.Show();
-            _mainWindow.WindowState = FormWindowState.Normal;
+            // 只把最小化状态恢复为常规，保留用户最大化窗口的状态
+            if (_mainWindow.WindowState == FormWindowState.Minimized)
+                _mainWindow.WindowState = FormWindowState.Normal;
             _mainWindow.Activate();
             _mainWindow.BringToFront();
 

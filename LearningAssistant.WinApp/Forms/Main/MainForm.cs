@@ -165,6 +165,8 @@ namespace LearningAssistant.Forms.Main
 
         private void MainForm_Load(object? sender, EventArgs e)
         {
+            ApplyHomeStyleConfig();
+
             _presenter?.SetView(this);
             _presenter?.Initialize();
 
@@ -183,33 +185,36 @@ namespace LearningAssistant.Forms.Main
             // 初始化全局快捷键
             InitializeGlobalHotkeys();
 
-            // 绑定FeatureCard点击
-            foreach (FeatureCard card in this.dashboardView.Controls.OfType<Panel>()
-                .SelectMany(p => p.Controls.OfType<FeatureCard>()))
+            // 绑定FeatureCard点击（简洁版首页不包含完整版卡片，跳过即可）
+            if (dashboardView != null)
             {
-                card.CardClicked += this.FeatureCard_Clicked;
-            }
-
-            // 首页统计卡片下钻：点击任一卡片打开学习数据中心（06 方案 3.4）
-            dashboardView.StatCardClicked += (s, index) =>
-            {
-                try { _windowManager.OpenStatisticsWindow(); }
-                catch (Exception ex) { _logger?.LogError(ex, "打开统计中心失败"); }
-            };
-
-            dashboardView.EmptyStateAction += (s, action) =>
-            {
-                try
+                foreach (FeatureCard card in this.dashboardView.Controls.OfType<Panel>()
+                    .SelectMany(p => p.Controls.OfType<FeatureCard>()))
                 {
-                    switch (action)
-                    {
-                        case "learning": OnNavigationItemClicked(null, "learning"); break;
-                        case "pdf": OnNavigationItemClicked(null, "pdf"); break;
-                        case "editor": OnNavigationItemClicked(null, "editor"); break;
-                    }
+                    card.CardClicked += this.FeatureCard_Clicked;
                 }
-                catch (Exception ex) { _logger?.LogError(ex, "空状态引导导航失败"); }
-            };
+
+                // 首页统计卡片下钻：点击任一卡片打开学习数据中心（06 方案 3.4）
+                dashboardView.StatCardClicked += (s, index) =>
+                {
+                    try { _windowManager.OpenStatisticsWindow(); }
+                    catch (Exception ex) { _logger?.LogError(ex, "打开统计中心失败"); }
+                };
+
+                dashboardView.EmptyStateAction += (s, action) =>
+                {
+                    try
+                    {
+                        switch (action)
+                        {
+                            case "learning": OnNavigationItemClicked(null, "learning"); break;
+                            case "pdf": OnNavigationItemClicked(null, "pdf"); break;
+                            case "editor": OnNavigationItemClicked(null, "editor"); break;
+                        }
+                    }
+                    catch (Exception ex) { _logger?.LogError(ex, "空状态引导导航失败"); }
+                };
+            }
 
             RefreshDashboardChallengeProgress();
             sideNavigation.AddItems(new List<NavigationItem>
@@ -255,7 +260,6 @@ namespace LearningAssistant.Forms.Main
             {
                 _trayIconService.Initialize(this);
                 _trayIconService.Show();
-                _trayIconService.TrayDoubleClick += TrayIconService_TrayDoubleClick;
                 _logger.LogInformation("系统托盘已初始化");
             }
             catch (Exception ex)
@@ -368,21 +372,6 @@ namespace LearningAssistant.Forms.Main
             {
                 _pomodoroService.Pause();
                 _trayIconService.ShowNotification("番茄钟已暂停", "学习已暂停", 3000);
-            }
-        }
-
-        /// <summary>
-        /// 托盘图标双击事件处理
-        /// </summary>
-        private void TrayIconService_TrayDoubleClick(object? sender, EventArgs e)
-        {
-            if (this.Visible)
-            {
-                _trayIconService.HideToTray();
-            }
-            else
-            {
-                _trayIconService.ShowMainWindow();
             }
         }
 
@@ -537,12 +526,43 @@ namespace LearningAssistant.Forms.Main
 
         private void ShowDashboard()
         {
-            if (dashboardView == null) return;
+            var homeView = (Control?)simpleHomeView ?? dashboardView;
+            if (homeView == null) return;
 
             panelContent.Controls.Clear();
-            panelContent.Controls.Add(dashboardView);
-            dashboardView.BringToFront();
+            panelContent.Controls.Add(homeView);
+            homeView.BringToFront();
             Text = "🏠 工具 - 首页";
+        }
+
+        /// <summary>
+        /// 按 AppSettings.HomeStyle 选择首页：Simple 使用简洁版，其余使用完整卡片版。
+        /// 完整版 DashboardView 仍然保留，切换配置即可恢复。
+        /// </summary>
+        private void ApplyHomeStyleConfig()
+        {
+            if (!string.Equals(_appConfig.AppSettings.HomeStyle, "Simple", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            if (simpleHomeView != null) return;
+
+            panelContent.Controls.Remove(dashboardView);
+
+            simpleHomeView = new SimpleHomeView
+            {
+                Dock = DockStyle.Fill,
+                UserName = userSwitcherControl?.UserName ?? "同学"
+            };
+            simpleHomeView.QuickActionRequested += (_, key) => OnNavigationItemClicked(null, key);
+
+            panelContent.Controls.Add(simpleHomeView);
+            simpleHomeView.BringToFront();
+
+            _themeService?.RegisterThemeable(simpleHomeView);
+            if (_themeService != null)
+                simpleHomeView.ApplyTheme(_themeService.CurrentColors);
+
+            _logger?.LogInformation("首页已切换为简洁版");
         }
 
         private void ShowMentorPanel()
@@ -700,6 +720,7 @@ namespace LearningAssistant.Forms.Main
                     int completed = challenges.Count(c => c.Completed);
                     int total = challenges.Count;
                     dashboardView?.UpdateChallengeProgress(completed, total);
+                    simpleHomeView?.UpdateChallengeProgress(completed, total);
                 }
             }
             catch
@@ -721,6 +742,8 @@ namespace LearningAssistant.Forms.Main
                     userSwitcherControl.UserName = value;
                 if (dashboardView != null)
                     dashboardView.UserName = value;
+                if (simpleHomeView != null)
+                    simpleHomeView.UserName = value;
             }
         }
 
@@ -814,6 +837,17 @@ namespace LearningAssistant.Forms.Main
                     noteCount,
                     todayNewNotes);
             }
+
+            simpleHomeView?.UpdateStats(
+                todayStudyMinutes,
+                streakDays,
+                totalXP,
+                currentLevel,
+                xpToNextLevel,
+                completedChallenges,
+                totalChallenges,
+                noteCount,
+                todayNewNotes);
         }
 
         public void UpdateRecommendations(List<Models.Learning.LearningRecommendation> recommendations)
@@ -850,6 +884,7 @@ namespace LearningAssistant.Forms.Main
         private SplitContainer splitContainerMain;
         private SideNavigationPanel sideNavigation;
         private DashboardView dashboardView;
+        private SimpleHomeView? simpleHomeView;
         private Panel panelContent;
         private Panel panelTopBar;
         private Label labelTopBarTitle;
