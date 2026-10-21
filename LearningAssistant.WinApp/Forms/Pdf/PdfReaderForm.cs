@@ -30,6 +30,9 @@ namespace LearningAssistant.Forms.Pdf
         private readonly IPdfAiService? _pdfAiService;
         private readonly IPdfDocumentTextIndex? _documentTextIndex;
 
+        // 本次会话是否已确认把整份文档文本发送给 AI 服务，避免每次操作重复弹窗
+        private bool _wholeDocumentAiConfirmed;
+
         private PdfReaderNightModeManager? _nightModeManager;
         private PdfReaderHighlightManager? _highlightManager;
         private PdfReaderNavigationManager? _navigationManager;
@@ -2647,6 +2650,27 @@ namespace LearningAssistant.Forms.Pdf
             return result;
         }
 
+        /// <summary>
+        /// 全文作用域的隐私确认：首次使用把整份文档文本发送给 AI 前提示，确认后本次会话不再重复询问。
+        /// </summary>
+        private bool EnsureWholeDocumentAiConsent(string operation)
+        {
+            if (_wholeDocumentAiConfirmed) return true;
+
+            var result = MessageBox.Show(this,
+                $"{operation}会把整份文档的文本（含 OCR 结果）发送给 AI 服务。\n\n" +
+                "如果文档包含敏感信息，建议改用“当前页”或“选中内容”范围。\n\n是否继续？",
+                "上传整份文档内容",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2);
+
+            if (result != DialogResult.Yes) return false;
+
+            _wholeDocumentAiConfirmed = true;
+            return true;
+        }
+
         /// <summary>站内问答：按作用域调用 PDF AI 编排并返回可引用的页码</summary>
         private async Task<PdfAiResponse> AskPdfAiScopedAsync(
             PdfAiScope scope,
@@ -2659,6 +2683,10 @@ namespace LearningAssistant.Forms.Pdf
                 return PdfAiResponse.Fail("AI 服务不可用，请先完成 AI 配置");
             if (string.IsNullOrWhiteSpace(_currentPdfPath))
                 return PdfAiResponse.Fail("当前没有打开的 PDF 文档");
+
+            // 全文作用域会把整份文档文本发送给 AI，首次使用需用户显式确认
+            if (scope == PdfAiScope.WholeDocument && !EnsureWholeDocumentAiConsent("全文问答"))
+                return PdfAiResponse.Fail("已取消将整份文档内容发送给 AI");
 
             // 非选中内容作用域都依赖全文索引，先带进度地准备索引，避免调用时长时间无反馈
             if (scope != PdfAiScope.Selection)
@@ -2784,6 +2812,9 @@ namespace LearningAssistant.Forms.Pdf
                 "请输入要检索的问题：", "全文检索问答", string.Empty);
             if (string.IsNullOrWhiteSpace(question)) return;
 
+            if (!EnsureWholeDocumentAiConsent("全文检索问答"))
+                return;
+
             if (await EnsurePdfTextIndexAsync(showProgress: true).ConfigureAwait(true) == null)
             {
                 MessageBox.Show(this, "未能建立文档文本索引，请重试或先完成 OCR", "提示",
@@ -2864,6 +2895,10 @@ namespace LearningAssistant.Forms.Pdf
             if (optionsDialog.ShowDialog(this) != DialogResult.OK) return;
 
             var options = optionsDialog.Options;
+
+            // 全部页面导出等同全文上传，首次需要隐私确认
+            if (options.StartPageIndex < 0 && !EnsureWholeDocumentAiConsent("AI 学习笔记导出"))
+                return;
 
             if (await EnsurePdfTextIndexAsync(showProgress: true).ConfigureAwait(true) == null)
             {
