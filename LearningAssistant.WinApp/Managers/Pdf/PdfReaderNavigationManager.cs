@@ -138,6 +138,31 @@ namespace LearningAssistant.Managers
         public int SelectedStrokeIndex => _selectionManager.SelectedStrokeIndex;
         public AnnotationStroke? HoveredStroke => _selectionManager.HoveredStroke;
         public SelectionInteractionState SelectionState => _selectionManager.SelectionState;
+
+        /// <summary>当前页标注层版本号，供异步加载回调校验是否已过期。</summary>
+        public int AnnotationRevision => _annotationLayerManager.CurrentPageRevision;
+
+        /// <summary>双页第二页标注层版本号。</summary>
+        public int SecondAnnotationRevision => _annotationLayerManager.SecondPageRevision;
+
+        /// <summary>
+        /// 用户是否正在进行绘制或标注拖拽/缩放。
+        /// 此期间不得替换页面位图，否则标注图层会被清理，导致当前笔画丢失。
+        /// </summary>
+        public bool IsUserInteractionActive
+        {
+            get
+            {
+                if (_toolHandler.IsDrawing || _toolHandler.IsDrawingShape) return true;
+                var state = _selectionManager.SelectionState;
+                return state == SelectionInteractionState.Moving
+                    || state == SelectionInteractionState.ResizingTopLeft
+                    || state == SelectionInteractionState.ResizingTopRight
+                    || state == SelectionInteractionState.ResizingBottomLeft
+                    || state == SelectionInteractionState.ResizingBottomRight;
+            }
+        }
+
         public bool AnnotationLayerVisible
         {
             get => _annotationLayerVisible;
@@ -178,10 +203,26 @@ namespace LearningAssistant.Managers
         {
             _selectionManager.ClientToImage = ClientToImage;
             _selectionManager.GetCurrentDisplayRect = GetCurrentDisplayRect;
-            _selectionManager.UpdateStrokeAtCurrentPage = (idx, stroke) => _form.Presenter?.UpdateStrokeAtCurrentPage(idx, stroke);
-            _selectionManager.RemoveStrokeAtCurrentPage = (idx) => _form.Presenter?.RemoveStrokeAtCurrentPage(idx);
-            _selectionManager.RemoveTextAtCurrentPage = (idx, text) => _form.Presenter?.RemoveTextAtCurrentPage(idx);
-            _selectionManager.UpdateTextAtCurrentPage = (idx, text) => _form.Presenter?.UpdateTextAtCurrentPage(idx, text);
+            _selectionManager.UpdateStrokeAtCurrentPage = (idx, stroke) =>
+            {
+                _form.Presenter?.UpdateStrokeAtCurrentPage(idx, stroke);
+                _annotationLayerManager.IncrementCurrentPageRevision();
+            };
+            _selectionManager.RemoveStrokeAtCurrentPage = (idx) =>
+            {
+                _form.Presenter?.RemoveStrokeAtCurrentPage(idx);
+                _annotationLayerManager.IncrementCurrentPageRevision();
+            };
+            _selectionManager.RemoveTextAtCurrentPage = (idx, text) =>
+            {
+                _form.Presenter?.RemoveTextAtCurrentPage(idx);
+                _annotationLayerManager.IncrementCurrentPageRevision();
+            };
+            _selectionManager.UpdateTextAtCurrentPage = (idx, text) =>
+            {
+                _form.Presenter?.UpdateTextAtCurrentPage(idx, text);
+                _annotationLayerManager.IncrementCurrentPageRevision();
+            };
             _selectionManager.ReloadAnnotations = () => LoadAnnotationsForCurrentPage();
             _selectionManager.InvalidateView = () => { try { _form.PictureBoxPdf?.Invalidate(); } catch { } };
             _selectionManager.PushStrokeToUndoStack = PushStrokeToUndoStack;
@@ -1104,6 +1145,8 @@ namespace LearningAssistant.Managers
                 _logger.LogInformation("清除所有笔划标注: {PdfPath}", _form.CurrentPdfPath);
 
                 _form.Presenter.ClearAllAnnotations(_form.CurrentPdfPath);
+                // 所有页面标注均已清除，同时使第二页在途加载失效（第二页不会在此处重载）
+                _annotationLayerManager.IncrementSecondPageRevision();
                 _selectionManager.ClearSelection();
                 _annotationLayerManager.CleanupAnnotationBitmap();
                 _toolHandler.CurrentStrokePoints?.Clear();

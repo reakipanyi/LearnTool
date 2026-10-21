@@ -276,6 +276,12 @@ namespace LearningAssistant.Forms.Pdf
         private bool _isDragging = false;
         private Point _dragStart = Point.Empty;
 
+        /// <summary>
+        /// 绘制/拖拽标注期间收到的页面位图。此时不能立即替换画面（会清理标注图层并丢失当前笔画），
+        /// 待鼠标抬起后再应用，仅保留最新一帧。
+        /// </summary>
+        private byte[]? _pendingDisplayImageData;
+
         private Bitmap? _annotationBitmap;
         private Graphics? _annotationGraphics;
 
@@ -378,7 +384,7 @@ namespace LearningAssistant.Forms.Pdf
             {
                 _pictureBoxPdf.MouseDown += _navigationManager.MouseDown;
                 _pictureBoxPdf.MouseMove += _navigationManager.MouseMove;
-                _pictureBoxPdf.MouseUp += _navigationManager.MouseUp;
+                _pictureBoxPdf.MouseUp += PictureBoxPdf_MouseUp;
             }
 
             // 音频 Tab 采用「配套音频 / 我的录音」双面板结构
@@ -1089,7 +1095,6 @@ namespace LearningAssistant.Forms.Pdf
                     int.TryParse(parts, out totalPages);
                 }
                 int currentPage = _currentPageIndex + 1;
-                double progress = totalPages > 0 ? (double)currentPage / totalPages * 100 : 0;
 
                 string fileName = string.Empty;
                 if (!string.IsNullOrEmpty(_currentPdfPath))
@@ -1101,20 +1106,14 @@ namespace LearningAssistant.Forms.Pdf
                     }
                 }
 
-                if (!string.IsNullOrEmpty(fileName))
-                {
-                    _statusLabelLeft.Text = $"{fileName}  ·  第 {currentPage} 页 / 共 {totalPages} 页  ·  阅读进度 {progress:F0}%";
-                }
-                else
-                {
-                    _statusLabelLeft.Text = $"第 {currentPage} 页 / 共 {totalPages} 页  ·  阅读进度 {progress:F0}%";
-                }
+                // 页码与阅读进度在上方工具栏和进度条已有呈现，此处只保留文件名与页码
+                string pageInfo = $"第 {currentPage} 页 / 共 {totalPages} 页";
+                _statusLabelLeft.Text = string.IsNullOrEmpty(fileName) ? pageInfo : $"{fileName}  ·  {pageInfo}";
             }
             if (_statusLabelRight != null)
             {
                 string mode = GetCurrentToolModeText();
                 string dualPage = _isDualPage ? "双页" : "单页";
-                string zoom = $"{CurrentZoomLevel}%";
 
                 int highlightCount = 0;
                 try
@@ -1127,7 +1126,8 @@ namespace LearningAssistant.Forms.Pdf
                 catch { }
 
                 string highlightInfo = highlightCount > 0 ? $"  ·  标注 {highlightCount}" : string.Empty;
-                _statusLabelRight.Text = $"缩放 {zoom}  ·  {mode}  ·  {dualPage}{highlightInfo}";
+                // 缩放值已显示在工具栏，状态栏只保留工具与页模式，避免同一信息出现三处
+                _statusLabelRight.Text = $"{mode}  ·  {dualPage}{highlightInfo}";
             }
         }
 
@@ -1669,6 +1669,14 @@ namespace LearningAssistant.Forms.Pdf
         /// <param name="bmp">要显示的Bitmap图像</param>
         public void DisplayImage(byte[] imageData)
         {
+            // 绘制/拖拽期间禁止换图：CleanupAnnotationBitmap 会使 FinalizeStroke 拿不到位图而丢弃当前笔画
+            if (_navigationManager?.IsUserInteractionActive == true)
+            {
+                _pendingDisplayImageData = imageData;
+                return;
+            }
+
+            _pendingDisplayImageData = null;
             Bitmap bmp = new Bitmap(new MemoryStream(imageData));
             Bitmap? rotatedImage = null;
             try
@@ -1741,6 +1749,26 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
+        /// <summary>
+        /// 绘制/拖拽结束后应用被挂起的页面位图。
+        /// </summary>
+        private void FlushPendingDisplayImage()
+        {
+            if (_pendingDisplayImageData == null) return;
+            if (_navigationManager?.IsUserInteractionActive == true) return;
+
+            var pending = _pendingDisplayImageData;
+            _pendingDisplayImageData = null;
+            DisplayImage(pending);
+        }
+
+        private void PictureBoxPdf_MouseUp(object? sender, MouseEventArgs e)
+        {
+            _navigationManager?.MouseUp(sender, e);
+            // MouseUp 内部会结束绘制/拖拽状态，此时再应用挂起的页面位图
+            FlushPendingDisplayImage();
+        }
+
         void IPdfReaderFormAccess.DisplayImage(Bitmap bmp)
         {
             using var ms = new MemoryStream();
@@ -1748,10 +1776,19 @@ namespace LearningAssistant.Forms.Pdf
             DisplayImage(ms.ToArray());
         }
 
+        void IPdfReaderFormAccess.ReloadAnnotationLayer()
+        {
+            // 仅重载标注图层并刷新，不触发整页重新渲染
+            _navigationManager?.LoadAnnotationsForCurrentPage();
+            _pictureBoxPdf?.Invalidate();
+        }
+
         private async Task LoadAnnotationsAsync(int pageIndex, string pdfPath)
         {
             try
             {
+                int revisionAtLoad = _navigationManager?.AnnotationRevision ?? 0;
+
                 int imgW = 0, imgH = 0;
                 try
                 {
@@ -1778,12 +1815,15 @@ namespace LearningAssistant.Forms.Pdf
 
                 BeginInvoke(new Action(() =>
                 {
-                    if (_currentPageIndex != pageIndex || _currentPdfPath != pdfPath)
-                        return;
-                    if (_currentPageImage == null) return;
-
                     try
                     {
+                        if (_currentPageIndex != pageIndex || _currentPdfPath != pdfPath)
+                            return;
+                        // 标注内容已变化（新增/撤销/删除/重载），丢弃这份过期图层
+                        if ((_navigationManager?.AnnotationRevision ?? 0) != revisionAtLoad)
+                            return;
+                        if (_currentPageImage == null) return;
+
                         _navigationManager?.ApplyLoadedAnnotationBitmap(annotationBmp);
                         _pictureBoxPdf.Invalidate();
                     }
@@ -1810,6 +1850,8 @@ namespace LearningAssistant.Forms.Pdf
         {
             try
             {
+                int revisionAtLoad = _navigationManager?.SecondAnnotationRevision ?? 0;
+
                 int imgW = 0, imgH = 0;
                 try
                 {
@@ -1836,12 +1878,15 @@ namespace LearningAssistant.Forms.Pdf
 
                 BeginInvoke(new Action(() =>
                 {
-                    if (_currentPageIndex + 1 != pageIndex || _currentPdfPath != pdfPath)
-                        return;
-                    if (_secondPageImage == null) return;
-
                     try
                     {
+                        if (_currentPageIndex + 1 != pageIndex || _currentPdfPath != pdfPath)
+                            return;
+                        // 第二页标注内容已变化，丢弃过期图层
+                        if ((_navigationManager?.SecondAnnotationRevision ?? 0) != revisionAtLoad)
+                            return;
+                        if (_secondPageImage == null) return;
+
                         _navigationManager?.ApplySecondLoadedAnnotationBitmap(annotationBmp);
                         _pictureBoxPdf.Invalidate();
                     }
@@ -5804,7 +5849,7 @@ namespace LearningAssistant.Forms.Pdf
             // 
             _statusLabelLeft.AutoSize = true;
             _statusLabelLeft.Font = new Font("Microsoft YaHei UI", 9F);
-            _statusLabelLeft.ForeColor = Color.FromArgb(153, 153, 153);
+            _statusLabelLeft.ForeColor = Color.FromArgb(71, 85, 105);
             _statusLabelLeft.Location = new Point(12, 4);
             _statusLabelLeft.Name = "_statusLabelLeft";
             _statusLabelLeft.Size = new Size(142, 17);
@@ -5816,7 +5861,7 @@ namespace LearningAssistant.Forms.Pdf
             _statusLabelRight.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             _statusLabelRight.AutoSize = true;
             _statusLabelRight.Font = new Font("Microsoft YaHei UI", 9F);
-            _statusLabelRight.ForeColor = Color.FromArgb(153, 153, 153);
+            _statusLabelRight.ForeColor = Color.FromArgb(71, 85, 105);
             _statusLabelRight.Location = new Point(1379, 4);
             _statusLabelRight.Name = "_statusLabelRight";
             _statusLabelRight.Size = new Size(130, 17);
