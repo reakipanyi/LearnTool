@@ -1,5 +1,6 @@
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Pdf;
+using LearningAssistant.Services.Pdf;
 using System.Text.RegularExpressions;
 
 namespace LearningAssistant.Forms.Pdf;
@@ -66,12 +67,14 @@ public class PdfAudioRuleDialog : Form
         var btnAdd = new Button { Text = "新增", Width = 70 };
         var btnDelete = new Button { Text = "删除", Width = 70 };
         var btnApply = new Button { Text = "应用修改", Width = 90 };
+        var btnSuggest = new Button { Text = "由手动匹配归纳", Width = 110 };
         var btnOk = new Button { Text = "保存并关闭", Width = 100, DialogResult = DialogResult.OK };
         var btnCancel = new Button { Text = "取消", Width = 70, DialogResult = DialogResult.Cancel };
 
         btnAdd.Click += (_, _) => OnAdd();
         btnDelete.Click += (_, _) => OnDelete();
         btnApply.Click += (_, _) => { ApplyToSelected(); RefreshPreview(); };
+        btnSuggest.Click += (_, _) => OnSuggestFromManual();
         btnOk.Click += (_, _) =>
         {
             ApplyToSelected();
@@ -86,7 +89,7 @@ public class PdfAudioRuleDialog : Form
         };
 
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(8) };
-        bottom.Controls.AddRange(new Control[] { btnAdd, btnDelete, btnApply, btnOk, btnCancel });
+        bottom.Controls.AddRange(new Control[] { btnAdd, btnDelete, btnApply, btnSuggest, btnOk, btnCancel });
 
         var editPanel = new TableLayoutPanel { Dock = DockStyle.Right, Width = 320, ColumnCount = 2, Padding = new Padding(8) };
         editPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -184,6 +187,30 @@ public class PdfAudioRuleDialog : Form
         if (item.Tag is AudioMatchRule r) _rules.Remove(r);
         _lvRules.Items.Remove(item);
         RefreshPreview();
+    }
+
+    /// <summary>把已有手动匹配反推为一条规则，加入列表由用户确认后随“保存并关闭”生效</summary>
+    private void OnSuggestFromManual()
+    {
+        var suggestion = PdfAudioRuleSuggester.Suggest(_profile.ManualOverrides, _profile.Tracks);
+        if (suggestion == null)
+        {
+            MessageBox.Show(this, "当前没有可归纳的手动匹配（需手动指定的文件名中包含数字）。",
+                "无法归纳", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        suggestion.Rule.Priority = _rules.Count == 0 ? 0 : _rules.Max(r => r.Priority) + 1;
+        _rules.Add(suggestion.Rule);
+        AddListItem(suggestion.Rule);
+        _lvRules.Items[_lvRules.Items.Count - 1].Selected = true;
+        RefreshPreview();
+
+        var note = string.IsNullOrEmpty(suggestion.Note) ? "" : "\n" + suggestion.Note;
+        MessageBox.Show(this,
+            $"已生成规则：{suggestion.Rule.FileNamePattern}\n覆盖 {suggestion.OverrideCount} 处手动匹配。" +
+            $"请确认试算结果后再点“保存并关闭”。{note}",
+            "归纳完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private void PopulateFields()
