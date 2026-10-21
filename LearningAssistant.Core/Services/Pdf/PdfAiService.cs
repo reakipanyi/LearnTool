@@ -15,19 +15,28 @@ namespace LearningAssistant.Services.Pdf
         /// <summary>答案中的页码锚点，例如 [[p12]]</summary>
         private static readonly Regex PageAnchorRegex = new(@"\[\[p(\d+)\]\]", RegexOptions.Compiled);
 
+        /// <summary>缓存 Key 中的提示词版本，提示词调整后递增可让旧缓存自然失效</summary>
+        private const string CachePromptVersion = "pdf-ai-v1";
+
+        /// <summary>缓存 Key 中的语言标记（当前 PDF AI 统一使用中文提示词）</summary>
+        private const string CacheLanguage = "zh";
+
         private readonly IAIService? _aiService;
         private readonly IPdfDocumentTextIndex _textIndex;
+        private readonly IPdfAiCacheService? _cacheService;
         private readonly PdfAiOptions _options;
         private readonly ILogger<PdfAiService>? _logger;
 
         public PdfAiService(
             IAIService? aiService,
             IPdfDocumentTextIndex textIndex,
+            IPdfAiCacheService? cacheService = null,
             PdfAiOptions? options = null,
             ILogger<PdfAiService>? logger = null)
         {
             _aiService = aiService;
             _textIndex = textIndex ?? throw new ArgumentNullException(nameof(textIndex));
+            _cacheService = cacheService;
             _options = options ?? new PdfAiOptions();
             _logger = logger;
         }
@@ -57,8 +66,8 @@ namespace LearningAssistant.Services.Pdf
                     {context.Context}
                     """;
 
-                var content = await AskAsync(prompt, cancellationToken).ConfigureAwait(false);
-                return PdfAiResponse.Ok(content, ExtractPageAnchors(content, context.PageCount));
+                return await ExecutePromptAsync(context, "summarize", context.IncludedPages, prompt,
+                    null, null, null, cancellationToken).ConfigureAwait(false);
             }, "总结", cancellationToken);
 
         /// <inheritdoc />
@@ -90,8 +99,8 @@ namespace LearningAssistant.Services.Pdf
                     {context.Context}
                     """;
 
-                var content = await AskAsync(prompt, cancellationToken).ConfigureAwait(false);
-                return PdfAiResponse.Ok(content, ExtractPageAnchors(content, context.PageCount));
+                return await ExecutePromptAsync(context, "ask", context.IncludedPages, prompt,
+                    null, question, null, cancellationToken).ConfigureAwait(false);
             }, "问答", cancellationToken);
 
         /// <inheritdoc />
@@ -123,8 +132,8 @@ namespace LearningAssistant.Services.Pdf
                     {pageText}
                     """;
 
-                var content = await AskAsync(prompt, cancellationToken).ConfigureAwait(false);
-                return PdfAiResponse.Ok(content, new[] { pageIndex + 1 });
+                return await ExecutePromptAsync(context, "explain", new[] { pageIndex + 1 }, prompt,
+                    null, selectedText, new[] { pageIndex + 1 }, cancellationToken).ConfigureAwait(false);
             }, "解释", cancellationToken);
 
         /// <inheritdoc />
@@ -151,9 +160,8 @@ namespace LearningAssistant.Services.Pdf
                     {{context.Context}}
                     """;
 
-                var content = await AskAsync(prompt, cancellationToken).ConfigureAwait(false);
-                bool structured = IsValidJson(content, JsonValueKind.Object);
-                return PdfAiResponse.Ok(content, ExtractPageAnchors(content, context.PageCount), structured);
+                return await ExecutePromptAsync(context, "outline", context.IncludedPages, prompt,
+                    JsonValueKind.Object, null, null, cancellationToken).ConfigureAwait(false);
             }, "大纲生成", cancellationToken);
 
         /// <inheritdoc />
@@ -181,8 +189,8 @@ namespace LearningAssistant.Services.Pdf
                     {context.Context}
                     """;
 
-                var content = await AskAsync(prompt, cancellationToken).ConfigureAwait(false);
-                return PdfAiResponse.Ok(content, ExtractPageAnchors(content, context.PageCount));
+                return await ExecutePromptAsync(context, "notes", context.IncludedPages, prompt,
+                    null, null, null, cancellationToken).ConfigureAwait(false);
             }, "笔记生成", cancellationToken);
 
         /// <inheritdoc />
@@ -209,9 +217,8 @@ namespace LearningAssistant.Services.Pdf
                     {{context.Context}}
                     """;
 
-                var content = await AskAsync(prompt, cancellationToken).ConfigureAwait(false);
-                bool structured = IsValidJson(content, JsonValueKind.Array);
-                return PdfAiResponse.Ok(content, ExtractPageAnchors(content, context.PageCount), structured);
+                return await ExecutePromptAsync(context, "flashcards", context.IncludedPages, prompt,
+                    JsonValueKind.Array, null, null, cancellationToken).ConfigureAwait(false);
             }, "闪卡生成", cancellationToken);
 
         private async Task<PdfAiResponse> ExecuteAsync(
@@ -250,6 +257,57 @@ namespace LearningAssistant.Services.Pdf
                 .ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// 先查磁盘缓存，未命中再调用 AI；成功后回写缓存。
+        /// </summary>
+        private async Task<PdfAiResponse> ExecutePromptAsync(
+            PdfAiContext context,
+            string feature,
+            IReadOnlyList<int> cachePages,
+            string prompt,
+            JsonValueKind? expectedJsonKind,
+            string? extra,
+            IReadOnlyList<int>? forcedPages,
+            CancellationToken cancellationToken)
+        {
+            string? cacheKey = null;
+            if (_cacheService != null && _aiService != null)
+            {
+                cacheKey = _cacheService.BuildKey(
+                    context.Fingerprint,
+                    cachePages,
+                    feature,
+                    CacheLanguage,
+                    CachePromptVersion,
+                    _aiService.ModelName,
+                    extra);
+
+                if (_cacheService.TryGet(cacheKey, out var cached))
+                {
+                    return BuildResponse(cached, context.PageCount, expectedJsonKind, forcedPages);
+                }
+            }
+
+            var content = await AskAsync(prompt, cancellationToken).ConfigureAwait(false);
+            if (cacheKey != null && !string.IsNullOrWhiteSpace(content))
+            {
+                _cacheService!.Set(cacheKey, content);
+            }
+
+            return BuildResponse(content, context.PageCount, expectedJsonKind, forcedPages);
+        }
+
+        private static PdfAiResponse BuildResponse(
+            string content,
+            int pageCount,
+            JsonValueKind? expectedJsonKind,
+            IReadOnlyList<int>? forcedPages)
+        {
+            bool structured = expectedJsonKind.HasValue && IsValidJson(content, expectedJsonKind.Value);
+            var pages = forcedPages ?? ExtractPageAnchors(content, pageCount);
+            return PdfAiResponse.Ok(content, pages, structured);
+        }
+
         /// <summary>按页面顺序或当前页优先构造裁剪后的上下文</summary>
         private async Task<PdfAiContext> BuildContextAsync(
             string pdfPath,
@@ -264,12 +322,12 @@ namespace LearningAssistant.Services.Pdf
                 .ConfigureAwait(false);
             int pageCount = index.PageCount;
             if (pageCount <= 0)
-                return new PdfAiContext(string.Empty, Array.Empty<int>(), 0);
+                return new PdfAiContext(string.Empty, Array.Empty<int>(), 0, string.Empty);
 
             int start = Math.Max(0, startPageIndex);
             int end = endPageIndex == int.MaxValue ? pageCount - 1 : Math.Min(pageCount - 1, endPageIndex);
             if (end < start)
-                return new PdfAiContext(string.Empty, Array.Empty<int>(), pageCount);
+                return new PdfAiContext(string.Empty, Array.Empty<int>(), pageCount, index.Fingerprint);
 
             var order = priorityPageIndex >= start && priorityPageIndex <= end
                 ? BuildPriorityOrder(priorityPageIndex, start, end)
@@ -304,7 +362,7 @@ namespace LearningAssistant.Services.Pdf
                 includedPages.Add(pageIndex + 1);
             }
 
-            return new PdfAiContext(builder.ToString(), includedPages, pageCount);
+            return new PdfAiContext(builder.ToString(), includedPages, pageCount, index.Fingerprint);
         }
 
         /// <summary>当前页优先，再向两侧扩展的取页顺序</summary>
@@ -366,6 +424,6 @@ namespace LearningAssistant.Services.Pdf
             return text[(firstLineEnd + 1)..lastFence].Trim();
         }
 
-        private sealed record PdfAiContext(string Context, IReadOnlyList<int> IncludedPages, int PageCount);
+        private sealed record PdfAiContext(string Context, IReadOnlyList<int> IncludedPages, int PageCount, string Fingerprint);
     }
 }

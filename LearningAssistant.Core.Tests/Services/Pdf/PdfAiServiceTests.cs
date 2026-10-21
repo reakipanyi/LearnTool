@@ -31,7 +31,7 @@ public class PdfAiServiceTests
         var index = new FakeTextIndex(1);
         index.SetText(0, new string('长', 100));
         var ai = new FakeAiService(_ => "摘要");
-        var service = new PdfAiService(ai, index, new PdfAiOptions { MaxCharsPerPage = 10, MaxTotalChars = 500 });
+        var service = new PdfAiService(ai, index, options: new PdfAiOptions { MaxCharsPerPage = 10, MaxTotalChars = 500 });
 
         var result = await service.SummarizePagesAsync("book.pdf", 0, 0);
 
@@ -81,6 +81,22 @@ public class PdfAiServiceTests
 
         result.Success.Should().BeFalse();
         result.ErrorMessage.Should().Contain("失败");
+    }
+
+    [Fact]
+    public async Task 相同摘要第二次命中缓存_不再调用AI()
+    {
+        var index = new FakeTextIndex(1);
+        index.SetText(0, "内容");
+        var ai = new FakeAiService(_ => "摘要 [[p1]]");
+        var cache = new PdfAiCacheService(Path.Combine(Path.GetTempPath(), "pdfaicache_" + Guid.NewGuid().ToString("N")));
+        var service = new PdfAiService(ai, index, cache);
+
+        var first = await service.SummarizePagesAsync("book.pdf", 0, 0);
+        var second = await service.SummarizePagesAsync("book.pdf", 0, 0);
+
+        first.Content.Should().Be(second.Content);
+        ai.CallCount.Should().Be(1);
     }
 
     [Fact]
@@ -135,12 +151,14 @@ public class PdfAiServiceTests
         public FakeAiService(Func<string, string> handler) => _handler = handler;
 
         public string? LastPrompt { get; private set; }
+        public int CallCount { get; private set; }
         public string ModelName => "fake";
         public string ProviderName => "fake";
 
         public Task<string> AskQuestionAsync(string question, string context = "", CancellationToken cancellationToken = default)
         {
             LastPrompt = question;
+            CallCount++;
             return Task.FromResult(_handler(question));
         }
 

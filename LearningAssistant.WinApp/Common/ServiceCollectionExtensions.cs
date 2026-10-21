@@ -212,10 +212,16 @@ namespace LearningAssistant.Common
                 sp.GetService<ILogger<PdfDocumentTextIndex>>(),
                 AppPaths.PdfTextIndexDir));
 
-            // PDF 专用 AI 编排：文本索引取料 + 页码锚点 + 上下文预算
+            // PDF AI 结果磁盘缓存：按指纹/页码/功能/模型分键，LRU 淘汰
+            services.AddScoped<IPdfAiCacheService>(sp => new PdfAiCacheService(
+                AppPaths.PdfAiCacheDir,
+                logger: sp.GetService<ILogger<PdfAiCacheService>>()));
+
+            // PDF 专用 AI 编排：文本索引取料 + 页码锚点 + 上下文预算 + 结果缓存
             services.AddScoped<IPdfAiService>(sp => new PdfAiService(
                 sp.GetService<IAIService>(),
                 sp.GetRequiredService<IPdfDocumentTextIndex>(),
+                sp.GetRequiredService<IPdfAiCacheService>(),
                 null,
                 sp.GetService<ILogger<PdfAiService>>()));
             services.AddScoped<IPdfStudyIntegration, PdfStudyIntegration>();
