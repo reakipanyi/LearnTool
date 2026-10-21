@@ -258,13 +258,14 @@ public class PdfAudioTrackManager : IDisposable
 
     private AudioTrack ResolveTrack(string fileNameOrRelativePath, bool markManual)
     {
-        // 相对路径优先，避免不同子目录下同名文件被误解析
-        var track = _profile?.Tracks.FirstOrDefault(t =>
-                        string.Equals(t.RelativePath, fileNameOrRelativePath, StringComparison.OrdinalIgnoreCase))
-                    ?? _profile?.Tracks.FirstOrDefault(t =>
-                        string.Equals(t.FilePath, fileNameOrRelativePath, StringComparison.OrdinalIgnoreCase))
-                    ?? _profile?.Tracks.FirstOrDefault(t =>
-                        string.Equals(t.FileName, Path.GetFileName(fileNameOrRelativePath), StringComparison.OrdinalIgnoreCase));
+        // 相对路径优先；绝对路径只按完整路径匹配，避免被同名曲目误解析
+        AudioTrack? track = Path.IsPathRooted(fileNameOrRelativePath)
+            ? _profile?.Tracks.FirstOrDefault(t =>
+                string.Equals(t.FilePath, fileNameOrRelativePath, StringComparison.OrdinalIgnoreCase))
+            : _profile?.Tracks.FirstOrDefault(t =>
+                    string.Equals(t.RelativePath, fileNameOrRelativePath, StringComparison.OrdinalIgnoreCase))
+                ?? _profile?.Tracks.FirstOrDefault(t =>
+                    string.Equals(t.FileName, Path.GetFileName(fileNameOrRelativePath), StringComparison.OrdinalIgnoreCase));
         if (track == null)
         {
             track = new AudioTrack
