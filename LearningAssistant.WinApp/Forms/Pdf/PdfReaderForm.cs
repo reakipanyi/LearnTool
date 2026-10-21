@@ -7,6 +7,7 @@ using LearningAssistant.Models.Config;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
+using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Media;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Views;
@@ -448,7 +449,15 @@ namespace LearningAssistant.Forms.Pdf
                     _audioTrackManager = new PdfAudioTrackManager(_logger, matcher, scanner, store, subParser);
                     if (_tabPageCompanion != null)
                     {
-                        _audioPanel = new PdfAudioPanel(_audioTrackManager, this) { Dock = DockStyle.Fill };
+                        // AI 匹配只按需读取页面文本，使用独立的 PDF 服务实例避免干扰阅读器自己的文档句柄
+                        var aiService = Program.ServiceProvider?.GetService(typeof(IAIService)) as IAIService;
+                        var pdfTextLogger = Program.ServiceProvider?
+                            .GetService(typeof(ILogger<PdfiumPdfService>)) as ILogger<PdfiumPdfService>;
+                        var aiMatcher = aiService != null && pdfTextLogger != null
+                            ? new PdfAudioAiMatcher(aiService, new PdfiumPdfService(pdfTextLogger), _logger)
+                            : null;
+
+                        _audioPanel = new PdfAudioPanel(_audioTrackManager, this, aiMatcher) { Dock = DockStyle.Fill };
                         _tabPageCompanion.Controls.Add(_audioPanel);
                     }
                 }

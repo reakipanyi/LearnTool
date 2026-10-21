@@ -28,13 +28,18 @@ public class PdfAudioPanel : UserControl
     private readonly Button _btnManual = new() { Text = "手动指定", Width = 76 };
     private readonly Button _btnManualFromList = new() { Text = "从列表选", Width = 76 };
     private readonly Button _btnRescan = new() { Text = "重新扫描", Width = 76 };
+    private readonly Button _btnAddDir = new() { Text = "📁 添加音频目录", Width = 116 };
+    private readonly Button _btnAiMatch = new() { Text = "✨ AI匹配", Width = 88 };
     private readonly CheckBox _chkSubDir = new() { Text = "包含子目录", AutoSize = true };
+    private readonly PdfAudioAiMatcher? _aiMatcher;
     private bool _suppressAutoPlay;
 
-    public PdfAudioPanel(PdfAudioTrackManager manager, IPdfReaderFormAccess form)
+    public PdfAudioPanel(PdfAudioTrackManager manager, IPdfReaderFormAccess form,
+        PdfAudioAiMatcher? aiMatcher = null)
     {
         _manager = manager;
         _form = form;
+        _aiMatcher = aiMatcher;
         BuildLayout();
         WireEvents();
         RefreshData();
@@ -57,7 +62,7 @@ public class PdfAudioPanel : UserControl
         speedRow.Controls.Add(new Label { AutoSize = true, Text = "倍速待技术评估", ForeColor = Color.FromArgb(148, 163, 184) });
 
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true };
-        bottom.Controls.AddRange(new Control[] { _btnFollowRead, _btnRules, _btnManual, _btnManualFromList, _btnRescan, _chkSubDir });
+        bottom.Controls.AddRange(new Control[] { _btnFollowRead, _btnRules, _btnManual, _btnManualFromList, _btnAddDir, _btnAiMatch, _btnRescan, _chkSubDir });
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 7 };
         root.Controls.Add(_labelInfo, 0, 0);
@@ -93,6 +98,10 @@ public class PdfAudioPanel : UserControl
         _btnRules.Click += (_, _) => OnRules();
         _btnManual.Click += (_, _) => OnManual();
         _btnManualFromList.Click += (_, _) => OnManualFromList();
+        _btnAddDir.Click += async (_, _) => await OnAddDirectoryAsync();
+        _btnAiMatch.Click += async (_, _) => await OnAiMatchAsync();
+        _tooltip.SetToolTip(_btnAddDir, "选择一个外部音频目录，扫描后合并到当前曲目列表");
+        _tooltip.SetToolTip(_btnAiMatch, "让 AI 根据 PDF 各页内容与音频文件名自动匹配页码，确认后应用");
         _btnRescan.Click += async (_, _) =>
         {
             _btnRescan.Enabled = false;
@@ -146,7 +155,11 @@ public class PdfAudioPanel : UserControl
             {
                 var pages = pagesByTrack.TryGetValue(t.FilePath, out var list) ? list.OrderBy(p => p).ToList() : new List<int>();
                 var pageText = pages.Count > 0 ? string.Join(",", pages.Take(4)) + (pages.Count > 4 ? "…" : "") : "未匹配";
-                _listTracks.Items.Add($"第{pageText}页  {t.FileName}{(t.IsManual ? "  [手动]" : "")}");
+                // 外部目录曲目用目录名辅助区分同名文件
+                var folderHint = Path.IsPathRooted(t.RelativePath)
+                    ? $"  ({Path.GetFileName(Path.GetDirectoryName(t.FilePath))})"
+                    : "";
+                _listTracks.Items.Add($"第{pageText}页  {t.FileName}{folderHint}{(t.IsManual ? "  [手动]" : "")}");
             }
             if (result.UnmatchedPages.Count > 0)
                 _listTracks.Items.Add($"未匹配页：{string.Join(",", result.UnmatchedPages.Select(p => p + 1).Take(20))}");
@@ -270,6 +283,88 @@ public class PdfAudioPanel : UserControl
             RefreshData();
             var resolved = _manager.Result?.PageIndex.GetValueOrDefault(_form.CurrentPageIndex);
             if (resolved != null) SelectTrackInList(resolved);
+        }
+    }
+
+    /// <summary>选择外部音频目录并合并到当前曲目列表</summary>
+    private async Task OnAddDirectoryAsync()
+    {
+        if (string.IsNullOrEmpty(_form.CurrentPdfPath)) { _form.ShowWarning("请先打开 PDF"); return; }
+
+        using var dialog = new FolderBrowserDialog
+        {
+            Description = "选择包含音频文件的目录（自动包含子目录）",
+            ShowNewFolderButton = false
+        };
+        if (dialog.ShowDialog(_form.Form) != DialogResult.OK) return;
+
+        _btnAddDir.Enabled = false;
+        try
+        {
+            var added = await _manager.AddExternalDirectoryAsync(dialog.SelectedPath);
+            RefreshData();
+            _form.ShowMessage($"已添加音频目录：{dialog.SelectedPath}\n新增 {added} 个音频文件", "添加音频目录");
+        }
+        catch (Exception ex)
+        {
+            HandleAudioError("添加音频目录失败", ex);
+        }
+        finally
+        {
+            _btnAddDir.Enabled = true;
+        }
+    }
+
+    /// <summary>调用 AI 匹配当前 PDF 页与曲目，预览确认后写入手动匹配</summary>
+    private async Task OnAiMatchAsync()
+    {
+        if (string.IsNullOrEmpty(_form.CurrentPdfPath)) { _form.ShowWarning("请先打开 PDF"); return; }
+        var result = _manager.Result;
+        if (result == null || result.Tracks.Count == 0)
+        {
+            _form.ShowWarning("当前没有可匹配的音频，请先添加音频目录或重新扫描");
+            return;
+        }
+        if (_aiMatcher == null)
+        {
+            _form.ShowWarning("AI 服务不可用，请先在设置中配置 AI 服务");
+            return;
+        }
+
+        _btnAiMatch.Enabled = false;
+        _btnAddDir.Enabled = false;
+        var originalText = _btnAiMatch.Text;
+        UseWaitCursor = true;
+        try
+        {
+            var progress = new Progress<string>(message => InvokeIfReady(() => _labelInfo.Text = message));
+            var suggestions = await _aiMatcher.SuggestAsync(
+                _form.CurrentPdfPath, _manager.PageCount, result.Tracks, progress);
+            if (suggestions.Count == 0)
+            {
+                _form.ShowWarning("AI 没有返回可用的匹配建议，可能是页面无可提取文本或音频文件名缺少线索");
+                return;
+            }
+
+            using var dialog = new PdfAudioAiMatchDialog(suggestions, _manager.PageCount);
+            if (dialog.ShowDialog(_form.Form) != DialogResult.OK) return;
+
+            _manager.ApplyManualMatches(dialog.SelectedMatches);
+            _manager.OnPageChanged(_form.CurrentPageIndex);
+            RefreshData();
+            _form.ShowMessage($"已应用 {dialog.SelectedMatches.Count} 条 AI 匹配结果", "AI 自动匹配");
+        }
+        catch (Exception ex)
+        {
+            HandleAudioError("AI 自动匹配失败", ex);
+        }
+        finally
+        {
+            _btnAiMatch.Text = originalText;
+            _btnAiMatch.Enabled = true;
+            _btnAddDir.Enabled = true;
+            UseWaitCursor = false;
+            OnCurrentPageChanged();
         }
     }
 

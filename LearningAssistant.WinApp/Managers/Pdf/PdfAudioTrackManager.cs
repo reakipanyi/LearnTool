@@ -71,13 +71,15 @@ public class PdfAudioTrackManager : IDisposable
 
         var directory = Path.GetDirectoryName(pdfPath) ?? "";
         var includeSubDirectories = _profile.IncludeSubDirectories;
+        // 外部目录在进入扫描前取快照，避免后台线程读取被 UI 线程修改的集合
+        var externalDirectories = _profile.ExternalAudioDirectories.ToList();
         List<AudioTrack> tracks;
         string fingerprint;
         try
         {
             (tracks, fingerprint) = await Task.Run(() =>
             {
-                var scanned = _scanner.Scan(directory, includeSubDirectories);
+                var scanned = ScanAll(directory, includeSubDirectories, externalDirectories);
                 return (scanned, PdfAudioDirectoryScanner.ComputeScanFingerprint(scanned));
             }, cancellationToken).ConfigureAwait(true);
         }
@@ -127,6 +129,77 @@ public class PdfAudioTrackManager : IDisposable
                 if (!_result.PageIndex.ContainsKey(p)) _result.UnmatchedPages.Add(p);
         }
         _currentPageIndex = -1;
+    }
+
+    /// <summary>扫描 PDF 同目录及已登记的外部音频目录，按完整路径去重</summary>
+    private List<AudioTrack> ScanAll(string pdfDirectory, bool includeSubDirectories,
+        IReadOnlyList<string> externalDirectories)
+    {
+        var tracks = _scanner.Scan(pdfDirectory, includeSubDirectories);
+        var seen = new HashSet<string>(tracks.Select(t => t.FilePath), StringComparer.OrdinalIgnoreCase);
+        foreach (var external in externalDirectories)
+        {
+            if (string.IsNullOrWhiteSpace(external) || !Directory.Exists(external)) continue;
+            foreach (var track in _scanner.Scan(external, includeSubDirectories: true))
+            {
+                if (!seen.Add(track.FilePath)) continue;
+                // 外部目录曲目改用绝对路径标识，避免与 PDF 同目录的同名文件混淆
+                track.RelativePath = track.FilePath;
+                tracks.Add(track);
+            }
+        }
+        return tracks
+            .OrderBy(t => t.RelativePath, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>把外部音频目录合并到当前曲目并立即重新匹配，返回新增曲目数量</summary>
+    public async Task<int> AddExternalDirectoryAsync(string directoryPath)
+    {
+        if (_profile == null || _currentPdfPath == null) return 0;
+        var fullPath = Path.GetFullPath(directoryPath);
+        if (!Directory.Exists(fullPath))
+            throw new DirectoryNotFoundException($"音频目录不存在：{fullPath}");
+
+        var before = _profile.Tracks
+            .Select(t => t.FilePath)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (!_profile.ExternalAudioDirectories.Any(d =>
+                string.Equals(d, fullPath, StringComparison.OrdinalIgnoreCase)))
+        {
+            _profile.ExternalAudioDirectories.Add(fullPath);
+            _store.Save(_profile);
+            await LoadProfileAsync(_currentPdfPath, _pageCount);
+        }
+        return _profile.Tracks.Count(t => !before.Contains(t.FilePath));
+    }
+
+    /// <summary>批量应用 AI 匹配结果（页 → 音频完整路径），写入手动覆盖并立即生效</summary>
+    public void ApplyManualMatches(IReadOnlyDictionary<int, string> pageToFile)
+    {
+        if (_profile == null) return;
+        foreach (var kv in pageToFile)
+        {
+            if (kv.Key < 0 || kv.Key >= _pageCount || string.IsNullOrWhiteSpace(kv.Value)) continue;
+            var value = ToProfilePath(kv.Value);
+            _profile.ManualOverrides[kv.Key] = value;
+            // 同步缓存映射，避免指纹命中时恢复到应用前的旧结果
+            _profile.PageIndex[kv.Key] = value;
+        }
+        SaveRulesAndRematch();
+    }
+
+    /// <summary>PDF 同目录内用相对路径，目录外保留绝对路径</summary>
+    private string ToProfilePath(string fullPath)
+    {
+        var pdfDir = Path.GetDirectoryName(_currentPdfPath ?? "");
+        if (string.IsNullOrEmpty(pdfDir)) return fullPath;
+        var baseDir = Path.GetFullPath(pdfDir);
+        var target = Path.GetFullPath(fullPath);
+        return target.StartsWith(baseDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+            ? Path.GetRelativePath(baseDir, target)
+            : target;
     }
 
     /// <summary>把当前匹配结果按页持久化，供下次指纹命中时恢复</summary>
