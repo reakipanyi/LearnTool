@@ -1,9 +1,12 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
+using LearningAssistant.Forms.Pdf;
 using LearningAssistant.Models;
 using LearningAssistant.Models.Config;
+using LearningAssistant.Models.Pdf;
 using LearningAssistant.Models.UI;
 using LearningAssistant.Services;
+using LearningAssistant.Services.Pdf;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
@@ -44,6 +47,21 @@ namespace LearningAssistant.Forms.UserControls.Ai
         private Button _buttonExportHistory;
         private ComboBox _comboBoxHistory;
         private ListBox _listBoxSuggestions;
+
+        // PDF 作用域与站内问答
+        private Panel _panelPdfScope;
+        private ComboBox _comboPdfScope;
+        private NumericUpDown _numericScopeStart;
+        private NumericUpDown _numericScopeEnd;
+        private Label _labelScopeRangeTo;
+        private Button _buttonScopedAsk;
+        private Func<PdfAiScope, int, int, Task<string>>? _scopeContextProvider;
+        private Func<PdfAiScope, int, int, string, CancellationToken, Task<PdfAiResponse>>? _scopedQuestionHandler;
+        private Func<int, Task>? _pageNavigationHandler;
+        private CancellationTokenSource? _scopeContextCts;
+        private int _pdfCurrentPageIndex;
+        private int _pdfPageCount = 1;
+        private bool _isUpdatingScope;
         #endregion
 
         #region 属性
@@ -121,6 +139,15 @@ namespace LearningAssistant.Forms.UserControls.Ai
             _listBoxSuggestions.ForeColor = isDark ? colors.TextPrimary : Color.Black;
             _labelStatus.ForeColor = isDark ? colors.TextSecondary : Color.Gray;
             _labelStatus.BackColor = isDark ? colors.Surface : Color.FromArgb(245, 245, 245);
+
+            _panelPdfScope.BackColor = isDark ? colors.SurfaceElevated : Color.FromArgb(248, 248, 248);
+            _comboPdfScope.BackColor = isDark ? colors.Surface : Color.White;
+            _comboPdfScope.ForeColor = isDark ? colors.TextPrimary : Color.Black;
+            _numericScopeStart.BackColor = isDark ? colors.Surface : Color.White;
+            _numericScopeStart.ForeColor = isDark ? colors.TextPrimary : Color.Black;
+            _numericScopeEnd.BackColor = isDark ? colors.Surface : Color.White;
+            _numericScopeEnd.ForeColor = isDark ? colors.TextPrimary : Color.Black;
+            _labelScopeRangeTo.ForeColor = isDark ? colors.TextPrimary : Color.Black;
 
             foreach (var kvp in _radioButtons)
             {
@@ -213,6 +240,156 @@ namespace LearningAssistant.Forms.UserControls.Ai
             _historyService.ClearConversationHistory();
             SetStatus("对话历史已清空");
         }
+
+        /// <summary>
+        /// 配置 PDF 作用域上下文与站内问答（由 PDF 阅读器注入）。
+        /// </summary>
+        public void ConfigurePdfScope(PdfAiPanelOptions options)
+        {
+            if (options == null || _panelPdfScope == null) return;
+
+            _scopeContextProvider = options.ContextProvider;
+            _scopedQuestionHandler = options.QuestionHandler;
+            _pageNavigationHandler = options.PageNavigationHandler;
+            _pdfPageCount = Math.Max(1, options.PageCount);
+            _pdfCurrentPageIndex = Math.Clamp(options.CurrentPageIndex, 0, _pdfPageCount - 1);
+
+            _isUpdatingScope = true;
+            _numericScopeStart.Maximum = _pdfPageCount;
+            _numericScopeEnd.Maximum = _pdfPageCount;
+            _numericScopeStart.Value = _pdfCurrentPageIndex + 1;
+            _numericScopeEnd.Value = Math.Min(_pdfPageCount, _pdfCurrentPageIndex + 3);
+            _isUpdatingScope = false;
+
+            bool enabled = options.ContextProvider != null || options.QuestionHandler != null;
+            _panelPdfScope.Visible = enabled;
+            _buttonScopedAsk.Visible = options.QuestionHandler != null;
+            RefreshScopeRangeVisibility();
+
+            if (enabled && options.ContextProvider != null)
+            {
+                _ = RefreshScopeContextAsync();
+            }
+        }
+
+        private PdfAiScope SelectedScope => (PdfAiScope)Math.Max(0, _comboPdfScope.SelectedIndex);
+
+        private void ComboPdfScope_SelectedIndexChanged(object? sender, EventArgs e)
+        {
+            if (_isUpdatingScope) return;
+            RefreshScopeRangeVisibility();
+            _ = RefreshScopeContextAsync();
+        }
+
+        private void ScopeRange_ValueChanged(object? sender, EventArgs e)
+        {
+            if (_isUpdatingScope || SelectedScope != PdfAiScope.SpecifiedPages) return;
+            _ = RefreshScopeContextAsync();
+        }
+
+        private void RefreshScopeRangeVisibility()
+        {
+            bool showRange = SelectedScope == PdfAiScope.SpecifiedPages;
+            _numericScopeStart.Visible = showRange;
+            _numericScopeEnd.Visible = showRange;
+            _labelScopeRangeTo.Visible = showRange;
+        }
+
+        private async Task RefreshScopeContextAsync()
+        {
+            var provider = _scopeContextProvider;
+            if (provider == null || IsDisposed) return;
+
+            _scopeContextCts?.Cancel();
+            _scopeContextCts?.Dispose();
+            var cts = new CancellationTokenSource();
+            _scopeContextCts = cts;
+
+            var scope = SelectedScope;
+            int start = (int)_numericScopeStart.Value;
+            int end = (int)_numericScopeEnd.Value;
+
+            try
+            {
+                RunOnUiThread(() => SetStatus($"正在准备{_comboPdfScope.Text}上下文..."));
+                var context = await provider(scope, start, end).ConfigureAwait(false);
+                if (cts.IsCancellationRequested || IsDisposed) return;
+
+                RunOnUiThread(() =>
+                {
+                    _currentContext = context;
+                    SetStatus($"已切换范围：{_comboPdfScope.Text}");
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "准备 PDF AI 上下文失败");
+                RunOnUiThread(() => SetStatus("上下文准备失败"));
+            }
+        }
+
+        private async void ButtonScopedAsk_Click(object? sender, EventArgs e)
+        {
+            var handler = _scopedQuestionHandler;
+            if (handler == null) return;
+
+            string question = PromptText.Trim();
+            if (string.IsNullOrWhiteSpace(question))
+            {
+                ShowError("请先输入问题");
+                return;
+            }
+
+            var scope = SelectedScope;
+            int start = (int)_numericScopeStart.Value;
+            int end = (int)_numericScopeEnd.Value;
+
+            _buttonScopedAsk.Enabled = false;
+            SetStatus("站内问答生成中...");
+            try
+            {
+                var response = await handler(scope, start, end, question, CancellationToken.None).ConfigureAwait(true);
+                if (!response.Success)
+                {
+                    ShowError(response.ErrorMessage ?? "问答失败");
+                    return;
+                }
+
+                using var dialog = new PdfAiAnswerDialog("PDF 站内问答", response, NavigateToPage);
+                dialog.ShowDialog(FindForm());
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "PDF 站内问答异常");
+                ShowError($"问答失败: {ex.Message}");
+            }
+            finally
+            {
+                _buttonScopedAsk.Enabled = true;
+                SetStatus("就绪");
+            }
+        }
+
+        private void NavigateToPage(int pageNumber)
+        {
+            var navigation = _pageNavigationHandler;
+            if (navigation == null) return;
+            _ = navigation(pageNumber);
+        }
+
+        private void RunOnUiThread(Action action)
+        {
+            if (IsDisposed) return;
+
+            if (InvokeRequired)
+            {
+                if (!IsHandleCreated) return;
+                BeginInvoke(action);
+                return;
+            }
+
+            action();
+        }
         #endregion
 
         #region 初始化方法
@@ -231,6 +408,12 @@ namespace LearningAssistant.Forms.UserControls.Ai
             _panelQuickActions = new Panel();
             _panelRadioButtons = new Panel();
             _panelBrowser = new Panel();
+            _panelPdfScope = new Panel();
+            _comboPdfScope = new ComboBox();
+            _numericScopeStart = new NumericUpDown();
+            _numericScopeEnd = new NumericUpDown();
+            _labelScopeRangeTo = new Label();
+            _buttonScopedAsk = new Button();
             _labelStatus = new Label();
 
             _panelTop.SuspendLayout();
@@ -247,6 +430,7 @@ namespace LearningAssistant.Forms.UserControls.Ai
             SetupQuickActionsPanel();
             SetupRadioButtonsPanel();
             SetupBrowserPanel();
+            SetupPdfScopePanel();
             SetupMainPanel();
 
             _panelTop.ResumeLayout(false);
@@ -393,6 +577,83 @@ namespace LearningAssistant.Forms.UserControls.Ai
             _panelBrowser.Name = "_panelBrowser";
             _panelBrowser.Size = new Size(1263, 512);
             _panelBrowser.TabIndex = 0;
+        }
+
+        private void SetupPdfScopePanel()
+        {
+            _panelPdfScope.BackColor = Color.FromArgb(248, 248, 248);
+            _panelPdfScope.Dock = DockStyle.Bottom;
+            _panelPdfScope.Height = 40;
+            _panelPdfScope.Padding = new Padding(8, 6, 8, 6);
+            _panelPdfScope.Name = "_panelPdfScope";
+            _panelPdfScope.Visible = false;
+
+            var labelScope = new Label
+            {
+                Text = "AI 范围:",
+                AutoSize = true,
+                Location = new Point(8, 11),
+                Font = new Font("微软雅黑", 9F)
+            };
+
+            _comboPdfScope.DropDownStyle = ComboBoxStyle.DropDownList;
+            _comboPdfScope.Font = new Font("微软雅黑", 9F);
+            _comboPdfScope.Location = new Point(72, 6);
+            _comboPdfScope.Size = new Size(96, 28);
+            _comboPdfScope.Cursor = Cursors.Hand;
+            _comboPdfScope.Items.AddRange(new object[] { "选中内容", "本页", "指定页", "全文" });
+            _comboPdfScope.SelectedIndex = 1;
+            _comboPdfScope.SelectedIndexChanged += ComboPdfScope_SelectedIndexChanged;
+
+            _numericScopeStart.Font = new Font("微软雅黑", 9F);
+            _numericScopeStart.Location = new Point(178, 6);
+            _numericScopeStart.Size = new Size(56, 28);
+            _numericScopeStart.Minimum = 1;
+            _numericScopeStart.Visible = false;
+            _numericScopeStart.ValueChanged += ScopeRange_ValueChanged;
+
+            _labelScopeRangeTo.Text = "至";
+            _labelScopeRangeTo.AutoSize = true;
+            _labelScopeRangeTo.Location = new Point(238, 11);
+            _labelScopeRangeTo.Font = new Font("微软雅黑", 9F);
+            _labelScopeRangeTo.Visible = false;
+
+            _numericScopeEnd.Font = new Font("微软雅黑", 9F);
+            _numericScopeEnd.Location = new Point(258, 6);
+            _numericScopeEnd.Size = new Size(56, 28);
+            _numericScopeEnd.Minimum = 1;
+            _numericScopeEnd.Visible = false;
+            _numericScopeEnd.ValueChanged += ScopeRange_ValueChanged;
+
+            _buttonScopedAsk.BackColor = Color.FromArgb(139, 92, 246);
+            _buttonScopedAsk.FlatAppearance.BorderSize = 0;
+            _buttonScopedAsk.FlatStyle = FlatStyle.Flat;
+            _buttonScopedAsk.Font = new Font("微软雅黑", 9F);
+            _buttonScopedAsk.ForeColor = Color.White;
+            _buttonScopedAsk.Location = new Point(328, 5);
+            _buttonScopedAsk.Size = new Size(96, 30);
+            _buttonScopedAsk.Text = "📄 站内问答";
+            _buttonScopedAsk.Cursor = Cursors.Hand;
+            _buttonScopedAsk.Click += ButtonScopedAsk_Click;
+
+            var labelHint = new Label
+            {
+                Text = "答案页码可点击跳转",
+                AutoSize = true,
+                Location = new Point(434, 11),
+                Font = new Font("微软雅黑", 8F),
+                ForeColor = Color.Gray
+            };
+
+            _panelPdfScope.Controls.Add(labelScope);
+            _panelPdfScope.Controls.Add(_comboPdfScope);
+            _panelPdfScope.Controls.Add(_numericScopeStart);
+            _panelPdfScope.Controls.Add(_labelScopeRangeTo);
+            _panelPdfScope.Controls.Add(_numericScopeEnd);
+            _panelPdfScope.Controls.Add(_buttonScopedAsk);
+            _panelPdfScope.Controls.Add(labelHint);
+
+            _panelBrowser.Controls.Add(_panelPdfScope);
         }
 
         private void SetupMainPanel()
@@ -1202,6 +1463,10 @@ namespace LearningAssistant.Forms.UserControls.Ai
         {
             if (disposing)
             {
+                _scopeContextCts?.Cancel();
+                _scopeContextCts?.Dispose();
+                _scopeContextCts = null;
+
                 if (_webView != null)
                 {
                     _webView.NavigationCompleted -= OnNavigationCompleted;

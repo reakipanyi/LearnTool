@@ -2,11 +2,34 @@ using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Forms.UserControls;
 using LearningAssistant.Forms.UserControls.Ai;
+using LearningAssistant.Models.Pdf;
+using LearningAssistant.Services.Pdf;
 using System.Collections.Concurrent;
 using System.Windows.Forms;
 
 namespace LearningAssistant.Services
 {
+    /// <summary>
+    /// PDF AI 面板扩展配置：作用域上下文与站内问答回调。
+    /// </summary>
+    public sealed class PdfAiPanelOptions
+    {
+        /// <summary>当前页（从 0 开始）</summary>
+        public int CurrentPageIndex { get; init; }
+
+        /// <summary>文档总页数</summary>
+        public int PageCount { get; init; }
+
+        /// <summary>按作用域获取上下文文本</summary>
+        public Func<PdfAiScope, int, int, Task<string>>? ContextProvider { get; init; }
+
+        /// <summary>站内问答（返回带页码锚点的答案）</summary>
+        public Func<PdfAiScope, int, int, string, CancellationToken, Task<PdfAiResponse>>? QuestionHandler { get; init; }
+
+        /// <summary>页码锚点点击后的跳转回调（页码从 1 开始）</summary>
+        public Func<int, Task>? PageNavigationHandler { get; init; }
+    }
+
     /// <summary>
     /// AI面板弹窗服务 - 统一管理AIAbilityPanel的弹出逻辑
     /// </summary>
@@ -19,7 +42,8 @@ namespace LearningAssistant.Services
         /// <param name="prompt">初始提示词</param>
         /// <param name="aiUrl">AI URL（可选）</param>
         /// <param name="context">上下文文本（可选，如PDF选中的内容）</param>
-        void ShowAIAbilityPanel(Form parent, string? prompt = null, string? aiUrl = null, string? context = null);
+        /// <param name="pdfAiOptions">PDF 作用域与站内问答配置（可选）</param>
+        void ShowAIAbilityPanel(Form parent, string? prompt = null, string? aiUrl = null, string? context = null, PdfAiPanelOptions? pdfAiOptions = null);
 
         /// <summary>
         /// 关闭指定父窗体上的AI面板
@@ -51,7 +75,7 @@ namespace LearningAssistant.Services
 
         #region 公共方法
 
-        public void ShowAIAbilityPanel(Form parent, string? prompt = null, string? aiUrl = null, string? context = null)
+        public void ShowAIAbilityPanel(Form parent, string? prompt = null, string? aiUrl = null, string? context = null, PdfAiPanelOptions? pdfAiOptions = null)
         {
             if (parent == null)
                 throw new ArgumentNullException(nameof(parent));
@@ -59,11 +83,11 @@ namespace LearningAssistant.Services
             if (_panelContainers.TryGetValue(parent, out var existingContainer))
             {
                 // 内部实现为 Task，自行捕获异常并提示，避免 async void 吞掉异常
-                _ = OpenExistingPanelCoreAsync(parent, existingContainer, prompt, aiUrl, context);
+                _ = OpenExistingPanelCoreAsync(parent, existingContainer, prompt, aiUrl, context, pdfAiOptions);
                 return;
             }
 
-            _ = OpenNewPanelCoreAsync(parent, prompt, aiUrl, context);
+            _ = OpenNewPanelCoreAsync(parent, prompt, aiUrl, context, pdfAiOptions);
         }
 
         public void HideAIAbilityPanel(Form parent)
@@ -92,7 +116,7 @@ namespace LearningAssistant.Services
         /// <summary>
         /// 打开/复用父窗体上已存在的 AI 面板。
         /// </summary>
-        private async Task OpenExistingPanelCoreAsync(Form parent, Panel container, string? prompt, string? aiUrl, string? context)
+        private async Task OpenExistingPanelCoreAsync(Form parent, Panel container, string? prompt, string? aiUrl, string? context, PdfAiPanelOptions? pdfAiOptions)
         {
             try
             {
@@ -108,6 +132,9 @@ namespace LearningAssistant.Services
                     if (!string.IsNullOrEmpty(prompt))
                         aiPanel.PromptText = prompt;
 
+                    if (pdfAiOptions != null)
+                        aiPanel.ConfigurePdfScope(pdfAiOptions);
+
                     var urlToUse = !string.IsNullOrEmpty(aiUrl) ? aiUrl : aiPanel.CurrentAIUrl;
                     await aiPanel.OpenWebViewAsync(urlToUse, prompt);
                 }
@@ -122,11 +149,13 @@ namespace LearningAssistant.Services
         /// <summary>
         /// 创建并打开新的 AI 面板。
         /// </summary>
-        private async Task OpenNewPanelCoreAsync(Form parent, string? prompt, string? aiUrl, string? context)
+        private async Task OpenNewPanelCoreAsync(Form parent, string? prompt, string? aiUrl, string? context, PdfAiPanelOptions? pdfAiOptions)
         {
             try
             {
                 var aiAbilityPanel = CreateAIAbilityPanel(prompt, context);
+                if (pdfAiOptions != null)
+                    aiAbilityPanel.ConfigurePdfScope(pdfAiOptions);
                 var containerPanel = CreateContainerPanel(aiAbilityPanel, parent);
 
                 parent.Controls.Add(containerPanel);

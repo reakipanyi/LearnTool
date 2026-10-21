@@ -104,6 +104,44 @@ namespace LearningAssistant.Services.Pdf
             }, "问答", cancellationToken);
 
         /// <inheritdoc />
+        public Task<PdfAiResponse> AskScopedAsync(
+            string pdfPath,
+            string question,
+            PdfAiScope scope,
+            int currentPageIndex,
+            int startPageIndex,
+            int endPageIndex,
+            string? selectedText = null,
+            CancellationToken cancellationToken = default)
+            => ExecuteAsync(async () =>
+            {
+                if (string.IsNullOrWhiteSpace(question))
+                    return PdfAiResponse.Fail("问题内容为空");
+
+                var context = await BuildScopedContextAsync(pdfPath, scope, currentPageIndex,
+                    startPageIndex, endPageIndex, selectedText, cancellationToken).ConfigureAwait(false);
+                if (context.IncludedPages.Count == 0)
+                    return PdfAiResponse.Fail("所选作用域没有可用文本，请先完成 OCR 或切换范围");
+
+                var prompt = $"""
+                    你是文档问答助手。请只依据下面给定范围内的内容回答问题。
+                    要求：
+                    1. 每个结论后标注依据页码，格式为 [[p12]]（页码从 1 开始）；
+                    2. 如果给定内容不足以回答，明确说明“未在文档中找到依据”，不要编造；
+                    3. 回答简洁，必要时分点说明。
+
+                    问题：{question}
+
+                    文档内容：
+                    {context.Context}
+                    """;
+
+                var extra = $"{scope}|{selectedText}|{question}";
+                return await ExecutePromptAsync(context, "ask-scoped", context.IncludedPages, prompt,
+                    null, extra, null, cancellationToken).ConfigureAwait(false);
+            }, "问答", cancellationToken);
+
+        /// <inheritdoc />
         public Task<PdfAiResponse> ExplainSelectionAsync(
             string pdfPath,
             int pageIndex,
@@ -306,6 +344,32 @@ namespace LearningAssistant.Services.Pdf
             bool structured = expectedJsonKind.HasValue && IsValidJson(content, expectedJsonKind.Value);
             var pages = forcedPages ?? ExtractPageAnchors(content, pageCount);
             return PdfAiResponse.Ok(content, pages, structured);
+        }
+
+        /// <summary>按作用域构造上下文（选中 / 本页 / 指定页 / 全文）</summary>
+        private async Task<PdfAiContext> BuildScopedContextAsync(
+            string pdfPath,
+            PdfAiScope scope,
+            int currentPageIndex,
+            int startPageIndex,
+            int endPageIndex,
+            string? selectedText,
+            CancellationToken cancellationToken)
+        {
+            var index = await _textIndex.GetOrBuildAsync(pdfPath, progress: null, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
+            var result = PdfAiContextBuilder.Build(
+                index,
+                scope,
+                currentPageIndex,
+                startPageIndex,
+                endPageIndex,
+                selectedText,
+                _options.MaxCharsPerPage,
+                _options.MaxTotalChars);
+
+            return new PdfAiContext(result.Context, result.IncludedPages, index.PageCount, index.Fingerprint);
         }
 
         /// <summary>按页面顺序或当前页优先构造裁剪后的上下文</summary>

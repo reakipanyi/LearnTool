@@ -84,6 +84,21 @@ public class PdfAiServiceTests
     }
 
     [Fact]
+    public async Task 作用域问答_选中内容进入上下文并返回页码()
+    {
+        var index = new FakeTextIndex(3);
+        index.SetText(2, "第三页全文");
+        var ai = new FakeAiService(_ => "选中的句子指代前文 [[p3]]");
+        var service = new PdfAiService(ai, index);
+
+        var result = await service.AskScopedAsync("book.pdf", "这句是什么意思？", PdfAiScope.Selection, 2, 3, 3, "选中的句子");
+
+        result.Success.Should().BeTrue();
+        result.ReferencedPages.Should().BeEquivalentTo(new[] { 3 });
+        ai.LastPrompt.Should().Contain("选中的句子").And.Contain("[[p3]]");
+    }
+
+    [Fact]
     public async Task 相同摘要第二次命中缓存_不再调用AI()
     {
         var index = new FakeTextIndex(1);

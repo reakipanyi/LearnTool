@@ -28,6 +28,19 @@ namespace LearningAssistant.Services.Pdf
             CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// 按作用域问答：选中 / 本页（含前后页）/ 指定页 / 全文，答案带 [[pN]] 页码锚点。
+        /// </summary>
+        Task<PdfAiResponse> AskScopedAsync(
+            string pdfPath,
+            string question,
+            PdfAiScope scope,
+            int currentPageIndex,
+            int startPageIndex,
+            int endPageIndex,
+            string? selectedText = null,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// 解释选中文本：结合所在页上下文，而不是裸文本调用。
         /// </summary>
         Task<PdfAiResponse> ExplainSelectionAsync(

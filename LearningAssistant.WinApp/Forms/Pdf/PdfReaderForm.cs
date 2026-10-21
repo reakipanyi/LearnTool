@@ -26,6 +26,8 @@ namespace LearningAssistant.Forms.Pdf
         private readonly IHighlightService _highlightService;
         private readonly IAnnotationService? _annotationService;
         private readonly IEventBus? _eventBus;
+        private readonly IPdfAiService? _pdfAiService;
+        private readonly IPdfDocumentTextIndex? _documentTextIndex;
 
         private PdfReaderNightModeManager? _nightModeManager;
         private PdfReaderHighlightManager? _highlightManager;
@@ -333,7 +335,7 @@ namespace LearningAssistant.Forms.Pdf
         private ToolStripDropDown _annotationOptionsDropDown;
         private ToolStripControlHost _annotationOptionsHostItem;
         private Panel _annotationOptionsHost;
-        public PdfReaderForm(ILogger<PdfReaderForm> logger, IAIPanelPopupService? aiPanelPopupService = null, Services.Learning.IPendingContentService? pendingContentService = null, IHighlightService? highlightService = null, IAnnotationService? annotationService = null, IEventBus? eventBus = null, IAudioRecorderService? audioRecorderService = null)
+        public PdfReaderForm(ILogger<PdfReaderForm> logger, IAIPanelPopupService? aiPanelPopupService = null, Services.Learning.IPendingContentService? pendingContentService = null, IHighlightService? highlightService = null, IAnnotationService? annotationService = null, IEventBus? eventBus = null, IAudioRecorderService? audioRecorderService = null, IPdfAiService? pdfAiService = null, IPdfDocumentTextIndex? documentTextIndex = null)
         {
             InitializeComponent();
             WindowState = FormWindowState.Maximized;
@@ -344,6 +346,8 @@ namespace LearningAssistant.Forms.Pdf
             _annotationService = annotationService;
             _eventBus = eventBus;
             _audioRecorderService = audioRecorderService;
+            _pdfAiService = pdfAiService;
+            _documentTextIndex = documentTextIndex;
             KeyPreview = true;
             Load += PdfReaderFormV2_Load;
             Resize += PdfReaderFormV2_Resize;
@@ -2504,15 +2508,94 @@ namespace LearningAssistant.Forms.Pdf
 
         public void RaiseAiQuestionAsked()
         {
-            if (_aiPanelPopupService != null)
-            {
-                var context = _textBoxOriginal?.Text ?? string.Empty;
-                _aiPanelPopupService.ShowAIAbilityPanel(this, context, null, context);
-            }
-            else
+            if (_aiPanelPopupService == null)
             {
                 MessageBox.Show("AI面板服务未初始化", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
             }
+
+            var selection = GetSelectedText();
+            var context = string.IsNullOrWhiteSpace(selection)
+                ? (_textBoxOriginal?.Text ?? string.Empty)
+                : selection;
+
+            var options = new PdfAiPanelOptions
+            {
+                CurrentPageIndex = _currentPageIndex,
+                PageCount = _presenter?.PageCount ?? 0,
+                ContextProvider = BuildPdfAiScopeContextAsync,
+                QuestionHandler = AskPdfAiScopedAsync,
+                PageNavigationHandler = NavigateToAiPageAsync
+            };
+
+            _aiPanelPopupService.ShowAIAbilityPanel(this, context, null, context, options);
+        }
+
+        /// <summary>取翻译原文框中当前选中的文本</summary>
+        private string GetSelectedText()
+        {
+            if (_textBoxOriginal == null || _textBoxOriginal.IsDisposed) return string.Empty;
+            return _textBoxOriginal.SelectedText?.Trim() ?? string.Empty;
+        }
+
+        /// <summary>按 AI 面板选择的作用域构建带页码锚点的上下文</summary>
+        private async Task<string> BuildPdfAiScopeContextAsync(PdfAiScope scope, int startPageNumber, int endPageNumber)
+        {
+            if (string.IsNullOrWhiteSpace(_currentPdfPath) || _documentTextIndex == null)
+                return _textBoxOriginal?.Text ?? string.Empty;
+
+            try
+            {
+                var index = await _documentTextIndex.GetOrBuildAsync(_currentPdfPath).ConfigureAwait(false);
+                var result = PdfAiContextBuilder.Build(
+                    index,
+                    scope,
+                    _currentPageIndex,
+                    Math.Max(0, startPageNumber - 1),
+                    Math.Max(0, endPageNumber - 1),
+                    GetSelectedText());
+
+                var documentName = Path.GetFileName(_currentPdfPath);
+                return $"文档：{documentName}\n\n{result.Context}";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "构建 PDF AI 上下文失败");
+                return _textBoxOriginal?.Text ?? string.Empty;
+            }
+        }
+
+        /// <summary>站内问答：按作用域调用 PDF AI 编排并返回可引用的页码</summary>
+        private async Task<PdfAiResponse> AskPdfAiScopedAsync(
+            PdfAiScope scope,
+            int startPageNumber,
+            int endPageNumber,
+            string question,
+            CancellationToken cancellationToken)
+        {
+            if (_pdfAiService == null)
+                return PdfAiResponse.Fail("AI 服务不可用，请先完成 AI 配置");
+            if (string.IsNullOrWhiteSpace(_currentPdfPath))
+                return PdfAiResponse.Fail("当前没有打开的 PDF 文档");
+
+            return await _pdfAiService.AskScopedAsync(
+                _currentPdfPath,
+                question,
+                scope,
+                _currentPageIndex,
+                Math.Max(0, startPageNumber - 1),
+                Math.Max(0, endPageNumber - 1),
+                GetSelectedText(),
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>点击答案中的页码后跳转（页码从 1 开始）</summary>
+        private async Task NavigateToAiPageAsync(int pageNumber)
+        {
+            if (_presenter == null || _presenter.PageCount <= 0) return;
+
+            int pageIndex = Math.Clamp(pageNumber - 1, 0, _presenter.PageCount - 1);
+            await _presenter.RenderPage(pageIndex).ConfigureAwait(false);
         }
 
         public int GetZoomLevel()
