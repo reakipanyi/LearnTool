@@ -1159,35 +1159,6 @@ namespace LearningAssistant.Forms.Pdf
             };
         }
 
-        private void CleanupOldTabPages()
-        {
-            try
-            {
-                if (_tabControlLeft != null)
-                {
-                    if (_tabPageBookmarksAndHighlights != null && _tabControlLeft.TabPages.Contains(_tabPageBookmarksAndHighlights))
-                    {
-                        _tabControlLeft.TabPages.Remove(_tabPageBookmarksAndHighlights);
-                    }
-                }
-
-                _groupBoxHighlights?.Dispose();
-                _listBoxHighlights?.Dispose();
-                _buttonRemoveHighlight?.Dispose();
-                _buttonBatchRemoveHighlight?.Dispose();
-
-                _groupBoxHighlights = null;
-                _listBoxHighlights = null;
-                _buttonRemoveHighlight = null;
-                _buttonBatchRemoveHighlight = null;
-                _tabPageBookmarksAndHighlights = null;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error in CleanupOldTabPages");
-            }
-        }
-
         private void StartPageTransition(bool forward)
         {
             _navigationManager?.StartPageTransition(forward);
