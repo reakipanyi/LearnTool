@@ -4,6 +4,7 @@ using LearningAssistant.Common.Events;
 using LearningAssistant.Forms.UserControls.Common;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Config;
+using LearningAssistant.Models.Learning;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
@@ -3221,7 +3222,60 @@ namespace LearningAssistant.Forms.Pdf
                 SanitizeFileName(documentName) + "_学习笔记.md"));
 
             await File.WriteAllTextAsync(outputPath, builder.ToString(), new UTF8Encoding(false));
-            ShowMessage($"学习笔记已导出：\n{outputPath}", "AI 学习笔记导出");
+
+            // 同时写入笔记库，方便在笔记模块继续整理与复习
+            bool noteSaved = false;
+            if (options.SaveToNotes)
+                noteSaved = SaveAiNotesToNoteLibrary(documentName, rangeText, content, response);
+
+            var message = noteSaved
+                ? $"学习笔记已导出并保存到笔记库：\n{outputPath}"
+                : $"学习笔记已导出：\n{outputPath}";
+            ShowMessage(message, "AI 学习笔记导出");
+        }
+
+        /// <summary>把 AI 学习笔记写入笔记库，并关联来源 PDF 与参考页</summary>
+        private bool SaveAiNotesToNoteLibrary(
+            string documentName, string rangeText, string content, PdfAiResponse response)
+        {
+            if (_noteService == null || string.IsNullOrWhiteSpace(content)) return false;
+
+            var userId = _userSessionService?.CurrentUserId;
+            if (string.IsNullOrWhiteSpace(userId))
+                userId = Constants.DefaultUserId;
+
+            try
+            {
+                var tags = new List<string> { "AI笔记", "PDF" };
+                if (!string.IsNullOrWhiteSpace(documentName))
+                    tags.Add(documentName);
+                foreach (var page in response.ReferencedPages.OrderBy(p => p).Take(5))
+                    tags.Add($"第{page}页");
+
+                var note = new NoteItem
+                {
+                    UserId = userId,
+                    Title = $"{documentName} 学习笔记（{rangeText}）",
+                    Content = content,
+                    Category = "PDF学习笔记",
+                    Tags = tags,
+                    RelatedType = "Pdf",
+                    RelatedItemId = _currentPdfPath,
+                    RelatedItemTitle = documentName,
+                    Importance = 2,
+                    CreatedAt = DateTime.Now,
+                    UpdatedAt = DateTime.Now,
+                    Source = "AI"
+                };
+
+                _noteService.AddNote(userId, note);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "AI 学习笔记写入笔记库失败");
+                return false;
+            }
         }
 
         /// <summary>AI 整理标注：本页或全书，输出要点/待办/疑问三类清单（带页码与时间锚点）</summary>

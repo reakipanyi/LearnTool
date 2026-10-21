@@ -11,6 +11,8 @@ namespace LearningAssistant.Forms.Pdf
         public int StartPageIndex { get; init; } = -1;
         /// <summary>结束页（0 基），-1 表示最后一页</summary>
         public int EndPageIndex { get; init; } = -1;
+        /// <summary>是否同时写入笔记库</summary>
+        public bool SaveToNotes { get; init; } = true;
     }
 
     /// <summary>
@@ -23,6 +25,7 @@ namespace LearningAssistant.Forms.Pdf
 
         private readonly TextBox _textRange;
         private readonly TextBox _textOutput;
+        private readonly CheckBox _checkSaveToNotes;
 
         public PdfAiNotesExportOptions Options { get; private set; } = new();
 
@@ -34,7 +37,7 @@ namespace LearningAssistant.Forms.Pdf
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(480, 262);
+            ClientSize = new Size(480, 296);
             BackColor = Color.White;
 
             var accentBar = new Panel
@@ -112,10 +115,19 @@ namespace LearningAssistant.Forms.Pdf
                 ForeColor = Color.FromArgb(120, 120, 132)
             };
 
+            _checkSaveToNotes = new CheckBox
+            {
+                Text = "同时保存到笔记库，便于后续检索与复习",
+                Location = new Point(20, 210),
+                Size = new Size(440, 24),
+                Checked = true,
+                ForeColor = _textColor
+            };
+
             var buttonOk = new Button
             {
                 Text = "生成并导出",
-                Location = new Point(250, 214),
+                Location = new Point(250, 246),
                 Size = new Size(100, 34),
                 BackColor = _accentColor,
                 ForeColor = Color.White,
@@ -128,7 +140,7 @@ namespace LearningAssistant.Forms.Pdf
             var buttonCancel = new Button
             {
                 Text = "取消",
-                Location = new Point(360, 214),
+                Location = new Point(360, 246),
                 Size = new Size(100, 34),
                 BackColor = Color.White,
                 ForeColor = _textColor,
@@ -145,7 +157,7 @@ namespace LearningAssistant.Forms.Pdf
             Controls.AddRange(new Control[]
             {
                 accentBar, labelDoc, labelRange, _textRange, labelRangeHint,
-                labelOutput, _textOutput, buttonBrowse, labelFormat, buttonOk, buttonCancel
+                labelOutput, _textOutput, buttonBrowse, labelFormat, _checkSaveToNotes, buttonOk, buttonCancel
             });
 
             AcceptButton = buttonOk;
@@ -196,7 +208,8 @@ namespace LearningAssistant.Forms.Pdf
             {
                 OutputDirectory = outputDirectory,
                 StartPageIndex = startIndex,
-                EndPageIndex = endIndex
+                EndPageIndex = endIndex,
+                SaveToNotes = _checkSaveToNotes.Checked
             };
 
             DialogResult = DialogResult.OK;
