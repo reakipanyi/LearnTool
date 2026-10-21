@@ -17,7 +17,12 @@ namespace LearningAssistant.Services.Pdf
         event EventHandler<TimeSpan>? PositionChanged;
         event EventHandler<float>? AudioLevelChanged;
 
-        void StartRecording(string pdfPath, int pageIndex, string pdfFileName);
+        void StartRecording(
+            string pdfPath,
+            int pageIndex,
+            string pdfFileName,
+            AudioRecordingScope scope = AudioRecordingScope.Page,
+            string? sentenceId = null);
         void StopRecording();
         AudioRecording? GetCurrentRecording();
         TimeSpan CurrentPosition { get; }

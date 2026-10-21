@@ -1,5 +1,14 @@
 namespace LearningAssistant.Models.Pdf
 {
+    /// <summary>
+    /// 录音用途：整页跟读或句子跟读。用于让不同消费方过滤掉不属于自己的录音。
+    /// </summary>
+    public enum AudioRecordingScope
+    {
+        Page,
+        Sentence
+    }
+
     public class AudioRecording
     {
         public string Id { get; set; } = Guid.NewGuid().ToString("N");
@@ -10,5 +19,15 @@ namespace LearningAssistant.Models.Pdf
         public int DurationMs { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public string? Label { get; set; }
+
+        /// <summary>
+        /// 录音来源，默认整页跟读，兼容旧录音数据。
+        /// </summary>
+        public AudioRecordingScope Scope { get; set; } = AudioRecordingScope.Page;
+
+        /// <summary>
+        /// 句子跟读时对应的句子 Id；整页录音为 null。
+        /// </summary>
+        public string? SentenceId { get; set; }
     }
 }

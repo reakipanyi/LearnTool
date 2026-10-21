@@ -216,6 +216,10 @@ public class PdfAudioPanel : UserControl
 
     private void OnRecordingCompleted(AudioRecording recording)
     {
+        // 句子跟读录音由跟读窗口消费，不能污染整页音频与录音列表
+        if (recording.Scope != AudioRecordingScope.Page)
+            return;
+
         if (!string.IsNullOrEmpty(recording.FilePath))
             _manager.Playback.Load(new AudioTrack
             {

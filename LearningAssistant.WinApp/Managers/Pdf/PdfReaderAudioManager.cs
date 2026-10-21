@@ -369,6 +369,10 @@ namespace LearningAssistant.Managers
 
         private void OnRecordingCompleted(object? sender, AudioRecording recording)
         {
+            // 只处理整页跟读录音，句子跟读录音由独立跟读窗口接管
+            if (recording.Scope != AudioRecordingScope.Page)
+                return;
+
             if (_form.Form.InvokeRequired)
             {
                 _form.Form.Invoke(() => OnRecordingCompleted(sender, recording));

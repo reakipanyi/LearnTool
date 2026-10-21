@@ -35,7 +35,12 @@ namespace LearningAssistant.Services.Pdf
             _logger = logger;
         }
 
-        public void StartRecording(string pdfPath, int pageIndex, string pdfFileName)
+        public void StartRecording(
+            string pdfPath,
+            int pageIndex,
+            string pdfFileName,
+            AudioRecordingScope scope = AudioRecordingScope.Page,
+            string? sentenceId = null)
         {
             if (State == AudioRecorderState.Recording)
                 StopRecording();
@@ -47,7 +52,11 @@ namespace LearningAssistant.Services.Pdf
 
                 var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
                 var safeName = SanitizeFileName(pdfFileName);
-                _tempFilePath = Path.Combine(recordingsDir, $"{safeName}_{timestamp}.wav");
+                // 句子录音可能在同一秒内连续触发，附加句 Id 片段避免文件名冲突
+                var sentenceSuffix = scope == AudioRecordingScope.Sentence && !string.IsNullOrWhiteSpace(sentenceId)
+                    ? "_" + SanitizeFileName(sentenceId!.Length > 8 ? sentenceId[..8] : sentenceId)
+                    : string.Empty;
+                _tempFilePath = Path.Combine(recordingsDir, $"{safeName}_{timestamp}{sentenceSuffix}.wav");
 
                 _waveIn = new WaveInEvent
                 {
@@ -65,7 +74,9 @@ namespace LearningAssistant.Services.Pdf
                     PdfFileName = pdfFileName,
                     PageIndex = pageIndex,
                     FilePath = _tempFilePath,
-                    CreatedAt = DateTime.Now
+                    CreatedAt = DateTime.Now,
+                    Scope = scope,
+                    SentenceId = sentenceId
                 };
 
                 _stopwatch.Reset();
