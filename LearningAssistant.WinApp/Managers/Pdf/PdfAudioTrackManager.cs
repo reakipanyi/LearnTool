@@ -46,20 +46,46 @@ public class PdfAudioTrackManager : IDisposable
         var tracks = _scanner.Scan(dir, _profile.IncludeSubDirectories);
         var fingerprint = PdfAudioDirectoryScanner.ComputeScanFingerprint(tracks);
 
-        if (fingerprint != _profile.ScanFingerprint || _profile.Tracks.Count == 0)
+        var scanChanged = fingerprint != _profile.ScanFingerprint || _profile.Tracks.Count == 0;
+        var pageCountChanged = _profile.PageCount != pageCount;
+        // 指纹与页数均未变化时复用缓存映射；否则重算，避免规则结果丢失或页数变化后映射越界
+        if (scanChanged || pageCountChanged || _profile.PageIndex.Count == 0)
         {
             _result = _matcher.Match(pdfPath, pageCount, tracks, _profile.Rules, _profile.ManualOverrides);
             _profile.Tracks = tracks;
             _profile.ScanFingerprint = fingerprint;
+            _profile.PageCount = pageCount;
+            PersistPageIndex();
             _store.Save(_profile);
         }
         else
         {
             _result = new AudioMatchResult { Tracks = _profile.Tracks };
+            foreach (var kv in _profile.PageIndex)
+            {
+                if (kv.Key < 0 || kv.Key >= pageCount) continue;
+                _result.PageIndex[kv.Key] = ResolveTrack(kv.Value, markManual: false);
+            }
+            // 手动覆盖始终最高优先级
             foreach (var kv in _profile.ManualOverrides)
-                _result.PageIndex[kv.Key] = FindOrCreate(kv.Value);
+            {
+                if (kv.Key < 0 || kv.Key >= pageCount) continue;
+                _result.PageIndex[kv.Key] = ResolveTrack(kv.Value, markManual: true);
+            }
+            _result.UnmatchedPages.Clear();
+            for (int p = 0; p < pageCount; p++)
+                if (!_result.PageIndex.ContainsKey(p)) _result.UnmatchedPages.Add(p);
         }
         _currentPageIndex = -1;
+    }
+
+    /// <summary>把当前匹配结果按页持久化，供下次指纹命中时恢复</summary>
+    private void PersistPageIndex()
+    {
+        if (_profile == null || _result == null) return;
+        _profile.PageIndex = _result.PageIndex.ToDictionary(
+            kv => kv.Key,
+            kv => string.IsNullOrEmpty(kv.Value.RelativePath) ? kv.Value.FileName : kv.Value.RelativePath);
     }
 
     public void OnPageChanged(int pageIndex)
@@ -159,8 +185,14 @@ public class PdfAudioTrackManager : IDisposable
     {
         if (_profile == null) return;
         _profile.ManualOverrides[page] = file;
+        // 同步缓存映射，避免指纹命中时恢复到手动指定前的旧结果
+        _profile.PageIndex[page] = file;
         _store.Save(_profile);
-        if (_result != null) _result.PageIndex[page] = FindOrCreate(file);
+        if (_result != null)
+        {
+            _result.PageIndex[page] = ResolveTrack(file, markManual: true);
+            _result.UnmatchedPages.Remove(page);
+        }
     }
 
     private AudioTrack? CurrentTrack()
@@ -169,22 +201,28 @@ public class PdfAudioTrackManager : IDisposable
         return _result.PageIndex.TryGetValue(_currentPageIndex, out var t) ? t : null;
     }
 
-    private AudioTrack FindOrCreate(string fileName)
+    private AudioTrack ResolveTrack(string fileNameOrRelativePath, bool markManual)
     {
+        // 相对路径优先，避免不同子目录下同名文件被误解析
         var track = _profile?.Tracks.FirstOrDefault(t =>
-            string.Equals(t.FileName, Path.GetFileName(fileName), StringComparison.OrdinalIgnoreCase)
-            || string.Equals(t.RelativePath, fileName, StringComparison.OrdinalIgnoreCase));
+                        string.Equals(t.RelativePath, fileNameOrRelativePath, StringComparison.OrdinalIgnoreCase))
+                    ?? _profile?.Tracks.FirstOrDefault(t =>
+                        string.Equals(t.FilePath, fileNameOrRelativePath, StringComparison.OrdinalIgnoreCase))
+                    ?? _profile?.Tracks.FirstOrDefault(t =>
+                        string.Equals(t.FileName, Path.GetFileName(fileNameOrRelativePath), StringComparison.OrdinalIgnoreCase));
         if (track == null)
         {
             track = new AudioTrack
             {
-                FilePath = Path.Combine(Path.GetDirectoryName(_currentPdfPath) ?? "", fileName),
-                FileName = Path.GetFileName(fileName),
-                RelativePath = fileName
+                FilePath = Path.IsPathRooted(fileNameOrRelativePath)
+                    ? fileNameOrRelativePath
+                    : Path.Combine(Path.GetDirectoryName(_currentPdfPath) ?? "", fileNameOrRelativePath),
+                FileName = Path.GetFileName(fileNameOrRelativePath),
+                RelativePath = fileNameOrRelativePath
             };
             _profile?.Tracks.Add(track);
         }
-        track!.IsManual = true;
+        if (markManual) track.IsManual = true;
         return track;
     }
 
