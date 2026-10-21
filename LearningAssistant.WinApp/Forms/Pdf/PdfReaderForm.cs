@@ -100,6 +100,10 @@ namespace LearningAssistant.Forms.Pdf
         private TabPage _tabPageThumbnails;
         private Panel _panelLeftContainer;
 
+        // 侧栏页签改为自绘图标：悬停页索引与统一图标字体
+        private int _sidebarHoveredTabIndex = -1;
+        private Font? _sidebarTabFont;
+
         private Panel _highlightContainer;
         private FlowLayoutPanel _highlightButtonPanel;
 
@@ -799,6 +803,16 @@ namespace LearningAssistant.Forms.Pdf
         private void PdfReaderFormV2_Load(object? sender, EventArgs e)
         {
             _tabControlLeft.SelectedIndexChanged += TabControlLeft_SelectedIndexChanged;
+            // 图标式页签：自绘 + 宽度自适应 + 悬停提示
+            _tabControlLeft.DrawItem += TabControlLeft_DrawItem;
+            _tabControlLeft.MouseMove += TabControlLeft_MouseMove;
+            _tabControlLeft.MouseLeave += TabControlLeft_MouseLeave;
+            _tabControlLeft.SizeChanged += (_, __) => UpdateSidebarTabItemSize();
+            _sidebarTabFont ??= new Font("Segoe UI Emoji", 12F);
+            UpdateSidebarTabItemSize();
+            // 页签不再显示文字，补上无障碍名称，屏幕阅读器仍可读出中文标签
+            foreach (TabPage page in _tabControlLeft.TabPages)
+                page.AccessibleName = GetSidebarTabTitle(page);
 
             AdjustPanelPdfSize();
             _presenter?.LoadLastSessionAndRestore();
@@ -3570,6 +3584,9 @@ namespace LearningAssistant.Forms.Pdf
                     radio.FlatAppearance.BorderColor = isNightMode ? Color.FromArgb(80, 80, 80) : Color.FromArgb(200, 200, 200);
                 }
             }
+
+            // 自绘页签需要显式重绘，否则主题切换后仍保留旧底色
+            _tabControlLeft?.Invalidate();
         }
 
         private void ButtonAskAi_Click(object? sender, EventArgs e)
@@ -5988,11 +6005,16 @@ namespace LearningAssistant.Forms.Pdf
             _tabControlLeft.Controls.Add(_tabPageBookmarksAndHighlights);
             _tabControlLeft.Controls.Add(_tabPageAudio);
             _tabControlLeft.Dock = DockStyle.Fill;
+            // 仅显示图标、自绘页签：避免 5 个“emoji+文字”页签在缩放或窄侧栏下换行/溢出
+            _tabControlLeft.DrawMode = TabDrawMode.OwnerDrawFixed;
             _tabControlLeft.Font = new Font("Microsoft YaHei UI", 9F);
+            _tabControlLeft.ItemSize = new Size(62, 30);
             _tabControlLeft.Location = new Point(0, 0);
+            _tabControlLeft.Multiline = false;
             _tabControlLeft.Name = "_tabControlLeft";
             _tabControlLeft.SelectedIndex = 0;
             _tabControlLeft.Size = new Size(330, 1034);
+            _tabControlLeft.SizeMode = TabSizeMode.Fixed;
             _tabControlLeft.TabIndex = 0;
             // 
             // _tabPageFiles
@@ -6004,7 +6026,7 @@ namespace LearningAssistant.Forms.Pdf
             _tabPageFiles.Padding = new Padding(3);
             _tabPageFiles.Size = new Size(322, 1004);
             _tabPageFiles.TabIndex = 2;
-            _tabPageFiles.Text = "📁 文件";
+            _tabPageFiles.Text = "📁";
             _tabPageFiles.UseVisualStyleBackColor = true;
             // 
             // _treeViewFiles
@@ -6037,7 +6059,7 @@ namespace LearningAssistant.Forms.Pdf
             _tabPageThumbnails.Padding = new Padding(3);
             _tabPageThumbnails.Size = new Size(322, 1004);
             _tabPageThumbnails.TabIndex = 1;
-            _tabPageThumbnails.Text = "🖼️ 缩略图";
+            _tabPageThumbnails.Text = "🖼";
             _tabPageThumbnails.UseVisualStyleBackColor = true;
             // 
             // _panelThumbnails
@@ -6069,7 +6091,7 @@ namespace LearningAssistant.Forms.Pdf
             _tabPageTranslate.Padding = new Padding(3);
             _tabPageTranslate.Size = new Size(322, 1004);
             _tabPageTranslate.TabIndex = 0;
-            _tabPageTranslate.Text = "🌐 翻译";
+            _tabPageTranslate.Text = "🌐";
             _tabPageTranslate.UseVisualStyleBackColor = true;
             // 
             // _groupBoxProgress
@@ -6221,7 +6243,7 @@ namespace LearningAssistant.Forms.Pdf
             _tabPageBookmarksAndHighlights.Padding = new Padding(3);
             _tabPageBookmarksAndHighlights.Size = new Size(322, 1004);
             _tabPageBookmarksAndHighlights.TabIndex = 3;
-            _tabPageBookmarksAndHighlights.Text = "📑 高亮";
+            _tabPageBookmarksAndHighlights.Text = "📑";
             _tabPageBookmarksAndHighlights.UseVisualStyleBackColor = true;
             // 
             // _groupBoxHighlights
@@ -6410,7 +6432,7 @@ namespace LearningAssistant.Forms.Pdf
             _tabPageAudio.Padding = new Padding(3);
             _tabPageAudio.Size = new Size(322, 1004);
             _tabPageAudio.TabIndex = 5;
-            _tabPageAudio.Text = "🎤 音频";
+            _tabPageAudio.Text = "🎤";
             _tabPageAudio.UseVisualStyleBackColor = true;
             // 
             // moreMenu
@@ -6684,6 +6706,114 @@ namespace LearningAssistant.Forms.Pdf
                     _presenter.GenerateThumbnails();
                 }
             }
+        }
+
+        /// <summary>按侧栏实际宽度均分页签尺寸，确保任意 DPI 下都保持单行且不溢出。</summary>
+        private void UpdateSidebarTabItemSize()
+        {
+            if (_tabControlLeft == null) return;
+            int count = Math.Max(1, _tabControlLeft.TabPages.Count);
+            int tabWidth = Math.Max(40, (_tabControlLeft.ClientSize.Width - 6) / count);
+            // 高度跟随图标字体，避免高 DPI 下图标被裁切
+            int tabHeight = (_sidebarTabFont?.Height ?? 16) + 10;
+            var size = new Size(tabWidth, tabHeight);
+            if (_tabControlLeft.ItemSize != size)
+            {
+                _tabControlLeft.ItemSize = size;
+                // 页签高度变化后同步页内容区域，避免页内容上移被页签遮挡
+                Rectangle display = _tabControlLeft.DisplayRectangle;
+                foreach (TabPage page in _tabControlLeft.TabPages)
+                    page.Bounds = display;
+            }
+        }
+
+        /// <summary>页签只显示图标，完整名称用于悬停提示。</summary>
+        private static string GetSidebarTabTitle(TabPage? page)
+        {
+            if (page == null) return string.Empty;
+            return page.Name switch
+            {
+                "_tabPageFiles" => "文件",
+                "_tabPageThumbnails" => "缩略图",
+                "_tabPageTranslate" => "翻译",
+                "_tabPageBookmarksAndHighlights" => "高亮",
+                "_tabPageAudio" => "音频",
+                _ => page.Text
+            };
+        }
+
+        private void TabControlLeft_DrawItem(object? sender, DrawItemEventArgs e)
+        {
+            if (_tabControlLeft == null || e.Index < 0 || e.Index >= _tabControlLeft.TabPages.Count) return;
+
+            bool isNightMode = _nightModeManager?.IsNightMode ?? false;
+            bool isSelected = e.Index == _tabControlLeft.SelectedIndex;
+            bool isHovered = e.Index == _sidebarHoveredTabIndex;
+
+            Color baseColor = isNightMode ? Color.FromArgb(40, 40, 40) : Color.White;
+            Color selectedColor = isNightMode ? Color.FromArgb(51, 65, 85) : Color.FromArgb(238, 242, 255);
+            Color hoverColor = isNightMode ? Color.FromArgb(45, 56, 70) : Color.FromArgb(248, 250, 252);
+            Color borderColor = isNightMode ? Color.FromArgb(63, 63, 70) : Color.FromArgb(226, 232, 240);
+            Color iconColor = isSelected
+                ? (isNightMode ? Color.FromArgb(233, 213, 255) : Color.FromArgb(124, 58, 237))
+                : (isNightMode ? Color.FromArgb(203, 213, 225) : Color.FromArgb(100, 116, 139));
+            Color accentColor = isNightMode ? Color.FromArgb(167, 139, 250) : Color.FromArgb(139, 92, 246);
+
+            using (var brush = new SolidBrush(isSelected ? selectedColor : isHovered ? hoverColor : baseColor))
+                e.Graphics.FillRectangle(brush, e.Bounds);
+
+            using (var borderPen = new Pen(borderColor, 1))
+                e.Graphics.DrawLine(borderPen, e.Bounds.Left, e.Bounds.Bottom - 1, e.Bounds.Right, e.Bounds.Bottom - 1);
+
+            if (isSelected)
+            {
+                using var accentBrush = new SolidBrush(accentColor);
+                e.Graphics.FillRectangle(accentBrush, e.Bounds.Left + 8, e.Bounds.Bottom - 3, e.Bounds.Width - 16, 3);
+            }
+
+            string glyph = _tabControlLeft.TabPages[e.Index].Text;
+            _sidebarTabFont ??= new Font("Segoe UI Emoji", 12F);
+            TextRenderer.DrawText(e.Graphics, glyph, _sidebarTabFont, e.Bounds, iconColor,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+        }
+
+        private void TabControlLeft_MouseMove(object? sender, MouseEventArgs e)
+        {
+            if (_tabControlLeft == null) return;
+
+            int hoveredIndex = -1;
+            for (int i = 0; i < _tabControlLeft.TabPages.Count; i++)
+            {
+                if (_tabControlLeft.GetTabRect(i).Contains(e.Location))
+                {
+                    hoveredIndex = i;
+                    break;
+                }
+            }
+
+            if (hoveredIndex == _sidebarHoveredTabIndex) return;
+            _sidebarHoveredTabIndex = hoveredIndex;
+            _tabControlLeft.Invalidate();
+
+            if (hoveredIndex >= 0)
+            {
+                Rectangle rect = _tabControlLeft.GetTabRect(hoveredIndex);
+                _toolTip?.Show(GetSidebarTabTitle(_tabControlLeft.TabPages[hoveredIndex]),
+                    _tabControlLeft, rect.Left, rect.Bottom + 2, 3000);
+            }
+            else
+            {
+                _toolTip?.Hide(_tabControlLeft);
+            }
+        }
+
+        private void TabControlLeft_MouseLeave(object? sender, EventArgs e)
+        {
+            if (_tabControlLeft == null) return;
+            if (_sidebarHoveredTabIndex < 0) return;
+            _sidebarHoveredTabIndex = -1;
+            _tabControlLeft.Invalidate();
+            _toolTip?.Hide(_tabControlLeft);
         }
     }
 }
