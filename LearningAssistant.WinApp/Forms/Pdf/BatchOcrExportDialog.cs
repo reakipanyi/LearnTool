@@ -13,6 +13,8 @@ namespace LearningAssistant.Forms.Pdf
         public int StartPageIndex { get; init; } = -1;
         /// <summary>结束页（0 基），-1 表示最后一页</summary>
         public int EndPageIndex { get; init; } = -1;
+        /// <summary>是否启用 AI 智能整理（标题层级 / 去页眉页脚 / 段落合并 / 术语统一）</summary>
+        public bool UseAiCleanup { get; init; }
     }
 
     /// <summary>
@@ -28,6 +30,7 @@ namespace LearningAssistant.Forms.Pdf
         private readonly TextBox _textOutput;
         private readonly RadioButton _radioMarkdown;
         private readonly RadioButton _radioText;
+        private readonly CheckBox _checkAiCleanup;
 
         private const int DefaultStartPage = -1;
         private const int DefaultEndPage = -1;
@@ -42,7 +45,7 @@ namespace LearningAssistant.Forms.Pdf
             MaximizeBox = false;
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(480, 306);
+            ClientSize = new Size(480, 350);
             BackColor = Color.White;
 
             var accentBar = new Panel
@@ -136,10 +139,27 @@ namespace LearningAssistant.Forms.Pdf
                 ForeColor = _textColor
             };
 
+            _checkAiCleanup = new CheckBox
+            {
+                Text = "AI 智能整理（标题层级 / 去页眉页脚 / 段落合并 / 术语统一）",
+                Location = new Point(20, 242),
+                Size = new Size(440, 24),
+                ForeColor = _textColor,
+                Checked = false
+            };
+
+            var labelAiHint = new Label
+            {
+                Text = "整理失败时自动回退原始 OCR 文本，不中断导出",
+                Location = new Point(40, 266),
+                Size = new Size(420, 22),
+                ForeColor = Color.FromArgb(150, 150, 160)
+            };
+
             var buttonOk = new Button
             {
                 Text = "开始导出",
-                Location = new Point(250, 254),
+                Location = new Point(250, 298),
                 Size = new Size(100, 34),
                 BackColor = _accentColor,
                 ForeColor = Color.White,
@@ -152,7 +172,7 @@ namespace LearningAssistant.Forms.Pdf
             var buttonCancel = new Button
             {
                 Text = "取消",
-                Location = new Point(360, 254),
+                Location = new Point(360, 298),
                 Size = new Size(100, 34),
                 BackColor = Color.White,
                 ForeColor = _textColor,
@@ -170,7 +190,7 @@ namespace LearningAssistant.Forms.Pdf
             {
                 accentBar, labelFiles, labelRange, _textRange, labelRangeHint,
                 labelOutput, _textOutput, buttonBrowse, labelFormat,
-                _radioMarkdown, _radioText, buttonOk, buttonCancel
+                _radioMarkdown, _radioText, _checkAiCleanup, labelAiHint, buttonOk, buttonCancel
             });
 
             AcceptButton = buttonOk;
@@ -221,7 +241,8 @@ namespace LearningAssistant.Forms.Pdf
                 OutputDirectory = outputDirectory,
                 Markdown = _radioMarkdown.Checked,
                 StartPageIndex = startIndex,
-                EndPageIndex = endIndex
+                EndPageIndex = endIndex,
+                UseAiCleanup = _checkAiCleanup.Checked
             };
 
             DialogResult = DialogResult.OK;

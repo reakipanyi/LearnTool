@@ -4068,12 +4068,7 @@ namespace LearningAssistant.Forms.Pdf
                 throw new InvalidOperationException($"页码范围超出文档页数（共 {pageCount} 页）");
 
             var baseName = Path.GetFileNameWithoutExtension(pdfPath);
-            var builder = new StringBuilder();
-            if (options.Markdown)
-            {
-                builder.AppendLine($"# {baseName}");
-                builder.AppendLine();
-            }
+            var pageTexts = new List<string>(endPage - startPage + 1);
 
             IPdfService? renderService = null;
             bool renderServiceLoaded = false;
@@ -4117,25 +4112,56 @@ namespace LearningAssistant.Forms.Pdf
                         }
                     }
 
-                    var content = string.IsNullOrWhiteSpace(pageText) ? "（本页未识别到文字）" : pageText.Trim();
-                    if (options.Markdown)
-                    {
-                        builder.AppendLine($"## 第 {pageIndex + 1} 页");
-                        builder.AppendLine();
-                        builder.AppendLine(content);
-                        builder.AppendLine();
-                    }
-                    else
-                    {
-                        builder.AppendLine($"===== 第 {pageIndex + 1} 页 =====");
-                        builder.AppendLine(content);
-                        builder.AppendLine();
-                    }
+                    pageTexts.Add(string.IsNullOrWhiteSpace(pageText) ? "（本页未识别到文字）" : pageText.Trim());
                 }
             }
             finally
             {
                 renderService?.Dispose();
+            }
+
+            // AI 智能整理为可选增强：关闭时输出与原有逻辑完全一致，失败时逐页回退原始文本
+            if (options.UseAiCleanup && pageTexts.Count > 0)
+            {
+                var aiService = Program.ServiceProvider?.GetService(typeof(IAIService)) as IAIService;
+                if (aiService != null)
+                {
+                    progressForm.SetStatus($"AI 正在整理 {Path.GetFileName(pdfPath)}…");
+                    var cleaner = new PdfBatchTextCleaner(aiService);
+                    var cleaned = await cleaner.CleanAsync(baseName, pageTexts, startPage);
+                    for (int i = 0; i < pageTexts.Count && i < cleaned.Pages.Count; i++)
+                    {
+                        // AI 返回空页时保留原始文本，避免丢失已识别内容
+                        if (!string.IsNullOrWhiteSpace(cleaned.Pages[i]))
+                        {
+                            pageTexts[i] = cleaned.Pages[i];
+                        }
+                    }
+                }
+            }
+
+            var builder = new StringBuilder();
+            if (options.Markdown)
+            {
+                builder.AppendLine($"# {baseName}");
+                builder.AppendLine();
+            }
+
+            for (int i = 0; i < pageTexts.Count; i++)
+            {
+                if (options.Markdown)
+                {
+                    builder.AppendLine($"## 第 {startPage + i + 1} 页");
+                    builder.AppendLine();
+                    builder.AppendLine(pageTexts[i]);
+                    builder.AppendLine();
+                }
+                else
+                {
+                    builder.AppendLine($"===== 第 {startPage + i + 1} 页 =====");
+                    builder.AppendLine(pageTexts[i]);
+                    builder.AppendLine();
+                }
             }
 
             var extension = options.Markdown ? ".md" : ".txt";
