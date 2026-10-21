@@ -1,14 +1,15 @@
 using System.Diagnostics;
+using LearningAssistant.Models.Pdf;
 using LearningAssistant.Models.Shadowing;
 using LearningAssistant.Services.Media;
+using LearningAssistant.Services.Pdf;
 using LearningAssistant.Services.Shadowing;
 using LearningAssistant.Services.TTS;
 
 namespace LearningAssistant.Forms.Pdf
 {
     /// <summary>
-    /// 句子跟读独立窗口：展示分句结果、逐句合成与播放。
-    /// 录音与参考评分在后续步骤接入。
+    /// 句子跟读独立窗口：分句、逐句合成播放、倒计时自动录音与参考评分。
     /// </summary>
     public sealed class SentenceShadowingForm : Form
     {
@@ -22,14 +23,26 @@ namespace LearningAssistant.Forms.Pdf
         private readonly string _pdfPath;
         private readonly int _pageIndex;
         private readonly ShadowingPracticeService? _practice;
+        private readonly IAudioRecorderService? _recorder;
+        private readonly IPronunciationScorer? _scorer;
+        private readonly EventHandler<AudioRecording>? _recordingHandler;
         private readonly ListBox _listSentences = new();
         private readonly Label _labelTitle = new();
         private readonly Label _labelInfo = new();
         private readonly Label _labelCurrent = new();
         private readonly Label _labelStatus = new();
+        private readonly Label _labelScore = new();
         private readonly ComboBox _comboMode = new();
         private readonly Button _btnPlay = new();
+        private readonly Button _btnRecord = new();
+        private readonly System.Windows.Forms.Timer _countdownTimer = new() { Interval = 700 };
+        private readonly System.Windows.Forms.Timer _recordLimitTimer = new();
         private int _currentIndex = -1;
+        private int _countdown;
+        private int _pendingIndex = -1;
+        private int _recordingIndex = -1;
+        private string? _recordingSentenceId;
+        private bool _suppressRecordingAdvance;
         private PlayMode _mode = PlayMode.AutoNext;
 
         public SentenceShadowingForm(string pdfPath, int pageIndex, string pageText, string documentTitle)
@@ -39,8 +52,8 @@ namespace LearningAssistant.Forms.Pdf
 
             Text = $"句子跟读 - {documentTitle}";
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(720, 640);
-            MinimumSize = new Size(600, 480);
+            ClientSize = new Size(720, 680);
+            MinimumSize = new Size(600, 520);
             Font = new Font("Microsoft YaHei UI", 9.5F);
             KeyPreview = true;
 
@@ -52,6 +65,8 @@ namespace LearningAssistant.Forms.Pdf
 
             var tts = Program.ServiceProvider?.GetService(typeof(ITTSService)) as ITTSService;
             var subtitleParser = Program.ServiceProvider?.GetService(typeof(ISubtitleParser)) as ISubtitleParser;
+            _recorder = Program.ServiceProvider?.GetService(typeof(IAudioRecorderService)) as IAudioRecorderService;
+            _scorer = Program.ServiceProvider?.GetService(typeof(IPronunciationScorer)) as IPronunciationScorer;
 
             if (tts == null || subtitleParser == null)
             {
@@ -66,8 +81,24 @@ namespace LearningAssistant.Forms.Pdf
                 _practice.ErrorOccurred += OnPracticeError;
             }
 
+            if (_recorder == null)
+            {
+                _btnRecord.Enabled = false;
+                _btnRecord.Text = "录音不可用";
+            }
+            else
+            {
+                _recordingHandler = OnRecordingCompleted;
+                _recorder.RecordingCompleted += _recordingHandler;
+            }
+
+            _labelScore.Visible = _scorer?.IsAvailable == true;
+
             if (sentences.Count > 0)
                 SetCurrentIndex(0, play: false);
+
+            _countdownTimer.Tick += OnCountdownTick;
+            _recordLimitTimer.Tick += OnRecordLimitReached;
 
             Shown += OnFormShown;
             FormClosed += OnFormClosed;
@@ -104,7 +135,7 @@ namespace LearningAssistant.Forms.Pdf
             _labelCurrent.ForeColor = Color.FromArgb(15, 23, 42);
             _labelCurrent.AutoEllipsis = true;
 
-            var bottom = new Panel { Dock = DockStyle.Bottom, Height = 132, Padding = new Padding(16, 8, 16, 8) };
+            var bottom = new Panel { Dock = DockStyle.Bottom, Height = 168, Padding = new Padding(16, 8, 16, 8) };
 
             _comboMode.Items.AddRange(new object[] { "单句循环", "自动下一句", "整段连读" });
             _comboMode.SelectedIndex = 1;
@@ -129,18 +160,30 @@ namespace LearningAssistant.Forms.Pdf
 
             var btnStop = CreateButton("停止", 76);
             btnStop.Location = new Point(454, 6);
-            btnStop.Click += (_, _) => StopPlayback();
+            btnStop.Click += (_, _) => StopAll();
+
+            _btnRecord.Text = "🎤 录音";
+            _btnRecord.Width = 96;
+            _btnRecord.Height = 32;
+            _btnRecord.Location = new Point(546, 6);
+            _btnRecord.Click += OnRecordButtonClicked;
 
             _labelStatus.AutoSize = false;
             _labelStatus.Location = new Point(16, 56);
             _labelStatus.Size = new Size(660, 24);
             _labelStatus.ForeColor = Color.FromArgb(100, 116, 139);
 
+            _labelScore.AutoSize = true;
+            _labelScore.Location = new Point(16, 84);
+            _labelScore.ForeColor = Color.FromArgb(139, 92, 246);
+            _labelScore.Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold);
+            _labelScore.Text = "参考分：—";
+
             var labelHint = new Label
             {
                 Text = "快捷键：空格 播放，R 重播当前句，→ 下一句",
                 AutoSize = true,
-                Location = new Point(16, 90),
+                Location = new Point(16, 116),
                 ForeColor = Color.FromArgb(148, 163, 184)
             };
 
@@ -149,7 +192,9 @@ namespace LearningAssistant.Forms.Pdf
             bottom.Controls.Add(_btnPlay);
             bottom.Controls.Add(btnNext);
             bottom.Controls.Add(btnStop);
+            bottom.Controls.Add(_btnRecord);
             bottom.Controls.Add(_labelStatus);
+            bottom.Controls.Add(_labelScore);
             bottom.Controls.Add(labelHint);
 
             Controls.Add(_listSentences);
@@ -231,7 +276,7 @@ namespace LearningAssistant.Forms.Pdf
             _labelCurrent.Text = $"第 {index + 1} 句：{_practice.Sentences[index].Sentence.Text}";
 
             if (play)
-                FireAndForget(PlayCurrentAsync());
+                FireAndForget(PlayIndexAsync(index));
         }
 
         private void MoveSentence(int delta)
@@ -249,29 +294,68 @@ namespace LearningAssistant.Forms.Pdf
             if (_practice == null || _practice.Sentences.Count == 0)
                 return;
 
+            StopRecordingIfAny(suppressAdvance: true);
+            StopCountdown();
+
             int index = _currentIndex < 0 ? 0 : _currentIndex;
             SetCurrentIndex(index, play: true);
         }
 
-        private void StopPlayback()
+        private void StopAll()
         {
+            StopCountdown();
+            StopRecordingIfAny(suppressAdvance: true);
             _practice?.StopPlayback();
+            _btnRecord.Text = "🎤 录音";
             _labelStatus.Text = "已停止。";
         }
 
-        private async Task PlayCurrentAsync()
+        private async Task PlayIndexAsync(int index)
         {
-            if (_practice == null || _currentIndex < 0)
+            if (_practice == null || index < 0)
                 return;
 
+            _currentIndex = index;
+            _listSentences.SelectedIndex = index;
+            _labelCurrent.Text = $"第 {index + 1} 句：{_practice.Sentences[index].Sentence.Text}";
+            _labelScore.Text = "参考分：—";
+
             _labelStatus.Text = "正在准备音频…";
-            bool started = await _practice.PlaySentenceAsync(_currentIndex);
+            bool started = await _practice.PlaySentenceAsync(index);
             if (!IsHandleCreated)
                 return;
 
             _labelStatus.Text = started
-                ? $"正在播放第 {_currentIndex + 1} 句。"
+                ? $"正在播放第 {index + 1} 句。"
                 : "播放失败，请检查语音服务是否可用。";
+        }
+
+        private async Task AdvanceAsync(int finishedIndex)
+        {
+            if (_practice == null || _practice.Sentences.Count == 0)
+                return;
+
+            int next;
+            switch (_mode)
+            {
+                case PlayMode.SingleLoop:
+                    next = finishedIndex;
+                    break;
+                case PlayMode.Continuous:
+                    next = (finishedIndex + 1) % _practice.Sentences.Count;
+                    break;
+                default:
+                    if (finishedIndex + 1 >= _practice.Sentences.Count)
+                    {
+                        _labelStatus.Text = "已播放到最后一页句子。";
+                        _btnRecord.Text = "🎤 录音";
+                        return;
+                    }
+                    next = finishedIndex + 1;
+                    break;
+            }
+
+            await PlayIndexAsync(next);
         }
 
         private void OnSentenceSelected(object? sender, EventArgs e)
@@ -331,36 +415,13 @@ namespace LearningAssistant.Forms.Pdf
 
             try
             {
-                int next;
-                switch (_mode)
+                if (_recorder != null)
                 {
-                    case PlayMode.SingleLoop:
-                        next = index;
-                        break;
-                    case PlayMode.Continuous:
-                        next = (index + 1) % _practice.Sentences.Count;
-                        break;
-                    default:
-                        if (index + 1 >= _practice.Sentences.Count)
-                        {
-                            _labelStatus.Text = "已播放到最后一页句子。";
-                            return;
-                        }
-                        next = index + 1;
-                        break;
-                }
-
-                bool started = await _practice.PlaySentenceAsync(next);
-                if (!IsHandleCreated)
+                    StartCountdown(index);
                     return;
-
-                if (started)
-                {
-                    _currentIndex = next;
-                    _listSentences.SelectedIndex = next;
-                    _labelCurrent.Text = $"第 {next + 1} 句：{_practice.Sentences[next].Sentence.Text}";
-                    _labelStatus.Text = $"正在播放第 {next + 1} 句。";
                 }
+
+                await AdvanceAsync(index);
             }
             catch (Exception ex)
             {
@@ -375,6 +436,173 @@ namespace LearningAssistant.Forms.Pdf
                 _labelStatus.Text = message;
         }
 
+        private void StartCountdown(int index)
+        {
+            StopCountdown();
+            _pendingIndex = index;
+            _countdown = 3;
+            _labelStatus.Text = $"准备录音：{_countdown}";
+            _countdownTimer.Start();
+        }
+
+        private void OnCountdownTick(object? sender, EventArgs e)
+        {
+            _countdown--;
+            if (_countdown > 0)
+            {
+                _labelStatus.Text = $"准备录音：{_countdown}";
+                return;
+            }
+
+            StopCountdown();
+            StartSentenceRecording(_pendingIndex);
+        }
+
+        private void StopCountdown()
+        {
+            _countdownTimer.Stop();
+            _pendingIndex = -1;
+        }
+
+        private void StartSentenceRecording(int index)
+        {
+            if (_recorder == null || _practice == null
+                || index < 0 || index >= _practice.Sentences.Count)
+            {
+                return;
+            }
+
+            if (_recorder.State == AudioRecorderState.Recording)
+                return;
+
+            try
+            {
+                _practice.StopPlayback();
+                _recordingIndex = index;
+                _recordingSentenceId = _practice.Sentences[index].Sentence.Id;
+
+                _recorder.StartRecording(
+                    _pdfPath,
+                    _pageIndex,
+                    Path.GetFileName(_pdfPath),
+                    AudioRecordingScope.Sentence,
+                    _recordingSentenceId);
+
+                int durationMs = _practice.GetAudioDurationMs(index);
+                int limitMs = Math.Max(8000, (int)(durationMs * 2.5));
+                _recordLimitTimer.Interval = Math.Min(limitMs, 60000);
+                _recordLimitTimer.Start();
+
+                _btnRecord.Text = "⏹ 结束录音";
+                _labelStatus.Text = $"正在录制第 {index + 1} 句…";
+            }
+            catch (Exception ex)
+            {
+                _recordingIndex = -1;
+                _recordingSentenceId = null;
+                _labelStatus.Text = $"启动录音失败：{ex.Message}";
+            }
+        }
+
+        private void OnRecordLimitReached(object? sender, EventArgs e)
+        {
+            _recordLimitTimer.Stop();
+            _recorder?.StopRecording();
+        }
+
+        private void OnRecordButtonClicked(object? sender, EventArgs e)
+        {
+            if (_recorder == null)
+                return;
+
+            if (_recorder.State == AudioRecorderState.Recording)
+            {
+                _recordLimitTimer.Stop();
+                _recorder.StopRecording();
+                return;
+            }
+
+            StopCountdown();
+            StopPlaybackOnly();
+            StartSentenceRecording(_currentIndex < 0 ? 0 : _currentIndex);
+        }
+
+        private async void OnRecordingCompleted(object? sender, AudioRecording recording)
+        {
+            if (recording.Scope != AudioRecordingScope.Sentence)
+                return;
+            if (!string.IsNullOrEmpty(_recordingSentenceId)
+                && !string.Equals(recording.SentenceId, _recordingSentenceId, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(() => OnRecordingCompleted(sender, recording)));
+                return;
+            }
+
+            _recordLimitTimer.Stop();
+            _btnRecord.Text = "🎤 录音";
+
+            int index = _recordingIndex;
+            _recordingIndex = -1;
+            _recordingSentenceId = null;
+
+            try
+            {
+                if (index >= 0 && _practice != null && _scorer?.IsAvailable == true)
+                {
+                    _labelScore.Text = "正在评分…";
+                    var sentence = _practice.Sentences[index].Sentence;
+                    var result = await _scorer.ScoreAsync(sentence.Text, recording.FilePath);
+                    if (IsHandleCreated)
+                    {
+                        _labelScore.Text = result == null
+                            ? "参考分：—（录音过短或无法识别）"
+                            : $"参考分：{result.Score}（漏读 {result.MissingWords.Count} 词）";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                if (IsHandleCreated)
+                    _labelScore.Text = $"评分失败：{ex.Message}";
+            }
+
+            bool shouldAdvance = !_suppressRecordingAdvance;
+            _suppressRecordingAdvance = false;
+
+            if (shouldAdvance && index >= 0)
+            {
+                try
+                {
+                    await AdvanceAsync(index);
+                }
+                catch (Exception ex)
+                {
+                    if (IsHandleCreated)
+                        _labelStatus.Text = $"自动播放失败：{ex.Message}";
+                }
+            }
+        }
+
+        private void StopRecordingIfAny(bool suppressAdvance)
+        {
+            _recordLimitTimer.Stop();
+            if (_recorder?.State != AudioRecorderState.Recording)
+                return;
+
+            _suppressRecordingAdvance = suppressAdvance;
+            _recorder.StopRecording();
+        }
+
+        private void StopPlaybackOnly()
+        {
+            _practice?.StopPlayback();
+        }
+
         private void OnFormShown(object? sender, EventArgs e)
         {
             if (_practice == null || _practice.Sentences.Count == 0)
@@ -386,6 +614,16 @@ namespace LearningAssistant.Forms.Pdf
 
         private void OnFormClosed(object? sender, FormClosedEventArgs e)
         {
+            _countdownTimer.Stop();
+            _countdownTimer.Dispose();
+            _recordLimitTimer.Stop();
+            _recordLimitTimer.Dispose();
+
+            StopRecordingIfAny(suppressAdvance: true);
+
+            if (_recorder != null && _recordingHandler != null)
+                _recorder.RecordingCompleted -= _recordingHandler;
+
             if (_practice != null)
             {
                 _practice.StateChanged -= OnSentenceStateChanged;

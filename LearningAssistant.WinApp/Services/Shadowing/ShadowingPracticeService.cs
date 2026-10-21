@@ -21,6 +21,8 @@ namespace LearningAssistant.Services.Shadowing
 
         public string? AudioPath { get; internal set; }
 
+        public int DurationMs { get; internal set; }
+
         public ShadowingSentenceState(ShadowingSentence sentence) => Sentence = sentence;
     }
 
@@ -125,6 +127,7 @@ namespace LearningAssistant.Services.Shadowing
 
                 state.AudioPath = path;
                 state.AudioState = ShadowingAudioState.Ready;
+                state.DurationMs = ReadDurationMs(path);
                 RaiseStateChanged(index);
                 return true;
             }
@@ -175,6 +178,16 @@ namespace LearningAssistant.Services.Shadowing
             _player.Stop();
         }
 
+        /// <summary>
+        /// 获取已合成句子的音频时长；未就绪时返回 0。
+        /// </summary>
+        public int GetAudioDurationMs(int index)
+        {
+            if (index < 0 || index >= _states.Count)
+                return 0;
+            return _states[index].DurationMs;
+        }
+
         public void Dispose()
         {
             if (_disposed)
@@ -217,6 +230,19 @@ namespace LearningAssistant.Services.Shadowing
                     return "zh";
             }
             return "en";
+        }
+
+        private static int ReadDurationMs(string path)
+        {
+            try
+            {
+                using var reader = new NAudio.Wave.AudioFileReader(path);
+                return (int)reader.TotalTime.TotalMilliseconds;
+            }
+            catch
+            {
+                return 0;
+            }
         }
     }
 }

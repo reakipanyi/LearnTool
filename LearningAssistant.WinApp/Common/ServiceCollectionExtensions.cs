@@ -27,6 +27,7 @@ using LearningAssistant.Services.Migration;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Services.Persistence;
 using LearningAssistant.Services.Recovery;
+using LearningAssistant.Services.Shadowing;
 using LearningAssistant.Services.SystemTray;
 using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
@@ -210,6 +211,9 @@ namespace LearningAssistant.Common
             services.AddSingleton<IPdfAudioDirectoryScanner, PdfAudioDirectoryScanner>();
             services.AddSingleton<IPdfAudioMatcher, PdfAudioMatcher>();
             services.AddSingleton<IPdfAudioProfileStore, PdfAudioProfileStore>();
+
+            // 句子跟读：发音参考评分（无 en-US 识别器时自动降级为不可用）
+            services.AddSingleton<IPronunciationScorer, SystemSpeechPronunciationScorer>();
 
             return services;
         }
