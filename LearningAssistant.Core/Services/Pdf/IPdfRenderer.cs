@@ -17,8 +17,10 @@ namespace LearningAssistant.Services.Pdf
         /// <param name="width">渲染宽度（像素）</param>
         /// <param name="height">渲染高度（像素）</param>
         /// <param name="cancellationToken">取消令牌，快速翻页/缩放时取消上一次请求</param>
+        /// <param name="schedulePreRender">是否在渲染完成后调度邻近页预渲染（OCR 等辅助渲染应设为 false）</param>
         /// <returns>渲染后的位图，若失败或已取消返回null</returns>
-        Task<Bitmap?> RenderPageAsync(int pageIndex, int width, int height, CancellationToken cancellationToken = default);
+        Task<Bitmap?> RenderPageAsync(int pageIndex, int width, int height,
+            CancellationToken cancellationToken = default, bool schedulePreRender = true);
 
         /// <summary>
         /// 获取页面缩略图

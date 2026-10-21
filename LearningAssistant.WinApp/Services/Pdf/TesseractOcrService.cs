@@ -2,6 +2,8 @@ using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Models.Config;
 using Microsoft.Extensions.Logging;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
 using Tesseract;
 
 namespace LearningAssistant.Services.Pdf
@@ -324,7 +326,8 @@ namespace LearningAssistant.Services.Pdf
 
         private Bitmap PreprocessImage(Bitmap image)
         {
-            var grayImage = new Bitmap(image.Width, image.Height);
+            // 统一为 24bpp，后续 LockBits 可固定按 3 字节/像素处理
+            var grayImage = new Bitmap(image.Width, image.Height, PixelFormat.Format24bppRgb);
             using (var g = Graphics.FromImage(grayImage))
             {
                 var grayMatrix = new System.Drawing.Imaging.ColorMatrix(new float[][]
@@ -349,35 +352,65 @@ namespace LearningAssistant.Services.Pdf
 
         private Bitmap ApplyAdaptiveThreshold(Bitmap grayImage)
         {
-            var result = new Bitmap(grayImage.Width, grayImage.Height);
+            int width = grayImage.Width;
+            int height = grayImage.Height;
+            var result = new Bitmap(width, height, PixelFormat.Format24bppRgb);
 
             int threshold = CalculateGlobalThreshold(grayImage);
             int margin = 15;
             int lowerThreshold = Math.Max(0, threshold - margin);
             int upperThreshold = Math.Min(255, threshold + margin);
 
-            for (int y = 0; y < grayImage.Height; y++)
+            var rect = new Rectangle(0, 0, width, height);
+            var srcData = grayImage.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+            var dstData = result.LockBits(rect, ImageLockMode.WriteOnly, PixelFormat.Format24bppRgb);
+            try
             {
-                for (int x = 0; x < grayImage.Width; x++)
-                {
-                    var pixel = grayImage.GetPixel(x, y);
-                    int brightness = (pixel.R + pixel.G + pixel.B) / 3;
+                int srcStride = srcData.Stride;
+                int dstStride = dstData.Stride;
+                int srcBytes = srcStride * height;
+                int dstBytes = dstStride * height;
 
-                    Color outputColor;
-                    if (brightness > upperThreshold)
+                var srcBuffer = new byte[srcBytes];
+                var dstBuffer = new byte[dstBytes];
+                Marshal.Copy(srcData.Scan0, srcBuffer, 0, srcBytes);
+
+                for (int y = 0; y < height; y++)
+                {
+                    int srcRow = y * srcStride;
+                    int dstRow = y * dstStride;
+                    for (int x = 0; x < width; x++)
                     {
-                        outputColor = Color.White;
+                        int si = srcRow + x * 3;
+                        int brightness = (srcBuffer[si] + srcBuffer[si + 1] + srcBuffer[si + 2]) / 3;
+
+                        byte output;
+                        if (brightness > upperThreshold)
+                        {
+                            output = 255;
+                        }
+                        else if (brightness < lowerThreshold)
+                        {
+                            output = 0;
+                        }
+                        else
+                        {
+                            output = (byte)brightness;
+                        }
+
+                        int di = dstRow + x * 3;
+                        dstBuffer[di] = output;
+                        dstBuffer[di + 1] = output;
+                        dstBuffer[di + 2] = output;
                     }
-                    else if (brightness < lowerThreshold)
-                    {
-                        outputColor = Color.Black;
-                    }
-                    else
-                    {
-                        outputColor = pixel;
-                    }
-                    result.SetPixel(x, y, outputColor);
                 }
+
+                Marshal.Copy(dstBuffer, 0, dstData.Scan0, dstBytes);
+            }
+            finally
+            {
+                grayImage.UnlockBits(srcData);
+                result.UnlockBits(dstData);
             }
 
             return result;
@@ -388,14 +421,29 @@ namespace LearningAssistant.Services.Pdf
             int[] histogram = new int[256];
             long totalPixels = (long)grayImage.Width * grayImage.Height;
 
-            for (int y = 0; y < grayImage.Height; y++)
+            var rect = new Rectangle(0, 0, grayImage.Width, grayImage.Height);
+            var data = grayImage.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+            try
             {
-                for (int x = 0; x < grayImage.Width; x++)
+                int stride = data.Stride;
+                int bytes = stride * grayImage.Height;
+                var buffer = new byte[bytes];
+                Marshal.Copy(data.Scan0, buffer, 0, bytes);
+
+                for (int y = 0; y < grayImage.Height; y++)
                 {
-                    var pixel = grayImage.GetPixel(x, y);
-                    int brightness = (pixel.R + pixel.G + pixel.B) / 3;
-                    histogram[brightness]++;
+                    int row = y * stride;
+                    for (int x = 0; x < grayImage.Width; x++)
+                    {
+                        int i = row + x * 3;
+                        int brightness = (buffer[i] + buffer[i + 1] + buffer[i + 2]) / 3;
+                        histogram[brightness]++;
+                    }
                 }
+            }
+            finally
+            {
+                grayImage.UnlockBits(data);
             }
 
             double sum = 0;

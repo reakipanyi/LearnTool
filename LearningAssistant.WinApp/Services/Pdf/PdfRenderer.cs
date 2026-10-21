@@ -112,7 +112,8 @@ namespace LearningAssistant.Services.Pdf
             _isNightMode = enabled;
         }
 
-        public async Task<Bitmap?> RenderPageAsync(int pageIndex, int width, int height, CancellationToken cancellationToken = default)
+        public async Task<Bitmap?> RenderPageAsync(int pageIndex, int width, int height,
+            CancellationToken cancellationToken = default, bool schedulePreRender = true)
         {
             Bitmap? bitmap;
 
@@ -138,7 +139,7 @@ namespace LearningAssistant.Services.Pdf
                 // 尺寸量化 + 硬上限，防止高倍缩放生成数百 MB 的位图
                 (renderWidth, renderHeight) = PdfRenderSizePolicy.Apply(renderWidth, renderHeight);
 
-                bitmap = await GetRenderedPageAsync(pageIndex, renderWidth, renderHeight, cancellationToken);
+                bitmap = await GetRenderedPageAsync(pageIndex, renderWidth, renderHeight, cancellationToken, schedulePreRender);
             }
 
             if (bitmap == null) return null;
@@ -253,7 +254,7 @@ namespace LearningAssistant.Services.Pdf
         }
 
         private async Task<Bitmap?> GetRenderedPageAsync(int pageIndex, int renderW, int renderH,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default, bool schedulePreRender = true)
         {
             if (_isImageMode)
             {
@@ -265,7 +266,7 @@ namespace LearningAssistant.Services.Pdf
                 if (pageIndex < 0 || pageIndex >= _pdfService.PageCount) return null;
             }
 
-            return await GetRenderedPageInternalAsync(pageIndex, renderW, renderH, cancellationToken);
+            return await GetRenderedPageInternalAsync(pageIndex, renderW, renderH, cancellationToken, schedulePreRender);
         }
 
         private async Task<Bitmap?> GetRenderedImagePageAsync(int pageIndex, int renderW, int renderH,
@@ -275,7 +276,7 @@ namespace LearningAssistant.Services.Pdf
         }
 
         private async Task<Bitmap?> GetRenderedPageInternalAsync(int pageIndex, int renderW, int renderH,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken, bool schedulePreRender = true)
         {
             // 再次收敛尺寸（预渲染等入口可能绕过 RenderPageAsync）
             (renderW, renderH) = PdfRenderSizePolicy.Apply(renderW, renderH);
@@ -325,7 +326,7 @@ namespace LearningAssistant.Services.Pdf
 
                 AddCacheEntry(cacheKey, bmp);
 
-                if (!_inPreRender.Value)
+                if (!_inPreRender.Value && schedulePreRender)
                 {
                     SchedulePreRender(pageIndex, renderW, renderH);
                 }
