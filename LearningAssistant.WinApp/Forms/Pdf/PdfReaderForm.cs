@@ -90,6 +90,7 @@ namespace LearningAssistant.Forms.Pdf
         private Button _buttonTranslate;
         private Button _buttonSpeakTranslation;
         private Button _buttonAddToLearningContent;
+        private Button _buttonShadowing;
         private CheckBox _checkBoxAutoSpeak;
         private SpeedSelectorControl _speedSelector;
         private Panel _panelNavigation;
@@ -226,6 +227,7 @@ namespace LearningAssistant.Forms.Pdf
         private Button? _buttonSpeakOriginal;
         private System.Windows.Forms.Timer? _pageTransitionTimer;
         private string _currentPdfPath = string.Empty;
+        private SentenceShadowingForm? _shadowingForm;
         private int _currentPageIndex = 0;
         private string? _pendingSelectionId = null;
         private bool _isImageMode = false;
@@ -5091,6 +5093,37 @@ namespace LearningAssistant.Forms.Pdf
             AddToLearningList?.Invoke(this, EventArgs.Empty);
         }
 
+        private void ButtonShadowing_Click(object? sender, EventArgs e)
+        {
+            if (string.IsNullOrEmpty(_currentPdfPath))
+            {
+                ShowWarning("请先打开 PDF 文档。");
+                return;
+            }
+
+            string originalText = _textBoxOriginal.Text?.Trim() ?? string.Empty;
+            if (originalText.Length == 0)
+            {
+                ShowWarning("请先识别或输入原文，再开始句子跟读。");
+                return;
+            }
+
+            // 同一文档只保留一个跟读窗口，重复点击时激活已有窗口
+            if (_shadowingForm != null && !_shadowingForm.IsDisposed)
+            {
+                if (_shadowingForm.WindowState == FormWindowState.Minimized)
+                    _shadowingForm.WindowState = FormWindowState.Normal;
+                _shadowingForm.Activate();
+                return;
+            }
+
+            string documentTitle = Path.GetFileNameWithoutExtension(_currentPdfPath);
+            _shadowingForm = new SentenceShadowingForm(
+                _currentPdfPath, _currentPageIndex, originalText, documentTitle);
+            _shadowingForm.FormClosed += (_, _) => _shadowingForm = null;
+            _shadowingForm.Show(this);
+        }
+
         private void ButtonOpenFolder_Click(object? sender, EventArgs e)
         {
             using var dialog = new FolderBrowserDialog();
@@ -6513,6 +6546,7 @@ namespace LearningAssistant.Forms.Pdf
             // 
             _groupBoxProgress.Controls.Add(_textBoxTranslation);
             _groupBoxProgress.Controls.Add(_buttonSpeakTranslation);
+            _groupBoxProgress.Controls.Add(_buttonShadowing);
             _groupBoxProgress.Controls.Add(_buttonAddToLearningContent);
             _groupBoxProgress.Controls.Add(_textBoxOriginal);
             _groupBoxProgress.Controls.Add(_buttonSpeakOriginal);
@@ -6554,6 +6588,20 @@ namespace LearningAssistant.Forms.Pdf
             _buttonSpeakTranslation.Text = "🔊 朗读";
             _buttonSpeakTranslation.UseVisualStyleBackColor = false;
             _buttonSpeakTranslation.Click += ButtonSpeakTranslation_Click;
+            // 
+            // _buttonShadowing
+            // 
+            _buttonShadowing = new Button();
+            _buttonShadowing.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
+            _buttonShadowing.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _buttonShadowing.FlatStyle = FlatStyle.Flat;
+            _buttonShadowing.Location = new Point(90, 889);
+            _buttonShadowing.Name = "_buttonShadowing";
+            _buttonShadowing.Size = new Size(70, 28);
+            _buttonShadowing.TabIndex = 10;
+            _buttonShadowing.Text = "✂ 跟读";
+            _buttonShadowing.UseVisualStyleBackColor = false;
+            _buttonShadowing.Click += ButtonShadowing_Click;
             // 
             // _buttonAddToLearningContent
             // 
