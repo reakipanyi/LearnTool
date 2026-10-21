@@ -99,5 +99,13 @@ namespace LearningAssistant.Services.Pdf
             string pdfPath,
             IReadOnlyList<PdfAnnotationDigestItem> items,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 按主题聚合全书标注（同一主题跨页归并），用于导出 Markdown 复习清单。
+        /// </summary>
+        Task<PdfTopicClusterResult> ClusterAnnotationsAsync(
+            string pdfPath,
+            IReadOnlyList<PdfAnnotationDigestItem> items,
+            CancellationToken cancellationToken = default);
     }
 }

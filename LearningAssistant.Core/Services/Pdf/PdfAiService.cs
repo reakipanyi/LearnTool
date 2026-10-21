@@ -455,6 +455,25 @@ namespace LearningAssistant.Services.Pdf
             long? timeMs,
             string text)
         {
+            var (pageIndex, anchor) = ResolveAnchor(items, pageNumber, timeMs);
+            if (pageIndex < 0) return null;
+
+            return new PdfAiSummaryEntry
+            {
+                PdfPath = pdfPath,
+                PageIndex = pageIndex,
+                RecordingId = anchor?.AudioRecordingId,
+                TimestampMs = anchor?.AudioTimestampMs,
+                Text = ClampText(text)
+            };
+        }
+
+        /// <summary>按页码 + 时间戳就近匹配原标注，返回页码与锚点</summary>
+        private static (int PageIndex, PdfAnnotationDigestItem? Anchor) ResolveAnchor(
+            IReadOnlyList<PdfAnnotationDigestItem> items,
+            int pageNumber,
+            long? timeMs)
+        {
             int pageIndex = pageNumber - 1;
             var candidates = items.Where(i => i.PageIndex == pageIndex).ToList();
 
@@ -462,7 +481,7 @@ namespace LearningAssistant.Services.Pdf
             if (candidates.Count == 0)
             {
                 var fallbackItem = items.FirstOrDefault(i => i.AudioTimestampMs.HasValue) ?? items.FirstOrDefault();
-                if (fallbackItem == null) return null;
+                if (fallbackItem == null) return (-1, null);
 
                 pageIndex = fallbackItem.PageIndex;
                 candidates = items.Where(i => i.PageIndex == pageIndex).ToList();
@@ -480,16 +499,127 @@ namespace LearningAssistant.Services.Pdf
             anchor ??= candidates.FirstOrDefault(i => i.AudioTimestampMs.HasValue);
             anchor ??= candidates.FirstOrDefault();
 
-            return new PdfAiSummaryEntry
+            return (Math.Max(0, pageIndex), anchor);
+        }
+
+        /// <inheritdoc />
+        public async Task<PdfTopicClusterResult> ClusterAnnotationsAsync(
+            string pdfPath,
+            IReadOnlyList<PdfAnnotationDigestItem> items,
+            CancellationToken cancellationToken = default)
+        {
+            if (_aiService == null)
+                return PdfTopicClusterResult.Fail("AI 服务不可用，请先完成 AI 配置");
+            if (items == null || items.Count == 0)
+                return PdfTopicClusterResult.Fail("当前文档没有可聚合的标注");
+
+            var digest = PdfAnnotationDigestBuilder.Build(items);
+            if (string.IsNullOrWhiteSpace(digest))
+                return PdfTopicClusterResult.Fail("标注内容为空，无法聚合");
+
+            var prompt = $$"""
+                你是学习内容整理助手。下面是用户从 PDF 各页做的标注条目（含页码、录音时间戳与文字）。
+                请按主题把同一主题的标注聚合到一起，跨页的同主题标注必须归入同一个主题。
+                只输出 JSON 数组，不要输出解释或代码围栏：
+                [{"topic":"主题名称","items":[{"page":3,"timeMs":65000,"text":"标注内容"}]}]
+                要求：
+                1. topic 用简短名词短语概括该主题；
+                2. page 为页码（从 1 开始），timeMs 为该标注的时间戳（毫秒，没有则省略）；
+                3. 每条原始标注只能出现在一个主题下，不要重复；
+                4. 主题数量控制在 3-8 个，无法归类的放入“其他”。
+
+                标注条目：
+                {{digest}}
+                """;
+
+            try
             {
-                PdfPath = pdfPath,
-                PageIndex = Math.Max(0, pageIndex),
-                RecordingId = anchor?.AudioRecordingId,
-                TimestampMs = anchor?.AudioTimestampMs,
-                Text = text.Length > PdfAnnotationDigestBuilder.MaxTextLength
-                    ? text[..PdfAnnotationDigestBuilder.MaxTextLength] + "…"
-                    : text
-            };
+                var raw = await AskAsync(prompt, cancellationToken).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(raw))
+                    return PdfTopicClusterResult.Fail("AI 未返回内容");
+
+                var json = StripCodeFence(raw);
+                using var document = JsonDocument.Parse(json);
+                if (document.RootElement.ValueKind != JsonValueKind.Array)
+                    return PdfTopicClusterResult.Fail("AI 返回格式不正确");
+
+                var clusters = new List<PdfTopicCluster>();
+                foreach (var element in document.RootElement.EnumerateArray())
+                {
+                    if (element.ValueKind != JsonValueKind.Object) continue;
+
+                    var topic = element.TryGetProperty("topic", out var topicElement)
+                        ? (topicElement.GetString() ?? string.Empty).Trim()
+                        : string.Empty;
+                    if (string.IsNullOrWhiteSpace(topic)) continue;
+
+                    var cluster = new PdfTopicCluster { Topic = topic };
+                    if (element.TryGetProperty("items", out var itemsElement)
+                        && itemsElement.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var itemElement in itemsElement.EnumerateArray())
+                        {
+                            if (itemElement.ValueKind != JsonValueKind.Object) continue;
+
+                            var text = itemElement.TryGetProperty("text", out var textElement)
+                                ? (textElement.GetString() ?? string.Empty).Trim()
+                                : string.Empty;
+
+                            int pageNumber = itemElement.TryGetProperty("page", out var pageElement)
+                                && pageElement.TryGetInt32(out var parsedPage)
+                                    ? parsedPage
+                                    : 0;
+
+                            long? timeMs = itemElement.TryGetProperty("timeMs", out var timeElement)
+                                && timeElement.ValueKind == JsonValueKind.Number
+                                && timeElement.TryGetInt64(out var parsedTime)
+                                    ? parsedTime
+                                    : null;
+
+                            var (pageIndex, anchor) = ResolveAnchor(items, pageNumber, timeMs);
+                            if (pageIndex < 0) continue;
+
+                            cluster.Items.Add(new PdfTopicClusterItem
+                            {
+                                PageIndex = pageIndex,
+                                TimestampMs = anchor?.AudioTimestampMs ?? timeMs,
+                                RecordingId = anchor?.AudioRecordingId,
+                                Text = ClampText(text)
+                            });
+                        }
+                    }
+
+                    if (cluster.Items.Count > 0)
+                    {
+                        clusters.Add(cluster);
+                    }
+                }
+
+                return clusters.Count == 0
+                    ? PdfTopicClusterResult.Fail("AI 未返回有效的主题聚类")
+                    : PdfTopicClusterResult.Ok(clusters);
+            }
+            catch (OperationCanceledException)
+            {
+                return PdfTopicClusterResult.Fail("AI 请求已取消或超时");
+            }
+            catch (JsonException ex)
+            {
+                _logger?.LogWarning(ex, "AI 主题聚类 JSON 解析失败");
+                return PdfTopicClusterResult.Fail("AI 返回的聚类格式无法解析");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "AI 标注主题聚类失败");
+                return PdfTopicClusterResult.Fail(ex.Message);
+            }
+        }
+
+        private static string ClampText(string text)
+        {
+            return text.Length > PdfAnnotationDigestBuilder.MaxTextLength
+                ? text[..PdfAnnotationDigestBuilder.MaxTextLength] + "…"
+                : text;
         }
 
         private static string ShortHash(string text)

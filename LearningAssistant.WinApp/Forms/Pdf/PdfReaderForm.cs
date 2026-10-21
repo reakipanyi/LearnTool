@@ -2891,6 +2891,98 @@ namespace LearningAssistant.Forms.Pdf
             return items.Take(PdfAnnotationDigestBuilder.MaxItems).ToList();
         }
 
+        /// <summary>AI 主题聚合全书标注并导出 Markdown 复习清单</summary>
+        private async Task ExportAnnotationReviewListAsync()
+        {
+            if (_pdfAiService == null)
+            {
+                MessageBox.Show(this, "AI 服务不可用，请先完成 AI 配置", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (_annotationService == null || _presenter == null || string.IsNullOrWhiteSpace(_currentPdfPath))
+            {
+                MessageBox.Show(this, "当前没有打开的 PDF 文档", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var pdfPath = _currentPdfPath;
+            int pageCount = _presenter.PageCount;
+            var annotationService = _annotationService;
+
+            List<PdfAnnotationDigestItem> items;
+            UseWaitCursor = true;
+            try
+            {
+                items = await Task.Run(() => CollectAnnotationDigest(annotationService, pdfPath, true, -1, pageCount))
+                    .ConfigureAwait(true);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+            }
+
+            if (items.Count == 0)
+            {
+                MessageBox.Show(this, "全书中还没有可聚合的标注", "导出标注复习清单",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            using var folderDialog = new FolderBrowserDialog
+            {
+                Description = "选择复习清单输出目录",
+                SelectedPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+            };
+            if (folderDialog.ShowDialog(this) != DialogResult.OK) return;
+
+            PdfTopicClusterResult result;
+            UseWaitCursor = true;
+            try
+            {
+                result = await _pdfAiService.ClusterAnnotationsAsync(pdfPath, items).ConfigureAwait(true);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+            }
+
+            if (!result.Success)
+            {
+                MessageBox.Show(this, result.ErrorMessage ?? "标注主题聚合失败", "导出标注复习清单",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var documentName = Path.GetFileNameWithoutExtension(pdfPath);
+            var builder = new StringBuilder();
+            builder.AppendLine($"# {documentName} 标注复习清单");
+            builder.AppendLine();
+            builder.AppendLine($"> 主题数：{result.Clusters.Count}　标注数：{result.Clusters.Sum(c => c.Items.Count)}　生成时间：{DateTime.Now:yyyy-MM-dd HH:mm}");
+            builder.AppendLine();
+
+            foreach (var cluster in result.Clusters)
+            {
+                builder.AppendLine($"## {cluster.Topic}");
+                builder.AppendLine();
+                foreach (var item in cluster.Items.OrderBy(i => i.PageIndex).ThenBy(i => i.TimestampMs ?? long.MaxValue))
+                {
+                    var anchor = item.TimestampMs.HasValue
+                        ? $"P{item.PageIndex + 1} · {PdfAnnotationDigestBuilder.FormatTimestamp(item.TimestampMs.Value)}"
+                        : $"P{item.PageIndex + 1}";
+                    var text = string.IsNullOrWhiteSpace(item.Text) ? "（标注）" : item.Text.Replace('\r', ' ').Replace('\n', ' ');
+                    builder.AppendLine($"- [{anchor}] {text}");
+                }
+                builder.AppendLine();
+            }
+
+            var outputPath = GetUniqueOutputPath(Path.Combine(
+                folderDialog.SelectedPath,
+                SanitizeFileName(documentName) + "_标注复习清单.md"));
+
+            await File.WriteAllTextAsync(outputPath, builder.ToString(), new UTF8Encoding(false));
+            ShowMessage($"复习清单已导出：\n{outputPath}", "导出标注复习清单");
+        }
+
         /// <summary>去掉 AI 返回内容外层的 Markdown 代码围栏</summary>
         private static string StripCodeFence(string content)
         {
@@ -4429,6 +4521,7 @@ namespace LearningAssistant.Forms.Pdf
             menu.Items.Add("导出 AI 学习笔记…", null, async (_, _) => await ExportAiStudyNotesAsync());
             menu.Items.Add("整理本页标注", null, async (_, _) => await SummarizeAnnotationsAsync(wholeDocument: false));
             menu.Items.Add("整理全书标注", null, async (_, _) => await SummarizeAnnotationsAsync(wholeDocument: true));
+            menu.Items.Add("导出标注复习清单…", null, async (_, _) => await ExportAnnotationReviewListAsync());
 
             if (sender is Control anchor)
             {
