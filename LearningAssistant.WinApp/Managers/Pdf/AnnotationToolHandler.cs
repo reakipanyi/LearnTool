@@ -250,7 +250,10 @@ namespace LearningAssistant.Managers
             using var drawPen = CreatePen(drawColor, drawWidth);
             DrawSmoothCurve(activeGfx, drawPen, CurrentStrokePoints.ToArray());
 
+            // 先持久化再递增版本：确保在版本变化后启动的加载能读到最新笔划
             SaveAnnotationForPage?.Invoke(DrawingPageIndex);
+            if (isSecondPage) _layerManager.IncrementSecondPageRevision();
+            else _layerManager.IncrementCurrentPageRevision();
 
             var imgW = activeBmp.Width;
             var imgH = activeBmp.Height;
@@ -317,7 +320,10 @@ namespace LearningAssistant.Managers
 
             DrawShapeOnLayer(activeGfx, activeBmp, mode, startPt, endPt, rect);
 
+            // 先持久化再递增版本：确保在版本变化后启动的加载能读到最新形状
             SaveAnnotationForPage?.Invoke(DrawingPageIndex);
+            if (isSecondPage) _layerManager.IncrementSecondPageRevision();
+            else _layerManager.IncrementCurrentPageRevision();
 
             var imgW = activeBmp.Width;
             var imgH = activeBmp.Height;

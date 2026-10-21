@@ -20,6 +20,22 @@ namespace LearningAssistant.Managers
         public Bitmap? SecondAnnotationBitmap { get; private set; }
         public Graphics? SecondAnnotationGraphics { get; private set; }
 
+        private int _currentPageRevision;
+        private int _secondPageRevision;
+
+        /// <summary>
+        /// 当前页标注层版本号。任何标注内容变更或图层重建都会递增，
+        /// 用于丢弃晚到的异步标注加载结果，避免覆盖撤销/新增操作。
+        /// </summary>
+        public int CurrentPageRevision => Volatile.Read(ref _currentPageRevision);
+
+        /// <summary>第二页标注层版本号，语义同 <see cref="CurrentPageRevision"/>。</summary>
+        public int SecondPageRevision => Volatile.Read(ref _secondPageRevision);
+
+        public void IncrementCurrentPageRevision() => Interlocked.Increment(ref _currentPageRevision);
+
+        public void IncrementSecondPageRevision() => Interlocked.Increment(ref _secondPageRevision);
+
         public void EnsureAnnotationBitmap()
         {
             try
@@ -110,6 +126,8 @@ namespace LearningAssistant.Managers
 
         public void ApplyLoadedAnnotationBitmap(Bitmap? annotationBitmap)
         {
+            // 先递增版本：使此前发起的异步加载结果全部失效，防止撤销后旧图层被贴回
+            IncrementCurrentPageRevision();
             try
             {
                 if (annotationBitmap != null)
@@ -132,6 +150,7 @@ namespace LearningAssistant.Managers
 
         public void ApplySecondLoadedAnnotationBitmap(Bitmap? annotationBitmap)
         {
+            IncrementSecondPageRevision();
             try
             {
                 if (annotationBitmap != null)

@@ -3296,7 +3296,6 @@ namespace LearningAssistant.Forms.Pdf
                 return;
 
             _navigationManager?.ClearAllStrokes();
-            _ = _presenter.RenderAndDisplayCurrentPageAsync();
             UpdateStatusBar();
         }
 

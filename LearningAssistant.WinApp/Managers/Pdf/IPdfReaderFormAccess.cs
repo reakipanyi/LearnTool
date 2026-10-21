@@ -64,6 +64,9 @@ namespace LearningAssistant.Managers
         Color BackColor { get; set; }
 
         Rectangle GetImageDisplayRect();
+
+        /// <summary>重新加载当前页标注图层并刷新画面（不触发整页重渲染）</summary>
+        void ReloadAnnotationLayer();
         (int pageIndex, Rectangle pageRect, Bitmap? pageImage) GetPageAtPoint(Point clientPoint);
         void DisplayImage(Bitmap bmp);
         void ShowWarning(string message);

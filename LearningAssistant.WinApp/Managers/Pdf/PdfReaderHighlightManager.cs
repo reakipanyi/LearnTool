@@ -645,17 +645,9 @@ namespace LearningAssistant.Managers
 
             RefreshHighlightList();
             UpdateHighlightLayer();
-            _form.PictureBoxPdf?.Invalidate();
 
-            // 清除标注图层缓存后，需要重新加载当前页的标注以刷新笔触图层
-            if (_form.Presenter != null)
-            {
-                _ = _form.Presenter.RenderAndDisplayCurrentPageAsync();
-            }
-            else
-            {
-                _form.PictureBoxPdf?.Invalidate();
-            }
+            // 只重建当前页标注图层，不再依赖可能被取消的整页重渲染
+            _form.ReloadAnnotationLayer();
 
             _form.ShowMessage($"已成功删除 {highlightCount} 个高亮、{strokeCount} 个笔画和 {textCount} 个文字标注", "删除完成");
         }
