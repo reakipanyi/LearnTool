@@ -94,9 +94,11 @@ namespace LearningAssistant.Forms.Pdf
         private SpeedSelectorControl _speedSelector;
         private Panel _panelNavigation;
         private Button _buttonPrev;
+        private Button _buttonPrevSpread;
         private TextBox _textBoxPage;
         private Label _labelPageCount;
         private Button _buttonNext;
+        private Button _buttonNextSpread;
         private ProgressBar _progressBarPage;
         private Button _buttonNightMode;
         private Button _buttonTranslationToggle;
@@ -2979,8 +2981,9 @@ namespace LearningAssistant.Forms.Pdf
 
             const int edge = 6;
             const int gap = 12;
-            const int fullPageWidth = 343;
-            const int compactPageWidth = 207;
+            // 双页模式多两个跨页按钮，页码组需要更宽
+            int fullPageWidth = _isDualPage ? 396 : 343;
+            int compactPageWidth = _isDualPage ? 262 : 207;
             const int fullViewWidth = 376;
             const int compactViewWidth = 230;
 
@@ -3007,10 +3010,41 @@ namespace LearningAssistant.Forms.Pdf
             if (_progressBarPage != null) _progressBarPage.Visible = showProgress;
             pnlPage.Width = pageWidth;
             pnlPage.Location = new Point(pageX, 0);
+            ApplyPageGroupLayout();
 
             _toolbarViewSepX = showViewGroup ? viewX - 6 : -1;
             _toolbarPageSepX = pageX - 6;
             _toolbarGroupTools.Invalidate();
+        }
+
+        /// <summary>
+        /// 页码组的单页/双页两套排布。双页模式下插入「上一跨页/下一跨页」两个按钮，
+        /// 其余单页按钮和页码输入框右移，单页模式保持原有位置不变。
+        /// </summary>
+        private void ApplyPageGroupLayout()
+        {
+            if (pnlPage == null) return;
+
+            bool dual = _isDualPage;
+            if (_buttonPrevSpread != null) _buttonPrevSpread.Visible = dual;
+            if (_buttonNextSpread != null) _buttonNextSpread.Visible = dual;
+
+            if (dual)
+            {
+                if (_buttonPrevSpread != null) _buttonPrevSpread.Location = new Point(78, 3);
+                if (_textBoxPage != null) _textBoxPage.Location = new Point(110, 7);
+                if (_labelPageCount != null) _labelPageCount.Location = new Point(154, 11);
+                if (_buttonNextSpread != null) _buttonNextSpread.Location = new Point(192, 3);
+                if (_buttonNext != null) _buttonNext.Location = new Point(226, 3);
+                if (_progressBarPage != null) _progressBarPage.Location = new Point(264, 7);
+            }
+            else
+            {
+                if (_textBoxPage != null) _textBoxPage.Location = new Point(74, 7);
+                if (_labelPageCount != null) _labelPageCount.Location = new Point(120, 11);
+                if (_buttonNext != null) _buttonNext.Location = new Point(171, 3);
+                if (_progressBarPage != null) _progressBarPage.Location = new Point(211, 7);
+            }
         }
 
         /// <summary>
@@ -3825,6 +3859,8 @@ namespace LearningAssistant.Forms.Pdf
                 _buttonDualPage.FlatAppearance.BorderColor = _isDualPage ? Color.FromArgb(64, 150, 255) : Color.FromArgb(217, 217, 217);
             }
             UpdateStatusBar();
+            // 双页模式下页码组需要额外容纳跨页按钮，重新排布工具栏
+            LayoutAnnotationToolStrip();
             if (_isDualPage)
             {
                 _presenter?.RenderPage(_currentPageIndex);
@@ -3846,6 +3882,25 @@ namespace LearningAssistant.Forms.Pdf
         private void ButtonNext_Click(object? sender, EventArgs e)
         {
             _presenter?.NextPage();
+        }
+
+        private void ButtonPrevSpread_Click(object? sender, EventArgs e)
+        {
+            StepSpread(-2);
+        }
+
+        private void ButtonNextSpread_Click(object? sender, EventArgs e)
+        {
+            StepSpread(2);
+        }
+
+        /// <summary>双页模式按跨页步进（两页），单页按钮仍保持一页步进</summary>
+        private void StepSpread(int delta)
+        {
+            if (!_isDualPage || _presenter == null) return;
+            int target = _currentPageIndex + delta;
+            if (target < 0 || target >= _presenter.PageCount) return;
+            _ = _presenter.RenderPage(target);
         }
 
         private void TextBoxPage_KeyDown(object? sender, KeyEventArgs e)
@@ -5087,9 +5142,11 @@ namespace LearningAssistant.Forms.Pdf
             pnlPage = new Panel();
             _buttonOpenFolder = new Button();
             _buttonPrev = new Button();
+            _buttonPrevSpread = new Button();
             _progressBarPage = new ProgressBar();
             _textBoxPage = new TextBox();
             _buttonNext = new Button();
+            _buttonNextSpread = new Button();
             _labelPageCount = new Label();
             _panelAnnotationOptions = new Panel();
             _buttonDashStyle = new Button();
@@ -5697,9 +5754,11 @@ namespace LearningAssistant.Forms.Pdf
             // 
             pnlPage.Controls.Add(_buttonOpenFolder);
             pnlPage.Controls.Add(_buttonPrev);
+            pnlPage.Controls.Add(_buttonPrevSpread);
             pnlPage.Controls.Add(_progressBarPage);
             pnlPage.Controls.Add(_textBoxPage);
             pnlPage.Controls.Add(_buttonNext);
+            pnlPage.Controls.Add(_buttonNextSpread);
             pnlPage.Controls.Add(_labelPageCount);
             pnlPage.Location = new Point(846, -2);
             pnlPage.Name = "pnlPage";
@@ -5731,6 +5790,22 @@ namespace LearningAssistant.Forms.Pdf
             _buttonPrev.Text = "◀";
             _buttonPrev.UseVisualStyleBackColor = false;
             _buttonPrev.Click += ButtonPrev_Click;
+            _toolTip.SetToolTip(_buttonPrev, "上一页（单页步进）");
+            // 
+            // _buttonPrevSpread
+            // 
+            _buttonPrevSpread.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _buttonPrevSpread.FlatStyle = FlatStyle.Flat;
+            _buttonPrevSpread.Font = new Font("Microsoft YaHei UI", 10F);
+            _buttonPrevSpread.Location = new Point(78, 3);
+            _buttonPrevSpread.Name = "_buttonPrevSpread";
+            _buttonPrevSpread.Size = new Size(28, 32);
+            _buttonPrevSpread.TabIndex = 10;
+            _buttonPrevSpread.Text = "«";
+            _buttonPrevSpread.UseVisualStyleBackColor = false;
+            _buttonPrevSpread.Visible = false;
+            _buttonPrevSpread.Click += ButtonPrevSpread_Click;
+            _toolTip.SetToolTip(_buttonPrevSpread, "上一跨页（双页模式，一次翻两页）");
             // 
             // _progressBarPage
             // 
@@ -5767,6 +5842,22 @@ namespace LearningAssistant.Forms.Pdf
             _buttonNext.Text = "▶";
             _buttonNext.UseVisualStyleBackColor = false;
             _buttonNext.Click += ButtonNext_Click;
+            _toolTip.SetToolTip(_buttonNext, "下一页（单页步进）");
+            // 
+            // _buttonNextSpread
+            // 
+            _buttonNextSpread.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
+            _buttonNextSpread.FlatStyle = FlatStyle.Flat;
+            _buttonNextSpread.Font = new Font("Microsoft YaHei UI", 10F);
+            _buttonNextSpread.Location = new Point(192, 3);
+            _buttonNextSpread.Name = "_buttonNextSpread";
+            _buttonNextSpread.Size = new Size(28, 32);
+            _buttonNextSpread.TabIndex = 11;
+            _buttonNextSpread.Text = "»";
+            _buttonNextSpread.UseVisualStyleBackColor = false;
+            _buttonNextSpread.Visible = false;
+            _buttonNextSpread.Click += ButtonNextSpread_Click;
+            _toolTip.SetToolTip(_buttonNextSpread, "下一跨页（双页模式，一次翻两页）");
             // 
             // _labelPageCount
             // 
