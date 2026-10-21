@@ -15,6 +15,7 @@ using Microsoft.Extensions.Logging;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 
 namespace LearningAssistant.Forms.Pdf
 {
@@ -2837,6 +2838,112 @@ namespace LearningAssistant.Forms.Pdf
             ShowAiResponseDialog("全文检索问答", response, allowSave: true);
         }
 
+        /// <summary>生成整份文档的 AI 大纲，按章节与页码展示，可加入待处理内容</summary>
+        private async Task GenerateDocumentOutlineAsync()
+        {
+            if (_pdfAiService == null)
+            {
+                MessageBox.Show(this, "AI 服务不可用，请先完成 AI 配置", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (_presenter == null || _presenter.PageCount <= 0 || string.IsNullOrWhiteSpace(_currentPdfPath))
+            {
+                MessageBox.Show(this, "当前没有打开的 PDF 文档", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (!EnsureWholeDocumentAiConsent("AI 大纲生成")) return;
+
+            if (await EnsurePdfTextIndexAsync(showProgress: true).ConfigureAwait(true) == null)
+            {
+                MessageBox.Show(this, "未能建立文档文本索引，请重试或先完成 OCR", "提示",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            int pageCount = _presenter.PageCount;
+            PdfAiResponse response;
+            UseWaitCursor = true;
+            try
+            {
+                response = await _pdfAiService
+                    .GenerateOutlineAsync(_currentPdfPath, 0, pageCount - 1)
+                    .ConfigureAwait(true);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+            }
+
+            if (response.Success && !string.IsNullOrWhiteSpace(response.Content))
+            {
+                var outline = FormatOutline(response.Content, pageCount);
+                if (!string.IsNullOrWhiteSpace(outline))
+                    response = PdfAiResponse.Ok(outline, response.ReferencedPages);
+            }
+
+            ShowAiResponseDialog("文档 AI 大纲", response, allowSave: false, allowAddToEditor: true);
+        }
+
+        /// <summary>把 AI 大纲 JSON 转成带页码的 Markdown 文本；格式异常时原样返回</summary>
+        private static string FormatOutline(string content, int pageCount)
+        {
+            var json = StripCodeFence(content);
+            try
+            {
+                using var document = JsonDocument.Parse(json);
+                if (document.RootElement.ValueKind != JsonValueKind.Object) return json;
+
+                var builder = new StringBuilder();
+                var title = document.RootElement.TryGetProperty("title", out var titleElement)
+                    ? (titleElement.GetString() ?? string.Empty).Trim()
+                    : string.Empty;
+                if (!string.IsNullOrWhiteSpace(title))
+                    builder.AppendLine($"# {title}").AppendLine();
+
+                if (!document.RootElement.TryGetProperty("sections", out var sections) ||
+                    sections.ValueKind != JsonValueKind.Array)
+                    return json;
+
+                int index = 1;
+                foreach (var section in sections.EnumerateArray())
+                {
+                    if (section.ValueKind != JsonValueKind.Object) continue;
+
+                    var sectionTitle = section.TryGetProperty("title", out var titleNode)
+                        ? (titleNode.GetString() ?? string.Empty).Trim()
+                        : string.Empty;
+                    if (string.IsNullOrWhiteSpace(sectionTitle))
+                        sectionTitle = $"第 {index} 部分";
+
+                    int pageNumber = section.TryGetProperty("page", out var pageNode)
+                        && pageNode.TryGetInt32(out var parsedPage)
+                            ? Math.Clamp(parsedPage, 0, Math.Max(0, pageCount))
+                            : 0;
+                    var pageSuffix = pageNumber > 0 ? $"（第 {pageNumber} 页）" : string.Empty;
+
+                    builder.AppendLine($"## {index}. {sectionTitle}{pageSuffix}");
+                    if (section.TryGetProperty("points", out var points) && points.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var point in points.EnumerateArray())
+                        {
+                            var text = (point.GetString() ?? string.Empty).Trim();
+                            if (!string.IsNullOrWhiteSpace(text))
+                                builder.AppendLine($"- {text}");
+                        }
+                    }
+                    builder.AppendLine();
+                    index++;
+                }
+
+                return builder.ToString().TrimEnd();
+            }
+            catch (JsonException)
+            {
+                return json;
+            }
+        }
+
         /// <summary>解释选中内容：带当前页上下文并走缓存，可添加到编辑器或保存为标注</summary>
         private async Task ExplainSelectionAsync()
         {
@@ -4695,6 +4802,7 @@ namespace LearningAssistant.Forms.Pdf
             menu.Items.Add("总结选中内容", null, async (_, _) => await SummarizeSelectionAsync());
             menu.Items.Add("解释选中内容", null, async (_, _) => await ExplainSelectionAsync());
             menu.Items.Add("全文检索问答", null, async (_, _) => await AskDocumentByRetrievalAsync());
+            menu.Items.Add("生成文档大纲…", null, async (_, _) => await GenerateDocumentOutlineAsync());
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("导出 AI 学习笔记…", null, async (_, _) => await ExportAiStudyNotesAsync());
             menu.Items.Add("整理本页标注", null, async (_, _) => await SummarizeAnnotationsAsync(wholeDocument: false));
