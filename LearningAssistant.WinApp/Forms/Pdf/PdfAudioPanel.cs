@@ -23,7 +23,7 @@ public class PdfAudioPanel : UserControl
     private readonly ToolTip _tooltip = new();
     private readonly ComboBox _comboSpeed = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 84 };
     private readonly Label _labelSubtitle = new() { AutoSize = true, Text = "", ForeColor = Color.FromArgb(139, 92, 246), MaximumSize = new Size(300, 0) };
-    private readonly Button _btnFollowRead = new() { Text = "🎤 跟读", Width = 76 };
+    private readonly Button _btnFollowRead = new() { Text = "● 整页录音", Width = 96 };
     private readonly Button _btnRules = new() { Text = "规则", Width = 56 };
     private readonly Button _btnManual = new() { Text = "手动指定", Width = 76 };
     private readonly Button _btnManualFromList = new() { Text = "从列表选", Width = 76 };
@@ -205,13 +205,13 @@ public class PdfAudioPanel : UserControl
         if (recorder.State == AudioRecorderState.Recording)
         {
             recorder.StopRecording();
-            _btnFollowRead.Text = "🎤 跟读";
+            _btnFollowRead.Text = "● 整页录音";
             return;
         }
         if (string.IsNullOrEmpty(_form.CurrentPdfPath)) { _form.ShowWarning("请先打开 PDF"); return; }
         _manager.Playback.Pause(); // 录音与播放互斥
         recorder.StartRecording(_form.CurrentPdfPath, _form.CurrentPageIndex, Path.GetFileName(_form.CurrentPdfPath));
-        _btnFollowRead.Text = "⏹ 结束跟读";
+        _btnFollowRead.Text = "■ 结束录音";
     }
 
     private void OnRecordingCompleted(AudioRecording recording)
@@ -227,7 +227,7 @@ public class PdfAudioPanel : UserControl
                 FileName = Path.GetFileName(recording.FilePath),
                 RelativePath = Path.GetFileName(recording.FilePath)
             });
-        InvokeIfReady(() => _btnFollowRead.Text = "🎤 跟读");
+        InvokeIfReady(() => _btnFollowRead.Text = "● 整页录音");
     }
 
     private void OnRules()

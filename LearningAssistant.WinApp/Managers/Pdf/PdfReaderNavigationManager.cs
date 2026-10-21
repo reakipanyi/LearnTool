@@ -121,6 +121,14 @@ namespace LearningAssistant.Managers
         /// </summary>
         public event Action<AnnotationStroke, int, bool>? AnnotationSelected;
 
+        /// <summary>
+        /// 高亮被选中时触发，携带高亮对象，供外部回显已缓存的识别文本与译文
+        /// </summary>
+        public event Action<PdfHighlight>? HighlightSelected;
+
+        /// <summary>当前选中的高亮（画布点击或列表选中）</summary>
+        public PdfHighlight? SelectedHighlight => _selectionManager.SelectedHighlight;
+
         public int ZoomLevel => _zoomController.ZoomLevel;
         public bool IsLocked => _zoomController.IsLocked;
         public Rectangle? LastSelectionRect => _lastSelectionRect ?? _pendingHighlightRect;
@@ -232,6 +240,7 @@ namespace LearningAssistant.Managers
             _selectionManager.PushStrokeToUndoStack = PushStrokeToUndoStack;
             _selectionManager.EditTextCallback = (text, idx) => EditTextCallback?.Invoke(text, idx);
             _selectionManager.UpdateHighlightCallback = (highlight) => _form.HighlightService?.UpdateHighlight(_form.CurrentPdfPath, highlight);
+            _selectionManager.HighlightSelected += (highlight) => HighlightSelected?.Invoke(highlight);
         }
 
         private void InitializeToolHandlerDelegates()
@@ -1311,6 +1320,7 @@ namespace LearningAssistant.Managers
                     _selectionManager.SelectedHighlight = highlights[i];
                     _selectionManager.SelectedHighlightIndex = i;
                     _selectionManager.SelectionState = SelectionInteractionState.Idle;
+                    HighlightSelected?.Invoke(highlights[i]);
                     _form.PictureBoxPdf?.Invalidate();
                     return true;
                 }

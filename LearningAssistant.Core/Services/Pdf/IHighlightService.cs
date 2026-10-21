@@ -89,6 +89,15 @@ namespace LearningAssistant.Services.Pdf
         void UpdateHighlightNote(string pdfPath, string highlightId, string note);
 
         /// <summary>
+        /// 更新高亮已缓存的内容（识别文本/译文），供再次选中时直接回显
+        /// </summary>
+        /// <param name="pdfPath">PDF文件路径</param>
+        /// <param name="highlightId">高亮唯一ID</param>
+        /// <param name="text">识别文本，null 表示不修改</param>
+        /// <param name="translation">译文，null 表示不修改</param>
+        void UpdateHighlightContent(string pdfPath, string highlightId, string? text, string? translation);
+
+        /// <summary>
         /// 更新高亮的位置和大小（用于 Select 模式拖拽移动和缩放调整后持久化）
         /// </summary>
         /// <param name="pdfPath">PDF文件路径</param>

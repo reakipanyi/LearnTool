@@ -25,6 +25,8 @@ namespace LearningAssistant.Models.Pdf
         [Obsolete("Use NormalizedHeight instead")]
         public float Height { get; set; }
         public string Text { get; set; } = string.Empty;
+        /// <summary>该高亮区域已缓存的译文，选中高亮时直接回显，避免重复翻译</summary>
+        public string TranslationText { get; set; } = string.Empty;
         public string Note { get; set; } = string.Empty;
         public HighlightColor Color { get; set; } = HighlightColor.Yellow;
         public DateTime CreatedAt { get; set; } = DateTime.Now;

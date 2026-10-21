@@ -308,8 +308,9 @@ namespace LearningAssistant.Managers
                     _form.PictureBoxPdf?.Invalidate();
                 }
 
-                // 把识别文本同步到原文面板，并在需要时触发自动翻译/朗读
-                SyncOcrTextToPanel(ocrText);
+                // 把识别文本同步到原文面板，并在需要时触发自动翻译/朗读；
+                // 译文会回写到高亮实体，供再次选中时直接回显
+                await SyncOcrTextToPanelAsync(currentPdfPath, highlight, ocrText);
 
                 // 发布高亮事件供其他模块（如学习积分）消费
                 PublishHighlightEvent(currentPdfPath, ocrText);
@@ -464,15 +465,38 @@ namespace LearningAssistant.Managers
 
         /// <summary>
         /// 把 OCR 识别文本同步到原文面板，并在需要时触发自动翻译/朗读。
+        /// 自动翻译的译文会回写到高亮实体，避免下次选中时重复翻译。
         /// </summary>
-        private void SyncOcrTextToPanel(string ocrText)
+        private async Task SyncOcrTextToPanelAsync(string pdfPath, PdfHighlight highlight, string ocrText)
         {
             if (string.IsNullOrEmpty(ocrText) || _form.TextBoxOriginal == null) return;
 
             _form.TextBoxOriginal.Text = ocrText;
+
             if (_form.AutoTranslateAfterOcr)
             {
-                _form.OnTranslateClicked();
+                string? translation = null;
+                if (_form.Presenter != null)
+                {
+                    try
+                    {
+                        translation = await _form.Presenter.TranslateTextForRegionAsync(ocrText);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Auto translate highlight text failed");
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(translation))
+                {
+                    if (_form.TextBoxTranslation != null)
+                    {
+                        _form.TextBoxTranslation.Text = translation;
+                    }
+                    highlight.TranslationText = translation;
+                    _highlightService.UpdateHighlightContent(pdfPath, highlight.Id, ocrText, translation);
+                }
             }
 
             if (_form.AutoSpeakAfterOcr)
@@ -707,9 +731,16 @@ namespace LearningAssistant.Managers
                         NormalizedWidth = highlight.NormalizedWidth > 0 ? highlight.NormalizedWidth : highlight.Width,
                         NormalizedHeight = highlight.NormalizedWidth > 0 ? highlight.NormalizedHeight : highlight.Height,
                         Text = highlight.Text,
+                        TranslationText = highlight.TranslationText,
                         Color = highlight.Color,
                         CreatedAt = highlight.CreatedAt
                     };
+
+                    if (!string.IsNullOrEmpty(highlight.TranslationText))
+                    {
+                        _highlightService.UpdateHighlightContent(
+                            _form.CurrentPdfPath, newHighlightId, highlight.Text, highlight.TranslationText);
+                    }
 
                     PushUndoAction(new HighlightUndoAction
                     {

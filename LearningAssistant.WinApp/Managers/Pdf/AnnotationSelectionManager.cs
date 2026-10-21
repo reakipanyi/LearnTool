@@ -1,4 +1,4 @@
-﻿using LearningAssistant.Abstractions;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Models.Pdf;
 using Microsoft.Extensions.Logging;
 using System.Drawing.Drawing2D;
@@ -41,6 +41,8 @@ namespace LearningAssistant.Managers
 
         // 事件
         public event Action<AnnotationStroke, int, bool>? AnnotationSelected;
+        /// <summary>高亮被选中时触发，供外部回显该区域已缓存的识别文本与译文</summary>
+        public event Action<PdfHighlight>? HighlightSelected;
         public event Action? SelectionCleared;
 
         // 回调委托（由主类设置）
@@ -242,6 +244,7 @@ namespace LearningAssistant.Managers
                             highlights[i].NormalizedWidth, highlights[i].NormalizedHeight);
                         _logger.LogInformation("Selected highlight at index {Index}", i);
                     }
+                    HighlightSelected?.Invoke(highlights[i]);
                     InvalidateView?.Invoke();
                     return;
                 }

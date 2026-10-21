@@ -528,6 +528,25 @@ namespace LearningAssistant.Presenters
             return await _pdfTranslationService.TranslateAsync(text);
         }
 
+        /// <summary>
+        /// 翻译高亮区域的识别文本（含可选的 AI 润色），返回译文供调用方缓存到高亮实体。
+        /// </summary>
+        public async Task<string?> TranslateTextForRegionAsync(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return null;
+
+            _view?.SetLoadingState(true);
+            try
+            {
+                var translation = await TranslateAsync(text);
+                return await PolishTranslationAsync(text, translation);
+            }
+            finally
+            {
+                _view?.SetLoadingState(false);
+            }
+        }
+
         public bool IsTranslationServiceAvailable()
         {
             return _pdfTranslationService != null && _pdfTranslationService.IsAvailable;

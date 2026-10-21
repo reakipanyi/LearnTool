@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Windows.Forms;
+using LearningAssistant.Common.UI;
 using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Managers
@@ -40,6 +41,10 @@ namespace LearningAssistant.Managers
                 ApplyNightModeToBookmarksAndHighlights();
                 ApplyNightModeToStatusBar();
                 UpdateThumbnailsBackground();
+
+                // 三个侧栏面板与跟读窗口共用同一套主题令牌，仅重绘当前窗口
+                PdfSidebarTheme.SetDark(_isNightMode);
+                PdfSidebarTheme.ApplyRecursive(_form.TabControlLeft);
             }
             catch (Exception ex)
             {

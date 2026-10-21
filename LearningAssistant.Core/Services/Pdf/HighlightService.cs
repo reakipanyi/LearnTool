@@ -147,6 +147,35 @@ namespace LearningAssistant.Services.Pdf
                 _logger?.LogWarning("未找到要高亮注释: {HighlightId}", highlightId);
         }
 
+        public void UpdateHighlightContent(string pdfPath, string highlightId, string? text, string? translation)
+        {
+            var folderPath = Path.GetDirectoryName(pdfPath) ?? "";
+            var collection = GetOrCreateFolderCollection(folderPath);
+            var highlight = collection.Highlights.FirstOrDefault(h => h.Id == highlightId);
+            if (highlight == null)
+            {
+                _logger?.LogWarning("未找到要高亮内容: {HighlightId}", highlightId);
+                return;
+            }
+
+            bool changed = false;
+            if (text != null && highlight.Text != text)
+            {
+                highlight.Text = text;
+                changed = true;
+            }
+            if (translation != null && highlight.TranslationText != translation)
+            {
+                highlight.TranslationText = translation;
+                changed = true;
+            }
+
+            if (!changed) return;
+
+            SaveHighlightsToFolder(folderPath, collection);
+            _logger?.LogInformation("更新高亮内容: {HighlightId}", highlightId);
+        }
+
         public void UpdateHighlight(string pdfPath, PdfHighlight highlight)
         {
             var folderPath = Path.GetDirectoryName(pdfPath) ?? "";

@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Common.UI;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.Pdf;
 using Microsoft.Extensions.Logging;
@@ -18,8 +19,11 @@ namespace LearningAssistant.Managers
 
         private TabPage? _tabPage;
 
-        /// <summary>录音 UI 的挂载页（默认挂到「音频」Tab；双面板模式下指向「我的录音」子页）</summary>
+        /// <summary>录音 UI 的挂载页（默认挂到「音频」Tab；三段式模式下指向「整页录音」子页）</summary>
         public TabPage? MountTabPage { get; set; }
+        private TableLayoutPanel? _layout;
+        private bool _timestampsExpanded;
+        private bool _summariesExpanded;
         private Button _buttonRecord;
         private Button _buttonStop;
         private Button _buttonPlay;
@@ -94,6 +98,7 @@ namespace LearningAssistant.Managers
                 AutoSizeMode = AutoSizeMode.GrowAndShrink
             };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            _layout = layout;
 
             // 行定义：状态/按钮行/时间/进度条/电平/列表标题/列表/删除按钮/时间戳标题/时间戳列表
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));  // 0: _labelStatus
@@ -357,7 +362,22 @@ namespace LearningAssistant.Managers
             _listSummaries.MouseClick += ListSummaries_MouseClick;
             layout.Controls.Add(_listSummaries, 0, 11);
 
+            // 时间戳与 AI 摘要默认折叠，避免三组列表同时抢占高度
+            _labelTimestamps.Cursor = Cursors.Hand;
+            _labelTimestamps.Click += (_, _) =>
+            {
+                _timestampsExpanded = !_timestampsExpanded;
+                ApplySectionState();
+            };
+            _labelSummaries.Cursor = Cursors.Hand;
+            _labelSummaries.Click += (_, _) =>
+            {
+                _summariesExpanded = !_summariesExpanded;
+                ApplySectionState();
+            };
+
             _tabPage.Controls.Add(layout);
+            ApplySectionState();
             _tabPage.ResumeLayout(false);
 
             _uiTimer = new System.Windows.Forms.Timer { Interval = 200 };
@@ -367,6 +387,34 @@ namespace LearningAssistant.Managers
             _levelTimer = new System.Windows.Forms.Timer { Interval = 100 };
             _levelTimer.Tick += LevelTimer_Tick;
             _levelTimer.Start();
+        }
+
+        /// <summary>同步两个折叠区块的行高、可见性与标题计数。</summary>
+        private void ApplySectionState()
+        {
+            if (_layout == null) return;
+
+            ApplySectionRow(8, 9, _labelTimestamps, _listTimestamps, _labelNoTimestamps,
+                _timestampsExpanded, "本页时间戳标注");
+            ApplySectionRow(10, 11, _labelSummaries, _listSummaries, _labelNoSummaries,
+                _summariesExpanded, "AI 摘要");
+            _layout.PerformLayout();
+        }
+
+        private void ApplySectionRow(int titleRow, int listRow, Label title, ListBox list,
+            Label empty, bool expanded, string name)
+        {
+            if (_layout == null) return;
+
+            _layout.RowStyles[titleRow] = new RowStyle(SizeType.Absolute, 24F);
+            _layout.RowStyles[listRow] = expanded
+                ? new RowStyle(SizeType.Percent, 30F)
+                : new RowStyle(SizeType.Absolute, 0F);
+
+            bool hasItems = list.Items.Count > 0;
+            list.Visible = expanded && hasItems;
+            empty.Visible = expanded && !hasItems;
+            title.Text = $"{(expanded ? "▾" : "▸")} {name}（{list.Items.Count}）";
         }
 
         private void _buttonRecord_Click(object? sender, EventArgs e)
@@ -699,6 +747,7 @@ namespace LearningAssistant.Managers
             var hasItems = ordered.Count > 0;
             _listTimestamps.Visible = hasItems;
             _labelNoTimestamps.Visible = !hasItems;
+            ApplySectionState();
         }
 
         /// <summary>优先按录音 Id 精确匹配；旧数据无 Id 时回退到同页最近一次录音</summary>
@@ -724,12 +773,12 @@ namespace LearningAssistant.Managers
             if (_listTimestamps.Items[e.Index] is not TimestampEntry entry) return;
 
             var isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-            var bgColor = isSelected ? Color.FromArgb(230, 244, 255) : (e.Index % 2 == 0 ? Color.White : Color.FromArgb(248, 248, 252));
+            var bgColor = isSelected ? PdfSidebarTheme.BrandSoft : (e.Index % 2 == 0 ? PdfSidebarTheme.Surface : PdfSidebarTheme.SurfaceAlt);
             using var bgBrush = new SolidBrush(bgColor);
             e.Graphics.FillRectangle(bgBrush, e.Bounds);
 
             using var font = new Font("Microsoft YaHei UI", 9F);
-            using var textBrush = new SolidBrush(isSelected ? _accentColor : _textColor);
+            using var textBrush = new SolidBrush(isSelected ? PdfSidebarTheme.Brand : PdfSidebarTheme.Text);
             var rect = new Rectangle(e.Bounds.X + 6, e.Bounds.Y + 7, Math.Max(10, e.Bounds.Width - 12), e.Bounds.Height - 10);
             var format = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
             e.Graphics.DrawString(entry.Display, font, textBrush, rect, format);
@@ -785,6 +834,7 @@ namespace LearningAssistant.Managers
             var hasItems = _summaryEntries.Count > 0;
             _listSummaries.Visible = hasItems;
             _labelNoSummaries.Visible = !hasItems;
+            ApplySectionState();
         }
 
         private void ListSummaries_DrawItem(object? sender, DrawItemEventArgs e)
@@ -795,7 +845,7 @@ namespace LearningAssistant.Managers
             if (_listSummaries.Items[e.Index] is not PdfAiSummaryEntry entry) return;
 
             var isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-            var bgColor = isSelected ? Color.FromArgb(230, 244, 255) : (e.Index % 2 == 0 ? Color.White : Color.FromArgb(248, 248, 252));
+            var bgColor = isSelected ? PdfSidebarTheme.BrandSoft : (e.Index % 2 == 0 ? PdfSidebarTheme.Surface : PdfSidebarTheme.SurfaceAlt);
             using var bgBrush = new SolidBrush(bgColor);
             e.Graphics.FillRectangle(bgBrush, e.Bounds);
 
@@ -806,7 +856,7 @@ namespace LearningAssistant.Managers
             using var anchorFont = new Font("Microsoft YaHei UI", 8.5F, FontStyle.Bold);
             using var textFont = new Font("Microsoft YaHei UI", 9F);
             using var anchorBrush = new SolidBrush(isSelected ? _accentColor : Color.FromArgb(120, 120, 130));
-            using var textBrush = new SolidBrush(_textColor);
+            using var textBrush = new SolidBrush(PdfSidebarTheme.Text);
 
             var format = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
             e.Graphics.DrawString(anchorText, anchorFont, anchorBrush,
@@ -994,7 +1044,7 @@ namespace LearningAssistant.Managers
             var recording = (AudioRecording)_listRecordings.Items[e.Index];
             var isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
 
-            var bgColor = isSelected ? Color.FromArgb(230, 244, 255) : (e.Index % 2 == 0 ? Color.White : Color.FromArgb(248, 248, 252));
+            var bgColor = isSelected ? PdfSidebarTheme.BrandSoft : (e.Index % 2 == 0 ? PdfSidebarTheme.Surface : PdfSidebarTheme.SurfaceAlt);
             using var bgBrush = new SolidBrush(bgColor);
             e.Graphics.FillRectangle(bgBrush, e.Bounds);
 
@@ -1005,7 +1055,7 @@ namespace LearningAssistant.Managers
             var displayText = $"{label}  ({durationStr})";
 
             using var font = new Font("Microsoft YaHei UI", 10F);
-            using var textBrush = new SolidBrush(isSelected ? _accentColor : _textColor);
+            using var textBrush = new SolidBrush(isSelected ? PdfSidebarTheme.Brand : PdfSidebarTheme.Text);
             e.Graphics.DrawString(displayText, font, textBrush, e.Bounds.X + 8, e.Bounds.Y + 8);
 
             e.DrawFocusRectangle();

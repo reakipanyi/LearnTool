@@ -1,6 +1,7 @@
 using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
+using LearningAssistant.Common.UI;
 using LearningAssistant.Forms.UserControls.Common;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Config;
@@ -47,6 +48,15 @@ namespace LearningAssistant.Forms.Pdf
         private TabControl? _audioSubTabs;
         private TabPage? _tabPageCompanion;
         private TabPage? _tabPageRecording;
+        private TabPage? _tabPageShadowing;
+        private SegmentedTabs? _audioSegments;
+        private TableLayoutPanel? _translateBody;
+        private SidebarCard? _translateOriginalCard;
+        private SidebarCard? _translateTranslationCard;
+        private SidebarHeaderBar? _translateHeader;
+        private SidebarHeaderBar? _highlightHeader;
+        private Panel? _highlightEmptyHost;
+        private Label? _shadowingSummary;
         private readonly IAudioRecorderService? _audioRecorderService;
 
         private readonly Pen _pen = new Pen(Color.Red, 4f);
@@ -420,6 +430,9 @@ namespace LearningAssistant.Forms.Pdf
             // 标注选中事件：双击触发编辑，单击显示选中状态
             _navigationManager.AnnotationSelected += OnAnnotationSelected;
 
+            // 高亮选中事件：回显该区域已缓存的识别文本与译文，避免重复 OCR/翻译
+            _navigationManager.HighlightSelected += OnHighlightSelected;
+
             // 文字标注双击编辑回调
             _navigationManager.EditTextCallback = (text, index) =>
             {
@@ -447,16 +460,23 @@ namespace LearningAssistant.Forms.Pdf
                 _pictureBoxPdf.MouseUp += PictureBoxPdf_MouseUp;
             }
 
-            // 音频 Tab 采用「配套音频 / 我的录音」双面板结构
+            // 音频 Tab 采用「配套音频 / 整页录音 / 句子跟读」三段式结构
             TabPage? recordingPage = _tabPageAudio;
             if (_tabPageAudio != null)
             {
                 _tabPageCompanion = new TabPage("🎵 配套音频");
-                _tabPageRecording = new TabPage("🎤 我的录音");
+                _tabPageRecording = new TabPage("🎤 整页录音");
+                _tabPageShadowing = new TabPage("🗣 句子跟读");
                 recordingPage = _tabPageRecording;
                 _audioSubTabs = new TabControl { Dock = DockStyle.Fill };
                 _audioSubTabs.TabPages.Add(_tabPageCompanion);
                 _audioSubTabs.TabPages.Add(_tabPageRecording);
+                _audioSubTabs.TabPages.Add(_tabPageShadowing);
+                // 页签条由上方 SegmentedTabs 代替，隐藏原生 Tab 头
+                _audioSubTabs.Appearance = TabAppearance.FlatButtons;
+                _audioSubTabs.ItemSize = new Size(1, 1);
+                _audioSubTabs.SizeMode = TabSizeMode.Fixed;
+                _audioSubTabs.Multiline = false;
                 _tabPageAudio.Controls.Add(_audioSubTabs);
             }
 
@@ -550,6 +570,25 @@ namespace LearningAssistant.Forms.Pdf
             {
                 if (ctrl is Button btn) btn.TabStop = false;
             }
+
+            // 翻译 / 高亮 / 听读三个侧栏面板统一为同一套设计语言
+            ApplySidebarRedesign();
+        }
+
+        /// <summary>
+        /// 高亮被选中（画布点击或列表选中）时，回显该高亮已缓存的识别文本与译文，
+        /// 不再重新发起 OCR/翻译。
+        /// </summary>
+        private void OnHighlightSelected(PdfHighlight highlight)
+        {
+            if (highlight == null) return;
+
+            // 没有缓存文本时保持现状，避免清空用户当前正在查看的内容
+            if (string.IsNullOrWhiteSpace(highlight.Text)) return;
+
+            _textBoxOriginal.Text = highlight.Text;
+            _textBoxTranslation.Text = highlight.TranslationText ?? string.Empty;
+            UpdateStatusBar();
         }
 
         private void OnAnnotationSelected(AnnotationStroke stroke, int index, bool isDoubleClick)
@@ -1491,6 +1530,7 @@ namespace LearningAssistant.Forms.Pdf
         private void RefreshHighlightList()
         {
             _highlightManager?.RefreshHighlightList();
+            UpdateHighlightEmptyState();
         }
 
         private void LoadHighlightsForCurrentPage()
@@ -2319,6 +2359,26 @@ namespace LearningAssistant.Forms.Pdf
         public void SetTranslationText(string text)
         {
             _textBoxTranslation.Text = text;
+            PersistTranslationToSelectedHighlight(text);
+        }
+
+        /// <summary>
+        /// 手动翻译完成后，若当前选中的高亮正是原文框中这段文字，
+        /// 把译文回写到高亮实体，后续再次选中时直接回显。
+        /// </summary>
+        private void PersistTranslationToSelectedHighlight(string translation)
+        {
+            if (string.IsNullOrWhiteSpace(translation)) return;
+
+            var highlight = _navigationManager?.SelectedHighlight;
+            if (highlight == null || string.IsNullOrWhiteSpace(highlight.Text)) return;
+
+            var originalText = _textBoxOriginal.Text?.Trim();
+            if (!string.Equals(originalText, highlight.Text.Trim(), StringComparison.Ordinal)) return;
+            if (string.Equals(highlight.TranslationText, translation, StringComparison.Ordinal)) return;
+
+            highlight.TranslationText = translation;
+            _highlightService?.UpdateHighlightContent(_currentPdfPath, highlight.Id, highlight.Text, translation);
         }
 
         public void SetOriginalText(string text)
@@ -6166,6 +6226,550 @@ namespace LearningAssistant.Forms.Pdf
 
         private void ButtonShadowing_Click(object? sender, EventArgs e)
         {
+            OpenShadowingWindow();
+        }
+
+        #region 侧栏统一视觉重构
+
+        /// <summary>把翻译 / 高亮 / 听读三个侧栏面板统一到同一套卡片式设计语言。</summary>
+        private void ApplySidebarRedesign()
+        {
+            BuildTranslateSidebar();
+            BuildHighlightSidebar();
+            BuildAudioSidebar();
+
+            // 新建窗口时同步当前夜间模式（静态主题可能已被其他阅读窗口改变）
+            PdfSidebarTheme.SetDarkSilently(_nightModeManager?.IsNightMode ?? false);
+            PdfSidebarTheme.ApplyRecursive(_tabControlLeft);
+        }
+
+        private static void StyleSidebarButton(Button? button, string text, int width, int height = 30)
+        {
+            if (button == null) return;
+            button.Text = text;
+            button.Size = new Size(width, height);
+            button.FlatStyle = FlatStyle.Flat;
+            button.FlatAppearance.BorderSize = 1;
+            button.FlatAppearance.BorderColor = PdfSidebarTheme.Border;
+            button.BackColor = PdfSidebarTheme.Surface;
+            button.ForeColor = PdfSidebarTheme.Text;
+            button.Font = new Font("Microsoft YaHei UI", 9F);
+            button.Cursor = Cursors.Hand;
+            button.Tag = "secondary";
+        }
+
+        private static void StyleColorRadio(RadioButton? radio, Color color, string tooltip)
+        {
+            if (radio == null) return;
+            radio.Appearance = Appearance.Button;
+            radio.AutoSize = false;
+            radio.Size = new Size(24, 24);
+            radio.FlatStyle = FlatStyle.Flat;
+            radio.FlatAppearance.BorderColor = Color.White;
+            radio.FlatAppearance.BorderSize = 2;
+            radio.BackColor = color;
+            radio.Text = string.Empty;
+            radio.Cursor = Cursors.Hand;
+            radio.Margin = new Padding(2, 0, 6, 0);
+            radio.Tag = "keep";
+            var tip = new ToolTip();
+            tip.SetToolTip(radio, tooltip);
+        }
+
+        private void BuildTranslateSidebar()
+        {
+            if (_tabPageTranslate == null || _groupBoxProgress == null) return;
+
+            // 旧 GroupBox 只保留属性引用，视觉层由新卡片替代
+            _groupBoxProgress.Visible = false;
+
+            var root = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 4,
+                BackColor = PdfSidebarTheme.Background,
+                Padding = new Padding(6, 2, 6, 6)
+            };
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
+
+            _translateHeader = new SidebarHeaderBar("🌐", "翻译", "翻译",
+                (_, _) => ButtonTranslate_Click(null, EventArgs.Empty))
+            {
+                Dock = DockStyle.Fill,
+                Margin = Padding.Empty
+            };
+            root.Controls.Add(_translateHeader, 0, 0);
+
+            _translateBody = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 1,
+                BackColor = PdfSidebarTheme.Background,
+                Margin = new Padding(0, 2, 0, 2)
+            };
+
+            _translateOriginalCard = new SidebarCard("原文", "🔊 读原文",
+                (_, _) => ButtonSpeakOriginal_Click(null, EventArgs.Empty))
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 2, 0)
+            };
+            _translateTranslationCard = new SidebarCard("译文", "🔊 读译文",
+                (_, _) => ButtonSpeakTranslation_Click(null, EventArgs.Empty))
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(2, 0, 0, 0)
+            };
+
+            SidebarUi.StyleTextBox(_textBoxOriginal);
+            _textBoxOriginal.Dock = DockStyle.Fill;
+            _textBoxOriginal.Margin = Padding.Empty;
+            _translateOriginalCard.Body.Controls.Add(_textBoxOriginal);
+
+            SidebarUi.StyleTextBox(_textBoxTranslation);
+            _textBoxTranslation.Dock = DockStyle.Fill;
+            _textBoxTranslation.Margin = Padding.Empty;
+            _translateTranslationCard.Body.Controls.Add(_textBoxTranslation);
+
+            _translateBody.Controls.Add(_translateOriginalCard, 0, 0);
+            _translateBody.Controls.Add(_translateTranslationCard, 1, 0);
+            root.Controls.Add(_translateBody, 0, 1);
+
+            var actions = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                BackColor = PdfSidebarTheme.Background,
+                Margin = new Padding(0, 2, 0, 0)
+            };
+            StyleSidebarButton(_buttonShadowing, "✂ 句子跟读", 112);
+            StyleSidebarButton(_buttonAddToLearningContent, "➕ 添加到学习", 118);
+            actions.Controls.Add(_buttonShadowing);
+            actions.Controls.Add(_buttonAddToLearningContent);
+            root.Controls.Add(actions, 0, 2);
+
+            var options = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                BackColor = PdfSidebarTheme.Background,
+                Margin = Padding.Empty
+            };
+
+            _labelOriginal.Visible = false;
+            _labelTranslation.Visible = false;
+            _buttonSpeakOriginal.Visible = false;
+            _buttonSpeakTranslation.Visible = false;
+            _buttonTranslate.Visible = false;
+
+            _checkBoxAutoTranslate.Text = "自动翻译";
+            _checkBoxAutoSpeak.Text = "自动朗读";
+            _checkBoxAiPolish.Text = "AI 润色";
+            SidebarUi.StyleCheckBox(_checkBoxAutoTranslate);
+            SidebarUi.StyleCheckBox(_checkBoxAutoSpeak);
+            SidebarUi.StyleCheckBox(_checkBoxAiPolish);
+            _checkBoxAutoTranslate.AutoSize = true;
+            _checkBoxAutoSpeak.AutoSize = true;
+            _checkBoxAiPolish.AutoSize = true;
+            _checkBoxAutoTranslate.Margin = new Padding(2, 4, 6, 0);
+            _checkBoxAutoSpeak.Margin = new Padding(2, 4, 6, 0);
+            _checkBoxAiPolish.Margin = new Padding(2, 4, 2, 0);
+
+            options.Controls.Add(_checkBoxAutoTranslate);
+            options.Controls.Add(_checkBoxAutoSpeak);
+            options.Controls.Add(_checkBoxAiPolish);
+            if (_speedSelector != null)
+            {
+                _speedSelector.Margin = new Padding(2, 0, 0, 0);
+                options.Controls.Add(_speedSelector);
+            }
+            root.Controls.Add(options, 0, 3);
+
+            _tabPageTranslate.Controls.Add(root);
+            root.BringToFront();
+
+            _translateBody.Resize += (_, _) => LayoutTranslateCards();
+            _textBoxOriginal.TextChanged += (_, _) => UpdateTranslateHeaderStatus();
+            _textBoxTranslation.TextChanged += (_, _) => UpdateTranslateHeaderStatus();
+            LayoutTranslateCards();
+            UpdateTranslateHeaderStatus();
+        }
+
+        /// <summary>窄侧栏上下堆叠、宽侧栏左右对照。</summary>
+        private void LayoutTranslateCards()
+        {
+            if (_translateBody == null || _translateOriginalCard == null || _translateTranslationCard == null)
+                return;
+
+            bool wide = _translateBody.ClientSize.Width >= 420;
+            _translateBody.SuspendLayout();
+            _translateBody.ColumnStyles.Clear();
+            _translateBody.RowStyles.Clear();
+
+            if (wide)
+            {
+                _translateBody.ColumnCount = 2;
+                _translateBody.RowCount = 1;
+                _translateBody.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+                _translateBody.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+                _translateBody.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+                _translateBody.SetCellPosition(_translateOriginalCard, new TableLayoutPanelCellPosition(0, 0));
+                _translateBody.SetCellPosition(_translateTranslationCard, new TableLayoutPanelCellPosition(1, 0));
+                _translateOriginalCard.Margin = new Padding(0, 0, 2, 0);
+                _translateTranslationCard.Margin = new Padding(2, 0, 0, 0);
+            }
+            else
+            {
+                _translateBody.ColumnCount = 1;
+                _translateBody.RowCount = 2;
+                _translateBody.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+                _translateBody.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+                _translateBody.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+                _translateBody.SetCellPosition(_translateOriginalCard, new TableLayoutPanelCellPosition(0, 0));
+                _translateBody.SetCellPosition(_translateTranslationCard, new TableLayoutPanelCellPosition(0, 1));
+                _translateOriginalCard.Margin = new Padding(0, 0, 0, 2);
+                _translateTranslationCard.Margin = new Padding(0, 2, 0, 0);
+            }
+
+            _translateBody.ResumeLayout(true);
+        }
+
+        private void UpdateTranslateHeaderStatus()
+        {
+            if (_translateHeader == null) return;
+            int originalLength = _textBoxOriginal?.Text?.Length ?? 0;
+            int translationLength = _textBoxTranslation?.Text?.Length ?? 0;
+            string original = originalLength == 0 ? "未识别" : $"{originalLength} 字";
+            string translation = translationLength == 0 ? "未翻译" : $"{translationLength} 字";
+            _translateHeader.SetSubtitle($"第 {_currentPageIndex + 1} 页 · 原文 {original} · 译文 {translation}");
+        }
+
+        private void BuildHighlightSidebar()
+        {
+            if (_tabPageBookmarksAndHighlights == null || _groupBoxHighlights == null) return;
+
+            _groupBoxHighlights.Visible = false;
+
+            var root = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 4,
+                BackColor = PdfSidebarTheme.Background,
+                Padding = new Padding(6, 2, 6, 6)
+            };
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
+
+            _highlightHeader = new SidebarHeaderBar("📑", "高亮", "导出",
+                (_, _) => ButtonExportHighlights_Click(null, EventArgs.Empty))
+            {
+                Dock = DockStyle.Fill,
+                Margin = Padding.Empty
+            };
+            root.Controls.Add(_highlightHeader, 0, 0);
+
+            var colors = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                BackColor = PdfSidebarTheme.Background,
+                Margin = new Padding(0, 2, 0, 2),
+                Padding = new Padding(2, 4, 0, 0)
+            };
+            StyleColorRadio(_radioHighlightYellow, Color.FromArgb(253, 224, 71), "黄色高亮");
+            StyleColorRadio(_radioHighlightGreen, Color.FromArgb(74, 222, 128), "绿色高亮");
+            StyleColorRadio(_radioHighlightBlue, Color.FromArgb(96, 165, 250), "蓝色高亮");
+            StyleColorRadio(_radioHighlightPink, Color.FromArgb(244, 114, 182), "粉色高亮");
+            StyleColorRadio(_radioHighlightOrange, Color.FromArgb(251, 146, 60), "橙色高亮");
+            colors.Controls.Add(_radioHighlightYellow);
+            colors.Controls.Add(_radioHighlightGreen);
+            colors.Controls.Add(_radioHighlightBlue);
+            colors.Controls.Add(_radioHighlightPink);
+            colors.Controls.Add(_radioHighlightOrange);
+            colors.Controls.Add(SidebarUi.CreateSectionLabel("选色后框选文字"));
+            root.Controls.Add(colors, 0, 1);
+
+            var listHost = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = PdfSidebarTheme.Surface,
+                Tag = "surface",
+                Margin = new Padding(0, 0, 0, 2)
+            };
+
+            _listBoxHighlights.Dock = DockStyle.Fill;
+            _listBoxHighlights.BorderStyle = BorderStyle.None;
+            _listBoxHighlights.DrawMode = DrawMode.OwnerDrawFixed;
+            _listBoxHighlights.ItemHeight = 52;
+            _listBoxHighlights.BackColor = PdfSidebarTheme.Surface;
+            _listBoxHighlights.ForeColor = PdfSidebarTheme.Text;
+            _listBoxHighlights.Font = new Font("Microsoft YaHei UI", 9F);
+            _listBoxHighlights.DrawItem += ListBoxHighlights_DrawItem;
+            listHost.Controls.Add(_listBoxHighlights);
+
+            _highlightEmptyHost = SidebarUi.CreateEmptyState("📑", "还没有摘录\n选中文字后用高亮工具即可保存");
+            _highlightEmptyHost.Visible = false;
+            listHost.Controls.Add(_highlightEmptyHost);
+            root.Controls.Add(listHost, 0, 2);
+
+            var footer = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.LeftToRight,
+                WrapContents = false,
+                BackColor = PdfSidebarTheme.Background,
+                Margin = Padding.Empty,
+                Padding = new Padding(0, 4, 0, 0)
+            };
+            StyleSidebarButton(_buttonRemoveHighlight, "删除", 72, 28);
+            StyleSidebarButton(_buttonEditHighlight, "编辑", 72, 28);
+            StyleSidebarButton(_buttonBatchRemoveHighlight, "批量删除", 92, 28);
+            footer.Controls.Add(_buttonRemoveHighlight);
+            footer.Controls.Add(_buttonEditHighlight);
+            footer.Controls.Add(_buttonBatchRemoveHighlight);
+            root.Controls.Add(footer, 0, 3);
+
+            _tabPageBookmarksAndHighlights.Controls.Add(root);
+            root.BringToFront();
+
+            UpdateHighlightEmptyState();
+        }
+
+        private void UpdateHighlightEmptyState()
+        {
+            int count = _listBoxHighlights?.Items.Count ?? 0;
+            _highlightHeader?.SetSubtitle(count == 0 ? "全书暂无摘录" : $"全书共 {count} 条 · 双击跳转");
+            if (_highlightEmptyHost != null)
+            {
+                _highlightEmptyHost.Visible = count == 0;
+                if (count == 0) _highlightEmptyHost.BringToFront();
+            }
+        }
+
+        private void ListBoxHighlights_DrawItem(object? sender, DrawItemEventArgs e)
+        {
+            if (_listBoxHighlights == null || e.Index < 0 || e.Index >= _listBoxHighlights.Items.Count)
+                return;
+
+            object? item = _listBoxHighlights.Items[e.Index];
+            bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            var bounds = e.Bounds;
+
+            using (var background = new SolidBrush(selected ? PdfSidebarTheme.BrandSoft : PdfSidebarTheme.Surface))
+                e.Graphics.FillRectangle(background, bounds);
+
+            if (selected)
+            {
+                using var border = new Pen(PdfSidebarTheme.Brand);
+                e.Graphics.DrawRectangle(border, bounds.X, bounds.Y, bounds.Width - 1, bounds.Height - 1);
+            }
+
+            Color color = Color.FromArgb(253, 224, 71);
+            string title;
+            string meta;
+
+            switch (item)
+            {
+                case PdfHighlight highlight:
+                    color = MapHighlightColor(highlight.Color);
+                    title = string.IsNullOrWhiteSpace(highlight.Text) ? highlight.Note : highlight.Text;
+                    meta = $"第 {highlight.PageIndex + 1} 页 · {highlight.CreatedAt:MM-dd HH:mm}";
+                    break;
+                case PdfAnnotationItem annotation:
+                    color = Color.FromArgb(annotation.ColorArgb);
+                    title = string.IsNullOrWhiteSpace(annotation.Text) ? annotation.Type.ToString() : annotation.Text;
+                    meta = $"第 {annotation.PageIndex + 1} 页 · {annotation.Type}";
+                    break;
+                default:
+                    title = item?.ToString() ?? string.Empty;
+                    meta = string.Empty;
+                    break;
+            }
+
+            using (var strip = new SolidBrush(color))
+                e.Graphics.FillRectangle(strip, bounds.X, bounds.Y + 6, 3, bounds.Height - 12);
+
+            var titleRect = new Rectangle(bounds.X + 12, bounds.Y + 6, Math.Max(10, bounds.Width - 24), 30);
+            TextRenderer.DrawText(e.Graphics, title, _listBoxHighlights.Font, titleRect,
+                selected ? PdfSidebarTheme.Text : PdfSidebarTheme.Text,
+                TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+
+            var metaFont = new Font("Microsoft YaHei UI", 8F);
+            var metaRect = new Rectangle(bounds.X + 12, bounds.Y + bounds.Height - 18, Math.Max(10, bounds.Width - 24), 16);
+            TextRenderer.DrawText(e.Graphics, meta, metaFont, metaRect, PdfSidebarTheme.Muted,
+                TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            metaFont.Dispose();
+        }
+
+        private static Color MapHighlightColor(HighlightColor color)
+        {
+            return color switch
+            {
+                HighlightColor.Green => Color.FromArgb(74, 222, 128),
+                HighlightColor.Blue => Color.FromArgb(96, 165, 250),
+                HighlightColor.Pink => Color.FromArgb(244, 114, 182),
+                HighlightColor.Orange => Color.FromArgb(251, 146, 60),
+                _ => Color.FromArgb(253, 224, 71)
+            };
+        }
+
+        private void BuildAudioSidebar()
+        {
+            if (_tabPageAudio == null || _audioSubTabs == null) return;
+
+            _tabPageAudio.SuspendLayout();
+            _tabPageAudio.Controls.Remove(_audioSubTabs);
+
+            var root = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                BackColor = PdfSidebarTheme.Background,
+                Padding = new Padding(6, 2, 6, 4)
+            };
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+            _audioSegments = new SegmentedTabs
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 2, 0, 4)
+            };
+            _audioSegments.SetItems("配套音频", "整页录音", "句子跟读");
+            _audioSegments.SelectedIndexChanged += (_, _) =>
+            {
+                if (_audioSubTabs != null)
+                    _audioSubTabs.SelectedIndex = _audioSegments.SelectedIndex;
+                if (_audioSegments.SelectedIndex == 2)
+                    UpdateShadowingSummary();
+            };
+            root.Controls.Add(_audioSegments, 0, 0);
+
+            _audioSubTabs.Dock = DockStyle.Fill;
+            _audioSubTabs.Margin = Padding.Empty;
+            root.Controls.Add(_audioSubTabs, 0, 1);
+
+            _tabPageAudio.Controls.Add(root);
+            root.BringToFront();
+
+            BuildShadowingPage();
+            UpdateShadowingSummary();
+            _tabPageAudio.ResumeLayout(true);
+        }
+
+        private void BuildShadowingPage()
+        {
+            if (_tabPageShadowing == null) return;
+
+            var card = new SidebarCard("逐句跟读")
+            {
+                Dock = DockStyle.Fill,
+                Margin = Padding.Empty
+            };
+
+            var stack = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                BackColor = PdfSidebarTheme.Surface,
+                Padding = new Padding(0, 2, 0, 0)
+            };
+
+            var description = new Label
+            {
+                Text = "逐句播放 → 录音 → 查看参考分，可回放原音与自己的录音对比。",
+                Font = new Font("Microsoft YaHei UI", 9F),
+                ForeColor = PdfSidebarTheme.Muted,
+                AutoSize = false,
+                Height = 46,
+                Width = 250,
+                Tag = "muted",
+                Margin = new Padding(0, 0, 0, 6)
+            };
+
+            _shadowingSummary = new Label
+            {
+                Text = string.Empty,
+                Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
+                ForeColor = PdfSidebarTheme.Text,
+                AutoSize = false,
+                Height = 44,
+                Width = 250,
+                Margin = new Padding(0, 0, 0, 10)
+            };
+
+            var openButton = SidebarUi.CreatePrimaryButton("打开跟读练习", 34);
+            openButton.Width = 150;
+            openButton.Margin = new Padding(0, 0, 0, 10);
+            openButton.Click += (_, _) => OpenShadowingWindow();
+
+            var hint = new Label
+            {
+                Text = "窗口可与 PDF 并排显示，练习时不必关闭原文。",
+                Font = new Font("Microsoft YaHei UI", 8.5F),
+                ForeColor = PdfSidebarTheme.Muted,
+                AutoSize = false,
+                Height = 40,
+                Width = 250,
+                Tag = "muted",
+                Margin = Padding.Empty
+            };
+
+            stack.Controls.Add(description);
+            stack.Controls.Add(_shadowingSummary);
+            stack.Controls.Add(openButton);
+            stack.Controls.Add(hint);
+            card.Body.Controls.Add(stack);
+
+            void ResizeChildren()
+            {
+                int width = Math.Max(120, card.Body.ClientSize.Width - 4);
+                description.Width = width;
+                _shadowingSummary.Width = width;
+                hint.Width = width;
+            }
+
+            card.Body.Resize += (_, _) => ResizeChildren();
+            ResizeChildren();
+
+            _tabPageShadowing.Controls.Add(card);
+            _tabPageShadowing.BackColor = PdfSidebarTheme.Background;
+        }
+
+        private void UpdateShadowingSummary()
+        {
+            if (_shadowingSummary == null) return;
+
+            string text = _textBoxOriginal?.Text?.Trim() ?? string.Empty;
+            if (text.Length == 0)
+            {
+                _shadowingSummary.Text = "本页还没有识别到原文，请先在翻译页执行 OCR 或翻译。";
+                _shadowingSummary.ForeColor = PdfSidebarTheme.Muted;
+                _shadowingSummary.Tag = "muted";
+                return;
+            }
+
+            var sentences = LearningAssistant.Services.Shadowing.SentenceSegmenter.Segment(text);
+            _shadowingSummary.Text = $"本页共 {sentences.Count} 句，可逐句跟读并记录参考分。";
+            _shadowingSummary.ForeColor = PdfSidebarTheme.Text;
+            _shadowingSummary.Tag = null;
+        }
+
+        private void OpenShadowingWindow()
+        {
             if (string.IsNullOrEmpty(_currentPdfPath))
             {
                 ShowWarning("请先打开 PDF 文档。");
@@ -6194,6 +6798,8 @@ namespace LearningAssistant.Forms.Pdf
             _shadowingForm.FormClosed += (_, _) => _shadowingForm = null;
             _shadowingForm.Show(this);
         }
+
+        #endregion
 
         private void ButtonOpenFolder_Click(object? sender, EventArgs e)
         {
@@ -8279,6 +8885,13 @@ namespace LearningAssistant.Forms.Pdf
                     _presenter.GenerateThumbnails();
                 }
             }
+
+            if (_tabControlLeft.SelectedTab == _tabPageTranslate)
+                UpdateTranslateHeaderStatus();
+            else if (_tabControlLeft.SelectedTab == _tabPageBookmarksAndHighlights)
+                UpdateHighlightEmptyState();
+            else if (_tabControlLeft.SelectedTab == _tabPageAudio && _audioSegments?.SelectedIndex == 2)
+                UpdateShadowingSummary();
         }
 
         /// <summary>按侧栏实际宽度均分页签尺寸，确保任意 DPI 下都保持单行且不溢出。</summary>
@@ -8493,6 +9106,8 @@ namespace LearningAssistant.Forms.Pdf
         /// <summary>原文/译文左右并排：按可用高度撑满，并保持左右等宽、中间留 8px 间隔。</summary>
         private void LayoutTranslateTab()
         {
+            // 新版卡片布局接管后，旧 GroupBox 的绝对坐标排布不再参与
+            if (_translateBody != null) return;
             if (_groupBoxProgress == null || _textBoxOriginal == null || _textBoxTranslation == null) return;
             if (_labelTranslation == null || _buttonSpeakTranslation == null) return;
 
