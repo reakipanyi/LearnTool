@@ -27,6 +27,10 @@ namespace LearningAssistant.Managers
         private ListBox _listRecordings;
         private Label _labelStatus;
         private Label _labelNoRecordings;
+        private Label _labelTimestamps;
+        private Label _labelNoTimestamps;
+        private ListBox _listTimestamps;
+        private int _lastTimestampPage = -1;
         private System.Windows.Forms.Timer _uiTimer;
         private System.Windows.Forms.Timer _levelTimer;
 
@@ -78,15 +82,17 @@ namespace LearningAssistant.Managers
             };
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
 
-            // 行定义：状态/按钮行/时间/进度条/电平/列表标题/列表/删除按钮
+            // 行定义：状态/按钮行/时间/进度条/电平/列表标题/列表/删除按钮/时间戳标题/时间戳列表
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));  // 0: _labelStatus
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));  // 1: 按钮行
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));  // 2: _labelTime
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));  // 3: _trackBarPosition
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 16));  // 4: _levelMeter
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));  // 5: 录音列表标题
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F)); // 6: 列表 / 无录音提示
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 60F));  // 6: 列表 / 无录音提示
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));  // 7: 删除按钮
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));  // 8: 时间戳标注标题
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 40F));  // 9: 时间戳标注列表
 
             _labelStatus = new Label
             {
@@ -251,6 +257,39 @@ namespace LearningAssistant.Managers
             buttonDelete.Click += _buttonDelete_Click;
             layout.Controls.Add(buttonDelete, 0, 7);
 
+            // 本页时间戳标注：录制过程中创建的标注会记录音频位置，点击可跳转回放
+            _labelTimestamps = new Label
+            {
+                Text = "本页时间戳标注（点击跳转回放）",
+                Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
+                ForeColor = _textColor,
+                Anchor = AnchorStyles.Left | AnchorStyles.Top,
+                AutoSize = true
+            };
+            layout.Controls.Add(_labelTimestamps, 0, 8);
+
+            _labelNoTimestamps = new Label
+            {
+                Text = "本页暂无时间戳标注",
+                Font = new Font("Microsoft YaHei UI", 9F),
+                ForeColor = Color.FromArgb(160, 160, 170),
+                TextAlign = ContentAlignment.MiddleCenter,
+                Dock = DockStyle.Fill
+            };
+            layout.Controls.Add(_labelNoTimestamps, 0, 9);
+
+            _listTimestamps = new ListBox
+            {
+                Dock = DockStyle.Fill,
+                BorderStyle = BorderStyle.FixedSingle,
+                DrawMode = DrawMode.OwnerDrawFixed,
+                ItemHeight = 32,
+                Visible = false
+            };
+            _listTimestamps.DrawItem += ListTimestamps_DrawItem;
+            _listTimestamps.MouseClick += ListTimestamps_MouseClick;
+            layout.Controls.Add(_listTimestamps, 0, 9);
+
             _tabPage.Controls.Add(layout);
             _tabPage.ResumeLayout(false);
 
@@ -339,6 +378,8 @@ namespace LearningAssistant.Managers
             _recordings.Add(recording);
             SaveRecordings();
             RefreshRecordingList();
+            // 新录音完成后重新解析时间戳标注对应的录音
+            RefreshTimestampList();
             _labelStatus.Text = "录制完成";
             _labelStatus.ForeColor = _textColor;
             UpdateUIState();
@@ -378,6 +419,11 @@ namespace LearningAssistant.Managers
             {
                 _currentPdfPath = _form.CurrentPdfPath;
                 LoadRecordings();
+            }
+            else if (_form.CurrentPageIndex != _lastTimestampPage)
+            {
+                // 翻页后刷新当前页的时间戳标注列表
+                RefreshTimestampList();
             }
 
             if (_isPlaying && _playbackReader != null && !_isDraggingPosition)
@@ -498,11 +544,168 @@ namespace LearningAssistant.Managers
             return null;
         }
 
+        /// <summary>获取当前录音 Id，未在录制时返回 null</summary>
+        public string? GetCurrentRecordingId()
+        {
+            if (_recorder.State == AudioRecorderState.Recording)
+                return _recorder.GetCurrentRecording()?.Id;
+            return null;
+        }
+
         /// <summary>获取当前 PDF 的录音列表</summary>
         public IReadOnlyList<AudioRecording> GetRecordings()
         {
             return _recordings.AsReadOnly();
         }
+
+        #region 时间戳标注列表
+
+        /// <summary>时间戳标注列表项：展示文本 + 对应录音与音频位置</summary>
+        private sealed class TimestampEntry
+        {
+            public string Display { get; init; } = string.Empty;
+            public AudioRecording? Recording { get; init; }
+            public long TimestampMs { get; init; }
+        }
+
+        /// <summary>刷新当前页的时间戳标注列表（仅显示录制期间创建的标注）</summary>
+        public void RefreshTimestampList()
+        {
+            if (_listTimestamps == null || _labelNoTimestamps == null || _tabPage == null) return;
+            if (_tabPage.IsDisposed) return;
+
+            if (_form.Form.InvokeRequired)
+            {
+                try { _form.Form.Invoke(() => RefreshTimestampList()); } catch { }
+                return;
+            }
+
+            var pdfPath = _form.CurrentPdfPath;
+            var pageIndex = _form.CurrentPageIndex;
+            _lastTimestampPage = pageIndex;
+
+            var entries = new List<TimestampEntry>();
+            var presenter = _form.Presenter;
+            if (!string.IsNullOrEmpty(pdfPath) && presenter != null)
+            {
+                try
+                {
+                    foreach (var text in presenter.GetCurrentPageTextsForPage(pageIndex))
+                    {
+                        if (!text.AudioTimestampMs.HasValue) continue;
+                        entries.Add(new TimestampEntry
+                        {
+                            Display = $"文字：{SummarizeText(text.Content)}  ·  {FormatTime(TimeSpan.FromMilliseconds(text.AudioTimestampMs.Value))}",
+                            Recording = ResolveRecording(text.AudioRecordingId, pageIndex),
+                            TimestampMs = text.AudioTimestampMs.Value
+                        });
+                    }
+
+                    foreach (var stroke in presenter.GetCurrentPageStrokesForPage(pageIndex))
+                    {
+                        if (!stroke.AudioTimestampMs.HasValue) continue;
+                        entries.Add(new TimestampEntry
+                        {
+                            Display = $"{DescribeShape(stroke.ShapeType)}  ·  {FormatTime(TimeSpan.FromMilliseconds(stroke.AudioTimestampMs.Value))}",
+                            Recording = ResolveRecording(stroke.AudioRecordingId, pageIndex),
+                            TimestampMs = stroke.AudioTimestampMs.Value
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to build timestamp annotation list");
+                }
+            }
+
+            var ordered = entries.OrderBy(x => x.TimestampMs).ToList();
+            _listTimestamps.BeginUpdate();
+            _listTimestamps.Items.Clear();
+            foreach (var item in ordered)
+                _listTimestamps.Items.Add(item);
+            _listTimestamps.EndUpdate();
+
+            var hasItems = ordered.Count > 0;
+            _listTimestamps.Visible = hasItems;
+            _labelNoTimestamps.Visible = !hasItems;
+        }
+
+        /// <summary>优先按录音 Id 精确匹配；旧数据无 Id 时回退到同页最近一次录音</summary>
+        private AudioRecording? ResolveRecording(string? recordingId, int pageIndex)
+        {
+            if (!string.IsNullOrEmpty(recordingId))
+            {
+                var byId = _recordings.FirstOrDefault(r => r.Id == recordingId);
+                if (byId != null) return byId;
+            }
+
+            return _recordings
+                .Where(r => r.PageIndex == pageIndex)
+                .OrderByDescending(r => r.CreatedAt)
+                .FirstOrDefault();
+        }
+
+        private void ListTimestamps_DrawItem(object? sender, DrawItemEventArgs e)
+        {
+            if (e.Index < 0 || e.Index >= _listTimestamps.Items.Count) return;
+            e.DrawBackground();
+
+            if (_listTimestamps.Items[e.Index] is not TimestampEntry entry) return;
+
+            var isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            var bgColor = isSelected ? Color.FromArgb(230, 244, 255) : (e.Index % 2 == 0 ? Color.White : Color.FromArgb(248, 248, 252));
+            using var bgBrush = new SolidBrush(bgColor);
+            e.Graphics.FillRectangle(bgBrush, e.Bounds);
+
+            using var font = new Font("Microsoft YaHei UI", 9F);
+            using var textBrush = new SolidBrush(isSelected ? _accentColor : _textColor);
+            var rect = new Rectangle(e.Bounds.X + 6, e.Bounds.Y + 7, Math.Max(10, e.Bounds.Width - 12), e.Bounds.Height - 10);
+            var format = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
+            e.Graphics.DrawString(entry.Display, font, textBrush, rect, format);
+
+            e.DrawFocusRectangle();
+        }
+
+        private void ListTimestamps_MouseClick(object? sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left) return;
+
+            int index = _listTimestamps.IndexFromPoint(e.Location);
+            if (index < 0 || index >= _listTimestamps.Items.Count) return;
+            if (_listTimestamps.Items[index] is not TimestampEntry entry) return;
+
+            if (entry.Recording == null)
+            {
+                _form.ShowWarning("未找到该标注对应的录音");
+                return;
+            }
+
+            // 同步选中录音列表项，保证播放按钮状态与当前跳转的录音一致
+            _listRecordings.SelectedItem = entry.Recording;
+            SeekToPosition(entry.Recording, entry.TimestampMs);
+        }
+
+        private static string SummarizeText(string? content)
+        {
+            if (string.IsNullOrWhiteSpace(content)) return "（空文字）";
+            var normalized = content.Replace('\r', ' ').Replace('\n', ' ').Trim();
+            return normalized.Length <= 24 ? normalized : normalized[..24] + "…";
+        }
+
+        private static string DescribeShape(string? shapeType)
+        {
+            return shapeType switch
+            {
+                "Rectangle" => "矩形标注",
+                "Ellipse" => "椭圆标注",
+                "Arrow" => "箭头标注",
+                "Mosaic" => "马赛克标注",
+                null or "" => "笔划标注",
+                _ => "形状标注"
+            };
+        }
+
+        #endregion
 
         private void UpdateUIState()
         {
@@ -593,6 +796,7 @@ namespace LearningAssistant.Managers
                 _recordings.Clear();
             }
             RefreshRecordingList();
+            RefreshTimestampList();
         }
 
         private void SaveRecordings()

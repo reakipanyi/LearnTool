@@ -363,6 +363,11 @@ namespace LearningAssistant.Forms.Pdf
             _navigationManager.ShowMagnifierCallback = point => ShowMagnifier(point);
             _navigationManager.UpdateHighlightLayerCallback = () => _highlightManager?.UpdateHighlightLayer();
 
+            // 录音过程中创建的标注自动关联当前录音（时间戳 + 录音 Id），供「我的录音」页跳转回放
+            _navigationManager.GetCurrentAudioTimestampMs = () => _audioManager?.GetCurrentTimestampMs();
+            _navigationManager.GetCurrentAudioRecordingId = () => _audioManager?.GetCurrentRecordingId();
+            _navigationManager.AnnotationAddedCallback = () => _audioManager?.RefreshTimestampList();
+
             // 标注选中事件：双击触发编辑，单击显示选中状态
             _navigationManager.AnnotationSelected += OnAnnotationSelected;
 
@@ -1633,6 +1638,7 @@ namespace LearningAssistant.Forms.Pdf
             _currentPageIndex = pageIndex;
             _audioTrackManager?.OnPageChanged(pageIndex);
             _audioPanel?.OnCurrentPageChanged();
+            _audioManager?.RefreshTimestampList();
             _textBoxPage.Text = (pageIndex + 1).ToString();
             // 页码可能超出进度条范围（如空文档或页码未同步），避免 Value 越界抛异常
             _progressBarPage.Value = Math.Clamp(pageIndex + 1, _progressBarPage.Minimum, _progressBarPage.Maximum);
@@ -3510,10 +3516,13 @@ namespace LearningAssistant.Forms.Pdf
                         dialog.SelectedColor.ToArgb(),
                         dialog.SelectedFontSize,
                         "Microsoft YaHei UI",
-                        _currentPageImage.Width, _currentPageImage.Height);
+                        _currentPageImage.Width, _currentPageImage.Height,
+                        _audioManager?.GetCurrentTimestampMs(),
+                        _audioManager?.GetCurrentRecordingId());
 
                     _navigationManager?.LoadAnnotationsForCurrentPage();
                     RefreshHighlightList();
+                    _audioManager?.RefreshTimestampList();
                     _pictureBoxPdf.Invalidate();
                 }
                 catch (Exception ex)

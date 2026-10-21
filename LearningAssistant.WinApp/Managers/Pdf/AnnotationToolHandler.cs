@@ -34,8 +34,10 @@ namespace LearningAssistant.Managers
         // 回调委托
         public Action<AnnotationStroke>? PushStrokeToUndoStack { get; set; }
         public Func<long?>? GetCurrentAudioTimestampMs { get; set; }
+        /// <summary>获取当前录音 Id，用于标注与录音精确关联</summary>
+        public Func<string?>? GetCurrentAudioRecordingId { get; set; }
         public Action<int>? SaveAnnotationForPage { get; set; }
-        public Action<float[], int, float, int, int, string?, int, string>? AddAnnotationStroke { get; set; }
+        public Action<float[], int, float, int, int, string?, int, string, long?, string?>? AddAnnotationStroke { get; set; }
         public Func<Point, PointF>? ClientToImage { get; set; }
 
         public AnnotationToolHandler(ILogger logger, IPdfReaderFormAccess form, AnnotationLayerManager layerManager)
@@ -264,6 +266,10 @@ namespace LearningAssistant.Managers
                 pts.Add(pt.Y / imgH);
             }
 
+            // 录制过程中创建的标注自动关联当前录音，便于后续按时间戳回放
+            long? audioTimestampMs = GetCurrentAudioTimestampMs?.Invoke();
+            string? audioRecordingId = audioTimestampMs.HasValue ? GetCurrentAudioRecordingId?.Invoke() : null;
+
             var stroke = new AnnotationStroke
             {
                 Points = pts.ToArray(),
@@ -271,12 +277,13 @@ namespace LearningAssistant.Managers
                 Thickness = drawWidth,
                 PenType = PenType,
                 StrokeStyle = StrokeStyle,
-                AudioTimestampMs = GetCurrentAudioTimestampMs?.Invoke(),
+                AudioTimestampMs = audioTimestampMs,
+                AudioRecordingId = audioRecordingId,
                 CreatedAt = DateTime.Now
             };
 
             PushStrokeToUndoStack?.Invoke(stroke);
-            AddAnnotationStroke?.Invoke(pts.ToArray(), drawColor.ToArgb(), drawWidth, imgW, imgH, null, DrawingPageIndex, StrokeStyle);
+            AddAnnotationStroke?.Invoke(pts.ToArray(), drawColor.ToArgb(), drawWidth, imgW, imgH, null, DrawingPageIndex, StrokeStyle, audioTimestampMs, audioRecordingId);
 
             ResetDrawingState();
             return stroke;
@@ -334,6 +341,10 @@ namespace LearningAssistant.Managers
                 endPt.X / imgW, endPt.Y / imgH
             };
 
+            // 录制过程中创建的形状标注同样关联当前录音
+            long? audioTimestampMs = GetCurrentAudioTimestampMs?.Invoke();
+            string? audioRecordingId = audioTimestampMs.HasValue ? GetCurrentAudioRecordingId?.Invoke() : null;
+
             var stroke = new AnnotationStroke
             {
                 Points = strokePts.ToArray(),
@@ -343,12 +354,13 @@ namespace LearningAssistant.Managers
                 DashStyle = IsDashed ? "Dash" : "Solid",
                 PenType = PenType,
                 StrokeStyle = StrokeStyle,
-                AudioTimestampMs = GetCurrentAudioTimestampMs?.Invoke(),
+                AudioTimestampMs = audioTimestampMs,
+                AudioRecordingId = audioRecordingId,
                 CreatedAt = DateTime.Now
             };
 
             PushStrokeToUndoStack?.Invoke(stroke);
-            AddAnnotationStroke?.Invoke(strokePts.ToArray(), PenColor.ToArgb(), PenWidth, imgW, imgH, mode.ToString(), DrawingPageIndex, StrokeStyle);
+            AddAnnotationStroke?.Invoke(strokePts.ToArray(), PenColor.ToArgb(), PenWidth, imgW, imgH, mode.ToString(), DrawingPageIndex, StrokeStyle, audioTimestampMs, audioRecordingId);
 
             ResetDrawingState();
             return stroke;

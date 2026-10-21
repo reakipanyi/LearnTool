@@ -28,6 +28,8 @@ namespace LearningAssistant.Models.Pdf
         public string StrokeStyle { get; set; } = "Solid";
         /// <summary>关联的音频时间戳(毫秒)，录制时创建标注自动记录</summary>
         public long? AudioTimestampMs { get; set; }
+        /// <summary>关联的录音 Id，用于多次同页录音时精确定位回放</summary>
+        public string? AudioRecordingId { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.Now;
     }
 
@@ -42,6 +44,8 @@ namespace LearningAssistant.Models.Pdf
         public string FontFamily { get; set; } = "Microsoft YaHei UI";
         /// <summary>关联的音频时间戳(毫秒)，录制时创建标注自动记录</summary>
         public long? AudioTimestampMs { get; set; }
+        /// <summary>关联的录音 Id，用于多次同页录音时精确定位回放</summary>
+        public string? AudioRecordingId { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.Now;
     }
 

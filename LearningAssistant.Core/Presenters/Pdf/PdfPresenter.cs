@@ -819,6 +819,7 @@ namespace LearningAssistant.Presenters
                         FontSize = fontSize,
                         FontFamily = fontFamily,
                         AudioTimestampMs = text.AudioTimestampMs,
+                        AudioRecordingId = text.AudioRecordingId,
                         CreatedAt = text.CreatedAt
                     };
                     _annotationService.UpdateTextAt(annotation.PdfPath, annotation.PageIndex, index, updatedText);
@@ -830,7 +831,7 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        public void AddAnnotationStroke(float[] normalizedPoints, int colorArgb, float thickness, int imageWidth, int imageHeight, string? shapeType = null, int pageIndex = -1, string strokeStyle = "Solid")
+        public void AddAnnotationStroke(float[] normalizedPoints, int colorArgb, float thickness, int imageWidth, int imageHeight, string? shapeType = null, int pageIndex = -1, string strokeStyle = "Solid", long? audioTimestampMs = null, string? audioRecordingId = null)
         {
             if (pageIndex < 0)
                 pageIndex = _pdfFileManager.CurrentPageIndex;
@@ -859,7 +860,9 @@ namespace LearningAssistant.Presenters
                     ColorArgb = colorArgb,
                     Thickness = thickness,
                     ShapeType = shapeType,
-                    StrokeStyle = strokeStyle
+                    StrokeStyle = strokeStyle,
+                    AudioTimestampMs = audioTimestampMs,
+                    AudioRecordingId = audioRecordingId
                 };
                 _annotationService.AddStroke(_pdfFileManager.CurrentFilePath, pageIndex, stroke);
             }
@@ -887,7 +890,7 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        public void AddAnnotationText(float normalizedX, float normalizedY, string text, int colorArgb, float fontSize, string fontFamily, int imageWidth, int imageHeight, long? audioTimestampMs = null)
+        public void AddAnnotationText(float normalizedX, float normalizedY, string text, int colorArgb, float fontSize, string fontFamily, int imageWidth, int imageHeight, long? audioTimestampMs = null, string? audioRecordingId = null)
         {
             try
             {
@@ -909,7 +912,8 @@ namespace LearningAssistant.Presenters
                     ColorArgb = colorArgb,
                     FontSize = fontSize,
                     FontFamily = fontFamily,
-                    AudioTimestampMs = audioTimestampMs
+                    AudioTimestampMs = audioTimestampMs,
+                    AudioRecordingId = audioRecordingId
                 };
                 _annotationService.AddText(_pdfFileManager.CurrentFilePath, _pdfFileManager.CurrentPageIndex, annotationText);
             }

@@ -183,6 +183,10 @@ namespace LearningAssistant.Managers
         public Action? UpdateHighlightLayerCallback { get; set; }
         /// <summary>获取当前音频录制时间戳(毫秒)，用于标注时同步记录</summary>
         public Func<long?>? GetCurrentAudioTimestampMs { get; set; }
+        /// <summary>获取当前录音 Id，用于多次同页录音时精确定位回放</summary>
+        public Func<string?>? GetCurrentAudioRecordingId { get; set; }
+        /// <summary>标注写入后触发，用于刷新本页时间戳标注列表</summary>
+        public Action? AnnotationAddedCallback { get; set; }
 
         public PdfReaderNavigationManager(ILogger logger, IPdfReaderFormAccess form)
         {
@@ -234,9 +238,10 @@ namespace LearningAssistant.Managers
         {
             _toolHandler.PushStrokeToUndoStack = PushStrokeToUndoStack;
             _toolHandler.GetCurrentAudioTimestampMs = () => GetCurrentAudioTimestampMs?.Invoke();
+            _toolHandler.GetCurrentAudioRecordingId = () => GetCurrentAudioRecordingId?.Invoke();
             _toolHandler.SaveAnnotationForPage = (pageIndex) => _form.Presenter?.SaveAnnotationForPage(pageIndex);
-            _toolHandler.AddAnnotationStroke = (pts, color, thickness, imgW, imgH, shapeType, pageIdx, strokeStyle) =>
-                _form.Presenter?.AddAnnotationStroke(pts, color, thickness, imgW, imgH, shapeType, pageIdx, strokeStyle);
+            _toolHandler.AddAnnotationStroke = (pts, color, thickness, imgW, imgH, shapeType, pageIdx, strokeStyle, audioTs, audioRecordingId) =>
+                _form.Presenter?.AddAnnotationStroke(pts, color, thickness, imgW, imgH, shapeType, pageIdx, strokeStyle, audioTs, audioRecordingId);
             _toolHandler.ClientToImage = ClientToImage;
         }
 
@@ -811,6 +816,7 @@ namespace LearningAssistant.Managers
                     _toolHandler.FinalizeStroke(_currentToolMode);
                     _form.PictureBoxPdf.Invalidate();
                     _form.HighlightManager?.RefreshHighlightList();
+                    AnnotationAddedCallback?.Invoke();
 
                     // 临时笔模式：记录笔迹并启动定时清除
                     if (_currentToolMode == AnnotationToolMode.TemporaryPen)
@@ -876,6 +882,7 @@ namespace LearningAssistant.Managers
                     }
                     _form.PictureBoxPdf.Invalidate();
                     _form.HighlightManager?.RefreshHighlightList();
+                    AnnotationAddedCallback?.Invoke();
 
                     // 一次性工具：形状绘制完成后自动恢复默认模式
                     RevertIfOneTimeTool();
