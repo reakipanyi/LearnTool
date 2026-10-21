@@ -30,6 +30,9 @@ namespace LearningAssistant.Forms.Pdf
         private readonly IEventBus? _eventBus;
         private readonly IPdfAiService? _pdfAiService;
         private readonly IPdfDocumentTextIndex? _documentTextIndex;
+        private readonly Services.Learning.ISpacedRepetitionService? _spacedRepetitionService;
+        private readonly Services.Learning.INoteService? _noteService;
+        private readonly Services.Learning.IUserSessionService? _userSessionService;
 
         // 本次会话是否已确认把整份文档文本发送给 AI 服务，避免每次操作重复弹窗
         private bool _wholeDocumentAiConfirmed;
@@ -342,7 +345,7 @@ namespace LearningAssistant.Forms.Pdf
         private ToolStripDropDown _annotationOptionsDropDown;
         private ToolStripControlHost _annotationOptionsHostItem;
         private Panel _annotationOptionsHost;
-        public PdfReaderForm(ILogger<PdfReaderForm> logger, IAIPanelPopupService? aiPanelPopupService = null, Services.Learning.IPendingContentService? pendingContentService = null, IHighlightService? highlightService = null, IAnnotationService? annotationService = null, IEventBus? eventBus = null, IAudioRecorderService? audioRecorderService = null, IPdfAiService? pdfAiService = null, IPdfDocumentTextIndex? documentTextIndex = null)
+        public PdfReaderForm(ILogger<PdfReaderForm> logger, IAIPanelPopupService? aiPanelPopupService = null, Services.Learning.IPendingContentService? pendingContentService = null, IHighlightService? highlightService = null, IAnnotationService? annotationService = null, IEventBus? eventBus = null, IAudioRecorderService? audioRecorderService = null, IPdfAiService? pdfAiService = null, IPdfDocumentTextIndex? documentTextIndex = null, Services.Learning.ISpacedRepetitionService? spacedRepetitionService = null, Services.Learning.INoteService? noteService = null, Services.Learning.IUserSessionService? userSessionService = null)
         {
             InitializeComponent();
             WindowState = FormWindowState.Maximized;
@@ -356,6 +359,9 @@ namespace LearningAssistant.Forms.Pdf
             _audioRecorderService = audioRecorderService;
             _pdfAiService = pdfAiService;
             _documentTextIndex = documentTextIndex;
+            _spacedRepetitionService = spacedRepetitionService;
+            _noteService = noteService;
+            _userSessionService = userSessionService;
             KeyPreview = true;
             Load += PdfReaderFormV2_Load;
             Resize += PdfReaderFormV2_Resize;
@@ -2944,6 +2950,160 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
+        /// <summary>生成指定页码范围的 AI 闪卡，预览勾选后加入闪卡复习队列</summary>
+        private async Task GenerateFlashcardsAsync()
+        {
+            if (_pdfAiService == null)
+            {
+                MessageBox.Show(this, "AI 服务不可用，请先完成 AI 配置", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (_presenter == null || _presenter.PageCount <= 0 || string.IsNullOrWhiteSpace(_currentPdfPath))
+            {
+                MessageBox.Show(this, "当前没有打开的 PDF 文档", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (_spacedRepetitionService == null)
+            {
+                MessageBox.Show(this, "复习服务不可用，无法加入闪卡复习", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            using var optionsDialog = new PdfAiFlashcardDialog(_presenter.PageCount);
+            if (optionsDialog.ShowDialog(this) != DialogResult.OK) return;
+
+            var options = optionsDialog.Options;
+            // 全部页面生成等同全文上传，首次需要隐私确认
+            if (options.StartPageIndex < 0 && !EnsureWholeDocumentAiConsent("AI 闪卡生成"))
+                return;
+
+            if (await EnsurePdfTextIndexAsync(showProgress: true).ConfigureAwait(true) == null)
+            {
+                MessageBox.Show(this, "未能建立文档文本索引，请重试或先完成 OCR", "提示",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            int pageCount = _presenter.PageCount;
+            PdfAiResponse response;
+            UseWaitCursor = true;
+            try
+            {
+                response = await _pdfAiService
+                    .GenerateFlashcardsAsync(_currentPdfPath, options.StartPageIndex, options.EndPageIndex)
+                    .ConfigureAwait(true);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+            }
+
+            if (!response.Success)
+            {
+                MessageBox.Show(this, response.ErrorMessage ?? "闪卡生成失败", "AI 闪卡",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var cards = ParseFlashcards(response.Content, pageCount);
+            if (cards.Count == 0)
+            {
+                MessageBox.Show(this, "AI 未返回有效的闪卡，请调整页码范围后重试", "AI 闪卡",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var documentName = Path.GetFileNameWithoutExtension(_currentPdfPath);
+            using var previewDialog = new PdfAiFlashcardPreviewDialog(cards, documentName);
+            if (previewDialog.ShowDialog(this) != DialogResult.OK) return;
+
+            int imported = ImportFlashcardsToReview(previewDialog.SelectedCards);
+            ShowMessage(imported > 0
+                ? $"已把 {imported} 张闪卡加入复习队列"
+                : "未能加入复习队列，请检查复习服务",
+                "AI 闪卡");
+        }
+
+        /// <summary>解析 AI 返回的闪卡 JSON，过滤缺少正面或背面的条目</summary>
+        private static List<PdfAiFlashcardCard> ParseFlashcards(string content, int pageCount)
+        {
+            var cards = new List<PdfAiFlashcardCard>();
+            if (string.IsNullOrWhiteSpace(content)) return cards;
+
+            var json = StripCodeFence(content);
+            try
+            {
+                using var document = JsonDocument.Parse(json);
+                if (document.RootElement.ValueKind != JsonValueKind.Array) return cards;
+
+                foreach (var element in document.RootElement.EnumerateArray())
+                {
+                    if (element.ValueKind != JsonValueKind.Object) continue;
+
+                    var front = element.TryGetProperty("front", out var frontNode)
+                        ? (frontNode.GetString() ?? string.Empty).Trim()
+                        : string.Empty;
+                    var back = element.TryGetProperty("back", out var backNode)
+                        ? (backNode.GetString() ?? string.Empty).Trim()
+                        : string.Empty;
+                    if (string.IsNullOrWhiteSpace(front) || string.IsNullOrWhiteSpace(back)) continue;
+
+                    int pageNumber = element.TryGetProperty("page", out var pageNode)
+                        && pageNode.TryGetInt32(out var parsedPage)
+                            ? Math.Clamp(parsedPage, 0, Math.Max(0, pageCount))
+                            : 0;
+
+                    cards.Add(new PdfAiFlashcardCard
+                    {
+                        Front = front,
+                        Back = back,
+                        PageNumber = pageNumber
+                    });
+                }
+            }
+            catch (JsonException)
+            {
+                cards.Clear();
+            }
+
+            return cards;
+        }
+
+        /// <summary>把闪卡写入间隔重复复习队列，记录来源文档便于后续筛选</summary>
+        private int ImportFlashcardsToReview(IReadOnlyList<PdfAiFlashcardCard> cards)
+        {
+            if (_spacedRepetitionService == null || cards == null || cards.Count == 0) return 0;
+
+            var userId = _userSessionService?.CurrentUserId;
+            if (string.IsNullOrWhiteSpace(userId))
+                userId = Constants.DefaultUserId;
+
+            var documentName = string.IsNullOrWhiteSpace(_currentPdfPath)
+                ? string.Empty
+                : Path.GetFileNameWithoutExtension(_currentPdfPath);
+
+            int imported = 0;
+            foreach (var card in cards)
+            {
+                try
+                {
+                    var item = _spacedRepetitionService.CreateNewItem(userId, card.Front, card.Back);
+                    item.Category = "PDF闪卡";
+                    if (!string.IsNullOrWhiteSpace(documentName))
+                        item.Subject = documentName;
+                    item.UpdatedAt = DateTime.Now;
+                    _spacedRepetitionService.UpdateItem(item);
+                    imported++;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "闪卡加入复习队列失败: {Front}", card.Front);
+                }
+            }
+
+            return imported;
+        }
+
         /// <summary>解释选中内容：带当前页上下文并走缓存，可添加到编辑器或保存为标注</summary>
         private async Task ExplainSelectionAsync()
         {
@@ -4803,6 +4963,7 @@ namespace LearningAssistant.Forms.Pdf
             menu.Items.Add("解释选中内容", null, async (_, _) => await ExplainSelectionAsync());
             menu.Items.Add("全文检索问答", null, async (_, _) => await AskDocumentByRetrievalAsync());
             menu.Items.Add("生成文档大纲…", null, async (_, _) => await GenerateDocumentOutlineAsync());
+            menu.Items.Add("生成闪卡…", null, async (_, _) => await GenerateFlashcardsAsync());
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("导出 AI 学习笔记…", null, async (_, _) => await ExportAiStudyNotesAsync());
             menu.Items.Add("整理本页标注", null, async (_, _) => await SummarizeAnnotationsAsync(wholeDocument: false));

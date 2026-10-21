@@ -204,7 +204,7 @@ namespace LearningAssistant.Forms.Pdf
         }
 
         /// <summary>解析页码范围文本，返回 0 基起止页；留空时返回 -1/-1 表示全部页面</summary>
-        private static bool TryParsePageRange(string? text, out int startIndex, out int endIndex)
+        internal static bool TryParsePageRange(string? text, out int startIndex, out int endIndex)
         {
             startIndex = -1;
             endIndex = -1;
