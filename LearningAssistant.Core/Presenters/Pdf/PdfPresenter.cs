@@ -35,6 +35,10 @@ namespace LearningAssistant.Presenters
         private string _currentLanguage = Constants.Language.English;
         private string _currentSubCategory = Constants.SubCategory.EnglishWord;
 
+        // 页面渲染代次：快速翻页/缩放时，await 返回后若代次已过期则丢弃旧结果
+        private CancellationTokenSource? _pageRenderCts;
+        private int _renderGeneration;
+
         public event EventHandler<AddWordEventArgs>? OnAddWordToLearningList;
 
         public PdfPresenter(ILogger<PdfPresenter> logger,
@@ -274,23 +278,67 @@ namespace LearningAssistant.Presenters
 
         public async Task RenderAndDisplayCurrentPageAsync()
         {
+            await RenderAndDisplayPageAsync(_pdfFileManager.CurrentPageIndex, null, true);
+        }
+
+        /// <summary>
+        /// 按缩放比例重新渲染当前页（由 PdfZoomController 调用）。
+        /// 渲染与显示统一走代次校验，避免旧缩放结果覆盖新画面。
+        /// </summary>
+        public Task RenderPageAtZoomAsync(int pageIndex, int zoomPercent)
+        {
+            if (pageIndex < 0 || pageIndex >= _pdfRenderer.PageCount)
+                return Task.CompletedTask;
+
+            return RenderAndDisplayPageAsync(pageIndex, zoomPercent, false);
+        }
+
+        private async Task RenderAndDisplayPageAsync(int currentIndex, int? zoomPercent, bool updateThumbnail)
+        {
+            var generationCts = new CancellationTokenSource();
+            var previousCts = Interlocked.Exchange(ref _pageRenderCts, generationCts);
+            if (previousCts != null)
+            {
+                try
+                {
+                    previousCts.Cancel();
+                    previousCts.Dispose();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // 已被释放，忽略
+                }
+            }
+
+            int generation = Interlocked.Increment(ref _renderGeneration);
+            var cancellationToken = generationCts.Token;
+
             try
             {
-                int currentIndex = _pdfFileManager.CurrentPageIndex;
-
                 var (renderWidth, renderHeight) = CalculateRenderSize();
 
-                var firstPageTask = _pdfRenderer.RenderPageAsync(currentIndex, renderWidth, renderHeight);
+                if (zoomPercent.HasValue)
+                {
+                    // 缩放渲染：在适配显示尺寸基础上按百分比放大，尺寸上限由 PdfRenderSizePolicy 统一收敛
+                    double factor = Math.Max(1, zoomPercent.Value) / 100.0;
+                    renderWidth = Math.Max(1, (int)Math.Round(renderWidth * factor));
+                    renderHeight = Math.Max(1, (int)Math.Round(renderHeight * factor));
+                }
+
+                var firstPageTask = _pdfRenderer.RenderPageAsync(currentIndex, renderWidth, renderHeight, cancellationToken);
 
                 Task<byte[]?>? secondPageTask = null;
-                bool isDual = _view.IsDualPage;
+                bool isDual = _view?.IsDualPage == true;
                 int nextIndex = currentIndex + 1;
                 if (isDual && nextIndex < _pdfRenderer.PageCount)
                 {
-                    secondPageTask = _pdfRenderer.RenderPageAsync(nextIndex, renderWidth, renderHeight);
+                    secondPageTask = _pdfRenderer.RenderPageAsync(nextIndex, renderWidth, renderHeight, cancellationToken);
                 }
 
                 var imageData = await firstPageTask;
+                if (IsRenderResultStale(generation, generationCts))
+                    return;
+
                 if (imageData != null)
                 {
                     _view?.DisplayImage(imageData);
@@ -299,6 +347,9 @@ namespace LearningAssistant.Presenters
                 if (secondPageTask != null)
                 {
                     var secondImageData = await secondPageTask;
+                    if (IsRenderResultStale(generation, generationCts))
+                        return;
+
                     _view?.SetSecondPageImage(secondImageData);
                 }
                 else
@@ -306,12 +357,48 @@ namespace LearningAssistant.Presenters
                     _view?.SetSecondPageImage(null);
                 }
 
-                _view?.HighlightThumbnail(currentIndex);
+                if (updateThumbnail)
+                {
+                    _view?.HighlightThumbnail(currentIndex);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // 后续翻页/缩放已取消本次渲染，正常丢弃
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to render page {PageIndex}", _pdfFileManager.CurrentPageIndex);
+                _logger.LogError(ex, "Failed to render page {PageIndex}", currentIndex);
                 _view?.ShowError("渲染页面失败");
+            }
+        }
+
+        /// <summary>
+        /// 判断渲染结果是否已过期（代次变化或已取消）
+        /// </summary>
+        private bool IsRenderResultStale(int generation, CancellationTokenSource cts)
+        {
+            return generation != Volatile.Read(ref _renderGeneration) || cts.IsCancellationRequested;
+        }
+
+        /// <summary>
+        /// 取消进行中的页面渲染（切换文件/释放时调用）
+        /// </summary>
+        private void CancelPendingRender()
+        {
+            Interlocked.Increment(ref _renderGeneration);
+            var cts = Interlocked.Exchange(ref _pageRenderCts, null);
+            if (cts != null)
+            {
+                try
+                {
+                    cts.Cancel();
+                    cts.Dispose();
+                }
+                catch (ObjectDisposedException)
+                {
+                    // 已被释放，忽略
+                }
             }
         }
 
@@ -1320,6 +1407,9 @@ namespace LearningAssistant.Presenters
 
         private void OnFileLoaded(object? sender, FileLoadedEventArgs e)
         {
+            // 切换文件时作废旧文件的渲染结果，避免其晚到覆盖新文件首屏
+            CancelPendingRender();
+
             _view?.SetCurrentPdfPath(e.FilePath);
             _view?.SetImageMode(e.IsImageMode);
             _view?.SetPageCount(e.PageCount);
@@ -1617,6 +1707,7 @@ namespace LearningAssistant.Presenters
 
         public void Dispose()
         {
+            CancelPendingRender();
             UnsubscribeFromEvents();
             UnsubscribeFromServiceEvents();
             UnsubscribeFromEventBus();

@@ -18,6 +18,18 @@ namespace LearningAssistant.Services.Pdf
         Task<byte[]?> RenderPageAsync(int pageIndex, int width, int height);
 
         /// <summary>
+        /// 异步渲染指定页面（支持取消）
+        /// 默认实现忽略取消令牌，渲染器实现应重写以在排队/渲染完成后尽快丢弃过期结果。
+        /// </summary>
+        /// <param name="pageIndex">页码索引（从0开始）</param>
+        /// <param name="width">渲染宽度（像素）</param>
+        /// <param name="height">渲染高度（像素）</param>
+        /// <param name="cancellationToken">取消令牌，快速翻页/缩放时取消上一次请求</param>
+        /// <returns>渲染后的byte[]，若失败或已取消返回null</returns>
+        Task<byte[]?> RenderPageAsync(int pageIndex, int width, int height, CancellationToken cancellationToken)
+            => RenderPageAsync(pageIndex, width, height);
+
+        /// <summary>
         /// 获取页面缩略图
         /// </summary>
         /// <param name="pageIndex">页码索引（从0开始）</param>

@@ -97,7 +97,10 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
-        public async Task<byte[]?> RenderPageAsync(int pageIndex, int width, int height)
+        public Task<byte[]?> RenderPageAsync(int pageIndex, int width, int height)
+            => RenderPageAsync(pageIndex, width, height, CancellationToken.None);
+
+        public async Task<byte[]?> RenderPageAsync(int pageIndex, int width, int height, CancellationToken cancellationToken)
         {
             Bitmap? bitmap;
 
@@ -120,13 +123,22 @@ namespace LearningAssistant.Services.Pdf
                 int renderWidth = width;
                 int renderHeight = (int)(renderWidth * pageSize.Height / pageSize.Width);
 
-                bitmap = await GetRenderedPageAsync(pageIndex, renderWidth, renderHeight);
+                // 尺寸量化 + 硬上限，防止高倍缩放生成数百 MB 的位图
+                (renderWidth, renderHeight) = PdfRenderSizePolicy.Apply(renderWidth, renderHeight);
+
+                bitmap = await GetRenderedPageAsync(pageIndex, renderWidth, renderHeight, cancellationToken);
             }
 
             try
             {
+                if (bitmap == null) return null;
+                if (cancellationToken.IsCancellationRequested) return null;
+
                 var bitmapBytes = BitmapToBytes(bitmap);
-                return bitmapBytes != null ? ApplyNightMode(bitmapBytes) : null;
+                if (bitmapBytes == null) return null;
+                // 已取消的请求不再做夜间模式转换，直接丢弃
+                if (cancellationToken.IsCancellationRequested) return null;
+                return ApplyNightMode(bitmapBytes);
             }
             finally
             {
@@ -153,6 +165,8 @@ namespace LearningAssistant.Services.Pdf
 
         private string GetRenderCacheKey(int pageIndex, int renderWidth, int renderHeight)
         {
+            // 统一在 key 处量化，保证渲染与预渲染即使传入原始尺寸也命中同一缓存项
+            (renderWidth, renderHeight) = PdfRenderSizePolicy.Apply(renderWidth, renderHeight);
             return $"{_currentFilePath}_{pageIndex}_{renderWidth}_{renderHeight}_{_isNightMode}";
         }
 
@@ -169,7 +183,8 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
-        private async Task<Bitmap?> GetRenderedPageAsync(int pageIndex, int renderW, int renderH)
+        private async Task<Bitmap?> GetRenderedPageAsync(int pageIndex, int renderW, int renderH,
+            CancellationToken cancellationToken = default)
         {
             if (_isImageMode)
             {
@@ -181,16 +196,21 @@ namespace LearningAssistant.Services.Pdf
                 if (pageIndex < 0 || pageIndex >= _pdfService.PageCount) return null;
             }
 
-            return await GetRenderedPageInternalAsync(pageIndex, renderW, renderH);
+            return await GetRenderedPageInternalAsync(pageIndex, renderW, renderH, cancellationToken);
         }
 
-        private async Task<Bitmap?> GetRenderedImagePageAsync(int pageIndex, int renderW, int renderH)
+        private async Task<Bitmap?> GetRenderedImagePageAsync(int pageIndex, int renderW, int renderH,
+            CancellationToken cancellationToken = default)
         {
-            return await GetRenderedPageAsync(pageIndex, renderW, renderH);
+            return await GetRenderedPageAsync(pageIndex, renderW, renderH, cancellationToken);
         }
 
-        private async Task<Bitmap?> GetRenderedPageInternalAsync(int pageIndex, int renderW, int renderH)
+        private async Task<Bitmap?> GetRenderedPageInternalAsync(int pageIndex, int renderW, int renderH,
+            CancellationToken cancellationToken)
         {
+            // 再次收敛尺寸（预渲染等入口可能绕过 RenderPageAsync）
+            (renderW, renderH) = PdfRenderSizePolicy.Apply(renderW, renderH);
+
             var cacheKey = GetRenderCacheKey(pageIndex, renderW, renderH);
             lock (_renderLock)
             {
@@ -201,9 +221,25 @@ namespace LearningAssistant.Services.Pdf
                 }
             }
 
-            await _renderSemaphore.WaitAsync();
             try
             {
+                // 排队阶段即可取消：快速翻页时旧请求不再占用渲染槽位
+                await _renderSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return null;
+            }
+            catch (ObjectDisposedException)
+            {
+                // 渲染器已释放，直接放弃
+                return null;
+            }
+
+            try
+            {
+                if (cancellationToken.IsCancellationRequested) return null;
+
                 lock (_renderLock)
                 {
                     if (_renderCache.TryGetValue(cacheKey, out var cachedAfterWait))
@@ -214,8 +250,15 @@ namespace LearningAssistant.Services.Pdf
                 }
 
                 var bmp = await Task.Run(() => RenderPageToBitmap(pageIndex, renderW, renderH),
-                    _cts?.Token ?? CancellationToken.None).ConfigureAwait(false);
+                    cancellationToken).ConfigureAwait(false);
                 if (bmp == null) return null;
+
+                // 渲染期间已被取消：结果直接丢弃，不写入缓存，也不再触发预渲染
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    bmp.Dispose();
+                    return null;
+                }
 
                 lock (_renderLock)
                 {
