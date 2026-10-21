@@ -220,6 +220,12 @@ namespace LearningAssistant.Common
             // PDF AI 摘要条目：按文档哈希落盘，带页码/录音锚点
             services.AddScoped<IPdfAiSummaryStore>(_ => new PdfAiSummaryStore());
 
+            // PDF 翻译术语表：按文件指纹落盘缓存，供逐页译文润色复用
+            services.AddScoped<IPdfTranslationGlossaryService>(sp => new PdfTranslationGlossaryService(
+                sp.GetRequiredService<IPdfDocumentTextIndex>(),
+                sp.GetService<IAIService>(),
+                sp.GetService<ILogger<PdfTranslationGlossaryService>>()));
+
             // PDF 专用 AI 编排：文本索引取料 + 页码锚点 + 上下文预算 + 结果缓存
             services.AddScoped<IPdfAiService>(sp => new PdfAiService(
                 sp.GetService<IAIService>(),
@@ -519,9 +525,11 @@ namespace LearningAssistant.Common
                 var eventBus = sp.GetService<IEventBus>();
                 var userSessionService = sp.GetService<IUserSessionService>();
                 var pdfAiService = sp.GetService<IPdfAiService>();
+                var translationGlossaryService = sp.GetService<IPdfTranslationGlossaryService>();
                 return new PdfPresenter(logger, pdfRenderer, pdfFileManager, pdfOcrService, pdfTranslationService,
                     aiService, pdfTtsService, pdfStudyIntegration, exportService,
-                    annotationService, highlightService, pdfService, imageProcessor, ttsConfig, eventBus, userSessionService, pdfAiService);
+                    annotationService, highlightService, pdfService, imageProcessor, ttsConfig, eventBus, userSessionService,
+                    pdfAiService, translationGlossaryService);
             });
 
             services.AddScoped<MainForm>(sp =>

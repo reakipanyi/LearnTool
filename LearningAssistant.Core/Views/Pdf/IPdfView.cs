@@ -378,6 +378,11 @@ namespace LearningAssistant.Views
         bool AutoTranslateAfterOcr { get; set; }
 
         /// <summary>
+        /// 翻译后是否使用 AI 术语表润色
+        /// </summary>
+        bool AiTranslationPolishEnabled { get; }
+
+        /// <summary>
         /// 是否双页显示模式
         /// </summary>
         bool IsDualPage { get; }

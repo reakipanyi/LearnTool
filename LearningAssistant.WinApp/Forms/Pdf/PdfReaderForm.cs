@@ -13,6 +13,7 @@ using LearningAssistant.Services.Pdf;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Text;
 
 namespace LearningAssistant.Forms.Pdf
@@ -325,6 +326,8 @@ namespace LearningAssistant.Forms.Pdf
         private TextBox _textBoxFilter;
         private List<string> _allFiles = new List<string>();
         private CheckBox _checkBoxAutoTranslate;
+        private CheckBox _checkBoxAiPolish;
+        private bool _syncingTranslationScroll;
         private Panel panel1;
         private Panel pnlPage;
         private Panel panel2;
@@ -339,6 +342,7 @@ namespace LearningAssistant.Forms.Pdf
         {
             InitializeComponent();
             WindowState = FormWindowState.Maximized;
+            SubscribeTranslationScrollSync();
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _aiPanelPopupService = aiPanelPopupService;
             _pendingContentService = pendingContentService;
@@ -817,6 +821,9 @@ namespace LearningAssistant.Forms.Pdf
             get => _checkBoxAutoTranslate?.Checked ?? false;
             set => _checkBoxAutoTranslate.Checked = value;
         }
+
+        /// <summary>翻译后是否使用 AI 术语表润色</summary>
+        public bool AiTranslationPolishEnabled => _checkBoxAiPolish?.Checked ?? false;
 
         public TabPage? TabPageBookmarksAndHighlights => _tabPageBookmarksAndHighlights;
 
@@ -5842,13 +5849,14 @@ namespace LearningAssistant.Forms.Pdf
             _flowLayoutPanelThumbnails = new FlowLayoutPanel();
             _tabPageTranslate = new TabPage();
             _groupBoxProgress = new GroupBox();
-            _textBoxTranslation = new TextBox();
+            _textBoxTranslation = new SyncedTextBox();
             _buttonSpeakTranslation = new Button();
             _buttonAddToLearningContent = new Button();
-            _textBoxOriginal = new TextBox();
+            _textBoxOriginal = new SyncedTextBox();
             _buttonSpeakOriginal = new Button();
             _checkBoxAutoTranslate = new CheckBox();
             _checkBoxAutoSpeak = new CheckBox();
+            _checkBoxAiPolish = new CheckBox();
             _speedSelector = new SpeedSelectorControl();
             _labelTranslation = new Label();
             _labelOriginal = new Label();
@@ -7148,6 +7156,7 @@ namespace LearningAssistant.Forms.Pdf
             _groupBoxProgress.Controls.Add(_buttonSpeakOriginal);
             _groupBoxProgress.Controls.Add(_checkBoxAutoTranslate);
             _groupBoxProgress.Controls.Add(_checkBoxAutoSpeak);
+            _groupBoxProgress.Controls.Add(_checkBoxAiPolish);
             _groupBoxProgress.Controls.Add(_speedSelector);
             _groupBoxProgress.Controls.Add(_labelTranslation);
             _groupBoxProgress.Controls.Add(_labelOriginal);
@@ -7165,11 +7174,11 @@ namespace LearningAssistant.Forms.Pdf
             // 
             _textBoxTranslation.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             _textBoxTranslation.BorderStyle = BorderStyle.FixedSingle;
-            _textBoxTranslation.Location = new Point(10, 385);
+            _textBoxTranslation.Location = new Point(158, 97);
             _textBoxTranslation.Multiline = true;
             _textBoxTranslation.Name = "_textBoxTranslation";
             _textBoxTranslation.ScrollBars = ScrollBars.Vertical;
-            _textBoxTranslation.Size = new Size(294, 494);
+            _textBoxTranslation.Size = new Size(146, 772);
             _textBoxTranslation.TabIndex = 7;
             // 
             // _buttonSpeakTranslation
@@ -7214,13 +7223,13 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // _textBoxOriginal
             // 
-            _textBoxOriginal.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            _textBoxOriginal.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
             _textBoxOriginal.BorderStyle = BorderStyle.FixedSingle;
             _textBoxOriginal.Location = new Point(10, 97);
             _textBoxOriginal.Multiline = true;
             _textBoxOriginal.Name = "_textBoxOriginal";
             _textBoxOriginal.ScrollBars = ScrollBars.Vertical;
-            _textBoxOriginal.Size = new Size(294, 253);
+            _textBoxOriginal.Size = new Size(140, 772);
             _textBoxOriginal.TabIndex = 4;
             // 
             // _buttonSpeakOriginal
@@ -7238,7 +7247,7 @@ namespace LearningAssistant.Forms.Pdf
             // _checkBoxAutoTranslate
             // 
             _checkBoxAutoTranslate.AutoSize = true;
-            _checkBoxAutoTranslate.Location = new Point(150, 46);
+            _checkBoxAutoTranslate.Location = new Point(122, 46);
             _checkBoxAutoTranslate.Name = "_checkBoxAutoTranslate";
             _checkBoxAutoTranslate.Size = new Size(107, 21);
             _checkBoxAutoTranslate.TabIndex = 8;
@@ -7255,6 +7264,17 @@ namespace LearningAssistant.Forms.Pdf
             _checkBoxAutoSpeak.Text = "🔊 识别后朗读";
             _checkBoxAutoSpeak.UseVisualStyleBackColor = true;
             // 
+            // _checkBoxAiPolish
+            // 
+            _checkBoxAiPolish.AutoSize = true;
+            _checkBoxAiPolish.Location = new Point(233, 46);
+            _checkBoxAiPolish.Name = "_checkBoxAiPolish";
+            _checkBoxAiPolish.Size = new Size(72, 21);
+            _checkBoxAiPolish.TabIndex = 11;
+            _checkBoxAiPolish.Text = "✨ 润色";
+            _checkBoxAiPolish.UseVisualStyleBackColor = true;
+            _toolTip.SetToolTip(_checkBoxAiPolish, "使用 AI 术语表润色译文，保持术语前后一致（失败时自动保留机器译文）");
+            // 
             // _speedSelector
             // 
             _speedSelector.BackColor = Color.Transparent;
@@ -7266,16 +7286,16 @@ namespace LearningAssistant.Forms.Pdf
             // _labelTranslation
             // 
             _labelTranslation.AutoSize = true;
-            _labelTranslation.Location = new Point(10, 358);
+            _labelTranslation.Location = new Point(158, 76);
             _labelTranslation.Name = "_labelTranslation";
             _labelTranslation.Size = new Size(44, 17);
             _labelTranslation.TabIndex = 2;
-            _labelTranslation.Text = "翻译：";
+            _labelTranslation.Text = "译文：";
             // 
             // _labelOriginal
             // 
             _labelOriginal.AutoSize = true;
-            _labelOriginal.Location = new Point(10, 24);
+            _labelOriginal.Location = new Point(10, 76);
             _labelOriginal.Name = "_labelOriginal";
             _labelOriginal.Size = new Size(44, 17);
             _labelOriginal.TabIndex = 1;
@@ -7286,9 +7306,9 @@ namespace LearningAssistant.Forms.Pdf
             _buttonTranslate.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             _buttonTranslate.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonTranslate.FlatStyle = FlatStyle.Flat;
-            _buttonTranslate.Location = new Point(224, 354);
+            _buttonTranslate.Location = new Point(224, 72);
             _buttonTranslate.Name = "_buttonTranslate";
-            _buttonTranslate.Size = new Size(70, 28);
+            _buttonTranslate.Size = new Size(80, 24);
             _buttonTranslate.TabIndex = 0;
             _buttonTranslate.Text = "🌐 翻译";
             _buttonTranslate.UseVisualStyleBackColor = false;
@@ -8000,23 +8020,92 @@ namespace LearningAssistant.Forms.Pdf
             control.DragDrop += PdfReaderFormV2_DragDrop;
         }
 
-        /// <summary>原文/译文文本框按可用高度 42% / 58% 分配，避免窗口变高后两框比例失衡。</summary>
+        /// <summary>原文/译文左右并排：按可用高度撑满，并保持左右等宽、中间留 8px 间隔。</summary>
         private void LayoutTranslateTab()
         {
             if (_groupBoxProgress == null || _textBoxOriginal == null || _textBoxTranslation == null) return;
             if (_labelTranslation == null || _buttonSpeakTranslation == null) return;
 
             const int gap = 8;
+            const int margin = 10;
             int contentTop = _textBoxOriginal.Top;
             int contentBottom = _buttonSpeakTranslation.Top - 10;
             int available = contentBottom - contentTop;
-            if (available < 220) return;
+            if (available < 120) return;
 
-            int originalHeight = Math.Max(90, (int)(available * 0.42));
-            _textBoxOriginal.Height = originalHeight;
-            _labelTranslation.Top = _textBoxOriginal.Bottom + 6;
-            _textBoxTranslation.Top = _labelTranslation.Bottom + 4;
-            _textBoxTranslation.Height = Math.Max(90, contentBottom - _textBoxTranslation.Top - gap / 2);
+            int rightEdge = _groupBoxProgress.ClientSize.Width - margin;
+            int leftWidth = Math.Max(70, (rightEdge - margin - gap) / 2);
+            _textBoxOriginal.Width = leftWidth;
+            _textBoxOriginal.Height = available;
+
+            _textBoxTranslation.Left = _textBoxOriginal.Right + gap;
+            _textBoxTranslation.Top = contentTop;
+            _textBoxTranslation.Width = Math.Max(70, rightEdge - _textBoxTranslation.Left);
+            _textBoxTranslation.Height = available;
+
+            _labelOriginal.Top = Math.Max(0, contentTop - 21);
+            _labelTranslation.Top = _labelOriginal.Top;
+            _labelTranslation.Left = _textBoxTranslation.Left;
+            _buttonTranslate.Top = Math.Max(0, contentTop - 25);
+        }
+
+        private void SubscribeTranslationScrollSync()
+        {
+            if (_textBoxOriginal is not SyncedTextBox originalBox) return;
+            if (_textBoxTranslation is not SyncedTextBox translationBox) return;
+
+            originalBox.VerticalScrolled += (_, _) => SyncTranslationScroll(_textBoxOriginal, _textBoxTranslation);
+            translationBox.VerticalScrolled += (_, _) => SyncTranslationScroll(_textBoxTranslation, _textBoxOriginal);
+        }
+
+        /// <summary>把源文本框的纵向滚动位置同步到目标文本框，避免递归回环。</summary>
+        private void SyncTranslationScroll(TextBox source, TextBox target)
+        {
+            if (_syncingTranslationScroll || source.IsDisposed || target.IsDisposed) return;
+            if (!source.IsHandleCreated || !target.IsHandleCreated) return;
+
+            _syncingTranslationScroll = true;
+            try
+            {
+                var position = default(POINT);
+                SendMessage(source.Handle, EM_GETSCROLLPOS, IntPtr.Zero, ref position);
+                SendMessage(target.Handle, EM_SETSCROLLPOS, IntPtr.Zero, ref position);
+            }
+            finally
+            {
+                _syncingTranslationScroll = false;
+            }
+        }
+
+        private const int EM_GETSCROLLPOS = 0x0400 + 221;
+        private const int EM_SETSCROLLPOS = 0x0400 + 222;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT
+        {
+            public int X;
+            public int Y;
+        }
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, ref POINT lParam);
+
+        /// <summary>带纵向滚动通知的多行文本框，用于原文/译文同步滚动。</summary>
+        private sealed class SyncedTextBox : TextBox
+        {
+            private const int WM_VSCROLL = 0x0115;
+            private const int WM_MOUSEWHEEL = 0x020A;
+
+            public event EventHandler? VerticalScrolled;
+
+            protected override void WndProc(ref Message m)
+            {
+                base.WndProc(ref m);
+                if (m.Msg == WM_VSCROLL || m.Msg == WM_MOUSEWHEEL)
+                {
+                    VerticalScrolled?.Invoke(this, EventArgs.Empty);
+                }
+            }
         }
     }
 }

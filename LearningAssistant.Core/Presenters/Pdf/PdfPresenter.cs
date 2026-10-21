@@ -22,6 +22,7 @@ namespace LearningAssistant.Presenters
         private readonly IPdfTranslationService _pdfTranslationService;
         private readonly IAIService? _aiService;
         private readonly IPdfAiService? _pdfAiService;
+        private readonly IPdfTranslationGlossaryService? _translationGlossaryService;
         private readonly IPdfTtsService? _pdfTtsService;
         private readonly IPdfStudyIntegration _pdfStudyIntegration;
         private readonly TtsConfig _ttsConfig;
@@ -65,7 +66,8 @@ namespace LearningAssistant.Presenters
             TtsConfig ttsConfig,
             IEventBus? eventBus = null,
             IUserSessionService? userSessionService = null,
-            IPdfAiService? pdfAiService = null)
+            IPdfAiService? pdfAiService = null,
+            IPdfTranslationGlossaryService? translationGlossaryService = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _pdfRenderer = pdfRenderer ?? throw new ArgumentNullException(nameof(pdfRenderer));
@@ -74,6 +76,7 @@ namespace LearningAssistant.Presenters
             _pdfTranslationService = pdfTranslationService ?? throw new ArgumentNullException(nameof(pdfTranslationService));
             _aiService = aiService;
             _pdfAiService = pdfAiService;
+            _translationGlossaryService = translationGlossaryService;
             _pdfTtsService = pdfTtsService;
             _pdfStudyIntegration = pdfStudyIntegration ?? throw new ArgumentNullException(nameof(pdfStudyIntegration));
             _ttsConfig = ttsConfig ?? throw new ArgumentNullException(nameof(ttsConfig));
@@ -1788,6 +1791,7 @@ namespace LearningAssistant.Presenters
                 try
                 {
                     var translation = await TranslateAsync(textLayer);
+                    translation = await PolishTranslationAsync(textLayer, translation);
                     if (cacheKey != null)
                         StorePageCache(cacheKey, textLayer, translation);
                     UpdateOcrResult(textLayer, translation);
@@ -1823,9 +1827,10 @@ namespace LearningAssistant.Presenters
             try
             {
                 var result = await _pdfTranslationService.OcrAndTranslateAsync(img);
+                var translation = await PolishTranslationAsync(result.Original, result.Translation);
                 if (cacheKey != null && !string.IsNullOrWhiteSpace(result.Original))
-                    StorePageCache(cacheKey, result.Original, result.Translation);
-                UpdateOcrResult(result.Original, result.Translation);
+                    StorePageCache(cacheKey, result.Original, translation);
+                UpdateOcrResult(result.Original, translation);
             }
             catch (Exception ex)
             {
@@ -1835,6 +1840,37 @@ namespace LearningAssistant.Presenters
             finally
             {
                 _view?.SetLoadingState(false);
+            }
+        }
+
+        /// <summary>
+        /// 可选的 AI 润色：仅在视图启用润色且术语表服务可用时调用，失败时回退机器译文。
+        /// </summary>
+        private async Task<string?> PolishTranslationAsync(string? originalText, string? translation)
+        {
+            if (string.IsNullOrWhiteSpace(originalText) || string.IsNullOrWhiteSpace(translation))
+                return translation;
+            if (_translationGlossaryService == null) return translation;
+            if (_view?.AiTranslationPolishEnabled != true) return translation;
+
+            var pdfPath = _pdfFileManager.CurrentFilePath;
+            if (string.IsNullOrEmpty(pdfPath)) return translation;
+
+            try
+            {
+                var result = await _translationGlossaryService.PolishAsync(pdfPath, originalText, translation);
+                if (result.MissingTerms.Count > 0)
+                {
+                    _logger.LogDebug("翻译术语未完全统一: {Terms}",
+                        string.Join(", ", result.MissingTerms.Select(t => t.Source)));
+                }
+
+                return result.Success && !string.IsNullOrWhiteSpace(result.Text) ? result.Text : translation;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "AI 润色失败，使用机器译文");
+                return translation;
             }
         }
 
@@ -1904,6 +1940,7 @@ namespace LearningAssistant.Presenters
 
                 _view?.SetLoadingState(true);
                 var translation = await TranslateAsync(originalText);
+                translation = await PolishTranslationAsync(originalText, translation);
                 if (!string.IsNullOrWhiteSpace(translation))
                 {
                     _view?.SetTranslationText(translation);
