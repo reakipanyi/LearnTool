@@ -972,7 +972,7 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        public void AddAnnotationText(float normalizedX, float normalizedY, string text, int colorArgb, float fontSize, string fontFamily, int imageWidth, int imageHeight, long? audioTimestampMs = null, string? audioRecordingId = null)
+        public void AddAnnotationText(float normalizedX, float normalizedY, string text, int colorArgb, float fontSize, string fontFamily, int imageWidth, int imageHeight, long? audioTimestampMs = null, string? audioRecordingId = null, bool isAiGenerated = false, string? aiReferencePages = null)
         {
             try
             {
@@ -995,7 +995,9 @@ namespace LearningAssistant.Presenters
                     FontSize = fontSize,
                     FontFamily = fontFamily,
                     AudioTimestampMs = audioTimestampMs,
-                    AudioRecordingId = audioRecordingId
+                    AudioRecordingId = audioRecordingId,
+                    IsAiGenerated = isAiGenerated,
+                    AiReferencePages = aiReferencePages
                 };
                 _annotationService.AddText(_pdfFileManager.CurrentFilePath, _pdfFileManager.CurrentPageIndex, annotationText);
             }

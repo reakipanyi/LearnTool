@@ -113,6 +113,10 @@ namespace LearningAssistant.Models.Pdf
         public float FontSize { get; set; }
         public string FontFamily { get; set; } = "Microsoft YaHei UI";
         public DateTime CreatedAt { get; set; } = DateTime.Now;
+        /// <summary>是否为 AI 生成的标注</summary>
+        public bool IsAiGenerated { get; set; }
+        /// <summary>AI 结果引用的页码（从 1 开始，逗号分隔）</summary>
+        public string? AiReferencePages { get; set; }
 
         public override string ToString()
         {
@@ -135,13 +139,14 @@ namespace LearningAssistant.Models.Pdf
                 _ => ""
             };
 
+            var aiPrefix = IsAiGenerated ? "🤖 AI·" : string.Empty;
             if (!string.IsNullOrEmpty(Text))
             {
                 var displayText = Text.Length > 30 ? Text.Substring(0, 30) + "..." : Text;
-                return $"{typeIcon} {fileName} P{pageNum} {typeName}: {displayText}";
+                return $"{aiPrefix}{typeIcon} {fileName} P{pageNum} {typeName}: {displayText}";
             }
 
-            return $"{typeIcon} {fileName} P{pageNum} {typeName}";
+            return $"{aiPrefix}{typeIcon} {fileName} P{pageNum} {typeName}";
         }
 
         private string GetStrokeTypeName()

@@ -2598,6 +2598,119 @@ namespace LearningAssistant.Forms.Pdf
             await _presenter.RenderPage(pageIndex).ConfigureAwait(false);
         }
 
+        /// <summary>总结当前页（走 A3 缓存，重复总结同一页可直接命中）</summary>
+        private async Task SummarizeCurrentPageAsync()
+        {
+            if (_pdfAiService == null)
+            {
+                MessageBox.Show(this, "AI 服务不可用，请先完成 AI 配置", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(_currentPdfPath))
+            {
+                MessageBox.Show(this, "当前没有打开的 PDF 文档", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            PdfAiResponse response;
+            UseWaitCursor = true;
+            try
+            {
+                response = await _pdfAiService.SummarizePagesAsync(_currentPdfPath, _currentPageIndex, _currentPageIndex)
+                    .ConfigureAwait(true);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+            }
+
+            ShowAiResponseDialog($"第 {_currentPageIndex + 1} 页 AI 总结", response, allowSave: true);
+        }
+
+        /// <summary>总结翻译页原文框中选中的内容</summary>
+        private async Task SummarizeSelectionAsync()
+        {
+            var selection = GetSelectedText();
+            if (string.IsNullOrWhiteSpace(selection))
+            {
+                MessageBox.Show(this, "请先在左侧翻译页签的原文框中选中要总结的内容", "提示",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (_pdfAiService == null)
+            {
+                MessageBox.Show(this, "AI 服务不可用，请先完成 AI 配置", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(_currentPdfPath))
+            {
+                MessageBox.Show(this, "当前没有打开的 PDF 文档", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            PdfAiResponse response;
+            UseWaitCursor = true;
+            try
+            {
+                response = await _pdfAiService.AskScopedAsync(
+                    _currentPdfPath,
+                    "请用要点总结下面选中的内容，并在需要时标注引用页码。",
+                    PdfAiScope.Selection,
+                    _currentPageIndex,
+                    0,
+                    0,
+                    selection).ConfigureAwait(true);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+            }
+
+            ShowAiResponseDialog("选中内容 AI 总结", response, allowSave: true);
+        }
+
+        /// <summary>展示 AI 结果窗口，可按需保存为当前页标注</summary>
+        private void ShowAiResponseDialog(string title, PdfAiResponse response, bool allowSave)
+        {
+            using var dialog = new PdfAiAnswerDialog(
+                title,
+                response,
+                pageNumber => _ = NavigateToAiPageAsync(pageNumber),
+                allowSave ? SaveAiSummaryAsAnnotationAsync : null);
+            dialog.ShowDialog(this);
+        }
+
+        /// <summary>把 AI 结果保存为当前页文字标注（带 AI 标记与引用页码）</summary>
+        private Task SaveAiSummaryAsAnnotationAsync(PdfAiResponse response)
+        {
+            if (_presenter == null || _currentPageImage == null || string.IsNullOrWhiteSpace(_currentPdfPath))
+                return Task.CompletedTask;
+
+            var content = response.Content ?? string.Empty;
+            if (content.Length > 600)
+            {
+                content = content.Substring(0, 600) + "…";
+            }
+
+            var referencePages = response.ReferencedPages.Count > 0
+                ? string.Join(",", response.ReferencedPages)
+                : null;
+
+            _presenter.AddAnnotationText(
+                0.06f, 0.06f, content,
+                Color.FromArgb(139, 92, 246).ToArgb(),
+                11f,
+                "Microsoft YaHei UI",
+                _currentPageImage.Width, _currentPageImage.Height,
+                null, null, true, referencePages);
+
+            _navigationManager?.LoadAnnotationsForCurrentPage();
+            RefreshHighlightList();
+            _pictureBoxPdf?.Invalidate();
+
+            return Task.CompletedTask;
+        }
+
         public int GetZoomLevel()
         {
             return _navigationManager?.ZoomLevel ?? _zoomLevel;
@@ -4043,7 +4156,20 @@ namespace LearningAssistant.Forms.Pdf
 
         private void ButtonAskAi_Click(object? sender, EventArgs e)
         {
-            RaiseAiQuestionAsked();
+            var menu = new ContextMenuStrip();
+
+            menu.Items.Add("打开 AI 面板", null, (_, _) => RaiseAiQuestionAsked());
+            menu.Items.Add("总结当前页", null, async (_, _) => await SummarizeCurrentPageAsync());
+            menu.Items.Add("总结选中内容", null, async (_, _) => await SummarizeSelectionAsync());
+
+            if (sender is Control anchor)
+            {
+                menu.Show(anchor, new Point(0, anchor.Height));
+            }
+            else
+            {
+                menu.Show(Cursor.Position);
+            }
         }
 
         private void ButtonTranslationToggle_Click(object? sender, EventArgs e)

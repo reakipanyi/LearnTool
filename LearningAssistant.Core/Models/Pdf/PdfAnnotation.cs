@@ -46,6 +46,10 @@ namespace LearningAssistant.Models.Pdf
         public long? AudioTimestampMs { get; set; }
         /// <summary>关联的录音 Id，用于多次同页录音时精确定位回放</summary>
         public string? AudioRecordingId { get; set; }
+        /// <summary>是否为 AI 生成的标注</summary>
+        public bool IsAiGenerated { get; set; }
+        /// <summary>AI 结果引用的页码（从 1 开始，逗号分隔）</summary>
+        public string? AiReferencePages { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.Now;
     }
 

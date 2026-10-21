@@ -790,7 +790,9 @@ namespace LearningAssistant.Managers
                                 Text = text.Content,
                                 FontSize = text.FontSize,
                                 FontFamily = text.FontFamily,
-                                CreatedAt = text.CreatedAt
+                                CreatedAt = text.CreatedAt,
+                                IsAiGenerated = text.IsAiGenerated,
+                                AiReferencePages = text.AiReferencePages
                             };
                             listBox.Items.Add(annotationItem);
                         }

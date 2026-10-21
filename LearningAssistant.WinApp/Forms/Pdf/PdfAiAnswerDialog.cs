@@ -9,13 +9,16 @@ namespace LearningAssistant.Forms.Pdf
     {
         private readonly PdfAiResponse _response;
         private readonly Action<int>? _navigateToPage;
+        private readonly Func<PdfAiResponse, Task>? _saveAsAnnotation;
         private readonly RichTextBox _textAnswer;
         private readonly FlowLayoutPanel _flowPages;
 
-        public PdfAiAnswerDialog(string title, PdfAiResponse response, Action<int>? navigateToPage = null)
+        public PdfAiAnswerDialog(string title, PdfAiResponse response, Action<int>? navigateToPage = null,
+            Func<PdfAiResponse, Task>? saveAsAnnotation = null)
         {
             _response = response ?? throw new ArgumentNullException(nameof(response));
             _navigateToPage = navigateToPage;
+            _saveAsAnnotation = saveAsAnnotation;
 
             Text = title;
             Size = new Size(680, 560);
@@ -68,8 +71,30 @@ namespace LearningAssistant.Forms.Pdf
             buttonClose.Click += (_, _) => Close();
             panelBottom.Resize += (_, _) => buttonClose.Left = panelBottom.ClientSize.Width - buttonClose.Width - 12;
 
+            Button? buttonSave = null;
+            if (_saveAsAnnotation != null && _response.Success)
+            {
+                var saveButton = new Button
+                {
+                    Text = "保存为标注",
+                    Size = new Size(104, 32),
+                    Location = new Point(0, 12),
+                    Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                    FlatStyle = FlatStyle.Flat,
+                    BackColor = Color.FromArgb(243, 240, 255),
+                    ForeColor = Color.FromArgb(109, 40, 217),
+                    Cursor = Cursors.Hand
+                };
+                saveButton.FlatAppearance.BorderColor = Color.FromArgb(196, 181, 253);
+                saveButton.Click += async (_, _) => await SaveAsAnnotationAsync(saveButton);
+                panelBottom.Resize += (_, _) =>
+                    saveButton.Left = panelBottom.ClientSize.Width - buttonClose.Width - saveButton.Width - 20;
+                buttonSave = saveButton;
+            }
+
             panelBottom.Controls.Add(labelPages);
             panelBottom.Controls.Add(_flowPages);
+            if (buttonSave != null) panelBottom.Controls.Add(buttonSave);
             panelBottom.Controls.Add(buttonClose);
 
             var labelTitle = new Label
@@ -114,6 +139,24 @@ namespace LearningAssistant.Forms.Pdf
             {
                 if (e.KeyCode == Keys.Escape) Close();
             };
+        }
+
+        private async Task SaveAsAnnotationAsync(Button source)
+        {
+            if (_saveAsAnnotation == null) return;
+
+            try
+            {
+                source.Enabled = false;
+                await _saveAsAnnotation(_response);
+                source.Text = "已保存";
+            }
+            catch (Exception ex)
+            {
+                source.Enabled = true;
+                MessageBox.Show(this, $"保存失败：{ex.Message}", "保存为标注",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private void BuildPageLinks()
