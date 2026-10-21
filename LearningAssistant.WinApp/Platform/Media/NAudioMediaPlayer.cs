@@ -60,15 +60,38 @@ public class NAudioMediaPlayer : IMediaPlayer
         _reader?.Dispose();
         _reader = null;
         SubtitleCues = null;
+        // 换曲时清除上一曲的 A-B 循环，避免沿用旧区间
+        _abLoop.A = null;
+        _abLoop.B = null;
 
-        _reader = new AudioFileReader(mediaPath);
-        _waveOut = new WaveOutEvent();
-        _waveOut.PlaybackStopped += OnPlaybackStopped;
-        _waveOut.Init(_reader);
-        _timer = new System.Windows.Forms.Timer { Interval = 100 };
-        _timer.Tick += (_, _) => OnTick();
-        _timer.Start();
-        SetState(MediaPlaybackState.Idle);
+        try
+        {
+            _reader = new AudioFileReader(mediaPath);
+            _waveOut = new WaveOutEvent();
+            _waveOut.PlaybackStopped += OnPlaybackStopped;
+            _waveOut.Init(_reader);
+            _timer = new System.Windows.Forms.Timer { Interval = 100 };
+            _timer.Tick += (_, _) => OnTick();
+            _timer.Start();
+            SetState(MediaPlaybackState.Idle);
+        }
+        catch (Exception ex)
+        {
+            // 文件被删除/占用或格式不支持时不能让 UI 线程崩溃，退回未加载状态
+            _timer?.Stop();
+            _timer?.Dispose();
+            _timer = null;
+            if (_waveOut != null)
+            {
+                _waveOut.PlaybackStopped -= OnPlaybackStopped;
+                _waveOut.Dispose();
+                _waveOut = null;
+            }
+            _reader?.Dispose();
+            _reader = null;
+            SetState(MediaPlaybackState.Idle);
+            System.Diagnostics.Trace.TraceError($"[NAudioMediaPlayer] 加载音频失败: {mediaPath} - {ex.Message}");
+        }
     }
 
     public Task PlayAsync(CancellationToken ct = default)

@@ -1621,7 +1621,8 @@ namespace LearningAssistant.Forms.Pdf
         public void SetPageCount(int count)
         {
             _labelPageCount.Text = $"/ {count}";
-            _progressBarPage.Maximum = count;
+            // 空文档或加载失败时 count 可能为 0，进度条 Minimum 为 1，Maximum 不得小于 Minimum
+            _progressBarPage.Maximum = Math.Max(1, count);
             UpdateStatusBar();
         }
 
@@ -1635,7 +1636,8 @@ namespace LearningAssistant.Forms.Pdf
             _audioTrackManager?.OnPageChanged(pageIndex);
             _audioPanel?.RefreshData();
             _textBoxPage.Text = (pageIndex + 1).ToString();
-            _progressBarPage.Value = pageIndex + 1;
+            // 页码可能超出进度条范围（如空文档或页码未同步），避免 Value 越界抛异常
+            _progressBarPage.Value = Math.Clamp(pageIndex + 1, _progressBarPage.Minimum, _progressBarPage.Maximum);
             StartPageTransition(isForward);
             UpdateStatusBar();
         }
@@ -1990,7 +1992,9 @@ namespace LearningAssistant.Forms.Pdf
             _thumbnailDirectoryHeaders.Clear();
             if (_flowLayoutPanelThumbnails != null)
             {
-                foreach (Control control in _flowLayoutPanelThumbnails.Controls)
+                // 先取快照再释放：Dispose 会把控件从父集合中移除，直接遍历会抛 InvalidOperationException
+                var thumbnails = _flowLayoutPanelThumbnails.Controls.Cast<Control>().ToArray();
+                foreach (var control in thumbnails)
                 {
                     control.Dispose();
                 }

@@ -93,9 +93,13 @@ public class PdfAudioTrackManager : IDisposable
         int cur = -1;
         if (_result.PageIndex.TryGetValue(_currentPageIndex, out var current))
         {
-            cur = _result.Tracks.FindIndex(t => t.FilePath == current.FilePath);
+            cur = _result.Tracks.FindIndex(t => string.Equals(t.FilePath, current.FilePath, StringComparison.OrdinalIgnoreCase));
         }
-        var next = (_result.Tracks.Count + (cur < 0 ? 0 : cur) + delta) % _result.Tracks.Count;
+
+        int count = _result.Tracks.Count;
+        int next = cur < 0
+            ? (delta > 0 ? 0 : count - 1)          // 当前页无音频时：下一曲从首曲开始，上一曲从末曲开始
+            : ((cur + delta) % count + count) % count; // 正负方向均能正确环绕
         var track = _result.Tracks[next];
         _playback.Load(track);
         FireAndForget(_playback.PlayAsync(), "PlayAsync");

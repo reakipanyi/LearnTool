@@ -442,9 +442,14 @@ namespace LearningAssistant.Managers
 
         private void StopPlayback()
         {
-            _playbackOut?.Stop();
-            _playbackOut?.Dispose();
-            _playbackOut = null;
+            if (_playbackOut != null)
+            {
+                // 先退订再停止，避免 Stop 异步触发的 PlaybackStopped 干扰后续新播放状态
+                _playbackOut.PlaybackStopped -= OnPlaybackStopped;
+                _playbackOut.Stop();
+                _playbackOut.Dispose();
+                _playbackOut = null;
+            }
             _playbackReader?.Dispose();
             _playbackReader = null;
             _isPlaying = false;
