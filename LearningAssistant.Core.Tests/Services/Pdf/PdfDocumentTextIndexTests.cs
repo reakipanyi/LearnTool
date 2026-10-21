@@ -39,7 +39,7 @@ public class PdfDocumentTextIndexTests
         int extractCalls = pdfService.ExtractCalls;
         PdfTextIndexProgress? cachedProgress = null;
         var second = await index.GetOrBuildAsync(pdfPath,
-            progress: new Progress<PdfTextIndexProgress>(p => cachedProgress = p));
+            progress: new SyncProgress<PdfTextIndexProgress>(p => cachedProgress = p));
 
         second.Fingerprint.Should().Be(document.Fingerprint);
         pdfService.ExtractCalls.Should().Be(extractCalls);
@@ -123,6 +123,16 @@ public class PdfDocumentTextIndexTests
         var dir = Path.Combine(Path.GetTempPath(), "pdfindex_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         return dir;
+    }
+
+    /// <summary>同步回调的进度实现，避免 Progress&lt;T&gt; 异步投递导致断言竞态</summary>
+    private sealed class SyncProgress<T> : IProgress<T>
+    {
+        private readonly Action<T> _callback;
+
+        public SyncProgress(Action<T> callback) => _callback = callback;
+
+        public void Report(T value) => _callback(value);
     }
 
     private sealed class FakePdfService : IPdfService
