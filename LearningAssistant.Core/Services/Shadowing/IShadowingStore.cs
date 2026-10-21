@@ -13,6 +13,16 @@ namespace LearningAssistant.Services.Shadowing
 
         string GetManifestPath(string pdfPath, int pageIndex);
 
+        /// <summary>
+        /// 读取该页各句子最近一次跟读录音的文件路径（键为句子 Id）。
+        /// </summary>
+        IReadOnlyDictionary<string, string> LoadSentenceRecordings(string pdfPath, int pageIndex);
+
+        /// <summary>
+        /// 保存该页各句子的跟读录音路径，便于重新打开窗口后回放。
+        /// </summary>
+        void SaveSentenceRecordings(string pdfPath, int pageIndex, IReadOnlyDictionary<string, string> recordings);
+
         bool Delete(string pdfPath, int pageIndex);
     }
 }

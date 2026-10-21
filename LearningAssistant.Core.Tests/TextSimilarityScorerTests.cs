@@ -50,4 +50,39 @@ public class TextSimilarityScorerTests
 
         Assert.False(result.IsValid);
     }
+
+    [Fact]
+    public void ScoreCompletion_OnDurationReturnsFullScore()
+    {
+        var result = TextSimilarityScorer.ScoreCompletion(4000, 4000);
+
+        Assert.True(result.IsValid);
+        Assert.Equal(100, result.Score);
+        Assert.Equal("completion", result.Basis);
+    }
+
+    [Fact]
+    public void ScoreCompletion_TooShortIsPenalized()
+    {
+        var result = TextSimilarityScorer.ScoreCompletion(4000, 1000);
+
+        Assert.True(result.IsValid);
+        Assert.InRange(result.Score, 25, 40);
+    }
+
+    [Fact]
+    public void ScoreCompletion_TooLongIsPenalized()
+    {
+        var result = TextSimilarityScorer.ScoreCompletion(4000, 12000);
+
+        Assert.True(result.IsValid);
+        Assert.True(result.Score < 70);
+    }
+
+    [Fact]
+    public void ScoreCompletion_InvalidDurationsReturnInvalid()
+    {
+        Assert.False(TextSimilarityScorer.ScoreCompletion(0, 4000).IsValid);
+        Assert.False(TextSimilarityScorer.ScoreCompletion(4000, 0).IsValid);
+    }
 }

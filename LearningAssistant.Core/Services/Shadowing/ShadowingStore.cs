@@ -38,16 +38,51 @@ namespace LearningAssistant.Services.Shadowing
             return Path.Combine(_rootDir, _userId, hash + ".json");
         }
 
+        public IReadOnlyDictionary<string, string> LoadSentenceRecordings(string pdfPath, int pageIndex)
+        {
+            return JsonHelper.LoadFromFile<Dictionary<string, string>>(GetRecordingsPath(pdfPath, pageIndex))
+                   ?? new Dictionary<string, string>(StringComparer.Ordinal);
+        }
+
+        public void SaveSentenceRecordings(string pdfPath, int pageIndex, IReadOnlyDictionary<string, string> recordings)
+        {
+            ArgumentNullException.ThrowIfNull(recordings);
+            var map = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var pair in recordings)
+            {
+                if (!string.IsNullOrWhiteSpace(pair.Key) && !string.IsNullOrWhiteSpace(pair.Value))
+                    map[pair.Key] = pair.Value;
+            }
+
+            JsonHelper.SaveToFile(GetRecordingsPath(pdfPath, pageIndex), map);
+        }
+
+        private string GetRecordingsPath(string pdfPath, int pageIndex)
+            => GetManifestPath(pdfPath, pageIndex) + ".recordings.json";
+
         public bool Delete(string pdfPath, int pageIndex)
         {
             string path = GetManifestPath(pdfPath, pageIndex);
-            if (!File.Exists(path))
+            string recordingsPath = GetRecordingsPath(pdfPath, pageIndex);
+            if (!File.Exists(path) && !File.Exists(recordingsPath))
                 return false;
 
+            bool deleted = false;
             try
             {
-                File.Delete(path);
-                return true;
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                    deleted = true;
+                }
+
+                if (File.Exists(recordingsPath))
+                {
+                    File.Delete(recordingsPath);
+                    deleted = true;
+                }
+
+                return deleted;
             }
             catch (IOException)
             {

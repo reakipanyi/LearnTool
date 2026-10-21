@@ -63,6 +63,33 @@ public class ShadowingStoreTests
     }
 
     [Fact]
+    public void SentenceRecordings_RoundTripAndIsolatedByPage()
+    {
+        string root = CreateTempRoot();
+        try
+        {
+            string pdf = Path.Combine(root, "book.pdf");
+            var store = new ShadowingStore(root, "tester");
+
+            store.SaveSentenceRecordings(pdf, 0, new Dictionary<string, string>
+            {
+                ["sentence-a"] = Path.Combine(root, "a.wav"),
+                ["sentence-b"] = "  "
+            });
+
+            var loaded = store.LoadSentenceRecordings(pdf, 0);
+            Assert.Single(loaded);
+            Assert.Equal(Path.Combine(root, "a.wav"), loaded["sentence-a"]);
+
+            Assert.Empty(store.LoadSentenceRecordings(pdf, 1));
+        }
+        finally
+        {
+            DeleteTempRoot(root);
+        }
+    }
+
+    [Fact]
     public void Delete_RemovesExistingManifest()
     {
         string root = CreateTempRoot();

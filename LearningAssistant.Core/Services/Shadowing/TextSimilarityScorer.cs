@@ -28,6 +28,11 @@ namespace LearningAssistant.Services.Shadowing
         public string RecognizedText { get; set; } = string.Empty;
 
         /// <summary>
+        /// 评分依据：text=语音识别文本相似度；completion=录音完成度降级。
+        /// </summary>
+        public string Basis { get; set; } = "text";
+
+        /// <summary>
         /// 是否是一次有效评分（原句为空时为 false）。
         /// </summary>
         public bool IsValid { get; set; }
@@ -105,6 +110,42 @@ namespace LearningAssistant.Services.Shadowing
                 MissingWords = missing,
                 IsValid = true,
                 RecognizedText = recognizedText ?? string.Empty
+            };
+        }
+
+        /// <summary>
+        /// 无可用语音识别引擎时的降级评分：按录音时长相对原句音频时长的完成度给出参考分。
+        /// 只表示「是否完整读完」，不代表发音准确度，界面需明确标注为完成度。
+        /// </summary>
+        /// <param name="expectedDurationMs">原句音频时长（毫秒）。</param>
+        /// <param name="recordedDurationMs">本次录音时长（毫秒）。</param>
+        public static PronunciationScoreResult ScoreCompletion(int expectedDurationMs, int recordedDurationMs)
+        {
+            if (expectedDurationMs <= 0 || recordedDurationMs <= 0)
+            {
+                return new PronunciationScoreResult
+                {
+                    Score = 0,
+                    IsValid = false,
+                    Basis = "completion"
+                };
+            }
+
+            double ratio = (double)recordedDurationMs / expectedDurationMs;
+            double score;
+            if (ratio < 0.5)
+                score = 60 * ratio / 0.5;
+            else if (ratio <= 1.8)
+                score = 70 + 30 * (1 - Math.Abs(ratio - 1.0) / 0.8);
+            else
+                score = Math.Max(0, 70 - 20 * (ratio - 1.8));
+
+            return new PronunciationScoreResult
+            {
+                Score = Math.Clamp((int)Math.Round(score), 0, 100),
+                Coverage = Math.Clamp(ratio, 0, 1),
+                IsValid = true,
+                Basis = "completion"
             };
         }
 

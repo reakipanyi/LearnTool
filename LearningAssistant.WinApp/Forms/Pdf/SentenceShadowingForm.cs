@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Models.Shadowing;
+using LearningAssistant.Platform.Media;
 using LearningAssistant.Services.Media;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Services.Shadowing;
@@ -35,6 +36,11 @@ namespace LearningAssistant.Forms.Pdf
         private readonly ComboBox _comboMode = new();
         private readonly Button _btnPlay = new();
         private readonly Button _btnRecord = new();
+        private readonly Button _btnReplayRecording = new();
+        private readonly Dictionary<string, string> _sentenceRecordings = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> _sentenceScores = new(StringComparer.Ordinal);
+        private readonly ShadowingStore _store = new();
+        private NAudioMediaPlayer? _recordingPlayer;
         private readonly System.Windows.Forms.Timer _countdownTimer = new() { Interval = 700 };
         private readonly System.Windows.Forms.Timer _recordLimitTimer = new();
         private int _currentIndex = -1;
@@ -62,11 +68,20 @@ namespace LearningAssistant.Forms.Pdf
 
             BuildLayout();
             FillSentenceList(sentences);
+            LoadSentenceRecordings(sentences);
 
             var tts = Program.ServiceProvider?.GetService(typeof(ITTSService)) as ITTSService;
             var subtitleParser = Program.ServiceProvider?.GetService(typeof(ISubtitleParser)) as ISubtitleParser;
             _recorder = Program.ServiceProvider?.GetService(typeof(IAudioRecorderService)) as IAudioRecorderService;
-            _scorer = Program.ServiceProvider?.GetService(typeof(IPronunciationScorer)) as IPronunciationScorer;
+            try
+            {
+                _scorer = Program.ServiceProvider?.GetService(typeof(IPronunciationScorer)) as IPronunciationScorer;
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"[SentenceShadowing] 评分器初始化失败: {ex.Message}");
+                _scorer = null;
+            }
 
             if (tts == null || subtitleParser == null)
             {
@@ -79,6 +94,8 @@ namespace LearningAssistant.Forms.Pdf
                 _practice.StateChanged += OnSentenceStateChanged;
                 _practice.SentenceFinished += OnSentenceFinished;
                 _practice.ErrorOccurred += OnPracticeError;
+                _recordingPlayer = new NAudioMediaPlayer(subtitleParser);
+                _recordingPlayer.PlaybackFinished += OnRecordingPlaybackFinished;
             }
 
             if (_recorder == null)
@@ -92,7 +109,9 @@ namespace LearningAssistant.Forms.Pdf
                 _recorder.RecordingCompleted += _recordingHandler;
             }
 
-            _labelScore.Visible = _scorer?.IsAvailable == true;
+            _btnReplayRecording.Enabled = false;
+            if (_scorer?.IsAvailable != true)
+                _labelScore.Text = "参考分：—（未安装英语识别器，按完成度评分）";
 
             if (sentences.Count > 0)
                 SetCurrentIndex(0, play: false);
@@ -135,7 +154,7 @@ namespace LearningAssistant.Forms.Pdf
             _labelCurrent.ForeColor = Color.FromArgb(15, 23, 42);
             _labelCurrent.AutoEllipsis = true;
 
-            var bottom = new Panel { Dock = DockStyle.Bottom, Height = 168, Padding = new Padding(16, 8, 16, 8) };
+            var bottom = new Panel { Dock = DockStyle.Bottom, Height = 180, Padding = new Padding(16, 8, 16, 8) };
 
             _comboMode.Items.AddRange(new object[] { "单句循环", "自动下一句", "整段连读" });
             _comboMode.SelectedIndex = 1;
@@ -168,22 +187,30 @@ namespace LearningAssistant.Forms.Pdf
             _btnRecord.Location = new Point(546, 6);
             _btnRecord.Click += OnRecordButtonClicked;
 
+            _btnReplayRecording.Text = "▶ 回放录音";
+            _btnReplayRecording.Width = 120;
+            _btnReplayRecording.Height = 32;
+            _btnReplayRecording.Location = new Point(16, 46);
+            _btnReplayRecording.Click += OnReplayRecordingClicked;
+
             _labelStatus.AutoSize = false;
-            _labelStatus.Location = new Point(16, 56);
+            _labelStatus.Location = new Point(16, 86);
             _labelStatus.Size = new Size(660, 24);
             _labelStatus.ForeColor = Color.FromArgb(100, 116, 139);
 
-            _labelScore.AutoSize = true;
-            _labelScore.Location = new Point(16, 84);
+            _labelScore.AutoSize = false;
+            _labelScore.Location = new Point(16, 112);
+            _labelScore.Size = new Size(660, 24);
+            _labelScore.TextAlign = ContentAlignment.MiddleLeft;
             _labelScore.ForeColor = Color.FromArgb(139, 92, 246);
             _labelScore.Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold);
             _labelScore.Text = "参考分：—";
 
             var labelHint = new Label
             {
-                Text = "快捷键：空格 播放，R 重播当前句，→ 下一句",
+                Text = "快捷键：空格 播放，R 重播当前句，→ 下一句；录音结束后可回放对比",
                 AutoSize = true,
-                Location = new Point(16, 116),
+                Location = new Point(16, 142),
                 ForeColor = Color.FromArgb(148, 163, 184)
             };
 
@@ -193,6 +220,7 @@ namespace LearningAssistant.Forms.Pdf
             bottom.Controls.Add(btnNext);
             bottom.Controls.Add(btnStop);
             bottom.Controls.Add(_btnRecord);
+            bottom.Controls.Add(_btnReplayRecording);
             bottom.Controls.Add(_labelStatus);
             bottom.Controls.Add(_labelScore);
             bottom.Controls.Add(labelHint);
@@ -246,12 +274,126 @@ namespace LearningAssistant.Forms.Pdf
                     SegmenterVersion = SentenceSegmenter.Version,
                     Sentences = sentences
                 };
-                new ShadowingStore().Save(manifest);
+                _store.Save(manifest);
             }
             catch (Exception ex)
             {
                 Trace.TraceWarning($"[SentenceShadowing] 保存分句清单失败: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// 载入该页上次保存的句子录音路径，丢弃已不存在或已失效的句子。
+        /// </summary>
+        private void LoadSentenceRecordings(IReadOnlyList<ShadowingSentence> sentences)
+        {
+            if (string.IsNullOrWhiteSpace(_pdfPath) || sentences.Count == 0)
+                return;
+
+            try
+            {
+                var saved = _store.LoadSentenceRecordings(_pdfPath, _pageIndex);
+                var validIds = new HashSet<string>(sentences.Select(s => s.Id), StringComparer.Ordinal);
+                foreach (var pair in saved)
+                {
+                    if (!validIds.Contains(pair.Key) || !File.Exists(pair.Value))
+                        continue;
+                    _sentenceRecordings[pair.Key] = pair.Value;
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"[SentenceShadowing] 读取跟读录音失败: {ex.Message}");
+            }
+        }
+
+        private void PersistSentenceRecordings()
+        {
+            if (string.IsNullOrWhiteSpace(_pdfPath))
+                return;
+
+            try
+            {
+                _store.SaveSentenceRecordings(_pdfPath, _pageIndex, _sentenceRecordings);
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"[SentenceShadowing] 保存跟读录音路径失败: {ex.Message}");
+            }
+        }
+
+        private void UpdateReplayButtonState()
+        {
+            bool available = _practice != null
+                             && _currentIndex >= 0
+                             && _currentIndex < _practice.Sentences.Count
+                             && _sentenceRecordings.TryGetValue(
+                                 _practice.Sentences[_currentIndex].Sentence.Id, out var path)
+                             && File.Exists(path);
+            _btnReplayRecording.Enabled = available;
+        }
+
+        /// <summary>
+        /// 恢复当前句的参考分显示：已评分过则显示分数，否则显示占位或降级说明。
+        /// </summary>
+        private void RefreshScoreLabel()
+        {
+            if (_practice == null || _currentIndex < 0 || _currentIndex >= _practice.Sentences.Count)
+            {
+                _labelScore.Text = "参考分：—";
+                return;
+            }
+
+            string id = _practice.Sentences[_currentIndex].Sentence.Id;
+            if (_sentenceScores.TryGetValue(id, out int score))
+                _labelScore.Text = $"参考分：{score} / 100";
+            else
+                _labelScore.Text = _scorer?.IsAvailable == true
+                    ? "参考分：—"
+                    : "参考分：—（未安装英语识别器，按完成度评分）";
+        }
+
+        private void OnReplayRecordingClicked(object? sender, EventArgs e)
+        {
+            if (_practice == null || _currentIndex < 0 || _currentIndex >= _practice.Sentences.Count)
+                return;
+
+            var sentence = _practice.Sentences[_currentIndex].Sentence;
+            if (!_sentenceRecordings.TryGetValue(sentence.Id, out var path) || !File.Exists(path))
+            {
+                _labelStatus.Text = "当前句还没有录音，可点击「🎤 录音」开始跟读。";
+                return;
+            }
+
+            PlayRecording(path);
+        }
+
+        private void PlayRecording(string path)
+        {
+            if (_recordingPlayer == null)
+            {
+                _labelStatus.Text = "录音回放不可用。";
+                return;
+            }
+
+            StopCountdown();
+            StopPlaybackOnly();
+            try
+            {
+                _recordingPlayer.Load(path);
+                _ = _recordingPlayer.PlayAsync();
+                _labelStatus.Text = "正在回放当前句录音…";
+            }
+            catch (Exception ex)
+            {
+                _labelStatus.Text = $"录音回放失败：{ex.Message}";
+            }
+        }
+
+        private void OnRecordingPlaybackFinished(object? sender, EventArgs e)
+        {
+            if (IsHandleCreated && !IsDisposed)
+                _labelStatus.Text = "录音回放结束。";
         }
 
         private static string FormatSentenceItem(int index, string text, ShadowingAudioState state)
@@ -274,6 +416,8 @@ namespace LearningAssistant.Forms.Pdf
             _currentIndex = index;
             _listSentences.SelectedIndex = index;
             _labelCurrent.Text = $"第 {index + 1} 句：{_practice.Sentences[index].Sentence.Text}";
+            RefreshScoreLabel();
+            UpdateReplayButtonState();
 
             if (play)
                 FireAndForget(PlayIndexAsync(index));
@@ -296,6 +440,7 @@ namespace LearningAssistant.Forms.Pdf
 
             StopRecordingIfAny(suppressAdvance: true);
             StopCountdown();
+            _recordingPlayer?.Stop();
 
             int index = _currentIndex < 0 ? 0 : _currentIndex;
             SetCurrentIndex(index, play: true);
@@ -305,6 +450,7 @@ namespace LearningAssistant.Forms.Pdf
         {
             StopCountdown();
             StopRecordingIfAny(suppressAdvance: true);
+            _recordingPlayer?.Stop();
             _practice?.StopPlayback();
             _btnRecord.Text = "🎤 录音";
             _labelStatus.Text = "已停止。";
@@ -318,7 +464,8 @@ namespace LearningAssistant.Forms.Pdf
             _currentIndex = index;
             _listSentences.SelectedIndex = index;
             _labelCurrent.Text = $"第 {index + 1} 句：{_practice.Sentences[index].Sentence.Text}";
-            _labelScore.Text = "参考分：—";
+            RefreshScoreLabel();
+            UpdateReplayButtonState();
 
             _labelStatus.Text = "正在准备音频…";
             bool started = await _practice.PlaySentenceAsync(index);
@@ -478,6 +625,7 @@ namespace LearningAssistant.Forms.Pdf
             try
             {
                 _practice.StopPlayback();
+                _recordingPlayer?.Stop();
                 _recordingIndex = index;
                 _recordingSentenceId = _practice.Sentences[index].Sentence.Id;
 
@@ -550,25 +698,63 @@ namespace LearningAssistant.Forms.Pdf
             _recordingIndex = -1;
             _recordingSentenceId = null;
 
-            try
+            if (index >= 0 && _practice != null)
             {
-                if (index >= 0 && _practice != null && _scorer?.IsAvailable == true)
+                var sentence = _practice.Sentences[index].Sentence;
+
+                // 记录本句录音，供「回放录音」与下次打开窗口使用
+                if (!string.IsNullOrWhiteSpace(recording.FilePath) && File.Exists(recording.FilePath))
                 {
-                    _labelScore.Text = "正在评分…";
-                    var sentence = _practice.Sentences[index].Sentence;
-                    var result = await _scorer.ScoreAsync(sentence.Text, recording.FilePath);
-                    if (IsHandleCreated)
-                    {
-                        _labelScore.Text = result == null
-                            ? "参考分：—（录音过短或无法识别）"
-                            : $"参考分：{result.Score}（漏读 {result.MissingWords.Count} 词）";
-                    }
+                    _sentenceRecordings[sentence.Id] = recording.FilePath;
+                    PersistSentenceRecordings();
                 }
-            }
-            catch (Exception ex)
-            {
-                if (IsHandleCreated)
-                    _labelScore.Text = $"评分失败：{ex.Message}";
+                UpdateReplayButtonState();
+
+                if (index == _currentIndex)
+                    _labelScore.Text = "参考分：计算中…";
+
+                try
+                {
+                    PronunciationScoreResult? result = null;
+                    if (_scorer?.IsAvailable == true)
+                        result = await _scorer.ScoreAsync(sentence.Text, recording.FilePath);
+
+                    // 无 en-US 识别器、识别结果为空或录音无效时，退回按录音完成度评分
+                    bool needFallback = result == null
+                                        || !result.IsValid
+                                        || string.IsNullOrWhiteSpace(result.RecognizedText);
+
+                    if (needFallback)
+                    {
+                        int expectedMs = _practice.GetAudioDurationMs(index);
+                        var fallback = TextSimilarityScorer.ScoreCompletion(expectedMs, recording.DurationMs);
+                        if (fallback.IsValid)
+                        {
+                            result = fallback;
+                            if (IsHandleCreated && index == _currentIndex)
+                                _labelScore.Text = $"参考分：{fallback.Score} / 100（按完成度）";
+                        }
+                        else if (IsHandleCreated && index == _currentIndex)
+                        {
+                            _labelScore.Text = "参考分：—（录音或原音时长不足）";
+                        }
+                    }
+                    else if (IsHandleCreated && index == _currentIndex)
+                    {
+                        string missing = result!.MissingWords.Count > 0
+                            ? $"（漏读 {result.MissingWords.Count} 词）"
+                            : string.Empty;
+                        _labelScore.Text = $"参考分：{result.Score} / 100{missing}";
+                    }
+
+                    if (result != null && result.IsValid)
+                        _sentenceScores[sentence.Id] = result.Score;
+                }
+                catch (Exception ex)
+                {
+                    if (IsHandleCreated && index == _currentIndex)
+                        _labelScore.Text = $"评分失败：{ex.Message}";
+                }
             }
 
             bool shouldAdvance = !_suppressRecordingAdvance;
@@ -623,6 +809,13 @@ namespace LearningAssistant.Forms.Pdf
 
             if (_recorder != null && _recordingHandler != null)
                 _recorder.RecordingCompleted -= _recordingHandler;
+
+            if (_recordingPlayer != null)
+            {
+                _recordingPlayer.PlaybackFinished -= OnRecordingPlaybackFinished;
+                _recordingPlayer.Dispose();
+                _recordingPlayer = null;
+            }
 
             if (_practice != null)
             {
