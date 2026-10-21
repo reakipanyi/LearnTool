@@ -31,6 +31,13 @@ public class PdfAudioMatcher : IPdfAudioMatcher
             }
             if (hits.Count == 0) continue;
 
+            if (rule.MapMode == AudioPageMapMode.Custom)
+            {
+                _diagnostics.Add($"规则「{rule.Name}」使用了未实现的 Custom 模式，已跳过");
+                continue;
+            }
+
+
             if (rule.MapMode == AudioPageMapMode.Sequence)
             {
                 var ordered = hits.OrderBy(h => h.Value ?? 0).ThenBy(h => h.Track.RelativePath, StringComparer.OrdinalIgnoreCase).ToList();

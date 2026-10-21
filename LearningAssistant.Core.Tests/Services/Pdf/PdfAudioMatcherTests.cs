@@ -29,6 +29,15 @@ public class PdfAudioMatcherTests
     }
 
     [Fact]
+    public void Custom模式_跳过并记录诊断()
+    {
+        var rule = new AudioMatchRule { Name = "自定义", FileNamePattern = @"(\d+)", MapMode = AudioPageMapMode.Custom };
+        var r = Matcher.Match(@"C:\pdf\a.pdf", 10, new[] { T("01.mp3") }, new[] { rule }, null);
+        r.PageIndex.Should().BeEmpty();
+        Matcher.Diagnostics.Should().Contain(d => d.Contains("Custom"));
+    }
+
+    [Fact]
     public void Range_Unit3每单元10页_映射21到30()
     {
         var rule = new AudioMatchRule { FileNamePattern = @"Unit(\d+)", MapMode = AudioPageMapMode.Range, PagesPerUnit = 10 };

@@ -36,7 +36,7 @@ public class PdfAudioRuleDialog : Form
     private readonly System.Windows.Forms.Timer _previewTimer = new() { Interval = 200 };
 
     private readonly List<AudioPageMapMode> _modes = new()
-    { AudioPageMapMode.PageIndex, AudioPageMapMode.Sequence, AudioPageMapMode.Range, AudioPageMapMode.Custom };
+    { AudioPageMapMode.PageIndex, AudioPageMapMode.Sequence, AudioPageMapMode.Range };
     private bool _populating;
 
     public PdfAudioRuleDialog(PdfAudioProfile profile, IPdfReaderFormAccess form, PdfAudioTrackManager manager)
