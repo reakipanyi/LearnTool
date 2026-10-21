@@ -1727,7 +1727,8 @@ namespace LearningAssistant.Presenters
                     return;
                 }
 
-                await _pdfTtsService.SpeakTextAsync(text, "zh", _ttsConfig.Speed);
+                // 译文语言随目标语言自动变化（中文文档可能译为英文），按文本实际语言选择音色
+                await _pdfTtsService.SpeakTextAsync(text, _ttsConfig.Speed);
             }
             catch (Exception ex)
             {

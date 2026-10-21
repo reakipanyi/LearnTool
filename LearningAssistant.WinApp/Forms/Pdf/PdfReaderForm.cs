@@ -7191,9 +7191,10 @@ namespace LearningAssistant.Forms.Pdf
             _buttonSpeakTranslation.Name = "_buttonSpeakTranslation";
             _buttonSpeakTranslation.Size = new Size(75, 28);
             _buttonSpeakTranslation.TabIndex = 6;
-            _buttonSpeakTranslation.Text = "🔊 朗读";
+            _buttonSpeakTranslation.Text = "🔊 读译文";
             _buttonSpeakTranslation.UseVisualStyleBackColor = false;
             _buttonSpeakTranslation.Click += ButtonSpeakTranslation_Click;
+            _toolTip.SetToolTip(_buttonSpeakTranslation, "朗读右侧译文（按译文语言自动选择音色）");
             // 
             // _buttonShadowing
             // 
@@ -7240,9 +7241,10 @@ namespace LearningAssistant.Forms.Pdf
             _buttonSpeakOriginal.Name = "_buttonSpeakOriginal";
             _buttonSpeakOriginal.Size = new Size(75, 28);
             _buttonSpeakOriginal.TabIndex = 3;
-            _buttonSpeakOriginal.Text = "🔊 朗读";
+            _buttonSpeakOriginal.Text = "🔊 读原文";
             _buttonSpeakOriginal.UseVisualStyleBackColor = false;
             _buttonSpeakOriginal.Click += ButtonSpeakOriginal_Click;
+            _toolTip.SetToolTip(_buttonSpeakOriginal, "朗读左侧原文（按原文语言自动选择音色）");
             // 
             // _checkBoxAutoTranslate
             // 

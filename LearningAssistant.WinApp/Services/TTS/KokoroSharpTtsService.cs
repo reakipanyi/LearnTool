@@ -252,7 +252,8 @@ namespace LearningAssistant.Services.TTS
                     return resultBytes != null && resultBytes.Length > 0 ? null : null;
                 }
 
-                var actualVoice = SelectVoiceForSegment(language ?? "en", language) ?? _defaultVoice;
+                // 未显式指定语言时按文本语言选音色，避免中文文本用英文音色做缓存键
+                var actualVoice = SelectVoiceForSegment(language ?? langSegments[0].LangCode, language) ?? _defaultVoice;
                 string path = GetCacheFilePath(paddedText, language, actualSpeed, actualVoice?.Name);
 
                 if (File.Exists(path))
@@ -819,11 +820,16 @@ namespace LearningAssistant.Services.TTS
                 case "zh-cn":
                 case "chinese":
                 case "mandarinchinese":
+                case "cmn":
+                case "chi_sim":
+                case "chi_tra":
                     voiceName = SelectBestChineseVoice();
                     break;
                 case "en":
                 case "en-us":
+                case "en-gb":
                 case "americanenglish":
+                case "eng":
                     voiceName = string.IsNullOrWhiteSpace(_config.Voice) ? "af_heart" : _config.Voice;
                     break;
                 default:
@@ -888,11 +894,18 @@ namespace LearningAssistant.Services.TTS
             return "zf_xiaoxiao";
         }
 
+        /// <summary>
+        /// KokoroSharp 的 espeak 音素化只识别 cmn（普通话），传入 "zh" 会回退到英文音素，
+        /// 导致中文被读成 "Chinese letter" 且音色错乱，因此这里统一映射为 cmn。
+        /// </summary>
         private static string MapLangCodeToTokenizerLang(string langCode)
         {
-            if (langCode == "zh")
-                return "zh";
-            return "en";
+            var code = (langCode ?? string.Empty).Trim().ToLowerInvariant();
+            return code switch
+            {
+                "zh" or "zh-cn" or "zh_cn" or "chinese" or "cmn" => "cmn",
+                _ => "en"
+            };
         }
 
 
