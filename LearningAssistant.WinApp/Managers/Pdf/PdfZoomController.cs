@@ -1,4 +1,4 @@
-﻿using LearningAssistant.Abstractions;
+using LearningAssistant.Abstractions;
 using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Managers
@@ -26,8 +26,9 @@ namespace LearningAssistant.Managers
         {
             if (_isLocked) return;
 
-            _zoomLevel = value;
-            _form.TrackBarZoom.Value = value;
+            // 与滚轮保持同一区间（10%–400%），防止滑块值越界抛异常
+            _zoomLevel = Math.Min(400, Math.Max(10, value));
+            _form.TrackBarZoom.Value = _zoomLevel;
             _form.LabelZoom.Text = $"{_zoomLevel}%";
             _ = RenderPageAtZoomAsync();
         }

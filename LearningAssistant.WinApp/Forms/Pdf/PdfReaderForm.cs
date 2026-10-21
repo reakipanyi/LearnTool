@@ -561,10 +561,13 @@ namespace LearningAssistant.Forms.Pdf
         // 二级选项改为浮层后，工具栏只需容纳单行工具（一级图标条 + 视图/页码组 + 加载指示）
         private const int ToolbarSingleRowHeight = 58;
 
-        // 工具栏组间分隔线 X 坐标
-        private const int ToolbarSepX1 = 343;   // 绘制/编辑工具组 ↔ 视图与智能组
-        private const int ToolbarSepX2 = 710;   // 视图/模式组 ↔ 缩放视图组
-        private const int ToolbarSepX3 = 1091;  // 缩放视图组 ↔ 页码导航组
+        // 缩放区间：滑块与滚轮共用同一范围，避免两者钳位不一致
+        private const int MinZoomPercent = 10;
+        private const int MaxZoomPercent = 400;
+
+        // 工具栏组间分隔线 X 坐标（由 LayoutToolbarGroups 在运行期计算，-1 表示不绘制）
+        private int _toolbarViewSepX = -1;
+        private int _toolbarPageSepX = -1;
 
         #endregion
 
@@ -2418,7 +2421,7 @@ namespace LearningAssistant.Forms.Pdf
 
         public void SetZoomLevel(int level)
         {
-            int clampedLevel = Math.Max(50, Math.Min(200, level));
+            int clampedLevel = Math.Max(MinZoomPercent, Math.Min(MaxZoomPercent, level));
             _navigationManager?.Zoom(clampedLevel);
             _trackBarZoom.Value = clampedLevel;
             _zoomLevel = clampedLevel;
@@ -2428,7 +2431,7 @@ namespace LearningAssistant.Forms.Pdf
         public void ZoomIn()
         {
             int currentLevel = GetZoomLevel();
-            int newLevel = Math.Min(200, currentLevel + 10);
+            int newLevel = Math.Min(MaxZoomPercent, currentLevel + 10);
             if (newLevel != currentLevel)
             {
                 SetZoomLevel(newLevel);
@@ -2438,7 +2441,7 @@ namespace LearningAssistant.Forms.Pdf
         public void ZoomOut()
         {
             int currentLevel = GetZoomLevel();
-            int newLevel = Math.Max(50, currentLevel - 10);
+            int newLevel = Math.Max(MinZoomPercent, currentLevel - 10);
             if (newLevel != currentLevel)
             {
                 SetZoomLevel(newLevel);
@@ -2510,14 +2513,15 @@ namespace LearningAssistant.Forms.Pdf
 
         private void ToolbarGroupTools_Paint(object? sender, PaintEventArgs e)
         {
-            // 绘制按钮组间分隔线
+            // 绘制按钮组间分隔线：X 坐标随重排结果动态变化，不再使用固定值
             bool isNightMode = _nightModeManager?.IsNightMode ?? false;
             Color sepColor = isNightMode ? Color.FromArgb(60, 60, 60) : Color.FromArgb(224, 224, 224);
             using var pen = new Pen(sepColor, 1);
 
-            e.Graphics.DrawLine(pen, ToolbarSepX1, 4, ToolbarSepX1, 30);
-            e.Graphics.DrawLine(pen, ToolbarSepX2, 4, ToolbarSepX2, 30);
-            e.Graphics.DrawLine(pen, ToolbarSepX3, 4, ToolbarSepX3, 30);
+            if (_toolbarViewSepX > 0)
+                e.Graphics.DrawLine(pen, _toolbarViewSepX, 6, _toolbarViewSepX, 34);
+            if (_toolbarPageSepX > 0)
+                e.Graphics.DrawLine(pen, _toolbarPageSepX, 6, _toolbarPageSepX, 34);
         }
 
         private void ButtonTextMode_Click(object? sender, EventArgs e)
@@ -2748,6 +2752,9 @@ namespace LearningAssistant.Forms.Pdf
             if (_panelNavigation != null) _panelNavigation.Height = ToolbarSingleRowHeight;
             InitializeAnnotationOptionsDropDown();
 
+            // 窗口宽度变化时重算分组位置，避免固定坐标在窄窗口下互相压盖
+            _toolbarGroupTools.Resize += (_, __) => LayoutAnnotationToolStrip();
+
             LayoutAnnotationToolStrip();
         }
 
@@ -2850,7 +2857,89 @@ namespace LearningAssistant.Forms.Pdf
             x = PlaceInToolStrip(_buttonNightMode, x, y, size, gap);
             x = PlaceInToolStrip(_buttonAskAi, x, y, size, gap);
             x = PlaceInToolStrip(_buttonTranslationToggle, x, y, size, gap);
-            PlaceInToolStrip(_buttonClearAllAnnotations, x, y, size, gap);
+            int toolsEndX = PlaceInToolStrip(_buttonClearAllAnnotations, x, y, size, gap);
+
+            // 视图组、页码组的位置同样不能在设计器里写死，否则会与上面重排后的图标条相互压盖
+            LayoutToolbarGroups(toolsEndX);
+        }
+
+        /// <summary>
+        /// 按工具栏实际宽度排布右侧分组：加载指示 → 视图组 → 页码组（靠右）。
+        /// 空间不足时依次收起页码进度条、缩放滑块，最后隐藏视图组，保证任何宽度下都不发生控件重叠。
+        /// </summary>
+        private void LayoutToolbarGroups(int toolsEndX)
+        {
+            if (_toolbarGroupTools == null || _toolbarGroupView == null || pnlPage == null) return;
+
+            int available = _toolbarGroupTools.ClientSize.Width;
+            if (available <= 0) return;
+
+            const int edge = 6;
+            const int gap = 12;
+            const int fullPageWidth = 343;
+            const int compactPageWidth = 207;
+            const int fullViewWidth = 376;
+            const int compactViewWidth = 230;
+
+            int loadingLeft = toolsEndX + 2;
+            if (_loadingIndicator != null)
+                _loadingIndicator.Location = new Point(loadingLeft, 1);
+
+            int viewX = loadingLeft + (_loadingIndicator?.Width ?? 0) + 6;
+
+            // 逐级降级：完整体 → 收起页码进度条 → 收起缩放滑块 → 隐藏视图组，任何宽度下都不重叠
+            bool showProgress = available >= viewX + fullViewWidth + gap + fullPageWidth + edge;
+            bool fullView = available >= viewX + fullViewWidth + gap + compactPageWidth + edge;
+            bool showViewGroup = available >= viewX + compactViewWidth + gap + compactPageWidth + edge;
+
+            ApplyViewGroupCompactLayout(!fullView);
+
+            int pageWidth = showProgress ? fullPageWidth : compactPageWidth;
+            int pageX = available - pageWidth - edge;
+            if (!showViewGroup)
+                pageX = Math.Max(toolsEndX + gap, pageX);
+
+            _toolbarGroupView.Location = new Point(viewX, 0);
+            _toolbarGroupView.Visible = showViewGroup;
+            if (_progressBarPage != null) _progressBarPage.Visible = showProgress;
+            pnlPage.Width = pageWidth;
+            pnlPage.Location = new Point(pageX, 0);
+
+            _toolbarViewSepX = showViewGroup ? viewX - 6 : -1;
+            _toolbarPageSepX = pageX - 6;
+            _toolbarGroupTools.Invalidate();
+        }
+
+        /// <summary>
+        /// 视图组的紧凑/完整两套排布：紧凑时隐藏缩放滑块与百分比，只保留按钮，节省横向空间。
+        /// </summary>
+        private void ApplyViewGroupCompactLayout(bool compact)
+        {
+            if (_toolbarGroupView == null) return;
+
+            if (_trackBarZoom != null) _trackBarZoom.Visible = !compact;
+            if (_labelZoom != null) _labelZoom.Visible = !compact;
+
+            PlaceViewGroupButton(_buttonZoomOut, 5);
+            PlaceViewGroupButton(_buttonZoomIn, compact ? 37 : 185);
+            PlaceViewGroupButton(_buttonLockView, compact ? 69 : 217);
+            PlaceViewGroupButton(_buttonFullscreen, compact ? 101 : 249);
+            PlaceViewGroupButton(_buttonDualPage, compact ? 133 : 281);
+            PlaceViewGroupButton(_buttonResetView, compact ? 165 : 313);
+            PlaceViewGroupButton(_buttonRotate, compact ? 197 : 345);
+
+            if (!compact)
+            {
+                if (_trackBarZoom != null) _trackBarZoom.Location = new Point(37, 4);
+                if (_labelZoom != null) _labelZoom.Location = new Point(141, 12);
+            }
+
+            _toolbarGroupView.Width = compact ? 230 : 376;
+        }
+
+        private static void PlaceViewGroupButton(Button? button, int x)
+        {
+            if (button != null) button.Location = new Point(x, 4);
         }
 
         // 注意：不能在这里判断 control.Visible —— 构造函数阶段窗体尚未显示，
@@ -4170,9 +4259,11 @@ namespace LearningAssistant.Forms.Pdf
 
         private void SetZoom(int level)
         {
-            _navigationManager?.Zoom(level);
-            _trackBarZoom.Value = level;
-            _labelZoom.Text = $"{level}%";
+            // 统一钳位，避免滑块与滚轮使用不同区间导致数值回跳
+            int clampedLevel = Math.Max(MinZoomPercent, Math.Min(MaxZoomPercent, level));
+            _navigationManager?.Zoom(clampedLevel);
+            _trackBarZoom.Value = clampedLevel;
+            _labelZoom.Text = $"{clampedLevel}%";
             UpdateStatusBar();
         }
 
@@ -4182,7 +4273,7 @@ namespace LearningAssistant.Forms.Pdf
             {
                 float scale = (float)_pictureBoxPdf.ClientSize.Width / _currentPageImage.Width;
                 int zoomLevel = (int)(scale * 100);
-                SetZoom(Math.Max(50, Math.Min(200, zoomLevel)));
+                SetZoom(Math.Max(MinZoomPercent, Math.Min(MaxZoomPercent, zoomLevel)));
             }
         }
 
@@ -4192,7 +4283,7 @@ namespace LearningAssistant.Forms.Pdf
             {
                 float scale = (float)_pictureBoxPdf.ClientSize.Height / _currentPageImage.Height;
                 int zoomLevel = (int)(scale * 100);
-                SetZoom(Math.Max(50, Math.Min(200, zoomLevel)));
+                SetZoom(Math.Max(MinZoomPercent, Math.Min(MaxZoomPercent, zoomLevel)));
             }
         }
 
@@ -4204,7 +4295,7 @@ namespace LearningAssistant.Forms.Pdf
                     (float)_pictureBoxPdf.ClientSize.Width / _currentPageImage.Width,
                     (float)_pictureBoxPdf.ClientSize.Height / _currentPageImage.Height);
                 int zoomLevel = (int)(scale * 100);
-                SetZoom(Math.Max(50, Math.Min(200, zoomLevel)));
+                SetZoom(Math.Max(MinZoomPercent, Math.Min(MaxZoomPercent, zoomLevel)));
             }
         }
 
@@ -4980,7 +5071,6 @@ namespace LearningAssistant.Forms.Pdf
             _toolbarGroupTools.Name = "_toolbarGroupTools";
             _toolbarGroupTools.Size = new Size(1513, 71);
             _toolbarGroupTools.TabIndex = 3;
-            _toolbarGroupTools.Paint += _toolbarGroupTools_Paint;
             // 
             // _loadingIndicator
             // 
@@ -5081,8 +5171,8 @@ namespace LearningAssistant.Forms.Pdf
             // 
             _trackBarZoom.AutoSize = false;
             _trackBarZoom.Location = new Point(37, 4);
-            _trackBarZoom.Maximum = 200;
-            _trackBarZoom.Minimum = 50;
+            _trackBarZoom.Maximum = 400;
+            _trackBarZoom.Minimum = 10;
             _trackBarZoom.Name = "_trackBarZoom";
             _trackBarZoom.Size = new Size(100, 32);
             _trackBarZoom.TabIndex = 1;
@@ -6594,11 +6684,6 @@ namespace LearningAssistant.Forms.Pdf
                     _presenter.GenerateThumbnails();
                 }
             }
-        }
-
-        private void _toolbarGroupTools_Paint(object sender, PaintEventArgs e)
-        {
-
         }
     }
 }
