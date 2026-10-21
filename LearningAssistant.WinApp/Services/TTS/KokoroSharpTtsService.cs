@@ -254,7 +254,9 @@ namespace LearningAssistant.Services.TTS
 
                 // 未显式指定语言时按文本语言选音色，避免中文文本用英文音色做缓存键
                 var actualVoice = SelectVoiceForSegment(language ?? langSegments[0].LangCode, language) ?? _defaultVoice;
-                string path = GetCacheFilePath(paddedText, language, actualSpeed, actualVoice?.Name);
+                // 缓存键使用音素化语言，避免旧的 zh 缓存（英文音素合成）被命中
+                string cacheLang = MapLangCodeToTokenizerLang(language ?? langSegments[0].LangCode);
+                string path = GetCacheFilePath(paddedText, cacheLang, actualSpeed, actualVoice?.Name);
 
                 if (File.Exists(path))
                 {
@@ -327,7 +329,9 @@ namespace LearningAssistant.Services.TTS
                 var actualVoice = SelectVoiceForSegment(language ?? "en", language) ?? _defaultVoice;
                 string paddedText = PadShortText(text);
                 float actualSpeed = speed ?? _config.Speed;
-                string path = GetCacheFilePath(paddedText, language, actualSpeed, actualVoice?.Name);
+                // 缓存键使用音素化语言，避免旧的 zh 缓存（英文音素合成）被命中
+                string cacheLang = MapLangCodeToTokenizerLang(language ?? "en");
+                string path = GetCacheFilePath(paddedText, cacheLang, actualSpeed, actualVoice?.Name);
 
                 if (File.Exists(path))
                 {
