@@ -9,6 +9,8 @@ namespace LearningAssistant.Services.Pdf
     public class TesseractOcrService : IOcrService, IDisposable
     {
         private TesseractEngine? _engine;
+        // TesseractEngine 非线程安全，识别与语言切换必须串行，避免并发识别产生乱码或访问已释放引擎
+        private readonly SemaphoreSlim _engineLock = new SemaphoreSlim(1, 1);
         private readonly OcrConfig _config;
         private readonly ILogger<TesseractOcrService>? _logger;
         private bool _initialized = false;
@@ -137,13 +139,22 @@ namespace LearningAssistant.Services.Pdf
             if (string.IsNullOrWhiteSpace(language))
                 return false;
 
-            if (_engine != null)
+            // 等待进行中的识别结束再重建引擎，避免识别期间引擎被释放
+            _engineLock.Wait();
+            try
             {
-                _engine.Dispose();
-                _engine = null;
-            }
+                if (_engine != null)
+                {
+                    _engine.Dispose();
+                    _engine = null;
+                }
 
-            return InitializeEngineInternal(language);
+                return InitializeEngineInternal(language);
+            }
+            finally
+            {
+                _engineLock.Release();
+            }
         }
 
         public void SetPageSegMode(PageSegMode mode)
@@ -165,19 +176,27 @@ namespace LearningAssistant.Services.Pdf
 
             return await Task.Run(() =>
             {
+                _engineLock.Wait();
                 try
                 {
+                    var engine = _engine;
+                    if (engine == null) return string.Empty;
+
                     using var ms = new MemoryStream();
                     bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
                     var bytes = ms.ToArray();
                     using var pix = Pix.LoadFromMemory(bytes);
-                    using var page = _engine.Process(pix);
+                    using var page = engine.Process(pix);
                     return page.GetText() ?? string.Empty;
                 }
                 catch (Exception ex)
                 {
                     _logger?.LogError(ex, "OCR识别失败");
                     return string.Empty;
+                }
+                finally
+                {
+                    _engineLock.Release();
                 }
             });
         }
@@ -195,8 +214,12 @@ namespace LearningAssistant.Services.Pdf
 
             return await Task.Run(() =>
             {
+                _engineLock.Wait();
                 try
                 {
+                    var engine = _engine;
+                    if (engine == null) return string.Empty;
+
                     bool needCrop = rect.X > 0 || rect.Y > 0 ||
                                     rect.Width < bmp.Width || rect.Height < bmp.Height;
 
@@ -215,7 +238,7 @@ namespace LearningAssistant.Services.Pdf
                             ms.Position = 0;
 
                             using (var pix = Pix.LoadFromMemory(ms.ToArray()))
-                            using (var page = _engine.Process(pix))
+                            using (var page = engine.Process(pix))
                             {
                                 var text = page.GetText()?.Trim() ?? string.Empty;
                                 if (!string.IsNullOrWhiteSpace(text))
@@ -241,7 +264,7 @@ namespace LearningAssistant.Services.Pdf
                             originalMs.Position = 0;
 
                             using (var originalPix = Pix.LoadFromMemory(originalMs.ToArray()))
-                            using (var originalPage = _engine.Process(originalPix))
+                            using (var originalPage = engine.Process(originalPix))
                             {
                                 var originalText = originalPage.GetText()?.Trim() ?? string.Empty;
                                 return CleanAndNormalizeText(originalText);
@@ -258,6 +281,10 @@ namespace LearningAssistant.Services.Pdf
                 {
                     _logger?.LogError(ex, "OCR识别异常");
                     return string.Empty;
+                }
+                finally
+                {
+                    _engineLock.Release();
                 }
             });
         }
@@ -407,7 +434,16 @@ namespace LearningAssistant.Services.Pdf
 
         public void Dispose()
         {
-            _engine?.Dispose();
+            _engineLock.Wait();
+            try
+            {
+                _engine?.Dispose();
+                _engine = null;
+            }
+            finally
+            {
+                _engineLock.Release();
+            }
         }
 
         private static byte[]? BitmapToBytes(Bitmap? bmp)
