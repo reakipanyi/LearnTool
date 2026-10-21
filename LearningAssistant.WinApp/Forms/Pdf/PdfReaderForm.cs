@@ -5851,6 +5851,7 @@ namespace LearningAssistant.Forms.Pdf
             _groupBoxProgress = new GroupBox();
             _textBoxTranslation = new SyncedTextBox();
             _buttonSpeakTranslation = new Button();
+            _buttonShadowing = new Button();
             _buttonAddToLearningContent = new Button();
             _textBoxOriginal = new SyncedTextBox();
             _buttonSpeakOriginal = new Button();
@@ -7196,7 +7197,6 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // _buttonShadowing
             // 
-            _buttonShadowing = new Button();
             _buttonShadowing.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
             _buttonShadowing.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
             _buttonShadowing.FlatStyle = FlatStyle.Flat;
