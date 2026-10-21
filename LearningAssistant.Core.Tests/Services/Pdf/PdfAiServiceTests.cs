@@ -183,6 +183,50 @@ public class PdfAiServiceTests
     }
 
     [Fact]
+    public async Task AI摘要条目_解析JSON并回链录音锚点()
+    {
+        var index = new FakeTextIndex(5);
+        var ai = new FakeAiService(_ => "```json\n[{\"text\":\"复习这一节\",\"page\":3,\"timeMs\":65000}]\n```");
+        var service = new PdfAiService(ai, index);
+
+        var items = new[]
+        {
+            new PdfAnnotationDigestItem
+            {
+                PageIndex = 2,
+                AudioTimestampMs = 65_000,
+                AudioRecordingId = "rec-1",
+                Kind = "文字",
+                Text = "复习这一节"
+            }
+        };
+
+        var result = await service.GenerateSummaryEntriesAsync("book.pdf", items);
+
+        result.Success.Should().BeTrue();
+        result.Entries.Should().ContainSingle();
+        result.Entries[0].PageIndex.Should().Be(2);
+        result.Entries[0].TimestampMs.Should().Be(65_000);
+        result.Entries[0].RecordingId.Should().Be("rec-1");
+    }
+
+    [Fact]
+    public async Task AI摘要条目_返回非JSON时失败()
+    {
+        var index = new FakeTextIndex(2);
+        var ai = new FakeAiService(_ => "这不是 JSON");
+        var service = new PdfAiService(ai, index);
+
+        var result = await service.GenerateSummaryEntriesAsync("book.pdf", new[]
+        {
+            new PdfAnnotationDigestItem { PageIndex = 0, Kind = "文字", Text = "标注" }
+        });
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().NotBeNullOrEmpty();
+    }
+
+    [Fact]
     public async Task AI服务不可用_直接返回失败()
     {
         var index = new FakeTextIndex(1);

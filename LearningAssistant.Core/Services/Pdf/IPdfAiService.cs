@@ -91,5 +91,13 @@ namespace LearningAssistant.Services.Pdf
             string pdfPath,
             IReadOnlyList<PdfAnnotationDigestItem> items,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 生成带锚点（页码/录音 Id/时间戳）的 AI 摘要条目，供「我的录音」页回链播放。
+        /// </summary>
+        Task<PdfAiSummaryEntriesResult> GenerateSummaryEntriesAsync(
+            string pdfPath,
+            IReadOnlyList<PdfAnnotationDigestItem> items,
+            CancellationToken cancellationToken = default);
     }
 }

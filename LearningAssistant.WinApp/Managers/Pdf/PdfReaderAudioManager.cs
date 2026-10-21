@@ -11,6 +11,9 @@ namespace LearningAssistant.Managers
         private readonly ILogger _logger;
         private readonly IPdfReaderFormAccess _form;
         private readonly IAudioRecorderService _recorder;
+        private readonly IPdfAiService? _pdfAiService;
+        private readonly IPdfAiSummaryStore? _summaryStore;
+        private readonly IAnnotationService? _annotationService;
         private bool _disposed;
 
         private TabPage? _tabPage;
@@ -30,6 +33,11 @@ namespace LearningAssistant.Managers
         private Label _labelTimestamps;
         private Label _labelNoTimestamps;
         private ListBox _listTimestamps;
+        private Label _labelSummaries;
+        private Label _labelNoSummaries;
+        private ListBox _listSummaries;
+        private Button _buttonGenerateSummary;
+        private List<PdfAiSummaryEntry> _summaryEntries = new();
         private int _lastTimestampPage = -1;
         private System.Windows.Forms.Timer _uiTimer;
         private System.Windows.Forms.Timer _levelTimer;
@@ -47,11 +55,16 @@ namespace LearningAssistant.Managers
         private static Color _bgColor = Color.FromArgb(248, 248, 252);
         private static Color _textColor = Color.FromArgb(50, 50, 60);
 
-        public PdfReaderAudioManager(ILogger logger, IPdfReaderFormAccess form, IAudioRecorderService recorder)
+        public PdfReaderAudioManager(ILogger logger, IPdfReaderFormAccess form, IAudioRecorderService recorder,
+            IPdfAiService? pdfAiService = null, IPdfAiSummaryStore? summaryStore = null,
+            IAnnotationService? annotationService = null)
         {
             _logger = logger;
             _form = form;
             _recorder = recorder;
+            _pdfAiService = pdfAiService;
+            _summaryStore = summaryStore;
+            _annotationService = annotationService;
             _recorder.RecordingCompleted += OnRecordingCompleted;
             _recorder.PositionChanged += OnPositionChanged;
         }
@@ -89,10 +102,12 @@ namespace LearningAssistant.Managers
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));  // 3: _trackBarPosition
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 16));  // 4: _levelMeter
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));  // 5: 录音列表标题
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 60F));  // 6: 列表 / 无录音提示
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));  // 7: 删除按钮
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 45F));  // 6: 列表 / 无录音提示
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));  // 7: 删除 / AI 摘要按钮
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));  // 8: 时间戳标注标题
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 40F));  // 9: 时间戳标注列表
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 27F));  // 9: 时间戳标注列表
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));  // 10: AI 摘要标题
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 28F));  // 11: AI 摘要列表
 
             _labelStatus = new Label
             {
@@ -241,6 +256,8 @@ namespace LearningAssistant.Managers
             _listRecordings.MouseDoubleClick += ListRecordings_MouseDoubleClick;
             layout.Controls.Add(_listRecordings, 0, 6);
 
+            var panelActions = new Panel { Dock = DockStyle.Fill };
+
             var buttonDelete = new Button
             {
                 Text = "删除",
@@ -249,13 +266,30 @@ namespace LearningAssistant.Managers
                 BackColor = Color.FromArgb(230, 230, 235),
                 FlatStyle = FlatStyle.Flat,
                 FlatAppearance = { BorderSize = 0 },
-                Anchor = AnchorStyles.Left | AnchorStyles.Top,
+                Location = new Point(0, 2),
                 Size = new Size(60, 26),
                 Cursor = Cursors.Hand,
                 Tag = "delete"
             };
             buttonDelete.Click += _buttonDelete_Click;
-            layout.Controls.Add(buttonDelete, 0, 7);
+
+            _buttonGenerateSummary = new Button
+            {
+                Text = "AI 摘要",
+                Font = new Font("Microsoft YaHei UI", 9F),
+                ForeColor = Color.White,
+                BackColor = _accentColor,
+                FlatStyle = FlatStyle.Flat,
+                FlatAppearance = { BorderSize = 0 },
+                Location = new Point(66, 2),
+                Size = new Size(72, 26),
+                Cursor = Cursors.Hand
+            };
+            _buttonGenerateSummary.Click += ButtonGenerateSummary_Click;
+
+            panelActions.Controls.Add(buttonDelete);
+            panelActions.Controls.Add(_buttonGenerateSummary);
+            layout.Controls.Add(panelActions, 0, 7);
 
             // 本页时间戳标注：录制过程中创建的标注会记录音频位置，点击可跳转回放
             _labelTimestamps = new Label
@@ -289,6 +323,39 @@ namespace LearningAssistant.Managers
             _listTimestamps.DrawItem += ListTimestamps_DrawItem;
             _listTimestamps.MouseClick += ListTimestamps_MouseClick;
             layout.Controls.Add(_listTimestamps, 0, 9);
+
+            // 全书 AI 摘要：每条带页码/录音锚点，点击跳页并从时间戳回放
+            _labelSummaries = new Label
+            {
+                Text = "AI 摘要（点击跳页并回放）",
+                Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
+                ForeColor = _textColor,
+                Anchor = AnchorStyles.Left | AnchorStyles.Top,
+                AutoSize = true
+            };
+            layout.Controls.Add(_labelSummaries, 0, 10);
+
+            _labelNoSummaries = new Label
+            {
+                Text = "暂无 AI 摘要，点击「AI 摘要」生成",
+                Font = new Font("Microsoft YaHei UI", 9F),
+                ForeColor = Color.FromArgb(160, 160, 170),
+                TextAlign = ContentAlignment.MiddleCenter,
+                Dock = DockStyle.Fill
+            };
+            layout.Controls.Add(_labelNoSummaries, 0, 11);
+
+            _listSummaries = new ListBox
+            {
+                Dock = DockStyle.Fill,
+                BorderStyle = BorderStyle.FixedSingle,
+                DrawMode = DrawMode.OwnerDrawFixed,
+                ItemHeight = 46,
+                Visible = false
+            };
+            _listSummaries.DrawItem += ListSummaries_DrawItem;
+            _listSummaries.MouseClick += ListSummaries_MouseClick;
+            layout.Controls.Add(_listSummaries, 0, 11);
 
             _tabPage.Controls.Add(layout);
             _tabPage.ResumeLayout(false);
@@ -689,11 +756,196 @@ namespace LearningAssistant.Managers
             SeekToPosition(entry.Recording, entry.TimestampMs);
         }
 
-        private static string SummarizeText(string? content)
+        /// <summary>刷新全书 AI 摘要列表（可按页跳转并从时间戳回放）</summary>
+        public void RefreshSummaryList()
+        {
+            if (_listSummaries == null || _labelNoSummaries == null || _tabPage == null) return;
+            if (_tabPage.IsDisposed) return;
+
+            if (_form.Form.InvokeRequired)
+            {
+                try { _form.Form.Invoke(() => RefreshSummaryList()); } catch { }
+                return;
+            }
+
+            var pdfPath = _form.CurrentPdfPath;
+            _summaryEntries = string.IsNullOrEmpty(pdfPath) || _summaryStore == null
+                ? new List<PdfAiSummaryEntry>()
+                : _summaryStore.GetEntries(pdfPath)
+                    .OrderBy(e => e.PageIndex)
+                    .ThenBy(e => e.TimestampMs ?? long.MaxValue)
+                    .ToList();
+
+            _listSummaries.BeginUpdate();
+            _listSummaries.Items.Clear();
+            foreach (var entry in _summaryEntries)
+                _listSummaries.Items.Add(entry);
+            _listSummaries.EndUpdate();
+
+            var hasItems = _summaryEntries.Count > 0;
+            _listSummaries.Visible = hasItems;
+            _labelNoSummaries.Visible = !hasItems;
+        }
+
+        private void ListSummaries_DrawItem(object? sender, DrawItemEventArgs e)
+        {
+            if (e.Index < 0 || e.Index >= _listSummaries.Items.Count) return;
+            e.DrawBackground();
+
+            if (_listSummaries.Items[e.Index] is not PdfAiSummaryEntry entry) return;
+
+            var isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            var bgColor = isSelected ? Color.FromArgb(230, 244, 255) : (e.Index % 2 == 0 ? Color.White : Color.FromArgb(248, 248, 252));
+            using var bgBrush = new SolidBrush(bgColor);
+            e.Graphics.FillRectangle(bgBrush, e.Bounds);
+
+            var anchorText = entry.TimestampMs.HasValue
+                ? $"P{entry.PageIndex + 1} · {FormatTime(TimeSpan.FromMilliseconds(entry.TimestampMs.Value))}"
+                : $"P{entry.PageIndex + 1} · 无时间锚点";
+
+            using var anchorFont = new Font("Microsoft YaHei UI", 8.5F, FontStyle.Bold);
+            using var textFont = new Font("Microsoft YaHei UI", 9F);
+            using var anchorBrush = new SolidBrush(isSelected ? _accentColor : Color.FromArgb(120, 120, 130));
+            using var textBrush = new SolidBrush(_textColor);
+
+            var format = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
+            e.Graphics.DrawString(anchorText, anchorFont, anchorBrush,
+                new RectangleF(e.Bounds.X + 6, e.Bounds.Y + 4, e.Bounds.Width - 12, 16), format);
+            e.Graphics.DrawString(SummarizeText(entry.Text, 32), textFont, textBrush,
+                new RectangleF(e.Bounds.X + 6, e.Bounds.Y + 22, e.Bounds.Width - 12, 18), format);
+
+            e.DrawFocusRectangle();
+        }
+
+        private async void ListSummaries_MouseClick(object? sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left) return;
+
+            int index = _listSummaries.IndexFromPoint(e.Location);
+            if (index < 0 || index >= _listSummaries.Items.Count) return;
+            if (_listSummaries.Items[index] is not PdfAiSummaryEntry entry) return;
+
+            try
+            {
+                var presenter = _form.Presenter;
+                if (presenter != null && entry.PageIndex >= 0 && entry.PageIndex < presenter.PageCount
+                    && entry.PageIndex != _form.CurrentPageIndex)
+                {
+                    await presenter.RenderPage(entry.PageIndex);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to navigate to summary page");
+            }
+
+            var recording = ResolveRecording(entry.RecordingId, entry.PageIndex);
+            if (recording == null)
+            {
+                _form.ShowWarning("未找到该摘要对应的录音");
+                return;
+            }
+
+            _listRecordings.SelectedItem = recording;
+            SeekToPosition(recording, entry.TimestampMs ?? 0);
+        }
+
+        private async void ButtonGenerateSummary_Click(object? sender, EventArgs e)
+        {
+            if (_summaryStore == null || _annotationService == null)
+            {
+                _form.ShowWarning("AI 摘要服务未初始化");
+                return;
+            }
+            if (_pdfAiService == null)
+            {
+                _form.ShowWarning("AI 服务不可用，请先完成 AI 配置");
+                return;
+            }
+
+            var pdfPath = _form.CurrentPdfPath;
+            if (string.IsNullOrEmpty(pdfPath))
+            {
+                _form.ShowWarning("请先打开一个 PDF 文件");
+                return;
+            }
+
+            var presenter = _form.Presenter;
+            int pageCount = presenter?.PageCount ?? 0;
+            if (pageCount <= 0)
+            {
+                _form.ShowWarning("文档页数不可用");
+                return;
+            }
+
+            _buttonGenerateSummary.Enabled = false;
+            var previousCursor = _form.Form.Cursor;
+            _form.Form.Cursor = Cursors.WaitCursor;
+            try
+            {
+                var annotationService = _annotationService;
+                var items = await Task.Run(() => CollectDocumentAnnotations(annotationService, pdfPath, pageCount));
+                if (items.Count == 0)
+                {
+                    _form.ShowWarning("当前文档还没有可整理的标注");
+                    return;
+                }
+
+                var result = await _pdfAiService.GenerateSummaryEntriesAsync(pdfPath, items);
+                if (!result.Success)
+                {
+                    _form.ShowWarning(result.ErrorMessage ?? "AI 摘要生成失败");
+                    return;
+                }
+
+                _summaryStore.AddEntries(pdfPath, result.Entries);
+                RefreshSummaryList();
+                _form.ShowMessage($"已生成 {result.Entries.Count} 条 AI 摘要", "AI 摘要");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to generate AI summary entries");
+                _form.ShowWarning("AI 摘要生成失败");
+            }
+            finally
+            {
+                _buttonGenerateSummary.Enabled = true;
+                _form.Form.Cursor = previousCursor;
+            }
+        }
+
+        /// <summary>采集全书标注摘要（仅页码、时间戳与录音 Id）</summary>
+        private static List<PdfAnnotationDigestItem> CollectDocumentAnnotations(
+            IAnnotationService annotationService, string pdfPath, int pageCount)
+        {
+            var items = new List<PdfAnnotationDigestItem>();
+            for (int pageIndex = 0; pageIndex < pageCount; pageIndex++)
+            {
+                if (items.Count >= PdfAnnotationDigestBuilder.MaxItems) break;
+
+                PdfAnnotation? annotation;
+                try
+                {
+                    annotation = annotationService.GetAnnotation(pdfPath, pageIndex);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                items.AddRange(PdfAnnotationDigestBuilder.Collect(annotation, pageIndex));
+            }
+
+            return items.Take(PdfAnnotationDigestBuilder.MaxItems).ToList();
+        }
+
+        private static string SummarizeText(string? content) => SummarizeText(content, 24);
+
+        private static string SummarizeText(string? content, int maxLength)
         {
             if (string.IsNullOrWhiteSpace(content)) return "（空文字）";
             var normalized = content.Replace('\r', ' ').Replace('\n', ' ').Trim();
-            return normalized.Length <= 24 ? normalized : normalized[..24] + "…";
+            return normalized.Length <= maxLength ? normalized : normalized[..maxLength] + "…";
         }
 
         private static string DescribeShape(string? shapeType)
@@ -778,6 +1030,7 @@ namespace LearningAssistant.Managers
             {
                 _recordings.Clear();
                 RefreshRecordingList();
+                RefreshSummaryList();
                 return;
             }
 
@@ -801,6 +1054,7 @@ namespace LearningAssistant.Managers
             }
             RefreshRecordingList();
             RefreshTimestampList();
+            RefreshSummaryList();
         }
 
         private void SaveRecordings()

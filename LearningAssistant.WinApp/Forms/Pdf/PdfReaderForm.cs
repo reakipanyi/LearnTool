@@ -481,7 +481,9 @@ namespace LearningAssistant.Forms.Pdf
             }
             if (audioRecorderService != null)
             {
-                _audioManager = new PdfReaderAudioManager(_logger, this, audioRecorderService) { MountTabPage = recordingPage };
+                var pdfAiSummaryStore = Program.ServiceProvider?.GetService(typeof(IPdfAiSummaryStore)) as IPdfAiSummaryStore;
+                _audioManager = new PdfReaderAudioManager(_logger, this, audioRecorderService,
+                    _pdfAiService, pdfAiSummaryStore, _annotationService) { MountTabPage = recordingPage };
                 _audioManager.Initialize();
             }
             else

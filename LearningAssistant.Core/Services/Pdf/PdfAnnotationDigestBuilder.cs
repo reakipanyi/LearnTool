@@ -9,6 +9,8 @@ namespace LearningAssistant.Services.Pdf
         public int PageIndex { get; init; }
         /// <summary>录音时间戳（毫秒），无时间戳时为 null</summary>
         public long? AudioTimestampMs { get; init; }
+        /// <summary>关联录音 Id，用于摘要条目回链播放</summary>
+        public string? AudioRecordingId { get; init; }
         public string Kind { get; init; } = "标注";
         public string Text { get; init; } = string.Empty;
     }
@@ -38,6 +40,7 @@ namespace LearningAssistant.Services.Pdf
                 {
                     PageIndex = pageIndex,
                     AudioTimestampMs = text.AudioTimestampMs,
+                    AudioRecordingId = text.AudioRecordingId,
                     Kind = "文字",
                     Text = content
                 });
@@ -52,6 +55,7 @@ namespace LearningAssistant.Services.Pdf
                 {
                     PageIndex = pageIndex,
                     AudioTimestampMs = stroke.AudioTimestampMs,
+                    AudioRecordingId = stroke.AudioRecordingId,
                     Kind = kind,
                     Text = string.Empty
                 });

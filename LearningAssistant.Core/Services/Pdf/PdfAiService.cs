@@ -362,6 +362,136 @@ namespace LearningAssistant.Services.Pdf
                     null, extra, null, cancellationToken).ConfigureAwait(false);
             }, "标注整理", cancellationToken);
 
+        /// <inheritdoc />
+        public async Task<PdfAiSummaryEntriesResult> GenerateSummaryEntriesAsync(
+            string pdfPath,
+            IReadOnlyList<PdfAnnotationDigestItem> items,
+            CancellationToken cancellationToken = default)
+        {
+            if (_aiService == null)
+                return PdfAiSummaryEntriesResult.Fail("AI 服务不可用，请先完成 AI 配置");
+            if (items == null || items.Count == 0)
+                return PdfAiSummaryEntriesResult.Fail("当前文档没有可整理的标注");
+
+            var digest = PdfAnnotationDigestBuilder.Build(items);
+            if (string.IsNullOrWhiteSpace(digest))
+                return PdfAiSummaryEntriesResult.Fail("标注内容为空，无法生成摘要");
+
+            var prompt = $$"""
+                你是学习摘要助手。下面是用户从 PDF 中做的标注条目（含页码与录音时间戳）。
+                请把标注归纳为 3-8 条摘要，每条尽量简短，只依据标注内容，不要编造。
+                只输出 JSON 数组，不要输出任何解释或代码围栏：
+                [{"text":"摘要内容","page":3,"timeMs":65000}]
+                说明：
+                1. page 为页码（从 1 开始）；
+                2. timeMs 为该条对应的标注时间戳（毫秒），标注没有时间戳时省略该字段；
+                3. 同一标注不要重复输出。
+
+                标注条目：
+                {{digest}}
+                """;
+
+            try
+            {
+                var raw = await AskAsync(prompt, cancellationToken).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(raw))
+                    return PdfAiSummaryEntriesResult.Fail("AI 未返回内容");
+
+                var json = StripCodeFence(raw);
+                using var document = JsonDocument.Parse(json);
+                if (document.RootElement.ValueKind != JsonValueKind.Array)
+                    return PdfAiSummaryEntriesResult.Fail("AI 返回格式不正确");
+
+                var entries = new List<PdfAiSummaryEntry>();
+                foreach (var element in document.RootElement.EnumerateArray())
+                {
+                    if (element.ValueKind != JsonValueKind.Object) continue;
+
+                    var text = element.TryGetProperty("text", out var textElement)
+                        ? (textElement.GetString() ?? string.Empty).Trim()
+                        : string.Empty;
+                    if (string.IsNullOrWhiteSpace(text)) continue;
+
+                    int pageNumber = element.TryGetProperty("page", out var pageElement)
+                        && pageElement.TryGetInt32(out var parsedPage)
+                            ? parsedPage
+                            : 0;
+
+                    long? timeMs = element.TryGetProperty("timeMs", out var timeElement)
+                        && timeElement.ValueKind == JsonValueKind.Number
+                        && timeElement.TryGetInt64(out var parsedTime)
+                            ? parsedTime
+                            : null;
+
+                    var entry = BuildSummaryEntry(pdfPath, items, pageNumber, timeMs, text);
+                    if (entry != null) entries.Add(entry);
+                }
+
+                return entries.Count == 0
+                    ? PdfAiSummaryEntriesResult.Fail("AI 未返回有效的摘要条目")
+                    : PdfAiSummaryEntriesResult.Ok(entries);
+            }
+            catch (OperationCanceledException)
+            {
+                return PdfAiSummaryEntriesResult.Fail("AI 请求已取消或超时");
+            }
+            catch (JsonException ex)
+            {
+                _logger?.LogWarning(ex, "AI 摘要条目 JSON 解析失败");
+                return PdfAiSummaryEntriesResult.Fail("AI 返回的摘要格式无法解析");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "生成 AI 摘要条目失败");
+                return PdfAiSummaryEntriesResult.Fail(ex.Message);
+            }
+        }
+
+        /// <summary>把 AI 摘要条目映射回原标注的页码/录音锚点</summary>
+        private static PdfAiSummaryEntry? BuildSummaryEntry(
+            string pdfPath,
+            IReadOnlyList<PdfAnnotationDigestItem> items,
+            int pageNumber,
+            long? timeMs,
+            string text)
+        {
+            int pageIndex = pageNumber - 1;
+            var candidates = items.Where(i => i.PageIndex == pageIndex).ToList();
+
+            // AI 页码不可信时，退回到最近一条带锚点的标注
+            if (candidates.Count == 0)
+            {
+                var fallbackItem = items.FirstOrDefault(i => i.AudioTimestampMs.HasValue) ?? items.FirstOrDefault();
+                if (fallbackItem == null) return null;
+
+                pageIndex = fallbackItem.PageIndex;
+                candidates = items.Where(i => i.PageIndex == pageIndex).ToList();
+            }
+
+            PdfAnnotationDigestItem? anchor = null;
+            if (timeMs.HasValue)
+            {
+                anchor = candidates
+                    .Where(i => i.AudioTimestampMs.HasValue)
+                    .OrderBy(i => Math.Abs(i.AudioTimestampMs!.Value - timeMs.Value))
+                    .FirstOrDefault();
+            }
+
+            anchor ??= candidates.FirstOrDefault(i => i.AudioTimestampMs.HasValue);
+            anchor ??= candidates.FirstOrDefault();
+
+            return new PdfAiSummaryEntry
+            {
+                PdfPath = pdfPath,
+                PageIndex = Math.Max(0, pageIndex),
+                RecordingId = anchor?.AudioRecordingId,
+                TimestampMs = anchor?.AudioTimestampMs,
+                Text = text.Length > PdfAnnotationDigestBuilder.MaxTextLength
+                    ? text[..PdfAnnotationDigestBuilder.MaxTextLength] + "…"
+                    : text
+            };
+        }
+
         private static string ShortHash(string text)
         {
             var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text));

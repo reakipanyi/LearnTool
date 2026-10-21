@@ -217,6 +217,9 @@ namespace LearningAssistant.Common
                 AppPaths.PdfAiCacheDir,
                 logger: sp.GetService<ILogger<PdfAiCacheService>>()));
 
+            // PDF AI 摘要条目：按文档哈希落盘，带页码/录音锚点
+            services.AddScoped<IPdfAiSummaryStore>(_ => new PdfAiSummaryStore());
+
             // PDF 专用 AI 编排：文本索引取料 + 页码锚点 + 上下文预算 + 结果缓存
             services.AddScoped<IPdfAiService>(sp => new PdfAiService(
                 sp.GetService<IAIService>(),
