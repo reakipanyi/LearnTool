@@ -203,6 +203,14 @@ namespace LearningAssistant.Common
             services.AddScoped<IPdfOcrService, PdfOcrService>();
             services.AddScoped<IPdfTranslationService, PdfTranslationService>();
             services.AddScoped<IPdfTtsService, PdfTtsService>();
+
+            // PDF 文本索引：文本层优先、扫描页回退 OCR，按文件指纹缓存
+            services.AddScoped<IPdfDocumentTextIndex>(sp => new PdfDocumentTextIndex(
+                sp.GetRequiredService<IPdfService>(),
+                sp.GetService<IPdfOcrService>(),
+                _ => new PdfiumPdfService(Microsoft.Extensions.Logging.Abstractions.NullLogger<PdfiumPdfService>.Instance),
+                sp.GetService<ILogger<PdfDocumentTextIndex>>(),
+                AppPaths.PdfTextIndexDir));
             services.AddScoped<IPdfStudyIntegration, PdfStudyIntegration>();
             services.AddSingleton<IExportService>(sp => sp.GetRequiredService<ExportService>());
 

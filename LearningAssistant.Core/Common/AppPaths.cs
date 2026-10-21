@@ -154,6 +154,11 @@ namespace LearningAssistant.Common
         public static string ShadowingDir => Path.Combine(DataDir, "Shadowings");
 
         /// <summary>
+        /// PDF 文本索引目录（按用户 + 文件指纹缓存页级文本）
+        /// </summary>
+        public static string PdfTextIndexDir => Path.Combine(CurrentUserDir, "pdf_text_index");
+
+        /// <summary>
         /// TTS 缓存目录
         /// </summary>
         public static string TTSCacheDir => Path.Combine(CacheDir, "tts");
@@ -261,6 +266,7 @@ namespace LearningAssistant.Common
             EnsureDirectoryExists(AudioDir);
             EnsureDirectoryExists(AudioProfilesDir);
             EnsureDirectoryExists(ShadowingDir);
+            EnsureDirectoryExists(PdfTextIndexDir);
             EnsureDirectoryExists(TTSCacheDir);
             EnsureDirectoryExists(TesseractDataDir);
         }
@@ -384,6 +390,14 @@ namespace LearningAssistant.Common
         }
 
         /// <summary>
+        /// 获取用户 PDF 文本索引目录
+        /// </summary>
+        public static string GetUserPdfTextIndexDir(string? userId = null)
+        {
+            return Path.Combine(GetUserDir(userId), "pdf_text_index");
+        }
+
+        /// <summary>
         /// 获取TTS缓存目录
         /// </summary>
         public static string GetTtsCacheDir()
@@ -457,6 +471,7 @@ namespace LearningAssistant.Common
             EnsureDirectoryExists(GetUserBookmarksDir(userId));
             EnsureDirectoryExists(GetUserHighlightsDir(userId));
             EnsureDirectoryExists(GetUserTranslationsDir(userId));
+            EnsureDirectoryExists(GetUserPdfTextIndexDir(userId));
             EnsureDirectoryExists(GetTtsCacheDir());
             EnsureDirectoryExists(GetUserAutoSaveDir(userId));
             EnsureDirectoryExists(GetUserBackupDir(userId));
