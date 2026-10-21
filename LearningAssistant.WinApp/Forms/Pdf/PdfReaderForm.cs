@@ -284,7 +284,7 @@ namespace LearningAssistant.Forms.Pdf
         /// 绘制/拖拽标注期间收到的页面位图。此时不能立即替换画面（会清理标注图层并丢失当前笔画），
         /// 待鼠标抬起后再应用，仅保留最新一帧。
         /// </summary>
-        private byte[]? _pendingDisplayImageData;
+        private Bitmap? _pendingDisplayImage;
 
         private Bitmap? _annotationBitmap;
         private Graphics? _annotationGraphics;
@@ -1646,22 +1646,29 @@ namespace LearningAssistant.Forms.Pdf
 
         /// <summary>
         /// 显示PDF页面图像
+        /// 所有权约定：视图接管传入位图并负责释放，调用方不得再释放。
         /// </summary>
-        /// <param name="bmp">要显示的Bitmap图像</param>
-        public void DisplayImage(byte[] imageData)
+        /// <param name="image">要显示的Bitmap图像</param>
+        public void DisplayImage(Bitmap image)
         {
             // 绘制/拖拽期间禁止换图：CleanupAnnotationBitmap 会使 FinalizeStroke 拿不到位图而丢弃当前笔画
             if (_navigationManager?.IsUserInteractionActive == true)
             {
-                _pendingDisplayImageData = imageData;
+                // 仅保留最新一帧，被替换的挂起位图由视图释放
+                if (!ReferenceEquals(_pendingDisplayImage, image))
+                {
+                    SafeDisposeImage(ref _pendingDisplayImage);
+                }
+                _pendingDisplayImage = image;
                 return;
             }
 
-            _pendingDisplayImageData = null;
+            // 交互已结束但挂起帧尚未应用时，新帧直接取代它，避免泄漏
+            SafeDisposeImage(ref _pendingDisplayImage);
             // 页面成功显示后移除空状态引导
             if (_panelEmptyState != null && _panelEmptyState.Visible)
                 _panelEmptyState.Visible = false;
-            Bitmap bmp = new Bitmap(new MemoryStream(imageData));
+            Bitmap bmp = image;
             Bitmap? rotatedImage = null;
             try
             {
@@ -1738,11 +1745,11 @@ namespace LearningAssistant.Forms.Pdf
         /// </summary>
         private void FlushPendingDisplayImage()
         {
-            if (_pendingDisplayImageData == null) return;
+            if (_pendingDisplayImage == null) return;
             if (_navigationManager?.IsUserInteractionActive == true) return;
 
-            var pending = _pendingDisplayImageData;
-            _pendingDisplayImageData = null;
+            var pending = _pendingDisplayImage;
+            _pendingDisplayImage = null;
             DisplayImage(pending);
         }
 
@@ -1755,9 +1762,8 @@ namespace LearningAssistant.Forms.Pdf
 
         void IPdfReaderFormAccess.DisplayImage(Bitmap bmp)
         {
-            using var ms = new MemoryStream();
-            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-            DisplayImage(ms.ToArray());
+            // 直接转交，不再做 PNG 编码中转
+            DisplayImage(bmp);
         }
 
         void IPdfReaderFormAccess.ReloadAnnotationLayer()
@@ -1892,11 +1898,12 @@ namespace LearningAssistant.Forms.Pdf
 
         /// <summary>
         /// 设置双页模式下第二页的图像
+        /// 所有权约定：视图接管传入位图并负责释放，调用方不得再释放。
         /// </summary>
-        /// <param name="bmp">第二页的Bitmap图像，null则清除</param>
-        public void SetSecondPageImage(byte[]? imageData)
+        /// <param name="image">第二页的Bitmap图像，null则清除</param>
+        public void SetSecondPageImage(Bitmap? image)
         {
-            Bitmap? bmp = imageData != null ? new Bitmap(new MemoryStream(imageData)) : null;
+            Bitmap? bmp = image;
             try
             {
                 SafeReplaceImage(ref _secondPageImage, bmp);
@@ -1927,6 +1934,11 @@ namespace LearningAssistant.Forms.Pdf
             }
             catch (Exception ex)
             {
+                // 未成功挂到 _secondPageImage 上的新位图由视图释放，避免泄漏
+                if (bmp != null && !ReferenceEquals(_secondPageImage, bmp))
+                {
+                    bmp.Dispose();
+                }
                 _logger.LogError(ex, "Error in SetSecondPageImage");
             }
         }
@@ -6535,6 +6547,7 @@ namespace LearningAssistant.Forms.Pdf
                 // 释放Bitmap资源
                 SafeDisposeImage(ref _currentPageImage);
                 SafeDisposeImage(ref _secondPageImage);
+                SafeDisposeImage(ref _pendingDisplayImage);
                 SafeDisposeImage(ref _annotationBitmap);
                 SafeDisposeImage(ref _highlightBitmap);
 

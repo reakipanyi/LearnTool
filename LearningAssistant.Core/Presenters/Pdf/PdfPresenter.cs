@@ -8,6 +8,7 @@ using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
+using System.Drawing;
 
 namespace LearningAssistant.Presenters
 {
@@ -221,7 +222,7 @@ namespace LearningAssistant.Presenters
             _pdfFileManager.LoadFolder(folder);
         }
 
-        public async Task<byte[]?> RenderPageAsync(int pageIndex,
+        public async Task<Bitmap?> RenderPageAsync(int pageIndex,
             int width, int height)
         {
             return await _pdfRenderer.RenderPageAsync(pageIndex, width, height);
@@ -325,36 +326,80 @@ namespace LearningAssistant.Presenters
                     renderHeight = Math.Max(1, (int)Math.Round(renderHeight * factor));
                 }
 
-                var firstPageTask = _pdfRenderer.RenderPageAsync(currentIndex, renderWidth, renderHeight, cancellationToken);
-
-                Task<byte[]?>? secondPageTask = null;
-                bool isDual = _view?.IsDualPage == true;
-                int nextIndex = currentIndex + 1;
-                if (isDual && nextIndex < _pdfRenderer.PageCount)
+                Bitmap? firstImage = null;
+                Bitmap? secondImage = null;
+                try
                 {
-                    secondPageTask = _pdfRenderer.RenderPageAsync(nextIndex, renderWidth, renderHeight, cancellationToken);
-                }
+                    var firstPageTask = _pdfRenderer.RenderPageAsync(currentIndex, renderWidth, renderHeight, cancellationToken);
 
-                var imageData = await firstPageTask;
-                if (IsRenderResultStale(generation, generationCts))
-                    return;
+                    Task<Bitmap?>? secondPageTask = null;
+                    bool isDual = _view?.IsDualPage == true;
+                    int nextIndex = currentIndex + 1;
+                    if (isDual && nextIndex < _pdfRenderer.PageCount)
+                    {
+                        secondPageTask = _pdfRenderer.RenderPageAsync(nextIndex, renderWidth, renderHeight, cancellationToken);
+                    }
 
-                if (imageData != null)
-                {
-                    _view?.DisplayImage(imageData);
-                }
-
-                if (secondPageTask != null)
-                {
-                    var secondImageData = await secondPageTask;
+                    firstImage = await firstPageTask;
                     if (IsRenderResultStale(generation, generationCts))
+                    {
+                        // 过期结果由 Presenter 释放；双页任务同样作废，需回收其结果
+                        firstImage?.Dispose();
+                        firstImage = null;
+                        if (secondPageTask != null)
+                        {
+                            var staleSecond = await secondPageTask;
+                            staleSecond?.Dispose();
+                        }
                         return;
+                    }
 
-                    _view?.SetSecondPageImage(secondImageData);
+                    if (firstImage != null)
+                    {
+                        if (_view != null)
+                        {
+                            // 所有权移交视图，调用方不得再释放
+                            _view.DisplayImage(firstImage);
+                            firstImage = null;
+                        }
+                        else
+                        {
+                            firstImage.Dispose();
+                            firstImage = null;
+                        }
+                    }
+
+                    if (secondPageTask != null)
+                    {
+                        secondImage = await secondPageTask;
+                        if (IsRenderResultStale(generation, generationCts))
+                        {
+                            secondImage?.Dispose();
+                            secondImage = null;
+                            return;
+                        }
+
+                        if (_view != null)
+                        {
+                            _view.SetSecondPageImage(secondImage);
+                            secondImage = null;
+                        }
+                        else
+                        {
+                            secondImage?.Dispose();
+                            secondImage = null;
+                        }
+                    }
+                    else
+                    {
+                        _view?.SetSecondPageImage(null);
+                    }
                 }
-                else
+                finally
                 {
-                    _view?.SetSecondPageImage(null);
+                    // 未成功移交给视图的位图在此释放，避免渲染结果泄漏
+                    firstImage?.Dispose();
+                    secondImage?.Dispose();
                 }
 
                 if (updateThumbnail)

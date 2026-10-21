@@ -97,10 +97,7 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
-        public Task<byte[]?> RenderPageAsync(int pageIndex, int width, int height)
-            => RenderPageAsync(pageIndex, width, height, CancellationToken.None);
-
-        public async Task<byte[]?> RenderPageAsync(int pageIndex, int width, int height, CancellationToken cancellationToken)
+        public async Task<Bitmap?> RenderPageAsync(int pageIndex, int width, int height, CancellationToken cancellationToken = default)
         {
             Bitmap? bitmap;
 
@@ -129,22 +126,30 @@ namespace LearningAssistant.Services.Pdf
                 bitmap = await GetRenderedPageAsync(pageIndex, renderWidth, renderHeight, cancellationToken);
             }
 
-            try
-            {
-                if (bitmap == null) return null;
-                if (cancellationToken.IsCancellationRequested) return null;
+            if (bitmap == null) return null;
 
-                var bitmapBytes = BitmapToBytes(bitmap);
-                if (bitmapBytes == null) return null;
-                // 已取消的请求不再做夜间模式转换，直接丢弃
-                if (cancellationToken.IsCancellationRequested) return null;
-                return ApplyNightMode(bitmapBytes);
-            }
-            finally
+            // 渲染期间已被取消：结果直接丢弃
+            if (cancellationToken.IsCancellationRequested)
             {
-                // 渲染结果由本方法独占持有，转换为字节后立即释放，避免每页泄漏大位图
-                bitmap?.Dispose();
+                bitmap.Dispose();
+                return null;
             }
+
+            // 夜间模式在位图层面完成反色，避免 byte[] PNG 往返
+            if (_isNightMode)
+            {
+                try
+                {
+                    return ApplyNightMode(bitmap);
+                }
+                finally
+                {
+                    // 反色结果为新位图，原始位图由渲染器释放
+                    bitmap.Dispose();
+                }
+            }
+
+            return bitmap;
         }
 
         private async Task<Bitmap?> LoadImageAsync(int index)
@@ -435,9 +440,9 @@ namespace LearningAssistant.Services.Pdf
                 {
                     w = Math.Max(1, (int)Math.Round(renderH * pageRatio));
                 }
-                return BytesToBitmap(_pdfService.RenderPage(pageIndex, w, h));
+                return _pdfService.RenderPageBitmap(pageIndex, w, h);
             }
-            return BytesToBitmap(_pdfService.RenderPage(pageIndex, renderW, renderH));
+            return _pdfService.RenderPageBitmap(pageIndex, renderW, renderH);
         }
 
         public async Task<byte[]?> GetThumbnailAsync(int pageIndex)
@@ -597,28 +602,42 @@ namespace LearningAssistant.Services.Pdf
             if (bmp == null)
                 return bitmap;
 
-            using var inverted = new Bitmap(bmp.Width, bmp.Height);
-            using (var graphics = Graphics.FromImage(inverted))
-            {
-                var colorMatrix = new System.Drawing.Imaging.ColorMatrix(
-                    new float[][]
-                    {
-                        new float[] { -1, 0, 0, 0, 0 },
-                        new float[] { 0, -1, 0, 0, 0 },
-                        new float[] { 0, 0, -1, 0, 0 },
-                        new float[] { 0, 0, 0, 1, 0 },
-                        new float[] { 1, 1, 1, 0, 1 }
-                    });
-
-                using (var attributes = new System.Drawing.Imaging.ImageAttributes())
-                {
-                    attributes.SetColorMatrix(colorMatrix);
-                    graphics.DrawImage(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height),
-                        0, 0, bmp.Width, bmp.Height, GraphicsUnit.Pixel, attributes);
-                }
-            }
-
+            using var inverted = ApplyNightMode(bmp);
             return BitmapToBytes(inverted) ?? bitmap;
+        }
+
+        public Bitmap ApplyNightMode(Bitmap source)
+        {
+            var inverted = new Bitmap(source.Width, source.Height);
+            try
+            {
+                using (var graphics = Graphics.FromImage(inverted))
+                {
+                    var colorMatrix = new System.Drawing.Imaging.ColorMatrix(
+                        new float[][]
+                        {
+                            new float[] { -1, 0, 0, 0, 0 },
+                            new float[] { 0, -1, 0, 0, 0 },
+                            new float[] { 0, 0, -1, 0, 0 },
+                            new float[] { 0, 0, 0, 1, 0 },
+                            new float[] { 1, 1, 1, 0, 1 }
+                        });
+
+                    using (var attributes = new System.Drawing.Imaging.ImageAttributes())
+                    {
+                        attributes.SetColorMatrix(colorMatrix);
+                        graphics.DrawImage(source, new Rectangle(0, 0, source.Width, source.Height),
+                            0, 0, source.Width, source.Height, GraphicsUnit.Pixel, attributes);
+                    }
+                }
+
+                return inverted;
+            }
+            catch
+            {
+                inverted.Dispose();
+                throw;
+            }
         }
 
         private static byte[]? BitmapToBytes(Bitmap? bmp)

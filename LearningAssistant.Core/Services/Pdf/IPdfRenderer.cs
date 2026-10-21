@@ -1,4 +1,5 @@
 using LearningAssistant.Abstractions;
+using System.Drawing;
 
 namespace LearningAssistant.Services.Pdf
 {
@@ -9,25 +10,15 @@ namespace LearningAssistant.Services.Pdf
     public interface IPdfRenderer : IDisposable
     {
         /// <summary>
-        /// 异步渲染指定页面
-        /// </summary>
-        /// <param name="pageIndex">页码索引（从0开始）</param>
-        /// <param name="width">渲染宽度（像素）</param>
-        /// <param name="height">渲染高度（像素）</param>
-        /// <returns>渲染后的byte[]，若失败返回null</returns>
-        Task<byte[]?> RenderPageAsync(int pageIndex, int width, int height);
-
-        /// <summary>
-        /// 异步渲染指定页面（支持取消）
-        /// 默认实现忽略取消令牌，渲染器实现应重写以在排队/渲染完成后尽快丢弃过期结果。
+        /// 异步渲染指定页面（直接返回位图，避免 PNG 编解码）
+        /// 返回值由调用方接管并负责释放；渲染器内部的缓存为独立深拷贝。
         /// </summary>
         /// <param name="pageIndex">页码索引（从0开始）</param>
         /// <param name="width">渲染宽度（像素）</param>
         /// <param name="height">渲染高度（像素）</param>
         /// <param name="cancellationToken">取消令牌，快速翻页/缩放时取消上一次请求</param>
-        /// <returns>渲染后的byte[]，若失败或已取消返回null</returns>
-        Task<byte[]?> RenderPageAsync(int pageIndex, int width, int height, CancellationToken cancellationToken)
-            => RenderPageAsync(pageIndex, width, height);
+        /// <returns>渲染后的位图，若失败或已取消返回null</returns>
+        Task<Bitmap?> RenderPageAsync(int pageIndex, int width, int height, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// 获取页面缩略图
@@ -88,12 +79,19 @@ namespace LearningAssistant.Services.Pdf
         Task GenerateVisibleThumbnailsAsync(int currentPage, int visibleCount = 5);
 
         /// <summary>
-        /// 对byte[]应用夜间模式滤镜
-        /// 将浅色背景变深，减少眼睛疲劳
+        /// 对byte[]应用夜间模式滤镜（导出/兼容用途，热路径请用 Bitmap 重载）
         /// </summary>
         /// <param name="bitmap">原始byte[]</param>
         /// <returns>应用夜间模式后的byte[]</returns>
         byte[] ApplyNightMode(byte[] bitmap);
+
+        /// <summary>
+        /// 对位图应用夜间模式滤镜，返回新的位图（源位图不被修改）
+        /// 返回值由调用方接管并负责释放。
+        /// </summary>
+        /// <param name="source">原始位图</param>
+        /// <returns>应用夜间模式后的新位图</returns>
+        Bitmap ApplyNightMode(Bitmap source);
 
         /// <summary>
         /// 缩略图生成完成事件

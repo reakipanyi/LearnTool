@@ -77,6 +77,12 @@ namespace LearningAssistant.Services.Pdf
 
         public byte[]? RenderPage(int pageIndex, int width, int height)
         {
+            using var bmp = RenderPageBitmap(pageIndex, width, height);
+            return BitmapToBytes(bmp);
+        }
+
+        public Bitmap? RenderPageBitmap(int pageIndex, int width, int height)
+        {
             if (pageIndex < 0)
                 throw new ArgumentOutOfRangeException(nameof(pageIndex), "Page index cannot be negative.");
             if (width <= 0)
@@ -96,9 +102,15 @@ namespace LearningAssistant.Services.Pdf
                 {
                     _logger.LogDebug("Rendering page {PageIndex} with size {Width}x{Height}", pageIndex, width, height);
                     using var img = _pdf.Render(pageIndex, width, height, 96, 96, PdfRenderFlags.Annotations);
-                    using var result = img != null ? new Bitmap(img) : null;
+                    if (img == null)
+                        return null;
+
+                    // 必须复制：PdfiumViewer 返回的 Image 生命周期与本次调用绑定，
+                    // 直接传出会在 using 结束（或文档卸载）后变成已释放对象。
+                    // 这次内存拷贝远低于 PNG 编码/解码成本。
+                    var result = new Bitmap(img);
                     _logger.LogDebug("Page {PageIndex} rendered successfully", pageIndex);
-                    return BitmapToBytes(result);
+                    return result;
                 }
                 catch (Exception ex)
                 {

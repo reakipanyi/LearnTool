@@ -1,5 +1,6 @@
-﻿using LearningAssistant.Abstractions;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Models.Config;
+using System.Drawing;
 
 namespace LearningAssistant.Views
 {
@@ -55,15 +56,17 @@ namespace LearningAssistant.Views
 
         /// <summary>
         /// 显示图片
+        /// 所有权约定：视图接管传入位图并负责释放，调用方不得再释放。
         /// </summary>
-        /// <param name="imageData">PNG 格式的图片字节数组</param>
-        void DisplayImage(byte[] imageData);
+        /// <param name="image">页面位图</param>
+        void DisplayImage(Bitmap image);
 
         /// <summary>
         /// 设置第二页图像（双页模式）
+        /// 所有权约定：视图接管传入位图并负责释放，调用方不得再释放。
         /// </summary>
-        /// <param name="imageData">第二页 PNG 格式图片字节数组</param>
-        void SetSecondPageImage(byte[]? imageData);
+        /// <param name="image">第二页位图，null则清除</param>
+        void SetSecondPageImage(Bitmap? image);
 
         /// <summary>
         /// 显示警告消息
