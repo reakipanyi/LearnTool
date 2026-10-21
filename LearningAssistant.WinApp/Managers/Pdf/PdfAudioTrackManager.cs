@@ -55,37 +55,69 @@ public class PdfAudioTrackManager : IDisposable
         _playback = new PdfAudioPlaybackService(new NAudioMediaPlayer(subtitleParser));
     }
 
-    public void LoadProfile(string pdfPath, int pageCount)
+    private int _loadGeneration;
+    /// <summary>异步加载/重新扫描完成后触发，供 UI 刷新</summary>
+    public event EventHandler? ProfileLoaded;
+
+    public async Task LoadProfileAsync(string pdfPath, int pageCount, CancellationToken cancellationToken = default)
     {
+        var generation = ++_loadGeneration;
         _currentPdfPath = pdfPath;
         _pageCount = pageCount;
         _profile = _store.Load(pdfPath) ?? new PdfAudioProfile { PdfPath = pdfPath };
-        var dir = Path.GetDirectoryName(pdfPath) ?? "";
-        var tracks = _scanner.Scan(dir, _profile.IncludeSubDirectories);
-        var fingerprint = PdfAudioDirectoryScanner.ComputeScanFingerprint(tracks);
+        // 扫描期间不沿用上一份文档的匹配结果，避免翻页播放错音频
+        _result = null;
+        _currentPageIndex = -1;
 
-        var scanChanged = fingerprint != _profile.ScanFingerprint || _profile.Tracks.Count == 0;
-        var pageCountChanged = _profile.PageCount != pageCount;
-        // 指纹与页数均未变化时复用缓存映射；否则重算，避免规则结果丢失或页数变化后映射越界
-        if (scanChanged || pageCountChanged || _profile.PageIndex.Count == 0)
+        var directory = Path.GetDirectoryName(pdfPath) ?? "";
+        var includeSubDirectories = _profile.IncludeSubDirectories;
+        List<AudioTrack> tracks;
+        string fingerprint;
+        try
         {
-            _result = _matcher.Match(pdfPath, pageCount, tracks, _profile.Rules, _profile.ManualOverrides);
-            _profile.Tracks = tracks;
-            _profile.ScanFingerprint = fingerprint;
-            _profile.PageCount = pageCount;
+            (tracks, fingerprint) = await Task.Run(() =>
+            {
+                var scanned = _scanner.Scan(directory, includeSubDirectories);
+                return (scanned, PdfAudioDirectoryScanner.ComputeScanFingerprint(scanned));
+            }, cancellationToken).ConfigureAwait(true);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        // 期间已打开其它文档，丢弃过期结果
+        if (_disposed || generation != _loadGeneration) return;
+
+        ApplyLoadedProfile(pdfPath, pageCount, tracks, fingerprint);
+        ProfileLoaded?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void ApplyLoadedProfile(string pdfPath, int pageCount, List<AudioTrack> tracks, string fingerprint)
+    {
+        var profile = _profile!;
+        var scanChanged = fingerprint != profile.ScanFingerprint || profile.Tracks.Count == 0;
+        var pageCountChanged = profile.PageCount != pageCount;
+        // 指纹与页数均未变化时复用缓存映射；否则重算，避免规则结果丢失或页数变化后映射越界
+        if (scanChanged || pageCountChanged || profile.PageIndex.Count == 0)
+        {
+            _result = _matcher.Match(pdfPath, pageCount, tracks, profile.Rules, profile.ManualOverrides);
+            profile.Tracks = tracks;
+            profile.ScanFingerprint = fingerprint;
+            profile.PageCount = pageCount;
             PersistPageIndex();
-            _store.Save(_profile);
+            _store.Save(profile);
         }
         else
         {
-            _result = new AudioMatchResult { Tracks = _profile.Tracks };
-            foreach (var kv in _profile.PageIndex)
+            _result = new AudioMatchResult { Tracks = profile.Tracks };
+            foreach (var kv in profile.PageIndex)
             {
                 if (kv.Key < 0 || kv.Key >= pageCount) continue;
                 _result.PageIndex[kv.Key] = ResolveTrack(kv.Value, markManual: false);
             }
             // 手动覆盖始终最高优先级
-            foreach (var kv in _profile.ManualOverrides)
+            foreach (var kv in profile.ManualOverrides)
             {
                 if (kv.Key < 0 || kv.Key >= pageCount) continue;
                 _result.PageIndex[kv.Key] = ResolveTrack(kv.Value, markManual: true);
@@ -177,26 +209,31 @@ public class PdfAudioTrackManager : IDisposable
         }
     }
 
-    public void Rescan()
+    public async Task RescanAsync()
     {
-        if (_profile == null || _currentPdfPath == null) return;
-        _profile.ScanFingerprint = ""; // 强制重算匹配
-        LoadProfile(_currentPdfPath, _pageCount);
+        if (_currentPdfPath == null) return;
+        await LoadProfileAsync(_currentPdfPath, _pageCount);
     }
 
-    public void SetIncludeSubDirectories(bool value)
+    public async Task SetIncludeSubDirectoriesAsync(bool value)
     {
         if (_profile == null || _currentPdfPath == null) return;
         if (_profile.IncludeSubDirectories == value) return;
         _profile.IncludeSubDirectories = value;
         _store.Save(_profile);
-        Rescan();
+        await LoadProfileAsync(_currentPdfPath, _pageCount);
     }
 
-    public void SaveRules()
+    /// <summary>规则变更后直接用已扫描曲目重算，无需再次扫描目录</summary>
+    public void SaveRulesAndRematch()
     {
-        if (_profile == null) return;
+        if (_profile == null || _currentPdfPath == null) return;
+        _result = _matcher.Match(_currentPdfPath, _pageCount, _profile.Tracks,
+            _profile.Rules, _profile.ManualOverrides);
+        PersistPageIndex();
         _store.Save(_profile);
+        _currentPageIndex = -1;
+        ProfileLoaded?.Invoke(this, EventArgs.Empty);
     }
 
     public void SetManualOverride(int page, string file)

@@ -1463,7 +1463,9 @@ namespace LearningAssistant.Forms.Pdf
             _thumbnailsLoaded = false;
             _currentPdfPath = pdfPath;
             RefreshHighlightList();
-            _audioTrackManager?.LoadProfile(pdfPath, _presenter?.PageCount ?? 0);
+            _audioTrackManager?.LoadProfileAsync(pdfPath, _presenter?.PageCount ?? 0)
+                .ContinueWith(t => _logger.LogError(t.Exception, "加载PDF配套音频失败: {PdfPath}", pdfPath),
+                    TaskContinuationOptions.OnlyOnFaulted);
             _audioPanel?.RefreshData();
 
             LoadHighlightsForCurrentPage();

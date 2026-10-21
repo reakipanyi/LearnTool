@@ -92,9 +92,22 @@ public class PdfAudioPanel : UserControl
         _btnRules.Click += (_, _) => OnRules();
         _btnManual.Click += (_, _) => OnManual();
         _btnManualFromList.Click += (_, _) => OnManualFromList();
-        _btnRescan.Click += (_, _) => { _manager.Rescan(); RefreshData(); };
-        _chkSubDir.CheckedChanged += (_, _) => { _manager.SetIncludeSubDirectories(_chkSubDir.Checked); RefreshData(); };
+        _btnRescan.Click += async (_, _) =>
+        {
+            _btnRescan.Enabled = false;
+            try { await _manager.RescanAsync(); }
+            catch (Exception ex) { HandleAudioError("重新扫描失败", ex); }
+            finally { _btnRescan.Enabled = true; }
+        };
+        _chkSubDir.CheckedChanged += async (_, _) =>
+        {
+            _chkSubDir.Enabled = false;
+            try { await _manager.SetIncludeSubDirectoriesAsync(_chkSubDir.Checked); }
+            catch (Exception ex) { HandleAudioError("切换递归扫描失败", ex); }
+            finally { _chkSubDir.Enabled = true; }
+        };
         _listTracks.SelectedIndexChanged += (_, _) => OnTrackSelected();
+        _manager.ProfileLoaded += OnProfileLoaded;
 
         _manager.Playback.Player.StateChanged += OnPlayerStateChanged;
         _manager.Playback.Player.PositionChanged += OnPlayerPositionChanged;
@@ -203,11 +216,7 @@ public class PdfAudioPanel : UserControl
         if (_manager.Profile == null) { _form.ShowWarning("尚未加载 profile"); return; }
         using var dlg = new PdfAudioRuleDialog(_manager.Profile, _form, _manager);
         if (dlg.ShowDialog(_form.Form) == DialogResult.OK)
-        {
-            _manager.SaveRules();
-            _manager.Rescan();
-            RefreshData();
-        }
+            _manager.SaveRulesAndRematch();
     }
 
     private void OnManual()
@@ -271,6 +280,14 @@ public class PdfAudioPanel : UserControl
         _labelSubtitle.Text = cue?.Text ?? "";
     }
 
+    private void OnProfileLoaded(object? sender, EventArgs e) => InvokeIfReady(RefreshData);
+
+    private void HandleAudioError(string message, Exception ex)
+    {
+        System.Diagnostics.Trace.TraceError($"{message}：{ex}");
+        _form.ShowWarning($"{message}：{ex.Message}");
+    }
+
     private void InvokeIfReady(Action action)
     {
         if (IsDisposed || !IsHandleCreated) return;
@@ -287,6 +304,7 @@ public class PdfAudioPanel : UserControl
         {
             _manager.Playback.Player.StateChanged -= OnPlayerStateChanged;
             _manager.Playback.Player.PositionChanged -= OnPlayerPositionChanged;
+            _manager.ProfileLoaded -= OnProfileLoaded;
             if (_recordingCompletedHandler != null && _form.AudioRecorderService != null)
                 _form.AudioRecorderService.RecordingCompleted -= _recordingCompletedHandler;
         }
