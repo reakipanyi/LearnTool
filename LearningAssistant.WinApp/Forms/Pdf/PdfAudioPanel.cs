@@ -201,7 +201,7 @@ public class PdfAudioPanel : UserControl
     private void OnRules()
     {
         if (_manager.Profile == null) { _form.ShowWarning("尚未加载 profile"); return; }
-        using var dlg = new PdfAudioRuleDialog(_manager.Profile, _form);
+        using var dlg = new PdfAudioRuleDialog(_manager.Profile, _form, _manager);
         if (dlg.ShowDialog(_form.Form) == DialogResult.OK)
         {
             _manager.SaveRules();

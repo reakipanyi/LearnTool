@@ -1,5 +1,6 @@
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Pdf;
+using System.Text.RegularExpressions;
 
 namespace LearningAssistant.Forms.Pdf;
 
@@ -7,6 +8,7 @@ public class PdfAudioRuleDialog : Form
 {
     private readonly PdfAudioProfile _profile;
     private readonly List<AudioMatchRule> _rules;
+    private readonly PdfAudioTrackManager _manager;
 
     private readonly ListView _lvRules = new()
     {
@@ -21,21 +23,36 @@ public class PdfAudioRuleDialog : Form
     private readonly NumericUpDown _numPriority = new() { Dock = DockStyle.Top, Minimum = 0, Maximum = 10000 };
     private readonly CheckBox _chkEnabled = new() { Dock = DockStyle.Top, Text = "启用", Checked = true };
 
+    private readonly ListBox _lstPreview = new() { Dock = DockStyle.Fill, IntegralHeight = false };
+    private readonly Label _labelPreviewSummary = new()
+    {
+        Dock = DockStyle.Top, AutoSize = false, Height = 22, ForeColor = Color.FromArgb(50, 70, 90)
+    };
+    private readonly Label _labelDiagnostics = new()
+    {
+        Dock = DockStyle.Top, AutoSize = false, Height = 22, ForeColor = Color.FromArgb(220, 38, 38)
+    };
+    private readonly System.Windows.Forms.Timer _previewTimer = new() { Interval = 200 };
+
     private readonly List<AudioPageMapMode> _modes = new()
     { AudioPageMapMode.PageIndex, AudioPageMapMode.Sequence, AudioPageMapMode.Range, AudioPageMapMode.Custom };
+    private bool _populating;
 
-    public PdfAudioRuleDialog(PdfAudioProfile profile, IPdfReaderFormAccess form)
+    public PdfAudioRuleDialog(PdfAudioProfile profile, IPdfReaderFormAccess form, PdfAudioTrackManager manager)
     {
         _profile = profile;
+        _manager = manager;
         // 拷贝一份规则编辑：取消时不能影响已生效的配置
         _rules = _profile.Rules.Select(CloneRule).ToList();
         Text = "音频匹配规则";
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(760, 460);
+        ClientSize = new Size(820, 560);
+        MinimumSize = new Size(720, 480);
         BuildLayout();
         foreach (var m in _modes) _cmbMode.Items.Add(m.ToString());
         foreach (var r in _rules) AddListItem(r);
         if (_lvRules.Items.Count > 0) _lvRules.Items[0].Selected = true;
+        RefreshPreview();
     }
 
     private void BuildLayout()
@@ -54,8 +71,19 @@ public class PdfAudioRuleDialog : Form
 
         btnAdd.Click += (_, _) => OnAdd();
         btnDelete.Click += (_, _) => OnDelete();
-        btnApply.Click += (_, _) => ApplyToSelected();
-        btnOk.Click += (_, _) => { ApplyToSelected(); _profile.Rules = _rules; };
+        btnApply.Click += (_, _) => { ApplyToSelected(); RefreshPreview(); };
+        btnOk.Click += (_, _) =>
+        {
+            ApplyToSelected();
+            if (!ValidateAllRules(out var message))
+            {
+                btnOk.DialogResult = DialogResult.None;
+                MessageBox.Show(this, message, "正则非法", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            btnOk.DialogResult = DialogResult.OK;
+            _profile.Rules = _rules;
+        };
 
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(8) };
         bottom.Controls.AddRange(new Control[] { btnAdd, btnDelete, btnApply, btnOk, btnCancel });
@@ -73,11 +101,35 @@ public class PdfAudioRuleDialog : Form
         AddField(editPanel, ref row, "优先级", _numPriority);
         AddField(editPanel, ref row, "启用", _chkEnabled);
 
-        Controls.Add(_lvRules);
+        // 左侧：上为规则列表，下为试算预览
+        var split = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            Orientation = Orientation.Horizontal,
+            SplitterDistance = 260,
+            FixedPanel = FixedPanel.Panel1
+        };
+        split.Panel1.Controls.Add(_lvRules);
+        split.Panel2.Controls.Add(_lstPreview);
+        split.Panel2.Controls.Add(_labelDiagnostics);
+        split.Panel2.Controls.Add(_labelPreviewSummary);
+
+        Controls.Add(split);
         Controls.Add(editPanel);
         Controls.Add(bottom);
 
-        _lvRules.SelectedIndexChanged += (_, _) => PopulateFields();
+        _lvRules.SelectedIndexChanged += (_, _) => { PopulateFields(); SchedulePreview(); };
+
+        // 编辑项变化时延后 200ms 重算试算，避免逐字符触发
+        _previewTimer.Tick += (_, _) => { _previewTimer.Stop(); RefreshPreview(); };
+        _txtName.TextChanged += (_, _) => SchedulePreview();
+        _txtPattern.TextChanged += (_, _) => { ValidatePatternField(); SchedulePreview(); };
+        _cmbMode.SelectedIndexChanged += (_, _) => SchedulePreview();
+        _txtCapture.TextChanged += (_, _) => SchedulePreview();
+        _numOffset.ValueChanged += (_, _) => SchedulePreview();
+        _numPagesPerUnit.ValueChanged += (_, _) => SchedulePreview();
+        _numPriority.ValueChanged += (_, _) => SchedulePreview();
+        _chkEnabled.CheckedChanged += (_, _) => SchedulePreview();
     }
 
     private static void AddField(TableLayoutPanel panel, ref int row, string label, Control control)
@@ -118,10 +170,11 @@ public class PdfAudioRuleDialog : Form
 
     private void OnAdd()
     {
-        var rule = new AudioMatchRule { Name = "新规则", FileNamePattern = @"(\d+)\.mp3" };
+        var rule = new AudioMatchRule { Name = "新规则", FileNamePattern = @"(?:^|[\\/])(\d+)\.(?:mp3|wav|m4a|aac|flac|ogg|wma)$" };
         _rules.Add(rule);
         AddListItem(rule);
         _lvRules.Items[_lvRules.Items.Count - 1].Selected = true;
+        RefreshPreview();
     }
 
     private void OnDelete()
@@ -130,20 +183,30 @@ public class PdfAudioRuleDialog : Form
         var item = _lvRules.SelectedItems[0];
         if (item.Tag is AudioMatchRule r) _rules.Remove(r);
         _lvRules.Items.Remove(item);
+        RefreshPreview();
     }
 
     private void PopulateFields()
     {
         if (_lvRules.SelectedItems.Count == 0) return;
         if (_lvRules.SelectedItems[0].Tag is not AudioMatchRule r) return;
-        _txtName.Text = r.Name;
-        _txtPattern.Text = r.FileNamePattern;
-        _cmbMode.SelectedIndex = Math.Max(0, _modes.IndexOf(r.MapMode));
-        _txtCapture.Text = r.CaptureGroupIndex?.ToString() ?? "";
-        _numOffset.Value = Math.Clamp(r.PageOffset, -1000m, 10000m);
-        _numPagesPerUnit.Value = Math.Clamp(r.PagesPerUnit, 1m, 1000m);
-        _numPriority.Value = Math.Clamp(r.Priority, 0m, 10000m);
-        _chkEnabled.Checked = r.Enabled;
+        _populating = true;
+        try
+        {
+            _txtName.Text = r.Name;
+            _txtPattern.Text = r.FileNamePattern;
+            _cmbMode.SelectedIndex = Math.Max(0, _modes.IndexOf(r.MapMode));
+            _txtCapture.Text = r.CaptureGroupIndex?.ToString() ?? "";
+            _numOffset.Value = Math.Clamp(r.PageOffset, -1000m, 10000m);
+            _numPagesPerUnit.Value = Math.Clamp(r.PagesPerUnit, 1m, 1000m);
+            _numPriority.Value = Math.Clamp(r.Priority, 0m, 10000m);
+            _chkEnabled.Checked = r.Enabled;
+        }
+        finally
+        {
+            _populating = false;
+        }
+        ValidatePatternField();
     }
 
     private void ApplyToSelected()
@@ -159,6 +222,7 @@ public class PdfAudioRuleDialog : Form
         r.Priority = (int)_numPriority.Value;
         r.Enabled = _chkEnabled.Checked;
         RefreshListItem(_lvRules.SelectedItems[0], r);
+        ValidatePatternField();
     }
 
     private void RefreshListItem(ListViewItem item, AudioMatchRule r)
@@ -168,5 +232,119 @@ public class PdfAudioRuleDialog : Form
         item.SubItems[2].Text = r.Priority.ToString();
         item.SubItems[3].Text = r.Enabled ? "是" : "否";
         item.SubItems[4].Text = r.FileNamePattern;
+    }
+
+    private void SchedulePreview()
+    {
+        if (_populating) return;
+        _previewTimer.Stop();
+        _previewTimer.Start();
+    }
+
+    /// <summary>用当前编辑中的字段（未点“应用修改”）组装试算规则</summary>
+    private List<AudioMatchRule> BuildPreviewRules()
+    {
+        var list = _rules.Select(CloneRule).ToList();
+        if (_lvRules.SelectedItems.Count == 0 || _lvRules.SelectedItems[0].Tag is not AudioMatchRule selected)
+            return list;
+        var index = _rules.IndexOf(selected);
+        if (index < 0) return list;
+        list[index] = new AudioMatchRule
+        {
+            Id = selected.Id,
+            Name = string.IsNullOrWhiteSpace(_txtName.Text) ? "未命名规则" : _txtName.Text.Trim(),
+            FileNamePattern = _txtPattern.Text,
+            CaptureGroupIndex = int.TryParse(_txtCapture.Text.Trim(), out var group) ? group : null,
+            MapMode = _modes[Math.Max(0, _cmbMode.SelectedIndex)],
+            PageOffset = (int)_numOffset.Value,
+            PagesPerUnit = (int)_numPagesPerUnit.Value,
+            Enabled = _chkEnabled.Checked,
+            Priority = (int)_numPriority.Value
+        };
+        return list;
+    }
+
+    private void RefreshPreview()
+    {
+        if (_manager == null) return;
+
+        var result = _manager.PreviewRules(BuildPreviewRules());
+        // 先按曲目反查页码，避免对每个曲目重复扫描整个 PageIndex
+        var pagesByTrack = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in result.PageIndex)
+        {
+            if (!pagesByTrack.TryGetValue(kv.Value.FilePath, out var pages))
+                pagesByTrack[kv.Value.FilePath] = pages = new List<int>();
+            pages.Add(kv.Key + 1);
+        }
+
+        _lstPreview.BeginUpdate();
+        _lstPreview.Items.Clear();
+        foreach (var track in result.Tracks)
+        {
+            var pages = pagesByTrack.TryGetValue(track.FilePath, out var list)
+                ? string.Join(",", list.OrderBy(p => p).Take(6)) + (list.Count > 6 ? "…" : "")
+                : "未匹配";
+            _lstPreview.Items.Add($"{track.RelativePath}  →  {pages}");
+        }
+        _lstPreview.EndUpdate();
+
+        var total = _manager.PageCount;
+        _labelPreviewSummary.Text = total > 0
+            ? $"试算：已匹配 {result.PageIndex.Count}/{total} 页，未匹配 {result.UnmatchedPages.Count} 页"
+            : "试算：请先打开 PDF";
+        _labelDiagnostics.Text = _manager.Diagnostics.Count > 0
+            ? string.Join("；", _manager.Diagnostics)
+            : "";
+    }
+
+    private bool ValidatePatternField()
+    {
+        var pattern = _txtPattern.Text;
+        if (string.IsNullOrWhiteSpace(pattern))
+        {
+            _txtPattern.BackColor = Color.MistyRose;
+            return false;
+        }
+        try
+        {
+            _ = new Regex(pattern);
+            _txtPattern.BackColor = SystemColors.Window;
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            _txtPattern.BackColor = Color.MistyRose;
+            return false;
+        }
+    }
+
+    private bool ValidateAllRules(out string message)
+    {
+        foreach (var rule in _rules.Where(r => r.Enabled))
+        {
+            if (string.IsNullOrWhiteSpace(rule.FileNamePattern))
+            {
+                message = $"规则「{rule.Name}」正则不能为空";
+                return false;
+            }
+            try
+            {
+                _ = new Regex(rule.FileNamePattern);
+            }
+            catch (ArgumentException ex)
+            {
+                message = $"规则「{rule.Name}」正则非法：{ex.Message}";
+                return false;
+            }
+        }
+        message = "";
+        return true;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _previewTimer.Dispose();
+        base.Dispose(disposing);
     }
 }

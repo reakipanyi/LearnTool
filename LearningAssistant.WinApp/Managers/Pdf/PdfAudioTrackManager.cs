@@ -25,6 +25,24 @@ public class PdfAudioTrackManager : IDisposable
     public PdfAudioPlaybackService Playback => _playback;
     public AudioMatchResult? Result => _result;
     public PdfAudioProfile? Profile => _profile;
+    public int PageCount => _pageCount;
+    public IReadOnlyList<string> Diagnostics => _matcher.Diagnostics;
+
+    /// <summary>用给定规则对当前已扫描曲目试算，不修改已生效的 profile</summary>
+    public AudioMatchResult PreviewRules(IReadOnlyList<AudioMatchRule> rules)
+    {
+        // 传入副本，避免试算修改缓存曲目的映射状态
+        var tracks = (_profile?.Tracks ?? new List<AudioTrack>())
+            .Select(t => new AudioTrack
+            {
+                FilePath = t.FilePath,
+                FileName = t.FileName,
+                RelativePath = t.RelativePath,
+                SubtitlePath = t.SubtitlePath
+            })
+            .ToList();
+        return _matcher.Match(_currentPdfPath ?? "", _pageCount, tracks, rules, _profile?.ManualOverrides);
+    }
 
     public PdfAudioTrackManager(ILogger logger,
         IPdfAudioMatcher matcher, IPdfAudioDirectoryScanner scanner,
