@@ -2669,6 +2669,39 @@ namespace LearningAssistant.Forms.Pdf
             ShowAiResponseDialog("选中内容 AI 总结", response, allowSave: true);
         }
 
+        /// <summary>全文检索问答：关键词召回相关页后回答，答案页码可点击跳转</summary>
+        private async Task AskDocumentByRetrievalAsync()
+        {
+            if (_pdfAiService == null)
+            {
+                MessageBox.Show(this, "AI 服务不可用，请先完成 AI 配置", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(_currentPdfPath))
+            {
+                MessageBox.Show(this, "当前没有打开的 PDF 文档", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var question = Microsoft.VisualBasic.Interaction.InputBox(
+                "请输入要检索的问题：", "全文检索问答", string.Empty);
+            if (string.IsNullOrWhiteSpace(question)) return;
+
+            PdfAiResponse response;
+            UseWaitCursor = true;
+            try
+            {
+                response = await _pdfAiService.AskDocumentWithRetrievalAsync(
+                    _currentPdfPath, question.Trim()).ConfigureAwait(true);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+            }
+
+            ShowAiResponseDialog("全文检索问答", response, allowSave: true);
+        }
+
         /// <summary>展示 AI 结果窗口，可按需保存为当前页标注</summary>
         private void ShowAiResponseDialog(string title, PdfAiResponse response, bool allowSave)
         {
@@ -4161,6 +4194,7 @@ namespace LearningAssistant.Forms.Pdf
             menu.Items.Add("打开 AI 面板", null, (_, _) => RaiseAiQuestionAsked());
             menu.Items.Add("总结当前页", null, async (_, _) => await SummarizeCurrentPageAsync());
             menu.Items.Add("总结选中内容", null, async (_, _) => await SummarizeSelectionAsync());
+            menu.Items.Add("全文检索问答", null, async (_, _) => await AskDocumentByRetrievalAsync());
 
             if (sender is Control anchor)
             {

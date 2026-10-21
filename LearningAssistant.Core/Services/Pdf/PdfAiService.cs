@@ -104,6 +104,56 @@ namespace LearningAssistant.Services.Pdf
             }, "问答", cancellationToken);
 
         /// <inheritdoc />
+        public Task<PdfAiResponse> AskDocumentWithRetrievalAsync(
+            string pdfPath,
+            string question,
+            CancellationToken cancellationToken = default)
+            => ExecuteAsync(async () =>
+            {
+                if (string.IsNullOrWhiteSpace(question))
+                    return PdfAiResponse.Fail("问题内容为空");
+
+                var index = await _textIndex.GetOrBuildAsync(pdfPath, progress: null,
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
+                if (index.PageCount <= 0)
+                    return PdfAiResponse.Fail("文档没有可用文本，请先完成 OCR");
+
+                var retrieval = PdfKeywordRetriever.Retrieve(index, question);
+                if (!retrieval.HasMatch)
+                {
+                    return PdfAiResponse.Ok("未在文档中找到依据（已检索全文，未发现与该问题相关的页面）。");
+                }
+
+                var result = PdfAiContextBuilder.BuildForPages(
+                    index,
+                    retrieval.PageIndexes,
+                    _options.MaxCharsPerPage,
+                    _options.MaxTotalChars);
+
+                if (result.IncludedPages.Count == 0)
+                    return PdfAiResponse.Fail("召回页面没有可用文本，请先完成 OCR");
+
+                var context = new PdfAiContext(result.Context, result.IncludedPages, index.PageCount, index.Fingerprint);
+
+                var prompt = $"""
+                    你是文档问答助手。下面是根据问题检索到的文档页面，请只依据这些内容回答。
+                    要求：
+                    1. 每个结论后标注依据页码，格式为 [[p12]]（页码从 1 开始）；
+                    2. 如果这些页面不足以回答，明确说明“未在文档中找到依据”，不要编造；
+                    3. 回答简洁，必要时分点说明。
+
+                    问题：{question}
+
+                    检索到的文档内容：
+                    {context.Context}
+                    """;
+
+                var extra = $"retrieval|{question}|{string.Join(",", retrieval.Keywords)}";
+                return await ExecutePromptAsync(context, "ask-retrieval", context.IncludedPages, prompt,
+                    null, extra, null, cancellationToken).ConfigureAwait(false);
+            }, "文档问答", cancellationToken);
+
+        /// <inheritdoc />
         public Task<PdfAiResponse> AskScopedAsync(
             string pdfPath,
             string question,

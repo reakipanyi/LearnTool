@@ -115,6 +115,40 @@ public class PdfAiServiceTests
     }
 
     [Fact]
+    public async Task 全文检索问答_仅召回相关页进入上下文()
+    {
+        var index = new FakeTextIndex(10);
+        index.SetText(0, "无关内容");
+        index.SetText(6, "光合作用的定义与步骤");
+        index.SetText(7, "无关内容");
+        var ai = new FakeAiService(_ => "光合作用是植物合成有机物 [[p7]]");
+        var service = new PdfAiService(ai, index);
+
+        var result = await service.AskDocumentWithRetrievalAsync("book.pdf", "什么是光合作用？");
+
+        result.Success.Should().BeTrue();
+        result.ReferencedPages.Should().BeEquivalentTo(new[] { 7 });
+        ai.LastPrompt.Should().Contain("[[p7]]");
+        ai.LastPrompt.Should().NotContain("[[p1]]").And.NotContain("[[p10]]");
+    }
+
+    [Fact]
+    public async Task 全文检索无相关页_不调用AI并明确提示()
+    {
+        var index = new FakeTextIndex(2);
+        index.SetText(0, "苹果");
+        index.SetText(1, "香蕉");
+        var ai = new FakeAiService(_ => "不应调用");
+        var service = new PdfAiService(ai, index);
+
+        var result = await service.AskDocumentWithRetrievalAsync("book.pdf", "量子纠缠");
+
+        result.Success.Should().BeTrue();
+        result.Content.Should().Contain("未在文档中找到依据");
+        ai.CallCount.Should().Be(0);
+    }
+
+    [Fact]
     public async Task AI服务不可用_直接返回失败()
     {
         var index = new FakeTextIndex(1);

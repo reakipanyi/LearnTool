@@ -28,6 +28,15 @@ namespace LearningAssistant.Services.Pdf
             CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// 文档问答（轻量检索）：先按关键词召回相关页及邻近页，再基于召回内容回答。
+        /// 无召回页时返回明确提示，不调用 AI。
+        /// </summary>
+        Task<PdfAiResponse> AskDocumentWithRetrievalAsync(
+            string pdfPath,
+            string question,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// 按作用域问答：选中 / 本页（含前后页）/ 指定页 / 全文，答案带 [[pN]] 页码锚点。
         /// </summary>
         Task<PdfAiResponse> AskScopedAsync(

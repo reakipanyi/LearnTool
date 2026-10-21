@@ -75,6 +75,39 @@ namespace LearningAssistant.Services.Pdf
                 _ => new[] { current }
             };
 
+            return BuildFromIndexes(document, pageIndexes, maxCharsPerPage, maxTotalChars);
+        }
+
+        /// <summary>
+        /// 按给定的非连续页码集合构建上下文（用于轻量检索召回）。
+        /// </summary>
+        public static PdfAiContextResult BuildForPages(
+            PdfTextIndexDocument document,
+            IEnumerable<int> pageIndexes,
+            int maxCharsPerPage = 4000,
+            int maxTotalChars = 24000)
+        {
+            if (document == null || document.PageCount <= 0 || pageIndexes == null)
+                return new PdfAiContextResult();
+
+            var indexes = pageIndexes
+                .Where(i => i >= 0 && i < document.PageCount)
+                .Distinct()
+                .OrderBy(i => i);
+
+            return BuildFromIndexes(
+                document,
+                indexes,
+                Math.Max(200, maxCharsPerPage),
+                Math.Max(500, maxTotalChars));
+        }
+
+        private static PdfAiContextResult BuildFromIndexes(
+            PdfTextIndexDocument document,
+            IEnumerable<int> pageIndexes,
+            int maxCharsPerPage,
+            int maxTotalChars)
+        {
             var builder = new StringBuilder();
             var includedPages = new List<int>();
 
