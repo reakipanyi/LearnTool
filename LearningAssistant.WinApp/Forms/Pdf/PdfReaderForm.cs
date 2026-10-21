@@ -1323,7 +1323,12 @@ namespace LearningAssistant.Forms.Pdf
         {
             if (angle == 0) return bitmap;
 
-            var rotated = new Bitmap(bitmap.Height, bitmap.Width);
+            // 只有 90°/270° 需要交换宽高，180° 画布尺寸保持不变
+            bool swapDimensions = angle % 180 != 0;
+            int targetWidth = swapDimensions ? bitmap.Height : bitmap.Width;
+            int targetHeight = swapDimensions ? bitmap.Width : bitmap.Height;
+
+            var rotated = new Bitmap(targetWidth, targetHeight);
             rotated.SetResolution(bitmap.HorizontalResolution, bitmap.VerticalResolution);
 
             using (var g = Graphics.FromImage(rotated))
@@ -1334,7 +1339,7 @@ namespace LearningAssistant.Forms.Pdf
                 g.DrawImage(bitmap, Point.Empty);
             }
 
-            bitmap.Dispose();
+            // 传入位图的生命周期由调用方管理，避免旋转失败后回退到已释放对象
             return rotated;
         }
 
@@ -1646,6 +1651,7 @@ namespace LearningAssistant.Forms.Pdf
         public void DisplayImage(byte[] imageData)
         {
             Bitmap bmp = new Bitmap(new MemoryStream(imageData));
+            Bitmap? rotatedImage = null;
             try
             {
                 CleanupAnnotationBitmap();
@@ -1655,7 +1661,9 @@ namespace LearningAssistant.Forms.Pdf
 
                 if (_rotationAngle != 0)
                 {
-                    imageToDisplay = RotateBitmap(imageToDisplay, _rotationAngle);
+                    // 旋转结果单独持有，异常时仍可安全回退到原始位图
+                    rotatedImage = RotateBitmap(bmp, _rotationAngle);
+                    imageToDisplay = rotatedImage;
                 }
 
                 SafeDisposeImage(ref _currentPageImage);
@@ -1683,11 +1691,29 @@ namespace LearningAssistant.Forms.Pdf
                 int pageIndexAtDisplay = _currentPageIndex;
                 string pdfPathAtDisplay = _currentPdfPath;
                 _ = Task.Run(() => LoadAnnotationsAsync(pageIndexAtDisplay, pdfPathAtDisplay));
+
+                // 旋转结果已提交到界面，原始未旋转位图不再需要
+                if (rotatedImage != null)
+                {
+                    bmp.Dispose();
+                }
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error in DisplayImage");
-                SafeDisposeImage(ref _currentPageImage);
+
+                // 回退到未旋转的原始位图；已挂到 _currentPageImage 上的旋转图一并释放，避免残留
+                if (rotatedImage != null && !ReferenceEquals(_currentPageImage, rotatedImage))
+                {
+                    rotatedImage.Dispose();
+                    rotatedImage = null;
+                }
+
+                if (!ReferenceEquals(_currentPageImage, bmp))
+                {
+                    SafeDisposeImage(ref _currentPageImage);
+                }
+
                 _currentPageImage = bmp;
                 _pictureBoxPdf.Image = null;
                 _pictureBoxPdf.Invalidate();

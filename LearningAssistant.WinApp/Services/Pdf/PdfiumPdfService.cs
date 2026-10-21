@@ -96,7 +96,7 @@ namespace LearningAssistant.Services.Pdf
                 {
                     _logger.LogDebug("Rendering page {PageIndex} with size {Width}x{Height}", pageIndex, width, height);
                     using var img = _pdf.Render(pageIndex, width, height, 96, 96, PdfRenderFlags.Annotations);
-                    var result = img != null ? new Bitmap(img) : null;
+                    using var result = img != null ? new Bitmap(img) : null;
                     _logger.LogDebug("Page {PageIndex} rendered successfully", pageIndex);
                     return BitmapToBytes(result);
                 }

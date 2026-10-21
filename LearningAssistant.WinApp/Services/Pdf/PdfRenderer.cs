@@ -75,6 +75,12 @@ namespace LearningAssistant.Services.Pdf
                     try { bitmap.Dispose(); } catch { }
                 }
                 _thumbnailCache.Clear();
+
+                // 渲染缓存中保存的是内部深拷贝，调用方拿到的均为副本，可安全释放
+                foreach (var bitmap in _renderCache.Values)
+                {
+                    try { bitmap.Dispose(); } catch { }
+                }
                 _renderCache.Clear();
                 _cacheAccessOrder.Clear();
                 _preRenderingPages.Clear();
@@ -116,8 +122,16 @@ namespace LearningAssistant.Services.Pdf
                 bitmap = await GetRenderedPageAsync(pageIndex, renderWidth, renderHeight);
             }
 
-            var bitmapBytes = BitmapToBytes(bitmap);
-            return bitmapBytes != null ? ApplyNightMode(bitmapBytes) : null;
+            try
+            {
+                var bitmapBytes = BitmapToBytes(bitmap);
+                return bitmapBytes != null ? ApplyNightMode(bitmapBytes) : null;
+            }
+            finally
+            {
+                // 渲染结果由本方法独占持有，转换为字节后立即释放，避免每页泄漏大位图
+                bitmap?.Dispose();
+            }
         }
 
         private async Task<Bitmap?> LoadImageAsync(int index)
@@ -285,14 +299,11 @@ namespace LearningAssistant.Services.Pdf
                             if (_renderCache.ContainsKey(cacheKey)) continue;
                         }
 
-                        if (_isImageMode)
-                        {
-                            await GetRenderedImagePageAsync(p, renderW, renderH);
-                        }
-                        else
-                        {
-                            await GetRenderedPageAsync(p, renderW, renderH);
-                        }
+                        // 预渲染只用于填充缓存，返回的位图副本需立即释放
+                        var preRendered = _isImageMode
+                            ? await GetRenderedImagePageAsync(p, renderW, renderH)
+                            : await GetRenderedPageAsync(p, renderW, renderH);
+                        preRendered?.Dispose();
                     }
                     finally
                     {
@@ -385,12 +396,15 @@ namespace LearningAssistant.Services.Pdf
             {
                 if (_thumbnailCache.TryGetValue(pageIndex, out var cached))
                 {
-                    return BitmapToBytes(CreateDeepCopy(cached));
+                    using var copy = CreateDeepCopy(cached);
+                    return BitmapToBytes(copy);
                 }
             }
 
             var thumbnail = await Task.Run(() => RenderPageToBitmap(pageIndex, 100, 140));
-            if (thumbnail != null)
+            if (thumbnail == null) return null;
+
+            try
             {
                 lock (_renderLock)
                 {
@@ -399,8 +413,12 @@ namespace LearningAssistant.Services.Pdf
                         _thumbnailCache[pageIndex] = CreateDeepCopy(thumbnail);
                     }
                 }
+                return BitmapToBytes(thumbnail);
             }
-            return BitmapToBytes(thumbnail);
+            finally
+            {
+                thumbnail.Dispose();
+            }
         }
 
         public async Task GenerateThumbnailsAsync()
@@ -521,11 +539,15 @@ namespace LearningAssistant.Services.Pdf
 
         public byte[] ApplyNightMode(byte[] bitmap)
         {
-            var bmp = BytesToBitmap(bitmap);
-            if (!_isNightMode || bmp == null)
+            // 白天模式直接返回，避免多余的解码与位图分配
+            if (!_isNightMode)
                 return bitmap;
 
-            var inverted = new Bitmap(bmp.Width, bmp.Height);
+            using var bmp = BytesToBitmap(bitmap);
+            if (bmp == null)
+                return bitmap;
+
+            using var inverted = new Bitmap(bmp.Width, bmp.Height);
             using (var graphics = Graphics.FromImage(inverted))
             {
                 var colorMatrix = new System.Drawing.Imaging.ColorMatrix(
@@ -546,7 +568,7 @@ namespace LearningAssistant.Services.Pdf
                 }
             }
 
-            return BitmapToBytes(inverted);
+            return BitmapToBytes(inverted) ?? bitmap;
         }
 
         private static byte[]? BitmapToBytes(Bitmap? bmp)
