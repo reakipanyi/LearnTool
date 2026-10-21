@@ -40,6 +40,12 @@ namespace LearningAssistant.Presenters
         private CancellationTokenSource? _pageRenderCts;
         private int _renderGeneration;
 
+        // 按页翻译缓存：key = 文档路径 + 页码 + OCR语言。文本层翻译与OCR翻译共用，
+        // 切换文档/语言时清空，避免重复OCR与重复调用翻译接口。
+        private readonly Dictionary<string, (string? Original, string? Translation)> _pageTranslationCache = new();
+        private readonly object _pageTranslationCacheLock = new();
+        private const int PageTranslationCacheLimit = 100;
+
         public event EventHandler<AddWordEventArgs>? OnAddWordToLearningList;
 
         public PdfPresenter(ILogger<PdfPresenter> logger,
@@ -207,6 +213,7 @@ namespace LearningAssistant.Presenters
         /// </summary>
         public void CloseCurrentDocument()
         {
+            ClearPageTranslationCache();
             try
             {
                 _pdfService.Unload();
@@ -606,16 +613,36 @@ namespace LearningAssistant.Presenters
                 (int)Math.Round(actualWidth),
                 (int)Math.Round(actualHeight));
 
+            // 优先按固定 DPI 重新渲染选区，避免用小尺寸显示位图识别导致汉字乱码；
+            // 渲染失败时回退到当前显示位图，保持原有行为。
+            byte[] ocrImageData = imageData;
+            RectInt ocrRect = intRect;
+            try
+            {
+                var hiResSelection = await RenderSelectionForOcrAsync(intRect, imgWidth, imgHeight);
+                if (hiResSelection != null && hiResSelection.Length > 0)
+                {
+                    ocrImageData = hiResSelection;
+                    ocrRect = RectInt.Empty;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "High DPI OCR render failed, fallback to displayed image");
+            }
+
             try
             {
                 if (_view?.AutoTranslateAfterOcr == true)
                 {
-                    var result = await _pdfTranslationService.OcrAndTranslateAsync(imageData, intRect);
+                    var result = await _pdfTranslationService.OcrAndTranslateAsync(ocrImageData, ocrRect);
                     UpdateOcrResult(result.Original, result.Translation);
                 }
                 else
                 {
-                    var croppedData = _imageProcessor.CropImage(imageData, intRect);
+                    var croppedData = ocrRect.Width > 0
+                        ? _imageProcessor.CropImage(ocrImageData, ocrRect)
+                        : ocrImageData;
                     if (croppedData == null)
                     {
                         _view?.ShowError("图像裁剪失败");
@@ -630,6 +657,60 @@ namespace LearningAssistant.Presenters
                 _logger.LogError(ex, "OCR识别失败");
                 _view?.ShowError("OCR识别失败：" + ex.Message);
             }
+        }
+
+        /// <summary>
+        /// OCR 目标渲染 DPI：保证小字号中文有足够的像素高度，避免缩放显示位图直接识别造成乱码。
+        /// </summary>
+        private const float OcrRenderDpi = 300f;
+
+        /// <summary>
+        /// 按固定 DPI 重新渲染当前页并按选区的相对位置裁剪，返回裁剪后的 PNG 数据。
+        /// 渲染失败返回 null，由调用方回退到当前显示位图。
+        /// </summary>
+        private async Task<byte[]?> RenderSelectionForOcrAsync(RectInt displayRect, int displayWidth, int displayHeight)
+        {
+            int pageIndex = _pdfFileManager.CurrentPageIndex;
+            if (pageIndex < 0 || displayWidth <= 0 || displayHeight <= 0) return null;
+
+            int renderWidth;
+            int renderHeight;
+
+            if (_pdfFileManager.IsImageMode)
+            {
+                // 图片模式原图即最高分辨率，渲染器会忽略目标尺寸并返回原图
+                renderWidth = displayWidth;
+                renderHeight = displayHeight;
+            }
+            else
+            {
+                var pageSize = _pdfService.GetPageSize(pageIndex);
+                if (pageSize.Width <= 0 || pageSize.Height <= 0) return null;
+
+                renderWidth = (int)Math.Round(pageSize.Width / 72.0 * OcrRenderDpi);
+                renderHeight = (int)Math.Round(pageSize.Height / 72.0 * OcrRenderDpi);
+            }
+
+            // OCR 辅助渲染不再调度邻近页预渲染，避免放大 OCR 的开销
+            using var pageBitmap = await _pdfRenderer.RenderPageAsync(
+                pageIndex, renderWidth, renderHeight, cancellationToken: default, schedulePreRender: false);
+            if (pageBitmap == null) return null;
+
+            // 选区坐标基于显示位图，换算成相对比例后映射到高分辨率页图
+            int x = (int)Math.Floor((double)displayRect.X / displayWidth * pageBitmap.Width);
+            int y = (int)Math.Floor((double)displayRect.Y / displayHeight * pageBitmap.Height);
+            int w = (int)Math.Ceiling((double)displayRect.Width / displayWidth * pageBitmap.Width);
+            int h = (int)Math.Ceiling((double)displayRect.Height / displayHeight * pageBitmap.Height);
+
+            x = Math.Clamp(x, 0, pageBitmap.Width - 1);
+            y = Math.Clamp(y, 0, pageBitmap.Height - 1);
+            w = Math.Clamp(w, 1, pageBitmap.Width - x);
+            h = Math.Clamp(h, 1, pageBitmap.Height - y);
+
+            using var cropped = pageBitmap.Clone(new Rectangle(x, y, w, h), pageBitmap.PixelFormat);
+            using var ms = new MemoryStream();
+            cropped.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+            return ms.ToArray();
         }
 
         private void UpdateOcrResult(string? original, string? translation)
@@ -1458,6 +1539,8 @@ namespace LearningAssistant.Presenters
         {
             // 切换文件时作废旧文件的渲染结果，避免其晚到覆盖新文件首屏
             CancelPendingRender();
+            // 页面翻译缓存属于上一份文档，必须清空
+            ClearPageTranslationCache();
 
             _view?.SetCurrentPdfPath(e.FilePath);
             _view?.SetImageMode(e.IsImageMode);
@@ -1635,7 +1718,8 @@ namespace LearningAssistant.Presenters
         }
 
         /// <summary>
-        /// 整页翻译：对当前页做 OCR 识别 + 翻译，结果写入原文/翻译文本框。
+        /// 整页翻译：优先使用 PDF 文本层，文本层为空时才回退到 OCR；
+        /// 结果按页缓存，重复点击或来回翻页不会重复 OCR/翻译。
         /// </summary>
         private async Task TranslateFullPageAsync()
         {
@@ -1647,7 +1731,41 @@ namespace LearningAssistant.Presenters
                 return;
             }
 
-            // 原文框为空 → 整页 OCR + 翻译
+            var pageIndex = _pdfFileManager.CurrentPageIndex;
+            var cacheKey = TryBuildPageCacheKey(pageIndex);
+
+            // 命中本页缓存直接回显
+            if (cacheKey != null && TryGetPageCache(cacheKey, out var cached) && !string.IsNullOrWhiteSpace(cached.Original))
+            {
+                UpdateOcrResult(cached.Original, cached.Translation);
+                return;
+            }
+
+            // 文本层优先：可提取文本的 PDF 跳过 OCR 直接翻译
+            var textLayer = TryGetTextLayerText(pageIndex);
+            if (!string.IsNullOrWhiteSpace(textLayer))
+            {
+                _view?.SetLoadingState(true);
+                try
+                {
+                    var translation = await TranslateAsync(textLayer);
+                    if (cacheKey != null)
+                        StorePageCache(cacheKey, textLayer, translation);
+                    UpdateOcrResult(textLayer, translation);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error in TranslateFullPageAsync (text layer)");
+                    _view?.ShowError("整页翻译失败: " + ex.Message);
+                }
+                finally
+                {
+                    _view?.SetLoadingState(false);
+                }
+                return;
+            }
+
+            // 文本层为空 → 整页 OCR + 翻译
             if (!_pdfOcrService.IsAvailable)
             {
                 var errorMsg = _pdfOcrService.InitErrorMessage ?? "OCR服务未配置";
@@ -1666,6 +1784,8 @@ namespace LearningAssistant.Presenters
             try
             {
                 var result = await _pdfTranslationService.OcrAndTranslateAsync(img);
+                if (cacheKey != null && !string.IsNullOrWhiteSpace(result.Original))
+                    StorePageCache(cacheKey, result.Original, result.Translation);
                 UpdateOcrResult(result.Original, result.Translation);
             }
             catch (Exception ex)
@@ -1676,6 +1796,59 @@ namespace LearningAssistant.Presenters
             finally
             {
                 _view?.SetLoadingState(false);
+            }
+        }
+
+        /// <summary>构建按页缓存键；图片模式或无文档时返回 null（不缓存）</summary>
+        private string? TryBuildPageCacheKey(int pageIndex)
+        {
+            if (_pdfFileManager.IsImageMode) return null;
+            var pdfPath = _pdfFileManager.CurrentFilePath;
+            if (string.IsNullOrEmpty(pdfPath)) return null;
+            var language = _view?.GetCurrentLanguage() ?? _currentLanguage;
+            return $"{pdfPath}|{pageIndex}|{language}";
+        }
+
+        /// <summary>尝试读取 PDF 文本层；不可用或异常时返回 null，由调用方回退到 OCR</summary>
+        private string? TryGetTextLayerText(int pageIndex)
+        {
+            if (_pdfFileManager.IsImageMode) return null;
+            try
+            {
+                return _pdfService.GetPdfText(pageIndex);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to extract PDF text layer for page {Page}", pageIndex);
+                return null;
+            }
+        }
+
+        private bool TryGetPageCache(string key, out (string? Original, string? Translation) value)
+        {
+            lock (_pageTranslationCacheLock)
+            {
+                return _pageTranslationCache.TryGetValue(key, out value);
+            }
+        }
+
+        private void StorePageCache(string key, string? original, string? translation)
+        {
+            if (string.IsNullOrWhiteSpace(original)) return;
+            lock (_pageTranslationCacheLock)
+            {
+                // 超限时整体清空，避免长时间阅读时无限增长
+                if (_pageTranslationCache.Count >= PageTranslationCacheLimit)
+                    _pageTranslationCache.Clear();
+                _pageTranslationCache[key] = (original, translation);
+            }
+        }
+
+        private void ClearPageTranslationCache()
+        {
+            lock (_pageTranslationCacheLock)
+            {
+                _pageTranslationCache.Clear();
             }
         }
 
@@ -1741,6 +1914,9 @@ namespace LearningAssistant.Presenters
                 // 视图提供的是 Tesseract 语言码（chi_sim/eng），TTS 需要中英文常量，这里做转换，
                 // 避免切换 OCR 语言后朗读仍使用旧语言
                 _currentLanguage = language == "eng" ? Constants.Language.English : Constants.Language.Chinese;
+
+                // OCR 语言变更后旧的按页识别/翻译结果不再有效
+                ClearPageTranslationCache();
             }
         }
 
