@@ -743,6 +743,28 @@ namespace LearningAssistant.Services.Pdf
             string? selectedText,
             CancellationToken cancellationToken)
         {
+            // 选中内容作用域只需选中文本，跳过整份文档索引，避免首次提问时长时间等待
+            if (scope == PdfAiScope.Selection && !string.IsNullOrWhiteSpace(selectedText))
+            {
+                int pageNumber = Math.Max(0, currentPageIndex) + 1;
+                string fingerprint;
+                try
+                {
+                    fingerprint = _textIndex.GetFingerprint(pdfPath);
+                }
+                catch (FileNotFoundException)
+                {
+                    fingerprint = pdfPath;
+                }
+
+                return new PdfAiContext(
+                    $"[[p{pageNumber}]]\n{selectedText.Trim()}\n\n",
+                    new[] { pageNumber },
+                    int.MaxValue,
+                    fingerprint,
+                    string.Empty);
+            }
+
             var index = await _textIndex.GetOrBuildAsync(pdfPath, progress: null, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
 

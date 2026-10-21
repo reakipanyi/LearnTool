@@ -2553,9 +2553,22 @@ namespace LearningAssistant.Forms.Pdf
             if (string.IsNullOrWhiteSpace(_currentPdfPath) || _documentTextIndex == null)
                 return _textBoxOriginal?.Text ?? string.Empty;
 
+            var documentName = Path.GetFileName(_currentPdfPath);
+
+            // 选中内容作用域无需整份文档索引，直接用选中的文本，避免首次构建索引时等待
+            if (scope == PdfAiScope.Selection)
+            {
+                var selection = GetSelectedText();
+                if (!string.IsNullOrWhiteSpace(selection))
+                    return $"文档：{documentName}\n\n[[p{_currentPageIndex + 1}]]\n{selection}\n\n";
+            }
+
             try
             {
-                var index = await _documentTextIndex.GetOrBuildAsync(_currentPdfPath).ConfigureAwait(false);
+                var index = await EnsurePdfTextIndexAsync(showProgress: true).ConfigureAwait(true);
+                if (index == null)
+                    return _textBoxOriginal?.Text ?? string.Empty;
+
                 var result = PdfAiContextBuilder.Build(
                     index,
                     scope,
@@ -2564,7 +2577,6 @@ namespace LearningAssistant.Forms.Pdf
                     Math.Max(0, endPageNumber - 1),
                     GetSelectedText());
 
-                var documentName = Path.GetFileName(_currentPdfPath);
                 return $"文档：{documentName}\n\n{result.Context}";
             }
             catch (Exception ex)
@@ -2572,6 +2584,67 @@ namespace LearningAssistant.Forms.Pdf
                 _logger.LogWarning(ex, "构建 PDF AI 上下文失败");
                 return _textBoxOriginal?.Text ?? string.Empty;
             }
+        }
+
+        /// <summary>
+        /// 确保当前 PDF 的文本索引可用：已有磁盘缓存直接复用，未命中时按需显示带取消的构建进度。
+        /// </summary>
+        private async Task<PdfTextIndexDocument?> EnsurePdfTextIndexAsync(bool showProgress)
+        {
+            if (string.IsNullOrWhiteSpace(_currentPdfPath) || _documentTextIndex == null)
+                return null;
+
+            var indexService = _documentTextIndex;
+            var pdfPath = _currentPdfPath;
+
+            // 缓存命中时不弹窗，避免每次 AI 操作都打断阅读
+            var cached = indexService.TryLoadCached(pdfPath);
+            if (cached != null) return cached;
+
+            if (!showProgress)
+            {
+                try
+                {
+                    return await indexService.GetOrBuildAsync(pdfPath).ConfigureAwait(true);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "构建 PDF 文本索引失败");
+                    return null;
+                }
+            }
+
+            PdfTextIndexDocument? result = null;
+            using var progressForm = new PdfTextIndexProgressForm();
+            using var cancellation = new CancellationTokenSource();
+
+            progressForm.CancelRequested += (_, _) => cancellation.Cancel();
+            progressForm.Shown += async (_, _) =>
+            {
+                try
+                {
+                    var progress = new Progress<PdfTextIndexProgress>(progressForm.UpdateProgress);
+                    result = await indexService
+                        .GetOrBuildAsync(pdfPath, forceRebuild: false, progress, cancellation.Token)
+                        .ConfigureAwait(true);
+                }
+                catch (OperationCanceledException)
+                {
+                    result = null;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "构建 PDF 文本索引失败");
+                    result = null;
+                }
+                finally
+                {
+                    if (!progressForm.IsDisposed) progressForm.Close();
+                }
+            };
+
+            progressForm.ShowDialog(this);
+            return result;
         }
 
         /// <summary>站内问答：按作用域调用 PDF AI 编排并返回可引用的页码</summary>
@@ -2586,6 +2659,14 @@ namespace LearningAssistant.Forms.Pdf
                 return PdfAiResponse.Fail("AI 服务不可用，请先完成 AI 配置");
             if (string.IsNullOrWhiteSpace(_currentPdfPath))
                 return PdfAiResponse.Fail("当前没有打开的 PDF 文档");
+
+            // 非选中内容作用域都依赖全文索引，先带进度地准备索引，避免调用时长时间无反馈
+            if (scope != PdfAiScope.Selection)
+            {
+                var index = await EnsurePdfTextIndexAsync(showProgress: true).ConfigureAwait(true);
+                if (index == null)
+                    return PdfAiResponse.Fail("未能建立文档文本索引，请重试或先完成 OCR");
+            }
 
             return await _pdfAiService.AskScopedAsync(
                 _currentPdfPath,
@@ -2618,6 +2699,13 @@ namespace LearningAssistant.Forms.Pdf
             if (string.IsNullOrWhiteSpace(_currentPdfPath))
             {
                 MessageBox.Show(this, "当前没有打开的 PDF 文档", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (await EnsurePdfTextIndexAsync(showProgress: true).ConfigureAwait(true) == null)
+            {
+                MessageBox.Show(this, "未能建立文档文本索引，请重试或先完成 OCR", "提示",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -2696,6 +2784,13 @@ namespace LearningAssistant.Forms.Pdf
                 "请输入要检索的问题：", "全文检索问答", string.Empty);
             if (string.IsNullOrWhiteSpace(question)) return;
 
+            if (await EnsurePdfTextIndexAsync(showProgress: true).ConfigureAwait(true) == null)
+            {
+                MessageBox.Show(this, "未能建立文档文本索引，请重试或先完成 OCR", "提示",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             PdfAiResponse response;
             UseWaitCursor = true;
             try
@@ -2725,6 +2820,14 @@ namespace LearningAssistant.Forms.Pdf
             {
                 MessageBox.Show(this, "请先在左侧翻译页签的原文框中选中要解释的内容", "提示",
                     MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_currentPdfPath) ||
+                await EnsurePdfTextIndexAsync(showProgress: true).ConfigureAwait(true) == null)
+            {
+                MessageBox.Show(this, "未能建立文档文本索引，请重试或先完成 OCR", "提示",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -2761,6 +2864,13 @@ namespace LearningAssistant.Forms.Pdf
             if (optionsDialog.ShowDialog(this) != DialogResult.OK) return;
 
             var options = optionsDialog.Options;
+
+            if (await EnsurePdfTextIndexAsync(showProgress: true).ConfigureAwait(true) == null)
+            {
+                MessageBox.Show(this, "未能建立文档文本索引，请重试或先完成 OCR", "提示",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
 
             PdfAiResponse response;
             UseWaitCursor = true;
@@ -8091,6 +8201,109 @@ namespace LearningAssistant.Forms.Pdf
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, ref POINT lParam);
+
+        /// <summary>文本索引构建进度窗口：显示逐页构建进度，并支持取消。</summary>
+        private sealed class PdfTextIndexProgressForm : Form
+        {
+            private readonly Label _labelStatus;
+            private readonly ProgressBar _progressBar;
+            private readonly Button _buttonCancel;
+
+            /// <summary>用户请求取消构建</summary>
+            public event EventHandler? CancelRequested;
+
+            public PdfTextIndexProgressForm()
+            {
+                Text = "建立文本索引";
+                Font = new Font("Microsoft YaHei UI", 9F);
+                FormBorderStyle = FormBorderStyle.FixedDialog;
+                ControlBox = false;
+                ShowInTaskbar = false;
+                StartPosition = FormStartPosition.CenterParent;
+                ClientSize = new Size(480, 172);
+                BackColor = Color.White;
+
+                var labelTitle = new Label
+                {
+                    Text = "正在建立文档文本索引",
+                    Font = new Font("Microsoft YaHei UI", 11F, FontStyle.Bold),
+                    ForeColor = Color.FromArgb(35, 42, 58),
+                    Location = new Point(20, 18),
+                    AutoSize = true
+                };
+
+                _labelStatus = new Label
+                {
+                    Text = "准备中…",
+                    Location = new Point(20, 48),
+                    Size = new Size(440, 20),
+                    ForeColor = Color.FromArgb(70, 78, 96)
+                };
+
+                var labelDetail = new Label
+                {
+                    Text = "文本层优先，扫描页自动 OCR；结果会缓存，下次直接复用。",
+                    Location = new Point(20, 70),
+                    Size = new Size(440, 34),
+                    ForeColor = Color.FromArgb(130, 138, 155)
+                };
+
+                _progressBar = new ProgressBar
+                {
+                    Location = new Point(20, 108),
+                    Size = new Size(440, 16),
+                    Minimum = 0,
+                    Maximum = 100
+                };
+
+                _buttonCancel = new Button
+                {
+                    Text = "取消",
+                    Location = new Point(370, 134),
+                    Size = new Size(90, 30),
+                    BackColor = Color.White,
+                    FlatStyle = FlatStyle.Flat,
+                    Cursor = Cursors.Hand
+                };
+                _buttonCancel.FlatAppearance.BorderColor = Color.FromArgb(210, 215, 225);
+                _buttonCancel.Click += (_, _) =>
+                {
+                    _buttonCancel.Enabled = false;
+                    _labelStatus.Text = "正在取消，等待当前页处理完成…";
+                    CancelRequested?.Invoke(this, EventArgs.Empty);
+                };
+
+                Controls.AddRange(new Control[] { labelTitle, _labelStatus, labelDetail, _progressBar, _buttonCancel });
+            }
+
+            /// <summary>按索引构建进度刷新状态与进度条</summary>
+            public void UpdateProgress(PdfTextIndexProgress progress)
+            {
+                if (IsDisposed || progress == null) return;
+
+                if (progress.FromCache)
+                {
+                    _labelStatus.Text = "已命中文本索引缓存";
+                    _progressBar.Value = 100;
+                    return;
+                }
+
+                if (progress.TotalPages > 0)
+                {
+                    _progressBar.Value = Math.Clamp(
+                        (int)Math.Round(100.0 * progress.ProcessedPages / progress.TotalPages), 0, 100);
+                }
+
+                var source = progress.Source switch
+                {
+                    PdfTextSource.TextLayer => "文本层",
+                    PdfTextSource.Ocr => "OCR",
+                    _ => "跳过"
+                };
+                _labelStatus.Text =
+                    $"正在建立文本索引（{progress.ProcessedPages}/{progress.TotalPages}）· 第 {progress.PageIndex + 1} 页 · {source}";
+            }
+        }
 
         /// <summary>带纵向滚动通知的多行文本框，用于原文/译文同步滚动。</summary>
         private sealed class SyncedTextBox : TextBox
