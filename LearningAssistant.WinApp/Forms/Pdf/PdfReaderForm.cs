@@ -12,6 +12,7 @@ using LearningAssistant.Services.Pdf;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel;
+using System.Text;
 
 namespace LearningAssistant.Forms.Pdf
 {
@@ -2789,6 +2790,12 @@ namespace LearningAssistant.Forms.Pdf
             AddMoreMenuItem(moreMenu, "删除线", _buttonStrikethroughMode, () => ButtonStrikethroughMode_Click(this, EventArgs.Empty));
             AddMoreMenuItem(moreMenu, "标注图层显隐", _buttonToggleAnnotationLayer, () => ButtonToggleAnnotationLayer_Click(this, EventArgs.Empty));
             AddMoreMenuItem(moreMenu, "导出标注为图片", _buttonExportAnnotationsAsImage, () => ExportAnnotationsAsImage_Click(this, EventArgs.Empty));
+
+            // 批量 OCR 导出属于文件级操作，放在「更多」中作为低频入口
+            var batchOcrItem = new ToolStripMenuItem("批量OCR导出文本…");
+            batchOcrItem.Image = CreateGlyphIcon("📄");
+            batchOcrItem.Click += (s, e) => BatchOcrExport_Click();
+            moreMenu.Items.Add(batchOcrItem);
             AddMoreMenuItem(moreMenu, "检查清单", _buttonChecklistMode, () => ButtonChecklistMode_Click(this, EventArgs.Empty));
             AddMoreMenuItem(moreMenu, "插入图片", _buttonImageEmbedMode, () => ButtonImageEmbedMode_Click(this, EventArgs.Empty));
             AddMoreMenuItem(moreMenu, "聚光灯", _buttonSpotlightMode, () => ButtonSpotlightMode_Click(this, EventArgs.Empty));
@@ -3339,6 +3346,226 @@ namespace LearningAssistant.Forms.Pdf
                 bmp.Save(saveDialog.FileName, System.Drawing.Imaging.ImageFormat.Png);
             }
         }
+
+        #region 批量 OCR 导出
+
+        /// <summary>
+        /// 批量 OCR 导出入口：多选 PDF → 设置页码/目录/格式 → 后台逐页提取文本或 OCR → 输出 md/txt。
+        /// </summary>
+        private void BatchOcrExport_Click()
+        {
+            using var openDialog = new OpenFileDialog
+            {
+                Title = "选择要导出的 PDF 文件",
+                Filter = "PDF 文件|*.pdf",
+                Multiselect = true
+            };
+            if (openDialog.ShowDialog(this) != DialogResult.OK || openDialog.FileNames.Length == 0)
+                return;
+
+            using var optionsDialog = new BatchOcrExportDialog(openDialog.FileNames.Length);
+            if (optionsDialog.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            RunBatchOcrExport(openDialog.FileNames, optionsDialog.Options);
+        }
+
+        /// <summary>执行批量导出：进度窗口模态显示，逐文件串行处理，支持取消</summary>
+        private void RunBatchOcrExport(string[] files, BatchOcrExportOptions options)
+        {
+            var pdfService = Program.ServiceProvider?.GetService(typeof(IPdfService)) as IPdfService;
+            if (pdfService == null)
+            {
+                ShowWarning("PDF服务不可用，无法执行批量导出");
+                return;
+            }
+
+            var ocrService = Program.ServiceProvider?.GetService(typeof(IPdfOcrService)) as IPdfOcrService;
+            int successCount = 0;
+            var failures = new List<string>();
+
+            using var progressForm = new BatchOcrExportProgressForm(files.Length);
+            progressForm.Shown += async (s, e) =>
+            {
+                try
+                {
+                    for (int i = 0; i < files.Length; i++)
+                    {
+                        if (progressForm.IsCancellationRequested) break;
+
+                        var file = files[i];
+                        progressForm.SetStatus($"正在处理 {Path.GetFileName(file)}（{i + 1}/{files.Length}）");
+                        try
+                        {
+                            await ExportPdfTextAsync(file, options, pdfService, ocrService, progressForm);
+                            successCount++;
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            break;
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "批量OCR导出失败: {File}", file);
+                            failures.Add($"{Path.GetFileName(file)}：{ex.Message}");
+                        }
+                    }
+                }
+                finally
+                {
+                    progressForm.Close();
+                }
+            };
+
+            progressForm.ShowDialog(this);
+
+            if (failures.Count == 0)
+            {
+                var message = progressForm.IsCancellationRequested
+                    ? $"批量导出已取消，已完成 {successCount} 个文件"
+                    : $"批量导出完成，共处理 {successCount} 个文件";
+                ShowToast(message, 3500);
+            }
+            else
+            {
+                ShowMessage($"批量导出结束：成功 {successCount} 个，失败 {failures.Count} 个。\n\n{string.Join("\n", failures)}",
+                    "批量OCR导出");
+            }
+        }
+
+        /// <summary>导出单个 PDF：有文本层直接提取，无文本层才渲染并 OCR，最后写入 md/txt</summary>
+        private async Task ExportPdfTextAsync(string pdfPath, BatchOcrExportOptions options, IPdfService pdfService,
+            IPdfOcrService? ocrService, BatchOcrExportProgressForm progressForm)
+        {
+            int pageCount = pdfService.GetPageCount(pdfPath);
+            if (pageCount <= 0)
+                throw new InvalidOperationException("无法读取文档页数");
+
+            int startPage = options.StartPageIndex < 0 ? 0 : Math.Min(options.StartPageIndex, pageCount - 1);
+            int endPage = options.EndPageIndex < 0 ? pageCount - 1 : Math.Min(options.EndPageIndex, pageCount - 1);
+            if (endPage < startPage)
+                throw new InvalidOperationException($"页码范围超出文档页数（共 {pageCount} 页）");
+
+            var baseName = Path.GetFileNameWithoutExtension(pdfPath);
+            var builder = new StringBuilder();
+            if (options.Markdown)
+            {
+                builder.AppendLine($"# {baseName}");
+                builder.AppendLine();
+            }
+
+            IPdfService? renderService = null;
+            bool renderServiceLoaded = false;
+            try
+            {
+                int totalPages = endPage - startPage + 1;
+                for (int pageIndex = startPage; pageIndex <= endPage; pageIndex++)
+                {
+                    if (progressForm.IsCancellationRequested)
+                        throw new OperationCanceledException();
+
+                    progressForm.SetPageProgress(pageIndex - startPage + 1, totalPages);
+
+                    string? pageText = null;
+                    try
+                    {
+                        pageText = pdfService.ExtractText(pdfPath, pageIndex + 1);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "提取文本层失败: {File} 第 {Page} 页", pdfPath, pageIndex + 1);
+                    }
+
+                    if (string.IsNullOrWhiteSpace(pageText))
+                    {
+                        // 文本层为空（扫描件）→ 渲染当前页并 OCR
+                        if (ocrService == null || !ocrService.IsAvailable)
+                        {
+                            pageText = "（OCR服务不可用，无法识别本页文字）";
+                        }
+                        else
+                        {
+                            renderService ??= new PdfiumPdfService(
+                                Microsoft.Extensions.Logging.Abstractions.NullLogger<PdfiumPdfService>.Instance);
+                            if (!renderServiceLoaded)
+                            {
+                                renderService.Load(pdfPath);
+                                renderServiceLoaded = true;
+                            }
+                            pageText = await OcrRenderedPageAsync(renderService, ocrService, pageIndex);
+                        }
+                    }
+
+                    var content = string.IsNullOrWhiteSpace(pageText) ? "（本页未识别到文字）" : pageText.Trim();
+                    if (options.Markdown)
+                    {
+                        builder.AppendLine($"## 第 {pageIndex + 1} 页");
+                        builder.AppendLine();
+                        builder.AppendLine(content);
+                        builder.AppendLine();
+                    }
+                    else
+                    {
+                        builder.AppendLine($"===== 第 {pageIndex + 1} 页 =====");
+                        builder.AppendLine(content);
+                        builder.AppendLine();
+                    }
+                }
+            }
+            finally
+            {
+                renderService?.Dispose();
+            }
+
+            var extension = options.Markdown ? ".md" : ".txt";
+            var outputPath = GetUniqueOutputPath(Path.Combine(options.OutputDirectory, SanitizeFileName(baseName) + extension));
+            await File.WriteAllTextAsync(outputPath, builder.ToString(), new UTF8Encoding(false));
+        }
+
+        /// <summary>把页面渲染为位图后交给 OCR 识别，位图与内存流销毁前完成编码</summary>
+        private static async Task<string?> OcrRenderedPageAsync(IPdfService pdfService, IPdfOcrService ocrService, int pageIndex)
+        {
+            var pageSize = pdfService.GetPageSize(pageIndex);
+            const int targetWidth = 1600;
+            int targetHeight = pageSize.Width > 0
+                ? Math.Max(1, (int)Math.Round(targetWidth * pageSize.Height / pageSize.Width))
+                : 2000;
+
+            using var bitmap = pdfService.RenderPageBitmap(pageIndex, targetWidth, targetHeight);
+            if (bitmap == null) return null;
+
+            using var memoryStream = new MemoryStream();
+            bitmap.Save(memoryStream, System.Drawing.Imaging.ImageFormat.Png);
+            return await ocrService.RecognizeTextAsync(memoryStream.ToArray());
+        }
+
+        /// <summary>去掉文件名中的非法字符，避免导出失败</summary>
+        private static string SanitizeFileName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return "未命名";
+            var invalidChars = Path.GetInvalidFileNameChars();
+            var chars = name.Select(c => invalidChars.Contains(c) ? '_' : c).ToArray();
+            return new string(chars).Trim();
+        }
+
+        /// <summary>目标文件已存在时追加序号，避免覆盖已有导出结果</summary>
+        private static string GetUniqueOutputPath(string path)
+        {
+            if (!File.Exists(path)) return path;
+
+            var directory = Path.GetDirectoryName(path) ?? string.Empty;
+            var baseName = Path.GetFileNameWithoutExtension(path);
+            var extension = Path.GetExtension(path);
+            for (int i = 2; i < 1000; i++)
+            {
+                var candidate = Path.Combine(directory, $"{baseName}_{i}{extension}");
+                if (!File.Exists(candidate)) return candidate;
+            }
+
+            return Path.Combine(directory, $"{baseName}_{DateTime.Now:yyyyMMddHHmmss}{extension}");
+        }
+
+        #endregion
 
         private void ButtonChecklistMode_Click(object? sender, EventArgs e)
         {
