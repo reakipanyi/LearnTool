@@ -69,6 +69,10 @@ namespace LearningAssistant.Forms.Pdf
         private bool _contextMenuTargetIsFolder;
         private Panel _panelPdf;
         private BufferedPictureBox _pictureBoxPdf;
+
+        // 未打开 PDF 时的空状态引导面板
+        private Panel? _panelEmptyState;
+        private FlowLayoutPanel? _panelEmptyContent;
         private ContextMenuStrip _contextMenuPdf;
         private Label? _toastLabel;
 
@@ -250,9 +254,6 @@ namespace LearningAssistant.Forms.Pdf
         private int CurrentZoomLevel => _navigationManager?.ZoomLevel ?? _zoomLevel;
         private Point CurrentImageOffset => _navigationManager?.ImageOffset ?? _imageOffset;
 
-        private bool _isNavPanelDragging = false;
-        private Point _navPanelStartPoint = Point.Empty;
-
         private bool _isLongPressPending = false;
         private Point _longPressStartLocation = Point.Empty;
         private bool _longPressDragStarted = false;
@@ -301,6 +302,8 @@ namespace LearningAssistant.Forms.Pdf
         private ToolStripMenuItem menuItemHighlight;
         private ToolStripMenuItem menuItemRectangle;
         private ToolStripMenuItem menuItemText;
+        private ToolStripSeparator menuItemAnnotationSeparator;
+        private ToolStripSeparator menuItemZoomSeparator;
         private ToolStripMenuItem menuItemZoomIn;
         private ToolStripMenuItem menuItemZoomOut;
         private ToolStripMenuItem menuItemResetZoom;
@@ -824,8 +827,12 @@ namespace LearningAssistant.Forms.Pdf
                 page.AccessibleName = GetSidebarTabTitle(page);
 
             AdjustPanelPdfSize();
+            InitializeEmptyState();
             _presenter?.LoadLastSessionAndRestore();
             UpdateStatusBar();
+            // 原文/译文文本框按可用高度比例分配，跟随侧栏高度变化
+            _groupBoxProgress.Resize += (_, __) => LayoutTranslateTab();
+            LayoutTranslateTab();
             UpdateAnnotationColorSelection(Color.Black);
             if (_trackBarThickness != null)
             {
@@ -1680,6 +1687,9 @@ namespace LearningAssistant.Forms.Pdf
             }
 
             _pendingDisplayImageData = null;
+            // 页面成功显示后移除空状态引导
+            if (_panelEmptyState != null && _panelEmptyState.Visible)
+                _panelEmptyState.Visible = false;
             Bitmap bmp = new Bitmap(new MemoryStream(imageData));
             Bitmap? rotatedImage = null;
             try
@@ -3658,33 +3668,6 @@ namespace LearningAssistant.Forms.Pdf
             HideOcrOverlay();
         }
 
-        private void PanelNavigation_MouseDown(object? sender, MouseEventArgs e)
-        {
-            if (e.Button == MouseButtons.Left)
-            {
-                _isNavPanelDragging = true;
-                _navPanelStartPoint = new Point(e.X, e.Y);
-            }
-        }
-
-        private void PanelNavigation_MouseMove(object? sender, MouseEventArgs e)
-        {
-            if (_isNavPanelDragging && _panelNavigation != null)
-            {
-                int x = _panelNavigation.Left + (e.X - _navPanelStartPoint.X);
-                int y = _panelNavigation.Top + (e.Y - _navPanelStartPoint.Y);
-                _panelNavigation.Location = new Point(
-                    Math.Max(0, Math.Min(x, _panelPdf.Width - _panelNavigation.Width)),
-                    Math.Max(0, Math.Min(y, _panelPdf.Height - _panelNavigation.Height))
-                );
-            }
-        }
-
-        private void PanelNavigation_MouseUp(object? sender, MouseEventArgs e)
-        {
-            _isNavPanelDragging = false;
-        }
-
         private void PictureBoxPdf_Paint(object? sender, PaintEventArgs e)
         {
             try
@@ -4870,6 +4853,8 @@ namespace LearningAssistant.Forms.Pdf
             menuItemHighlight = new ToolStripMenuItem();
             menuItemRectangle = new ToolStripMenuItem();
             menuItemText = new ToolStripMenuItem();
+            menuItemAnnotationSeparator = new ToolStripSeparator();
+            menuItemZoomSeparator = new ToolStripSeparator();
             menuItemZoomIn = new ToolStripMenuItem();
             menuItemZoomOut = new ToolStripMenuItem();
             menuItemResetZoom = new ToolStripMenuItem();
@@ -4999,9 +4984,6 @@ namespace LearningAssistant.Forms.Pdf
             _panelNavigation.Padding = new Padding(8);
             _panelNavigation.Size = new Size(1529, 87);
             _panelNavigation.TabIndex = 3;
-            _panelNavigation.MouseDown += PanelNavigation_MouseDown;
-            _panelNavigation.MouseMove += PanelNavigation_MouseMove;
-            _panelNavigation.MouseUp += PanelNavigation_MouseUp;
             // 
             // _buttonSpotlightMode
             // 
@@ -5886,7 +5868,7 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // _contextMenuPdf
             // 
-            _contextMenuPdf.Items.AddRange(new ToolStripItem[] { menuItemCopy, menuItemSearch, menuItemHighlight, menuItemRectangle, menuItemText, menuItemZoomIn, menuItemZoomOut, menuItemResetZoom, menuItemExport, menuItemRotationSeparator, menuItemRotateLeft, menuItemRotateRight, menuItemResetRotation });
+            _contextMenuPdf.Items.AddRange(new ToolStripItem[] { menuItemCopy, menuItemSearch, menuItemAnnotationSeparator, menuItemHighlight, menuItemRectangle, menuItemText, menuItemZoomSeparator, menuItemZoomIn, menuItemZoomOut, menuItemResetZoom, menuItemExport, menuItemRotationSeparator, menuItemRotateLeft, menuItemRotateRight, menuItemResetRotation });
             _contextMenuPdf.Name = "_contextMenuPdf";
             _contextMenuPdf.Size = new Size(144, 274);
             // 
@@ -5894,63 +5876,77 @@ namespace LearningAssistant.Forms.Pdf
             // 
             menuItemCopy.Name = "menuItemCopy";
             menuItemCopy.Size = new Size(143, 22);
-            menuItemCopy.Text = "复制";
+            menuItemCopy.Text = "📋 复制";
             menuItemCopy.Click += MenuItemCopy_Click;
             // 
             // menuItemSearch
             // 
             menuItemSearch.Name = "menuItemSearch";
             menuItemSearch.Size = new Size(143, 22);
-            menuItemSearch.Text = "搜索";
+            menuItemSearch.Text = "🔍 搜索";
+            menuItemSearch.ShortcutKeyDisplayString = "Ctrl+F";
             menuItemSearch.Click += MenuItemSearch_Click;
+            // 
+            // menuItemAnnotationSeparator
+            // 
+            menuItemAnnotationSeparator.Name = "menuItemAnnotationSeparator";
+            menuItemAnnotationSeparator.Size = new Size(143, 6);
             // 
             // menuItemHighlight
             // 
             menuItemHighlight.Name = "menuItemHighlight";
             menuItemHighlight.Size = new Size(143, 22);
-            menuItemHighlight.Text = "高亮标注";
+            menuItemHighlight.Text = "🖍 高亮标注";
             menuItemHighlight.Click += MenuItemHighlight_Click;
             // 
             // menuItemRectangle
             // 
             menuItemRectangle.Name = "menuItemRectangle";
             menuItemRectangle.Size = new Size(143, 22);
-            menuItemRectangle.Text = "矩形标注";
+            menuItemRectangle.Text = "▭ 矩形标注";
             menuItemRectangle.Click += MenuItemRectangle_Click;
             // 
             // menuItemText
             // 
             menuItemText.Name = "menuItemText";
             menuItemText.Size = new Size(143, 22);
-            menuItemText.Text = "文字注解";
+            menuItemText.Text = "T 文字注解";
             menuItemText.Click += MenuItemText_Click;
+            // 
+            // menuItemZoomSeparator
+            // 
+            menuItemZoomSeparator.Name = "menuItemZoomSeparator";
+            menuItemZoomSeparator.Size = new Size(143, 6);
             // 
             // menuItemZoomIn
             // 
             menuItemZoomIn.Name = "menuItemZoomIn";
             menuItemZoomIn.Size = new Size(143, 22);
-            menuItemZoomIn.Text = "放大";
+            menuItemZoomIn.Text = "＋ 放大";
+            menuItemZoomIn.ShortcutKeyDisplayString = "Ctrl+=";
             menuItemZoomIn.Click += MenuItemZoomIn_Click;
             // 
             // menuItemZoomOut
             // 
             menuItemZoomOut.Name = "menuItemZoomOut";
             menuItemZoomOut.Size = new Size(143, 22);
-            menuItemZoomOut.Text = "缩小";
+            menuItemZoomOut.Text = "－ 缩小";
+            menuItemZoomOut.ShortcutKeyDisplayString = "Ctrl+-";
             menuItemZoomOut.Click += MenuItemZoomOut_Click;
             // 
             // menuItemResetZoom
             // 
             menuItemResetZoom.Name = "menuItemResetZoom";
             menuItemResetZoom.Size = new Size(143, 22);
-            menuItemResetZoom.Text = "重置缩放";
+            menuItemResetZoom.Text = "⟲ 重置缩放";
+            menuItemResetZoom.ShortcutKeyDisplayString = "Ctrl+0";
             menuItemResetZoom.Click += MenuItemResetZoom_Click;
             // 
             // menuItemExport
             // 
             menuItemExport.Name = "menuItemExport";
             menuItemExport.Size = new Size(143, 22);
-            menuItemExport.Text = "导出当前页";
+            menuItemExport.Text = "⤓ 导出当前页";
             menuItemExport.Click += MenuItemExport_Click;
             // 
             // menuItemRotationSeparator
@@ -5962,21 +5958,21 @@ namespace LearningAssistant.Forms.Pdf
             // 
             menuItemRotateLeft.Name = "menuItemRotateLeft";
             menuItemRotateLeft.Size = new Size(143, 22);
-            menuItemRotateLeft.Text = "向左旋转90°";
+            menuItemRotateLeft.Text = "↺ 向左旋转 90°";
             menuItemRotateLeft.Click += MenuItemRotateLeft_Click;
             // 
             // menuItemRotateRight
             // 
             menuItemRotateRight.Name = "menuItemRotateRight";
             menuItemRotateRight.Size = new Size(143, 22);
-            menuItemRotateRight.Text = "向右旋转90°";
+            menuItemRotateRight.Text = "↻ 向右旋转 90°";
             menuItemRotateRight.Click += MenuItemRotateRight_Click;
             // 
             // menuItemResetRotation
             // 
             menuItemResetRotation.Name = "menuItemResetRotation";
             menuItemResetRotation.Size = new Size(143, 22);
-            menuItemResetRotation.Text = "重置旋转";
+            menuItemResetRotation.Text = "⟳ 重置旋转";
             menuItemResetRotation.Click += MenuItemResetRotation_Click;
             // 
             // _ocrPanel
@@ -6112,7 +6108,8 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // _panelThumbnails
             // 
-            _panelThumbnails.AutoScroll = true;
+            // 缩略图滚动只保留在 FlowLayoutPanel 上，避免双层滚动容器
+            _panelThumbnails.AutoScroll = false;
             _panelThumbnails.BackColor = Color.FromArgb(245, 245, 245);
             _panelThumbnails.Controls.Add(_flowLayoutPanelThumbnails);
             _panelThumbnails.Dock = DockStyle.Fill;
@@ -6128,6 +6125,7 @@ namespace LearningAssistant.Forms.Pdf
             _flowLayoutPanelThumbnails.Dock = DockStyle.Fill;
             _flowLayoutPanelThumbnails.Location = new Point(0, 0);
             _flowLayoutPanelThumbnails.Name = "_flowLayoutPanelThumbnails";
+            _flowLayoutPanelThumbnails.Padding = new Padding(6, 6, 0, 6);
             _flowLayoutPanelThumbnails.Size = new Size(316, 998);
             _flowLayoutPanelThumbnails.TabIndex = 0;
             // 
@@ -6885,6 +6883,126 @@ namespace LearningAssistant.Forms.Pdf
             _sidebarHoveredTabIndex = -1;
             _tabControlLeft.Invalidate();
             _toolTip?.Hide(_tabControlLeft);
+        }
+
+        /// <summary>未打开 PDF 时的空状态引导：拖放提示 + 打开文件夹入口。</summary>
+        private void InitializeEmptyState()
+        {
+            if (_panelPdf == null || _panelEmptyState != null) return;
+
+            _panelEmptyState = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.FromArgb(248, 250, 252),
+                Name = "_panelEmptyState"
+            };
+
+            _panelEmptyContent = new FlowLayoutPanel
+            {
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink,
+                BackColor = Color.Transparent
+            };
+
+            var iconLabel = new Label
+            {
+                Text = "📄",
+                Font = new Font("Segoe UI Emoji", 44F),
+                AutoSize = true,
+                ForeColor = Color.FromArgb(148, 163, 184),
+                Margin = new Padding(0, 0, 0, 4)
+            };
+
+            var titleLabel = new Label
+            {
+                Text = "还没有打开 PDF",
+                Font = new Font("Microsoft YaHei UI", 15F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(51, 65, 85),
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, 6)
+            };
+
+            var hintLabel = new Label
+            {
+                Text = "把 PDF 文件拖到这里，或从左侧文件夹中选择",
+                Font = new Font("Microsoft YaHei UI", 9.5F),
+                ForeColor = Color.FromArgb(100, 116, 139),
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, 18)
+            };
+
+            var openButton = new Button
+            {
+                Text = "打开文件夹",
+                Size = new Size(132, 36),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(139, 92, 246),
+                ForeColor = Color.White,
+                Font = new Font("Microsoft YaHei UI", 9.5F),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0)
+            };
+            openButton.FlatAppearance.BorderSize = 0;
+            openButton.Click += (_, __) => ButtonOpenFolder_Click(this, EventArgs.Empty);
+            openButton.MouseEnter += (_, __) => openButton.BackColor = Color.FromArgb(124, 58, 237);
+            openButton.MouseLeave += (_, __) => openButton.BackColor = Color.FromArgb(139, 92, 246);
+
+            _panelEmptyContent.Controls.Add(iconLabel);
+            _panelEmptyContent.Controls.Add(titleLabel);
+            _panelEmptyContent.Controls.Add(hintLabel);
+            _panelEmptyContent.Controls.Add(openButton);
+
+            _panelEmptyState.Controls.Add(_panelEmptyContent);
+            _panelEmptyState.Resize += (_, __) => CenterEmptyState();
+
+            _panelPdf.Controls.Add(_panelEmptyState);
+            _panelEmptyState.BringToFront();
+            CenterEmptyState();
+
+            // 画布与空状态中的子控件都要接受拖放，否则拖到画布上无法触发打开
+            EnablePdfFileDrop(_panelPdf);
+            EnablePdfFileDrop(_pictureBoxPdf);
+            EnablePdfFileDrop(_panelEmptyState);
+            EnablePdfFileDrop(_panelEmptyContent);
+            foreach (Control child in _panelEmptyContent.Controls)
+                EnablePdfFileDrop(child);
+        }
+
+        private void CenterEmptyState()
+        {
+            if (_panelEmptyState == null || _panelEmptyContent == null) return;
+            _panelEmptyContent.Location = new Point(
+                Math.Max(0, (_panelEmptyState.ClientSize.Width - _panelEmptyContent.Width) / 2),
+                Math.Max(0, (_panelEmptyState.ClientSize.Height - _panelEmptyContent.Height) / 2));
+        }
+
+        private void EnablePdfFileDrop(Control? control)
+        {
+            if (control == null) return;
+            control.AllowDrop = true;
+            control.DragEnter += PdfReaderFormV2_DragEnter;
+            control.DragDrop += PdfReaderFormV2_DragDrop;
+        }
+
+        /// <summary>原文/译文文本框按可用高度 42% / 58% 分配，避免窗口变高后两框比例失衡。</summary>
+        private void LayoutTranslateTab()
+        {
+            if (_groupBoxProgress == null || _textBoxOriginal == null || _textBoxTranslation == null) return;
+            if (_labelTranslation == null || _buttonSpeakTranslation == null) return;
+
+            const int gap = 8;
+            int contentTop = _textBoxOriginal.Top;
+            int contentBottom = _buttonSpeakTranslation.Top - 10;
+            int available = contentBottom - contentTop;
+            if (available < 220) return;
+
+            int originalHeight = Math.Max(90, (int)(available * 0.42));
+            _textBoxOriginal.Height = originalHeight;
+            _labelTranslation.Top = _textBoxOriginal.Bottom + 6;
+            _textBoxTranslation.Top = _labelTranslation.Bottom + 4;
+            _textBoxTranslation.Height = Math.Max(90, contentBottom - _textBoxTranslation.Top - gap / 2);
         }
     }
 }
