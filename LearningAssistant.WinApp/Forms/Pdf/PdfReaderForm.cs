@@ -2803,6 +2803,92 @@ namespace LearningAssistant.Forms.Pdf
             ShowMessage($"学习笔记已导出：\n{outputPath}", "AI 学习笔记导出");
         }
 
+        /// <summary>AI 整理标注：本页或全书，输出要点/待办/疑问三类清单（带页码与时间锚点）</summary>
+        private async Task SummarizeAnnotationsAsync(bool wholeDocument)
+        {
+            if (_pdfAiService == null)
+            {
+                MessageBox.Show(this, "AI 服务不可用，请先完成 AI 配置", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+            if (_annotationService == null || _presenter == null || string.IsNullOrWhiteSpace(_currentPdfPath))
+            {
+                MessageBox.Show(this, "当前没有打开的 PDF 文档", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var pdfPath = _currentPdfPath;
+            int pageCount = _presenter.PageCount;
+            int currentPageIndex = _currentPageIndex;
+            var annotationService = _annotationService;
+
+            List<PdfAnnotationDigestItem> items;
+            UseWaitCursor = true;
+            try
+            {
+                items = await Task.Run(() => CollectAnnotationDigest(
+                    annotationService, pdfPath, wholeDocument, currentPageIndex, pageCount)).ConfigureAwait(true);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+            }
+
+            if (items.Count == 0)
+            {
+                MessageBox.Show(this,
+                    wholeDocument ? "全书中还没有可整理的标注" : "当前页还没有可整理的标注",
+                    "AI 整理标注", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            PdfAiResponse response;
+            UseWaitCursor = true;
+            try
+            {
+                response = await _pdfAiService.SummarizeAnnotationsAsync(pdfPath, items).ConfigureAwait(true);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+            }
+
+            ShowAiResponseDialog(wholeDocument ? "全书标注 AI 整理" : "本页标注 AI 整理", response, allowSave: false);
+        }
+
+        /// <summary>逐页采集标注摘要（仅页码、时间戳与文字，不含音频）</summary>
+        private static List<PdfAnnotationDigestItem> CollectAnnotationDigest(
+            IAnnotationService annotationService, string pdfPath, bool wholeDocument, int currentPageIndex, int pageCount)
+        {
+            var items = new List<PdfAnnotationDigestItem>();
+
+            if (!wholeDocument)
+            {
+                items.AddRange(PdfAnnotationDigestBuilder.Collect(
+                    annotationService.GetAnnotation(pdfPath, currentPageIndex), currentPageIndex));
+                return items;
+            }
+
+            for (int pageIndex = 0; pageIndex < pageCount; pageIndex++)
+            {
+                if (items.Count >= PdfAnnotationDigestBuilder.MaxItems) break;
+
+                PdfAnnotation? annotation;
+                try
+                {
+                    annotation = annotationService.GetAnnotation(pdfPath, pageIndex);
+                }
+                catch
+                {
+                    continue;
+                }
+
+                items.AddRange(PdfAnnotationDigestBuilder.Collect(annotation, pageIndex));
+            }
+
+            return items.Take(PdfAnnotationDigestBuilder.MaxItems).ToList();
+        }
+
         /// <summary>去掉 AI 返回内容外层的 Markdown 代码围栏</summary>
         private static string StripCodeFence(string content)
         {
@@ -4339,6 +4425,8 @@ namespace LearningAssistant.Forms.Pdf
             menu.Items.Add("全文检索问答", null, async (_, _) => await AskDocumentByRetrievalAsync());
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("导出 AI 学习笔记…", null, async (_, _) => await ExportAiStudyNotesAsync());
+            menu.Items.Add("整理本页标注", null, async (_, _) => await SummarizeAnnotationsAsync(wholeDocument: false));
+            menu.Items.Add("整理全书标注", null, async (_, _) => await SummarizeAnnotationsAsync(wholeDocument: true));
 
             if (sender is Control anchor)
             {

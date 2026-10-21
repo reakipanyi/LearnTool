@@ -84,5 +84,12 @@ namespace LearningAssistant.Services.Pdf
             int startPageIndex,
             int endPageIndex,
             CancellationToken cancellationToken = default);
+        /// <summary>
+        /// 整理标注（页码 + 时间戳 + 文字/形状）为要点/待办/疑问清单，每条带页码与时间锚点。
+        /// </summary>
+        Task<PdfAiResponse> SummarizeAnnotationsAsync(
+            string pdfPath,
+            IReadOnlyList<PdfAnnotationDigestItem> items,
+            CancellationToken cancellationToken = default);
     }
 }

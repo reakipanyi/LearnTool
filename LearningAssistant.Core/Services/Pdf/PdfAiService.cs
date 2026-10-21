@@ -309,6 +309,65 @@ namespace LearningAssistant.Services.Pdf
                     JsonValueKind.Array, null, null, cancellationToken).ConfigureAwait(false);
             }, "闪卡生成", cancellationToken);
 
+        /// <inheritdoc />
+        public Task<PdfAiResponse> SummarizeAnnotationsAsync(
+            string pdfPath,
+            IReadOnlyList<PdfAnnotationDigestItem> items,
+            CancellationToken cancellationToken = default)
+            => ExecuteAsync(async () =>
+            {
+                if (items == null || items.Count == 0)
+                    return PdfAiResponse.Fail("当前页码范围没有可整理的标注");
+
+                var digest = PdfAnnotationDigestBuilder.Build(items);
+                if (string.IsNullOrWhiteSpace(digest))
+                    return PdfAiResponse.Fail("标注内容为空，无法整理");
+
+                var pages = items
+                    .Select(i => i.PageIndex + 1)
+                    .Distinct()
+                    .OrderBy(p => p)
+                    .ToArray();
+
+                string fingerprint;
+                try
+                {
+                    fingerprint = _textIndex.GetFingerprint(pdfPath);
+                }
+                catch (FileNotFoundException)
+                {
+                    fingerprint = pdfPath;
+                }
+
+                var context = new PdfAiContext(digest, pages, pages.Length > 0 ? pages[^1] : 0, fingerprint);
+
+                var prompt = $"""
+                    你是学习笔记整理助手。下面是用户从 PDF 中做的标注条目（含页码与录音时间戳）。
+                    请将它们整理成 Markdown，固定输出三个小节：
+                    ### 要点
+                    ### 待办
+                    ### 疑问
+                    要求：
+                    1. 每条以 [[pN]] 开头（页码从 1 开始），条目带时间戳时追加 [mm:ss]；
+                    2. 只有明确的任务才放进“待办”，不确定的放“要点”；
+                    3. 没有某一类内容时写“- 无”；
+                    4. 不要编造标注中不存在的信息。
+
+                    标注条目：
+                    {digest}
+                    """;
+
+                var extra = "annotations|" + ShortHash(digest);
+                return await ExecutePromptAsync(context, "annotation-digest", pages, prompt,
+                    null, extra, null, cancellationToken).ConfigureAwait(false);
+            }, "标注整理", cancellationToken);
+
+        private static string ShortHash(string text)
+        {
+            var bytes = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text));
+            return Convert.ToHexString(bytes)[..16];
+        }
+
         private async Task<PdfAiResponse> ExecuteAsync(
             Func<Task<PdfAiResponse>> action,
             string operationName,

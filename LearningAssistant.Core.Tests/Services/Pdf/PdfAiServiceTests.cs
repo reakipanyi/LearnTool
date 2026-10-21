@@ -149,6 +149,40 @@ public class PdfAiServiceTests
     }
 
     [Fact]
+    public async Task 标注整理_提示词带页码与时间戳锚点()
+    {
+        var index = new FakeTextIndex(5);
+        var ai = new FakeAiService(_ => "### 要点\n- [[p3]] [01:05] 复习这一节");
+        var service = new PdfAiService(ai, index);
+
+        var items = new[]
+        {
+            new PdfAnnotationDigestItem { PageIndex = 2, AudioTimestampMs = 65_000, Kind = "文字", Text = "复习这一节" }
+        };
+
+        var result = await service.SummarizeAnnotationsAsync("book.pdf", items);
+
+        result.Success.Should().BeTrue();
+        result.ReferencedPages.Should().ContainSingle().Which.Should().Be(3);
+        ai.LastPrompt.Should().Contain("[[p3]] [01:05] 文字: 复习这一节");
+        ai.LastPrompt.Should().Contain("### 待办");
+    }
+
+    [Fact]
+    public async Task 标注整理_空标注不调用AI()
+    {
+        var index = new FakeTextIndex(2);
+        var ai = new FakeAiService(_ => "不应调用");
+        var service = new PdfAiService(ai, index);
+
+        var result = await service.SummarizeAnnotationsAsync("book.pdf", Array.Empty<PdfAnnotationDigestItem>());
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("没有可整理的标注");
+        ai.CallCount.Should().Be(0);
+    }
+
+    [Fact]
     public async Task AI服务不可用_直接返回失败()
     {
         var index = new FakeTextIndex(1);

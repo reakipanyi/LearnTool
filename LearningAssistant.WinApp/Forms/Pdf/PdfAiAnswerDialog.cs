@@ -136,7 +136,7 @@ namespace LearningAssistant.Forms.Pdf
                 ScrollBars = RichTextBoxScrollBars.Vertical,
                 DetectUrls = false,
                 Text = _response.Success
-                    ? _response.Content
+                    ? HumanizeAnchors(_response.Content)
                     : (_response.ErrorMessage ?? "未知错误")
             };
 
@@ -158,6 +158,13 @@ namespace LearningAssistant.Forms.Pdf
             {
                 if (e.KeyCode == Keys.Escape) Close();
             };
+        }
+
+        /// <summary>把 [[pN]] 锚点转成可读的“（第 N 页）”，点击跳转仍用底部页码链接</summary>
+        private static string HumanizeAnchors(string? content)
+        {
+            if (string.IsNullOrEmpty(content)) return string.Empty;
+            return System.Text.RegularExpressions.Regex.Replace(content, @"\[\[p(\d+)\]\]", "（第 $1 页）");
         }
 
         private static Button CreateSecondaryButton(string text)
