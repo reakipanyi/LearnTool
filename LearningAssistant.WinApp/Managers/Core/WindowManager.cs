@@ -280,9 +280,7 @@ namespace LearningAssistant.Managers
         {
             _logger.LogInformation("Opening PDF reader window");
 
-            // 单例聚焦：已有 PDF 阅读器窗口则提到前台
-            if (TryFocusExisting(typeof(PdfReaderForm))) return;
-
+            // 允许多开：每次打开都创建独立 scope，渲染服务互不干扰
             var scope = _serviceProvider.CreateScope();
             try
             {
@@ -335,9 +333,7 @@ namespace LearningAssistant.Managers
         {
             _logger.LogInformation("Opening AI WebView window");
 
-            // 单例聚焦：已有 AI 浏览器窗口则提到前台
-            if (TryFocusExisting(typeof(WebView2BrowserForm))) return;
-
+            // 允许多开：每个浏览器窗口独立运行，不再聚焦已有窗口
             try
             {
                 var cloudStorageService = _serviceProvider.GetService<ICloudStorageService>();

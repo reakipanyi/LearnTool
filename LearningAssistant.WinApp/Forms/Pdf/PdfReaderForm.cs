@@ -295,6 +295,7 @@ namespace LearningAssistant.Forms.Pdf
         private HighlightColor _currentHighlightColor = HighlightColor.Yellow;
 
         private bool _isNightMode = false;
+        private bool _closeConfirmed = false;
         private bool _isDualPage = false;
         private bool _isFullscreen = false;
         private Bitmap? _highlightBitmap;
@@ -342,9 +343,32 @@ namespace LearningAssistant.Forms.Pdf
             Load += PdfReaderFormV2_Load;
             Resize += PdfReaderFormV2_Resize;
             KeyDown += PdfReaderFormV2_KeyDown;
+            FormClosing += PdfReaderForm_FormClosing;
 
             InitializeFileContextMenu();
             InitializeManagers();
+        }
+
+        private void PdfReaderForm_FormClosing(object? sender, FormClosingEventArgs e)
+        {
+            if (e.CloseReason != CloseReason.UserClosing || _closeConfirmed)
+                return;
+
+            var result = MessageBox.Show(
+                this,
+                "确定要关闭 PDF 阅读器吗？",
+                "关闭确认",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question,
+                MessageBoxDefaultButton.Button2);
+
+            if (result != DialogResult.Yes)
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            _closeConfirmed = true;
         }
 
         private void InitializeManagers()

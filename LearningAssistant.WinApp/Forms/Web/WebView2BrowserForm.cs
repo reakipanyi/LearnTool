@@ -44,6 +44,9 @@ namespace LearningAssistant.Forms.Web
         private int _zoomLevel = Config.DefaultZoomLevel;
         private bool _isAwaitingPanAuth;
         private ToolStripButton btnPanTool;
+        private static int _openWindowCount;
+        private bool _closeConfirmed;
+        private bool _countedOpen;
 
         /// <summary>
         /// 百度网盘 OAuth 授权专用标签页（与网页浏览标签页分离，授权完成后自动关闭）
@@ -188,7 +191,19 @@ namespace LearningAssistant.Forms.Web
             InitializeProviderButtonMappings();
             InitializeBookmarks();
             Load += WebView2BrowserForm_Load;
+            Shown += (_, _) =>
+            {
+                if (_countedOpen) return;
+                _countedOpen = true;
+                Interlocked.Increment(ref _openWindowCount);
+            };
             FormClosing += WebView2BrowserForm_FormClosing;
+            FormClosed += (_, _) =>
+            {
+                if (!_countedOpen) return;
+                _countedOpen = false;
+                Interlocked.Decrement(ref _openWindowCount);
+            };
 
             tabControl.DrawMode = TabDrawMode.OwnerDrawFixed;
             tabControl.SizeMode = TabSizeMode.Normal;
@@ -278,7 +293,31 @@ namespace LearningAssistant.Forms.Web
 
         private void WebView2BrowserForm_FormClosing(object? sender, FormClosingEventArgs e)
         {
-            SaveTabState();
+            // 防止误点右上角关闭：用户主动关闭时先确认
+            if (e.CloseReason == CloseReason.UserClosing && !_closeConfirmed)
+            {
+                var result = MessageBox.Show(
+                    this,
+                    "确定要关闭浏览器窗口吗？\n当前窗口的所有标签页都会关闭。",
+                    "关闭确认",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question,
+                    MessageBoxDefaultButton.Button2);
+
+                if (result != DialogResult.Yes)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+
+                _closeConfirmed = true;
+            }
+
+            // 多开时仅让最后一个关闭的窗口写入标签状态，避免互相覆盖
+            if (Volatile.Read(ref _openWindowCount) <= 1)
+            {
+                SaveTabState();
+            }
         }
 
         /// <summary>

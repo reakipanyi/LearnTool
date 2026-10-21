@@ -143,7 +143,7 @@ namespace LearningAssistant.Common
             services.AddSingleton<ExportService>();
             services.AddSingleton<QuoteService>();
             services.AddSingleton<LearningReportService>();
-            services.AddSingleton<IPdfContentLinkService, PdfContentLinkService>();
+            services.AddScoped<IPdfContentLinkService, PdfContentLinkService>();
 
             // 云存储服务（百度网盘）
             services.AddSingleton<ICloudStorageService>(sp =>
@@ -189,7 +189,8 @@ namespace LearningAssistant.Common
         /// </summary>
         public static IServiceCollection AddPdfServices(this IServiceCollection services)
         {
-            services.AddSingleton<IPdfService, PdfiumPdfService>();
+            // 每次打开 PDF 阅读器使用独立 scope，服务持有当前文档句柄，必须按 scope 隔离才能多开
+            services.AddScoped<IPdfService, PdfiumPdfService>();
             services.AddSingleton<IOcrService, TesseractOcrService>();
             services.AddSingleton<ITranslationService, BaiduTranslationService>();
             services.AddSingleton<IAnnotationService, FileAnnotationService>();
