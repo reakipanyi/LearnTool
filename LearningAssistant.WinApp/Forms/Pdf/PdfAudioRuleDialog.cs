@@ -33,6 +33,11 @@ public class PdfAudioRuleDialog : Form
     {
         Dock = DockStyle.Top, AutoSize = false, Height = 22, ForeColor = Color.FromArgb(220, 38, 38)
     };
+    private readonly Label _labelModeHint = new()
+    {
+        AutoSize = true, MaximumSize = new Size(300, 0), ForeColor = Color.FromArgb(100, 116, 139)
+    };
+    private readonly ToolTip _tooltip = new();
     private readonly System.Windows.Forms.Timer _previewTimer = new() { Interval = 200 };
 
     private readonly List<AudioPageMapMode> _modes = new()
@@ -44,7 +49,7 @@ public class PdfAudioRuleDialog : Form
         _profile = profile;
         _manager = manager;
         // 拷贝一份规则编辑：取消时不能影响已生效的配置
-        _rules = _profile.Rules.Select(CloneRule).ToList();
+        _rules = _profile.Rules.OrderByDescending(r => r.Priority).Select(CloneRule).ToList();
         Text = "音频匹配规则";
         StartPosition = FormStartPosition.CenterParent;
         ClientSize = new Size(820, 560);
@@ -53,6 +58,7 @@ public class PdfAudioRuleDialog : Form
         foreach (var m in _modes) _cmbMode.Items.Add(m.ToString());
         foreach (var r in _rules) AddListItem(r);
         if (_lvRules.Items.Count > 0) _lvRules.Items[0].Selected = true;
+        UpdateModeHint();
         RefreshPreview();
     }
 
@@ -66,6 +72,8 @@ public class PdfAudioRuleDialog : Form
 
         var btnAdd = new Button { Text = "新增", Width = 70 };
         var btnDelete = new Button { Text = "删除", Width = 70 };
+        var btnUp = new Button { Text = "上移", Width = 60 };
+        var btnDown = new Button { Text = "下移", Width = 60 };
         var btnApply = new Button { Text = "应用修改", Width = 90 };
         var btnSuggest = new Button { Text = "由手动匹配归纳", Width = 110 };
         var btnOk = new Button { Text = "保存并关闭", Width = 100, DialogResult = DialogResult.OK };
@@ -73,6 +81,8 @@ public class PdfAudioRuleDialog : Form
 
         btnAdd.Click += (_, _) => OnAdd();
         btnDelete.Click += (_, _) => OnDelete();
+        btnUp.Click += (_, _) => MoveSelected(-1);
+        btnDown.Click += (_, _) => MoveSelected(1);
         btnApply.Click += (_, _) => { ApplyToSelected(); RefreshPreview(); };
         btnSuggest.Click += (_, _) => OnSuggestFromManual();
         btnOk.Click += (_, _) =>
@@ -89,7 +99,7 @@ public class PdfAudioRuleDialog : Form
         };
 
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(8) };
-        bottom.Controls.AddRange(new Control[] { btnAdd, btnDelete, btnApply, btnSuggest, btnOk, btnCancel });
+        bottom.Controls.AddRange(new Control[] { btnAdd, btnDelete, btnUp, btnDown, btnApply, btnSuggest, btnOk, btnCancel });
 
         var editPanel = new TableLayoutPanel { Dock = DockStyle.Right, Width = 320, ColumnCount = 2, Padding = new Padding(8) };
         editPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -97,6 +107,7 @@ public class PdfAudioRuleDialog : Form
         int row = 0;
         AddField(editPanel, ref row, "名称", _txtName);
         AddField(editPanel, ref row, "正则", _txtPattern);
+        AddSpanField(editPanel, ref row, _labelModeHint);
         AddField(editPanel, ref row, "模式", _cmbMode);
         AddField(editPanel, ref row, "捕获组(1起)", _txtCapture);
         AddField(editPanel, ref row, "页码偏移", _numOffset);
@@ -126,8 +137,10 @@ public class PdfAudioRuleDialog : Form
         // 编辑项变化时延后 200ms 重算试算，避免逐字符触发
         _previewTimer.Tick += (_, _) => { _previewTimer.Stop(); RefreshPreview(); };
         _txtName.TextChanged += (_, _) => SchedulePreview();
+        _txtPattern.PlaceholderText = @"例：P(\d+)\.mp3";
+        _tooltip.SetToolTip(_txtPattern, @"对相对路径做不区分大小写的正则匹配，捕获组序号从 1 开始");
         _txtPattern.TextChanged += (_, _) => { ValidatePatternField(); SchedulePreview(); };
-        _cmbMode.SelectedIndexChanged += (_, _) => SchedulePreview();
+        _cmbMode.SelectedIndexChanged += (_, _) => { UpdateModeHint(); SchedulePreview(); };
         _txtCapture.TextChanged += (_, _) => SchedulePreview();
         _numOffset.ValueChanged += (_, _) => SchedulePreview();
         _numPagesPerUnit.ValueChanged += (_, _) => SchedulePreview();
@@ -142,6 +155,49 @@ public class PdfAudioRuleDialog : Form
         control.Margin = new Padding(0, 4, 0, 4);
         panel.Controls.Add(control, 1, row);
         row++;
+    }
+
+    private static void AddSpanField(TableLayoutPanel panel, ref int row, Control control)
+    {
+        panel.RowCount = row + 1;
+        control.Margin = new Padding(0, 0, 0, 6);
+        panel.Controls.Add(control, 0, row);
+        panel.SetColumnSpan(control, 2);
+        row++;
+    }
+
+    private void UpdateModeHint()
+    {
+        var mode = _modes[Math.Max(0, _cmbMode.SelectedIndex)];
+        _labelModeHint.Text = mode switch
+        {
+            AudioPageMapMode.PageIndex => "页码 = 捕获数字 + 偏移，例如 P12.mp3 配 -1 映射到第 11 页",
+            AudioPageMapMode.Sequence => "匹配曲目按数字升序依次映射，从偏移页开始连续占用页面",
+            AudioPageMapMode.Range => "起始页 = (数字 - 1) × 每单元页数 + 偏移，一个文件覆盖多页",
+            _ => ""
+        };
+    }
+
+    /// <summary>按列表顺序交换相邻规则，并重排优先级（越靠前优先级越高）</summary>
+    private void MoveSelected(int delta)
+    {
+        if (_lvRules.SelectedItems.Count == 0) return;
+        var index = _lvRules.SelectedIndices[0];
+        var target = index + delta;
+        if (target < 0 || target >= _rules.Count) return;
+
+        (_rules[index], _rules[target]) = (_rules[target], _rules[index]);
+        var item = _lvRules.Items[index];
+        _lvRules.Items.RemoveAt(index);
+        _lvRules.Items.Insert(target, item);
+        for (var i = 0; i < _rules.Count; i++)
+            _rules[i].Priority = _rules.Count - 1 - i;
+        for (var i = 0; i < _lvRules.Items.Count; i++)
+            _lvRules.Items[i].SubItems[2].Text = _rules[i].Priority.ToString();
+
+        item.Selected = true;
+        item.EnsureVisible();
+        RefreshPreview();
     }
 
     private static AudioMatchRule CloneRule(AudioMatchRule r)
@@ -233,6 +289,7 @@ public class PdfAudioRuleDialog : Form
         {
             _populating = false;
         }
+        UpdateModeHint();
         ValidatePatternField();
     }
 
@@ -371,7 +428,11 @@ public class PdfAudioRuleDialog : Form
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _previewTimer.Dispose();
+        if (disposing)
+        {
+            _previewTimer.Dispose();
+            _tooltip.Dispose();
+        }
         base.Dispose(disposing);
     }
 }

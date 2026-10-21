@@ -61,9 +61,19 @@ public class PdfAudioMatcher : IPdfAudioMatcher
             foreach (var kv in manualOverrides)
             {
                 if (kv.Key < 0 || kv.Key >= pageCount) continue;
-                var track = tracks.FirstOrDefault(t => string.Equals(t.FileName, Path.GetFileName(kv.Value), StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(t.RelativePath, kv.Value, StringComparison.OrdinalIgnoreCase))
-                    ?? new AudioTrack { FilePath = Path.Combine(Path.GetDirectoryName(pdfPath) ?? "", kv.Value), FileName = Path.GetFileName(kv.Value), RelativePath = kv.Value };
+                // 相对路径优先；绝对路径只按完整路径匹配，避免目录外文件被同名曲目顶替
+                var track = Path.IsPathRooted(kv.Value)
+                    ? tracks.FirstOrDefault(t => string.Equals(t.FilePath, kv.Value, StringComparison.OrdinalIgnoreCase))
+                    : tracks.FirstOrDefault(t => string.Equals(t.RelativePath, kv.Value, StringComparison.OrdinalIgnoreCase))
+                      ?? tracks.FirstOrDefault(t => string.Equals(t.FileName, Path.GetFileName(kv.Value), StringComparison.OrdinalIgnoreCase));
+                track ??= new AudioTrack
+                {
+                    FilePath = Path.IsPathRooted(kv.Value)
+                        ? kv.Value
+                        : Path.Combine(Path.GetDirectoryName(pdfPath) ?? "", kv.Value),
+                    FileName = Path.GetFileName(kv.Value),
+                    RelativePath = kv.Value
+                };
                 track.IsManual = true;
                 pageIndex[kv.Key] = track;
                 // 手动指定的音频可能不在扫描列表中，需补入曲目集合，否则列表/下一曲无法访问

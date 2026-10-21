@@ -57,6 +57,15 @@ public class PdfAudioMatcherTests
     }
 
     [Fact]
+    public void 手动覆盖_目录外绝对路径不被同名曲目顶替()
+    {
+        var overrides = new Dictionary<int, string> { [0] = @"D:\other\manual.mp3" };
+        var r = Matcher.Match(@"C:\pdf\a.pdf", 5, new[] { T("manual.mp3") },
+            Array.Empty<AudioMatchRule>(), overrides);
+        r.PageIndex[0].FilePath.Should().Be(@"D:\other\manual.mp3");
+    }
+
+    [Fact]
     public void 非法正则_跳过不抛异常()
     {
         var rule = new AudioMatchRule { FileNamePattern = "(" };

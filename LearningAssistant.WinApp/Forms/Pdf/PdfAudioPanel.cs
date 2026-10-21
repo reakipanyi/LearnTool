@@ -29,6 +29,7 @@ public class PdfAudioPanel : UserControl
     private readonly Button _btnManualFromList = new() { Text = "从列表选", Width = 76 };
     private readonly Button _btnRescan = new() { Text = "重新扫描", Width = 76 };
     private readonly CheckBox _chkSubDir = new() { Text = "包含子目录", AutoSize = true };
+    private bool _suppressAutoPlay;
 
     public PdfAudioPanel(PdfAudioTrackManager manager, IPdfReaderFormAccess form)
     {
@@ -178,6 +179,7 @@ public class PdfAudioPanel : UserControl
     {
         var result = _manager.Result;
         if (result == null || _listTracks.SelectedIndex < 0 || _listTracks.SelectedIndex >= result.Tracks.Count) return;
+        if (_suppressAutoPlay) return;
         var track = result.Tracks[_listTracks.SelectedIndex];
         _manager.Playback.Load(track);
         FireAndForget(_manager.Playback.PlayAsync());
@@ -230,8 +232,11 @@ public class PdfAudioPanel : UserControl
         };
         if (ofd.ShowDialog(_form.Form) == DialogResult.OK)
         {
-            _manager.SetManualOverride(_form.CurrentPageIndex, Path.GetFileName(ofd.FileName));
+            // 目录内文件存相对路径，目录外保留绝对路径，避免解析到错误的同名文件
+            _manager.SetManualOverride(_form.CurrentPageIndex, ToProfilePath(ofd.FileName));
             RefreshData();
+            var resolved = _manager.Result?.PageIndex.GetValueOrDefault(_form.CurrentPageIndex);
+            if (resolved != null) SelectTrackInList(resolved);
         }
     }
 
@@ -263,7 +268,40 @@ public class PdfAudioPanel : UserControl
         {
             _manager.SetManualOverride(_form.CurrentPageIndex, result.Tracks[list.SelectedIndex].RelativePath);
             RefreshData();
+            var resolved = _manager.Result?.PageIndex.GetValueOrDefault(_form.CurrentPageIndex);
+            if (resolved != null) SelectTrackInList(resolved);
         }
+    }
+
+    /// <summary>把指定曲目在列表中高亮并滚动到可见位置（不触发自动播放）</summary>
+    private void SelectTrackInList(AudioTrack track)
+    {
+        var result = _manager.Result;
+        if (result == null) return;
+        var index = result.Tracks.FindIndex(t =>
+            string.Equals(t.FilePath, track.FilePath, StringComparison.OrdinalIgnoreCase));
+        if (index < 0) return;
+        _suppressAutoPlay = true;
+        try
+        {
+            _listTracks.SelectedIndex = index;
+            _listTracks.TopIndex = Math.Max(0, index - 2);
+        }
+        finally
+        {
+            _suppressAutoPlay = false;
+        }
+    }
+
+    private string ToProfilePath(string fullPath)
+    {
+        var pdfDir = Path.GetDirectoryName(_form.CurrentPdfPath ?? "");
+        if (string.IsNullOrEmpty(pdfDir)) return fullPath;
+        var baseDir = Path.GetFullPath(pdfDir);
+        var target = Path.GetFullPath(fullPath);
+        if (target.StartsWith(baseDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            return Path.GetRelativePath(baseDir, target);
+        return target;
     }
 
     private void UpdateLoopLabel()
