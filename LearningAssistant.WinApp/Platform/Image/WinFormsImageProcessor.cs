@@ -67,7 +67,8 @@ namespace LearningAssistant.Platform
         {
             if (data == null || data.Length == 0) return null;
             using var ms = new MemoryStream(data);
-            return new Bitmap(ms);
+            using var source = Image.FromStream(ms);
+            return new Bitmap(source);
         }
     }
 }

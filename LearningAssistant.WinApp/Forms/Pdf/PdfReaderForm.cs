@@ -1634,7 +1634,7 @@ namespace LearningAssistant.Forms.Pdf
                 _navigationManager?.ClearSelection();
             _currentPageIndex = pageIndex;
             _audioTrackManager?.OnPageChanged(pageIndex);
-            _audioPanel?.RefreshData();
+            _audioPanel?.OnCurrentPageChanged();
             _textBoxPage.Text = (pageIndex + 1).ToString();
             // 页码可能超出进度条范围（如空文档或页码未同步），避免 Value 越界抛异常
             _progressBarPage.Value = Math.Clamp(pageIndex + 1, _progressBarPage.Minimum, _progressBarPage.Maximum);

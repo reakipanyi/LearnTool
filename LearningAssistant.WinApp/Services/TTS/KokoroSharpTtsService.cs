@@ -602,7 +602,8 @@ namespace LearningAssistant.Services.TTS
         {
             if (wavBytes == null || wavBytes.Length == 0 || _stopRequested || cancellationToken.IsCancellationRequested) return;
 
-            string tempFile = Path.Combine(_appPaths.GetTtsCacheDir(), $"_temp_{Guid.NewGuid():N}.wav");
+            // 临时文件放在系统临时目录，避免进程异常退出后污染 TTS 缓存目录
+            string tempFile = Path.Combine(Path.GetTempPath(), $"_temp_{Guid.NewGuid():N}.wav");
             try
             {
                 await File.WriteAllBytesAsync(tempFile, wavBytes, cancellationToken).ConfigureAwait(false);

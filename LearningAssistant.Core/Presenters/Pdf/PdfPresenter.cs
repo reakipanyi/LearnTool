@@ -301,10 +301,6 @@ namespace LearningAssistant.Presenters
                     var secondImageData = await secondPageTask;
                     _view?.SetSecondPageImage(secondImageData);
                 }
-                else if (isDual)
-                {
-                    _view?.SetSecondPageImage(null);
-                }
                 else
                 {
                     _view?.SetSecondPageImage(null);
@@ -676,27 +672,24 @@ namespace LearningAssistant.Presenters
                 if (string.IsNullOrEmpty(annotation.PdfPath)) return;
 
                 var texts = _annotationService.GetTexts(annotation.PdfPath, annotation.PageIndex).ToList();
-                for (int i = texts.Count - 1; i >= 0; i--)
+                // 按 Id 匹配，避免两条内容/颜色/坐标相同的标注被误改
+                int index = texts.FindIndex(t => t.Id == annotation.Id);
+                if (index >= 0)
                 {
-                    var text = texts[i];
-                    if (text.Content == annotation.Text &&
-                        text.ColorArgb == annotation.ColorArgb &&
-                        Math.Abs(text.NormalizedX - annotation.NormalizedX) < 0.001 &&
-                        Math.Abs(text.NormalizedY - annotation.NormalizedY) < 0.001)
+                    var text = texts[index];
+                    var updatedText = new AnnotationText
                     {
-                        var updatedText = new AnnotationText
-                        {
-                            Content = newText,
-                            NormalizedX = annotation.NormalizedX,
-                            NormalizedY = annotation.NormalizedY,
-                            ColorArgb = colorArgb,
-                            FontSize = fontSize,
-                            FontFamily = fontFamily,
-                            CreatedAt = text.CreatedAt
-                        };
-                        _annotationService.UpdateTextAt(annotation.PdfPath, annotation.PageIndex, i, updatedText);
-                        break;
-                    }
+                        Id = text.Id,
+                        Content = newText,
+                        NormalizedX = text.NormalizedX,
+                        NormalizedY = text.NormalizedY,
+                        ColorArgb = colorArgb,
+                        FontSize = fontSize,
+                        FontFamily = fontFamily,
+                        AudioTimestampMs = text.AudioTimestampMs,
+                        CreatedAt = text.CreatedAt
+                    };
+                    _annotationService.UpdateTextAt(annotation.PdfPath, annotation.PageIndex, index, updatedText);
                 }
             }
             catch (Exception ex)

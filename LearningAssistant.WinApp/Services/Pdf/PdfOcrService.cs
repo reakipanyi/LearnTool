@@ -132,7 +132,13 @@ namespace LearningAssistant.Services.Pdf
         {
             try
             {
-                return _ocrService.SetLanguage(language);
+                var success = _ocrService.SetLanguage(language);
+                // 同步保存语言状态，避免后续自动检测基于过期值判断
+                if (success)
+                {
+                    _currentLanguage = language;
+                }
+                return success;
             }
             catch (Exception ex)
             {
@@ -165,7 +171,8 @@ namespace LearningAssistant.Services.Pdf
         {
             if (data == null || data.Length == 0) return null;
             using var ms = new MemoryStream(data);
-            return new Bitmap(ms);
+            using var source = Image.FromStream(ms);
+            return new Bitmap(source);
         }
     }
 }

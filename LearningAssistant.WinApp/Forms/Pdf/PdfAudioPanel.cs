@@ -112,13 +112,25 @@ public class PdfAudioPanel : UserControl
     public void RefreshData()
     {
         var result = _manager.Result;
+        // 先按曲目反查页码，避免对每个曲目重复扫描整个 PageIndex（O(T×P)）
+        var pagesByTrack = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+        if (result != null)
+        {
+            foreach (var kv in result.PageIndex)
+            {
+                if (!pagesByTrack.TryGetValue(kv.Value.FilePath, out var pages))
+                    pagesByTrack[kv.Value.FilePath] = pages = new List<int>();
+                pages.Add(kv.Key + 1);
+            }
+        }
+
         _listTracks.BeginUpdate();
         _listTracks.Items.Clear();
         if (result != null)
         {
             foreach (var t in result.Tracks)
             {
-                var pages = result.PageIndex.Where(kv => kv.Value.FilePath == t.FilePath).Select(kv => kv.Key + 1).OrderBy(p => p).ToList();
+                var pages = pagesByTrack.TryGetValue(t.FilePath, out var list) ? list.OrderBy(p => p).ToList() : new List<int>();
                 var pageText = pages.Count > 0 ? string.Join(",", pages.Take(4)) + (pages.Count > 4 ? "…" : "") : "未匹配";
                 _listTracks.Items.Add($"第{pageText}页  {t.FileName}{(t.IsManual ? "  [手动]" : "")}");
             }
@@ -126,6 +138,12 @@ public class PdfAudioPanel : UserControl
                 _listTracks.Items.Add($"未匹配页：{string.Join(",", result.UnmatchedPages.Select(p => p + 1).Take(20))}");
         }
         _listTracks.EndUpdate();
+        OnCurrentPageChanged();
+    }
+
+    /// <summary>翻页时只更新与当前页相关的信息，不重建曲目列表</summary>
+    public void OnCurrentPageChanged()
+    {
         UpdateInfoLabel();
         UpdateLoopLabel();
         UpdateSubtitle(_manager.Playback.Player.Position);

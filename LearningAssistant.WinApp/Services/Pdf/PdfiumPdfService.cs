@@ -160,8 +160,9 @@ namespace LearningAssistant.Services.Pdf
                 using var doc = PdfDocument.Load(pdfPath);
                 return doc.PageCount;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "Failed to get page count: {Path}", pdfPath);
                 return 0;
             }
         }
@@ -190,8 +191,9 @@ namespace LearningAssistant.Services.Pdf
                     return string.Empty;
                 return doc.GetPdfText(pageNumber - 1) ?? string.Empty;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "Failed to extract text: {Path}, page {Page}", pdfPath, pageNumber);
                 return string.Empty;
             }
         }
@@ -278,7 +280,8 @@ namespace LearningAssistant.Services.Pdf
         {
             if (data == null || data.Length == 0) return null;
             using var ms = new MemoryStream(data);
-            return new Bitmap(ms);
+            using var source = Image.FromStream(ms);
+            return new Bitmap(source);
         }
     }
 }

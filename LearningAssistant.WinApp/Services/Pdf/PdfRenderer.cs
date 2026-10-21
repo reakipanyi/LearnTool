@@ -14,7 +14,8 @@ namespace LearningAssistant.Services.Pdf
         private bool _isImageMode = false;
         private bool _isNightMode = false;
 
-        private readonly Dictionary<int, string> _pageTexts = new Dictionary<int, string>();
+        // 预渲染过程中再次触发的预渲染请求会被忽略，避免"渲染→预渲染→再渲染"无限链式调度
+        private static readonly AsyncLocal<bool> _inPreRender = new();
         private readonly object _renderLock = new object();
         private readonly LinkedList<string> _cacheAccessOrder = new LinkedList<string>();
         private readonly Dictionary<string, Bitmap> _renderCache = new Dictionary<string, Bitmap>();
@@ -236,8 +237,11 @@ namespace LearningAssistant.Services.Pdf
                     }
                 }
 
-                _ = Task.Run(() => SmartPreRenderAsync(pageIndex, renderW, renderH),
-                    _cts?.Token ?? CancellationToken.None);
+                if (!_inPreRender.Value)
+                {
+                    _ = Task.Run(() => SmartPreRenderAsync(pageIndex, renderW, renderH),
+                        _cts?.Token ?? CancellationToken.None);
+                }
 
                 return bmp;
             }
@@ -249,6 +253,9 @@ namespace LearningAssistant.Services.Pdf
 
         private async Task SmartPreRenderAsync(int currentPage, int renderW, int renderH)
         {
+            // 标记当前预渲染上下文，其内部渲染不再触发新的预渲染
+            _inPreRender.Value = true;
+
             var cts = _cts;
             if (cts == null || cts.IsCancellationRequested) return;
 
@@ -583,7 +590,8 @@ namespace LearningAssistant.Services.Pdf
         {
             if (data == null || data.Length == 0) return null;
             using var ms = new MemoryStream(data);
-            return new Bitmap(ms);
+            using var source = Image.FromStream(ms);
+            return new Bitmap(source);
         }
     }
 }

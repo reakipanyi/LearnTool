@@ -59,6 +59,9 @@ public class PdfAudioMatcher : IPdfAudioMatcher
                     ?? new AudioTrack { FilePath = Path.Combine(Path.GetDirectoryName(pdfPath) ?? "", kv.Value), FileName = Path.GetFileName(kv.Value), RelativePath = kv.Value };
                 track.IsManual = true;
                 pageIndex[kv.Key] = track;
+                // 手动指定的音频可能不在扫描列表中，需补入曲目集合，否则列表/下一曲无法访问
+                if (!result.Tracks.Exists(t => string.Equals(t.FilePath, track.FilePath, StringComparison.OrdinalIgnoreCase)))
+                    result.Tracks.Add(track);
             }
 
         for (int p = 0; p < pageCount; p++)

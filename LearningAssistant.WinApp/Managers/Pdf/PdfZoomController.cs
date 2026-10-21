@@ -75,7 +75,15 @@ namespace LearningAssistant.Managers
                 var bmp = await _form.Presenter!.RenderPageAsync(page, Math.Max(1, targetW), Math.Max(1, targetH));
                 if (bmp != null)
                 {
-                    _form.Form.BeginInvoke(() => _form.DisplayImage(new Bitmap(new MemoryStream(bmp))));
+                    // 解码后复制成独立位图，避免位图依赖已关闭的 MemoryStream
+                    using var ms = new MemoryStream(bmp);
+                    using var decoded = Image.FromStream(ms);
+                    var image = new Bitmap(decoded);
+
+                    if (!_form.Form.IsDisposed && _form.Form.IsHandleCreated)
+                        _form.Form.BeginInvoke(() => _form.DisplayImage(image));
+                    else
+                        image.Dispose();
                 }
             }
             catch (OperationCanceledException)

@@ -27,7 +27,8 @@ public class PdfAudioRuleDialog : Form
     public PdfAudioRuleDialog(PdfAudioProfile profile, IPdfReaderFormAccess form)
     {
         _profile = profile;
-        _rules = _profile.Rules;
+        // 拷贝一份规则编辑：取消时不能影响已生效的配置
+        _rules = _profile.Rules.Select(CloneRule).ToList();
         Text = "音频匹配规则";
         StartPosition = FormStartPosition.CenterParent;
         ClientSize = new Size(760, 460);
@@ -54,7 +55,7 @@ public class PdfAudioRuleDialog : Form
         btnAdd.Click += (_, _) => OnAdd();
         btnDelete.Click += (_, _) => OnDelete();
         btnApply.Click += (_, _) => ApplyToSelected();
-        btnOk.Click += (_, _) => { ApplyToSelected(); };
+        btnOk.Click += (_, _) => { ApplyToSelected(); _profile.Rules = _rules; };
 
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(8) };
         bottom.Controls.AddRange(new Control[] { btnAdd, btnDelete, btnApply, btnOk, btnCancel });
@@ -86,6 +87,23 @@ public class PdfAudioRuleDialog : Form
         control.Margin = new Padding(0, 4, 0, 4);
         panel.Controls.Add(control, 1, row);
         row++;
+    }
+
+    private static AudioMatchRule CloneRule(AudioMatchRule r)
+    {
+        return new AudioMatchRule
+        {
+            Id = r.Id,
+            Name = r.Name,
+            FileNamePattern = r.FileNamePattern,
+            CaptureGroupIndex = r.CaptureGroupIndex,
+            CaptureGroupName = r.CaptureGroupName,
+            MapMode = r.MapMode,
+            PageOffset = r.PageOffset,
+            PagesPerUnit = r.PagesPerUnit,
+            Enabled = r.Enabled,
+            Priority = r.Priority
+        };
     }
 
     private void AddListItem(AudioMatchRule r)
