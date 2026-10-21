@@ -1757,7 +1757,7 @@ namespace LearningAssistant.Forms.Pdf
                         annotationBmp = new Bitmap(new MemoryStream(annotationBytes));
                 }
 
-                if (IsDisposed || _pictureBoxPdf.IsDisposed) return;
+                if (IsDisposed || !IsHandleCreated || _pictureBoxPdf.IsDisposed) return;
 
                 BeginInvoke(new Action(() =>
                 {
@@ -1815,7 +1815,7 @@ namespace LearningAssistant.Forms.Pdf
                         annotationBmp = new Bitmap(new MemoryStream(annotationBytes));
                 }
 
-                if (IsDisposed || _pictureBoxPdf.IsDisposed) return;
+                if (IsDisposed || !IsHandleCreated || _pictureBoxPdf.IsDisposed) return;
 
                 BeginInvoke(new Action(() =>
                 {
@@ -1893,7 +1893,7 @@ namespace LearningAssistant.Forms.Pdf
 
                 var highlights = _highlightService.GetHighlightsForPage(pdfPath, pageIndex);
 
-                if (IsDisposed || _pictureBoxPdf.IsDisposed) return;
+                if (IsDisposed || !IsHandleCreated || _pictureBoxPdf.IsDisposed) return;
 
                 BeginInvoke(new Action(() =>
                 {

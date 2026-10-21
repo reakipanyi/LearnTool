@@ -29,6 +29,7 @@ namespace LearningAssistant.Presenters
         private readonly IPdfService _pdfService;
         private readonly IImageProcessor _imageProcessor;
         private readonly IEventBus? _eventBus;
+        private readonly SynchronizationContext? _uiContext = SynchronizationContext.Current;
 
         private string _currentUserId = Constants.DefaultUserId;
         private string _currentLanguage = Constants.Language.English;
@@ -50,7 +51,8 @@ namespace LearningAssistant.Presenters
             IPdfService pdfService,
             IImageProcessor imageProcessor,
             TtsConfig ttsConfig,
-            IEventBus? eventBus = null)
+            IEventBus? eventBus = null,
+            IUserSessionService? userSessionService = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _pdfRenderer = pdfRenderer ?? throw new ArgumentNullException(nameof(pdfRenderer));
@@ -67,6 +69,14 @@ namespace LearningAssistant.Presenters
             _pdfService = pdfService ?? throw new ArgumentNullException(nameof(pdfService));
             _imageProcessor = imageProcessor ?? throw new ArgumentNullException(nameof(imageProcessor));
             _eventBus = eventBus;
+
+            // 从会话获取真实用户，避免 PDF 加词固定落到默认用户
+            var currentUserId = userSessionService?.CurrentUserId;
+            if (!string.IsNullOrWhiteSpace(currentUserId))
+            {
+                _currentUserId = currentUserId;
+                _pdfStudyIntegration.SetCurrentUserAndConfig(_currentUserId, _currentLanguage, _currentSubCategory);
+            }
 
             SubscribeToServiceEvents();
             SubscribeToEventBus();
@@ -112,7 +122,7 @@ namespace LearningAssistant.Presenters
             _logger.LogInformation("Received SendToPdfSearchEvent: {SearchText}", @event.SearchText);
             if (!string.IsNullOrEmpty(@event.SearchText))
             {
-                _ = SearchTextAsync(@event.SearchText);
+                _ = FireAndForgetWithLogging(SearchTextAsync(@event.SearchText), "PdfSearchText");
             }
         }
 
@@ -1091,7 +1101,8 @@ namespace LearningAssistant.Presenters
             StringComparison comparison = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 
             // 记录调用方的同步上下文（WinForms 为 UI 线程），用于把结果安全地回显到界面
-            SynchronizationContext? uiContext = SynchronizationContext.Current;
+            // 事件总线触发搜索时当前线程可能没有同步上下文，回退到构造时捕获的 UI 上下文
+            SynchronizationContext? uiContext = SynchronizationContext.Current ?? _uiContext;
 
             _searchResults.Clear();
             _currentSearchIndex = -1;
@@ -1594,7 +1605,12 @@ namespace LearningAssistant.Presenters
                 if (!success)
                 {
                     _view?.ShowWarning($"无法切换到语言: {language}");
+                    return;
                 }
+
+                // 视图提供的是 Tesseract 语言码（chi_sim/eng），TTS 需要中英文常量，这里做转换，
+                // 避免切换 OCR 语言后朗读仍使用旧语言
+                _currentLanguage = language == "eng" ? Constants.Language.English : Constants.Language.Chinese;
             }
         }
 
