@@ -21,6 +21,7 @@ namespace LearningAssistant.Presenters
         private readonly IPdfOcrService _pdfOcrService;
         private readonly IPdfTranslationService _pdfTranslationService;
         private readonly IAIService? _aiService;
+        private readonly IPdfAiService? _pdfAiService;
         private readonly IPdfTtsService? _pdfTtsService;
         private readonly IPdfStudyIntegration _pdfStudyIntegration;
         private readonly TtsConfig _ttsConfig;
@@ -63,7 +64,8 @@ namespace LearningAssistant.Presenters
             IImageProcessor imageProcessor,
             TtsConfig ttsConfig,
             IEventBus? eventBus = null,
-            IUserSessionService? userSessionService = null)
+            IUserSessionService? userSessionService = null,
+            IPdfAiService? pdfAiService = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _pdfRenderer = pdfRenderer ?? throw new ArgumentNullException(nameof(pdfRenderer));
@@ -71,6 +73,7 @@ namespace LearningAssistant.Presenters
             _pdfOcrService = pdfOcrService ?? throw new ArgumentNullException(nameof(pdfOcrService));
             _pdfTranslationService = pdfTranslationService ?? throw new ArgumentNullException(nameof(pdfTranslationService));
             _aiService = aiService;
+            _pdfAiService = pdfAiService;
             _pdfTtsService = pdfTtsService;
             _pdfStudyIntegration = pdfStudyIntegration ?? throw new ArgumentNullException(nameof(pdfStudyIntegration));
             _ttsConfig = ttsConfig ?? throw new ArgumentNullException(nameof(ttsConfig));
@@ -783,11 +786,44 @@ namespace LearningAssistant.Presenters
 
         public async Task<string> GetAiAnswerAsync(string question, string context = "", CancellationToken cancellationToken = default)
         {
+            // 无显式上下文且已打开文档时按“选中内容解释”处理：带当前页上下文并走 A3 缓存
+            if (string.IsNullOrWhiteSpace(context) && !string.IsNullOrWhiteSpace(question)
+                && _pdfAiService != null && !string.IsNullOrWhiteSpace(_pdfFileManager.CurrentFilePath))
+            {
+                var response = await ExplainSelectionWithContextAsync(question, cancellationToken).ConfigureAwait(false);
+                if (response.Success) return response.Content;
+                if (!string.IsNullOrWhiteSpace(response.ErrorMessage)) return response.ErrorMessage;
+            }
+
             if (_aiService == null)
             {
                 return "AI服务不可用";
             }
             return await _aiService.AskQuestionAsync(question, context, cancellationToken);
+        }
+
+        /// <summary>
+        /// 解释选中内容：结合所在页上下文调用 PDF AI 编排（结果按页/模型缓存）。
+        /// </summary>
+        public async Task<PdfAiResponse> ExplainSelectionWithContextAsync(string selectedText, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(selectedText))
+                return PdfAiResponse.Fail("选中文本为空");
+
+            var pdfPath = _pdfFileManager.CurrentFilePath;
+            if (_pdfAiService != null && !string.IsNullOrWhiteSpace(pdfPath))
+            {
+                return await _pdfAiService.ExplainSelectionAsync(
+                    pdfPath, _pdfFileManager.CurrentPageIndex, selectedText, cancellationToken).ConfigureAwait(false);
+            }
+
+            if (_aiService == null)
+                return PdfAiResponse.Fail("AI服务不可用");
+
+            var answer = await _aiService.AskQuestionAsync(
+                $"请解释下面的内容：{selectedText.Trim()}", string.Empty, cancellationToken).ConfigureAwait(false);
+
+            return PdfAiResponse.Ok(answer, new[] { _pdfFileManager.CurrentPageIndex + 1 });
         }
 
         public async Task<string> GenerateAiContentAsync(string prompt, CancellationToken cancellationToken = default)

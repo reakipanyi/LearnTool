@@ -515,9 +515,10 @@ namespace LearningAssistant.Common
                 var ttsConfig = sp.GetRequiredService<TtsConfig>();
                 var eventBus = sp.GetService<IEventBus>();
                 var userSessionService = sp.GetService<IUserSessionService>();
+                var pdfAiService = sp.GetService<IPdfAiService>();
                 return new PdfPresenter(logger, pdfRenderer, pdfFileManager, pdfOcrService, pdfTranslationService,
                     aiService, pdfTtsService, pdfStudyIntegration, exportService,
-                    annotationService, highlightService, pdfService, imageProcessor, ttsConfig, eventBus, userSessionService);
+                    annotationService, highlightService, pdfService, imageProcessor, ttsConfig, eventBus, userSessionService, pdfAiService);
             });
 
             services.AddScoped<MainForm>(sp =>

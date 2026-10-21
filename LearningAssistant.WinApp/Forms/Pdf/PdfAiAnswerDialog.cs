@@ -10,15 +10,17 @@ namespace LearningAssistant.Forms.Pdf
         private readonly PdfAiResponse _response;
         private readonly Action<int>? _navigateToPage;
         private readonly Func<PdfAiResponse, Task>? _saveAsAnnotation;
+        private readonly Action<PdfAiResponse>? _addToEditor;
         private readonly RichTextBox _textAnswer;
         private readonly FlowLayoutPanel _flowPages;
 
         public PdfAiAnswerDialog(string title, PdfAiResponse response, Action<int>? navigateToPage = null,
-            Func<PdfAiResponse, Task>? saveAsAnnotation = null)
+            Func<PdfAiResponse, Task>? saveAsAnnotation = null, Action<PdfAiResponse>? addToEditor = null)
         {
             _response = response ?? throw new ArgumentNullException(nameof(response));
             _navigateToPage = navigateToPage;
             _saveAsAnnotation = saveAsAnnotation;
+            _addToEditor = addToEditor;
 
             Text = title;
             Size = new Size(680, 560);
@@ -69,32 +71,48 @@ namespace LearningAssistant.Forms.Pdf
             };
             buttonClose.FlatAppearance.BorderSize = 0;
             buttonClose.Click += (_, _) => Close();
-            panelBottom.Resize += (_, _) => buttonClose.Left = panelBottom.ClientSize.Width - buttonClose.Width - 12;
 
-            Button? buttonSave = null;
+            var actionButtons = new List<Button>();
+
+            if (_addToEditor != null && _response.Success)
+            {
+                var editorButton = CreateSecondaryButton("添加到编辑器");
+                editorButton.Click += (_, _) =>
+                {
+                    _addToEditor(_response);
+                    editorButton.Text = "已添加";
+                };
+                actionButtons.Add(editorButton);
+            }
+
             if (_saveAsAnnotation != null && _response.Success)
             {
-                var saveButton = new Button
-                {
-                    Text = "保存为标注",
-                    Size = new Size(104, 32),
-                    Location = new Point(0, 12),
-                    Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                    FlatStyle = FlatStyle.Flat,
-                    BackColor = Color.FromArgb(243, 240, 255),
-                    ForeColor = Color.FromArgb(109, 40, 217),
-                    Cursor = Cursors.Hand
-                };
-                saveButton.FlatAppearance.BorderColor = Color.FromArgb(196, 181, 253);
+                var saveButton = CreateSecondaryButton("保存为标注");
                 saveButton.Click += async (_, _) => await SaveAsAnnotationAsync(saveButton);
-                panelBottom.Resize += (_, _) =>
-                    saveButton.Left = panelBottom.ClientSize.Width - buttonClose.Width - saveButton.Width - 20;
-                buttonSave = saveButton;
+                actionButtons.Add(saveButton);
             }
+
+            // 右侧依次排布：动作按钮 → 关闭；页码区宽度随按钮区收缩
+            void LayoutBottom()
+            {
+                int right = panelBottom.ClientSize.Width - 12;
+                buttonClose.Left = right - buttonClose.Width;
+
+                int left = buttonClose.Left;
+                for (int i = actionButtons.Count - 1; i >= 0; i--)
+                {
+                    left -= actionButtons[i].Width + 8;
+                    actionButtons[i].Left = left;
+                }
+
+                _flowPages.Width = Math.Max(120, left - _flowPages.Left - 8);
+            }
+
+            panelBottom.Resize += (_, _) => LayoutBottom();
 
             panelBottom.Controls.Add(labelPages);
             panelBottom.Controls.Add(_flowPages);
-            if (buttonSave != null) panelBottom.Controls.Add(buttonSave);
+            foreach (var button in actionButtons) panelBottom.Controls.Add(button);
             panelBottom.Controls.Add(buttonClose);
 
             var labelTitle = new Label
@@ -134,11 +152,29 @@ namespace LearningAssistant.Forms.Pdf
             Controls.Add(labelTitle);
 
             BuildPageLinks();
+            LayoutBottom();
 
             KeyDown += (_, e) =>
             {
                 if (e.KeyCode == Keys.Escape) Close();
             };
+        }
+
+        private static Button CreateSecondaryButton(string text)
+        {
+            var button = new Button
+            {
+                Text = text,
+                Size = new Size(104, 32),
+                Location = new Point(0, 12),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(243, 240, 255),
+                ForeColor = Color.FromArgb(109, 40, 217),
+                Cursor = Cursors.Hand
+            };
+            button.FlatAppearance.BorderColor = Color.FromArgb(196, 181, 253);
+            return button;
         }
 
         private async Task SaveAsAnnotationAsync(Button source)

@@ -2702,15 +2702,69 @@ namespace LearningAssistant.Forms.Pdf
             ShowAiResponseDialog("全文检索问答", response, allowSave: true);
         }
 
+        /// <summary>解释选中内容：带当前页上下文并走缓存，可添加到编辑器或保存为标注</summary>
+        private async Task ExplainSelectionAsync()
+        {
+            if (_presenter == null)
+            {
+                MessageBox.Show(this, "PDF 服务未初始化", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var selection = GetSelectedText();
+            if (string.IsNullOrWhiteSpace(selection))
+            {
+                MessageBox.Show(this, "请先在左侧翻译页签的原文框中选中要解释的内容", "提示",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            PdfAiResponse response;
+            UseWaitCursor = true;
+            try
+            {
+                response = await _presenter.ExplainSelectionWithContextAsync(selection).ConfigureAwait(true);
+            }
+            finally
+            {
+                UseWaitCursor = false;
+            }
+
+            ShowAiResponseDialog("选中内容 AI 解释", response, allowSave: true, allowAddToEditor: true);
+        }
+
         /// <summary>展示 AI 结果窗口，可按需保存为当前页标注</summary>
-        private void ShowAiResponseDialog(string title, PdfAiResponse response, bool allowSave)
+        private void ShowAiResponseDialog(string title, PdfAiResponse response, bool allowSave,
+            bool allowAddToEditor = false)
         {
             using var dialog = new PdfAiAnswerDialog(
                 title,
                 response,
                 pageNumber => _ = NavigateToAiPageAsync(pageNumber),
-                allowSave ? SaveAiSummaryAsAnnotationAsync : null);
+                allowSave ? SaveAiSummaryAsAnnotationAsync : null,
+                allowAddToEditor ? AddAiAnswerToEditor : null);
             dialog.ShowDialog(this);
+        }
+
+        /// <summary>把 AI 解释加入待处理内容，供内容编辑器直接取用</summary>
+        private void AddAiAnswerToEditor(PdfAiResponse response)
+        {
+            var text = response.Content;
+            if (string.IsNullOrWhiteSpace(text)) return;
+
+            if (_pendingContentService == null)
+            {
+                MessageBox.Show(this, "待添加内容服务未初始化", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            bool isEnglish = string.Equals(GetCurrentLanguage(), "eng", StringComparison.OrdinalIgnoreCase);
+            var language = isEnglish ? Constants.Language.English : Constants.Language.Chinese;
+            var category = isEnglish ? Constants.SubCategory.EnglishComprehensive : Constants.SubCategory.ChineseComprehensive;
+            _pendingContentService.Add(text.Trim(), language, category);
+
+            MessageBox.Show(this, $"已添加到内容编辑器（{category}）", "提示",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         /// <summary>把 AI 结果保存为当前页文字标注（带 AI 标记与引用页码）</summary>
@@ -4194,6 +4248,7 @@ namespace LearningAssistant.Forms.Pdf
             menu.Items.Add("打开 AI 面板", null, (_, _) => RaiseAiQuestionAsked());
             menu.Items.Add("总结当前页", null, async (_, _) => await SummarizeCurrentPageAsync());
             menu.Items.Add("总结选中内容", null, async (_, _) => await SummarizeSelectionAsync());
+            menu.Items.Add("解释选中内容", null, async (_, _) => await ExplainSelectionAsync());
             menu.Items.Add("全文检索问答", null, async (_, _) => await AskDocumentByRetrievalAsync());
 
             if (sender is Control anchor)
