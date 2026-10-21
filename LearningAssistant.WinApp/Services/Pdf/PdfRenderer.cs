@@ -1,6 +1,7 @@
 using LearningAssistant.Abstractions;
 using LearningAssistant.Models.Pdf;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 using System.Threading;
 
 namespace LearningAssistant.Services.Pdf
@@ -17,16 +18,32 @@ namespace LearningAssistant.Services.Pdf
         // 预渲染过程中再次触发的预渲染请求会被忽略，避免"渲染→预渲染→再渲染"无限链式调度
         private static readonly AsyncLocal<bool> _inPreRender = new();
         private readonly object _renderLock = new object();
-        private readonly LinkedList<string> _cacheAccessOrder = new LinkedList<string>();
-        private readonly Dictionary<string, Bitmap> _renderCache = new Dictionary<string, Bitmap>();
-        private const int RenderCacheSize = 30;
+
+        // 渲染缓存按字节预算做 LRU 淘汰，避免高倍缩放时缓存多张大图导致内存峰值失控
+        private sealed class RenderCacheEntry
+        {
+            public string Key = string.Empty;
+            public Bitmap Bitmap = null!;
+            public long Bytes;
+        }
+
+        private readonly LinkedList<RenderCacheEntry> _cacheAccessOrder = new();
+        private readonly Dictionary<string, LinkedListNode<RenderCacheEntry>> _renderCache = new();
+        private const long MaxRenderCacheBytes = 256L * 1024 * 1024;
+        private long _renderCacheBytes;
+
+        private const int MaxThumbnailCacheCount = 300;
         private readonly Dictionary<int, Bitmap> _thumbnailCache = new Dictionary<int, Bitmap>();
+        private readonly Queue<int> _thumbnailCacheOrder = new Queue<int>();
         private bool _isGeneratingThumbnails = false;
         private CancellationTokenSource? _thumbnailCts;
         private readonly SemaphoreSlim _renderSemaphore = new SemaphoreSlim(2, 5);
         private readonly SemaphoreSlim _preRenderSemaphore = new SemaphoreSlim(1, 1);
         private CancellationTokenSource? _preRenderCts;
-        private readonly HashSet<int> _preRenderingPages = new HashSet<int>();
+        // 记录后台预渲染任务，Dispose 时先取消并等待退出，再释放信号量
+        private readonly ConcurrentDictionary<long, Task> _backgroundTasks = new();
+        private long _backgroundTaskSeq;
+        private volatile bool _disposed;
         private CancellationTokenSource? _cts;
 
         public event EventHandler<ThumbnailGeneratedEventArgs>? ThumbnailGenerated;
@@ -76,25 +93,23 @@ namespace LearningAssistant.Services.Pdf
                     try { bitmap.Dispose(); } catch { }
                 }
                 _thumbnailCache.Clear();
+                _thumbnailCacheOrder.Clear();
 
                 // 渲染缓存中保存的是内部深拷贝，调用方拿到的均为副本，可安全释放
-                foreach (var bitmap in _renderCache.Values)
+                foreach (var entry in _cacheAccessOrder)
                 {
-                    try { bitmap.Dispose(); } catch { }
+                    try { entry.Bitmap.Dispose(); } catch { }
                 }
-                _renderCache.Clear();
                 _cacheAccessOrder.Clear();
-                _preRenderingPages.Clear();
+                _renderCache.Clear();
+                _renderCacheBytes = 0;
             }
         }
 
         public void SetNightMode(bool enabled)
         {
-            if (_isNightMode != enabled)
-            {
-                _isNightMode = enabled;
-                ClearCache();
-            }
+            // 夜间反色已移至显示层，缓存不再区分昼夜，切换时无需清空缓存
+            _isNightMode = enabled;
         }
 
         public async Task<Bitmap?> RenderPageAsync(int pageIndex, int width, int height, CancellationToken cancellationToken = default)
@@ -135,20 +150,7 @@ namespace LearningAssistant.Services.Pdf
                 return null;
             }
 
-            // 夜间模式在位图层面完成反色，避免 byte[] PNG 往返
-            if (_isNightMode)
-            {
-                try
-                {
-                    return ApplyNightMode(bitmap);
-                }
-                finally
-                {
-                    // 反色结果为新位图，原始位图由渲染器释放
-                    bitmap.Dispose();
-                }
-            }
-
+            // 夜间反色由视图在绘制层完成，这里始终返回原色位图，保证导出/打印/OCR 使用原色
             return bitmap;
         }
 
@@ -163,29 +165,91 @@ namespace LearningAssistant.Services.Pdf
             {
                 using (var stream = new FileStream(imagePath, FileMode.Open, FileAccess.Read))
                 {
-                    return new Bitmap(stream);
+                    using (var source = Image.FromStream(stream))
+                    {
+                        // 复制为独立位图，避免位图依赖已关闭的文件流导致偶发 GDI+ 错误
+                        return new Bitmap(source);
+                    }
                 }
             });
         }
 
         private string GetRenderCacheKey(int pageIndex, int renderWidth, int renderHeight)
         {
-            // 统一在 key 处量化，保证渲染与预渲染即使传入原始尺寸也命中同一缓存项
+            // 统一在 key 处量化，保证渲染与预渲染即使传入原始尺寸也命中同一缓存项；
+            // key 不含夜间模式，昼夜切换共享同一份原色缓存
             (renderWidth, renderHeight) = PdfRenderSizePolicy.Apply(renderWidth, renderHeight);
-            return $"{_currentFilePath}_{pageIndex}_{renderWidth}_{renderHeight}_{_isNightMode}";
+            return $"{_currentFilePath}_{pageIndex}_{renderWidth}_{renderHeight}";
         }
 
-        private void UpdateCacheAccessOrder(string cacheKey)
+        /// <summary>
+        /// 命中缓存时返回独立副本，并把该条目移到 LRU 末端。调用方负责释放返回值。
+        /// </summary>
+        private Bitmap? TryGetCachedCopy(string cacheKey)
         {
             lock (_renderLock)
             {
-                var node = _cacheAccessOrder.Find(cacheKey);
-                if (node != null)
+                if (_renderCache.TryGetValue(cacheKey, out var node))
                 {
-                    _cacheAccessOrder.Remove(node);
+                    TouchCacheEntry(node);
+                    return CreateDeepCopy(node.Value.Bitmap);
                 }
-                _cacheAccessOrder.AddLast(cacheKey);
             }
+            return null;
+        }
+
+        private void TouchCacheEntry(LinkedListNode<RenderCacheEntry> node)
+        {
+            if (node.List == null) return;
+            _cacheAccessOrder.Remove(node);
+            _cacheAccessOrder.AddLast(node);
+        }
+
+        /// <summary>
+        /// 写入缓存（内部持有深拷贝），超出字节预算时从最旧条目开始淘汰并释放。
+        /// </summary>
+        private void AddCacheEntry(string cacheKey, Bitmap bitmap)
+        {
+            lock (_renderLock)
+            {
+                if (_renderCache.ContainsKey(cacheKey)) return;
+
+                var copy = CreateDeepCopy(bitmap);
+                if (copy == null) return;
+
+                long bytes = EstimateBitmapBytes(copy);
+                if (bytes > MaxRenderCacheBytes)
+                {
+                    // 单张就超过预算的极端尺寸不进入缓存，避免把缓存整体挤空
+                    copy.Dispose();
+                    return;
+                }
+
+                var entry = new RenderCacheEntry { Key = cacheKey, Bitmap = copy, Bytes = bytes };
+                var node = _cacheAccessOrder.AddLast(entry);
+                _renderCache[cacheKey] = node;
+                _renderCacheBytes += bytes;
+
+                TrimRenderCache();
+            }
+        }
+
+        private void TrimRenderCache()
+        {
+            while (_renderCacheBytes > MaxRenderCacheBytes && _cacheAccessOrder.First != null)
+            {
+                var oldest = _cacheAccessOrder.First;
+                _cacheAccessOrder.RemoveFirst();
+                _renderCache.Remove(oldest.Value.Key);
+                _renderCacheBytes -= oldest.Value.Bytes;
+                try { oldest.Value.Bitmap.Dispose(); } catch { }
+            }
+        }
+
+        private static long EstimateBitmapBytes(Bitmap bitmap)
+        {
+            // 统一按 4 字节/像素估算，覆盖 32bpp ARGB 的真实峰值
+            return (long)bitmap.Width * bitmap.Height * 4;
         }
 
         private async Task<Bitmap?> GetRenderedPageAsync(int pageIndex, int renderW, int renderH,
@@ -217,13 +281,10 @@ namespace LearningAssistant.Services.Pdf
             (renderW, renderH) = PdfRenderSizePolicy.Apply(renderW, renderH);
 
             var cacheKey = GetRenderCacheKey(pageIndex, renderW, renderH);
-            lock (_renderLock)
+            var cachedCopy = TryGetCachedCopy(cacheKey);
+            if (cachedCopy != null)
             {
-                if (_renderCache.TryGetValue(cacheKey, out var cached))
-                {
-                    UpdateCacheAccessOrder(cacheKey);
-                    return CreateDeepCopy(cached);
-                }
+                return cachedCopy;
             }
 
             try
@@ -245,13 +306,10 @@ namespace LearningAssistant.Services.Pdf
             {
                 if (cancellationToken.IsCancellationRequested) return null;
 
-                lock (_renderLock)
+                var cachedAfterWait = TryGetCachedCopy(cacheKey);
+                if (cachedAfterWait != null)
                 {
-                    if (_renderCache.TryGetValue(cacheKey, out var cachedAfterWait))
-                    {
-                        UpdateCacheAccessOrder(cacheKey);
-                        return CreateDeepCopy(cachedAfterWait);
-                    }
+                    return cachedAfterWait;
                 }
 
                 var bmp = await Task.Run(() => RenderPageToBitmap(pageIndex, renderW, renderH),
@@ -265,42 +323,40 @@ namespace LearningAssistant.Services.Pdf
                     return null;
                 }
 
-                lock (_renderLock)
-                {
-                    if (!_renderCache.ContainsKey(cacheKey))
-                    {
-                        _renderCache[cacheKey] = CreateDeepCopy(bmp);
-                        UpdateCacheAccessOrder(cacheKey);
-
-                        while (_renderCache.Count > RenderCacheSize && _cacheAccessOrder.Count > 0)
-                        {
-                            var oldestKey = _cacheAccessOrder.First.Value;
-                            if (_renderCache.TryGetValue(oldestKey, out var oldBmp))
-                            {
-                                _renderCache.Remove(oldestKey);
-                                oldBmp?.Dispose();
-                            }
-                            _cacheAccessOrder.RemoveFirst();
-                        }
-                    }
-                }
+                AddCacheEntry(cacheKey, bmp);
 
                 if (!_inPreRender.Value)
                 {
-                    _ = Task.Run(() => SmartPreRenderAsync(pageIndex, renderW, renderH),
-                        _cts?.Token ?? CancellationToken.None);
+                    SchedulePreRender(pageIndex, renderW, renderH);
                 }
 
                 return bmp;
             }
             finally
             {
-                _renderSemaphore.Release();
+                try { _renderSemaphore.Release(); } catch (ObjectDisposedException) { }
             }
+        }
+
+        /// <summary>
+        /// 登记后台预渲染任务，Dispose 时据此等待任务退出后再释放信号量。
+        /// </summary>
+        private void SchedulePreRender(int pageIndex, int renderW, int renderH)
+        {
+            if (_disposed) return;
+
+            var token = _cts?.Token ?? CancellationToken.None;
+            long taskId = Interlocked.Increment(ref _backgroundTaskSeq);
+            var task = Task.Run(() => SmartPreRenderAsync(pageIndex, renderW, renderH), token);
+            _backgroundTasks[taskId] = task;
+            _ = task.ContinueWith(_ => _backgroundTasks.TryRemove(taskId, out _),
+                CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }
 
         private async Task SmartPreRenderAsync(int currentPage, int renderW, int renderH)
         {
+            if (_disposed) return;
+
             // 标记当前预渲染上下文，其内部渲染不再触发新的预渲染
             _inPreRender.Value = true;
 
@@ -315,18 +371,12 @@ namespace LearningAssistant.Services.Pdf
             var preRenderCts = _preRenderCts;
             if (preRenderCts == null) return;
 
+            // 固定顺序：下一页 → 下下页 → 上一页 → 上上页，保证用户继续翻页时优先命中缓存
             var pagesToRender = new List<int>();
             if (currentPage + 1 < PageCount) pagesToRender.Add(currentPage + 1);
+            if (PageCount > 50 && currentPage + 2 < PageCount) pagesToRender.Add(currentPage + 2);
             if (currentPage - 1 >= 0) pagesToRender.Add(currentPage - 1);
-
-            if (PageCount > 50)
-            {
-                if (currentPage + 2 < PageCount) pagesToRender.Add(currentPage + 2);
-                if (currentPage - 2 >= 0) pagesToRender.Add(currentPage - 2);
-            }
-
-            var rnd = new Random();
-            pagesToRender = pagesToRender.OrderBy(_ => rnd.Next()).ToList();
+            if (PageCount > 50 && currentPage - 2 >= 0) pagesToRender.Add(currentPage - 2);
 
             foreach (var p in pagesToRender)
             {
@@ -367,6 +417,11 @@ namespace LearningAssistant.Services.Pdf
                 }
                 catch (OperationCanceledException)
                 {
+                    return;
+                }
+                catch (ObjectDisposedException)
+                {
+                    // 渲染器已释放，预渲染直接退出
                     return;
                 }
                 catch (Exception ex)
@@ -466,6 +521,8 @@ namespace LearningAssistant.Services.Pdf
                     if (!_thumbnailCache.ContainsKey(pageIndex))
                     {
                         _thumbnailCache[pageIndex] = CreateDeepCopy(thumbnail);
+                        _thumbnailCacheOrder.Enqueue(pageIndex);
+                        TrimThumbnailCache();
                     }
                 }
                 return BitmapToBytes(thumbnail);
@@ -473,6 +530,22 @@ namespace LearningAssistant.Services.Pdf
             finally
             {
                 thumbnail.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// 缩略图缓存按数量上限淘汰最早插入项，避免长篇文档常驻内存持续增长。
+        /// </summary>
+        private void TrimThumbnailCache()
+        {
+            while (_thumbnailCacheOrder.Count > MaxThumbnailCacheCount)
+            {
+                int oldest = _thumbnailCacheOrder.Dequeue();
+                if (_thumbnailCache.TryGetValue(oldest, out var bmp))
+                {
+                    _thumbnailCache.Remove(oldest);
+                    try { bmp.Dispose(); } catch { }
+                }
             }
         }
 
@@ -582,11 +655,28 @@ namespace LearningAssistant.Services.Pdf
 
         public void Dispose()
         {
+            if (_disposed) return;
+            _disposed = true;
+
             ClearCache();
 
             _cts?.Cancel();
             _cts?.Dispose();
             _cts = null;
+
+            // 等待后台预渲染退出后再释放信号量，避免其 WaitAsync/Release 抛 ObjectDisposedException
+            try
+            {
+                var pending = _backgroundTasks.Values.ToArray();
+                if (pending.Length > 0)
+                {
+                    Task.WhenAll(pending).Wait(1000);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Background pre-render tasks did not finish before dispose");
+            }
 
             _renderSemaphore.Dispose();
             _preRenderSemaphore.Dispose();

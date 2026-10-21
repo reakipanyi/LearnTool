@@ -3710,11 +3710,22 @@ namespace LearningAssistant.Forms.Pdf
             else
             {
                 var rect = ToRectangle(GetImageDisplayRect());
-                // 夜间模式图像已由 PdfRenderer.ApplyNightMode 在渲染阶段完成 ColorMatrix 反色，
-                // 此处直接绘制，避免与显示层 DrawInvertedImage 叠加造成"双重反色=原色"。
-                g.DrawImage(_currentPageImage, rect);
+                // 夜间反色只在显示层做一次，渲染缓存与导出/OCR 始终使用原色位图
+                if (IsNightModeActive)
+                {
+                    DrawInvertedImage(g, _currentPageImage, rect);
+                }
+                else
+                {
+                    g.DrawImage(_currentPageImage, rect);
+                }
             }
         }
+
+        /// <summary>
+        /// 当前是否处于夜间模式（以夜间模式管理器为准，兼容快捷键切换）。
+        /// </summary>
+        private bool IsNightModeActive => _nightModeManager?.IsNightMode ?? _isNightMode;
 
         private static void DrawInvertedImage(Graphics g, Image image, Rectangle rect)
         {
@@ -3788,17 +3799,30 @@ namespace LearningAssistant.Forms.Pdf
                     return;
 
                 var (leftRect, rightRect) = GetDualPageRects();
+                bool isNight = IsNightModeActive;
 
-                // 夜间模式图像已由 PdfRenderer.ApplyNightMode 在渲染阶段完成反色，直接绘制
-                g.DrawImage(_currentPageImage, leftRect);
-
-                if (_secondPageImage != null)
+                // 夜间反色只在显示层做一次，双页两页都需反色
+                if (isNight)
                 {
-                    g.DrawImage(_secondPageImage, rightRect);
+                    DrawInvertedImage(g, _currentPageImage, leftRect);
+
+                    if (_secondPageImage != null)
+                    {
+                        DrawInvertedImage(g, _secondPageImage, rightRect);
+                    }
                 }
                 else
                 {
-                    bool isNight = _nightModeManager?.IsNightMode ?? _isNightMode;
+                    g.DrawImage(_currentPageImage, leftRect);
+
+                    if (_secondPageImage != null)
+                    {
+                        g.DrawImage(_secondPageImage, rightRect);
+                    }
+                }
+
+                if (_secondPageImage == null)
+                {
                     using var brush = new SolidBrush(isNight ? Color.FromArgb(20, 20, 20) : Color.White);
                     g.FillRectangle(brush, rightRect);
                 }

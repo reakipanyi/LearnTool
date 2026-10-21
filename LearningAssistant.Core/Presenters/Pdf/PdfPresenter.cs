@@ -1717,11 +1717,9 @@ namespace LearningAssistant.Presenters
 
         private void View_ToggleNightMode(object? sender, EventArgs e)
         {
+            // 夜间反色由视图在 Paint 层 DrawInvertedImage 完成，渲染缓存不再区分昼夜，
+            // 切换时无需重新渲染（视图在按钮点击时已自行重绘），导出/OCR 仍使用原色位图。
             _pdfRenderer.SetNightMode(!_pdfRenderer.IsNightMode);
-            // 夜间模式反色由 PdfRenderer.ApplyNightMode 在渲染阶段 ColorMatrix 实现，
-            // 切换模式后必须重新渲染，把已正确反色的图像载入视图；
-            // 视图端 Paint 的 DrawInvertedImage 已停用以避免双重反色。
-            _ = FireAndForgetWithLogging(RenderAndDisplayCurrentPageAsync(), "NightModeRender");
         }
 
         private void View_LanguageChanged(object? sender, EventArgs e)
