@@ -1,0 +1,371 @@
+using LearningAssistant.Models.Pdf;
+using LearningAssistant.Services.AI;
+using Microsoft.Extensions.Logging;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+
+namespace LearningAssistant.Services.Pdf
+{
+    /// <summary>
+    /// PDF 专用 AI 编排实现：文本索引取料 → 上下文裁剪 → 现有 IAIService 调用 → 页码锚点解析。
+    /// </summary>
+    public sealed class PdfAiService : IPdfAiService
+    {
+        /// <summary>答案中的页码锚点，例如 [[p12]]</summary>
+        private static readonly Regex PageAnchorRegex = new(@"\[\[p(\d+)\]\]", RegexOptions.Compiled);
+
+        private readonly IAIService? _aiService;
+        private readonly IPdfDocumentTextIndex _textIndex;
+        private readonly PdfAiOptions _options;
+        private readonly ILogger<PdfAiService>? _logger;
+
+        public PdfAiService(
+            IAIService? aiService,
+            IPdfDocumentTextIndex textIndex,
+            PdfAiOptions? options = null,
+            ILogger<PdfAiService>? logger = null)
+        {
+            _aiService = aiService;
+            _textIndex = textIndex ?? throw new ArgumentNullException(nameof(textIndex));
+            _options = options ?? new PdfAiOptions();
+            _logger = logger;
+        }
+
+        /// <inheritdoc />
+        public Task<PdfAiResponse> SummarizePagesAsync(
+            string pdfPath,
+            int startPageIndex,
+            int endPageIndex,
+            CancellationToken cancellationToken = default)
+            => ExecuteAsync(async () =>
+            {
+                var context = await BuildContextAsync(pdfPath, startPageIndex, endPageIndex, -1, cancellationToken)
+                    .ConfigureAwait(false);
+                if (context.IncludedPages.Count == 0)
+                    return PdfAiResponse.Fail("指定页码范围内没有可用文本，请先完成 OCR 或检查文档");
+
+                var prompt = $"""
+                    你是文档摘要助手。请只依据下面的页面内容进行总结。
+                    要求：
+                    1. 使用简洁中文，按主题归纳要点；
+                    2. 每条要点末尾必须标注来源页码，格式为 [[p12]]（页码从 1 开始）；
+                    3. 不要编造页面中未出现的信息；
+                    4. 最后给出 3-5 条整体结论。
+
+                    文档内容：
+                    {context.Context}
+                    """;
+
+                var content = await AskAsync(prompt, cancellationToken).ConfigureAwait(false);
+                return PdfAiResponse.Ok(content, ExtractPageAnchors(content, context.PageCount));
+            }, "总结", cancellationToken);
+
+        /// <inheritdoc />
+        public Task<PdfAiResponse> AskDocumentAsync(
+            string pdfPath,
+            string question,
+            int currentPageIndex = -1,
+            CancellationToken cancellationToken = default)
+            => ExecuteAsync(async () =>
+            {
+                if (string.IsNullOrWhiteSpace(question))
+                    return PdfAiResponse.Fail("问题内容为空");
+
+                var context = await BuildContextAsync(pdfPath, 0, int.MaxValue, currentPageIndex, cancellationToken)
+                    .ConfigureAwait(false);
+                if (context.IncludedPages.Count == 0)
+                    return PdfAiResponse.Fail("文档没有可用文本，请先完成 OCR");
+
+                var prompt = $"""
+                    你是文档问答助手。请只依据下面的页面内容回答问题。
+                    要求：
+                    1. 每个结论后标注依据页码，格式为 [[p12]]（页码从 1 开始）；
+                    2. 如果页面内容不足以回答，明确说明“未在文档中找到依据”，不要编造；
+                    3. 回答简洁，必要时分点说明。
+
+                    问题：{question}
+
+                    文档内容：
+                    {context.Context}
+                    """;
+
+                var content = await AskAsync(prompt, cancellationToken).ConfigureAwait(false);
+                return PdfAiResponse.Ok(content, ExtractPageAnchors(content, context.PageCount));
+            }, "问答", cancellationToken);
+
+        /// <inheritdoc />
+        public Task<PdfAiResponse> ExplainSelectionAsync(
+            string pdfPath,
+            int pageIndex,
+            string selectedText,
+            CancellationToken cancellationToken = default)
+            => ExecuteAsync(async () =>
+            {
+                if (string.IsNullOrWhiteSpace(selectedText))
+                    return PdfAiResponse.Fail("选中文本为空");
+
+                var context = await BuildContextAsync(pdfPath, pageIndex, pageIndex, -1, cancellationToken)
+                    .ConfigureAwait(false);
+                var pageText = context.IncludedPages.Count > 0 ? context.Context : string.Empty;
+
+                var prompt = $"""
+                    请结合页面上下文解释下面的选中内容。
+                    要求：
+                    1. 说明含义、作用和上下文关系，必要时给出例子；
+                    2. 只输出解释正文，不要重复粘贴整页原文；
+                    3. 控制在 300 字以内。
+
+                    选中内容：
+                    {selectedText.Trim()}
+
+                    所在页（第 {pageIndex + 1} 页）上下文：
+                    {pageText}
+                    """;
+
+                var content = await AskAsync(prompt, cancellationToken).ConfigureAwait(false);
+                return PdfAiResponse.Ok(content, new[] { pageIndex + 1 });
+            }, "解释", cancellationToken);
+
+        /// <inheritdoc />
+        public Task<PdfAiResponse> GenerateOutlineAsync(
+            string pdfPath,
+            int startPageIndex,
+            int endPageIndex,
+            CancellationToken cancellationToken = default)
+            => ExecuteAsync(async () =>
+            {
+                var context = await BuildContextAsync(pdfPath, startPageIndex, endPageIndex, -1, cancellationToken)
+                    .ConfigureAwait(false);
+                if (context.IncludedPages.Count == 0)
+                    return PdfAiResponse.Fail("指定页码范围内没有可用文本");
+
+                var prompt = $$"""
+                    请为下面的文档内容生成层级大纲。
+                    只输出严格 JSON，不要 Markdown 代码块，不要额外说明。
+                    JSON 格式：
+                    {"title":"文档标题","sections":[{"title":"章节标题","page":3,"points":["要点1","要点2"]}]}
+                    其中 page 为页码数字（从 1 开始）。不要编造未出现的信息。
+
+                    文档内容：
+                    {{context.Context}}
+                    """;
+
+                var content = await AskAsync(prompt, cancellationToken).ConfigureAwait(false);
+                bool structured = IsValidJson(content, JsonValueKind.Object);
+                return PdfAiResponse.Ok(content, ExtractPageAnchors(content, context.PageCount), structured);
+            }, "大纲生成", cancellationToken);
+
+        /// <inheritdoc />
+        public Task<PdfAiResponse> GenerateStudyNotesAsync(
+            string pdfPath,
+            int startPageIndex,
+            int endPageIndex,
+            CancellationToken cancellationToken = default)
+            => ExecuteAsync(async () =>
+            {
+                var context = await BuildContextAsync(pdfPath, startPageIndex, endPageIndex, -1, cancellationToken)
+                    .ConfigureAwait(false);
+                if (context.IncludedPages.Count == 0)
+                    return PdfAiResponse.Fail("指定页码范围内没有可用文本");
+
+                var prompt = $"""
+                    请把下面的文档内容整理成结构化学习笔记。
+                    要求：
+                    1. 使用 Markdown，按章节使用 ## / ### 标题；
+                    2. 每段关键内容后标注来源页码，格式为 [[p12]]（页码从 1 开始）；
+                    3. 包含“核心概念”“要点”“疑问”三个部分；
+                    4. 只基于给定内容，不要编造。
+
+                    文档内容：
+                    {context.Context}
+                    """;
+
+                var content = await AskAsync(prompt, cancellationToken).ConfigureAwait(false);
+                return PdfAiResponse.Ok(content, ExtractPageAnchors(content, context.PageCount));
+            }, "笔记生成", cancellationToken);
+
+        /// <inheritdoc />
+        public Task<PdfAiResponse> GenerateFlashcardsAsync(
+            string pdfPath,
+            int startPageIndex,
+            int endPageIndex,
+            CancellationToken cancellationToken = default)
+            => ExecuteAsync(async () =>
+            {
+                var context = await BuildContextAsync(pdfPath, startPageIndex, endPageIndex, -1, cancellationToken)
+                    .ConfigureAwait(false);
+                if (context.IncludedPages.Count == 0)
+                    return PdfAiResponse.Fail("指定页码范围内没有可用文本");
+
+                var prompt = $$"""
+                    请根据下面的文档内容生成闪卡。
+                    只输出严格 JSON 数组，不要 Markdown 代码块，不要额外说明。
+                    JSON 格式：
+                    [{"front":"问题或概念","back":"答案或解释","page":3}]
+                    其中 page 为页码数字（从 1 开始）。每张卡片聚焦一个知识点，不要编造。
+
+                    文档内容：
+                    {{context.Context}}
+                    """;
+
+                var content = await AskAsync(prompt, cancellationToken).ConfigureAwait(false);
+                bool structured = IsValidJson(content, JsonValueKind.Array);
+                return PdfAiResponse.Ok(content, ExtractPageAnchors(content, context.PageCount), structured);
+            }, "闪卡生成", cancellationToken);
+
+        private async Task<PdfAiResponse> ExecuteAsync(
+            Func<Task<PdfAiResponse>> action,
+            string operationName,
+            CancellationToken cancellationToken)
+        {
+            if (_aiService == null)
+                return PdfAiResponse.Fail("AI 服务不可用，请先完成 AI 配置");
+
+            try
+            {
+                return await action().ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return PdfAiResponse.Fail($"{operationName}已取消");
+            }
+            catch (TimeoutException)
+            {
+                return PdfAiResponse.Fail($"{operationName}超时，请稍后重试");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "PDF AI {Operation}失败", operationName);
+                return PdfAiResponse.Fail($"{operationName}失败：{ex.Message}");
+            }
+        }
+
+        private async Task<string> AskAsync(string prompt, CancellationToken cancellationToken)
+        {
+            int timeoutSeconds = Math.Max(5, _options.TimeoutSeconds);
+            return await _aiService!
+                .AskQuestionAsync(prompt, string.Empty, cancellationToken)
+                .WaitAsync(TimeSpan.FromSeconds(timeoutSeconds), cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        /// <summary>按页面顺序或当前页优先构造裁剪后的上下文</summary>
+        private async Task<PdfAiContext> BuildContextAsync(
+            string pdfPath,
+            int startPageIndex,
+            int endPageIndex,
+            int priorityPageIndex,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var index = await _textIndex.GetOrBuildAsync(pdfPath, progress: null, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+            int pageCount = index.PageCount;
+            if (pageCount <= 0)
+                return new PdfAiContext(string.Empty, Array.Empty<int>(), 0);
+
+            int start = Math.Max(0, startPageIndex);
+            int end = endPageIndex == int.MaxValue ? pageCount - 1 : Math.Min(pageCount - 1, endPageIndex);
+            if (end < start)
+                return new PdfAiContext(string.Empty, Array.Empty<int>(), pageCount);
+
+            var order = priorityPageIndex >= start && priorityPageIndex <= end
+                ? BuildPriorityOrder(priorityPageIndex, start, end)
+                : Enumerable.Range(start, end - start + 1);
+
+            var builder = new StringBuilder();
+            var includedPages = new List<int>();
+            foreach (int pageIndex in order)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var text = index.GetPage(pageIndex)?.Text;
+                if (string.IsNullOrWhiteSpace(text)) continue;
+
+                int remaining = _options.MaxTotalChars - builder.Length;
+                if (remaining <= 80) break;
+
+                int pageLimit = Math.Min(_options.MaxCharsPerPage, remaining);
+                var pageText = text.Trim();
+                if (pageText.Length > pageLimit)
+                {
+                    pageText = pageText[..pageLimit] + "…";
+                }
+
+                var block = $"[[p{pageIndex + 1}]]\n{pageText}\n\n";
+                if (block.Length > remaining)
+                {
+                    block = block[..remaining];
+                }
+
+                builder.Append(block);
+                includedPages.Add(pageIndex + 1);
+            }
+
+            return new PdfAiContext(builder.ToString(), includedPages, pageCount);
+        }
+
+        /// <summary>当前页优先，再向两侧扩展的取页顺序</summary>
+        private static IEnumerable<int> BuildPriorityOrder(int priority, int start, int end)
+        {
+            yield return priority;
+            for (int distance = 1; distance <= Math.Max(priority - start, end - priority); distance++)
+            {
+                int after = priority + distance;
+                if (after <= end) yield return after;
+
+                int before = priority - distance;
+                if (before >= start) yield return before;
+            }
+        }
+
+        /// <summary>提取并去重答案中的页码锚点（过滤越界页码）</summary>
+        private static IReadOnlyList<int> ExtractPageAnchors(string content, int pageCount)
+        {
+            if (string.IsNullOrWhiteSpace(content)) return Array.Empty<int>();
+
+            var pages = new SortedSet<int>();
+            foreach (Match match in PageAnchorRegex.Matches(content))
+            {
+                if (int.TryParse(match.Groups[1].Value, out int page) && page >= 1 && page <= pageCount)
+                {
+                    pages.Add(page);
+                }
+            }
+            return pages.ToArray();
+        }
+
+        /// <summary>去除代码块围栏后校验 JSON 根节点类型</summary>
+        private static bool IsValidJson(string content, JsonValueKind expectedKind)
+        {
+            var json = StripCodeFence(content);
+            if (string.IsNullOrWhiteSpace(json)) return false;
+
+            try
+            {
+                using var document = JsonDocument.Parse(json);
+                return document.RootElement.ValueKind == expectedKind;
+            }
+            catch (JsonException)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>去掉 AI 可能附带的 ```json 代码块围栏</summary>
+        private static string StripCodeFence(string content)
+        {
+            var text = (content ?? string.Empty).Trim();
+            if (!text.StartsWith("```", StringComparison.Ordinal)) return text;
+
+            int firstLineEnd = text.IndexOf('\n');
+            int lastFence = text.LastIndexOf("```", StringComparison.Ordinal);
+            if (firstLineEnd < 0 || lastFence <= firstLineEnd) return text;
+            return text[(firstLineEnd + 1)..lastFence].Trim();
+        }
+
+        private sealed record PdfAiContext(string Context, IReadOnlyList<int> IncludedPages, int PageCount);
+    }
+}

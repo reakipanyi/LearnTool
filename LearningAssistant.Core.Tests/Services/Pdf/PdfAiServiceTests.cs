@@ -1,0 +1,154 @@
+using FluentAssertions;
+using LearningAssistant.Models.Pdf;
+using LearningAssistant.Services.AI;
+using LearningAssistant.Services.Pdf;
+using Xunit;
+
+namespace LearningAssistant.Core.Tests.Services.Pdf;
+
+public class PdfAiServiceTests
+{
+    [Fact]
+    public async Task 总结_上下文带页码锚点_越界锚点被过滤()
+    {
+        var index = new FakeTextIndex(3);
+        index.SetText(0, "第一页内容");
+        index.SetText(1, "第二页内容");
+        index.SetText(2, "第三页内容");
+        var ai = new FakeAiService(_ => "要点A [[p2]]，要点B [[p9]]");
+        var service = new PdfAiService(ai, index);
+
+        var result = await service.SummarizePagesAsync("book.pdf", 0, 2);
+
+        result.Success.Should().BeTrue();
+        result.ReferencedPages.Should().BeEquivalentTo(new[] { 2 });
+        ai.LastPrompt.Should().Contain("[[p1]]").And.Contain("[[p3]]");
+    }
+
+    [Fact]
+    public async Task 每页字符上限生效_超长文本被截断()
+    {
+        var index = new FakeTextIndex(1);
+        index.SetText(0, new string('长', 100));
+        var ai = new FakeAiService(_ => "摘要");
+        var service = new PdfAiService(ai, index, new PdfAiOptions { MaxCharsPerPage = 10, MaxTotalChars = 500 });
+
+        var result = await service.SummarizePagesAsync("book.pdf", 0, 0);
+
+        result.Success.Should().BeTrue();
+        ai.LastPrompt.Should().Contain("…");
+        ai.LastPrompt.Should().NotContain(new string('长', 100));
+    }
+
+    [Fact]
+    public async Task 闪卡返回非JSON_保留原文并标记非结构化()
+    {
+        var index = new FakeTextIndex(1);
+        index.SetText(0, "内容");
+        var ai = new FakeAiService(_ => "这不是 JSON");
+        var service = new PdfAiService(ai, index);
+
+        var result = await service.GenerateFlashcardsAsync("book.pdf", 0, 0);
+
+        result.Success.Should().BeTrue();
+        result.IsStructured.Should().BeFalse();
+        result.Content.Should().Be("这不是 JSON");
+    }
+
+    [Fact]
+    public async Task 闪卡返回代码块JSON_可识别为结构化()
+    {
+        var index = new FakeTextIndex(1);
+        index.SetText(0, "内容");
+        var ai = new FakeAiService(_ => "```json\n[{\"front\":\"问\",\"back\":\"答\",\"page\":1}]\n```");
+        var service = new PdfAiService(ai, index);
+
+        var result = await service.GenerateFlashcardsAsync("book.pdf", 0, 0);
+
+        result.Success.Should().BeTrue();
+        result.IsStructured.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AI异常_返回结构化失败而非抛出()
+    {
+        var index = new FakeTextIndex(1);
+        index.SetText(0, "内容");
+        var ai = new FakeAiService(_ => throw new InvalidOperationException("boom"));
+        var service = new PdfAiService(ai, index);
+
+        var result = await service.SummarizePagesAsync("book.pdf", 0, 0);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("失败");
+    }
+
+    [Fact]
+    public async Task AI服务不可用_直接返回失败()
+    {
+        var index = new FakeTextIndex(1);
+        index.SetText(0, "内容");
+        var service = new PdfAiService(null, index);
+
+        var result = await service.AskDocumentAsync("book.pdf", "问题");
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("AI 服务不可用");
+    }
+
+    private sealed class FakeTextIndex : IPdfDocumentTextIndex
+    {
+        private readonly PdfTextIndexDocument _document;
+
+        public FakeTextIndex(int pageCount)
+        {
+            _document = new PdfTextIndexDocument
+            {
+                DocumentPath = "book.pdf",
+                Fingerprint = "fp",
+                PageCount = pageCount,
+                Pages = Enumerable.Range(0, pageCount)
+                    .Select(i => new PdfTextIndexPage { PageIndex = i })
+                    .ToList()
+            };
+        }
+
+        public void SetText(int pageIndex, string text)
+        {
+            var page = _document.Pages[pageIndex];
+            page.Text = text;
+            page.CharacterCount = text.Length;
+        }
+
+        public string GetFingerprint(string pdfPath) => "fp";
+        public PdfTextIndexDocument? TryLoadCached(string pdfPath) => _document;
+        public Task<PdfTextIndexDocument> GetOrBuildAsync(string pdfPath, bool forceRebuild = false,
+            IProgress<PdfTextIndexProgress>? progress = null, CancellationToken cancellationToken = default)
+            => Task.FromResult(_document);
+        public void Invalidate(string pdfPath) { }
+    }
+
+    private sealed class FakeAiService : IAIService
+    {
+        private readonly Func<string, string> _handler;
+
+        public FakeAiService(Func<string, string> handler) => _handler = handler;
+
+        public string? LastPrompt { get; private set; }
+        public string ModelName => "fake";
+        public string ProviderName => "fake";
+
+        public Task<string> AskQuestionAsync(string question, string context = "", CancellationToken cancellationToken = default)
+        {
+            LastPrompt = question;
+            return Task.FromResult(_handler(question));
+        }
+
+        public Task<string> GetExplanationAsync(string text, string language, string subType, CancellationToken cancellationToken = default)
+            => Task.FromResult(string.Empty);
+        public Task<string> GenerateExerciseAsync(string text, string language, CancellationToken cancellationToken = default)
+            => Task.FromResult(string.Empty);
+        public Task<string> SummarizeAsync(string text, CancellationToken cancellationToken = default)
+            => Task.FromResult(string.Empty);
+    }
+}

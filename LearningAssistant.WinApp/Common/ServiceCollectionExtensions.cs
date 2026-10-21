@@ -211,6 +211,13 @@ namespace LearningAssistant.Common
                 _ => new PdfiumPdfService(Microsoft.Extensions.Logging.Abstractions.NullLogger<PdfiumPdfService>.Instance),
                 sp.GetService<ILogger<PdfDocumentTextIndex>>(),
                 AppPaths.PdfTextIndexDir));
+
+            // PDF 专用 AI 编排：文本索引取料 + 页码锚点 + 上下文预算
+            services.AddScoped<IPdfAiService>(sp => new PdfAiService(
+                sp.GetService<IAIService>(),
+                sp.GetRequiredService<IPdfDocumentTextIndex>(),
+                null,
+                sp.GetService<ILogger<PdfAiService>>()));
             services.AddScoped<IPdfStudyIntegration, PdfStudyIntegration>();
             services.AddSingleton<IExportService>(sp => sp.GetRequiredService<ExportService>());
 
