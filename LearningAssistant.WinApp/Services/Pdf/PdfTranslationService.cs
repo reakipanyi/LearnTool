@@ -1,16 +1,15 @@
 using LearningAssistant.Abstractions;
 using Microsoft.Extensions.Logging;
-using System.Drawing.Drawing2D;
 
 namespace LearningAssistant.Services.Pdf
 {
     public class PdfTranslationService : IPdfTranslationService
     {
         private readonly ILogger<PdfTranslationService> _logger;
-        private readonly IOcrService _ocrService;
+        private readonly IPdfOcrService _ocrService;
         private readonly ITranslationService _translationService;
 
-        public PdfTranslationService(ILogger<PdfTranslationService> logger, IOcrService ocrService, ITranslationService translationService)
+        public PdfTranslationService(ILogger<PdfTranslationService> logger, IPdfOcrService ocrService, ITranslationService translationService)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _ocrService = ocrService ?? throw new ArgumentNullException(nameof(ocrService));
@@ -42,7 +41,7 @@ namespace LearningAssistant.Services.Pdf
 
             try
             {
-                var recognizedText = await _ocrService.RecognizeTextAsync(image);
+                var recognizedText = await _ocrService.RecognizeTextWithAutoLanguageAsync(image);
                 if (string.IsNullOrWhiteSpace(recognizedText))
                     return (null, null);
 
@@ -68,23 +67,8 @@ namespace LearningAssistant.Services.Pdf
 
             try
             {
-                var bmp = BytesToBitmap(image);
-                if (bmp == null)
-                    return (null, null);
-
-                var rect = new Rectangle(region.X, region.Y, region.Width, region.Height);
-
-                if (rect.X < 0 || rect.Y < 0 ||
-                    rect.X + rect.Width > bmp.Width ||
-                    rect.Y + rect.Height > bmp.Height)
-                {
-                    _logger.LogWarning("OCR region out of bounds");
-                    return (null, null);
-                }
-
-                using var cropped = CropImage(bmp, rect);
-                var recognizedText = await _ocrService.RecognizeTextAsync(BitmapToBytes(cropped));
-
+                // 区域裁剪与越界校验统一由 PdfOcrService 处理，这里只做识别 + 翻译
+                var recognizedText = await _ocrService.RecognizeTextWithAutoLanguageAsync(image, region);
                 if (string.IsNullOrWhiteSpace(recognizedText))
                     return (null, null);
 
@@ -96,34 +80,6 @@ namespace LearningAssistant.Services.Pdf
                 _logger.LogError(ex, "OCR and translate with region failed");
                 return (null, null);
             }
-        }
-
-        private static Bitmap CropImage(Bitmap source, Rectangle region)
-        {
-            var cropped = new Bitmap(region.Width, region.Height);
-            using var graphics = Graphics.FromImage(cropped);
-            graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
-            graphics.SmoothingMode = SmoothingMode.HighQuality;
-            graphics.DrawImage(source, new Rectangle(0, 0, region.Width, region.Height),
-                              region, GraphicsUnit.Pixel);
-            return cropped;
-        }
-
-        private static byte[]? BitmapToBytes(Bitmap? bmp)
-        {
-            if (bmp == null) return null;
-            using var ms = new MemoryStream();
-            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
-            return ms.ToArray();
-        }
-
-        private static Bitmap? BytesToBitmap(byte[]? data)
-        {
-            if (data == null || data.Length == 0) return null;
-            using var ms = new MemoryStream(data);
-            using var source = Image.FromStream(ms);
-            return new Bitmap(source);
         }
     }
 }

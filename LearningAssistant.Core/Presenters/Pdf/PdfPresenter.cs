@@ -508,7 +508,8 @@ namespace LearningAssistant.Presenters
 
         public async Task<string?> OcrBitmapAsync(byte[] imageData)
         {
-            return await _pdfOcrService.RecognizeTextAsync(imageData);
+            // 自动语言检测：识别当前页后按结果切换 OCR 语言，供后续页使用
+            return await _pdfOcrService.RecognizeTextWithAutoLanguageAsync(imageData);
         }
 
         public async Task<string?> TranslateAsync(string text)

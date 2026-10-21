@@ -3536,7 +3536,8 @@ namespace LearningAssistant.Forms.Pdf
 
             using var memoryStream = new MemoryStream();
             bitmap.Save(memoryStream, System.Drawing.Imaging.ImageFormat.Png);
-            return await ocrService.RecognizeTextAsync(memoryStream.ToArray());
+            // 批量导出同样启用自动语言检测，跨文件中英混排时无需手动切换语言
+            return await ocrService.RecognizeTextWithAutoLanguageAsync(memoryStream.ToArray());
         }
 
         /// <summary>去掉文件名中的非法字符，避免导出失败</summary>

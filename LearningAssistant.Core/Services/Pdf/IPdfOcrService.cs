@@ -33,6 +33,21 @@ namespace LearningAssistant.Services.Pdf
         Task<string?> RecognizeTextAsync(byte[] image, RectInt region);
 
         /// <summary>
+        /// 识别图片中的文字，并根据识别结果自动检测/切换 OCR 语言（用于后续页识别）
+        /// </summary>
+        /// <param name="image">图片byte[]</param>
+        /// <returns>识别出的文本，失败返回null</returns>
+        Task<string?> RecognizeTextWithAutoLanguageAsync(byte[] image);
+
+        /// <summary>
+        /// 识别图片指定区域的文字，并根据识别结果自动检测/切换 OCR 语言（用于后续页识别）
+        /// </summary>
+        /// <param name="image">图片byte[]</param>
+        /// <param name="region">要识别的矩形区域</param>
+        /// <returns>识别出的文本，失败返回null</returns>
+        Task<string?> RecognizeTextWithAutoLanguageAsync(byte[] image, RectInt region);
+
+        /// <summary>
         /// 设置OCR识别语言
         /// </summary>
         /// <param name="language">语言代码（如 eng, chi_sim）</param>
