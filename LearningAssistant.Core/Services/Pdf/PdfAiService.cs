@@ -1,3 +1,4 @@
+using LearningAssistant.Common;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.AI;
 using Microsoft.Extensions.Logging;
@@ -57,10 +58,12 @@ namespace LearningAssistant.Services.Pdf
                 var prompt = $"""
                     你是文档摘要助手。请只依据下面的页面内容进行总结。
                     要求：
-                    1. 使用简洁中文，按主题归纳要点；
+                    1. 使用与文档一致的语言，按主题归纳要点；
                     2. 每条要点末尾必须标注来源页码，格式为 [[p12]]（页码从 1 开始）；
                     3. 不要编造页面中未出现的信息；
                     4. 最后给出 3-5 条整体结论。
+
+                    {context.LanguageHint}
 
                     文档内容：
                     {context.Context}
@@ -92,6 +95,8 @@ namespace LearningAssistant.Services.Pdf
                     1. 每个结论后标注依据页码，格式为 [[p12]]（页码从 1 开始）；
                     2. 如果页面内容不足以回答，明确说明“未在文档中找到依据”，不要编造；
                     3. 回答简洁，必要时分点说明。
+
+                    {context.LanguageHint}
 
                     问题：{question}
 
@@ -133,7 +138,8 @@ namespace LearningAssistant.Services.Pdf
                 if (result.IncludedPages.Count == 0)
                     return PdfAiResponse.Fail("召回页面没有可用文本，请先完成 OCR");
 
-                var context = new PdfAiContext(result.Context, result.IncludedPages, index.PageCount, index.Fingerprint);
+                var context = new PdfAiContext(result.Context, result.IncludedPages, index.PageCount, index.Fingerprint,
+                    BuildLanguageHint(index, result.IncludedPages));
 
                 var prompt = $"""
                     你是文档问答助手。下面是根据问题检索到的文档页面，请只依据这些内容回答。
@@ -141,6 +147,8 @@ namespace LearningAssistant.Services.Pdf
                     1. 每个结论后标注依据页码，格式为 [[p12]]（页码从 1 开始）；
                     2. 如果这些页面不足以回答，明确说明“未在文档中找到依据”，不要编造；
                     3. 回答简洁，必要时分点说明。
+
+                    {context.LanguageHint}
 
                     问题：{question}
 
@@ -180,6 +188,8 @@ namespace LearningAssistant.Services.Pdf
                     2. 如果给定内容不足以回答，明确说明“未在文档中找到依据”，不要编造；
                     3. 回答简洁，必要时分点说明。
 
+                    {context.LanguageHint}
+
                     问题：{question}
 
                     文档内容：
@@ -213,6 +223,8 @@ namespace LearningAssistant.Services.Pdf
                     2. 只输出解释正文，不要重复粘贴整页原文；
                     3. 控制在 300 字以内。
 
+                    {context.LanguageHint}
+
                     选中内容：
                     {selectedText.Trim()}
 
@@ -244,6 +256,8 @@ namespace LearningAssistant.Services.Pdf
                     {"title":"文档标题","sections":[{"title":"章节标题","page":3,"points":["要点1","要点2"]}]}
                     其中 page 为页码数字（从 1 开始）。不要编造未出现的信息。
 
+                    {{context.LanguageHint}}
+
                     文档内容：
                     {{context.Context}}
                     """;
@@ -273,6 +287,8 @@ namespace LearningAssistant.Services.Pdf
                     3. 包含“核心概念”“要点”“疑问”三个部分；
                     4. 只基于给定内容，不要编造。
 
+                    {context.LanguageHint}
+
                     文档内容：
                     {context.Context}
                     """;
@@ -300,6 +316,8 @@ namespace LearningAssistant.Services.Pdf
                     JSON 格式：
                     [{"front":"问题或概念","back":"答案或解释","page":3}]
                     其中 page 为页码数字（从 1 开始）。每张卡片聚焦一个知识点，不要编造。
+
+                    {{context.LanguageHint}}
 
                     文档内容：
                     {{context.Context}}
@@ -339,7 +357,7 @@ namespace LearningAssistant.Services.Pdf
                     fingerprint = pdfPath;
                 }
 
-                var context = new PdfAiContext(digest, pages, pages.Length > 0 ? pages[^1] : 0, fingerprint);
+                var context = new PdfAiContext(digest, pages, pages.Length > 0 ? pages[^1] : 0, fingerprint, string.Empty);
 
                 var prompt = $"""
                     你是学习笔记整理助手。下面是用户从 PDF 中做的标注条目（含页码与录音时间戳）。
@@ -738,7 +756,8 @@ namespace LearningAssistant.Services.Pdf
                 _options.MaxCharsPerPage,
                 _options.MaxTotalChars);
 
-            return new PdfAiContext(result.Context, result.IncludedPages, index.PageCount, index.Fingerprint);
+            return new PdfAiContext(result.Context, result.IncludedPages, index.PageCount, index.Fingerprint,
+                BuildLanguageHint(index, result.IncludedPages));
         }
 
         /// <summary>按页面顺序或当前页优先构造裁剪后的上下文</summary>
@@ -755,12 +774,12 @@ namespace LearningAssistant.Services.Pdf
                 .ConfigureAwait(false);
             int pageCount = index.PageCount;
             if (pageCount <= 0)
-                return new PdfAiContext(string.Empty, Array.Empty<int>(), 0, string.Empty);
+                return new PdfAiContext(string.Empty, Array.Empty<int>(), 0, string.Empty, string.Empty);
 
             int start = Math.Max(0, startPageIndex);
             int end = endPageIndex == int.MaxValue ? pageCount - 1 : Math.Min(pageCount - 1, endPageIndex);
             if (end < start)
-                return new PdfAiContext(string.Empty, Array.Empty<int>(), pageCount, index.Fingerprint);
+                return new PdfAiContext(string.Empty, Array.Empty<int>(), pageCount, index.Fingerprint, string.Empty);
 
             var order = priorityPageIndex >= start && priorityPageIndex <= end
                 ? BuildPriorityOrder(priorityPageIndex, start, end)
@@ -795,7 +814,8 @@ namespace LearningAssistant.Services.Pdf
                 includedPages.Add(pageIndex + 1);
             }
 
-            return new PdfAiContext(builder.ToString(), includedPages, pageCount, index.Fingerprint);
+            return new PdfAiContext(builder.ToString(), includedPages, pageCount, index.Fingerprint,
+                BuildLanguageHint(index, includedPages));
         }
 
         /// <summary>当前页优先，再向两侧扩展的取页顺序</summary>
@@ -857,6 +877,79 @@ namespace LearningAssistant.Services.Pdf
             return text[(firstLineEnd + 1)..lastFence].Trim();
         }
 
-        private sealed record PdfAiContext(string Context, IReadOnlyList<int> IncludedPages, int PageCount, string Fingerprint);
+        /// <summary>
+        /// 根据参与上下文的页面语言生成提示词语言要求；中英混排时按页说明，避免整篇强行统一语言。
+        /// </summary>
+        private static string BuildLanguageHint(PdfTextIndexDocument index, IReadOnlyList<int> includedPages)
+        {
+            if (includedPages == null || includedPages.Count == 0) return string.Empty;
+
+            var chinesePages = new List<int>();
+            var englishPages = new List<int>();
+            var mixedPages = new List<int>();
+            var unknownPages = new List<int>();
+
+            foreach (int pageNumber in includedPages.Distinct().OrderBy(p => p))
+            {
+                switch (ResolvePageLanguage(index.GetPage(pageNumber - 1)))
+                {
+                    case LanguageType.Chinese:
+                        chinesePages.Add(pageNumber);
+                        break;
+                    case LanguageType.English:
+                        englishPages.Add(pageNumber);
+                        break;
+                    case LanguageType.Mixed:
+                        mixedPages.Add(pageNumber);
+                        break;
+                    default:
+                        unknownPages.Add(pageNumber);
+                        break;
+                }
+            }
+
+            if (chinesePages.Count == 0 && englishPages.Count == 0 && mixedPages.Count == 0)
+                return "语言要求：文档语言未知，请按原文语言作答，并保留原文表述。";
+
+            if (englishPages.Count == 0 && mixedPages.Count == 0 && unknownPages.Count == 0)
+                return "语言要求：文档主要为中文，请使用中文作答，引用原文时保留原文语言。";
+
+            if (chinesePages.Count == 0 && mixedPages.Count == 0 && unknownPages.Count == 0)
+                return "语言要求：文档主要为英文，请使用英文作答，引用原文时保留原文语言。";
+
+            var parts = new List<string>();
+            if (chinesePages.Count > 0) parts.Add($"第 {FormatPageList(chinesePages)} 页为中文");
+            if (englishPages.Count > 0) parts.Add($"第 {FormatPageList(englishPages)} 页为英文");
+            if (mixedPages.Count > 0) parts.Add($"第 {FormatPageList(mixedPages)} 页为中英混排");
+
+            return $"语言要求：文档为中英混排（{string.Join("，", parts)}）。请按各页原文语言分别处理，"
+                + "引用原文时保留原文语言，不要整篇强行统一语言。";
+        }
+
+        /// <summary>优先使用索引中已记录的页级语言，缺失时按页面文本重新检测</summary>
+        private static LanguageType ResolvePageLanguage(PdfTextIndexPage? page)
+        {
+            if (page == null) return LanguageType.Unknown;
+            if (Enum.TryParse<LanguageType>(page.DetectedLanguage, out var parsed) && parsed != LanguageType.Unknown)
+                return parsed;
+
+            return StringLanguageDetector.DetectLanguage(page.Text);
+        }
+
+        /// <summary>页码列表过长时只列前 8 页，避免提示词膨胀</summary>
+        private static string FormatPageList(List<int> pages)
+        {
+            const int maxListed = 8;
+            var listed = pages.Take(maxListed).Select(p => p.ToString()).ToList();
+            var text = string.Join("、", listed);
+            return pages.Count > maxListed ? text + " 等" : text;
+        }
+
+        private sealed record PdfAiContext(
+            string Context,
+            IReadOnlyList<int> IncludedPages,
+            int PageCount,
+            string Fingerprint,
+            string LanguageHint);
     }
 }

@@ -21,6 +21,14 @@ namespace LearningAssistant.Services.Pdf
         Task<string?> TranslateAsync(string text);
 
         /// <summary>
+        /// 按指定目标语言翻译文本
+        /// </summary>
+        /// <param name="text">要翻译的文本</param>
+        /// <param name="targetLanguage">目标语言代码（如 zh / en）</param>
+        /// <returns>翻译结果，失败返回null</returns>
+        Task<string?> TranslateAsync(string text, string targetLanguage);
+
+        /// <summary>
         /// OCR识别图片内容并翻译
         /// </summary>
         /// <param name="image">图片byte[]</param>

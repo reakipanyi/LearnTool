@@ -239,6 +239,38 @@ public class PdfAiServiceTests
         result.ErrorMessage.Should().Contain("AI 服务不可用");
     }
 
+    [Fact]
+    public async Task 英文页面_提示词要求英文作答()
+    {
+        var index = new FakeTextIndex(1);
+        index.SetText(0, "Photosynthesis is the process by which plants make food.");
+        var ai = new FakeAiService(_ => "Summary [[p1]]");
+        var service = new PdfAiService(ai, index);
+
+        var result = await service.SummarizePagesAsync("book.pdf", 0, 0);
+
+        result.Success.Should().BeTrue();
+        ai.LastPrompt.Should().Contain("文档主要为英文").And.Contain("使用英文作答");
+    }
+
+    [Fact]
+    public async Task 中英混排文档_提示词按页指明语言()
+    {
+        var index = new FakeTextIndex(2);
+        index.SetText(0, "第一页是中文内容");
+        index.SetText(1, "This page is English content.");
+        var ai = new FakeAiService(_ => "摘要 [[p1]]");
+        var service = new PdfAiService(ai, index);
+
+        var result = await service.SummarizePagesAsync("book.pdf", 0, 1);
+
+        result.Success.Should().BeTrue();
+        ai.LastPrompt.Should().Contain("中英混排")
+            .And.Contain("第 1 页为中文")
+            .And.Contain("第 2 页为英文")
+            .And.Contain("按各页原文语言分别处理");
+    }
+
     private sealed class FakeTextIndex : IPdfDocumentTextIndex
     {
         private readonly PdfTextIndexDocument _document;

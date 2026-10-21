@@ -1,4 +1,5 @@
 using LearningAssistant.Abstractions;
+using LearningAssistant.Common;
 using Microsoft.Extensions.Logging;
 
 namespace LearningAssistant.Services.Pdf
@@ -23,7 +24,8 @@ namespace LearningAssistant.Services.Pdf
             if (!_translationService.IsAvailable)
                 return null;
 
-            return await _translationService.TranslateAsync(text);
+            // 按原文语言自动选择目标语言：中文译英文，其余译中文，中英混排按页各自判定
+            return await _translationService.TranslateAsync(text, "auto", ResolveTargetLanguage(text));
         }
 
         public async Task<string?> TranslateAsync(string text, string targetLanguage)
@@ -45,7 +47,8 @@ namespace LearningAssistant.Services.Pdf
                 if (string.IsNullOrWhiteSpace(recognizedText))
                     return (null, null);
 
-                var translation = await _translationService.TranslateAsync(recognizedText);
+                var translation = await _translationService.TranslateAsync(
+                    recognizedText, "auto", ResolveTargetLanguage(recognizedText));
                 return (recognizedText, translation);
             }
             catch (Exception ex)
@@ -72,7 +75,8 @@ namespace LearningAssistant.Services.Pdf
                 if (string.IsNullOrWhiteSpace(recognizedText))
                     return (null, null);
 
-                var translation = await _translationService.TranslateAsync(recognizedText);
+                var translation = await _translationService.TranslateAsync(
+                    recognizedText, "auto", ResolveTargetLanguage(recognizedText));
                 return (recognizedText, translation);
             }
             catch (Exception ex)
@@ -81,5 +85,9 @@ namespace LearningAssistant.Services.Pdf
                 return (null, null);
             }
         }
+
+        /// <summary>中文原文译成英文，其余（英文/混排/未知）译成中文</summary>
+        private static string ResolveTargetLanguage(string text)
+            => StringLanguageDetector.DetectLanguage(text) == LanguageType.Chinese ? "en" : "zh";
     }
 }
