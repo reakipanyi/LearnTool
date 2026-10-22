@@ -142,4 +142,80 @@ public class PdfAudioMatcherTests
 
         Matcher.Diagnostics.Should().Contain(d => d.Contains("未匹配到任何音频") && d.Contains("P1.mp3"));
     }
+
+    [Fact]
+    public void 无规则时_按文件名第一个数字自动匹配()
+    {
+        var r = Matcher.Match(@"C:\pdf\a.pdf", 20,
+            new[] { T("第3课.mp3"), T("P12.mp3") }, Array.Empty<AudioMatchRule>(), null);
+
+        r.PageIndex[2].FileName.Should().Be("第3课.mp3");
+        r.PageIndex[11].FileName.Should().Be("P12.mp3");
+        Matcher.Diagnostics.Should().Contain(d => d.Contains("自动匹配"));
+    }
+
+    [Fact]
+    public void 无规则时_文件名优先_目录数字不干扰()
+    {
+        var track = new AudioTrack
+        {
+            FileName = "P5.mp3",
+            RelativePath = @"第2单元\P5.mp3",
+            FilePath = @"C:\pdf\第2单元\P5.mp3"
+        };
+
+        var r = Matcher.Match(@"C:\pdf\a.pdf", 20, new[] { track },
+            Array.Empty<AudioMatchRule>(), null);
+
+        r.PageIndex[4].FileName.Should().Be("P5.mp3");
+        r.PageIndex.Should().NotContainKey(1);
+    }
+
+    [Fact]
+    public void 全部规则禁用时_仍走默认自动匹配()
+    {
+        var rule = new AudioMatchRule { FileNamePattern = @"P(\d+)", Enabled = false };
+
+        var r = Matcher.Match(@"C:\pdf\a.pdf", 20, new[] { T("P8.mp3") }, new[] { rule }, null);
+
+        r.PageIndex[7].FileName.Should().Be("P8.mp3");
+    }
+
+    [Fact]
+    public void 启用规则优先于默认自动匹配()
+    {
+        var rule = new AudioMatchRule
+        {
+            FileNamePattern = @"P(\d+)",
+            MapMode = AudioPageMapMode.PageIndex,
+            PageOffset = 1
+        };
+
+        var r = Matcher.Match(@"C:\pdf\a.pdf", 20, new[] { T("P5.mp3") }, new[] { rule }, null);
+
+        r.PageIndex[5].FileName.Should().Be("P5.mp3");
+        r.PageIndex.Should().NotContainKey(4);
+    }
+
+    [Fact]
+    public void 手动覆盖优先于默认自动匹配()
+    {
+        var overrides = new Dictionary<int, string> { [3] = "P9.mp3" };
+
+        var r = Matcher.Match(@"C:\pdf\a.pdf", 20, new[] { T("P4.mp3"), T("P9.mp3") },
+            Array.Empty<AudioMatchRule>(), overrides);
+
+        r.PageIndex[3].FileName.Should().Be("P9.mp3");
+        r.PageIndex[3].IsManual.Should().BeTrue();
+    }
+
+    [Fact]
+    public void 无规则时_超出页数范围的文件不映射()
+    {
+        var r = Matcher.Match(@"C:\pdf\a.pdf", 5, new[] { T("P99.mp3") },
+            Array.Empty<AudioMatchRule>(), null);
+
+        r.PageIndex.Should().BeEmpty();
+        r.UnmatchedPages.Should().HaveCount(5);
+    }
 }

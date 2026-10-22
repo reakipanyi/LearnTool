@@ -16,7 +16,12 @@ public class PdfAudioMatcher : IPdfAudioMatcher
         var pageIndex = result.PageIndex;
         var priorityMap = new Dictionary<int, int>(); // page -> assigned priority
 
-        foreach (var rule in rules.Where(r => r.Enabled).OrderByDescending(r => r.Priority))
+        var enabledRules = rules.Where(r => r.Enabled).OrderByDescending(r => r.Priority).ToList();
+        // 没有任何启用的规则时按文件名数字兜底，避免首次使用全部显示“未匹配”
+        if (enabledRules.Count == 0)
+            ApplyDefaultMatching(pageIndex, pageCount, tracks);
+
+        foreach (var rule in enabledRules)
         {
             var regex = PdfAudioPatternCompiler.TryCompile(rule, out var patternDiagnostic);
             if (patternDiagnostic != null)
@@ -93,6 +98,36 @@ public class PdfAudioMatcher : IPdfAudioMatcher
             if (!pageIndex.ContainsKey(p)) result.UnmatchedPages.Add(p);
 
         return result;
+    }
+
+    /// <summary>
+    /// 无启用规则时的默认匹配：取文件名中的第一个数字作为页码（1 起）。
+    /// 只在文件名中查找，避免上级目录的数字干扰；同页冲突时保留先扫描到的曲目。
+    /// </summary>
+    private void ApplyDefaultMatching(Dictionary<int, AudioTrack> pageIndex, int pageCount,
+        IReadOnlyList<AudioTrack> tracks)
+    {
+        if (tracks.Count == 0)
+        {
+            _diagnostics.Add("目录下没有音频文件，自动匹配未执行");
+            return;
+        }
+
+        _diagnostics.Add("未配置启用的匹配规则，已按文件名中的第一个数字自动匹配页码");
+
+        foreach (var track in tracks)
+        {
+            var match = Regex.Match(track.FileName, @"\d+");
+            if (!match.Success || !int.TryParse(match.Value, out var number)) continue;
+
+            var page = number - 1;
+            if (page < 0 || page >= pageCount) continue;
+            if (pageIndex.ContainsKey(page)) continue;
+
+            pageIndex[page] = track;
+            track.MappedPageStart = page;
+            track.MappedPageEnd = page;
+        }
     }
 
     private static int? ExtractValue(Match m, AudioMatchRule rule, AudioTrack track)
