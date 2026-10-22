@@ -5442,48 +5442,9 @@ namespace LearningAssistant.Forms.Pdf
 
         private void ShowSearchDialog()
         {
-            using var searchForm = new Form();
-            searchForm.Text = "查找";
-            searchForm.Size = new Size(400, 150);
-            searchForm.StartPosition = FormStartPosition.CenterParent;
-            searchForm.FormBorderStyle = FormBorderStyle.FixedDialog;
-            searchForm.MaximizeBox = false;
-            searchForm.MinimizeBox = false;
-
-            var label = new Label();
-            label.Text = "查找内容:";
-            label.Location = new Point(15, 20);
-            label.AutoSize = true;
-            searchForm.Controls.Add(label);
-
-            var textBox = new TextBox();
-            textBox.Location = new Point(85, 18);
-            textBox.Size = new Size(200, 24);
-            textBox.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            searchForm.Controls.Add(textBox);
-
-            var buttonFind = new Button();
-            buttonFind.Text = "查找";
-            buttonFind.Location = new Point(295, 15);
-            buttonFind.Size = new Size(80, 30);
-            buttonFind.Click += ButtonFind_Click;
-            searchForm.Controls.Add(buttonFind);
-
-            var checkCase = new CheckBox();
-            checkCase.Text = "区分大小写";
-            checkCase.Tag = "searchCase";
-            checkCase.Location = new Point(15, 55);
-            checkCase.AutoSize = true;
-            searchForm.Controls.Add(checkCase);
-
-            var checkWhole = new CheckBox();
-            checkWhole.Text = "全字匹配";
-            checkWhole.Tag = "searchWhole";
-            checkWhole.Location = new Point(120, 55);
-            checkWhole.AutoSize = true;
-            searchForm.Controls.Add(checkWhole);
-
-            searchForm.ShowDialog();
+            using var searchDialog = new PdfSearchDialog();
+            searchDialog.FindButton.Click += ButtonFind_Click;
+            searchDialog.ShowDialog();
         }
 
         private void PrintCurrentPdf()
@@ -5525,23 +5486,10 @@ namespace LearningAssistant.Forms.Pdf
 
         private async void ButtonFind_Click(object? sender, EventArgs e)
         {
-            var button = sender as Button;
-            if (button?.Parent is not Form searchForm) return;
+            if ((sender as Button)?.FindForm() is not PdfSearchDialog dialog) return;
+            if (string.IsNullOrWhiteSpace(dialog.SearchText)) return;
 
-            var textBox = searchForm.Controls.OfType<TextBox>().FirstOrDefault();
-            if (textBox != null && !string.IsNullOrWhiteSpace(textBox.Text))
-            {
-                // 读取搜索选项：区分大小写 / 全字匹配
-                bool caseSensitive = GetSearchOption(searchForm, checkTag: "searchCase");
-                bool wholeWord = GetSearchOption(searchForm, checkTag: "searchWhole");
-                await (_presenter?.SearchTextAsync(textBox.Text, caseSensitive, wholeWord) ?? Task.CompletedTask);
-            }
-        }
-
-        private static bool GetSearchOption(Form searchForm, string checkTag)
-        {
-            var check = searchForm.Controls.OfType<CheckBox>().FirstOrDefault(c => c.Tag as string == checkTag);
-            return check != null && check.Checked;
+            await (_presenter?.SearchTextAsync(dialog.SearchText, dialog.CaseSensitive, dialog.WholeWord) ?? Task.CompletedTask);
         }
 
         private void TrackBarThickness_Scroll(object? sender, EventArgs e)
