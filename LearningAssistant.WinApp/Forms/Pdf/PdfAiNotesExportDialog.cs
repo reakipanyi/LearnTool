@@ -16,152 +16,23 @@ namespace LearningAssistant.Forms.Pdf
     }
 
     /// <summary>
-    /// AI 学习笔记导出设置：页码范围与输出目录。纯代码构建，避免设计器文件。
+    /// AI 学习笔记导出设置：页码范围与输出目录。控件均在设计器中创建，便于可视化预览。
     /// </summary>
-    public sealed class PdfAiNotesExportDialog : Form
+    public sealed partial class PdfAiNotesExportDialog : Form
     {
-        private static readonly Color _accentColor = Color.FromArgb(139, 92, 246);
-        private static readonly Color _textColor = Color.FromArgb(50, 50, 60);
-
-        private readonly TextBox _textRange;
-        private readonly TextBox _textOutput;
-        private readonly CheckBox _checkSaveToNotes;
-
         public PdfAiNotesExportOptions Options { get; private set; } = new();
+
+        /// <summary>供 Visual Studio 设计器实例化使用。</summary>
+        public PdfAiNotesExportDialog() : this(1, string.Empty)
+        {
+        }
 
         public PdfAiNotesExportDialog(int pageCount, string documentName)
         {
-            Text = "AI 学习笔记导出";
-            Font = new Font("Microsoft YaHei UI", 9F);
-            FormBorderStyle = FormBorderStyle.FixedDialog;
-            MaximizeBox = false;
-            MinimizeBox = false;
-            StartPosition = FormStartPosition.CenterParent;
-            ClientSize = new Size(480, 296);
-            BackColor = Color.White;
+            InitializeComponent();
 
-            var accentBar = new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = 4,
-                BackColor = _accentColor
-            };
-
-            var labelDoc = new Label
-            {
-                Text = $"{documentName}（共 {pageCount} 页）",
-                Location = new Point(20, 22),
-                Size = new Size(440, 24),
-                ForeColor = _textColor,
-                Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold),
-                AutoEllipsis = true
-            };
-
-            var labelRange = new Label
-            {
-                Text = "页码范围（留空表示全部页面）",
-                Location = new Point(20, 56),
-                Size = new Size(300, 22),
-                ForeColor = _textColor
-            };
-
-            _textRange = new TextBox
-            {
-                Location = new Point(20, 80),
-                Size = new Size(200, 27),
-                PlaceholderText = "例如：1-5"
-            };
-
-            var labelRangeHint = new Label
-            {
-                Text = "支持单页或区间，超出页数时按文档实际页数截断",
-                Location = new Point(230, 84),
-                Size = new Size(230, 22),
-                ForeColor = Color.FromArgb(150, 150, 160)
-            };
-
-            var labelOutput = new Label
-            {
-                Text = "输出目录",
-                Location = new Point(20, 118),
-                Size = new Size(300, 22),
-                ForeColor = _textColor
-            };
-
-            _textOutput = new TextBox
-            {
-                Location = new Point(20, 142),
-                Size = new Size(356, 27),
-                Text = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
-            };
-
-            var buttonBrowse = new Button
-            {
-                Text = "浏览…",
-                Location = new Point(386, 140),
-                Size = new Size(74, 30),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = Color.White,
-                Cursor = Cursors.Hand
-            };
-            buttonBrowse.FlatAppearance.BorderColor = Color.FromArgb(210, 215, 225);
-            buttonBrowse.Click += ButtonBrowse_Click;
-
-            var labelFormat = new Label
-            {
-                Text = "输出格式：Markdown（.md），含页码锚点与结构化标题",
-                Location = new Point(20, 182),
-                Size = new Size(440, 22),
-                ForeColor = Color.FromArgb(120, 120, 132)
-            };
-
-            _checkSaveToNotes = new CheckBox
-            {
-                Text = "同时保存到笔记库，便于后续检索与复习",
-                Location = new Point(20, 210),
-                Size = new Size(440, 24),
-                Checked = true,
-                ForeColor = _textColor
-            };
-
-            var buttonOk = new Button
-            {
-                Text = "生成并导出",
-                Location = new Point(250, 246),
-                Size = new Size(100, 34),
-                BackColor = _accentColor,
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand
-            };
-            buttonOk.FlatAppearance.BorderSize = 0;
-            buttonOk.Click += ButtonOk_Click;
-
-            var buttonCancel = new Button
-            {
-                Text = "取消",
-                Location = new Point(360, 246),
-                Size = new Size(100, 34),
-                BackColor = Color.White,
-                ForeColor = _textColor,
-                FlatStyle = FlatStyle.Flat,
-                Cursor = Cursors.Hand
-            };
-            buttonCancel.FlatAppearance.BorderColor = Color.FromArgb(210, 215, 225);
-            buttonCancel.Click += (_, _) =>
-            {
-                DialogResult = DialogResult.Cancel;
-                Close();
-            };
-
-            Controls.AddRange(new Control[]
-            {
-                accentBar, labelDoc, labelRange, _textRange, labelRangeHint,
-                labelOutput, _textOutput, buttonBrowse, labelFormat, _checkSaveToNotes, buttonOk, buttonCancel
-            });
-
-            AcceptButton = buttonOk;
-            CancelButton = buttonCancel;
+            labelDoc.Text = $"{documentName}（共 {pageCount} 页）";
+            textOutput.Text = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
         }
 
         private void ButtonBrowse_Click(object? sender, EventArgs e)
@@ -169,17 +40,23 @@ namespace LearningAssistant.Forms.Pdf
             using var folderDialog = new FolderBrowserDialog
             {
                 Description = "选择笔记输出目录",
-                SelectedPath = Directory.Exists(_textOutput.Text) ? _textOutput.Text : string.Empty
+                SelectedPath = Directory.Exists(textOutput.Text) ? textOutput.Text : string.Empty
             };
             if (folderDialog.ShowDialog(this) == DialogResult.OK)
             {
-                _textOutput.Text = folderDialog.SelectedPath;
+                textOutput.Text = folderDialog.SelectedPath;
             }
+        }
+
+        private void ButtonCancel_Click(object? sender, EventArgs e)
+        {
+            DialogResult = DialogResult.Cancel;
+            Close();
         }
 
         private void ButtonOk_Click(object? sender, EventArgs e)
         {
-            var outputDirectory = _textOutput.Text.Trim();
+            var outputDirectory = textOutput.Text.Trim();
             if (string.IsNullOrEmpty(outputDirectory))
             {
                 MessageBox.Show(this, "请选择输出目录。", "AI 学习笔记导出", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -197,7 +74,7 @@ namespace LearningAssistant.Forms.Pdf
                 return;
             }
 
-            if (!TryParsePageRange(_textRange.Text, out var startIndex, out var endIndex))
+            if (!TryParsePageRange(textRange.Text, out var startIndex, out var endIndex))
             {
                 MessageBox.Show(this, "页码范围格式不正确，请填写如 1-5，或留空表示全部页面。", "AI 学习笔记导出",
                     MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -209,7 +86,7 @@ namespace LearningAssistant.Forms.Pdf
                 OutputDirectory = outputDirectory,
                 StartPageIndex = startIndex,
                 EndPageIndex = endIndex,
-                SaveToNotes = _checkSaveToNotes.Checked
+                SaveToNotes = checkSaveToNotes.Checked
             };
 
             DialogResult = DialogResult.OK;
