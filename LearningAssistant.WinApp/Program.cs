@@ -74,6 +74,10 @@ namespace LearningAssistant
                 persistenceService?.Initialize();
                 logger.LogInformation("数据库初始化完成");
 
+                // 词库 Id 回填：首次全量、后续仅扫描变更文件，避免旧数据在学习事件中反复生成新身份
+                var identityMigrationService = ServiceProvider.GetService<IItemIdentityMigrationService>();
+                identityMigrationService?.Run();
+
                 // 后台执行数据迁移（从 JSON 到 SQLite，含 analytics→DailyRollup），不阻塞主窗体打开
                 var migrationService = ServiceProvider.GetService<IDataMigrationService>();
                 if (migrationService != null)

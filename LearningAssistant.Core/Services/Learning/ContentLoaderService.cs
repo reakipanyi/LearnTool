@@ -128,6 +128,146 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
+        /// <summary>
+        /// 为旧词库补齐缺失的稳定 Id。逐文件处理：有变更才备份并写回，单文件失败不阻断其他文件。
+        /// </summary>
+        public int EnsureAllItemsHaveIds(DateTime? modifiedSince = null)
+        {
+            var fixedCount = 0;
+            var fileCount = 0;
+            var failedCount = 0;
+            var startedAt = DateTime.Now;
+
+            foreach (var filePath in EnumerateWordBankFiles(modifiedSince))
+            {
+                fileCount++;
+                try
+                {
+                    fixedCount += EnsureFileIds(filePath);
+                }
+                catch (Exception ex)
+                {
+                    failedCount++;
+                    _logger.LogWarning(ex, "Failed to backfill learning item ids: {FilePath}", filePath);
+                }
+            }
+
+            _logger.LogInformation(
+                "Learning item id backfill finished: {FileCount} files, {FixedCount} items fixed, {FailedCount} failed, elapsed {ElapsedMs}ms",
+                fileCount, fixedCount, failedCount, (int)(DateTime.Now - startedAt).TotalMilliseconds);
+
+            return fixedCount;
+        }
+
+        /// <summary>显式失效单个文件缓存（个人内容写入后调用）。</summary>
+        public void InvalidateFileCache(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath)) return;
+
+            lock (_cacheLock)
+            {
+                _fileCache.Remove(filePath);
+            }
+        }
+
+        private IEnumerable<string> EnumerateWordBankFiles(DateTime? modifiedSince)
+        {
+            var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            try
+            {
+                var dataDir = _appPaths.DataDir;
+                if (Directory.Exists(dataDir))
+                {
+                    foreach (var file in Directory.EnumerateFiles(dataDir, "*.json"))
+                    {
+                        var fileName = Path.GetFileName(file);
+                        if (Constants.ExcludedFileKeywords.WordBankExclusions.Any(
+                                keyword => fileName.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0))
+                        {
+                            continue;
+                        }
+
+                        if (_categoryFileMap.Values.Contains(fileName, StringComparer.OrdinalIgnoreCase) ||
+                            _categoryFileMap.Keys.Any(category =>
+                                fileName.StartsWith(GetCategoryFilePrefix(category), StringComparison.OrdinalIgnoreCase)))
+                        {
+                            result.Add(file);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to enumerate system word bank files");
+            }
+
+            try
+            {
+                var usersDir = _appPaths.UsersDir;
+                if (Directory.Exists(usersDir))
+                {
+                    foreach (var userDir in Directory.EnumerateDirectories(usersDir))
+                    {
+                        var contentDir = Path.Combine(userDir, "content");
+                        if (!Directory.Exists(contentDir)) continue;
+
+                        foreach (var file in Directory.EnumerateFiles(contentDir, "*.json", SearchOption.AllDirectories))
+                        {
+                            result.Add(file);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to enumerate personal content files");
+            }
+
+            if (modifiedSince.HasValue)
+            {
+                result.RemoveWhere(file =>
+                {
+                    try
+                    {
+                        return File.GetLastWriteTime(file) <= modifiedSince.Value;
+                    }
+                    catch
+                    {
+                        return true;
+                    }
+                });
+            }
+
+            return result;
+        }
+
+        private int EnsureFileIds(string filePath)
+        {
+            var json = File.ReadAllText(filePath);
+            var items = JsonHelper.DeserializeLearningItems(json);
+            if (items.Count == 0) return 0;
+
+            var missing = items.Where(item => string.IsNullOrWhiteSpace(item.Id)).ToList();
+            if (missing.Count == 0) return 0;
+
+            var backupPath = $"{filePath}.bak-{DateTime.Now:yyyyMMddHHmmss}";
+            File.Copy(filePath, backupPath, overwrite: true);
+
+            foreach (var item in missing)
+            {
+                LearningItemIdentity.EnsureKey(item);
+            }
+
+            JsonHelper.SaveToFile(filePath, items);
+            InvalidateFileCache(filePath);
+
+            _logger.LogInformation(
+                "Backfilled {Count} learning item ids in {FilePath} (backup: {BackupPath})",
+                missing.Count, filePath, backupPath);
+            return missing.Count;
+        }
+
         private List<LearningItem> LoadFromCacheOrFile(string filePath, SubCategoryType subCategory)
         {
             lock (_cacheLock)

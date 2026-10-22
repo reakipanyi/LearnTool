@@ -106,6 +106,7 @@ namespace LearningAssistant.Common
                 return new CacheService(cachePath, logger);
             });
             services.AddSingleton<IContentLoaderService, ContentLoaderService>();
+            services.AddSingleton<IItemIdentityMigrationService, ItemIdentityMigrationService>();
             services.AddSingleton<IUserSessionService, UserSessionService>();
             services.AddSingleton<ISubjectTemplateService, SubjectTemplateService>();
             // 历史 JSON → SQLite 迁移服务（含 analytics → DailyRollup 幂等迁移），启动后后台执行
