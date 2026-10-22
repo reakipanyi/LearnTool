@@ -23,20 +23,10 @@ public partial class PdfHighlightPanel : UserControl
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public SidebarHeaderBar Header => header;
 
-    /// <summary>颜色按钮行，宿主可在其中追加控件。</summary>
-    [Browsable(false)]
-    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-    public FlowLayoutPanel ColorHost => colors;
-
     /// <summary>摘录列表容器，宿主可放入空状态提示。</summary>
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Panel ListHost => listHost;
-
-    /// <summary>底部操作行，宿主可在其中追加控件。</summary>
-    [Browsable(false)]
-    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-    public FlowLayoutPanel FooterPanel => footer;
 
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
