@@ -81,6 +81,12 @@ namespace LearningAssistant.Forms.Learning
         private ComboBox? _cmbComparisonMetric;
         private ComboBox? _cmbComparisonPeriod;
 
+        // P4：分类维度统计 Tab（知识点 / 适龄段 / 重要等级 / 来源）
+        private ComboBox? _cmbDimension;
+        private DataGridView? _gridDimensionStats;
+        private Panel? _panelDimensionFilter;
+        private List<DimensionStatRow> _cachedDimensionStats = new();
+
         private List<DailyStatistics>? _cachedTrendData;
         private Dictionary<string, int>? _cachedCategoryStats;
         private List<WrongAnswerItem>? _cachedWrongAnswers;
@@ -212,6 +218,7 @@ namespace LearningAssistant.Forms.Learning
                 LoadAdvice();
                 LoadCalendar();
                 LoadComparisonData();
+                LoadDimensionStats();
                 _logger?.LogDebug("学习统计数据加载完成");
             }
             catch (Exception ex)
@@ -535,6 +542,100 @@ namespace LearningAssistant.Forms.Learning
                 _logger?.LogError(ex, "加载多用户对比数据失败");
             }
         }
+
+        /// <summary>
+        /// P4：按知识点/适龄段/重要等级/来源汇总覆盖、掌握率与练习产出。
+        /// </summary>
+        private void LoadDimensionStats()
+        {
+            if (_cmbDimension == null || _gridDimensionStats == null)
+                return;
+
+            try
+            {
+                var service = Program.GetService<ILearningDimensionStatsService>();
+                if (service == null)
+                {
+                    _gridDimensionStats.Rows.Clear();
+                    _cachedDimensionStats = new List<DimensionStatRow>();
+                    return;
+                }
+
+                var kind = (DimensionKind)Math.Max(0, _cmbDimension.SelectedIndex);
+                _cachedDimensionStats = service.GetBreakdown(_userId, kind).ToList();
+
+                _gridDimensionStats.Rows.Clear();
+                foreach (var row in _cachedDimensionStats)
+                {
+                    _gridDimensionStats.Rows.Add(
+                        row.Key,
+                        row.Total,
+                        row.KnownRate.ToString("P0", CultureInfo.CurrentCulture),
+                        row.PracticeCount,
+                        row.PracticeCount == 0 ? "-" : row.AverageScore.ToString("0.0", CultureInfo.CurrentCulture));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "加载分类维度统计失败");
+            }
+        }
+
+        /// <summary>
+        /// P4：切换统计维度后立即重算，避免等待整页刷新。
+        /// </summary>
+        private void CmbDimension_SelectedIndexChanged(object? sender, EventArgs e)
+            => LoadDimensionStats();
+
+        /// <summary>
+        /// 导出当前分类维度统计明细为 CSV（UTF-8 BOM，便于 Excel 直接打开）。
+        /// </summary>
+        private void BtnExportDimensionStats_Click(object? sender, EventArgs e)
+        {
+            if (_cachedDimensionStats.Count == 0)
+            {
+                MessageBox.Show("当前没有可导出的分类统计，请先刷新数据。", "导出", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var dimensionName = _cmbDimension?.SelectedItem as string ?? "分类";
+            using var dialog = new SaveFileDialog
+            {
+                Filter = "CSV 文件|*.csv",
+                FileName = $"分类维度统计_{dimensionName}_{DateTime.Now:yyyyMMdd}.csv"
+            };
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            var builder = new StringBuilder();
+            builder.AppendLine("维度值,覆盖数量,掌握数量,掌握率,练习次数,平均分");
+            foreach (var row in _cachedDimensionStats)
+            {
+                builder.AppendLine(string.Join(',',
+                    EscapeCsv(row.Key),
+                    row.Total,
+                    row.Known,
+                    EscapeCsv(row.KnownRate.ToString("P1", CultureInfo.CurrentCulture)),
+                    row.PracticeCount,
+                    row.PracticeCount == 0 ? "-" : row.AverageScore.ToString("0.0", CultureInfo.CurrentCulture)));
+            }
+
+            try
+            {
+                File.WriteAllText(dialog.FileName, builder.ToString(), new UTF8Encoding(true));
+                MessageBox.Show("分类统计已导出。", "导出", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "导出分类维度统计失败");
+                MessageBox.Show($"导出失败: {ex.Message}", "导出", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        private static string EscapeCsv(string value)
+            => value.Contains(',') || value.Contains('"')
+                ? $"\"{value.Replace("\"", "\"\"")}\""
+                : value;
 
         /// <summary>
         /// 解析单个用户在指定周期下的对比指标值（时长/正确率/连击/经验）。
@@ -1853,8 +1954,99 @@ namespace LearningAssistant.Forms.Learning
             tabComparison.Controls.Add(this._cmbComparisonPeriod);
             tabComparison.Controls.Add(this._chartComparison);
 
+            // ===== P4 分类维度统计 Tab =====
+            var tabDimension = new TabPage("🧩 分类");
+            tabDimension.AutoScroll = true;
+            tabDimension.BackColor = Color.FromArgb(245, 245, 250);
+            tabDimension.Padding = new Padding(10);
+
+            var panelDimensionFilter = new Panel();
+            panelDimensionFilter.Location = new Point(15, 15);
+            panelDimensionFilter.Size = new Size(855, 56);
+            panelDimensionFilter.BackColor = Color.White;
+            this._panelDimensionFilter = panelDimensionFilter;
+
+            Label lblDimension = new Label();
+            lblDimension.Text = "📐 统计维度";
+            lblDimension.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            lblDimension.Location = new Point(12, 18);
+            lblDimension.AutoSize = true;
+
+            this._cmbDimension = new ComboBox();
+            this._cmbDimension.Location = new Point(100, 16);
+            this._cmbDimension.Size = new Size(160, 25);
+            this._cmbDimension.DropDownStyle = ComboBoxStyle.DropDownList;
+            this._cmbDimension.Items.AddRange(new object[] { "知识点", "适龄段", "重要等级", "来源" });
+            this._cmbDimension.SelectedIndex = 0;
+            this._cmbDimension.SelectedIndexChanged += new EventHandler(this.CmbDimension_SelectedIndexChanged);
+
+            Button btnExportDimension = new Button();
+            btnExportDimension.Text = "📤 导出明细";
+            btnExportDimension.Location = new Point(730, 14);
+            btnExportDimension.Size = new Size(110, 28);
+            btnExportDimension.FlatStyle = FlatStyle.Flat;
+            btnExportDimension.FlatAppearance.BorderSize = 0;
+            btnExportDimension.BackColor = Color.FromArgb(33, 150, 243);
+            btnExportDimension.ForeColor = Color.White;
+            btnExportDimension.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            btnExportDimension.Click += new EventHandler(this.BtnExportDimensionStats_Click);
+
+            panelDimensionFilter.Controls.Add(lblDimension);
+            panelDimensionFilter.Controls.Add(this._cmbDimension);
+            panelDimensionFilter.Controls.Add(btnExportDimension);
+            tabDimension.Controls.Add(panelDimensionFilter);
+
+            this._gridDimensionStats = new DataGridView();
+            this._gridDimensionStats.Location = new Point(15, 82);
+            this._gridDimensionStats.Size = new Size(855, 420);
+            this._gridDimensionStats.AllowUserToAddRows = false;
+            this._gridDimensionStats.AllowUserToDeleteRows = false;
+            this._gridDimensionStats.AllowUserToResizeRows = false;
+            this._gridDimensionStats.ReadOnly = true;
+            this._gridDimensionStats.RowHeadersVisible = false;
+            this._gridDimensionStats.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            this._gridDimensionStats.MultiSelect = false;
+            this._gridDimensionStats.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+            this._gridDimensionStats.BackgroundColor = Color.White;
+            this._gridDimensionStats.BorderStyle = BorderStyle.None;
+            this._gridDimensionStats.EnableHeadersVisualStyles = false;
+            this._gridDimensionStats.ColumnHeadersHeight = 34;
+            this._gridDimensionStats.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(236, 239, 244);
+            this._gridDimensionStats.ColumnHeadersDefaultCellStyle.Font = new Font("微软雅黑", 9F, FontStyle.Bold);
+            this._gridDimensionStats.DefaultCellStyle.Font = new Font("微软雅黑", 9F);
+            this._gridDimensionStats.DefaultCellStyle.SelectionBackColor = Color.FromArgb(227, 242, 253);
+            this._gridDimensionStats.DefaultCellStyle.SelectionForeColor = Color.FromArgb(33, 33, 33);
+            this._gridDimensionStats.RowTemplate.Height = 30;
+            this._gridDimensionStats.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                HeaderText = "维度值",
+                FillWeight = 46
+            });
+            this._gridDimensionStats.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                HeaderText = "覆盖",
+                FillWeight = 12
+            });
+            this._gridDimensionStats.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                HeaderText = "掌握率",
+                FillWeight = 14
+            });
+            this._gridDimensionStats.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                HeaderText = "练习次数",
+                FillWeight = 14
+            });
+            this._gridDimensionStats.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                HeaderText = "平均分",
+                FillWeight = 14
+            });
+            tabDimension.Controls.Add(this._gridDimensionStats);
+
             // 全部 Tab 挂载到 TabControl
             this._tabMain.TabPages.Add(tabOverview);
+            this._tabMain.TabPages.Add(tabDimension);
             this._tabMain.TabPages.Add(tabMemory);
             this._tabMain.TabPages.Add(tabWrong);
             this._tabMain.TabPages.Add(tabGoal);
@@ -1919,6 +2111,19 @@ namespace LearningAssistant.Forms.Learning
                 _calendarView.BackColor = colors.Surface;
             if (_wrongStatsPanel != null)
                 _wrongStatsPanel.BackColor = colors.Surface;
+
+            // P4 分类维度统计 Tab 主题联动
+            if (_panelDimensionFilter != null)
+                _panelDimensionFilter.BackColor = colors.Surface;
+            if (_gridDimensionStats != null)
+            {
+                _gridDimensionStats.BackgroundColor = colors.Surface;
+                _gridDimensionStats.GridColor = colors.Divider;
+                _gridDimensionStats.ColumnHeadersDefaultCellStyle.BackColor = colors.SurfaceElevated;
+                _gridDimensionStats.ColumnHeadersDefaultCellStyle.ForeColor = colors.TextPrimary;
+                _gridDimensionStats.DefaultCellStyle.BackColor = colors.Surface;
+                _gridDimensionStats.DefaultCellStyle.ForeColor = colors.TextPrimary;
+            }
         }
 
         #region IDisposable Support

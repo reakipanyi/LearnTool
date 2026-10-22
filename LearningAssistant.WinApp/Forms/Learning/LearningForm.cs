@@ -49,6 +49,8 @@ namespace LearningAssistant.Forms.Learning
 
         #region === 学习状态 ===
         private LearningItem? _currentItem;
+        // P4：最近练习记录加载代次，防止快速切换学习项时旧结果回填
+        private int _practiceStatsVersion;
         private bool _isShowAnswer = false;
         private bool _answerRevealed = false;
         private bool _isFavorite = false;
@@ -751,6 +753,7 @@ namespace LearningAssistant.Forms.Learning
             {
                 _currentItem = value;
                 _sidePanelView?.UpdateItem(value);
+                _ = LoadPracticeStatsAsync(value);
                 if (_currentItem != null)
                 {
                     UpdateLearningCard();
@@ -759,10 +762,42 @@ namespace LearningAssistant.Forms.Learning
             }
         }
 
+        /// <summary>
+        /// P4 闭环回流：异步加载当前学习项最近一次练习记录，失败静默降级为“—”。
+        /// </summary>
+        private async Task LoadPracticeStatsAsync(LearningItem? item)
+        {
+            var version = ++_practiceStatsVersion;
+            var view = _sidePanelView;
+            if (view == null) return;
+
+            view.UpdatePracticeStats(null);
+            if (item == null || string.IsNullOrWhiteSpace(item.Id)) return;
+
+            try
+            {
+                var service = Program.GetService<IPracticeRecordService>();
+                var session = _userSessionService;
+                if (service == null || session == null) return;
+
+                var userId = string.IsNullOrWhiteSpace(session.CurrentUserId)
+                    ? Constants.DefaultUserId
+                    : session.CurrentUserId;
+                var itemId = item.Id;
+                var records = await Task.Run(() => service.GetRecent(userId, itemId, null, 1));
+
+                if (version != _practiceStatsVersion) return;
+                view.UpdatePracticeStats(records.FirstOrDefault());
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogDebug(ex, "加载最近练习记录失败");
+            }
+        }
+
         private void UpdateLearningCard()
         {
             if (_learningCard == null || _currentItem == null) return;
-
             _learningCard.Title = _currentItem.GetMainContent();
             _learningCard.Category = comboBoxSubCategory.Text;
             _learningCard.Icon = GetSubjectIcon();

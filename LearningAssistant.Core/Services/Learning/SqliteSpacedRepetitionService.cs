@@ -361,7 +361,9 @@ namespace LearningAssistant.Services.Learning
                 using var db = _dbContextFactory.CreateDbContext();
                 var dueItems = db.SpacedRepetitionItems
                     .Where(i => i.UserId == userId && i.IsActive && i.NextReviewDate <= targetDate.Date)
-                    .OrderBy(i => i.NextReviewDate)
+                    // P4：同等到期时间下按重要等级优先（核心 > 重点 > 一般 > 拓展），保持 SM-2/FSRS 字段不变
+                    .OrderByDescending(i => i.Importance)
+                    .ThenBy(i => i.NextReviewDate)
                     .Select(i => i.ToModel())
                     .ToList();
 
@@ -384,7 +386,9 @@ namespace LearningAssistant.Services.Learning
                 await using var db = await _dbContextFactory.CreateDbContextAsync();
                 var dueItems = await db.SpacedRepetitionItems
                     .Where(i => i.UserId == userId && i.IsActive && i.NextReviewDate <= targetDate.Date)
-                    .OrderBy(i => i.NextReviewDate)
+                    // P4：同等到期时间下按重要等级优先（核心 > 重点 > 一般 > 拓展），保持 SM-2/FSRS 字段不变
+                    .OrderByDescending(i => i.Importance)
+                    .ThenBy(i => i.NextReviewDate)
                     .Select(i => i.ToModel())
                     .ToListAsync();
 

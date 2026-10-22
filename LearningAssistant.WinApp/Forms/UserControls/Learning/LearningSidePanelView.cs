@@ -1,6 +1,7 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Models.Learning;
+using LearningAssistant.Models.Practice;
 using LearningAssistant.Services.Learning;
 
 namespace LearningAssistant.Forms.UserControls.Learning
@@ -21,6 +22,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
         private readonly Label _labelPracticeHeader = new();
         private readonly Button _buttonShadowing = new();
         private readonly Button _buttonDictation = new();
+        private readonly Label _labelPracticeStats = new();
 
         private string? _sourcePdfPath;
         private int _sourcePageIndex = -1;
@@ -51,7 +53,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
-                RowCount = 10
+                RowCount = 11
             };
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));  // 0 header
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));  // 1 来源类型
@@ -63,6 +65,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));  // 7 练习标题
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));  // 8 跟读
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 55F));   // 9 听写 + 空白
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));   // 10 最近练习
 
             BuildHeader();
 
@@ -124,6 +127,12 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _buttonShadowing.Click += (_, _) => ShadowingRequested?.Invoke(this, EventArgs.Empty);
             _buttonDictation.Click += (_, _) => DictationRequested?.Invoke(this, EventArgs.Empty);
 
+            _labelPracticeStats.Dock = DockStyle.Fill;
+            _labelPracticeStats.Font = new Font("微软雅黑", 8.5F);
+            _labelPracticeStats.ForeColor = Color.FromArgb(100, 116, 139);
+            _labelPracticeStats.TextAlign = ContentAlignment.MiddleLeft;
+            _labelPracticeStats.Text = "最近练习：—";
+
             root.Controls.Add(_headerPanel, 0, 0);
             root.Controls.Add(_labelSourceType, 0, 1);
             root.Controls.Add(_labelPage, 0, 2);
@@ -134,6 +143,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             root.Controls.Add(_labelPracticeHeader, 0, 7);
             root.Controls.Add(_buttonShadowing, 0, 8);
             root.Controls.Add(_buttonDictation, 0, 9);
+            root.Controls.Add(_labelPracticeStats, 0, 10);
 
             Controls.Add(root);
         }
@@ -189,6 +199,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
                 SetJumpTarget(null, -1);
                 _buttonShadowing.Enabled = false;
                 _buttonDictation.Enabled = false;
+                UpdatePracticeStats(null);
                 return;
             }
 
@@ -217,6 +228,23 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _buttonDictation.Enabled = hasWord;
         }
 
+        /// <summary>
+        /// 显示当前学习项最近一次练习结果（P4 数据闭环）。
+        /// </summary>
+        public void UpdatePracticeStats(PracticeRecord? latest)
+        {
+            if (latest == null)
+            {
+                _labelPracticeStats.Text = "最近练习：—";
+                return;
+            }
+
+            var scoreText = latest.MaxScore > 0
+                ? $"{latest.Score}/{latest.MaxScore} 分"
+                : $"{latest.Score} 分";
+            _labelPracticeStats.Text = $"最近练习：{latest.CreatedAt:MM-dd HH:mm} · {scoreText}";
+        }
+
         private void SetJumpTarget(string? pdfPath, int pageIndex)
         {
             _sourcePdfPath = pdfPath;
@@ -236,6 +264,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _labelPage.ForeColor = colors.TextSecondary;
             _labelExcerpt.ForeColor = colors.TextPrimary;
             _labelPracticeHeader.ForeColor = colors.TextPrimary;
+            _labelPracticeStats.ForeColor = colors.TextSecondary;
 
             _buttonJump.BackColor = colors.Surface;
             _buttonJump.ForeColor = colors.TextSecondary;

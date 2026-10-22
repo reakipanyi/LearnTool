@@ -109,6 +109,13 @@ namespace LearningAssistant.Common
             services.AddSingleton<IItemIdentityMigrationService, ItemIdentityMigrationService>();
             services.AddSingleton<IPersonalContentStore, PersonalContentStore>();
             services.AddSingleton<IStudyEntryService, StudyEntryService>();
+            services.AddSingleton<ILearningDimensionStatsService>(sp =>
+            {
+                var loader = sp.GetRequiredService<IContentLoaderService>();
+                var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
+                var logger = sp.GetService<ILogger<LearningDimensionStatsService>>();
+                return new LearningDimensionStatsService(loader, dbFactory, logger);
+            });
             services.AddSingleton<ILearningTaxonomyService>(sp =>
             {
                 var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
