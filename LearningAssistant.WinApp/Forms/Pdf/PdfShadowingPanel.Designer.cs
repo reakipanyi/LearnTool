@@ -25,7 +25,6 @@ partial class PdfShadowingPanel
         // 
         // card
         // 
-        card.Body.Controls.Add(stack);
         card.Dock = DockStyle.Fill;
         card.Margin = Padding.Empty;
         card.Name = "card";

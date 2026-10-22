@@ -70,7 +70,6 @@ partial class PdfStudyPanel
         // 
         // overviewCard
         // 
-        overviewCard.Body.Controls.Add(overviewLayout);
         overviewCard.Dock = DockStyle.Fill;
         overviewCard.Margin = new Padding(0, 0, 0, 4);
         overviewCard.Name = "overviewCard";
@@ -144,7 +143,6 @@ partial class PdfStudyPanel
         // 
         // actionCard
         // 
-        actionCard.Body.Controls.Add(actionLayout);
         actionCard.Dock = DockStyle.Fill;
         actionCard.Margin = new Padding(0, 0, 0, 4);
         actionCard.Name = "actionCard";
@@ -246,7 +244,6 @@ partial class PdfStudyPanel
         // 
         // listCard
         // 
-        listCard.Body.Controls.Add(itemList);
         listCard.Dock = DockStyle.Fill;
         listCard.Margin = Padding.Empty;
         listCard.Name = "listCard";

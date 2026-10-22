@@ -9,6 +9,8 @@ public partial class PdfShadowingPanel : UserControl
     public PdfShadowingPanel()
     {
         InitializeComponent();
+        // 卡片内容区由面板自行挂载，避免 VS 设计器回写时丢失
+        card.Body.Controls.Add(stack);
         card.Body.Resize += (_, _) => ResizeChildren();
         ResizeChildren();
     }

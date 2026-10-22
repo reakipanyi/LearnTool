@@ -9,6 +9,10 @@ public partial class PdfStudyPanel : UserControl
     public PdfStudyPanel()
     {
         InitializeComponent();
+        // 卡片内容区由面板自行挂载，避免 VS 设计器回写时丢失
+        overviewCard.Body.Controls.Add(overviewLayout);
+        actionCard.Body.Controls.Add(actionLayout);
+        listCard.Body.Controls.Add(itemList);
         root.Resize += (_, _) => UpdateRowHeights();
         UpdateRowHeights();
     }

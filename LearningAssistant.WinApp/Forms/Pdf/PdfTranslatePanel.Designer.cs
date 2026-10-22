@@ -1,4 +1,5 @@
 using LearningAssistant.Common.UI;
+using LearningAssistant.Forms.UserControls.Common;
 
 namespace LearningAssistant.Forms.Pdf;
 
@@ -12,15 +13,27 @@ partial class PdfTranslatePanel
 
     private void InitializeComponent()
     {
+        components = new System.ComponentModel.Container();
         root = new TableLayoutPanel();
         header = new SidebarHeaderBar();
         body = new TableLayoutPanel();
         originalCard = new SidebarCard();
+        originalBox = new SyncedTextBox();
         translationCard = new SidebarCard();
+        translationBox = new SyncedTextBox();
         actions = new FlowLayoutPanel();
+        shadowingButton = new Button();
+        addToLearningButton = new Button();
         options = new FlowLayoutPanel();
+        autoTranslateCheck = new CheckBox();
+        autoSpeakCheck = new CheckBox();
+        aiPolishCheck = new CheckBox();
+        speedSelector = new SpeedSelectorControl();
+        _tip = new ToolTip(components);
         root.SuspendLayout();
         body.SuspendLayout();
+        actions.SuspendLayout();
+        options.SuspendLayout();
         SuspendLayout();
         // 
         // root
@@ -42,7 +55,7 @@ partial class PdfTranslatePanel
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
-        root.Size = new Size(300, 504);
+        root.Size = new Size(543, 504);
         root.TabIndex = 0;
         // 
         // header
@@ -55,25 +68,25 @@ partial class PdfTranslatePanel
         header.Margin = new Padding(0);
         header.Name = "header";
         header.Padding = new Padding(2, 0, 2, 0);
-        header.Size = new Size(288, 48);
+        header.Size = new Size(531, 48);
         header.TabIndex = 0;
         header.TitleText = "翻译";
         // 
         // body
         // 
         body.BackColor = Color.FromArgb(247, 248, 251);
-        body.ColumnCount = 1;
-        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        body.ColumnCount = 2;
+        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
         body.Controls.Add(originalCard, 0, 0);
-        body.Controls.Add(translationCard, 0, 1);
+        body.Controls.Add(translationCard, 1, 0);
         body.Dock = DockStyle.Fill;
         body.Location = new Point(6, 52);
         body.Margin = new Padding(0, 2, 0, 2);
         body.Name = "body";
-        body.RowCount = 2;
-        body.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
-        body.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
-        body.Size = new Size(288, 374);
+        body.RowCount = 1;
+        body.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        body.Size = new Size(531, 374);
         body.TabIndex = 1;
         // 
         // originalCard
@@ -82,47 +95,160 @@ partial class PdfTranslatePanel
         originalCard.BackColor = Color.FromArgb(247, 248, 251);
         originalCard.Dock = DockStyle.Fill;
         originalCard.Location = new Point(0, 0);
-        originalCard.Margin = new Padding(0, 0, 0, 2);
+        originalCard.Margin = new Padding(0, 0, 2, 0);
         originalCard.Name = "originalCard";
         originalCard.Padding = new Padding(2, 1, 2, 1);
-        originalCard.Size = new Size(142, 187);
+        originalCard.Size = new Size(263, 374);
         originalCard.TabIndex = 0;
         originalCard.Title = "原文";
+        // 
+        // originalBox
+        // 
+        originalBox.BackColor = Color.White;
+        originalBox.BorderStyle = BorderStyle.None;
+        originalBox.Dock = DockStyle.Fill;
+        originalBox.Font = new Font("Microsoft YaHei UI", 9.5F);
+        originalBox.ForeColor = Color.FromArgb(15, 23, 42);
+        originalBox.Location = new Point(10, 30);
+        originalBox.Multiline = true;
+        originalBox.Name = "originalBox";
+        originalBox.ScrollBars = ScrollBars.Vertical;
+        originalBox.Size = new Size(243, 334);
+        originalBox.TabIndex = 0;
         // 
         // translationCard
         // 
         translationCard.ActionText = "🔊 读译文";
         translationCard.BackColor = Color.FromArgb(247, 248, 251);
         translationCard.Dock = DockStyle.Fill;
-        translationCard.Location = new Point(0, 189);
-        translationCard.Margin = new Padding(0, 2, 0, 0);
+        translationCard.Location = new Point(265, 0);
+        translationCard.Margin = new Padding(2, 0, 0, 0);
         translationCard.Name = "translationCard";
         translationCard.Padding = new Padding(2, 1, 2, 1);
-        translationCard.Size = new Size(142, 187);
+        translationCard.Size = new Size(266, 374);
         translationCard.TabIndex = 1;
         translationCard.Title = "译文";
+        // 
+        // translationBox
+        // 
+        translationBox.BackColor = Color.White;
+        translationBox.BorderStyle = BorderStyle.None;
+        translationBox.Dock = DockStyle.Fill;
+        translationBox.Font = new Font("Microsoft YaHei UI", 9.5F);
+        translationBox.ForeColor = Color.FromArgb(15, 23, 42);
+        translationBox.Location = new Point(10, 30);
+        translationBox.Multiline = true;
+        translationBox.Name = "translationBox";
+        translationBox.ScrollBars = ScrollBars.Vertical;
+        translationBox.Size = new Size(246, 334);
+        translationBox.TabIndex = 0;
         // 
         // actions
         // 
         actions.BackColor = Color.FromArgb(247, 248, 251);
+        actions.Controls.Add(shadowingButton);
+        actions.Controls.Add(addToLearningButton);
         actions.Dock = DockStyle.Fill;
         actions.Location = new Point(6, 430);
         actions.Margin = new Padding(0, 2, 0, 0);
         actions.Name = "actions";
-        actions.Size = new Size(288, 38);
+        actions.Padding = new Padding(0, 5, 0, 0);
+        actions.Size = new Size(531, 38);
         actions.TabIndex = 2;
         actions.WrapContents = false;
+        // 
+        // shadowingButton
+        // 
+        shadowingButton.BackColor = Color.White;
+        shadowingButton.Cursor = Cursors.Hand;
+        shadowingButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        shadowingButton.FlatAppearance.BorderSize = 1;
+        shadowingButton.FlatStyle = FlatStyle.Flat;
+        shadowingButton.Font = new Font("Microsoft YaHei UI", 9F);
+        shadowingButton.ForeColor = Color.FromArgb(15, 23, 42);
+        shadowingButton.Margin = new Padding(0, 0, 6, 0);
+        shadowingButton.Name = "shadowingButton";
+        shadowingButton.Size = new Size(112, 28);
+        shadowingButton.TabIndex = 0;
+        shadowingButton.Tag = "secondary";
+        shadowingButton.Text = "✂ 句子跟读";
+        shadowingButton.UseVisualStyleBackColor = false;
+        // 
+        // addToLearningButton
+        // 
+        addToLearningButton.BackColor = Color.White;
+        addToLearningButton.Cursor = Cursors.Hand;
+        addToLearningButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        addToLearningButton.FlatAppearance.BorderSize = 1;
+        addToLearningButton.FlatStyle = FlatStyle.Flat;
+        addToLearningButton.Font = new Font("Microsoft YaHei UI", 9F);
+        addToLearningButton.ForeColor = Color.FromArgb(15, 23, 42);
+        addToLearningButton.Name = "addToLearningButton";
+        addToLearningButton.Size = new Size(118, 28);
+        addToLearningButton.TabIndex = 1;
+        addToLearningButton.Tag = "secondary";
+        addToLearningButton.Text = "➕ 添加到学习";
+        addToLearningButton.UseVisualStyleBackColor = false;
         // 
         // options
         // 
         options.BackColor = Color.FromArgb(247, 248, 251);
+        options.Controls.Add(autoTranslateCheck);
+        options.Controls.Add(autoSpeakCheck);
+        options.Controls.Add(aiPolishCheck);
+        options.Controls.Add(speedSelector);
         options.Dock = DockStyle.Fill;
         options.Location = new Point(6, 468);
         options.Margin = new Padding(0);
         options.Name = "options";
-        options.Size = new Size(288, 30);
+        options.Size = new Size(531, 30);
         options.TabIndex = 3;
         options.WrapContents = false;
+        // 
+        // autoTranslateCheck
+        // 
+        autoTranslateCheck.AutoSize = true;
+        autoTranslateCheck.BackColor = Color.Transparent;
+        autoTranslateCheck.FlatStyle = FlatStyle.System;
+        autoTranslateCheck.ForeColor = Color.FromArgb(15, 23, 42);
+        autoTranslateCheck.Margin = new Padding(2, 4, 6, 0);
+        autoTranslateCheck.Name = "autoTranslateCheck";
+        autoTranslateCheck.Size = new Size(115, 21);
+        autoTranslateCheck.TabIndex = 0;
+        autoTranslateCheck.Text = "🌐 识别后翻译";
+        // 
+        // autoSpeakCheck
+        // 
+        autoSpeakCheck.AutoSize = true;
+        autoSpeakCheck.BackColor = Color.Transparent;
+        autoSpeakCheck.FlatStyle = FlatStyle.System;
+        autoSpeakCheck.ForeColor = Color.FromArgb(15, 23, 42);
+        autoSpeakCheck.Margin = new Padding(2, 4, 6, 0);
+        autoSpeakCheck.Name = "autoSpeakCheck";
+        autoSpeakCheck.Size = new Size(115, 21);
+        autoSpeakCheck.TabIndex = 1;
+        autoSpeakCheck.Text = "🔊 识别后朗读";
+        // 
+        // aiPolishCheck
+        // 
+        aiPolishCheck.AutoSize = true;
+        aiPolishCheck.BackColor = Color.Transparent;
+        aiPolishCheck.FlatStyle = FlatStyle.System;
+        aiPolishCheck.ForeColor = Color.FromArgb(15, 23, 42);
+        aiPolishCheck.Margin = new Padding(2, 4, 2, 0);
+        aiPolishCheck.Name = "aiPolishCheck";
+        aiPolishCheck.Size = new Size(79, 21);
+        aiPolishCheck.TabIndex = 2;
+        aiPolishCheck.Text = "✨ 润色";
+        // 
+        // speedSelector
+        // 
+        speedSelector.BackColor = Color.Transparent;
+        speedSelector.Location = new Point(319, 1);
+        speedSelector.Margin = new Padding(2, 0, 0, 0);
+        speedSelector.Name = "speedSelector";
+        speedSelector.Size = new Size(130, 28);
+        speedSelector.TabIndex = 3;
         // 
         // PdfTranslatePanel
         // 
@@ -131,9 +257,12 @@ partial class PdfTranslatePanel
         BackColor = Color.FromArgb(247, 248, 251);
         Controls.Add(root);
         Name = "PdfTranslatePanel";
-        Size = new Size(300, 504);
+        Size = new Size(555, 508);
         root.ResumeLayout(false);
         body.ResumeLayout(false);
+        actions.ResumeLayout(false);
+        options.ResumeLayout(false);
+        options.PerformLayout();
         ResumeLayout(false);
     }
 
@@ -143,7 +272,16 @@ partial class PdfTranslatePanel
     private SidebarHeaderBar header;
     private TableLayoutPanel body;
     private SidebarCard originalCard;
+    private SyncedTextBox originalBox;
     private SidebarCard translationCard;
+    private SyncedTextBox translationBox;
     private FlowLayoutPanel actions;
+    private Button shadowingButton;
+    private Button addToLearningButton;
     private FlowLayoutPanel options;
+    private CheckBox autoTranslateCheck;
+    private CheckBox autoSpeakCheck;
+    private CheckBox aiPolishCheck;
+    private SpeedSelectorControl speedSelector;
+    private ToolTip _tip;
 }

@@ -75,12 +75,15 @@ namespace LearningAssistant.Forms.Pdf
         private LoadingIndicator? _loadingIndicator;
         private bool _isTranslationEnabled = false;
 
-        private GroupBox? _groupBoxHighlights;
         private ListBox? _listBoxHighlights;
         private Button? _buttonRemoveHighlight;
         private Button? _buttonBatchRemoveHighlight;
         private Button? _buttonEditHighlight;
-        private Button? _buttonExportHighlights;
+        private RadioButton? _radioHighlightYellow;
+        private RadioButton? _radioHighlightGreen;
+        private RadioButton? _radioHighlightBlue;
+        private RadioButton? _radioHighlightPink;
+        private RadioButton? _radioHighlightOrange;
 
         private TabPage? _tabPageBookmarksAndHighlights;
         private TabPage? _tabPageAudio;
@@ -120,11 +123,7 @@ namespace LearningAssistant.Forms.Pdf
         private FlowLayoutPanel? _studyItemList;
         private PdfStudyPanel? _studyPanel;
         private SyncedTextBox _textBoxOriginal;
-        private Label _labelOriginal;
-        private Label _labelTranslation;
         private SyncedTextBox _textBoxTranslation;
-        private Button _buttonTranslate;
-        private Button _buttonSpeakTranslation;
         private Button _buttonAddToLearningContent;
         private Button _buttonShadowing;
         private CheckBox _checkBoxAutoSpeak;
@@ -153,16 +152,6 @@ namespace LearningAssistant.Forms.Pdf
         private Font? _sidebarTabFont;
         // 悬停提示延迟显示，避免鼠标划过页签时提示框反复弹出/收回造成闪烁
         private System.Windows.Forms.Timer? _sidebarTipTimer;
-
-        private Panel _highlightContainer;
-        private FlowLayoutPanel _highlightButtonPanel;
-
-        private GroupBox _groupBoxHighlightColor;
-        private RadioButton _radioHighlightYellow;
-        private RadioButton _radioHighlightGreen;
-        private RadioButton _radioHighlightBlue;
-        private RadioButton _radioHighlightPink;
-        private RadioButton _radioHighlightOrange;
 
         private Label _transitionLabel;
         private Panel _toolbarGroupView;
@@ -261,8 +250,6 @@ namespace LearningAssistant.Forms.Pdf
         private Label? _statusLabelLeft;
         private Label? _statusLabelRight;
         private Panel? _pageTransitionOverlay;
-        private GroupBox? _groupBoxProgress;
-        private Button? _buttonSpeakOriginal;
         private System.Windows.Forms.Timer? _pageTransitionTimer;
         private string _currentPdfPath = string.Empty;
         private SentenceShadowingForm? _shadowingForm;
@@ -377,7 +364,6 @@ namespace LearningAssistant.Forms.Pdf
         {
             InitializeComponent();
             WindowState = FormWindowState.Maximized;
-            SubscribeTranslationScrollSync();
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _aiPanelPopupService = aiPanelPopupService;
             _pendingContentService = pendingContentService;
@@ -557,7 +543,7 @@ namespace LearningAssistant.Forms.Pdf
                 }
             }
 
-            InitializeHighlightColorButtonEvents();
+
             InitializeColorButtonLayout();
             InitializeHighlightColorSwatches();
             InitializeToolbarButtonHoverEffects();
@@ -583,7 +569,7 @@ namespace LearningAssistant.Forms.Pdf
                 _buttonSpotlightMode, _buttonMagnifierMode, _buttonAskAi, _buttonTranslationToggle, _buttonCollapseNav,
                 _buttonPrev, _buttonNext, _buttonZoomOut, _buttonZoomIn, _buttonResetView,
                 _buttonRotate, _buttonLockView, _buttonNightMode, _buttonDualPage, _buttonFullscreen,
-                _buttonTranslate, _buttonSpeakOriginal, _buttonSpeakTranslation, _buttonAddToLearningContent
+                _buttonAddToLearningContent
             };
             foreach (var ctrl in tabStopButtons)
             {
@@ -782,28 +768,6 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
-        private void InitializeHighlightColorButtonEvents()
-        {
-            var radioButtons = new[] { _radioHighlightYellow, _radioHighlightGreen, _radioHighlightBlue, _radioHighlightPink, _radioHighlightOrange };
-            foreach (var radio in radioButtons)
-            {
-                if (radio != null)
-                {
-                    radio.MouseEnter += RadioHighlightColor_MouseEnter;
-                    radio.MouseLeave += RadioHighlightColor_MouseLeave;
-                    // 设置圆形 Region
-                    try
-                    {
-                        var path = new System.Drawing.Drawing2D.GraphicsPath();
-                        path.AddEllipse(0, 0, radio.Width, radio.Height);
-                        radio.Region = new Region(path);
-                        path.Dispose();
-                    }
-                    catch { }
-                }
-            }
-        }
-
         #region IPdfReaderFormAccess Implementation
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -874,13 +838,7 @@ namespace LearningAssistant.Forms.Pdf
         public Button? ButtonAskAi => _buttonAskAi;
 
         public TabPage? TabPageTranslate => _tabPageTranslate;
-        public GroupBox? GroupBoxProgress => _groupBoxProgress;
         public TextBox? TextBoxTranslation => _textBoxTranslation;
-        public Label? LabelOriginal => _labelOriginal;
-        public Label? LabelTranslation => _labelTranslation;
-        public Button? ButtonTranslate => _buttonTranslate;
-        public Button? ButtonSpeakOriginal => _buttonSpeakOriginal;
-        public Button? ButtonSpeakTranslation => _buttonSpeakTranslation;
         public SpeedSelectorControl? SpeedSelector => _speedSelector;
 
         [System.ComponentModel.Browsable(false)]
@@ -904,12 +862,9 @@ namespace LearningAssistant.Forms.Pdf
 
         public TabPage? TabPageBookmarksAndHighlights => _tabPageBookmarksAndHighlights;
 
-        public GroupBox? GroupBoxHighlights => _groupBoxHighlights;
         public ListBox? ListBoxHighlights => _listBoxHighlights;
-        public GroupBox? GroupBoxHighlightColor => _groupBoxHighlightColor;
         public Button? ButtonRemoveHighlight => _buttonRemoveHighlight;
         public Button? ButtonBatchRemoveHighlight => _buttonBatchRemoveHighlight;
-        public Button? ButtonExportHighlights => _buttonExportHighlights;
 
         public Panel? PanelPdf => _panelPdf;
         public Panel? PanelNavigation => _panelNavigation;
@@ -969,9 +924,6 @@ namespace LearningAssistant.Forms.Pdf
             InitializeEmptyState();
             _presenter?.LoadLastSessionAndRestore();
             UpdateStatusBar();
-            // 原文/译文文本框按可用高度比例分配，跟随侧栏高度变化
-            _groupBoxProgress.Resize += (_, __) => LayoutTranslateTab();
-            LayoutTranslateTab();
             UpdateAnnotationColorSelection(Color.Black);
             if (_trackBarThickness != null)
             {
@@ -1315,7 +1267,8 @@ namespace LearningAssistant.Forms.Pdf
             radio.FlatAppearance.BorderSize = radio.Checked ? 2 : 0;
             radio.FlatAppearance.BorderColor = Color.FromArgb(64, 150, 255);
 
-            if (radio.Checked && radio.Tag is int colorIndex)
+            int colorIndex = GetHighlightColorIndex(radio);
+            if (radio.Checked && colorIndex > 0)
             {
                 var color = (HighlightColor)colorIndex;
                 _currentHighlightColor = color;
@@ -1325,6 +1278,17 @@ namespace LearningAssistant.Forms.Pdf
                 }
                 _pictureBoxPdf?.Invalidate();
             }
+        }
+
+        /// <summary>颜色按钮不在 Tag 中存索引（Tag 留给主题系统），改按引用映射。</summary>
+        private int GetHighlightColorIndex(RadioButton radio)
+        {
+            if (ReferenceEquals(radio, _radioHighlightYellow)) return 1;
+            if (ReferenceEquals(radio, _radioHighlightGreen)) return 2;
+            if (ReferenceEquals(radio, _radioHighlightBlue)) return 3;
+            if (ReferenceEquals(radio, _radioHighlightPink)) return 4;
+            if (ReferenceEquals(radio, _radioHighlightOrange)) return 5;
+            return 0;
         }
 
         private void RadioHighlightColor_MouseEnter(object? sender, EventArgs e)
@@ -6723,30 +6687,9 @@ namespace LearningAssistant.Forms.Pdf
             button.Tag = "secondary";
         }
 
-        private static void StyleColorRadio(RadioButton? radio, Color color, string tooltip)
-        {
-            if (radio == null) return;
-            radio.Appearance = Appearance.Button;
-            radio.AutoSize = false;
-            radio.Size = new Size(24, 24);
-            radio.FlatStyle = FlatStyle.Flat;
-            radio.FlatAppearance.BorderColor = Color.White;
-            radio.FlatAppearance.BorderSize = 2;
-            radio.BackColor = color;
-            radio.Text = string.Empty;
-            radio.Cursor = Cursors.Hand;
-            radio.Margin = new Padding(2, 0, 6, 0);
-            radio.Tag = "keep";
-            var tip = new ToolTip();
-            tip.SetToolTip(radio, tooltip);
-        }
-
         private void BuildTranslateSidebar()
         {
-            if (_tabPageTranslate == null || _groupBoxProgress == null) return;
-
-            // 旧 GroupBox 只保留属性引用，视觉层由新卡片替代
-            _groupBoxProgress.Visible = false;
+            if (_tabPageTranslate == null) return;
 
             _translatePanel = new PdfTranslatePanel();
             _translatePanel.Dock = DockStyle.Fill;
@@ -6755,52 +6698,23 @@ namespace LearningAssistant.Forms.Pdf
             _translatePanel.OriginalCard.ActionButton!.Click += (_, _) => ButtonSpeakOriginal_Click(null, EventArgs.Empty);
             _translatePanel.TranslationCard.ActionButton!.Click += (_, _) => ButtonSpeakTranslation_Click(null, EventArgs.Empty);
 
-            SidebarUi.StyleTextBox(_textBoxOriginal);
-            _textBoxOriginal.Dock = DockStyle.Fill;
-            _textBoxOriginal.Margin = Padding.Empty;
-            _translatePanel.OriginalCard.Body.Controls.Add(_textBoxOriginal);
+            _textBoxOriginal = _translatePanel.OriginalBox;
+            _textBoxTranslation = _translatePanel.TranslationBox;
 
-            SidebarUi.StyleTextBox(_textBoxTranslation);
-            _textBoxTranslation.Dock = DockStyle.Fill;
-            _textBoxTranslation.Margin = Padding.Empty;
-            _translatePanel.TranslationCard.Body.Controls.Add(_textBoxTranslation);
+            _buttonShadowing = _translatePanel.ShadowingButton;
+            _buttonAddToLearningContent = _translatePanel.AddToLearningButton;
+            _buttonShadowing.Click += ButtonShadowing_Click;
+            _buttonAddToLearningContent.Click += ButtonAddToLearningContent_Click;
 
-            StyleSidebarButton(_buttonShadowing, "✂ 句子跟读", 112);
-            StyleSidebarButton(_buttonAddToLearningContent, "➕ 添加到学习", 118);
-            _translatePanel.ActionsPanel.Controls.Add(_buttonShadowing);
-            _translatePanel.ActionsPanel.Controls.Add(_buttonAddToLearningContent);
-
-            _labelOriginal.Visible = false;
-            _labelTranslation.Visible = false;
-            _buttonSpeakOriginal.Visible = false;
-            _buttonSpeakTranslation.Visible = false;
-            _buttonTranslate.Visible = false;
-
-            _checkBoxAutoTranslate.Text = "自动翻译";
-            _checkBoxAutoSpeak.Text = "自动朗读";
-            _checkBoxAiPolish.Text = "AI 润色";
-            SidebarUi.StyleCheckBox(_checkBoxAutoTranslate);
-            SidebarUi.StyleCheckBox(_checkBoxAutoSpeak);
-            SidebarUi.StyleCheckBox(_checkBoxAiPolish);
-            _checkBoxAutoTranslate.AutoSize = true;
-            _checkBoxAutoSpeak.AutoSize = true;
-            _checkBoxAiPolish.AutoSize = true;
-            _checkBoxAutoTranslate.Margin = new Padding(2, 4, 6, 0);
-            _checkBoxAutoSpeak.Margin = new Padding(2, 4, 6, 0);
-            _checkBoxAiPolish.Margin = new Padding(2, 4, 2, 0);
-
-            _translatePanel.OptionsPanel.Controls.Add(_checkBoxAutoTranslate);
-            _translatePanel.OptionsPanel.Controls.Add(_checkBoxAutoSpeak);
-            _translatePanel.OptionsPanel.Controls.Add(_checkBoxAiPolish);
-            if (_speedSelector != null)
-            {
-                _speedSelector.Margin = new Padding(2, 0, 0, 0);
-                _translatePanel.OptionsPanel.Controls.Add(_speedSelector);
-            }
+            _checkBoxAutoTranslate = _translatePanel.AutoTranslateCheck;
+            _checkBoxAutoSpeak = _translatePanel.AutoSpeakCheck;
+            _checkBoxAiPolish = _translatePanel.AiPolishCheck;
+            _speedSelector = _translatePanel.TtsSpeedSelector;
 
             _tabPageTranslate.Controls.Add(_translatePanel);
             _translatePanel.BringToFront();
 
+            SubscribeTranslationScrollSync();
             _textBoxOriginal.TextChanged += (_, _) => UpdateTranslateHeaderStatus();
             _textBoxTranslation.TextChanged += (_, _) => UpdateTranslateHeaderStatus();
             UpdateTranslateHeaderStatus();
@@ -6818,47 +6732,43 @@ namespace LearningAssistant.Forms.Pdf
 
         private void BuildHighlightSidebar()
         {
-            if (_tabPageBookmarksAndHighlights == null || _groupBoxHighlights == null) return;
-
-            _groupBoxHighlights.Visible = false;
+            if (_tabPageBookmarksAndHighlights == null) return;
 
             _highlightPanel = new PdfHighlightPanel();
             _highlightPanel.Dock = DockStyle.Fill;
             _highlightHeader = _highlightPanel.Header;
             _highlightPanel.Header.ActionButton!.Click += (_, _) => ButtonExportHighlights_Click(null, EventArgs.Empty);
 
-            StyleColorRadio(_radioHighlightYellow, Color.FromArgb(253, 224, 71), "黄色高亮");
-            StyleColorRadio(_radioHighlightGreen, Color.FromArgb(74, 222, 128), "绿色高亮");
-            StyleColorRadio(_radioHighlightBlue, Color.FromArgb(96, 165, 250), "蓝色高亮");
-            StyleColorRadio(_radioHighlightPink, Color.FromArgb(244, 114, 182), "粉色高亮");
-            StyleColorRadio(_radioHighlightOrange, Color.FromArgb(251, 146, 60), "橙色高亮");
-            _highlightPanel.ColorHost.Controls.Add(_radioHighlightYellow);
-            _highlightPanel.ColorHost.Controls.Add(_radioHighlightGreen);
-            _highlightPanel.ColorHost.Controls.Add(_radioHighlightBlue);
-            _highlightPanel.ColorHost.Controls.Add(_radioHighlightPink);
-            _highlightPanel.ColorHost.Controls.Add(_radioHighlightOrange);
-            _highlightPanel.ColorHost.Controls.Add(SidebarUi.CreateSectionLabel("选色后框选文字"));
+            _radioHighlightYellow = _highlightPanel.YellowButton;
+            _radioHighlightGreen = _highlightPanel.GreenButton;
+            _radioHighlightBlue = _highlightPanel.BlueButton;
+            _radioHighlightPink = _highlightPanel.PinkButton;
+            _radioHighlightOrange = _highlightPanel.OrangeButton;
+            foreach (var radio in new[] { _highlightPanel.YellowButton, _highlightPanel.GreenButton, _highlightPanel.BlueButton, _highlightPanel.PinkButton, _highlightPanel.OrangeButton })
+            {
+                radio.CheckedChanged += RadioHighlightColor_CheckedChanged;
+                radio.MouseEnter += RadioHighlightColor_MouseEnter;
+                radio.MouseLeave += RadioHighlightColor_MouseLeave;
+            }
 
-            _listBoxHighlights.Dock = DockStyle.Fill;
-            _listBoxHighlights.BorderStyle = BorderStyle.None;
-            _listBoxHighlights.DrawMode = DrawMode.OwnerDrawFixed;
-            _listBoxHighlights.ItemHeight = 52;
-            _listBoxHighlights.BackColor = PdfSidebarTheme.Surface;
-            _listBoxHighlights.ForeColor = PdfSidebarTheme.Text;
-            _listBoxHighlights.Font = new Font("Microsoft YaHei UI", 9F);
+            _listBoxHighlights = _highlightPanel.HighlightList;
             _listBoxHighlights.DrawItem += ListBoxHighlights_DrawItem;
-            _highlightPanel.ListHost.Controls.Add(_listBoxHighlights);
+            _listBoxHighlights.SelectedIndexChanged += ListBoxHighlights_SelectedIndexChanged;
+            _listBoxHighlights.DoubleClick += ListBoxHighlights_DoubleClick;
 
             _highlightEmptyHost = SidebarUi.CreateEmptyState("📑", "还没有摘录\n选中文字后用高亮工具即可保存");
             _highlightEmptyHost.Visible = false;
             _highlightPanel.ListHost.Controls.Add(_highlightEmptyHost);
 
+            _buttonRemoveHighlight = _highlightPanel.RemoveButton;
+            _buttonEditHighlight = _highlightPanel.EditButton;
+            _buttonBatchRemoveHighlight = _highlightPanel.BatchRemoveButton;
             StyleSidebarButton(_buttonRemoveHighlight, "删除", 72, 28);
             StyleSidebarButton(_buttonEditHighlight, "编辑", 72, 28);
             StyleSidebarButton(_buttonBatchRemoveHighlight, "批量删除", 92, 28);
-            _highlightPanel.FooterPanel.Controls.Add(_buttonRemoveHighlight);
-            _highlightPanel.FooterPanel.Controls.Add(_buttonEditHighlight);
-            _highlightPanel.FooterPanel.Controls.Add(_buttonBatchRemoveHighlight);
+            _buttonRemoveHighlight.Click += ButtonRemoveHighlight_Click;
+            _buttonEditHighlight.Click += ButtonEditHighlight_Click;
+            _buttonBatchRemoveHighlight.Click += ButtonBatchRemoveHighlight_Click;
 
             _tabPageBookmarksAndHighlights.Controls.Add(_highlightPanel);
             _highlightPanel.BringToFront();
@@ -7173,35 +7083,8 @@ namespace LearningAssistant.Forms.Pdf
             _panelThumbnails = new Panel();
             _flowLayoutPanelThumbnails = new FlowLayoutPanel();
             _tabPageTranslate = new TabPage();
-            _groupBoxProgress = new GroupBox();
-            _textBoxTranslation = new SyncedTextBox();
-            _buttonSpeakTranslation = new Button();
-            _buttonShadowing = new Button();
-            _buttonAddToLearningContent = new Button();
-            _textBoxOriginal = new SyncedTextBox();
-            _buttonSpeakOriginal = new Button();
-            _checkBoxAutoTranslate = new CheckBox();
-            _checkBoxAutoSpeak = new CheckBox();
-            _checkBoxAiPolish = new CheckBox();
-            _speedSelector = new SpeedSelectorControl();
-            _labelTranslation = new Label();
-            _labelOriginal = new Label();
-            _buttonTranslate = new Button();
             _tabPageStudy = new TabPage();
             _tabPageBookmarksAndHighlights = new TabPage();
-            _groupBoxHighlights = new GroupBox();
-            _groupBoxHighlightColor = new GroupBox();
-            _radioHighlightYellow = new RadioButton();
-            _radioHighlightGreen = new RadioButton();
-            _radioHighlightBlue = new RadioButton();
-            _radioHighlightPink = new RadioButton();
-            _radioHighlightOrange = new RadioButton();
-            _listBoxHighlights = new ListBox();
-            _highlightButtonPanel = new FlowLayoutPanel();
-            _buttonRemoveHighlight = new Button();
-            _buttonEditHighlight = new Button();
-            _buttonBatchRemoveHighlight = new Button();
-            _buttonExportHighlights = new Button();
             _tabPageAudio = new TabPage();
             _toolTip = new ToolTip(components);
             moreMenu = new ContextMenuStrip(components);
@@ -7233,11 +7116,7 @@ namespace LearningAssistant.Forms.Pdf
             _tabPageThumbnails.SuspendLayout();
             _panelThumbnails.SuspendLayout();
             _tabPageTranslate.SuspendLayout();
-            _groupBoxProgress.SuspendLayout();
             _tabPageBookmarksAndHighlights.SuspendLayout();
-            _groupBoxHighlights.SuspendLayout();
-            _groupBoxHighlightColor.SuspendLayout();
-            _highlightButtonPanel.SuspendLayout();
             SuspendLayout();
             // 
             // _splitContainerMain
@@ -7255,7 +7134,7 @@ namespace LearningAssistant.Forms.Pdf
             // 
             _splitContainerMain.Panel2.Controls.Add(_panelLeftContainer);
             _splitContainerMain.Size = new Size(1863, 1034);
-            _splitContainerMain.SplitterDistance = 1529;
+            _splitContainerMain.SplitterDistance = 1296;
             _splitContainerMain.TabIndex = 0;
             // 
             // _panelPdf
@@ -7269,7 +7148,7 @@ namespace LearningAssistant.Forms.Pdf
             _panelPdf.Dock = DockStyle.Fill;
             _panelPdf.Location = new Point(0, 0);
             _panelPdf.Name = "_panelPdf";
-            _panelPdf.Size = new Size(1529, 1034);
+            _panelPdf.Size = new Size(1296, 1034);
             _panelPdf.TabIndex = 1;
             // 
             // _panelNavigation
@@ -7281,7 +7160,7 @@ namespace LearningAssistant.Forms.Pdf
             _panelNavigation.Location = new Point(0, 0);
             _panelNavigation.Name = "_panelNavigation";
             _panelNavigation.Padding = new Padding(8);
-            _panelNavigation.Size = new Size(1529, 87);
+            _panelNavigation.Size = new Size(1296, 87);
             _panelNavigation.TabIndex = 3;
             // 
             // _toolbarGroupTools
@@ -7317,7 +7196,7 @@ namespace LearningAssistant.Forms.Pdf
             _toolbarGroupTools.Dock = DockStyle.Fill;
             _toolbarGroupTools.Location = new Point(8, 8);
             _toolbarGroupTools.Name = "_toolbarGroupTools";
-            _toolbarGroupTools.Size = new Size(1513, 71);
+            _toolbarGroupTools.Size = new Size(1280, 71);
             _toolbarGroupTools.TabIndex = 3;
             // 
             // _buttonSpotlightMode
@@ -8159,7 +8038,7 @@ namespace LearningAssistant.Forms.Pdf
             _statusBar.Dock = DockStyle.Bottom;
             _statusBar.Location = new Point(0, 1010);
             _statusBar.Name = "_statusBar";
-            _statusBar.Size = new Size(1529, 24);
+            _statusBar.Size = new Size(1296, 24);
             _statusBar.TabIndex = 4;
             // 
             // _statusLabelLeft
@@ -8179,7 +8058,7 @@ namespace LearningAssistant.Forms.Pdf
             _statusLabelRight.AutoSize = true;
             _statusLabelRight.Font = new Font("Microsoft YaHei UI", 9F);
             _statusLabelRight.ForeColor = Color.FromArgb(71, 85, 105);
-            _statusLabelRight.Location = new Point(1379, 4);
+            _statusLabelRight.Location = new Point(1146, 4);
             _statusLabelRight.Name = "_statusLabelRight";
             _statusLabelRight.Size = new Size(130, 17);
             _statusLabelRight.TabIndex = 1;
@@ -8192,7 +8071,7 @@ namespace LearningAssistant.Forms.Pdf
             _pictureBoxPdf.Dock = DockStyle.Fill;
             _pictureBoxPdf.Location = new Point(0, 0);
             _pictureBoxPdf.Name = "_pictureBoxPdf";
-            _pictureBoxPdf.Size = new Size(1529, 1034);
+            _pictureBoxPdf.Size = new Size(1296, 1034);
             _pictureBoxPdf.TabIndex = 1;
             _pictureBoxPdf.TabStop = false;
             _pictureBoxPdf.Paint += PictureBoxPdf_Paint;
@@ -8348,7 +8227,7 @@ namespace LearningAssistant.Forms.Pdf
             _pageTransitionOverlay.Dock = DockStyle.Fill;
             _pageTransitionOverlay.Location = new Point(0, 0);
             _pageTransitionOverlay.Name = "_pageTransitionOverlay";
-            _pageTransitionOverlay.Size = new Size(1529, 1034);
+            _pageTransitionOverlay.Size = new Size(1296, 1034);
             _pageTransitionOverlay.TabIndex = 0;
             _pageTransitionOverlay.Visible = false;
             // 
@@ -8359,7 +8238,7 @@ namespace LearningAssistant.Forms.Pdf
             _transitionLabel.ForeColor = Color.FromArgb(200, 100, 100, 100);
             _transitionLabel.Location = new Point(0, 0);
             _transitionLabel.Name = "_transitionLabel";
-            _transitionLabel.Size = new Size(1529, 1034);
+            _transitionLabel.Size = new Size(1296, 1034);
             _transitionLabel.TabIndex = 0;
             _transitionLabel.TextAlign = ContentAlignment.MiddleCenter;
             // 
@@ -8370,7 +8249,7 @@ namespace LearningAssistant.Forms.Pdf
             _panelLeftContainer.Dock = DockStyle.Fill;
             _panelLeftContainer.Location = new Point(0, 0);
             _panelLeftContainer.Name = "_panelLeftContainer";
-            _panelLeftContainer.Size = new Size(330, 1034);
+            _panelLeftContainer.Size = new Size(563, 1034);
             _panelLeftContainer.TabIndex = 0;
             // 
             // _tabControlLeft
@@ -8388,7 +8267,7 @@ namespace LearningAssistant.Forms.Pdf
             _tabControlLeft.Location = new Point(0, 0);
             _tabControlLeft.Name = "_tabControlLeft";
             _tabControlLeft.SelectedIndex = 0;
-            _tabControlLeft.Size = new Size(330, 1034);
+            _tabControlLeft.Size = new Size(563, 1034);
             _tabControlLeft.SizeMode = TabSizeMode.Fixed;
             _tabControlLeft.TabIndex = 0;
             // 
@@ -8408,7 +8287,9 @@ namespace LearningAssistant.Forms.Pdf
             // 
             _treeViewFiles.BorderStyle = BorderStyle.None;
             _treeViewFiles.Dock = DockStyle.Fill;
+            _treeViewFiles.Location = new Point(3, 27);
             _treeViewFiles.Name = "_treeViewFiles";
+            _treeViewFiles.Size = new Size(316, 966);
             _treeViewFiles.TabIndex = 0;
             _treeViewFiles.AfterSelect += TreeViewFiles_AfterSelect;
             // 
@@ -8430,7 +8311,7 @@ namespace LearningAssistant.Forms.Pdf
             _tabPageThumbnails.Location = new Point(4, 34);
             _tabPageThumbnails.Name = "_tabPageThumbnails";
             _tabPageThumbnails.Padding = new Padding(3);
-            _tabPageThumbnails.Size = new Size(322, 996);
+            _tabPageThumbnails.Size = new Size(555, 996);
             _tabPageThumbnails.TabIndex = 1;
             _tabPageThumbnails.Text = "🖼";
             _tabPageThumbnails.UseVisualStyleBackColor = true;
@@ -8442,7 +8323,7 @@ namespace LearningAssistant.Forms.Pdf
             _panelThumbnails.Dock = DockStyle.Fill;
             _panelThumbnails.Location = new Point(3, 3);
             _panelThumbnails.Name = "_panelThumbnails";
-            _panelThumbnails.Size = new Size(316, 990);
+            _panelThumbnails.Size = new Size(549, 990);
             _panelThumbnails.TabIndex = 0;
             // 
             // _flowLayoutPanelThumbnails
@@ -8453,395 +8334,45 @@ namespace LearningAssistant.Forms.Pdf
             _flowLayoutPanelThumbnails.Location = new Point(0, 0);
             _flowLayoutPanelThumbnails.Name = "_flowLayoutPanelThumbnails";
             _flowLayoutPanelThumbnails.Padding = new Padding(6, 6, 0, 6);
-            _flowLayoutPanelThumbnails.Size = new Size(316, 990);
+            _flowLayoutPanelThumbnails.Size = new Size(549, 990);
             _flowLayoutPanelThumbnails.TabIndex = 0;
             // 
             // _tabPageTranslate
             // 
-            _tabPageTranslate.Controls.Add(_groupBoxProgress);
             _tabPageTranslate.Location = new Point(4, 34);
             _tabPageTranslate.Name = "_tabPageTranslate";
             _tabPageTranslate.Padding = new Padding(3);
-            _tabPageTranslate.Size = new Size(322, 996);
+            _tabPageTranslate.Size = new Size(555, 996);
             _tabPageTranslate.TabIndex = 0;
             _tabPageTranslate.Text = "🌐";
             _tabPageTranslate.UseVisualStyleBackColor = true;
-            // 
-            // _groupBoxProgress
-            // 
-            _groupBoxProgress.Controls.Add(_textBoxTranslation);
-            _groupBoxProgress.Controls.Add(_buttonSpeakTranslation);
-            _groupBoxProgress.Controls.Add(_buttonShadowing);
-            _groupBoxProgress.Controls.Add(_buttonAddToLearningContent);
-            _groupBoxProgress.Controls.Add(_textBoxOriginal);
-            _groupBoxProgress.Controls.Add(_buttonSpeakOriginal);
-            _groupBoxProgress.Controls.Add(_checkBoxAutoTranslate);
-            _groupBoxProgress.Controls.Add(_checkBoxAutoSpeak);
-            _groupBoxProgress.Controls.Add(_checkBoxAiPolish);
-            _groupBoxProgress.Controls.Add(_speedSelector);
-            _groupBoxProgress.Controls.Add(_labelTranslation);
-            _groupBoxProgress.Controls.Add(_labelOriginal);
-            _groupBoxProgress.Controls.Add(_buttonTranslate);
-            _groupBoxProgress.Dock = DockStyle.Fill;
-            _groupBoxProgress.Font = new Font("Microsoft YaHei UI", 9F);
-            _groupBoxProgress.Location = new Point(3, 3);
-            _groupBoxProgress.Name = "_groupBoxProgress";
-            _groupBoxProgress.Size = new Size(316, 990);
-            _groupBoxProgress.TabIndex = 0;
-            _groupBoxProgress.TabStop = false;
-            _groupBoxProgress.Text = "OCR / 翻译";
-            // 
-            // _textBoxTranslation
-            // 
-            _textBoxTranslation.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            _textBoxTranslation.BorderStyle = BorderStyle.FixedSingle;
-            _textBoxTranslation.Location = new Point(158, 97);
-            _textBoxTranslation.Multiline = true;
-            _textBoxTranslation.Name = "_textBoxTranslation";
-            _textBoxTranslation.ScrollBars = ScrollBars.Vertical;
-            _textBoxTranslation.Size = new Size(146, 764);
-            _textBoxTranslation.TabIndex = 7;
-            // 
-            // _buttonSpeakTranslation
-            // 
-            _buttonSpeakTranslation.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            _buttonSpeakTranslation.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
-            _buttonSpeakTranslation.FlatStyle = FlatStyle.Flat;
-            _buttonSpeakTranslation.Location = new Point(10, 881);
-            _buttonSpeakTranslation.Name = "_buttonSpeakTranslation";
-            _buttonSpeakTranslation.Size = new Size(75, 28);
-            _buttonSpeakTranslation.TabIndex = 6;
-            _buttonSpeakTranslation.Text = "🔊 读译文";
-            _toolTip.SetToolTip(_buttonSpeakTranslation, "朗读右侧译文（按译文语言自动选择音色）");
-            _buttonSpeakTranslation.UseVisualStyleBackColor = false;
-            _buttonSpeakTranslation.Click += ButtonSpeakTranslation_Click;
-            // 
-            // _buttonShadowing
-            // 
-            _buttonShadowing.Anchor = AnchorStyles.Bottom | AnchorStyles.Left;
-            _buttonShadowing.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
-            _buttonShadowing.FlatStyle = FlatStyle.Flat;
-            _buttonShadowing.Location = new Point(90, 881);
-            _buttonShadowing.Name = "_buttonShadowing";
-            _buttonShadowing.Size = new Size(70, 28);
-            _buttonShadowing.TabIndex = 10;
-            _buttonShadowing.Text = "✂ 跟读";
-            _buttonShadowing.UseVisualStyleBackColor = false;
-            _buttonShadowing.Click += ButtonShadowing_Click;
-            // 
-            // _buttonAddToLearningContent
-            // 
-            _buttonAddToLearningContent.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
-            _buttonAddToLearningContent.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
-            _buttonAddToLearningContent.FlatStyle = FlatStyle.Flat;
-            _buttonAddToLearningContent.Location = new Point(164, 881);
-            _buttonAddToLearningContent.Name = "_buttonAddToLearningContent";
-            _buttonAddToLearningContent.Size = new Size(140, 28);
-            _buttonAddToLearningContent.TabIndex = 5;
-            _buttonAddToLearningContent.Text = "➕ 添加到学习";
-            _buttonAddToLearningContent.UseVisualStyleBackColor = false;
-            _buttonAddToLearningContent.Click += ButtonAddToLearningContent_Click;
-            // 
-            // _textBoxOriginal
-            // 
-            _textBoxOriginal.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left;
-            _textBoxOriginal.BorderStyle = BorderStyle.FixedSingle;
-            _textBoxOriginal.Location = new Point(10, 97);
-            _textBoxOriginal.Multiline = true;
-            _textBoxOriginal.Name = "_textBoxOriginal";
-            _textBoxOriginal.ScrollBars = ScrollBars.Vertical;
-            _textBoxOriginal.Size = new Size(140, 764);
-            _textBoxOriginal.TabIndex = 4;
-            // 
-            // _buttonSpeakOriginal
-            // 
-            _buttonSpeakOriginal.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
-            _buttonSpeakOriginal.FlatStyle = FlatStyle.Flat;
-            _buttonSpeakOriginal.Location = new Point(10, 15);
-            _buttonSpeakOriginal.Name = "_buttonSpeakOriginal";
-            _buttonSpeakOriginal.Size = new Size(75, 28);
-            _buttonSpeakOriginal.TabIndex = 3;
-            _buttonSpeakOriginal.Text = "🔊 读原文";
-            _toolTip.SetToolTip(_buttonSpeakOriginal, "朗读左侧原文（按原文语言自动选择音色）");
-            _buttonSpeakOriginal.UseVisualStyleBackColor = false;
-            _buttonSpeakOriginal.Click += ButtonSpeakOriginal_Click;
-            // 
-            // _checkBoxAutoTranslate
-            // 
-            _checkBoxAutoTranslate.AutoSize = true;
-            _checkBoxAutoTranslate.Location = new Point(122, 46);
-            _checkBoxAutoTranslate.Name = "_checkBoxAutoTranslate";
-            _checkBoxAutoTranslate.Size = new Size(107, 21);
-            _checkBoxAutoTranslate.TabIndex = 8;
-            _checkBoxAutoTranslate.Text = "🌐 识别后翻译";
-            _checkBoxAutoTranslate.UseVisualStyleBackColor = true;
-            // 
-            // _checkBoxAutoSpeak
-            // 
-            _checkBoxAutoSpeak.AutoSize = true;
-            _checkBoxAutoSpeak.Location = new Point(10, 46);
-            _checkBoxAutoSpeak.Name = "_checkBoxAutoSpeak";
-            _checkBoxAutoSpeak.Size = new Size(107, 21);
-            _checkBoxAutoSpeak.TabIndex = 8;
-            _checkBoxAutoSpeak.Text = "🔊 识别后朗读";
-            _checkBoxAutoSpeak.UseVisualStyleBackColor = true;
-            // 
-            // _checkBoxAiPolish
-            // 
-            _checkBoxAiPolish.AutoSize = true;
-            _checkBoxAiPolish.Location = new Point(233, 46);
-            _checkBoxAiPolish.Name = "_checkBoxAiPolish";
-            _checkBoxAiPolish.Size = new Size(71, 21);
-            _checkBoxAiPolish.TabIndex = 11;
-            _checkBoxAiPolish.Text = "✨ 润色";
-            _toolTip.SetToolTip(_checkBoxAiPolish, "使用 AI 术语表润色译文，保持术语前后一致（失败时自动保留机器译文）");
-            _checkBoxAiPolish.UseVisualStyleBackColor = true;
-            // 
-            // _speedSelector
-            // 
-            _speedSelector.BackColor = Color.Transparent;
-            _speedSelector.Location = new Point(150, 15);
-            _speedSelector.Name = "_speedSelector";
-            _speedSelector.Size = new Size(130, 28);
-            _speedSelector.TabIndex = 9;
-            // 
-            // _labelTranslation
-            // 
-            _labelTranslation.AutoSize = true;
-            _labelTranslation.Location = new Point(158, 76);
-            _labelTranslation.Name = "_labelTranslation";
-            _labelTranslation.Size = new Size(44, 17);
-            _labelTranslation.TabIndex = 2;
-            _labelTranslation.Text = "译文：";
-            // 
-            // _labelOriginal
-            // 
-            _labelOriginal.AutoSize = true;
-            _labelOriginal.Location = new Point(10, 76);
-            _labelOriginal.Name = "_labelOriginal";
-            _labelOriginal.Size = new Size(44, 17);
-            _labelOriginal.TabIndex = 1;
-            _labelOriginal.Text = "原文：";
-            // 
-            // _buttonTranslate
-            // 
-            _buttonTranslate.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            _buttonTranslate.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
-            _buttonTranslate.FlatStyle = FlatStyle.Flat;
-            _buttonTranslate.Location = new Point(224, 72);
-            _buttonTranslate.Name = "_buttonTranslate";
-            _buttonTranslate.Size = new Size(80, 24);
-            _buttonTranslate.TabIndex = 0;
-            _buttonTranslate.Text = "🌐 翻译";
-            _buttonTranslate.UseVisualStyleBackColor = false;
-            _buttonTranslate.Click += ButtonTranslate_Click;
             // 
             // _tabPageStudy
             // 
             _tabPageStudy.Location = new Point(4, 34);
             _tabPageStudy.Name = "_tabPageStudy";
             _tabPageStudy.Padding = new Padding(3);
-            _tabPageStudy.Size = new Size(322, 996);
+            _tabPageStudy.Size = new Size(555, 996);
             _tabPageStudy.TabIndex = 5;
             _tabPageStudy.Text = "🎯";
             _tabPageStudy.UseVisualStyleBackColor = true;
             // 
             // _tabPageBookmarksAndHighlights
             // 
-            _tabPageBookmarksAndHighlights.Controls.Add(_groupBoxHighlights);
             _tabPageBookmarksAndHighlights.Location = new Point(4, 34);
             _tabPageBookmarksAndHighlights.Name = "_tabPageBookmarksAndHighlights";
             _tabPageBookmarksAndHighlights.Padding = new Padding(3);
-            _tabPageBookmarksAndHighlights.Size = new Size(322, 996);
+            _tabPageBookmarksAndHighlights.Size = new Size(555, 996);
             _tabPageBookmarksAndHighlights.TabIndex = 3;
             _tabPageBookmarksAndHighlights.Text = "📑";
             _tabPageBookmarksAndHighlights.UseVisualStyleBackColor = true;
-            // 
-            // _groupBoxHighlights
-            // 
-            _groupBoxHighlights.Controls.Add(_groupBoxHighlightColor);
-            _groupBoxHighlights.Controls.Add(_listBoxHighlights);
-            _groupBoxHighlights.Controls.Add(_highlightButtonPanel);
-            _groupBoxHighlights.Dock = DockStyle.Fill;
-            _groupBoxHighlights.Location = new Point(3, 3);
-            _groupBoxHighlights.Name = "_groupBoxHighlights";
-            _groupBoxHighlights.Size = new Size(316, 990);
-            _groupBoxHighlights.TabIndex = 0;
-            _groupBoxHighlights.TabStop = false;
-            _groupBoxHighlights.Text = "高亮";
-            // 
-            // _groupBoxHighlightColor
-            // 
-            _groupBoxHighlightColor.Controls.Add(_radioHighlightYellow);
-            _groupBoxHighlightColor.Controls.Add(_radioHighlightGreen);
-            _groupBoxHighlightColor.Controls.Add(_radioHighlightBlue);
-            _groupBoxHighlightColor.Controls.Add(_radioHighlightPink);
-            _groupBoxHighlightColor.Controls.Add(_radioHighlightOrange);
-            _groupBoxHighlightColor.Dock = DockStyle.Top;
-            _groupBoxHighlightColor.Location = new Point(3, 19);
-            _groupBoxHighlightColor.Name = "_groupBoxHighlightColor";
-            _groupBoxHighlightColor.Size = new Size(310, 56);
-            _groupBoxHighlightColor.TabIndex = 0;
-            _groupBoxHighlightColor.TabStop = false;
-            _groupBoxHighlightColor.Text = "颜色";
-            // 
-            // _radioHighlightYellow
-            // 
-            _radioHighlightYellow.Appearance = Appearance.Button;
-            _radioHighlightYellow.BackColor = Color.Yellow;
-            _radioHighlightYellow.Checked = true;
-            _radioHighlightYellow.FlatAppearance.BorderColor = Color.FromArgb(64, 150, 255);
-            _radioHighlightYellow.FlatAppearance.BorderSize = 2;
-            _radioHighlightYellow.FlatAppearance.CheckedBackColor = Color.Yellow;
-            _radioHighlightYellow.FlatStyle = FlatStyle.Flat;
-            _radioHighlightYellow.Location = new Point(82, 22);
-            _radioHighlightYellow.Name = "_radioHighlightYellow";
-            _radioHighlightYellow.Size = new Size(22, 22);
-            _radioHighlightYellow.TabIndex = 0;
-            _radioHighlightYellow.TabStop = true;
-            _radioHighlightYellow.Tag = 1;
-            _radioHighlightYellow.UseVisualStyleBackColor = false;
-            _radioHighlightYellow.CheckedChanged += RadioHighlightColor_CheckedChanged;
-            // 
-            // _radioHighlightGreen
-            // 
-            _radioHighlightGreen.Appearance = Appearance.Button;
-            _radioHighlightGreen.BackColor = Color.LimeGreen;
-            _radioHighlightGreen.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
-            _radioHighlightGreen.FlatAppearance.CheckedBackColor = Color.LimeGreen;
-            _radioHighlightGreen.FlatStyle = FlatStyle.Flat;
-            _radioHighlightGreen.Location = new Point(110, 22);
-            _radioHighlightGreen.Name = "_radioHighlightGreen";
-            _radioHighlightGreen.Size = new Size(22, 22);
-            _radioHighlightGreen.TabIndex = 1;
-            _radioHighlightGreen.Tag = 2;
-            _radioHighlightGreen.UseVisualStyleBackColor = false;
-            _radioHighlightGreen.CheckedChanged += RadioHighlightColor_CheckedChanged;
-            // 
-            // _radioHighlightBlue
-            // 
-            _radioHighlightBlue.Appearance = Appearance.Button;
-            _radioHighlightBlue.BackColor = Color.LightBlue;
-            _radioHighlightBlue.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
-            _radioHighlightBlue.FlatAppearance.CheckedBackColor = Color.LightBlue;
-            _radioHighlightBlue.FlatStyle = FlatStyle.Flat;
-            _radioHighlightBlue.Location = new Point(138, 22);
-            _radioHighlightBlue.Name = "_radioHighlightBlue";
-            _radioHighlightBlue.Size = new Size(22, 22);
-            _radioHighlightBlue.TabIndex = 2;
-            _radioHighlightBlue.Tag = 3;
-            _radioHighlightBlue.UseVisualStyleBackColor = false;
-            _radioHighlightBlue.CheckedChanged += RadioHighlightColor_CheckedChanged;
-            // 
-            // _radioHighlightPink
-            // 
-            _radioHighlightPink.Appearance = Appearance.Button;
-            _radioHighlightPink.BackColor = Color.Pink;
-            _radioHighlightPink.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
-            _radioHighlightPink.FlatAppearance.CheckedBackColor = Color.Pink;
-            _radioHighlightPink.FlatStyle = FlatStyle.Flat;
-            _radioHighlightPink.Location = new Point(166, 22);
-            _radioHighlightPink.Name = "_radioHighlightPink";
-            _radioHighlightPink.Size = new Size(22, 22);
-            _radioHighlightPink.TabIndex = 3;
-            _radioHighlightPink.Tag = 4;
-            _radioHighlightPink.UseVisualStyleBackColor = false;
-            _radioHighlightPink.CheckedChanged += RadioHighlightColor_CheckedChanged;
-            // 
-            // _radioHighlightOrange
-            // 
-            _radioHighlightOrange.Appearance = Appearance.Button;
-            _radioHighlightOrange.BackColor = Color.Orange;
-            _radioHighlightOrange.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
-            _radioHighlightOrange.FlatAppearance.CheckedBackColor = Color.Orange;
-            _radioHighlightOrange.FlatStyle = FlatStyle.Flat;
-            _radioHighlightOrange.Location = new Point(194, 22);
-            _radioHighlightOrange.Name = "_radioHighlightOrange";
-            _radioHighlightOrange.Size = new Size(22, 22);
-            _radioHighlightOrange.TabIndex = 4;
-            _radioHighlightOrange.Tag = 5;
-            _radioHighlightOrange.UseVisualStyleBackColor = false;
-            _radioHighlightOrange.CheckedChanged += RadioHighlightColor_CheckedChanged;
-            // 
-            // _listBoxHighlights
-            // 
-            _listBoxHighlights.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
-            _listBoxHighlights.BorderStyle = BorderStyle.FixedSingle;
-            _listBoxHighlights.FormattingEnabled = true;
-            _listBoxHighlights.Location = new Point(3, 80);
-            _listBoxHighlights.Name = "_listBoxHighlights";
-            _listBoxHighlights.Size = new Size(310, 835);
-            _listBoxHighlights.TabIndex = 1;
-            _listBoxHighlights.SelectedIndexChanged += ListBoxHighlights_SelectedIndexChanged;
-            _listBoxHighlights.DoubleClick += ListBoxHighlights_DoubleClick;
-            // 
-            // _highlightButtonPanel
-            // 
-            _highlightButtonPanel.Controls.Add(_buttonRemoveHighlight);
-            _highlightButtonPanel.Controls.Add(_buttonEditHighlight);
-            _highlightButtonPanel.Controls.Add(_buttonBatchRemoveHighlight);
-            _highlightButtonPanel.Controls.Add(_buttonExportHighlights);
-            _highlightButtonPanel.Dock = DockStyle.Bottom;
-            _highlightButtonPanel.Location = new Point(3, 931);
-            _highlightButtonPanel.Name = "_highlightButtonPanel";
-            _highlightButtonPanel.Size = new Size(310, 56);
-            _highlightButtonPanel.TabIndex = 2;
-            // 
-            // _buttonRemoveHighlight
-            // 
-            _buttonRemoveHighlight.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
-            _buttonRemoveHighlight.FlatStyle = FlatStyle.Flat;
-            _buttonRemoveHighlight.Location = new Point(3, 3);
-            _buttonRemoveHighlight.Name = "_buttonRemoveHighlight";
-            _buttonRemoveHighlight.Size = new Size(68, 28);
-            _buttonRemoveHighlight.TabIndex = 2;
-            _buttonRemoveHighlight.Text = "删除";
-            _buttonRemoveHighlight.UseVisualStyleBackColor = false;
-            _buttonRemoveHighlight.Click += ButtonRemoveHighlight_Click;
-            // 
-            // _buttonEditHighlight
-            // 
-            _buttonEditHighlight.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
-            _buttonEditHighlight.FlatStyle = FlatStyle.Flat;
-            _buttonEditHighlight.Location = new Point(77, 3);
-            _buttonEditHighlight.Name = "_buttonEditHighlight";
-            _buttonEditHighlight.Size = new Size(68, 28);
-            _buttonEditHighlight.TabIndex = 3;
-            _buttonEditHighlight.Text = "编辑";
-            _buttonEditHighlight.UseVisualStyleBackColor = false;
-            _buttonEditHighlight.Click += ButtonEditHighlight_Click;
-            // 
-            // _buttonBatchRemoveHighlight
-            // 
-            _buttonBatchRemoveHighlight.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
-            _buttonBatchRemoveHighlight.FlatStyle = FlatStyle.Flat;
-            _buttonBatchRemoveHighlight.Location = new Point(151, 3);
-            _buttonBatchRemoveHighlight.Name = "_buttonBatchRemoveHighlight";
-            _buttonBatchRemoveHighlight.Size = new Size(72, 28);
-            _buttonBatchRemoveHighlight.TabIndex = 0;
-            _buttonBatchRemoveHighlight.Text = "批量删";
-            _buttonBatchRemoveHighlight.UseVisualStyleBackColor = false;
-            _buttonBatchRemoveHighlight.Click += ButtonBatchRemoveHighlight_Click;
-            // 
-            // _buttonExportHighlights
-            // 
-            _buttonExportHighlights.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
-            _buttonExportHighlights.FlatStyle = FlatStyle.Flat;
-            _buttonExportHighlights.Location = new Point(229, 3);
-            _buttonExportHighlights.Name = "_buttonExportHighlights";
-            _buttonExportHighlights.Size = new Size(68, 28);
-            _buttonExportHighlights.TabIndex = 4;
-            _buttonExportHighlights.Text = "导出";
-            _toolTip.SetToolTip(_buttonExportHighlights, "导出高亮 (Ctrl+S)");
-            _buttonExportHighlights.UseVisualStyleBackColor = false;
-            _buttonExportHighlights.Click += ButtonExportHighlights_Click;
             // 
             // _tabPageAudio
             // 
             _tabPageAudio.Location = new Point(4, 34);
             _tabPageAudio.Name = "_tabPageAudio";
             _tabPageAudio.Padding = new Padding(3);
-            _tabPageAudio.Size = new Size(322, 996);
+            _tabPageAudio.Size = new Size(555, 996);
             _tabPageAudio.TabIndex = 5;
             _tabPageAudio.Text = "🎤";
             _tabPageAudio.UseVisualStyleBackColor = true;
@@ -8908,12 +8439,7 @@ namespace LearningAssistant.Forms.Pdf
             _tabPageThumbnails.ResumeLayout(false);
             _panelThumbnails.ResumeLayout(false);
             _tabPageTranslate.ResumeLayout(false);
-            _groupBoxProgress.ResumeLayout(false);
-            _groupBoxProgress.PerformLayout();
             _tabPageBookmarksAndHighlights.ResumeLayout(false);
-            _groupBoxHighlights.ResumeLayout(false);
-            _groupBoxHighlightColor.ResumeLayout(false);
-            _highlightButtonPanel.ResumeLayout(false);
             ResumeLayout(false);
             PerformLayout();
         }
@@ -9383,37 +8909,6 @@ namespace LearningAssistant.Forms.Pdf
             control.DragDrop += PdfReaderFormV2_DragDrop;
         }
 
-        /// <summary>原文/译文左右并排：按可用高度撑满，并保持左右等宽、中间留 8px 间隔。</summary>
-        private void LayoutTranslateTab()
-        {
-            // 新版卡片布局接管后，旧 GroupBox 的绝对坐标排布不再参与
-            if (_translatePanel != null) return;
-            if (_groupBoxProgress == null || _textBoxOriginal == null || _textBoxTranslation == null) return;
-            if (_labelTranslation == null || _buttonSpeakTranslation == null) return;
-
-            const int gap = 8;
-            const int margin = 10;
-            int contentTop = _textBoxOriginal.Top;
-            int contentBottom = _buttonSpeakTranslation.Top - 10;
-            int available = contentBottom - contentTop;
-            if (available < 120) return;
-
-            int rightEdge = _groupBoxProgress.ClientSize.Width - margin;
-            int leftWidth = Math.Max(70, (rightEdge - margin - gap) / 2);
-            _textBoxOriginal.Width = leftWidth;
-            _textBoxOriginal.Height = available;
-
-            _textBoxTranslation.Left = _textBoxOriginal.Right + gap;
-            _textBoxTranslation.Top = contentTop;
-            _textBoxTranslation.Width = Math.Max(70, rightEdge - _textBoxTranslation.Left);
-            _textBoxTranslation.Height = available;
-
-            _labelOriginal.Top = Math.Max(0, contentTop - 21);
-            _labelTranslation.Top = _labelOriginal.Top;
-            _labelTranslation.Left = _textBoxTranslation.Left;
-            _buttonTranslate.Top = Math.Max(0, contentTop - 25);
-        }
-
         private void SubscribeTranslationScrollSync()
         {
             if (_textBoxOriginal is not SyncedTextBox originalBox) return;
@@ -9555,24 +9050,6 @@ namespace LearningAssistant.Forms.Pdf
                 };
                 _labelStatus.Text =
                     $"正在建立文本索引（{progress.ProcessedPages}/{progress.TotalPages}）· 第 {progress.PageIndex + 1} 页 · {source}";
-            }
-        }
-
-        /// <summary>带纵向滚动通知的多行文本框，用于原文/译文同步滚动。</summary>
-        private sealed class SyncedTextBox : TextBox
-        {
-            private const int WM_VSCROLL = 0x0115;
-            private const int WM_MOUSEWHEEL = 0x020A;
-
-            public event EventHandler? VerticalScrolled;
-
-            protected override void WndProc(ref Message m)
-            {
-                base.WndProc(ref m);
-                if (m.Msg == WM_VSCROLL || m.Msg == WM_MOUSEWHEEL)
-                {
-                    VerticalScrolled?.Invoke(this, EventArgs.Empty);
-                }
             }
         }
     }

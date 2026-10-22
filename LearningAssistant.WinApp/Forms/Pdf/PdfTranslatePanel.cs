@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using LearningAssistant.Common.UI;
+using LearningAssistant.Forms.UserControls.Common;
 
 namespace LearningAssistant.Forms.Pdf;
 
@@ -9,6 +10,14 @@ public partial class PdfTranslatePanel : UserControl
     public PdfTranslatePanel()
     {
         InitializeComponent();
+        // 卡片内容区由面板自行挂载：VS 设计器无法序列化自定义容器的 Body，
+        // 放在构造里可保证设计视图与运行期都能看到文本框。
+        originalCard.Body.Controls.Add(originalBox);
+        translationCard.Body.Controls.Add(translationBox);
+        _tip.SetToolTip(autoTranslateCheck, "识别后自动翻译原文");
+        _tip.SetToolTip(autoSpeakCheck, "识别后自动朗读原文");
+        _tip.SetToolTip(aiPolishCheck, "使用 AI 术语表润色译文，保持术语前后一致（失败时自动保留机器译文）");
+
         body.Resize += (_, _) =>
         {
             // 设计器内不重排行列样式，避免 VS 把运行期结果写回 Designer 文件
@@ -28,25 +37,55 @@ public partial class PdfTranslatePanel : UserControl
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public SidebarHeaderBar Header => header;
 
-    /// <summary>原文卡片，宿主把原文文本框放入其内容区。</summary>
+    /// <summary>原文卡片，宿主为卡片右上角朗读按钮绑定事件。</summary>
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public SidebarCard OriginalCard => originalCard;
 
-    /// <summary>译文卡片，宿主把译文文本框放入其内容区。</summary>
+    /// <summary>译文卡片，宿主为卡片右上角朗读按钮绑定事件。</summary>
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public SidebarCard TranslationCard => translationCard;
 
-    /// <summary>操作区：句子跟读、添加到学习。</summary>
+    /// <summary>原文文本框。</summary>
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-    public FlowLayoutPanel ActionsPanel => actions;
+    public SyncedTextBox OriginalBox => originalBox;
 
-    /// <summary>选项区：自动翻译、自动朗读、AI 润色、倍速。</summary>
+    /// <summary>译文文本框。</summary>
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-    public FlowLayoutPanel OptionsPanel => options;
+    public SyncedTextBox TranslationBox => translationBox;
+
+    /// <summary>句子跟读按钮。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button ShadowingButton => shadowingButton;
+
+    /// <summary>添加到学习按钮。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button AddToLearningButton => addToLearningButton;
+
+    /// <summary>识别后自动翻译。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public CheckBox AutoTranslateCheck => autoTranslateCheck;
+
+    /// <summary>识别后自动朗读。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public CheckBox AutoSpeakCheck => autoSpeakCheck;
+
+    /// <summary>AI 润色。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public CheckBox AiPolishCheck => aiPolishCheck;
+
+    /// <summary>语速选择。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public SpeedSelectorControl TtsSpeedSelector => speedSelector;
 
     /// <summary>窄侧栏上下堆叠、宽侧栏左右对照。</summary>
     private void LayoutCards()
@@ -82,5 +121,23 @@ public partial class PdfTranslatePanel : UserControl
         }
 
         body.ResumeLayout(true);
+    }
+}
+
+/// <summary>带纵向滚动通知的多行文本框，用于原文/译文同步滚动。</summary>
+public sealed class SyncedTextBox : TextBox
+{
+    private const int WM_VSCROLL = 0x0115;
+    private const int WM_MOUSEWHEEL = 0x020A;
+
+    public event EventHandler? VerticalScrolled;
+
+    protected override void WndProc(ref Message m)
+    {
+        base.WndProc(ref m);
+        if (m.Msg == WM_VSCROLL || m.Msg == WM_MOUSEWHEEL)
+        {
+            VerticalScrolled?.Invoke(this, EventArgs.Empty);
+        }
     }
 }

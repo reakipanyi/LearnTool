@@ -115,27 +115,17 @@ namespace LearningAssistant.Managers
         private void ApplyNightModeToTabPageTranslate()
         {
             ApplyControlBackColor(_form.TabPageTranslate, _isNightMode);
-            ApplyGroupBoxNightMode(_form.GroupBoxProgress);
             ApplyTextBoxNightMode(_form.TextBoxOriginal);
             ApplyTextBoxNightMode(_form.TextBoxTranslation);
-            ApplyLabelForeColor(_form.LabelOriginal);
-            ApplyLabelForeColor(_form.LabelTranslation);
-
-            ApplyButtonNightMode(_form.ButtonTranslate);
-            ApplyButtonNightMode(_form.ButtonSpeakOriginal);
-            ApplyButtonNightMode(_form.ButtonSpeakTranslation);
         }
 
         private void ApplyNightModeToBookmarksAndHighlights()
         {
             ApplyControlBackColor(_form.TabPageBookmarksAndHighlights, _isNightMode);
-            
-            ApplyGroupBoxNightMode(_form.GroupBoxHighlights);
+
             ApplyListBoxNightMode(_form.ListBoxHighlights);
-            ApplyGroupBoxNightMode(_form.GroupBoxHighlightColor);
             ApplyButtonNightMode(_form.ButtonRemoveHighlight);
             ApplyButtonNightMode(_form.ButtonBatchRemoveHighlight);
-            ApplyButtonNightMode(_form.ButtonExportHighlights);
         }
 
         private void ApplyControlBackColor(Control? control, bool isNightMode)
@@ -144,24 +134,11 @@ namespace LearningAssistant.Managers
             control.BackColor = isNightMode ? Color.FromArgb(40, 40, 40) : Color.White;
         }
 
-        private void ApplyGroupBoxNightMode(GroupBox? groupBox)
-        {
-            if (groupBox == null) return;
-            groupBox.BackColor = _isNightMode ? Color.FromArgb(40, 40, 40) : Color.White;
-            groupBox.ForeColor = _isNightMode ? Color.White : Color.Black;
-        }
-
         private void ApplyTextBoxNightMode(TextBox? textBox)
         {
             if (textBox == null) return;
             textBox.BackColor = _isNightMode ? Color.FromArgb(30, 30, 30) : Color.White;
             textBox.ForeColor = _isNightMode ? Color.White : Color.Black;
-        }
-
-        private void ApplyLabelForeColor(Label? label)
-        {
-            if (label == null) return;
-            label.ForeColor = _isNightMode ? Color.White : Color.Black;
         }
 
         private void ApplyListBoxNightMode(ListBox? listBox)

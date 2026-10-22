@@ -19,6 +19,10 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
     public PdfAudioPanel()
     {
         InitializeComponent();
+        // 卡片内容区由面板自行挂载，避免 VS 设计器回写时丢失
+        listCard.Body.Controls.Add(_listTracks);
+        playbackCard.Body.Controls.Add(playback);
+        sourceCard.Body.Controls.Add(sourceGrid);
         _manager = null!;
         _form = null!;
         _aiMatcher = null;

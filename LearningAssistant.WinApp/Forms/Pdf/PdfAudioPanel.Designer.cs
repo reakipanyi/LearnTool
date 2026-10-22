@@ -17,9 +17,8 @@ partial class PdfAudioPanel
         statusPanel = new Panel();
         _labelInfo = new Label();
         listCard = new SidebarCard();
-        playbackCard = new SidebarCard();
-        sourceCard = new SidebarCard();
         _listTracks = new ListBox();
+        playbackCard = new SidebarCard();
         playback = new TableLayoutPanel();
         transport = new FlowLayoutPanel();
         _btnPrev = new Button();
@@ -35,6 +34,7 @@ partial class PdfAudioPanel
         _comboSpeed = new ComboBox();
         speedNote = new Label();
         _labelSubtitle = new Label();
+        sourceCard = new SidebarCard();
         sourceGrid = new TableLayoutPanel();
         _btnAddDir = new Button();
         _btnAiMatch = new Button();
@@ -103,7 +103,6 @@ partial class PdfAudioPanel
         // 
         // listCard
         // 
-        listCard.Body.Controls.Add(_listTracks);
         listCard.BackColor = Color.FromArgb(247, 248, 251);
         listCard.Dock = DockStyle.Fill;
         listCard.Location = new Point(0, 46);
@@ -113,32 +112,6 @@ partial class PdfAudioPanel
         listCard.Size = new Size(308, 188);
         listCard.TabIndex = 1;
         listCard.Title = "曲目";
-        // 
-        // playbackCard
-        // 
-        playbackCard.Body.Controls.Add(playback);
-        playbackCard.BackColor = Color.FromArgb(247, 248, 251);
-        playbackCard.Dock = DockStyle.Fill;
-        playbackCard.Location = new Point(0, 238);
-        playbackCard.Margin = new Padding(0, 0, 0, 4);
-        playbackCard.Name = "playbackCard";
-        playbackCard.Padding = new Padding(2, 1, 2, 1);
-        playbackCard.Size = new Size(308, 194);
-        playbackCard.TabIndex = 2;
-        playbackCard.Title = "播放";
-        // 
-        // sourceCard
-        // 
-        sourceCard.Body.Controls.Add(sourceGrid);
-        sourceCard.BackColor = Color.FromArgb(247, 248, 251);
-        sourceCard.Dock = DockStyle.Fill;
-        sourceCard.Location = new Point(0, 436);
-        sourceCard.Margin = new Padding(0);
-        sourceCard.Name = "sourceCard";
-        sourceCard.Padding = new Padding(2, 1, 2, 1);
-        sourceCard.Size = new Size(308, 188);
-        sourceCard.TabIndex = 3;
-        sourceCard.Title = "音频来源与匹配";
         // 
         // _listTracks
         // 
@@ -153,6 +126,18 @@ partial class PdfAudioPanel
         _listTracks.Name = "_listTracks";
         _listTracks.Size = new Size(284, 146);
         _listTracks.TabIndex = 0;
+        // 
+        // playbackCard
+        // 
+        playbackCard.BackColor = Color.FromArgb(247, 248, 251);
+        playbackCard.Dock = DockStyle.Fill;
+        playbackCard.Location = new Point(0, 238);
+        playbackCard.Margin = new Padding(0, 0, 0, 4);
+        playbackCard.Name = "playbackCard";
+        playbackCard.Padding = new Padding(2, 1, 2, 1);
+        playbackCard.Size = new Size(308, 194);
+        playbackCard.TabIndex = 2;
+        playbackCard.Title = "播放";
         // 
         // playback
         // 
@@ -188,7 +173,7 @@ partial class PdfAudioPanel
         transport.Location = new Point(0, 0);
         transport.Margin = new Padding(0);
         transport.Name = "transport";
-        transport.Size = new Size(200, 100);
+        transport.Size = new Size(132, 34);
         transport.TabIndex = 0;
         transport.WrapContents = false;
         // 
@@ -411,6 +396,18 @@ partial class PdfAudioPanel
         _labelSubtitle.TabIndex = 4;
         _labelSubtitle.Tag = "score";
         _labelSubtitle.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // sourceCard
+        // 
+        sourceCard.BackColor = Color.FromArgb(247, 248, 251);
+        sourceCard.Dock = DockStyle.Fill;
+        sourceCard.Location = new Point(0, 436);
+        sourceCard.Margin = new Padding(0);
+        sourceCard.Name = "sourceCard";
+        sourceCard.Padding = new Padding(2, 1, 2, 1);
+        sourceCard.Size = new Size(308, 188);
+        sourceCard.TabIndex = 3;
+        sourceCard.Title = "音频来源与匹配";
         // 
         // sourceGrid
         // 

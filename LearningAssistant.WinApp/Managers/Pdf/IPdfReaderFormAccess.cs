@@ -28,22 +28,13 @@ namespace LearningAssistant.Managers
         Button? ButtonAskAi { get; }
 
         TabPage? TabPageTranslate { get; }
-        GroupBox? GroupBoxProgress { get; }
         TextBox? TextBoxTranslation { get; }
-        Label? LabelOriginal { get; }
-        Label? LabelTranslation { get; }
-        Button? ButtonTranslate { get; }
-        Button? ButtonSpeakOriginal { get; }
-        Button? ButtonSpeakTranslation { get; }
 
         TabPage? TabPageBookmarksAndHighlights { get; }
 
-        GroupBox? GroupBoxHighlights { get; }
         ListBox? ListBoxHighlights { get; }
-        GroupBox? GroupBoxHighlightColor { get; }
         Button? ButtonRemoveHighlight { get; }
         Button? ButtonBatchRemoveHighlight { get; }
-        Button? ButtonExportHighlights { get; }
 
         Panel? PanelPdf { get; }
         Panel? PanelNavigation { get; }
