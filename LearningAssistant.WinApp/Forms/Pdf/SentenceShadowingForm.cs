@@ -225,7 +225,7 @@ namespace LearningAssistant.Forms.Pdf
                 RowCount = 1,
                 BackColor = PdfSidebarTheme.Background
             };
-            body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 280F));
+            body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 330F));
             body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             body.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
@@ -239,8 +239,8 @@ namespace LearningAssistant.Forms.Pdf
             _listSentences.IntegralHeight = false;
             _listSentences.BorderStyle = BorderStyle.None;
             _listSentences.DrawMode = DrawMode.OwnerDrawFixed;
-            _listSentences.ItemHeight = 60;
-            _listSentences.Font = new Font("Microsoft YaHei UI", 9.5F);
+            _listSentences.ItemHeight = 76;
+            _listSentences.Font = new Font("Microsoft YaHei UI", 11.5F);
             _listSentences.BackColor = PdfSidebarTheme.Surface;
             _listSentences.ForeColor = PdfSidebarTheme.Text;
             _listSentences.SelectedIndexChanged += OnSentenceSelected;
@@ -508,20 +508,20 @@ namespace LearningAssistant.Forms.Pdf
             };
 
             using (var dot = new SolidBrush(dotColor))
-                e.Graphics.FillEllipse(dot, bounds.X + 10, bounds.Y + 14, 8, 8);
+                e.Graphics.FillEllipse(dot, bounds.X + 12, bounds.Y + 19, 10, 10);
 
-            var indexFont = new Font("Consolas", 8.5F, FontStyle.Bold);
+            var indexFont = new Font("Consolas", 10.5F, FontStyle.Bold);
             TextRenderer.DrawText(e.Graphics, $"{row.Index + 1:00}", indexFont,
-                new Rectangle(bounds.X + 22, bounds.Y + 9, 22, 18),
+                new Rectangle(bounds.X + 28, bounds.Y + 15, 28, 22),
                 palette.Muted, TextFormatFlags.NoPrefix);
             indexFont.Dispose();
 
-            var textRect = new Rectangle(bounds.X + 44, bounds.Y + 6,
-                Math.Max(10, bounds.Width - 92), 34);
+            var textRect = new Rectangle(bounds.X + 62, bounds.Y + 8,
+                Math.Max(10, bounds.Width - 124), 50);
             TextRenderer.DrawText(e.Graphics, row.Text, _listSentences.Font, textRect,
                 palette.Text, TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis);
 
-            var stateFont = new Font("Microsoft YaHei UI", 8F);
+            var stateFont = new Font("Microsoft YaHei UI", 9.5F);
             string stateText = row.State switch
             {
                 ShadowingAudioState.Synthesizing => "合成中",
@@ -530,7 +530,7 @@ namespace LearningAssistant.Forms.Pdf
                 _ => "待读"
             };
             TextRenderer.DrawText(e.Graphics, stateText, stateFont,
-                new Rectangle(bounds.X + 44, bounds.Y + 42, 90, 16),
+                new Rectangle(bounds.X + 62, bounds.Y + 56, 110, 18),
                 palette.Muted, TextFormatFlags.NoPrefix);
             stateFont.Dispose();
 
@@ -539,12 +539,12 @@ namespace LearningAssistant.Forms.Pdf
                 string id = _practice.Sentences[row.Index].Sentence.Id;
                 if (_sentenceScores.TryGetValue(id, out int score))
                 {
-                    var badge = new Rectangle(bounds.Right - 50, bounds.Y + 8, 42, 20);
-                    using var badgePath = GdiHelper.CreateRoundedRectPath(badge, 10);
+                    var badge = new Rectangle(bounds.Right - 58, bounds.Y + 10, 48, 22);
+                    using var badgePath = GdiHelper.CreateRoundedRectPath(badge, 11);
                     using var badgeBrush = new SolidBrush(PdfSidebarTheme.Score);
                     e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
                     e.Graphics.FillPath(badgeBrush, badgePath);
-                    using var badgeFont = new Font("Microsoft YaHei UI", 8F, FontStyle.Bold);
+                    using var badgeFont = new Font("Microsoft YaHei UI", 9.5F, FontStyle.Bold);
                     using var badgeText = new SolidBrush(Color.White);
                     using var format = new StringFormat
                     {
