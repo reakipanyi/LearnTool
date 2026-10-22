@@ -270,9 +270,7 @@
 		<Compile Update="Forms\Pdf\PdfSearchDialog.cs">
 			<SubType>Form</SubType>
 		</Compile>
-		<Compile Update="Forms\Pdf\BatchOcrExportDialog.cs">
-			<SubType>Form</SubType>
-		</Compile>
+		<Compile Update="Forms\Pdf\BatchOcrExportDialog.cs" />
 		<Compile Update="Forms\Pdf\BatchOcrExportProgressForm.cs">
 			<SubType>Form</SubType>
 		</Compile>

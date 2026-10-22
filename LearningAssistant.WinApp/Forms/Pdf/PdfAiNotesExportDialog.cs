@@ -2,18 +2,6 @@ using System.Text.RegularExpressions;
 
 namespace LearningAssistant.Forms.Pdf
 {
-    /// <summary>AI 学习笔记导出选项</summary>
-    public sealed class PdfAiNotesExportOptions
-    {
-        /// <summary>输出目录</summary>
-        public string OutputDirectory { get; init; } = string.Empty;
-        /// <summary>起始页（0 基），-1 表示第一页</summary>
-        public int StartPageIndex { get; init; } = -1;
-        /// <summary>结束页（0 基），-1 表示最后一页</summary>
-        public int EndPageIndex { get; init; } = -1;
-        /// <summary>是否同时写入笔记库</summary>
-        public bool SaveToNotes { get; init; } = true;
-    }
 
     /// <summary>
     /// AI 学习笔记导出设置：页码范围与输出目录。控件均在设计器中创建，便于可视化预览。
@@ -113,5 +101,17 @@ namespace LearningAssistant.Forms.Pdf
             endIndex = end - 1;
             return true;
         }
+    }
+    /// <summary>AI 学习笔记导出选项</summary>
+    public sealed class PdfAiNotesExportOptions
+    {
+        /// <summary>输出目录</summary>
+        public string OutputDirectory { get; init; } = string.Empty;
+        /// <summary>起始页（0 基），-1 表示第一页</summary>
+        public int StartPageIndex { get; init; } = -1;
+        /// <summary>结束页（0 基），-1 表示最后一页</summary>
+        public int EndPageIndex { get; init; } = -1;
+        /// <summary>是否同时写入笔记库</summary>
+        public bool SaveToNotes { get; init; } = true;
     }
 }

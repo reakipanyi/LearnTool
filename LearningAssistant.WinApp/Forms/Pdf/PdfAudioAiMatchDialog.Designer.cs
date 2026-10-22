@@ -10,7 +10,8 @@ partial class PdfAudioAiMatchDialog
 
     private void InitializeComponent()
     {
-        components = new System.ComponentModel.Container();
+        DataGridViewCellStyle dataGridViewCellStyle1 = new DataGridViewCellStyle();
+        DataGridViewCellStyle dataGridViewCellStyle2 = new DataGridViewCellStyle();
         grid = new DataGridView();
         columnSelect = new DataGridViewCheckBoxColumn();
         columnAudio = new DataGridViewTextBoxColumn();
@@ -33,14 +34,30 @@ partial class PdfAudioAiMatchDialog
         grid.AllowUserToDeleteRows = false;
         grid.AllowUserToResizeRows = false;
         grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        dataGridViewCellStyle1.Alignment = DataGridViewContentAlignment.MiddleLeft;
+        dataGridViewCellStyle1.BackColor = SystemColors.Control;
+        dataGridViewCellStyle1.Font = new Font("Microsoft YaHei UI", 9F);
+        dataGridViewCellStyle1.ForeColor = SystemColors.WindowText;
+        dataGridViewCellStyle1.SelectionBackColor = SystemColors.Highlight;
+        dataGridViewCellStyle1.SelectionForeColor = SystemColors.HighlightText;
+        dataGridViewCellStyle1.WrapMode = DataGridViewTriState.True;
+        grid.ColumnHeadersDefaultCellStyle = dataGridViewCellStyle1;
         grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
         grid.Columns.AddRange(new DataGridViewColumn[] { columnSelect, columnAudio, columnPage, columnConfidence, columnReason });
+        dataGridViewCellStyle2.Alignment = DataGridViewContentAlignment.MiddleLeft;
+        dataGridViewCellStyle2.BackColor = SystemColors.Window;
+        dataGridViewCellStyle2.Font = new Font("Microsoft YaHei UI", 9F);
+        dataGridViewCellStyle2.ForeColor = SystemColors.ControlText;
+        dataGridViewCellStyle2.SelectionBackColor = SystemColors.Highlight;
+        dataGridViewCellStyle2.SelectionForeColor = SystemColors.HighlightText;
+        dataGridViewCellStyle2.WrapMode = DataGridViewTriState.False;
+        grid.DefaultCellStyle = dataGridViewCellStyle2;
         grid.Dock = DockStyle.Fill;
-        grid.Location = new Point(0, 44);
+        grid.Location = new Point(0, 31);
         grid.Name = "grid";
         grid.RowHeadersVisible = false;
         grid.SelectionMode = DataGridViewSelectionMode.CellSelect;
-        grid.Size = new Size(760, 390);
+        grid.Size = new Size(760, 403);
         grid.TabIndex = 0;
         // 
         // columnSelect
@@ -49,9 +66,7 @@ partial class PdfAudioAiMatchDialog
         columnSelect.FillWeight = 50F;
         columnSelect.HeaderText = "选择";
         columnSelect.Name = "columnSelect";
-        columnSelect.SortMode = DataGridViewColumnSortMode.NotSortable;
         columnSelect.TrueValue = true;
-        columnSelect.Width = 50;
         // 
         // columnAudio
         // 
@@ -102,7 +117,7 @@ partial class PdfAudioAiMatchDialog
         // btnCancel
         // 
         btnCancel.DialogResult = DialogResult.Cancel;
-        btnCancel.Location = new Point(676, 11);
+        btnCancel.Location = new Point(665, 11);
         btnCancel.Name = "btnCancel";
         btnCancel.Size = new Size(76, 30);
         btnCancel.TabIndex = 0;
@@ -111,7 +126,7 @@ partial class PdfAudioAiMatchDialog
         // 
         // btnOk
         // 
-        btnOk.Location = new Point(572, 11);
+        btnOk.Location = new Point(563, 11);
         btnOk.Name = "btnOk";
         btnOk.Size = new Size(96, 30);
         btnOk.TabIndex = 1;
@@ -121,7 +136,7 @@ partial class PdfAudioAiMatchDialog
         // 
         // btnSelectNone
         // 
-        btnSelectNone.Location = new Point(488, 11);
+        btnSelectNone.Location = new Point(481, 11);
         btnSelectNone.Name = "btnSelectNone";
         btnSelectNone.Size = new Size(76, 30);
         btnSelectNone.TabIndex = 2;
@@ -131,7 +146,7 @@ partial class PdfAudioAiMatchDialog
         // 
         // btnSelectAll
         // 
-        btnSelectAll.Location = new Point(404, 11);
+        btnSelectAll.Location = new Point(399, 11);
         btnSelectAll.Name = "btnSelectAll";
         btnSelectAll.Size = new Size(76, 30);
         btnSelectAll.TabIndex = 3;
@@ -146,7 +161,7 @@ partial class PdfAudioAiMatchDialog
         labelSummary.Location = new Point(0, 0);
         labelSummary.Name = "labelSummary";
         labelSummary.Padding = new Padding(10, 10, 10, 4);
-        labelSummary.Size = new Size(190, 31);
+        labelSummary.Size = new Size(299, 31);
         labelSummary.TabIndex = 2;
         labelSummary.Text = "AI 给出 0 条建议，可修改页码或取消勾选后应用。";
         // 

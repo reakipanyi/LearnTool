@@ -2,20 +2,6 @@ using System.Text.RegularExpressions;
 
 namespace LearningAssistant.Forms.Pdf
 {
-    /// <summary>批量 OCR 导出选项</summary>
-    public sealed class BatchOcrExportOptions
-    {
-        /// <summary>输出目录</summary>
-        public string OutputDirectory { get; init; } = string.Empty;
-        /// <summary>true 输出 Markdown，false 输出纯文本</summary>
-        public bool Markdown { get; init; } = true;
-        /// <summary>起始页（0 基），-1 表示第一页</summary>
-        public int StartPageIndex { get; init; } = -1;
-        /// <summary>结束页（0 基），-1 表示最后一页</summary>
-        public int EndPageIndex { get; init; } = -1;
-        /// <summary>是否启用 AI 智能整理（标题层级 / 去页眉页脚 / 段落合并 / 术语统一）</summary>
-        public bool UseAiCleanup { get; init; }
-    }
 
     /// <summary>
     /// 批量 OCR 导出设置对话框：页码范围、输出目录与输出格式。
@@ -125,5 +111,19 @@ namespace LearningAssistant.Forms.Pdf
             endIndex = endPage - 1;
             return true;
         }
+    }
+    /// <summary>批量 OCR 导出选项</summary>
+    public sealed class BatchOcrExportOptions
+    {
+        /// <summary>输出目录</summary>
+        public string OutputDirectory { get; init; } = string.Empty;
+        /// <summary>true 输出 Markdown，false 输出纯文本</summary>
+        public bool Markdown { get; init; } = true;
+        /// <summary>起始页（0 基），-1 表示第一页</summary>
+        public int StartPageIndex { get; init; } = -1;
+        /// <summary>结束页（0 基），-1 表示最后一页</summary>
+        public int EndPageIndex { get; init; } = -1;
+        /// <summary>是否启用 AI 智能整理（标题层级 / 去页眉页脚 / 段落合并 / 术语统一）</summary>
+        public bool UseAiCleanup { get; init; }
     }
 }
