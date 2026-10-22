@@ -60,8 +60,7 @@ namespace LearningAssistant.Services.Gamification
         public GamificationService(
             IDbContextFactory<AppDbContext> dbContextFactory,
             ILoggerFactory? loggerFactory = null,
-            IEventBus? eventBus = null,
-            IAppPaths? appPaths = null)
+            IEventBus? eventBus = null)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _logger = loggerFactory?.CreateLogger<GamificationService>();
@@ -72,10 +71,9 @@ namespace LearningAssistant.Services.Gamification
                 loggerFactory?.CreateLogger<StudyStatsManager>(),
                 OnLevelUp,
                 OnScoreChanged,
-                OnXPChanged,
-                appPaths);
+                OnXPChanged);
 
-            _badgeManager = new BadgeManager(dbContextFactory, loggerFactory?.CreateLogger<BadgeManager>(), null, appPaths);
+            _badgeManager = new BadgeManager(dbContextFactory, loggerFactory?.CreateLogger<BadgeManager>(), null);
             _badgeManager.BadgesUnlocked += OnBadgesUnlocked;
 
             _challengeManager = new ChallengeManager(
@@ -84,8 +82,7 @@ namespace LearningAssistant.Services.Gamification
                 OnScoreChanged,
                 OnXPChanged,
                 OnLevelUp,
-                OnChallengeCompleted,
-                appPaths);
+                OnChallengeCompleted);
 
             SubscribeToEvents();
         }

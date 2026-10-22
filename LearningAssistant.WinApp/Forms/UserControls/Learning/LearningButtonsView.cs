@@ -24,6 +24,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
         private Button _buttonChallenge = null!;
         private Button _buttonAchievement = null!;
         private Button _buttonWrongBook = null!;
+        private Button _buttonPractice = null!;
         private readonly Dictionary<Button, Size> _originalButtonSizes = new Dictionary<Button, Size>();
 
         #endregion
@@ -65,6 +66,9 @@ namespace LearningAssistant.Forms.UserControls.Learning
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
         public Button ButtonWrongBook => _buttonWrongBook;
+
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public Button ButtonPractice => _buttonPractice;
 
         #endregion
 
@@ -125,6 +129,11 @@ namespace LearningAssistant.Forms.UserControls.Learning
         /// </summary>
         public event EventHandler? WrongBookClicked;
 
+        /// <summary>
+        /// 单词跟读/听写按钮点击事件（P2）
+        /// </summary>
+        public event EventHandler? PracticeClicked;
+
         #endregion
 
         #region Initialization
@@ -148,6 +157,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             ApplyRoundedStyle(_buttonChallenge, 6);
             ApplyRoundedStyle(_buttonAchievement, 6);
             ApplyRoundedStyle(_buttonWrongBook, 6);
+            ApplyRoundedStyle(_buttonPractice, 6);
         }
 
         private void ApplyRoundedStyle(Button button, int radius)
@@ -227,6 +237,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _buttonChallenge = new Button();
             _buttonAchievement = new Button();
             _buttonWrongBook = new Button();
+            _buttonPractice = new Button();
             separator3 = new Panel();
             _buttonExit = new Button();
             _buttonsPanel.SuspendLayout();
@@ -246,6 +257,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _buttonsPanel.Controls.Add(_buttonChallenge);
             _buttonsPanel.Controls.Add(_buttonAchievement);
             _buttonsPanel.Controls.Add(_buttonWrongBook);
+            _buttonsPanel.Controls.Add(_buttonPractice);
             _buttonsPanel.Controls.Add(separator3);
             _buttonsPanel.Controls.Add(_buttonExit);
             _buttonsPanel.Dock = DockStyle.Fill;
@@ -454,11 +466,29 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _buttonWrongBook.UseVisualStyleBackColor = false;
             _buttonWrongBook.Click += ButtonWrongBook_Click;
             // 
+            // _buttonPractice
+            // 
+            // 语义色：蓝色 #3B82F6 = 练习入口，与统计/挑战/错题工具区分
+            _buttonPractice.BackColor = Color.FromArgb(59, 130, 246);
+            _buttonPractice.FlatAppearance.BorderSize = 0;
+            _buttonPractice.FlatAppearance.MouseDownBackColor = Color.FromArgb(37, 99, 235);
+            _buttonPractice.FlatAppearance.MouseOverBackColor = Color.FromArgb(96, 165, 250);
+            _buttonPractice.FlatStyle = FlatStyle.Flat;
+            _buttonPractice.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            _buttonPractice.ForeColor = Color.White;
+            _buttonPractice.Margin = new Padding(5, 6, 5, 6);
+            _buttonPractice.Name = "_buttonPractice";
+            _buttonPractice.Size = new Size(86, 51);
+            _buttonPractice.TabIndex = 13;
+            _buttonPractice.Text = "🎤 练习";
+            _buttonPractice.UseVisualStyleBackColor = false;
+            _buttonPractice.Click += ButtonPractice_Click;
+            // 
             // separator3
             // 
             separator3.Name = "separator3";
             separator3.Size = new Size(20, 51);
-            separator3.TabIndex = 13;
+            separator3.TabIndex = 14;
             // 
             // _buttonExit
             // 
@@ -510,6 +540,8 @@ namespace LearningAssistant.Forms.UserControls.Learning
 
         private void ButtonWrongBook_Click(object? sender, EventArgs e) => WrongBookClicked?.Invoke(sender, e);
 
+        private void ButtonPractice_Click(object? sender, EventArgs e) => PracticeClicked?.Invoke(sender, e);
+
         #endregion
 
         #region Public Methods
@@ -529,6 +561,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _buttonChallenge.Enabled = enabled;
             _buttonAchievement.Enabled = enabled;
             _buttonWrongBook.Enabled = enabled;
+            _buttonPractice.Enabled = enabled;
             _buttonExit.Enabled = enabled;
         }
 

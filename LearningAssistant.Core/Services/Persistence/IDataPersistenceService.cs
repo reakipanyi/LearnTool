@@ -16,8 +16,6 @@ namespace LearningAssistant.Services.Persistence
         bool DeleteUserProfile(string userId);
         void SaveSession(SessionData session);
         SessionData LoadSession();
-        T? LoadJsonFile<T>(string filePath);
-        void SaveJsonFile<T>(string filePath, T data);
         void PersistCache();
 
         List<string> GetKnownItems(string userId, SubCategoryType category);

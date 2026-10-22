@@ -21,7 +21,6 @@ namespace LearningAssistant.Services.Learning
         private readonly IDataPersistenceService _persistenceService;
         private readonly ILogger<WrongAnswerService> _logger;
         private readonly IEventBus? _eventBus;
-        private readonly IAppPaths _appPaths;
         private readonly object _lock = new object();
         private bool _disposed = false;
 
@@ -29,16 +28,13 @@ namespace LearningAssistant.Services.Learning
             IDbContextFactory<AppDbContext> dbContextFactory,
             IDataPersistenceService persistenceService,
             ILogger<WrongAnswerService> logger,
-            IAppPaths appPaths,
             IEventBus? eventBus = null)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
             _eventBus = eventBus;
 
-            MigrateFromJsonToDb();
             SubscribeToEvents();
         }
 
@@ -110,75 +106,6 @@ namespace LearningAssistant.Services.Learning
             catch (Exception ex)
             {
                 _logger.LogError(ex, "处理复习完成事件失败: {ItemContent}", evt.ItemContent);
-            }
-        }
-
-        private void MigrateFromJsonToDb()
-        {
-            try
-            {
-                var wrongAnswersDir = _appPaths.WrongAnswersDir;
-                if (!Directory.Exists(wrongAnswersDir))
-                {
-                    wrongAnswersDir = Path.Combine(_appPaths.UsersDir, "wrong_answers");
-                    if (!Directory.Exists(wrongAnswersDir)) return;
-                }
-
-                var migratedMarker = Path.Combine(wrongAnswersDir, ".migrated_to_db");
-                if (File.Exists(migratedMarker)) return;
-
-                foreach (var file in Directory.EnumerateFiles(wrongAnswersDir, "*_wrong_answers.json"))
-                {
-                    var fileName = Path.GetFileName(file);
-                    var userId = fileName.Replace("_wrong_answers.json", "");
-
-                    var json = File.ReadAllText(file);
-                    var items = System.Text.Json.JsonSerializer.Deserialize<List<WrongAnswerItem>>(json) ?? new List<WrongAnswerItem>();
-
-                    if (items.Count == 0) continue;
-
-                    using var db = _dbContextFactory.CreateDbContext();
-                    var existingIds = db.WrongAnswers.Where(w => w.UserId == userId).Select(w => w.Id).ToHashSet();
-
-                    foreach (var item in items)
-                    {
-                        if (existingIds.Contains(item.Id)) continue;
-
-                        db.WrongAnswers.Add(new WrongAnswerEntity
-                        {
-                            Id = item.Id,
-                            UserId = item.UserId,
-                            Subject = item.Subject.ToString(),
-                            Category = item.Category.ToString(),
-                            Question = item.Question,
-                            CorrectAnswer = item.CorrectAnswer,
-                            UserAnswer = item.UserAnswer,
-                            Explanation = item.Explanation,
-                            AddedAt = item.AddedAt,
-                            LastReviewAt = item.LastReviewAt,
-                            ReviewCount = item.ReviewCount,
-                            WrongCount = item.WrongCount,
-                            CorrectCount = item.CorrectCount,
-                            Difficulty = item.Difficulty,
-                            MasteryLevel = (int)item.Mastery,
-                            Tags = item.Tags,
-                            NextReviewAt = item.NextReviewAt,
-                            FirstWrongAt = item.FirstWrongAt,
-                            LastWrongAt = item.LastWrongAt,
-                            IsActive = item.IsActive,
-                            Notes = item.Notes
-                        });
-                    }
-
-                    db.SaveChanges();
-                }
-
-                File.Create(migratedMarker).Dispose();
-                _logger.LogInformation("迁移错题本数据从JSON到数据库完成");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "迁移错题本数据失败");
             }
         }
 

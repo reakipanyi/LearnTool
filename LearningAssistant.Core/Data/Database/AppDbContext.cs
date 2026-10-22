@@ -34,6 +34,7 @@ namespace LearningAssistant.Data.Database
         public DbSet<MigrationCheckpointEntity> MigrationCheckpoints { get; set; }
         public DbSet<KnowledgePointEntity> KnowledgePoints { get; set; }
         public DbSet<KnowledgePointAssignmentEntity> KnowledgePointAssignments { get; set; }
+        public DbSet<PracticeRecordEntity> PracticeRecords { get; set; }
 
         private readonly string _dbPath;
 
@@ -308,6 +309,15 @@ namespace LearningAssistant.Data.Database
 
             modelBuilder.Entity<KnowledgePointAssignmentEntity>()
                 .HasIndex(a => a.KnowledgePointId);
+
+            modelBuilder.Entity<PracticeRecordEntity>()
+                .HasKey(p => p.Id);
+
+            modelBuilder.Entity<PracticeRecordEntity>()
+                .HasIndex(p => new { p.UserId, p.CreatedAt });
+
+            modelBuilder.Entity<PracticeRecordEntity>()
+                .HasIndex(p => new { p.UserId, p.LearningItemId });
         }
 
         /// <summary>
@@ -357,6 +367,7 @@ namespace LearningAssistant.Data.Database
                 RepairLearningItemsTable();
                 RepairKnowledgePointsTable();
                 RepairKnowledgePointAssignmentsTable();
+                RepairPracticeRecordsTable();
                 RepairPomodoroSettingsTable();
                 RepairPomodoroRecordsTable();
                 RepairSpacedRepetitionItemsColumn();
@@ -1010,6 +1021,34 @@ namespace LearningAssistant.Data.Database
             Database.ExecuteSqlRaw(sql);
 
             sql = @"CREATE INDEX IF NOT EXISTS IX_KnowledgePointAssignments_KnowledgePointId ON KnowledgePointAssignments(KnowledgePointId);";
+            Database.ExecuteSqlRaw(sql);
+        }
+
+        private void RepairPracticeRecordsTable()
+        {
+            var sql = @"CREATE TABLE IF NOT EXISTS PracticeRecords (
+                Id TEXT CONSTRAINT PK_PracticeRecords PRIMARY KEY NOT NULL,
+                UserId TEXT NOT NULL,
+                LearningItemId TEXT NULL,
+                ItemContent TEXT NOT NULL DEFAULT '',
+                Type INTEGER NOT NULL DEFAULT 0,
+                SourceType INTEGER NOT NULL DEFAULT 0,
+                Score REAL NOT NULL DEFAULT 0,
+                MaxScore REAL NOT NULL DEFAULT 100,
+                DurationMs INTEGER NOT NULL DEFAULT 0,
+                RecordingPath TEXT NULL,
+                MetaJson TEXT NOT NULL DEFAULT '{}',
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
+            );";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_PracticeRecords_UserId_CreatedAt ON PracticeRecords(UserId, CreatedAt);";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_PracticeRecords_UserId_LearningItemId ON PracticeRecords(UserId, LearningItemId);";
             Database.ExecuteSqlRaw(sql);
         }
 

@@ -24,10 +24,7 @@ namespace LearningAssistant.Platform
         public string TranslationsDir => AppPaths.TranslationsDir;
         public string FileBookmarksDir => AppPaths.FileBookmarksDir;
         public string HighlightsDir => AppPaths.HighlightsDir;
-        public string WrongAnswersDir => AppPaths.WrongAnswersDir;
         public string RecommendationFeedbackDir => AppPaths.RecommendationFeedbackDir;
-        public string NotesDir => AppPaths.NotesDir;
-        public string LearningPathsDir => AppPaths.LearningPathsDir;
         public string ThumbnailsDir => AppPaths.ThumbnailsDir;
         public string AudioDir => AppPaths.AudioDir;
         public string TTSCacheDir => AppPaths.TTSCacheDir;
@@ -40,11 +37,8 @@ namespace LearningAssistant.Platform
         public string PromptTemplatesPath => AppPaths.PromptTemplatesPath;
         public string WebBookmarksPath => AppPaths.WebBookmarksPath;
         public string SubjectTemplatesPath => AppPaths.SubjectTemplatesPath;
-        public string RemindersPath => AppPaths.RemindersPath;
         public string EncouragementConfigPath => AppPaths.EncouragementConfigPath;
         public string PendingContentPath => AppPaths.PendingContentPath;
-        public string LastSessionPath => AppPaths.LastSessionPath;
-        public string SessionPath => AppPaths.SessionPath;
         public string BrowserTabsPath => AppPaths.BrowserTabsPath;
         public string UserBookmarksPath => AppPaths.UserBookmarksPath;
 
@@ -65,12 +59,7 @@ namespace LearningAssistant.Platform
         public string GetTtsCacheDir() => AppPaths.GetTtsCacheDir();
         public string GetUserAutoSaveDir(string? userId = null) => AppPaths.GetUserAutoSaveDir(userId);
         public string GetUserBackupDir(string? userId = null) => AppPaths.GetUserBackupDir(userId);
-        public string GetUserNotesPath(string? userId = null) => AppPaths.GetUserNotesPath(userId);
         public string GetUserFavoritesPath(string? userId = null) => AppPaths.GetUserFavoritesPath(userId);
-        public string GetUserWrongAnswersPath(string? userId = null) => AppPaths.GetUserWrongAnswersPath(userId);
-        public string GetUserGoalsPath(string? userId = null) => AppPaths.GetUserGoalsPath(userId);
-        public string GetUserAnalyticsPath(string? userId = null) => AppPaths.GetUserAnalyticsPath(userId);
-        public string GetUserProgressPath(string userName) => AppPaths.GetUserProgressPath(userName);
 
         public string GetAnnotationPath(string pdfPath, int pageIndex) => AppPaths.GetAnnotationPath(pdfPath, pageIndex);
         public string GetPdfBookmarkPath(string pdfPath) => AppPaths.GetPdfBookmarkPath(pdfPath);

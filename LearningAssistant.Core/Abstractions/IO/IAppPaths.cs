@@ -23,10 +23,7 @@ namespace LearningAssistant.Abstractions
         string TranslationsDir { get; }
         string FileBookmarksDir { get; }
         string HighlightsDir { get; }
-        string WrongAnswersDir { get; }
         string RecommendationFeedbackDir { get; }
-        string NotesDir { get; }
-        string LearningPathsDir { get; }
         string ThumbnailsDir { get; }
         string AudioDir { get; }
         string TTSCacheDir { get; }
@@ -39,11 +36,8 @@ namespace LearningAssistant.Abstractions
         string PromptTemplatesPath { get; }
         string WebBookmarksPath { get; }
         string SubjectTemplatesPath { get; }
-        string RemindersPath { get; }
         string EncouragementConfigPath { get; }
         string PendingContentPath { get; }
-        string LastSessionPath { get; }
-        string SessionPath { get; }
         string BrowserTabsPath { get; }
         string UserBookmarksPath { get; }
 
@@ -64,12 +58,7 @@ namespace LearningAssistant.Abstractions
         string GetTtsCacheDir();
         string GetUserAutoSaveDir(string? userId = null);
         string GetUserBackupDir(string? userId = null);
-        string GetUserNotesPath(string? userId = null);
         string GetUserFavoritesPath(string? userId = null);
-        string GetUserWrongAnswersPath(string? userId = null);
-        string GetUserGoalsPath(string? userId = null);
-        string GetUserAnalyticsPath(string? userId = null);
-        string GetUserProgressPath(string userName);
 
         string GetAnnotationPath(string pdfPath, int pageIndex);
         string GetPdfBookmarkPath(string pdfPath);

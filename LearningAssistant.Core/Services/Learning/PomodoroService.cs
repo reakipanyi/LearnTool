@@ -16,7 +16,6 @@ namespace LearningAssistant.Services.Learning
         private readonly IDataPersistenceService _persistenceService;
         private readonly ILogger<PomodoroService> _logger;
         private readonly IEventBus? _eventBus;
-        private readonly IAppPaths _appPaths;
         private readonly System.Timers.Timer _timer;
         private readonly object _lock = new object();
         private readonly SynchronizationContext? _syncContext;
@@ -55,29 +54,21 @@ namespace LearningAssistant.Services.Learning
             IDbContextFactory<AppDbContext> dbContextFactory,
             IDataPersistenceService persistenceService,
             ILogger<PomodoroService> logger,
-            IAppPaths appPaths,
             IEventBus? eventBus = null)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
             _eventBus = eventBus;
             _syncContext = SynchronizationContext.Current;
 
             _timer = new System.Timers.Timer(1000);
             _timer.Elapsed += Timer_Elapsed;
 
-            MigrateFromJsonToDb();
             LoadRecords();
             LoadTodayStats();
             LoadSettings();
         }
-
-        private string StatsDir => Path.Combine(_appPaths.UsersDir, "pomodoro_stats");
-
-        private string DataFilePath => Path.Combine(StatsDir, "pomodoro_records.json");
-        private string SettingsFilePath => Path.Combine(StatsDir, "pomodoro_settings.json");
 
         public void Start()
         {
@@ -515,77 +506,6 @@ namespace LearningAssistant.Services.Learning
                 r.StartTime.Date == today &&
                 r.Type == Models.Pomodoro.PomodoroState.Studying &&
                 r.Completed);
-        }
-
-        private void MigrateFromJsonToDb()
-        {
-            try
-            {
-                if (!Directory.Exists(StatsDir)) return;
-
-                var migratedMarker = Path.Combine(StatsDir, ".migrated_to_db");
-                if (File.Exists(migratedMarker)) return;
-
-                using var db = _dbContextFactory.CreateDbContext();
-                var existingIds = db.PomodoroRecords.Select(r => r.Id).ToHashSet();
-
-                var dataPath = DataFilePath;
-                if (File.Exists(dataPath))
-                {
-                    var json = File.ReadAllText(dataPath);
-                    var records = System.Text.Json.JsonSerializer.Deserialize<List<PomodoroRecord>>(json) ?? new List<PomodoroRecord>();
-
-                    foreach (var record in records)
-                    {
-                        if (existingIds.Contains(record.Id)) continue;
-
-                        db.PomodoroRecords.Add(new PomodoroRecordEntity
-                        {
-                            Id = record.Id,
-                            StartTime = record.StartTime,
-                            EndTime = record.EndTime,
-                            Type = record.Type.ToString(),
-                            DurationSeconds = record.DurationSeconds,
-                            PlannedDurationSeconds = record.PlannedDurationSeconds,
-                            Completed = record.Completed,
-                            Task = record.Task,
-                            InterruptionCount = record.InterruptionCount
-                        });
-                    }
-
-                    db.SaveChanges();
-                }
-
-                var settingsPath = SettingsFilePath;
-                if (File.Exists(settingsPath))
-                {
-                    var json = File.ReadAllText(settingsPath);
-                    var settings = System.Text.Json.JsonSerializer.Deserialize<PomodoroSettings>(json);
-
-                    if (settings != null && !db.PomodoroSettings.Any())
-                    {
-                        db.PomodoroSettings.Add(new PomodoroSettingsEntity
-                        {
-                            StudyMinutes = settings.StudyMinutes,
-                            ShortBreakMinutes = settings.ShortBreakMinutes,
-                            LongBreakMinutes = settings.LongBreakMinutes,
-                            LongBreakInterval = settings.LongBreakInterval,
-                            AutoStartBreak = settings.AutoStartBreak,
-                            AutoStartStudy = settings.AutoStartStudy,
-                            SoundEnabled = settings.SoundEnabled,
-                            Volume = settings.Volume
-                        });
-                        db.SaveChanges();
-                    }
-                }
-
-                File.Create(migratedMarker).Dispose();
-                _logger.LogInformation("迁移番茄钟数据从JSON到数据库完成");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "迁移番茄钟数据失败");
-            }
         }
 
         private void LoadTodayStats()

@@ -114,24 +114,9 @@ namespace LearningAssistant.Common
         public static string HighlightsDir => Path.Combine(DataRoot, "highlights");
 
         /// <summary>
-        /// 错题本目录（全局共享，按用户分文件）
-        /// </summary>
-        public static string WrongAnswersDir => Path.Combine(DataDir, "wrong_answers");
-
-        /// <summary>
         /// 推荐反馈目录（全局共享，按用户分文件）
         /// </summary>
         public static string RecommendationFeedbackDir => Path.Combine(DataDir, "recommendation_feedback");
-
-        /// <summary>
-        /// 笔记目录（全局共享，按用户分文件）
-        /// </summary>
-        public static string NotesDir => Path.Combine(DataDir, "notes");
-
-        /// <summary>
-        /// 学习路径目录（全局共享，按用户分文件）
-        /// </summary>
-        public static string LearningPathsDir => Path.Combine(DataDir, "learning_paths");
 
         /// <summary>
         /// 缩略图目录
@@ -210,18 +195,6 @@ namespace LearningAssistant.Common
         public static string SubjectTemplatesPath => Path.Combine(ConfigDir, "SubjectTemplates.json");
 
         /// <summary>
-        /// 学习提醒文件路径
-        /// </summary>
-        public static string RemindersPath => Path.Combine(ConfigDir, "learning_reminders.json");
-
-        /// <summary>
-        /// 学习分析文件路径（旧位置，已废弃）
-        /// 新分析数据按用户存储在用户目录下，使用 GetUserAnalyticsPath
-        /// </summary>
-        [Obsolete("已废弃，使用 GetUserAnalyticsPath 获取用户学习分析路径")]
-        public static string AnalyticsPath => Path.Combine(ConfigDir, "learning_analytics.json");
-
-        /// <summary>
         /// 鼓励配置文件路径
         /// </summary>
         public static string EncouragementConfigPath => Path.Combine(ConfigDir, "encouragement.json");
@@ -230,16 +203,6 @@ namespace LearningAssistant.Common
         /// 待处理内容文件路径
         /// </summary>
         public static string PendingContentPath => Path.Combine(ConfigDir, "pending_content.json");
-
-        /// <summary>
-        /// 上次会话文件路径
-        /// </summary>
-        public static string LastSessionPath => Path.Combine(SessionDir, "lastsession.json");
-
-        /// <summary>
-        /// 会话文件路径
-        /// </summary>
-        public static string SessionPath => Path.Combine(SessionDir, "session.json");
 
         /// <summary>
         /// 浏览器标签页状态文件路径
@@ -299,14 +262,6 @@ namespace LearningAssistant.Common
             {
                 Directory.CreateDirectory(path);
             }
-        }
-
-        /// <summary>
-        /// 获取用户进度文件路径
-        /// </summary>
-        public static string GetUserProgressPath(string userName)
-        {
-            return Path.Combine(UsersDir, $"{SanitizeFileName(userName)}.json");
         }
 
         /// <summary>
@@ -464,43 +419,11 @@ namespace LearningAssistant.Common
         }
 
         /// <summary>
-        /// 获取用户笔记文件路径
-        /// </summary>
-        public static string GetUserNotesPath(string? userId = null)
-        {
-            return Path.Combine(GetUserDir(userId), "notes.json");
-        }
-
-        /// <summary>
         /// 获取用户收藏夹文件路径
         /// </summary>
         public static string GetUserFavoritesPath(string? userId = null)
         {
             return Path.Combine(GetUserDir(userId), "favorites.json");
-        }
-
-        /// <summary>
-        /// 获取用户错题本文件路径
-        /// </summary>
-        public static string GetUserWrongAnswersPath(string? userId = null)
-        {
-            return Path.Combine(GetUserDir(userId), "wrong_answers.json");
-        }
-
-        /// <summary>
-        /// 获取用户学习目标文件路径
-        /// </summary>
-        public static string GetUserGoalsPath(string? userId = null)
-        {
-            return Path.Combine(GetUserDir(userId), "learning_goals.json");
-        }
-
-        /// <summary>
-        /// 获取用户学习分析文件路径
-        /// </summary>
-        public static string GetUserAnalyticsPath(string? userId = null)
-        {
-            return Path.Combine(GetUserDir(userId), "learning_analytics.json");
         }
 
         /// <summary>

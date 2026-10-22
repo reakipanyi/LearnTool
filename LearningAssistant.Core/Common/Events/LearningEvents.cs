@@ -54,6 +54,23 @@ namespace LearningAssistant.Common.Events
         public string LearningType { get; set; } = string.Empty;
         public DateTime WrongAt { get; set; } = DateTime.Now;
     }
+    /// <summary>
+    /// 练习完成事件（P2）：跟读/听写等练习结果落库后发布，供统计、推荐与成就联动。
+    /// </summary>
+    public class PracticeCompletedEvent : ApplicationEventBase
+    {
+        public string UserId { get; set; } = string.Empty;
+        public string RecordId { get; set; } = string.Empty;
+        public string? LearningItemId { get; set; }
+        public string ItemContent { get; set; } = string.Empty;
+        public string PracticeType { get; set; } = string.Empty;
+        public string SourceType { get; set; } = string.Empty;
+        public double Score { get; set; }
+        public double MaxScore { get; set; } = 100;
+        public int DurationMs { get; set; }
+        public string? RecordingPath { get; set; }
+    }
+
     public class LearningItemCompletedEvent : ApplicationEventBase
     {
         public string UserId { get; set; } = string.Empty;

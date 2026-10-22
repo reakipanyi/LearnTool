@@ -1,4 +1,6 @@
 using LearningAssistant.Common;
+using LearningAssistant.Data.Database;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
@@ -10,6 +12,7 @@ namespace LearningAssistant.Services.Pdf
     {
         private readonly ILogger<PdfFileManager> _logger;
         private readonly IPdfService _pdfService;
+        private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
 
         private string _currentPdfPath = string.Empty;
         private int _currentPageIndex = 0;
@@ -23,13 +26,17 @@ namespace LearningAssistant.Services.Pdf
 
         public event EventHandler<FileLoadedEventArgs>? FileLoaded;
         public event EventHandler<FolderLoadedEventArgs>? FolderLoaded;
-        private readonly IAppPaths _appPaths;
 
-        public PdfFileManager(ILogger<PdfFileManager> logger, IPdfService pdfService, IAppPaths appPaths)
+        private const string PdfSessionKey = "pdf_session";
+
+        public PdfFileManager(
+            ILogger<PdfFileManager> logger,
+            IPdfService pdfService,
+            IDbContextFactory<AppDbContext> dbContextFactory)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _pdfService = pdfService ?? throw new ArgumentNullException(nameof(pdfService));
-            _appPaths = appPaths;
+            _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         }
 
         public string CurrentFilePath => _currentPdfPath;
@@ -72,7 +79,27 @@ namespace LearningAssistant.Services.Pdf
             {
                 var data = new SessionData(_lastFolderPath, _currentPdfPath, new Dictionary<string, int>(_filePageMap), new List<string>(_recentFiles));
                 var json = JsonSerializer.Serialize(data);
-                File.WriteAllText(_appPaths.LastSessionPath, json);
+
+                using var db = _dbContextFactory.CreateDbContext();
+                var entity = db.AppSessions.FirstOrDefault(s => s.SessionKey == PdfSessionKey);
+                if (entity == null)
+                {
+                    db.AppSessions.Add(new AppSessionEntity
+                    {
+                        SessionKey = PdfSessionKey,
+                        SessionDataJson = json,
+                        LastAccessTime = DateTime.Now,
+                        UpdatedAt = DateTime.Now
+                    });
+                }
+                else
+                {
+                    entity.SessionDataJson = json;
+                    entity.LastAccessTime = DateTime.Now;
+                    entity.UpdatedAt = DateTime.Now;
+                }
+
+                db.SaveChanges();
             }
             catch (Exception ex)
             {
@@ -84,9 +111,11 @@ namespace LearningAssistant.Services.Pdf
         {
             try
             {
-                if (!File.Exists(_appPaths.LastSessionPath)) return (null, null, null);
-                var json = File.ReadAllText(_appPaths.LastSessionPath);
-                var data = JsonSerializer.Deserialize<SessionData>(json);
+                using var db = _dbContextFactory.CreateDbContext();
+                var entity = db.AppSessions.FirstOrDefault(s => s.SessionKey == PdfSessionKey);
+                if (entity == null || string.IsNullOrWhiteSpace(entity.SessionDataJson)) return (null, null, null);
+
+                var data = JsonSerializer.Deserialize<SessionData>(entity.SessionDataJson);
                 if (data == null) return (null, null, null);
 
                 if (data.RecentFiles != null)

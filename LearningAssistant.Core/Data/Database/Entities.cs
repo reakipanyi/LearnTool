@@ -882,4 +882,35 @@ namespace LearningAssistant.Data.Database
         [MaxLength(64)]
         public string KnowledgePointId { get; set; } = string.Empty;
     }
+
+    /// <summary>
+    /// 练习记录（P2）：跟读、听写的单次结果，用于统计下钻与回放。
+    /// </summary>
+    public class PracticeRecordEntity : UserEntityBase
+    {
+        [Key]
+        [MaxLength(64)]
+        public string Id { get; set; } = string.Empty;
+
+        [MaxLength(64)]
+        public string? LearningItemId { get; set; }
+
+        [MaxLength(500)]
+        public string ItemContent { get; set; } = string.Empty;
+
+        public int Type { get; set; }
+
+        public int SourceType { get; set; }
+
+        public double Score { get; set; }
+
+        public double MaxScore { get; set; } = 100;
+
+        public int DurationMs { get; set; }
+
+        [MaxLength(512)]
+        public string? RecordingPath { get; set; }
+
+        public string MetaJson { get; set; } = "{}";
+    }
 }

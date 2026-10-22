@@ -1,4 +1,4 @@
-﻿using LearningAssistant.Abstractions;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Data.Database;
 using LearningAssistant.Models.Learning;
@@ -15,7 +15,6 @@ namespace LearningAssistant.Managers
     {
         private readonly IDbContextFactory<AppDbContext> _dbContextFactory;
         private readonly ILogger<StudyStatsManager>? _logger;
-        private readonly IAppPaths? _appPaths;
         private string _currentUserId = "default";
         private readonly List<string> _levelTitles = new() {
             "小白", "学徒", "学者", "秀才", "举人", "进士", "翰林", "大师", "宗师", "圣人"
@@ -54,15 +53,13 @@ namespace LearningAssistant.Managers
             ILogger<StudyStatsManager>? logger = null,
             Action? onLevelUp = null,
             Action<int>? onScoreChanged = null,
-            Action<int>? onXPChanged = null,
-            IAppPaths? appPaths = null)
+            Action<int>? onXPChanged = null)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _logger = logger;
             _onLevelUp = onLevelUp;
             _onScoreChanged = onScoreChanged;
             _onXPChanged = onXPChanged;
-            _appPaths = appPaths;
         }
 
         /// <summary>
@@ -87,15 +84,6 @@ namespace LearningAssistant.Managers
         }
 
         /// <summary>
-        /// 获取用户统计数据文件路径（用于迁移）
-        /// </summary>
-        private string GetUserStatsPath(string userId)
-        {
-            var userDir = Path.Combine(_appPaths?.UsersDir ?? AppPaths.UsersDir, userId);
-            return Path.Combine(userDir, "study_stats.json");
-        }
-
-        /// <summary>
         /// 从数据库加载统计数据
         /// </summary>
         public void Load(string userId = "default")
@@ -103,8 +91,6 @@ namespace LearningAssistant.Managers
             _currentUserId = userId;
             try
             {
-                MigrateFromJsonToDb(userId);
-
                 using var db = _dbContextFactory.CreateDbContext();
                 var entity = db.StudyStats.FirstOrDefault(s => s.UserId == userId);
 
@@ -184,49 +170,6 @@ namespace LearningAssistant.Managers
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "保存学习统计失败");
-            }
-        }
-
-        private void MigrateFromJsonToDb(string userId)
-        {
-            try
-            {
-                var statsPath = GetUserStatsPath(userId);
-                if (!File.Exists(statsPath)) return;
-
-                var migratedMarker = Path.Combine(_appPaths?.UsersDir ?? AppPaths.UsersDir, userId, ".stats_migrated");
-                if (File.Exists(migratedMarker)) return;
-
-                var json = File.ReadAllText(statsPath);
-                var stats = System.Text.Json.JsonSerializer.Deserialize<StudyStats>(json);
-
-                if (stats != null)
-                {
-                    using var db = _dbContextFactory.CreateDbContext();
-                    var existing = db.StudyStats.FirstOrDefault(s => s.UserId == userId);
-
-                    if (existing == null)
-                    {
-                        db.StudyStats.Add(new StudyStatsEntity
-                        {
-                            UserId = userId,
-                            TodayLearnedCount = stats.TodayLearnedCount,
-                            StreakDays = stats.StreakDays,
-                            TotalScore = stats.TotalScore,
-                            TotalLearnedCount = stats.TotalLearnedCount,
-                            XP = stats.XP,
-                            LastStudyDate = stats.LastStudyDate
-                        });
-                        db.SaveChanges();
-                    }
-                }
-
-                File.Create(migratedMarker).Dispose();
-                _logger?.LogInformation("迁移学习统计数据从JSON到数据库完成: {UserId}", userId);
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogWarning(ex, "迁移学习统计数据失败: {UserId}", userId);
             }
         }
 

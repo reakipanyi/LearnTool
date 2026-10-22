@@ -185,10 +185,7 @@ public class ContentLoaderServicePersonalMergeTests : IDisposable
         public string TranslationsDir => Path.Combine(_root, "translations");
         public string FileBookmarksDir => Path.Combine(_root, "bookmarks");
         public string HighlightsDir => Path.Combine(_root, "highlights");
-        public string WrongAnswersDir => Path.Combine(_root, "wrong");
         public string RecommendationFeedbackDir => Path.Combine(_root, "feedback");
-        public string NotesDir => Path.Combine(_root, "notes");
-        public string LearningPathsDir => Path.Combine(_root, "paths");
         public string ThumbnailsDir => Path.Combine(_root, "thumbs");
         public string AudioDir => Path.Combine(_root, "audio");
         public string TTSCacheDir => Path.Combine(_root, "tts");
@@ -201,11 +198,8 @@ public class ContentLoaderServicePersonalMergeTests : IDisposable
         public string PromptTemplatesPath => Path.Combine(_root, "prompts.json");
         public string WebBookmarksPath => Path.Combine(_root, "web.json");
         public string SubjectTemplatesPath => Path.Combine(_root, "subjects.json");
-        public string RemindersPath => Path.Combine(_root, "reminders.json");
         public string EncouragementConfigPath => Path.Combine(_root, "encouragement.json");
         public string PendingContentPath => Path.Combine(_root, "pending.json");
-        public string LastSessionPath => Path.Combine(_root, "last.json");
-        public string SessionPath => Path.Combine(_root, "session.json");
         public string BrowserTabsPath => Path.Combine(_root, "tabs.json");
         public string UserBookmarksPath => Path.Combine(_root, "bookmarks.json");
 
@@ -225,12 +219,7 @@ public class ContentLoaderServicePersonalMergeTests : IDisposable
         public string GetTtsCacheDir() => TTSCacheDir;
         public string GetUserAutoSaveDir(string? userId = null) => Path.Combine(GetUserDir(userId), "autosave");
         public string GetUserBackupDir(string? userId = null) => Path.Combine(GetUserDir(userId), "backup");
-        public string GetUserNotesPath(string? userId = null) => Path.Combine(GetUserDir(userId), "notes.json");
         public string GetUserFavoritesPath(string? userId = null) => Path.Combine(GetUserDir(userId), "favorites.json");
-        public string GetUserWrongAnswersPath(string? userId = null) => Path.Combine(GetUserDir(userId), "wrong.json");
-        public string GetUserGoalsPath(string? userId = null) => Path.Combine(GetUserDir(userId), "goals.json");
-        public string GetUserAnalyticsPath(string? userId = null) => Path.Combine(GetUserDir(userId), "analytics.json");
-        public string GetUserProgressPath(string userName) => Path.Combine(GetUserDir(userName), "progress.json");
         public string GetAnnotationPath(string pdfPath, int pageIndex) => Path.Combine(AnnotationsDir, $"{pageIndex}.json");
         public string GetPdfBookmarkPath(string pdfPath) => Path.Combine(FileBookmarksDir, "pdf.json");
         public string GetFolderHighlightPath(string folderPath) => Path.Combine(HighlightsDir, "folder.json");

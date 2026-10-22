@@ -20,7 +20,6 @@ namespace LearningAssistant.Services.Learning
         private readonly ILearningAnalyticsService _analyticsService;
         private readonly IWrongAnswerService _wrongAnswerService;
         private readonly ILogger<LearningPathService> _logger;
-        private readonly IAppPaths _appPaths;
         private readonly object _lock = new object();
 
         public LearningPathService(
@@ -28,101 +27,13 @@ namespace LearningAssistant.Services.Learning
             IDataPersistenceService persistenceService,
             ILearningAnalyticsService analyticsService,
             IWrongAnswerService wrongAnswerService,
-            ILogger<LearningPathService> logger,
-            IAppPaths appPaths)
+            ILogger<LearningPathService> logger)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
             _analyticsService = analyticsService ?? throw new ArgumentNullException(nameof(analyticsService));
             _wrongAnswerService = wrongAnswerService ?? throw new ArgumentNullException(nameof(wrongAnswerService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
-            MigrateFromJsonToDb();
-        }
-
-        private void MigrateFromJsonToDb()
-        {
-            try
-            {
-                var pathsDir = _appPaths.LearningPathsDir;
-                if (!Directory.Exists(pathsDir))
-                {
-                    pathsDir = Path.Combine(_appPaths.UsersDir, "learning_paths");
-                    if (!Directory.Exists(pathsDir)) return;
-                }
-
-                var migratedMarker = Path.Combine(pathsDir, ".migrated_to_db");
-                if (File.Exists(migratedMarker)) return;
-
-                foreach (var file in Directory.EnumerateFiles(pathsDir, "*_paths.json"))
-                {
-                    var fileName = Path.GetFileName(file);
-                    var userId = fileName.Replace("_paths.json", "");
-
-                    var json = File.ReadAllText(file);
-                    var paths = System.Text.Json.JsonSerializer.Deserialize<List<LearningPath>>(json) ?? new List<LearningPath>();
-
-                    if (paths.Count == 0) continue;
-
-                    using var db = _dbContextFactory.CreateDbContext();
-                    var existingIds = db.LearningPaths.Where(p => p.UserId == userId).Select(p => p.Id).ToHashSet();
-
-                    foreach (var path in paths)
-                    {
-                        if (existingIds.Contains(path.Id)) continue;
-
-                        var pathEntity = new LearningPathEntity
-                        {
-                            Id = path.Id,
-                            UserId = path.UserId,
-                            Name = path.Name,
-                            Description = path.Description,
-                            Goal = path.Goal,
-                            PathType = path.PathType,
-                            Domain = path.Domain,
-                            Level = path.Level,
-                            TotalEstimatedMinutes = path.TotalEstimatedMinutes,
-                            IsActive = path.IsActive,
-                            StartDate = path.StartDate,
-                            TargetDate = path.TargetDate,
-                            CreatedAt = path.CreatedAt,
-                            UpdatedAt = path.UpdatedAt
-                        };
-                        db.LearningPaths.Add(pathEntity);
-
-                        foreach (var item in path.Items)
-                        {
-                            db.LearningPathItems.Add(new LearningPathItemEntity
-                            {
-                                Id = item.Id,
-                                PathId = path.Id,
-                                Title = item.Title,
-                                Description = item.Description,
-                                ContentType = item.ContentType,
-                                ContentIds = System.Text.Json.JsonSerializer.Serialize(item.ContentIds),
-                                EstimatedMinutes = item.EstimatedMinutes,
-                                DifficultyLevel = item.DifficultyLevel,
-                                Prerequisites = System.Text.Json.JsonSerializer.Serialize(item.Prerequisites),
-                                Order = item.Order,
-                                IsCompleted = item.IsCompleted,
-                                CompletedAt = item.CompletedAt,
-                                Progress = item.Progress,
-                                CreatedAt = path.CreatedAt,
-                                UpdatedAt = path.UpdatedAt
-                            });
-                        }
-                    }
-
-                    db.SaveChanges();
-                }
-
-                File.Create(migratedMarker).Dispose();
-                _logger.LogInformation("迁移学习路径数据从JSON到数据库完成");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "迁移学习路径数据失败");
-            }
         }
 
         private List<LearningPath> LoadPaths(string userId)

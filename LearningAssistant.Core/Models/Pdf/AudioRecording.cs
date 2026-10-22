@@ -6,7 +6,9 @@ namespace LearningAssistant.Models.Pdf
     public enum AudioRecordingScope
     {
         Page,
-        Sentence
+        Sentence,
+        /// <summary>单词跟读（P2）：与整页/句子跟读隔离，避免污染既有录音列表。</summary>
+        WordShadowing
     }
 
     public class AudioRecording

@@ -20,87 +20,18 @@ namespace LearningAssistant.Services.Learning
         private readonly ILogger<NoteService> _logger;
         private readonly IEventBus? _eventBus;
         private readonly IDataPersistenceService _persistenceService;
-        private readonly IAppPaths _appPaths;
         private readonly object _lock = new object();
 
         public NoteService(
             IDbContextFactory<AppDbContext> dbContextFactory,
             ILogger<NoteService> logger,
             IDataPersistenceService persistenceService,
-            IAppPaths appPaths,
             IEventBus? eventBus = null)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _persistenceService = persistenceService ?? throw new ArgumentNullException(nameof(persistenceService));
-            _appPaths = appPaths ?? throw new ArgumentNullException(nameof(appPaths));
             _eventBus = eventBus;
-            MigrateFromJsonToDb();
-        }
-
-        private void MigrateFromJsonToDb()
-        {
-            try
-            {
-                var notesDir = _appPaths.NotesDir;
-                if (!Directory.Exists(notesDir))
-                {
-                    notesDir = Path.Combine(_appPaths.UsersDir, "notes");
-                    if (!Directory.Exists(notesDir)) return;
-                }
-
-                var migratedMarker = Path.Combine(notesDir, ".migrated_to_db");
-                if (File.Exists(migratedMarker)) return;
-
-                foreach (var file in Directory.EnumerateFiles(notesDir, "*_notes.json"))
-                {
-                    var fileName = Path.GetFileName(file);
-                    var userId = fileName.Replace("_notes.json", "");
-
-                    var json = File.ReadAllText(file);
-                    var items = System.Text.Json.JsonSerializer.Deserialize<List<NoteItem>>(json) ?? new List<NoteItem>();
-
-                    if (items.Count == 0) continue;
-
-                    using var db = _dbContextFactory.CreateDbContext();
-                    var existingIds = db.Notes.Where(n => n.UserId == userId).Select(n => n.Id).ToHashSet();
-
-                    foreach (var item in items)
-                    {
-                        if (existingIds.Contains(item.Id)) continue;
-
-                        db.Notes.Add(new NoteEntity
-                        {
-                            Id = item.Id,
-                            UserId = item.UserId,
-                            Title = item.Title,
-                            Content = item.Content,
-                            Category = item.Category,
-                            Tags = item.Tags != null ? string.Join(",", item.Tags) : string.Empty,
-                            RelatedType = item.RelatedType,
-                            RelatedItemId = item.RelatedItemId,
-                            RelatedItemTitle = item.RelatedItemTitle,
-                            Importance = item.Importance,
-                            IsFavorite = item.IsFavorite,
-                            CreatedAt = item.CreatedAt,
-                            UpdatedAt = item.UpdatedAt,
-                            LastReviewedAt = item.LastReviewedAt,
-                            ReviewCount = item.ReviewCount,
-                            Color = item.Color,
-                            Source = item.Source
-                        });
-                    }
-
-                    db.SaveChanges();
-                }
-
-                File.Create(migratedMarker).Dispose();
-                _logger.LogInformation("迁移笔记数据从JSON到数据库完成");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "迁移笔记数据失败");
-            }
         }
 
         private List<NoteItem> LoadNotes(string userId)

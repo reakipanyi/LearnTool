@@ -52,8 +52,8 @@ namespace LearningAssistant.Services.Pdf
 
                 var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
                 var safeName = SanitizeFileName(pdfFileName);
-                // 句子录音可能在同一秒内连续触发，附加句 Id 片段避免文件名冲突
-                var sentenceSuffix = scope == AudioRecordingScope.Sentence && !string.IsNullOrWhiteSpace(sentenceId)
+                // 句子/单词录音可能在同一秒内连续触发，附加 Id 片段避免文件名冲突
+                var sentenceSuffix = scope != AudioRecordingScope.Page && !string.IsNullOrWhiteSpace(sentenceId)
                     ? "_" + SanitizeFileName(sentenceId!.Length > 8 ? sentenceId[..8] : sentenceId)
                     : string.Empty;
                 _tempFilePath = Path.Combine(recordingsDir, $"{safeName}_{timestamp}{sentenceSuffix}.wav");

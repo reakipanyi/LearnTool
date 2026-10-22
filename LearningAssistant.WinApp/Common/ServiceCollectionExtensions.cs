@@ -23,9 +23,9 @@ using LearningAssistant.Services.Hotkeys;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Media;
 using LearningAssistant.Services.PanAnalysis;
-using LearningAssistant.Services.Migration;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Services.Persistence;
+using LearningAssistant.Services.Practice;
 using LearningAssistant.Services.Recovery;
 using LearningAssistant.Services.Shadowing;
 using LearningAssistant.Services.SystemTray;
@@ -115,10 +115,26 @@ namespace LearningAssistant.Common
                 var logger = sp.GetService<ILogger<LearningTaxonomyService>>();
                 return new LearningTaxonomyService(dbFactory, logger);
             });
+            services.AddSingleton<IPracticeRecordService>(sp =>
+            {
+                var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
+                var eventBus = sp.GetService<IEventBus>();
+                var logger = sp.GetService<ILogger<PracticeRecordService>>();
+                return new PracticeRecordService(dbFactory, eventBus, logger);
+            });
+            services.AddSingleton<IWordPracticeService>(sp =>
+            {
+                var tts = sp.GetRequiredService<ITTSService>();
+                var recorder = sp.GetRequiredService<IAudioRecorderService>();
+                var recordService = sp.GetRequiredService<IPracticeRecordService>();
+                var session = sp.GetRequiredService<IUserSessionService>();
+                var scorer = sp.GetService<IPronunciationScorer>();
+                var eventBus = sp.GetService<IEventBus>();
+                var logger = sp.GetService<ILogger<WordPracticeService>>();
+                return new WordPracticeService(tts, recorder, recordService, session, scorer, eventBus, logger);
+            });
             services.AddSingleton<IUserSessionService, UserSessionService>();
             services.AddSingleton<ISubjectTemplateService, SubjectTemplateService>();
-            // 历史 JSON → SQLite 迁移服务（含 analytics → DailyRollup 幂等迁移），启动后后台执行
-            services.AddSingleton<IDataMigrationService, DataMigrationService>();
 
             // 注：仓储层（IUserProfileRepository 等）当前未被任何服务消费，且 RepositoryBase 依赖 AppDbContext，
             // 而 AddDatabaseServices 仅注册了 IDbContextFactory<AppDbContext>（不注册 AppDbContext 本身），
@@ -283,10 +299,9 @@ namespace LearningAssistant.Common
 
             services.AddSingleton<ILearningAnalyticsService>(sp =>
             {
+                var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
                 var logger = sp.GetService<ILogger<LearningAnalyticsService>>();
-                var persistenceService = sp.GetService<IDataPersistenceService>();
-                var appPathsLas = sp.GetRequiredService<IAppPaths>();
-                return new LearningAnalyticsService(logger, persistenceService, appPathsLas);
+                return new LearningAnalyticsService(dbFactory, logger);
             });
             services.AddSingleton<ILearningReminderService>(sp =>
             {
@@ -315,17 +330,15 @@ namespace LearningAssistant.Common
                 var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
                 var loggerFactory = sp.GetService<ILoggerFactory>();
                 var eventBus = sp.GetService<IEventBus>();
-                var appPaths = sp.GetService<IAppPaths>();
-                return new GamificationService(dbFactory, loggerFactory, eventBus, appPaths);
+                return new GamificationService(dbFactory, loggerFactory, eventBus);
             });
             services.AddSingleton<ILearningGoalService>(sp =>
             {
                 var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
                 var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
                 var logger = sp.GetRequiredService<ILogger<LearningGoalService>>();
-                var appPaths = sp.GetRequiredService<IAppPaths>();
                 var eventBus = sp.GetService<IEventBus>();
-                return new LearningGoalService(dbFactory, persistenceService, logger, appPaths, eventBus);
+                return new LearningGoalService(dbFactory, persistenceService, logger, eventBus);
             });
             // 统计底座：统一聚合服务（A2+A7+A8），订阅学习事件、批量落库并输出统一统计 DTO
             services.AddSingleton<ILearningStatsAggregator>(sp =>
@@ -359,9 +372,8 @@ namespace LearningAssistant.Common
                 var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
                 var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
                 var logger = sp.GetService<ILogger<WrongAnswerService>>();
-                var appPaths = sp.GetRequiredService<IAppPaths>();
                 var eventBus = sp.GetService<IEventBus>();
-                return new WrongAnswerService(dbFactory, persistenceService, logger, appPaths, eventBus);
+                return new WrongAnswerService(dbFactory, persistenceService, logger, eventBus);
             });
             services.AddSingleton<WordMatchGameService>(sp =>
             {
@@ -375,9 +387,8 @@ namespace LearningAssistant.Common
                 var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
                 var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
                 var logger = sp.GetService<ILogger<NoteService>>();
-                var appPaths = sp.GetRequiredService<IAppPaths>();
                 var eventBus = sp.GetService<IEventBus>();
-                return new NoteService(dbFactory, logger, persistenceService, appPaths, eventBus);
+                return new NoteService(dbFactory, logger, persistenceService, eventBus);
             });
             services.AddSingleton<IFavoritesService>(sp =>
             {
@@ -392,8 +403,7 @@ namespace LearningAssistant.Common
                 var analyticsService = sp.GetRequiredService<ILearningAnalyticsService>();
                 var wrongAnswerService = sp.GetRequiredService<IWrongAnswerService>();
                 var logger = sp.GetService<ILogger<LearningPathService>>();
-                var appPathsLps = sp.GetRequiredService<IAppPaths>();
-                return new LearningPathService(dbFactory, persistenceService, analyticsService, wrongAnswerService, logger, appPathsLps);
+                return new LearningPathService(dbFactory, persistenceService, analyticsService, wrongAnswerService, logger);
             });
             // P-001: 统一学习入口服务
             services.AddSingleton<IUnifiedStudyEntryService>(sp =>
@@ -422,9 +432,8 @@ namespace LearningAssistant.Common
                 var dbFactory = sp.GetRequiredService<IDbContextFactory<AppDbContext>>();
                 var persistenceService = sp.GetRequiredService<IDataPersistenceService>();
                 var logger = sp.GetService<ILogger<PomodoroService>>();
-                var appPathsPomo = sp.GetRequiredService<IAppPaths>();
                 var eventBus = sp.GetService<IEventBus>();
-                return new PomodoroService(dbFactory, persistenceService, logger, appPathsPomo, eventBus);
+                return new PomodoroService(dbFactory, persistenceService, logger, eventBus);
             });
             services.AddSingleton<IDataImportService, DataImportService>();
 

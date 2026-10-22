@@ -70,11 +70,124 @@ namespace LearningAssistant.Services.Persistence
                 {
                     db.RepairSchema();
                 }
+
+                CleanupLegacyJsonStorage();
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "Failed to initialize database");
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// 清理已被 SQLite 取代的遗留 JSON 存储（笔记、错题、目标、路径、番茄钟、统计、徽章、挑战、会话、分析、提醒）。
+        /// 这些数据现已全部以数据库为唯一权威源，JSON 文件不再读写，启动时直接删除。
+        /// </summary>
+        private void CleanupLegacyJsonStorage()
+        {
+            var deleted = 0;
+
+            void TryDeleteFile(string path)
+            {
+                try
+                {
+                    if (File.Exists(path))
+                    {
+                        File.Delete(path);
+                        deleted++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Failed to delete legacy JSON file: {Path}", path);
+                }
+            }
+
+            void TryDeleteDirectory(string path)
+            {
+                try
+                {
+                    if (Directory.Exists(path))
+                    {
+                        Directory.Delete(path, recursive: true);
+                        deleted++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Failed to delete legacy JSON directory: {Path}", path);
+                }
+            }
+
+            // 全局遗留目录与文件
+            TryDeleteDirectory(Path.Combine(_appPaths.DataDir, "notes"));
+            TryDeleteDirectory(Path.Combine(_appPaths.DataDir, "wrong_answers"));
+            TryDeleteDirectory(Path.Combine(_appPaths.DataDir, "learning_paths"));
+            TryDeleteDirectory(Path.Combine(_appPaths.UsersDir, "notes"));
+            TryDeleteDirectory(Path.Combine(_appPaths.UsersDir, "wrong_answers"));
+            TryDeleteDirectory(Path.Combine(_appPaths.UsersDir, "learning_paths"));
+
+            TryDeleteFile(Path.Combine(_appPaths.ConfigDir, "learning_analytics.json"));
+            TryDeleteFile(Path.Combine(_appPaths.ConfigDir, "learning_reminders.json"));
+            TryDeleteFile(Path.Combine(_appPaths.SessionDir, "lastsession.json"));
+            TryDeleteFile(Path.Combine(_appPaths.SessionDir, "session.json"));
+            TryDeleteFile(Path.Combine(_appPaths.DataDir, "spaced_repetition.json"));
+
+            // 按用户遗留文件
+            if (Directory.Exists(_appPaths.UsersDir))
+            {
+                try
+                {
+                    // 早期进度文件：users/{userId}.json
+                    foreach (var file in Directory.EnumerateFiles(_appPaths.UsersDir, "*.json"))
+                    {
+                        TryDeleteFile(file);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Failed to enumerate legacy user JSON files");
+                }
+
+                try
+                {
+                    foreach (var userDir in Directory.EnumerateDirectories(_appPaths.UsersDir))
+                    {
+                        TryDeleteDirectory(Path.Combine(userDir, "goals"));
+                        TryDeleteDirectory(Path.Combine(userDir, "pomodoro_stats"));
+
+                        foreach (var fileName in new[]
+                        {
+                            "notes.json",
+                            "wrong_answers.json",
+                            "learning_goals.json",
+                            "learning_analytics.json",
+                            "study_stats.json",
+                            "badges.json",
+                            "challenges.json",
+                            "challenge_history.json",
+                            "progress.json",
+                            "pomodoro_records.json",
+                            "pomodoro_settings.json",
+                            ".stats_migrated",
+                            ".badges_migrated",
+                            ".challenges_migrated"
+                        })
+                        {
+                            TryDeleteFile(Path.Combine(userDir, fileName));
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "Failed to enumerate legacy user directories");
+                }
+            }
+
+            if (deleted > 0)
+            {
+                _logger?.LogInformation("Removed {Count} legacy JSON storage entries now backed by SQLite", deleted);
             }
         }
 
@@ -491,19 +604,6 @@ namespace LearningAssistant.Services.Persistence
                     db.SaveChanges();
                     _logger?.LogWarning("Detected corrupt app session entity, removed it to allow recovery");
                 }
-
-                // 尝试从旧的 JSON 文件迁移
-                var path = _appPaths.LastSessionPath;
-                if (File.Exists(path))
-                {
-                    var oldSession = Common.JsonHelper.LoadFromFile<SessionData>(path);
-                    if (oldSession != null)
-                    {
-                        SaveSession(oldSession);
-                        _logger?.LogInformation("Migrated session data from JSON to SQLite");
-                        return oldSession;
-                    }
-                }
             }
             catch (Exception ex)
             {
@@ -511,16 +611,6 @@ namespace LearningAssistant.Services.Persistence
             }
 
             return new SessionData();
-        }
-
-        public T? LoadJsonFile<T>(string filePath)
-        {
-            return Common.JsonHelper.LoadFromFile<T>(filePath);
-        }
-
-        public void SaveJsonFile<T>(string filePath, T data)
-        {
-            Common.JsonHelper.SaveToFile(filePath, data);
         }
 
         public void PersistCache()

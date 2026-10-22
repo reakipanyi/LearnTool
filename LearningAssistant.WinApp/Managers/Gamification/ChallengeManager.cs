@@ -1,4 +1,4 @@
-﻿using LearningAssistant.Abstractions;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Data.Database;
 using LearningAssistant.Models;
@@ -21,7 +21,6 @@ namespace LearningAssistant.Managers
         private readonly Action<int>? _onXPChanged;
         private readonly Action? _onLevelUp;
         private readonly Action? _onChallengeCompleted;
-        private readonly IAppPaths? _appPaths;
 
         private string _currentUserId = Constants.DefaultUserId;
         private List<Challenge> _dailyChallenges = new();
@@ -48,8 +47,7 @@ namespace LearningAssistant.Managers
             Action<int>? onScoreChanged = null,
             Action<int>? onXPChanged = null,
             Action? onLevelUp = null,
-            Action? onChallengeCompleted = null,
-            IAppPaths? appPaths = null)
+            Action? onChallengeCompleted = null)
         {
             _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
             _logger = logger;
@@ -57,7 +55,6 @@ namespace LearningAssistant.Managers
             _onXPChanged = onXPChanged;
             _onLevelUp = onLevelUp;
             _onChallengeCompleted = onChallengeCompleted;
-            _appPaths = appPaths;
         }
 
         /// <summary>
@@ -100,7 +97,6 @@ namespace LearningAssistant.Managers
             _currentUserId = userId;
             try
             {
-                MigrateFromJsonToDb(userId);
                 LoadHistory(userId);
 
                 string today = DateTime.Today.ToString("yyyy-MM-dd");
@@ -130,76 +126,6 @@ namespace LearningAssistant.Managers
             {
                 _logger?.LogError(ex, "加载挑战失败");
                 GenerateDailyChallenges();
-            }
-        }
-
-        private void MigrateFromJsonToDb(string userId)
-        {
-            try
-            {
-                var userDir = Path.Combine(_appPaths?.UsersDir ?? AppPaths.UsersDir, userId);
-                if (!Directory.Exists(userDir)) return;
-
-                var migratedMarker = Path.Combine(userDir, ".challenges_migrated");
-                if (File.Exists(migratedMarker)) return;
-
-                using var db = _dbContextFactory.CreateDbContext();
-
-                var challengesPath = Path.Combine(userDir, "challenges.json");
-                if (File.Exists(challengesPath))
-                {
-                    var json = File.ReadAllText(challengesPath);
-                    var data = System.Text.Json.JsonSerializer.Deserialize<ChallengeData>(json);
-
-                    if (data != null)
-                    {
-                        var existing = db.DailyChallenges.FirstOrDefault(d => d.UserId == userId && d.Date == data.Date);
-                        if (existing == null)
-                        {
-                            db.DailyChallenges.Add(new DailyChallengeEntity
-                            {
-                                UserId = userId,
-                                Date = data.Date,
-                                ChallengesJson = System.Text.Json.JsonSerializer.Serialize(data.Challenges)
-                            });
-                            db.SaveChanges();
-                        }
-                    }
-                }
-
-                var historyPath = Path.Combine(userDir, "challenge_history.json");
-                if (File.Exists(historyPath))
-                {
-                    var json = File.ReadAllText(historyPath);
-                    var records = System.Text.Json.JsonSerializer.Deserialize<List<ChallengeHistoryRecord>>(json) ?? new List<ChallengeHistoryRecord>();
-
-                    var existingDates = db.ChallengeHistory.Where(h => h.UserId == userId).Select(h => h.Date).ToHashSet();
-
-                    foreach (var record in records)
-                    {
-                        if (existingDates.Contains(record.Date)) continue;
-
-                        db.ChallengeHistory.Add(new ChallengeHistoryEntity
-                        {
-                            UserId = userId,
-                            Date = record.Date,
-                            CompletedCount = record.CompletedCount,
-                            TotalCount = record.TotalCount,
-                            ClaimedCount = record.ClaimedCount,
-                            TotalXP = record.TotalXP,
-                            ChallengesJson = System.Text.Json.JsonSerializer.Serialize(record.Challenges)
-                        });
-                    }
-
-                    db.SaveChanges();
-                }
-
-                File.Create(migratedMarker).Dispose();
-                _logger?.LogInformation("迁移挑战数据从JSON到数据库完成: {UserId}", userId);
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogWarning(ex, "迁移挑战数据失败: {UserId}", userId);
             }
         }
 

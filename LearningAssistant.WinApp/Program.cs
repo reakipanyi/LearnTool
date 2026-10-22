@@ -4,7 +4,6 @@ using LearningAssistant.Forms.Main;
 using LearningAssistant.Forms.Notification;
 using LearningAssistant.Forms.Web;
 using LearningAssistant.Services.Learning;
-using LearningAssistant.Services.Migration;
 using LearningAssistant.Services.Persistence;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -78,37 +77,6 @@ namespace LearningAssistant
                 var identityMigrationService = ServiceProvider.GetService<IItemIdentityMigrationService>();
                 identityMigrationService?.Run();
 
-                // 后台执行数据迁移（从 JSON 到 SQLite，含 analytics→DailyRollup），不阻塞主窗体打开
-                var migrationService = ServiceProvider.GetService<IDataMigrationService>();
-                if (migrationService != null)
-                {
-                    Task.Run(async () =>
-                    {
-                        try
-                        {
-                            await Task.Delay(500);
-                            if (migrationService.NeedsMigration())
-                            {
-                                logger?.LogInformation("检测到需要迁移的数据，开始迁移...");
-                                migrationService.BackupBeforeMigration();
-                                var result = migrationService.PerformMigration();
-                                if (result.Success)
-                                {
-                                    logger?.LogInformation("数据迁移成功: {Count} 个用户", result.SuccessfulMigrations);
-                                }
-                                else
-                                {
-                                    logger?.LogWarning("数据迁移部分失败: 成功 {Success}, 失败 {Failed}",
-                                        result.SuccessfulMigrations, result.FailedMigrations);
-                                }
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            logger?.LogError(ex, "后台数据迁移失败");
-                        }
-                    });
-                }
                 var reminderService = ServiceProvider.GetService<ILearningReminderService>();
                 if (reminderService != null)
                 {

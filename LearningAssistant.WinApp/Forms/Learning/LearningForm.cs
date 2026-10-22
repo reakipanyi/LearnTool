@@ -11,6 +11,7 @@ using LearningAssistant.Services.Feedback;
 using LearningAssistant.Services.Gamification;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Persistence;
+using LearningAssistant.Services.Practice;
 using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
@@ -229,6 +230,7 @@ namespace LearningAssistant.Forms.Learning
             _buttonsView.ChallengeClicked += ButtonChallenge_Click;
             _buttonsView.AchievementClicked += ButtonAchievement_Click;
             _buttonsView.WrongBookClicked += ButtonWrongBook_Click;
+            _buttonsView.PracticeClicked += ButtonPractice_Click;
 
             _settingsView.RadioStudyMode.CheckedChanged += RadioSetting_CheckedChanged;
             _settingsView.RadioQuickMode.CheckedChanged += RadioSetting_CheckedChanged;
@@ -1393,6 +1395,7 @@ namespace LearningAssistant.Forms.Learning
             if (_buttonsView.ButtonChallenge != null) ApplyRoundedStyle(_buttonsView.ButtonChallenge, 8);
             if (_buttonsView.ButtonAchievement != null) ApplyRoundedStyle(_buttonsView.ButtonAchievement, 8);
             if (_buttonsView.ButtonWrongBook != null) ApplyRoundedStyle(_buttonsView.ButtonWrongBook, 8);
+            if (_buttonsView.ButtonPractice != null) ApplyRoundedStyle(_buttonsView.ButtonPractice, 8);
 
             foreach (Control ctrl in _buttonsView.ButtonsPanel.Controls)
             {
@@ -1419,6 +1422,7 @@ namespace LearningAssistant.Forms.Learning
             _toolTip.SetToolTip(_buttonsView.ButtonChallenge, "打开每日挑战");
             _toolTip.SetToolTip(_buttonsView.ButtonAchievement, "查看成就徽章");
             _toolTip.SetToolTip(_buttonsView.ButtonWrongBook, "打开错题本");
+            _toolTip.SetToolTip(_buttonsView.ButtonPractice, "单词跟读 / 听写练习");
             _toolTip.SetToolTip(_buttonsView.ButtonExit, "退出学习 (Esc)");
 
             _toolTip.SetToolTip(buttonShowAnswer, "切换学习/答题模式 (F3)");
@@ -1690,6 +1694,38 @@ namespace LearningAssistant.Forms.Learning
             {
                 _logger?.LogError(ex, "打开错题本失败");
                 ShowToast($"打开错题本失败: {ex.Message}", ToastType.Error);
+            }
+        }
+
+        /// <summary>
+        /// 单词跟读/听写入口（P2）：以当前学习项打开练习窗口。
+        /// </summary>
+        private void ButtonPractice_Click(object? sender, EventArgs e)
+        {
+            if (_currentItem == null)
+            {
+                ShowToast("请先选择一个学习项", ToastType.Warning);
+                return;
+            }
+
+            try
+            {
+                var wordPracticeService = Program.GetRequiredService<IWordPracticeService>();
+                var practiceThemeService = Program.GetService<IThemeService>();
+                var practiceLogger = Program.GetService<ILogger<WordPracticeForm>>();
+
+                using var form = new WordPracticeForm(
+                    _currentItem,
+                    wordPracticeService,
+                    practiceLogger,
+                    practiceThemeService);
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.ShowDialog(this);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "打开单词练习失败");
+                ShowToast($"打开单词练习失败: {ex.Message}", ToastType.Error);
             }
         }
 
@@ -2967,6 +3003,7 @@ namespace LearningAssistant.Forms.Learning
                     _buttonsView.NextClicked -= ButtonNext_Click;
                     _buttonsView.FavoriteClicked -= ButtonFavorite_Click;
                     _buttonsView.ExitClicked -= ButtonExit_Click;
+                    _buttonsView.PracticeClicked -= ButtonPractice_Click;
                 }
 
                 if (_settingsView != null)
