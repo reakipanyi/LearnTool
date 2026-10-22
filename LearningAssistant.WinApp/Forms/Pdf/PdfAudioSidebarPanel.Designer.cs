@@ -18,6 +18,7 @@ partial class PdfAudioSidebarPanel
         tabs = new TabControl();
         companionPage = new TabPage();
         recordingPage = new TabPage();
+        recordingUnavailable = new Label();
         shadowingPage = new TabPage();
         root.SuspendLayout();
         tabs.SuspendLayout();
@@ -81,12 +82,26 @@ partial class PdfAudioSidebarPanel
         // recordingPage
         // 
         recordingPage.BackColor = Color.FromArgb(247, 248, 251);
+        recordingPage.Controls.Add(recordingUnavailable);
         recordingPage.Location = new Point(4, 4);
         recordingPage.Name = "recordingPage";
         recordingPage.Padding = new Padding(0);
         recordingPage.Size = new Size(535, 952);
         recordingPage.TabIndex = 1;
         recordingPage.UseVisualStyleBackColor = false;
+        // 
+        // recordingUnavailable
+        // 
+        recordingUnavailable.Dock = DockStyle.Fill;
+        recordingUnavailable.Font = new Font("Microsoft YaHei UI", 9F);
+        recordingUnavailable.ForeColor = Color.Gray;
+        recordingUnavailable.Location = new Point(0, 0);
+        recordingUnavailable.Name = "recordingUnavailable";
+        recordingUnavailable.Size = new Size(535, 952);
+        recordingUnavailable.TabIndex = 0;
+        recordingUnavailable.Text = "录音服务不可用\r\n请确保 NAudio 库已正确安装";
+        recordingUnavailable.TextAlign = ContentAlignment.MiddleCenter;
+        recordingUnavailable.Visible = false;
         // 
         // shadowingPage
         // 
@@ -118,5 +133,6 @@ partial class PdfAudioSidebarPanel
     private TabControl tabs;
     private TabPage companionPage;
     private TabPage recordingPage;
+    private Label recordingUnavailable;
     private TabPage shadowingPage;
 }

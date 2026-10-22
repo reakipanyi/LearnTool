@@ -34,6 +34,9 @@ public partial class PdfAudioSidebarPanel : UserControl
     /// <summary>整页录音子页，录音管理器在此挂载 UI。</summary>
     public TabPage RecordingPage => recordingPage;
 
+    /// <summary>录音服务不可用时的提示（默认隐藏）。</summary>
+    public Label RecordingUnavailableLabel => recordingUnavailable;
+
     /// <summary>句子跟读子页，宿主在此挂载跟读面板。</summary>
     public TabPage ShadowingPage => shadowingPage;
 }

@@ -261,6 +261,9 @@
 		<Compile Update="Forms\Pdf\PdfAudioSidebarPanel.cs">
 			<SubType>UserControl</SubType>
 		</Compile>
+		<Compile Update="Forms\Pdf\PdfRecordingPanel.cs">
+			<SubType>UserControl</SubType>
+		</Compile>
 		<Compile Update="Forms\Pdf\PdfShadowingPanel.cs">
 			<SubType>UserControl</SubType>
 		</Compile>

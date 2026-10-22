@@ -1,5 +1,6 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.UI;
+using LearningAssistant.Forms.Pdf;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.Pdf;
 using Microsoft.Extensions.Logging;
@@ -22,11 +23,13 @@ namespace LearningAssistant.Managers
         /// <summary>录音 UI 的挂载页（默认挂到「音频」Tab；三段式模式下指向「整页录音」子页）</summary>
         public TabPage? MountTabPage { get; set; }
         private TableLayoutPanel? _layout;
+        private PdfRecordingPanel? _panel;
         private bool _timestampsExpanded;
         private bool _summariesExpanded;
         private Button _buttonRecord;
         private Button _buttonStop;
         private Button _buttonPlay;
+        private Button _buttonDelete;
         private Label _labelTime;
         private TrackBar _trackBarPosition;
         private Panel _levelMeter;
@@ -88,297 +91,11 @@ namespace LearningAssistant.Managers
         {
             if (_tabPage == null) return;
 
-            _tabPage.SuspendLayout();
+            _panel = new PdfRecordingPanel { Dock = DockStyle.Fill };
+            _tabPage.Controls.Add(_panel);
 
-            var layout = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                Padding = new Padding(12, 10, 12, 10),
-                AutoSize = true,
-                AutoSizeMode = AutoSizeMode.GrowAndShrink
-            };
-            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            _layout = layout;
-
-            // 行定义：状态/按钮行/时间/进度条/电平/列表标题/列表/删除按钮/时间戳标题/时间戳列表
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));  // 0: _labelStatus
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));  // 1: 按钮行
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));  // 2: _labelTime
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));  // 3: _trackBarPosition
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 16));  // 4: _levelMeter
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));  // 5: 录音列表标题
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 45F));  // 6: 列表 / 无录音提示
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));  // 7: 删除 / AI 摘要按钮
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));  // 8: 时间戳标注标题
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 27F));  // 9: 时间戳标注列表
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));  // 10: AI 摘要标题
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 28F));  // 11: AI 摘要列表
-
-            _labelStatus = new Label
-            {
-                Text = "就绪",
-                Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                ForeColor = _textColor,
-                Anchor = AnchorStyles.Left | AnchorStyles.Top,
-                AutoSize = true
-            };
-            layout.Controls.Add(_labelStatus, 0, 0);
-
-            // 按钮容器（录制/停止/播放三按钮水平排列）
-            var buttonPanel = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 3,
-                RowCount = 1,
-                Margin = Padding.Empty
-            };
-            buttonPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
-            buttonPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
-            buttonPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.34F));
-
-            _buttonRecord = new Button
-            {
-                Text = "● 录制",
-                Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                ForeColor = Color.White,
-                BackColor = _recordRed,
-                FlatStyle = FlatStyle.Flat,
-                FlatAppearance = { BorderSize = 0 },
-                Dock = DockStyle.Fill,
-                Margin = new Padding(0, 0, 3, 0),
-                Cursor = Cursors.Hand,
-                Tag = "record"
-            };
-            _buttonRecord.Click += _buttonRecord_Click;
-            buttonPanel.Controls.Add(_buttonRecord, 0, 0);
-
-            _buttonStop = new Button
-            {
-                Text = "■ 停止",
-                Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                ForeColor = Color.White,
-                BackColor = Color.FromArgb(100, 100, 100),
-                FlatStyle = FlatStyle.Flat,
-                FlatAppearance = { BorderSize = 0 },
-                Dock = DockStyle.Fill,
-                Margin = new Padding(3, 0, 3, 0),
-                Cursor = Cursors.Hand,
-                Enabled = false,
-                Tag = "stop"
-            };
-            _buttonStop.Click += _buttonStop_Click;
-            buttonPanel.Controls.Add(_buttonStop, 1, 0);
-
-            _buttonPlay = new Button
-            {
-                Text = "▶ 播放",
-                Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                ForeColor = Color.White,
-                BackColor = _accentColor,
-                FlatStyle = FlatStyle.Flat,
-                FlatAppearance = { BorderSize = 0 },
-                Dock = DockStyle.Fill,
-                Margin = new Padding(3, 0, 0, 0),
-                Cursor = Cursors.Hand,
-                Enabled = false,
-                Tag = "play"
-            };
-            _buttonPlay.Click += _buttonPlay_Click;
-            buttonPanel.Controls.Add(_buttonPlay, 2, 0);
-
-            layout.Controls.Add(buttonPanel, 0, 1);
-
-            _labelTime = new Label
-            {
-                Text = "00:00 / 00:00",
-                Font = new Font("Consolas", 9F),
-                ForeColor = _textColor,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top,
-                Height = 20
-            };
-            layout.Controls.Add(_labelTime, 0, 2);
-
-            _trackBarPosition = new TrackBar
-            {
-                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top,
-                Height = 30,
-                Minimum = 0,
-                Maximum = 1000,
-                TickStyle = TickStyle.None,
-                Enabled = false
-            };
-            _trackBarPosition.MouseDown += (s, e) => _isDraggingPosition = true;
-            _trackBarPosition.MouseUp += TrackBarPosition_MouseUp;
-            layout.Controls.Add(_trackBarPosition, 0, 3);
-
-            _levelMeter = new Panel
-            {
-                Height = 12,
-                Width = 200,
-                BackColor = Color.FromArgb(220, 220, 230),
-                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top
-            };
-            _levelFill = new Panel
-            {
-                Location = new Point(1, 1),
-                Size = new Size(0, 10),
-                BackColor = _accentColor
-            };
-            _levelMeter.Controls.Add(_levelFill);
-            layout.Controls.Add(_levelMeter, 0, 4);
-
-            var labelList = new Label
-            {
-                Text = "录音列表",
-                Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                ForeColor = _textColor,
-                Anchor = AnchorStyles.Left | AnchorStyles.Top,
-                AutoSize = true
-            };
-            layout.Controls.Add(labelList, 0, 5);
-
-            _labelNoRecordings = new Label
-            {
-                Text = "暂无录音，点击 ● 录制 开始",
-                Font = new Font("Microsoft YaHei UI", 9F),
-                ForeColor = Color.FromArgb(160, 160, 170),
-                TextAlign = ContentAlignment.MiddleCenter,
-                Dock = DockStyle.Fill
-            };
-            layout.Controls.Add(_labelNoRecordings, 0, 6);
-
-            _listRecordings = new ListBox
-            {
-                Dock = DockStyle.Fill,
-                BorderStyle = BorderStyle.FixedSingle,
-                DrawMode = DrawMode.OwnerDrawFixed,
-                ItemHeight = 36,
-                Visible = false
-            };
-            _listRecordings.DrawItem += ListRecordings_DrawItem;
-            _listRecordings.SelectedIndexChanged += ListRecordings_SelectedIndexChanged;
-            _listRecordings.MouseDoubleClick += ListRecordings_MouseDoubleClick;
-            layout.Controls.Add(_listRecordings, 0, 6);
-
-            var panelActions = new Panel { Dock = DockStyle.Fill };
-
-            var buttonDelete = new Button
-            {
-                Text = "删除",
-                Font = new Font("Microsoft YaHei UI", 9F),
-                ForeColor = _textColor,
-                BackColor = Color.FromArgb(230, 230, 235),
-                FlatStyle = FlatStyle.Flat,
-                FlatAppearance = { BorderSize = 0 },
-                Location = new Point(0, 2),
-                Size = new Size(60, 26),
-                Cursor = Cursors.Hand,
-                Tag = "delete"
-            };
-            buttonDelete.Click += _buttonDelete_Click;
-
-            _buttonGenerateSummary = new Button
-            {
-                Text = "AI 摘要",
-                Font = new Font("Microsoft YaHei UI", 9F),
-                ForeColor = Color.White,
-                BackColor = _accentColor,
-                FlatStyle = FlatStyle.Flat,
-                FlatAppearance = { BorderSize = 0 },
-                Location = new Point(66, 2),
-                Size = new Size(72, 26),
-                Cursor = Cursors.Hand
-            };
-            _buttonGenerateSummary.Click += ButtonGenerateSummary_Click;
-
-            panelActions.Controls.Add(buttonDelete);
-            panelActions.Controls.Add(_buttonGenerateSummary);
-            layout.Controls.Add(panelActions, 0, 7);
-
-            // 本页时间戳标注：录制过程中创建的标注会记录音频位置，点击可跳转回放
-            _labelTimestamps = new Label
-            {
-                Text = "本页时间戳标注（点击跳转回放）",
-                Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                ForeColor = _textColor,
-                Anchor = AnchorStyles.Left | AnchorStyles.Top,
-                AutoSize = true
-            };
-            layout.Controls.Add(_labelTimestamps, 0, 8);
-
-            _labelNoTimestamps = new Label
-            {
-                Text = "本页暂无时间戳标注",
-                Font = new Font("Microsoft YaHei UI", 9F),
-                ForeColor = Color.FromArgb(160, 160, 170),
-                TextAlign = ContentAlignment.MiddleCenter,
-                Dock = DockStyle.Fill
-            };
-            layout.Controls.Add(_labelNoTimestamps, 0, 9);
-
-            _listTimestamps = new ListBox
-            {
-                Dock = DockStyle.Fill,
-                BorderStyle = BorderStyle.FixedSingle,
-                DrawMode = DrawMode.OwnerDrawFixed,
-                ItemHeight = 32,
-                Visible = false
-            };
-            _listTimestamps.DrawItem += ListTimestamps_DrawItem;
-            _listTimestamps.MouseClick += ListTimestamps_MouseClick;
-            layout.Controls.Add(_listTimestamps, 0, 9);
-
-            // 全书 AI 摘要：每条带页码/录音锚点，点击跳页并从时间戳回放
-            _labelSummaries = new Label
-            {
-                Text = "AI 摘要（点击跳页并回放）",
-                Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                ForeColor = _textColor,
-                Anchor = AnchorStyles.Left | AnchorStyles.Top,
-                AutoSize = true
-            };
-            layout.Controls.Add(_labelSummaries, 0, 10);
-
-            _labelNoSummaries = new Label
-            {
-                Text = "暂无 AI 摘要，点击「AI 摘要」生成",
-                Font = new Font("Microsoft YaHei UI", 9F),
-                ForeColor = Color.FromArgb(160, 160, 170),
-                TextAlign = ContentAlignment.MiddleCenter,
-                Dock = DockStyle.Fill
-            };
-            layout.Controls.Add(_labelNoSummaries, 0, 11);
-
-            _listSummaries = new ListBox
-            {
-                Dock = DockStyle.Fill,
-                BorderStyle = BorderStyle.FixedSingle,
-                DrawMode = DrawMode.OwnerDrawFixed,
-                ItemHeight = 46,
-                Visible = false
-            };
-            _listSummaries.DrawItem += ListSummaries_DrawItem;
-            _listSummaries.MouseClick += ListSummaries_MouseClick;
-            layout.Controls.Add(_listSummaries, 0, 11);
-
-            // 时间戳与 AI 摘要默认折叠，避免三组列表同时抢占高度
-            _labelTimestamps.Cursor = Cursors.Hand;
-            _labelTimestamps.Click += (_, _) =>
-            {
-                _timestampsExpanded = !_timestampsExpanded;
-                ApplySectionState();
-            };
-            _labelSummaries.Cursor = Cursors.Hand;
-            _labelSummaries.Click += (_, _) =>
-            {
-                _summariesExpanded = !_summariesExpanded;
-                ApplySectionState();
-            };
-
-            _tabPage.Controls.Add(layout);
+            BindPanelControls();
             ApplySectionState();
-            _tabPage.ResumeLayout(false);
 
             _uiTimer = new System.Windows.Forms.Timer { Interval = 200 };
             _uiTimer.Tick += UiTimer_Tick;
@@ -387,6 +104,64 @@ namespace LearningAssistant.Managers
             _levelTimer = new System.Windows.Forms.Timer { Interval = 100 };
             _levelTimer.Tick += LevelTimer_Tick;
             _levelTimer.Start();
+        }
+
+        /// <summary>把面板控件接入录音逻辑，事件绑定与运行时构建版本保持一致。</summary>
+        private void BindPanelControls()
+        {
+            if (_panel == null) return;
+
+            _layout = _panel.Root;
+            _labelStatus = _panel.StatusLabel;
+
+            _buttonRecord = _panel.RecordButton;
+            _buttonRecord.Click += _buttonRecord_Click;
+            _buttonStop = _panel.StopButton;
+            _buttonStop.Click += _buttonStop_Click;
+            _buttonPlay = _panel.PlayButton;
+            _buttonPlay.Click += _buttonPlay_Click;
+
+            _labelTime = _panel.TimeLabel;
+
+            _trackBarPosition = _panel.PositionBar;
+            _trackBarPosition.MouseDown += (_, _) => _isDraggingPosition = true;
+            _trackBarPosition.MouseUp += TrackBarPosition_MouseUp;
+
+            _levelMeter = _panel.LevelMeter;
+            _levelFill = _panel.LevelFill;
+
+            _labelNoRecordings = _panel.NoRecordingsLabel;
+            _listRecordings = _panel.RecordingsList;
+            _listRecordings.DrawItem += ListRecordings_DrawItem;
+            _listRecordings.SelectedIndexChanged += ListRecordings_SelectedIndexChanged;
+            _listRecordings.MouseDoubleClick += ListRecordings_MouseDoubleClick;
+
+            _buttonDelete = _panel.DeleteButton;
+            _buttonDelete.Click += _buttonDelete_Click;
+            _buttonGenerateSummary = _panel.GenerateSummaryButton;
+            _buttonGenerateSummary.Click += ButtonGenerateSummary_Click;
+
+            _labelTimestamps = _panel.TimestampsTitle;
+            _labelTimestamps.Click += (_, _) =>
+            {
+                _timestampsExpanded = !_timestampsExpanded;
+                ApplySectionState();
+            };
+            _labelNoTimestamps = _panel.NoTimestampsLabel;
+            _listTimestamps = _panel.TimestampsList;
+            _listTimestamps.DrawItem += ListTimestamps_DrawItem;
+            _listTimestamps.MouseClick += ListTimestamps_MouseClick;
+
+            _labelSummaries = _panel.SummariesTitle;
+            _labelSummaries.Click += (_, _) =>
+            {
+                _summariesExpanded = !_summariesExpanded;
+                ApplySectionState();
+            };
+            _labelNoSummaries = _panel.NoSummariesLabel;
+            _listSummaries = _panel.SummariesList;
+            _listSummaries.DrawItem += ListSummaries_DrawItem;
+            _listSummaries.MouseClick += ListSummaries_MouseClick;
         }
 
         /// <summary>同步两个折叠区块的行高、可见性与标题计数。</summary>

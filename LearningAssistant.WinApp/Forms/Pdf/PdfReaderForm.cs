@@ -209,6 +209,11 @@ namespace LearningAssistant.Forms.Pdf
         private Button _buttonColorVioletRed;
         private Button _buttonColorDodgerBlue;
         private Button _buttonColorMore;
+        private Button _buttonHighlightColor0;
+        private Button _buttonHighlightColor1;
+        private Button _buttonHighlightColor2;
+        private Button _buttonHighlightColor3;
+        private Button _buttonHighlightColor4;
 
         /// <summary>「更多」按钮：承载低频工具，对应工具栏一级图标条的收口入口</summary>
         private Button _buttonMoreTools;
@@ -519,16 +524,10 @@ namespace LearningAssistant.Forms.Pdf
             }
             else
             {
-                // 录音服务不可用时，在「我的录音」子页上显示提示
-                if (recordingPage != null)
+                // 录音服务不可用时，在「整页录音」子页上显示提示
+                if (_audioSidebar != null)
                 {
-                    var lbl = new Label();
-                    lbl.Text = "录音服务不可用\n请确保 NAudio 库已正确安装";
-                    lbl.Font = new Font("Microsoft YaHei UI", 9F);
-                    lbl.ForeColor = Color.Gray;
-                    lbl.TextAlign = ContentAlignment.MiddleCenter;
-                    lbl.Dock = DockStyle.Fill;
-                    recordingPage.Controls.Add(lbl);
+                    _audioSidebar.RecordingUnavailableLabel.Visible = true;
                 }
             }
 
@@ -3820,27 +3819,22 @@ namespace LearningAssistant.Forms.Pdf
         private void InitializeHighlightColorSwatches()
         {
             if (_panelColor == null) return;
-            _buttonHighlightColors = new Button[HighlightPalette.Length];
-            for (int i = 0; i < HighlightPalette.Length; i++)
+
+            _buttonHighlightColors = new[]
             {
+                _buttonHighlightColor0, _buttonHighlightColor1, _buttonHighlightColor2,
+                _buttonHighlightColor3, _buttonHighlightColor4
+            };
+
+            for (int i = 0; i < _buttonHighlightColors.Length && i < HighlightPalette.Length; i++)
+            {
+                var button = _buttonHighlightColors[i];
                 var color = HighlightService.GetHighlightColor(HighlightPalette[i]).ToColor();
-                var button = new Button();
-                button.Name = $"_buttonHighlightColor{i}";
-                button.Size = new Size(22, 22);
-                button.Location = new Point(2 + i * 28, 4);
-                button.FlatStyle = FlatStyle.Flat;
                 button.BackColor = ToSwatchSurface(color);
-                button.UseVisualStyleBackColor = false;
-                button.Visible = false;
-                button.TabIndex = 200 + i;
-                button.FlatAppearance.BorderSize = 1;
-                button.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
                 var paletteColor = HighlightPalette[i];
                 button.Click += (s, e) => SelectHighlightColor(paletteColor);
                 _toolTip.SetToolTip(button, $"高亮色：{paletteColor}");
                 MakeButtonCircular(button);
-                _panelColor.Controls.Add(button);
-                _buttonHighlightColors[i] = button;
             }
         }
 
@@ -6996,6 +6990,11 @@ namespace LearningAssistant.Forms.Pdf
             _buttonColorVioletRed = new Button();
             _buttonColorDodgerBlue = new Button();
             _buttonColorMore = new Button();
+            _buttonHighlightColor0 = new Button();
+            _buttonHighlightColor1 = new Button();
+            _buttonHighlightColor2 = new Button();
+            _buttonHighlightColor3 = new Button();
+            _buttonHighlightColor4 = new Button();
             _buttonUndoAnnotation = new Button();
             _buttonHighlightMode = new Button();
             _buttonRectangleMode = new Button();
@@ -7736,6 +7735,11 @@ namespace LearningAssistant.Forms.Pdf
             _panelColor.Controls.Add(_buttonColorVioletRed);
             _panelColor.Controls.Add(_buttonColorDodgerBlue);
             _panelColor.Controls.Add(_buttonColorMore);
+            _panelColor.Controls.Add(_buttonHighlightColor0);
+            _panelColor.Controls.Add(_buttonHighlightColor1);
+            _panelColor.Controls.Add(_buttonHighlightColor2);
+            _panelColor.Controls.Add(_buttonHighlightColor3);
+            _panelColor.Controls.Add(_buttonHighlightColor4);
             _panelColor.Location = new Point(167, 6);
             _panelColor.Name = "_panelColor";
             _panelColor.Size = new Size(391, 27);
@@ -7860,6 +7864,71 @@ namespace LearningAssistant.Forms.Pdf
             _buttonColorMore.Text = "+";
             _buttonColorMore.UseVisualStyleBackColor = false;
             _buttonColorMore.Click += ButtonColorMore_Click;
+            // 
+            // _buttonHighlightColor0
+            // 
+            _buttonHighlightColor0.BackColor = Color.FromArgb(255, 255, 185);
+            _buttonHighlightColor0.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
+            _buttonHighlightColor0.FlatAppearance.BorderSize = 1;
+            _buttonHighlightColor0.FlatStyle = FlatStyle.Flat;
+            _buttonHighlightColor0.Location = new Point(2, 4);
+            _buttonHighlightColor0.Name = "_buttonHighlightColor0";
+            _buttonHighlightColor0.Size = new Size(22, 22);
+            _buttonHighlightColor0.TabIndex = 200;
+            _buttonHighlightColor0.UseVisualStyleBackColor = false;
+            _buttonHighlightColor0.Visible = false;
+            // 
+            // _buttonHighlightColor1
+            // 
+            _buttonHighlightColor1.BackColor = Color.FromArgb(185, 255, 185);
+            _buttonHighlightColor1.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
+            _buttonHighlightColor1.FlatAppearance.BorderSize = 1;
+            _buttonHighlightColor1.FlatStyle = FlatStyle.Flat;
+            _buttonHighlightColor1.Location = new Point(30, 4);
+            _buttonHighlightColor1.Name = "_buttonHighlightColor1";
+            _buttonHighlightColor1.Size = new Size(22, 22);
+            _buttonHighlightColor1.TabIndex = 201;
+            _buttonHighlightColor1.UseVisualStyleBackColor = false;
+            _buttonHighlightColor1.Visible = false;
+            // 
+            // _buttonHighlightColor2
+            // 
+            _buttonHighlightColor2.BackColor = Color.FromArgb(185, 237, 255);
+            _buttonHighlightColor2.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
+            _buttonHighlightColor2.FlatAppearance.BorderSize = 1;
+            _buttonHighlightColor2.FlatStyle = FlatStyle.Flat;
+            _buttonHighlightColor2.Location = new Point(58, 4);
+            _buttonHighlightColor2.Name = "_buttonHighlightColor2";
+            _buttonHighlightColor2.Size = new Size(22, 22);
+            _buttonHighlightColor2.TabIndex = 202;
+            _buttonHighlightColor2.UseVisualStyleBackColor = false;
+            _buttonHighlightColor2.Visible = false;
+            // 
+            // _buttonHighlightColor3
+            // 
+            _buttonHighlightColor3.BackColor = Color.FromArgb(255, 237, 240);
+            _buttonHighlightColor3.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
+            _buttonHighlightColor3.FlatAppearance.BorderSize = 1;
+            _buttonHighlightColor3.FlatStyle = FlatStyle.Flat;
+            _buttonHighlightColor3.Location = new Point(86, 4);
+            _buttonHighlightColor3.Name = "_buttonHighlightColor3";
+            _buttonHighlightColor3.Size = new Size(22, 22);
+            _buttonHighlightColor3.TabIndex = 203;
+            _buttonHighlightColor3.UseVisualStyleBackColor = false;
+            _buttonHighlightColor3.Visible = false;
+            // 
+            // _buttonHighlightColor4
+            // 
+            _buttonHighlightColor4.BackColor = Color.FromArgb(255, 230, 185);
+            _buttonHighlightColor4.FlatAppearance.BorderColor = Color.FromArgb(200, 200, 200);
+            _buttonHighlightColor4.FlatAppearance.BorderSize = 1;
+            _buttonHighlightColor4.FlatStyle = FlatStyle.Flat;
+            _buttonHighlightColor4.Location = new Point(114, 4);
+            _buttonHighlightColor4.Name = "_buttonHighlightColor4";
+            _buttonHighlightColor4.Size = new Size(22, 22);
+            _buttonHighlightColor4.TabIndex = 204;
+            _buttonHighlightColor4.UseVisualStyleBackColor = false;
+            _buttonHighlightColor4.Visible = false;
             // 
             // _buttonUndoAnnotation
             // 
