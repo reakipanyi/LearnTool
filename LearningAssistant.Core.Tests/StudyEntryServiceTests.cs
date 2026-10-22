@@ -114,6 +114,9 @@ public class StudyEntryServiceTests
         public IReadOnlyList<LearningItem> Load(string userId, SubjectType subject, SubCategoryType subCategory)
             => ItemsFor(subject, subCategory);
 
+        public IReadOnlyList<LearningItem> LoadAll(string userId)
+            => _items.Values.SelectMany(list => list).ToList();
+
         public void Upsert(string userId, SubjectType subject, SubCategoryType subCategory, LearningItem item)
             => ItemsFor(subject, subCategory).Add(item);
 

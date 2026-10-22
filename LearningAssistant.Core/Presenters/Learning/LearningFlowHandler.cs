@@ -640,6 +640,10 @@ namespace LearningAssistant.Presenters
                 bool sortChanged = newSortOrder != _studyEngine.CurrentSortOrder;
                 bool userIdChanged = newUserId != _currentUserId;
 
+                // P3：筛选条件（知识点/适龄段/重要等级/来源）变化时也需要按新条件重载队列
+                var newFilterKey = _view.CurrentContext.GetFilterKey();
+                bool filterChanged = !string.Equals(newFilterKey, _studyEngine.CurrentProgressKey, StringComparison.Ordinal);
+
                 if (subjectChanged)
                 {
                     _currentSubject = newSubject;
@@ -662,7 +666,7 @@ namespace LearningAssistant.Presenters
                     _currentUserId = newUserId;
                 }
 
-                if (subjectChanged || subCategoryChanged || userIdChanged)
+                if (subjectChanged || subCategoryChanged || userIdChanged || filterChanged)
                 {
                     string userId = string.IsNullOrWhiteSpace(_currentUserId) ? Constants.DefaultUserId : _currentUserId;
                     var context = _view.CurrentContext with { UserId = userId, SubCategory = _currentSubCategory, WordBankFile = "" };

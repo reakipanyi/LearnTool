@@ -1,8 +1,10 @@
 using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Models.Config;
+using LearningAssistant.Models.Learning;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
+using LearningAssistant.Services.Practice;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -38,6 +40,7 @@ namespace LearningAssistant.Forms.Learning
         private bool _disposed = false;
         private readonly Dictionary<string, Color> _buttonOriginalColors = new();
         private Button buttonLoadPending;
+        private Button buttonPreview;
 
         public ContentEditorForm(ILogger<ContentEditorForm> logger, AppConfig appConfig, IAIPanelPopupService aiPanelPopupService, IThemeService themeService, Services.Learning.IPendingContentService? pendingContentService = null)
         {
@@ -647,6 +650,263 @@ namespace LearningAssistant.Forms.Learning
             ShowMessage($"已加载 {pendingItems.Count} 条待添加内容到JSON编辑区，请编辑后保存");
         }
 
+        /// <summary>
+        /// 试学预览（P3）：用当前表格行构造学习项，弹窗展示内容并提供朗读/跟读/听写入口。
+        /// </summary>
+        private void ButtonPreview_Click(object? sender, EventArgs e)
+        {
+            var item = BuildPreviewItem();
+            if (item == null)
+            {
+                ShowMessage("请先在表格中选择要试学的内容");
+                return;
+            }
+
+            using var form = new ContentPreviewForm(item);
+            form.StartPosition = FormStartPosition.CenterParent;
+            form.ShowDialog(this);
+        }
+
+        /// <summary>
+        /// 将表格当前行转为 LearningItem（复用 JSON 转换器，兼容各学科的不同内容列名）。
+        /// </summary>
+        private LearningItem? BuildPreviewItem()
+        {
+            var row = dataGridView.CurrentRow ?? dataGridView.SelectedRows.Cast<DataGridViewRow>().FirstOrDefault();
+            if (row?.DataBoundItem is not DataRowView dataRowView)
+            {
+                return null;
+            }
+
+            var dataRow = dataRowView.Row;
+            var payload = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (DataColumn column in dataRow.Table.Columns)
+            {
+                // 系统列不参与内容解析，避免空 Id/时间覆盖
+                if (column.ColumnName is "Id" or "CreatedAt" or "UpdatedAt")
+                {
+                    continue;
+                }
+
+                var value = dataRow[column]?.ToString();
+                if (!string.IsNullOrWhiteSpace(value))
+                {
+                    payload[column.ColumnName] = value;
+                }
+            }
+
+            if (payload.Count == 0)
+            {
+                return null;
+            }
+
+            try
+            {
+                var json = System.Text.Json.JsonSerializer.Serialize(payload);
+                var options = new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    Converters = { new LearningItemJsonConverter() }
+                };
+                var item = System.Text.Json.JsonSerializer.Deserialize<LearningItem>(json, options);
+                if (item == null || string.IsNullOrWhiteSpace(item.MainContent))
+                {
+                    return null;
+                }
+
+                item.Subject = SelectedSubject;
+                item.SubCategory = SelectedSubCategory;
+                return item;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "构造试学预览学习项失败");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 试学预览窗口：展示主内容/音标/释义/分类信息，并可直接朗读或进入单词练习。
+        /// </summary>
+        private sealed class ContentPreviewForm : Form
+        {
+            private readonly LearningItem _item;
+            private readonly IWordPracticeService? _practice;
+            private readonly Label _labelStatus = new();
+
+            public ContentPreviewForm(LearningItem item)
+            {
+                _item = item ?? throw new ArgumentNullException(nameof(item));
+                _practice = Program.GetService<IWordPracticeService>();
+                InitializeComponent();
+            }
+
+            private void InitializeComponent()
+            {
+                Text = "🎬 试学预览";
+                ClientSize = new Size(660, 480);
+                MinimumSize = new Size(560, 420);
+                BackColor = Color.FromArgb(248, 250, 252);
+                Font = new Font("微软雅黑", 9.5F);
+
+                var root = new TableLayoutPanel
+                {
+                    Dock = DockStyle.Fill,
+                    ColumnCount = 1,
+                    RowCount = 5,
+                    Padding = new Padding(22, 18, 22, 16)
+                };
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 78F));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
+                root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58F));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
+
+                var labelContent = new Label
+                {
+                    Dock = DockStyle.Fill,
+                    Font = new Font("微软雅黑", 24F, FontStyle.Bold),
+                    ForeColor = Color.FromArgb(15, 23, 42),
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    Text = _item.MainContent
+                };
+
+                var phonetic = _item.Pronunciation?.Main;
+                var labelPhonetic = new Label
+                {
+                    Dock = DockStyle.Fill,
+                    Font = new Font("Segoe UI", 12F),
+                    ForeColor = Color.FromArgb(100, 116, 139),
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    Text = string.IsNullOrWhiteSpace(phonetic) ? string.Empty : $"/{phonetic.Trim('/', ' ')}/"
+                };
+
+                var message = _item.Meaning?.Content ?? "（暂无释义）";
+                if (!string.IsNullOrWhiteSpace(_item.Example?.Content))
+                {
+                    message += Environment.NewLine + "例句：" + _item.Example!.Content;
+                }
+
+                var labelMeaning = new Label
+                {
+                    Dock = DockStyle.Fill,
+                    Font = new Font("微软雅黑", 11F),
+                    ForeColor = Color.FromArgb(51, 65, 85),
+                    TextAlign = ContentAlignment.TopLeft,
+                    Text = message
+                };
+
+                var knowledgePoint = string.IsNullOrWhiteSpace(_item.KnowledgePointPath)
+                    ? "未分类"
+                    : _item.KnowledgePointPath;
+                var labelMeta = new Label
+                {
+                    Dock = DockStyle.Fill,
+                    Font = new Font("微软雅黑", 9F),
+                    ForeColor = Color.FromArgb(100, 116, 139),
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    Text = $"分类：{SubjectSubCategoryMapping.GetSubjectDisplayName(_item.Subject)} / "
+                        + $"{SubjectSubCategoryMapping.GetSubCategoryDisplayName(_item.SubCategory)}"
+                        + $"{Environment.NewLine}知识点：{knowledgePoint}　适龄段：{_item.AgeRange.ToDisplayString()}"
+                        + $"　重要等级：{_item.Importance.ToDisplayString()}"
+                        + $"{Environment.NewLine}难度：{_item.ContentDifficulty}　来源：{_item.SourceType.ToDisplayString()}"
+                };
+
+                var buttonPanel = new FlowLayoutPanel
+                {
+                    Dock = DockStyle.Fill,
+                    FlowDirection = FlowDirection.LeftToRight,
+                    WrapContents = false,
+                    Padding = new Padding(0, 6, 0, 0)
+                };
+
+                var buttonSpeak = CreateButton("🔊 朗读", Color.FromArgb(59, 130, 246));
+                buttonSpeak.Click += ButtonSpeak_Click;
+                var buttonShadow = CreateButton("🗣 跟读", Color.FromArgb(34, 197, 94));
+                buttonShadow.Click += (_, _) => StartPractice(false);
+                var buttonDictation = CreateButton("⌨️ 听写", Color.FromArgb(249, 115, 22));
+                buttonDictation.Click += (_, _) => StartPractice(true);
+                var buttonClose = CreateButton("关闭", Color.FromArgb(100, 116, 139));
+                buttonClose.DialogResult = DialogResult.Cancel;
+
+                _labelStatus.Dock = DockStyle.Fill;
+                _labelStatus.Font = new Font("微软雅黑", 9F);
+                _labelStatus.ForeColor = Color.FromArgb(100, 116, 139);
+                _labelStatus.TextAlign = ContentAlignment.MiddleLeft;
+
+                buttonPanel.Controls.Add(buttonSpeak);
+                buttonPanel.Controls.Add(buttonShadow);
+                buttonPanel.Controls.Add(buttonDictation);
+                buttonPanel.Controls.Add(buttonClose);
+
+                root.Controls.Add(labelContent, 0, 0);
+                root.Controls.Add(labelPhonetic, 0, 1);
+                root.Controls.Add(labelMeaning, 0, 2);
+                root.Controls.Add(labelMeta, 0, 3);
+                root.Controls.Add(buttonPanel, 0, 4);
+
+                var statusPanel = new Panel { Dock = DockStyle.Bottom, Height = 26, Padding = new Padding(22, 0, 22, 0) };
+                statusPanel.Controls.Add(_labelStatus);
+
+                Controls.Add(root);
+                Controls.Add(statusPanel);
+                CancelButton = buttonClose;
+            }
+
+            private static Button CreateButton(string text, Color backColor)
+            {
+                return new Button
+                {
+                    Text = text,
+                    Size = new Size(96, 34),
+                    Margin = new Padding(0, 0, 10, 0),
+                    FlatStyle = FlatStyle.Flat,
+                    FlatAppearance = { BorderSize = 0 },
+                    BackColor = backColor,
+                    ForeColor = Color.White,
+                    Font = new Font("微软雅黑", 9.5F, FontStyle.Bold),
+                    Cursor = Cursors.Hand
+                };
+            }
+
+            private async void ButtonSpeak_Click(object? sender, EventArgs e)
+            {
+                if (_practice == null)
+                {
+                    _labelStatus.Text = "朗读服务不可用";
+                    return;
+                }
+
+                try
+                {
+                    await _practice.PlayModelAsync(_item);
+                    _labelStatus.Text = "已播放示范发音";
+                }
+                catch (Exception ex)
+                {
+                    _labelStatus.Text = "朗读失败：" + ex.Message;
+                }
+            }
+
+            private void StartPractice(bool startInDictation)
+            {
+                if (_practice == null)
+                {
+                    _labelStatus.Text = "练习服务不可用";
+                    return;
+                }
+
+                using var form = new WordPracticeForm(
+                    _item,
+                    _practice,
+                    Program.GetService<ILogger<WordPracticeForm>>(),
+                    Program.GetService<IThemeService>(),
+                    startInDictation);
+                form.StartPosition = FormStartPosition.CenterParent;
+                form.ShowDialog(this);
+            }
+        }
+
 
         private void InitializeComponent()
         {
@@ -816,6 +1076,24 @@ namespace LearningAssistant.Forms.Learning
             buttonLoadPending.Click += ButtonLoadPending_Click;
             buttonLoadPending.MouseEnter += Button_HoverEnter;
             buttonLoadPending.MouseLeave += Button_HoverLeave;
+            //
+            // buttonPreview
+            //
+            buttonPreview = new Button();
+            buttonPreview.BackColor = Color.FromArgb(63, 81, 181);
+            buttonPreview.FlatAppearance.BorderSize = 0;
+            buttonPreview.FlatStyle = FlatStyle.Flat;
+            buttonPreview.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            buttonPreview.ForeColor = Color.White;
+            buttonPreview.Location = new Point(750, 3);
+            buttonPreview.Name = "buttonPreview";
+            buttonPreview.Size = new Size(103, 42);
+            buttonPreview.TabIndex = 7;
+            buttonPreview.Text = "🎬 试学";
+            buttonPreview.UseVisualStyleBackColor = false;
+            buttonPreview.Click += ButtonPreview_Click;
+            buttonPreview.MouseEnter += Button_HoverEnter;
+            buttonPreview.MouseLeave += Button_HoverLeave;
             // 
             // statusStrip
             // 
@@ -994,6 +1272,7 @@ namespace LearningAssistant.Forms.Learning
             buttonPanel.Controls.Add(buttonExport);
             buttonPanel.Controls.Add(buttonGenerateAI);
             buttonPanel.Controls.Add(buttonLoadPending);
+            buttonPanel.Controls.Add(buttonPreview);
             buttonPanel.Dock = DockStyle.Fill;
             buttonPanel.Location = new Point(3, 696);
             buttonPanel.Name = "buttonPanel";

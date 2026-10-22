@@ -10,7 +10,10 @@ namespace LearningAssistant.Abstractions
         void OpenEditorWindowWithContext(string? text, string? language, string? subCategory);
         void OpenStatisticsWindow();
         void OpenLearningManagementWindow();
-        void OpenPdfReaderWindow();
+        /// <summary>
+        /// 打开 PDF 阅读器。可选直接定位到指定文件的指定页（学习项回跳原文用）。
+        /// </summary>
+        void OpenPdfReaderWindow(string? pdfPath = null, int pageIndex = -1);
         void OpenNotesWindow();
         void OpenAIWebViewWindow(string? initialPrompt = null);
         void OpenWordMatchGameWindow();

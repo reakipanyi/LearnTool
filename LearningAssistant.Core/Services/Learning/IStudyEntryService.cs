@@ -48,6 +48,11 @@ namespace LearningAssistant.Services.Learning
 
         Task<IReadOnlyList<StudyEntryResult>> AddRangeAsync(
             IEnumerable<StudyEntryRequest> requests, CancellationToken ct = default);
+
+        /// <summary>
+        /// 查询某 PDF 某页已加入学习的个人条目（按来源锚点匹配，兼容旧 ExtendedProperties）。
+        /// </summary>
+        IReadOnlyList<LearningItem> GetByPdfPage(string pdfPath, int pageIndex);
     }
 
     public sealed class StudyEntryService : IStudyEntryService
@@ -66,6 +71,40 @@ namespace LearningAssistant.Services.Learning
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _session = session ?? throw new ArgumentNullException(nameof(session));
             _logger = logger;
+        }
+
+        public IReadOnlyList<LearningItem> GetByPdfPage(string pdfPath, int pageIndex)
+        {
+            if (string.IsNullOrWhiteSpace(pdfPath) || pageIndex < 0)
+                return Array.Empty<LearningItem>();
+
+            var userId = string.IsNullOrWhiteSpace(_session.CurrentUserId)
+                ? Constants.DefaultUserId
+                : _session.CurrentUserId;
+
+            return _store.LoadAll(userId)
+                .Where(item => IsFromPdfPage(item, pdfPath, pageIndex))
+                .ToList();
+        }
+
+        private static bool IsFromPdfPage(LearningItem item, string pdfPath, int pageIndex)
+        {
+            if (item.SourceRef != null)
+            {
+                return item.SourceRef.HasPdfAnchor
+                    && item.SourceRef.PageIndex == pageIndex
+                    && string.Equals(item.SourceRef.PdfPath, pdfPath, StringComparison.OrdinalIgnoreCase);
+            }
+
+            var legacyPath = item.GetExtendedProperty("SourcePdfPath", string.Empty);
+            if (string.IsNullOrWhiteSpace(legacyPath)
+                || !string.Equals(legacyPath, pdfPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var legacyPage = item.GetExtendedProperty("SourcePageIndex", string.Empty);
+            return int.TryParse(legacyPage, out var parsedPage) && parsedPage == pageIndex;
         }
 
         public Task<StudyEntryResult> AddAsync(StudyEntryRequest request, CancellationToken ct = default)

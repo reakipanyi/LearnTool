@@ -276,7 +276,7 @@ namespace LearningAssistant.Managers
             ShowScopedForm<LearningManagementForm>();
         }
 
-        public void OpenPdfReaderWindow()
+        public void OpenPdfReaderWindow(string? pdfPath = null, int pageIndex = -1)
         {
             _logger.LogInformation("Opening PDF reader window");
 
@@ -291,6 +291,13 @@ namespace LearningAssistant.Managers
 
                 form.SetPresenter(presenter);
                 form.StartPosition = FormStartPosition.CenterParent;
+                // 从学习项回跳：窗口显示后加载指定 PDF 并定位到来源页
+                if (!string.IsNullOrWhiteSpace(pdfPath) && File.Exists(pdfPath))
+                {
+                    var targetPath = pdfPath;
+                    var targetPage = pageIndex;
+                    form.Shown += async (_, _) => await LoadPdfAtPageAsync(presenter, targetPath, targetPage);
+                }
                 ShowNonModalScopedForm(scope, form);
             }
             catch (Exception ex)
@@ -323,6 +330,23 @@ namespace LearningAssistant.Managers
         //        throw;
         //    }
         //}
+        /// <summary>
+        /// 加载指定 PDF 并定位到来源页（学习项回跳原文）。
+        /// </summary>
+        private async Task LoadPdfAtPageAsync(PdfPresenter presenter, string pdfPath, int pageIndex)
+        {
+            try
+            {
+                await presenter.LoadPdf(pdfPath);
+                if (pageIndex >= 0)
+                    await presenter.RenderPage(pageIndex);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to open PDF at page {PageIndex} from learning source: {PdfPath}", pageIndex, pdfPath);
+            }
+        }
+
         public void OpenNotesWindow()
         {
             _logger.LogInformation("Opening notes window");

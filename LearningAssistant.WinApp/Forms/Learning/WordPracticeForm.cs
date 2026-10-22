@@ -20,6 +20,7 @@ namespace LearningAssistant.Forms.Learning
         private readonly ILogger<WordPracticeForm>? _logger;
         private readonly IThemeService? _themeService;
         private readonly ISubtitleParser? _subtitleParser;
+        private readonly bool _startInDictation;
 
         private readonly Panel _headerPanel = new();
         private readonly Label _labelWord = new();
@@ -56,12 +57,14 @@ namespace LearningAssistant.Forms.Learning
             LearningItem item,
             IWordPracticeService practice,
             ILogger<WordPracticeForm>? logger = null,
-            IThemeService? themeService = null)
+            IThemeService? themeService = null,
+            bool startInDictation = false)
         {
             _item = item ?? throw new ArgumentNullException(nameof(item));
             _practice = practice ?? throw new ArgumentNullException(nameof(practice));
             _logger = logger;
             _themeService = themeService;
+            _startInDictation = startInDictation;
             _subtitleParser = Program.GetService<ISubtitleParser>();
 
             InitializeComponent();
@@ -147,6 +150,9 @@ namespace LearningAssistant.Forms.Learning
             _tabDictation.Text = "⌨️ 听写";
             _tabs.TabPages.Add(_tabShadow);
             _tabs.TabPages.Add(_tabDictation);
+
+            if (_startInDictation)
+                _tabs.SelectedTab = _tabDictation;
         }
 
         private void BuildShadowTab()

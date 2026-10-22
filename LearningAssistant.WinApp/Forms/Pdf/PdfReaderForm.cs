@@ -11,6 +11,7 @@ using LearningAssistant.Presenters;
 using LearningAssistant.Services;
 using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Media;
+using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
@@ -106,6 +107,13 @@ namespace LearningAssistant.Forms.Pdf
         private Panel _panelThumbnails;
         private FlowLayoutPanel _flowLayoutPanelThumbnails;
         private TabPage _tabPageTranslate;
+        private TabPage _tabPageStudy;
+        private Label? _studyHighlightCount;
+        private Label? _studyLearningCount;
+        private Label? _studySentenceCount;
+        private Button? _buttonStudyAddHighlights;
+        private Button? _buttonStudyFlashcards;
+        private Button? _buttonStudyShadowing;
         private TextBox _textBoxOriginal;
         private Label _labelOriginal;
         private Label _labelTranslation;
@@ -802,7 +810,13 @@ namespace LearningAssistant.Forms.Pdf
         public int CurrentPageIndex
         {
             get => _currentPageIndex;
-            set => _currentPageIndex = value;
+            set
+            {
+                _currentPageIndex = value;
+                // 停留在「学习」Tab 时翻页需要同步刷新本页统计
+                if (_tabControlLeft != null && _tabControlLeft.SelectedTab == _tabPageStudy)
+                    UpdateStudyTab();
+            }
         }
 
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -3018,7 +3032,7 @@ namespace LearningAssistant.Forms.Pdf
         }
 
         /// <summary>生成指定页码范围的 AI 闪卡，预览勾选后加入闪卡复习队列</summary>
-        private async Task GenerateFlashcardsAsync()
+        private async Task GenerateFlashcardsAsync(PdfAiFlashcardOptions? presetOptions = null)
         {
             if (_pdfAiService == null)
             {
@@ -3036,10 +3050,17 @@ namespace LearningAssistant.Forms.Pdf
                 return;
             }
 
-            using var optionsDialog = new PdfAiFlashcardDialog(_presenter.PageCount);
-            if (optionsDialog.ShowDialog(this) != DialogResult.OK) return;
-
-            var options = optionsDialog.Options;
+            PdfAiFlashcardOptions options;
+            if (presetOptions != null)
+            {
+                options = presetOptions;
+            }
+            else
+            {
+                using var optionsDialog = new PdfAiFlashcardDialog(_presenter.PageCount);
+                if (optionsDialog.ShowDialog(this) != DialogResult.OK) return;
+                options = optionsDialog.Options;
+            }
             // 全部页面生成等同全文上传，首次需要隐私确认
             if (options.StartPageIndex < 0 && !EnsureWholeDocumentAiConsent("AI 闪卡生成"))
                 return;
@@ -6294,10 +6315,259 @@ namespace LearningAssistant.Forms.Pdf
             BuildTranslateSidebar();
             BuildHighlightSidebar();
             BuildAudioSidebar();
+            BuildStudySidebar();
 
             // 夜间状态按窗口记录，避免新建窗口覆盖其他阅读窗口的主题
             PdfSidebarTheme.SetWindowDark(this, _nightModeManager?.IsNightMode ?? false);
             PdfSidebarTheme.ApplyRecursive(_tabControlLeft);
+        }
+
+        /// <summary>
+        /// 「学习」Tab（P3）：汇总本页高亮/已加入学习项/可跟读句子，并提供一键动作。
+        /// </summary>
+        private void BuildStudySidebar()
+        {
+            if (_tabPageStudy == null) return;
+
+            _tabPageStudy.Controls.Clear();
+
+            var root = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 3,
+                BackColor = PdfSidebarTheme.Background,
+                Padding = new Padding(6, 2, 6, 6)
+            };
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 150F));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+            var header = new SidebarHeaderBar("🎯", "学习", "刷新",
+                (_, _) => UpdateStudyTab())
+            {
+                Dock = DockStyle.Fill,
+                Margin = Padding.Empty
+            };
+
+            var overviewCard = new SidebarCard("本页概览")
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 0, 4)
+            };
+            _studyHighlightCount = CreateStudyStatLabel();
+            _studyLearningCount = CreateStudyStatLabel();
+            _studySentenceCount = CreateStudyStatLabel();
+            overviewCard.Body.Controls.Add(_studySentenceCount);
+            overviewCard.Body.Controls.Add(_studyLearningCount);
+            overviewCard.Body.Controls.Add(_studyHighlightCount);
+
+            var actionCard = new SidebarCard("一键操作")
+            {
+                Dock = DockStyle.Fill,
+                Margin = Padding.Empty
+            };
+
+            _buttonStudyAddHighlights = new Button();
+            StyleSidebarButton(_buttonStudyAddHighlights, "➕ 本页高亮全部加入学习", 268, 32);
+            _buttonStudyAddHighlights.Margin = new Padding(0, 0, 0, 6);
+            _buttonStudyAddHighlights.Click += ButtonStudyAddHighlights_Click;
+
+            _buttonStudyFlashcards = new Button();
+            StyleSidebarButton(_buttonStudyFlashcards, "✨ 生成本页闪卡", 268, 32);
+            _buttonStudyFlashcards.Margin = new Padding(0, 0, 0, 6);
+            _buttonStudyFlashcards.Click += ButtonStudyFlashcards_Click;
+
+            _buttonStudyShadowing = new Button();
+            StyleSidebarButton(_buttonStudyShadowing, "✂ 开始本页跟读", 268, 32);
+            _buttonStudyShadowing.Margin = new Padding(0, 0, 0, 6);
+            _buttonStudyShadowing.Click += ButtonStudyShadowing_Click;
+
+            var hint = new Label
+            {
+                AutoSize = true,
+                MaximumSize = new Size(268, 0),
+                Font = new Font("Microsoft YaHei UI", 9F),
+                ForeColor = PdfSidebarTheme.Muted,
+                Margin = new Padding(0, 4, 0, 0),
+                Text = "高亮与闪卡会写入个人学习库，可在学习窗口按来源筛选。"
+            };
+            hint.Tag = "muted";
+
+            var actionLayout = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                AutoScroll = true,
+                BackColor = PdfSidebarTheme.Background,
+                Padding = Padding.Empty
+            };
+            actionLayout.Controls.Add(_buttonStudyAddHighlights);
+            actionLayout.Controls.Add(_buttonStudyFlashcards);
+            actionLayout.Controls.Add(_buttonStudyShadowing);
+            actionLayout.Controls.Add(hint);
+            actionCard.Body.Controls.Add(actionLayout);
+
+            root.Controls.Add(header, 0, 0);
+            root.Controls.Add(overviewCard, 0, 1);
+            root.Controls.Add(actionCard, 0, 2);
+            _tabPageStudy.Controls.Add(root);
+        }
+
+        private static Label CreateStudyStatLabel()
+        {
+            return new Label
+            {
+                AutoSize = false,
+                Dock = DockStyle.Top,
+                Height = 30,
+                Font = new Font("Microsoft YaHei UI", 9.5F),
+                ForeColor = PdfSidebarTheme.Text,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Text = "—"
+            };
+        }
+
+        /// <summary>
+        /// 刷新「学习」Tab 的计数与按钮可用状态。数据量很小，直接同步读取个人学习库。
+        /// </summary>
+        private void UpdateStudyTab()
+        {
+            if (_tabPageStudy == null || _studyHighlightCount == null) return;
+
+            int highlightCount = 0;
+            if (!string.IsNullOrWhiteSpace(_currentPdfPath) && _highlightService != null && _currentPageIndex >= 0)
+            {
+                try
+                {
+                    highlightCount = _highlightService
+                        .GetHighlightsForPage(_currentPdfPath, _currentPageIndex)
+                        .Count(h => !string.IsNullOrWhiteSpace(h.Text));
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "统计本页高亮失败");
+                }
+            }
+
+            int learningCount = 0;
+            try
+            {
+                var studyEntryService = Program.GetService<IStudyEntryService>();
+                if (studyEntryService != null && !string.IsNullOrWhiteSpace(_currentPdfPath) && _currentPageIndex >= 0)
+                    learningCount = studyEntryService.GetByPdfPage(_currentPdfPath, _currentPageIndex).Count;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "统计本页已加入学习项失败");
+            }
+
+            int sentenceCount = CountReadableSentences(_textBoxOriginal?.Text);
+
+            _studyHighlightCount.Text = $"🖍 本页高亮：{highlightCount} 条";
+            _studyLearningCount.Text = $"📚 已加入学习：{learningCount} 项";
+            _studySentenceCount.Text = $"🎙 可跟读句子：{sentenceCount} 句";
+
+            if (_buttonStudyAddHighlights != null)
+                _buttonStudyAddHighlights.Enabled = highlightCount > 0;
+            if (_buttonStudyShadowing != null)
+                _buttonStudyShadowing.Enabled = sentenceCount > 0;
+        }
+
+        private static int CountReadableSentences(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return 0;
+
+            return text
+                .Split(new[] { '.', '!', '?', '。', '！', '？', '\n', '\r', ';', '；' },
+                    StringSplitOptions.RemoveEmptyEntries)
+                .Count(part => part.Trim().Length >= 2);
+        }
+
+        private async void ButtonStudyAddHighlights_Click(object? sender, EventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(_currentPdfPath) || _currentPageIndex < 0)
+            {
+                ShowToast("请先打开 PDF 并定位到需要转换的页面");
+                return;
+            }
+
+            var studyEntryService = Program.GetService<IStudyEntryService>();
+            if (studyEntryService == null)
+            {
+                ShowToast("学习服务不可用");
+                return;
+            }
+
+            try
+            {
+                var highlights = _highlightService?
+                    .GetHighlightsForPage(_currentPdfPath, _currentPageIndex)
+                    .Where(h => !string.IsNullOrWhiteSpace(h.Text))
+                    .ToList() ?? new List<LearningAssistant.Models.Pdf.PdfHighlight>();
+
+                if (highlights.Count == 0)
+                {
+                    ShowToast("本页暂无高亮");
+                    return;
+                }
+
+                if (_buttonStudyAddHighlights != null) _buttonStudyAddHighlights.Enabled = false;
+
+                var requests = highlights.Select(h => new StudyEntryRequest
+                {
+                    Text = h.Text,
+                    Translation = string.IsNullOrWhiteSpace(h.TranslationText) ? null : h.TranslationText,
+                    SourceType = "PdfHighlight",
+                    PdfPath = _currentPdfPath,
+                    PageIndex = _currentPageIndex,
+                    HighlightId = h.Id
+                }).ToList();
+
+                var results = await studyEntryService.AddRangeAsync(requests);
+                var created = results.Count(r => r.Created);
+                var existed = results.Count(r => r.AlreadyExists);
+
+                ShowToast(existed > 0
+                    ? $"已加入 {created} 条高亮（{existed} 条已存在）"
+                    : $"已将 {created} 条高亮加入学习");
+
+                UpdateStudyTab();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "本页高亮批量加入学习失败");
+                ShowToast($"加入学习失败: {ex.Message}");
+                if (_buttonStudyAddHighlights != null) _buttonStudyAddHighlights.Enabled = true;
+            }
+        }
+
+        private async void ButtonStudyFlashcards_Click(object? sender, EventArgs e)
+        {
+            if (_currentPageIndex < 0)
+            {
+                ShowToast("请先打开 PDF");
+                return;
+            }
+
+            await GenerateFlashcardsAsync(new PdfAiFlashcardOptions
+            {
+                StartPageIndex = _currentPageIndex,
+                EndPageIndex = _currentPageIndex
+            });
+            UpdateStudyTab();
+        }
+
+        private void ButtonStudyShadowing_Click(object? sender, EventArgs e)
+        {
+            if (CountReadableSentences(_textBoxOriginal?.Text) == 0)
+            {
+                ShowToast("请先在「翻译」页识别原文，再开始跟读");
+                return;
+            }
+
+            OpenShadowingWindow();
         }
 
         private static void StyleSidebarButton(Button? button, string text, int width, int height = 30)
@@ -6981,6 +7251,7 @@ namespace LearningAssistant.Forms.Pdf
             _panelThumbnails = new Panel();
             _flowLayoutPanelThumbnails = new FlowLayoutPanel();
             _tabPageTranslate = new TabPage();
+            _tabPageStudy = new TabPage();
             _groupBoxProgress = new GroupBox();
             _textBoxTranslation = new SyncedTextBox();
             _buttonSpeakTranslation = new Button();
@@ -8186,6 +8457,7 @@ namespace LearningAssistant.Forms.Pdf
             _tabControlLeft.Controls.Add(_tabPageFiles);
             _tabControlLeft.Controls.Add(_tabPageThumbnails);
             _tabControlLeft.Controls.Add(_tabPageTranslate);
+            _tabControlLeft.Controls.Add(_tabPageStudy);
             _tabControlLeft.Controls.Add(_tabPageBookmarksAndHighlights);
             _tabControlLeft.Controls.Add(_tabPageAudio);
             _tabControlLeft.Dock = DockStyle.Fill;
@@ -8268,6 +8540,17 @@ namespace LearningAssistant.Forms.Pdf
             _flowLayoutPanelThumbnails.Padding = new Padding(6, 6, 0, 6);
             _flowLayoutPanelThumbnails.Size = new Size(316, 998);
             _flowLayoutPanelThumbnails.TabIndex = 0;
+            // 
+            // 
+            // _tabPageStudy
+            // 
+            _tabPageStudy.Location = new Point(4, 26);
+            _tabPageStudy.Name = "_tabPageStudy";
+            _tabPageStudy.Padding = new Padding(3);
+            _tabPageStudy.Size = new Size(322, 1004);
+            _tabPageStudy.TabIndex = 5;
+            _tabPageStudy.Text = "🎯";
+            _tabPageStudy.UseVisualStyleBackColor = true;
             // 
             // _tabPageTranslate
             // 
@@ -8947,6 +9230,8 @@ namespace LearningAssistant.Forms.Pdf
 
             if (_tabControlLeft.SelectedTab == _tabPageTranslate)
                 UpdateTranslateHeaderStatus();
+            else if (_tabControlLeft.SelectedTab == _tabPageStudy)
+                UpdateStudyTab();
             else if (_tabControlLeft.SelectedTab == _tabPageBookmarksAndHighlights)
                 UpdateHighlightEmptyState();
             else if (_tabControlLeft.SelectedTab == _tabPageAudio && _audioSegments?.SelectedIndex == 2)
@@ -8981,6 +9266,7 @@ namespace LearningAssistant.Forms.Pdf
                 "_tabPageFiles" => "文件",
                 "_tabPageThumbnails" => "缩略图",
                 "_tabPageTranslate" => "翻译",
+                "_tabPageStudy" => "学习",
                 "_tabPageBookmarksAndHighlights" => "高亮",
                 "_tabPageAudio" => "音频",
                 _ => page.Text

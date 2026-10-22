@@ -15,6 +15,11 @@ namespace LearningAssistant.Services.Learning
     {
         string GetFilePath(string userId, SubjectType subject, SubCategoryType subCategory);
         IReadOnlyList<LearningItem> Load(string userId, SubjectType subject, SubCategoryType subCategory);
+
+        /// <summary>
+        /// 加载该用户全部个人学习项（跨学科/子类别），用于按来源统计或回跳。
+        /// </summary>
+        IReadOnlyList<LearningItem> LoadAll(string userId);
         void Upsert(string userId, SubjectType subject, SubCategoryType subCategory, LearningItem item);
         bool Remove(string userId, SubjectType subject, SubCategoryType subCategory, string canonicalKey);
     }
@@ -80,6 +85,36 @@ namespace LearningAssistant.Services.Learning
                 _logger?.LogWarning(ex, "Failed to load personal content: {FilePath}", filePath);
                 return Array.Empty<LearningItem>();
             }
+        }
+
+        public IReadOnlyList<LearningItem> LoadAll(string userId)
+        {
+            var contentDir = Path.Combine(_appPaths.GetUserDir(ResolveUserId(userId)), "content");
+            if (!Directory.Exists(contentDir))
+                return Array.Empty<LearningItem>();
+
+            var result = new List<LearningItem>();
+            try
+            {
+                foreach (var filePath in Directory.EnumerateFiles(contentDir, "*.json", SearchOption.AllDirectories))
+                {
+                    try
+                    {
+                        var json = File.ReadAllText(filePath);
+                        result.AddRange(JsonHelper.DeserializeLearningItems(json));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "Failed to load personal content file: {FilePath}", filePath);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Failed to enumerate personal content: {Directory}", contentDir);
+            }
+
+            return result;
         }
 
         public void Upsert(string userId, SubjectType subject, SubCategoryType subCategory, LearningItem item)

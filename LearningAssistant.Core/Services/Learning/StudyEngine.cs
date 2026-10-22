@@ -30,6 +30,8 @@ namespace LearningAssistant.Services.Learning
         public SortOrderType CurrentSortOrder => _state.CurrentSortOrder;
         public bool HasSavedProgress => _state.KnownItems.Count > 0 || _state.UnknownItems.Count > 0;
 
+        public string CurrentProgressKey => _state.ProgressKey;
+
         public StudyEngine(
             IContentLoaderService contentLoaderService,
             IProgressManager progressManager,

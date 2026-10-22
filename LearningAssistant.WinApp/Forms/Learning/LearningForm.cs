@@ -1,4 +1,5 @@
 using LearningAssistant.Common;
+using LearningAssistant.Abstractions;
 using LearningAssistant.Common.Events;
 using LearningAssistant.Common.Themes;
 using LearningAssistant.Forms.UserControls;
@@ -112,6 +113,8 @@ namespace LearningAssistant.Forms.Learning
         private LearningStatsView _statsView = null!;
         private LearningProcessStatsView _statsProgressView = null!;
         private LearningSettingsView _settingsView = null!;
+        private LearningFilterView _filterView = null!;
+        private LearningSidePanelView _sidePanelView = null!;
         #endregion
 
         #region === 控件访问器 ===
@@ -213,6 +216,9 @@ namespace LearningAssistant.Forms.Learning
 
             _themeService.RegisterThemeable(this);
 
+            // 初始化知识点筛选下拉（失败不影响学习主流程）
+            RefreshFilterKnowledgePoints();
+
             // 自动播放计时器
             _autoPlayTimer.Interval = 5000;
             _autoPlayTimer.Tick += AutoPlayTimer_Tick;
@@ -231,6 +237,14 @@ namespace LearningAssistant.Forms.Learning
             _buttonsView.AchievementClicked += ButtonAchievement_Click;
             _buttonsView.WrongBookClicked += ButtonWrongBook_Click;
             _buttonsView.PracticeClicked += ButtonPractice_Click;
+
+            // P3：顶部筛选条 + 右侧可折叠“来源/练习”面板
+            _filterView.FilterChanged += FilterView_FilterChanged;
+            _filterView.SidePanelToggleRequested += (_, _) => SetSidePanelOpen(!IsSidePanelOpen());
+            _sidePanelView.CollapseRequested += (_, _) => SetSidePanelOpen(false);
+            _sidePanelView.ShadowingRequested += (_, _) => OpenWordPractice(startInDictation: false);
+            _sidePanelView.DictationRequested += (_, _) => OpenWordPractice(startInDictation: true);
+            _sidePanelView.JumpToSourceRequested += SidePanelView_JumpToSourceRequested;
 
             _settingsView.RadioStudyMode.CheckedChanged += RadioSetting_CheckedChanged;
             _settingsView.RadioQuickMode.CheckedChanged += RadioSetting_CheckedChanged;
@@ -282,6 +296,9 @@ namespace LearningAssistant.Forms.Learning
             {
                 middlePanel.BackColor = colors.Background;
             }
+
+            _filterView?.ApplyTheme(colors);
+            _sidePanelView?.ApplyTheme(colors);
 
             if (_buttonsView != null && _buttonsView.ButtonsPanel != null)
             {
@@ -733,6 +750,7 @@ namespace LearningAssistant.Forms.Learning
             set
             {
                 _currentItem = value;
+                _sidePanelView?.UpdateItem(value);
                 if (_currentItem != null)
                 {
                     UpdateLearningCard();
@@ -984,7 +1002,11 @@ namespace LearningAssistant.Forms.Learning
             Subject: Subject,
             SubCategory: SubCategory,
             Mode: LearningMode,
-            SortOrder: SortOrder
+            SortOrder: SortOrder,
+            KnowledgePointId: _filterView?.SelectedKnowledgePointId,
+            AgeRange: _filterView?.SelectedAgeRange,
+            Importance: _filterView?.SelectedImportance,
+            SourceType: _filterView?.SelectedSourceType
         );
 
 
@@ -1104,6 +1126,12 @@ namespace LearningAssistant.Forms.Learning
             _statsView = new LearningStatsView();
             _statsProgressView = new LearningProcessStatsView();
             _settingsView = new LearningSettingsView();
+            _filterView = new LearningFilterView();
+            _sidePanelView = new LearningSidePanelView
+            {
+                Dock = DockStyle.Fill,
+                Visible = false
+            };
             mainTableLayoutPanel = new TableLayoutPanel();
             middlePanel = new Panel();
             middleTableLayoutPanel = new TableLayoutPanel();
@@ -1250,13 +1278,16 @@ namespace LearningAssistant.Forms.Learning
             // 
             // mainTableLayoutPanel
             // 
-            mainTableLayoutPanel.ColumnCount = 3;
+            // 第 4 列为可折叠的“来源/练习”面板，默认 0 宽（折叠）
+            mainTableLayoutPanel.ColumnCount = 4;
             mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 266F));
             mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220F));
+            mainTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 0F));
             mainTableLayoutPanel.Controls.Add(_listView, 0, 0);
             mainTableLayoutPanel.Controls.Add(middlePanel, 1, 0);
             mainTableLayoutPanel.Controls.Add(_settingsView, 2, 0);
+            mainTableLayoutPanel.Controls.Add(_sidePanelView, 3, 0);
             mainTableLayoutPanel.Dock = DockStyle.Fill;
             mainTableLayoutPanel.Location = new Point(0, 0);
             mainTableLayoutPanel.Name = "mainTableLayoutPanel";
@@ -1278,7 +1309,9 @@ namespace LearningAssistant.Forms.Learning
             // 
             middleTableLayoutPanel.ColumnCount = 1;
             middleTableLayoutPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            middleTableLayoutPanel.Controls.Add(_contentView, 0, 0);
+            // 第 0 行为筛选条（P3），内容区下移到第 1 行保持沉浸式卡片为视觉主体
+            middleTableLayoutPanel.Controls.Add(_filterView, 0, 0);
+            middleTableLayoutPanel.Controls.Add(_contentView, 0, 1);
             middleTableLayoutPanel.Controls.Add(_buttonsView, 0, 2);
             middleTableLayoutPanel.Controls.Add(_statsProgressView, 0, 3);
             middleTableLayoutPanel.Controls.Add(_statsView, 0, 4);
@@ -1286,8 +1319,8 @@ namespace LearningAssistant.Forms.Learning
             middleTableLayoutPanel.Location = new Point(0, 0);
             middleTableLayoutPanel.Name = "middleTableLayoutPanel";
             middleTableLayoutPanel.RowCount = 5;
+            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
             middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 0F));
             middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 74F));
             middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 53F));
             middleTableLayoutPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 35F));
@@ -1700,7 +1733,12 @@ namespace LearningAssistant.Forms.Learning
         /// <summary>
         /// 单词跟读/听写入口（P2）：以当前学习项打开练习窗口。
         /// </summary>
-        private void ButtonPractice_Click(object? sender, EventArgs e)
+        private void ButtonPractice_Click(object? sender, EventArgs e) => OpenWordPractice(startInDictation: false);
+
+        /// <summary>
+        /// 打开当前学习项的单词跟读/听写窗口。
+        /// </summary>
+        private void OpenWordPractice(bool startInDictation)
         {
             if (_currentItem == null)
             {
@@ -1718,7 +1756,8 @@ namespace LearningAssistant.Forms.Learning
                     _currentItem,
                     wordPracticeService,
                     practiceLogger,
-                    practiceThemeService);
+                    practiceThemeService,
+                    startInDictation);
                 form.StartPosition = FormStartPosition.CenterParent;
                 form.ShowDialog(this);
             }
@@ -2220,8 +2259,74 @@ namespace LearningAssistant.Forms.Learning
 
         private void ComboBoxSubject_SelectedIndexChanged(object? sender, EventArgs e)
         {
+            // 学科变化后知识点树不同，先刷新筛选下拉再触发重载
+            RefreshFilterKnowledgePoints();
             if (!_settingsChangedEventsSuspended)
                 SettingsChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void FilterView_FilterChanged(object? sender, EventArgs e)
+        {
+            if (!_settingsChangedEventsSuspended)
+                SettingsChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// 刷新筛选条中的知识点下拉项（树形展开为带缩进的平铺项）。
+        /// </summary>
+        private void RefreshFilterKnowledgePoints()
+        {
+            try
+            {
+                var taxonomyService = Program.GetService<ILearningTaxonomyService>();
+                if (taxonomyService == null)
+                    return;
+
+                var nodes = taxonomyService.GetTree(Subject, GetCurrentUserId());
+                _filterView.RefreshKnowledgePoints(nodes);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "刷新知识点筛选失败");
+            }
+        }
+
+        private bool IsSidePanelOpen()
+        {
+            return mainTableLayoutPanel.ColumnStyles.Count > 3
+                && mainTableLayoutPanel.ColumnStyles[3].Width > 0F;
+        }
+
+        private void SetSidePanelOpen(bool isOpen)
+        {
+            if (mainTableLayoutPanel.ColumnStyles.Count <= 3)
+                return;
+
+            mainTableLayoutPanel.ColumnStyles[3].Width = isOpen ? 288F : 0F;
+            _sidePanelView.Visible = isOpen;
+            if (isOpen)
+                _sidePanelView.UpdateItem(_currentItem);
+            _filterView.SetSidePanelOpen(isOpen);
+        }
+
+        private void SidePanelView_JumpToSourceRequested(object? sender, SourceJumpEventArgs e)
+        {
+            try
+            {
+                var windowManager = Program.GetService<IWindowManager>();
+                if (windowManager == null)
+                {
+                    ShowToast("窗口服务不可用，无法打开原文", ToastType.Warning);
+                    return;
+                }
+
+                windowManager.OpenPdfReaderWindow(e.PdfPath, e.PageIndex);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "回跳 PDF 原文失败");
+                ShowToast($"打开原文失败: {ex.Message}", ToastType.Error);
+            }
         }
 
         private void ComboBoxSubCategory_SelectedIndexChanged(object? sender, EventArgs e)

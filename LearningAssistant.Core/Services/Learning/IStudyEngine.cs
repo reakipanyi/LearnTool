@@ -31,6 +31,11 @@ namespace LearningAssistant.Services.Learning
         bool HasSavedProgress { get; }
         List<LearningItem> GetAllItems();
 
+        /// <summary>
+        /// 当前筛选指纹（空字符串表示无筛选），用于判断筛选条件是否变化需要重载队列。
+        /// </summary>
+        string CurrentProgressKey { get; }
+
         string GetProgressSummary(string userId, SubjectType subject, SubCategoryType subCategory);
         int GetKnownCount(string userId, SubCategoryType subCategory);
         int GetUnknownCount(string userId, SubCategoryType subCategory);
