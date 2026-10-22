@@ -264,6 +264,9 @@
 		<Compile Update="Forms\Pdf\PdfRecordingPanel.cs">
 			<SubType>UserControl</SubType>
 		</Compile>
+		<Compile Update="Forms\Pdf\PdfReaderForm.cs">
+			<SubType>Form</SubType>
+		</Compile>
 		<Compile Update="Forms\Pdf\PdfSearchDialog.cs">
 			<SubType>Form</SubType>
 		</Compile>
