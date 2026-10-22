@@ -11,18 +11,19 @@ namespace LearningAssistant.Services.Quiz
     /// </summary>
     public class VoiceRecallService : IVoiceRecallService
     {
-        private readonly IWebSpeechService _speechService;
+        private readonly IWebSpeechService? _speechService;
         private readonly IAiQuestionService _aiService;
         private readonly ILogger<VoiceRecallService>? _logger;
 
-        public bool IsVoiceSupported => _speechService.IsRecognitionSupported;
+        // 当前仓库未提供 IWebSpeechService 实现时降级为“不可用”，避免服务无法从 DI 解析
+        public bool IsVoiceSupported => _speechService?.IsRecognitionSupported ?? false;
 
         public VoiceRecallService(
-            IWebSpeechService speechService,
+            IWebSpeechService? speechService,
             IAiQuestionService aiService,
             ILogger<VoiceRecallService>? logger = null)
         {
-            _speechService = speechService ?? throw new ArgumentNullException(nameof(speechService));
+            _speechService = speechService;
             _aiService = aiService ?? throw new ArgumentNullException(nameof(aiService));
             _logger = logger;
         }
@@ -39,6 +40,12 @@ namespace LearningAssistant.Services.Quiz
 
             try
             {
+                if (_speechService == null)
+                {
+                    result.Feedback = "当前环境未启用语音识别，暂时无法进行语音回忆";
+                    return result;
+                }
+
                 // 朗读问题
                 _logger?.LogDebug("朗读问题: {Content}", item.Content);
                 await _speechService.SpeakAsync(item.Content);
@@ -110,7 +117,10 @@ namespace LearningAssistant.Services.Quiz
                 }
 
                 // 朗读反馈
-                await _speechService.SpeakAsync(result.GetFeedbackMessage());
+                if (_speechService != null)
+                {
+                    await _speechService.SpeakAsync(result.GetFeedbackMessage());
+                }
 
                 _logger?.LogInformation("评估结果: 得分={Score}, 正确={Correct}", result.Score, result.IsCorrect);
             }
@@ -138,7 +148,10 @@ namespace LearningAssistant.Services.Quiz
             };
 
             // 朗读提示
-            await _speechService.SpeakAsync(hint);
+            if (_speechService != null)
+            {
+                await _speechService.SpeakAsync(hint);
+            }
 
             return hint;
         }

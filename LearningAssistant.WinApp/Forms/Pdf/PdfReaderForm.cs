@@ -3105,7 +3105,7 @@ namespace LearningAssistant.Forms.Pdf
             using var previewDialog = new PdfAiFlashcardPreviewDialog(cards, documentName);
             if (previewDialog.ShowDialog(this) != DialogResult.OK) return;
 
-            int imported = ImportFlashcardsToReview(previewDialog.SelectedCards);
+            int imported = await ImportFlashcardsToReviewAsync(previewDialog.SelectedCards);
             ShowMessage(imported > 0
                 ? $"已把 {imported} 张闪卡加入复习队列"
                 : "未能加入复习队列，请检查复习服务",
@@ -3157,8 +3157,11 @@ namespace LearningAssistant.Forms.Pdf
             return cards;
         }
 
-        /// <summary>把闪卡写入间隔重复复习队列，记录来源文档便于后续筛选</summary>
-        private int ImportFlashcardsToReview(IReadOnlyList<PdfAiFlashcardCard> cards)
+        /// <summary>
+        /// 把闪卡写入间隔重复复习队列，记录来源文档便于后续筛选；
+        /// 同时双写统一学习项（P0-4），使闪卡在学习窗口按“来源=PDF 闪卡”可见。
+        /// </summary>
+        private async Task<int> ImportFlashcardsToReviewAsync(IReadOnlyList<PdfAiFlashcardCard> cards)
         {
             if (_spacedRepetitionService == null || cards == null || cards.Count == 0) return 0;
 
@@ -3181,6 +3184,29 @@ namespace LearningAssistant.Forms.Pdf
                         item.Subject = documentName;
                     item.UpdatedAt = DateTime.Now;
                     _spacedRepetitionService.UpdateItem(item);
+
+                    // 双写统一学习项：复习队列之外，学习窗口与统计也能看到该闪卡
+                    if (_studyEntryService != null)
+                    {
+                        try
+                        {
+                            await _studyEntryService.AddAsync(new StudyEntryRequest
+                            {
+                                Text = card.Front,
+                                Translation = string.IsNullOrWhiteSpace(card.Back) ? null : card.Back,
+                                SourceType = "PdfAiFlashcard",
+                                PdfPath = _currentPdfPath,
+                                PageIndex = card.PageNumber > 0
+                                    ? card.PageNumber - 1
+                                    : _currentPageIndex
+                            }).ConfigureAwait(true);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "闪卡写入学习项失败: {Front}", card.Front);
+                        }
+                    }
+
                     imported++;
                 }
                 catch (Exception ex)

@@ -494,4 +494,38 @@ namespace LearningAssistant.Services.Learning
             return new DictationScore(isCorrect, (int)(similarity * 100), actual, string.Empty);
         }
     }
+
+    #region 数据模型
+
+    /// <summary>听写评分结果（从重复的 SpeechService 合并而来）</summary>
+    public class DictationScore
+    {
+        public bool Passed { get; }
+        public int Score { get; }
+        public string RecognizedText { get; }
+        public string Message { get; }
+
+        public DictationScore(bool passed, int score, string recognizedText, string message)
+        {
+            Passed = passed;
+            Score = score;
+            RecognizedText = recognizedText;
+            Message = message;
+        }
+    }
+
+    /// <summary>听写完成事件参数（从重复的 SpeechService 合并而来）</summary>
+    public class DictationResultEventArgs : EventArgs
+    {
+        public string Text { get; }
+        public bool Success { get; }
+
+        public DictationResultEventArgs(string text, bool success)
+        {
+            Text = text;
+            Success = success;
+        }
+    }
+
+    #endregion
 }

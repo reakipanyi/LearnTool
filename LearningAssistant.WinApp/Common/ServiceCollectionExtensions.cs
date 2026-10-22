@@ -26,6 +26,7 @@ using LearningAssistant.Services.PanAnalysis;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Services.Persistence;
 using LearningAssistant.Services.Practice;
+using LearningAssistant.Services.Quiz;
 using LearningAssistant.Services.Recovery;
 using LearningAssistant.Services.Shadowing;
 using LearningAssistant.Services.SystemTray;
@@ -285,6 +286,17 @@ namespace LearningAssistant.Common
         /// </summary>
         public static IServiceCollection AddLearningServices(this IServiceCollection services)
         {
+            // P0-5：统一语音与测验能力出口。听写仅保留 AdvancedSpeechService（重复的 SpeechService 已合并）；
+            // IWebSpeechService 暂无实现时 IVoiceRecall 自动降级为不可用，不影响其他功能。
+            services.AddSingleton<IAdvancedSpeechService, AdvancedSpeechService>();
+            services.AddSingleton<IQuizEngineService>(sp => new QuizEngineService(
+                sp.GetRequiredService<IAiQuestionService>(),
+                sp.GetService<ILogger<QuizEngineService>>()));
+            services.AddSingleton<IVoiceRecallService>(sp => new VoiceRecallService(
+                sp.GetService<LearningAssistant.Services.Speech.IWebSpeechService>(),
+                sp.GetRequiredService<IAiQuestionService>(),
+                sp.GetService<ILogger<VoiceRecallService>>()));
+
             services.AddSingleton<Services.Learning.SortStrategies.SortStrategyFactory>();
             services.AddSingleton<IStudyListProcessor, StudyListProcessor>();
             services.AddSingleton<IProgressManager, ProgressManager>();
