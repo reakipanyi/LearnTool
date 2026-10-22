@@ -1037,7 +1037,7 @@ namespace LearningAssistant.Data.Database
                 MaxScore REAL NOT NULL DEFAULT 100,
                 DurationMs INTEGER NOT NULL DEFAULT 0,
                 RecordingPath TEXT NULL,
-                MetaJson TEXT NOT NULL DEFAULT '{}',
+                MetaJson TEXT NOT NULL DEFAULT '{{}}',
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
                 IsActive INTEGER NOT NULL DEFAULT 1,
