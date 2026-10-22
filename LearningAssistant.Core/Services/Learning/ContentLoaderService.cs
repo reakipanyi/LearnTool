@@ -157,30 +157,14 @@ namespace LearningAssistant.Services.Learning
         {
             try
             {
-                var userId = string.IsNullOrWhiteSpace(context.UserId)
-                    ? Constants.DefaultUserId
-                    : SanitizeUserId(context.UserId);
-                var userDir = _appPaths.GetUserDir(userId);
-                return Path.Combine(userDir, "content", context.Subject.ToString(), $"{context.SubCategory}.json");
+                return PersonalContentStore.GetFilePath(
+                    _appPaths, context.UserId, context.Subject, context.SubCategory);
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to resolve personal content path");
                 return null;
             }
-        }
-
-        private static string SanitizeUserId(string userId)
-        {
-            var builder = new System.Text.StringBuilder(userId.Length);
-            foreach (var ch in userId)
-            {
-                if (char.IsLetterOrDigit(ch) || ch == '-' || ch == '_')
-                {
-                    builder.Append(ch);
-                }
-            }
-            return builder.Length > 0 ? builder.ToString() : Constants.DefaultUserId;
         }
 
         /// <summary>

@@ -39,10 +39,30 @@ namespace LearningAssistant.Services.Learning
         }
 
         public string GetFilePath(string userId, SubjectType subject, SubCategoryType subCategory)
+            => GetFilePath(_appPaths, userId, subject, subCategory);
+
+        /// <summary>
+        /// 与其他用户数据保持同一目录约定；仅在用户 Id 含非法路径字符时才降级清理。
+        /// </summary>
+        public static string GetFilePath(
+            IAppPaths appPaths, string userId, SubjectType subject, SubCategoryType subCategory)
         {
-            var safeUserId = Sanitize(userId);
-            var userDir = _appPaths.GetUserDir(safeUserId);
+            var userDir = appPaths.GetUserDir(ResolveUserId(userId));
             return Path.Combine(userDir, "content", subject.ToString(), $"{subCategory}.json");
+        }
+
+        public static string ResolveUserId(string? userId)
+        {
+            if (string.IsNullOrWhiteSpace(userId)) return Constants.DefaultUserId;
+
+            var trimmed = userId.Trim();
+            if (trimmed.IndexOfAny(Path.GetInvalidFileNameChars()) < 0 &&
+                trimmed.IndexOf("..", StringComparison.Ordinal) < 0)
+            {
+                return trimmed;
+            }
+
+            return Sanitize(trimmed);
         }
 
         public IReadOnlyList<LearningItem> Load(string userId, SubjectType subject, SubCategoryType subCategory)
