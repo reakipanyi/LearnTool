@@ -62,7 +62,7 @@ namespace LearningAssistant.Forms.Pdf
             public ShadowingAudioState State { get; set; } = ShadowingAudioState.Pending;
         }
 
-        public SentenceShadowingForm(string pdfPath, int pageIndex, string pageText, string documentTitle)
+        public SentenceShadowingForm(string pdfPath, int pageIndex, string pageText, string documentTitle, bool isDark = false)
         {
             _pdfPath = pdfPath;
             _pageIndex = pageIndex;
@@ -82,8 +82,11 @@ namespace LearningAssistant.Forms.Pdf
             FillSentenceList(sentences);
             LoadSentenceRecordings(sentences);
             PdfSidebarTheme.ThemeChanged += OnSidebarThemeChanged;
-            if (PdfSidebarTheme.IsDark)
-                PdfSidebarTheme.ApplyRecursive(this);
+            if (isDark)
+            {
+                BackColor = new PdfSidebarPalette(true).Background;
+                PdfSidebarTheme.ApplyRecursive(this, true);
+            }
 
             var tts = Program.ServiceProvider?.GetService(typeof(ITTSService)) as ITTSService;
             var subtitleParser = Program.ServiceProvider?.GetService(typeof(ISubtitleParser)) as ISubtitleParser;
@@ -483,7 +486,9 @@ namespace LearningAssistant.Forms.Pdf
             bool current = row != null && row.Index == _currentIndex;
             var bounds = e.Bounds;
 
-            using (var background = new SolidBrush(selected ? PdfSidebarTheme.BrandSoft : PdfSidebarTheme.Surface))
+            var palette = PdfSidebarTheme.PaletteFor(_listSentences);
+
+            using (var background = new SolidBrush(selected ? palette.BrandSoft : palette.Surface))
                 e.Graphics.FillRectangle(background, bounds);
 
             if (current)
@@ -499,7 +504,7 @@ namespace LearningAssistant.Forms.Pdf
                 ShadowingAudioState.Synthesizing => PdfSidebarTheme.Brand,
                 ShadowingAudioState.Ready => PdfSidebarTheme.Success,
                 ShadowingAudioState.Failed => PdfSidebarTheme.Danger,
-                _ => PdfSidebarTheme.Muted
+                _ => palette.Muted
             };
 
             using (var dot = new SolidBrush(dotColor))
@@ -508,13 +513,13 @@ namespace LearningAssistant.Forms.Pdf
             var indexFont = new Font("Consolas", 8.5F, FontStyle.Bold);
             TextRenderer.DrawText(e.Graphics, $"{row.Index + 1:00}", indexFont,
                 new Rectangle(bounds.X + 22, bounds.Y + 9, 22, 18),
-                PdfSidebarTheme.Muted, TextFormatFlags.NoPrefix);
+                palette.Muted, TextFormatFlags.NoPrefix);
             indexFont.Dispose();
 
             var textRect = new Rectangle(bounds.X + 44, bounds.Y + 6,
                 Math.Max(10, bounds.Width - 92), 34);
             TextRenderer.DrawText(e.Graphics, row.Text, _listSentences.Font, textRect,
-                PdfSidebarTheme.Text, TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis);
+                palette.Text, TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis);
 
             var stateFont = new Font("Microsoft YaHei UI", 8F);
             string stateText = row.State switch
@@ -526,7 +531,7 @@ namespace LearningAssistant.Forms.Pdf
             };
             TextRenderer.DrawText(e.Graphics, stateText, stateFont,
                 new Rectangle(bounds.X + 44, bounds.Y + 42, 90, 16),
-                PdfSidebarTheme.Muted, TextFormatFlags.NoPrefix);
+                palette.Muted, TextFormatFlags.NoPrefix);
             stateFont.Dispose();
 
             if (_practice != null && row.Index < _practice.Sentences.Count)
@@ -1153,8 +1158,9 @@ namespace LearningAssistant.Forms.Pdf
         private void OnSidebarThemeChanged(object? sender, EventArgs e)
         {
             if (!IsHandleCreated || IsDisposed) return;
-            BackColor = PdfSidebarTheme.Background;
-            PdfSidebarTheme.ApplyRecursive(this);
+            bool isDark = PdfSidebarTheme.IsDarkFor(this);
+            BackColor = new PdfSidebarPalette(isDark).Background;
+            PdfSidebarTheme.ApplyRecursive(this, isDark);
             Invalidate(true);
         }
 

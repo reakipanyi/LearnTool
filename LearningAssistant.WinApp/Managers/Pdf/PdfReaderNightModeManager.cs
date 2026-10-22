@@ -42,9 +42,11 @@ namespace LearningAssistant.Managers
                 ApplyNightModeToStatusBar();
                 UpdateThumbnailsBackground();
 
-                // 三个侧栏面板与跟读窗口共用同一套主题令牌，仅重绘当前窗口
-                PdfSidebarTheme.SetDark(_isNightMode);
+                // 三个侧栏面板与跟读窗口共用同一套主题令牌；夜间状态按窗口独立记录
+                if (_form is Form window)
+                    PdfSidebarTheme.SetWindowDark(window, _isNightMode);
                 PdfSidebarTheme.ApplyRecursive(_form.TabControlLeft);
+                PdfSidebarTheme.NotifyThemeChanged();
             }
             catch (Exception ex)
             {

@@ -773,12 +773,13 @@ namespace LearningAssistant.Managers
             if (_listTimestamps.Items[e.Index] is not TimestampEntry entry) return;
 
             var isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-            var bgColor = isSelected ? PdfSidebarTheme.BrandSoft : (e.Index % 2 == 0 ? PdfSidebarTheme.Surface : PdfSidebarTheme.SurfaceAlt);
+            var palette = PdfSidebarTheme.PaletteFor(_listTimestamps);
+            var bgColor = isSelected ? palette.BrandSoft : (e.Index % 2 == 0 ? palette.Surface : palette.SurfaceAlt);
             using var bgBrush = new SolidBrush(bgColor);
             e.Graphics.FillRectangle(bgBrush, e.Bounds);
 
             using var font = new Font("Microsoft YaHei UI", 9F);
-            using var textBrush = new SolidBrush(isSelected ? PdfSidebarTheme.Brand : PdfSidebarTheme.Text);
+            using var textBrush = new SolidBrush(isSelected ? PdfSidebarTheme.Brand : palette.Text);
             var rect = new Rectangle(e.Bounds.X + 6, e.Bounds.Y + 7, Math.Max(10, e.Bounds.Width - 12), e.Bounds.Height - 10);
             var format = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
             e.Graphics.DrawString(entry.Display, font, textBrush, rect, format);
@@ -845,7 +846,8 @@ namespace LearningAssistant.Managers
             if (_listSummaries.Items[e.Index] is not PdfAiSummaryEntry entry) return;
 
             var isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-            var bgColor = isSelected ? PdfSidebarTheme.BrandSoft : (e.Index % 2 == 0 ? PdfSidebarTheme.Surface : PdfSidebarTheme.SurfaceAlt);
+            var palette = PdfSidebarTheme.PaletteFor(_listSummaries);
+            var bgColor = isSelected ? palette.BrandSoft : (e.Index % 2 == 0 ? palette.Surface : palette.SurfaceAlt);
             using var bgBrush = new SolidBrush(bgColor);
             e.Graphics.FillRectangle(bgBrush, e.Bounds);
 
@@ -856,7 +858,7 @@ namespace LearningAssistant.Managers
             using var anchorFont = new Font("Microsoft YaHei UI", 8.5F, FontStyle.Bold);
             using var textFont = new Font("Microsoft YaHei UI", 9F);
             using var anchorBrush = new SolidBrush(isSelected ? _accentColor : Color.FromArgb(120, 120, 130));
-            using var textBrush = new SolidBrush(PdfSidebarTheme.Text);
+            using var textBrush = new SolidBrush(palette.Text);
 
             var format = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
             e.Graphics.DrawString(anchorText, anchorFont, anchorBrush,
@@ -1044,7 +1046,8 @@ namespace LearningAssistant.Managers
             var recording = (AudioRecording)_listRecordings.Items[e.Index];
             var isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
 
-            var bgColor = isSelected ? PdfSidebarTheme.BrandSoft : (e.Index % 2 == 0 ? PdfSidebarTheme.Surface : PdfSidebarTheme.SurfaceAlt);
+            var palette = PdfSidebarTheme.PaletteFor(_listRecordings);
+            var bgColor = isSelected ? palette.BrandSoft : (e.Index % 2 == 0 ? palette.Surface : palette.SurfaceAlt);
             using var bgBrush = new SolidBrush(bgColor);
             e.Graphics.FillRectangle(bgBrush, e.Bounds);
 
@@ -1055,7 +1058,7 @@ namespace LearningAssistant.Managers
             var displayText = $"{label}  ({durationStr})";
 
             using var font = new Font("Microsoft YaHei UI", 10F);
-            using var textBrush = new SolidBrush(isSelected ? PdfSidebarTheme.Brand : PdfSidebarTheme.Text);
+            using var textBrush = new SolidBrush(isSelected ? PdfSidebarTheme.Brand : palette.Text);
             e.Graphics.DrawString(displayText, font, textBrush, e.Bounds.X + 8, e.Bounds.Y + 8);
 
             e.DrawFocusRectangle();

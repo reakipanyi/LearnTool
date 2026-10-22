@@ -587,7 +587,9 @@ namespace LearningAssistant.Forms.Pdf
             if (string.IsNullOrWhiteSpace(highlight.Text)) return;
 
             _textBoxOriginal.Text = highlight.Text;
-            _textBoxTranslation.Text = highlight.TranslationText ?? string.Empty;
+            // 译文同样判空：高亮尚未翻译时保留用户当前正在查看的译文
+            if (!string.IsNullOrWhiteSpace(highlight.TranslationText))
+                _textBoxTranslation.Text = highlight.TranslationText;
             UpdateStatusBar();
         }
 
@@ -6238,8 +6240,8 @@ namespace LearningAssistant.Forms.Pdf
             BuildHighlightSidebar();
             BuildAudioSidebar();
 
-            // 新建窗口时同步当前夜间模式（静态主题可能已被其他阅读窗口改变）
-            PdfSidebarTheme.SetDarkSilently(_nightModeManager?.IsNightMode ?? false);
+            // 夜间状态按窗口记录，避免新建窗口覆盖其他阅读窗口的主题
+            PdfSidebarTheme.SetWindowDark(this, _nightModeManager?.IsNightMode ?? false);
             PdfSidebarTheme.ApplyRecursive(_tabControlLeft);
         }
 
@@ -6565,8 +6567,9 @@ namespace LearningAssistant.Forms.Pdf
             object? item = _listBoxHighlights.Items[e.Index];
             bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
             var bounds = e.Bounds;
+            var palette = PdfSidebarTheme.PaletteFor(_listBoxHighlights);
 
-            using (var background = new SolidBrush(selected ? PdfSidebarTheme.BrandSoft : PdfSidebarTheme.Surface))
+            using (var background = new SolidBrush(selected ? palette.BrandSoft : palette.Surface))
                 e.Graphics.FillRectangle(background, bounds);
 
             if (selected)
@@ -6602,12 +6605,12 @@ namespace LearningAssistant.Forms.Pdf
 
             var titleRect = new Rectangle(bounds.X + 12, bounds.Y + 6, Math.Max(10, bounds.Width - 24), 30);
             TextRenderer.DrawText(e.Graphics, title, _listBoxHighlights.Font, titleRect,
-                selected ? PdfSidebarTheme.Text : PdfSidebarTheme.Text,
+                palette.Text,
                 TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
 
             var metaFont = new Font("Microsoft YaHei UI", 8F);
             var metaRect = new Rectangle(bounds.X + 12, bounds.Y + bounds.Height - 18, Math.Max(10, bounds.Width - 24), 16);
-            TextRenderer.DrawText(e.Graphics, meta, metaFont, metaRect, PdfSidebarTheme.Muted,
+            TextRenderer.DrawText(e.Graphics, meta, metaFont, metaRect, palette.Muted,
                 TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
             metaFont.Dispose();
         }
@@ -6794,7 +6797,8 @@ namespace LearningAssistant.Forms.Pdf
 
             string documentTitle = Path.GetFileNameWithoutExtension(_currentPdfPath);
             _shadowingForm = new SentenceShadowingForm(
-                _currentPdfPath, _currentPageIndex, originalText, documentTitle);
+                _currentPdfPath, _currentPageIndex, originalText, documentTitle,
+                _nightModeManager?.IsNightMode ?? false);
             _shadowingForm.FormClosed += (_, _) => _shadowingForm = null;
             _shadowingForm.Show(this);
         }

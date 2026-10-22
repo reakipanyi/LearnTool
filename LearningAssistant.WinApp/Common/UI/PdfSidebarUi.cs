@@ -1,11 +1,29 @@
 using System.Drawing.Drawing2D;
+using System.Runtime.CompilerServices;
 
 namespace LearningAssistant.Common.UI
 {
     /// <summary>侧栏面板可响应主题切换的控件约定。</summary>
     public interface ISidebarThemeAware
     {
-        void ApplyTheme();
+        void ApplyTheme(bool isDark);
+    }
+
+    /// <summary>某一夜间模式下的配色快照，绘制时按所属窗口解析，避免多窗口互相覆盖。</summary>
+    public readonly struct PdfSidebarPalette
+    {
+        public PdfSidebarPalette(bool isDark) => IsDark = isDark;
+
+        public bool IsDark { get; }
+        public Color Background => IsDark ? Color.FromArgb(15, 23, 42) : Color.FromArgb(247, 248, 251);
+        public Color Surface => IsDark ? Color.FromArgb(30, 41, 59) : Color.White;
+        public Color SurfaceAlt => IsDark ? Color.FromArgb(51, 65, 85) : Color.FromArgb(241, 245, 249);
+        public Color Border => IsDark ? Color.FromArgb(51, 65, 85) : Color.FromArgb(226, 232, 240);
+        public Color Text => IsDark ? Color.FromArgb(248, 250, 252) : Color.FromArgb(15, 23, 42);
+        public Color Muted => IsDark ? Color.FromArgb(148, 163, 184) : Color.FromArgb(100, 116, 139);
+        public Color BrandSoft => IsDark ? Color.FromArgb(67, 56, 145) : Color.FromArgb(237, 233, 254);
+        public Color FieldBackground => IsDark ? Color.FromArgb(15, 23, 42) : Color.White;
+        public Color Hover => IsDark ? Color.FromArgb(71, 85, 105) : Color.FromArgb(241, 245, 249);
     }
 
     /// <summary>
@@ -14,97 +32,122 @@ namespace LearningAssistant.Common.UI
     /// </summary>
     public static class PdfSidebarTheme
     {
+        // 每个顶层窗口的夜间模式独立存储，避免多窗口互相覆盖
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Form, StrongBox<bool>> WindowModes = new();
+
+        /// <summary>未注册窗口（如独立对话框）的兜底模式。</summary>
         public static bool IsDark { get; private set; }
 
         public static event EventHandler? ThemeChanged;
 
-        public static Color Background => IsDark ? Color.FromArgb(15, 23, 42) : Color.FromArgb(247, 248, 251);
-        public static Color Surface => IsDark ? Color.FromArgb(30, 41, 59) : Color.White;
-        public static Color SurfaceAlt => IsDark ? Color.FromArgb(51, 65, 85) : Color.FromArgb(241, 245, 249);
-        public static Color Border => IsDark ? Color.FromArgb(51, 65, 85) : Color.FromArgb(226, 232, 240);
-        public static Color Text => IsDark ? Color.FromArgb(248, 250, 252) : Color.FromArgb(15, 23, 42);
-        public static Color Muted => IsDark ? Color.FromArgb(148, 163, 184) : Color.FromArgb(100, 116, 139);
+        public static Color Background => new PdfSidebarPalette(IsDark).Background;
+        public static Color Surface => new PdfSidebarPalette(IsDark).Surface;
+        public static Color SurfaceAlt => new PdfSidebarPalette(IsDark).SurfaceAlt;
+        public static Color Border => new PdfSidebarPalette(IsDark).Border;
+        public static Color Text => new PdfSidebarPalette(IsDark).Text;
+        public static Color Muted => new PdfSidebarPalette(IsDark).Muted;
         public static Color Brand => Color.FromArgb(108, 92, 231);
-        public static Color BrandSoft => IsDark ? Color.FromArgb(67, 56, 145) : Color.FromArgb(237, 233, 254);
+        public static Color BrandSoft => new PdfSidebarPalette(IsDark).BrandSoft;
         public static Color Danger => Color.FromArgb(239, 68, 68);
         public static Color Success => Color.FromArgb(34, 197, 94);
         public static Color Score => Color.FromArgb(139, 92, 246);
-        public static Color FieldBackground => IsDark ? Color.FromArgb(15, 23, 42) : Color.White;
-        public static Color Hover => IsDark ? Color.FromArgb(71, 85, 105) : Color.FromArgb(241, 245, 249);
+        public static Color FieldBackground => new PdfSidebarPalette(IsDark).FieldBackground;
+        public static Color Hover => new PdfSidebarPalette(IsDark).Hover;
 
-        public static void SetDark(bool isDark)
+        /// <summary>记录指定窗口的夜间模式；绘制与主题应用均按窗口解析。</summary>
+        public static void SetWindowDark(Form window, bool isDark)
         {
-            if (IsDark == isDark) return;
-            IsDark = isDark;
-            ThemeChanged?.Invoke(null, EventArgs.Empty);
+            if (window == null) return;
+            WindowModes.Remove(window);
+            WindowModes.Add(window, new StrongBox<bool>(isDark));
         }
 
-        /// <summary>窗口初始化时同步主题，不触发其他窗口的重绘。</summary>
-        public static void SetDarkSilently(bool isDark) => IsDark = isDark;
+        /// <summary>解析控件所属窗口（含 Owner 链）的夜间模式。</summary>
+        public static bool IsDarkFor(Control? control)
+        {
+            Form? form = control as Form ?? control?.FindForm();
+            while (form != null)
+            {
+                if (WindowModes.TryGetValue(form, out var state)) return state.Value;
+                form = form.Owner;
+            }
+            return IsDark;
+        }
+
+        /// <summary>获取控件所属窗口的配色快照，用于自绘控件。</summary>
+        public static PdfSidebarPalette PaletteFor(Control? control) => new(IsDarkFor(control));
+
+        /// <summary>通知依赖主题的窗口重绘，不修改任何窗口的夜间状态。</summary>
+        public static void NotifyThemeChanged() => ThemeChanged?.Invoke(null, EventArgs.Empty);
 
         /// <summary>把主题递归应用到指定容器（侧栏三个面板）。</summary>
         public static void ApplyRecursive(Control? root)
+            => ApplyRecursive(root, root == null ? IsDark : IsDarkFor(root));
+
+        /// <summary>按指定夜间模式把主题递归应用到容器。</summary>
+        public static void ApplyRecursive(Control? root, bool isDark)
         {
             if (root == null) return;
 
+            var palette = new PdfSidebarPalette(isDark);
             bool insideCard = IsInsideCard(root);
 
             switch (root)
             {
                 case TabPage:
-                    root.BackColor = Background;
+                    root.BackColor = palette.Background;
                     break;
                 case TableLayoutPanel or FlowLayoutPanel or SplitContainer:
-                    root.BackColor = insideCard ? Surface : Background;
+                    root.BackColor = insideCard ? palette.Surface : palette.Background;
                     break;
                 case Panel:
                     root.BackColor = root.Tag is string surfaceTag && surfaceTag == "surface"
-                        ? Surface
-                        : insideCard ? Surface : Background;
+                        ? palette.Surface
+                        : insideCard ? palette.Surface : palette.Background;
                     break;
                 case TextBox:
-                    root.BackColor = FieldBackground;
-                    root.ForeColor = Text;
+                    root.BackColor = palette.FieldBackground;
+                    root.ForeColor = palette.Text;
                     break;
                 case ListBox:
-                    root.BackColor = Surface;
-                    root.ForeColor = Text;
+                    root.BackColor = palette.Surface;
+                    root.ForeColor = palette.Text;
                     break;
                 case ComboBox:
-                    root.BackColor = Surface;
-                    root.ForeColor = Text;
+                    root.BackColor = palette.Surface;
+                    root.ForeColor = palette.Text;
                     break;
                 case Label label:
                     label.BackColor = Color.Transparent;
-                    label.ForeColor = label.Tag is string labelTag && labelTag == "muted" ? Muted
+                    label.ForeColor = label.Tag is string labelTag && labelTag == "muted" ? palette.Muted
                         : label.Tag is string scoreTag && scoreTag == "score" ? Score
                         : label.Tag is string accentTag && accentTag == "accent" ? Brand
-                        : Text;
+                        : palette.Text;
                     break;
                 case CheckBox or RadioButton:
                     if (root.Tag is string keepTag && keepTag == "keep") break;
                     root.BackColor = Color.Transparent;
-                    root.ForeColor = Text;
+                    root.ForeColor = palette.Text;
                     break;
                 case GroupBox:
-                    root.BackColor = Background;
-                    root.ForeColor = Text;
+                    root.BackColor = palette.Background;
+                    root.ForeColor = palette.Text;
                     break;
                 case Button button:
                     if (button.Tag is string tag && (tag == "accent" || tag == "danger" || tag == "record" || tag == "keep"))
                         break;
-                    button.BackColor = SurfaceAlt;
-                    button.ForeColor = Text;
-                    button.FlatAppearance.BorderColor = Border;
-                    button.FlatAppearance.MouseOverBackColor = Hover;
+                    button.BackColor = palette.SurfaceAlt;
+                    button.ForeColor = palette.Text;
+                    button.FlatAppearance.BorderColor = palette.Border;
+                    button.FlatAppearance.MouseOverBackColor = palette.Hover;
                     break;
             }
 
             if (root is ISidebarThemeAware themed)
-                themed.ApplyTheme();
+                themed.ApplyTheme(isDark);
 
             foreach (Control child in root.Controls)
-                ApplyRecursive(child);
+                ApplyRecursive(child, isDark);
         }
 
         private static bool IsInsideCard(Control control)
@@ -163,16 +206,17 @@ namespace LearningAssistant.Common.UI
                 Controls.Add(_action);
             }
 
-            ApplyTheme();
+            ApplyTheme(PdfSidebarTheme.IsDark);
         }
 
         public void SetSubtitle(string text) => _subtitle.Text = text;
 
-        public void ApplyTheme()
+        public void ApplyTheme(bool isDark)
         {
-            BackColor = PdfSidebarTheme.Background;
-            _title.ForeColor = PdfSidebarTheme.Text;
-            _subtitle.ForeColor = PdfSidebarTheme.Muted;
+            var palette = new PdfSidebarPalette(isDark);
+            BackColor = palette.Background;
+            _title.ForeColor = palette.Text;
+            _subtitle.ForeColor = palette.Muted;
             if (_action != null)
             {
                 _action.BackColor = PdfSidebarTheme.Brand;
@@ -194,6 +238,7 @@ namespace LearningAssistant.Common.UI
         private readonly Label _title = new();
         private readonly Panel _body = new();
         private Button? _actionButton;
+        private bool _isDark;
 
         public Panel Body => _body;
 
@@ -222,19 +267,21 @@ namespace LearningAssistant.Common.UI
                 Controls.Add(_actionButton);
             }
 
-            ApplyTheme();
+            ApplyTheme(PdfSidebarTheme.IsDark);
         }
 
-        public void ApplyTheme()
+        public void ApplyTheme(bool isDark)
         {
-            BackColor = PdfSidebarTheme.Background;
-            _title.ForeColor = PdfSidebarTheme.Text;
-            _body.BackColor = PdfSidebarTheme.Surface;
+            _isDark = isDark;
+            var palette = new PdfSidebarPalette(isDark);
+            BackColor = palette.Background;
+            _title.ForeColor = palette.Text;
+            _body.BackColor = palette.Surface;
             if (_actionButton != null)
             {
-                _actionButton.BackColor = PdfSidebarTheme.Surface;
-                _actionButton.ForeColor = PdfSidebarTheme.Muted;
-                _actionButton.FlatAppearance.MouseOverBackColor = PdfSidebarTheme.Hover;
+                _actionButton.BackColor = palette.Surface;
+                _actionButton.ForeColor = palette.Muted;
+                _actionButton.FlatAppearance.MouseOverBackColor = palette.Hover;
             }
             Invalidate();
         }
@@ -245,10 +292,11 @@ namespace LearningAssistant.Common.UI
             var rect = new Rectangle(2, 1, Width - 5, Height - 3);
             if (rect.Width <= 0 || rect.Height <= 0) return;
 
+            var palette = new PdfSidebarPalette(_isDark);
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             using var path = GdiHelper.CreateRoundedRectPath(rect, 10);
-            using var fill = new SolidBrush(PdfSidebarTheme.Surface);
-            using var border = new Pen(PdfSidebarTheme.Border);
+            using var fill = new SolidBrush(palette.Surface);
+            using var border = new Pen(palette.Border);
             e.Graphics.FillPath(fill, path);
             e.Graphics.DrawPath(border, path);
         }
@@ -277,6 +325,7 @@ namespace LearningAssistant.Common.UI
         private readonly List<string> _items = new();
         private int _selectedIndex;
         private int _hoverIndex = -1;
+        private bool _isDark;
 
         public event EventHandler? SelectedIndexChanged;
 
@@ -351,12 +400,13 @@ namespace LearningAssistant.Common.UI
         {
             var g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
+            var palette = new PdfSidebarPalette(_isDark);
 
             var track = new Rectangle(2, 4, Width - 5, Height - 9);
             if (track.Width <= 0 || track.Height <= 0) return;
 
             using (var trackPath = GdiHelper.CreateRoundedRectPath(track, 8))
-            using (var trackBrush = new SolidBrush(PdfSidebarTheme.SurfaceAlt))
+            using (var trackBrush = new SolidBrush(palette.SurfaceAlt))
                 g.FillPath(trackBrush, trackPath);
 
             if (_items.Count == 0) return;
@@ -373,16 +423,16 @@ namespace LearningAssistant.Common.UI
                     using var itemPath = GdiHelper.CreateRoundedRectPath(
                         new Rectangle(itemRect.X + 2, itemRect.Y + 2, itemRect.Width - 4, itemRect.Height - 4), 6);
                     using var itemBrush = new SolidBrush(selected
-                        ? (PdfSidebarTheme.IsDark ? Color.FromArgb(71, 85, 105) : Color.White)
-                        : PdfSidebarTheme.Hover);
+                        ? (palette.IsDark ? Color.FromArgb(71, 85, 105) : Color.White)
+                        : palette.Hover);
                     g.FillPath(itemBrush, itemPath);
                 }
 
                 using var font = new Font("Microsoft YaHei UI", 9F,
                     selected ? FontStyle.Bold : FontStyle.Regular);
                 using var textBrush = new SolidBrush(selected
-                    ? (PdfSidebarTheme.IsDark ? Color.White : PdfSidebarTheme.Brand)
-                    : PdfSidebarTheme.Muted);
+                    ? (palette.IsDark ? Color.White : PdfSidebarTheme.Brand)
+                    : palette.Muted);
                 using var format = new StringFormat
                 {
                     Alignment = StringAlignment.Center,
@@ -392,9 +442,10 @@ namespace LearningAssistant.Common.UI
             }
         }
 
-        public void ApplyTheme()
+        public void ApplyTheme(bool isDark)
         {
-            BackColor = PdfSidebarTheme.Background;
+            _isDark = isDark;
+            BackColor = new PdfSidebarPalette(isDark).Background;
             Invalidate();
         }
     }
@@ -404,6 +455,7 @@ namespace LearningAssistant.Common.UI
     {
         private int _countdown;
         private bool _recording;
+        private bool _isDark;
 
         [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
         public int Countdown
@@ -444,7 +496,8 @@ namespace LearningAssistant.Common.UI
             if (size <= 0) return;
             var rect = new Rectangle((Width - size) / 2, (Height - size) / 2, size, size);
 
-            using var trackPen = new Pen(PdfSidebarTheme.Border, 5);
+            var palette = new PdfSidebarPalette(_isDark);
+            using var trackPen = new Pen(palette.Border, 5);
             g.DrawEllipse(trackPen, rect);
 
             var activeColor = _recording ? PdfSidebarTheme.Danger : PdfSidebarTheme.Brand;
@@ -467,7 +520,11 @@ namespace LearningAssistant.Common.UI
             g.DrawString(text, font, brush, rect, format);
         }
 
-        public void ApplyTheme() => Invalidate();
+        public void ApplyTheme(bool isDark)
+        {
+            _isDark = isDark;
+            Invalidate();
+        }
     }
 
     /// <summary>侧栏与跟读窗口共用的控件工厂。</summary>

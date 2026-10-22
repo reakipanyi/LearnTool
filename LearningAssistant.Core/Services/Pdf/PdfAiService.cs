@@ -760,9 +760,10 @@ namespace LearningAssistant.Services.Pdf
                 return new PdfAiContext(
                     $"[[p{pageNumber}]]\n{selectedText.Trim()}\n\n",
                     new[] { pageNumber },
-                    int.MaxValue,
+                    // 上下文中只包含当前选中页，页码锚点不应超出该页；同时保留按原文语言作答的要求
+                    pageNumber,
                     fingerprint,
-                    string.Empty);
+                    BuildSelectionLanguageHint(selectedText));
             }
 
             var index = await _textIndex.GetOrBuildAsync(pdfPath, progress: null, cancellationToken: cancellationToken)
@@ -946,6 +947,18 @@ namespace LearningAssistant.Services.Pdf
 
             return $"语言要求：文档为中英混排（{string.Join("，", parts)}）。请按各页原文语言分别处理，"
                 + "引用原文时保留原文语言，不要整篇强行统一语言。";
+        }
+
+        /// <summary>选中内容没有页级语言信息，按选中文本本身检测作答语言</summary>
+        private static string BuildSelectionLanguageHint(string selectedText)
+        {
+            return StringLanguageDetector.DetectLanguage(selectedText) switch
+            {
+                LanguageType.English => "语言要求：选中的内容主要为英文，请使用英文作答，引用原文时保留原文语言。",
+                LanguageType.Chinese => "语言要求：选中的内容主要为中文，请使用中文作答，引用原文时保留原文语言。",
+                LanguageType.Mixed => "语言要求：选中的内容为中英混排，请按原文语言分别处理，引用原文时保留原文语言。",
+                _ => "语言要求：选中内容的语言未知，请按原文语言作答，并保留原文表述。"
+            };
         }
 
         /// <summary>优先使用索引中已记录的页级语言，缺失时按页面文本重新检测</summary>

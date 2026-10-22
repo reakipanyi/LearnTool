@@ -308,12 +308,12 @@ namespace LearningAssistant.Managers
                     _form.PictureBoxPdf?.Invalidate();
                 }
 
+                // 先发布高亮事件，避免自动翻译（含 AI 润色）耗时或失败时吞掉学习积分等下游逻辑
+                PublishHighlightEvent(currentPdfPath, ocrText);
+
                 // 把识别文本同步到原文面板，并在需要时触发自动翻译/朗读；
                 // 译文会回写到高亮实体，供再次选中时直接回显
                 await SyncOcrTextToPanelAsync(currentPdfPath, highlight, ocrText);
-
-                // 发布高亮事件供其他模块（如学习积分）消费
-                PublishHighlightEvent(currentPdfPath, ocrText);
             }
             catch (Exception ex)
             {
