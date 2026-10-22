@@ -242,6 +242,19 @@ namespace LearningAssistant.Common.UI
 
         public Panel Body => _body;
 
+        /// <summary>供 Visual Studio 设计器实例化；运行时请使用带标题的构造函数。</summary>
+        public SidebarCard() : this(string.Empty)
+        {
+        }
+
+        /// <summary>卡片标题；设计器通过该属性设置标题。</summary>
+        [System.ComponentModel.DefaultValue("")]
+        public string Title
+        {
+            get => _title.Text;
+            set => _title.Text = value;
+        }
+
         public SidebarCard(string title, string? actionText = null, EventHandler? onAction = null)
         {
             BackColor = PdfSidebarTheme.Background;
@@ -484,7 +497,7 @@ namespace LearningAssistant.Common.UI
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer
                      | ControlStyles.ResizeRedraw | ControlStyles.UserPaint, true);
             Size = new Size(88, 88);
-            BackColor = Color.Transparent;
+            BackColor = Color.LightBlue;
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -527,23 +540,35 @@ namespace LearningAssistant.Common.UI
         }
     }
 
+    /// <summary>
+    /// 启用双缓冲的 TabControl。
+    /// 侧栏页签为自绘图标，悬停切换背景色时整条页签会重绘，
+    /// 原生 TabControl 未开启双缓冲会出现图标/标题闪烁，这里统一开启。
+    /// </summary>
+    public sealed class BufferedTabControl : TabControl
+    {
+        public BufferedTabControl()
+        {
+            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
+            DoubleBuffered = true;
+        }
+    }
+
     /// <summary>侧栏与跟读窗口共用的控件工厂。</summary>
     public static class SidebarUi
     {
         public static Button CreatePrimaryButton(string text, int height = 30)
         {
-            var button = new Button
-            {
-                Text = text,
-                Height = height,
-                AutoSize = false,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = PdfSidebarTheme.Brand,
-                ForeColor = Color.White,
-                Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                Cursor = Cursors.Hand,
-                Tag = "accent"
-            };
+            var button = new Button();
+            button.Text = text;
+            button.Height = height;
+            button.AutoSize = false;
+            button.FlatStyle = FlatStyle.Flat;
+            button.BackColor = PdfSidebarTheme.Brand;
+            button.ForeColor = Color.White;
+            button.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
+            button.Cursor = Cursors.Hand;
+            button.Tag = "accent";
             button.FlatAppearance.BorderSize = 0;
             button.FlatAppearance.MouseOverBackColor = Color.FromArgb(88, 72, 211);
             button.FlatAppearance.MouseDownBackColor = Color.FromArgb(72, 58, 185);
@@ -552,17 +577,15 @@ namespace LearningAssistant.Common.UI
 
         public static Button CreateSecondaryButton(string text, int height = 30)
         {
-            var button = new Button
-            {
-                Text = text,
-                Height = height,
-                AutoSize = false,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = PdfSidebarTheme.Surface,
-                ForeColor = PdfSidebarTheme.Text,
-                Font = new Font("Microsoft YaHei UI", 9F),
-                Cursor = Cursors.Hand
-            };
+            var button = new Button();
+            button.Text = text;
+            button.Height = height;
+            button.AutoSize = false;
+            button.FlatStyle = FlatStyle.Flat;
+            button.BackColor = PdfSidebarTheme.Surface;
+            button.ForeColor = PdfSidebarTheme.Text;
+            button.Font = new Font("Microsoft YaHei UI", 9F);
+            button.Cursor = Cursors.Hand;
             button.FlatAppearance.BorderColor = PdfSidebarTheme.Border;
             button.FlatAppearance.BorderSize = 1;
             button.FlatAppearance.MouseOverBackColor = PdfSidebarTheme.Hover;
@@ -580,16 +603,14 @@ namespace LearningAssistant.Common.UI
 
         public static Button CreateIconButton(string text, string tooltip, EventHandler? onClick = null)
         {
-            var button = new Button
-            {
-                Text = text,
-                Size = new Size(30, 30),
-                FlatStyle = FlatStyle.Flat,
-                BackColor = PdfSidebarTheme.Surface,
-                ForeColor = PdfSidebarTheme.Text,
-                Font = new Font("Segoe UI Emoji", 10F),
-                Cursor = Cursors.Hand
-            };
+            var button = new Button();
+            button.Text = text;
+            button.Size = new Size(30, 30);
+            button.FlatStyle = FlatStyle.Flat;
+            button.BackColor = PdfSidebarTheme.Surface;
+            button.ForeColor = PdfSidebarTheme.Text;
+            button.Font = new Font("Segoe UI Emoji", 10F);
+            button.Cursor = Cursors.Hand;
             button.FlatAppearance.BorderSize = 0;
             button.FlatAppearance.MouseOverBackColor = PdfSidebarTheme.Hover;
             if (onClick != null) button.Click += onClick;
@@ -600,14 +621,13 @@ namespace LearningAssistant.Common.UI
 
         public static Label CreateSectionLabel(string text)
         {
-            return new Label
-            {
-                Text = text,
-                Font = new Font("Microsoft YaHei UI", 8.5F, FontStyle.Bold),
-                ForeColor = PdfSidebarTheme.Muted,
-                AutoSize = true,
-                Tag = "muted"
-            };
+            var label = new Label();
+            label.Text = text;
+            label.Font = new Font("Microsoft YaHei UI", 8.5F, FontStyle.Bold);
+            label.ForeColor = PdfSidebarTheme.Muted;
+            label.AutoSize = true;
+            label.Tag = "muted";
+            return label;
         }
 
         public static void StyleTextBox(TextBox textBox)
@@ -629,27 +649,29 @@ namespace LearningAssistant.Common.UI
 
         public static Panel CreateEmptyState(string icon, string text, string? actionText = null, EventHandler? onAction = null)
         {
-            var panel = new Panel { Dock = DockStyle.Fill, BackColor = PdfSidebarTheme.Surface, Tag = "surface" };
-            var iconLabel = new Label
-            {
-                Text = icon,
-                Font = new Font("Segoe UI Emoji", 22F),
-                ForeColor = PdfSidebarTheme.Muted,
-                AutoSize = false,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Size = new Size(48, 44),
-                Tag = "muted"
-            };
-            var textLabel = new Label
-            {
-                Text = text,
-                Font = new Font("Microsoft YaHei UI", 9F),
-                ForeColor = PdfSidebarTheme.Muted,
-                AutoSize = false,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Height = 40,
-                Tag = "muted"
-            };
+            var panel = new Panel();
+            panel.Dock = DockStyle.Fill;
+            panel.BackColor = PdfSidebarTheme.Surface;
+            panel.Tag = "surface";
+
+            var iconLabel = new Label();
+            iconLabel.Text = icon;
+            iconLabel.Font = new Font("Segoe UI Emoji", 22F);
+            iconLabel.ForeColor = PdfSidebarTheme.Muted;
+            iconLabel.AutoSize = false;
+            iconLabel.TextAlign = ContentAlignment.MiddleCenter;
+            iconLabel.Size = new Size(48, 44);
+            iconLabel.Tag = "muted";
+
+            var textLabel = new Label();
+            textLabel.Text = text;
+            textLabel.Font = new Font("Microsoft YaHei UI", 9F);
+            textLabel.ForeColor = PdfSidebarTheme.Muted;
+            textLabel.AutoSize = false;
+            textLabel.TextAlign = ContentAlignment.MiddleCenter;
+            textLabel.Height = 40;
+            textLabel.Tag = "muted";
+
             panel.Controls.Add(iconLabel);
             panel.Controls.Add(textLabel);
 

@@ -255,6 +255,9 @@
 		<Compile Update="Forms\UserControls\PanNavigatorPanel.cs">
 			<SubType>UserControl</SubType>
 		</Compile>
+		<Compile Update="Forms\Pdf\PdfAudioPanel.cs">
+			<SubType>UserControl</SubType>
+		</Compile>
 		<Compile Update="Forms\PanOrganizerForm.cs">
 			<SubType>Form</SubType>
 		</Compile>

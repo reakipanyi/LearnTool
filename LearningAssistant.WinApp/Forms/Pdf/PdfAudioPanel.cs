@@ -1,83 +1,124 @@
 using LearningAssistant.Abstractions.Media;
+using LearningAssistant.Common.UI;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.Pdf;
 
 namespace LearningAssistant.Forms.Pdf;
 
-public class PdfAudioPanel : UserControl
+public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
 {
     private readonly PdfAudioTrackManager _manager;
     private readonly IPdfReaderFormAccess _form;
-    private EventHandler<AudioRecording>? _recordingCompletedHandler;
-
-    private readonly Label _labelInfo = new() { AutoSize = true, Text = "本页：无音频", ForeColor = Color.FromArgb(50, 70, 90) };
-    private readonly ListBox _listTracks = new() { Dock = DockStyle.Fill, IntegralHeight = false };
-    private readonly Button _btnPrev = new() { Text = "⏮", Width = 44 };
-    private readonly Button _btnPlay = new() { Text = "▶", Width = 56 };
-    private readonly Button _btnNext = new() { Text = "⏭", Width = 44 };
-    private readonly Button _btnSetA = new() { Text = "设起点", Width = 62 };
-    private readonly Button _btnSetB = new() { Text = "设终点", Width = 62 };
-    private readonly Button _btnClearAb = new() { Text = "取消复读", Width = 74 };
-    private readonly Label _labelLoop = new() { AutoSize = true, Text = "复读：未设置", ForeColor = Color.FromArgb(100, 116, 139) };
-    private readonly ToolTip _tooltip = new();
-    private readonly ComboBox _comboSpeed = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 84 };
-    private readonly Label _labelSubtitle = new() { AutoSize = true, Text = "", ForeColor = Color.FromArgb(139, 92, 246), MaximumSize = new Size(300, 0) };
-    private readonly Button _btnFollowRead = new() { Text = "● 整页录音", Width = 96 };
-    private readonly Button _btnRules = new() { Text = "规则", Width = 56 };
-    private readonly Button _btnManual = new() { Text = "手动指定", Width = 76 };
-    private readonly Button _btnManualFromList = new() { Text = "从列表选", Width = 76 };
-    private readonly Button _btnRescan = new() { Text = "重新扫描", Width = 76 };
-    private readonly Button _btnAddDir = new() { Text = "📁 添加音频目录", Width = 116 };
-    private readonly Button _btnAiMatch = new() { Text = "✨ AI匹配", Width = 88 };
-    private readonly CheckBox _chkSubDir = new() { Text = "包含子目录", AutoSize = true };
     private readonly PdfAudioAiMatcher? _aiMatcher;
+    private EventHandler<AudioRecording>? _recordingCompletedHandler;
     private bool _suppressAutoPlay;
+    private Font? _listFont;
+
+    /// <summary>供 Visual Studio 设计器实例化；运行时请使用带依赖的构造函数。</summary>
+    public PdfAudioPanel()
+    {
+        InitializeComponent();
+        _manager = null!;
+        _form = null!;
+        _aiMatcher = null;
+    }
 
     public PdfAudioPanel(PdfAudioTrackManager manager, IPdfReaderFormAccess form,
-        PdfAudioAiMatcher? aiMatcher = null)
+        PdfAudioAiMatcher? aiMatcher = null) : this()
     {
         _manager = manager;
         _form = form;
         _aiMatcher = aiMatcher;
-        BuildLayout();
+        ApplyRuntimeMetrics();
         WireEvents();
         RefreshData();
     }
 
-    private void BuildLayout()
+    /// <summary>按当前字体回填设计期占位尺寸，保持与动态布局一致的视觉效果。</summary>
+    private void ApplyRuntimeMetrics()
     {
-        _comboSpeed.Items.Add("1.0x（不变调）"); // 阶段一：倍速引擎未落地，UI 禁用
-        _comboSpeed.SelectedIndex = 0;
-        _comboSpeed.Enabled = false;
+        _listFont ??= new Font("Microsoft YaHei UI", 9.5F);
+        _listTracks.ItemHeight = Math.Max(28, _listFont.Height + 12);
 
-        var transport = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        transport.Controls.AddRange(new Control[] { _btnPrev, _btnPlay, _btnNext });
+        int baseFontHeight = Control.DefaultFont.Height;
+        int buttonHeight = Math.Max(30, baseFontHeight + 14);
+        int iconSize = Math.Max(34, baseFontHeight + 18);
+        int comboHeight = Math.Max(26, _comboSpeed.Font.Height + 10);
 
-        var abRow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        abRow.Controls.AddRange(new Control[] { _btnSetA, _btnSetB, _btnClearAb, _labelLoop });
+        _labelInfo.Height = Math.Max(24, _labelInfo.Font.Height + 8);
+        int statusHeight = _labelInfo.Height + 14;
+        int playbackHeight = 40 + (iconSize + 6) + (buttonHeight + 6) + 22 + (comboHeight + 6) + 24;
+        int sourceHeight = 40 + 4 * (buttonHeight + 6) + 4;
 
-        var speedRow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        speedRow.Controls.Add(_comboSpeed);
-        speedRow.Controls.Add(new Label { AutoSize = true, Text = "倍速待技术评估", ForeColor = Color.FromArgb(148, 163, 184) });
+        root.RowStyles[0].Height = statusHeight + 4;
+        root.RowStyles[2].Height = playbackHeight + 4;
+        root.RowStyles[3].Height = sourceHeight;
 
-        var bottom = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = true };
-        bottom.Controls.AddRange(new Control[] { _btnFollowRead, _btnRules, _btnManual, _btnManualFromList, _btnAddDir, _btnAiMatch, _btnRescan, _chkSubDir });
+        playback.RowStyles[0].Height = iconSize + 6;
+        playback.RowStyles[1].Height = buttonHeight + 6;
+        playback.RowStyles[2].Height = 22F;
+        playback.RowStyles[3].Height = comboHeight + 6;
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 7 };
-        root.Controls.Add(_labelInfo, 0, 0);
-        root.Controls.Add(_listTracks, 0, 1);
-        root.Controls.Add(transport, 0, 2);
-        root.Controls.Add(abRow, 0, 3);
-        root.Controls.Add(speedRow, 0, 4);
-        root.Controls.Add(_labelSubtitle, 0, 5);
-        root.Controls.Add(bottom, 0, 6);
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        for (int i = 2; i < 7; i++) root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        for (int i = 0; i < sourceGrid.RowStyles.Count; i++)
+            sourceGrid.RowStyles[i].Height = buttonHeight + 6;
 
-        Controls.Add(root);
-        Padding = new Padding(6);
+        StyleTransportButton(_btnPrev, iconSize, iconSize, primary: false);
+        StyleTransportButton(_btnPlay, iconSize + 12, iconSize, primary: true);
+        StyleTransportButton(_btnNext, iconSize, iconSize, primary: false);
+    }
+
+    /// <summary>播放区图标按钮：播放/暂停为主按钮，前后曲为次级按钮。</summary>
+    private static void StyleTransportButton(Button button, int width, int height, bool primary)
+    {
+        button.AutoSize = false;
+        button.Size = new Size(width, height);
+        button.FlatStyle = FlatStyle.Flat;
+        button.FlatAppearance.BorderSize = primary ? 0 : 1;
+        button.FlatAppearance.BorderColor = PdfSidebarTheme.Border;
+        button.BackColor = primary ? PdfSidebarTheme.Brand : PdfSidebarTheme.Surface;
+        button.ForeColor = primary ? Color.White : PdfSidebarTheme.Text;
+        button.Font = new Font("Microsoft YaHei UI", primary ? 11F : 10F, FontStyle.Bold);
+        button.Cursor = Cursors.Hand;
+        button.Margin = new Padding(3, 0, 3, 0);
+        button.Tag = primary ? "accent" : "transport";
+    }
+
+    private void ListTracks_DrawItem(object? sender, DrawItemEventArgs e)
+    {
+        var palette = PdfSidebarTheme.PaletteFor(this);
+        bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+
+        using (var background = new SolidBrush(selected ? palette.BrandSoft : palette.Surface))
+            e.Graphics.FillRectangle(background, e.Bounds);
+
+        if (e.Index < 0 || e.Index >= _listTracks.Items.Count) return;
+
+        using (var pen = new Pen(palette.Border))
+            e.Graphics.DrawLine(pen, e.Bounds.Left + 4, e.Bounds.Bottom - 1, e.Bounds.Right - 4, e.Bounds.Bottom - 1);
+
+        var textRect = new Rectangle(e.Bounds.Left + 10, e.Bounds.Top,
+            Math.Max(10, e.Bounds.Width - 16), e.Bounds.Height);
+        Color foreColor = selected
+            ? (palette.IsDark ? Color.White : PdfSidebarTheme.Brand)
+            : palette.Text;
+        _listFont ??= new Font("Microsoft YaHei UI", 9.5F);
+        TextRenderer.DrawText(e.Graphics, _listTracks.Items[e.Index]?.ToString() ?? string.Empty,
+            _listFont, textRect, foreColor,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+    }
+
+    public void ApplyTheme(bool isDark)
+    {
+        var palette = new PdfSidebarPalette(isDark);
+        BackColor = palette.Background;
+        _labelInfo.ForeColor = palette.Text;
+        _labelSubtitle.ForeColor = PdfSidebarTheme.Score;
+        _listTracks.BackColor = palette.Surface;
+        _listTracks.ForeColor = palette.Text;
+        _comboSpeed.BackColor = palette.Surface;
+        _comboSpeed.ForeColor = palette.Text;
+        _listTracks.Invalidate();
     }
 
     private void WireEvents()
@@ -117,6 +158,7 @@ public class PdfAudioPanel : UserControl
             finally { _chkSubDir.Enabled = true; }
         };
         _listTracks.SelectedIndexChanged += (_, _) => OnTrackSelected();
+        _listTracks.DrawItem += ListTracks_DrawItem;
         _manager.ProfileLoaded += OnProfileLoaded;
 
         _manager.Playback.Player.StateChanged += OnPlayerStateChanged;
@@ -439,11 +481,16 @@ public class PdfAudioPanel : UserControl
     {
         if (disposing)
         {
-            _manager.Playback.Player.StateChanged -= OnPlayerStateChanged;
-            _manager.Playback.Player.PositionChanged -= OnPlayerPositionChanged;
-            _manager.ProfileLoaded -= OnProfileLoaded;
-            if (_recordingCompletedHandler != null && _form.AudioRecorderService != null)
+            if (_manager != null)
+            {
+                _manager.Playback.Player.StateChanged -= OnPlayerStateChanged;
+                _manager.Playback.Player.PositionChanged -= OnPlayerPositionChanged;
+                _manager.ProfileLoaded -= OnProfileLoaded;
+            }
+            if (_recordingCompletedHandler != null && _form != null && _form.AudioRecorderService != null)
                 _form.AudioRecorderService.RecordingCompleted -= _recordingCompletedHandler;
+            _listFont?.Dispose();
+            components?.Dispose();
         }
         base.Dispose(disposing);
     }
