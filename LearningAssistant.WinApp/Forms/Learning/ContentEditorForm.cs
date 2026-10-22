@@ -662,7 +662,8 @@ namespace LearningAssistant.Forms.Learning
                 return;
             }
 
-            using var form = new ContentPreviewForm(item);
+            var rowItemId = (dataGridView.CurrentRow?.DataBoundItem as DataRowView)?.Row["Id"]?.ToString();
+            using var form = new ContentPreviewForm(item, rowItemId);
             form.StartPosition = FormStartPosition.CenterParent;
             form.ShowDialog(this);
         }
@@ -732,12 +733,16 @@ namespace LearningAssistant.Forms.Learning
         {
             private readonly LearningItem _item;
             private readonly IWordPracticeService? _practice;
+            private readonly IPracticeRecordService? _practiceRecords;
+            private readonly string _itemId;
             private readonly Label _labelStatus = new();
 
-            public ContentPreviewForm(LearningItem item)
+            public ContentPreviewForm(LearningItem item, string? itemId = null)
             {
                 _item = item ?? throw new ArgumentNullException(nameof(item));
+                _itemId = string.IsNullOrWhiteSpace(itemId) ? item.Id : itemId;
                 _practice = Program.GetService<IWordPracticeService>();
+                _practiceRecords = Program.GetService<IPracticeRecordService>();
                 InitializeComponent();
             }
 
@@ -759,7 +764,7 @@ namespace LearningAssistant.Forms.Learning
                 root.RowStyles.Add(new RowStyle(SizeType.Absolute, 78F));
                 root.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
                 root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58F));
+                root.RowStyles.Add(new RowStyle(SizeType.Absolute, 74F));
                 root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
 
                 var labelContent = new Label
@@ -810,6 +815,7 @@ namespace LearningAssistant.Forms.Learning
                         + $"{Environment.NewLine}知识点：{knowledgePoint}　适龄段：{_item.AgeRange.ToDisplayString()}"
                         + $"　重要等级：{_item.Importance.ToDisplayString()}"
                         + $"{Environment.NewLine}难度：{_item.ContentDifficulty}　来源：{_item.SourceType.ToDisplayString()}"
+                        + $"{Environment.NewLine}{BuildPracticeText()}"
                 };
 
                 var buttonPanel = new FlowLayoutPanel
@@ -851,6 +857,22 @@ namespace LearningAssistant.Forms.Learning
                 Controls.Add(root);
                 Controls.Add(statusPanel);
                 CancelButton = buttonClose;
+            }
+
+            /// <summary>内容质量判断辅助：该项被练习的次数、平均分与最近时间（P4-3）。</summary>
+            private string BuildPracticeText()
+            {
+                const string empty = "练习：暂无练习记录";
+                if (_practiceRecords == null || string.IsNullOrWhiteSpace(_itemId)) return empty;
+
+                var userId = Program.GetService<Services.Learning.IUserSessionService>()?.CurrentUserId;
+                if (string.IsNullOrWhiteSpace(userId)) return empty;
+
+                var records = _practiceRecords.GetRecent(userId, _itemId, null, 200);
+                if (records.Count == 0) return empty;
+
+                var average = records.Average(r => r.Score);
+                return $"练习：{records.Count} 次　平均 {average:0} 分　最近 {records[0].CreatedAt:MM-dd HH:mm}";
             }
 
             private static Button CreateButton(string text, Color backColor)

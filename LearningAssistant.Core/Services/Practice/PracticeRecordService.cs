@@ -11,6 +11,10 @@ namespace LearningAssistant.Services.Practice
     {
         Task SaveAsync(PracticeRecord record, CancellationToken cancellationToken = default);
         IReadOnlyList<PracticeRecord> GetRecent(string userId, string? learningItemId = null, PracticeType? type = null, int limit = 50);
+
+        /// <summary>批量取每个学习项最近一次练习记录（列表状态展示用，避免逐项查询）。</summary>
+        IReadOnlyDictionary<string, PracticeRecord> GetLatestByItemIds(string userId, IEnumerable<string> learningItemIds);
+
         PracticeSummary GetSummary(string userId, DateTime? since = null);
     }
 
@@ -126,6 +130,50 @@ namespace LearningAssistant.Services.Practice
                 _logger?.LogWarning(ex, "读取练习记录失败: {UserId}", userId);
                 return Array.Empty<PracticeRecord>();
             }
+        }
+
+        public IReadOnlyDictionary<string, PracticeRecord> GetLatestByItemIds(
+            string userId, IEnumerable<string> learningItemIds)
+        {
+            var result = new Dictionary<string, PracticeRecord>(StringComparer.Ordinal);
+            if (string.IsNullOrWhiteSpace(userId) || learningItemIds == null) return result;
+
+            var ids = learningItemIds
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (ids.Count == 0) return result;
+
+            try
+            {
+                using var db = _dbContextFactory.CreateDbContext();
+
+                // 分批查询，避免超过 SQLite 参数上限
+                const int batchSize = 500;
+                for (int offset = 0; offset < ids.Count; offset += batchSize)
+                {
+                    var batch = ids.Skip(offset).Take(batchSize).ToList();
+                    var records = db.PracticeRecords
+                        .Where(p => p.UserId == userId && p.IsActive
+                                    && p.LearningItemId != null
+                                    && batch.Contains(p.LearningItemId))
+                        .OrderByDescending(p => p.CreatedAt)
+                        .ToList();
+
+                    foreach (var entity in records)
+                    {
+                        var key = entity.LearningItemId!;
+                        if (!result.ContainsKey(key))
+                            result[key] = ToModel(entity);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "批量读取最近练习记录失败: {UserId}", userId);
+            }
+
+            return result;
         }
 
         public PracticeSummary GetSummary(string userId, DateTime? since = null)

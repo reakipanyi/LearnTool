@@ -6,13 +6,16 @@ using LearningAssistant.Forms.UserControls.Common;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Config;
 using LearningAssistant.Models.Learning;
+using LearningAssistant.Models.Learning.Status;
 using LearningAssistant.Models.Pdf;
+using LearningAssistant.Models.Practice;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
 using LearningAssistant.Services.AI;
 using LearningAssistant.Services.Media;
 using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Pdf;
+using LearningAssistant.Services.Practice;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel;
@@ -114,6 +117,7 @@ namespace LearningAssistant.Forms.Pdf
         private Button? _buttonStudyAddHighlights;
         private Button? _buttonStudyFlashcards;
         private Button? _buttonStudyShadowing;
+        private FlowLayoutPanel? _studyItemList;
         private TextBox _textBoxOriginal;
         private Label _labelOriginal;
         private Label _labelTranslation;
@@ -6361,11 +6365,12 @@ namespace LearningAssistant.Forms.Pdf
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
-                RowCount = 3,
+                RowCount = 4,
                 BackColor = PdfSidebarTheme.Background,
                 Padding = new Padding(6, 2, 6, 6)
             };
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 150F));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 150F));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
@@ -6391,7 +6396,7 @@ namespace LearningAssistant.Forms.Pdf
             var actionCard = new SidebarCard("一键操作")
             {
                 Dock = DockStyle.Fill,
-                Margin = Padding.Empty
+                Margin = new Padding(0, 0, 0, 4)
             };
 
             _buttonStudyAddHighlights = new Button();
@@ -6435,9 +6440,27 @@ namespace LearningAssistant.Forms.Pdf
             actionLayout.Controls.Add(hint);
             actionCard.Body.Controls.Add(actionLayout);
 
+            // 本页学习项列表（P3-2）：显示状态与最近练习，双击回跳对应页
+            var listCard = new SidebarCard("本页学习项")
+            {
+                Dock = DockStyle.Fill,
+                Margin = Padding.Empty
+            };
+            _studyItemList = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                AutoScroll = true,
+                BackColor = PdfSidebarTheme.Background,
+                Padding = Padding.Empty
+            };
+            listCard.Body.Controls.Add(_studyItemList);
+
             root.Controls.Add(header, 0, 0);
             root.Controls.Add(overviewCard, 0, 1);
             root.Controls.Add(actionCard, 0, 2);
+            root.Controls.Add(listCard, 0, 3);
             _tabPageStudy.Controls.Add(root);
         }
 
@@ -6478,11 +6501,15 @@ namespace LearningAssistant.Forms.Pdf
             }
 
             int learningCount = 0;
+            IReadOnlyList<LearningItem> pageItems = Array.Empty<LearningItem>();
             try
             {
                 var studyEntryService = Program.GetService<IStudyEntryService>();
                 if (studyEntryService != null && !string.IsNullOrWhiteSpace(_currentPdfPath) && _currentPageIndex >= 0)
-                    learningCount = studyEntryService.GetByPdfPage(_currentPdfPath, _currentPageIndex).Count;
+                {
+                    pageItems = studyEntryService.GetByPdfPage(_currentPdfPath, _currentPageIndex);
+                    learningCount = pageItems.Count;
+                }
             }
             catch (Exception ex)
             {
@@ -6499,6 +6526,146 @@ namespace LearningAssistant.Forms.Pdf
                 _buttonStudyAddHighlights.Enabled = highlightCount > 0;
             if (_buttonStudyShadowing != null)
                 _buttonStudyShadowing.Enabled = sentenceCount > 0;
+
+            RefreshStudyItemList(pageItems);
+        }
+
+        /// <summary>重建「本页学习项」列表：内容 + 状态 + 最近练习（P3-2 / P4-3）。</summary>
+        private void RefreshStudyItemList(IReadOnlyList<LearningItem> items)
+        {
+            if (_studyItemList == null) return;
+
+            _studyItemList.SuspendLayout();
+            try
+            {
+                _studyItemList.Controls.Clear();
+
+                if (items.Count == 0)
+                {
+                    var empty = new Label
+                    {
+                        AutoSize = false,
+                        Size = new Size(260, 30),
+                        Font = new Font("Microsoft YaHei UI", 9F),
+                        ForeColor = PdfSidebarTheme.Muted,
+                        Margin = new Padding(2, 4, 0, 0),
+                        Tag = "muted",
+                        Text = "本页暂无学习项，可先加入高亮或生成闪卡"
+                    };
+                    _studyItemList.Controls.Add(empty);
+                    return;
+                }
+
+                IReadOnlyDictionary<string, PracticeRecord> latest =
+                    new Dictionary<string, PracticeRecord>();
+                try
+                {
+                    var practice = Program.GetService<IPracticeRecordService>();
+                    var userId = _userSessionService?.CurrentUserId;
+                    if (practice != null && !string.IsNullOrWhiteSpace(userId))
+                        latest = practice.GetLatestByItemIds(userId, items.Select(i => i.Id));
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "读取本页学习项练习记录失败");
+                }
+
+                foreach (var item in items)
+                    _studyItemList.Controls.Add(CreateStudyItemRow(item, latest));
+            }
+            finally
+            {
+                _studyItemList.ResumeLayout();
+            }
+        }
+
+        private Control CreateStudyItemRow(
+            LearningItem item, IReadOnlyDictionary<string, PracticeRecord> latest)
+        {
+            var row = new Panel
+            {
+                Size = new Size(260, 52),
+                BackColor = PdfSidebarTheme.Surface,
+                Margin = new Padding(2, 0, 2, 4),
+                Cursor = Cursors.Hand
+            };
+
+            var content = new Label
+            {
+                AutoSize = false,
+                Location = new Point(2, 2),
+                Size = new Size(256, 28),
+                Font = new Font("Microsoft YaHei UI", 9.5F),
+                ForeColor = PdfSidebarTheme.Text,
+                TextAlign = ContentAlignment.MiddleLeft,
+                AutoEllipsis = true,
+                Text = item.MainContent
+            };
+
+            var meta = new Label
+            {
+                AutoSize = false,
+                Location = new Point(2, 30),
+                Size = new Size(256, 20),
+                Font = new Font("Microsoft YaHei UI", 8.5F),
+                ForeColor = PdfSidebarTheme.Muted,
+                TextAlign = ContentAlignment.MiddleLeft,
+                AutoEllipsis = true,
+                Tag = "muted",
+                Text = BuildStudyItemMeta(item, latest)
+            };
+
+            void Jump(object? sender, EventArgs e) => _ = JumpToStudyItemAsync(item);
+            row.DoubleClick += Jump;
+            content.DoubleClick += Jump;
+            meta.DoubleClick += Jump;
+
+            row.Controls.Add(content);
+            row.Controls.Add(meta);
+            return row;
+        }
+
+        private static string BuildStudyItemMeta(
+            LearningItem item, IReadOnlyDictionary<string, PracticeRecord> latest)
+        {
+            var status = GetLearningStatusText(item.Status);
+
+            if (latest.TryGetValue(item.Id, out var record))
+                return $"{status} · 最近练习 {record.CreatedAt:MM-dd HH:mm} · {record.Score:0}分";
+
+            if (item.LastReviewedAt.HasValue)
+                return $"{status} · 最近复习 {item.LastReviewedAt.Value:MM-dd HH:mm}";
+
+            return $"{status} · 尚无练习";
+        }
+
+        private static string GetLearningStatusText(LearningStatus status) => status switch
+        {
+            LearningStatus.New => "新",
+            LearningStatus.Learning => "学习中",
+            LearningStatus.Known => "已认识",
+            LearningStatus.Mastered => "已掌握",
+            _ => "—"
+        };
+
+        /// <summary>双击学习项回跳到它的来源页（P4-3 回流入口）。</summary>
+        private async Task JumpToStudyItemAsync(LearningItem item)
+        {
+            if (_presenter == null || _presenter.PageCount <= 0) return;
+
+            int pageIndex = item.SourceRef is { PageIndex: >= 0 } anchor
+                ? anchor.PageIndex
+                : _currentPageIndex;
+            pageIndex = Math.Clamp(pageIndex, 0, _presenter.PageCount - 1);
+
+            try
+            {
+                await _presenter.RenderPage(pageIndex);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "学习项回跳失败");
+            }
         }
 
         private static int CountReadableSentences(string? text)
