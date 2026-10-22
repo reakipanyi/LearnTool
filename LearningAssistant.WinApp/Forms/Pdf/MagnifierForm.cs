@@ -1,13 +1,12 @@
-﻿using System.Drawing.Drawing2D;
+using System.Drawing.Drawing2D;
 
 namespace LearningAssistant.Forms.Pdf
 {
     /// <summary>
-    /// 放大镜窗体，显示 PDF 页面指定区域的放大视图
+    /// 放大镜窗体，显示 PDF 页面指定区域的放大视图。控件在设计器中创建，便于可视化预览。
     /// </summary>
-    public class MagnifierForm : Form
+    public partial class MagnifierForm : Form
     {
-        private readonly PictureBox _pictureBox;
         private readonly Bitmap _sourceImage;
         private readonly Point _sourcePoint;
         private readonly int _zoomFactor = 2;
@@ -15,31 +14,20 @@ namespace LearningAssistant.Forms.Pdf
         private bool _isDragging;
         private Point _dragStart;
 
+        /// <summary>供 Visual Studio 设计器实例化使用。</summary>
+        public MagnifierForm() : this(new Bitmap(1, 1), Point.Empty)
+        {
+        }
+
         public MagnifierForm(Bitmap sourceImage, Point sourcePoint, int zoomFactor = 2)
         {
             _sourceImage = sourceImage;
             _sourcePoint = sourcePoint;
             _zoomFactor = zoomFactor;
 
-            Text = "放大镜";
-            FormBorderStyle = FormBorderStyle.FixedToolWindow;
-            StartPosition = FormStartPosition.Manual;
-            ShowInTaskbar = false;
-            TopMost = true;
-            Size = new Size(_lensRadius * 2 * _zoomFactor + 16, _lensRadius * 2 * _zoomFactor + 40);
-            BackColor = Color.White;
+            InitializeComponent();
 
-            _pictureBox = new PictureBox
-            {
-                Dock = DockStyle.Fill,
-                SizeMode = PictureBoxSizeMode.StretchImage,
-                Cursor = Cursors.SizeAll,
-                BorderStyle = BorderStyle.FixedSingle
-            };
-            _pictureBox.MouseDown += PictureBox_MouseDown;
-            _pictureBox.MouseMove += PictureBox_MouseMove;
-            _pictureBox.MouseUp += PictureBox_MouseUp;
-            Controls.Add(_pictureBox);
+            Size = new Size(_lensRadius * 2 * _zoomFactor + 16, _lensRadius * 2 * _zoomFactor + 40);
 
             UpdateMagnifiedImage();
         }
@@ -74,8 +62,8 @@ namespace LearningAssistant.Forms.Pdf
             using var circlePen = new Pen(Color.Black, 2);
             g.DrawEllipse(circlePen, 0, 0, magnified.Width - 1, magnified.Height - 1);
 
-            _pictureBox.Image?.Dispose();
-            _pictureBox.Image = magnified;
+            pictureBox.Image?.Dispose();
+            pictureBox.Image = magnified;
         }
 
         private void PictureBox_MouseDown(object? sender, MouseEventArgs e)
@@ -115,7 +103,7 @@ namespace LearningAssistant.Forms.Pdf
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
-            _pictureBox.Image?.Dispose();
+            pictureBox.Image?.Dispose();
             base.OnFormClosed(e);
         }
     }
