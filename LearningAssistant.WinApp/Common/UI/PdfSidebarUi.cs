@@ -166,9 +166,54 @@ namespace LearningAssistant.Common.UI
         private readonly Label _icon = new();
         private readonly Label _title = new();
         private readonly Label _subtitle = new();
-        private readonly Button? _action;
+        private Button? _action;
 
         public Label Subtitle => _subtitle;
+
+        /// <summary>供 Visual Studio 设计器实例化；运行时请使用带图标的构造函数。</summary>
+        public SidebarHeaderBar() : this(string.Empty, string.Empty)
+        {
+        }
+
+        /// <summary>页头图标；设计器通过该属性设置。</summary>
+        [System.ComponentModel.DefaultValue("")]
+        public string Icon
+        {
+            get => _icon.Text;
+            set => _icon.Text = value;
+        }
+
+        /// <summary>页头标题；设计器通过该属性设置。</summary>
+        [System.ComponentModel.DefaultValue("")]
+        public string TitleText
+        {
+            get => _title.Text;
+            set => _title.Text = value;
+        }
+
+        /// <summary>右侧主操作文字；赋值时创建按钮。</summary>
+        [System.ComponentModel.DefaultValue("")]
+        public string ActionText
+        {
+            get => _action?.Text ?? string.Empty;
+            set
+            {
+                if (string.IsNullOrEmpty(value)) return;
+                if (_action == null)
+                {
+                    _action = SidebarUi.CreatePrimaryButton(value, 28);
+                    _action.Dock = DockStyle.None;
+                    _action.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+                    Controls.Add(_action);
+                }
+                _action.Text = value;
+            }
+        }
+
+        /// <summary>右侧主操作按钮，供宿主订阅点击事件。</summary>
+        [System.ComponentModel.Browsable(false)]
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public Button? ActionButton => _action;
 
         public SidebarHeaderBar(string icon, string title, string? actionText = null, EventHandler? onAction = null)
         {
@@ -254,6 +299,29 @@ namespace LearningAssistant.Common.UI
             get => _title.Text;
             set => _title.Text = value;
         }
+
+        /// <summary>卡片右上角操作文字；赋值时创建按钮。</summary>
+        [System.ComponentModel.DefaultValue("")]
+        public string ActionText
+        {
+            get => _actionButton?.Text ?? string.Empty;
+            set
+            {
+                if (string.IsNullOrEmpty(value)) return;
+                if (_actionButton == null)
+                {
+                    _actionButton = SidebarUi.CreateGhostButton(value, 26);
+                    _actionButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+                    Controls.Add(_actionButton);
+                }
+                _actionButton.Text = value;
+            }
+        }
+
+        /// <summary>卡片右上角操作按钮，供宿主订阅点击事件。</summary>
+        [System.ComponentModel.Browsable(false)]
+        [System.ComponentModel.DesignerSerializationVisibility(System.ComponentModel.DesignerSerializationVisibility.Hidden)]
+        public Button? ActionButton => _actionButton;
 
         public SidebarCard(string title, string? actionText = null, EventHandler? onAction = null)
         {

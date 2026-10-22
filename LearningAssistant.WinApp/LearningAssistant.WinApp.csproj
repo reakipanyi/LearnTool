@@ -258,6 +258,18 @@
 		<Compile Update="Forms\Pdf\PdfAudioPanel.cs">
 			<SubType>UserControl</SubType>
 		</Compile>
+		<Compile Update="Forms\Pdf\PdfShadowingPanel.cs">
+			<SubType>UserControl</SubType>
+		</Compile>
+		<Compile Update="Forms\Pdf\PdfTranslatePanel.cs">
+			<SubType>UserControl</SubType>
+		</Compile>
+		<Compile Update="Forms\Pdf\PdfHighlightPanel.cs">
+			<SubType>UserControl</SubType>
+		</Compile>
+		<Compile Update="Forms\Pdf\PdfStudyPanel.cs">
+			<SubType>UserControl</SubType>
+		</Compile>
 		<Compile Update="Forms\PanOrganizerForm.cs">
 			<SubType>Form</SubType>
 		</Compile>
