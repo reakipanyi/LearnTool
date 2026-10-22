@@ -1,6 +1,7 @@
 using LearningAssistant.Models.Learning;
 using LearningAssistant.Models.Learning.Status;
 using LearningAssistant.Models.Learning.ValueObjects;
+using LearningAssistant.Services.Learning;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -153,6 +154,42 @@ namespace LearningAssistant.Common
                         if (reader.TryGetDateTime(out var lastReviewedAt))
                             item.LastReviewedAt = lastReviewedAt;
                         break;
+                    case "knowledgepointid":
+                        item.KnowledgePointId = reader.TokenType == JsonTokenType.String ? reader.GetString() : null;
+                        break;
+                    case "knowledgepointpath":
+                        item.KnowledgePointPath = reader.TokenType == JsonTokenType.String ? reader.GetString() ?? string.Empty : string.Empty;
+                        break;
+                    case "agerange":
+                        item.AgeRange = ReadAgeRange(ref reader);
+                        break;
+                    case "importance":
+                        item.Importance = ReadImportance(ref reader);
+                        break;
+                    case "contentdifficulty":
+                        item.ContentDifficulty = Math.Clamp(ReadInt32(ref reader, 3), 1, 5);
+                        break;
+                    case "sourcetype":
+                        item.SourceType = ReadSourceType(ref reader);
+                        break;
+                    case "sourceref":
+                        using (var sourceDoc = JsonDocument.ParseValue(ref reader))
+                        {
+                            if (sourceDoc.RootElement.ValueKind == JsonValueKind.Object)
+                            {
+                                try
+                                {
+                                    item.SourceRef = JsonSerializer.Deserialize<LearningSourceRef>(
+                                        sourceDoc.RootElement.GetRawText(),
+                                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                }
+                                catch
+                                {
+                                    // 来源锚点损坏时不影响学习项主体加载
+                                }
+                            }
+                        }
+                        break;
                     case "$type":
                         typeName = reader.GetString();
                         break;
@@ -228,8 +265,71 @@ namespace LearningAssistant.Common
             "SyllableBreakdown", "Word", "Character", "Phrase", "Sentence",
             "Idiom", "Poem", "Title", "Rule",
             "ChineseMeaning", "ExampleTranslation", "Content", "Explanation",
-            "$type", "Status", "ReviewCount", "LastReviewedAt", "ExtendedProperties"
+            "$type", "Status", "ReviewCount", "LastReviewedAt", "ExtendedProperties",
+            "KnowledgePointId", "KnowledgePointPath", "AgeRange", "Importance",
+            "ContentDifficulty", "SourceType", "SourceRef"
         };
+
+        private static AgeRange ReadAgeRange(ref Utf8JsonReader reader)
+        {
+            if (reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out var number)
+                && Enum.IsDefined(typeof(AgeRange), number))
+            {
+                return (AgeRange)number;
+            }
+
+            if (reader.TokenType == JsonTokenType.String
+                && LearningItemClassification.TryParseAgeRange(reader.GetString(), out var parsed))
+            {
+                return parsed;
+            }
+
+            return AgeRange.All;
+        }
+
+        private static ImportanceLevel ReadImportance(ref Utf8JsonReader reader)
+        {
+            if (reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out var number)
+                && Enum.IsDefined(typeof(ImportanceLevel), number))
+            {
+                return (ImportanceLevel)number;
+            }
+
+            if (reader.TokenType == JsonTokenType.String
+                && LearningItemClassification.TryParseImportance(reader.GetString(), out var parsed))
+            {
+                return parsed;
+            }
+
+            return ImportanceLevel.Normal;
+        }
+
+        private static StudyContentSource ReadSourceType(ref Utf8JsonReader reader)
+        {
+            if (reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out var number)
+                && Enum.IsDefined(typeof(StudyContentSource), number))
+            {
+                return (StudyContentSource)number;
+            }
+
+            return reader.TokenType == JsonTokenType.String
+                ? LearningItemClassification.ParseSourceType(reader.GetString())
+                : StudyContentSource.Manual;
+        }
+
+        private static int ReadInt32(ref Utf8JsonReader reader, int defaultValue)
+        {
+            if (reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out var number))
+                return number;
+
+            if (reader.TokenType == JsonTokenType.String
+                && int.TryParse(reader.GetString(), out var parsed))
+            {
+                return parsed;
+            }
+
+            return defaultValue;
+        }
 
         private static SubCategoryType InferSubCategoryFromTypeName(string typeName)
         {
@@ -302,6 +402,30 @@ namespace LearningAssistant.Common
             writer.WriteNumber("ReviewCount", value.ReviewCount);
             if (value.LastReviewedAt.HasValue)
                 writer.WriteString("LastReviewedAt", value.LastReviewedAt.Value);
+
+            if (!string.IsNullOrWhiteSpace(value.KnowledgePointId))
+                writer.WriteString("KnowledgePointId", value.KnowledgePointId);
+
+            if (!string.IsNullOrWhiteSpace(value.KnowledgePointPath))
+                writer.WriteString("KnowledgePointPath", value.KnowledgePointPath);
+
+            if (value.AgeRange != AgeRange.All)
+                writer.WriteString("AgeRange", value.AgeRange.ToString());
+
+            if (value.Importance != ImportanceLevel.Normal)
+                writer.WriteString("Importance", value.Importance.ToString());
+
+            if (value.ContentDifficulty != 3)
+                writer.WriteNumber("ContentDifficulty", value.ContentDifficulty);
+
+            if (value.SourceType != StudyContentSource.Manual)
+                writer.WriteString("SourceType", value.SourceType.ToString());
+
+            if (value.SourceRef != null)
+            {
+                writer.WritePropertyName("SourceRef");
+                JsonSerializer.Serialize(writer, value.SourceRef, options);
+            }
 
             writer.WritePropertyName("ExtendedProperties");
             writer.WriteRawValue(value.ExtendedProperties);

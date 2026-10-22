@@ -50,6 +50,17 @@ namespace LearningAssistant.Presenters
         /// </summary>
         private bool _isLoading = false;
 
+        /// <summary>分类维度列（P1）：所有类别通用，参与筛选、排序与统计。</summary>
+        private static readonly string[] ClassificationColumns =
+        {
+            "KnowledgePointId",
+            "KnowledgePointPath",
+            "AgeRange",
+            "Importance",
+            "ContentDifficulty",
+            "SourceType"
+        };
+
 
 
         /// <summary>
@@ -180,6 +191,12 @@ namespace LearningAssistant.Presenters
                         column.Caption = CategoryConfig.GetChineseColumnName(key, categoryStr);
                     }
                 }
+
+                foreach (var key in ClassificationColumns)
+                {
+                    var column = table.Columns.Add(key, typeof(string));
+                    column.Caption = CategoryConfig.GetChineseColumnName(key, categoryStr);
+                }
                 return table;
             }
 
@@ -195,6 +212,9 @@ namespace LearningAssistant.Presenters
                 allColumns.Add("Id");
                 allColumns.Add("CreatedAt");
                 allColumns.Add("UpdatedAt");
+
+                foreach (var key in ClassificationColumns)
+                    allColumns.Add(key);
 
                 if (!string.IsNullOrWhiteSpace(item.MainContent))
                 {
@@ -247,6 +267,13 @@ namespace LearningAssistant.Presenters
                 row["Id"] = item.Id;
                 row["CreatedAt"] = item.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss");
                 row["UpdatedAt"] = item.UpdatedAt.ToString("yyyy-MM-dd HH:mm:ss");
+
+                row["KnowledgePointId"] = item.KnowledgePointId ?? string.Empty;
+                row["KnowledgePointPath"] = item.KnowledgePointPath;
+                row["AgeRange"] = item.AgeRange.ToDisplayString();
+                row["Importance"] = item.Importance.ToDisplayString();
+                row["ContentDifficulty"] = item.ContentDifficulty.ToString();
+                row["SourceType"] = LearningItemClassification.GetEffectiveSourceType(item).ToDisplayString();
 
                 if (categoryStr.StartsWith("English"))
                     row["Word"] = item.MainContent;
@@ -457,6 +484,16 @@ namespace LearningAssistant.Presenters
                     foreach (var property in element.EnumerateObject())
                     {
                         var englishName = CategoryConfig.GetEnglishColumnName(property.Name, category);
+
+                        // 编辑器以中文显示枚举值，写回 JSON 前转回枚举名，保证反序列化往返不丢值
+                        if (property.Value.ValueKind == JsonValueKind.String
+                            && LearningItemClassification.IsClassificationEnumColumn(englishName))
+                        {
+                            writer.WriteString(englishName,
+                                LearningItemClassification.NormalizeEnumValue(englishName, property.Value.GetString()));
+                            continue;
+                        }
+
                         writer.WritePropertyName(englishName);
                         property.Value.WriteTo(writer);
                     }

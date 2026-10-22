@@ -52,11 +52,16 @@ namespace LearningAssistant.Services.Learning
         private readonly Dictionary<string, CacheEntry> _fileCache = new Dictionary<string, CacheEntry>();
         private readonly object _cacheLock = new object();
         private readonly IAppPaths _appPaths;
+        private readonly ILearningTaxonomyService? _taxonomyService;
 
-        public ContentLoaderService(ILogger<ContentLoaderService> logger, IAppPaths appPaths)
+        public ContentLoaderService(
+            ILogger<ContentLoaderService> logger,
+            IAppPaths appPaths,
+            ILearningTaxonomyService? taxonomyService = null)
         {
             _logger = logger;
             _appPaths = appPaths;
+            _taxonomyService = taxonomyService;
         }
 
         public List<LearningItem> LoadItems(LearningContext context)
@@ -92,13 +97,127 @@ namespace LearningAssistant.Services.Learning
                     items.AddRange(personalItems);
                 }
 
-                return items;
+                return ApplyClassificationFilters(items, context);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to load items for subCategory: {SubCategory}", context.SubCategory);
                 return new List<LearningItem>();
             }
+        }
+
+        /// <summary>
+        /// 按知识点/适龄段/重要等级/来源过滤队列。未启用筛选时直接返回原集合，保持历史行为。
+        /// 知识点以关联表为权威来源，旧数据回退到学习项自身的 KnowledgePointId。
+        /// </summary>
+        private List<LearningItem> ApplyClassificationFilters(List<LearningItem> items, LearningContext context)
+        {
+            if (!context.HasClassificationFilter || items.Count == 0)
+                return items;
+
+            IReadOnlyDictionary<string, string>? assignments = null;
+            HashSet<string>? allowedKnowledgePointIds = null;
+
+            if (!string.IsNullOrWhiteSpace(context.KnowledgePointId))
+            {
+                assignments = _taxonomyService?.GetAssignmentMap(context.UserId);
+
+                if (context.KnowledgePointId == LearningTaxonomyService.UnclassifiedId)
+                {
+                    // 未分类筛选不需要子树集合
+                }
+                else if (_taxonomyService != null)
+                {
+                    allowedKnowledgePointIds = CollectKnowledgePointSubtree(
+                        context.Subject, context.UserId, context.KnowledgePointId);
+                }
+                else
+                {
+                    allowedKnowledgePointIds = new HashSet<string>(StringComparer.Ordinal)
+                    {
+                        context.KnowledgePointId
+                    };
+                }
+            }
+
+            return items.Where(item =>
+            {
+                if (context.AgeRange is { } ageFilter && ageFilter != AgeRange.All
+                    && item.AgeRange != ageFilter && item.AgeRange != AgeRange.All)
+                {
+                    return false;
+                }
+
+                if (context.Importance is { } importanceFilter && item.Importance != importanceFilter)
+                    return false;
+
+                if (context.SourceType is { } sourceFilter
+                    && LearningItemClassification.GetEffectiveSourceType(item) != sourceFilter)
+                {
+                    return false;
+                }
+
+                if (string.IsNullOrWhiteSpace(context.KnowledgePointId))
+                    return true;
+
+                var itemPointId = ResolveItemKnowledgePointId(item, assignments);
+
+                if (context.KnowledgePointId == LearningTaxonomyService.UnclassifiedId)
+                    return string.IsNullOrWhiteSpace(itemPointId);
+
+                return !string.IsNullOrWhiteSpace(itemPointId)
+                    && allowedKnowledgePointIds != null
+                    && allowedKnowledgePointIds.Contains(itemPointId);
+            }).ToList();
+        }
+
+        private static string? ResolveItemKnowledgePointId(
+            LearningItem item,
+            IReadOnlyDictionary<string, string>? assignments)
+        {
+            var key = string.IsNullOrWhiteSpace(item.Id)
+                ? LearningItemIdentity.GetCanonicalKey(item)
+                : item.Id;
+
+            if (assignments != null && assignments.TryGetValue(key, out var assigned))
+                return assigned;
+
+            return string.IsNullOrWhiteSpace(item.KnowledgePointId) ? null : item.KnowledgePointId;
+        }
+
+        private HashSet<string> CollectKnowledgePointSubtree(
+            SubjectType subject,
+            string userId,
+            string rootId)
+        {
+            var result = new HashSet<string>(StringComparer.Ordinal) { rootId };
+            var tree = _taxonomyService?.GetTree(subject, userId);
+            if (tree == null || tree.Count == 0)
+                return result;
+
+            KnowledgePointNode? FindNode(IEnumerable<KnowledgePointNode> nodes)
+            {
+                foreach (var node in nodes)
+                {
+                    if (node.Id == rootId) return node;
+                    var found = FindNode(node.Children);
+                    if (found != null) return found;
+                }
+                return null;
+            }
+
+            void Collect(KnowledgePointNode node)
+            {
+                result.Add(node.Id);
+                foreach (var child in node.Children)
+                    Collect(child);
+            }
+
+            var root = FindNode(tree);
+            if (root != null)
+                Collect(root);
+
+            return result;
         }
 
         public List<LearningItem> LoadItemsPaged(LearningContext context, int pageIndex, int pageSize)

@@ -65,6 +65,39 @@ namespace LearningAssistant.Common
         Random
     }
 
+    /// <summary>适龄段（All 表示通用，不限定年龄段）。</summary>
+    public enum AgeRange
+    {
+        All = 0,
+        Preschool = 1,
+        PrimaryLow = 2,
+        PrimaryHigh = 3,
+        JuniorHigh = 4,
+        SeniorHigh = 5,
+        Adult = 6
+    }
+
+    /// <summary>重要等级，数值越大复习优先级越高。</summary>
+    public enum ImportanceLevel
+    {
+        Extension = 1,
+        Normal = 2,
+        Key = 3,
+        Core = 4
+    }
+
+    /// <summary>学习内容来源，用于来源筛选与回跳原文。</summary>
+    public enum StudyContentSource
+    {
+        Manual = 0,
+        PdfHighlight = 1,
+        PdfAnnotation = 2,
+        PdfShadowing = 3,
+        PdfAiFlashcard = 4,
+        Import = 5,
+        Game = 6
+    }
+
 
     public enum ThemeMode
     {
@@ -76,6 +109,48 @@ namespace LearningAssistant.Common
 
     public static class EnumExtensions
     {
+        public static string ToDisplayString(this AgeRange ageRange)
+        {
+            return ageRange switch
+            {
+                AgeRange.All => "通用",
+                AgeRange.Preschool => "学前",
+                AgeRange.PrimaryLow => "小学低年级",
+                AgeRange.PrimaryHigh => "小学高年级",
+                AgeRange.JuniorHigh => "初中",
+                AgeRange.SeniorHigh => "高中",
+                AgeRange.Adult => "成人",
+                _ => ageRange.ToString()
+            };
+        }
+
+        public static string ToDisplayString(this ImportanceLevel importance)
+        {
+            return importance switch
+            {
+                ImportanceLevel.Extension => "拓展",
+                ImportanceLevel.Normal => "一般",
+                ImportanceLevel.Key => "重点",
+                ImportanceLevel.Core => "核心",
+                _ => importance.ToString()
+            };
+        }
+
+        public static string ToDisplayString(this StudyContentSource source)
+        {
+            return source switch
+            {
+                StudyContentSource.Manual => "手动",
+                StudyContentSource.PdfHighlight => "PDF高亮",
+                StudyContentSource.PdfAnnotation => "PDF标注",
+                StudyContentSource.PdfShadowing => "跟读",
+                StudyContentSource.PdfAiFlashcard => "PDF闪卡",
+                StudyContentSource.Import => "导入",
+                StudyContentSource.Game => "游戏",
+                _ => source.ToString()
+            };
+        }
+
         public static string ToDisplayString(this SubjectType language)
         {
             return language switch

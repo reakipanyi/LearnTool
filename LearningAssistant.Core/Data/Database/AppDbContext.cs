@@ -32,6 +32,8 @@ namespace LearningAssistant.Data.Database
         public DbSet<DailyGoalRecordEntity> DailyGoalRecords { get; set; }
         public DbSet<DailyRollupEntity> DailyRollups { get; set; }
         public DbSet<MigrationCheckpointEntity> MigrationCheckpoints { get; set; }
+        public DbSet<KnowledgePointEntity> KnowledgePoints { get; set; }
+        public DbSet<KnowledgePointAssignmentEntity> KnowledgePointAssignments { get; set; }
 
         private readonly string _dbPath;
 
@@ -285,6 +287,27 @@ namespace LearningAssistant.Data.Database
 
             modelBuilder.Entity<WrongAnswerEntity>()
                 .HasIndex(w => w.NextReviewAt);
+
+            // 知识点树（P1 分类体系）
+            modelBuilder.Entity<KnowledgePointEntity>()
+                .HasKey(k => k.Id);
+
+            modelBuilder.Entity<KnowledgePointEntity>()
+                .HasIndex(k => new { k.UserId, k.Subject });
+
+            modelBuilder.Entity<KnowledgePointEntity>()
+                .HasIndex(k => k.ParentId);
+
+            // 学习项 ↔ 知识点关联：同一用户同一学习项只允许一个知识点
+            modelBuilder.Entity<KnowledgePointAssignmentEntity>()
+                .HasKey(a => a.Id);
+
+            modelBuilder.Entity<KnowledgePointAssignmentEntity>()
+                .HasIndex(a => new { a.UserId, a.ItemKey })
+                .IsUnique();
+
+            modelBuilder.Entity<KnowledgePointAssignmentEntity>()
+                .HasIndex(a => a.KnowledgePointId);
         }
 
         /// <summary>
@@ -332,6 +355,8 @@ namespace LearningAssistant.Data.Database
                 RepairLearningPathsTable();
                 RepairLearningPathItemsTable();
                 RepairLearningItemsTable();
+                RepairKnowledgePointsTable();
+                RepairKnowledgePointAssignmentsTable();
                 RepairPomodoroSettingsTable();
                 RepairPomodoroRecordsTable();
                 RepairSpacedRepetitionItemsColumn();
@@ -632,6 +657,12 @@ namespace LearningAssistant.Data.Database
                 AlgorithmType TEXT NULL,
                 Category TEXT NULL,
                 Subject TEXT NULL,
+                KnowledgePointId TEXT NULL,
+                AgeRange INTEGER NOT NULL DEFAULT 0,
+                Importance INTEGER NOT NULL DEFAULT 2,
+                ContentDifficulty INTEGER NOT NULL DEFAULT 3,
+                SourceType TEXT NULL,
+                SourceRefJson TEXT NULL,
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
                 IsActive INTEGER NOT NULL DEFAULT 1,
@@ -937,6 +968,51 @@ namespace LearningAssistant.Data.Database
             Database.ExecuteSqlRaw(sql);
         }
 
+        private void RepairKnowledgePointsTable()
+        {
+            var sql = @"CREATE TABLE IF NOT EXISTS KnowledgePoints (
+                Id TEXT CONSTRAINT PK_KnowledgePoints PRIMARY KEY NOT NULL,
+                UserId TEXT NOT NULL,
+                ParentId TEXT NULL,
+                Name TEXT NOT NULL,
+                Subject TEXT NOT NULL DEFAULT '',
+                AgeRange INTEGER NOT NULL DEFAULT 0,
+                SortOrder INTEGER NOT NULL DEFAULT 0,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
+            );";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_KnowledgePoints_UserId_Subject ON KnowledgePoints(UserId, Subject);";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_KnowledgePoints_ParentId ON KnowledgePoints(ParentId);";
+            Database.ExecuteSqlRaw(sql);
+        }
+
+        private void RepairKnowledgePointAssignmentsTable()
+        {
+            var sql = @"CREATE TABLE IF NOT EXISTS KnowledgePointAssignments (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                UserId TEXT NOT NULL,
+                ItemKey TEXT NOT NULL,
+                KnowledgePointId TEXT NOT NULL,
+                CreatedAt TEXT NOT NULL,
+                UpdatedAt TEXT NOT NULL,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                RowVersion INTEGER NOT NULL DEFAULT 0
+            );";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE UNIQUE INDEX IF NOT EXISTS IX_KnowledgePointAssignments_UserId_ItemKey ON KnowledgePointAssignments(UserId, ItemKey);";
+            Database.ExecuteSqlRaw(sql);
+
+            sql = @"CREATE INDEX IF NOT EXISTS IX_KnowledgePointAssignments_KnowledgePointId ON KnowledgePointAssignments(KnowledgePointId);";
+            Database.ExecuteSqlRaw(sql);
+        }
+
         private void RepairPomodoroSettingsTable()
         {
             var sql = @"CREATE TABLE IF NOT EXISTS PomodoroSettings (
@@ -1036,6 +1112,66 @@ namespace LearningAssistant.Data.Database
             catch (Exception ex)
             {
                 System.Diagnostics.Trace.TraceWarning($"添加ItemKey列失败（可能已存在）: {ex.Message}");
+            }
+
+            try
+            {
+                var sql = @"ALTER TABLE SpacedRepetitionItems ADD COLUMN KnowledgePointId TEXT;";
+                Database.ExecuteSqlRaw(sql);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning($"添加KnowledgePointId列失败（可能已存在）: {ex.Message}");
+            }
+
+            try
+            {
+                var sql = @"ALTER TABLE SpacedRepetitionItems ADD COLUMN AgeRange INTEGER NOT NULL DEFAULT 0;";
+                Database.ExecuteSqlRaw(sql);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning($"添加AgeRange列失败（可能已存在）: {ex.Message}");
+            }
+
+            try
+            {
+                var sql = @"ALTER TABLE SpacedRepetitionItems ADD COLUMN Importance INTEGER NOT NULL DEFAULT 2;";
+                Database.ExecuteSqlRaw(sql);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning($"添加Importance列失败（可能已存在）: {ex.Message}");
+            }
+
+            try
+            {
+                var sql = @"ALTER TABLE SpacedRepetitionItems ADD COLUMN ContentDifficulty INTEGER NOT NULL DEFAULT 3;";
+                Database.ExecuteSqlRaw(sql);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning($"添加ContentDifficulty列失败（可能已存在）: {ex.Message}");
+            }
+
+            try
+            {
+                var sql = @"ALTER TABLE SpacedRepetitionItems ADD COLUMN SourceType TEXT;";
+                Database.ExecuteSqlRaw(sql);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning($"添加SourceType列失败（可能已存在）: {ex.Message}");
+            }
+
+            try
+            {
+                var sql = @"ALTER TABLE SpacedRepetitionItems ADD COLUMN SourceRefJson TEXT;";
+                Database.ExecuteSqlRaw(sql);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning($"添加SourceRefJson列失败（可能已存在）: {ex.Message}");
             }
 
             try

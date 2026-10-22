@@ -223,6 +223,22 @@ namespace LearningAssistant.Data.Database
         [MaxLength(64)]
         public string? ItemKey { get; set; }
 
+        // 分类维度（P1）：与学习项一等字段保持同步，供复习队列筛选与统计下钻。
+        [MaxLength(64)]
+        public string? KnowledgePointId { get; set; }
+
+        public int AgeRange { get; set; }
+
+        public int Importance { get; set; } = 2;
+
+        /// <summary>内容难度 1-5；与 FSRS 的 Difficulty 字段无关。</summary>
+        public int ContentDifficulty { get; set; } = 3;
+
+        [MaxLength(20)]
+        public string? SourceType { get; set; }
+
+        public string? SourceRefJson { get; set; }
+
         public List<ReviewLogEntity> ReviewLogs { get; set; } = new List<ReviewLogEntity>();
     }
 
@@ -823,5 +839,47 @@ namespace LearningAssistant.Data.Database
         public DateTime? CompletedAt { get; set; }
 
         public int Progress { get; set; }
+    }
+
+    /// <summary>
+    /// 知识点实体（P1 分类体系）：按用户与学科隔离，支持父子树。
+    /// </summary>
+    public class KnowledgePointEntity : UserEntityBase
+    {
+        [Key]
+        [MaxLength(64)]
+        public string Id { get; set; } = string.Empty;
+
+        [MaxLength(64)]
+        public string? ParentId { get; set; }
+
+        [Required]
+        [MaxLength(100)]
+        public string Name { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(20)]
+        public string Subject { get; set; } = string.Empty;
+
+        public int AgeRange { get; set; }
+
+        public int SortOrder { get; set; }
+    }
+
+    /// <summary>
+    /// 学习项 ↔ 知识点关联（P1）：以用户 + 学习项稳定 Id 为唯一键。
+    /// </summary>
+    public class KnowledgePointAssignmentEntity : UserEntityBase
+    {
+        [Key]
+        public int Id { get; set; }
+
+        [Required]
+        [MaxLength(64)]
+        public string ItemKey { get; set; } = string.Empty;
+
+        [Required]
+        [MaxLength(64)]
+        public string KnowledgePointId { get; set; } = string.Empty;
     }
 }

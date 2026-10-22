@@ -25,6 +25,15 @@ namespace LearningAssistant.Models.Learning
 
         public string ExtendedProperties { get; set; } = "{}";
 
+        // 分类维度：参与筛选、排序与统计，必须是一等字段而非塞进 ExtendedProperties。
+        public string? KnowledgePointId { get; set; }
+        public string KnowledgePointPath { get; set; } = string.Empty;
+        public AgeRange AgeRange { get; set; } = AgeRange.All;
+        public ImportanceLevel Importance { get; set; } = ImportanceLevel.Normal;
+        public int ContentDifficulty { get; set; } = 3;
+        public StudyContentSource SourceType { get; set; } = StudyContentSource.Manual;
+        public LearningSourceRef? SourceRef { get; set; }
+
         [JsonProperty("Status")]
         public LearningStatus Status { get; set; } = LearningStatus.New;
 

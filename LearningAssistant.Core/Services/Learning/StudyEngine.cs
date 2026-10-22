@@ -56,6 +56,11 @@ namespace LearningAssistant.Services.Learning
                 _state.WordBankFile = context.WordBankFile;
                 _state.CurrentMode = context.Mode;
                 _state.CurrentSortOrder = context.SortOrder;
+                _state.KnowledgePointId = context.KnowledgePointId;
+                _state.AgeRange = context.AgeRange;
+                _state.Importance = context.Importance;
+                _state.SourceType = context.SourceType;
+                _state.ProgressKey = context.GetFilterKey();
             }
 
             if (loadAllItems)
@@ -69,7 +74,7 @@ namespace LearningAssistant.Services.Learning
 
             if (continueMode)
             {
-                _progressManager.LoadProgress(context.UserId, context.SubCategory);
+                _progressManager.LoadProgress(context.UserId, context.SubCategory, context.GetFilterKey());
                 SyncProgressState();
             }
             else
@@ -99,7 +104,11 @@ namespace LearningAssistant.Services.Learning
                 _state.SubCategory,
                 _state.WordBankFile,
                 _state.CurrentMode,
-                _state.CurrentSortOrder
+                _state.CurrentSortOrder,
+                _state.KnowledgePointId,
+                _state.AgeRange,
+                _state.Importance,
+                _state.SourceType
             );
         }
 

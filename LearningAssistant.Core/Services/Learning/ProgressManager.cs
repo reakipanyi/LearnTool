@@ -6,7 +6,7 @@ namespace LearningAssistant.Services.Learning
 {
     public interface IProgressManager
     {
-        void LoadProgress(string userId, SubCategoryType subCategory);
+        void LoadProgress(string userId, SubCategoryType subCategory, string? filterKey = null);
         void SaveProgress(string userId, SubCategoryType subCategory, StudyEngineState state, IReadOnlyDictionary<string, string>? itemKeyMap = null);
         ProgressState GetProgressState();
         void AddUnknownItem(string userId, string content, SubCategoryType subCategory);
@@ -26,7 +26,8 @@ namespace LearningAssistant.Services.Learning
     public class ProgressManager : IProgressManager
     {
         private readonly IDataPersistenceService _persistenceService;
-        private readonly ProgressState _currentState = new ProgressState();
+        private readonly Dictionary<string, ProgressState> _states = new Dictionary<string, ProgressState>(StringComparer.Ordinal);
+        private string _activeKey = string.Empty;
         private readonly object _lock = new object();
 
         public ProgressManager(IDataPersistenceService persistenceService)
@@ -38,12 +39,13 @@ namespace LearningAssistant.Services.Learning
         {
             lock (_lock)
             {
-                return _currentState;
+                return GetOrCreateState(_activeKey);
             }
         }
 
-        public void LoadProgress(string userId, SubCategoryType subCategory)
+        public void LoadProgress(string userId, SubCategoryType subCategory, string? filterKey = null)
         {
+            var key = filterKey ?? string.Empty;
             var knownItems = _persistenceService.GetKnownItems(userId, subCategory);
             var unknownItems = _persistenceService.GetUnknownItems(userId, subCategory);
 
@@ -67,47 +69,58 @@ namespace LearningAssistant.Services.Learning
 
             lock (_lock)
             {
-                _currentState.KnownItems = knownItems;
-                _currentState.UnknownItems = unknownItems;
+                var state = GetOrCreateState(key);
+                state.KnownItems = knownItems;
+                state.UnknownItems = unknownItems;
 
-                var userProfile = _persistenceService.LoadUserProfile(userId);
-                var subCatStr = subCategory.ToString();
-                if (userProfile.LearningProgress.CategoryProgresses.TryGetValue(subCatStr, out var catProgress))
+                if (key.Length == 0)
                 {
-                    _currentState.CorrectCount = catProgress.CorrectCount;
-                    _currentState.TotalCount = catProgress.TotalTestCount;
-                    _currentState.StudyModeIndex = catProgress.LastResumeIndex;
-                    _currentState.QuickModeIndex = catProgress.QuickTestResumeIndex;
+                    var userProfile = _persistenceService.LoadUserProfile(userId);
+                    var subCatStr = subCategory.ToString();
+                    if (userProfile.LearningProgress.CategoryProgresses.TryGetValue(subCatStr, out var catProgress))
+                    {
+                        state.CorrectCount = catProgress.CorrectCount;
+                        state.TotalCount = catProgress.TotalTestCount;
+                        state.StudyModeIndex = catProgress.LastResumeIndex;
+                        state.QuickModeIndex = catProgress.QuickTestResumeIndex;
+                    }
+                    else
+                    {
+                        ResetProgressInternal(state);
+                    }
                 }
-                else
-                {
-                    ResetProgressInternal();
-                }
+
+                _activeKey = key;
             }
         }
 
         public void SaveProgress(string userId, SubCategoryType subCategory, StudyEngineState state, IReadOnlyDictionary<string, string>? itemKeyMap = null)
         {
+            var key = state.ProgressKey ?? string.Empty;
             var profile = _persistenceService.LoadUserProfile(userId);
             var progress = profile.LearningProgress;
             var subCategoryStr = subCategory.ToString();
 
-            if (!progress.CategoryProgresses.TryGetValue(subCategoryStr, out var categoryProgress))
-            {
-                categoryProgress = new CategoryProgress { CategoryName = subCategoryStr };
-                progress.CategoryProgresses[subCategoryStr] = categoryProgress;
-            }
-
             _persistenceService.SyncCategoryProgressToLearningItemStates(userId, subCategory, state.KnownItems, state.UnknownItems, itemKeyMap);
 
-            categoryProgress.KnownItems = state.KnownItems;
-            categoryProgress.UnknownItems = state.UnknownItems;
-            categoryProgress.LastStudyMode = state.CurrentMode.ToString();
-            categoryProgress.LastResumeIndex = state.StudyModeIndex;
-            categoryProgress.QuickTestResumeIndex = state.QuickModeIndex;
-            categoryProgress.TotalTestCount = state.TotalCount;
-            categoryProgress.CorrectCount = state.CorrectCount;
-            categoryProgress.LastTestDate = DateTime.Now;
+            if (key.Length == 0)
+            {
+                if (!progress.CategoryProgresses.TryGetValue(subCategoryStr, out var categoryProgress))
+                {
+                    categoryProgress = new CategoryProgress { CategoryName = subCategoryStr };
+                    progress.CategoryProgresses[subCategoryStr] = categoryProgress;
+                }
+
+                categoryProgress.KnownItems = state.KnownItems;
+                categoryProgress.UnknownItems = state.UnknownItems;
+                categoryProgress.LastStudyMode = state.CurrentMode.ToString();
+                categoryProgress.LastResumeIndex = state.StudyModeIndex;
+                categoryProgress.QuickTestResumeIndex = state.QuickModeIndex;
+                categoryProgress.TotalTestCount = state.TotalCount;
+                categoryProgress.CorrectCount = state.CorrectCount;
+                categoryProgress.LastTestDate = DateTime.Now;
+            }
+            // 筛选态不写分类进度，避免不同筛选条件互相覆盖断点；掌握状态仍通过 ItemStates 全局共享。
 
             progress.LastStudyTime = DateTime.Now;
 
@@ -115,6 +128,18 @@ namespace LearningAssistant.Services.Learning
             profile.IncrementTodayItems();
 
             _persistenceService.SaveUserProfile(profile);
+
+            lock (_lock)
+            {
+                var target = GetOrCreateState(key);
+                target.KnownItems = state.KnownItems;
+                target.UnknownItems = state.UnknownItems;
+                target.StudyModeIndex = state.StudyModeIndex;
+                target.QuickModeIndex = state.QuickModeIndex;
+                target.CorrectCount = state.CorrectCount;
+                target.TotalCount = state.TotalCount;
+                _activeKey = key;
+            }
         }
 
         public void AddUnknownItem(string userId, string content, SubCategoryType subCategory)
@@ -124,18 +149,19 @@ namespace LearningAssistant.Services.Learning
 
             lock (_lock)
             {
+                var state = GetOrCreateState(_activeKey);
                 if (!knownItems.Contains(content) && !unknownItems.Contains(content))
                 {
                     _persistenceService.UpsertLearningItemState(userId, subCategory, content, false);
-                    if (!_currentState.UnknownItems.Contains(content))
-                        _currentState.UnknownItems.Add(content);
+                    if (!state.UnknownItems.Contains(content))
+                        state.UnknownItems.Add(content);
                 }
                 else if (knownItems.Contains(content))
                 {
                     _persistenceService.UpsertLearningItemState(userId, subCategory, content, false);
-                    _currentState.KnownItems.Remove(content);
-                    if (!_currentState.UnknownItems.Contains(content))
-                        _currentState.UnknownItems.Add(content);
+                    state.KnownItems.Remove(content);
+                    if (!state.UnknownItems.Contains(content))
+                        state.UnknownItems.Add(content);
 
                     var profile = _persistenceService.LoadUserProfile(userId);
                     var subCategoryStr = subCategory.ToString();
@@ -156,18 +182,28 @@ namespace LearningAssistant.Services.Learning
         {
             lock (_lock)
             {
-                ResetProgressInternal();
+                ResetProgressInternal(GetOrCreateState(_activeKey));
             }
         }
 
-        private void ResetProgressInternal()
+        private static void ResetProgressInternal(ProgressState state)
         {
-            _currentState.KnownItems.Clear();
-            _currentState.UnknownItems.Clear();
-            _currentState.StudyModeIndex = 0;
-            _currentState.QuickModeIndex = 0;
-            _currentState.CorrectCount = 0;
-            _currentState.TotalCount = 0;
+            state.KnownItems.Clear();
+            state.UnknownItems.Clear();
+            state.StudyModeIndex = 0;
+            state.QuickModeIndex = 0;
+            state.CorrectCount = 0;
+            state.TotalCount = 0;
+        }
+
+        private ProgressState GetOrCreateState(string key)
+        {
+            if (!_states.TryGetValue(key, out var state))
+            {
+                state = new ProgressState();
+                _states[key] = state;
+            }
+            return state;
         }
     }
 }

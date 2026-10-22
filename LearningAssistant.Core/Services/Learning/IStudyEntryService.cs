@@ -238,6 +238,28 @@ namespace LearningAssistant.Services.Learning
             item.SetExtendedProperty("SourceHighlightId", request.HighlightId ?? string.Empty);
             item.SetExtendedProperty("SourceAnnotationId", request.AnnotationId ?? string.Empty);
             item.SetExtendedProperty("SourceSentenceId", request.SentenceId ?? string.Empty);
+
+            // P1：来源同时落到一等字段与来源锚点，供筛选与回跳原文使用。
+            item.SourceType = LearningItemClassification.ParseSourceType(request.SourceType);
+
+            var hasAnchor = request.PageIndex >= 0
+                || !string.IsNullOrWhiteSpace(request.PdfPath)
+                || !string.IsNullOrWhiteSpace(request.HighlightId)
+                || !string.IsNullOrWhiteSpace(request.AnnotationId)
+                || !string.IsNullOrWhiteSpace(request.SentenceId);
+
+            if (hasAnchor)
+            {
+                item.SourceRef = new LearningSourceRef
+                {
+                    PdfPath = request.PdfPath,
+                    PdfHash = request.PdfHash,
+                    PageIndex = request.PageIndex,
+                    HighlightId = request.HighlightId,
+                    AnnotationId = request.AnnotationId,
+                    SentenceId = request.SentenceId
+                };
+            }
         }
 
         internal static bool LooksLikeEnglish(string text)

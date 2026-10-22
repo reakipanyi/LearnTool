@@ -735,6 +735,12 @@
     "Answer": "答案",
     "Applications": "应用",
     "Principle": "原理",
-    "Background": "背景"
+    "Background": "背景",
+    "KnowledgePointId": "知识点ID",
+    "KnowledgePointPath": "知识点",
+    "AgeRange": "适龄段",
+    "Importance": "重要等级",
+    "ContentDifficulty": "内容难度",
+    "SourceType": "来源"
   }
 }

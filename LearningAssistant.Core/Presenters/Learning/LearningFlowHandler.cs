@@ -7,6 +7,7 @@ using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.TTS;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace LearningAssistant.Presenters
 {
@@ -336,7 +337,7 @@ namespace LearningAssistant.Presenters
             if (currentItem != null)
             {
                 var itemKey = LearningItemIdentity.EnsureKey(currentItem);
-                SyncToSpacedRepetition(itemKey, currentItem.GetMainContent(), currentItem.GetDisplayText(), true);
+                SyncToSpacedRepetition(itemKey, currentItem.GetMainContent(), currentItem.GetDisplayText(), true, currentItem);
 
                 if (_eventBus != null)
                 {
@@ -355,7 +356,8 @@ namespace LearningAssistant.Presenters
             await MoveToNextAsync();
         }
 
-        private void SyncToSpacedRepetition(string? itemKey, string content, string answer, bool isKnown)
+        private void SyncToSpacedRepetition(
+            string? itemKey, string content, string answer, bool isKnown, LearningItem? sourceItem = null)
         {
             if (_spacedRepetitionService == null) return;
             if (string.IsNullOrWhiteSpace(content)) return;
@@ -378,6 +380,7 @@ namespace LearningAssistant.Presenters
                         existingItem.ItemKey = itemKey;
                     }
 
+                    ApplyClassification(existingItem, sourceItem);
                     _spacedRepetitionService.CalculateNextReview(existingItem, isKnown ? 4 : 2);
                 }
                 else
@@ -385,6 +388,7 @@ namespace LearningAssistant.Presenters
                     var newItem = _spacedRepetitionService.CreateNewItem(_currentUserId, content, answer, itemKey);
                     newItem.Category = _currentSubCategory.ToString();
                     newItem.Subject = _currentSubject.ToString();
+                    ApplyClassification(newItem, sourceItem);
                     _spacedRepetitionService.UpdateItem(newItem);
                     _spacedRepetitionService.CalculateNextReview(newItem, isKnown ? 4 : 2);
                 }
@@ -398,6 +402,21 @@ namespace LearningAssistant.Presenters
             }
         }
 
+        /// <summary>把学习项的分类维度同步到间隔重复记录，供复习队列筛选与统计使用。</summary>
+        private static void ApplyClassification(ReviewItem target, LearningItem? sourceItem)
+        {
+            if (sourceItem == null) return;
+
+            target.KnowledgePointId = sourceItem.KnowledgePointId;
+            target.AgeRange = (int)sourceItem.AgeRange;
+            target.Importance = (int)sourceItem.Importance;
+            target.ContentDifficulty = sourceItem.ContentDifficulty;
+            target.SourceType = LearningItemClassification.GetEffectiveSourceType(sourceItem).ToString();
+
+            if (sourceItem.SourceRef != null)
+                target.SourceRefJson = JsonSerializer.Serialize(sourceItem.SourceRef);
+        }
+
         public async Task MarkAsUnknownAsync()
         {
             var currentItem = _studyEngine.GetCurrentItem();
@@ -408,7 +427,7 @@ namespace LearningAssistant.Presenters
             if (currentItem != null)
             {
                 var itemKey = LearningItemIdentity.EnsureKey(currentItem);
-                SyncToSpacedRepetition(itemKey, currentItem.GetMainContent(), currentItem.GetDisplayText(), false);
+                SyncToSpacedRepetition(itemKey, currentItem.GetMainContent(), currentItem.GetDisplayText(), false, currentItem);
 
                 if (_eventBus != null)
                 {

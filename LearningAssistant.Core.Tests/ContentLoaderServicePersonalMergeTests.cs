@@ -65,6 +65,93 @@ public class ContentLoaderServicePersonalMergeTests : IDisposable
         Assert.Equal("hello", items[0].MainContent);
     }
 
+    [Fact]
+    public void LoadItems_FiltersByAgeImportanceAndSource()
+    {
+        var items = new List<LearningItem>
+        {
+            new()
+            {
+                Id = "1", Subject = SubjectType.English, SubCategory = SubCategoryType.EnglishWord,
+                MainContent = "apple", AgeRange = AgeRange.PrimaryLow, Importance = ImportanceLevel.Key,
+                SourceType = StudyContentSource.PdfHighlight, ContentDifficulty = 2
+            },
+            new()
+            {
+                Id = "2", Subject = SubjectType.English, SubCategory = SubCategoryType.EnglishWord,
+                MainContent = "banana", AgeRange = AgeRange.All, Importance = ImportanceLevel.Normal
+            },
+            new()
+            {
+                Id = "3", Subject = SubjectType.English, SubCategory = SubCategoryType.EnglishWord,
+                MainContent = "cherry", AgeRange = AgeRange.PrimaryLow, Importance = ImportanceLevel.Key
+            }
+        };
+        JsonHelper.SaveToFile(Path.Combine(_root, "data", Constants.FileName.EnglishWord), items);
+
+        var service = new ContentLoaderService(NullLogger<ContentLoaderService>.Instance, new FakeAppPaths(_root));
+        var filtered = service.LoadItems(new LearningContext(
+            "u1", SubjectType.English, SubCategoryType.EnglishWord,
+            AgeRange: AgeRange.PrimaryLow,
+            Importance: ImportanceLevel.Key,
+            SourceType: StudyContentSource.PdfHighlight));
+
+        Assert.Single(filtered);
+        Assert.Equal("apple", filtered[0].MainContent);
+        Assert.Equal(3, service.GetItemCount(new LearningContext("u1", SubjectType.English, SubCategoryType.EnglishWord)));
+    }
+
+    [Fact]
+    public void JsonRoundTrip_PreservesClassificationAndSourceRef()
+    {
+        var item = new LearningItem
+        {
+            Id = "a-1",
+            Subject = SubjectType.English,
+            SubCategory = SubCategoryType.EnglishWord,
+            MainContent = "apple",
+            KnowledgePointId = "kp-1",
+            KnowledgePointPath = "英语/词汇/食物",
+            AgeRange = AgeRange.PrimaryLow,
+            Importance = ImportanceLevel.Core,
+            ContentDifficulty = 4,
+            SourceType = StudyContentSource.PdfHighlight,
+            SourceRef = new LearningSourceRef
+            {
+                PdfPath = "book.pdf",
+                PdfHash = "hash",
+                PageIndex = 12,
+                HighlightId = "hl-9"
+            }
+        };
+
+        var back = JsonHelper.Deserialize<LearningItem>(JsonHelper.Serialize(item));
+
+        Assert.NotNull(back);
+        Assert.Equal("kp-1", back!.KnowledgePointId);
+        Assert.Equal("英语/词汇/食物", back.KnowledgePointPath);
+        Assert.Equal(AgeRange.PrimaryLow, back.AgeRange);
+        Assert.Equal(ImportanceLevel.Core, back.Importance);
+        Assert.Equal(4, back.ContentDifficulty);
+        Assert.Equal(StudyContentSource.PdfHighlight, back.SourceType);
+        Assert.NotNull(back.SourceRef);
+        Assert.Equal(12, back.SourceRef!.PageIndex);
+        Assert.Equal("hl-9", back.SourceRef.HighlightId);
+    }
+
+    [Fact]
+    public void GetFilterKey_IsolatesDifferentClassificationFilters()
+    {
+        var baseContext = new LearningContext("u1", SubjectType.English, SubCategoryType.EnglishWord);
+        var ageContext = baseContext with { AgeRange = AgeRange.PrimaryLow };
+        var importanceContext = baseContext with { Importance = ImportanceLevel.Core };
+
+        Assert.Equal(string.Empty, baseContext.GetFilterKey());
+        Assert.NotEqual(baseContext.GetFilterKey(), ageContext.GetFilterKey());
+        Assert.NotEqual(ageContext.GetFilterKey(), importanceContext.GetFilterKey());
+        Assert.Equal(ageContext.GetFilterKey(), (baseContext with { AgeRange = AgeRange.PrimaryLow }).GetFilterKey());
+    }
+
     public void Dispose()
     {
         try

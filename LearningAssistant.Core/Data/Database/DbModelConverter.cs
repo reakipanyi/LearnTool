@@ -382,7 +382,13 @@ namespace LearningAssistant.Data.Database
                 AlgorithmType = item.AlgorithmType,
                 Category = item.Category,
                 Subject = item.Subject,
-                ItemKey = item.ItemKey
+                ItemKey = item.ItemKey,
+                KnowledgePointId = item.KnowledgePointId,
+                AgeRange = item.AgeRange,
+                Importance = item.Importance,
+                ContentDifficulty = item.ContentDifficulty,
+                SourceType = item.SourceType,
+                SourceRefJson = item.SourceRefJson
             };
         }
 
@@ -413,7 +419,13 @@ namespace LearningAssistant.Data.Database
                 AlgorithmType = entity.AlgorithmType,
                 Category = entity.Category,
                 Subject = entity.Subject,
-                ItemKey = entity.ItemKey
+                ItemKey = entity.ItemKey,
+                KnowledgePointId = entity.KnowledgePointId,
+                AgeRange = entity.AgeRange,
+                Importance = entity.Importance,
+                ContentDifficulty = entity.ContentDifficulty,
+                SourceType = entity.SourceType,
+                SourceRefJson = entity.SourceRefJson
             };
         }
 
@@ -439,6 +451,12 @@ namespace LearningAssistant.Data.Database
             entity.AlgorithmType = item.AlgorithmType;
             entity.Category = item.Category;
             entity.Subject = item.Subject;
+            entity.KnowledgePointId = item.KnowledgePointId;
+            entity.AgeRange = item.AgeRange;
+            entity.Importance = item.Importance;
+            entity.ContentDifficulty = item.ContentDifficulty;
+            entity.SourceType = item.SourceType;
+            entity.SourceRefJson = item.SourceRefJson;
             if (!string.IsNullOrEmpty(item.ItemKey))
             {
                 entity.ItemKey = item.ItemKey;

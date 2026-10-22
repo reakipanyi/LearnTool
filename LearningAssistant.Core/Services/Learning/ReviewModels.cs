@@ -42,6 +42,14 @@ namespace LearningAssistant.Services.Learning
 
         /// <summary>学习项稳定身份（LearningItem.Id）；旧数据可能为空，按 Content 回退匹配。</summary>
         public string? ItemKey { get; set; }
+
+        // 分类维度（P1）：随学习项写回，供复习队列筛选与统计下钻。
+        public string? KnowledgePointId { get; set; }
+        public int AgeRange { get; set; }
+        public int Importance { get; set; } = 2;
+        public int ContentDifficulty { get; set; } = 3;
+        public string? SourceType { get; set; }
+        public string? SourceRefJson { get; set; }
     }
 
     /// <summary>
