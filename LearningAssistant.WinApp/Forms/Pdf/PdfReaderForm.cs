@@ -8406,11 +8406,9 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // _treeViewFiles
             // 
-            _treeViewFiles.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
             _treeViewFiles.BorderStyle = BorderStyle.None;
-            _treeViewFiles.Location = new Point(3, 29);
+            _treeViewFiles.Dock = DockStyle.Fill;
             _treeViewFiles.Name = "_treeViewFiles";
-            _treeViewFiles.Size = new Size(316, 972);
             _treeViewFiles.TabIndex = 0;
             _treeViewFiles.AfterSelect += TreeViewFiles_AfterSelect;
             // 

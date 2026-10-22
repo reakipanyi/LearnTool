@@ -22,6 +22,8 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _manager = null!;
         _form = null!;
         _aiMatcher = null;
+        // 设计期也按当前字体回填一次，保证设计视图与运行预览一致
+        ApplyRuntimeMetrics();
     }
 
     public PdfAudioPanel(PdfAudioTrackManager manager, IPdfReaderFormAccess form,
@@ -30,7 +32,6 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _manager = manager;
         _form = form;
         _aiMatcher = aiMatcher;
-        ApplyRuntimeMetrics();
         WireEvents();
         RefreshData();
     }

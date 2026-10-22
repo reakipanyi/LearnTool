@@ -58,7 +58,7 @@ partial class PdfAudioPanel
         // 
         root.BackColor = Color.FromArgb(247, 248, 251);
         root.ColumnCount = 1;
-        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 20F));
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         root.Controls.Add(statusPanel, 0, 0);
         root.Controls.Add(listCard, 0, 1);
         root.Controls.Add(playbackCard, 0, 2);
@@ -103,6 +103,7 @@ partial class PdfAudioPanel
         // 
         // listCard
         // 
+        listCard.Body.Controls.Add(_listTracks);
         listCard.BackColor = Color.FromArgb(247, 248, 251);
         listCard.Dock = DockStyle.Fill;
         listCard.Location = new Point(0, 46);
@@ -115,6 +116,7 @@ partial class PdfAudioPanel
         // 
         // playbackCard
         // 
+        playbackCard.Body.Controls.Add(playback);
         playbackCard.BackColor = Color.FromArgb(247, 248, 251);
         playbackCard.Dock = DockStyle.Fill;
         playbackCard.Location = new Point(0, 238);
@@ -127,6 +129,7 @@ partial class PdfAudioPanel
         // 
         // sourceCard
         // 
+        sourceCard.Body.Controls.Add(sourceGrid);
         sourceCard.BackColor = Color.FromArgb(247, 248, 251);
         sourceCard.Dock = DockStyle.Fill;
         sourceCard.Location = new Point(0, 436);
@@ -155,7 +158,7 @@ partial class PdfAudioPanel
         // 
         playback.BackColor = Color.Transparent;
         playback.ColumnCount = 1;
-        playback.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 20F));
+        playback.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         playback.Controls.Add(transport, 0, 0);
         playback.Controls.Add(abRow, 0, 1);
         playback.Controls.Add(_labelLoop, 0, 2);
@@ -255,7 +258,7 @@ partial class PdfAudioPanel
         abRow.Margin = new Padding(0);
         abRow.Name = "abRow";
         abRow.RowCount = 1;
-        abRow.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+        abRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         abRow.Size = new Size(284, 36);
         abRow.TabIndex = 1;
         // 
@@ -348,7 +351,7 @@ partial class PdfAudioPanel
         speedRow.Margin = new Padding(0);
         speedRow.Name = "speedRow";
         speedRow.RowCount = 1;
-        speedRow.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+        speedRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         speedRow.Size = new Size(284, 32);
         speedRow.TabIndex = 3;
         // 

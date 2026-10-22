@@ -25,6 +25,7 @@ partial class PdfHighlightPanel
         // 
         root.BackColor = Color.FromArgb(247, 248, 251);
         root.ColumnCount = 1;
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         root.Controls.Add(header, 0, 0);
         root.Controls.Add(colors, 0, 1);
         root.Controls.Add(listHost, 0, 2);

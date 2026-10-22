@@ -40,6 +40,7 @@ partial class PdfStudyPanel
         // 
         root.BackColor = Color.FromArgb(247, 248, 251);
         root.ColumnCount = 1;
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         root.Controls.Add(header, 0, 0);
         root.Controls.Add(overviewCard, 0, 1);
         root.Controls.Add(actionCard, 0, 2);
@@ -81,6 +82,7 @@ partial class PdfStudyPanel
         // 
         overviewLayout.BackColor = Color.Transparent;
         overviewLayout.ColumnCount = 1;
+        overviewLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         overviewLayout.Controls.Add(highlightCount, 0, 0);
         overviewLayout.Controls.Add(learningCount, 0, 1);
         overviewLayout.Controls.Add(sentenceCount, 0, 2);
@@ -154,6 +156,7 @@ partial class PdfStudyPanel
         // 
         actionLayout.BackColor = Color.Transparent;
         actionLayout.ColumnCount = 1;
+        actionLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         actionLayout.Controls.Add(addHighlightsButton, 0, 0);
         actionLayout.Controls.Add(flashcardsButton, 0, 1);
         actionLayout.Controls.Add(shadowingButton, 0, 2);

@@ -9,7 +9,17 @@ public partial class PdfTranslatePanel : UserControl
     public PdfTranslatePanel()
     {
         InitializeComponent();
-        body.Resize += (_, _) => LayoutCards();
+        body.Resize += (_, _) =>
+        {
+            // 设计器内不重排行列样式，避免 VS 把运行期结果写回 Designer 文件
+            if (!DesignMode) LayoutCards();
+        };
+    }
+
+    /// <summary>运行期按实际宽度决定卡片上下堆叠还是左右对照。</summary>
+    protected override void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
         LayoutCards();
     }
 
