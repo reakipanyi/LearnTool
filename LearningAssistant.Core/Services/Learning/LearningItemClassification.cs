@@ -1,5 +1,6 @@
 using LearningAssistant.Common;
 using LearningAssistant.Models.Learning;
+using LearningAssistant.Models.Pdf;
 
 namespace LearningAssistant.Services.Learning
 {
@@ -86,6 +87,22 @@ namespace LearningAssistant.Services.Learning
                 case "成人": value = AgeRange.Adult; return true;
                 default: return false;
             }
+        }
+
+        /// <summary>
+        /// 高亮颜色 → 默认重要等级（P0-2）：红色=核心、橙/蓝=重点、绿/黄=一般、粉色=拓展。
+        /// 仅作为“加入学习”时的默认值，用户后续可在编辑器中调整。
+        /// </summary>
+        public static ImportanceLevel ResolveImportanceFromHighlightColor(HighlightColor color)
+        {
+            return color switch
+            {
+                HighlightColor.Red => ImportanceLevel.Core,
+                HighlightColor.Orange => ImportanceLevel.Key,
+                HighlightColor.Blue => ImportanceLevel.Key,
+                HighlightColor.Pink => ImportanceLevel.Extension,
+                _ => ImportanceLevel.Normal
+            };
         }
 
         public static bool TryParseImportance(string? raw, out ImportanceLevel value)

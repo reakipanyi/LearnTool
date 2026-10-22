@@ -6713,6 +6713,7 @@ namespace LearningAssistant.Forms.Pdf
                     Text = h.Text,
                     Translation = string.IsNullOrWhiteSpace(h.TranslationText) ? null : h.TranslationText,
                     SourceType = "PdfHighlight",
+                    Importance = LearningItemClassification.ResolveImportanceFromHighlightColor(h.Color),
                     PdfPath = _currentPdfPath,
                     PageIndex = _currentPageIndex,
                     HighlightId = h.Id

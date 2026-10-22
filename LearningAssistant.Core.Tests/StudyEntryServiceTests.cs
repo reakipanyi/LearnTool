@@ -1,5 +1,6 @@
 using LearningAssistant.Common;
 using LearningAssistant.Models.Learning;
+using LearningAssistant.Models.Pdf;
 using LearningAssistant.Models.User;
 using LearningAssistant.Services.Learning;
 using Xunit;
@@ -91,6 +92,32 @@ public class StudyEntryServiceTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             service.AddAsync(new StudyEntryRequest { Text = new string('a', 2001) }));
+    }
+
+    [Fact]
+    public async Task AddAsync_AppliesImportance()
+    {
+        var store = new FakeStore();
+        var result = await CreateService(store).AddAsync(new StudyEntryRequest
+        {
+            Text = "core point",
+            Importance = ImportanceLevel.Core
+        });
+
+        Assert.Equal(ImportanceLevel.Core, result.Item!.Importance);
+    }
+
+    [Theory]
+    [InlineData(HighlightColor.Red, ImportanceLevel.Core)]
+    [InlineData(HighlightColor.Orange, ImportanceLevel.Key)]
+    [InlineData(HighlightColor.Blue, ImportanceLevel.Key)]
+    [InlineData(HighlightColor.Green, ImportanceLevel.Normal)]
+    [InlineData(HighlightColor.Yellow, ImportanceLevel.Normal)]
+    [InlineData(HighlightColor.Pink, ImportanceLevel.Extension)]
+    public void ResolveImportanceFromHighlightColor_MapsByColor(
+        HighlightColor color, ImportanceLevel expected)
+    {
+        Assert.Equal(expected, LearningItemClassification.ResolveImportanceFromHighlightColor(color));
     }
 
     private sealed class FakeSession : IUserSessionService

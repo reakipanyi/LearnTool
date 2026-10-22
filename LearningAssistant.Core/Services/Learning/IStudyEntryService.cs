@@ -27,6 +27,7 @@ namespace LearningAssistant.Services.Learning
         public StudyTextKind Kind { get; init; } = StudyTextKind.Auto;
 
         public string SourceType { get; init; } = "Manual";
+        public ImportanceLevel? Importance { get; init; }
         public string? PdfPath { get; init; }
         public string? PdfHash { get; init; }
         public int PageIndex { get; init; } = -1;
@@ -164,6 +165,12 @@ namespace LearningAssistant.Services.Learning
             if (!string.IsNullOrWhiteSpace(request.Note))
             {
                 item.Example = Example.Create(request.Note.Trim());
+            }
+
+            // P0-2：来源侧（如高亮颜色）给出的默认重要等级
+            if (request.Importance.HasValue)
+            {
+                item.Importance = request.Importance.Value;
             }
 
             ApplySourceProperties(item, request);
