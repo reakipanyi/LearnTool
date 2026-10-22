@@ -107,6 +107,8 @@ namespace LearningAssistant.Common
             });
             services.AddSingleton<IContentLoaderService, ContentLoaderService>();
             services.AddSingleton<IItemIdentityMigrationService, ItemIdentityMigrationService>();
+            services.AddSingleton<IPersonalContentStore, PersonalContentStore>();
+            services.AddSingleton<IStudyEntryService, StudyEntryService>();
             services.AddSingleton<IUserSessionService, UserSessionService>();
             services.AddSingleton<ISubjectTemplateService, SubjectTemplateService>();
             // 历史 JSON → SQLite 迁移服务（含 analytics → DailyRollup 幂等迁移），启动后后台执行
