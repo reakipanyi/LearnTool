@@ -13,7 +13,7 @@ namespace LearningAssistant.Forms.Pdf
     /// <summary>
     /// 句子跟读独立窗口：分句、逐句合成播放、倒计时自动录音与参考评分。
     /// </summary>
-    public sealed class SentenceShadowingForm : Form
+    public sealed partial class SentenceShadowingForm : Form
     {
         private enum PlayMode
         {
@@ -28,18 +28,7 @@ namespace LearningAssistant.Forms.Pdf
         private readonly IAudioRecorderService? _recorder;
         private readonly IPronunciationScorer? _scorer;
         private readonly EventHandler<AudioRecording>? _recordingHandler;
-        private readonly ListBox _listSentences = new();
-        private readonly Label _labelTitle = new();
-        private readonly Label _labelInfo = new();
-        private readonly Label _labelCurrent = new();
-        private readonly Label _labelStatus = new();
-        private readonly Label _labelScore = new();
-        private readonly ComboBox _comboMode = new();
-        private readonly Button _btnPlay = new();
-        private readonly Button _btnRecord = new();
-        private readonly Button _btnReplayRecording = new();
-        private readonly CircularStatus _circularStatus = new();
-        private readonly Panel _progressTrack = new();
+        private readonly ToolTip _buttonTip = new();
         private readonly Dictionary<string, string> _sentenceRecordings = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _sentenceScores = new(StringComparer.Ordinal);
         private readonly ShadowingStore _store = new();
@@ -67,18 +56,20 @@ namespace LearningAssistant.Forms.Pdf
             _pdfPath = pdfPath;
             _pageIndex = pageIndex;
 
+            InitializeComponent();
+
             Text = $"句子跟读 - {documentTitle}";
-            StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(860, 640);
-            MinimumSize = new Size(720, 560);
             BackColor = PdfSidebarTheme.Background;
-            Font = new Font("Microsoft YaHei UI", 9.5F);
-            KeyPreview = true;
+            _labelInfo.Text = $"第 {_pageIndex + 1} 页";
+            _comboMode.Items.AddRange(new object[] { "单句循环", "自动下一句", "整段连读" });
+            _comboMode.SelectedIndex = 1;
+
+            MountCardContents();
+            WireEvents();
 
             var sentences = SentenceSegmenter.Segment(pageText);
             PersistManifest(sentences);
 
-            BuildLayout();
             FillSentenceList(sentences);
             LoadSentenceRecordings(sentences);
             PdfSidebarTheme.ThemeChanged += OnSidebarThemeChanged;
@@ -141,339 +132,67 @@ namespace LearningAssistant.Forms.Pdf
             FormClosed += OnFormClosed;
         }
 
-        private void BuildLayout()
+        /// <summary>把各卡片内容挂到卡片 Body：VS 设计器回写会丢弃 Body.Controls.Add，因此放在构造函数。</summary>
+        private void MountCardContents()
         {
-            SuspendLayout();
-
-            var root = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 1,
-                RowCount = 4,
-                BackColor = PdfSidebarTheme.Background,
-                Padding = new Padding(16, 8, 16, 10)
-            };
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 64F));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 8F));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
-
-            root.Controls.Add(BuildHeader(), 0, 0);
-            root.Controls.Add(BuildProgress(), 0, 1);
-            root.Controls.Add(BuildBody(), 0, 2);
-            root.Controls.Add(BuildFooter(), 0, 3);
-
-            Controls.Add(root);
-            ResumeLayout(true);
+            MountBodyChild(listCard, _listSentences);
+            MountBodyChild(currentCard, _labelCurrent);
+            MountBodyChild(currentCard, navigation);
+            MountBodyChild(practiceCard, grid);
+            MountBodyChild(scoreCard, note);
+            MountBodyChild(scoreCard, _labelScore);
         }
 
-        private Control BuildHeader()
+        private static void MountBodyChild(SidebarCard card, Control child)
         {
-            var header = new Panel { Dock = DockStyle.Fill, BackColor = PdfSidebarTheme.Background };
-
-            _labelTitle.Text = "句子跟读";
-            _labelTitle.Font = new Font("Microsoft YaHei UI", 14F, FontStyle.Bold);
-            _labelTitle.ForeColor = PdfSidebarTheme.Text;
-            _labelTitle.AutoSize = true;
-            _labelTitle.Location = new Point(0, 2);
-
-            _labelInfo.Text = $"第 {_pageIndex + 1} 页";
-            _labelInfo.Font = new Font("Microsoft YaHei UI", 9F);
-            _labelInfo.ForeColor = PdfSidebarTheme.Muted;
-            _labelInfo.Tag = "muted";
-            _labelInfo.AutoSize = true;
-            _labelInfo.Location = new Point(2, 32);
-
-            header.Controls.Add(_labelTitle);
-            header.Controls.Add(_labelInfo);
-            return header;
+            if (child.Parent == null)
+                card.Body.Controls.Add(child);
         }
 
-        private Control BuildProgress()
+        private void WireEvents()
         {
-            _progressTrack.Dock = DockStyle.Fill;
-            _progressTrack.BackColor = PdfSidebarTheme.Background;
-            _progressTrack.Margin = Padding.Empty;
-            _progressTrack.Paint += (_, e) =>
-            {
-                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-                int trackHeight = 6;
-                var track = new Rectangle(0, (int)((e.Graphics.VisibleClipBounds.Height - trackHeight) / 2f),
-                    Math.Max(0, _progressTrack.Width - 1), trackHeight);
-                if (track.Width <= 0) return;
-
-                using (var path = GdiHelper.CreateRoundedRectPath(track, 3))
-                using (var brush = new SolidBrush(PdfSidebarTheme.SurfaceAlt))
-                    e.Graphics.FillPath(brush, path);
-
-                if (_totalSentences <= 0) return;
-                float ratio = Math.Clamp((_currentIndex + 1f) / _totalSentences, 0f, 1f);
-                var filled = new Rectangle(track.X, track.Y, Math.Max(1, (int)(track.Width * ratio)), track.Height);
-                using var fillPath = GdiHelper.CreateRoundedRectPath(filled, 3);
-                using var fillBrush = new SolidBrush(PdfSidebarTheme.Brand);
-                e.Graphics.FillPath(fillBrush, fillPath);
-            };
-            return _progressTrack;
-        }
-
-        private Control BuildBody()
-        {
-            var body = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 2,
-                RowCount = 1,
-                BackColor = PdfSidebarTheme.Background
-            };
-            body.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 330F));
-            body.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            body.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-
-            var listCard = new SidebarCard("句子列表")
-            {
-                Dock = DockStyle.Fill,
-                Margin = new Padding(0, 0, 10, 0)
-            };
-
-            _listSentences.Dock = DockStyle.Fill;
-            _listSentences.IntegralHeight = false;
-            _listSentences.BorderStyle = BorderStyle.None;
-            _listSentences.DrawMode = DrawMode.OwnerDrawFixed;
-            _listSentences.ItemHeight = 76;
-            _listSentences.Font = new Font("Microsoft YaHei UI", 11.5F);
-            _listSentences.BackColor = PdfSidebarTheme.Surface;
-            _listSentences.ForeColor = PdfSidebarTheme.Text;
             _listSentences.SelectedIndexChanged += OnSentenceSelected;
             _listSentences.DoubleClick += OnSentenceDoubleClick;
             _listSentences.DrawItem += OnSentenceDrawItem;
-            listCard.Body.Controls.Add(_listSentences);
-            body.Controls.Add(listCard, 0, 0);
 
-            var right = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 1,
-                RowCount = 3,
-                BackColor = PdfSidebarTheme.Background
-            };
-            right.RowStyles.Add(new RowStyle(SizeType.Percent, 36F));
-            right.RowStyles.Add(new RowStyle(SizeType.Percent, 40F));
-            right.RowStyles.Add(new RowStyle(SizeType.Percent, 24F));
-            right.Controls.Add(BuildCurrentSentenceCard(), 0, 0);
-            right.Controls.Add(BuildPracticeCard(), 0, 1);
-            right.Controls.Add(BuildScoreCard(), 0, 2);
-            body.Controls.Add(right, 1, 0);
-
-            return body;
-        }
-
-        private Control BuildCurrentSentenceCard()
-        {
-            var card = new SidebarCard("当前句")
-            {
-                Dock = DockStyle.Fill,
-                Margin = new Padding(0, 0, 0, 8)
-            };
-
-            _labelCurrent.Dock = DockStyle.Fill;
-            _labelCurrent.Padding = new Padding(4, 2, 4, 2);
-            _labelCurrent.TextAlign = ContentAlignment.MiddleLeft;
-            _labelCurrent.Font = new Font("Microsoft YaHei UI", 13F);
-            _labelCurrent.ForeColor = PdfSidebarTheme.Text;
-            _labelCurrent.AutoSize = false;
-            _labelCurrent.AutoEllipsis = false;
-            _labelCurrent.Text = "请从左侧选择一句开始跟读";
-
-            var navigation = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Bottom,
-                Height = 44,
-                FlowDirection = FlowDirection.LeftToRight,
-                WrapContents = false,
-                BackColor = PdfSidebarTheme.Surface,
-                Padding = new Padding(0, 4, 0, 0)
-            };
-
-            var btnPrev = SidebarUi.CreateIconButton("◀", "上一句");
-            btnPrev.Size = new Size(38, 34);
-            btnPrev.Margin = new Padding(0, 0, 6, 0);
             btnPrev.Click += (_, _) => MoveSentence(-1);
-
-            _btnPlay.Text = "▶ 播放";
-            _btnPlay.Size = new Size(96, 34);
-            _btnPlay.Font = new Font("Microsoft YaHei UI", 9.5F, FontStyle.Bold);
-            _btnPlay.FlatStyle = FlatStyle.Flat;
-            _btnPlay.BackColor = PdfSidebarTheme.Brand;
-            _btnPlay.ForeColor = Color.White;
-            _btnPlay.FlatAppearance.BorderSize = 0;
-            _btnPlay.Tag = "accent";
-            _btnPlay.Cursor = Cursors.Hand;
-            _btnPlay.Margin = new Padding(0, 0, 6, 0);
             _btnPlay.Click += (_, _) => StartPlayback();
-
-            var btnNext = SidebarUi.CreateIconButton("▶", "下一句");
-            btnNext.Size = new Size(38, 34);
-            btnNext.Margin = new Padding(0, 0, 6, 0);
             btnNext.Click += (_, _) => MoveSentence(1);
-
-            var btnStop = SidebarUi.CreateGhostButton("停止", 34);
-            btnStop.Width = 64;
-            btnStop.Margin = Padding.Empty;
             btnStop.Click += (_, _) => StopAll();
 
-            navigation.Controls.Add(btnPrev);
-            navigation.Controls.Add(_btnPlay);
-            navigation.Controls.Add(btnNext);
-            navigation.Controls.Add(btnStop);
-
-            card.Body.Controls.Add(_labelCurrent);
-            card.Body.Controls.Add(navigation);
-            return card;
-        }
-
-        private Control BuildPracticeCard()
-        {
-            var card = new SidebarCard("跟读")
-            {
-                Dock = DockStyle.Fill,
-                Margin = new Padding(0, 0, 0, 8)
-            };
-
-            var grid = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 2,
-                RowCount = 1,
-                BackColor = PdfSidebarTheme.Surface
-            };
-            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112F));
-            grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            grid.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-
-            _circularStatus.Margin = new Padding(0, 4, 0, 0);
-            _circularStatus.Anchor = AnchorStyles.None;
-            grid.Controls.Add(_circularStatus, 0, 0);
-
-            var actions = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 1,
-                RowCount = 3,
-                BackColor = PdfSidebarTheme.Surface
-            };
-            actions.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
-            actions.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
-            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-
-            _btnRecord.Text = "🎤 录音";
-            _btnRecord.Dock = DockStyle.Fill;
-            _btnRecord.FlatStyle = FlatStyle.Flat;
-            _btnRecord.BackColor = PdfSidebarTheme.Danger;
-            _btnRecord.ForeColor = Color.White;
-            _btnRecord.Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold);
-            _btnRecord.FlatAppearance.BorderSize = 0;
-            _btnRecord.Tag = "record";
-            _btnRecord.Cursor = Cursors.Hand;
-            _btnRecord.Margin = new Padding(0, 2, 0, 4);
             _btnRecord.Click += OnRecordButtonClicked;
-
-            _btnReplayRecording.Text = "▶ 回放我的录音";
-            _btnReplayRecording.Dock = DockStyle.Fill;
-            _btnReplayRecording.FlatStyle = FlatStyle.Flat;
-            _btnReplayRecording.BackColor = PdfSidebarTheme.Surface;
-            _btnReplayRecording.ForeColor = PdfSidebarTheme.Text;
-            _btnReplayRecording.FlatAppearance.BorderColor = PdfSidebarTheme.Border;
-            _btnReplayRecording.FlatAppearance.BorderSize = 1;
-            _btnReplayRecording.FlatAppearance.MouseOverBackColor = PdfSidebarTheme.Hover;
-            _btnReplayRecording.Cursor = Cursors.Hand;
-            _btnReplayRecording.Margin = new Padding(0, 0, 0, 4);
             _btnReplayRecording.Click += OnReplayRecordingClicked;
-
-            _labelStatus.Dock = DockStyle.Fill;
-            _labelStatus.AutoSize = false;
-            _labelStatus.ForeColor = PdfSidebarTheme.Muted;
-            _labelStatus.Tag = "muted";
-            _labelStatus.Font = new Font("Microsoft YaHei UI", 8.5F);
-            _labelStatus.Padding = new Padding(2, 2, 2, 0);
-
-            actions.Controls.Add(_btnRecord, 0, 0);
-            actions.Controls.Add(_btnReplayRecording, 0, 1);
-            actions.Controls.Add(_labelStatus, 0, 2);
-            grid.Controls.Add(actions, 1, 0);
-
-            card.Body.Controls.Add(grid);
-            return card;
-        }
-
-        private Control BuildScoreCard()
-        {
-            var card = new SidebarCard("参考分")
-            {
-                Dock = DockStyle.Fill,
-                Margin = Padding.Empty
-            };
-
-            _labelScore.Dock = DockStyle.Top;
-            _labelScore.AutoSize = false;
-            _labelScore.Height = 34;
-            _labelScore.TextAlign = ContentAlignment.MiddleLeft;
-            _labelScore.ForeColor = PdfSidebarTheme.Score;
-            _labelScore.Tag = "score";
-            _labelScore.Font = new Font("Microsoft YaHei UI", 14F, FontStyle.Bold);
-            _labelScore.Text = "参考分：—";
-
-            var note = new Label
-            {
-                Dock = DockStyle.Top,
-                Text = "仅反映跟读完成度，不作为发音准确率结论。",
-                Font = new Font("Microsoft YaHei UI", 8.5F),
-                ForeColor = PdfSidebarTheme.Muted,
-                Tag = "muted",
-                AutoSize = false,
-                Height = 24
-            };
-
-            card.Body.Controls.Add(note);
-            card.Body.Controls.Add(_labelScore);
-            return card;
-        }
-
-        private Control BuildFooter()
-        {
-            var footer = new Panel { Dock = DockStyle.Fill, BackColor = PdfSidebarTheme.Background };
-
-            _comboMode.Items.Clear();
-            _comboMode.Items.AddRange(new object[] { "单句循环", "自动下一句", "整段连读" });
-            _comboMode.SelectedIndex = 1;
-            _comboMode.DropDownStyle = ComboBoxStyle.DropDownList;
-            _comboMode.FlatStyle = FlatStyle.Flat;
-            _comboMode.BackColor = PdfSidebarTheme.Surface;
-            _comboMode.ForeColor = PdfSidebarTheme.Text;
-            _comboMode.Font = new Font("Microsoft YaHei UI", 9F);
-            _comboMode.Width = 124;
-            _comboMode.Location = new Point(0, 10);
             _comboMode.SelectedIndexChanged += OnModeChanged;
 
-            var hint = new Label
-            {
-                Text = "空格 播放 · R 重播 · → 下一句",
-                Font = new Font("Microsoft YaHei UI", 8.5F),
-                ForeColor = PdfSidebarTheme.Muted,
-                Tag = "muted",
-                AutoSize = false,
-                Height = 28,
-                Width = 240,
-                TextAlign = ContentAlignment.MiddleRight,
-                Anchor = AnchorStyles.Top | AnchorStyles.Right
-            };
+            _progressTrack.Paint += ProgressTrack_Paint;
 
-            void LayoutHint() => hint.Location = new Point(footer.ClientSize.Width - hint.Width, 10);
+            _buttonTip.SetToolTip(btnPrev, "上一句");
+            _buttonTip.SetToolTip(btnNext, "下一句");
+
             footer.Resize += (_, _) => LayoutHint();
             LayoutHint();
+        }
 
-            footer.Controls.Add(_comboMode);
-            footer.Controls.Add(hint);
-            return footer;
+        private void LayoutHint() => hint.Location = new Point(footer.ClientSize.Width - hint.Width, 10);
+
+        private void ProgressTrack_Paint(object? sender, PaintEventArgs e)
+        {
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            int trackHeight = 6;
+            var track = new Rectangle(0, (int)((e.Graphics.VisibleClipBounds.Height - trackHeight) / 2f),
+                Math.Max(0, _progressTrack.Width - 1), trackHeight);
+            if (track.Width <= 0) return;
+
+            using (var path = GdiHelper.CreateRoundedRectPath(track, 3))
+            using (var brush = new SolidBrush(PdfSidebarTheme.SurfaceAlt))
+                e.Graphics.FillPath(brush, path);
+
+            if (_totalSentences <= 0) return;
+            float ratio = Math.Clamp((_currentIndex + 1f) / _totalSentences, 0f, 1f);
+            var filled = new Rectangle(track.X, track.Y, Math.Max(1, (int)(track.Width * ratio)), track.Height);
+            using var fillPath = GdiHelper.CreateRoundedRectPath(filled, 3);
+            using var fillBrush = new SolidBrush(PdfSidebarTheme.Brand);
+            e.Graphics.FillPath(fillBrush, fillPath);
         }
 
         private void OnSentenceDrawItem(object? sender, DrawItemEventArgs e)

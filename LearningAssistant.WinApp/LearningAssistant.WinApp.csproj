@@ -291,6 +291,12 @@
 		<Compile Update="Forms\Pdf\MagnifierForm.cs">
 			<SubType>Form</SubType>
 		</Compile>
+		<Compile Update="Forms\Pdf\PdfAiAnswerDialog.cs">
+			<SubType>Form</SubType>
+		</Compile>
+		<Compile Update="Forms\Pdf\SentenceShadowingForm.cs">
+			<SubType>Form</SubType>
+		</Compile>
 		<Compile Update="Forms\Pdf\PdfShadowingPanel.cs">
 			<SubType>UserControl</SubType>
 		</Compile>
