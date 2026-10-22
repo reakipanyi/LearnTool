@@ -51,11 +51,7 @@ namespace LearningAssistant.Forms.Pdf
         private PdfReaderAudioManager? _audioManager;
         private PdfAudioTrackManager? _audioTrackManager;
         private PdfAudioPanel? _audioPanel;
-        private TabControl? _audioSubTabs;
-        private TabPage? _tabPageCompanion;
-        private TabPage? _tabPageRecording;
-        private TabPage? _tabPageShadowing;
-        private SegmentedTabs? _audioSegments;
+        private PdfAudioSidebarPanel? _audioSidebar;
         private SidebarHeaderBar? _translateHeader;
         private PdfTranslatePanel? _translatePanel;
         private SidebarHeaderBar? _highlightHeader;
@@ -469,21 +465,14 @@ namespace LearningAssistant.Forms.Pdf
             TabPage? recordingPage = _tabPageAudio;
             if (_tabPageAudio != null)
             {
-                _tabPageCompanion = new TabPage("🎵 配套音频");
-                _tabPageRecording = new TabPage("🎤 整页录音");
-                _tabPageShadowing = new TabPage("🗣 句子跟读");
-                recordingPage = _tabPageRecording;
-                _audioSubTabs = new TabControl();
-                _audioSubTabs.Dock = DockStyle.Fill;
-                _audioSubTabs.TabPages.Add(_tabPageCompanion);
-                _audioSubTabs.TabPages.Add(_tabPageRecording);
-                _audioSubTabs.TabPages.Add(_tabPageShadowing);
-                // 页签条由上方 SegmentedTabs 代替，隐藏原生 Tab 头
-                _audioSubTabs.Appearance = TabAppearance.FlatButtons;
-                _audioSubTabs.ItemSize = new Size(1, 1);
-                _audioSubTabs.SizeMode = TabSizeMode.Fixed;
-                _audioSubTabs.Multiline = false;
-                _tabPageAudio.Controls.Add(_audioSubTabs);
+                _audioSidebar = new PdfAudioSidebarPanel();
+                _audioSidebar.Dock = DockStyle.Fill;
+                _audioSidebar.SelectedIndexChanged += (_, _) =>
+                {
+                    if (_audioSidebar?.SelectedIndex == 2) UpdateShadowingSummary();
+                };
+                _tabPageAudio.Controls.Add(_audioSidebar);
+                recordingPage = _audioSidebar.RecordingPage;
             }
 
             // 初始化配套音频跟踪管理器（与录音服务解耦，独立于录音可用性）
@@ -496,7 +485,7 @@ namespace LearningAssistant.Forms.Pdf
                 if (matcher != null && scanner != null && store != null && subParser != null)
                 {
                     _audioTrackManager = new PdfAudioTrackManager(_logger, matcher, scanner, store, subParser);
-                    if (_tabPageCompanion != null)
+                    if (_audioSidebar != null)
                     {
                         // AI 匹配只按需读取页面文本，使用独立的 PDF 服务实例避免干扰阅读器自己的文档句柄
                         var aiService = Program.ServiceProvider?.GetService(typeof(IAIService)) as IAIService;
@@ -507,7 +496,7 @@ namespace LearningAssistant.Forms.Pdf
                             : null;
 
                         _audioPanel = new PdfAudioPanel(_audioTrackManager, this, aiMatcher) { Dock = DockStyle.Fill };
-                        _tabPageCompanion.Controls.Add(_audioPanel);
+                        _audioSidebar.CompanionPage.Controls.Add(_audioPanel);
                     }
                 }
             }
@@ -6857,56 +6846,23 @@ namespace LearningAssistant.Forms.Pdf
 
         private void BuildAudioSidebar()
         {
-            if (_tabPageAudio == null || _audioSubTabs == null) return;
-
-            _tabPageAudio.SuspendLayout();
-            _tabPageAudio.Controls.Remove(_audioSubTabs);
-
-            var root = new TableLayoutPanel();
-            root.Dock = DockStyle.Fill;
-            root.ColumnCount = 1;
-            root.RowCount = 2;
-            root.BackColor = PdfSidebarTheme.Background;
-            root.Padding = new Padding(6, 2, 6, 4);
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-
-            _audioSegments = new SegmentedTabs();
-            _audioSegments.Dock = DockStyle.Fill;
-            _audioSegments.Margin = new Padding(0, 2, 0, 4);
-            _audioSegments.SetItems("配套音频", "整页录音", "句子跟读");
-            _audioSegments.SelectedIndexChanged += (_, _) =>
-            {
-                if (_audioSubTabs != null)
-                    _audioSubTabs.SelectedIndex = _audioSegments.SelectedIndex;
-                if (_audioSegments.SelectedIndex == 2)
-                    UpdateShadowingSummary();
-            };
-            root.Controls.Add(_audioSegments, 0, 0);
-
-            _audioSubTabs.Dock = DockStyle.Fill;
-            _audioSubTabs.Margin = Padding.Empty;
-            root.Controls.Add(_audioSubTabs, 0, 1);
-
-            _tabPageAudio.Controls.Add(root);
-            root.BringToFront();
+            if (_audioSidebar == null) return;
 
             BuildShadowingPage();
             UpdateShadowingSummary();
-            _tabPageAudio.ResumeLayout(true);
         }
 
         private void BuildShadowingPage()
         {
-            if (_tabPageShadowing == null) return;
+            if (_audioSidebar == null || _shadowingPanel != null) return;
 
             _shadowingPanel = new PdfShadowingPanel();
             _shadowingPanel.Dock = DockStyle.Fill;
             _shadowingPanel.OpenButton.Click += (_, _) => OpenShadowingWindow();
             _shadowingSummary = _shadowingPanel.SummaryLabel;
 
-            _tabPageShadowing.Controls.Add(_shadowingPanel);
-            _tabPageShadowing.BackColor = PdfSidebarTheme.Background;
+            _audioSidebar.ShadowingPage.Controls.Add(_shadowingPanel);
+            _audioSidebar.ShadowingPage.BackColor = PdfSidebarTheme.Background;
         }
 
         private void UpdateShadowingSummary()
@@ -8676,7 +8632,7 @@ namespace LearningAssistant.Forms.Pdf
                 UpdateStudyTab();
             else if (_tabControlLeft.SelectedTab == _tabPageBookmarksAndHighlights)
                 UpdateHighlightEmptyState();
-            else if (_tabControlLeft.SelectedTab == _tabPageAudio && _audioSegments?.SelectedIndex == 2)
+            else if (_tabControlLeft.SelectedTab == _tabPageAudio && _audioSidebar?.SelectedIndex == 2)
                 UpdateShadowingSummary();
         }
 
