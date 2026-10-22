@@ -47,17 +47,20 @@ namespace LearningAssistant.Services.Learning
         private readonly IHighlightService _highlightService;
         private readonly IBookmarkService _bookmarkService;
         private readonly IContentLoaderService? _contentLoaderService;
+        private readonly IStudyEntryService? _studyEntryService;
         private readonly List<ExtractedContent> _editedContents = new List<ExtractedContent>();
 
         public PdfContentLinkService(IPdfService pdfService,
             IHighlightService highlightService,
             IBookmarkService bookmarkService,
-            IContentLoaderService? contentLoaderService = null)
+            IContentLoaderService? contentLoaderService = null,
+            IStudyEntryService? studyEntryService = null)
         {
             _pdfService = pdfService;
             _highlightService = highlightService;
             _bookmarkService = bookmarkService;
             _contentLoaderService = contentLoaderService;
+            _studyEntryService = studyEntryService;
         }
 
         public List<ExtractedContent> ExtractAllContent(string pdfPath)
@@ -238,33 +241,29 @@ namespace LearningAssistant.Services.Learning
 
             var materials = GenerateStudyMaterials(contents);
 
-            if (_contentLoaderService != null)
+            if (_studyEntryService == null)
             {
-                foreach (var material in materials)
-                {
-                    try
-                    {
-                        _contentLoaderService.SaveUserContent(new UserContent
-                        {
-                            UserId = userId,
-                            Title = material.Title,
-                            Content = material.Content,
-                            Category = material.Type,
-                            Tags = string.Join(",", material.Tags),
-                            CreatedAt = DateTime.Now,
-                            UpdatedAt = DateTime.Now
-                        });
-                        System.Diagnostics.Trace.TraceInformation($"已导出学习素材: {material.Title}");
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Trace.TraceError($"导出学习素材失败: {material.Title} - {ex.Message}");
-                    }
-                }
+                System.Diagnostics.Trace.TraceWarning($"生成了 {materials.Count} 个学习素材，但无法保存到学习库（StudyEntryService 未注入）");
+                return;
             }
-            else
+
+            var requests = materials.Select(m => new StudyEntryRequest
             {
-                System.Diagnostics.Trace.TraceWarning($"生成了 {materials.Count} 个学习素材，但无法保存到学习库（ContentLoaderService 未注入）");
+                Text = m.Content,
+                Note = m.Title,
+                SourceType = "PdfExport",
+                Kind = StudyTextKind.Auto
+            }).ToList();
+
+            try
+            {
+                var results = _studyEntryService.AddRangeAsync(requests).GetAwaiter().GetResult();
+                var created = results.Count(r => r.Created);
+                System.Diagnostics.Trace.TraceInformation($"已导出 {created} 个学习素材到学习库（用户: {userId}）");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceError($"导出学习素材失败: {ex.Message}");
             }
         }
 

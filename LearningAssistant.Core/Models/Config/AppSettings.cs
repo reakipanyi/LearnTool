@@ -14,5 +14,8 @@ namespace LearningAssistant.Models.Config
         public bool IsAIExplanationEnabled { get; set; } = false;
         /// <summary>主页风格：Dashboard（完整卡片版）/ Simple（简洁版）</summary>
         public string HomeStyle { get; set; } = "Dashboard";
+
+        /// <summary>是否启用统一学习入口（PDF/手动内容统一进入个人学习库）</summary>
+        public bool EnableUnifiedStudyEntry { get; set; } = true;
     }
 }

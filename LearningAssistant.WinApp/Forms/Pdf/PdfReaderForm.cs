@@ -35,6 +35,8 @@ namespace LearningAssistant.Forms.Pdf
         private readonly Services.Learning.ISpacedRepetitionService? _spacedRepetitionService;
         private readonly Services.Learning.INoteService? _noteService;
         private readonly Services.Learning.IUserSessionService? _userSessionService;
+        private readonly Services.Learning.IStudyEntryService? _studyEntryService;
+        private readonly AppConfig? _appConfig;
 
         // 本次会话是否已确认把整份文档文本发送给 AI 服务，避免每次操作重复弹窗
         private bool _wholeDocumentAiConfirmed;
@@ -356,7 +358,7 @@ namespace LearningAssistant.Forms.Pdf
         private ToolStripDropDown _annotationOptionsDropDown;
         private ToolStripControlHost _annotationOptionsHostItem;
         private Panel _annotationOptionsHost;
-        public PdfReaderForm(ILogger<PdfReaderForm> logger, IAIPanelPopupService? aiPanelPopupService = null, Services.Learning.IPendingContentService? pendingContentService = null, IHighlightService? highlightService = null, IAnnotationService? annotationService = null, IEventBus? eventBus = null, IAudioRecorderService? audioRecorderService = null, IPdfAiService? pdfAiService = null, IPdfDocumentTextIndex? documentTextIndex = null, Services.Learning.ISpacedRepetitionService? spacedRepetitionService = null, Services.Learning.INoteService? noteService = null, Services.Learning.IUserSessionService? userSessionService = null)
+        public PdfReaderForm(ILogger<PdfReaderForm> logger, IAIPanelPopupService? aiPanelPopupService = null, Services.Learning.IPendingContentService? pendingContentService = null, IHighlightService? highlightService = null, IAnnotationService? annotationService = null, IEventBus? eventBus = null, IAudioRecorderService? audioRecorderService = null, IPdfAiService? pdfAiService = null, IPdfDocumentTextIndex? documentTextIndex = null, Services.Learning.ISpacedRepetitionService? spacedRepetitionService = null, Services.Learning.INoteService? noteService = null, Services.Learning.IUserSessionService? userSessionService = null, Services.Learning.IStudyEntryService? studyEntryService = null, AppConfig? appConfig = null)
         {
             InitializeComponent();
             WindowState = FormWindowState.Maximized;
@@ -373,6 +375,8 @@ namespace LearningAssistant.Forms.Pdf
             _spacedRepetitionService = spacedRepetitionService;
             _noteService = noteService;
             _userSessionService = userSessionService;
+            _studyEntryService = studyEntryService;
+            _appConfig = appConfig;
             KeyPreview = true;
             Load += PdfReaderFormV2_Load;
             Resize += PdfReaderFormV2_Resize;
@@ -6221,9 +6225,60 @@ namespace LearningAssistant.Forms.Pdf
             SpeakTranslation?.Invoke(this, EventArgs.Empty);
         }
 
-        private void ButtonAddToLearningContent_Click(object? sender, EventArgs e)
+        private async void ButtonAddToLearningContent_Click(object? sender, EventArgs e)
         {
-            AddToLearningList?.Invoke(this, EventArgs.Empty);
+            if (_appConfig?.AppSettings.EnableUnifiedStudyEntry == false)
+            {
+                MessageBox.Show(this, "统一学习入口未启用", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (_studyEntryService == null)
+            {
+                MessageBox.Show(this, "学习入口服务未初始化", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var text = ResolveStudyText();
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                MessageBox.Show(this, "请先选中或识别一段文本", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            try
+            {
+                var request = new Services.Learning.StudyEntryRequest
+                {
+                    Text = text,
+                    Translation = _textBoxTranslation?.Text,
+                    SourceType = "PdfHighlight",
+                    PdfPath = _currentPdfPath,
+                    PageIndex = _currentPageIndex
+                };
+
+                var result = await _studyEntryService.AddAsync(request);
+                MessageBox.Show(
+                    this,
+                    result.AlreadyExists ? "已在学习库中" : "已加入学习",
+                    "提示",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "添加到学习库失败");
+                MessageBox.Show(this, $"加入学习失败：{ex.Message}", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        /// <summary>按“选区 → 原文框全文”的优先级解析待加入学习的文本。</summary>
+        private string ResolveStudyText()
+        {
+            var selected = GetSelectedText();
+            if (!string.IsNullOrWhiteSpace(selected)) return selected;
+
+            return _textBoxOriginal?.Text?.Trim() ?? string.Empty;
         }
 
         private void ButtonShadowing_Click(object? sender, EventArgs e)
