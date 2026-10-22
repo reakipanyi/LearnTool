@@ -585,7 +585,7 @@ namespace LearningAssistant.Services.Persistence
             }
         }
 
-        public void UpsertLearningItemState(string userId, SubCategoryType category, string content, bool isKnown)
+        public void UpsertLearningItemState(string userId, SubCategoryType category, string content, bool isKnown, string? itemKey = null)
         {
             if (string.IsNullOrWhiteSpace(content)) return;
 
@@ -593,12 +593,24 @@ namespace LearningAssistant.Services.Persistence
             try
             {
                 using var db = _dbContextFactory.CreateDbContext();
-                var existing = db.LearningItemStates
-                    .FirstOrDefault(s => s.UserId == userId && s.CategoryName == categoryName && s.Content == content);
+
+                // 双键兼容：ItemKey 优先，旧数据 ItemKey 为空时按内容回退。
+                var existing = !string.IsNullOrEmpty(itemKey)
+                    ? db.LearningItemStates.FirstOrDefault(s =>
+                        s.UserId == userId && s.CategoryName == categoryName && s.ItemKey == itemKey)
+                    : null;
+                existing ??= db.LearningItemStates.FirstOrDefault(s =>
+                    s.UserId == userId && s.CategoryName == categoryName &&
+                    s.ItemKey == null && s.Content == content);
 
                 if (existing != null)
                 {
                     existing.IsKnown = isKnown;
+                    existing.Content = content;
+                    if (string.IsNullOrEmpty(existing.ItemKey) && !string.IsNullOrEmpty(itemKey))
+                    {
+                        existing.ItemKey = itemKey;
+                    }
                     existing.UpdatedAt = DateTime.Now;
                 }
                 else
@@ -608,6 +620,7 @@ namespace LearningAssistant.Services.Persistence
                         UserId = userId,
                         CategoryName = categoryName,
                         Content = content,
+                        ItemKey = itemKey,
                         IsKnown = isKnown,
                         CreatedAt = DateTime.Now,
                         UpdatedAt = DateTime.Now
@@ -705,7 +718,12 @@ namespace LearningAssistant.Services.Persistence
             }
         }
 
-        public void SyncCategoryProgressToLearningItemStates(string userId, SubCategoryType category, List<string> knownItems, List<string> unknownItems)
+        public void SyncCategoryProgressToLearningItemStates(
+            string userId,
+            SubCategoryType category,
+            List<string> knownItems,
+            List<string> unknownItems,
+            IReadOnlyDictionary<string, string>? itemKeyMap = null)
         {
             var categoryName = category.ToString();
             try
@@ -717,62 +735,81 @@ namespace LearningAssistant.Services.Persistence
                     .Where(s => s.UserId == userId && s.CategoryName == categoryName)
                     .ToList();
 
-                // 改为 upsert：按 Content 匹配更新，保留原始 CreatedAt；仅删除不再需要的项。
-                var stateByContent = existingStates.ToDictionary(s => s.Content);
-                var now = DateTime.Now;
-                var desired = new HashSet<string>();
+                // 改为 upsert：ItemKey 优先匹配，旧数据按 Content 回退，并补写 ItemKey。
+                var stateByContent = existingStates
+                    .GroupBy(s => s.Content, StringComparer.Ordinal)
+                    .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+                var stateByKey = existingStates
+                    .Where(s => !string.IsNullOrEmpty(s.ItemKey))
+                    .GroupBy(s => s.ItemKey!, StringComparer.Ordinal)
+                    .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
 
-                foreach (var content in knownItems.Where(c => !string.IsNullOrWhiteSpace(c)))
+                var now = DateTime.Now;
+                var matchedIds = new HashSet<int>();
+
+                void Apply(string content, bool isKnown)
                 {
-                    desired.Add(content);
-                    if (stateByContent.TryGetValue(content, out var existing))
+                    if (string.IsNullOrWhiteSpace(content)) return;
+
+                    string? itemKey = null;
+                    itemKeyMap?.TryGetValue(content, out itemKey);
+
+                    LearningItemStateEntity? state = null;
+                    if (!string.IsNullOrEmpty(itemKey))
                     {
-                        if (!existing.IsKnown)
+                        stateByKey.TryGetValue(itemKey, out state);
+                    }
+                    state ??= stateByContent.GetValueOrDefault(content);
+
+                    if (state != null)
+                    {
+                        matchedIds.Add(state.Id);
+                        if (!string.Equals(state.Content, content, StringComparison.Ordinal))
                         {
-                            existing.IsKnown = true;
-                            existing.UpdatedAt = now;
+                            state.Content = content;
                         }
+                        if (string.IsNullOrEmpty(state.ItemKey) && !string.IsNullOrEmpty(itemKey))
+                        {
+                            state.ItemKey = itemKey;
+                        }
+                        if (state.IsKnown != isKnown)
+                        {
+                            state.IsKnown = isKnown;
+                        }
+                        state.UpdatedAt = now;
                     }
                     else
                     {
-                        db.LearningItemStates.Add(new LearningItemStateEntity
+                        var newState = new LearningItemStateEntity
                         {
                             UserId = userId,
                             CategoryName = categoryName,
                             Content = content,
-                            IsKnown = true,
+                            ItemKey = itemKey,
+                            IsKnown = isKnown,
                             CreatedAt = now,
                             UpdatedAt = now
-                        });
+                        };
+                        db.LearningItemStates.Add(newState);
+                        stateByContent[content] = newState;
+                        if (!string.IsNullOrEmpty(itemKey))
+                        {
+                            stateByKey[itemKey] = newState;
+                        }
                     }
+                }
+
+                foreach (var content in knownItems.Where(c => !string.IsNullOrWhiteSpace(c)))
+                {
+                    Apply(content, true);
                 }
 
                 foreach (var content in unknownItems.Where(c => !string.IsNullOrWhiteSpace(c)))
                 {
-                    desired.Add(content);
-                    if (stateByContent.TryGetValue(content, out var existing))
-                    {
-                        if (existing.IsKnown)
-                        {
-                            existing.IsKnown = false;
-                            existing.UpdatedAt = now;
-                        }
-                    }
-                    else
-                    {
-                        db.LearningItemStates.Add(new LearningItemStateEntity
-                        {
-                            UserId = userId,
-                            CategoryName = categoryName,
-                            Content = content,
-                            IsKnown = false,
-                            CreatedAt = now,
-                            UpdatedAt = now
-                        });
-                    }
+                    Apply(content, false);
                 }
 
-                foreach (var stateToRemove in existingStates.Where(s => !desired.Contains(s.Content)))
+                foreach (var stateToRemove in existingStates.Where(s => !matchedIds.Contains(s.Id)))
                 {
                     db.LearningItemStates.Remove(stateToRemove);
                 }

@@ -160,6 +160,9 @@ namespace LearningAssistant.Data.Database
                 .HasIndex(s => s.LearningStage);
 
             modelBuilder.Entity<SpacedRepetitionItemEntity>()
+                .HasIndex(s => new { s.UserId, s.ItemKey });
+
+            modelBuilder.Entity<SpacedRepetitionItemEntity>()
                 .HasMany(s => s.ReviewLogs)
                 .WithOne(r => r.SpacedRepetitionItem)
                 .HasForeignKey(r => r.ContentId)
@@ -197,6 +200,9 @@ namespace LearningAssistant.Data.Database
             modelBuilder.Entity<LearningItemStateEntity>()
                 .HasIndex(l => new { l.UserId, l.CategoryName, l.Content })
                 .IsUnique();
+
+            modelBuilder.Entity<LearningItemStateEntity>()
+                .HasIndex(l => new { l.UserId, l.CategoryName, l.ItemKey });
 
             // 提醒重复日期配置
             modelBuilder.Entity<ReminderRepeatDayEntity>()
@@ -329,6 +335,7 @@ namespace LearningAssistant.Data.Database
                 RepairPomodoroSettingsTable();
                 RepairPomodoroRecordsTable();
                 RepairSpacedRepetitionItemsColumn();
+                RepairLearningItemStatesColumns();
                 RepairPomodoroSettingsColumns();
             }
             catch (Exception ex)
@@ -367,6 +374,7 @@ namespace LearningAssistant.Data.Database
                 UserId TEXT NOT NULL,
                 CategoryName TEXT NOT NULL,
                 Content TEXT NOT NULL,
+                ItemKey TEXT NULL,
                 IsKnown INTEGER NOT NULL DEFAULT 0,
                 CreatedAt TEXT NOT NULL,
                 UpdatedAt TEXT NOT NULL,
@@ -606,6 +614,7 @@ namespace LearningAssistant.Data.Database
                 Id TEXT PRIMARY KEY,
                 UserId TEXT NOT NULL,
                 Content TEXT NOT NULL,
+                ItemKey TEXT NULL,
                 Answer TEXT NOT NULL DEFAULT '',
                 Interval INTEGER NOT NULL DEFAULT 0,
                 Repetitions INTEGER NOT NULL DEFAULT 0,
@@ -1017,6 +1026,50 @@ namespace LearningAssistant.Data.Database
             catch (Exception ex)
             {
                 System.Diagnostics.Trace.TraceWarning($"添加AlgorithmType列失败（可能已存在）: {ex.Message}");
+            }
+
+            try
+            {
+                var sql = @"ALTER TABLE SpacedRepetitionItems ADD COLUMN ItemKey TEXT;";
+                Database.ExecuteSqlRaw(sql);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning($"添加ItemKey列失败（可能已存在）: {ex.Message}");
+            }
+
+            try
+            {
+                // 索引必须在补列之后创建，否则旧库会因缺列而失败
+                var sql = @"CREATE INDEX IF NOT EXISTS IX_SpacedRepetitionItems_UserId_ItemKey ON SpacedRepetitionItems(UserId, ItemKey);";
+                Database.ExecuteSqlRaw(sql);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning($"创建SpacedRepetitionItems.ItemKey索引失败: {ex.Message}");
+            }
+        }
+
+        private void RepairLearningItemStatesColumns()
+        {
+            try
+            {
+                var sql = @"ALTER TABLE LearningItemStates ADD COLUMN ItemKey TEXT;";
+                Database.ExecuteSqlRaw(sql);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning($"添加LearningItemStates.ItemKey列失败（可能已存在）: {ex.Message}");
+            }
+
+            try
+            {
+                var sql = @"CREATE INDEX IF NOT EXISTS IX_LearningItemStates_UserId_CategoryName_ItemKey ON LearningItemStates(UserId, CategoryName, ItemKey);";
+                Database.ExecuteSqlRaw(sql);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.TraceWarning($"创建LearningItemStates.ItemKey索引失败: {ex.Message}");
             }
         }
     }

@@ -7,7 +7,7 @@ namespace LearningAssistant.Services.Learning
     public interface IProgressManager
     {
         void LoadProgress(string userId, SubCategoryType subCategory);
-        void SaveProgress(string userId, SubCategoryType subCategory, StudyEngineState state);
+        void SaveProgress(string userId, SubCategoryType subCategory, StudyEngineState state, IReadOnlyDictionary<string, string>? itemKeyMap = null);
         ProgressState GetProgressState();
         void AddUnknownItem(string userId, string content, SubCategoryType subCategory);
         void ResetProgress();
@@ -86,7 +86,7 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        public void SaveProgress(string userId, SubCategoryType subCategory, StudyEngineState state)
+        public void SaveProgress(string userId, SubCategoryType subCategory, StudyEngineState state, IReadOnlyDictionary<string, string>? itemKeyMap = null)
         {
             var profile = _persistenceService.LoadUserProfile(userId);
             var progress = profile.LearningProgress;
@@ -98,7 +98,7 @@ namespace LearningAssistant.Services.Learning
                 progress.CategoryProgresses[subCategoryStr] = categoryProgress;
             }
 
-            _persistenceService.SyncCategoryProgressToLearningItemStates(userId, subCategory, state.KnownItems, state.UnknownItems);
+            _persistenceService.SyncCategoryProgressToLearningItemStates(userId, subCategory, state.KnownItems, state.UnknownItems, itemKeyMap);
 
             categoryProgress.KnownItems = state.KnownItems;
             categoryProgress.UnknownItems = state.UnknownItems;

@@ -62,13 +62,19 @@ namespace LearningAssistant.Services.Learning
         {
             try
             {
+                // 按事件携带的子类别归类，避免所有错题被硬编码成英语单词。
+                var subCategory = SubjectSubCategoryMapping.TryParseSubCategory(evt.SubCategory, out var parsed)
+                    ? parsed
+                    : SubCategoryType.EnglishWord;
+                var subject = SubjectSubCategoryMapping.GetSubject(subCategory);
+
                 var item = new WrongAnswerItem
                 {
                     Question = evt.ItemContent,
                     CorrectAnswer = evt.CorrectAnswer,
                     UserAnswer = evt.UserAnswer,
-                    Subject = SubjectType.English,
-                    Category = SubCategoryType.EnglishWord
+                    Subject = subject,
+                    Category = subCategory
                 };
 
                 AddWrongAnswer(evt.UserId, item);

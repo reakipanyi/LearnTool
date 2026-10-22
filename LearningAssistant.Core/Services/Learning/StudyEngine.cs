@@ -467,11 +467,22 @@ namespace LearningAssistant.Services.Learning
 
         private void SaveProgressInternal()
         {
+            // 内容 → 稳定 Id 映射用于学习状态表补写 ItemKey；旧词库缺失 Id 时在此兜底生成。
+            var itemKeyMap = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var item in _allItems)
+            {
+                var content = item.GetMainContent();
+                if (!itemKeyMap.ContainsKey(content))
+                {
+                    itemKeyMap[content] = LearningItemIdentity.EnsureKey(item);
+                }
+            }
+
             Task.Run(() =>
             {
                 try
                 {
-                    _progressManager.SaveProgress(_state.UserId, _state.SubCategory, _state);
+                    _progressManager.SaveProgress(_state.UserId, _state.SubCategory, _state, itemKeyMap);
                 }
                 catch (Exception ex)
                 {

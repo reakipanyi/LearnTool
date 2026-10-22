@@ -219,6 +219,10 @@ namespace LearningAssistant.Data.Database
         [MaxLength(50)]
         public string? Subject { get; set; }
 
+        /// <summary>学习项稳定身份（LearningItem.Id）；旧数据为空时按 Content 回退匹配。</summary>
+        [MaxLength(64)]
+        public string? ItemKey { get; set; }
+
         public List<ReviewLogEntity> ReviewLogs { get; set; } = new List<ReviewLogEntity>();
     }
 
@@ -269,6 +273,10 @@ namespace LearningAssistant.Data.Database
 
         [Required]
         public string Content { get; set; } = string.Empty;
+
+        /// <summary>学习项稳定身份（LearningItem.Id）；旧数据为空时按 Content 回退匹配。</summary>
+        [MaxLength(64)]
+        public string? ItemKey { get; set; }
 
         public bool IsKnown { get; set; } = false;
     }

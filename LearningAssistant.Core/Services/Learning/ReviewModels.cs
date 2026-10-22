@@ -39,6 +39,9 @@ namespace LearningAssistant.Services.Learning
         public string? Category { get; set; }
 
         public string? Subject { get; set; }
+
+        /// <summary>学习项稳定身份（LearningItem.Id）；旧数据可能为空，按 Content 回退匹配。</summary>
+        public string? ItemKey { get; set; }
     }
 
     /// <summary>

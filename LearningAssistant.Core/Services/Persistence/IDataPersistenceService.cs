@@ -22,10 +22,10 @@ namespace LearningAssistant.Services.Persistence
 
         List<string> GetKnownItems(string userId, SubCategoryType category);
         List<string> GetUnknownItems(string userId, SubCategoryType category);
-        void UpsertLearningItemState(string userId, SubCategoryType category, string content, bool isKnown);
+        void UpsertLearningItemState(string userId, SubCategoryType category, string content, bool isKnown, string? itemKey = null);
         void UpsertLearningItemStates(string userId, SubCategoryType category, IEnumerable<string> contents, bool isKnown);
         void DeleteLearningItemState(string userId, SubCategoryType category, string content);
-        void SyncCategoryProgressToLearningItemStates(string userId, SubCategoryType category, List<string> knownItems, List<string> unknownItems);
+        void SyncCategoryProgressToLearningItemStates(string userId, SubCategoryType category, List<string> knownItems, List<string> unknownItems, IReadOnlyDictionary<string, string>? itemKeyMap = null);
     }
 
     /// <summary>

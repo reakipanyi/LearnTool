@@ -381,7 +381,8 @@ namespace LearningAssistant.Data.Database
                 CorrectStreak = item.CorrectStreak,
                 AlgorithmType = item.AlgorithmType,
                 Category = item.Category,
-                Subject = item.Subject
+                Subject = item.Subject,
+                ItemKey = item.ItemKey
             };
         }
 
@@ -411,7 +412,8 @@ namespace LearningAssistant.Data.Database
                 CorrectStreak = entity.CorrectStreak,
                 AlgorithmType = entity.AlgorithmType,
                 Category = entity.Category,
-                Subject = entity.Subject
+                Subject = entity.Subject,
+                ItemKey = entity.ItemKey
             };
         }
 
@@ -437,6 +439,10 @@ namespace LearningAssistant.Data.Database
             entity.AlgorithmType = item.AlgorithmType;
             entity.Category = item.Category;
             entity.Subject = item.Subject;
+            if (!string.IsNullOrEmpty(item.ItemKey))
+            {
+                entity.ItemKey = item.ItemKey;
+            }
         }
 
         public static LearningItemEntity ToEntity(this LearningItem item)

@@ -335,14 +335,15 @@ namespace LearningAssistant.Presenters
 
             if (currentItem != null)
             {
-                SyncToSpacedRepetition(currentItem.GetMainContent(), currentItem.GetDisplayText(), true);
+                var itemKey = LearningItemIdentity.EnsureKey(currentItem);
+                SyncToSpacedRepetition(itemKey, currentItem.GetMainContent(), currentItem.GetDisplayText(), true);
 
                 if (_eventBus != null)
                 {
                     _eventBus.Publish(new ItemLearnedEvent
                     {
                         UserId = _currentUserId,
-                        ItemId = currentItem.GetMainContent(),
+                        ItemId = itemKey,
                         ItemContent = currentItem.GetMainContent(),
                         SubCategory = _currentSubCategory.ToString(),
                         LearnedAt = DateTime.Now
@@ -354,46 +355,38 @@ namespace LearningAssistant.Presenters
             await MoveToNextAsync();
         }
 
-        private void SyncToSpacedRepetition(string content, string answer, bool isKnown)
+        private void SyncToSpacedRepetition(string? itemKey, string content, string answer, bool isKnown)
         {
             if (_spacedRepetitionService == null) return;
             if (string.IsNullOrWhiteSpace(content)) return;
 
             try
             {
+                // 双键兼容：ItemKey 优先，旧记录 ItemKey 为空时按内容回退，并在命中后补键。
                 var allItems = _spacedRepetitionService.GetAllItems(_currentUserId);
-                var existingItem = allItems.FirstOrDefault(i =>
+                var existingItem = !string.IsNullOrEmpty(itemKey)
+                    ? allItems.FirstOrDefault(i => string.Equals(i.ItemKey, itemKey, StringComparison.Ordinal))
+                    : null;
+                existingItem ??= allItems.FirstOrDefault(i =>
+                    string.IsNullOrEmpty(i.ItemKey) &&
                     string.Equals(i.Content.Trim(), content.Trim(), StringComparison.OrdinalIgnoreCase));
 
-                if (isKnown)
+                if (existingItem != null)
                 {
-                    if (existingItem != null)
+                    if (string.IsNullOrEmpty(existingItem.ItemKey) && !string.IsNullOrEmpty(itemKey))
                     {
-                        _spacedRepetitionService.CalculateNextReview(existingItem, 4);
+                        existingItem.ItemKey = itemKey;
                     }
-                    else
-                    {
-                        var newItem = _spacedRepetitionService.CreateNewItem(_currentUserId, content, answer);
-                        newItem.Category = _currentSubCategory.ToString();
-                        newItem.Subject = _currentSubject.ToString();
-                        _spacedRepetitionService.UpdateItem(newItem);
-                        _spacedRepetitionService.CalculateNextReview(newItem, 4);
-                    }
+
+                    _spacedRepetitionService.CalculateNextReview(existingItem, isKnown ? 4 : 2);
                 }
                 else
                 {
-                    if (existingItem != null)
-                    {
-                        _spacedRepetitionService.CalculateNextReview(existingItem, 2);
-                    }
-                    else
-                    {
-                        var newItem = _spacedRepetitionService.CreateNewItem(_currentUserId, content, answer);
-                        newItem.Category = _currentSubCategory.ToString();
-                        newItem.Subject = _currentSubject.ToString();
-                        _spacedRepetitionService.UpdateItem(newItem);
-                        _spacedRepetitionService.CalculateNextReview(newItem, 2);
-                    }
+                    var newItem = _spacedRepetitionService.CreateNewItem(_currentUserId, content, answer, itemKey);
+                    newItem.Category = _currentSubCategory.ToString();
+                    newItem.Subject = _currentSubject.ToString();
+                    _spacedRepetitionService.UpdateItem(newItem);
+                    _spacedRepetitionService.CalculateNextReview(newItem, isKnown ? 4 : 2);
                 }
 
                 _logger.LogDebug("同步到间隔重复系统: 用户 {UserId}, 内容 {Content}, 已知 {IsKnown}",
@@ -414,14 +407,15 @@ namespace LearningAssistant.Presenters
 
             if (currentItem != null)
             {
-                SyncToSpacedRepetition(currentItem.GetMainContent(), currentItem.GetDisplayText(), false);
+                var itemKey = LearningItemIdentity.EnsureKey(currentItem);
+                SyncToSpacedRepetition(itemKey, currentItem.GetMainContent(), currentItem.GetDisplayText(), false);
 
                 if (_eventBus != null)
                 {
                     _eventBus.Publish(new ItemWrongEvent
                     {
                         UserId = _currentUserId,
-                        ItemId = currentItem.GetMainContent(),
+                        ItemId = itemKey,
                         ItemContent = currentItem.GetMainContent(),
                         CorrectAnswer = currentItem.GetDisplayText(),
                         UserAnswer = "",

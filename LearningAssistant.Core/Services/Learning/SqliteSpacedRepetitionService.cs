@@ -32,7 +32,7 @@ namespace LearningAssistant.Services.Learning
         /// <summary>
         /// 创建新的复习项
         /// </summary>
-        ReviewItem CreateNewItem(string userId, string content, string answer = "");
+        ReviewItem CreateNewItem(string userId, string content, string answer = "", string? itemKey = null);
 
         /// <summary>
         /// 获取待复习项列表
@@ -187,8 +187,14 @@ namespace LearningAssistant.Services.Learning
             try
             {
                 using var db = _dbContextFactory.CreateDbContext();
-                var existing = db.SpacedRepetitionItems
-                    .FirstOrDefault(i => i.UserId == evt.UserId && i.Content == evt.ItemContent && i.IsActive);
+                var itemKey = string.IsNullOrWhiteSpace(evt.ItemId) ? null : evt.ItemId;
+
+                // 双键兼容：ItemKey 优先，旧数据 ItemKey 为空时按内容回退。
+                var existing = !string.IsNullOrEmpty(itemKey)
+                    ? db.SpacedRepetitionItems.FirstOrDefault(i => i.UserId == evt.UserId && i.ItemKey == itemKey && i.IsActive)
+                    : null;
+                existing ??= db.SpacedRepetitionItems
+                    .FirstOrDefault(i => i.UserId == evt.UserId && i.ItemKey == null && i.Content == evt.ItemContent && i.IsActive);
 
                 if (existing == null)
                 {
@@ -197,6 +203,8 @@ namespace LearningAssistant.Services.Learning
                         UserId = evt.UserId,
                         Content = evt.ItemContent,
                         Answer = evt.ItemContent,
+                        ItemKey = itemKey,
+                        Category = evt.SubCategory,
                         Interval = 0,
                         Repetitions = 0,
                         EFactor = 2.5,
@@ -210,6 +218,12 @@ namespace LearningAssistant.Services.Learning
 
                     _logger?.LogInformation("自动加入间隔重复队列: {UserId}, {ItemContent}", 
                         evt.UserId, evt.ItemContent.Length > 30 ? evt.ItemContent.Substring(0, 30) + "..." : evt.ItemContent);
+                }
+                else if (string.IsNullOrEmpty(existing.ItemKey) && !string.IsNullOrEmpty(itemKey))
+                {
+                    existing.ItemKey = itemKey;
+                    existing.UpdatedAt = DateTime.Now;
+                    db.SaveChanges();
                 }
             }
             catch (Exception ex)
@@ -312,7 +326,7 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        public ReviewItem CreateNewItem(string userId, string content, string answer = "")
+        public ReviewItem CreateNewItem(string userId, string content, string answer = "", string? itemKey = null)
         {
             if (string.IsNullOrWhiteSpace(userId))
                 throw new ArgumentException("userId cannot be null or empty", nameof(userId));
@@ -322,6 +336,7 @@ namespace LearningAssistant.Services.Learning
                 UserId = userId,
                 Content = content,
                 Answer = answer,
+                ItemKey = itemKey,
                 Interval = 0,
                 Repetitions = 0,
                 EFactor = 2.5,
