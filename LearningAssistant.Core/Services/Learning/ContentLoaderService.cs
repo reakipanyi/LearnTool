@@ -71,13 +71,27 @@ namespace LearningAssistant.Services.Learning
                     return new List<LearningItem>();
                 }
 
-                if (!File.Exists(filePath))
+                var items = new List<LearningItem>();
+
+                if (File.Exists(filePath))
                 {
-                    _logger.LogWarning("File not found: {FilePath}", filePath);
-                    return new List<LearningItem>();
+                    items.AddRange(LoadFromCacheOrFile(filePath, context.SubCategory));
+                }
+                else
+                {
+                    _logger.LogDebug("System word bank not found, continue with personal content: {FilePath}", filePath);
                 }
 
-                var items = LoadFromCacheOrFile(filePath, context.SubCategory);
+                // 个人内容合并：按规范化键去重，个人内容优先覆盖系统词库中的同名项。
+                var personalItems = LoadPersonalItems(context);
+                if (personalItems.Count > 0)
+                {
+                    var personalKeys = new HashSet<string>(
+                        personalItems.Select(LearningItemIdentity.GetCanonicalKey), StringComparer.Ordinal);
+                    items.RemoveAll(item => personalKeys.Contains(LearningItemIdentity.GetCanonicalKey(item)));
+                    items.AddRange(personalItems);
+                }
+
                 return items;
             }
             catch (Exception ex)
@@ -113,19 +127,60 @@ namespace LearningAssistant.Services.Learning
         {
             try
             {
-                string filePath = GetFilePath(context.SubCategory, context.WordBankFile);
-
-                if (!IsPathSafe(filePath) || !File.Exists(filePath))
-                    return 0;
-
-                var items = LoadFromCacheOrFile(filePath, context.SubCategory);
-                return items.Count;
+                return LoadItems(context).Count;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to get item count for subCategory: {SubCategory}", context.SubCategory);
                 return 0;
             }
+        }
+
+        /// <summary>加载当前用户的个人内容，缺失或损坏时返回空集合。</summary>
+        private List<LearningItem> LoadPersonalItems(LearningContext context)
+        {
+            var personalPath = GetPersonalFilePath(context);
+            if (personalPath == null || !File.Exists(personalPath)) return new List<LearningItem>();
+
+            try
+            {
+                return LoadFromCacheOrFile(personalPath, context.SubCategory);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load personal content: {FilePath}", personalPath);
+                return new List<LearningItem>();
+            }
+        }
+
+        private string? GetPersonalFilePath(LearningContext context)
+        {
+            try
+            {
+                var userId = string.IsNullOrWhiteSpace(context.UserId)
+                    ? Constants.DefaultUserId
+                    : SanitizeUserId(context.UserId);
+                var userDir = _appPaths.GetUserDir(userId);
+                return Path.Combine(userDir, "content", context.Subject.ToString(), $"{context.SubCategory}.json");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to resolve personal content path");
+                return null;
+            }
+        }
+
+        private static string SanitizeUserId(string userId)
+        {
+            var builder = new System.Text.StringBuilder(userId.Length);
+            foreach (var ch in userId)
+            {
+                if (char.IsLetterOrDigit(ch) || ch == '-' || ch == '_')
+                {
+                    builder.Append(ch);
+                }
+            }
+            return builder.Length > 0 ? builder.ToString() : Constants.DefaultUserId;
         }
 
         /// <summary>
