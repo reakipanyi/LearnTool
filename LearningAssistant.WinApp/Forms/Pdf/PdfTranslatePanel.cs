@@ -42,6 +42,12 @@ public partial class PdfTranslatePanel : UserControl
         _tip.SetToolTip(translationBox, "点击译文段落，可定位对应原文段落");
         _tip.SetToolTip(originalBox, "识别结果可直接编辑；修改后点「重新翻译」生效。点击段落可定位对应译文");
 
+        // 卡片右上角的朗读按钮：默认 ghost 样式过于浅淡，这里恢复为清晰可见的强调样式
+        StylePlayButton(originalCard, "🔊 播放原文");
+        StylePlayButton(translationCard, "🔊 播放译文");
+        _tip.SetToolTip(originalCard.ActionButton!, "朗读左侧原文（按原文语言自动选择音色）");
+        _tip.SetToolTip(translationCard.ActionButton!, "朗读右侧译文（按译文语言自动选择音色）");
+
         // 段落级联动：两侧段数一致时才接管点击，避免译文被合并/拆分时定位错乱
         originalBox.MouseClick += (_, e) => AlignParagraph(originalBox, translationBox, e.Location);
         translationBox.MouseClick += (_, e) => AlignParagraph(translationBox, originalBox, e.Location);
@@ -152,6 +158,28 @@ public partial class PdfTranslatePanel : UserControl
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Button ReTranslateButton => reTranslateButton;
+
+    /// <summary>把卡片右上角的朗读按钮做成边框 + 品牌色的强调样式，保证在明暗主题下都能一眼看到。</summary>
+    private static void StylePlayButton(SidebarCard card, string text)
+    {
+        var button = card.ActionButton;
+        if (button == null) return;
+
+        button.Text = text;
+        button.AutoSize = false;
+        button.Size = new Size(110, 26);
+        button.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
+        button.FlatStyle = FlatStyle.Flat;
+        button.FlatAppearance.BorderSize = 1;
+        button.FlatAppearance.BorderColor = PdfSidebarTheme.Border;
+        button.FlatAppearance.MouseOverBackColor = PdfSidebarTheme.BrandSoft;
+        button.BackColor = PdfSidebarTheme.Surface;
+        button.ForeColor = PdfSidebarTheme.Brand;
+        button.Cursor = Cursors.Hand;
+        // keep：主题刷新时保留自定义强调色，只更新表面色与边框
+        button.Tag = "keep";
+        button.Location = new Point(card.Width - button.Width - 12, 6);
+    }
 
     /// <summary>填充目标语言下拉框，默认「自动」。</summary>
     private void InitTargetLanguageOptions()

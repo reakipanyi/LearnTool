@@ -360,9 +360,20 @@ namespace LearningAssistant.Common.UI
             _body.BackColor = palette.Surface;
             if (_actionButton != null)
             {
-                _actionButton.BackColor = palette.Surface;
-                _actionButton.ForeColor = palette.Muted;
-                _actionButton.FlatAppearance.MouseOverBackColor = palette.Hover;
+                // Tag 为 keep 的按钮由宿主自定义强调色（如翻译卡片的朗读按钮），只跟随表面色
+                if (_actionButton.Tag is string keepTag && keepTag == "keep")
+                {
+                    _actionButton.BackColor = palette.Surface;
+                    _actionButton.ForeColor = PdfSidebarTheme.Brand;
+                    _actionButton.FlatAppearance.BorderColor = palette.Border;
+                    _actionButton.FlatAppearance.MouseOverBackColor = palette.BrandSoft;
+                }
+                else
+                {
+                    _actionButton.BackColor = palette.Surface;
+                    _actionButton.ForeColor = palette.Muted;
+                    _actionButton.FlatAppearance.MouseOverBackColor = palette.Hover;
+                }
             }
             Invalidate();
         }
