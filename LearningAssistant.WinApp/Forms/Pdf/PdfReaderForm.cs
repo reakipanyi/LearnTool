@@ -7383,6 +7383,9 @@ namespace LearningAssistant.Forms.Pdf
             if (_syncingTranslationScroll || source.IsDisposed || target.IsDisposed) return;
             if (!source.IsHandleCreated || !target.IsHandleCreated) return;
 
+            // 段落级定位期间由面板接管滚动，跳过比例同步以免覆盖定位结果
+            if (source is SyncedTextBox { SuppressScrollSync: true }) return;
+
             _syncingTranslationScroll = true;
             try
             {
