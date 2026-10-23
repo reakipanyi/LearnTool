@@ -24,8 +24,10 @@ namespace LearningAssistant.Managers
         private readonly IServiceProvider _serviceProvider;
         private readonly ILogger<WindowManager> _logger;
 
-        // 单实例聚焦：同类型窗口只保留一个，重复打开时聚焦已有窗口
-        private readonly Dictionary<Type, Form> _openForms = new();
+        // 窗口注册表：允许多个同类型窗口并存（PDF/浏览器多开），
+        // 需要单实例的窗口打开前用 TryFocusExisting 聚焦已有窗口。
+        private readonly List<Form> _openForms = new();
+        private readonly object _openFormsLock = new();
 
         public event EventHandler? SettingUsersChanged;
 
@@ -440,20 +442,7 @@ namespace LearningAssistant.Managers
         /// </summary>
         private void ShowNonModalScopedForm(IServiceScope scope, Form form)
         {
-            var type = form.GetType();
-            // 清理已被释放的旧占位
-            if (_openForms.TryGetValue(type, out var stale) && (stale == null || stale.IsDisposed))
-                _openForms.Remove(type);
-
-            // 注册并绑定关闭清理逻辑
-            _openForms[type] = form;
-            form.FormClosed += (s, e) =>
-            {
-                if (_openForms.TryGetValue(type, out var current) && ReferenceEquals(current, form))
-                    _openForms.Remove(type);
-                scope.Dispose();
-            };
-
+            RegisterForm(form, onClosed: () => scope.Dispose());
             // 非模态显示，允许多窗口并存
             form.Show();
         }
@@ -463,17 +452,49 @@ namespace LearningAssistant.Managers
         /// </summary>
         private void ShowNonModalForm(Form form)
         {
-            var type = form.GetType();
-            if (_openForms.TryGetValue(type, out var stale) && (stale == null || stale.IsDisposed))
-                _openForms.Remove(type);
+            RegisterForm(form, onClosed: null);
+            form.Show();
+        }
 
-            _openForms[type] = form;
+        /// <summary>注册窗口并在关闭时移除；同类型窗口允许多个实例并存。</summary>
+        private void RegisterForm(Form form, Action? onClosed)
+        {
+            lock (_openFormsLock)
+            {
+                RemoveDisposedLocked();
+                _openForms.Add(form);
+            }
+
+            _logger.LogDebug("窗口已注册：{WindowType}，当前窗口数 {Count}", form.GetType().Name, _openForms.Count);
+
             form.FormClosed += (s, e) =>
             {
-                if (_openForms.TryGetValue(type, out var current) && ReferenceEquals(current, form))
-                    _openForms.Remove(type);
+                lock (_openFormsLock)
+                {
+                    _openForms.Remove(form);
+                }
+                _logger.LogDebug("窗口已关闭：{WindowType}", form.GetType().Name);
+                onClosed?.Invoke();
             };
-            form.Show();
+        }
+
+        private void RemoveDisposedLocked() => _openForms.RemoveAll(f => f.IsDisposed);
+
+        /// <summary>取指定类型的全部存活窗口（按打开顺序）。</summary>
+        public IReadOnlyList<T> GetWindows<T>() where T : Form
+        {
+            lock (_openFormsLock)
+            {
+                RemoveDisposedLocked();
+                return _openForms.OfType<T>().ToList();
+            }
+        }
+
+        /// <summary>取指定类型的活跃窗口：优先返回当前拥有焦点的窗口，否则返回最后打开的窗口。</summary>
+        public T? GetActive<T>() where T : Form
+        {
+            var windows = GetWindows<T>();
+            return windows.FirstOrDefault(f => f.ContainsFocus) ?? windows.LastOrDefault();
         }
 
         /// <summary>
@@ -481,14 +502,15 @@ namespace LearningAssistant.Managers
         /// </summary>
         private bool TryFocusExisting(Type type)
         {
-            if (!_openForms.TryGetValue(type, out var existing))
-                return false;
-
-            if (existing == null || existing.IsDisposed)
+            Form? existing;
+            lock (_openFormsLock)
             {
-                _openForms.Remove(type);
-                return false;
+                RemoveDisposedLocked();
+                existing = _openForms.LastOrDefault(f => type.IsInstanceOfType(f));
             }
+
+            if (existing == null)
+                return false;
 
             if (existing.WindowState == FormWindowState.Minimized)
                 existing.WindowState = FormWindowState.Normal;

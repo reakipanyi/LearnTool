@@ -22,12 +22,21 @@ public class PdfAudioTrackManager : IDisposable
     private int _currentPageIndex = -1;
     private int _pageCount;
     private bool _disposed;
+    /// <summary>播放列表中的目标索引；上下曲按它累积，避免连点被合并或乱序</summary>
+    private int _playlistIndex = -1;
 
     public PdfAudioPlaybackService Playback => _playback;
     public AudioMatchResult? Result => _result;
     public PdfAudioProfile? Profile => _profile;
     public int PageCount => _pageCount;
     public IReadOnlyList<string> Diagnostics => _matcher.Diagnostics;
+    /// <summary>当前播放列表索引；无曲目时为 -1</summary>
+    public int CurrentPlaylistIndex => _playlistIndex;
+    public AudioTrack? CurrentTrack => _loadedTrack;
+    public bool IsPlaying => _playback.Player.State == MediaPlaybackState.Playing;
+
+    /// <summary>切曲完成后触发（含上一曲/下一曲、列表选择、翻页切曲），供 UI 同步标题与高亮</summary>
+    public event EventHandler<AudioTrack>? TrackChanged;
 
     /// <summary>用给定规则/匹配方式对当前已扫描曲目试算，不修改已生效的 profile</summary>
     public AudioMatchResult PreviewRules(IReadOnlyList<AudioMatchRule> rules,
@@ -231,8 +240,12 @@ public class PdfAudioTrackManager : IDisposable
         if (_result.PageIndex.TryGetValue(pageIndex, out var track))
         {
             // 整篇单音频或一个音频覆盖多页时，翻页不应把同一音频重新从头播放
-            if (IsLoaded(track)) return;
-            bool playing = _playback.Player.State == MediaPlaybackState.Playing;
+            if (IsLoaded(track))
+            {
+                _playlistIndex = IndexOfTrack(track);
+                return;
+            }
+            bool playing = IsPlaying;
             Load(track);
             if (playing) FireAndForget(_playback.PlayAsync(), "PlayAsync");
         }
@@ -240,14 +253,24 @@ public class PdfAudioTrackManager : IDisposable
         {
             _playback.Stop();
             _loadedTrack = null;
+            _playlistIndex = -1;
         }
     }
 
-    /// <summary>加载音频并记录当前曲目，供翻页时判断是否需要切换。</summary>
+    /// <summary>加载音频并记录当前曲目，供翻页时判断是否需要切换；同时同步播放列表索引。</summary>
     public void Load(AudioTrack track)
     {
         _playback.Load(track);
         _loadedTrack = track;
+        _playlistIndex = IndexOfTrack(track);
+        TrackChanged?.Invoke(this, track);
+    }
+
+    private int IndexOfTrack(AudioTrack track)
+    {
+        if (_result == null) return -1;
+        return _result.Tracks.FindIndex(t =>
+            string.Equals(t.FilePath, track.FilePath, StringComparison.OrdinalIgnoreCase));
     }
 
     private bool IsLoaded(AudioTrack track)
@@ -260,48 +283,64 @@ public class PdfAudioTrackManager : IDisposable
     private void Move(int delta)
     {
         if (_result == null || _result.Tracks.Count == 0) return;
-        int cur = -1;
-        if (_result.PageIndex.TryGetValue(_currentPageIndex, out var current))
-        {
-            cur = _result.Tracks.FindIndex(t => string.Equals(t.FilePath, current.FilePath, StringComparison.OrdinalIgnoreCase));
-        }
 
         int count = _result.Tracks.Count;
-        int next = cur < 0
-            ? (delta > 0 ? 0 : count - 1)          // 当前页无音频时：下一曲从首曲开始，上一曲从末曲开始
-            : ((cur + delta) % count + count) % count; // 正负方向均能正确环绕
+        // 以目标索引为基准累积：连点 3 次就前进 3 条，不合并、不丢弃
+        int baseIndex = _playlistIndex;
+        if (baseIndex < 0 && _result.PageIndex.TryGetValue(_currentPageIndex, out var current))
+            baseIndex = IndexOfTrack(current);
+        if (baseIndex < 0)
+            baseIndex = delta > 0 ? -1 : 0; // 当前无音频：下一曲从首曲开始，上一曲从末曲开始
+
+        int next = ((baseIndex + delta) % count + count) % count;
         var track = _result.Tracks[next];
         Load(track);
         FireAndForget(_playback.PlayAsync(), "PlayAsync");
     }
 
-    public bool PlayOrPause()
+    /// <summary>幂等播放：已在播放时不做任何事，不依赖 UI 反向推断状态。</summary>
+    public bool Play()
     {
+        if (IsPlaying) return true;
+
         switch (_playback.Player.State)
         {
-            case MediaPlaybackState.Playing:
-                _playback.Pause();
-                return true;
             case MediaPlaybackState.Paused:
                 _playback.Resume();
                 return true;
-            default:
-                // 已加载音频但处于待机/停止态，直接继续播放
+            case MediaPlaybackState.Idle:
+            case MediaPlaybackState.Stopped:
+                // 已加载曲目从当前位置继续；已播完则从头开始
                 if (_playback.Player.Duration > TimeSpan.Zero)
                 {
+                    if (_playback.Player.Position >= _playback.Player.Duration - TimeSpan.FromMilliseconds(50))
+                        _playback.Seek(TimeSpan.Zero);
                     _playback.Resume();
                     return true;
                 }
-                var track = CurrentTrack();
-                if (track != null)
-                {
-                    if (!IsLoaded(track)) Load(track);
-                    FireAndForget(_playback.PlayAsync(), "PlayAsync");
-                    return true;
-                }
-                return false;
+                break;
         }
+
+        var track = _loadedTrack ?? CurrentPageTrack();
+        if (track == null) return false;
+        if (!IsLoaded(track)) Load(track);
+        FireAndForget(_playback.PlayAsync(), "PlayAsync");
+        return true;
     }
+
+    /// <summary>幂等暂停：未在播放时不做任何事。</summary>
+    public bool Pause()
+    {
+        if (!IsPlaying) return false;
+        _playback.Pause();
+        return true;
+    }
+
+    /// <summary>切换播放/暂停；判定始终以播放器真实状态为准。</summary>
+    public bool TogglePlayback() => IsPlaying ? Pause() : Play();
+
+    /// <summary>兼容旧调用：语义等同 TogglePlayback。</summary>
+    public bool PlayOrPause() => TogglePlayback();
 
     public async Task RescanAsync()
     {
@@ -360,7 +399,7 @@ public class PdfAudioTrackManager : IDisposable
         }
     }
 
-    private AudioTrack? CurrentTrack()
+    private AudioTrack? CurrentPageTrack()
     {
         if (_result == null) return null;
         return _result.PageIndex.TryGetValue(_currentPageIndex, out var t) ? t : null;

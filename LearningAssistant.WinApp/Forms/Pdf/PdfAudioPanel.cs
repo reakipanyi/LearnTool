@@ -140,7 +140,12 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
 
     private void WireEvents()
     {
-        _btnPlay.Click += (_, _) => { if (!_manager.PlayOrPause()) _form.ShowWarning("当前页没有可播放的音频"); };
+        _btnPlay.Click += (_, _) =>
+        {
+            // 依据播放器真实状态分发幂等命令，避免“先置相反状态”导致需要点两下
+            bool ok = _manager.IsPlaying ? _manager.Pause() : _manager.Play();
+            if (!ok) _form.ShowWarning("当前页没有可播放的音频");
+        };
         _btnPrev.Click += (_, _) => _manager.Prev();
         _btnNext.Click += (_, _) => _manager.Next();
         _btnLoop.Click += (_, _) => CycleLoopMode();
@@ -179,6 +184,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _listTracks.SelectedIndexChanged += (_, _) => OnTrackSelected();
         _listTracks.DrawItem += ListTracks_DrawItem;
         _manager.ProfileLoaded += OnProfileLoaded;
+        _manager.TrackChanged += OnTrackChanged;
 
         _manager.Playback.Player.StateChanged += OnPlayerStateChanged;
         _manager.Playback.Player.PositionChanged += OnPlayerPositionChanged;
@@ -191,6 +197,15 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
 
     private void OnPlayerStateChanged(object? sender, MediaPlaybackState s)
         => InvokeIfReady(() => _btnPlay.Text = s == MediaPlaybackState.Playing ? "⏸" : "▶");
+
+    /// <summary>切曲后强制同步标题与列表高亮，避免标题/高亮仍停留在上一曲。</summary>
+    private void OnTrackChanged(object? sender, AudioTrack track)
+        => InvokeIfReady(() =>
+        {
+            _labelInfo.Text = $"播放：{track.FileName}";
+            SelectTrackInList(track);
+            UpdateSubtitle(_manager.Playback.Player.Position);
+        });
 
     private void OnPlayerPositionChanged(object? sender, TimeSpan p) => InvokeIfReady(() => UpdateSubtitle(p));
 
@@ -600,6 +615,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
                 _manager.Playback.Player.StateChanged -= OnPlayerStateChanged;
                 _manager.Playback.Player.PositionChanged -= OnPlayerPositionChanged;
                 _manager.ProfileLoaded -= OnProfileLoaded;
+                _manager.TrackChanged -= OnTrackChanged;
             }
             if (_recordingCompletedHandler != null && _form != null && _form.AudioRecorderService != null)
                 _form.AudioRecorderService.RecordingCompleted -= _recordingCompletedHandler;
