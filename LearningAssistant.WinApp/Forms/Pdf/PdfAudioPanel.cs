@@ -14,6 +14,15 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
     private EventHandler<AudioRecording>? _recordingCompletedHandler;
     private bool _suppressAutoPlay;
     private Font? _listFont;
+    private PlaybackLoopMode _loopMode = PlaybackLoopMode.None;
+
+    /// <summary>曲目播放结束后的循环策略。</summary>
+    private enum PlaybackLoopMode
+    {
+        None,
+        List,
+        One
+    }
 
     /// <summary>供 Visual Studio 设计器实例化；运行时请使用带依赖的构造函数。</summary>
     public PdfAudioPanel()
@@ -71,6 +80,9 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         StyleTransportButton(_btnPrev, iconSize, iconSize, primary: false);
         StyleTransportButton(_btnPlay, iconSize + 12, iconSize, primary: true);
         StyleTransportButton(_btnNext, iconSize, iconSize, primary: false);
+        StyleTransportButton(_btnLoop, Math.Max(72, iconSize + 38), iconSize, primary: false);
+        _btnLoop.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
+        UpdateLoopModeButton();
     }
 
     /// <summary>播放区图标按钮：播放/暂停为主按钮，前后曲为次级按钮。</summary>
@@ -131,6 +143,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _btnPlay.Click += (_, _) => { if (!_manager.PlayOrPause()) _form.ShowWarning("当前页没有可播放的音频"); };
         _btnPrev.Click += (_, _) => _manager.Prev();
         _btnNext.Click += (_, _) => _manager.Next();
+        _btnLoop.Click += (_, _) => CycleLoopMode();
         _btnSetA.Click += (_, _) => { _manager.Playback.SetAbLoop(_manager.Playback.Player.Position, _manager.Playback.Player.AbLoop.B); UpdateLoopLabel(); };
         _btnSetB.Click += (_, _) => { _manager.Playback.SetAbLoop(_manager.Playback.Player.AbLoop.A, _manager.Playback.Player.Position); UpdateLoopLabel(); };
         _btnClearAb.Click += (_, _) => { _manager.Playback.SetAbLoop(null, null); _manager.Playback.Player.LoopMode = MediaLoopMode.None; UpdateLoopLabel(); };
@@ -140,6 +153,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _tooltip.SetToolTip(_btnPrev, "上一曲");
         _tooltip.SetToolTip(_btnPlay, "播放 / 暂停");
         _tooltip.SetToolTip(_btnNext, "下一曲");
+        _tooltip.SetToolTip(_btnLoop, "循环模式：关闭 / 列表循环（播完自动下一曲）/ 单曲循环");
         _btnFollowRead.Click += (_, _) => OnFollowRead();
         _btnRules.Click += (_, _) => OnRules();
         _btnManual.Click += (_, _) => OnManual();
@@ -168,6 +182,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
 
         _manager.Playback.Player.StateChanged += OnPlayerStateChanged;
         _manager.Playback.Player.PositionChanged += OnPlayerPositionChanged;
+        _manager.Playback.Player.PlaybackFinished += (_, _) => OnPlaybackFinished();
 
         _recordingCompletedHandler = (_, rec) => OnRecordingCompleted(rec);
         if (_form.AudioRecorderService != null)
@@ -243,6 +258,86 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         var track = result.Tracks[_listTracks.SelectedIndex];
         _manager.Playback.Load(track);
         FireAndForget(_manager.Playback.PlayAsync());
+    }
+
+    /// <summary>循环模式：关闭 → 列表循环 → 单曲循环 → 关闭。</summary>
+    private void CycleLoopMode()
+    {
+        _loopMode = _loopMode switch
+        {
+            PlaybackLoopMode.None => PlaybackLoopMode.List,
+            PlaybackLoopMode.List => PlaybackLoopMode.One,
+            _ => PlaybackLoopMode.None
+        };
+        UpdateLoopModeButton();
+    }
+
+    /// <summary>用文字与配色标示当前循环模式，避免用户不知处在哪种模式。</summary>
+    private void UpdateLoopModeButton()
+    {
+        if (_btnLoop == null || _btnLoop.IsDisposed) return;
+
+        bool active = _loopMode != PlaybackLoopMode.None;
+        var palette = PdfSidebarTheme.PaletteFor(this);
+        _btnLoop.Text = _loopMode switch
+        {
+            PlaybackLoopMode.List => "🔁 列表",
+            PlaybackLoopMode.One => "🔁 单曲",
+            _ => "🔁 关闭"
+        };
+        _btnLoop.BackColor = active ? palette.BrandSoft : palette.Surface;
+        _btnLoop.ForeColor = active ? PdfSidebarTheme.Brand : palette.Text;
+    }
+
+    /// <summary>一曲播完按循环模式自动续播；关闭时不作处理。</summary>
+    private void OnPlaybackFinished()
+    {
+        InvokeIfReady(() =>
+        {
+            if (_loopMode == PlaybackLoopMode.None) return;
+
+            var result = _manager.Result;
+            if (result == null || result.Tracks.Count == 0) return;
+
+            if (_loopMode == PlaybackLoopMode.One)
+            {
+                _manager.Playback.Seek(TimeSpan.Zero);
+                FireAndForget(_manager.Playback.PlayAsync());
+                return;
+            }
+
+            int current = _listTracks.SelectedIndex;
+            if (current < 0 || current >= result.Tracks.Count)
+                current = CurrentTrackIndex(result);
+            if (current < 0) current = -1;
+
+            int next = (current + 1) % result.Tracks.Count;
+            _suppressAutoPlay = true;
+            try
+            {
+                _listTracks.SelectedIndex = next;
+            }
+            finally
+            {
+                _suppressAutoPlay = false;
+            }
+
+            _manager.Playback.Load(result.Tracks[next]);
+            FireAndForget(_manager.Playback.PlayAsync());
+        });
+    }
+
+    /// <summary>按当前页查找曲目索引，供列表未选中时定位续播起点。</summary>
+    private int CurrentTrackIndex(AudioMatchResult result)
+    {
+        var cur = CurrentTrack();
+        if (cur == null) return -1;
+        for (int i = 0; i < result.Tracks.Count; i++)
+        {
+            if (string.Equals(result.Tracks[i].FilePath, cur.FilePath, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+        return -1;
     }
 
     private void OnFollowRead()

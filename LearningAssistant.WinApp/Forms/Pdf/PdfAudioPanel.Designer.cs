@@ -24,6 +24,7 @@ partial class PdfAudioPanel
         _btnPrev = new Button();
         _btnPlay = new Button();
         _btnNext = new Button();
+        _btnLoop = new Button();
         abRow = new TableLayoutPanel();
         _btnSetA = new Button();
         _btnSetB = new Button();
@@ -170,6 +171,7 @@ partial class PdfAudioPanel
         transport.Controls.Add(_btnPrev);
         transport.Controls.Add(_btnPlay);
         transport.Controls.Add(_btnNext);
+        transport.Controls.Add(_btnLoop);
         transport.Location = new Point(0, 0);
         transport.Margin = new Padding(0);
         transport.Name = "transport";
@@ -587,6 +589,24 @@ partial class PdfAudioPanel
         _chkSubDir.TabIndex = 7;
         _chkSubDir.Text = "包含子目录";
         // 
+        // _btnLoop
+        // 
+        _btnLoop.BackColor = Color.White;
+        _btnLoop.Cursor = Cursors.Hand;
+        _btnLoop.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        _btnLoop.FlatAppearance.BorderSize = 1;
+        _btnLoop.FlatStyle = FlatStyle.Flat;
+        _btnLoop.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
+        _btnLoop.ForeColor = Color.FromArgb(15, 23, 42);
+        _btnLoop.Location = new Point(129, 0);
+        _btnLoop.Margin = new Padding(3, 0, 3, 0);
+        _btnLoop.Name = "_btnLoop";
+        _btnLoop.Size = new Size(70, 34);
+        _btnLoop.TabIndex = 3;
+        _btnLoop.Tag = "transport";
+        _btnLoop.Text = "🔁 关闭";
+        _btnLoop.UseVisualStyleBackColor = false;
+        // 
         // PdfAudioPanel
         // 
         AutoScaleDimensions = new SizeF(7F, 17F);
@@ -621,6 +641,7 @@ partial class PdfAudioPanel
     private Button _btnPrev;
     private Button _btnPlay;
     private Button _btnNext;
+    private Button _btnLoop;
     private TableLayoutPanel abRow;
     private Button _btnSetA;
     private Button _btnSetB;
