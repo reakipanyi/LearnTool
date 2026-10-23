@@ -389,7 +389,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
 <div class="wrap">
 
   <header class="hero">
-    <div class="eyebrow">PDF Audio · Redesign v1.5</div>
+    <div class="eyebrow">PDF Audio · Redesign v1.6</div>
     <h1>配套音频<br><span class="thin">从"一堆按钮"到一个播放器 + 一张绑定表</span></h1>
     <p class="lede">
       本方案不修补现有侧栏，而是重新划分职责：<mark class="key">底部固定播放器</mark>只负责听，
@@ -399,7 +399,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
     <div class="meta">
       <span class="chip">范围 <b>PDF 阅读器 · 配套音频</b></span>
       <span class="chip">相关代码 <b>PdfAudioPanel / PdfAudioTrackManager</b></span>
-      <span class="chip">版本 <b>v1.5 方案稿（目录级档案 + 跟读闭环）</b></span>
+      <span class="chip">版本 <b>v1.6 方案稿（审查修订：派生字段 + rulePatch + 状态迁移表）</b></span>
     </div>
 
     <div class="tldr">
@@ -421,18 +421,18 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
     </div>
 
     <div class="card rev" style="margin-top:16px;background:linear-gradient(180deg,rgba(14,159,110,.05),rgba(255,255,255,.9));border-color:rgba(14,159,110,.24)">
-      <div class="rev-t">v1.1 修订 · 相对 v1.0 的十处强化</div>
+      <div class="rev-t">v1.6 修订 · 相对 v1.5 的审查修订</div>
       <div class="cols">
-        <p style="margin:0 0 4px"><b>1. 拆分两个模式字段</b>：匹配方式与播放范围互不干扰，切模式不再有副作用。</p>
-        <p style="margin:0 0 4px"><b>2. 翻页防抖 250ms</b>：连翻多页只加载最终页，中间页丢弃。</p>
-        <p style="margin:0 0 4px"><b>3. 双向导航定义</b>：切曲跨页时默认同步翻页，可关闭。</p>
-        <p style="margin:0 0 4px"><b>4. 删掉"单页多音频"错误表述</b>：模型为一页一条。</p>
-        <p style="margin:0 0 4px"><b>5. 快捷键避开冲突</b>：Space/←→ 已用于翻页，改用焦点限定与 Ctrl/Shift 组合。</p>
-        <p style="margin:0 0 4px"><b>6. 倍速先做 spike</b>：SoundTouch 与 MediaFoundation 二选一，验证后再定 UI。</p>
-        <p style="margin:0 0 4px"><b>7. 性能预算</b>：进度 10Hz、列表增量刷新、超过 800 条虚拟化。</p>
-        <p style="margin:0 0 4px"><b>8. 多窗口档案合并</b>：目录档独占锁 + 只 patch 自己的书节点，A、B 书同时保存不互相覆盖。</p>
-        <p style="margin:0 0 4px"><b>9. PdfAudioSession 取代 DI scope</b>：手工组合，减少生命周期基础设施。</p>
-        <p style="margin:0 0 4px"><b>10. 播放器加"音源"标签</b>：配套音频 / 录音 / 跟读不抢同一个播放器。</p>
+        <p style="margin:0 0 4px"><b>1. matching 改派生字段</b>：唯一真相是 singleAudio，消除 SingleAudio+FollowPage 非法组合。</p>
+        <p style="margin:0 0 4px"><b>2. rulesOverride → rulePatch</b>：增量补丁，支持禁用/追加，目录规则可继承。</p>
+        <p style="margin:0 0 4px"><b>3. overrides 值改对象</b>：{path, source: manual|ai, createdAt}，可区分 AI 与手动。</p>
+        <p style="margin:0 0 4px"><b>4. 上下曲累积目标索引</b>：连点 3 次前进 3 条，不合并、不丢弃。</p>
+        <p style="margin:0 0 4px"><b>5. PlaybackDecision 加 playerState</b>：区分 Idle / PausedByUser / Ended / Previewing。</p>
+        <p style="margin:0 0 4px"><b>6. quick + full fingerprint</b>：打开先算 quick（毫秒级），异步补 full（含页数）。</p>
+        <p style="margin:0 0 4px"><b>7. signature 只做候选</b>：不判等；重挂按文件重叠率 &gt; 80% 列候选。</p>
+        <p style="margin:0 0 4px"><b>8. 状态迁移表</b>：命令 × 状态 → 目标状态，SVG 旁给出文字版。</p>
+        <p style="margin:0 0 4px"><b>9. 双开关独立</b>：翻页切换音频 / 切歌同步页码 互不隶属。</p>
+        <p style="margin:0 0 4px"><b>10. 试听 Previewing 子状态</b>：结束后恢复原曲与进度。</p>
       </div>
     </div>
 
@@ -739,17 +739,17 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
       <table>
         <thead><tr><th style="width:120px">控件</th><th style="width:250px">行为</th><th>状态与边界</th></tr></thead>
         <tbody>
-          <tr><td>播放 / 暂停</td><td>单击切换，图标只由 <code>StateChanged</code> 驱动；加载中显示转圈并忽略重复点击</td><td>Idle 时点击 = 加载当前页音频并播放；Ended 时点击 = 从头播放</td></tr>
-          <tr><td>上一曲 / 下一曲</td><td>按<b>播放列表顺序</b>切歌，不按当前页映射；立即更新标题、页码徽标、列表高亮</td><td>列表首/末禁用并变灰；开启"列表循环"后才首尾相接；单音频模式两个按钮禁用</td></tr>
+          <tr><td>播放 / 暂停</td><td>单击切换，图标只由 <code>StateChanged</code> 驱动；请求中显示转圈并忽略重复点击</td><td>Idle 时点击 = 加载当前页音频并播放；Ended 时点击 = 从头播放；加载中再点 = 取消加载</td></tr>
+          <tr><td>上一曲 / 下一曲</td><td>按<b>播放列表索引</b>切歌，连点时<b>累积目标索引</b>（每次 +1 / −1），加载完成后一次性跳到目标；立即更新标题、页码徽标、列表高亮</td><td>列表首/末禁用并变灰；开启"列表循环"后才首尾相接；单音频模式两个按钮禁用</td></tr>
           <tr><td>音源标签</td><td>标识当前播放归属：配套音频 / 整页录音 / 句子跟读；点击可在同窗口内切换音源</td><td>任一侧请求播放时，bar 先切标签再加载，避免多个页签抢同一个播放器</td></tr>
           <tr><td>曲目标题</td><td>点击在侧栏列表中定位并高亮；文件名过长省略，悬停显示完整路径</td><td>手动绑定的曲目带"手动"小标；不在扫描目录中的文件显示"文件缺失"红点</td></tr>
           <tr><td>页码徽标</td><td>显示当前曲目对应页；单音频显示"全篇"</td><td>一曲多页时显示"P12–P14"</td></tr>
           <tr><td>书名</td><td>点击弹出书籍菜单：最近 5 本 / 同目录其他书 / 打开文件</td><td>切书前自动暂停并记住该曲目进度</td></tr>
           <tr><td>倍速</td><td>预设胶囊 + 0.05 步进滑块；右键恢复 1.0x</td><td>按本书记忆；新书继承上次全局值；1.0x 时不显示高亮</td></tr>
           <tr><td>音量</td><td>点击展开竖向滑块 + 静音切换</td><td>持久化到全局设置</td></tr>
-          <tr><td>跟随翻页</td><td>开关；开启时按"模式 × 翻页"矩阵工作</td><td>单音频模式下开关恒为开且禁用，提示"整篇音频不随翻页切换"</td></tr>
+          <tr><td>跟随翻页</td><td>开关；开启时按"模式 × 翻页"矩阵工作</td><td>整篇模式下不渲染可点开关，替换为说明文字"整篇音频不随翻页切换"</td></tr>
           <tr><td>更多（⋯）</td><td>循环模式（不循环 / 列表循环 / 单曲循环）、A-B 复读、播放速率微调、在文件夹中显示</td><td>A-B 在时长未知时禁用；循环模式只保留这一处入口</td></tr>
-          <tr><td>跟读打点（主按钮）</td><td>常驻传输区正中、播放键右侧的主色胶囊；会话中变红色「打断 / 开始跟读 / 结束录音」；进入后倍速锁 1.0x，翻页只提示不切歌</td><td>打断 = 暂停 + 记录源时间戳；录音结束默认自动续播；窗口变窄时优先保留，不折叠进「⋯」；详见第 10 节</td></tr>
+          <tr><td>跟读打点（主按钮）</td><td>常驻传输区正中、播放键右侧的主色胶囊；会话中变红色「打断 / 开始跟读 / 结束录音」；进入后记录 captureSpeed（默认 1.0x，可开"精确打点"锁 1.0x），翻页只提示不切歌</td><td>打断 = 暂停 + 记录源时间戳；录音结束默认停在待录态，给「续播」「再录」；窗口变窄时优先保留，不折叠进「⋯」；详见第 10 节</td></tr>
           <tr><td>错误提示</td><td>右侧出红色内联条：原因 + "重试" + "换文件"</td><td>不弹模态框，不中断阅读</td></tr>
         </tbody>
       </table>
@@ -758,7 +758,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
     <h3>为什么这样能修好"点两下暂停"</h3>
     <div class="steps">
       <div class="step"><div class="sn">STEP 1</div><div class="st">命令入口唯一</div><div class="sd">空格、按钮、快捷键都调用同一个 <code>Toggle()</code>。</div></div>
-      <div class="step"><div class="sn">STEP 2</div><div class="st">按钮表达意图</div><div class="sd">点击后立刻进入"请求中"态（100ms 内不重复受理），图标先置为相反状态。</div></div>
+      <div class="step"><div class="sn">STEP 2</div><div class="st">请求中态</div><div class="sd">点击后进入"请求中"（图标转圈），120ms 内不重复受理；加载中再点 = 取消。成功才切到目标图标，失败回退并内联提示。</div></div>
       <div class="step"><div class="sn">STEP 3</div><div class="st">状态机落地</div><div class="sd">真实状态变化由 <code>PlaybackStopped</code>/<code>PlaybackState</code> 单点写回，UI 只读。</div></div>
       <div class="step"><div class="sn">STEP 4</div><div class="st">过期事件丢弃</div><div class="sd">每次加载带 <code>generation</code>；旧曲目的回调不覆盖新状态。</div></div>
     </div>
@@ -802,17 +802,18 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
           <li><span class="k">显示内容</span><span class="v">页码、来源（自动 / 手动）、曲目名、时长。数据模型是一页一条（<code>Dictionary&lt;int, AudioTrack&gt;</code>），不要暗示单页可挂多条</span></li>
           <li><span class="k">更换绑定</span><span class="v">打开搜索式选择器（已扫描曲目 + "选择本地文件…"），选定即生效，不弹二次确认</span></li>
           <li><span class="k">清除本页</span><span class="v">删除该页的 <code>ManualOverride</code>，回到自动匹配结果；若无自动结果则显示"未绑定"和"绑定"主按钮</span></li>
-          <li><span class="k">试听</span><span class="v">在底部播放器加载并播放，但不改变绑定</span></li>
+          <li><span class="k">试听</span><span class="v">在底部播放器加载并播放，<b>不改变绑定</b>；进入 <code>Previewing</code> 子状态，结束后恢复原曲与进度。试听期间翻页不切音频</span></li>
           <li><span class="k">多页一条音频</span><span class="v">卡片显示"本曲覆盖 P12–P14"，提供"解除覆盖"入口（回到该曲目原规则范围）</span></li>
         </ul>
 
         <h3>曲目列表</h3>
         <ul class="spec">
           <li><span class="k">排序</span><span class="v">默认按页码升序；可切换"按文件名"；未匹配页折叠成一行，点击展开逐页绑定</span></li>
-          <li><span class="k">单击行</span><span class="v">加载并播放；若开启"切曲同步翻页"，同时翻到该曲目对应页（默认开启，可关）</span></li>
+          <li><span class="k">单击行</span><span class="v">加载并播放；若开启"切歌同步页码"，同时翻到该曲目对应页（默认开启，可关）</span></li>
           <li><span class="k">行内更多</span><span class="v">绑定到当前页（不改变播放）、清除手动绑定、在文件夹中显示、复制文件名</span></li>
           <li><span class="k">播放中</span><span class="v">左侧紫色竖条 + 背景浅紫；列表自动滚动到可见（不抢焦点）</span></li>
           <li><span class="k">搜索</span><span class="v">按文件名或页码过滤；输入 <code>P12</code> 直达该页曲目</span></li>
+          <li><span class="k">来源标记</span><span class="v">手动 = 黄字"手动"；AI 匹配 = 蓝字"AI"；两者都可一键清除（AI 项可"全部清除 AI 绑定"）</span></li>
         </ul>
       </div>
     </div>
@@ -829,7 +830,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
       </div>
       <div class="card">
         <h4>全书级</h4>
-        <p>更多菜单 → "清除全部手动绑定（12 处）"，二次确认。原来的"重新匹配"保留，但会先提示影响范围。</p>
+        <p>更多菜单 → "清除全部手动绑定（12 处）"，二次确认；另提供"清除全部 AI 绑定"。原来的"重新匹配"保留，但会先提示影响范围（只重算自动匹配，不动 overrides）。</p>
       </div>
     </div>
 
@@ -846,17 +847,23 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
 
     <div class="grid2">
       <div class="card" style="border-color:rgba(108,92,231,.24)">
-        <h4>MatchingMode · 怎么匹配</h4>
-        <p style="margin-bottom:6px"><code>PerPage</code>：文件名/规则 → 页码，允许手动覆盖</p>
-        <p style="margin-bottom:6px"><code>SingleAudio</code>：指定一个文件覆盖全书</p>
-        <p style="margin-bottom:0;font-size:12.5px;color:var(--muted)">只影响"页码 → 文件"的解析，不影响播放行为。</p>
+        <h4>matching · 怎么匹配（派生字段）</h4>
+        <p style="margin-bottom:6px">唯一真相是 <code>singleAudio</code>：<b>为空</b> ⇒ 按页匹配（<code>PerPage</code>）；<b>非空</b> ⇒ 整篇单音频（<code>SingleAudio</code>）。</p>
+        <p style="margin-bottom:6px">运行时不再单独读取 <code>matching</code>；该字段仅为兼容旧档案保留，读入后按 <code>singleAudio</code> 归一化，写回时同步。</p>
+        <p style="margin-bottom:0;font-size:12.5px;color:var(--muted)">派生规则见 6.2：<code>singleAudio</code> 非空时强制 <code>WholeBook</code>。</p>
       </div>
       <div class="card" style="border-color:rgba(14,165,233,.26)">
-        <h4>PlaybackScope · 怎么播放</h4>
+        <h4>playbackScope · 怎么播放</h4>
         <p style="margin-bottom:6px"><code>FollowPage</code>：翻页切音频，上下曲在曲目间移动</p>
         <p style="margin-bottom:6px"><code>WholeBook</code>：一本书一个音轨，翻页不切换</p>
-        <p style="margin-bottom:0;font-size:12.5px;color:var(--muted)">只影响翻页与上下曲，不修改任何绑定或规则。</p>
+        <p style="margin-bottom:0;font-size:12.5px;color:var(--muted)">受 <code>singleAudio</code> 约束：非空时必须为 <code>WholeBook</code>，见 6.2。</p>
       </div>
+    </div>
+
+    <div class="callout warn">
+      <div class="t">非法组合：singleAudio 非空 + FollowPage</div>
+      <p>该组合没有可解释的行为（整篇音频无法"按页切"）。处理规则：<b>读入时自动纠正</b>为 <code>singleAudio != null ⇒ playbackScope = WholeBook</code>，写回时落盘纠正结果，并在面板给出一次性提示"已按整篇模式修正播放范围"。不弹错误、不阻断打开。</p>
+      <p style="margin-bottom:0">反过来，用户把范围切到 <code>WholeBook</code> 而 <code>singleAudio</code> 为空时，是合法状态：表示"用按页匹配的结果，但播放时不随翻页切换"。</p>
     </div>
 
     <div class="callout">
@@ -870,19 +877,22 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
           <tr><th style="width:180px">场景</th><th style="width:44%">按页听（FollowPage）</th><th>整篇听（WholeBook）</th></tr>
         </thead>
         <tbody>
-          <tr><td>列表内容</td><td>N 条曲目，按页码分组；未匹配页折叠</td><td><b>永远只有 1 条</b>：全篇 · 文件名（或"未选择音频"空态）</td></tr>
-          <tr><td>面板顶部分段</td><td>"按页听"选中</td><td>"整篇听"选中，且曲目选择器紧跟其下</td></tr>
-          <tr><td>翻到新页（有绑定）</td><td>页面稳定 250ms 后判断：目标音频 ≠ 当前音频 → <b>切换并从头播放</b>；相同 → 继续播放，不重启</td><td><b>不切换、不重启、不闪一下</b>；徽标保持"全篇"</td></tr>
+          <tr><td>列表内容</td><td>N 条曲目，按页码分组；未匹配页折叠</td><td><b>永远只有 1 条</b>：全篇 · 文件名（或"未选择音频"空态）；顶部显示"已隐藏 N 条按页绑定 · 查看"</td></tr>
+          <tr><td>面板顶部分段</td><td>"按页听"选中</td><td>"整篇听"选中，曲目选择器紧跟其下</td></tr>
+          <tr><td>翻到新页（有绑定）</td><td>页面稳定 250ms 后判断：目标音频 ≠ 当前音频 → <b>淡出 30ms → 切换 → 淡入 30ms 并从头播放</b>；相同 → 继续播放，不重启</td><td><b>不切换、不重启、不闪一下</b>；徽标保持"全篇"</td></tr>
           <tr><td>快速连翻 5 页</td><td>只加载<b>最终停留页</b>；中间页的加载请求直接丢弃，不出现连续切歌的杂音</td><td>完全无动作</td></tr>
           <tr><td>翻到新页（无绑定）</td><td>暂停并保留当前曲目位置，播放器右侧提示"P15 无音频 · 去绑定"</td><td>继续播放</td></tr>
+          <tr><td>从无绑定页翻回有绑定页</td><td><b>不自动恢复播放</b>；播放器显示"P12 可继续"按钮，点击后从暂停点续播</td><td>不动作</td></tr>
           <tr><td>翻页时处于暂停</td><td>只更新"当前页 → 曲目"的显示，不自动开始播放</td><td>不动作</td></tr>
           <tr><td>用户暂停后翻页</td><td>保持暂停；不因翻页自动恢复播放</td><td>保持暂停</td></tr>
-          <tr><td>关闭"跟随翻页"</td><td>翻页完全不动作；播放器显示"跟随已关闭"灰标</td><td>开关禁用（因为本来就不切）</td></tr>
-          <tr><td>上一曲 / 下一曲</td><td>在 N 条曲目中移动；若"切曲同步翻页"开启（默认），正文同时翻到该曲目对应页</td><td>两按钮禁用</td></tr>
+          <tr><td>关闭"翻页切换音频"</td><td>翻页完全不动作；播放器显示"跟随已关闭"灰标</td><td>开关替换为说明文字（见 6.5），不显示可点控件</td></tr>
+          <tr><td>上一曲 / 下一曲</td><td>按播放列表索引移动；连点时<b>累积目标索引</b>（每次 +1 / −1），加载完成后一次性跳到目标；若"切歌同步页码"开启（默认），正文同时翻到该曲目对应页</td><td>两按钮禁用</td></tr>
+          <tr><td>试听中翻页</td><td>进入 <code>Previewing</code> 子状态：翻页不切音频，试听结束后恢复原曲与进度</td><td>同左</td></tr>
           <tr><td>删除文件后点播放</td><td>播放器内联报错"文件缺失 · 重新定位"，可换文件；不弹模态框</td><td>同左</td></tr>
           <tr><td>一曲覆盖多页</td><td>这些页共用一条曲目；翻页在覆盖范围内不重启</td><td>不适用</td></tr>
           <tr><td>播完</td><td>停在末尾；按循环设置决定是否续播</td><td>同左</td></tr>
-          <tr><td>切换播放范围</td><td>仅切 <code>PlaybackScope</code>；绑定、规则、页码索引全部不动</td><td>仅切范围 + 确认单文件；列表塌缩为 1 条，不重算匹配</td></tr>
+          <tr><td>切换播放范围</td><td>仅切 <code>playbackScope</code>；绑定、规则、页码索引全部不动</td><td>仅切范围 + 确认单文件；列表塌缩为 1 条，不重算匹配</td></tr>
+          <tr><td>非法组合（singleAudio 非空 + FollowPage）</td><td colspan="2">读入时自动纠正为 <code>WholeBook</code> 并提示一次；写回落盘纠正结果，不报错、不阻断打开</td></tr>
         </tbody>
       </table>
     </div>
@@ -894,7 +904,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
       </div>
       <div class="card">
         <h4>暂停语义</h4>
-        <p>"翻页自动播放"与"用户手动暂停"是两件事。用户暂停后翻页，<b>不自动恢复播放</b>；只有用户点击播放才继续。自动播放仅发生在"翻页前正在播放"的情况下。</p>
+        <p>区分三种"没在播"：<code>Idle</code>（未加载）、<code>PausedByUser</code>（用户暂停）、<code>Ended</code>（播完）。翻页只在 <code>Playing</code> 时触发 <code>LoadAndPlay</code>；<code>PausedByUser</code> 时返回 <code>LoadOnly</code>（只换显示不播）；<code>Idle</code> 时返回 <code>None</code>。</p>
       </div>
     </div>
 
@@ -904,14 +914,43 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
         <p>翻页事件触发后重置 250ms 计时器；期间再次翻页则取消上一次。计时器到点才比对路径并加载。这解决"连续翻页触发多次 Load、声音一段段冒出来"的问题，也让快速浏览目录时不会疯狂读盘。</p>
       </div>
       <div class="card">
-        <h4>双向导航：切曲要不要翻页</h4>
-        <p>默认开启"切曲同步翻页"：点下一曲跨页时，正文跟到该曲目对应页，播放器与正文始终一致。关闭后只换音频、不动页面，适合"听 A 页、看 B 页"。这是唯一需要额外定一个默认值的交互，其余都可由模式推导。</p>
+        <h4>双向导航：两个开关，互不隶属</h4>
+        <p><b>翻页切换音频</b>（<code>autoFollowPage</code>）控制"翻页 → 换音频"；<b>切歌同步页码</b>（<code>syncPageOnTrackChange</code>）控制"换音频 → 翻页"。两者独立，可任意组合，见下表。</p>
       </div>
+    </div>
+
+    <div class="table-wrap" style="max-height:none;margin-top:14px">
+      <table>
+        <thead><tr><th style="width:180px">翻页切换音频 / 切歌同步页码</th><th>翻页时</th><th>点下一曲时</th></tr></thead>
+        <tbody>
+          <tr><td>开 / 开（默认）</td><td>切到目标页音频并从头播放</td><td>换曲 + 正文同步翻到该曲目页</td></tr>
+          <tr><td>开 / 关</td><td>切到目标页音频并从头播放</td><td>只换曲，正文不动（听 A 页看 B 页）</td></tr>
+          <tr><td>关 / 开</td><td>音频完全不动</td><td>换曲 + 正文同步翻到该曲目页</td></tr>
+          <tr><td>关 / 关</td><td>音频完全不动</td><td>只换曲，正文不动</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <div class="t">整篇模式不显示禁用的开关</div>
+      <p>整篇模式下，"翻页切换音频"不渲染为灰色开关（用户会反复点），而是替换为一行说明文字：<b>「整篇音频不随翻页切换」</b>。列表塌缩为 1 条时，顶部显示<b>「已隐藏 N 条按页绑定 · 查看」</b>，避免用户以为数据丢失。</p>
     </div>
 
     <div class="callout ok">
       <div class="t">实现方式：把上表变成一个纯函数</div>
-      <p><code>PlaybackDecision Resolve(scope, follow, wasPlaying, currentPath, targetPath)</code> 返回 <code>None / LoadAndPlay / LoadOnly / StopWithHint</code>。矩阵里每一行都是它的一个用例，可直接写单测覆盖，不需要启动 UI 手点十遍。</p>
+      <pre style="margin:8px 0 0;padding:10px 12px;background:#FBFBFD;border:1px solid var(--rule);border-radius:8px;overflow:auto;font-family:var(--mono);font-size:12px;line-height:1.6;color:#374151">PlaybackDecision Resolve(
+    PlaybackScope scope,
+    bool follow,
+    PlayerState playerState,     // Idle | Loading | Playing | PausedByUser | Ended | Previewing | Error
+    string? currentPath,         // 规范化路径，可为 null
+    string? targetPath)          // 规范化路径，可为 null
+
+→ None            // 不动作
+| LoadOnly         // 只换显示，不播（暂停态翻页）
+| LoadAndPlay      // 淡出 → Load → 淡入播放
+| StopWithHint     // 暂停 + 提示"本页无音频 / 文件缺失"
+| PreviewExit      // 退出试听，恢复原曲与进度</pre>
+      <p style="margin-top:8px;margin-bottom:0"><code>targetPath == null</code>（无绑定）⇒ <code>StopWithHint</code>；<code>Load(null)</code> 未定义，调用方必须先判空。矩阵里每一行都是它的一个用例，可直接写单测覆盖，不需要启动 UI 手点十遍。</p>
     </div>
   </section>
 
@@ -976,14 +1015,14 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
       <table>
         <thead><tr><th style="width:230px">原入口</th><th style="width:190px">新位置</th><th>说明</th></tr></thead>
         <tbody>
-          <tr><td>添加音频目录</td><td>扫描来源（折叠区）</td><td>显示当前目录、包含子目录开关、曲目数</td></tr>
+          <tr><td>添加音频目录</td><td>扫描来源（折叠区）</td><td>显示当前目录、包含子目录开关、曲目数；提供"添加目录 / 移除目录"</td></tr>
           <tr><td>重新扫描</td><td>扫描来源</td><td>保留；扫描期间显示进度，不阻塞 UI</td></tr>
-          <tr><td>AI 匹配</td><td>自动匹配卡 · 文字链接</td><td>二次确认后执行，进度可见，失败不改变现状</td></tr>
+          <tr><td>AI 匹配</td><td>自动匹配卡 · 文字链接</td><td>二次确认后执行，进度可见，失败不改变现状；写入的 overrides 标 <code>source: "ai"</code>，可一键清除</td></tr>
           <tr><td>规则</td><td>高级规则抽屉</td><td>改为抽屉，不再弹大对话框</td></tr>
           <tr><td>手动指定</td><td>当前页卡片 · 更换绑定 → 选择本地文件</td><td>选定即生效，不改变其他页</td></tr>
           <tr><td>从列表选</td><td>当前页卡片 · 更换绑定 → 列表选择</td><td>合并为同一个选择器，不再两个按钮两种流程</td></tr>
           <tr><td>整页录音</td><td>保留为独立子页</td><td>不属于配套音频，移出本区避免混淆</td></tr>
-          <tr><td>规则对话框中的模式 / 重新匹配 / 重置</td><td>面板分段 / 自动匹配卡 / 更多菜单</td><td>模式与重置不再藏在对话框；重置需二次确认并说明影响</td></tr>
+          <tr><td>规则对话框中的模式 / 重新匹配 / 重置</td><td>面板分段 / 自动匹配卡 / 更多菜单</td><td>模式与重置不再藏在对话框；"重新匹配"只重算自动匹配、不动 overrides；重置需二次确认并说明影响</td></tr>
         </tbody>
       </table>
     </div>
@@ -1018,8 +1057,8 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
       <li><span class="k">三块而非一张长表</span><span class="v">① 命名 → 页码 ② 一个音频覆盖多页 ③ 例外（单页指定）。默认只展开 ①</span></li>
       <li><span class="k">实时预览</span><span class="v">输入文件名示例即显示"识别到第几页、命中多少条"，不点"试算"按钮</span></li>
       <li><span class="k">草稿隔离</span><span class="v">编辑不即时写入正式档案；"保存"一次提交，"取消"无副作用（替代原来的"应用修改 + 保存"两步）</span></li>
-      <li><span class="k">规则就是列表</span><span class="v">每条一行：名称、模式、命中数、开关、删除。无优先级数字输入，用拖动排序表达优先级</span></li>
-      <li><span class="k">作用范围显式</span><span class="v">保存前必须看见"本目录 N 本书"；想只影响当前书就点「改为仅本书」，写入 <code>rulesOverride</code>，不改共享规则</span></li>
+      <li><span class="k">规则就是列表</span><span class="v">每条一行：名称、模式、命中数、优先级数字、启用、删除。优先级用<b>数字输入 + 上移/下移按钮</b>表达（成本低、可访问性好、虚拟列表下也稳）；拖拽排序列为 P3 可选，不作为首发依赖</span></li>
+      <li><span class="k">作用范围显式</span><span class="v">保存前必须看见"本目录 N 本书"；想只影响当前书就点「改为仅本书」，写入 <code>rulePatch</code>（增量补丁），不改共享规则</span></li>
       <li><span class="k">失败可见</span><span class="v">0 命中的规则在行内标黄并给"查看示例文件名"提示，不再只写进诊断日志</span></li>
     </ul>
   </section>
@@ -1043,12 +1082,12 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
       </div>
       <div class="card">
         <div class="n" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent)">共享 · 目录级</div>
-        <p>规则 <code>rules</code>、扫描来源 <code>sources</code>、是否含子目录、默认匹配/播放范围。</p>
+        <p>规则 <code>rules</code>、扫描来源 <code>sources</code>、是否含子目录、默认播放范围。</p>
         <p style="margin-bottom:0">改一次，本目录所有书下次打开即生效，不用逐本配置。</p>
       </div>
       <div class="card">
         <div class="n" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent2)">分区 · 书级</div>
-        <p><code>books["Lesson_12.pdf"]</code> 里放这本书独有的：匹配模式、整篇单音频、手动绑定、页码缓存。</p>
+        <p><code>books["Lesson_12.pdf"]</code> 里放这本书独有的：整篇单音频、播放范围、手动绑定、页码缓存。</p>
         <p style="margin-bottom:0">A 书把第 12 页绑到慢速音频，不影响 B 书。</p>
       </div>
     </div>
@@ -1078,8 +1117,8 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
     <ul class="spec">
       <li><span class="k">直接父目录</span><span class="v">只认 PDF 的直接父目录。课程分成多层子目录时，每层各自一份档案；跨层共用规则不在本期范围内（可后续加"继承父目录规则"）</span></li>
       <li><span class="k">规范化</span><span class="v">哈希前统一：绝对路径、去尾部 <code>\</code>、大小写不敏感；JSON 里另存原始 <code>scope.path</code> 供人阅读与重挂</span></li>
-      <li><span class="k">网络盘 / 盘符变化</span><span class="v">盘符或挂载点变化会生成新键；用 <code>scope.signature</code>（目录内 PDF 文件名+大小的哈希）做候选匹配，让用户一键重挂</span></li>
-      <li><span class="k">混合目录</span><span class="v">同一目录混放不同课程时，目录规则可能不合用；用规则的 <code>enabled</code> 开关 + 书级 <code>rulesOverride</code> 隔离，必要时把这些书拆到子目录（各自成档）</span></li>
+      <li><span class="k">网络盘 / 盘符变化</span><span class="v">盘符或挂载点变化会生成新键；用文件重叠率（见 9.5）列候选让用户一键重挂，<code>signature</code> 只做排序</span></li>
+      <li><span class="k">混合目录</span><span class="v">同一目录混放不同课程时，目录规则可能不合用；用规则的 <code>enabled</code> 开关 + 书级 <code>rulePatch</code> 隔离，必要时把这些书拆到子目录（各自成档）</span></li>
       <li><span class="k">多用户</span><span class="v">档案不带 <code>userId</code>；与跟读数据的用户隔离互不影响</span></li>
     </ul>
 
@@ -1087,7 +1126,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
     <p>匹配不是"猜"，是一条固定流水线：<mark class="key">扫描 → 规则命中 → 取数字 → 换算页码 → 冲突裁决 → 叠加手动绑定</mark>。任何一步都能在面板的诊断区看到结果。</p>
     <div class="steps">
       <div class="step"><div class="sn">STEP 1</div><div class="st">扫描</div><div class="sd">PDF 同目录（可选含子目录）+ 已登记的外部目录；扩展名 <code>mp3/wav/m4a/aac/flac/ogg/wma</code>，同名 <code>.srt/.lrc</code> 作为字幕。</div></div>
-      <div class="step"><div class="sn">STEP 2</div><div class="st">规则命中</div><div class="sd">生效规则 = 本书 <code>rulesOverride</code> ?? 目录 <code>rules</code>；按 <code>Priority</code> 从高到低，先匹配文件名，不中再匹配相对路径。通配符 <code>*</code>/<code>?</code> 自动锚定整串。</div></div>
+      <div class="step"><div class="sn">STEP 2</div><div class="st">规则命中</div><div class="sd">生效规则 = <code>rules</code> − <code>rulePatch.disabledRuleIds</code> + <code>rulePatch.extraRules</code>；按 <code>priority</code> 从高到低，先匹配文件名，不中再匹配相对路径。通配符 <code>*</code>/<code>?</code> 自动锚定整串。</div></div>
       <div class="step"><div class="sn">STEP 3</div><div class="st">取数字</div><div class="sd">优先级：命名捕获组 → 指定序号捕获组 → 第一个捕获组 → 文件名中第一个数字（兜底），避免"匹配上了却取不到页码"。</div></div>
       <div class="step"><div class="sn">STEP 4</div><div class="st">换算页码</div><div class="sd"><code>PageIndex</code>：<code>n-1+offset</code>；<code>Range</code>：从 <code>(n-1)×PagesPerUnit+offset</code> 起连续铺；<code>Sequence</code>：按数字排序后从 <code>offset</code> 起连续铺。</div></div>
     </div>
@@ -1095,16 +1134,16 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
     <h3>规则字段各管什么</h3>
     <div class="table-wrap" style="max-height:none">
       <table>
-        <thead><tr><th style="width:150px">字段</th><th style="width:250px">作用</th><th>取值与默认</th></tr></thead>
+        <thead><tr><th style="width:110px">JSON 字段</th><th style="width:110px">界面名称</th><th style="width:210px">作用</th><th>取值与默认</th></tr></thead>
         <tbody>
-          <tr><td><code>FileNamePattern</code></td><td>匹配文件名（不中再匹配相对路径）</td><td>正则：部分匹配、不区分大小写；通配符：锚定整串、不区分大小写</td></tr>
-          <tr><td><code>PatternMode</code></td><td>写法解释方式</td><td><code>Regex</code>（默认）/ <code>Wildcard</code>；写成 <code>*.mp3</code> 但选了 Regex 时会自动降级并提示</td></tr>
-          <tr><td><code>CaptureGroupIndex</code> / <code>Name</code></td><td>从哪一组取页码数字</td><td>都为空时取第 1 个捕获组；仍无数字则取文件名第一个数字</td></tr>
-          <tr><td><code>MapMode</code></td><td>数字怎么变成页</td><td><code>PageIndex</code> 一音频一页 / <code>Range</code> 一音频多页 / <code>Sequence</code> 按顺序铺页</td></tr>
-          <tr><td><code>PageOffset</code></td><td>页码整体偏移</td><td>例：音频从第 3 页才开始 → 填 <code>+2</code>；也可为负</td></tr>
-          <tr><td><code>PagesPerUnit</code></td><td>仅 <code>Range</code> 用：一个编号覆盖几页</td><td>默认 1；例：每条音频覆盖 2 页 → 填 2</td></tr>
-          <tr><td><code>Priority</code></td><td>同一页被多条规则命中时谁赢</td><td>数值大者优先；相同优先级时先执行的规则保留</td></tr>
-          <tr><td><code>Enabled</code></td><td>临时停用规则</td><td>停用后不参与匹配，也不删除</td></tr>
+          <tr><td><code>fileNamePattern</code></td><td>文件名规则</td><td>匹配文件名（不中再匹配相对路径）</td><td>正则：部分匹配、不区分大小写；通配符：锚定整串、不区分大小写</td></tr>
+          <tr><td><code>patternMode</code></td><td>写法</td><td>解释方式</td><td><code>Regex</code>（默认）/ <code>Wildcard</code>；写成 <code>*.mp3</code> 却选了 Regex 时自动降级并提示</td></tr>
+          <tr><td><code>captureGroupIndex</code> / <code>captureGroupName</code></td><td>取哪一组</td><td>从哪一组取页码数字</td><td>都为空时取第 1 个捕获组；仍无数字则取文件名第一个数字</td></tr>
+          <tr><td><code>mapMode</code></td><td>页码映射</td><td>数字怎么变成页</td><td><code>PageIndex</code> 一音频一页 / <code>Range</code> 一音频多页 / <code>Sequence</code> 按顺序铺页</td></tr>
+          <tr><td><code>pageOffset</code></td><td>页码偏移</td><td>页码整体偏移</td><td>例：音频从第 3 页才开始 → 填 <code>+2</code>；也可为负</td></tr>
+          <tr><td><code>pagesPerUnit</code></td><td>每单元页数</td><td>仅 <code>Range</code> 用：一个编号覆盖几页</td><td>默认 1；例：每条音频覆盖 2 页 → 填 2</td></tr>
+          <tr><td><code>priority</code></td><td>优先级</td><td>同一页被多条规则命中时谁赢</td><td>数值大者优先；相同优先级时先执行的规则保留</td></tr>
+          <tr><td><code>enabled</code></td><td>启用</td><td>临时停用规则</td><td>停用后不参与匹配，也不删除</td></tr>
         </tbody>
       </table>
     </div>
@@ -1123,14 +1162,14 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
     </div>
     <div class="callout warn">
       <div class="t">没有规则也能用</div>
-      <p>规则全部停用时，程序会取文件名中的<b>第一个数字</b>当页码（<code>Lesson_12.mp3</code> → P12）。这是首次使用的兜底，不是隐藏规则；一旦启用任一规则，兜底不再执行。</p>
+      <p>规则全部停用时，程序会取文件名中的<b>第一个数字</b>当页码（<code>Lesson_12.mp3</code> → P12）。这是首次使用的兜底，不是隐藏规则；一旦启用任一规则，兜底不再执行。文件名完全不含数字（如 <code>intro.mp3</code>）时不参与自动匹配，相关页标红为"未匹配"，可手动绑定，不猜页码。</p>
     </div>
 
     <h3>冲突与优先级（记住这一条就够）</h3>
     <ul class="spec">
-      <li><span class="k">规则来源</span><span class="v">默认用目录规则；本书勾选"单独规则"后只读 <code>rulesOverride</code>，与目录规则不再合并，避免两套逻辑叠加难查</span></li>
-      <li><span class="k">规则之间</span><span class="v">逐页裁决：<code>Priority</code> 大的覆盖小的；相同优先级先到先得，后执行的规则不会改写已占用的页</span></li>
-      <li><span class="k">手动绑定</span><span class="v">永远最高：<code>ManualOverrides</code> 最后叠加，哪怕文件名能自动匹配，也以手动为准；手动文件不在扫描列表时会被补进曲目列表</span></li>
+      <li><span class="k">规则来源</span><span class="v">有效规则 = <code>rules</code> − <code>rulePatch.disabledRuleIds</code> + <code>rulePatch.extraRules</code>；<code>rulePatch.replaceAll = true</code> 时只用 <code>extraRules</code>，完全脱离目录规则。默认走增量补丁，目录规则更新仍能继承</span></li>
+      <li><span class="k">规则之间</span><span class="v">逐页裁决：<code>priority</code> 大的覆盖小的；相同优先级先到先得，后执行的规则不会改写已占用的页</span></li>
+      <li><span class="k">手动绑定</span><span class="v">永远最高：<code>overrides</code> 最后叠加，哪怕文件名能自动匹配，也以手动为准；手动文件不在扫描列表时会被补进曲目列表</span></li>
       <li><span class="k">整篇单音频</span><span class="v">只认选中的那一条，映射到全部页；规则与手动绑定全部忽略（但数据不删除，切回按页模式即恢复）</span></li>
       <li><span class="k">未匹配页</span><span class="v">进入 <code>UnmatchedPages</code>，在面板标红；不静默借用相邻页音频</span></li>
     </ul>
@@ -1138,10 +1177,10 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
     <h3>日常怎么用（从打开书到改绑定）</h3>
     <div class="steps">
       <div class="step"><div class="sn">1</div><div class="st">打开书</div><div class="sd">自动扫描并匹配，面板顶部显示"已匹配 48 / 未匹配 2"。</div></div>
-      <div class="step"><div class="sn">2</div><div class="st">看结果</div><div class="sd">列表标绿=自动、黄=手动、红=未匹配；当前页卡片显示这一页用的哪条音频。</div></div>
+      <div class="step"><div class="sn">2</div><div class="st">看结果</div><div class="sd">列表标绿=自动、黄=手动、蓝=AI；当前页卡片显示这一页用的哪条音频。</div></div>
       <div class="step"><div class="sn">3</div><div class="st">改单页</div><div class="sd">未匹配或想换：点当前页卡片「绑定 / 换一个 / 清除」，立即生效并写入手动绑定。</div></div>
       <div class="step"><div class="sn">4</div><div class="st">改整体</div><div class="sd">命名不含页码、或一条音频覆盖多页时，才进「高级匹配」写规则；改的是<b>目录规则</b>，预览会显示"影响本目录 12 本书 / 命中 240 条"。</div></div>
-      <div class="step"><div class="sn">5</div><div class="st">兜底</div><div class="sd">规则仍不合意就手动绑定；AI 匹配只批量写手动绑定，不生成规则，避免留下看不懂的模式。</div></div>
+      <div class="step"><div class="sn">5</div><div class="st">兜底</div><div class="sd">规则仍不合意就手动绑定；AI 匹配只批量写手动绑定（标 source: ai），不生成规则。</div></div>
       <div class="step"><div class="sn">6</div><div class="st">带走</div><div class="sd">默认导出 <code>&lt;目录名&gt;.audio.json</code>（规则 + 全部书的分区）；也可只导出当前书，换机器导入后自动归位。</div></div>
     </div>
 
@@ -1151,8 +1190,8 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
         <thead><tr><th style="width:220px">现象</th><th>先看哪里 / 怎么修</th></tr></thead>
         <tbody>
           <tr><td>全部未匹配</td><td>诊断区是否提示"目录下没有音频"；检查扩展名、外部目录、是否勾选子目录</td></tr>
-          <tr><td>匹配到但页码全错</td><td>大概率 <code>PageOffset</code> 或"1 起页"换算问题；用预览里的前 3 个示例对照</td></tr>
-          <tr><td>同页出现两条候选</td><td>看 <code>Priority</code>；给更具体的那条规则更高优先级，或加上文件名限定</td></tr>
+          <tr><td>匹配到但页码全错</td><td>大概率 <code>pageOffset</code> 或"1 起页"换算问题；用预览里的前 3 个示例对照</td></tr>
+          <tr><td>同页出现两条候选</td><td>看 <code>priority</code>；给更具体的那条规则更高优先级，或加上文件名限定</td></tr>
           <tr><td>规则完全没命中</td><td>诊断区会报"未匹配到任何音频（示例：…）"；把示例文件名贴进测试框逐条试</td></tr>
           <tr><td>部分页被手动改过</td><td>正常：手动绑定优先。想回到自动匹配，点当前页「清除本页」</td></tr>
         </tbody>
@@ -1182,7 +1221,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
         <tbody>
           <tr><td>导出目录档案</td><td>写 <code>&lt;目录名&gt;.audio.json</code>：目录规则 + 来源 + 默认值 + 每本书的用户字段；<b>不含缓存</b>，位置自选</td><td>本目录无书时仍可导出（只有规则）；目标不可写时明确报错并保留"另存为"</td></tr>
           <tr><td>导出当前书</td><td>写 <code>&lt;pdf名&gt;.audio.json</code>：目录规则快照 + 当前书一个分区</td><td>导入到别的目录时只影响同名书，其余书不动</td></tr>
-          <tr><td>导入匹配文件</td><td>自动识别"目录档 / 单书档" → 校验 → 差异摘要 → 确认后<b>按书合并</b></td><td>版本过新拒绝；文件缺失的页标黄保留；不整份覆盖其他书</td></tr>
+          <tr><td>导入匹配文件</td><td>自动识别"目录档 / 单书档" → 校验 → 差异摘要 → 确认后<b>按书合并</b></td><td>版本过新拒绝；文件缺失的页标黄保留；不整份覆盖其他书；同名不同书按 9.7 处理</td></tr>
           <tr><td>内置表格编辑</td><td>两层视图：<b>目录规则</b> 一张表；<b>书目</b> 列出各书的模式 / 手动绑定数 / 未匹配数，点进去改单书</td><td>改目录规则先显示影响书目数；单书保存不触碰其他书节点</td></tr>
           <tr><td>原始 JSON</td><td>应用内文本编辑：格式化、语法校验（带行号）、保存前 diff；<code>cache</code> 节点折叠只读</td><td>校验不过不允许保存；未知字段原样保留</td></tr>
         </tbody>
@@ -1194,7 +1233,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
       <div class="step"><div class="sn">STEP 1</div><div class="st">选择文件</div><div class="sd">默认打开 PDF 所在目录；识别 <code>scope.kind</code> 是目录档还是单书档。</div></div>
       <div class="step"><div class="sn">STEP 2</div><div class="st">校验</div><div class="sd">schemaVersion、页码范围、路径存在性、规则语法；目录档还校验 <code>books</code> 的 key 是否同名文件。</div></div>
       <div class="step"><div class="sn">STEP 3</div><div class="st">预览差异</div><div class="sd">目录档显示"新增 3 本书 / 修改 2 本书 / 规则变更 1 条"；单书档只显示本书的页级差异。可逐项勾选。</div></div>
-      <div class="step"><div class="sn">STEP 4</div><div class="st">写入</div><div class="sd">按 <code>books[fileName]</code> 合并；目录规则按 <code>rule.id</code> 合并；保留本机缓存与未勾选项。</div></div>
+      <div class="step"><div class="sn">STEP 4</div><div class="st">写入</div><div class="sd">按 <code>books[fileName]</code> 合并；目录规则按 <code>rule.id</code> 合并；保留本机缓存与未勾选项。同名不同书走 9.7。</div></div>
     </div>
 
     <h3>用户字段与机器缓存必须分开保存</h3>
@@ -1205,20 +1244,20 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
         <tbody>
           <tr>
             <td>目录</td>
-            <td><code>rules</code>、<code>sources</code>、<code>includeSubDirectories</code>、<code>defaults.matching</code>、<code>defaults.playbackScope</code></td>
+            <td><code>rules</code>、<code>sources</code>、<code>includeSubDirectories</code>、<code>defaults.playbackScope</code>、<code>defaults.playbackSpeed</code></td>
             <td><code>scope.id</code>、<code>path</code>、<code>pathKey</code>、<code>signature</code>、<code>lastScanAt</code></td>
           </tr>
           <tr>
             <td>书</td>
-            <td><code>matching</code>、<code>singleAudio</code>、<code>rulesOverride</code>、<code>overrides</code></td>
-            <td><code>fingerprint</code>、<code>pageCount</code>、<code>cache.pageIndex</code>、<code>cache.scanFingerprint</code>、<code>updatedAt</code></td>
+            <td><code>singleAudio</code>、<code>playbackScope</code>、<code>rulePatch</code>、<code>overrides</code></td>
+            <td><code>quickFingerprint</code>、<code>fullFingerprint</code>、<code>pageCount</code>、<code>cache.pageIndex</code>、<code>cache.scanFingerprint</code>、<code>cache.updatedAt</code></td>
           </tr>
         </tbody>
       </table>
     </div>
     <div class="callout warn">
       <div class="t">不要用"整份反序列化再整份写回"</div>
-      <p>目录档装着很多书，整份写回会让 A 书窗口把 B 书刚保存的绑定冲掉。正确做法：读时保留 <code>JsonNode</code>，写时只 patch <code>books[当前书]</code> 与本次改动的 <code>rules</code>；文件级独占锁 + 3 次重试。</p>
+      <p>目录档装着很多书，整份写回会让 A 书窗口把 B 书刚保存的绑定冲掉。正确做法：读时保留 <code>JsonNode</code>，写时只 patch <code>books[当前书]</code> 与本次改动的 <code>rules</code>；进程内按 <code>pathKey</code> 串行 + temp 文件 <code>File.Replace</code> 原子替换。</p>
     </div>
 
     <h3>目录档案长什么样</h3>
@@ -1236,43 +1275,58 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
     "signature": "sig_5c1e8b2a"
   },
   "defaults": {
-    "matching": "PerPage",
     "playbackScope": "FollowPage",
-    "includeSubDirectories": false
+    "includeSubDirectories": false,
+    "playbackSpeed": 1.0
   },
   "sources": ["audio", "D:\\英语听力\\新概念2"],
   "rules": [
     {
       "id": "r_lesson",
       "name": "Lesson_NN",
-      "pattern": "Lesson_(\\d+)\\.mp3",
-      "mode": "Regex",
-      "capture": 1,
-      "map": "PageIndex",
-      "offset": 0,
+      "fileNamePattern": "Lesson_(\\d+)\\.mp3",
+      "patternMode": "Regex",
+      "captureGroupIndex": 1,
+      "captureGroupName": null,
+      "mapMode": "PageIndex",
+      "pageOffset": 0,
+      "pagesPerUnit": 1,
       "priority": 100,
       "enabled": true
     }
   ],
   "books": {
     "新概念2_Lesson12.pdf": {
-      "fingerprint": "9f3c1a…",
+      "quickFingerprint": "qf_9f3c1a",
+      "fullFingerprint": "ff_9f3c1a7e",
       "pageCount": 48,
-      "matching": "PerPage",
       "singleAudio": null,
-      "rulesOverride": null,
-      "overrides": { "14": "audio/extra/L12_repeat.mp3" },
+      "playbackScope": "FollowPage",
+      "rulePatch": null,
+      "overrides": {
+        "14": {
+          "path": "audio/extra/L12_repeat.mp3",
+          "source": "manual",
+          "createdAt": "2026-10-20T10:12:00"
+        }
+      },
       "cache": {
         "pageIndex": { "12": "audio/Lesson_12.mp3" },
-        "scanFingerprint": "be71…"
+        "scanFingerprint": "be71…",
+        "updatedAt": "2026-10-24T09:00:00"
       }
     },
     "新概念2_Lesson13.pdf": {
-      "fingerprint": "1d7e40…",
+      "quickFingerprint": "qf_1d7e40",
+      "fullFingerprint": "ff_1d7e405b",
       "pageCount": 52,
-      "matching": "SingleAudio",
       "singleAudio": "audio/Lesson_13_full.mp3",
-      "rulesOverride": null,
+      "playbackScope": "WholeBook",
+      "rulePatch": {
+        "disabledRuleIds": ["r_old"],
+        "extraRules": [],
+        "replaceAll": false
+      },
       "overrides": {},
       "cache": { "pageIndex": {} }
     }
@@ -1285,44 +1339,62 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
         <ul class="spec">
           <li><span class="k">kind</span><span class="v">目录档 <code>"directory"</code>；单书导出 <code>"book"</code>。导入按它决定合并范围，不靠文件名猜</span></li>
           <li><span class="k">主键</span><span class="v"><code>scope.pathKey</code> 决定文件名；<code>books</code> 的 key 是目录内文件名（大小写不敏感查找），人能直接认出来</span></li>
-          <li><span class="k">rules vs rulesOverride</span><span class="v">默认共用 <code>rules</code>；单书勾"单独规则"才写 <code>rulesOverride</code>，两者不合并</span></li>
-          <li><span class="k">overrides vs cache</span><span class="v"><code>overrides</code> 是人工例外（导出保留）；<code>cache.pageIndex</code> 是算出来的映射（导出剔除）</span></li>
-          <li><span class="k">signature</span><span class="v">目录内 PDF 文件名 + 大小的稳定哈希，用于盘符/路径变化后重挂；不随文件内容修改而变</span></li>
-          <li><span class="k">fingerprint</span><span class="v">单个 PDF 的大小 + 首 64KB 哈希 + 页数；书改名后靠它找回旧分区</span></li>
-          <li><span class="k">sources</span><span class="v">相对路径按 PDF 目录解析；绝对路径用于外部音频目录</span></li>
+          <li><span class="k">singleAudio</span><span class="v">整篇单音频的<b>唯一真相</b>。非空 ⇒ 归一化 <code>playbackScope = WholeBook</code>；为空 ⇒ 走按页匹配</span></li>
+          <li><span class="k">rulePatch</span><span class="v">书级增量补丁：<code>disabledRuleIds</code>（禁用目录规则）+ <code>extraRules</code>（追加）+ <code>replaceAll</code>（默认 false）。<code>null</code> 表示完全继承目录规则</span></li>
+          <li><span class="k">overrides</span><span class="v">人工/AI 例外，值是对象：<code>path</code> + <code>source</code>（manual/ai）+ <code>createdAt</code>。导出保留，AI 项可单独清除</span></li>
+          <li><span class="k">cache</span><span class="v">算出来的映射，导出剔除；只由程序写，用户字段永远不落在这里</span></li>
+          <li><span class="k">quickFingerprint</span><span class="v">大小 + 首 64KB 哈希，毫秒级；打开书时<b>先算它</b>，用于快速定位分区，不阻塞 UI</span></li>
+          <li><span class="k">fullFingerprint</span><span class="v">quick + 页数，需解析 PDF（百毫秒级）；<b>异步补全</b>，用于改名找回的最终校验</span></li>
+          <li><span class="k">signature</span><span class="v">目录内 PDF 文件名 + 大小的哈希。<b>只用于候选排序，不做精确相等</b>：增删一本书就会变，不能作为重挂的唯一依据（见 9.5）</span></li>
+          <li><span class="k">defaults 快照</span><span class="v">新书加入 <code>books</code> 时，把 <code>defaults</code> 当时的取值<b>快照写入书分区</b>（而非引用）；此后改 defaults 不影响历史书，避免"目录默认值一改，老书配置跟着漂"</span></li>
           <li><span class="k">容忍输入</span><span class="v">读取允许 BOM 与注释；写入不生成注释</span></li>
           <li><span class="k">所有权</span><span class="v">导出文件不含 <code>cache</code>；缓存永远留在 AppData</span></li>
         </ul>
       </div>
     </div>
 
+    <div class="callout ok" style="margin-top:14px">
+      <div class="t">相对 v1.5 稿的三处模型改动</div>
+      <p><b>① matching 改为派生字段</b>：唯一真相是 <code>singleAudio</code>，为空 = 按页、非空 = 整篇。<code>matching</code> 仅为兼容旧档保留，读入后归一化。彻底消除 <code>SingleAudio + FollowPage</code> 的非法组合。</p>
+      <p><b>② rulesOverride → rulePatch</b>：从"全量替换"改为"增量补丁"，支持"禁用目录某条规则 + 追加本书规则"，目录规则以后更新仍能继承。仅当用户明确选"完全独立"才置 <code>replaceAll: true</code>。</p>
+      <p style="margin-bottom:0"><b>③ overrides 值改为对象</b>：<code>{ path, source: "manual" | "ai", createdAt }</code>，用于区分人工绑定与 AI 批量写入，AI 项可一键全部清除。</p>
+    </div>
+
     <h3>打开一本书时发生什么</h3>
     <div class="steps">
       <div class="step"><div class="sn">1</div><div class="st">定位目录档</div><div class="sd">由 PDF 父目录算 <code>pathKey</code>，读 <code>dir-*.json</code>；失败显示错误条，不当作空档案。</div></div>
-      <div class="step"><div class="sn">2</div><div class="st">找书分区</div><div class="sd">先按文件名查 <code>books</code>；没有则按内容指纹在全档里找（改名场景）；都没有就按 <code>defaults</code> 新建一个分区。</div></div>
-      <div class="step"><div class="sn">3</div><div class="st">拼有效配置</div><div class="sd">规则取 <code>rulesOverride ?? rules</code>；模式、单音频、overrides 取本书；来源与子目录开关取目录。</div></div>
+      <div class="step"><div class="sn">2</div><div class="st">找书分区</div><div class="sd">先按文件名查 <code>books</code>；没有则按 <code>quickFingerprint</code> 命中候选，再用 <code>fullFingerprint</code> 确认（改名场景）；都没有就按 <code>defaults</code> 快照新建一个分区。</div></div>
+      <div class="step"><div class="sn">3</div><div class="st">拼有效配置</div><div class="sd">规则 = <code>rules</code> − <code>rulePatch.disabledRuleIds</code> + <code>rulePatch.extraRules</code>（或 <code>replaceAll</code>）；模式、单音频、overrides 取本书；来源与子目录开关取目录。</div></div>
       <div class="step"><div class="sn">4</div><div class="st">扫描与缓存</div><div class="sd">指纹命中则复用 <code>cache.pageIndex</code> 并叠加 overrides；不命中重扫重算，只更新本书的 <code>cache</code>。</div></div>
       <div class="step"><div class="sn">5</div><div class="st">外部文件提示</div><div class="sd">发现同目录 <code>&lt;目录名&gt;.audio.json</code> 或 <code>&lt;pdf名&gt;.audio.json</code> 时只提示"是否导入"，绝不自动覆盖。</div></div>
+    </div>
+
+    <div class="callout">
+      <div class="t">盘符变化 / 目录移动：signature 只做候选，不做判等</div>
+      <p>目录里增删一本书，<code>signature</code> 就变；因此不能用它判断"是不是同一个目录"。正确流程：算出新旧目录的<b>文件重叠率</b>（按文件名集合算 Jaccard），<b>&gt; 80%</b> 的档案列为候选，按重叠率排序展示"疑似同一目录"，用户点一下重挂。<code>signature</code> 只用于给候选打标签，不参与相等判断。</p>
+      <p style="margin-bottom:0">书改名找回同理：先用 <code>quickFingerprint</code> 命中候选，再用 <code>fullFingerprint</code>（含页数）最终确认，避免"同名不同书"误配。</p>
     </div>
 
     <h3>旧的一书一档怎么迁过来</h3>
     <div class="steps">
       <div class="step"><div class="sn">1</div><div class="st">发现旧档</div><div class="sd">打开某目录第一本书时，检查 <code>Profiles\&lt;PDF路径哈希&gt;.json</code> 是否存在；有则进入迁移，不直接删除。</div></div>
       <div class="step"><div class="sn">2</div><div class="st">合并规则</div><div class="sd">把同目录各旧档的规则按 <code>id</code> / 内容去重成目录 <code>rules</code>；冲突时取最近修改的一份作目录默认，并列出差异让用户确认。</div></div>
-      <div class="step"><div class="sn">3</div><div class="st">按书写入</div><div class="sd">每份旧档的 <code>MatchMode</code>、<code>SingleAudioFile</code>、<code>ManualOverrides</code> 原样写入对应 <code>books[文件名]</code>；<code>Tracks</code>/<code>PageIndex</code> 不迁移，重新扫描。</div></div>
+      <div class="step"><div class="sn">3</div><div class="st">按书写入</div><div class="sd">每份旧档的 <code>MatchMode</code>、<code>SingleAudioFile</code>、<code>ManualOverrides</code> 原样写入对应 <code>books[文件名]</code>；<code>Tracks</code>/<code>PageIndex</code> 不迁移，重新扫描。<code>MatchMode=SingleAudio</code> 迁移为 <code>singleAudio</code> 非空 + <code>playbackScope=WholeBook</code>。</div></div>
       <div class="step"><div class="sn">4</div><div class="st">保留备份</div><div class="sd">旧档移入 <code>Profiles\_legacy\</code>（只读存档），目录档写 <code>"migratedFrom": "v2"</code>；同一目录不再重复迁移。</div></div>
     </div>
 
     <h3>遗留风险与对策</h3>
     <ul class="spec">
       <li><span class="k">解析失败</span><span class="v"><code>JsonHelper</code> 目前吞掉 <code>JsonException</code> 返回 null，手改一个逗号就会静默变成"整目录没有匹配"。存储改为返回 <code>(profile, error)</code>，顶部展示行号与"打开编辑器修复"</span></li>
-      <li><span class="k">目录移动 / 盘符变化</span><span class="v"><code>pathKey</code> 失效；用 <code>scope.signature</code> 列出候选档案让用户一键重挂，或直接导入 <code>&lt;目录名&gt;.audio.json</code></span></li>
-      <li><span class="k">同目录多窗口</span><span class="v">一本书一窗口、多窗口同目录都允许：独占锁 + 重读 + 按 <code>books[文件名]</code> 合并，只 patch 自己的书节点；同页冲突后写覆盖并记日志</span></li>
-      <li><span class="k">书改名</span><span class="v">文件名 key 找不到时按 <code>fingerprint</code> 匹配旧分区，确认后把 key 改成新文件名，绑定与模式不丢</span></li>
-      <li><span class="k">书移到别的目录</span><span class="v">目录主键变化，配置不会自动跟随；提示"从源目录档导入本书"，按 <code>fingerprint</code> 找到旧分区后复制到新目录档</span></li>
+      <li><span class="k">目录移动 / 盘符变化</span><span class="v"><code>pathKey</code> 失效；按文件重叠率 &gt; 80% 列候选让用户一键重挂（见上），或直接导入 <code>&lt;目录名&gt;.audio.json</code></span></li>
+      <li><span class="k">同目录多窗口</span><span class="v">一本书一窗口、多窗口同目录都允许：进程内按 <code>pathKey</code> 串行 + 重读 + 按 <code>books[文件名]</code> 合并，只 patch 自己的书节点；同页冲突后写覆盖并记日志</span></li>
+      <li><span class="k">书改名</span><span class="v">文件名 key 找不到时按 <code>quickFingerprint</code> + <code>fullFingerprint</code> 匹配旧分区，确认后把 key 改成新文件名，绑定与模式不丢</span></li>
+      <li><span class="k">导入同名不同书</span><span class="v">目录档里已有同名 key、但 <code>fullFingerprint</code> 不同：提示"同名不同书"，给三个选项——覆盖 / 另存为副本（key 加后缀）/ 跳过。不静默覆盖</span></li>
+      <li><span class="k">书移到别的目录</span><span class="v">目录主键变化，配置不会自动跟随；提示"从源目录档导入本书"，按 <code>fullFingerprint</code> 找到旧分区后复制到新目录档</span></li>
       <li><span class="k">目录档过大</span><span class="v">书目超过 300 本或文件超过 2MB 时，把各书 <code>cache</code> 拆到 <code>Profiles\Cache\&lt;pathKey&gt;\&lt;book&gt;.json</code>；用户字段仍只在一份主档里</span></li>
       <li><span class="k">跨层目录</span><span class="v">只认直接父目录；多层课程目录想共用规则，本期用"导入目录档"复制，后续再加父目录继承</span></li>
       <li><span class="k">配置不随书</span><span class="v">选了 AppData 就必须接受换机器要导出；提供"批量导出本库所有目录档"与导入时按指纹自动归位</span></li>
+      <li><span class="k">降级与 _legacy</span><span class="v">旧档移入 <code>_legacy</code> 后<b>不自动回退</b>；文档明确"不支持降级到 v1.5 之前"。人工恢复路径：把 <code>_legacy</code> 里的文件拷回 <code>Profiles\</code> 并删掉对应 <code>dir-*.json</code>。升级时在目录档写 <code>"migratedFrom": "v2"</code>，避免重复迁移</span></li>
       <li><span class="k">版本升级</span><span class="v"><code>schemaVersion</code> 由 2 升 3；读取兼容旧单书档，写回只写新结构</span></li>
     </ul>
   </section>
@@ -1343,15 +1415,20 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
       <div class="card" style="border-color:rgba(108,92,231,.35)">
         <div class="n" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent)">主入口 · 播放器中央</div>
         <h4 style="margin-top:6px">⦿ 跟读打点</h4>
-        <p>点击立即进入打点会话：从头播放当前页音频（或从当前进度继续），并把倍速锁到 1.0x、页锁到当前页。再点一次即退出（有未保存内容时确认）。</p>
+        <p>点击立即进入打点会话：从头播放当前页音频（或从当前进度继续），并把页锁到当前页；默认记录 <code>captureSpeed</code>（默认 1.0x），开启"精确打点"时才锁 1.0x。再点一次即退出（有未保存内容时确认）。</p>
         <p style="margin-bottom:0">会话中同一个位置变成红色状态按钮：<b>打断</b> → <b>开始跟读</b> → <b>结束录音</b>，不需要移开鼠标去找别的按钮。</p>
       </div>
       <div class="card">
         <div class="n" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent2)">辅助入口 · 不重复造第三个</div>
         <h4 style="margin-top:6px">F8 与跟读页</h4>
-        <p><b>F8</b>：会话中等于「打断」；不在会话中等于「进入跟读打点」。单键、不与翻页冲突。</p>
+        <p><b>F8</b>：会话中等于「打断」；不在会话中等于「进入跟读打点」。单键、不与翻页冲突；笔记本 Fn 组合需提示。</p>
         <p style="margin-bottom:0"><b>侧栏 · 句子跟读</b>只作为"历史与管理"入口，打开同一个窗口；不再单独放打点按钮，避免三处入口各说各话。</p>
       </div>
+    </div>
+
+    <div class="callout">
+      <div class="t">窄屏断点</div>
+      <p>窗口宽度 <b>≥ 900px</b>：显示完整"⦿ 跟读打点"；<b>720–900px</b>：降级为"⦿ 打点"（图标 + 两字）；<b>&lt; 720px</b>：保留图标，移至播放键正下方第二行，始终不折叠进「⋯」。对应验收 A33。</p>
     </div>
 
     <h3>按钮状态机（看这一张表就知道现在能点什么）</h3>
@@ -1360,10 +1437,10 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
         <thead><tr><th style="width:140px">状态</th><th style="width:250px">播放器上的样子</th><th>可执行动作</th></tr></thead>
         <tbody>
           <tr><td>空闲</td><td>主色胶囊 <b>⦿ 跟读打点</b></td><td>点击进入会话；当前页无音频时置灰并提示"本页未绑定音频"</td></tr>
-          <tr><td>打点中 · 播放</td><td>红色胶囊 <b>● 打点中 · P12 · 3 段</b></td><td>点 = 打断；Esc = 暂停但不记时间戳；倍速控件锁定 1.0x</td></tr>
+          <tr><td>打点中 · 播放</td><td>红色胶囊 <b>● 打点中 · P12 · 3 段</b></td><td>点 = 打断；Esc = 暂停但不记时间戳；开启"精确打点"时倍速锁 1.0x</td></tr>
           <tr><td>已打断 · 待录</td><td>时间戳片 <b>03:24.180</b>，主按钮变 <b>⦿ 开始跟读</b></td><td>开始录音；或点播放跳过本段（保留原声切片，不生成 take）；Esc = 取消本次打断</td></tr>
           <tr><td>录音中</td><td>红色脉冲 <b>■ 结束录音 00:12</b>，播放器静音、进度冻结</td><td>点 = 结束并保存 take；无效录音（&lt;300ms）自动丢弃并提示</td></tr>
-          <tr><td>续播中</td><td>回到 <b>● 打点中 · P12 · 4 段</b>，时间戳条显示最新一段</td><td>继续下一次打断；或点「结束打点」进入切片</td></tr>
+          <tr><td>待录 / 续播</td><td>时间戳片仍在，主按钮给 <b>▶ 续播</b> 与 <b>⦿ 再录</b> 两个</td><td><b>默认不自动续播</b>：反复练同一句时给用户选择；会话设置里可开"自动续播"</td></tr>
           <tr><td>切原声中</td><td>进度条 <b>正在切原声 3/7</b>，按钮禁用</td><td>可取消；已完成的切片保留，未完成的丢弃</td></tr>
           <tr><td>会话结束</td><td>恢复 <b>⦿ 跟读打点</b>，弹出"已生成 7 段原声 · 打开跟读"</td><td>打开跟读窗口；或继续播放原音频</td></tr>
         </tbody>
@@ -1377,6 +1454,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
       <li><span class="k">结束 · 静音</span><span class="v">连续静音 3 秒自动结束（可设 2–5 秒，默认开）；只在有有效语音后生效，避免空录</span></li>
       <li><span class="k">结束 · 上限</span><span class="v">单段最长 60 秒，到时自动停并提示"可再打断细分"</span></li>
       <li><span class="k">取消</span><span class="v">录音中按 Esc = 取消本次录音，不生成 take，时间戳保留可重录</span></li>
+      <li><span class="k">录完是否续播</span><span class="v"><b>默认不自动续播</b>：结束后停在待录态，给「续播」「再录」两个按钮。反复练同一句时自动续播会打断节奏；需要连续跟读时在会话设置里打开"自动续播"（默认关）</span></li>
       <li><span class="k">设备</span><span class="v">录音中拔耳机/切设备：暂停录音并提示"设备已变，请确认麦克风"，不静默续录</span></li>
       <li><span class="k">权限</span><span class="v">首次录音请求麦克风权限；拒绝则按钮禁用并给出系统设置入口，不影响打点本身</span></li>
     </ul>
@@ -1385,7 +1463,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
     <div class="steps">
       <div class="step"><div class="sn">STEP 1</div><div class="st">打断</div><div class="sd">播放中点播放器中央的 <b>打断</b>（或 F8）：立即暂停，记录源音频时间戳 <code>t1</code>，按钮旁显示 <code>03:24.180</code>。</div></div>
       <div class="step"><div class="sn">STEP 2</div><div class="st">跟读</div><div class="sd">点「跟读」开始录音；再点结束（或静音 3 秒自动结束）。录音归属于"刚听完的这一段"。</div></div>
-      <div class="step"><div class="sn">STEP 3</div><div class="st">续播</div><div class="sd">默认录完自动从 <code>t1</code> 继续播放；也可手动点播放。续播不改变已记录的时间戳。</div></div>
+      <div class="step"><div class="sn">STEP 3</div><div class="st">续播</div><div class="sd">默认停在待录态，给「续播」「再录」；点「续播」从 <code>t1</code> 继续播放。续播不改变已记录的时间戳。</div></div>
       <div class="step"><div class="sn">STEP 4</div><div class="st">循环</div><div class="sd">在 <code>t2</code>、<code>t3</code> 再打断、再录。每对相邻时间戳 <code>[t(k-1), tk)</code> 就是一条原声切片。</div></div>
       <div class="step"><div class="sn">STEP 5</div><div class="st">切原声</div><div class="sd">点「结束打点」：后台按时间戳从源文件裁出 WAV 切片，写入该页的 <code>segments.json</code>。</div></div>
       <div class="step"><div class="sn">STEP 6</div><div class="st">练 + 合成</div><div class="sd">跟读窗口直接播切片做参考音；每段可录多次 take，最后把"采用"的 take 按页序拼成成品。</div></div>
@@ -1431,7 +1509,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
       <table>
         <thead><tr><th style="width:130px">对象</th><th style="width:210px">基准</th><th>规则</th></tr></thead>
         <tbody>
-          <tr><td>打断点 t</td><td>源音频时间（ms）</td><td>不是墙钟时间；打点会话强制 1.0x 倍速，关闭"跟随翻页"，否则时间戳会漂移</td></tr>
+          <tr><td>打断点 t</td><td>源音频时间（ms）</td><td>不是墙钟时间；默认记录 <code>captureSpeed</code>（1.0x），变速时按源时间轴换算；打点会话关闭"跟随翻页"，否则时间戳会漂移</td></tr>
           <tr><td>原声切片</td><td><code>[startMs, endMs)</code></td><td>左闭右开，最短 300ms、最长 60s；过短忽略、过长提示可再打断</td></tr>
           <tr><td>跟读 take</td><td>独立录音文件</td><td>不改切片、不改时间戳；每段最多保留 5 次，含时长、得分、创建时间</td></tr>
           <tr><td>成品音频</td><td>切片顺序</td><td>只拼接"采用"的 take；缺 take 的切片跳过并列出，不拿原声顶替</td></tr>
@@ -1446,26 +1524,33 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
         <div class="card" style="padding:0;overflow:hidden">
           <div style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:8px 12px;border-bottom:1px solid var(--rule);background:#FBFBFD">Shadowings/&lt;user&gt;/&lt;hash&gt;/p011.segments.json</div>
           <pre style="margin:0;padding:12px 14px;overflow:auto;font-family:var(--mono);font-size:11px;line-height:1.6;color:#374151;max-height:360px">{
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "pageIndex": 11,
   "source": {
     "trackPath": "audio/Lesson_12.mp3",
     "fingerprint": "9f3c1a…",
     "durationMs": 203400
   },
+  "session": {
+    "id": "ss_20261024_1520",
+    "captureSpeed": 1.0,
+    "lockedPage": true
+  },
   "segments": [
     {
-      "id": "sg_01",
+      "id": "sg_011_7c3a9e21",
       "startMs": 0,
       "endMs": 35700,
       "text": "First, listen to the dialogue.",
-      "slicePath": "slices/sg_01.wav",
+      "textSource": "srt",
+      "slicePath": "slices/sg_011_7c3a9e21.wav",
       "takes": [
         {
-          "id": "tk_02",
-          "path": "takes/p011_sg_01_20261024_153012.wav",
+          "id": "tk_011_7c3a9e21_02",
+          "path": "takes/p011_sg01_20261024_153012.wav",
           "durationMs": 33800,
           "score": 86,
+          "scoreKind": "pronunciation",
           "chosen": true,
           "createdAt": "2026-10-24T15:31:02"
         }
@@ -1476,6 +1561,8 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
     {
       "path": "composed/P012_20261024_153512.wav",
       "segmentCount": 3,
+      "segmentRefs": ["sg_011_7c3a9e21", "sg_011_8d1f02aa", "sg_011_9b7c4410"],
+      "takeRefs": ["tk_011_7c3a9e21_02", "tk_011_8d1f02aa_01", "tk_011_9b7c4410_03"],
       "durationMs": 118400,
       "createdAt": "2026-10-24T15:35:12"
     }
@@ -1486,11 +1573,14 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
       <div>
         <h4 style="margin-top:0">字段约定</h4>
         <ul class="spec">
-          <li><span class="k">slicePath</span><span class="v">相对 Shadowings 根目录；源音频路径仍按配套音频档案解析，不复制源文件</span></li>
+          <li><span class="k">segment.id</span><span class="v"><code>sg_{页码3位}_{uuid8}</code>，例 <code>sg_011_7c3a9e21</code>。由创建方生成，两窗口同页各写各的段不会撞 id；合并时同 id 视为同段，后写覆盖并记日志</span></li>
+          <li><span class="k">slicePath</span><span class="v">相对 Shadowings 根目录；源音频仍按配套音频档案解析，不复制源文件</span></li>
           <li><span class="k">fingerprint</span><span class="v">源音频大小 + 修改时间 + 时长；变化时提示"源已变更，切片可能偏移"</span></li>
-          <li><span class="k">text</span><span class="v">只作标签，不做强制对齐：默认按顺序取本页分句，允许编辑或留空；切片边界由你打断决定，可能与句子边界不一致</span></li>
+          <li><span class="k">text / textSource</span><span class="v"><code>textSource</code> 取值 <code>srt</code> / <code>lrc</code> / <code>ocr</code> / <code>manual</code>。默认优先取同名字幕，取不到再取 OCR 分句；<b>只作标签，不做强制对齐</b>，切片边界仍由打断决定</span></li>
+          <li><span class="k">session.captureSpeed</span><span class="v">打点时的倍速，默认 1.0；允许 0.5–1.5x，切片时按 <code>sourceMs = 起始源ms + (墙钟ms − 起始墙钟ms) × captureSpeed</code> 换算（见下方"切片怎么切"）</span></li>
+          <li><span class="k">scoreKind</span><span class="v"><code>pronunciation</code>（评分器可用）/ <code>reference</code>（声学参考分）。UI 必须标注口径，不能混为一谈</span></li>
           <li><span class="k">chosen</span><span class="v">每段最多一个；自动选最高分，用户手动"采用"后锁定，后续录音不再抢占</span></li>
-          <li><span class="k">composed</span><span class="v">只追加不覆盖；源 take 被删除后历史成品仍保留，清单标注"源已变更"</span></li>
+          <li><span class="k">composed[].segmentRefs / takeRefs</span><span class="v">记录成品引用了哪些段与 take；源 take 被删除后历史成品仍可播放，清单据此标注"源已变更"</span></li>
         </ul>
       </div>
     </div>
@@ -1498,8 +1588,9 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
     <h3>切片怎么切（实现约束）</h3>
     <ul class="spec">
       <li><span class="k">先解码再切</span><span class="v">用 <code>AudioFileReader</code> 读源，统一转 44.1kHz / 16bit / 单声道 WAV 再按采样点裁剪，避免 MP3 帧边界裁不齐</span></li>
-      <li><span class="k">误差预算</span><span class="v">MP3 seek 允许 ±30ms；界面显示的时间戳与实际切片起点差异不得超过 50ms</span></li>
-      <li><span class="k">只读源文件</span><span class="v">绝不改写或移动配套音频；切片缓存 key = 源路径 + 大小 + 修改时间 + <code>[a,b)</code>，命中直接复用</span></li>
+      <li><span class="k">预读与淡入淡出</span><span class="v">每条切片实际读取 <code>[start−50ms, end+50ms]</code>，按采样点裁剪后做 5–10ms 淡入淡出，消除首尾爆音</span></li>
+      <li><span class="k">误差预算</span><span class="v">1.0x 下 ≤ 50ms/段；变速下 ≤ <code>speed × 30ms + 20ms</code>。验收按"首尾无爆音 + 时长误差在预算内"判定，不再只卡 50ms</span></li>
+      <li><span class="k">只读源文件</span><span class="v">绝不改写或移动配套音频；切片缓存 key = 源路径 + 大小 + 修改时间 + <code>[a,b)</code> + captureSpeed，命中直接复用</span></li>
       <li><span class="k">后台执行</span><span class="v">结束打点后逐条切片并落盘，显示进度；中途关闭只丢弃未完成项，已完成保留</span></li>
       <li><span class="k">统一格式</span><span class="v">切片与跟读录音都用 WAV PCM，合成时无需二次转码；需要 MP3 时只在导出阶段编码一次</span></li>
       <li><span class="k">原子写入</span><span class="v">切片写 <code>.part</code> 后改名；<code>segments.json</code> 用现有 <code>JsonHelper</code> 的临时文件替换</span></li>
@@ -1518,9 +1609,10 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
     </div>
     <ul class="spec" style="margin-top:12px">
       <li><span class="k">多次录音</span><span class="v">每段可反复录，保留最近 5 个 take；列表显示"最佳 86 · 本次 78"，可试听、删除、采用</span></li>
-      <li><span class="k">评分</span><span class="v">沿用 <code>IPronunciationScorer</code>；不可用时按录音时长/原声时长的完成度给参考分，并明确标注口径</span></li>
+      <li><span class="k">评分</span><span class="v"><code>IPronunciationScorer</code> 可用且有 <code>text</code> 时走逐词评分；不可用或文本缺失时<b>降级为参考分</b>（时长比 + 停顿次数等声学指标），<code>scoreKind = reference</code>，UI 标注"参考分（非逐词）"。不因缺评分器阻塞练习</span></li>
       <li><span class="k">练习顺序</span><span class="v">默认按切片顺序；支持单段循环、整页连读两种模式，复用现有播放模式枚举</span></li>
       <li><span class="k">重新打点</span><span class="v">重打同一页时先给差异（段数、总时长变化），确认后才替换切片；旧 take 默认保留在历史目录</span></li>
+      <li><span class="k">倍速与时间戳</span><span class="v">打点会话<b>不强制锁 1.0x</b>：允许 0.5–1.5x，记录 <code>session.captureSpeed</code>，切片时按源时间轴换算。开启"精确打点"开关时才锁 1.0x 并置灰倍速。变速下精度标注为 <code>±(speed × 30ms)</code>，不假装和 1.0x 一样准</span></li>
     </ul>
 
     <h3>跟读窗口长什么样</h3>
@@ -1533,7 +1625,8 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
       </div>
       <div class="card">
         <div class="n" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent)">中 · 参考音</div>
-        <p>播放的是原声切片（不是 TTS）。波形 + 进度可拖动，支持 A-B 复读与 0.5–1.5x；顶部明确标注"原声 · P12 · 第 2/7 段"。</p>
+        <p>播放的是原声切片（不是 TTS）。顶部明确标注"原声 · P12 · 第 2/7 段"。</p>
+        <p>进度条可拖动，支持 A-B 复读与 0.5–1.5x。<b>录音结束后</b>显示一条<b>静态波形缩略图</b>（仅用于回放定位与"原声 vs 我的"对比），不做实时频谱、不做均衡器。</p>
         <p style="margin-bottom:0">大按钮：<b>⦿ 录这一句</b>；录完立即出现本次得分与波形对比。</p>
       </div>
       <div class="card">
@@ -1559,6 +1652,17 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
     </div>
     <p>实现上只做一件事：<code>ShadowingStore</code> 继续注入 <code>userId</code>，所有新文件都通过它取路径；<b>不要</b>把切片或 take 写到 <code>Audio\Profiles</code>，也<b>不要</b>给匹配档案加用户目录。</p>
 
+    <div class="callout">
+      <div class="t">progress.json（与 segments.json 同目录、同用户、同锁）</div>
+      <pre style="margin:8px 0 0;padding:10px 12px;background:#FBFBFD;border:1px solid var(--rule);border-radius:8px;overflow:auto;font-family:var(--mono);font-size:11.5px;line-height:1.6;color:#374151">{
+  "schemaVersion": 1,
+  "pages": {
+    "11": { "lastSegmentId": "sg_011_8d1f02aa", "mode": "single-loop", "updatedAt": "..." }
+  }
+}</pre>
+      <p style="margin-top:8px;margin-bottom:0">多窗口并发按 <code>pages[pageIndex]</code> 合并，后写覆盖；与 <code>segments.json</code> 共用同一把 <code>SemaphoreSlim</code>（按 <code>userId + pdfHash</code>）。</p>
+    </div>
+
     <h3>合成成品</h3>
     <div class="table-wrap" style="max-height:none">
       <table>
@@ -1570,7 +1674,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
           <tr><td>格式</td><td>44.1kHz / 16bit / 单声道 WAV</td><td>可选导出 MP3/M4A（MediaFoundation），仅在导出时编码一次</td></tr>
           <tr><td>命名</td><td><code>P{页码3位}_{yyyyMMdd_HHmmss}.wav</code></td><td>例：<code>P012_20261024_153012.wav</code>；重名追加 <code>_2</code>，不覆盖旧成品</td></tr>
           <tr><td>位置</td><td><code>&lt;AppData&gt;\data\Shadowings\&lt;user&gt;\&lt;hash&gt;\composed\</code></td><td>提供"打开所在文件夹"和"另存为"；不默认写进书目录</td></tr>
-          <tr><td>清单</td><td><code>composed</code> 数组</td><td>记录路径、段数、总时长、创建时间；失败只清理临时文件，不写半成品</td></tr>
+          <tr><td>清单</td><td><code>composed</code> 数组</td><td>记录路径、段数、总时长、创建时间、segmentRefs、takeRefs；失败只清理临时文件，不写半成品</td></tr>
         </tbody>
       </table>
     </div>
@@ -1582,7 +1686,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
       <li><span class="k">录音互斥</span><span class="v">录音期间播放器静音、进度停在打断点；结束后从该时间戳续播，避免扬声器串进麦克风</span></li>
       <li><span class="k">音源标签</span><span class="v">跟读窗口播放切片时，底部播放器标签切到"跟读"；关闭窗口后回到"配套音频"，不抢主播放列表</span></li>
       <li><span class="k">用户隔离</span><span class="v">打点会话的所有产物（切片、take、顺序、进度）只写当前用户目录；换用户后同一本书是空白练习记录，但匹配档案照常命中</span></li>
-      <li><span class="k">多窗口</span><span class="v">打点会话按"窗口 + 页"隔离；同页两窗口各写各的段，保存时按 <code>segment.id</code> 合并，冲突后写覆盖并记日志</span></li>
+      <li><span class="k">多窗口</span><span class="v">打点会话按"窗口 + 页"隔离；同页两窗口各写各的段（<code>segment.id</code> 含 uuid8），保存时按 <code>segment.id</code> 合并，冲突后写覆盖并记日志</span></li>
     </ul>
 
     <h3>边界与失败</h3>
@@ -1596,7 +1700,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
           <tr><td>源音频改名 / 移动 / 删除</td><td>切片与成品仍可播放；续播与重新打点禁用，并给"重新定位源文件"入口，定位后时间戳沿用</td></tr>
           <tr><td>设备变化 / 拔耳机</td><td>暂停并保留当前时间戳，不结束会话；恢复后可继续录</td></tr>
           <tr><td>磁盘不足 / 切片失败</td><td>逐条提示失败原因，已成功的切片不回滚；<code>segments.json</code> 只记录成功的条目</td></tr>
-          <tr><td>倍速被调过</td><td>打点会话内倍速控件锁定 1.0x 并置灰；退出后恢复用户原倍速，不用墙钟时间换算</td></tr>
+          <tr><td>倍速被调过</td><td>记录 <code>captureSpeed</code> 并按源时间轴换算切片；只有开启"精确打点"时才锁 1.0x 并置灰。退出会话恢复用户原倍速</td></tr>
         </tbody>
       </table>
     </div>
@@ -1660,12 +1764,15 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
   <!-- ======================== 12 状态机 ======================== -->
   <section id="state">
     <h2><span class="idx">12</span>状态机与实现落点</h2>
-    <p class="sub">播放状态收敛为六个状态、七个命令。所有 UI 只订阅 <code>StateChanged</code> 与 <code>TrackChanged</code>。</p>
+    <p class="sub">播放状态收敛为六个主状态 + 一个试听子状态，命令的迁移关系见下方文字表。所有 UI 只订阅 <code>StateChanged</code> 与 <code>TrackChanged</code>。</p>
 
     <div class="card" style="padding:14px 12px 6px">
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;font-size:11px;color:var(--muted)">
         <span class="chip" style="padding:2px 8px">实线 = 正常流转</span>
         <span class="chip" style="padding:2px 8px">虚线 = 需要异步加载（Next/Prev/Seek 也走 Loading）</span>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.6">
+        <b>Previewing</b>（试听）是 <code>Playing</code> 的子状态：进入时不改变主线，退出后恢复原曲与进度。状态迁移的文字版见下表，SVG 仅供概览。
       </div>
       <svg viewBox="0 0 900 330" width="100%" role="img" aria-label="播放状态机">
         <defs>
@@ -1673,7 +1780,6 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
             <path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/>
           </marker>
         </defs>
-        <!-- nodes -->
         <g font-family="Microsoft YaHei UI, sans-serif" font-size="12">
           <rect x="24" y="118" width="104" height="50" rx="9" fill="#fff" stroke="#E4E7EE"/>
           <text x="76" y="141" text-anchor="middle" fill="#374151" font-weight="700">Idle</text>
@@ -1703,7 +1809,6 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
           <text x="415" y="275" text-anchor="middle" fill="#991B1B" font-weight="700">Error</text>
           <text x="415" y="291" text-anchor="middle" fill="#B91C1C" font-size="10">文件缺失 / 解码失败</text>
         </g>
-        <!-- edges -->
         <g stroke="#94A3B8" fill="none" stroke-width="1.4" marker-end="url(#ar)">
           <path d="M128,143 L172,143"/>
           <path d="M300,143 L344,143"/>
@@ -1733,19 +1838,36 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
       </svg>
     </div>
 
+    <h3>状态迁移表（命令 × 当前状态 → 目标状态）</h3>
+    <div class="table-wrap" style="max-height:none">
+      <table>
+        <thead><tr><th style="width:130px">命令</th><th>Idle</th><th>Loading</th><th>Playing</th><th>PausedByUser</th><th>Ended</th><th>Error</th></tr></thead>
+        <tbody>
+          <tr><td><code>Play()</code></td><td>→ Loading</td><td>忽略（或取消）</td><td>忽略</td><td>→ Playing</td><td>→ Loading（从头）</td><td>→ Loading（重试）</td></tr>
+          <tr><td><code>Pause()</code></td><td>忽略</td><td>取消 → Idle</td><td>→ PausedByUser</td><td>忽略</td><td>忽略</td><td>忽略</td></tr>
+          <tr><td><code>Toggle()</code></td><td>→ Loading</td><td>取消 → Idle</td><td>→ PausedByUser</td><td>→ Playing</td><td>→ Loading（从头）</td><td>→ Loading（重试）</td></tr>
+          <tr><td><code>Next()/Prev()</code></td><td>→ Loading</td><td><code>targetIndex += ±1</code></td><td>淡出 → Loading</td><td>→ Loading（不播）</td><td>→ Loading</td><td>→ Loading</td></tr>
+          <tr><td><code>Seek()</code></td><td>忽略</td><td>忽略（禁用）</td><td>→ Loading → Playing</td><td>→ Loading → PausedByUser</td><td>→ Loading（不播）</td><td>忽略</td></tr>
+          <tr><td><code>Replay()</code></td><td>→ Loading</td><td>忽略</td><td>→ Loading</td><td>→ Loading → Playing</td><td>→ Loading → Playing</td><td>→ Loading</td></tr>
+          <tr><td>自然结束</td><td>—</td><td>—</td><td>→ Ended</td><td>—</td><td>—</td><td>—</td></tr>
+          <tr><td><code>DecodeError</code></td><td>—</td><td>→ Error</td><td>→ Error</td><td>→ Error</td><td>→ Error</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
     <h3>新增 / 调整的类型</h3>
     <div class="table-wrap">
       <table>
         <thead><tr><th style="width:250px">类型</th><th>职责与关键成员</th></tr></thead>
         <tbody>
-          <tr><td><code>PdfAudioPlaybackController</code><br><span style="font-weight:400;color:var(--muted);font-size:11px">新增，窗口级</span></td><td><code>Load(track)</code>、<code>Play/Pause/Toggle</code>、<code>Next/Prev</code>、<code>Seek(TimeSpan)</code>、<code>SetSpeed(double)</code>、<code>State</code>、<code>CurrentTrack</code>、<code>Playlist</code>、<code>StateChanged</code>、<code>TrackChanged</code>；内部维护 <code>generation</code> 丢弃过期回调</td></tr>
+          <tr><td><code>PdfAudioPlaybackController</code><br><span style="font-weight:400;color:var(--muted);font-size:11px">新增，窗口级</span></td><td><code>Load(track)</code>、<code>Play/Pause/Toggle</code>、<code>Next/Prev</code>、<code>Seek(TimeSpan)</code>、<code>SetSpeed(double)</code>、<code>State</code>、<code>CurrentTrack</code>、<code>Playlist</code>、<code>StateChanged</code>、<code>TrackChanged</code>；内部维护 <code>generation</code> 丢弃过期回调；接收 <code>IAudioSource</code>（配套音频 / 整页录音 / 跟读切片）</td></tr>
           <tr><td><code>PdfAudioPlayerBar</code><br><span style="font-weight:400;color:var(--muted);font-size:11px">新增，UserControl</span></td><td>只做渲染与输入转发；不含业务判断；进度拖动采用"预览 + 提交"两段式</td></tr>
           <tr><td><code>PdfAudioLibraryPanel</code><br><span style="font-weight:400;color:var(--muted);font-size:11px">由 PdfAudioPanel 拆分</span></td><td>书籍栏、模式分段、当前页卡片、列表、扫描来源、高级入口；不持有播放按钮</td></tr>
-          <tr><td><code>PdfAudioTrackManager</code><br><span style="font-weight:400;color:var(--muted);font-size:11px">调整</span></td><td>新增 <code>ClearManualOverride(page)</code>、<code>ClearManualOverrides(track)</code>、<code>SetPlaybackScope(scope)</code>、<code>SetSingleAudioFile(path)</code>、<code>CurrentTrack</code>；<code>Move()</code> 改为基于播放列表索引；匹配与播放范围分离，切范围不触发重算</td></tr>
-          <tr><td><code>PdfAudioProfile</code><br><span style="font-weight:400;color:var(--muted);font-size:11px">模型扩展（含迁移）</span></td><td><code>MatchingMode</code>、<code>PlaybackScope</code>、<code>SingleAudioFile</code>、<code>AutoFollowPage</code>（默认 true）、<code>SyncPageOnTrackChange</code>（默认 true）、<code>PlaybackSpeed</code>、<code>LastTrackIndex</code>、<code>TrackPositions</code>；旧档案把 <code>MatchMode=SingleAudio</code> 迁移为 <code>MatchingMode=SingleAudio + PlaybackScope=WholeBook</code>，并加 <code>SchemaVersion</code></td></tr>
-          <tr><td><code>PlaybackDecision</code><br><span style="font-weight:400;color:var(--muted);font-size:11px">新增，纯函数</span></td><td><code>Resolve(scope, follow, wasPlaying, currentPath, targetPath)</code> → <code>None / LoadAndPlay / LoadOnly / StopWithHint</code>；矩阵的每一行都是它的用例，单测覆盖</td></tr>
+          <tr><td><code>PdfAudioTrackManager</code><br><span style="font-weight:400;color:var(--muted);font-size:11px">调整</span></td><td>新增 <code>ClearManualOverride(page)</code>、<code>ClearManualOverrides(track)</code>、<code>SetPlaybackScope(scope)</code>、<code>SetSingleAudioFile(path)</code>、<code>CurrentTrack</code>；<code>Move()</code> 改为基于播放列表索引（累积目标索引）；匹配与播放范围分离，切范围不触发重算</td></tr>
+          <tr><td><code>PdfAudioProfile</code><br><span style="font-weight:400;color:var(--muted);font-size:11px">模型扩展（含迁移）</span></td><td><code>SingleAudioFile</code>、<code>PlaybackScope</code>、<code>AutoFollowPage</code>（默认 true）、<code>SyncPageOnTrackChange</code>（默认 true）、<code>PlaybackSpeed</code>、<code>LastTrackIndex</code>、<code>TrackPositions</code>；旧档案把 <code>MatchMode=SingleAudio</code> 迁移为 <code>SingleAudioFile</code> 非空 + <code>PlaybackScope=WholeBook</code>，并加 <code>SchemaVersion</code></td></tr>
+          <tr><td><code>PlaybackDecision</code><br><span style="font-weight:400;color:var(--muted);font-size:11px">新增，纯函数</span></td><td><code>Resolve(scope, follow, playerState, currentPath, targetPath)</code> → <code>None / LoadOnly / LoadAndPlay / StopWithHint / PreviewExit</code>；矩阵的每一行都是它的用例，单测覆盖</td></tr>
           <tr><td><code>PdfAudioSession</code><br><span style="font-weight:400;color:var(--muted);font-size:11px">新增，窗口级组合根</span></td><td>由 <code>PdfReaderForm</code> 创建并持有：profile、manager、controller、panel、bar；窗口关闭统一 Dispose 并解绑事件。不引入 DI scope 基础设施</td></tr>
-          <tr><td><code>NAudioMediaPlayer</code><br><span style="font-weight:400;color:var(--muted);font-size:11px">补齐</span></td><td>变速按 spike 结果接入（<code>Speed</code> 语义为变速不变调）；<code>Position</code> 可写；<code>State</code> 变化统一上报；<code>Load</code> 失败抛可识别异常</td></tr>
+          <tr><td><code>NAudioMediaPlayer</code><br><span style="font-weight:400;color:var(--muted);font-size:11px">补齐</span></td><td>变速按 spike 结果接入（<code>Speed</code> 语义为变速不变调）；<code>Position</code> 一律对外为源时间；<code>State</code> 变化统一上报；<code>Load</code> 失败抛可识别异常</td></tr>
         </tbody>
       </table>
     </div>
@@ -1754,11 +1876,14 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
     <ul class="spec">
       <li><span class="k">单一真相</span><span class="v">按钮、标题、列表高亮、徽标都来自 controller 事件；禁止在 Click 处理器里直接改 <code>Text</code></span></li>
       <li><span class="k">命令串行</span><span class="v">所有播放命令进入同一条队列；加载未完成时的第二次点击只更新"目标状态"，不产生第二个加载</span></li>
-      <li><span class="k">防抖</span><span class="v">播放/暂停 120ms 内忽略重复触发；上下曲 200ms 内合并（避免连点导致乱序）</span></li>
+      <li><span class="k">播放/暂停防抖</span><span class="v">120ms 内忽略重复触发；<b>加载中点击 = 取消加载</b>并回到 <code>Idle</code>，不吞掉点击。图标在请求期显示转圈，成功才切到 Playing/Paused，失败回退并内联提示（避免"先置相反状态"造成闪烁）</span></li>
+      <li><span class="k">上下曲累积</span><span class="v">连点不合并、不丢弃：每次点击让 <code>targetIndex += ±1</code>，加载完成后一次性跳到 <code>targetIndex</code>。这既避免乱序，也满足"连点 3 次前进 3 条"</span></li>
       <li><span class="k">过期丢弃</span><span class="v"><code>generation++</code> 在每次 Load；回调携带 generation，不匹配则丢弃</span></li>
-      <li><span class="k">翻页判定</span><span class="v">比较规范化路径（<code>Path.GetFullPath</code> + 忽略大小写），相同则不 Load</span></li>
+      <li><span class="k">翻页判定</span><span class="v">比较规范化路径（<code>Path.GetFullPath</code> + 忽略大小写），相同则不 Load；<code>targetPath == null</code> 返回 <code>StopWithHint</code></span></li>
       <li><span class="k">翻页防抖</span><span class="v">翻页后 250ms 计时，期间再翻则重置；只对最终页执行 <code>Resolve</code>，中间页请求直接丢弃</span></li>
-      <li><span class="k">整本守卫</span><span class="v"><code>PlaybackScope == WholeBook</code> 时翻页处理直接 return，杜绝任何重启</span></li>
+      <li><span class="k">切歌淡入淡出</span><span class="v"><code>LoadAndPlay</code> 前对当前曲目做 30ms 淡出，新曲 Load 后 30ms 淡入；<code>PausedByUser</code> 下只换不播，不做淡入</span></li>
+      <li><span class="k">整本守卫</span><span class="v"><code>playbackScope == WholeBook</code> 时翻页处理直接 return，杜绝任何重启</span></li>
+      <li><span class="k">音源统一</span><span class="v">controller 接收 <code>IAudioSource</code>（配套音频 / 整页录音 / 跟读切片），而非只认 <code>AudioTrack</code>；"音源标签"由它驱动，三种音源共用同一状态机</span></li>
       <li><span class="k">焦点隔离</span><span class="v">快捷键先判断焦点归属（输入框 → 不响应；正文 → 保留翻页键；播放器/侧栏 → 媒体键生效）</span></li>
     </ul>
 
@@ -1770,7 +1895,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
           <tr><td>进度回写</td><td>≤ 10 次/秒</td><td>定时器节流后 <code>BeginInvoke</code>；拖动期间停止回写</td></tr>
           <tr><td>列表刷新</td><td>单次 &lt; 16ms</td><td>翻页只改当前行/上一行的绘制状态并 <code>Invalidate(rect)</code>，不重建 Items</td></tr>
           <tr><td>大目录</td><td>800 条以上</td><td>切虚拟模式（<code>VirtualMode</code>），按需取行文本；扫描结果分批合并</td></tr>
-          <tr><td>切歌</td><td>无可感停顿</td><td>预读下一条首帧；<code>Load</code> 与 UI 更新解耦，标题先变、缓冲后进行</td></tr>
+          <tr><td>切歌</td><td>标题先变，缓冲 &lt; 200ms</td><td><code>Load</code> 与 UI 更新解耦：先更新标题/徽标/高亮，再异步 Load。<b>不追求 gapless</b>（<code>WaveOutEvent</code> 单实例不支持无缝），用 30ms 淡入淡出消除接缝感</td></tr>
           <tr><td>内存</td><td>单窗口 &lt; 150MB 增量</td><td>不缓存整段波形；关闭窗口释放 <code>WaveOutEvent</code> 与文件句柄</td></tr>
         </tbody>
       </table>
@@ -1779,17 +1904,20 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
     <h3>持久化与多窗口一致性</h3>
     <ul class="spec">
       <li><span class="k">写入时机</span><span class="v">暂停、切歌、关窗时落盘；不做每秒写入。异常退出最多丢失一个曲目的位置，可接受</span></li>
-      <li><span class="k">冲突策略</span><span class="v">保存前重读目录档，只 patch <code>books[当前书]</code>：手动绑定按 <code>page</code> 合并；目录规则只在用户本次改过时才写；不整份覆盖</span></li>
-      <li><span class="k">并发保护</span><span class="v">同目录档案使用独占文件流 + 重试（3 次，50ms 退避）；A 书与 B 书同时保存互不影响</span></li>
-      <li><span class="k">多窗口播放</span><span class="v">允许同时出声；打开新窗口不抢占正在播放的窗口，也不自动暂停它</span></li>
-      <li><span class="k">版本迁移</span><span class="v"><code>SchemaVersion</code> 递增；旧档案读取时补默认值，写回前不破坏未知字段</span></li>
+      <li><span class="k">进程内串行</span><span class="v">按 <code>pathKey</code> 维护 <code>SemaphoreSlim(1,1)</code>，同进程多窗口保存串行化，避免互踩</span></li>
+      <li><span class="k">原子替换</span><span class="v">读时 <code>FileShare.ReadWrite</code> 不长期独占；写时 temp 文件 + <code>File.Replace</code> 原子替换，失败重试 3 次（50ms 退避）</span></li>
+      <li><span class="k">冲突策略</span><span class="v">保存前重读目录档，只 patch <code>books[当前书]</code>：<code>overrides</code> 按 <code>page</code> 合并；<code>rulePatch</code> 按 <code>id</code> 合并；不整份覆盖。同页冲突后写覆盖并记日志</span></li>
+      <li><span class="k">Position 语义</span><span class="v">对外 <code>Position</code> 一律为<b>源时间</b>；内部按 <code>outputTime = sourceTime / speed</code> 换算。变速后 seek 精度需在 spike 中验证并记录</span></li>
+      <li><span class="k">多窗口播放</span><span class="v">允许同时出声；打开新窗口不抢占正在播放的窗口。检测到"同 <code>pathKey</code> + 同 <code>trackPath</code> 且另一窗口在播"时给非阻塞提示，不强制暂停</span></li>
+      <li><span class="k">窗口查找</span><span class="v"><code>WindowManager</code> 提供 <code>GetWindows&lt;T&gt;()</code> 与 <code>GetActive&lt;T&gt;()</code>；打开对话框前缓存 owner 引用并检查 <code>IsDisposed</code>，避免"激活窗口在打开瞬间变化"</span></li>
+      <li><span class="k">版本迁移</span><span class="v"><code>SchemaVersion</code> 3；旧档读入后补默认值、按 <code>singleAudio</code> 归一化 <code>playbackScope</code>、把 <code>rulesOverride</code> 转为 <code>rulePatch</code>，写回前不破坏未知字段</span></li>
     </ul>
   </section>
 
   <!-- ======================== 13 验收 ======================== -->
   <section id="acceptance">
     <h2><span class="idx">13</span>验收清单</h2>
-    <p class="sub">A1–A24 对应你列出的痛点与匹配档案；A25–A34 对应跟读闭环与入口澄清；A35–A40 对应目录级主键的共享、分区、并发与迁移。可逐条点击验证。</p>
+    <p class="sub">按模块分组，每条带阶段标签（P-1 / P0 / P1 / P2 / P3）。P-1 发布时只需 A2、A3、A10 全绿；其余按阶段推进。</p>
 
     <div class="table-wrap" style="max-height:none">
       <table>
@@ -1797,7 +1925,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
         <tbody>
           <tr><td>A1</td><td>点击倍速胶囊，选择 1.5x</td><td>立即生效，音高不变；关闭重开书籍仍是 1.5x</td></tr>
           <tr><td>A2</td><td>播放中单击暂停，再单击播放</td><td>每次单击都生效，无需第二下；图标与真实状态一致</td></tr>
-          <tr><td>A3</td><td>连续点下一曲 3 次</td><td>标题、页码徽标、列表高亮同步前进 3 条；到达末尾时按钮禁用，不出现"原曲名"</td></tr>
+          <tr><td>A3</td><td>连续点下一曲 3 次（间隔 150ms）</td><td>标题、页码徽标、列表高亮<b>同步前进 3 条</b>（累积目标索引，不合并、不丢弃）；到达末尾时按钮禁用，不出现"原曲名"</td></tr>
           <tr><td>A4</td><td>拖动进度条到 70%</td><td>拖动中只预览，松手后从 70% 播放；暂停状态拖动后保持暂停</td></tr>
           <tr><td>A5</td><td>按页模式翻页（目标页有音频）</td><td>切到目标页音频并从头播放；同一音频覆盖多页时不重启</td></tr>
           <tr><td>A6</td><td>整篇单音频模式翻页</td><td>列表始终 1 条"全篇"；翻任何页都不切歌、不重启、不闪断</td></tr>
@@ -1808,26 +1936,27 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
           <tr><td>A11</td><td>只配置一本普通命名的书</td><td>无需接触任何规则按钮即可正确匹配；未匹配页可在当前页卡片逐个绑定</td></tr>
           <tr><td>A12</td><td>关闭"跟随翻页"后翻页</td><td>音频完全不动；播放器显示"跟随已关闭"</td></tr>
           <tr><td>A13</td><td>快速连翻 5 页后停住</td><td>只播放最终页音频；中途无连续切歌、无杂音、无界面卡顿</td></tr>
-          <tr><td>A14</td><td>点下一曲跨到 P18</td><td>默认状态下正文同步翻到 P18；关闭"切曲同步翻页"后正文不动</td></tr>
+          <tr><td>A14</td><td>点下一曲跨到 P18</td><td>默认状态下正文同步翻到 P18；关闭"切歌同步页码"后正文不动</td></tr>
           <tr><td>A15</td><td>焦点在正文按 Space；焦点在播放器按 Space</td><td>前者翻页，后者播放/暂停；Ctrl+Space 在任何位置都能切换播放</td></tr>
           <tr><td>A16</td><td>播放中把音频文件改名或删除</td><td>播放器内联提示"文件缺失 · 重新定位"，可点"换文件"恢复；不弹模态框、不崩溃</td></tr>
-          <tr><td>A17</td><td>拔掉耳机 / 切默认输出设备</td><td>自动暂停并提示设备变化，点播放后从原位置继续；不清空状态</td></tr>
+          <tr><td>A17</td><td>拔掉耳机 / 切默认输出设备</td><td><b>P1</b>：检测到非用户操作的 <code>PlaybackStopped</code> 时提示"设备可能变化"，点播放后从原位置继续；<b>P2</b>：接入 <code>IMMNotificationClient</code> 后自动暂停并提示。不清空状态</td></tr>
           <tr><td>A18</td><td>窗口缩窄到侧栏最小宽、125%/150% DPI</td><td>播放器三栏不重叠、不截断；书名与曲名按省略号处理，悬停可看全</td></tr>
-          <tr><td>A19</td><td>同一本书在两个窗口各改一页绑定后保存</td><td>两处修改都保留；档案未损坏，重新打开两窗口一致</td></tr>
+          <tr><td>A19a</td><td>同一本书在两个窗口各改<b>不同页</b>的绑定后保存</td><td>两处修改都保留；档案未损坏，重新打开两窗口一致</td></tr>
+          <tr><td>A19b</td><td>同一本书在两个窗口改<b>同一页</b>的绑定后依次保存</td><td>后写覆盖；日志记录冲突页与时间；档案未损坏</td></tr>
           <tr><td>A20</td><td>在面板导出匹配文件，删除 AppData 档案后重新打开再导入</td><td>规则、手动绑定、模式、外部目录全部恢复；无需重新配置</td></tr>
           <tr><td>A21</td><td>导入另一个目录下的 <code>.audio.json</code></td><td>先显示差异预览（新增/变更/失效条目数），确认后才写入；取消则档案不变</td></tr>
           <tr><td>A22</td><td>手工编辑导出的 JSON，删掉一个逗号后导入</td><td>提示"第 N 行解析失败"并保留原档案；不出现"静默清空匹配"</td></tr>
           <tr><td>A23</td><td>在表格编辑器改一条规则并保存，随后重新扫描目录</td><td>仅用户字段被写回；曲目缓存、指纹、页码索引由程序重算，不覆盖手改内容</td></tr>
           <tr><td>A24</td><td>把 PDF 连同音频整体移动到新目录后打开</td><td>按指纹重挂档案，规则与手动绑定仍生效；提示"路径已变更"</td></tr>
           <tr><td>A25</td><td>播放中点「打断」</td><td>立即停在该毫秒位置并显示时间戳；不翻页、不切曲；点播放从同一点续播</td></tr>
-          <tr><td>A26</td><td>打断 → 跟读 → 自动续播，重复 3 次后点「结束打点」</td><td>生成 3 条原声切片；各段时长之和与总播放时长误差 ≤ 50ms/段</td></tr>
+          <tr><td>A26</td><td>打断 → 跟读 → 续播，重复 3 次后点「结束打点」</td><td>生成 3 条原声切片；各段时长之和与总播放时长误差 ≤ 50ms/段</td></tr>
           <tr><td>A27</td><td>打开跟读窗口（本页已打点）</td><td>列表为原声切片，播放的是切片文件；日志中无 TTS 调用；无切片页回退合成并明确标注</td></tr>
           <tr><td>A28</td><td>同一段连录 3 次</td><td>保留 3 个 take，自动采用最高分；手动采用后不被自动改；删除 take 同时删除音频文件</td></tr>
           <tr><td>A29</td><td>点「合成」生成成品</td><td>按页序拼接采用 take，句间 200ms；文件名形如 <code>P012_20261024_153012.wav</code>；时长正确、无爆音</td></tr>
           <tr><td>A30</td><td>打点中翻页 / 切书 / 关窗</td><td>翻页只提示不切歌；切书弹确认并保存已完成切片；关窗后重开，已完成切片仍在</td></tr>
           <tr><td>A31</td><td>打点后把源音频改名或移动</td><td>切片与成品仍可播放；续播与重打禁用并提示重新定位；定位后时间戳沿用</td></tr>
           <tr><td>A32</td><td>换一个用户打开同一本 PDF</td><td>匹配档案、规则与手动绑定仍生效；跟读记录为空，看不到上一用户的 take 与进度</td></tr>
-          <tr><td>A33</td><td>窗口缩窄到最小宽度</td><td>「跟读打点」主按钮仍在传输区可见，倍速/音量先收进「⋯」</td></tr>
+          <tr><td>A33</td><td>窗口缩窄到最小宽度</td><td>「跟读打点」主按钮仍在传输区可见（按 10 节窄屏断点降级），倍速/音量先收进「⋯」</td></tr>
           <tr><td>A34</td><td>文件名不含数字，如 <code>intro.mp3</code></td><td>该音频不参与自动匹配，相关页标红为"未匹配"；可手动绑定，不猜测页码</td></tr>
           <tr><td>A35</td><td>同目录打开书 A 写一条规则，再打开书 B</td><td>B 打开即按 A 的规则完成匹配，无需再配；规则表显示"来自目录"</td></tr>
           <tr><td>A36</td><td>书 A 把第 12 页绑到慢速音频，再打开书 B 的第 12 页</td><td>B 第 12 页仍是自动匹配结果；A 的绑定只出现在 A 的分区</td></tr>
@@ -1835,6 +1964,12 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
           <tr><td>A38</td><td>带旧的一书一档升级后打开该目录</td><td>自动合并成目录档，各书模式与手动绑定保留；旧档移入 <code>_legacy</code>；再打开不重复迁移</td></tr>
           <tr><td>A39</td><td>导出 <code>&lt;目录名&gt;.audio.json</code>，删除本地档案后重新导入</td><td>规则、来源、全部书的模式与绑定恢复；缓存重新扫描生成</td></tr>
           <tr><td>A40</td><td>把书 A 改名后打开</td><td>按指纹找回旧分区并提示"检测到改名"，确认后 key 更新，绑定不丢</td></tr>
+          <tr><td>A41</td><td>档案中同时存在 <code>singleAudio</code> 非空与 <code>playbackScope=FollowPage</code></td><td>打开书时自动纠正为 <code>WholeBook</code>，提示一次"已按整篇模式修正播放范围"，不报错、不阻断</td></tr>
+          <tr><td>A42</td><td>书级 <code>rulePatch.disabledRuleIds</code> 禁用目录一条规则，之后目录再改这条规则</td><td>本书仍禁用；其他书跟随目录新规则；<code>replaceAll=true</code> 的书完全不受目录影响</td></tr>
+          <tr><td>A43</td><td>AI 匹配批量写入后再看列表</td><td>AI 项与手动项视觉可区分；可一键"清除全部 AI 绑定"，手动项不受影响</td></tr>
+          <tr><td>A44</td><td>试听另一首曲目后关闭试听</td><td>回到原曲与暂停前进度；试听期间翻页不切音频</td></tr>
+          <tr><td>A45</td><td>0.75x 下打断打点并切片</td><td>切片时长与源音频对应段一致（误差 ≤ <code>0.75×30+20</code> ms），首尾无爆音；<code>captureSpeed</code> 记录为 0.75</td></tr>
+          <tr><td>A46</td><td>同目录打开两本书、各录同一页跟读</td><td><code>segment.id</code> 不冲突（各含 uuid8）；两用户视角看不到对方 take</td></tr>
         </tbody>
       </table>
     </div>
@@ -1850,6 +1985,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
         <div class="n" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ok)">P-1 · 先修锁定性缺陷（独立可发布）</div>
         <h4 style="margin-top:6px">不动架构，先止血</h4>
         <ul style="font-size:12.5px;color:var(--muted);padding-left:18px;margin-bottom:0">
+          <li>复现多窗口卡死并打点日志，确认 owner 缺失链路（0.5 天）</li>
           <li>窗口注册表 <code>Dictionary&lt;Type, Form&gt;</code> → <code>List&lt;Form&gt;</code></li>
           <li><code>Move()</code> 改按播放列表索引 + 切曲后强制刷新标题/高亮</li>
           <li>暂停/播放改为幂等命令，先消掉"点两下"</li>
@@ -1866,6 +2002,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
           <li><code>PlaybackDecision</code> 纯函数 + 单测</li>
           <li>翻页防抖 250ms + 路径比较</li>
           <li>焦点隔离的快捷键</li>
+          <li>上下曲累积目标索引（替换合并语义）</li>
         </ul>
       </div>
     </div>
@@ -1876,73 +2013,82 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
         <h4 style="margin-top:6px">面板与切书</h4>
         <ul style="font-size:12.5px;color:var(--muted);padding-left:18px;margin-bottom:0">
           <li>拆出 <code>PdfAudioLibraryPanel</code></li>
-          <li>匹配模式 / 播放范围双字段 + 档案迁移</li>
-          <li>跟随翻页、切曲同步翻页两个开关</li>
+          <li>matching 派生字段 + playbackScope + 非法组合纠正</li>
+          <li>跟随翻页、切歌同步页码两个开关（双开关独立）</li>
           <li>当前页卡片 / 三档清除</li>
           <li>书籍栏与播放器书名菜单</li>
           <li>规则按钮收敛为三入口</li>
           <li>档案存储改为<b>目录级主键</b> + <code>books</code> 书分区（含旧档迁移）</li>
+          <li>quickFingerprint + 异步 fullFingerprint</li>
+          <li>overrides 对象化（source: manual/ai）+ AI 绑定一键清除</li>
           <li>匹配档案导入 / 导出（目录档 + 单书档）+ 差异预览</li>
+          <li>空态引导（无音频/无规则三步走）</li>
+          <li>切歌淡入淡出 30ms</li>
         </ul>
       </div>
       <div class="card">
         <div class="n" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent)">P2 · 稳定性与体验</div>
         <h4 style="margin-top:6px">一致性与规则抽屉</h4>
         <ul style="font-size:12.5px;color:var(--muted);padding-left:18px;margin-bottom:0">
-          <li>目录档合并写入 + 文件锁 + <code>schemaVersion</code> 3</li>
+          <li>目录档合并写入 + 进程内 SemaphoreSlim + File.Replace</li>
+          <li><code>rulePatch</code> 增量补丁（替代 rulesOverride）</li>
           <li>目录字段 / 书字段 / 机器缓存三层分离，保存走 <code>JsonNode</code> 字段级 patch</li>
           <li>解析错误可见（行号 + 保留原档案），不再静默降级</li>
-          <li>按 <code>scope.signature</code> 重挂目录、按 <code>fingerprint</code> 找回改名书</li>
+          <li>按文件重叠率 &gt; 80% 重挂目录、按 quick+fullFingerprint 找回改名书</li>
           <li>性能预算落地（10Hz、增量刷新、虚拟列表）</li>
-          <li>规则抽屉（预览式）</li>
+          <li>规则抽屉（预览式）；优先级用数字 + 上/下移（拖拽列 P3）</li>
           <li>按本书记忆进度/倍速</li>
           <li>A-B 复读迁入播放器更多菜单</li>
-          <li>设备变化 / 文件缺失的恢复路径</li>
+          <li>设备变化完整监听（P1 先做提示）</li>
         </ul>
       </div>
     </div>
 
     <div class="card" style="margin-top:14px;border-color:rgba(37,99,235,.28)">
-      <div class="n" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent2)">P3 · 跟读闭环（v1.3 新增 / v1.4 入口前移，依赖 P0 播放器）</div>
+      <div class="n" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent2)">P3 · 跟读闭环（依赖 P0 播放器）</div>
       <h4 style="margin-top:6px">打断打点 → 原声切片 → 多次录音 → 合成成品</h4>
       <div class="grid2" style="margin-top:4px;gap:18px">
         <ul style="font-size:12.5px;color:var(--muted);padding-left:18px;margin-bottom:0">
-          <li>新增 <code>AudioSliceService</code>：解码、按采样点裁剪、缓存与进度</li>
-          <li>播放器中央主按钮 + 状态机（打断/录音/续播，1.0x 与页锁）</li>
+          <li>新增 <code>AudioSliceService</code>：解码、预读 50ms、淡入淡出、缓存与进度</li>
+          <li>播放器中央主按钮 + 状态机（打断/录音/待录续播/1.0x 可选锁）</li>
           <li><code>ShadowingSegmentStore</code> + <code>p{page}.segments.json</code>（按用户）</li>
+          <li><code>segment.id = sg_{page}_{uuid8}</code>，多窗口同页不撞</li>
         </ul>
         <ul style="font-size:12.5px;color:var(--muted);padding-left:18px;margin-bottom:0">
-          <li>跟读窗口改为切片参考音 + take 管理（试听/删除/采用/评分）</li>
-          <li><code>ShadowingComposeService</code>：拼接、句间静音、命名与清单</li>
-          <li>无切片回退 TTS，界面明确标注音源</li>
+          <li>跟读窗口改为切片参考音 + take 管理（试听/删除/采用/评分口径）</li>
+          <li>录音结束后静态波形缩略图（不做实时频谱）</li>
+          <li><code>ShadowingComposeService</code>：拼接、句间静音、命名与清单（含 segmentRefs/takeRefs）</li>
+          <li><code>progress.json</code> 与 segments 同锁；无切片回退 TTS 并明确标注</li>
         </ul>
       </div>
     </div>
 
     <div class="callout" style="margin-top:18px">
       <div class="t">主要改动文件（预估）</div>
-      <p>档案层另涉及：新增 <code>Core/Models/Pdf/PdfAudioDirectoryProfile.cs</code>（目录档 + 书分区 DTO）；改造 <code>Core/Services/Pdf/Audio/PdfAudioProfileStore.cs</code>（目录 hash、按书 patch、旧档迁移）、<code>WinApp/Managers/Pdf/PdfAudioTrackManager.cs</code>（先取目录档再取书分区）。</p>
+      <p>档案层另涉及：新增 <code>Core/Models/Pdf/PdfAudioDirectoryProfile.cs</code>（目录档 + 书分区 DTO）；改造 <code>Core/Services/Pdf/Audio/PdfAudioProfileStore.cs</code>（目录 hash、按书 patch、旧档迁移、quick/fullFingerprint）、<code>WinApp/Managers/Pdf/PdfAudioTrackManager.cs</code>（先取目录档再取书分区）。</p>
       <p style="margin-top:8px">播放与界面另涉及：<code>WinApp/Forms/Pdf/PdfAudioPanel.cs</code>（拆分）、新增 <code>PdfAudioPlayerBar.cs</code>、<code>WinApp/Platform/Media/NAudioMediaPlayer.cs</code>、<code>Core/Models/Pdf/PdfAudioProfile.cs</code>、<code>Core/Common/Json/JsonHelper.cs</code>（错误上报）、<code>WinApp/Managers/Core/WindowManager.cs</code>、<code>WinApp/Forms/Pdf/PdfAudioRuleDialog.cs</code>（改为抽屉）、<code>WinApp/Forms/Pdf/PdfReaderForm.cs</code>（播放器挂载与翻页联动）。</p>
       <p style="margin-top:8px">跟读闭环另涉及：新增 <code>Core/Services/Shadowing/AudioSliceService.cs</code>、<code>ShadowingSegmentStore.cs</code>、<code>ShadowingComposeService.cs</code>；改造 <code>WinApp/Forms/Pdf/SentenceShadowingForm.cs</code>、<code>WinApp/Services/Shadowing/ShadowingPracticeService.cs</code>（合成音降为回退）、<code>WinApp/Services/Pdf/NAudioRecorderService.cs</code>（take 命名与归属）。</p>
     </div>
 
     <h3>明确不做</h3>
     <ul>
-      <li>不做波形图、频谱、均衡器：与"听书"目标无关，增加渲染与解码负担。</li>
+      <li>不做实时频谱、均衡器：与"听书"目标无关，增加渲染与解码负担。跟读窗口允许在录音后显示<b>静态波形缩略图</b>（定位与对比用），不算"做波形图"。</li>
       <li>不做跨窗口共享播放：多开是并排对照，各窗口独立才是正确预期。</li>
       <li>不做云端同步：本轮只解决本地交互与状态一致性。</li>
       <li>不把播放器做成浮动、可停靠面板：增加布局复杂度，底部固定条已满足需求。</li>
       <li>不做自动 VAD 断句或强制对齐：切片边界只来自用户打断，算法不替用户决定句子在哪结束。</li>
+      <li>不追求 gapless 切歌：<code>WaveOutEvent</code> 单实例不支持无缝，用 30ms 淡入淡出消除接缝感即可。</li>
+      <li>不支持降级到 v1.5 之前：旧档移入 <code>_legacy</code> 仅作人工恢复。</li>
     </ul>
   </section>
 
   <!-- ======================== 15 待确认 ======================== -->
   <section id="open">
     <h2><span class="idx">15</span>仍需你拍板的三个默认值</h2>
-    <p class="sub">其余交互都已由模式和优先级推导得出。匹配档案的存储与编辑方式、<b>目录级主键</b>（规则目录共享、绑定分书保存）、跟读数据按用户隔离、打点入口位置均已定稿，不再列入待拍板；下面三项才是产品取向问题。</p>
+    <p class="sub">其余交互都已由模式和优先级推导得出。匹配档案的存储与编辑方式、<b>目录级主键</b>（规则目录共享、绑定分书保存）、跟读数据按用户隔离、打点入口位置、双开关语义均已定稿，不再列入待拍板；下面三项才是产品取向问题。</p>
     <div class="grid3">
       <div class="card">
-        <h4>1. 切曲是否同步翻页</h4>
+        <h4>1. 切歌是否同步翻页</h4>
         <p>方案默认<b>开启</b>（播放器与正文始终一致，适合顺序听课）。若你更常"听 A 页、看 B 页"，应默认关闭。</p>
       </div>
       <div class="card">
@@ -1957,12 +2103,12 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
 
     <div class="callout ok" style="margin-top:20px">
       <div class="t">一句话总结</div>
-      <p>底部一条播放器负责"听得好"，侧栏一块面板负责"配得清"，两者共享一个状态机；翻页只在"同一页音频变化"时动作，整篇单音频永不切换；所有模态框都归属当前窗口。</p>
+      <p>底部一条播放器负责"听得好"，侧栏一块面板负责"配得清"，两者共享一个状态机；翻页只在"同一页音频变化"时动作，整篇单音频永不切换；所有模态框都归属当前窗口；跟读原声只由用户打断产生。</p>
     </div>
   </section>
 
   <footer>
-    <p>文档：PDF 配套音频模块重设计方案 · v1.5 · 依据当前代码结构、反馈与四轮修订整理；v1.2 增补匹配档案，v1.3 增补跟读闭环，v1.4 前移打点入口并补全匹配原理，v1.5 将档案改为目录级主键。</p>
+    <p>文档：PDF 配套音频模块重设计方案 · v1.6 · 依据当前代码结构、反馈与五轮修订整理；v1.2 增补匹配档案，v1.3 增补跟读闭环，v1.4 前移打点入口并补全匹配原理，v1.5 将档案改为目录级主键，v1.6 应用审查修订（派生字段 / rulePatch / 对象化 overrides / 状态迁移表 / 双开关独立 / Previewing 子状态）。</p>
     <p>涉及模块：PDF 阅读器 · 配套音频 · 整页录音 · 句子跟读 · 窗口管理。</p>
   </footer>
 </div>
