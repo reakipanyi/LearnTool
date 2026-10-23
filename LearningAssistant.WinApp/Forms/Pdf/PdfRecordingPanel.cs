@@ -64,6 +64,10 @@ public partial class PdfRecordingPanel : UserControl
 
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button RenameButton => renameButton;
+
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Button GenerateSummaryButton => generateSummaryButton;
 
     [Browsable(false)]

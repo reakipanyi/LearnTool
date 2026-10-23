@@ -32,6 +32,8 @@ namespace LearningAssistant.Managers
         private Button _buttonStop;
         private Button _buttonPlay;
         private Button _buttonDelete;
+        private Button _buttonRename;
+        private Label _labelListTitle;
         private Label _labelTime;
         private TrackBar _trackBarPosition;
         private Panel _levelMeter;
@@ -141,6 +143,10 @@ namespace LearningAssistant.Managers
 
             _buttonDelete = _panel.DeleteButton;
             _buttonDelete.Click += _buttonDelete_Click;
+            _buttonRename = _panel.RenameButton;
+            _buttonRename.Click += _buttonRename_Click;
+            _buttonRename.Enabled = false;
+            _labelListTitle = _panel.ListTitle;
             _buttonGenerateSummary = _panel.GenerateSummaryButton;
             _buttonGenerateSummary.Click += ButtonGenerateSummary_Click;
 
@@ -239,6 +245,12 @@ namespace LearningAssistant.Managers
         {
             if (_listRecordings.SelectedItem is AudioRecording selected)
             {
+                string label = string.IsNullOrEmpty(selected.Label)
+                    ? $"录音 {selected.CreatedAt:HH:mm:ss}"
+                    : selected.Label;
+                if (!_form.ShowConfirm($"确定删除「{label}」？删除后无法恢复。", "删除录音"))
+                    return;
+
                 if (_isPlaying && _playbackReader != null &&
                     _playbackReader.FileName == selected.FilePath)
                     StopPlayback();
@@ -258,6 +270,37 @@ namespace LearningAssistant.Managers
                 RefreshRecordingList();
                 _form.ShowMessage("录音已删除", "删除成功");
             }
+        }
+
+        /// <summary>重命名选中的录音，名称随录音清单持久化。</summary>
+        private void _buttonRename_Click(object? sender, EventArgs e)
+        {
+            if (_listRecordings.SelectedItem is not AudioRecording selected)
+            {
+                _form.ShowWarning("请先选择一条录音");
+                return;
+            }
+
+            string current = string.IsNullOrEmpty(selected.Label)
+                ? $"录音 {selected.CreatedAt:HH:mm:ss}"
+                : selected.Label;
+            using var dialog = new LearningAssistant.Platform.InputDialog("重命名录音", current);
+            dialog.StartPosition = FormStartPosition.CenterParent;
+            if (dialog.ShowDialog(_form.Form) != DialogResult.OK)
+                return;
+
+            string newLabel = dialog.Value?.Trim() ?? string.Empty;
+            if (string.IsNullOrEmpty(newLabel))
+            {
+                _form.ShowWarning("录音名称不能为空");
+                return;
+            }
+
+            selected.Label = newLabel;
+            SaveRecordings();
+            RefreshRecordingList();
+            _labelStatus.Text = "已重命名";
+            _labelStatus.ForeColor = _textColor;
         }
 
         private void OnRecordingCompleted(object? sender, AudioRecording recording)
@@ -849,6 +892,10 @@ namespace LearningAssistant.Managers
                 _listRecordings.Items.Add(r);
 
             _buttonPlay.Enabled = _listRecordings.SelectedItem != null && _recorder.State == AudioRecorderState.Idle;
+            if (_buttonRename != null)
+                _buttonRename.Enabled = _listRecordings.SelectedItem != null;
+            if (_labelListTitle != null)
+                _labelListTitle.Text = $"录音列表（{_recordings.Count}）";
         }
 
         private void ListRecordings_DrawItem(object? sender, DrawItemEventArgs e)
@@ -880,6 +927,8 @@ namespace LearningAssistant.Managers
         private void ListRecordings_SelectedIndexChanged(object? sender, EventArgs e)
         {
             _buttonPlay.Enabled = _listRecordings.SelectedItem != null && _recorder.State == AudioRecorderState.Idle;
+            if (_buttonRename != null)
+                _buttonRename.Enabled = _listRecordings.SelectedItem != null;
         }
 
         private void ListRecordings_MouseDoubleClick(object? sender, MouseEventArgs e)

@@ -26,6 +26,7 @@ partial class PdfRecordingPanel
         recordingsList = new ListBox();
         actionsPanel = new Panel();
         deleteButton = new Button();
+        renameButton = new Button();
         generateSummaryButton = new Button();
         timestampsTitle = new Label();
         noTimestampsLabel = new Label();
@@ -248,6 +249,7 @@ partial class PdfRecordingPanel
         // actionsPanel
         // 
         actionsPanel.Controls.Add(deleteButton);
+        actionsPanel.Controls.Add(renameButton);
         actionsPanel.Controls.Add(generateSummaryButton);
         actionsPanel.Dock = DockStyle.Fill;
         actionsPanel.Location = new Point(12, 513);
@@ -272,6 +274,21 @@ partial class PdfRecordingPanel
         deleteButton.Text = "删除";
         deleteButton.UseVisualStyleBackColor = false;
         // 
+        // renameButton
+        // 
+        renameButton.BackColor = Color.FromArgb(230, 230, 235);
+        renameButton.Cursor = Cursors.Hand;
+        renameButton.FlatAppearance.BorderSize = 0;
+        renameButton.FlatStyle = FlatStyle.Flat;
+        renameButton.Font = new Font("Microsoft YaHei UI", 9F);
+        renameButton.ForeColor = Color.FromArgb(50, 50, 60);
+        renameButton.Location = new Point(66, 2);
+        renameButton.Name = "renameButton";
+        renameButton.Size = new Size(60, 26);
+        renameButton.TabIndex = 1;
+        renameButton.Text = "重命名";
+        renameButton.UseVisualStyleBackColor = false;
+        // 
         // generateSummaryButton
         // 
         generateSummaryButton.BackColor = Color.FromArgb(25, 118, 210);
@@ -280,7 +297,7 @@ partial class PdfRecordingPanel
         generateSummaryButton.FlatStyle = FlatStyle.Flat;
         generateSummaryButton.Font = new Font("Microsoft YaHei UI", 9F);
         generateSummaryButton.ForeColor = Color.White;
-        generateSummaryButton.Location = new Point(66, 2);
+        generateSummaryButton.Location = new Point(132, 2);
         generateSummaryButton.Name = "generateSummaryButton";
         generateSummaryButton.Size = new Size(72, 26);
         generateSummaryButton.TabIndex = 1;
@@ -400,6 +417,7 @@ partial class PdfRecordingPanel
     private ListBox recordingsList;
     private Panel actionsPanel;
     private Button deleteButton;
+    private Button renameButton;
     private Button generateSummaryButton;
     private Label timestampsTitle;
     private Label noTimestampsLabel;
