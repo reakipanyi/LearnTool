@@ -8,9 +8,24 @@ namespace LearningAssistant.Forms.Pdf;
 /// <summary>「翻译」侧栏面板：页头 + 原文/译文卡片 + 操作区 + 选项区。</summary>
 public partial class PdfTranslatePanel : UserControl
 {
+    /// <summary>目标语言：显示名与百度翻译语言代码一一对应</summary>
+    private static readonly (string Label, string Code)[] TargetLanguages =
+    {
+        ("自动", "auto"),
+        ("中文", "zh"),
+        ("English", "en"),
+        ("日本語", "jp"),
+        ("한국어", "kor"),
+        ("Français", "fra"),
+        ("Deutsch", "de"),
+        ("Español", "spa"),
+        ("Русский", "ru")
+    };
+
     public PdfTranslatePanel()
     {
         InitializeComponent();
+        InitTargetLanguageOptions();
         // 卡片内容区由面板自行挂载：VS 设计器无法序列化自定义容器的 Body，
         // 放在构造里可保证设计视图与运行期都能看到文本框。
         originalCard.Body.Controls.Add(originalBox);
@@ -21,6 +36,7 @@ public partial class PdfTranslatePanel : UserControl
         _tip.SetToolTip(autoTranslateCheck, "识别后自动翻译原文");
         _tip.SetToolTip(autoSpeakCheck, "识别后自动朗读原文");
         _tip.SetToolTip(aiPolishCheck, "使用 AI 术语表润色译文，保持术语前后一致（失败时自动保留机器译文）");
+        _tip.SetToolTip(targetLanguageCombo, "选择译文目标语言；「自动」表示中文译英文、其余译中文");
         _tip.SetToolTip(translationBox, "点击译文段落，可定位对应原文段落");
         _tip.SetToolTip(originalBox, "点击原文段落，可定位对应译文段落");
 
@@ -101,6 +117,37 @@ public partial class PdfTranslatePanel : UserControl
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public SpeedSelectorControl TtsSpeedSelector => speedSelector;
+
+    /// <summary>当前目标语言代码（百度翻译语言码）；auto 表示按原文自动判定。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public string TargetLanguageCode
+    {
+        get
+        {
+            int index = targetLanguageCombo.SelectedIndex;
+            return index >= 0 && index < TargetLanguages.Length ? TargetLanguages[index].Code : "auto";
+        }
+        set
+        {
+            int index = Array.FindIndex(TargetLanguages,
+                item => string.Equals(item.Code, value, StringComparison.OrdinalIgnoreCase));
+            targetLanguageCombo.SelectedIndex = index >= 0 ? index : 0;
+        }
+    }
+
+    /// <summary>目标语言下拉框，供宿主在切换时刷新状态。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public ComboBox TargetLanguageCombo => targetLanguageCombo;
+
+    /// <summary>填充目标语言下拉框，默认「自动」。</summary>
+    private void InitTargetLanguageOptions()
+    {
+        foreach (var option in TargetLanguages)
+            targetLanguageCombo.Items.Add(option.Label);
+        targetLanguageCombo.SelectedIndex = 0;
+    }
 
     /// <summary>窄侧栏上下堆叠、宽侧栏左右对照。</summary>
     private void LayoutCards()

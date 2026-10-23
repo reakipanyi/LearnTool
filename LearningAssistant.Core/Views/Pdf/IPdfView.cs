@@ -177,6 +177,12 @@ namespace LearningAssistant.Views
         string GetCurrentLanguage();
 
         /// <summary>
+        /// 获取翻译目标语言（百度语言代码）；返回空或 auto 表示按原文自动判定
+        /// </summary>
+        /// <returns>目标语言代码</returns>
+        string GetTranslationTargetLanguage();
+
+        /// <summary>
         /// 获取当前选中的文件
         /// </summary>
         /// <returns>文件路径</returns>

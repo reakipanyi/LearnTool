@@ -533,7 +533,12 @@ namespace LearningAssistant.Presenters
                 _view?.ShowWarning("翻译服务不可用，请检查API配置");
                 return null;
             }
-            return await _pdfTranslationService.TranslateAsync(text);
+
+            // 用户在翻译面板指定了目标语言时按指定语言翻译，否则沿用「中文→英文，其余→中文」的自动判定
+            var targetLanguage = GetTargetLanguageOverride();
+            return targetLanguage == null
+                ? await _pdfTranslationService.TranslateAsync(text)
+                : await _pdfTranslationService.TranslateAsync(text, targetLanguage);
         }
 
         /// <summary>
@@ -669,7 +674,7 @@ namespace LearningAssistant.Presenters
             {
                 if (_view?.AutoTranslateAfterOcr == true)
                 {
-                    var result = await _pdfTranslationService.OcrAndTranslateAsync(ocrImageData, ocrRect);
+                    var result = await _pdfTranslationService.OcrAndTranslateAsync(ocrImageData, ocrRect, GetTargetLanguageOverride());
                     UpdateOcrResult(result.Original, result.Translation);
                 }
                 else
@@ -1921,7 +1926,7 @@ namespace LearningAssistant.Presenters
             _view?.SetLoadingState(true);
             try
             {
-                var result = await _pdfTranslationService.OcrAndTranslateAsync(img);
+                var result = await _pdfTranslationService.OcrAndTranslateAsync(img, GetTargetLanguageOverride());
                 var translation = await PolishTranslationAsync(result.Original, result.Translation);
                 if (cacheKey != null && !string.IsNullOrWhiteSpace(result.Original))
                     StorePageCache(cacheKey, result.Original, translation);
@@ -1940,6 +1945,7 @@ namespace LearningAssistant.Presenters
 
         /// <summary>
         /// 可选的 AI 润色：仅在视图启用润色且术语表服务可用时调用，失败时回退机器译文。
+        /// 术语表统一生成中文译名，因此显式指定非中文目标语言时不参与润色。
         /// </summary>
         private async Task<string?> PolishTranslationAsync(string? originalText, string? translation)
         {
@@ -1947,6 +1953,10 @@ namespace LearningAssistant.Presenters
                 return translation;
             if (_translationGlossaryService == null) return translation;
             if (_view?.AiTranslationPolishEnabled != true) return translation;
+
+            var targetLanguage = GetTargetLanguageOverride();
+            if (targetLanguage != null && !string.Equals(targetLanguage, "zh", StringComparison.OrdinalIgnoreCase))
+                return translation;
 
             var pdfPath = _pdfFileManager.CurrentFilePath;
             if (string.IsNullOrEmpty(pdfPath)) return translation;
@@ -1983,7 +1993,18 @@ namespace LearningAssistant.Presenters
                 "translate-page",
                 language,
                 "v1",
-                "auto");
+                "auto",
+                GetTargetLanguageOverride() ?? "auto");
+        }
+
+        /// <summary>读取翻译面板选择的目标语言；空或 auto 表示按原文自动判定</summary>
+        private string? GetTargetLanguageOverride()
+        {
+            var target = _view?.GetTranslationTargetLanguage();
+            return string.IsNullOrWhiteSpace(target) ||
+                   string.Equals(target, "auto", StringComparison.OrdinalIgnoreCase)
+                ? null
+                : target;
         }
 
         /// <summary>文档指纹：路径 + 大小 + 修改时间，文件被替换后旧译文不会命中</summary>

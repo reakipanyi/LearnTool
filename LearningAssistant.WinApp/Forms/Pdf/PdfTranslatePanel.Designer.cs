@@ -30,11 +30,15 @@ partial class PdfTranslatePanel
         autoSpeakCheck = new CheckBox();
         aiPolishCheck = new CheckBox();
         speedSelector = new SpeedSelectorControl();
+        extras = new FlowLayoutPanel();
+        targetLanguageLabel = new Label();
+        targetLanguageCombo = new ComboBox();
         _tip = new ToolTip(components);
         root.SuspendLayout();
         body.SuspendLayout();
         actions.SuspendLayout();
         options.SuspendLayout();
+        extras.SuspendLayout();
         SuspendLayout();
         // 
         // root
@@ -46,16 +50,18 @@ partial class PdfTranslatePanel
         root.Controls.Add(body, 0, 1);
         root.Controls.Add(actions, 0, 2);
         root.Controls.Add(options, 0, 3);
+        root.Controls.Add(extras, 0, 4);
         root.Dock = DockStyle.Fill;
         root.Location = new Point(0, 0);
         root.Margin = new Padding(0);
         root.Name = "root";
         root.Padding = new Padding(6, 2, 6, 6);
-        root.RowCount = 4;
+        root.RowCount = 5;
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));
         root.Size = new Size(543, 504);
         root.TabIndex = 0;
         // 
@@ -269,6 +275,44 @@ partial class PdfTranslatePanel
         speedSelector.Size = new Size(130, 28);
         speedSelector.TabIndex = 3;
         // 
+        // extras
+        // 
+        extras.BackColor = Color.FromArgb(247, 248, 251);
+        extras.Controls.Add(targetLanguageLabel);
+        extras.Controls.Add(targetLanguageCombo);
+        extras.Dock = DockStyle.Fill;
+        extras.Location = new Point(6, 470);
+        extras.Margin = new Padding(0, 2, 0, 0);
+        extras.Name = "extras";
+        extras.Padding = new Padding(0, 2, 0, 0);
+        extras.Size = new Size(531, 30);
+        extras.TabIndex = 4;
+        extras.WrapContents = false;
+        // 
+        // targetLanguageLabel
+        // 
+        targetLanguageLabel.AutoSize = true;
+        targetLanguageLabel.ForeColor = Color.FromArgb(50, 70, 90);
+        targetLanguageLabel.Location = new Point(2, 6);
+        targetLanguageLabel.Margin = new Padding(2, 5, 4, 0);
+        targetLanguageLabel.Name = "targetLanguageLabel";
+        targetLanguageLabel.Size = new Size(32, 17);
+        targetLanguageLabel.TabIndex = 0;
+        targetLanguageLabel.Text = "译至";
+        // 
+        // targetLanguageCombo
+        // 
+        targetLanguageCombo.DropDownStyle = ComboBoxStyle.DropDownList;
+        targetLanguageCombo.FlatStyle = FlatStyle.Flat;
+        targetLanguageCombo.Font = new Font("Microsoft YaHei UI", 9F);
+        targetLanguageCombo.ForeColor = Color.FromArgb(15, 23, 42);
+        targetLanguageCombo.FormattingEnabled = true;
+        targetLanguageCombo.Location = new Point(40, 3);
+        targetLanguageCombo.Margin = new Padding(2, 2, 0, 0);
+        targetLanguageCombo.Name = "targetLanguageCombo";
+        targetLanguageCombo.Size = new Size(112, 25);
+        targetLanguageCombo.TabIndex = 1;
+        // 
         // PdfTranslatePanel
         // 
         AutoScaleDimensions = new SizeF(7F, 17F);
@@ -282,6 +326,8 @@ partial class PdfTranslatePanel
         actions.ResumeLayout(false);
         options.ResumeLayout(false);
         options.PerformLayout();
+        extras.ResumeLayout(false);
+        extras.PerformLayout();
         ResumeLayout(false);
     }
 
@@ -303,5 +349,8 @@ partial class PdfTranslatePanel
     private CheckBox autoSpeakCheck;
     private CheckBox aiPolishCheck;
     private SpeedSelectorControl speedSelector;
+    private FlowLayoutPanel extras;
+    private Label targetLanguageLabel;
+    private ComboBox targetLanguageCombo;
     private ToolTip _tip;
 }

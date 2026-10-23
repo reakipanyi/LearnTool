@@ -36,7 +36,7 @@ namespace LearningAssistant.Services.Pdf
             return await _translationService.TranslateAsync(text, "auto", targetLanguage);
         }
 
-        public async Task<(string? Original, string? Translation)> OcrAndTranslateAsync(byte[] image)
+        public async Task<(string? Original, string? Translation)> OcrAndTranslateAsync(byte[] image, string? targetLanguage = null)
         {
             if (!_ocrService.IsAvailable)
                 return (null, null);
@@ -47,8 +47,10 @@ namespace LearningAssistant.Services.Pdf
                 if (string.IsNullOrWhiteSpace(recognizedText))
                     return (null, null);
 
-                var translation = await _translationService.TranslateAsync(
-                    recognizedText, "auto", ResolveTargetLanguage(recognizedText));
+                var target = string.IsNullOrWhiteSpace(targetLanguage)
+                    ? ResolveTargetLanguage(recognizedText)
+                    : targetLanguage;
+                var translation = await _translationService.TranslateAsync(recognizedText, "auto", target);
                 return (recognizedText, translation);
             }
             catch (Exception ex)
@@ -58,14 +60,14 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
-        public async Task<(string? Original, string? Translation)> OcrAndTranslateAsync(byte[] image, RectInt region)
+        public async Task<(string? Original, string? Translation)> OcrAndTranslateAsync(byte[] image, RectInt region, string? targetLanguage = null)
         {
             if (!_ocrService.IsAvailable)
                 return (null, null);
 
             if (region.Width <= 0 || region.Height <= 0)
             {
-                return await OcrAndTranslateAsync(image);
+                return await OcrAndTranslateAsync(image, targetLanguage);
             }
 
             try
@@ -75,8 +77,10 @@ namespace LearningAssistant.Services.Pdf
                 if (string.IsNullOrWhiteSpace(recognizedText))
                     return (null, null);
 
-                var translation = await _translationService.TranslateAsync(
-                    recognizedText, "auto", ResolveTargetLanguage(recognizedText));
+                var target = string.IsNullOrWhiteSpace(targetLanguage)
+                    ? ResolveTargetLanguage(recognizedText)
+                    : targetLanguage;
+                var translation = await _translationService.TranslateAsync(recognizedText, "auto", target);
                 return (recognizedText, translation);
             }
             catch (Exception ex)

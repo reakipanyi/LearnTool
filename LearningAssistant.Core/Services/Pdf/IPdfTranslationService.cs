@@ -32,15 +32,17 @@ namespace LearningAssistant.Services.Pdf
         /// OCR识别图片内容并翻译
         /// </summary>
         /// <param name="image">图片byte[]</param>
+        /// <param name="targetLanguage">目标语言代码（如 zh / en）；为空时按原文语言自动判定</param>
         /// <returns>元组(原始识别文本, 翻译文本)</returns>
-        Task<(string? Original, string? Translation)> OcrAndTranslateAsync(byte[] image);
+        Task<(string? Original, string? Translation)> OcrAndTranslateAsync(byte[] image, string? targetLanguage = null);
 
         /// <summary>
         /// OCR识别图片指定区域内容并翻译
         /// </summary>
         /// <param name="image">图片byte[]</param>
         /// <param name="region">要识别的矩形区域</param>
+        /// <param name="targetLanguage">目标语言代码（如 zh / en）；为空时按原文语言自动判定</param>
         /// <returns>元组(原始识别文本, 翻译文本)</returns>
-        Task<(string? Original, string? Translation)> OcrAndTranslateAsync(byte[] image, RectInt region);
+        Task<(string? Original, string? Translation)> OcrAndTranslateAsync(byte[] image, RectInt region, string? targetLanguage = null);
     }
 }

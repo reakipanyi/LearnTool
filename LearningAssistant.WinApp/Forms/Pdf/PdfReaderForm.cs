@@ -7026,6 +7026,11 @@ namespace LearningAssistant.Forms.Pdf
             return _currentLanguage;
         }
 
+        public string GetTranslationTargetLanguage()
+        {
+            return _translatePanel?.TargetLanguageCode ?? "auto";
+        }
+
         public void ShowToast(string message, int duration = 2000)
         {
             if (_toastLabel == null || _toastLabel.IsDisposed) return;
