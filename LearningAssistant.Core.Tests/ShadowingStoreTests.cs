@@ -90,6 +90,53 @@ public class ShadowingStoreTests
     }
 
     [Fact]
+    public void SentenceScores_RoundTripFiltersOutOfRange()
+    {
+        string root = CreateTempRoot();
+        try
+        {
+            string pdf = Path.Combine(root, "book.pdf");
+            var store = new ShadowingStore(root, "tester");
+
+            store.SaveSentenceScores(pdf, 0, new Dictionary<string, int>
+            {
+                ["sentence-a"] = 88,
+                ["sentence-b"] = 120,
+                ["sentence-c"] = -1,
+                [" "] = 50
+            });
+
+            var loaded = store.LoadSentenceScores(pdf, 0);
+            Assert.Single(loaded);
+            Assert.Equal(88, loaded["sentence-a"]);
+            Assert.Empty(store.LoadSentenceScores(pdf, 1));
+        }
+        finally
+        {
+            DeleteTempRoot(root);
+        }
+    }
+
+    [Fact]
+    public void Delete_RemovesSentenceScores()
+    {
+        string root = CreateTempRoot();
+        try
+        {
+            var store = new ShadowingStore(root, "tester");
+            string pdf = Path.Combine(root, "book.pdf");
+            store.SaveSentenceScores(pdf, 0, new Dictionary<string, int> { ["s"] = 70 });
+
+            Assert.True(store.Delete(pdf, 0));
+            Assert.Empty(store.LoadSentenceScores(pdf, 0));
+        }
+        finally
+        {
+            DeleteTempRoot(root);
+        }
+    }
+
+    [Fact]
     public void Delete_RemovesExistingManifest()
     {
         string root = CreateTempRoot();

@@ -60,11 +60,34 @@ namespace LearningAssistant.Services.Shadowing
         private string GetRecordingsPath(string pdfPath, int pageIndex)
             => GetManifestPath(pdfPath, pageIndex) + ".recordings.json";
 
+        public IReadOnlyDictionary<string, int> LoadSentenceScores(string pdfPath, int pageIndex)
+        {
+            return JsonHelper.LoadFromFile<Dictionary<string, int>>(GetScoresPath(pdfPath, pageIndex))
+                   ?? new Dictionary<string, int>(StringComparer.Ordinal);
+        }
+
+        public void SaveSentenceScores(string pdfPath, int pageIndex, IReadOnlyDictionary<string, int> scores)
+        {
+            ArgumentNullException.ThrowIfNull(scores);
+            var map = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var pair in scores)
+            {
+                if (!string.IsNullOrWhiteSpace(pair.Key) && pair.Value >= 0 && pair.Value <= 100)
+                    map[pair.Key] = pair.Value;
+            }
+
+            JsonHelper.SaveToFile(GetScoresPath(pdfPath, pageIndex), map);
+        }
+
+        private string GetScoresPath(string pdfPath, int pageIndex)
+            => GetManifestPath(pdfPath, pageIndex) + ".scores.json";
+
         public bool Delete(string pdfPath, int pageIndex)
         {
             string path = GetManifestPath(pdfPath, pageIndex);
             string recordingsPath = GetRecordingsPath(pdfPath, pageIndex);
-            if (!File.Exists(path) && !File.Exists(recordingsPath))
+            string scoresPath = GetScoresPath(pdfPath, pageIndex);
+            if (!File.Exists(path) && !File.Exists(recordingsPath) && !File.Exists(scoresPath))
                 return false;
 
             bool deleted = false;
@@ -79,6 +102,12 @@ namespace LearningAssistant.Services.Shadowing
                 if (File.Exists(recordingsPath))
                 {
                     File.Delete(recordingsPath);
+                    deleted = true;
+                }
+
+                if (File.Exists(scoresPath))
+                {
+                    File.Delete(scoresPath);
                     deleted = true;
                 }
 

@@ -70,8 +70,9 @@ namespace LearningAssistant.Forms.Pdf
             var sentences = SentenceSegmenter.Segment(pageText);
             PersistManifest(sentences);
 
-            FillSentenceList(sentences);
             LoadSentenceRecordings(sentences);
+            LoadSentenceScores(sentences);
+            FillSentenceList(sentences);
             PdfSidebarTheme.ThemeChanged += OnSidebarThemeChanged;
             if (isDark)
             {
@@ -354,6 +355,31 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
+        /// <summary>
+        /// 载入该页上次保存的句子参考分，丢弃已不存在句子的评分。
+        /// </summary>
+        private void LoadSentenceScores(IReadOnlyList<ShadowingSentence> sentences)
+        {
+            if (string.IsNullOrWhiteSpace(_pdfPath) || sentences.Count == 0)
+                return;
+
+            try
+            {
+                var saved = _store.LoadSentenceScores(_pdfPath, _pageIndex);
+                var validIds = new HashSet<string>(sentences.Select(s => s.Id), StringComparer.Ordinal);
+                foreach (var pair in saved)
+                {
+                    if (!validIds.Contains(pair.Key) || pair.Value < 0 || pair.Value > 100)
+                        continue;
+                    _sentenceScores[pair.Key] = pair.Value;
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"[SentenceShadowing] 读取跟读评分失败: {ex.Message}");
+            }
+        }
+
         private void PersistSentenceRecordings()
         {
             if (string.IsNullOrWhiteSpace(_pdfPath))
@@ -366,6 +392,21 @@ namespace LearningAssistant.Forms.Pdf
             catch (Exception ex)
             {
                 Trace.TraceWarning($"[SentenceShadowing] 保存跟读录音路径失败: {ex.Message}");
+            }
+        }
+
+        private void PersistSentenceScores()
+        {
+            if (string.IsNullOrWhiteSpace(_pdfPath))
+                return;
+
+            try
+            {
+                _store.SaveSentenceScores(_pdfPath, _pageIndex, _sentenceScores);
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"[SentenceShadowing] 保存跟读评分失败: {ex.Message}");
             }
         }
 
@@ -794,6 +835,7 @@ namespace LearningAssistant.Forms.Pdf
                     if (result != null && result.IsValid)
                     {
                         _sentenceScores[sentence.Id] = result.Score;
+                        PersistSentenceScores();
                         if (IsHandleCreated) _listSentences.Invalidate();
                     }
                 }
