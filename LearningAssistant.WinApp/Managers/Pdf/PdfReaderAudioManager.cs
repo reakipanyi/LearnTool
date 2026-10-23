@@ -5,6 +5,8 @@ using LearningAssistant.Models.Pdf;
 using LearningAssistant.Services.Pdf;
 using Microsoft.Extensions.Logging;
 using NAudio.Wave;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace LearningAssistant.Managers
 {
@@ -863,6 +865,7 @@ namespace LearningAssistant.Managers
             }
 
             var listPath = GetRecordingListPath(pdfPath);
+            MigrateLegacyRecordingList(pdfPath, listPath);
             try
             {
                 if (File.Exists(listPath))
@@ -891,19 +894,80 @@ namespace LearningAssistant.Managers
             if (string.IsNullOrEmpty(pdfPath)) return;
 
             var listPath = GetRecordingListPath(pdfPath);
-            var dir = Path.GetDirectoryName(listPath);
-            if (!string.IsNullOrEmpty(dir))
-                AppPaths.EnsureDirectoryExists(dir);
-
-            var json = System.Text.Json.JsonSerializer.Serialize(_recordings, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(listPath, json);
+            WriteRecordingList(listPath, _recordings);
         }
 
+        /// <summary>录音清单按 PDF 路径哈希存储，避免不同目录下同名 PDF 共用同一份清单</summary>
         private static string GetRecordingListPath(string pdfPath)
         {
             var dir = Path.Combine(AppPaths.AudioDir, "Recordings");
             var safeName = SanitizeFileName(Path.GetFileNameWithoutExtension(pdfPath));
+            return Path.Combine(dir, $"{safeName}_{GetPathHash(pdfPath)}_recordings.json");
+        }
+
+        /// <summary>旧版仅按文件名存储的清单路径，仅用于一次性迁移</summary>
+        private static string GetLegacyRecordingListPath(string pdfPath)
+        {
+            var dir = Path.Combine(AppPaths.AudioDir, "Recordings");
+            var safeName = SanitizeFileName(Path.GetFileNameWithoutExtension(pdfPath));
             return Path.Combine(dir, $"{safeName}_recordings.json");
+        }
+
+        /// <summary>把旧清单中属于当前文档的条目迁移到新路径；旧文件保留，供其他同名文档各自迁移</summary>
+        private void MigrateLegacyRecordingList(string pdfPath, string newPath)
+        {
+            try
+            {
+                if (File.Exists(newPath)) return;
+                var legacyPath = GetLegacyRecordingListPath(pdfPath);
+                if (!File.Exists(legacyPath)) return;
+
+                var legacy = System.Text.Json.JsonSerializer.Deserialize<List<AudioRecording>>(
+                    File.ReadAllText(legacyPath));
+                if (legacy == null || legacy.Count == 0) return;
+
+                var normalized = NormalizePath(pdfPath);
+                var owned = legacy
+                    .Where(r => string.IsNullOrEmpty(r.PdfPath) || NormalizePath(r.PdfPath) == normalized)
+                    .ToList();
+                if (owned.Count == 0) return;
+
+                WriteRecordingList(newPath, owned);
+                _logger.LogInformation("已迁移 {Count} 条旧版录音记录: {Path}", owned.Count, newPath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "迁移旧版录音清单失败: {Path}", pdfPath);
+            }
+        }
+
+        private static string GetPathHash(string pdfPath)
+        {
+            var hash = SHA256.HashData(Encoding.UTF8.GetBytes(NormalizePath(pdfPath)));
+            return Convert.ToHexString(hash)[..12];
+        }
+
+        private static string NormalizePath(string path)
+        {
+            try
+            {
+                return Path.GetFullPath(path).ToLowerInvariant();
+            }
+            catch
+            {
+                return path.ToLowerInvariant();
+            }
+        }
+
+        private static void WriteRecordingList(string path, List<AudioRecording> recordings)
+        {
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir))
+                AppPaths.EnsureDirectoryExists(dir);
+
+            var json = System.Text.Json.JsonSerializer.Serialize(recordings,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(path, json);
         }
 
         private static string FormatTime(TimeSpan time)
