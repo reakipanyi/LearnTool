@@ -9,6 +9,7 @@ using LearningAssistant.Services.Pdf;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 using System.Drawing;
+using System.Text.Json;
 
 namespace LearningAssistant.Presenters
 {
@@ -42,11 +43,9 @@ namespace LearningAssistant.Presenters
         private CancellationTokenSource? _pageRenderCts;
         private int _renderGeneration;
 
-        // 按页翻译缓存：key = 文档路径 + 页码 + OCR语言。文本层翻译与OCR翻译共用，
-        // 切换文档/语言时清空，避免重复OCR与重复调用翻译接口。
-        private readonly Dictionary<string, (string? Original, string? Translation)> _pageTranslationCache = new();
-        private readonly object _pageTranslationCacheLock = new();
-        private const int PageTranslationCacheLimit = 100;
+        // 按页翻译缓存：key = 文档路径 + 修改时间 + 页码 + OCR语言。文本层翻译与OCR翻译共用，
+        // 复用 PDF AI 磁盘缓存的 LRU 淘汰，文档被替换后不会命中旧译文。
+        private readonly IPdfAiCacheService? _pageCacheService;
 
         public event EventHandler<AddWordEventArgs>? OnAddWordToLearningList;
 
@@ -67,7 +66,8 @@ namespace LearningAssistant.Presenters
             IEventBus? eventBus = null,
             IUserSessionService? userSessionService = null,
             IPdfAiService? pdfAiService = null,
-            IPdfTranslationGlossaryService? translationGlossaryService = null)
+            IPdfTranslationGlossaryService? translationGlossaryService = null,
+            IPdfAiCacheService? pdfAiCacheService = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _pdfRenderer = pdfRenderer ?? throw new ArgumentNullException(nameof(pdfRenderer));
@@ -77,6 +77,7 @@ namespace LearningAssistant.Presenters
             _aiService = aiService;
             _pdfAiService = pdfAiService;
             _translationGlossaryService = translationGlossaryService;
+            _pageCacheService = pdfAiCacheService;
             _pdfTtsService = pdfTtsService;
             _pdfStudyIntegration = pdfStudyIntegration ?? throw new ArgumentNullException(nameof(pdfStudyIntegration));
             _ttsConfig = ttsConfig ?? throw new ArgumentNullException(nameof(ttsConfig));
@@ -221,7 +222,6 @@ namespace LearningAssistant.Presenters
         /// </summary>
         public void CloseCurrentDocument()
         {
-            ClearPageTranslationCache();
             try
             {
                 _pdfService.Unload();
@@ -1602,8 +1602,6 @@ namespace LearningAssistant.Presenters
         {
             // 切换文件时作废旧文件的渲染结果，避免其晚到覆盖新文件首屏
             CancelPendingRender();
-            // 页面翻译缓存属于上一份文档，必须清空
-            ClearPageTranslationCache();
 
             _view?.SetCurrentPdfPath(e.FilePath);
             _view?.SetImageMode(e.IsImageMode);
@@ -1965,14 +1963,37 @@ namespace LearningAssistant.Presenters
             }
         }
 
-        /// <summary>构建按页缓存键；图片模式或无文档时返回 null（不缓存）</summary>
+        /// <summary>构建按页缓存键；图片模式、无文档或缓存服务不可用时返回 null（不缓存）</summary>
         private string? TryBuildPageCacheKey(int pageIndex)
         {
-            if (_pdfFileManager.IsImageMode) return null;
+            if (_pageCacheService == null || _pdfFileManager.IsImageMode) return null;
             var pdfPath = _pdfFileManager.CurrentFilePath;
             if (string.IsNullOrEmpty(pdfPath)) return null;
+
             var language = _view?.GetCurrentLanguage() ?? _currentLanguage;
-            return $"{pdfPath}|{pageIndex}|{language}";
+            return _pageCacheService.BuildKey(
+                BuildDocumentFingerprint(pdfPath),
+                new[] { pageIndex + 1 },
+                "translate-page",
+                language,
+                "v1",
+                "auto");
+        }
+
+        /// <summary>文档指纹：路径 + 大小 + 修改时间，文件被替换后旧译文不会命中</summary>
+        private static string BuildDocumentFingerprint(string pdfPath)
+        {
+            try
+            {
+                var info = new FileInfo(pdfPath);
+                if (info.Exists)
+                    return $"{pdfPath}|{info.Length}|{info.LastWriteTimeUtc.Ticks}";
+            }
+            catch (Exception)
+            {
+                // 文件信息不可用时退回路径本身，仍能避免跨文档串页
+            }
+            return pdfPath;
         }
 
         /// <summary>尝试读取 PDF 文本层；不可用或异常时返回 null，由调用方回退到 OCR</summary>
@@ -1992,30 +2013,47 @@ namespace LearningAssistant.Presenters
 
         private bool TryGetPageCache(string key, out (string? Original, string? Translation) value)
         {
-            lock (_pageTranslationCacheLock)
+            value = default;
+            if (_pageCacheService == null || !_pageCacheService.TryGet(key, out var json))
+                return false;
+
+            try
             {
-                return _pageTranslationCache.TryGetValue(key, out value);
+                var entry = JsonSerializer.Deserialize<PageTranslationCacheEntry>(json);
+                if (entry == null) return false;
+                value = (entry.Original, entry.Translation);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to deserialize page translation cache");
+                return false;
             }
         }
 
         private void StorePageCache(string key, string? original, string? translation)
         {
-            if (string.IsNullOrWhiteSpace(original)) return;
-            lock (_pageTranslationCacheLock)
+            if (_pageCacheService == null || string.IsNullOrWhiteSpace(original)) return;
+
+            try
             {
-                // 超限时整体清空，避免长时间阅读时无限增长
-                if (_pageTranslationCache.Count >= PageTranslationCacheLimit)
-                    _pageTranslationCache.Clear();
-                _pageTranslationCache[key] = (original, translation);
+                var json = JsonSerializer.Serialize(new PageTranslationCacheEntry
+                {
+                    Original = original,
+                    Translation = translation
+                });
+                _pageCacheService.Set(key, json);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to store page translation cache");
             }
         }
 
-        private void ClearPageTranslationCache()
+        private sealed class PageTranslationCacheEntry
         {
-            lock (_pageTranslationCacheLock)
-            {
-                _pageTranslationCache.Clear();
-            }
+            public string? Original { get; set; }
+            public string? Translation { get; set; }
         }
 
         private async Task TranslateTextAsync()
@@ -2082,8 +2120,7 @@ namespace LearningAssistant.Presenters
                 // 避免切换 OCR 语言后朗读仍使用旧语言
                 _currentLanguage = language == "eng" ? Constants.Language.English : Constants.Language.Chinese;
 
-                // OCR 语言变更后旧的按页识别/翻译结果不再有效
-                ClearPageTranslationCache();
+                // 缓存键已包含语言，旧语言的结果不会命中，无需清空缓存
             }
         }
 
