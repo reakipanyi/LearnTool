@@ -84,6 +84,57 @@ namespace LearningAssistant.Services.Pdf
         }
 
         /// <inheritdoc />
+        public Task<bool> SaveAsync(
+            string pdfPath,
+            IEnumerable<PdfGlossaryEntry> entries,
+            CancellationToken cancellationToken = default)
+        {
+            if (entries == null) return Task.FromResult(false);
+
+            string fingerprint;
+            try
+            {
+                fingerprint = _textIndex.GetFingerprint(pdfPath);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "无法计算 PDF 指纹，术语表未保存");
+                return Task.FromResult(false);
+            }
+
+            var cleaned = new List<PdfGlossaryEntry>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in entries)
+            {
+                var source = entry?.Source?.Trim();
+                var target = entry?.Target?.Trim();
+                if (string.IsNullOrWhiteSpace(source) || string.IsNullOrWhiteSpace(target)) continue;
+                if (!seen.Add(source)) continue;
+
+                cleaned.Add(new PdfGlossaryEntry { Source = source, Target = target });
+                if (cleaned.Count >= MaxGlossaryEntries) break;
+            }
+
+            if (cleaned.Count == 0)
+            {
+                _memoryCache.Remove(fingerprint);
+                DeleteFromDisk(fingerprint);
+                return Task.FromResult(true);
+            }
+
+            var glossary = new PdfTranslationGlossary
+            {
+                DocumentFingerprint = fingerprint,
+                Entries = cleaned
+            };
+            _memoryCache[fingerprint] = glossary;
+            SaveToDisk(glossary);
+            return Task.FromResult(true);
+        }
+
+        /// <summary>
+        /// 可选的 AI 润色：仅在视图启用润色且术语表服务可用时调用，失败时回退机器译文。
+        /// </summary>
         public async Task<PdfTranslationPolishResult> PolishAsync(
             string pdfPath,
             string originalText,
@@ -282,6 +333,19 @@ namespace LearningAssistant.Services.Pdf
 
         private string GetCacheFilePath(string fingerprint)
             => Path.Combine(_cacheDirectory, fingerprint + ".json");
+
+        private void DeleteFromDisk(string fingerprint)
+        {
+            try
+            {
+                var path = GetCacheFilePath(fingerprint);
+                if (File.Exists(path)) File.Delete(path);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "删除术语表缓存失败");
+            }
+        }
 
         private static string Truncate(string text, int maxLength)
             => text.Length > maxLength ? text[..maxLength] + "…" : text;

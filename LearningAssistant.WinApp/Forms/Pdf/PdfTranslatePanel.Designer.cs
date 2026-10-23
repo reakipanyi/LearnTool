@@ -33,6 +33,7 @@ partial class PdfTranslatePanel
         extras = new FlowLayoutPanel();
         targetLanguageLabel = new Label();
         targetLanguageCombo = new ComboBox();
+        glossaryButton = new Button();
         _tip = new ToolTip(components);
         root.SuspendLayout();
         body.SuspendLayout();
@@ -280,6 +281,7 @@ partial class PdfTranslatePanel
         extras.BackColor = Color.FromArgb(247, 248, 251);
         extras.Controls.Add(targetLanguageLabel);
         extras.Controls.Add(targetLanguageCombo);
+        extras.Controls.Add(glossaryButton);
         extras.Dock = DockStyle.Fill;
         extras.Location = new Point(6, 470);
         extras.Margin = new Padding(0, 2, 0, 0);
@@ -312,6 +314,23 @@ partial class PdfTranslatePanel
         targetLanguageCombo.Name = "targetLanguageCombo";
         targetLanguageCombo.Size = new Size(112, 25);
         targetLanguageCombo.TabIndex = 1;
+        // 
+        // glossaryButton
+        // 
+        glossaryButton.BackColor = Color.White;
+        glossaryButton.Cursor = Cursors.Hand;
+        glossaryButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        glossaryButton.FlatAppearance.BorderSize = 1;
+        glossaryButton.FlatStyle = FlatStyle.Flat;
+        glossaryButton.Font = new Font("Microsoft YaHei UI", 9F);
+        glossaryButton.ForeColor = Color.FromArgb(15, 23, 42);
+        glossaryButton.Margin = new Padding(6, 3, 0, 0);
+        glossaryButton.Name = "glossaryButton";
+        glossaryButton.Size = new Size(88, 26);
+        glossaryButton.TabIndex = 2;
+        glossaryButton.Tag = "secondary";
+        glossaryButton.Text = "📖 术语表";
+        glossaryButton.UseVisualStyleBackColor = false;
         // 
         // PdfTranslatePanel
         // 
@@ -352,5 +371,6 @@ partial class PdfTranslatePanel
     private FlowLayoutPanel extras;
     private Label targetLanguageLabel;
     private ComboBox targetLanguageCombo;
+    private Button glossaryButton;
     private ToolTip _tip;
 }

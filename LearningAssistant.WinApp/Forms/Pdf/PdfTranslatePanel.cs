@@ -37,6 +37,7 @@ public partial class PdfTranslatePanel : UserControl
         _tip.SetToolTip(autoSpeakCheck, "识别后自动朗读原文");
         _tip.SetToolTip(aiPolishCheck, "使用 AI 术语表润色译文，保持术语前后一致（失败时自动保留机器译文）");
         _tip.SetToolTip(targetLanguageCombo, "选择译文目标语言；「自动」表示中文译英文、其余译中文");
+        _tip.SetToolTip(glossaryButton, "查看/编辑本文档的翻译术语表，并查看术语在当前页的命中次数");
         _tip.SetToolTip(translationBox, "点击译文段落，可定位对应原文段落");
         _tip.SetToolTip(originalBox, "点击原文段落，可定位对应译文段落");
 
@@ -140,6 +141,11 @@ public partial class PdfTranslatePanel : UserControl
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public ComboBox TargetLanguageCombo => targetLanguageCombo;
+
+    /// <summary>术语表管理按钮。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button GlossaryButton => glossaryButton;
 
     /// <summary>填充目标语言下拉框，默认「自动」。</summary>
     private void InitTargetLanguageOptions()

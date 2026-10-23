@@ -127,6 +127,65 @@ public class PdfTranslationGlossaryServiceTests
         glossary.Should().BeNull();
     }
 
+    [Fact]
+    public async Task 保存术语表_覆盖缓存并立即生效()
+    {
+        var cacheDir = CreateTempDir();
+        try
+        {
+            int calls = 0;
+            var ai = new FakeAiService(_ =>
+            {
+                calls++;
+                return "[{\"source\":\"alpha\",\"target\":\"阿尔法\"}]";
+            });
+            var index = new FakeTextIndex("fp6", "alpha beta");
+            var service = new PdfTranslationGlossaryService(index, ai, cacheDirectory: cacheDir);
+
+            var saved = await service.SaveAsync("book.pdf", new[]
+            {
+                new PdfGlossaryEntry { Source = " beta ", Target = " 贝塔 " },
+                new PdfGlossaryEntry { Source = "beta", Target = "重复译名" },
+                new PdfGlossaryEntry { Source = " ", Target = "空" }
+            });
+
+            var glossary = await service.GetOrBuildAsync("book.pdf");
+
+            saved.Should().BeTrue();
+            calls.Should().Be(0);
+            glossary!.Entries.Should().ContainSingle();
+            glossary.Entries[0].Source.Should().Be("beta");
+            glossary.Entries[0].Target.Should().Be("贝塔");
+            Directory.GetFiles(cacheDir, "*.json").Should().HaveCount(1);
+        }
+        finally
+        {
+            Directory.Delete(cacheDir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task 保存空术语表_清除磁盘缓存()
+    {
+        var cacheDir = CreateTempDir();
+        try
+        {
+            var index = new FakeTextIndex("fp7", "text");
+            var service = new PdfTranslationGlossaryService(index, null, cacheDirectory: cacheDir);
+
+            await service.SaveAsync("book.pdf", new[] { new PdfGlossaryEntry { Source = "alpha", Target = "阿尔法" } });
+            Directory.GetFiles(cacheDir, "*.json").Should().HaveCount(1);
+
+            await service.SaveAsync("book.pdf", Array.Empty<PdfGlossaryEntry>());
+
+            Directory.GetFiles(cacheDir, "*.json").Should().BeEmpty();
+        }
+        finally
+        {
+            Directory.Delete(cacheDir, recursive: true);
+        }
+    }
+
     private static string CreateTempDir()
     {
         var dir = Path.Combine(Path.GetTempPath(), "glossary_tests_" + Guid.NewGuid().ToString("N"));

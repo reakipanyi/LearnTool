@@ -6675,6 +6675,7 @@ namespace LearningAssistant.Forms.Pdf
             _translatePanel.OcrButton.Click += (_, _) => OcrPageClicked?.Invoke(this, EventArgs.Empty);
             _translatePanel.OriginalCard.ActionButton!.Click += (_, _) => ButtonSpeakOriginal_Click(null, EventArgs.Empty);
             _translatePanel.TranslationCard.ActionButton!.Click += (_, _) => ButtonSpeakTranslation_Click(null, EventArgs.Empty);
+            _translatePanel.GlossaryButton.Click += (_, _) => ShowTranslationGlossaryDialog();
 
             _textBoxOriginal = _translatePanel.OriginalBox;
             _textBoxTranslation = _translatePanel.TranslationBox;
@@ -6706,6 +6707,43 @@ namespace LearningAssistant.Forms.Pdf
             string original = originalLength == 0 ? "未识别" : $"{originalLength} 字";
             string translation = translationLength == 0 ? "未翻译" : $"{translationLength} 字";
             _translateHeader.SetSubtitle($"第 {_currentPageIndex + 1} 页 · 原文 {original} · 译文 {translation}");
+        }
+
+        /// <summary>打开翻译术语表对话框：读取（必要时由 AI 构建）本文件术语表，保存后立即用于后续润色。</summary>
+        private async void ShowTranslationGlossaryDialog()
+        {
+            var pdfPath = _currentPdfPath;
+            if (string.IsNullOrEmpty(pdfPath) || !File.Exists(pdfPath))
+            {
+                ShowToast("请先打开 PDF 文档");
+                return;
+            }
+
+            var service = Program.ServiceProvider?.GetService(typeof(IPdfTranslationGlossaryService))
+                as IPdfTranslationGlossaryService;
+            if (service == null)
+            {
+                ShowToast("术语表服务不可用");
+                return;
+            }
+
+            try
+            {
+                var glossary = await service.GetOrBuildAsync(pdfPath);
+                using var dialog = new PdfTranslationGlossaryDialog(
+                    Path.GetFileName(pdfPath), glossary, _textBoxOriginal?.Text);
+                if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+                if (await service.SaveAsync(pdfPath, dialog.Entries))
+                    ShowToast("术语表已保存");
+                else
+                    ShowToast("术语表保存失败");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "打开翻译术语表失败");
+                ShowToast("读取术语表失败：" + ex.Message);
+            }
         }
 
         private void BuildHighlightSidebar()

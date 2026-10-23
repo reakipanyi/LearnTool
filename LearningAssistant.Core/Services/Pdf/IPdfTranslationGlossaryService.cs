@@ -21,5 +21,13 @@ namespace LearningAssistant.Services.Pdf
             string originalText,
             string machineTranslation,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 保存用户编辑后的术语表，覆盖同文档已有缓存；条目为空时清除缓存。
+        /// </summary>
+        Task<bool> SaveAsync(
+            string pdfPath,
+            IEnumerable<PdfGlossaryEntry> entries,
+            CancellationToken cancellationToken = default);
     }
 }
