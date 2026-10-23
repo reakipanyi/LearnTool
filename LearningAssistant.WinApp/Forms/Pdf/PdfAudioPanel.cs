@@ -185,6 +185,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _listTracks.DrawItem += ListTracks_DrawItem;
         _manager.ProfileLoaded += OnProfileLoaded;
         _manager.TrackChanged += OnTrackChanged;
+        _manager.PageHintChanged += OnPageHintChanged;
 
         _manager.Playback.Player.StateChanged += OnPlayerStateChanged;
         _manager.Playback.Player.PositionChanged += OnPlayerPositionChanged;
@@ -205,6 +206,13 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
             _labelInfo.Text = $"播放：{track.FileName}";
             SelectTrackInList(track);
             UpdateSubtitle(_manager.Playback.Player.Position);
+        });
+
+    private void OnPageHintChanged(object? sender, string? hint)
+        => InvokeIfReady(() =>
+        {
+            if (!string.IsNullOrEmpty(hint)) _labelInfo.Text = hint;
+            else UpdateInfoLabel();
         });
 
     private void OnPlayerPositionChanged(object? sender, TimeSpan p) => InvokeIfReady(() => UpdateSubtitle(p));
@@ -616,6 +624,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
                 _manager.Playback.Player.PositionChanged -= OnPlayerPositionChanged;
                 _manager.ProfileLoaded -= OnProfileLoaded;
                 _manager.TrackChanged -= OnTrackChanged;
+                _manager.PageHintChanged -= OnPageHintChanged;
             }
             if (_recordingCompletedHandler != null && _form != null && _form.AudioRecorderService != null)
                 _form.AudioRecorderService.RecordingCompleted -= _recordingCompletedHandler;

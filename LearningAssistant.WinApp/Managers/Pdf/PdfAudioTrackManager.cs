@@ -38,6 +38,14 @@ public class PdfAudioTrackManager : IDisposable
     /// <summary>切曲完成后触发（含上一曲/下一曲、列表选择、翻页切曲），供 UI 同步标题与高亮</summary>
     public event EventHandler<AudioTrack>? TrackChanged;
 
+    /// <summary>当前页提示（无音频 / 文件缺失等），由播放器内联显示，不弹模态框</summary>
+    public event EventHandler<string?>? PageHintChanged;
+    public string? PageHint { get; private set; }
+
+    private const int PageDebounceMs = 250;
+    private readonly SynchronizationContext? _syncContext = SynchronizationContext.Current;
+    private CancellationTokenSource? _pageChangeCts;
+
     /// <summary>用给定规则/匹配方式对当前已扫描曲目试算，不修改已生效的 profile</summary>
     public AudioMatchResult PreviewRules(IReadOnlyList<AudioMatchRule> rules,
         PdfAudioMatchMode matchMode = PdfAudioMatchMode.PerPage, string? singleAudioFile = null)
@@ -233,28 +241,98 @@ public class PdfAudioTrackManager : IDisposable
             kv => string.IsNullOrEmpty(kv.Value.RelativePath) ? kv.Value.FileName : kv.Value.RelativePath);
     }
 
+    /// <summary>
+    /// 翻页入口：只记录目标页并重置 250ms 计时器，页面稳定后才执行切换。
+    /// 快速连翻时中间页的请求随取消令牌一并丢弃，不会连续切歌。
+    /// </summary>
     public void OnPageChanged(int pageIndex)
     {
-        if (_result == null || pageIndex == _currentPageIndex) { _currentPageIndex = pageIndex; return; }
         _currentPageIndex = pageIndex;
-        if (_result.PageIndex.TryGetValue(pageIndex, out var track))
+        if (_result == null) return;
+
+        _pageChangeCts?.Cancel();
+        _pageChangeCts?.Dispose();
+        _pageChangeCts = new CancellationTokenSource();
+        _ = ApplyPageChangeAfterDelayAsync(pageIndex, _pageChangeCts.Token);
+    }
+
+    private async Task ApplyPageChangeAfterDelayAsync(int pageIndex, CancellationToken token)
+    {
+        try
         {
-            // 整篇单音频或一个音频覆盖多页时，翻页不应把同一音频重新从头播放
-            if (IsLoaded(track))
-            {
-                _playlistIndex = IndexOfTrack(track);
-                return;
-            }
-            bool playing = IsPlaying;
-            Load(track);
-            if (playing) FireAndForget(_playback.PlayAsync(), "PlayAsync");
+            await Task.Delay(PageDebounceMs, token).ConfigureAwait(false);
         }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        if (_syncContext != null)
+            _syncContext.Post(_ => ApplyPageChange(pageIndex, token), null);
         else
+            ApplyPageChange(pageIndex, token);
+    }
+
+    private void ApplyPageChange(int pageIndex, CancellationToken token)
+    {
+        if (_disposed || token.IsCancellationRequested) return;
+        // 已翻到其它页，丢弃过期请求
+        if (pageIndex != _currentPageIndex || _result == null) return;
+
+        var target = _result.PageIndex.GetValueOrDefault(pageIndex);
+        var decision = PlaybackDecision.Resolve(
+            PlaybackScope.FollowPage,
+            follow: true,
+            MapPlayerState(),
+            _loadedTrack?.FilePath,
+            target?.FilePath);
+
+        switch (decision)
         {
-            _playback.Stop();
-            _loadedTrack = null;
-            _playlistIndex = -1;
+            case PlaybackAction.LoadAndPlay:
+                Load(target!);
+                FireAndForget(_playback.PlayAsync(), "PlayAsync");
+                break;
+            case PlaybackAction.LoadOnly:
+                Load(target!);
+                break;
+            case PlaybackAction.StopWithHint:
+                _playback.Stop();
+                _loadedTrack = null;
+                _playlistIndex = -1;
+                SetPageHint($"P{pageIndex + 1} 无音频 · 去绑定");
+                break;
+            case PlaybackAction.None:
+            default:
+                if (target != null) SetPageHint(null);
+                break;
         }
+    }
+
+    /// <summary>把媒体播放器状态映射为翻页判定用的六态。</summary>
+    private PdfPlayerState MapPlayerState()
+    {
+        switch (_playback.Player.State)
+        {
+            case MediaPlaybackState.Playing:
+                return PdfPlayerState.Playing;
+            case MediaPlaybackState.Paused:
+                return PdfPlayerState.PausedByUser;
+            case MediaPlaybackState.Stopped:
+                return PdfPlayerState.Ended;
+            default:
+                // Load 完成但尚未播放：有媒体即视为可续播的暂停态，否则视为未加载
+                return _playback.Player.Duration > TimeSpan.Zero
+                    ? PdfPlayerState.PausedByUser
+                    : PdfPlayerState.Idle;
+        }
+    }
+
+    private void SetPageHint(string? hint)
+    {
+        if (string.Equals(PageHint, hint, StringComparison.Ordinal)) return;
+        PageHint = hint;
+        PageHintChanged?.Invoke(this, hint);
     }
 
     /// <summary>加载音频并记录当前曲目，供翻页时判断是否需要切换；同时同步播放列表索引。</summary>
@@ -441,6 +519,9 @@ public class PdfAudioTrackManager : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _pageChangeCts?.Cancel();
+        _pageChangeCts?.Dispose();
+        _pageChangeCts = null;
         _playback.Stop();
         _playback.Player.Dispose();
     }
