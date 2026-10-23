@@ -57,7 +57,7 @@ namespace LearningAssistant.Managers
         private AudioFileReader? _playbackReader;
         private bool _isPlaying;
         private bool _isDraggingPosition;
-        private int _levelPulseCount;
+        private DateTime _lastLevelAt = DateTime.MinValue;
 
         private static Color _accentColor = Color.FromArgb(25, 118, 210);
         private static Color _recordRed = Color.FromArgb(244, 67, 54);
@@ -76,6 +76,7 @@ namespace LearningAssistant.Managers
             _annotationService = annotationService;
             _recorder.RecordingCompleted += OnRecordingCompleted;
             _recorder.PositionChanged += OnPositionChanged;
+            _recorder.AudioLevelChanged += OnAudioLevelChanged;
         }
 
         public void Initialize()
@@ -334,18 +335,53 @@ namespace LearningAssistant.Managers
 
         private void LevelTimer_Tick(object? sender, EventArgs e)
         {
-            // 录制时显示脉冲动画，直观指示录制状态
+            // 停止录制后清空电平条
             if (_recorder.State != AudioRecorderState.Recording)
             {
-                _levelFill.Width = 0;
-                _levelPulseCount = 0;
+                if (_levelFill.Width != 0)
+                    _levelFill.Width = 0;
                 return;
             }
 
-            _levelPulseCount++;
-            // 正弦波脉冲：10%~40% 之间平滑变化
-            float pulse = 0.10f + 0.15f * (1f + (float)Math.Sin(_levelPulseCount * 0.3f)) * 0.5f;
-            _levelFill.Width = (int)(_levelMeter.Width * pulse);
+            // 麦克风静音或设备停止送数据时让电平条缓慢回落，避免停留在旧峰值
+            if ((DateTime.UtcNow - _lastLevelAt).TotalMilliseconds >= 250)
+            {
+                var step = Math.Max(1, _levelMeter.ClientSize.Width / 20);
+                _levelFill.Width = Math.Max(0, _levelFill.Width - step);
+            }
+        }
+
+        /// <summary>录音电平回调在采集线程触发，切到 UI 线程后按真实 RMS 更新电平条</summary>
+        private void OnAudioLevelChanged(object? sender, float level)
+        {
+            var form = _form.Form;
+            if (form.IsDisposed || !form.IsHandleCreated) return;
+
+            try
+            {
+                if (form.InvokeRequired)
+                {
+                    form.BeginInvoke(() => ApplyAudioLevel(level));
+                    return;
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                return;
+            }
+
+            ApplyAudioLevel(level);
+        }
+
+        private void ApplyAudioLevel(float level)
+        {
+            if (_levelFill.IsDisposed || _recorder.State != AudioRecorderState.Recording) return;
+
+            _lastLevelAt = DateTime.UtcNow;
+            var width = _levelMeter.ClientSize.Width;
+            _levelFill.Width = (int)(width * Math.Clamp(level, 0f, 1f));
+            // 接近满幅时提示过载，避免持续爆音却不自知
+            _levelFill.BackColor = level >= 0.95f ? _recordRed : _accentColor;
         }
 
         private void StartPlayback(AudioRecording recording)
@@ -995,6 +1031,7 @@ namespace LearningAssistant.Managers
             _levelTimer?.Stop();
             _levelTimer?.Dispose();
             StopPlayback();
+            _recorder.AudioLevelChanged -= OnAudioLevelChanged;
             if (_recorder.State == AudioRecorderState.Recording)
                 _recorder.StopRecording();
         }
