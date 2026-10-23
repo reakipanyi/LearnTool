@@ -16,6 +16,7 @@ public class PdfAudioTrackManager : IDisposable
     private readonly IPdfAudioProfileStore _store;
     private readonly PdfAudioPlaybackService _playback;
     private AudioMatchResult? _result;
+    private AudioTrack? _loadedTrack;
     private PdfAudioProfile? _profile;
     private string? _currentPdfPath;
     private int _currentPageIndex = -1;
@@ -28,8 +29,9 @@ public class PdfAudioTrackManager : IDisposable
     public int PageCount => _pageCount;
     public IReadOnlyList<string> Diagnostics => _matcher.Diagnostics;
 
-    /// <summary>用给定规则对当前已扫描曲目试算，不修改已生效的 profile</summary>
-    public AudioMatchResult PreviewRules(IReadOnlyList<AudioMatchRule> rules)
+    /// <summary>用给定规则/匹配方式对当前已扫描曲目试算，不修改已生效的 profile</summary>
+    public AudioMatchResult PreviewRules(IReadOnlyList<AudioMatchRule> rules,
+        PdfAudioMatchMode matchMode = PdfAudioMatchMode.PerPage, string? singleAudioFile = null)
     {
         // 传入副本，避免试算修改缓存曲目的映射状态
         var tracks = (_profile?.Tracks ?? new List<AudioTrack>())
@@ -41,7 +43,8 @@ public class PdfAudioTrackManager : IDisposable
                 SubtitlePath = t.SubtitlePath
             })
             .ToList();
-        return _matcher.Match(_currentPdfPath ?? "", _pageCount, tracks, rules, _profile?.ManualOverrides);
+        return _matcher.Match(_currentPdfPath ?? "", _pageCount, tracks, rules, _profile?.ManualOverrides,
+            matchMode, singleAudioFile);
     }
 
     public PdfAudioTrackManager(ILogger logger,
@@ -67,6 +70,7 @@ public class PdfAudioTrackManager : IDisposable
         _profile = _store.Load(pdfPath) ?? new PdfAudioProfile { PdfPath = pdfPath };
         // 扫描期间不沿用上一份文档的匹配结果，避免翻页播放错音频
         _result = null;
+        _loadedTrack = null;
         _currentPageIndex = -1;
 
         var directory = Path.GetDirectoryName(pdfPath) ?? "";
@@ -101,9 +105,12 @@ public class PdfAudioTrackManager : IDisposable
         var scanChanged = fingerprint != profile.ScanFingerprint || profile.Tracks.Count == 0;
         var pageCountChanged = profile.PageCount != pageCount;
         // 指纹与页数均未变化时复用缓存映射；否则重算，避免规则结果丢失或页数变化后映射越界
-        if (scanChanged || pageCountChanged || profile.PageIndex.Count == 0)
+        // 整篇单音频模式缓存里只有一条曲目，直接重算更简单，也避免与切换后的选择不一致
+        if (profile.MatchMode == PdfAudioMatchMode.SingleAudio
+            || scanChanged || pageCountChanged || profile.PageIndex.Count == 0)
         {
-            _result = _matcher.Match(pdfPath, pageCount, tracks, profile.Rules, profile.ManualOverrides);
+            _result = _matcher.Match(pdfPath, pageCount, tracks, profile.Rules, profile.ManualOverrides,
+                profile.MatchMode, profile.SingleAudioFile);
             profile.Tracks = tracks;
             profile.ScanFingerprint = fingerprint;
             profile.PageCount = pageCount;
@@ -206,6 +213,12 @@ public class PdfAudioTrackManager : IDisposable
     private void PersistPageIndex()
     {
         if (_profile == null || _result == null) return;
+        // 整篇单音频每次都会重算，不需要把每一页都写进缓存
+        if (_profile.MatchMode == PdfAudioMatchMode.SingleAudio)
+        {
+            _profile.PageIndex.Clear();
+            return;
+        }
         _profile.PageIndex = _result.PageIndex.ToDictionary(
             kv => kv.Key,
             kv => string.IsNullOrEmpty(kv.Value.RelativePath) ? kv.Value.FileName : kv.Value.RelativePath);
@@ -217,21 +230,29 @@ public class PdfAudioTrackManager : IDisposable
         _currentPageIndex = pageIndex;
         if (_result.PageIndex.TryGetValue(pageIndex, out var track))
         {
-            if (_playback.Player.State == MediaPlaybackState.Playing)
-            {
-                _playback.Load(track);
-                FireAndForget(_playback.PlayAsync(), "PlayAsync");
-            }
-            else
-            {
-                _playback.Load(track);
-            }
+            // 整篇单音频或一个音频覆盖多页时，翻页不应把同一音频重新从头播放
+            if (IsLoaded(track)) return;
+            bool playing = _playback.Player.State == MediaPlaybackState.Playing;
+            Load(track);
+            if (playing) FireAndForget(_playback.PlayAsync(), "PlayAsync");
         }
         else
         {
             _playback.Stop();
+            _loadedTrack = null;
         }
     }
+
+    /// <summary>加载音频并记录当前曲目，供翻页时判断是否需要切换。</summary>
+    public void Load(AudioTrack track)
+    {
+        _playback.Load(track);
+        _loadedTrack = track;
+    }
+
+    private bool IsLoaded(AudioTrack track)
+        => _loadedTrack != null
+           && string.Equals(_loadedTrack.FilePath, track.FilePath, StringComparison.OrdinalIgnoreCase);
 
     public void Next() => Move(1);
     public void Prev() => Move(-1);
@@ -250,7 +271,7 @@ public class PdfAudioTrackManager : IDisposable
             ? (delta > 0 ? 0 : count - 1)          // 当前页无音频时：下一曲从首曲开始，上一曲从末曲开始
             : ((cur + delta) % count + count) % count; // 正负方向均能正确环绕
         var track = _result.Tracks[next];
-        _playback.Load(track);
+        Load(track);
         FireAndForget(_playback.PlayAsync(), "PlayAsync");
     }
 
@@ -274,7 +295,7 @@ public class PdfAudioTrackManager : IDisposable
                 var track = CurrentTrack();
                 if (track != null)
                 {
-                    _playback.Load(track);
+                    if (!IsLoaded(track)) Load(track);
                     FireAndForget(_playback.PlayAsync(), "PlayAsync");
                     return true;
                 }
@@ -297,16 +318,32 @@ public class PdfAudioTrackManager : IDisposable
         await LoadProfileAsync(_currentPdfPath, _pageCount);
     }
 
-    /// <summary>规则变更后直接用已扫描曲目重算，无需再次扫描目录</summary>
+    /// <summary>规则或匹配方式变更后直接用已扫描曲目重算，无需再次扫描目录</summary>
     public void SaveRulesAndRematch()
     {
         if (_profile == null || _currentPdfPath == null) return;
         _result = _matcher.Match(_currentPdfPath, _pageCount, _profile.Tracks,
-            _profile.Rules, _profile.ManualOverrides);
+            _profile.Rules, _profile.ManualOverrides,
+            _profile.MatchMode, _profile.SingleAudioFile);
         PersistPageIndex();
         _store.Save(_profile);
         _currentPageIndex = -1;
         ProfileLoaded?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// 清空当前 PDF 的规则、手动匹配、缓存映射与单音频选择，恢复默认匹配。
+    /// 只影响当前打开的 PDF，不会改动其它文件已保存的配置。
+    /// </summary>
+    public void ResetMatching()
+    {
+        if (_profile == null) return;
+        _profile.Rules.Clear();
+        _profile.ManualOverrides.Clear();
+        _profile.PageIndex.Clear();
+        _profile.SingleAudioFile = null;
+        _profile.MatchMode = PdfAudioMatchMode.PerPage;
+        SaveRulesAndRematch();
     }
 
     public void SetManualOverride(int page, string file)

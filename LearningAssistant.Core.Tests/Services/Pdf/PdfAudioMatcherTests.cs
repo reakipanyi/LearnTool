@@ -218,4 +218,41 @@ public class PdfAudioMatcherTests
         r.PageIndex.Should().BeEmpty();
         r.UnmatchedPages.Should().HaveCount(5);
     }
+
+    [Fact]
+    public void 整篇单音频模式_全页共用同一曲目()
+    {
+        var r = Matcher.Match(@"C:\pdf\a.pdf", 5, new[] { T("a.mp3"), T("b.mp3") },
+            Array.Empty<AudioMatchRule>(), null, PdfAudioMatchMode.SingleAudio, "b.mp3");
+
+        r.PageIndex.Should().HaveCount(5);
+        r.PageIndex[0].FileName.Should().Be("b.mp3");
+        r.PageIndex[4].FileName.Should().Be("b.mp3");
+        r.Tracks.Should().ContainSingle().Which.FileName.Should().Be("b.mp3");
+        r.UnmatchedPages.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void 整篇单音频模式_忽略按页规则与手动覆盖()
+    {
+        var rule = new AudioMatchRule { FileNamePattern = @"(\d+)\.mp3", MapMode = AudioPageMapMode.PageIndex };
+        var overrides = new Dictionary<int, string> { [0] = "manual.mp3" };
+
+        var r = Matcher.Match(@"C:\pdf\a.pdf", 3, new[] { T("1.mp3"), T("whole.mp3"), T("manual.mp3") },
+            new[] { rule }, overrides, PdfAudioMatchMode.SingleAudio, "whole.mp3");
+
+        r.PageIndex[0].FileName.Should().Be("whole.mp3");
+        r.PageIndex[1].FileName.Should().Be("whole.mp3");
+        r.PageIndex[0].IsManual.Should().BeFalse();
+    }
+
+    [Fact]
+    public void 整篇单音频模式_未选择文件时输出诊断()
+    {
+        var r = Matcher.Match(@"C:\pdf\a.pdf", 3, new[] { T("a.mp3") },
+            Array.Empty<AudioMatchRule>(), null, PdfAudioMatchMode.SingleAudio, null);
+
+        r.PageIndex.Should().BeEmpty();
+        Matcher.Diagnostics.Should().Contain(d => d.Contains("整篇单音频"));
+    }
 }

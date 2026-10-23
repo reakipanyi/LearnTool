@@ -9,9 +9,13 @@ public class PdfAudioMatcher : IPdfAudioMatcher
     public IReadOnlyList<string> Diagnostics => _diagnostics;
 
     public AudioMatchResult Match(string pdfPath, int pageCount, IReadOnlyList<AudioTrack> tracks,
-        IReadOnlyList<AudioMatchRule> rules, IReadOnlyDictionary<int, string>? manualOverrides)
+        IReadOnlyList<AudioMatchRule> rules, IReadOnlyDictionary<int, string>? manualOverrides,
+        PdfAudioMatchMode matchMode = PdfAudioMatchMode.PerPage, string? singleAudioFile = null)
     {
         _diagnostics.Clear();
+        if (matchMode == PdfAudioMatchMode.SingleAudio)
+            return MatchSingleAudio(pdfPath, pageCount, tracks, singleAudioFile);
+
         var result = new AudioMatchResult { Tracks = tracks.ToList() };
         var pageIndex = result.PageIndex;
         var priorityMap = new Dictionary<int, int>(); // page -> assigned priority
@@ -98,6 +102,50 @@ public class PdfAudioMatcher : IPdfAudioMatcher
             if (!pageIndex.ContainsKey(p)) result.UnmatchedPages.Add(p);
 
         return result;
+    }
+
+    /// <summary>
+    /// 整篇单音频：只保留选定的那一个音频，并映射到全部页；忽略按页规则与手动覆盖。
+    /// </summary>
+    private AudioMatchResult MatchSingleAudio(string pdfPath, int pageCount,
+        IReadOnlyList<AudioTrack> tracks, string? singleAudioFile)
+    {
+        var result = new AudioMatchResult();
+
+        if (string.IsNullOrWhiteSpace(singleAudioFile))
+        {
+            _diagnostics.Add("当前为整篇单音频模式，但尚未选择音频文件");
+            return result;
+        }
+
+        var track = ResolveSingleTrack(pdfPath, tracks, singleAudioFile);
+        track.IsSingleAudio = true;
+        result.Tracks = new List<AudioTrack> { track };
+        track.MappedPageStart = 0;
+        track.MappedPageEnd = Math.Max(0, pageCount - 1);
+
+        for (int p = 0; p < pageCount; p++)
+            result.PageIndex[p] = track;
+
+        return result;
+    }
+
+    /// <summary>按相对路径、完整路径、文件名的顺序解析整篇音频，未命中时按给定路径构造曲目。</summary>
+    private static AudioTrack ResolveSingleTrack(string pdfPath, IReadOnlyList<AudioTrack> tracks, string value)
+    {
+        var track = Path.IsPathRooted(value)
+            ? tracks.FirstOrDefault(t => string.Equals(t.FilePath, value, StringComparison.OrdinalIgnoreCase))
+            : tracks.FirstOrDefault(t => string.Equals(t.RelativePath, value, StringComparison.OrdinalIgnoreCase))
+              ?? tracks.FirstOrDefault(t => string.Equals(t.FileName, Path.GetFileName(value), StringComparison.OrdinalIgnoreCase));
+
+        return track ?? new AudioTrack
+        {
+            FilePath = Path.IsPathRooted(value)
+                ? value
+                : Path.Combine(Path.GetDirectoryName(pdfPath) ?? "", value),
+            FileName = Path.GetFileName(value),
+            RelativePath = value
+        };
     }
 
     /// <summary>

@@ -11,6 +11,11 @@ partial class PdfAudioRuleDialog
     private void InitializeComponent()
     {
         components = new System.ComponentModel.Container();
+        topBar = new FlowLayoutPanel();
+        labelMatchMode = new Label();
+        cmbMatchMode = new ComboBox();
+        labelSingleAudio = new Label();
+        btnPickSingle = new Button();
         splitContainer = new SplitContainer();
         lvRules = new ListView();
         columnName = new ColumnHeader();
@@ -48,6 +53,8 @@ partial class PdfAudioRuleDialog
         btnDown = new Button();
         btnApply = new Button();
         btnSuggest = new Button();
+        btnClearRules = new Button();
+        btnReset = new Button();
         btnOk = new Button();
         btnCancel = new Button();
         tooltip = new ToolTip(components);
@@ -61,7 +68,60 @@ partial class PdfAudioRuleDialog
         ((System.ComponentModel.ISupportInitialize)numPagesPerUnit).BeginInit();
         ((System.ComponentModel.ISupportInitialize)numPriority).BeginInit();
         bottom.SuspendLayout();
+        topBar.SuspendLayout();
         SuspendLayout();
+        // 
+        // topBar
+        // 
+        topBar.Dock = DockStyle.Top;
+        topBar.Location = new Point(0, 0);
+        topBar.Name = "topBar";
+        topBar.Padding = new Padding(8, 8, 8, 4);
+        topBar.Size = new Size(1000, 44);
+        topBar.TabIndex = 3;
+        topBar.WrapContents = false;
+        topBar.Controls.Add(labelMatchMode);
+        topBar.Controls.Add(cmbMatchMode);
+        topBar.Controls.Add(labelSingleAudio);
+        topBar.Controls.Add(btnPickSingle);
+        // 
+        // labelMatchMode
+        // 
+        labelMatchMode.AutoSize = true;
+        labelMatchMode.Margin = new Padding(0, 6, 4, 0);
+        labelMatchMode.Name = "labelMatchMode";
+        labelMatchMode.Size = new Size(55, 17);
+        labelMatchMode.TabIndex = 0;
+        labelMatchMode.Text = "匹配方式";
+        // 
+        // cmbMatchMode
+        // 
+        cmbMatchMode.DropDownStyle = ComboBoxStyle.DropDownList;
+        cmbMatchMode.Margin = new Padding(0, 2, 12, 0);
+        cmbMatchMode.Name = "cmbMatchMode";
+        cmbMatchMode.Size = new Size(240, 25);
+        cmbMatchMode.TabIndex = 1;
+        cmbMatchMode.SelectedIndexChanged += CmbMatchMode_SelectedIndexChanged;
+        // 
+        // labelSingleAudio
+        // 
+        labelSingleAudio.AutoEllipsis = true;
+        labelSingleAudio.Margin = new Padding(0, 4, 4, 0);
+        labelSingleAudio.Name = "labelSingleAudio";
+        labelSingleAudio.Size = new Size(360, 24);
+        labelSingleAudio.TabIndex = 2;
+        labelSingleAudio.Text = "未选择音频";
+        labelSingleAudio.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // btnPickSingle
+        // 
+        btnPickSingle.Margin = new Padding(0, 2, 0, 0);
+        btnPickSingle.Name = "btnPickSingle";
+        btnPickSingle.Size = new Size(100, 26);
+        btnPickSingle.TabIndex = 3;
+        btnPickSingle.Text = "选择音频…";
+        btnPickSingle.UseVisualStyleBackColor = true;
+        btnPickSingle.Click += ButtonPickSingle_Click;
         // 
         // splitContainer
         // 
@@ -425,7 +485,7 @@ partial class PdfAudioRuleDialog
         bottom.Location = new Point(0, 511);
         bottom.Name = "bottom";
         bottom.Padding = new Padding(8);
-        bottom.Size = new Size(820, 49);
+        bottom.Size = new Size(1000, 49);
         bottom.TabIndex = 2;
         bottom.WrapContents = false;
         // 
@@ -489,13 +549,33 @@ partial class PdfAudioRuleDialog
         btnSuggest.UseVisualStyleBackColor = true;
         btnSuggest.Click += ButtonSuggest_Click;
         // 
+        // btnClearRules
+        // 
+        btnClearRules.Location = new Point(507, 11);
+        btnClearRules.Name = "btnClearRules";
+        btnClearRules.Size = new Size(80, 23);
+        btnClearRules.TabIndex = 6;
+        btnClearRules.Text = "清空规则";
+        btnClearRules.UseVisualStyleBackColor = true;
+        btnClearRules.Click += ButtonClearRules_Click;
+        // 
+        // btnReset
+        // 
+        btnReset.Location = new Point(593, 11);
+        btnReset.Name = "btnReset";
+        btnReset.Size = new Size(110, 23);
+        btnReset.TabIndex = 7;
+        btnReset.Text = "重置本文件…";
+        btnReset.UseVisualStyleBackColor = true;
+        btnReset.Click += ButtonReset_Click;
+        // 
         // btnOk
         // 
         btnOk.DialogResult = DialogResult.OK;
-        btnOk.Location = new Point(507, 11);
+        btnOk.Location = new Point(709, 11);
         btnOk.Name = "btnOk";
         btnOk.Size = new Size(100, 23);
-        btnOk.TabIndex = 6;
+        btnOk.TabIndex = 8;
         btnOk.Text = "保存并关闭";
         btnOk.UseVisualStyleBackColor = true;
         btnOk.Click += ButtonOk_Click;
@@ -503,10 +583,10 @@ partial class PdfAudioRuleDialog
         // btnCancel
         // 
         btnCancel.DialogResult = DialogResult.Cancel;
-        btnCancel.Location = new Point(613, 11);
+        btnCancel.Location = new Point(815, 11);
         btnCancel.Name = "btnCancel";
         btnCancel.Size = new Size(70, 23);
-        btnCancel.TabIndex = 7;
+        btnCancel.TabIndex = 9;
         btnCancel.Text = "取消";
         btnCancel.UseVisualStyleBackColor = true;
         // 
@@ -521,11 +601,12 @@ partial class PdfAudioRuleDialog
         AutoScaleDimensions = new SizeF(7F, 17F);
         AutoScaleMode = AutoScaleMode.Font;
         CancelButton = btnCancel;
-        ClientSize = new Size(820, 560);
+        ClientSize = new Size(1000, 604);
         Controls.Add(splitContainer);
         Controls.Add(editPanel);
         Controls.Add(bottom);
-        MinimumSize = new Size(720, 480);
+        Controls.Add(topBar);
+        MinimumSize = new Size(900, 520);
         Name = "PdfAudioRuleDialog";
         StartPosition = FormStartPosition.CenterParent;
         Text = "音频匹配规则";
@@ -539,12 +620,19 @@ partial class PdfAudioRuleDialog
         ((System.ComponentModel.ISupportInitialize)numPagesPerUnit).EndInit();
         ((System.ComponentModel.ISupportInitialize)numPriority).EndInit();
         bottom.ResumeLayout(false);
+        topBar.ResumeLayout(false);
+        topBar.PerformLayout();
         ResumeLayout(false);
         PerformLayout();
     }
 
     #endregion
 
+    private FlowLayoutPanel topBar;
+    private Label labelMatchMode;
+    private ComboBox cmbMatchMode;
+    private Label labelSingleAudio;
+    private Button btnPickSingle;
     private SplitContainer splitContainer;
     private ListView lvRules;
     private ColumnHeader columnName;
@@ -582,6 +670,8 @@ partial class PdfAudioRuleDialog
     private Button btnDown;
     private Button btnApply;
     private Button btnSuggest;
+    private Button btnClearRules;
+    private Button btnReset;
     private Button btnOk;
     private Button btnCancel;
     private ToolTip tooltip;

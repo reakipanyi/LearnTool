@@ -12,6 +12,8 @@ public partial class PdfAudioRuleDialog : Form
     private readonly PdfAudioProfile _profile;
     private readonly List<AudioMatchRule> _rules;
     private readonly PdfAudioTrackManager? _manager;
+    private readonly PdfAudioMatchMode _originalMatchMode;
+    private string? _singleAudioFile;
 
     private readonly List<AudioPageMapMode> _modes = new()
     { AudioPageMapMode.PageIndex, AudioPageMapMode.Sequence, AudioPageMapMode.Range };
@@ -23,24 +25,136 @@ public partial class PdfAudioRuleDialog : Form
         InitializeComponent();
         _profile = new PdfAudioProfile();
         _rules = new List<AudioMatchRule>();
+        _originalMatchMode = PdfAudioMatchMode.PerPage;
+        InitializeModeSelector();
     }
 
     public PdfAudioRuleDialog(PdfAudioProfile profile, IPdfReaderFormAccess form, PdfAudioTrackManager manager)
     {
         _profile = profile;
         _manager = manager;
+        _originalMatchMode = profile.MatchMode;
+        _singleAudioFile = profile.SingleAudioFile;
         // 拷贝一份规则编辑：取消时不能影响已生效的配置
         _rules = _profile.Rules.OrderByDescending(r => r.Priority).Select(CloneRule).ToList();
 
         InitializeComponent();
 
+        var pdfName = Path.GetFileName(_profile.PdfPath);
+        if (!string.IsNullOrEmpty(pdfName))
+            Text = $"音频匹配规则 - {pdfName}（仅作用于本文件）";
+
         cmbSyntax.Items.Add("正则表达式");
         cmbSyntax.Items.Add("通配符");
         cmbSyntax.SelectedIndex = 0;
         foreach (var m in _modes) cmbMode.Items.Add(m.ToString());
+        InitializeModeSelector();
         foreach (var r in _rules) AddListItem(r);
         if (lvRules.Items.Count > 0) lvRules.Items[0].Selected = true;
         UpdateModeHint();
+        RefreshPreview();
+    }
+
+    /// <summary>初始化匹配方式下拉框，并按保存的配置恢复选择。</summary>
+    private void InitializeModeSelector()
+    {
+        cmbMatchMode.Items.Add("按页匹配（一个 PDF 对应多个音频）");
+        cmbMatchMode.Items.Add("整篇共用一个音频");
+        cmbMatchMode.SelectedIndex = _profile.MatchMode == PdfAudioMatchMode.SingleAudio ? 1 : 0;
+        UpdateSingleAudioLabel();
+        UpdateModeAvailability();
+    }
+
+    private PdfAudioMatchMode SelectedMatchMode
+        => cmbMatchMode.SelectedIndex == 1 ? PdfAudioMatchMode.SingleAudio : PdfAudioMatchMode.PerPage;
+
+    private void UpdateSingleAudioLabel()
+    {
+        if (string.IsNullOrWhiteSpace(_singleAudioFile))
+        {
+            labelSingleAudio.Text = "未选择音频";
+            tooltip.SetToolTip(labelSingleAudio, null);
+            return;
+        }
+
+        var isExternal = Path.IsPathRooted(_singleAudioFile);
+        labelSingleAudio.Text = isExternal
+            ? $"{Path.GetFileName(_singleAudioFile)}（外部文件）"
+            : _singleAudioFile;
+        tooltip.SetToolTip(labelSingleAudio,
+            isExternal ? _singleAudioFile : Path.Combine(Path.GetDirectoryName(_profile.PdfPath) ?? "", _singleAudioFile));
+    }
+
+    /// <summary>整篇单音频模式下按页规则不可用，反之单音频选择不可用。</summary>
+    private void UpdateModeAvailability()
+    {
+        bool single = SelectedMatchMode == PdfAudioMatchMode.SingleAudio;
+        lvRules.Enabled = !single;
+        editPanel.Enabled = !single;
+        btnAdd.Enabled = !single;
+        btnDelete.Enabled = !single;
+        btnUp.Enabled = !single;
+        btnDown.Enabled = !single;
+        btnApply.Enabled = !single;
+        btnSuggest.Enabled = !single;
+        btnClearRules.Enabled = !single;
+        btnPickSingle.Enabled = single;
+        labelSingleAudio.Enabled = single;
+    }
+
+    private void CmbMatchMode_SelectedIndexChanged(object? sender, EventArgs e)
+    {
+        if (_populating) return;
+        UpdateModeAvailability();
+        SchedulePreview();
+    }
+
+    private void ButtonPickSingle_Click(object? sender, EventArgs e)
+    {
+        var pdfDir = Path.GetDirectoryName(_profile.PdfPath);
+        using var ofd = new OpenFileDialog
+        {
+            Title = "选择整篇共用的音频",
+            Filter = "音频文件|*.mp3;*.wav;*.m4a;*.aac;*.flac;*.ogg;*.wma",
+            InitialDirectory = !string.IsNullOrEmpty(pdfDir) && Directory.Exists(pdfDir) ? pdfDir : ""
+        };
+        if (ofd.ShowDialog(this) != DialogResult.OK) return;
+
+        _singleAudioFile = ToProfilePath(ofd.FileName);
+        UpdateSingleAudioLabel();
+        SchedulePreview();
+    }
+
+    private void ButtonClearRules_Click(object? sender, EventArgs e)
+    {
+        if (_rules.Count == 0) return;
+        if (MessageBox.Show(this,
+                $"确定清空当前文件的 {_rules.Count} 条匹配规则？\n点「保存并关闭」后生效，只影响本 PDF。",
+                "清空规则", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            return;
+
+        _rules.Clear();
+        lvRules.Items.Clear();
+        RefreshPreview();
+    }
+
+    private void ButtonReset_Click(object? sender, EventArgs e)
+    {
+        var pdfName = string.IsNullOrEmpty(_profile.PdfPath) ? "当前文件" : Path.GetFileName(_profile.PdfPath);
+        if (MessageBox.Show(this,
+                $"将清空「{pdfName}」的全部匹配规则、手动匹配、匹配缓存与整篇音频设置，恢复默认匹配。\n" +
+                "该操作立即生效，且只影响这一个 PDF，确定继续？",
+                "重置本文件", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+            return;
+
+        _manager?.ResetMatching();
+
+        _rules.Clear();
+        lvRules.Items.Clear();
+        _singleAudioFile = null;
+        cmbMatchMode.SelectedIndex = 0;
+        UpdateSingleAudioLabel();
+        UpdateModeAvailability();
         RefreshPreview();
     }
 
@@ -100,14 +214,48 @@ public partial class PdfAudioRuleDialog : Form
     private void ButtonOk_Click(object? sender, EventArgs e)
     {
         ApplyToSelected();
-        if (!ValidateAllRules(out var message))
+
+        var mode = SelectedMatchMode;
+        if (mode == PdfAudioMatchMode.SingleAudio && string.IsNullOrWhiteSpace(_singleAudioFile))
+        {
+            btnOk.DialogResult = DialogResult.None;
+            MessageBox.Show(this, "整篇单音频模式需要先选择一个音频文件（或切回按页匹配）。",
+                "尚未选择音频", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        if (mode == PdfAudioMatchMode.PerPage && !ValidateAllRules(out var message))
         {
             btnOk.DialogResult = DialogResult.None;
             MessageBox.Show(this, message, "匹配规则不可用", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
-        btnOk.DialogResult = DialogResult.OK;
+
+        bool modeChanged = _originalMatchMode != mode;
+        bool singleChanged = !string.Equals(_profile.SingleAudioFile, _singleAudioFile, StringComparison.OrdinalIgnoreCase);
+        // 切换匹配方式或更换整篇音频后，旧的按页绑定/缓存不再适用，必须清掉
+        if (modeChanged || singleChanged)
+        {
+            _profile.ManualOverrides.Clear();
+            _profile.PageIndex.Clear();
+        }
+
+        _profile.MatchMode = mode;
+        _profile.SingleAudioFile = _singleAudioFile;
         _profile.Rules = _rules;
+        btnOk.DialogResult = DialogResult.OK;
+    }
+
+    /// <summary>PDF 同目录内保存相对路径，目录外保存绝对路径。</summary>
+    private string ToProfilePath(string fullPath)
+    {
+        var pdfDir = Path.GetDirectoryName(_profile.PdfPath);
+        if (string.IsNullOrEmpty(pdfDir)) return fullPath;
+        var baseDir = Path.GetFullPath(pdfDir);
+        var target = Path.GetFullPath(fullPath);
+        return target.StartsWith(baseDir + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+            ? Path.GetRelativePath(baseDir, target)
+            : target;
     }
 
     private void UpdateModeHint()
@@ -305,7 +453,8 @@ public partial class PdfAudioRuleDialog : Form
     {
         if (_manager == null) return;
 
-        var result = _manager.PreviewRules(BuildPreviewRules());
+        var mode = SelectedMatchMode;
+        var result = _manager.PreviewRules(BuildPreviewRules(), mode, _singleAudioFile);
         // 先按曲目反查页码，避免对每个曲目重复扫描整个 PageIndex
         var pagesByTrack = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
         foreach (var kv in result.PageIndex)
@@ -317,7 +466,12 @@ public partial class PdfAudioRuleDialog : Form
 
         lstPreview.BeginUpdate();
         lstPreview.Items.Clear();
-        foreach (var track in result.Tracks)
+        if (mode == PdfAudioMatchMode.SingleAudio)
+        {
+            var track = result.Tracks.FirstOrDefault();
+            lstPreview.Items.Add(track == null ? "未选择音频" : $"{track.RelativePath}  →  全篇");
+        }
+        else foreach (var track in result.Tracks)
         {
             var pages = pagesByTrack.TryGetValue(track.FilePath, out var list)
                 ? string.Join(",", list.OrderBy(p => p).Take(6)) + (list.Count > 6 ? "…" : "")

@@ -209,12 +209,22 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
             }
         }
 
+        bool singleMode = _manager.Profile?.MatchMode == PdfAudioMatchMode.SingleAudio;
+        _btnAiMatch.Enabled = !singleMode;
+        _btnManual.Enabled = !singleMode;
+        _btnManualFromList.Enabled = !singleMode;
+
         _listTracks.BeginUpdate();
         _listTracks.Items.Clear();
         if (result != null)
         {
             foreach (var t in result.Tracks)
             {
+                if (singleMode)
+                {
+                    _listTracks.Items.Add($"全篇  {t.FileName}{(t.IsSingleAudio ? "  [整篇音频]" : "")}");
+                    continue;
+                }
                 var pages = pagesByTrack.TryGetValue(t.FilePath, out var list) ? list.OrderBy(p => p).ToList() : new List<int>();
                 var pageText = pages.Count > 0 ? string.Join(",", pages.Take(4)) + (pages.Count > 4 ? "…" : "") : "未匹配";
                 // 外部目录曲目用目录名辅助区分同名文件
@@ -256,7 +266,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         if (result == null || _listTracks.SelectedIndex < 0 || _listTracks.SelectedIndex >= result.Tracks.Count) return;
         if (_suppressAutoPlay) return;
         var track = result.Tracks[_listTracks.SelectedIndex];
-        _manager.Playback.Load(track);
+        _manager.Load(track);
         FireAndForget(_manager.Playback.PlayAsync());
     }
 
@@ -322,7 +332,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
                 _suppressAutoPlay = false;
             }
 
-            _manager.Playback.Load(result.Tracks[next]);
+            _manager.Load(result.Tracks[next]);
             FireAndForget(_manager.Playback.PlayAsync());
         });
     }
@@ -363,7 +373,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
             return;
 
         if (!string.IsNullOrEmpty(recording.FilePath))
-            _manager.Playback.Load(new AudioTrack
+            _manager.Load(new AudioTrack
             {
                 FilePath = recording.FilePath,
                 FileName = Path.GetFileName(recording.FilePath),
@@ -383,6 +393,8 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
     private void OnManual()
     {
         if (string.IsNullOrEmpty(_form.CurrentPdfPath)) { _form.ShowWarning("请先打开 PDF"); return; }
+        if (_manager.Profile?.MatchMode == PdfAudioMatchMode.SingleAudio)
+        { _form.ShowWarning("当前为整篇单音频模式，请在“匹配规则”中切换为按页匹配后再手动指定"); return; }
         using var ofd = new OpenFileDialog
         {
             Title = "为当前页手动指定音频",
@@ -401,6 +413,8 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
 
     private void OnManualFromList()
     {
+        if (_manager.Profile?.MatchMode == PdfAudioMatchMode.SingleAudio)
+        { _form.ShowWarning("当前为整篇单音频模式，请在“匹配规则”中切换为按页匹配后再手动指定"); return; }
         var result = _manager.Result;
         if (result == null || result.Tracks.Count == 0) { _form.ShowWarning("当前目录没有扫描到音频，请先重新扫描"); return; }
 
