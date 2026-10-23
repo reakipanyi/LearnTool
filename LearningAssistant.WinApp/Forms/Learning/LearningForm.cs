@@ -67,6 +67,13 @@ namespace LearningAssistant.Forms.Learning
         private HashSet<string>? _cachedUnknownItems;
         #endregion
 
+        #region === 我的笔记 ===
+        private Button? _buttonNotes;
+        private bool _notesVisible;
+        private string? _noteRelatedId;
+        private readonly System.Windows.Forms.Timer _noteSaveTimer = new() { Interval = 600 };
+        #endregion
+
         #region === 进度可视化 ===
         private CircularProgressControl _dailyGoalProgress = null!;
         #endregion
@@ -751,6 +758,13 @@ namespace LearningAssistant.Forms.Learning
         {
             set
             {
+                // 切换学习项前先落盘旧笔记，避免把旧内容写到新学习项上
+                if (_notesVisible)
+                {
+                    _noteSaveTimer.Stop();
+                    SaveNotesNow();
+                }
+
                 _currentItem = value;
                 _sidePanelView?.UpdateItem(value);
                 _ = LoadPracticeStatsAsync(value);
@@ -759,6 +773,8 @@ namespace LearningAssistant.Forms.Learning
                     UpdateLearningCard();
                     ResetDetailState();
                 }
+                if (_notesVisible)
+                    LoadNotesForCurrentItem();
             }
         }
 
@@ -1581,7 +1597,145 @@ namespace LearningAssistant.Forms.Learning
             _buttonsView.PreviousClicked += ButtonPrevious_Click;
             _buttonsView.NextClicked += ButtonNextNav_Click;
             _buttonsView.EditClicked += ButtonEdit_Click;
+            InitializeNotesButton();
             InitializeDailyGoalProgress();
+        }
+
+        /// <summary>
+        /// 底部操作条的「我的笔记」入口：展开内嵌笔记面板，按当前学习项加载/保存。
+        /// </summary>
+        private void InitializeNotesButton()
+        {
+            _buttonNotes = new Button
+            {
+                Text = "📝 笔记",
+                Size = new Size(86, 51),
+                Margin = new Padding(6, 8, 0, 8),
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.White,
+                ForeColor = Color.FromArgb(15, 23, 42),
+                Cursor = Cursors.Hand,
+                Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold)
+            };
+            _buttonNotes.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+            _buttonNotes.FlatAppearance.BorderSize = 1;
+            _buttonNotes.Click += ButtonNotes_Click;
+            _buttonsView.ButtonsPanel.Controls.Add(_buttonNotes);
+            _toolTip.SetToolTip(_buttonNotes, "展开/收起当前学习项的笔记");
+
+            _contentView.NoteTextChanged += (_, _) =>
+            {
+                if (!_notesVisible || _noteRelatedId == null) return;
+                _noteSaveTimer.Stop();
+                _noteSaveTimer.Start();
+            };
+            _noteSaveTimer.Tick += (_, _) =>
+            {
+                _noteSaveTimer.Stop();
+                SaveNotesNow();
+            };
+            FormClosing += (_, _) => SaveNotesNow();
+        }
+
+        private void ButtonNotes_Click(object? sender, EventArgs e)
+        {
+            SaveNotesNow();
+            _notesVisible = !_notesVisible;
+            _contentView.ShowNotes(_notesVisible);
+            _contentView.PanelContent.Visible = !_notesVisible;
+
+            if (_buttonNotes != null)
+            {
+                _buttonNotes.Text = _notesVisible ? "📝 收起笔记" : "📝 笔记";
+                _buttonNotes.BackColor = _notesVisible ? Color.FromArgb(237, 233, 254) : Color.White;
+            }
+
+            if (_notesVisible)
+                LoadNotesForCurrentItem();
+            else
+                SaveNotesNow();
+        }
+
+        private void LoadNotesForCurrentItem()
+        {
+            if (_currentItem == null)
+            {
+                _noteRelatedId = null;
+                _contentView.SetNotes(string.Empty);
+                return;
+            }
+
+            _noteRelatedId = _currentItem.MainContent;
+            var relatedType = _currentItem.SubCategory.ToString();
+            try
+            {
+                var noteService = Program.GetService<INoteService>();
+                if (noteService == null) return;
+
+                var notes = noteService.GetRelatedNotes(GetCurrentUserId(), relatedType, _noteRelatedId);
+                var latest = notes.OrderByDescending(n => n.UpdatedAt).FirstOrDefault();
+                _contentView.SetNotes(latest?.Content ?? string.Empty);
+                _noteCount = notes.Count;
+
+                if (latest != null)
+                    _buttonNotes?.Text = "📝 收起笔记";
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "加载学习项笔记失败");
+            }
+            finally
+            {
+                _noteSaveTimer.Stop();
+            }
+        }
+
+        private void SaveNotesNow()
+        {
+            if (!_notesVisible || _currentItem == null || _noteRelatedId == null) return;
+
+            var text = _contentView.GetNotes().Trim();
+            try
+            {
+                var noteService = Program.GetService<INoteService>();
+                if (noteService == null) return;
+
+                var relatedType = _currentItem.SubCategory.ToString();
+                var existing = noteService
+                    .GetRelatedNotes(GetCurrentUserId(), relatedType, _noteRelatedId)
+                    .OrderByDescending(n => n.UpdatedAt)
+                    .FirstOrDefault();
+
+                if (existing == null)
+                {
+                    if (text.Length == 0) return;
+                    noteService.AddNote(GetCurrentUserId(), new NoteItem
+                    {
+                        UserId = GetCurrentUserId(),
+                        Title = _currentItem.MainContent,
+                        Content = text,
+                        Category = "学习笔记",
+                        RelatedType = relatedType,
+                        RelatedItemId = _noteRelatedId,
+                        RelatedItemTitle = _currentItem.MainContent,
+                        Source = "learning",
+                        CreatedAt = DateTime.Now,
+                        UpdatedAt = DateTime.Now
+                    });
+                    _noteCount++;
+                }
+                else if (!string.Equals(existing.Content, text, StringComparison.Ordinal))
+                {
+                    if (text.Length == 0) return;
+                    existing.Content = text;
+                    existing.UpdatedAt = DateTime.Now;
+                    noteService.UpdateNote(GetCurrentUserId(), existing);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "保存学习项笔记失败");
+            }
         }
 
         private void InitializeDailyGoalProgress()
@@ -3121,6 +3275,8 @@ namespace LearningAssistant.Forms.Learning
                 _autoPlayTimer?.Stop();
                 _autoPlayTimer?.Dispose();
 
+                _noteSaveTimer.Stop();
+                _noteSaveTimer.Dispose();
 
                 _toolTip?.Dispose();
 

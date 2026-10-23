@@ -141,9 +141,9 @@ namespace LearningAssistant.Forms.Pdf
             _panelLeftContainer = new Panel();
             _tabControlLeft = new BufferedTabControl();
             _tabPageFiles = new TabPage();
+            _readingSidebar = new PdfReadingSidebarPanel();
             _treeViewFiles = new TreeView();
             _textBoxFilter = new TextBox();
-            _tabPageThumbnails = new TabPage();
             _panelThumbnails = new Panel();
             _flowLayoutPanelThumbnails = new FlowLayoutPanel();
             _tabPageTranslate = new TabPage();
@@ -177,7 +177,7 @@ namespace LearningAssistant.Forms.Pdf
             _panelLeftContainer.SuspendLayout();
             _tabControlLeft.SuspendLayout();
             _tabPageFiles.SuspendLayout();
-            _tabPageThumbnails.SuspendLayout();
+            _readingSidebar.SuspendLayout();
             _panelThumbnails.SuspendLayout();
             _tabPageTranslate.SuspendLayout();
             _tabPageBookmarksAndHighlights.SuspendLayout();
@@ -1389,11 +1389,10 @@ namespace LearningAssistant.Forms.Pdf
             // _tabControlLeft
             // 
             _tabControlLeft.Controls.Add(_tabPageFiles);
-            _tabControlLeft.Controls.Add(_tabPageThumbnails);
-            _tabControlLeft.Controls.Add(_tabPageTranslate);
-            _tabControlLeft.Controls.Add(_tabPageStudy);
             _tabControlLeft.Controls.Add(_tabPageBookmarksAndHighlights);
+            _tabControlLeft.Controls.Add(_tabPageTranslate);
             _tabControlLeft.Controls.Add(_tabPageAudio);
+            _tabControlLeft.Controls.Add(_tabPageStudy);
             _tabControlLeft.Dock = DockStyle.Fill;
             _tabControlLeft.DrawMode = TabDrawMode.OwnerDrawFixed;
             _tabControlLeft.Font = new Font("Microsoft YaHei UI", 9F);
@@ -1407,15 +1406,25 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // _tabPageFiles
             // 
-            _tabPageFiles.Controls.Add(_treeViewFiles);
-            _tabPageFiles.Controls.Add(_textBoxFilter);
+            _tabPageFiles.Controls.Add(_readingSidebar);
             _tabPageFiles.Location = new Point(4, 34);
             _tabPageFiles.Name = "_tabPageFiles";
-            _tabPageFiles.Padding = new Padding(3);
+            _tabPageFiles.Padding = new Padding(0);
             _tabPageFiles.Size = new Size(322, 996);
             _tabPageFiles.TabIndex = 2;
-            _tabPageFiles.Text = "📁";
+            _tabPageFiles.Text = "📖";
             _tabPageFiles.UseVisualStyleBackColor = true;
+            // 
+            // _readingSidebar
+            // 
+            _readingSidebar.Dock = DockStyle.Fill;
+            _readingSidebar.Location = new Point(0, 0);
+            _readingSidebar.Name = "_readingSidebar";
+            _readingSidebar.Size = new Size(322, 996);
+            _readingSidebar.TabIndex = 0;
+            _readingSidebar.FilesPage.Controls.Add(_treeViewFiles);
+            _readingSidebar.FilesPage.Controls.Add(_textBoxFilter);
+            _readingSidebar.ThumbnailsPage.Controls.Add(_panelThumbnails);
             // 
             // _treeViewFiles
             // 
@@ -1439,17 +1448,7 @@ namespace LearningAssistant.Forms.Pdf
             _textBoxFilter.TabIndex = 1;
             _textBoxFilter.TextChanged += TextBoxFilter_TextChanged;
             // 
-            // _tabPageThumbnails
-            // 
-            _tabPageThumbnails.Controls.Add(_panelThumbnails);
-            _tabPageThumbnails.Location = new Point(4, 34);
-            _tabPageThumbnails.Name = "_tabPageThumbnails";
-            _tabPageThumbnails.Padding = new Padding(3);
-            _tabPageThumbnails.Size = new Size(555, 996);
-            _tabPageThumbnails.TabIndex = 1;
-            _tabPageThumbnails.Text = "🖼";
-            _tabPageThumbnails.UseVisualStyleBackColor = true;
-            // 
+
             // _panelThumbnails
             // 
             _panelThumbnails.BackColor = Color.FromArgb(245, 245, 245);
@@ -1488,7 +1487,7 @@ namespace LearningAssistant.Forms.Pdf
             _tabPageStudy.Padding = new Padding(3);
             _tabPageStudy.Size = new Size(555, 996);
             _tabPageStudy.TabIndex = 5;
-            _tabPageStudy.Text = "🎯";
+            _tabPageStudy.Text = "🤖";
             _tabPageStudy.UseVisualStyleBackColor = true;
             // 
             // _tabPageBookmarksAndHighlights
@@ -1570,7 +1569,7 @@ namespace LearningAssistant.Forms.Pdf
             _tabControlLeft.ResumeLayout(false);
             _tabPageFiles.ResumeLayout(false);
             _tabPageFiles.PerformLayout();
-            _tabPageThumbnails.ResumeLayout(false);
+            _readingSidebar.ResumeLayout(false);
             _panelThumbnails.ResumeLayout(false);
             _tabPageTranslate.ResumeLayout(false);
             _tabPageBookmarksAndHighlights.ResumeLayout(false);

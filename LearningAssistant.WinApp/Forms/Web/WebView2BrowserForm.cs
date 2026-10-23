@@ -1480,28 +1480,6 @@ namespace LearningAssistant.Forms.Web
         }
 
         /// <summary>
-        /// 网盘整理工具独立入口：无需先进行 AI 分析，直接打开整理工具窗体。
-        /// 数据流已完全解耦：整理工具内部可通过「📥 拉取快照」/「📤 导入 AI 建议」自行获取数据。
-        /// </summary>
-        private void btnOpenPanOrganizer_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                // 使用无参 DI 构造函数，服务由 Program.ServiceProvider 自动注入
-                using (var form = new PanOrganizerForm())
-                {
-                    form.ShowDialog(this);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "打开网盘整理工具失败");
-                MessageBox.Show($"打开网盘整理工具失败：{ex.Message}", "错误",
-                    MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        /// <summary>
         /// AI 分析核心逻辑（授权检查 → 路径提取 → 打开分析窗体）
         /// </summary>
         private async Task HandleAiAnalyzeAsync()
@@ -2143,7 +2121,6 @@ namespace LearningAssistant.Forms.Web
         private ToolStripSeparator toolStripSeparatorTools;
         private ToolStripButton btnScreenshot;
         private ToolStripButton btnAiAnalyze;
-        private ToolStripButton btnOpenPanOrganizer;
         private ToolStripProgressBar progressBarLoading;
         private ToolStripLabel lblLoadingStatus;
 
@@ -2173,6 +2150,7 @@ namespace LearningAssistant.Forms.Web
             toolStripSeparator = new ToolStripSeparator();
             btnOpenNetdisk = new ToolStripButton();
             btnPanTool = new ToolStripButton();
+            btnScreenshot = new ToolStripButton();
             toolStripSeparatorTools = new ToolStripSeparator();
             btnOpenInBrowser = new ToolStripButton();
             progressBarLoading = new ToolStripProgressBar();
@@ -2183,7 +2161,7 @@ namespace LearningAssistant.Forms.Web
             // 
             // toolStrip
             // 
-            toolStrip.Items.AddRange(new ToolStripItem[] { btnBack, btnForward, btnRefresh, btnNewTab, comboBoxBookmarks, btnAddBookmark, btnManageBookmarks, toolStripSeparatorZoom, btnZoomOut, lblZoom, btnZoomIn, txtUrl, btnGo, toolStripSeparatorProvider, btnProviderDoubao, btnProviderDeepseek, btnProviderZhipu, btnProviderQwen, btnProviderSpark, btnProviderWenxin, toolStripSeparator, btnOpenNetdisk, btnPanTool, toolStripSeparatorTools, btnOpenInBrowser, progressBarLoading, lblLoadingStatus });
+            toolStrip.Items.AddRange(new ToolStripItem[] { btnBack, btnForward, btnRefresh, btnNewTab, comboBoxBookmarks, btnAddBookmark, btnManageBookmarks, toolStripSeparatorZoom, btnZoomOut, lblZoom, btnZoomIn, txtUrl, btnGo, toolStripSeparatorProvider, btnProviderDoubao, btnProviderDeepseek, btnProviderZhipu, btnProviderQwen, btnProviderSpark, btnProviderWenxin, toolStripSeparator, btnOpenNetdisk, btnPanTool, btnScreenshot, toolStripSeparatorTools, btnOpenInBrowser, progressBarLoading, lblLoadingStatus });
             toolStrip.Location = new Point(0, 0);
             toolStrip.Name = "toolStrip";
             toolStrip.Size = new Size(1566, 25);
@@ -2390,9 +2368,19 @@ namespace LearningAssistant.Forms.Web
             btnPanTool.ImageTransparentColor = Color.Magenta;
             btnPanTool.Name = "btnPanTool";
             btnPanTool.Size = new Size(104, 22);
-            btnPanTool.Text = "\U0001f9f0 网盘整理工具";
-            btnPanTool.ToolTipText = "分析当前网盘目录并给出整理建议";
+            btnPanTool.Text = "\U0001f9f0 网盘分析整理";
+            btnPanTool.ToolTipText = "分析当前网盘目录，并在分析窗体中进入手工整理";
             btnPanTool.Click += btnAiAnalyze_Click;
+            // 
+            // btnScreenshot
+            // 
+            btnScreenshot.DisplayStyle = ToolStripItemDisplayStyle.Text;
+            btnScreenshot.ImageTransparentColor = Color.Magenta;
+            btnScreenshot.Name = "btnScreenshot";
+            btnScreenshot.Size = new Size(80, 22);
+            btnScreenshot.Text = "✂ 区域截图";
+            btnScreenshot.ToolTipText = "框选网页区域并保存为图片";
+            btnScreenshot.Click += btnScreenshot_Click;
             // 
             // toolStripSeparatorTools
             // 

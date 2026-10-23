@@ -1,6 +1,7 @@
 using LearningAssistant.Abstractions;
 using LearningAssistant.Common;
 using LearningAssistant.Common.Themes;
+using LearningAssistant.Forms.Common;
 using LearningAssistant.Forms.Gamification;
 using LearningAssistant.Forms.Learning;
 using LearningAssistant.Forms.UserControls.Cards;
@@ -222,12 +223,15 @@ namespace LearningAssistant.Forms.Main
                 new() { Key = "dashboard", Icon = "🏠", Text = "首页", Order = 0, Group = "main" },
                 new() { Key = "learning", Icon = "📚", Text = "学习", Order = 1, Group = "main" },
                 new() { Key = "pdf", Icon = "📖", Text = "PDF阅读", Order = 2, Group = "main" },
-                new() { Key = "browser", Icon = "🌐", Text = "浏览器", Order = 3, Group = "tools" },
-                new() { Key = "editor", Icon = "✏️", Text = "内容编辑", Order = 4, Group = "tools" },
-                new() { Key = "data", Icon = "📊", Text = "学习数据", Order = 5, Group = "main" },
-                new() { Key = "settings", Icon = "⚙️", Text = "设置", Order = 6, Group = "system" },
+                new() { Key = "flashcard", Icon = "🃏", Text = "闪卡复习", Order = 3, Group = "main" },
+                new() { Key = "notes", Icon = "📝", Text = "笔记", Order = 4, Group = "main" },
+                new() { Key = "pomodoro", Icon = "🍅", Text = "番茄钟", Order = 5, Group = "tools" },
+                new() { Key = "browser", Icon = "🌐", Text = "浏览器", Order = 6, Group = "tools" },
+                new() { Key = "editor", Icon = "✏️", Text = "内容编辑", Order = 7, Group = "tools" },
+                new() { Key = "data", Icon = "📊", Text = "学习数据", Order = 8, Group = "main" },
+                new() { Key = "settings", Icon = "⚙️", Text = "设置", Order = 9, Group = "system" },
                 new() {
-                    Key = "games", Icon = "🎮", Text = "游戏", Order = 7, Group = "main",
+                    Key = "games", Icon = "🎮", Text = "游戏", Order = 10, Group = "main",
                     Children = new List<NavigationItem>
                     {
                         new() { Key = "spelling", Icon = "✍️", Text = "单词拼写", Order = 11 },
@@ -458,6 +462,9 @@ namespace LearningAssistant.Forms.Main
                 case "notes":
                     _windowManager.OpenNotesWindow();
                     break;
+                case "pomodoro":
+                    OpenPomodoroWindow();
+                    break;
                 case "wrongbook":
                     buttonExportErrorBook?.PerformClick();
                     break;
@@ -591,6 +598,33 @@ namespace LearningAssistant.Forms.Main
             {
                 _logger.LogError(ex, "打开闪卡复习失败");
                 ShowMessageLocal("打开闪卡复习失败");
+            }
+        }
+
+        private PomodoroForm? _pomodoroForm;
+
+        /// <summary>打开番茄钟界面（复用已有 PomodoroTimer 控件与托盘集成）。</summary>
+        private void OpenPomodoroWindow()
+        {
+            try
+            {
+                if (_pomodoroForm is { IsDisposed: false })
+                {
+                    if (_pomodoroForm.WindowState == FormWindowState.Minimized)
+                        _pomodoroForm.WindowState = FormWindowState.Normal;
+                    _pomodoroForm.Show();
+                    _pomodoroForm.Activate();
+                    return;
+                }
+
+                _pomodoroForm = new PomodoroForm(_pomodoroService);
+                _pomodoroForm.FormClosed += (_, _) => _pomodoroForm = null;
+                _pomodoroForm.Show(this);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "打开番茄钟窗口失败");
+                ShowMessageLocal($"打开番茄钟失败：{ex.Message}");
             }
         }
 

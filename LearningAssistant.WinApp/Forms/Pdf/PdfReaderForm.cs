@@ -52,6 +52,7 @@ namespace LearningAssistant.Forms.Pdf
         private PdfAudioTrackManager? _audioTrackManager;
         private PdfAudioPanel? _audioPanel;
         private PdfAudioSidebarPanel? _audioSidebar;
+        private PdfReadingSidebarPanel? _readingSidebar;
         private SidebarHeaderBar? _translateHeader;
         private PdfTranslatePanel? _translatePanel;
         private SidebarHeaderBar? _highlightHeader;
@@ -139,7 +140,6 @@ namespace LearningAssistant.Forms.Pdf
         private TrackBar _trackBarZoom;
         private BufferedTabControl _tabControlLeft;
         private TabPage _tabPageFiles;
-        private TabPage _tabPageThumbnails;
         private Panel _panelLeftContainer;
 
         // 侧栏页签改为自绘图标：悬停页索引与统一图标字体
@@ -891,6 +891,7 @@ namespace LearningAssistant.Forms.Pdf
 
         public void OnSelectOcrClicked() => SelectOcrClicked?.Invoke(this, EventArgs.Empty);
         public void OnTranslateClicked() => TranslateClicked?.Invoke(this, EventArgs.Empty);
+        public void OnOcrPageClicked() => OcrPageClicked?.Invoke(this, EventArgs.Empty);
 
         #endregion
 
@@ -3668,6 +3669,7 @@ namespace LearningAssistant.Forms.Pdf
         public event EventHandler<string>? AskAiWithText;
         public event EventHandler? SelectOcrClicked;
         public event EventHandler? TranslateClicked;
+        public event EventHandler? OcrPageClicked;
         public event EventHandler? ToggleNightMode;
         public event EventHandler? ToggleTranslation;
         public event EventHandler? SpeakAnswer;
@@ -6250,6 +6252,7 @@ namespace LearningAssistant.Forms.Pdf
         /// <summary>把翻译 / 高亮 / 听读三个侧栏面板统一到同一套卡片式设计语言。</summary>
         private void ApplySidebarRedesign()
         {
+            BuildReadingSidebar();
             BuildTranslateSidebar();
             BuildHighlightSidebar();
             BuildAudioSidebar();
@@ -6284,6 +6287,13 @@ namespace LearningAssistant.Forms.Pdf
             _buttonStudyFlashcards.Click += ButtonStudyFlashcards_Click;
             _buttonStudyShadowing = _studyPanel.ShadowingButton;
             _buttonStudyShadowing.Click += ButtonStudyShadowing_Click;
+
+            // 「AI 与文件工具」分组入口，复用现有 AI 菜单能力，避免功能藏在右键菜单里
+            _studyPanel.SummaryButton.Click += async (_, _) => await SummarizeCurrentPageAsync();
+            _studyPanel.AskButton.Click += async (_, _) => await AskDocumentByRetrievalAsync();
+            _studyPanel.OutlineButton.Click += async (_, _) => await GenerateDocumentOutlineAsync();
+            _studyPanel.NotesButton.Click += async (_, _) => await ExportAiStudyNotesAsync();
+            _studyPanel.BatchOcrButton.Click += (_, _) => BatchOcrExport_Click();
 
             _studyItemList = _studyPanel.ItemList;
             _studyItemList.ClientSizeChanged += (_, _) => ResizeStudyItemRows();
@@ -6624,6 +6634,36 @@ namespace LearningAssistant.Forms.Pdf
             button.Tag = "secondary";
         }
 
+        /// <summary>
+        /// 侧栏二级分组之一「阅读与视图」：把原「文件」与「缩略图」两个页签合并为一个页，
+        /// 用分段条切换，形成 阅读 / 标注 / 翻译与OCR / 音频 / AI与文件 五组。
+        /// </summary>
+        private void BuildReadingSidebar()
+        {
+            if (_tabPageFiles == null) return;
+
+            if (_readingSidebar == null) return;
+
+            _readingSidebar.SelectedIndexChanged += (_, _) =>
+            {
+                if (_readingSidebar.SelectedIndex == 1 && !_thumbnailsLoaded && _presenter != null)
+                {
+                    _thumbnailsLoaded = true;
+                    _presenter.GenerateThumbnails();
+                }
+            };
+
+            // 页签仅显示图标，完整分组名在悬停提示中展示
+            _tabPageFiles.Text = "📖";
+            _tabPageBookmarksAndHighlights.Text = "📑";
+            _tabPageTranslate.Text = "🌐";
+            _tabPageAudio.Text = "🎤";
+            _tabPageStudy.Text = "🤖";
+
+            foreach (TabPage page in _tabControlLeft.TabPages)
+                page.AccessibleName = GetSidebarTabTitle(page);
+        }
+
         private void BuildTranslateSidebar()
         {
             if (_tabPageTranslate == null) return;
@@ -6632,6 +6672,7 @@ namespace LearningAssistant.Forms.Pdf
             _translatePanel.Dock = DockStyle.Fill;
             _translateHeader = _translatePanel.Header;
             _translatePanel.Header.ActionButton!.Click += (_, _) => ButtonTranslate_Click(null, EventArgs.Empty);
+            _translatePanel.OcrButton.Click += (_, _) => OcrPageClicked?.Invoke(this, EventArgs.Empty);
             _translatePanel.OriginalCard.ActionButton!.Click += (_, _) => ButtonSpeakOriginal_Click(null, EventArgs.Empty);
             _translatePanel.TranslationCard.ActionButton!.Click += (_, _) => ButtonSpeakTranslation_Click(null, EventArgs.Empty);
 
@@ -7089,15 +7130,6 @@ namespace LearningAssistant.Forms.Pdf
         /// </summary>
         private void TabControlLeft_SelectedIndexChanged(object? sender, EventArgs e)
         {
-            if (_tabControlLeft.SelectedTab == _tabPageThumbnails)
-            {
-                if (!_thumbnailsLoaded && _presenter != null)
-                {
-                    _thumbnailsLoaded = true;
-                    _presenter.GenerateThumbnails();
-                }
-            }
-
             if (_tabControlLeft.SelectedTab == _tabPageTranslate)
                 UpdateTranslateHeaderStatus();
             else if (_tabControlLeft.SelectedTab == _tabPageStudy)
@@ -7133,12 +7165,11 @@ namespace LearningAssistant.Forms.Pdf
             if (page == null) return string.Empty;
             return page.Name switch
             {
-                "_tabPageFiles" => "文件",
-                "_tabPageThumbnails" => "缩略图",
-                "_tabPageTranslate" => "翻译",
-                "_tabPageStudy" => "学习",
-                "_tabPageBookmarksAndHighlights" => "高亮",
-                "_tabPageAudio" => "音频",
+                "_tabPageFiles" => "阅读与视图（文件 / 缩略图）",
+                "_tabPageTranslate" => "翻译与 OCR",
+                "_tabPageStudy" => "AI 与文件工具",
+                "_tabPageBookmarksAndHighlights" => "标注工具",
+                "_tabPageAudio" => "音频与录音",
                 _ => page.Text
             };
         }

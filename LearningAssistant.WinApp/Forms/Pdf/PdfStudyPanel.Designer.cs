@@ -26,6 +26,13 @@ partial class PdfStudyPanel
         flashcardsButton = new Button();
         shadowingButton = new Button();
         hint = new Label();
+        aiCard = new SidebarCard();
+        aiLayout = new TableLayoutPanel();
+        summaryButton = new Button();
+        askButton = new Button();
+        outlineButton = new Button();
+        notesButton = new Button();
+        batchOcrButton = new Button();
         listCard = new SidebarCard();
         itemList = new FlowLayoutPanel();
         root.SuspendLayout();
@@ -33,6 +40,8 @@ partial class PdfStudyPanel
         overviewLayout.SuspendLayout();
         actionCard.SuspendLayout();
         actionLayout.SuspendLayout();
+        aiCard.SuspendLayout();
+        aiLayout.SuspendLayout();
         listCard.SuspendLayout();
         SuspendLayout();
         // 
@@ -44,15 +53,17 @@ partial class PdfStudyPanel
         root.Controls.Add(header, 0, 0);
         root.Controls.Add(overviewCard, 0, 1);
         root.Controls.Add(actionCard, 0, 2);
-        root.Controls.Add(listCard, 0, 3);
+        root.Controls.Add(aiCard, 0, 3);
+        root.Controls.Add(listCard, 0, 4);
         root.Dock = DockStyle.Fill;
         root.Margin = Padding.Empty;
         root.Name = "root";
         root.Padding = new Padding(6, 2, 6, 6);
-        root.RowCount = 4;
+        root.RowCount = 5;
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 150F));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 150F));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 158F));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         root.Size = new Size(288, 700);
         root.TabIndex = 0;
@@ -242,13 +253,124 @@ partial class PdfStudyPanel
         hint.Text = "高亮与闪卡会写入个人学习库，可在学习窗口按来源筛选。";
         hint.TextAlign = ContentAlignment.MiddleLeft;
         // 
+        // aiCard
+        // 
+        aiCard.Dock = DockStyle.Fill;
+        aiCard.Margin = new Padding(0, 0, 0, 4);
+        aiCard.Name = "aiCard";
+        aiCard.Size = new Size(276, 154);
+        aiCard.TabIndex = 3;
+        aiCard.Title = "AI 与文件工具";
+        // 
+        // aiLayout
+        // 
+        aiLayout.BackColor = Color.Transparent;
+        aiLayout.ColumnCount = 2;
+        aiLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        aiLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+        aiLayout.Controls.Add(summaryButton, 0, 0);
+        aiLayout.Controls.Add(askButton, 1, 0);
+        aiLayout.Controls.Add(outlineButton, 0, 1);
+        aiLayout.Controls.Add(notesButton, 1, 1);
+        aiLayout.Controls.Add(batchOcrButton, 0, 2);
+        aiLayout.Dock = DockStyle.Fill;
+        aiLayout.Margin = Padding.Empty;
+        aiLayout.Name = "aiLayout";
+        aiLayout.Padding = Padding.Empty;
+        aiLayout.RowCount = 3;
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.4F));
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.3F));
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.3F));
+        aiLayout.Size = new Size(256, 110);
+        aiLayout.TabIndex = 0;
+        // 
+        // summaryButton
+        // 
+        summaryButton.AutoEllipsis = true;
+        summaryButton.BackColor = Color.White;
+        summaryButton.Cursor = Cursors.Hand;
+        summaryButton.Dock = DockStyle.Fill;
+        summaryButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        summaryButton.FlatAppearance.BorderSize = 1;
+        summaryButton.FlatStyle = FlatStyle.Flat;
+        summaryButton.Font = new Font("Microsoft YaHei UI", 9F);
+        summaryButton.ForeColor = Color.FromArgb(15, 23, 42);
+        summaryButton.Margin = new Padding(0, 0, 4, 4);
+        summaryButton.Name = "summaryButton";
+        summaryButton.Tag = "secondary";
+        summaryButton.Text = "📄 AI 总结";
+        // 
+        // askButton
+        // 
+        askButton.AutoEllipsis = true;
+        askButton.BackColor = Color.White;
+        askButton.Cursor = Cursors.Hand;
+        askButton.Dock = DockStyle.Fill;
+        askButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        askButton.FlatAppearance.BorderSize = 1;
+        askButton.FlatStyle = FlatStyle.Flat;
+        askButton.Font = new Font("Microsoft YaHei UI", 9F);
+        askButton.ForeColor = Color.FromArgb(15, 23, 42);
+        askButton.Margin = new Padding(4, 0, 0, 4);
+        askButton.Name = "askButton";
+        askButton.Tag = "secondary";
+        askButton.Text = "💬 全文问答";
+        // 
+        // outlineButton
+        // 
+        outlineButton.AutoEllipsis = true;
+        outlineButton.BackColor = Color.White;
+        outlineButton.Cursor = Cursors.Hand;
+        outlineButton.Dock = DockStyle.Fill;
+        outlineButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        outlineButton.FlatAppearance.BorderSize = 1;
+        outlineButton.FlatStyle = FlatStyle.Flat;
+        outlineButton.Font = new Font("Microsoft YaHei UI", 9F);
+        outlineButton.ForeColor = Color.FromArgb(15, 23, 42);
+        outlineButton.Margin = new Padding(0, 0, 4, 4);
+        outlineButton.Name = "outlineButton";
+        outlineButton.Tag = "secondary";
+        outlineButton.Text = "🗂 生成大纲";
+        // 
+        // notesButton
+        // 
+        notesButton.AutoEllipsis = true;
+        notesButton.BackColor = Color.White;
+        notesButton.Cursor = Cursors.Hand;
+        notesButton.Dock = DockStyle.Fill;
+        notesButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        notesButton.FlatAppearance.BorderSize = 1;
+        notesButton.FlatStyle = FlatStyle.Flat;
+        notesButton.Font = new Font("Microsoft YaHei UI", 9F);
+        notesButton.ForeColor = Color.FromArgb(15, 23, 42);
+        notesButton.Margin = new Padding(4, 0, 0, 4);
+        notesButton.Name = "notesButton";
+        notesButton.Tag = "secondary";
+        notesButton.Text = "📝 导出笔记";
+        // 
+        // batchOcrButton
+        // 
+        batchOcrButton.AutoEllipsis = true;
+        batchOcrButton.BackColor = Color.White;
+        batchOcrButton.Cursor = Cursors.Hand;
+        batchOcrButton.Dock = DockStyle.Fill;
+        batchOcrButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        batchOcrButton.FlatAppearance.BorderSize = 1;
+        batchOcrButton.FlatStyle = FlatStyle.Flat;
+        batchOcrButton.Font = new Font("Microsoft YaHei UI", 9F);
+        batchOcrButton.ForeColor = Color.FromArgb(15, 23, 42);
+        batchOcrButton.Margin = new Padding(0, 0, 4, 0);
+        batchOcrButton.Name = "batchOcrButton";
+        batchOcrButton.Tag = "secondary";
+        batchOcrButton.Text = "🔍 批量 OCR";
+        // 
         // listCard
         // 
         listCard.Dock = DockStyle.Fill;
         listCard.Margin = Padding.Empty;
         listCard.Name = "listCard";
         listCard.Size = new Size(276, 300);
-        listCard.TabIndex = 3;
+        listCard.TabIndex = 4;
         listCard.Title = "本页学习项";
         // 
         // itemList
@@ -300,6 +422,13 @@ partial class PdfStudyPanel
     private Button flashcardsButton;
     private Button shadowingButton;
     private Label hint;
+    private SidebarCard aiCard;
+    private TableLayoutPanel aiLayout;
+    private Button summaryButton;
+    private Button askButton;
+    private Button outlineButton;
+    private Button notesButton;
+    private Button batchOcrButton;
     private SidebarCard listCard;
     private FlowLayoutPanel itemList;
 }

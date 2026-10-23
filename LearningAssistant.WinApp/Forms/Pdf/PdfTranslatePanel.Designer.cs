@@ -22,6 +22,7 @@ partial class PdfTranslatePanel
         translationCard = new SidebarCard();
         translationBox = new SyncedTextBox();
         actions = new FlowLayoutPanel();
+        ocrButton = new Button();
         shadowingButton = new Button();
         addToLearningButton = new Button();
         options = new FlowLayoutPanel();
@@ -146,6 +147,7 @@ partial class PdfTranslatePanel
         // actions
         // 
         actions.BackColor = Color.FromArgb(247, 248, 251);
+        actions.Controls.Add(ocrButton);
         actions.Controls.Add(shadowingButton);
         actions.Controls.Add(addToLearningButton);
         actions.Dock = DockStyle.Fill;
@@ -156,6 +158,23 @@ partial class PdfTranslatePanel
         actions.Size = new Size(531, 38);
         actions.TabIndex = 2;
         actions.WrapContents = false;
+        // 
+        // ocrButton
+        // 
+        ocrButton.BackColor = Color.White;
+        ocrButton.Cursor = Cursors.Hand;
+        ocrButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        ocrButton.FlatAppearance.BorderSize = 1;
+        ocrButton.FlatStyle = FlatStyle.Flat;
+        ocrButton.Font = new Font("Microsoft YaHei UI", 9F);
+        ocrButton.ForeColor = Color.FromArgb(15, 23, 42);
+        ocrButton.Margin = new Padding(0, 0, 6, 0);
+        ocrButton.Name = "ocrButton";
+        ocrButton.Size = new Size(92, 28);
+        ocrButton.TabIndex = 0;
+        ocrButton.Tag = "secondary";
+        ocrButton.Text = "🔍 整页识别";
+        ocrButton.UseVisualStyleBackColor = false;
         // 
         // shadowingButton
         // 
@@ -168,7 +187,7 @@ partial class PdfTranslatePanel
         shadowingButton.ForeColor = Color.FromArgb(15, 23, 42);
         shadowingButton.Margin = new Padding(0, 0, 6, 0);
         shadowingButton.Name = "shadowingButton";
-        shadowingButton.Size = new Size(112, 28);
+        shadowingButton.Size = new Size(96, 28);
         shadowingButton.TabIndex = 0;
         shadowingButton.Tag = "secondary";
         shadowingButton.Text = "✂ 句子跟读";
@@ -184,10 +203,10 @@ partial class PdfTranslatePanel
         addToLearningButton.Font = new Font("Microsoft YaHei UI", 9F);
         addToLearningButton.ForeColor = Color.FromArgb(15, 23, 42);
         addToLearningButton.Name = "addToLearningButton";
-        addToLearningButton.Size = new Size(118, 28);
+        addToLearningButton.Size = new Size(100, 28);
         addToLearningButton.TabIndex = 1;
         addToLearningButton.Tag = "secondary";
-        addToLearningButton.Text = "➕ 添加到学习";
+        addToLearningButton.Text = "➕ 加入学习";
         addToLearningButton.UseVisualStyleBackColor = false;
         // 
         // options
@@ -276,6 +295,7 @@ partial class PdfTranslatePanel
     private SidebarCard translationCard;
     private SyncedTextBox translationBox;
     private FlowLayoutPanel actions;
+    private Button ocrButton;
     private Button shadowingButton;
     private Button addToLearningButton;
     private FlowLayoutPanel options;

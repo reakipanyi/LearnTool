@@ -182,6 +182,7 @@ namespace LearningAssistant.Presenters
             _view.SpeakText += View_SpeakText;
             _view.SelectOcrClicked += View_SelectOcrClicked;
             _view.TranslateClicked += View_TranslateClicked;
+            _view.OcrPageClicked += View_OcrPageClicked;
             _view.ToggleNightMode += View_ToggleNightMode;
             _view.LanguageChanged += View_LanguageChanged;
             _view.AiQuestionAsked += View_AiQuestionAsked;
@@ -201,6 +202,7 @@ namespace LearningAssistant.Presenters
             _view.SpeakText -= View_SpeakText;
             _view.SelectOcrClicked -= View_SelectOcrClicked;
             _view.TranslateClicked -= View_TranslateClicked;
+            _view.OcrPageClicked -= View_OcrPageClicked;
             _view.ToggleNightMode -= View_ToggleNightMode;
             _view.LanguageChanged -= View_LanguageChanged;
             _view.AiQuestionAsked -= View_AiQuestionAsked;
@@ -1777,6 +1779,75 @@ namespace LearningAssistant.Presenters
         private async void View_TranslateClicked(object? sender, EventArgs e)
         {
             await TranslateFullPageAsync();
+        }
+
+        private async void View_OcrPageClicked(object? sender, EventArgs e)
+        {
+            await OcrFullPageAsync();
+        }
+
+        /// <summary>
+        /// 整页识别：只提取本页文字（优先文本层，回退 OCR），不发起翻译。
+        /// 供翻译页签的显式「整页识别」按钮使用，避免必须走翻译流程才能触发 OCR。
+        /// </summary>
+        private async Task OcrFullPageAsync()
+        {
+            var pageIndex = _pdfFileManager.CurrentPageIndex;
+            var cacheKey = TryBuildPageCacheKey(pageIndex);
+
+            // 已缓存过原文时直接回显，避免重复识别
+            if (cacheKey != null && TryGetPageCache(cacheKey, out var cached) && !string.IsNullOrWhiteSpace(cached.Original))
+            {
+                UpdateOcrResult(cached.Original, cached.Translation);
+                return;
+            }
+
+            var textLayer = TryGetTextLayerText(pageIndex);
+            if (!string.IsNullOrWhiteSpace(textLayer))
+            {
+                if (cacheKey != null)
+                    StorePageCache(cacheKey, textLayer, null);
+                UpdateOcrResult(textLayer, null);
+                return;
+            }
+
+            if (!_pdfOcrService.IsAvailable)
+            {
+                var errorMsg = _pdfOcrService.InitErrorMessage ?? "OCR服务未配置";
+                _view?.ShowWarning($"OCR服务未初始化:\n{errorMsg}");
+                return;
+            }
+
+            var img = _view?.GetCurrentImage();
+            if (img == null || img.Length == 0)
+            {
+                _view?.ShowWarning("当前页面无效，无法识别");
+                return;
+            }
+
+            _view?.SetLoadingState(true);
+            try
+            {
+                var original = await OcrBitmapAsync(img);
+                if (string.IsNullOrWhiteSpace(original))
+                {
+                    _view?.ShowWarning("本页未识别到文字");
+                    return;
+                }
+
+                if (cacheKey != null)
+                    StorePageCache(cacheKey, original, null);
+                UpdateOcrResult(original, null);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in OcrFullPageAsync");
+                _view?.ShowError("整页识别失败: " + ex.Message);
+            }
+            finally
+            {
+                _view?.SetLoadingState(false);
+            }
         }
 
         /// <summary>

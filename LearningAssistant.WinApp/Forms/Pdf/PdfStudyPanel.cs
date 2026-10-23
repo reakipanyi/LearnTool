@@ -12,6 +12,7 @@ public partial class PdfStudyPanel : UserControl
         // 卡片内容区由面板自行挂载，避免 VS 设计器回写时丢失
         overviewCard.Body.Controls.Add(overviewLayout);
         actionCard.Body.Controls.Add(actionLayout);
+        aiCard.Body.Controls.Add(aiLayout);
         listCard.Body.Controls.Add(itemList);
         root.Resize += (_, _) => UpdateRowHeights();
         UpdateRowHeights();
@@ -52,6 +53,31 @@ public partial class PdfStudyPanel : UserControl
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Button ShadowingButton => shadowingButton;
 
+    /// <summary>「AI 总结」按钮。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button SummaryButton => summaryButton;
+
+    /// <summary>「全文问答」按钮。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button AskButton => askButton;
+
+    /// <summary>「生成大纲」按钮。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button OutlineButton => outlineButton;
+
+    /// <summary>「导出笔记」按钮。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button NotesButton => notesButton;
+
+    /// <summary>「批量 OCR」按钮。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button BatchOcrButton => batchOcrButton;
+
     /// <summary>本页学习项列表容器。</summary>
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -74,10 +100,13 @@ public partial class PdfStudyPanel : UserControl
 
         float overviewHeight = statHeight * 3 + 44;
         float actionHeight = 40 + 3 * (buttonHeight + 6) + hintHeight + 6 + 4;
+        float aiHeight = 40 + 3 * (buttonHeight + 4);
 
         if (Math.Abs(root.RowStyles[1].Height - overviewHeight) > 0.5f)
             root.RowStyles[1].Height = overviewHeight;
         if (Math.Abs(root.RowStyles[2].Height - actionHeight) > 0.5f)
             root.RowStyles[2].Height = actionHeight;
+        if (root.RowStyles.Count > 3 && Math.Abs(root.RowStyles[3].Height - aiHeight) > 0.5f)
+            root.RowStyles[3].Height = aiHeight;
     }
 }

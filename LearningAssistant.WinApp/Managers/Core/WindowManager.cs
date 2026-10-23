@@ -11,6 +11,7 @@ using LearningAssistant.Models.Config;
 using LearningAssistant.Presenters;
 using LearningAssistant.Services;
 using LearningAssistant.Services.Cloud;
+using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Web;
 using LearningAssistant.Views;
 using Microsoft.Extensions.DependencyInjection;
@@ -351,6 +352,27 @@ namespace LearningAssistant.Managers
         {
             _logger.LogInformation("Opening notes window");
 
+            try
+            {
+                var noteService = _serviceProvider.GetService<INoteService>();
+                if (noteService == null)
+                {
+                    MessageBox.Show("笔记服务不可用，无法打开笔记管理。", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                var sessionService = _serviceProvider.GetService<IUserSessionService>();
+                var form = new NotesManagerForm(noteService, sessionService)
+                {
+                    StartPosition = FormStartPosition.CenterParent
+                };
+                ShowNonModalForm(form);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to open notes window");
+                throw;
+            }
         }
 
         public void OpenAIWebViewWindow(string? initialPrompt = null)

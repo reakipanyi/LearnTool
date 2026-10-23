@@ -14,6 +14,9 @@ public partial class PdfTranslatePanel : UserControl
         // 放在构造里可保证设计视图与运行期都能看到文本框。
         originalCard.Body.Controls.Add(originalBox);
         translationCard.Body.Controls.Add(translationBox);
+        _tip.SetToolTip(ocrButton, "仅识别本页文字，不翻译；无文本层时自动调用 OCR");
+        _tip.SetToolTip(shadowingButton, "用当前页原文进入句子跟读");
+        _tip.SetToolTip(addToLearningButton, "把选区或本页原文加入个人学习库");
         _tip.SetToolTip(autoTranslateCheck, "识别后自动翻译原文");
         _tip.SetToolTip(autoSpeakCheck, "识别后自动朗读原文");
         _tip.SetToolTip(aiPolishCheck, "使用 AI 术语表润色译文，保持术语前后一致（失败时自动保留机器译文）");
@@ -56,6 +59,11 @@ public partial class PdfTranslatePanel : UserControl
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public SyncedTextBox TranslationBox => translationBox;
+
+    /// <summary>整页识别（OCR）按钮。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button OcrButton => ocrButton;
 
     /// <summary>句子跟读按钮。</summary>
     [Browsable(false)]
