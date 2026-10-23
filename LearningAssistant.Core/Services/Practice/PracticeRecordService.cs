@@ -196,7 +196,6 @@ namespace LearningAssistant.Services.Practice
 
                 summary.TotalCount = records.Count;
                 summary.ShadowingCount = records.Count(r => r.Type == (int)PracticeType.Shadowing);
-                summary.DictationCount = records.Count(r => r.Type == (int)PracticeType.Dictation);
                 summary.AverageScore = records.Count == 0 ? 0 : records.Average(r => r.Score);
 
                 if (records.Count > 0)

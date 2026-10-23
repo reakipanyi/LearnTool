@@ -10,8 +10,8 @@ using Microsoft.Extensions.Logging;
 namespace LearningAssistant.Forms.Learning
 {
     /// <summary>
-    /// 单词练习窗口（P2）：提供跟读（TTS 示范 + 录音 + 参考分）与听写（听音写词）。
-    /// 结果统一写入练习记录；听写未通过时由服务侧发布 ItemWrongEvent 进入错题本。
+    /// 单词练习窗口（P2）：提供跟读（TTS 示范 + 录音 + 参考分）。
+    /// 结果统一写入练习记录。
     /// </summary>
     public sealed class WordPracticeForm : Form, IThemeable
     {
@@ -20,15 +20,13 @@ namespace LearningAssistant.Forms.Learning
         private readonly ILogger<WordPracticeForm>? _logger;
         private readonly IThemeService? _themeService;
         private readonly ISubtitleParser? _subtitleParser;
-        private readonly bool _startInDictation;
 
         private readonly Panel _headerPanel = new();
         private readonly Label _labelWord = new();
         private readonly Label _labelMeta = new();
         private readonly Button _buttonSpeak = new();
-        private readonly TabControl _tabs = new();
+        private readonly Panel _shadowPanel = new();
 
-        private readonly TabPage _tabShadow = new();
         private readonly Label _labelShadowHint = new();
         private readonly Button _buttonShadowPlay = new();
         private readonly Button _buttonShadowStart = new();
@@ -37,14 +35,6 @@ namespace LearningAssistant.Forms.Learning
         private readonly Label _labelShadowStatus = new();
         private readonly Label _labelShadowResult = new();
         private readonly System.Windows.Forms.Timer _recordingTimer = new() { Interval = 200 };
-
-        private readonly TabPage _tabDictation = new();
-        private readonly Label _labelDictationHint = new();
-        private readonly Button _buttonDictationPlay = new();
-        private readonly TextBox _textBoxDictationInput = new();
-        private readonly Button _buttonDictationCheck = new();
-        private readonly Label _labelDictationResult = new();
-        private readonly Label _labelDictationDetail = new();
 
         private NAudioMediaPlayer? _replayPlayer;
         private string? _lastRecordingPath;
@@ -57,14 +47,12 @@ namespace LearningAssistant.Forms.Learning
             LearningItem item,
             IWordPracticeService practice,
             ILogger<WordPracticeForm>? logger = null,
-            IThemeService? themeService = null,
-            bool startInDictation = false)
+            IThemeService? themeService = null)
         {
             _item = item ?? throw new ArgumentNullException(nameof(item));
             _practice = practice ?? throw new ArgumentNullException(nameof(practice));
             _logger = logger;
             _themeService = themeService;
-            _startInDictation = startInDictation;
             _subtitleParser = Program.GetService<ISubtitleParser>();
 
             InitializeComponent();
@@ -84,9 +72,7 @@ namespace LearningAssistant.Forms.Learning
             KeyPreview = true;
 
             BuildHeader();
-            BuildTabs();
-            BuildShadowTab();
-            BuildDictationTab();
+            BuildShadowPanel();
 
             var root = new TableLayoutPanel
             {
@@ -98,7 +84,7 @@ namespace LearningAssistant.Forms.Learning
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 78F));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             root.Controls.Add(_headerPanel, 0, 0);
-            root.Controls.Add(_tabs, 0, 1);
+            root.Controls.Add(_shadowPanel, 0, 1);
             Controls.Add(root);
 
             _recordingTimer.Tick += RecordingTimer_Tick;
@@ -141,22 +127,11 @@ namespace LearningAssistant.Forms.Learning
             _headerPanel.Controls.Add(_labelWord);
         }
 
-        private void BuildTabs()
+        private void BuildShadowPanel()
         {
-            _tabs.Dock = DockStyle.Fill;
-            _tabs.Font = new Font("微软雅黑", 10F, FontStyle.Bold);
+            _shadowPanel.Dock = DockStyle.Fill;
+            _shadowPanel.BackColor = Color.White;
 
-            _tabShadow.Text = "🎤 跟读";
-            _tabDictation.Text = "⌨️ 听写";
-            _tabs.TabPages.Add(_tabShadow);
-            _tabs.TabPages.Add(_tabDictation);
-
-            if (_startInDictation)
-                _tabs.SelectedTab = _tabDictation;
-        }
-
-        private void BuildShadowTab()
-        {
             var layout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
@@ -210,71 +185,7 @@ namespace LearningAssistant.Forms.Learning
             layout.Controls.Add(_labelShadowStatus, 0, 2);
             layout.Controls.Add(_labelShadowResult, 0, 3);
 
-            _tabShadow.Controls.Add(layout);
-        }
-
-        private void BuildDictationTab()
-        {
-            var layout = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 1,
-                RowCount = 6,
-                Padding = new Padding(12, 14, 12, 12)
-            };
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 60F));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-
-            _labelDictationHint.Text = "① 播放读音 → ② 输入听到的内容 → ③ 提交判定（错误自动进入错题本）";
-            _labelDictationHint.Dock = DockStyle.Fill;
-            _labelDictationHint.ForeColor = Color.FromArgb(100, 116, 139);
-
-            var playPanel = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                WrapContents = false,
-                FlowDirection = FlowDirection.LeftToRight
-            };
-            ConfigureShadowButton(_buttonDictationPlay, "🔊 播放读音", Color.FromArgb(59, 130, 246));
-            _buttonDictationPlay.Click += ButtonDictationPlay_Click;
-            playPanel.Controls.Add(_buttonDictationPlay);
-
-            _textBoxDictationInput.Dock = DockStyle.Fill;
-            _textBoxDictationInput.Font = new Font("微软雅黑", 12F);
-            _textBoxDictationInput.BorderStyle = BorderStyle.FixedSingle;
-            _textBoxDictationInput.PlaceholderText = "请输入听到的单词";
-
-            var checkPanel = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                WrapContents = false,
-                FlowDirection = FlowDirection.LeftToRight
-            };
-            ConfigureShadowButton(_buttonDictationCheck, "✅ 提交判定", Color.FromArgb(139, 92, 246));
-            _buttonDictationCheck.Click += ButtonDictationCheck_Click;
-            checkPanel.Controls.Add(_buttonDictationCheck);
-
-            _labelDictationResult.Dock = DockStyle.Fill;
-            _labelDictationResult.Font = new Font("微软雅黑", 12F, FontStyle.Bold);
-            _labelDictationResult.ForeColor = Color.FromArgb(15, 23, 42);
-            _labelDictationResult.TextAlign = ContentAlignment.TopLeft;
-
-            _labelDictationDetail.Dock = DockStyle.Fill;
-            _labelDictationDetail.ForeColor = Color.FromArgb(100, 116, 139);
-            _labelDictationDetail.TextAlign = ContentAlignment.TopLeft;
-
-            layout.Controls.Add(_labelDictationHint, 0, 0);
-            layout.Controls.Add(playPanel, 0, 1);
-            layout.Controls.Add(_textBoxDictationInput, 0, 2);
-            layout.Controls.Add(checkPanel, 0, 3);
-            layout.Controls.Add(_labelDictationResult, 0, 4);
-            layout.Controls.Add(_labelDictationDetail, 0, 5);
-
-            _tabDictation.Controls.Add(layout);
+            _shadowPanel.Controls.Add(layout);
         }
 
         private static void ConfigureShadowButton(Button button, string text, Color backColor)
@@ -322,8 +233,6 @@ namespace LearningAssistant.Forms.Learning
             _buttonShadowReplay.Enabled = !_isRecording && !_isBusy
                 && !string.IsNullOrWhiteSpace(_lastRecordingPath)
                 && File.Exists(_lastRecordingPath);
-            _buttonDictationPlay.Enabled = !_isBusy;
-            _buttonDictationCheck.Enabled = !_isBusy;
         }
 
         private async void ButtonSpeak_Click(object? sender, EventArgs e)
@@ -332,11 +241,6 @@ namespace LearningAssistant.Forms.Learning
         }
 
         private async void ButtonShadowPlay_Click(object? sender, EventArgs e)
-        {
-            await PlayModelAsync();
-        }
-
-        private async void ButtonDictationPlay_Click(object? sender, EventArgs e)
         {
             await PlayModelAsync();
         }
@@ -470,43 +374,6 @@ namespace LearningAssistant.Forms.Learning
             }
         }
 
-        private async void ButtonDictationCheck_Click(object? sender, EventArgs e)
-        {
-            if (_isBusy) return;
-
-            _isBusy = true;
-            UpdateShadowControls();
-            try
-            {
-                var check = _practice.CheckDictation(_item, _textBoxDictationInput.Text);
-                var record = await _practice.RecordDictationAsync(_item, _textBoxDictationInput.Text, check);
-
-                if (check.IsCorrect)
-                {
-                    _labelDictationResult.ForeColor = Color.FromArgb(34, 197, 94);
-                    _labelDictationResult.Text = $"✅ 正确（匹配度 {check.Score} / 100）";
-                    _labelDictationDetail.Text = $"用时 {record.DurationMs / 1000.0:0.0}s，已写入练习记录";
-                }
-                else
-                {
-                    _labelDictationResult.ForeColor = Color.FromArgb(239, 68, 68);
-                    _labelDictationResult.Text = $"❌ 拼写不符（匹配度 {check.Score} / 100）";
-                    _labelDictationDetail.Text = $"正确写法：{check.Expected}\n已自动加入错题本，可在复习中巩固。";
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogWarning(ex, "听写判定失败");
-                _labelDictationResult.ForeColor = Color.FromArgb(239, 68, 68);
-                _labelDictationResult.Text = $"判定失败：{ex.Message}";
-            }
-            finally
-            {
-                _isBusy = false;
-                UpdateShadowControls();
-            }
-        }
-
         private void RecordingTimer_Tick(object? sender, EventArgs e)
         {
             if (!_isRecording) return;
@@ -564,25 +431,13 @@ namespace LearningAssistant.Forms.Learning
 
             BackColor = colors.Background;
             _headerPanel.BackColor = colors.Surface;
-            _tabs.BackColor = colors.Background;
-            _tabShadow.BackColor = colors.Background;
-            _tabDictation.BackColor = colors.Background;
+            _shadowPanel.BackColor = colors.Background;
 
             _labelWord.ForeColor = colors.TextPrimary;
             _labelMeta.ForeColor = colors.TextSecondary;
             _labelShadowHint.ForeColor = colors.TextSecondary;
             _labelShadowStatus.ForeColor = colors.TextSecondary;
             _labelShadowResult.ForeColor = colors.Primary;
-            _labelDictationHint.ForeColor = colors.TextSecondary;
-            _labelDictationDetail.ForeColor = colors.TextSecondary;
-
-            _textBoxDictationInput.BackColor = colors.Surface;
-            _textBoxDictationInput.ForeColor = colors.TextPrimary;
-
-            var shadowResultColor = _labelDictationResult.ForeColor;
-            if (shadowResultColor == Color.FromArgb(34, 197, 94)) _labelDictationResult.ForeColor = colors.Success;
-            else if (shadowResultColor == Color.FromArgb(239, 68, 68)) _labelDictationResult.ForeColor = colors.Error;
-            else _labelDictationResult.ForeColor = colors.TextPrimary;
         }
     }
 }

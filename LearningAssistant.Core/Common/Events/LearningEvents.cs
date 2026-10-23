@@ -55,7 +55,7 @@ namespace LearningAssistant.Common.Events
         public DateTime WrongAt { get; set; } = DateTime.Now;
     }
     /// <summary>
-    /// 练习完成事件（P2）：跟读/听写等练习结果落库后发布，供统计、推荐与成就联动。
+    /// 练习完成事件（P2）：跟读等练习结果落库后发布，供统计、推荐与成就联动。
     /// </summary>
     public class PracticeCompletedEvent : ApplicationEventBase
     {

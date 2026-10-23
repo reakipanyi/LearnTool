@@ -884,7 +884,7 @@ namespace LearningAssistant.Data.Database
     }
 
     /// <summary>
-    /// 练习记录（P2）：跟读、听写的单次结果，用于统计下钻与回放。
+    /// 练习记录（P2）：跟读的单次结果，用于统计下钻与回放。
     /// </summary>
     public class PracticeRecordEntity : UserEntityBase
     {

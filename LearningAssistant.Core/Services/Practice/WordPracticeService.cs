@@ -1,5 +1,4 @@
 using LearningAssistant.Common;
-using LearningAssistant.Common.Events;
 using LearningAssistant.Models.Learning;
 using LearningAssistant.Models.Pdf;
 using LearningAssistant.Models.Practice;
@@ -12,15 +11,6 @@ using System.Text.Json;
 
 namespace LearningAssistant.Services.Practice
 {
-    /// <summary>听写判定结果（分数为 0-100 的相似度参考）。</summary>
-    public sealed class DictationCheckResult
-    {
-        public bool IsCorrect { get; init; }
-        public int Score { get; init; }
-        public string Expected { get; init; } = string.Empty;
-        public string NormalizedInput { get; init; } = string.Empty;
-    }
-
     public interface IWordPracticeService
     {
         bool IsPronunciationScoringAvailable { get; }
@@ -29,13 +19,10 @@ namespace LearningAssistant.Services.Practice
         Task PlayModelAsync(LearningItem item, CancellationToken cancellationToken = default);
         bool StartShadowing(LearningItem item);
         Task<PracticeRecord?> StopShadowingAsync(LearningItem item, int? selfScore = null, CancellationToken cancellationToken = default);
-        DictationCheckResult CheckDictation(LearningItem item, string? input);
-        Task<PracticeRecord> RecordDictationAsync(LearningItem item, string? input, DictationCheckResult check, CancellationToken cancellationToken = default);
     }
 
     /// <summary>
-    /// 单词跟读/听写（P2）：复用 TTS、全局录音服务与发音参考评分器。
-    /// 跟读只记录练习结果；听写未通过时才发布 ItemWrongEvent 进入错题本。
+    /// 单词跟读（P2）：复用 TTS、全局录音服务与发音参考评分器。
     /// </summary>
     public sealed class WordPracticeService : IWordPracticeService
     {
@@ -44,7 +31,6 @@ namespace LearningAssistant.Services.Practice
         private readonly IPronunciationScorer? _scorer;
         private readonly IPracticeRecordService _recordService;
         private readonly IUserSessionService _sessionService;
-        private readonly IEventBus? _eventBus;
         private readonly ILogger<WordPracticeService>? _logger;
 
         private readonly object _recordingLock = new object();
@@ -58,7 +44,6 @@ namespace LearningAssistant.Services.Practice
             IPracticeRecordService recordService,
             IUserSessionService sessionService,
             IPronunciationScorer? scorer = null,
-            IEventBus? eventBus = null,
             ILogger<WordPracticeService>? logger = null)
         {
             _ttsService = ttsService;
@@ -66,7 +51,6 @@ namespace LearningAssistant.Services.Practice
             _recordService = recordService;
             _sessionService = sessionService;
             _scorer = scorer;
-            _eventBus = eventBus;
             _logger = logger;
         }
 
@@ -230,78 +214,6 @@ namespace LearningAssistant.Services.Practice
             return record;
         }
 
-        public DictationCheckResult CheckDictation(LearningItem item, string? input)
-        {
-            var expected = item.GetMainContent().Trim();
-            var normalizedExpected = Normalize(expected);
-            var normalizedInput = Normalize(input ?? string.Empty);
-
-            if (normalizedExpected.Length == 0)
-            {
-                return new DictationCheckResult
-                {
-                    IsCorrect = true,
-                    Score = 100,
-                    Expected = expected,
-                    NormalizedInput = normalizedInput
-                };
-            }
-
-            var score = normalizedExpected == normalizedInput
-                ? 100
-                : (int)Math.Round(Similarity(normalizedExpected, normalizedInput) * 100);
-
-            return new DictationCheckResult
-            {
-                IsCorrect = score >= 80,
-                Score = score,
-                Expected = expected,
-                NormalizedInput = normalizedInput
-            };
-        }
-
-        public async Task<PracticeRecord> RecordDictationAsync(
-            LearningItem item,
-            string? input,
-            DictationCheckResult check,
-            CancellationToken cancellationToken = default)
-        {
-            var record = new PracticeRecord
-            {
-                UserId = ResolveUserId(item),
-                LearningItemId = item.Id,
-                ItemContent = item.GetMainContent(),
-                Type = PracticeType.Dictation,
-                SourceType = LearningItemClassification.GetEffectiveSourceType(item),
-                Score = check.Score,
-                MaxScore = 100,
-                MetaJson = JsonSerializer.Serialize(new
-                {
-                    input = input ?? string.Empty,
-                    normalizedInput = check.NormalizedInput,
-                    passed = check.IsCorrect
-                })
-            };
-
-            await _recordService.SaveAsync(record, cancellationToken);
-
-            if (!check.IsCorrect)
-            {
-                _eventBus?.Publish(new ItemWrongEvent
-                {
-                    UserId = record.UserId,
-                    ItemId = item.Id ?? string.Empty,
-                    ItemContent = item.GetMainContent(),
-                    CorrectAnswer = item.GetDisplayText(),
-                    UserAnswer = input ?? string.Empty,
-                    SubCategory = item.SubCategory.ToString(),
-                    LearningType = "听写"
-                });
-            }
-
-            return record;
-        }
-
         private void CleanupRecordingSubscription()
         {
             if (_recordingHandler != null)
@@ -333,50 +245,6 @@ namespace LearningAssistant.Services.Practice
                 .ToArray());
 
             return string.IsNullOrWhiteSpace(safe) ? "word" : safe;
-        }
-
-        private static string Normalize(string text)
-        {
-            if (string.IsNullOrWhiteSpace(text)) return string.Empty;
-
-            var builder = new System.Text.StringBuilder(text.Length);
-            foreach (var ch in text.Trim().ToLowerInvariant())
-            {
-                if (char.IsLetterOrDigit(ch) || ch > 127)
-                    builder.Append(ch);
-            }
-
-            return builder.ToString();
-        }
-
-        /// <summary>基于编辑距离的相似度（0-1）。</summary>
-        private static double Similarity(string expected, string actual)
-        {
-            if (expected.Length == 0 && actual.Length == 0) return 1.0;
-            if (expected.Length == 0 || actual.Length == 0) return 0.0;
-
-            var previous = new int[actual.Length + 1];
-            var current = new int[actual.Length + 1];
-
-            for (var j = 0; j <= actual.Length; j++)
-                previous[j] = j;
-
-            for (var i = 1; i <= expected.Length; i++)
-            {
-                current[0] = i;
-                for (var j = 1; j <= actual.Length; j++)
-                {
-                    var cost = expected[i - 1] == actual[j - 1] ? 0 : 1;
-                    current[j] = Math.Min(
-                        Math.Min(current[j - 1] + 1, previous[j] + 1),
-                        previous[j - 1] + cost);
-                }
-
-                (previous, current) = (current, previous);
-            }
-
-            var distance = previous[actual.Length];
-            return 1.0 - (double)distance / Math.Max(expected.Length, actual.Length);
         }
     }
 }

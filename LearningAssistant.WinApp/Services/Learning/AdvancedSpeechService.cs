@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Logging;
-using System.Speech.Recognition;
 using System.Speech.Synthesis;
 using System.Text.RegularExpressions;
 
@@ -8,12 +7,9 @@ namespace LearningAssistant.Services.Learning
     public interface IAdvancedSpeechService
     {
         void SpeakWithPhonetics(string text);
-        void StartDictationWithFeedback(Action<string, double> onResult);
-        void StopDictation();
         PronunciationResult CheckPronunciation(string word, string expected);
         List<PhoneticInfo> GetPhonetics(string word);
         void PlayPronunciation(string word);
-        DictationScore StartDictationSessionWithScore(string expectedText, int timeoutSeconds = 30);
         void SpeakWithEmphasis(string text, Dictionary<string, int> emphasisWords);
         List<string> GetAvailableVoices();
         void SetVoice(string voiceName);
@@ -39,13 +35,9 @@ namespace LearningAssistant.Services.Learning
     public class AdvancedSpeechService : IAdvancedSpeechService, IDisposable
     {
         private readonly ILogger<AdvancedSpeechService>? _logger;
-        private SpeechRecognitionEngine? _recognizer;
         private SpeechSynthesizer? _synthesizer;
         private bool _disposed = false;
         private bool _isInitialized = false;
-
-        public event EventHandler<DictationResultEventArgs>? DictationCompleted;
-        public event EventHandler<string>? DictationError;
 
         public AdvancedSpeechService(ILogger<AdvancedSpeechService>? logger = null)
         {
@@ -58,23 +50,8 @@ namespace LearningAssistant.Services.Learning
 
             try
             {
-                _recognizer = new SpeechRecognitionEngine();
-                var dictationGrammar = new DictationGrammar();
-                _recognizer.LoadGrammar(dictationGrammar);
-                _recognizer.SetInputToDefaultAudioDevice();
-
                 _synthesizer = new SpeechSynthesizer();
                 _synthesizer.SetOutputToDefaultAudioDevice();
-
-                _recognizer.SpeechRecognized += (sender, e) =>
-                {
-                    OnDictationCompleted(e.Result.Text, true);
-                };
-
-                _recognizer.SpeechRecognitionRejected += (sender, e) =>
-                {
-                    OnDictationCompleted(string.Empty, false);
-                };
 
                 _isInitialized = true;
                 _logger?.LogInformation("高级语音服务初始化成功");
@@ -104,46 +81,6 @@ namespace LearningAssistant.Services.Learning
             catch (Exception ex)
             {
                 _logger?.LogError(ex, "带音标朗读失败");
-            }
-        }
-
-        public void StartDictationWithFeedback(Action<string, double> onResult)
-        {
-            EnsureInitialized();
-
-            if (_recognizer == null)
-            {
-                _logger?.LogError("语音识别引擎未初始化");
-                return;
-            }
-
-            try
-            {
-                _recognizer.SpeechRecognized += (sender, e) =>
-                {
-                    var confidence = e.Result.Confidence;
-                    onResult?.Invoke(e.Result.Text, confidence);
-                };
-
-                _recognizer.RecognizeAsync(RecognizeMode.Multiple);
-                _logger?.LogInformation("带反馈的听写已开始");
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "启动带反馈的听写失败");
-            }
-        }
-
-        public void StopDictation()
-        {
-            try
-            {
-                _recognizer?.RecognizeAsyncStop();
-                _logger?.LogInformation("听写已停止");
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "停止听写失败");
             }
         }
 
@@ -246,54 +183,6 @@ namespace LearningAssistant.Services.Learning
             }
         }
 
-        public DictationScore StartDictationSessionWithScore(string expectedText, int timeoutSeconds = 30)
-        {
-            EnsureInitialized();
-
-            if (_recognizer == null)
-            {
-                return new DictationScore(false, 0, string.Empty, "语音识别引擎未初始化");
-            }
-
-            string? recognizedText = null;
-
-            EventHandler<SpeechRecognizedEventArgs> recognizedHandler = (sender, e) =>
-            {
-                recognizedText = e.Result.Text;
-                _logger?.LogInformation("识别结果: {Text}", recognizedText);
-            };
-
-            try
-            {
-                _recognizer.SpeechRecognized += recognizedHandler;
-
-                _recognizer.RecognizeAsync(RecognizeMode.Single);
-
-                System.Threading.Thread.Sleep(timeoutSeconds * 1000);
-
-                _recognizer.RecognizeAsyncStop();
-
-                if (string.IsNullOrEmpty(recognizedText))
-                {
-                    return new DictationScore(false, 0, string.Empty, "超时或未识别");
-                }
-
-                return ScoreDictation(expectedText, recognizedText);
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "听写会话失败");
-                return new DictationScore(false, 0, string.Empty, ex.Message);
-            }
-            finally
-            {
-                if (_recognizer != null)
-                {
-                    _recognizer.SpeechRecognized -= recognizedHandler;
-                }
-            }
-        }
-
         public void SpeakWithEmphasis(string text, Dictionary<string, int> emphasisWords)
         {
             EnsureInitialized();
@@ -389,7 +278,6 @@ namespace LearningAssistant.Services.Learning
             {
                 try
                 {
-                    _recognizer?.Dispose();
                     _synthesizer?.Dispose();
                     _logger?.LogInformation("AdvancedSpeechService disposed");
                 }
@@ -470,62 +358,5 @@ namespace LearningAssistant.Services.Learning
 
             return costs[s2.Length];
         }
-
-        private void OnDictationCompleted(string text, bool success)
-        {
-            try
-            {
-                DictationCompleted?.Invoke(this, new DictationResultEventArgs(text, success));
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogError(ex, "Error invoking DictationCompleted event");
-            }
-        }
-
-        private DictationScore ScoreDictation(string expected, string actual)
-        {
-            var expectedClean = CleanText(expected);
-            var actualClean = CleanText(actual);
-
-            var similarity = CalculateSimilarity(expectedClean, actualClean);
-            var isCorrect = similarity >= 0.8;
-
-            return new DictationScore(isCorrect, (int)(similarity * 100), actual, string.Empty);
-        }
     }
-
-    #region 数据模型
-
-    /// <summary>听写评分结果（从重复的 SpeechService 合并而来）</summary>
-    public class DictationScore
-    {
-        public bool Passed { get; }
-        public int Score { get; }
-        public string RecognizedText { get; }
-        public string Message { get; }
-
-        public DictationScore(bool passed, int score, string recognizedText, string message)
-        {
-            Passed = passed;
-            Score = score;
-            RecognizedText = recognizedText;
-            Message = message;
-        }
-    }
-
-    /// <summary>听写完成事件参数（从重复的 SpeechService 合并而来）</summary>
-    public class DictationResultEventArgs : EventArgs
-    {
-        public string Text { get; }
-        public bool Success { get; }
-
-        public DictationResultEventArgs(string text, bool success)
-        {
-            Text = text;
-            Success = success;
-        }
-    }
-
-    #endregion
 }

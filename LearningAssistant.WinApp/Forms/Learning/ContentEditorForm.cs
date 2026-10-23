@@ -651,7 +651,7 @@ namespace LearningAssistant.Forms.Learning
         }
 
         /// <summary>
-        /// 试学预览（P3）：用当前表格行构造学习项，弹窗展示内容并提供朗读/跟读/听写入口。
+        /// 试学预览（P3）：用当前表格行构造学习项，弹窗展示内容并提供朗读/跟读入口。
         /// </summary>
         private void ButtonPreview_Click(object? sender, EventArgs e)
         {
@@ -829,9 +829,7 @@ namespace LearningAssistant.Forms.Learning
                 var buttonSpeak = CreateButton("🔊 朗读", Color.FromArgb(59, 130, 246));
                 buttonSpeak.Click += ButtonSpeak_Click;
                 var buttonShadow = CreateButton("🗣 跟读", Color.FromArgb(34, 197, 94));
-                buttonShadow.Click += (_, _) => StartPractice(false);
-                var buttonDictation = CreateButton("⌨️ 听写", Color.FromArgb(249, 115, 22));
-                buttonDictation.Click += (_, _) => StartPractice(true);
+                buttonShadow.Click += (_, _) => StartPractice();
                 var buttonClose = CreateButton("关闭", Color.FromArgb(100, 116, 139));
                 buttonClose.DialogResult = DialogResult.Cancel;
 
@@ -842,7 +840,6 @@ namespace LearningAssistant.Forms.Learning
 
                 buttonPanel.Controls.Add(buttonSpeak);
                 buttonPanel.Controls.Add(buttonShadow);
-                buttonPanel.Controls.Add(buttonDictation);
                 buttonPanel.Controls.Add(buttonClose);
 
                 root.Controls.Add(labelContent, 0, 0);
@@ -910,7 +907,7 @@ namespace LearningAssistant.Forms.Learning
                 }
             }
 
-            private void StartPractice(bool startInDictation)
+            private void StartPractice()
             {
                 if (_practice == null)
                 {
@@ -922,8 +919,7 @@ namespace LearningAssistant.Forms.Learning
                     _item,
                     _practice,
                     Program.GetService<ILogger<WordPracticeForm>>(),
-                    Program.GetService<IThemeService>(),
-                    startInDictation);
+                    Program.GetService<IThemeService>());
                 form.StartPosition = FormStartPosition.CenterParent;
                 form.ShowDialog(this);
             }

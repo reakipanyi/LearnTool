@@ -389,7 +389,7 @@
         sendToHost({ type: "gameEnd", results, score, moves, errors, combo: maxCombo, seconds });
     }
 
-    /** 结算面板：按对结果列出本次所有单词，供课堂复盘听写。 */
+    /** 结算面板：按对结果列出本次所有单词，供课堂复盘。 */
     function renderResultWords() {
         const list = $("resultWordsList");
         if (!list) return;

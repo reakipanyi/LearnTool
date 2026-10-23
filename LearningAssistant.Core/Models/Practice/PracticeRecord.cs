@@ -2,19 +2,17 @@ using LearningAssistant.Common;
 
 namespace LearningAssistant.Models.Practice
 {
-    /// <summary>练习类型（P2）：单词跟读与听写先行，其余类型预留。</summary>
+    /// <summary>练习类型（P2）：单词跟读先行，其余类型预留。</summary>
     public enum PracticeType
     {
         Shadowing = 0,
-        Dictation = 1,
         VoiceRecall = 2,
         Choice = 3,
         Reading = 4
     }
 
     /// <summary>
-    /// 一次练习的结果记录。跟读按“参考分”保存，不默认写入错题本；
-    /// 听写未通过时才由练习服务发布 ItemWrongEvent。
+    /// 一次练习的结果记录。跟读按“参考分”保存，不默认写入错题本。
     /// </summary>
     public class PracticeRecord
     {
@@ -39,7 +37,6 @@ namespace LearningAssistant.Models.Practice
     {
         public int TotalCount { get; set; }
         public int ShadowingCount { get; set; }
-        public int DictationCount { get; set; }
         public double AverageScore { get; set; }
         public DateTime? LastPracticedAt { get; set; }
     }

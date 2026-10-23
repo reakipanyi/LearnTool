@@ -137,9 +137,8 @@ namespace LearningAssistant.Common
                 var recordService = sp.GetRequiredService<IPracticeRecordService>();
                 var session = sp.GetRequiredService<IUserSessionService>();
                 var scorer = sp.GetService<IPronunciationScorer>();
-                var eventBus = sp.GetService<IEventBus>();
                 var logger = sp.GetService<ILogger<WordPracticeService>>();
-                return new WordPracticeService(tts, recorder, recordService, session, scorer, eventBus, logger);
+                return new WordPracticeService(tts, recorder, recordService, session, scorer, logger);
             });
             services.AddSingleton<IUserSessionService, UserSessionService>();
             services.AddSingleton<ISubjectTemplateService, SubjectTemplateService>();
@@ -286,7 +285,7 @@ namespace LearningAssistant.Common
         /// </summary>
         public static IServiceCollection AddLearningServices(this IServiceCollection services)
         {
-            // P0-5：统一语音与测验能力出口。听写仅保留 AdvancedSpeechService（重复的 SpeechService 已合并）；
+            // P0-5：统一语音与测验能力出口（重复的 SpeechService 已合并）；
             // IWebSpeechService 暂无实现时 IVoiceRecall 自动降级为不可用，不影响其他功能。
             services.AddSingleton<IAdvancedSpeechService, AdvancedSpeechService>();
             services.AddSingleton<IQuizEngineService>(sp => new QuizEngineService(

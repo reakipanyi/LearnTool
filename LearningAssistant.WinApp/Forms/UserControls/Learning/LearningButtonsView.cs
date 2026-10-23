@@ -130,7 +130,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
         public event EventHandler? WrongBookClicked;
 
         /// <summary>
-        /// 单词跟读/听写按钮点击事件（P2）
+        /// 单词跟读按钮点击事件（P2）
         /// </summary>
         public event EventHandler? PracticeClicked;
 

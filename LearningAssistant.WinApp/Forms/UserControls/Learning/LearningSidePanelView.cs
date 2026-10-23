@@ -7,7 +7,7 @@ using LearningAssistant.Services.Learning;
 namespace LearningAssistant.Forms.UserControls.Learning
 {
     /// <summary>
-    /// 学习窗口右侧可折叠面板（P3）：显示来源与原文，并提供跟读/听写入口。
+    /// 学习窗口右侧可折叠面板（P3）：显示来源与原文，并提供跟读入口。
     /// 默认折叠，不干扰中央卡片与“认识/不会”主操作。
     /// </summary>
     public sealed class LearningSidePanelView : UserControl, IThemeable
@@ -21,7 +21,6 @@ namespace LearningAssistant.Forms.UserControls.Learning
         private readonly Button _buttonJump = new();
         private readonly Label _labelPracticeHeader = new();
         private readonly Button _buttonShadowing = new();
-        private readonly Button _buttonDictation = new();
         private readonly Label _labelPracticeStats = new();
 
         private string? _sourcePdfPath;
@@ -41,9 +40,6 @@ namespace LearningAssistant.Forms.UserControls.Learning
         /// <summary>请求开始单词跟读。</summary>
         public event EventHandler? ShadowingRequested;
 
-        /// <summary>请求开始单词听写。</summary>
-        public event EventHandler? DictationRequested;
-
         private void BuildLayout()
         {
             BackColor = Color.White;
@@ -53,19 +49,18 @@ namespace LearningAssistant.Forms.UserControls.Learning
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
-                RowCount = 11
+                RowCount = 10
             };
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));  // 0 header
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));  // 1 来源类型
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));  // 2 页码
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));  // 3 “原文”标题
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 45F));   // 4 原文
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));  // 4 原文
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));  // 5 回跳按钮
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 1F));   // 6 分隔线
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));  // 7 练习标题
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));  // 8 跟读
-            root.RowStyles.Add(new RowStyle(SizeType.Percent, 55F));   // 9 听写 + 空白
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));   // 10 最近练习
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));  // 9 最近练习
 
             BuildHeader();
 
@@ -123,9 +118,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             _labelPracticeHeader.TextAlign = ContentAlignment.MiddleLeft;
 
             ConfigurePracticeButton(_buttonShadowing, "🗣 单词跟读", Color.FromArgb(139, 92, 246));
-            ConfigurePracticeButton(_buttonDictation, "⌨️ 单词听写", Color.FromArgb(59, 130, 246));
             _buttonShadowing.Click += (_, _) => ShadowingRequested?.Invoke(this, EventArgs.Empty);
-            _buttonDictation.Click += (_, _) => DictationRequested?.Invoke(this, EventArgs.Empty);
 
             _labelPracticeStats.Dock = DockStyle.Fill;
             _labelPracticeStats.Font = new Font("微软雅黑", 8.5F);
@@ -142,8 +135,7 @@ namespace LearningAssistant.Forms.UserControls.Learning
             root.Controls.Add(divider, 0, 6);
             root.Controls.Add(_labelPracticeHeader, 0, 7);
             root.Controls.Add(_buttonShadowing, 0, 8);
-            root.Controls.Add(_buttonDictation, 0, 9);
-            root.Controls.Add(_labelPracticeStats, 0, 10);
+            root.Controls.Add(_labelPracticeStats, 0, 9);
 
             Controls.Add(root);
         }
@@ -198,7 +190,6 @@ namespace LearningAssistant.Forms.UserControls.Learning
                 _labelExcerpt.Text = "未选择学习项";
                 SetJumpTarget(null, -1);
                 _buttonShadowing.Enabled = false;
-                _buttonDictation.Enabled = false;
                 UpdatePracticeStats(null);
                 return;
             }
@@ -225,7 +216,6 @@ namespace LearningAssistant.Forms.UserControls.Learning
 
             var hasWord = !string.IsNullOrWhiteSpace(item.GetMainContent());
             _buttonShadowing.Enabled = hasWord;
-            _buttonDictation.Enabled = hasWord;
         }
 
         /// <summary>

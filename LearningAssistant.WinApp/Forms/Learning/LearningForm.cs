@@ -251,8 +251,7 @@ namespace LearningAssistant.Forms.Learning
             _filterView.FilterChanged += FilterView_FilterChanged;
             _filterView.SidePanelToggleRequested += (_, _) => SetSidePanelOpen(!IsSidePanelOpen());
             _sidePanelView.CollapseRequested += (_, _) => SetSidePanelOpen(false);
-            _sidePanelView.ShadowingRequested += (_, _) => OpenWordPractice(startInDictation: false);
-            _sidePanelView.DictationRequested += (_, _) => OpenWordPractice(startInDictation: true);
+            _sidePanelView.ShadowingRequested += (_, _) => OpenWordPractice();
             _sidePanelView.JumpToSourceRequested += SidePanelView_JumpToSourceRequested;
 
             _settingsView.RadioStudyMode.CheckedChanged += RadioSetting_CheckedChanged;
@@ -1506,7 +1505,7 @@ namespace LearningAssistant.Forms.Learning
             _toolTip.SetToolTip(_buttonsView.ButtonChallenge, "打开每日挑战");
             _toolTip.SetToolTip(_buttonsView.ButtonAchievement, "查看成就徽章");
             _toolTip.SetToolTip(_buttonsView.ButtonWrongBook, "打开错题本");
-            _toolTip.SetToolTip(_buttonsView.ButtonPractice, "单词跟读 / 听写练习");
+            _toolTip.SetToolTip(_buttonsView.ButtonPractice, "单词跟读练习");
             _toolTip.SetToolTip(_buttonsView.ButtonExit, "退出学习 (Esc)");
 
             _toolTip.SetToolTip(buttonShowAnswer, "切换学习/答题模式 (F3)");
@@ -1920,14 +1919,14 @@ namespace LearningAssistant.Forms.Learning
         }
 
         /// <summary>
-        /// 单词跟读/听写入口（P2）：以当前学习项打开练习窗口。
+        /// 单词跟读入口（P2）：以当前学习项打开练习窗口。
         /// </summary>
-        private void ButtonPractice_Click(object? sender, EventArgs e) => OpenWordPractice(startInDictation: false);
+        private void ButtonPractice_Click(object? sender, EventArgs e) => OpenWordPractice();
 
         /// <summary>
-        /// 打开当前学习项的单词跟读/听写窗口。
+        /// 打开当前学习项的单词跟读窗口。
         /// </summary>
-        private void OpenWordPractice(bool startInDictation)
+        private void OpenWordPractice()
         {
             if (_currentItem == null)
             {
@@ -1945,8 +1944,7 @@ namespace LearningAssistant.Forms.Learning
                     _currentItem,
                     wordPracticeService,
                     practiceLogger,
-                    practiceThemeService,
-                    startInDictation);
+                    practiceThemeService);
                 form.StartPosition = FormStartPosition.CenterParent;
                 form.ShowDialog(this);
             }
