@@ -235,6 +235,8 @@ namespace LearningAssistant.Forms.Learning
         }
         #endregion
 
+        #region === 视图绑定与主题 ===
+
         private void BindSubViewEvents()
         {
             _buttonsView.KnownClicked += ButtonKnown_Click;
@@ -501,6 +503,10 @@ namespace LearningAssistant.Forms.Learning
 
 
 
+        #endregion
+
+        #region === 窗体加载、设置与卡片状态 ===
+
         private void LearningForm_Load(object? sender, EventArgs e)
         {
             BindSubViewEvents();
@@ -731,6 +737,8 @@ namespace LearningAssistant.Forms.Learning
 
         private void SuspendSettingsChangedEvents() => _settingsChangedEventsSuspended = true;
         private void ResumeSettingsChangedEvents() => _settingsChangedEventsSuspended = false;
+
+        #endregion
 
         #region ILearningView Implementation
 
@@ -2425,6 +2433,8 @@ namespace LearningAssistant.Forms.Learning
         #endregion
 
 
+        #region === 设置、筛选与侧栏 ===
+
         private void RadioSetting_CheckedChanged(object? sender, EventArgs e)
         {
             if (sender is RadioButton radio && radio.Checked && !_settingsChangedEventsSuspended)
@@ -2525,6 +2535,10 @@ namespace LearningAssistant.Forms.Learning
             }
         }
 
+
+        #endregion
+
+        #region === 学习动作与即时反馈 ===
 
         private async void ButtonKnown_Click(object? sender, EventArgs e)
         {
@@ -2656,6 +2670,10 @@ namespace LearningAssistant.Forms.Learning
             ExitClicked?.Invoke(this, EventArgs.Empty);
         }
 
+        #endregion
+
+        #region === 编辑、统计与用户 ===
+
         private void ButtonEdit_Click(object? sender, EventArgs e)
         {
             try
@@ -2786,6 +2804,10 @@ namespace LearningAssistant.Forms.Learning
             OpenStatisticsClicked?.Invoke(this, EventArgs.Empty);
         }
 
+        #endregion
+
+        #region === 答案显示、自动朗读与主题 ===
+
         private void ButtonExportErrorBook_Click(object? sender, EventArgs e)
         {
             ExportErrorBookClicked?.Invoke(this, EventArgs.Empty);
@@ -2896,6 +2918,10 @@ namespace LearningAssistant.Forms.Learning
             UpdateFavoriteButton();
         }
 
+        #endregion
+
+        #region === 收藏持久化与用户路径 ===
+
         private void SaveFavorite()
         {
             if (_currentItem == null) return;
@@ -3005,6 +3031,10 @@ namespace LearningAssistant.Forms.Learning
             return $"[{subCategory}]{content}";
         }
 
+
+        #endregion
+
+        #region === 键盘快捷键与跳转 ===
 
         private void LearningForm_KeyDown(object? sender, KeyEventArgs e)
         {
@@ -3252,6 +3282,10 @@ namespace LearningAssistant.Forms.Learning
         }
 
 
+        #endregion
+
+        #region === 资源释放与主题色表 ===
+
         protected override void Dispose(bool disposing)
         {
             if (_disposed)
@@ -3369,5 +3403,8 @@ namespace LearningAssistant.Forms.Learning
             public override Color SeparatorDark => _colors.Divider;
             public override Color SeparatorLight => _colors.Surface;
         }
+
+        #endregion
+
     }
 }

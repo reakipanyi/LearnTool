@@ -27,6 +27,9 @@ namespace LearningAssistant.Forms.Pdf
 {
     public partial class PdfReaderForm : Form, IPdfView, IPdfReaderFormAccess
     {
+
+        #region 字段与状态
+
         private PdfPresenter? _presenter;
         private readonly ILogger<PdfReaderForm> _logger;
         private readonly IAIPanelPopupService? _aiPanelPopupService;
@@ -360,6 +363,11 @@ namespace LearningAssistant.Forms.Pdf
         private ToolStripDropDown _annotationOptionsDropDown;
         private ToolStripControlHost _annotationOptionsHostItem;
         private Panel _annotationOptionsHost;
+
+        #endregion
+
+        #region 构造、初始化与窗体生命周期
+
         /// <summary>仅供 Visual Studio 设计器实例化使用，运行时不走此构造。</summary>
         public PdfReaderForm()
         {
@@ -574,6 +582,10 @@ namespace LearningAssistant.Forms.Pdf
             ApplySidebarRedesign();
         }
 
+        #endregion
+
+        #region 选择联动与工具栏视觉
+
         /// <summary>
         /// 高亮被选中（画布点击或列表选中）时，回显该高亮已缓存的识别文本与译文，
         /// 不再重新发起 OCR/翻译。
@@ -761,6 +773,10 @@ namespace LearningAssistant.Forms.Pdf
                 button.BackColor = isNightMode ? ToolbarHoverNight : ToolbarHoverDay;
             }
         }
+
+        #endregion
+
+        #region 视图事件、TTS 与窗体加载
 
         #region IPdfReaderFormAccess Implementation
 
@@ -1255,6 +1271,10 @@ namespace LearningAssistant.Forms.Pdf
             _navigationManager?.OnPageTransitionTick();
         }
 
+        #endregion
+
+        #region 高亮、视图与状态栏
+
         private void RadioHighlightColor_CheckedChanged(object? sender, EventArgs e)
         {
             if (sender is not RadioButton radio) return;
@@ -1544,6 +1564,10 @@ namespace LearningAssistant.Forms.Pdf
         {
             _navigationManager?.CleanupAnnotationBitmap();
         }
+
+        #endregion
+
+        #region 文档加载与页面渲染
 
         /// <summary>
         /// 设置当前PDF文件路径，并刷新相关UI状态
@@ -2077,6 +2101,10 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
+        #endregion
+
+        #region 提示、加载状态、夜间模式与缩略图
+
         public void ShowWarning(string message)
         {
             MessageBox.Show(message, WarningTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -2322,6 +2350,10 @@ namespace LearningAssistant.Forms.Pdf
                 NavigateToPage(idx);
             }
         }
+
+        #endregion
+
+        #region 页面导航、文本、选区与 OCR 覆盖层
 
         private void NavigateToPage(int pageIndex)
         {
@@ -2602,6 +2634,10 @@ namespace LearningAssistant.Forms.Pdf
 
             _aiPanelPopupService.ShowAIAbilityPanel(this, context, null, context, options);
         }
+
+        #endregion
+
+        #region PDF AI：上下文与摘要问答
 
         /// <summary>取翻译原文框中当前选中的文本</summary>
         private string GetSelectedText()
@@ -3002,6 +3038,10 @@ namespace LearningAssistant.Forms.Pdf
                 return json;
             }
         }
+
+        #endregion
+
+        #region PDF AI：闪卡、笔记与标注整理
 
         /// <summary>生成指定页码范围的 AI 闪卡，预览勾选后加入闪卡复习队列</summary>
         private async Task GenerateFlashcardsAsync(PdfAiFlashcardOptions? presetOptions = null)
@@ -3622,6 +3662,10 @@ namespace LearningAssistant.Forms.Pdf
 
             return Task.CompletedTask;
         }
+
+        #endregion
+
+        #region 缩放、标注工具模式与工具条布局
 
         public int GetZoomLevel()
         {
@@ -4436,6 +4480,10 @@ namespace LearningAssistant.Forms.Pdf
             SetAnnotationToolMode(AnnotationToolMode.Mosaic);
         }
 
+        #endregion
+
+        #region 撤销、导出、批量 OCR 与标注辅助工具
+
         private async void ButtonUndoAnnotation_Click(object? sender, EventArgs e)
         {
             await UndoLastActionAsync();
@@ -4981,6 +5029,10 @@ namespace LearningAssistant.Forms.Pdf
             magnifier.Show(this);
         }
 
+        #endregion
+
+        #region 翻页、视图模式与页面绘制
+
         private void ButtonDualPage_Click(object? sender, EventArgs e)
         {
             _isDualPage = !_isDualPage;
@@ -5158,16 +5210,6 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
-        /// <summary>
-        /// 开启双缓冲的 PictureBox，减少拖动绘制/缩放时的闪烁并降低重绘的感知延迟。
-        /// </summary>
-        private sealed class BufferedPictureBox : PictureBox
-        {
-            public BufferedPictureBox()
-            {
-                DoubleBuffered = true;
-            }
-        }
 
         private void ClearBackground(Graphics g, Rectangle clip)
         {
@@ -5435,6 +5477,10 @@ namespace LearningAssistant.Forms.Pdf
                 CleanupAnnotationBitmap();
             }
         }
+
+        #endregion
+
+        #region 右键菜单、搜索、打印与画笔/缩放
 
         private void MenuItemCopy_Click(object? sender, EventArgs e)
         {
@@ -5780,6 +5826,10 @@ namespace LearningAssistant.Forms.Pdf
                 SetZoom(Math.Max(MinZoomPercent, Math.Min(MaxZoomPercent, zoomLevel)));
             }
         }
+
+        #endregion
+
+        #region 文件树与文件操作
 
         private void _loadingIndicator_Click(object? sender, EventArgs e)
         {
@@ -6172,6 +6222,10 @@ namespace LearningAssistant.Forms.Pdf
             UpdateFileListDisplay();
         }
 
+        #endregion
+
+        #region 翻译、朗读与学习入口
+
         private void ButtonTranslate_Click(object? sender, EventArgs e)
         {
             TranslateClicked?.Invoke(this, EventArgs.Empty);
@@ -6247,6 +6301,10 @@ namespace LearningAssistant.Forms.Pdf
         {
             OpenShadowingWindow();
         }
+
+        #endregion
+
+        #region 侧栏构建（阅读 / 翻译 / 标注 / 音频 / 学习）
 
         #region 侧栏统一视觉重构
 
@@ -7030,6 +7088,10 @@ namespace LearningAssistant.Forms.Pdf
             return newImage;
         }
 
+        #endregion
+
+        #region 缩放预设、语言、Toast 与拖放
+
         #region 缩放预设菜单事件处理
 
         private void ZoomPreset50_Click(object? sender, EventArgs e) => SetZoom(50);
@@ -7169,6 +7231,10 @@ namespace LearningAssistant.Forms.Pdf
                 ShowError("打开文件失败: " + ex.Message);
             }
         }
+
+        #endregion
+
+        #region 侧栏页签绘制与提示
 
         /// <summary>
         /// 左侧选项卡切换事件：切换到缩略图选项卡时按需加载缩略图
@@ -7312,6 +7378,10 @@ namespace LearningAssistant.Forms.Pdf
                 _tabControlLeft, rect.Left, rect.Bottom + 2, 2500);
         }
 
+        #endregion
+
+        #region 空状态、拖放与滚动同步
+
         /// <summary>未打开 PDF 时的空状态引导：拖放提示 + 打开文件夹入口。</summary>
         private void InitializeEmptyState()
         {
@@ -7444,6 +7514,10 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
+        #endregion
+
+        #region Win32 互操作与内嵌控件
+
         private const int EM_GETSCROLLPOS = 0x0400 + 221;
         private const int EM_SETSCROLLPOS = 0x0400 + 222;
 
@@ -7457,107 +7531,18 @@ namespace LearningAssistant.Forms.Pdf
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, ref POINT lParam);
 
-        /// <summary>文本索引构建进度窗口：显示逐页构建进度，并支持取消。</summary>
-        private sealed class PdfTextIndexProgressForm : Form
+        /// <summary>
+        /// 开启双缓冲的 PictureBox，减少拖动绘制/缩放时的闪烁并降低重绘的感知延迟。
+        /// </summary>
+        private sealed class BufferedPictureBox : PictureBox
         {
-            private readonly Label _labelStatus;
-            private readonly ProgressBar _progressBar;
-            private readonly Button _buttonCancel;
-
-            /// <summary>用户请求取消构建</summary>
-            public event EventHandler? CancelRequested;
-
-            public PdfTextIndexProgressForm()
+            public BufferedPictureBox()
             {
-                Text = "建立文本索引";
-                Font = new Font("Microsoft YaHei UI", 9F);
-                FormBorderStyle = FormBorderStyle.FixedDialog;
-                ControlBox = false;
-                ShowInTaskbar = false;
-                StartPosition = FormStartPosition.CenterParent;
-                ClientSize = new Size(480, 172);
-                BackColor = Color.White;
-
-                var labelTitle = new Label
-                {
-                    Text = "正在建立文档文本索引",
-                    Font = new Font("Microsoft YaHei UI", 11F, FontStyle.Bold),
-                    ForeColor = Color.FromArgb(35, 42, 58),
-                    Location = new Point(20, 18),
-                    AutoSize = true
-                };
-
-                _labelStatus = new Label
-                {
-                    Text = "准备中…",
-                    Location = new Point(20, 48),
-                    Size = new Size(440, 20),
-                    ForeColor = Color.FromArgb(70, 78, 96)
-                };
-
-                var labelDetail = new Label
-                {
-                    Text = "文本层优先，扫描页自动 OCR；结果会缓存，下次直接复用。",
-                    Location = new Point(20, 70),
-                    Size = new Size(440, 34),
-                    ForeColor = Color.FromArgb(130, 138, 155)
-                };
-
-                _progressBar = new ProgressBar
-                {
-                    Location = new Point(20, 108),
-                    Size = new Size(440, 16),
-                    Minimum = 0,
-                    Maximum = 100
-                };
-
-                _buttonCancel = new Button
-                {
-                    Text = "取消",
-                    Location = new Point(370, 134),
-                    Size = new Size(90, 30),
-                    BackColor = Color.White,
-                    FlatStyle = FlatStyle.Flat,
-                    Cursor = Cursors.Hand
-                };
-                _buttonCancel.FlatAppearance.BorderColor = Color.FromArgb(210, 215, 225);
-                _buttonCancel.Click += (_, _) =>
-                {
-                    _buttonCancel.Enabled = false;
-                    _labelStatus.Text = "正在取消，等待当前页处理完成…";
-                    CancelRequested?.Invoke(this, EventArgs.Empty);
-                };
-
-                Controls.AddRange(new Control[] { labelTitle, _labelStatus, labelDetail, _progressBar, _buttonCancel });
-            }
-
-            /// <summary>按索引构建进度刷新状态与进度条</summary>
-            public void UpdateProgress(PdfTextIndexProgress progress)
-            {
-                if (IsDisposed || progress == null) return;
-
-                if (progress.FromCache)
-                {
-                    _labelStatus.Text = "已命中文本索引缓存";
-                    _progressBar.Value = 100;
-                    return;
-                }
-
-                if (progress.TotalPages > 0)
-                {
-                    _progressBar.Value = Math.Clamp(
-                        (int)Math.Round(100.0 * progress.ProcessedPages / progress.TotalPages), 0, 100);
-                }
-
-                var source = progress.Source switch
-                {
-                    PdfTextSource.TextLayer => "文本层",
-                    PdfTextSource.Ocr => "OCR",
-                    _ => "跳过"
-                };
-                _labelStatus.Text =
-                    $"正在建立文本索引（{progress.ProcessedPages}/{progress.TotalPages}）· 第 {progress.PageIndex + 1} 页 · {source}";
+                DoubleBuffered = true;
             }
         }
+
+        #endregion
+
     }
 }
