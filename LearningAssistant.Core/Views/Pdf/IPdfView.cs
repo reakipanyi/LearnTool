@@ -333,6 +333,11 @@ namespace LearningAssistant.Views
         event EventHandler? OcrPageClicked;
 
         /// <summary>
+        /// 重新翻译点击事件：按原文框当前内容（含手动修改）重新翻译
+        /// </summary>
+        event EventHandler? ReTranslateClicked;
+
+        /// <summary>
         /// 切换夜间模式点击事件
         /// </summary>
         event EventHandler? ToggleNightMode;

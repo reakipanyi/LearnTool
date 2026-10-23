@@ -3670,6 +3670,7 @@ namespace LearningAssistant.Forms.Pdf
         public event EventHandler? SelectOcrClicked;
         public event EventHandler? TranslateClicked;
         public event EventHandler? OcrPageClicked;
+        public event EventHandler? ReTranslateClicked;
         public event EventHandler? ToggleNightMode;
         public event EventHandler? ToggleTranslation;
         public event EventHandler? SpeakAnswer;
@@ -6676,6 +6677,7 @@ namespace LearningAssistant.Forms.Pdf
             _translatePanel.OriginalCard.ActionButton!.Click += (_, _) => ButtonSpeakOriginal_Click(null, EventArgs.Empty);
             _translatePanel.TranslationCard.ActionButton!.Click += (_, _) => ButtonSpeakTranslation_Click(null, EventArgs.Empty);
             _translatePanel.GlossaryButton.Click += (_, _) => ShowTranslationGlossaryDialog();
+            _translatePanel.ReTranslateButton.Click += (_, _) => ReTranslateClicked?.Invoke(this, EventArgs.Empty);
 
             _textBoxOriginal = _translatePanel.OriginalBox;
             _textBoxTranslation = _translatePanel.TranslationBox;

@@ -38,8 +38,9 @@ public partial class PdfTranslatePanel : UserControl
         _tip.SetToolTip(aiPolishCheck, "使用 AI 术语表润色译文，保持术语前后一致（失败时自动保留机器译文）");
         _tip.SetToolTip(targetLanguageCombo, "选择译文目标语言；「自动」表示中文译英文、其余译中文");
         _tip.SetToolTip(glossaryButton, "查看/编辑本文档的翻译术语表，并查看术语在当前页的命中次数");
+        _tip.SetToolTip(reTranslateButton, "按当前原文（识别结果可直接修改）重新翻译本页");
         _tip.SetToolTip(translationBox, "点击译文段落，可定位对应原文段落");
-        _tip.SetToolTip(originalBox, "点击原文段落，可定位对应译文段落");
+        _tip.SetToolTip(originalBox, "识别结果可直接编辑；修改后点「重新翻译」生效。点击段落可定位对应译文");
 
         // 段落级联动：两侧段数一致时才接管点击，避免译文被合并/拆分时定位错乱
         originalBox.MouseClick += (_, e) => AlignParagraph(originalBox, translationBox, e.Location);
@@ -146,6 +147,11 @@ public partial class PdfTranslatePanel : UserControl
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Button GlossaryButton => glossaryButton;
+
+    /// <summary>按当前原文（可直接编辑）重新翻译按钮。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button ReTranslateButton => reTranslateButton;
 
     /// <summary>填充目标语言下拉框，默认「自动」。</summary>
     private void InitTargetLanguageOptions()

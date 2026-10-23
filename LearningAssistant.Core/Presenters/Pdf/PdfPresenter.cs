@@ -190,6 +190,7 @@ namespace LearningAssistant.Presenters
             _view.SelectOcrClicked += View_SelectOcrClicked;
             _view.TranslateClicked += View_TranslateClicked;
             _view.OcrPageClicked += View_OcrPageClicked;
+            _view.ReTranslateClicked += View_ReTranslateClicked;
             _view.ToggleNightMode += View_ToggleNightMode;
             _view.LanguageChanged += View_LanguageChanged;
             _view.AiQuestionAsked += View_AiQuestionAsked;
@@ -210,6 +211,7 @@ namespace LearningAssistant.Presenters
             _view.SelectOcrClicked -= View_SelectOcrClicked;
             _view.TranslateClicked -= View_TranslateClicked;
             _view.OcrPageClicked -= View_OcrPageClicked;
+            _view.ReTranslateClicked -= View_ReTranslateClicked;
             _view.ToggleNightMode -= View_ToggleNightMode;
             _view.LanguageChanged -= View_LanguageChanged;
             _view.AiQuestionAsked -= View_AiQuestionAsked;
@@ -1793,6 +1795,58 @@ namespace LearningAssistant.Presenters
         private async void View_OcrPageClicked(object? sender, EventArgs e)
         {
             await OcrFullPageAsync();
+        }
+
+        private async void View_ReTranslateClicked(object? sender, EventArgs e)
+        {
+            await TranslateEditedOriginalAsync();
+        }
+
+        /// <summary>
+        /// 按原文框当前内容（允许用户手动修正 OCR 结果）重新翻译，
+        /// 成功后把新的原文/译文写回本页缓存，翻回本页时直接显示修正后的结果。
+        /// </summary>
+        private async Task TranslateEditedOriginalAsync()
+        {
+            var originalText = _view?.GetOriginalText();
+            if (string.IsNullOrWhiteSpace(originalText))
+            {
+                _view?.ShowWarning("请先识别或输入原文");
+                return;
+            }
+
+            if (!_pdfTranslationService.IsAvailable)
+            {
+                _view?.ShowWarning("翻译服务不可用，请检查API配置");
+                return;
+            }
+
+            _view?.SetLoadingState(true);
+            try
+            {
+                var translation = await TranslateAsync(originalText);
+                if (string.IsNullOrWhiteSpace(translation))
+                {
+                    _view?.ShowWarning("翻译失败，请检查网络连接或稍后重试");
+                    return;
+                }
+
+                translation = await PolishTranslationAsync(originalText, translation);
+                _view?.SetTranslationText(translation);
+
+                var cacheKey = TryBuildPageCacheKey(_pdfFileManager.CurrentPageIndex);
+                if (cacheKey != null)
+                    StorePageCache(cacheKey, originalText, translation);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error in TranslateEditedOriginalAsync");
+                _view?.ShowError("翻译失败: " + ex.Message);
+            }
+            finally
+            {
+                _view?.SetLoadingState(false);
+            }
         }
 
         /// <summary>

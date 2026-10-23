@@ -34,6 +34,7 @@ partial class PdfTranslatePanel
         targetLanguageLabel = new Label();
         targetLanguageCombo = new ComboBox();
         glossaryButton = new Button();
+        reTranslateButton = new Button();
         _tip = new ToolTip(components);
         root.SuspendLayout();
         body.SuspendLayout();
@@ -282,6 +283,7 @@ partial class PdfTranslatePanel
         extras.Controls.Add(targetLanguageLabel);
         extras.Controls.Add(targetLanguageCombo);
         extras.Controls.Add(glossaryButton);
+        extras.Controls.Add(reTranslateButton);
         extras.Dock = DockStyle.Fill;
         extras.Location = new Point(6, 470);
         extras.Margin = new Padding(0, 2, 0, 0);
@@ -332,6 +334,23 @@ partial class PdfTranslatePanel
         glossaryButton.Text = "📖 术语表";
         glossaryButton.UseVisualStyleBackColor = false;
         // 
+        // reTranslateButton
+        // 
+        reTranslateButton.BackColor = Color.White;
+        reTranslateButton.Cursor = Cursors.Hand;
+        reTranslateButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        reTranslateButton.FlatAppearance.BorderSize = 1;
+        reTranslateButton.FlatStyle = FlatStyle.Flat;
+        reTranslateButton.Font = new Font("Microsoft YaHei UI", 9F);
+        reTranslateButton.ForeColor = Color.FromArgb(15, 23, 42);
+        reTranslateButton.Margin = new Padding(6, 3, 0, 0);
+        reTranslateButton.Name = "reTranslateButton";
+        reTranslateButton.Size = new Size(96, 26);
+        reTranslateButton.TabIndex = 3;
+        reTranslateButton.Tag = "secondary";
+        reTranslateButton.Text = "🔄 重新翻译";
+        reTranslateButton.UseVisualStyleBackColor = false;
+        // 
         // PdfTranslatePanel
         // 
         AutoScaleDimensions = new SizeF(7F, 17F);
@@ -372,5 +391,6 @@ partial class PdfTranslatePanel
     private Label targetLanguageLabel;
     private ComboBox targetLanguageCombo;
     private Button glossaryButton;
+    private Button reTranslateButton;
     private ToolTip _tip;
 }
