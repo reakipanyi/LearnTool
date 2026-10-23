@@ -47,6 +47,12 @@ namespace LearningAssistant.Presenters
         // 复用 PDF AI 磁盘缓存的 LRU 淘汰，文档被替换后不会命中旧译文。
         private readonly IPdfAiCacheService? _pageCacheService;
 
+        // 文本层版面规范化：合并硬换行、修复断词、剔除重复页眉页脚
+        private readonly PdfTextLayoutNormalizer _textLayoutNormalizer = new();
+        private IReadOnlyCollection<string>? _headerFooterPatterns;
+        private string? _headerFooterPatternFingerprint;
+        private const int HeaderFooterSamplePages = 8;
+
         public event EventHandler<AddWordEventArgs>? OnAddWordToLearningList;
 
         public PdfPresenter(ILogger<PdfPresenter> logger,
@@ -1800,7 +1806,7 @@ namespace LearningAssistant.Presenters
                 return;
             }
 
-            var textLayer = TryGetTextLayerText(pageIndex);
+            var textLayer = await TryGetTextLayerTextAsync(pageIndex);
             if (!string.IsNullOrWhiteSpace(textLayer))
             {
                 if (cacheKey != null)
@@ -1873,7 +1879,7 @@ namespace LearningAssistant.Presenters
             }
 
             // 文本层优先：可提取文本的 PDF 跳过 OCR 直接翻译
-            var textLayer = TryGetTextLayerText(pageIndex);
+            var textLayer = await TryGetTextLayerTextAsync(pageIndex);
             if (!string.IsNullOrWhiteSpace(textLayer))
             {
                 _view?.SetLoadingState(true);
@@ -1996,19 +2002,77 @@ namespace LearningAssistant.Presenters
             return pdfPath;
         }
 
-        /// <summary>尝试读取 PDF 文本层；不可用或异常时返回 null，由调用方回退到 OCR</summary>
-        private string? TryGetTextLayerText(int pageIndex)
+        /// <summary>
+        /// 提取并规范化 PDF 文本层；图片模式、文本层为空或异常时返回 null，由调用方回退到 OCR。
+        /// 文本提取与规范化放在后台线程，避免整页文本处理阻塞界面。
+        /// </summary>
+        private async Task<string?> TryGetTextLayerTextAsync(int pageIndex)
         {
             if (_pdfFileManager.IsImageMode) return null;
+
+            var pdfPath = _pdfFileManager.CurrentFilePath;
+            var pageCount = PageCount;
+
             try
             {
-                return _pdfService.GetPdfText(pageIndex);
+                return await Task.Run(() =>
+                {
+                    string raw;
+                    try
+                    {
+                        raw = _pdfService.GetPdfText(pageIndex);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Failed to extract PDF text layer for page {Page}", pageIndex);
+                        return (string?)null;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(raw)) return null;
+
+                    var options = BuildTextLayoutOptions(pdfPath, pageCount);
+                    return _textLayoutNormalizer.NormalizePage(raw, options);
+                });
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "Failed to extract PDF text layer for page {Page}", pageIndex);
+                _logger.LogDebug(ex, "Failed to normalize PDF text layer for page {Page}", pageIndex);
                 return null;
             }
+        }
+
+        /// <summary>按文档指纹缓存页眉页脚模板，避免每次翻页都重新采样</summary>
+        private PdfTextLayoutOptions BuildTextLayoutOptions(string? pdfPath, int pageCount)
+        {
+            if (string.IsNullOrEmpty(pdfPath))
+                return new PdfTextLayoutOptions();
+
+            var fingerprint = BuildDocumentFingerprint(pdfPath);
+            if (_headerFooterPatternFingerprint != fingerprint)
+            {
+                var sample = new List<string>();
+                int count = Math.Min(pageCount, HeaderFooterSamplePages);
+                for (int i = 0; i < count; i++)
+                {
+                    try
+                    {
+                        var text = _pdfService.GetPdfText(i);
+                        if (!string.IsNullOrWhiteSpace(text)) sample.Add(text);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Failed to sample page {Page} for header/footer detection", i);
+                    }
+                }
+
+                _headerFooterPatterns = _textLayoutNormalizer.DetectHeaderFooterPatterns(sample);
+                _headerFooterPatternFingerprint = fingerprint;
+            }
+
+            return new PdfTextLayoutOptions
+            {
+                HeaderFooterPatterns = _headerFooterPatterns ?? Array.Empty<string>()
+            };
         }
 
         private bool TryGetPageCache(string key, out (string? Original, string? Translation) value)
