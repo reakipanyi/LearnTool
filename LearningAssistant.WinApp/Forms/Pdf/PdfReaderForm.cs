@@ -2107,12 +2107,12 @@ namespace LearningAssistant.Forms.Pdf
 
         public void ShowWarning(string message)
         {
-            MessageBox.Show(message, WarningTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, message, WarningTitle, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         public void ShowError(string message)
         {
-            MessageBox.Show(message, ErrorTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(this, message, ErrorTitle, MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
         public void SetLoadingState(bool isLoading)
@@ -2130,12 +2130,12 @@ namespace LearningAssistant.Forms.Pdf
 
         public void ShowMessage(string message)
         {
-            MessageBox.Show(message, InfoTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, message, InfoTitle, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         public void ShowMessage(string message, string title)
         {
-            MessageBox.Show(message, title, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, message, title, MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
         public void ShowLoading(string message)
@@ -2150,7 +2150,7 @@ namespace LearningAssistant.Forms.Pdf
 
         public bool ShowConfirm(string message, string title)
         {
-            return MessageBox.Show(message, title, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
+            return MessageBox.Show(this, message, title, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
         }
 
         public string? ShowSaveFileDialog(string defaultFileName, string filter)
@@ -2614,7 +2614,7 @@ namespace LearningAssistant.Forms.Pdf
         {
             if (_aiPanelPopupService == null)
             {
-                MessageBox.Show("AI面板服务未初始化", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(this, "AI面板服务未初始化", "提示", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -4559,7 +4559,7 @@ namespace LearningAssistant.Forms.Pdf
             using var saveDialog = new SaveFileDialog();
             saveDialog.Filter = "PNG图片|*.png";
             saveDialog.FileName = $"标注_{Path.GetFileNameWithoutExtension(_currentPdfPath)}_第{_currentPageIndex + 1}页.png";
-            if (saveDialog.ShowDialog() == DialogResult.OK)
+            if (saveDialog.ShowDialog(this) == DialogResult.OK)
             {
                 using var bmp = new Bitmap(_currentPageImage.Width, _currentPageImage.Height);
                 using var g = Graphics.FromImage(bmp);
@@ -5499,7 +5499,8 @@ namespace LearningAssistant.Forms.Pdf
         {
             using var searchDialog = new PdfSearchDialog();
             searchDialog.FindButton.Click += ButtonFind_Click;
-            searchDialog.ShowDialog();
+            // 指定 owner，避免进程级模态禁用其它已打开的阅读器窗口
+            searchDialog.ShowDialog(this);
         }
 
         private void PrintCurrentPdf()
@@ -5514,6 +5515,7 @@ namespace LearningAssistant.Forms.Pdf
                     warnings.Add("存在高亮/标注");
 
                 var result = MessageBox.Show(
+                    this,
                     $"打印输出的将是 PDF 原始内容，不会包含：{string.Join("、", warnings)}。\n\n是否仍要继续打印？",
                     "打印提示", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
                 if (result != DialogResult.Yes)
@@ -5736,7 +5738,7 @@ namespace LearningAssistant.Forms.Pdf
                 saveDialog.Filter = "PNG图片|*.png|JPEG图片|*.jpg|BMP图片|*.bmp";
                 saveDialog.DefaultExt = "png";
                 saveDialog.Title = "导出当前页";
-                if (saveDialog.ShowDialog() == DialogResult.OK)
+                if (saveDialog.ShowDialog(this) == DialogResult.OK)
                 {
                     try
                     {
@@ -7008,7 +7010,8 @@ namespace LearningAssistant.Forms.Pdf
         private void ButtonOpenFolder_Click(object? sender, EventArgs e)
         {
             using var dialog = new FolderBrowserDialog();
-            if (dialog.ShowDialog() == DialogResult.OK)
+            // 指定 owner，避免进程级模态禁用其它已打开的阅读器窗口
+            if (dialog.ShowDialog(this) == DialogResult.OK)
             {
                 _presenter?.LoadFolder(dialog.SelectedPath);
             }
