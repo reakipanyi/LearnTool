@@ -25,6 +25,13 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
     private readonly ToolStripMenuItem _menuExportDirectory = new("导出目录档案…");
     private readonly ToolStripMenuItem _menuExportBook = new("导出当前书…");
     private readonly ToolStripMenuItem _menuImport = new("导入匹配档案…");
+    private readonly Panel _emptyPanel = new();
+    private readonly Label _labelEmptyTitle = new();
+    private readonly Label _labelEmptySteps = new();
+    private readonly Button _btnEmptyPrimary = new();
+    private readonly Button _btnEmptySecond = new();
+    private Action? _emptyPrimaryAction;
+    private Action? _emptySecondAction;
 
     private bool _suppressAutoPlay;
     private bool _suppressMode;
@@ -114,6 +121,66 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _tooltip.SetToolTip(_btnPreview, "试听当前绑定，不影响绑定关系");
         _tooltip.SetToolTip(_labelAdvSource, "添加外部目录、重新扫描或切换递归扫描");
         _tooltip.SetToolTip(_labelAdvMatch, "AI 自动匹配与匹配规则设置");
+
+        BuildEmptyState();
+    }
+
+    /// <summary>列表卡片内的空态引导：没有音频或没有匹配时给出三步操作。</summary>
+    private void BuildEmptyState()
+    {
+        _emptyPanel.Dock = DockStyle.Fill;
+        _emptyPanel.Visible = false;
+        _emptyPanel.Padding = new Padding(2);
+
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 3,
+            Padding = new Padding(10, 12, 8, 8)
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        _labelEmptyTitle.AutoSize = true;
+        _labelEmptyTitle.Font = new Font(Font.FontFamily, Font.Size + 0.5F, FontStyle.Bold);
+        _labelEmptyTitle.Margin = new Padding(0, 0, 0, 6);
+
+        _labelEmptySteps.AutoSize = false;
+        _labelEmptySteps.Dock = DockStyle.Fill;
+        _labelEmptySteps.TextAlign = ContentAlignment.TopLeft;
+        _labelEmptySteps.Margin = new Padding(0, 0, 0, 6);
+
+        var actions = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            WrapContents = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            Margin = new Padding(0)
+        };
+
+        foreach (var button in new[] { _btnEmptyPrimary, _btnEmptySecond })
+        {
+            button.AutoSize = true;
+            button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            button.MinimumSize = new Size(96, 30);
+            button.Padding = new Padding(10, 2, 10, 2);
+            button.Margin = new Padding(0, 4, 8, 0);
+            actions.Controls.Add(button);
+        }
+
+        _btnEmptyPrimary.Click += (_, _) => _emptyPrimaryAction?.Invoke();
+        _btnEmptySecond.Click += (_, _) => _emptySecondAction?.Invoke();
+
+        layout.Controls.Add(_labelEmptyTitle, 0, 0);
+        layout.Controls.Add(_labelEmptySteps, 0, 1);
+        layout.Controls.Add(actions, 0, 2);
+        _emptyPanel.Controls.Add(layout);
+
+        listCard.Body.Controls.Add(_emptyPanel);
+        _emptyPanel.BringToFront();
     }
 
     /// <summary>按当前字体回填设计期占位尺寸，保持与动态布局一致的视觉效果。</summary>
@@ -304,6 +371,12 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _menuSource.ForeColor = palette.Text;
         _menuMatch.BackColor = palette.Surface;
         _menuMatch.ForeColor = palette.Text;
+
+        _emptyPanel.BackColor = palette.Surface;
+        _labelEmptyTitle.ForeColor = palette.Text;
+        _labelEmptySteps.ForeColor = palette.Muted;
+        StylePageButton(_btnEmptyPrimary, palette, primary: true);
+        StylePageButton(_btnEmptySecond, palette, primary: false);
     }
 
     private static void StylePageButton(Button button, PdfSidebarPalette palette, bool primary)
@@ -434,10 +507,78 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         int matched = result?.PageIndex.Count ?? 0;
         listCard.Title = count == 0
             ? "曲目 · 未扫描到音频"
-            : $"曲目 {count} · 已匹配 {matched}/{_manager.PageCount}";
+            : matched == 0 && !singleMode
+                ? $"曲目 {count} · 还未匹配页码"
+                : $"曲目 {count} · 已匹配 {matched}/{_manager.PageCount}";
 
+        UpdateEmptyState(singleMode, count, matched);
         UpdatePageCard();
         SelectCurrentTrackInList();
+    }
+
+    /// <summary>无音频/无匹配时用引导替代空列表；有内容时恢复列表。</summary>
+    private void UpdateEmptyState(bool singleMode, int trackCount, int matched)
+    {
+        if (singleMode && trackCount == 0)
+        {
+            ShowEmptyState("还没有选择整篇音频",
+                "① 点上方「整篇听」\r\n② 选择整本书共用的音频文件\r\n③ 之后翻页不会切换曲目",
+                "选择整篇音频…", OnBind);
+            return;
+        }
+
+        if (trackCount == 0)
+        {
+            ShowEmptyState("还没有可播放的音频",
+                "① 把音频放到 PDF 同目录，或添加音频目录\r\n② 文件名不规律时，用匹配规则或 AI 自动匹配\r\n③ 仍有遗漏时，在当前页卡片手动绑定",
+                "添加音频目录…", () => _ = OnAddDirectoryAsync(),
+                "匹配规则…", OpenRulesEntry);
+            return;
+        }
+
+        if (!singleMode && matched == 0)
+        {
+            ShowEmptyState($"已扫描到 {trackCount} 个音频，但还没有匹配页码",
+                "① 用「匹配规则」按文件名提取页码\r\n② 或让 AI 自动匹配生成建议\r\n③ 也可以在当前页卡片手动绑定",
+                "匹配规则…", OpenRulesEntry,
+                _aiMatcher == null ? null : "AI 自动匹配…",
+                _aiMatcher == null ? null : () => _ = OnAiMatchAsync());
+            return;
+        }
+
+        HideEmptyState();
+    }
+
+    private void ShowEmptyState(string title, string steps, string primaryText, Action primary,
+        string? secondText = null, Action? second = null)
+    {
+        _labelEmptyTitle.Text = title;
+        _labelEmptySteps.Text = steps;
+
+        _emptyPrimaryAction = primary;
+        _btnEmptyPrimary.Text = primaryText;
+        _btnEmptyPrimary.Visible = true;
+
+        _emptySecondAction = second;
+        _btnEmptySecond.Text = secondText ?? "";
+        _btnEmptySecond.Visible = secondText != null && second != null;
+
+        _emptyPanel.Visible = true;
+        _listTracks.Visible = false;
+        _emptyPanel.BringToFront();
+    }
+
+    private void HideEmptyState()
+    {
+        _emptyPanel.Visible = false;
+        _listTracks.Visible = true;
+    }
+
+    /// <summary>有书级补丁时规则入口应打开补丁编辑器，避免覆盖目录规则。</summary>
+    private void OpenRulesEntry()
+    {
+        if (_manager.Profile?.RulePatch != null) OnRulePatch();
+        else OnRules();
     }
 
     private void UpdateBookLabel()

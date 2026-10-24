@@ -14,6 +14,8 @@ public class NAudioMediaPlayer : IMediaPlayer
     private bool _manualStop;
     private double _speed = 1.0;
     private double _volume = 1.0;
+    private System.Windows.Forms.Timer? _fadeTimer;
+    private int _fadeGeneration;
 
     public event EventHandler<TimeSpan>? PositionChanged;
     public event EventHandler<MediaPlaybackState>? StateChanged;
@@ -44,6 +46,8 @@ public class NAudioMediaPlayer : IMediaPlayer
         get => _volume;
         set
         {
+            // 用户主动改音量时终止渐变，避免渐变把用户设置覆盖回去
+            CancelFade();
             _volume = Math.Clamp(value, 0d, 1d);
             if (_waveOut != null) _waveOut.Volume = (float)_volume;
         }
@@ -57,6 +61,7 @@ public class NAudioMediaPlayer : IMediaPlayer
 
     public void Load(string mediaPath)
     {
+        CancelFade();
         // 先释放旧资源，防止旧 WaveOutEvent 的 PlaybackStopped 事件异步干扰新播放状态
         _timer?.Stop();
         _timer?.Dispose();
@@ -119,6 +124,75 @@ public class NAudioMediaPlayer : IMediaPlayer
     public void Stop() { _manualStop = true; _waveOut?.Stop(); _reader?.Seek(0, System.IO.SeekOrigin.Begin); SetState(MediaPlaybackState.Stopped); }
     public void Seek(TimeSpan position) { if (_reader != null && position >= TimeSpan.Zero && position <= _reader.TotalTime) _reader.CurrentTime = position; }
 
+    public void FadeOut(int milliseconds, bool blocking = false) => FadeTo(0d, milliseconds, blocking);
+
+    public void FadeIn(int milliseconds) => FadeTo(_volume, milliseconds, blocking: false, fromZero: true);
+
+    /// <summary>渐变只改 WaveOut 的实际音量，不改变 Volume 目标值，换曲后仍能恢复用户音量。</summary>
+    private void FadeTo(double target, int milliseconds, bool blocking, bool fromZero = false)
+    {
+        target = Math.Clamp(target, 0d, 1d);
+        if (_waveOut == null || milliseconds <= 0)
+        {
+            if (_waveOut != null) _waveOut.Volume = (float)target;
+            return;
+        }
+
+        CancelFade();
+        int generation = ++_fadeGeneration;
+        double start = fromZero ? 0d : _waveOut.Volume;
+        long startedAt = Environment.TickCount64;
+
+        double Progress()
+            => Math.Clamp((Environment.TickCount64 - startedAt) / (double)milliseconds, 0d, 1d);
+
+        if (blocking)
+        {
+            while (generation == _fadeGeneration && _waveOut != null)
+            {
+                double t = Progress();
+                _waveOut.Volume = (float)(start + (target - start) * t);
+                if (t >= 1d) break;
+                Thread.Sleep(3);
+            }
+            if (generation == _fadeGeneration && _waveOut != null)
+                _waveOut.Volume = (float)target;
+            return;
+        }
+
+        var timer = new System.Windows.Forms.Timer { Interval = 5 };
+        timer.Tick += (_, _) =>
+        {
+            if (generation != _fadeGeneration || _waveOut == null)
+            {
+                timer.Stop();
+                timer.Dispose();
+                return;
+            }
+
+            double t = Progress();
+            _waveOut.Volume = (float)(start + (target - start) * t);
+            if (t < 1d) return;
+
+            timer.Stop();
+            timer.Dispose();
+            if (!ReferenceEquals(_fadeTimer, timer)) return;
+            _fadeTimer = null;
+            _fadeGeneration++;
+        };
+        _fadeTimer = timer;
+        timer.Start();
+    }
+
+    private void CancelFade()
+    {
+        _fadeGeneration++;
+        if (_fadeTimer == null) return;
+        _fadeTimer.Stop();
+        _fadeTimer.Dispose();
+        _fadeTimer = null;
+    }
+
     public void LoadSubtitle(string? subtitlePath)
     {
         SubtitleCues = string.IsNullOrWhiteSpace(subtitlePath) || !File.Exists(subtitlePath)
@@ -147,5 +221,13 @@ public class NAudioMediaPlayer : IMediaPlayer
         StateChanged?.Invoke(this, s);
     }
 
-    public void Dispose() { _timer?.Stop(); _timer?.Dispose(); Stop(); _waveOut?.Dispose(); _reader?.Dispose(); }
+    public void Dispose()
+    {
+        CancelFade();
+        _timer?.Stop();
+        _timer?.Dispose();
+        Stop();
+        _waveOut?.Dispose();
+        _reader?.Dispose();
+    }
 }

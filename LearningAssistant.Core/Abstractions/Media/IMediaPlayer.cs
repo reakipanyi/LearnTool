@@ -17,6 +17,10 @@ public interface IMediaPlayer : IDisposable
     void Resume();
     void Stop();
     void Seek(TimeSpan position);
+    /// <summary>在指定毫秒内淡出到静音；blocking=true 时同步完成，用于切歌前收尾</summary>
+    void FadeOut(int milliseconds, bool blocking = false);
+    /// <summary>从静音在指定毫秒内淡入到当前 Volume</summary>
+    void FadeIn(int milliseconds);
     void LoadSubtitle(string? subtitlePath);
     IReadOnlyList<SubtitleCue>? SubtitleCues { get; }
 
