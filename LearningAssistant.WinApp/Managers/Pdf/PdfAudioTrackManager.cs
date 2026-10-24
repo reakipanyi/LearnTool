@@ -53,6 +53,7 @@ public class PdfAudioTrackManager : IDisposable
     {
         get
         {
+            if (_profile?.PlaybackScope == PlaybackScope.WholeBook) return false;
             int count = _result?.Tracks.Count ?? 0;
             if (count == 0) return false;
             return LoopMode == MediaLoopMode.RepeatAll || _playlistIndex < count - 1;
@@ -64,6 +65,7 @@ public class PdfAudioTrackManager : IDisposable
     {
         get
         {
+            if (_profile?.PlaybackScope == PlaybackScope.WholeBook) return false;
             int count = _result?.Tracks.Count ?? 0;
             if (count == 0 || _playlistIndex < 0) return false;
             return LoopMode == MediaLoopMode.RepeatAll || _playlistIndex > 0;
@@ -76,6 +78,9 @@ public class PdfAudioTrackManager : IDisposable
     /// <summary>当前页提示（无音频 / 文件缺失等），由播放器内联显示，不弹模态框</summary>
     public event EventHandler<string?>? PageHintChanged;
     public string? PageHint { get; private set; }
+
+    /// <summary>播放设置（范围 / 跟随翻页 / 切歌同步）变化后触发，供侧栏与播放器同步开关</summary>
+    public event EventHandler? SettingsChanged;
 
     private const int PageDebounceMs = 250;
     private readonly SynchronizationContext? _syncContext = SynchronizationContext.Current;
@@ -445,19 +450,99 @@ public class PdfAudioTrackManager : IDisposable
     /// <summary>切换“跟随翻页”并写回档案。</summary>
     public void SetFollowPage(bool follow)
     {
-        FollowPage = follow;
-        if (_profile == null) return;
-        _profile.FollowPage = follow;
-        SaveProfile();
+        if (FollowPage != follow)
+        {
+            FollowPage = follow;
+            if (_profile != null) _profile.FollowPage = follow;
+            SaveProfile();
+        }
+        SettingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>切换“切歌同步页码”并写回档案。</summary>
     public void SetSyncPageOnTrackChange(bool sync)
     {
-        SyncPageOnTrackChange = sync;
+        if (SyncPageOnTrackChange != sync)
+        {
+            SyncPageOnTrackChange = sync;
+            if (_profile != null) _profile.SyncPageOnTrackChange = sync;
+            SaveProfile();
+        }
+        SettingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// 切换播放范围。整篇听需要提供整篇音频；按页听会移除整篇音频选择，
+    /// 但保留按页绑定与匹配规则。
+    /// </summary>
+    public void SetPlaybackScope(PlaybackScope scope, string? singleAudioFile = null)
+    {
         if (_profile == null) return;
-        _profile.SyncPageOnTrackChange = sync;
+
+        bool changed = false;
+        if (scope == PlaybackScope.WholeBook)
+        {
+            if (!string.IsNullOrWhiteSpace(singleAudioFile))
+            {
+                _profile.SingleAudioFile = singleAudioFile;
+                _profile.MatchMode = PdfAudioMatchMode.SingleAudio;
+                changed = true;
+            }
+            // 没有整篇音频时无法进入整篇听，保持原范围
+            if (string.IsNullOrWhiteSpace(_profile.SingleAudioFile)) return;
+        }
+        else
+        {
+            // 整篇单音频与按页听互斥，切回时只移除整篇选择，按页绑定不受影响
+            if (!string.IsNullOrWhiteSpace(_profile.SingleAudioFile))
+            {
+                _profile.SingleAudioFile = null;
+                changed = true;
+            }
+            if (_profile.MatchMode != PdfAudioMatchMode.PerPage)
+            {
+                _profile.MatchMode = PdfAudioMatchMode.PerPage;
+                changed = true;
+            }
+        }
+
+        if (_profile.PlaybackScope != scope)
+        {
+            _profile.PlaybackScope = scope;
+            changed = true;
+        }
+        if (!changed) return;
+
+        int page = _currentPageIndex;
         SaveProfile();
+        SaveRulesAndRematch();
+
+        // 范围切换后把播放器切到该范围对应的曲目，避免整篇模式下仍指向旧的按页曲目
+        var target = scope == PlaybackScope.WholeBook
+            ? _result?.Tracks.FirstOrDefault()
+            : page >= 0 ? _result?.PageIndex.GetValueOrDefault(page) : null;
+        if (target != null && !IsLoaded(target)) LoadCore(target, syncPage: false);
+
+        SettingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>清除指定页的手动绑定并回退到规则匹配结果。</summary>
+    public void ClearPageOverride(int page)
+    {
+        if (_profile == null) return;
+        if (!_profile.ManualOverrides.Remove(page)) return;
+        _profile.PageIndex.Remove(page);
+        SaveRulesAndRematch();
+    }
+
+    /// <summary>试听指定曲目：不改变绑定，也不因多页曲目跳到起始页。</summary>
+    public bool Preview(AudioTrack track)
+    {
+        if (track == null) return false;
+        if (!IsLoaded(track)) LoadCore(track, syncPage: false);
+        if (IsPlaying) return true;
+        FireAndForget(_playback.PlayAsync(), "PlayAsync");
+        return true;
     }
 
     private int IndexOfTrack(AudioTrack track)
@@ -477,6 +562,8 @@ public class PdfAudioTrackManager : IDisposable
     private void Move(int delta)
     {
         if (_result == null || _result.Tracks.Count == 0) return;
+        // 整篇听只有一条曲目，不提供上一曲/下一曲语义
+        if (_profile?.PlaybackScope == PlaybackScope.WholeBook) return;
 
         int count = _result.Tracks.Count;
         // 以目标索引为基准累积：连点 3 次就前进 3 条，不合并、不丢弃
@@ -607,6 +694,7 @@ public class PdfAudioTrackManager : IDisposable
         _profile.PageIndex.Clear();
         _profile.SingleAudioFile = null;
         _profile.MatchMode = PdfAudioMatchMode.PerPage;
+        _profile.PlaybackScope = PlaybackScope.FollowPage;
         SaveRulesAndRematch();
     }
 

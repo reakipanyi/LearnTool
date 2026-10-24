@@ -1,4 +1,4 @@
-using LearningAssistant.Abstractions.Media;
+using System.Drawing.Drawing2D;
 using LearningAssistant.Common.UI;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Pdf;
@@ -11,8 +11,19 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
     private readonly PdfAudioTrackManager _manager;
     private readonly IPdfReaderFormAccess _form;
     private readonly PdfAudioAiMatcher? _aiMatcher;
-    private EventHandler<AudioRecording>? _recordingCompletedHandler;
+    private readonly ToggleSwitch _chkFollow = new();
+    private readonly ContextMenuStrip _menuSource = new();
+    private readonly ContextMenuStrip _menuMatch = new();
+    private readonly ToolStripMenuItem _menuAddDir = new("添加音频目录…");
+    private readonly ToolStripMenuItem _menuRescan = new("重新扫描");
+    private readonly ToolStripMenuItem _menuSubDir = new("包含子目录");
+    private readonly ToolStripMenuItem _menuAi = new("AI 自动匹配…");
+    private readonly ToolStripMenuItem _menuRules = new("匹配规则…");
+
     private bool _suppressAutoPlay;
+    private bool _suppressMode;
+    private bool _suppressFollow;
+    private float _statusHeight;
     private Font? _listFont;
 
     /// <summary>供 Visual Studio 设计器实例化；运行时请使用带依赖的构造函数。</summary>
@@ -21,13 +32,14 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         InitializeComponent();
         // 卡片内容区由面板自行挂载，避免 VS 设计器回写时丢失
         listCard.Body.Controls.Add(_listTracks);
-        playbackCard.Body.Controls.Add(playback);
-        sourceCard.Body.Controls.Add(sourceGrid);
+        BuildLayoutExtras();
         _manager = null!;
         _form = null!;
         _aiMatcher = null;
         // 设计期也按当前字体回填一次，保证设计视图与运行预览一致
         ApplyRuntimeMetrics();
+        statusPanel.Visible = false;
+        root.RowStyles[0].Height = 0F;
     }
 
     public PdfAudioPanel(PdfAudioTrackManager manager, IPdfReaderFormAccess form,
@@ -40,56 +52,138 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         RefreshData();
     }
 
+    /// <summary>挂载设计器无法直接承载的控件：分段切换、开关与弹出菜单。</summary>
+    private void BuildLayoutExtras()
+    {
+        _segments.SetItems("按页听", "整篇听");
+        _chkFollow.Dock = DockStyle.Fill;
+        _chkFollow.Margin = new Padding(0, 3, 0, 3);
+        followRow.Controls.Add(_chkFollow, 1, 0);
+
+        _menuSubDir.CheckOnClick = true;
+        _menuSource.Items.AddRange(new ToolStripItem[]
+        {
+            _menuAddDir, _menuRescan, new ToolStripSeparator(), _menuSubDir
+        });
+        _menuSource.Opening += (_, _) =>
+        {
+            if (_manager == null) return;
+            _menuSubDir.Checked = _manager.Profile?.IncludeSubDirectories == true;
+        };
+
+        _menuMatch.Items.AddRange(new ToolStripItem[] { _menuAi, _menuRules });
+        _menuMatch.Opening += (_, _) =>
+        {
+            if (_manager == null) return;
+            bool single = _manager.Profile?.MatchMode == PdfAudioMatchMode.SingleAudio;
+            _menuAi.Enabled = !single;
+        };
+
+        pageCard.Resize += (_, _) => pageCard.Invalidate();
+        advSource.Paint += (_, e) => DrawAdvancedSeparator(e.Graphics, advSource);
+        advMatch.Paint += (_, e) => DrawAdvancedSeparator(e.Graphics, advMatch);
+
+        _tooltip.SetToolTip(_btnBind, "为这一页选择音频；整篇模式更换整篇音频");
+        _tooltip.SetToolTip(_btnClearPage, "清除手动绑定，恢复规则匹配");
+        _tooltip.SetToolTip(_btnPreview, "试听当前绑定，不影响绑定关系");
+        _tooltip.SetToolTip(_labelAdvSource, "添加外部目录、重新扫描或切换递归扫描");
+        _tooltip.SetToolTip(_labelAdvMatch, "AI 自动匹配与匹配规则设置");
+    }
+
     /// <summary>按当前字体回填设计期占位尺寸，保持与动态布局一致的视觉效果。</summary>
     private void ApplyRuntimeMetrics()
     {
         _listFont ??= new Font("Microsoft YaHei UI", 9.5F);
         _listTracks.ItemHeight = Math.Max(28, _listFont.Height + 12);
 
-        int baseFontHeight = Control.DefaultFont.Height;
-        int buttonHeight = Math.Max(30, baseFontHeight + 14);
-        int iconSize = Math.Max(34, baseFontHeight + 18);
-        int comboHeight = Math.Max(26, _comboSpeed.Font.Height + 10);
+        int fontHeight = _labelPageTrack.Font.Height;
+        int buttonHeight = Math.Max(28, fontHeight + 11);
+        int bookHeight = Math.Max(34, fontHeight + 17);
+        int followHeight = Math.Max(26, fontHeight + 9);
+        int advancedHeight = Math.Max(28, fontHeight + 11);
 
-        _labelInfo.Height = Math.Max(24, _labelInfo.Font.Height + 8);
-        int statusHeight = _labelInfo.Height + 14;
-        int playbackHeight = 40 + (iconSize + 6) + (buttonHeight + 6) + 22 + (comboHeight + 6) + 24;
-        int sourceHeight = 40 + 4 * (buttonHeight + 6) + 4;
+        _statusHeight = _labelInfo.Font.Height + 12;
+        root.RowStyles[1].Height = bookHeight;
+        root.RowStyles[3].Height = followHeight;
+        root.RowStyles[4].Height = 18 + (fontHeight + 7) + 18 + buttonHeight + 20;
+        root.RowStyles[6].Height = advancedHeight * 2;
 
-        root.RowStyles[0].Height = statusHeight + 4;
-        root.RowStyles[2].Height = playbackHeight + 4;
-        root.RowStyles[3].Height = sourceHeight;
-
-        playback.RowStyles[0].Height = iconSize + 6;
-        playback.RowStyles[1].Height = buttonHeight + 6;
-        playback.RowStyles[2].Height = 22F;
-        playback.RowStyles[3].Height = comboHeight + 6;
-
-        for (int i = 0; i < sourceGrid.RowStyles.Count; i++)
-            sourceGrid.RowStyles[i].Height = buttonHeight + 6;
-
-        StyleTransportButton(_btnPrev, iconSize, iconSize, primary: false);
-        StyleTransportButton(_btnPlay, iconSize + 12, iconSize, primary: true);
-        StyleTransportButton(_btnNext, iconSize, iconSize, primary: false);
-        StyleTransportButton(_btnLoop, Math.Max(72, iconSize + 38), iconSize, primary: false);
-        _btnLoop.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
-        UpdateLoopModeButton();
+        foreach (var button in new[] { _btnBind, _btnClearPage, _btnPreview })
+            button.Height = buttonHeight;
+        _btnBookSwitch.Height = bookHeight - 6;
+        advancedPanel.RowStyles[0].Height = advancedHeight;
+        advancedPanel.RowStyles[1].Height = advancedHeight;
     }
 
-    /// <summary>播放区图标按钮：播放/暂停为主按钮，前后曲为次级按钮。</summary>
-    private static void StyleTransportButton(Button button, int width, int height, bool primary)
+    private void WireEvents()
     {
-        button.AutoSize = false;
-        button.Size = new Size(width, height);
-        button.FlatStyle = FlatStyle.Flat;
-        button.FlatAppearance.BorderSize = primary ? 0 : 1;
-        button.FlatAppearance.BorderColor = PdfSidebarTheme.Border;
-        button.BackColor = primary ? PdfSidebarTheme.Brand : PdfSidebarTheme.Surface;
-        button.ForeColor = primary ? Color.White : PdfSidebarTheme.Text;
-        button.Font = new Font("Microsoft YaHei UI", primary ? 11F : 10F, FontStyle.Bold);
-        button.Cursor = Cursors.Hand;
-        button.Margin = new Padding(3, 0, 3, 0);
-        button.Tag = primary ? "accent" : "transport";
+        _labelBook.Click += (_, _) => ShowFilesTab();
+        _btnBookSwitch.Click += (_, _) => ShowFilesTab();
+        _tooltip.SetToolTip(_btnBookSwitch, "在左侧文件页切换书籍");
+
+        _segments.SelectedIndexChanged += (_, _) => OnModeSegmentChanged();
+        _chkFollow.CheckedChanged += (_, _) =>
+        {
+            if (_suppressFollow) return;
+            _manager.SetFollowPage(_chkFollow.Checked);
+        };
+
+        _btnBind.Click += (_, _) => OnBind();
+        _btnClearPage.Click += (_, _) => OnClearPage();
+        _btnPreview.Click += (_, _) => OnPreview();
+
+        advSource.Click += (_, _) => ShowSourceMenu();
+        _labelAdvSource.Click += (_, _) => ShowSourceMenu();
+        _labelAdvSourceChevron.Click += (_, _) => ShowSourceMenu();
+        advMatch.Click += (_, _) => ShowMatchMenu();
+        _labelAdvMatch.Click += (_, _) => ShowMatchMenu();
+        _labelAdvMatchChevron.Click += (_, _) => ShowMatchMenu();
+
+        _menuAi.Click += async (_, _) => await OnAiMatchAsync();
+        _menuRules.Click += (_, _) => OnRules();
+        _menuAddDir.Click += async (_, _) => await OnAddDirectoryAsync();
+        _menuRescan.Click += async (_, _) =>
+        {
+            _menuRescan.Enabled = false;
+            try { await _manager.RescanAsync(); }
+            catch (Exception ex) { HandleAudioError("重新扫描失败", ex); }
+            finally { _menuRescan.Enabled = true; }
+        };
+        // CheckOnClick 只切换勾选，不改变扫描行为；点击后读取勾选状态再执行
+        _menuSubDir.Click += async (_, _) =>
+        {
+            _menuSubDir.Enabled = false;
+            try { await _manager.SetIncludeSubDirectoriesAsync(_menuSubDir.Checked); }
+            catch (Exception ex) { HandleAudioError("切换递归扫描失败", ex); }
+            finally { _menuSubDir.Enabled = true; }
+        };
+
+        _listTracks.SelectedIndexChanged += (_, _) => OnTrackSelected();
+        _listTracks.DrawItem += ListTracks_DrawItem;
+
+        _manager.ProfileLoaded += OnProfileLoaded;
+        _manager.TrackChanged += OnTrackChanged;
+        _manager.PageHintChanged += OnPageHintChanged;
+        _manager.SettingsChanged += OnSettingsChanged;
+    }
+
+    private void ShowFilesTab()
+    {
+        var tabs = _form.TabControlLeft;
+        if (tabs == null || tabs.TabPages.Count == 0) return;
+        tabs.SelectedIndex = 0;
+    }
+
+    private void ShowSourceMenu()
+    {
+        if (_manager.Profile == null) return;
+        _menuSource.Show(advSource, new Point(0, advSource.Height));
+    }
+
+    private void ShowMatchMenu()
+    {
+        if (_manager.Profile == null) return;
+        _menuMatch.Show(advMatch, new Point(0, advMatch.Height));
     }
 
     private void ListTracks_DrawItem(object? sender, DrawItemEventArgs e)
@@ -104,6 +198,14 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
 
         using (var pen = new Pen(palette.Border))
             e.Graphics.DrawLine(pen, e.Bounds.Left + 4, e.Bounds.Bottom - 1, e.Bounds.Right - 4, e.Bounds.Bottom - 1);
+
+        // 正在播放的曲目用左侧色条标识，避免列表滚动后看不出当前曲目
+        int playingIndex = _manager?.CurrentPlaylistIndex ?? -1;
+        if (e.Index == playingIndex)
+        {
+            using var bar = new SolidBrush(PdfSidebarTheme.Brand);
+            e.Graphics.FillRectangle(bar, e.Bounds.Left, e.Bounds.Top + 6, 3, e.Bounds.Height - 12);
+        }
 
         var textRect = new Rectangle(e.Bounds.Left + 10, e.Bounds.Top,
             Math.Max(10, e.Bounds.Width - 16), e.Bounds.Height);
@@ -120,96 +222,141 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
     {
         var palette = new PdfSidebarPalette(isDark);
         BackColor = palette.Background;
+        root.BackColor = palette.Background;
+
+        statusPanel.BackColor = palette.Surface;
         _labelInfo.ForeColor = palette.Text;
-        _labelSubtitle.ForeColor = PdfSidebarTheme.Score;
+
+        bookBar.BackColor = palette.Background;
+        _labelBook.ForeColor = palette.Text;
+        _btnBookSwitch.BackColor = palette.Surface;
+        _btnBookSwitch.ForeColor = palette.Muted;
+        _btnBookSwitch.FlatAppearance.BorderColor = palette.Border;
+
+        _segments.ApplyTheme(isDark);
+
+        followRow.BackColor = palette.Background;
+        followLabel.ForeColor = palette.Muted;
+        _chkFollow.Invalidate();
+
+        pageCard.ApplyTheme(isDark);
+        _labelPageTitle.ForeColor = palette.Muted;
+        _labelPageSource.ForeColor = PdfSidebarTheme.Brand;
+        _labelPageTrack.ForeColor = palette.Text;
+        _labelPageMeta.ForeColor = palette.Muted;
+        StylePageButton(_btnBind, palette, primary: true);
+        StylePageButton(_btnClearPage, palette, primary: false);
+        StylePageButton(_btnPreview, palette, primary: false);
+
+        listCard.ApplyTheme(isDark);
         _listTracks.BackColor = palette.Surface;
         _listTracks.ForeColor = palette.Text;
-        _comboSpeed.BackColor = palette.Surface;
-        _comboSpeed.ForeColor = palette.Text;
         _listTracks.Invalidate();
+
+        advancedPanel.BackColor = palette.Background;
+        advSource.BackColor = palette.Background;
+        advMatch.BackColor = palette.Background;
+        _labelAdvSource.ForeColor = palette.Muted;
+        _labelAdvMatch.ForeColor = palette.Muted;
+        _labelAdvSourceChevron.ForeColor = palette.Muted;
+        _labelAdvMatchChevron.ForeColor = palette.Muted;
+        advSource.Invalidate();
+        advMatch.Invalidate();
+
+        _menuSource.BackColor = palette.Surface;
+        _menuSource.ForeColor = palette.Text;
+        _menuMatch.BackColor = palette.Surface;
+        _menuMatch.ForeColor = palette.Text;
     }
 
-    private void WireEvents()
+    private static void StylePageButton(Button button, PdfSidebarPalette palette, bool primary)
     {
-        _btnPlay.Click += (_, _) =>
-        {
-            // 依据播放器真实状态分发幂等命令，避免“先置相反状态”导致需要点两下
-            bool ok = _manager.IsPlaying ? _manager.Pause() : _manager.Play();
-            if (!ok) _form.ShowWarning("当前页没有可播放的音频");
-        };
-        _btnPrev.Click += (_, _) => _manager.Prev();
-        _btnNext.Click += (_, _) => _manager.Next();
-        _btnLoop.Click += (_, _) => CycleLoopMode();
-        _btnSetA.Click += (_, _) => { _manager.Playback.SetAbLoop(_manager.Playback.Player.Position, _manager.Playback.Player.AbLoop.B); UpdateLoopLabel(); };
-        _btnSetB.Click += (_, _) => { _manager.Playback.SetAbLoop(_manager.Playback.Player.AbLoop.A, _manager.Playback.Player.Position); UpdateLoopLabel(); };
-        _btnClearAb.Click += (_, _) => { _manager.Playback.SetAbLoop(null, null); _manager.Playback.Player.LoopMode = MediaLoopMode.None; UpdateLoopLabel(); };
-        _tooltip.SetToolTip(_btnSetA, "把当前播放位置设为复读起点（A）");
-        _tooltip.SetToolTip(_btnSetB, "把当前播放位置设为复读终点（B），播放到 B 后自动回到 A 循环");
-        _tooltip.SetToolTip(_btnClearAb, "取消复读，恢复正常播放");
-        _tooltip.SetToolTip(_btnPrev, "上一曲");
-        _tooltip.SetToolTip(_btnPlay, "播放 / 暂停");
-        _tooltip.SetToolTip(_btnNext, "下一曲");
-        _tooltip.SetToolTip(_btnLoop, "循环模式：关闭 / 列表循环（播完自动下一曲）/ 单曲循环");
-        _btnFollowRead.Click += (_, _) => OnFollowRead();
-        _btnRules.Click += (_, _) => OnRules();
-        _btnManual.Click += (_, _) => OnManual();
-        _btnManualFromList.Click += (_, _) => OnManualFromList();
-        _btnAddDir.Click += async (_, _) => await OnAddDirectoryAsync();
-        _btnAiMatch.Click += async (_, _) => await OnAiMatchAsync();
-        _tooltip.SetToolTip(_btnAddDir, "选择一个外部音频目录，扫描后合并到当前曲目列表");
-        _tooltip.SetToolTip(_btnAiMatch, "让 AI 根据 PDF 各页内容与音频文件名自动匹配页码，确认后应用");
-        _btnRescan.Click += async (_, _) =>
-        {
-            _btnRescan.Enabled = false;
-            try { await _manager.RescanAsync(); }
-            catch (Exception ex) { HandleAudioError("重新扫描失败", ex); }
-            finally { _btnRescan.Enabled = true; }
-        };
-        _chkSubDir.CheckedChanged += async (_, _) =>
-        {
-            _chkSubDir.Enabled = false;
-            try { await _manager.SetIncludeSubDirectoriesAsync(_chkSubDir.Checked); }
-            catch (Exception ex) { HandleAudioError("切换递归扫描失败", ex); }
-            finally { _chkSubDir.Enabled = true; }
-        };
-        _listTracks.SelectedIndexChanged += (_, _) => OnTrackSelected();
-        _listTracks.DrawItem += ListTracks_DrawItem;
-        _manager.ProfileLoaded += OnProfileLoaded;
-        _manager.TrackChanged += OnTrackChanged;
-        _manager.PageHintChanged += OnPageHintChanged;
-
-        _manager.Playback.Player.StateChanged += OnPlayerStateChanged;
-        _manager.Playback.Player.PositionChanged += OnPlayerPositionChanged;
-
-        _recordingCompletedHandler = (_, rec) => OnRecordingCompleted(rec);
-        if (_form.AudioRecorderService != null)
-            _form.AudioRecorderService.RecordingCompleted += _recordingCompletedHandler;
+        button.FlatStyle = FlatStyle.Flat;
+        button.FlatAppearance.BorderSize = primary ? 0 : 1;
+        button.FlatAppearance.BorderColor = palette.Border;
+        button.BackColor = primary ? PdfSidebarTheme.Brand : palette.Surface;
+        button.ForeColor = primary ? Color.White : palette.Text;
+        button.FlatAppearance.MouseOverBackColor = primary
+            ? Color.FromArgb(92, 78, 200)
+            : palette.Hover;
     }
 
-    private void OnPlayerStateChanged(object? sender, MediaPlaybackState s)
-        => InvokeIfReady(() => _btnPlay.Text = s == MediaPlaybackState.Playing ? "⏸" : "▶");
+    private void DrawAdvancedSeparator(Graphics graphics, Control row)
+    {
+        var palette = PdfSidebarTheme.PaletteFor(this);
+        using var pen = new Pen(palette.Border) { DashStyle = DashStyle.Dash };
+        graphics.DrawLine(pen, 2, 0, Math.Max(2, row.Width - 4), 0);
+    }
 
-    /// <summary>切曲后强制同步标题与列表高亮，避免标题/高亮仍停留在上一曲。</summary>
-    private void OnTrackChanged(object? sender, AudioTrack track)
-        => InvokeIfReady(() =>
+    /// <summary>切换播放范围；整篇听需要先选定一个整篇音频文件。</summary>
+    private void OnModeSegmentChanged()
+    {
+        if (_suppressMode) return;
+        if (_manager.Profile == null)
         {
-            _labelInfo.Text = $"播放：{track.FileName}";
-            SelectTrackInList(track);
-            UpdateSubtitle(_manager.Playback.Player.Position);
-        });
+            SyncModeControls();
+            return;
+        }
 
-    private void OnPageHintChanged(object? sender, string? hint)
-        => InvokeIfReady(() =>
+        if (_segments.SelectedIndex == 1)
         {
-            if (!string.IsNullOrEmpty(hint)) _labelInfo.Text = hint;
-            else UpdateInfoLabel();
-        });
+            if (_manager.Profile.PlaybackScope != PlaybackScope.WholeBook)
+            {
+                var path = PickAudioPath("选择整篇音频");
+                if (path == null)
+                {
+                    SyncModeControls();
+                    return;
+                }
+                _manager.SetPlaybackScope(PlaybackScope.WholeBook, path);
+            }
+        }
+        else if (_manager.Profile.PlaybackScope == PlaybackScope.WholeBook)
+        {
+            if (!_form.ShowConfirm("切回按页听后，整篇音频选择会被移除；按页绑定与匹配规则保留。", "切换播放范围"))
+            {
+                SyncModeControls();
+                return;
+            }
+            _manager.SetPlaybackScope(PlaybackScope.FollowPage);
+        }
 
-    private void OnPlayerPositionChanged(object? sender, TimeSpan p) => InvokeIfReady(() => UpdateSubtitle(p));
+        SyncModeControls();
+        RefreshData();
+    }
+
+    private void SyncModeControls()
+    {
+        if (_manager == null) return;
+        bool whole = _manager.Profile?.PlaybackScope == PlaybackScope.WholeBook;
+
+        _suppressMode = true;
+        try { _segments.SelectedIndex = whole ? 1 : 0; }
+        finally { _suppressMode = false; }
+
+        _suppressFollow = true;
+        try
+        {
+            _chkFollow.Checked = _manager.FollowPage;
+            _chkFollow.Enabled = !whole;
+        }
+        finally { _suppressFollow = false; }
+
+        followLabel.Text = whole ? "整篇音频不随翻页切换" : "翻页自动跟随";
+        _tooltip.SetToolTip(followLabel, whole
+            ? "整篇听模式下播放整本音频，翻页不会切换曲目"
+            : "翻页时自动切换到该页绑定的音频");
+    }
 
     public void RefreshData()
     {
+        if (_manager == null) return;
+        UpdateBookLabel();
+        SyncModeControls();
+
         var result = _manager.Result;
+        bool singleMode = _manager.Profile?.MatchMode == PdfAudioMatchMode.SingleAudio;
+
         // 先按曲目反查页码，避免对每个曲目重复扫描整个 PageIndex（O(T×P)）
         var pagesByTrack = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
         if (result != null)
@@ -221,11 +368,6 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
                 pages.Add(kv.Key + 1);
             }
         }
-
-        bool singleMode = _manager.Profile?.MatchMode == PdfAudioMatchMode.SingleAudio;
-        _btnAiMatch.Enabled = !singleMode;
-        _btnManual.Enabled = !singleMode;
-        _btnManualFromList.Enabled = !singleMode;
 
         _listTracks.BeginUpdate();
         _listTracks.Items.Clear();
@@ -246,32 +388,116 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
                     : "";
                 _listTracks.Items.Add($"第{pageText}页  {t.FileName}{folderHint}{(t.IsManual ? "  [手动]" : "")}");
             }
-            if (result.UnmatchedPages.Count > 0)
+            if (!singleMode && result.UnmatchedPages.Count > 0)
                 _listTracks.Items.Add($"未匹配页：{string.Join(",", result.UnmatchedPages.Select(p => p + 1).Take(20))}");
         }
         _listTracks.EndUpdate();
-        OnCurrentPageChanged();
+
+        int count = result?.Tracks.Count ?? 0;
+        int matched = result?.PageIndex.Count ?? 0;
+        listCard.Title = count == 0
+            ? "曲目 · 未扫描到音频"
+            : $"曲目 {count} · 已匹配 {matched}/{_manager.PageCount}";
+
+        UpdatePageCard();
+        SelectCurrentTrackInList();
+    }
+
+    private void UpdateBookLabel()
+    {
+        var path = _form?.CurrentPdfPath;
+        bool hasBook = !string.IsNullOrWhiteSpace(path);
+        _labelBook.Text = hasBook ? Path.GetFileNameWithoutExtension(path) : "未打开文档";
+        _btnBookSwitch.Enabled = hasBook;
+        _tooltip.SetToolTip(_labelBook, hasBook ? path : "打开 PDF 后可配置配套音频");
     }
 
     /// <summary>翻页时只更新与当前页相关的信息，不重建曲目列表</summary>
     public void OnCurrentPageChanged()
     {
-        UpdateInfoLabel();
-        UpdateLoopLabel();
-        UpdateSubtitle(_manager.Playback.Player.Position);
+        UpdatePageCard();
     }
 
-    private void UpdateInfoLabel()
+    private void UpdatePageCard()
     {
-        var cur = CurrentTrack();
-        _labelInfo.Text = cur != null ? $"本页：{cur.FileName}" : "本页：无音频";
+        if (_manager == null) return;
+        bool singleMode = _manager.Profile?.MatchMode == PdfAudioMatchMode.SingleAudio;
+        var result = _manager.Result;
+
+        AudioTrack? track;
+        string title;
+        if (singleMode)
+        {
+            track = result?.Tracks.FirstOrDefault();
+            title = "整篇听 · 全篇";
+        }
+        else
+        {
+            track = result != null && result.PageIndex.TryGetValue(_form.CurrentPageIndex, out var t) ? t : null;
+            title = $"当前页 · P{_form.CurrentPageIndex + 1}";
+        }
+
+        _labelPageTitle.Text = title;
+        _labelPageSource.Tag = track == null ? "muted" : "accent";
+        _labelPageSource.Text = singleMode ? "全篇" : track == null ? "未绑定" : track.IsManual ? "手动" : "自动";
+        _labelPageTrack.Text = track?.FileName ?? (singleMode ? "未选择整篇音频" : "本页未绑定音频");
+        _labelPageSource.ForeColor = track == null
+            ? PdfSidebarTheme.PaletteFor(this).Muted
+            : PdfSidebarTheme.Brand;
+
+        if (track == null)
+        {
+            _labelPageMeta.Text = _manager.PageHint
+                ?? (singleMode ? "点「更换绑定」选择整篇音频" : "点「更换绑定」选择这一页的音频");
+        }
+        else
+        {
+            var meta = new List<string>();
+            var duration = DescribeDuration(track);
+            if (!string.IsNullOrEmpty(duration)) meta.Add(duration);
+            if (!singleMode)
+            {
+                var coverage = DescribeCoverage(track);
+                if (!string.IsNullOrEmpty(coverage)) meta.Add(coverage);
+            }
+            _labelPageMeta.Text = meta.Count > 0 ? string.Join(" · ", meta) : "已绑定音频";
+        }
+
+        _btnBind.Text = singleMode ? "更换音频" : "更换绑定";
+        // 只有手动/AI 绑定才存在可清除的覆盖项，自动匹配结果清除后仍会重新命中
+        _btnClearPage.Enabled = !singleMode && track?.IsManual == true;
+        _btnPreview.Enabled = track != null;
     }
 
-    private AudioTrack? CurrentTrack()
+    private string DescribeDuration(AudioTrack track)
     {
-        if (_manager.Result == null) return null;
-        return _manager.Result.PageIndex.TryGetValue(_form.CurrentPageIndex, out var t) ? t : null;
+        if (track.DurationMs > 0) return FormatTime(TimeSpan.FromMilliseconds(track.DurationMs));
+        // 正在加载的曲目可直接读播放器时长，避免等待元数据重新解析
+        if (_manager.CurrentTrack != null
+            && string.Equals(_manager.CurrentTrack.FilePath, track.FilePath, StringComparison.OrdinalIgnoreCase)
+            && _manager.Playback.Player.Duration > TimeSpan.Zero)
+            return FormatTime(_manager.Playback.Player.Duration);
+        return "";
     }
+
+    private string DescribeCoverage(AudioTrack track)
+    {
+        var result = _manager.Result;
+        if (result == null) return "";
+        var pages = result.PageIndex
+            .Where(kv => string.Equals(kv.Value.FilePath, track.FilePath, StringComparison.OrdinalIgnoreCase))
+            .Select(kv => kv.Key)
+            .OrderBy(p => p)
+            .ToList();
+        if (pages.Count <= 1) return "";
+        if (pages.Count >= _manager.PageCount) return "覆盖全篇";
+        return $"覆盖 P{pages[0] + 1}–P{pages[^1] + 1}";
+    }
+
+    private static string FormatTime(TimeSpan time)
+        => time.TotalHours >= 1
+            ? $"{(int)time.TotalHours}:{time.Minutes:00}:{time.Seconds:00}"
+            : $"{time.Minutes:00}:{time.Seconds:00}";
 
     private void OnTrackSelected()
     {
@@ -283,66 +509,206 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         FireAndForget(_manager.Playback.PlayAsync());
     }
 
-    /// <summary>循环模式：关闭 → 列表循环 → 单曲循环 → 关闭。</summary>
-    private void CycleLoopMode()
-    {
-        // 循环策略统一由管理器持有，避免面板与底部播放器各自维护一份状态
-        _manager.LoopMode = _manager.LoopMode switch
+    /// <summary>切曲后同步当前页卡片与列表高亮。</summary>
+    private void OnTrackChanged(object? sender, AudioTrack track)
+        => InvokeIfReady(() =>
         {
-            MediaLoopMode.None => MediaLoopMode.RepeatAll,
-            MediaLoopMode.RepeatAll => MediaLoopMode.RepeatOne,
-            _ => MediaLoopMode.None
-        };
-        UpdateLoopModeButton();
-    }
+            UpdatePageCard();
+            SelectTrackInList(track);
+            _listTracks.Invalidate();
+        });
 
-    /// <summary>用文字与配色标示当前循环模式，避免用户不知处在哪种模式。</summary>
-    private void UpdateLoopModeButton()
-    {
-        if (_btnLoop == null || _btnLoop.IsDisposed) return;
+    private void OnPageHintChanged(object? sender, string? hint)
+        => InvokeIfReady(UpdatePageCard);
 
-        bool active = _manager.LoopMode != MediaLoopMode.None;
-        var palette = PdfSidebarTheme.PaletteFor(this);
-        _btnLoop.Text = _manager.LoopMode switch
+    private void OnSettingsChanged(object? sender, EventArgs e)
+        => InvokeIfReady(() =>
         {
-            MediaLoopMode.RepeatAll => "🔁 列表",
-            MediaLoopMode.RepeatOne => "🔁 单曲",
-            _ => "🔁 关闭"
-        };
-        _btnLoop.BackColor = active ? palette.BrandSoft : palette.Surface;
-        _btnLoop.ForeColor = active ? PdfSidebarTheme.Brand : palette.Text;
-    }
+            SyncModeControls();
+            UpdatePageCard();
+        });
 
-    private void OnFollowRead()
+    private void OnProfileLoaded(object? sender, EventArgs e) => InvokeIfReady(() =>
     {
-        var recorder = _form.AudioRecorderService;
-        if (recorder == null) { _form.ShowWarning("录音服务不可用"); return; }
-        if (recorder.State == AudioRecorderState.Recording)
+        RefreshData();
+        // 档案损坏优先提示，且管理器已禁止回写，避免覆盖原文件
+        var error = _manager.LoadErrorMessage;
+        if (!string.IsNullOrEmpty(error))
         {
-            recorder.StopRecording();
-            _btnFollowRead.Text = "● 整页录音";
+            ShowStatus(error, isError: true);
             return;
         }
-        if (string.IsNullOrEmpty(_form.CurrentPdfPath)) { _form.ShowWarning("请先打开 PDF"); return; }
-        _manager.Playback.Pause(); // 录音与播放互斥
-        recorder.StartRecording(_form.CurrentPdfPath, _form.CurrentPageIndex, Path.GetFileName(_form.CurrentPdfPath));
-        _btnFollowRead.Text = "■ 结束录音";
+        // 打开档案时若发生播放范围自动纠正，在这里提示一次，不弹模态框
+        ShowStatus(_manager.ScopeCorrectionMessage, isError: false);
+    });
+
+    private void ShowStatus(string? message, bool isError)
+    {
+        bool show = !string.IsNullOrWhiteSpace(message);
+        statusPanel.Visible = show;
+        root.RowStyles[0].Height = show ? _statusHeight : 0F;
+        if (!show) return;
+        _labelInfo.Text = message;
+        _labelInfo.ForeColor = isError
+            ? PdfSidebarTheme.Danger
+            : PdfSidebarTheme.PaletteFor(this).Muted;
     }
 
-    private void OnRecordingCompleted(AudioRecording recording)
+    /// <summary>更换当前页绑定（整篇模式下更换整篇音频）。</summary>
+    private void OnBind()
     {
-        // 句子跟读录音由跟读窗口消费，不能污染整页音频与录音列表
-        if (recording.Scope != AudioRecordingScope.Page)
-            return;
+        if (_manager.Profile == null) return;
+        bool singleMode = _manager.Profile.MatchMode == PdfAudioMatchMode.SingleAudio;
 
-        if (!string.IsNullOrEmpty(recording.FilePath))
-            _manager.Load(new AudioTrack
+        if (singleMode)
+        {
+            var single = PickAudioPath("更换整篇音频");
+            if (single == null) return;
+            _manager.SetPlaybackScope(PlaybackScope.WholeBook, single);
+            RefreshData();
+            return;
+        }
+
+        var path = PickAudioPath($"第 {_form.CurrentPageIndex + 1} 页 · 选择音频");
+        if (path == null) return;
+        _manager.SetManualOverride(_form.CurrentPageIndex, path);
+        RefreshData();
+    }
+
+    private void OnClearPage()
+    {
+        bool singleMode = _manager.Profile?.MatchMode == PdfAudioMatchMode.SingleAudio;
+        if (singleMode || _manager.Profile == null) return;
+        _manager.ClearPageOverride(_form.CurrentPageIndex);
+        RefreshData();
+    }
+
+    private void OnPreview()
+    {
+        bool singleMode = _manager.Profile?.MatchMode == PdfAudioMatchMode.SingleAudio;
+        AudioTrack? track;
+        if (singleMode)
+        {
+            track = _manager.Result?.Tracks.FirstOrDefault();
+        }
+        else
+        {
+            track = _manager.Result?.PageIndex.GetValueOrDefault(_form.CurrentPageIndex);
+        }
+        if (track == null) return;
+        if (!_manager.Preview(track)) _form.ShowWarning("当前音频无法试听");
+    }
+
+    /// <summary>搜索式音频选择器：可搜索已扫描曲目，也可选取目录外文件。</summary>
+    private string? PickAudioPath(string title)
+    {
+        if (string.IsNullOrEmpty(_form.CurrentPdfPath))
+        {
+            _form.ShowWarning("请先打开 PDF");
+            return null;
+        }
+
+        var tracks = _manager.Result?.Tracks ?? new List<AudioTrack>();
+        var visible = new List<AudioTrack>();
+        using var dialog = new Form
+        {
+            Text = title,
+            StartPosition = FormStartPosition.CenterParent,
+            ClientSize = new Size(460, 420),
+            Font = Font,
+            MinimizeBox = false,
+            MaximizeBox = false,
+            ShowInTaskbar = false,
+            FormBorderStyle = FormBorderStyle.FixedDialog
+        };
+
+        var filterBox = new TextBox { Dock = DockStyle.Top, PlaceholderText = "搜索文件名或页码（如 P12）" };
+        var list = new ListBox { Dock = DockStyle.Fill, IntegralHeight = false };
+        var bottom = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            FlowDirection = FlowDirection.RightToLeft,
+            Height = 44,
+            Padding = new Padding(0, 6, 0, 0)
+        };
+        var btnCancel = new Button { Text = "取消", DialogResult = DialogResult.Cancel, Size = new Size(72, 30), Margin = new Padding(6, 0, 0, 0) };
+        var btnOk = new Button { Text = "选择", Size = new Size(72, 30), Margin = new Padding(6, 0, 4, 0) };
+        var btnLocal = new Button { Text = "选择本地文件…", Size = new Size(112, 30), Margin = new Padding(0) };
+        bottom.Controls.Add(btnCancel);
+        bottom.Controls.Add(btnOk);
+        bottom.Controls.Add(btnLocal);
+
+        void Fill()
+        {
+            var key = filterBox.Text.Trim();
+            list.BeginUpdate();
+            list.Items.Clear();
+            visible.Clear();
+            foreach (var track in tracks)
             {
-                FilePath = recording.FilePath,
-                FileName = Path.GetFileName(recording.FilePath),
-                RelativePath = Path.GetFileName(recording.FilePath)
-            });
-        InvokeIfReady(() => _btnFollowRead.Text = "● 整页录音");
+                if (!MatchesFilter(track, key)) continue;
+                visible.Add(track);
+                var pageText = DescribeTrackPages(track);
+                list.Items.Add($"{pageText}  {track.FileName}{(track.IsManual ? "  [手动]" : "")}");
+            }
+            list.EndUpdate();
+            if (list.Items.Count > 0) list.SelectedIndex = 0;
+        }
+
+        filterBox.TextChanged += (_, _) => Fill();
+        list.DoubleClick += (_, _) => { dialog.DialogResult = DialogResult.OK; dialog.Close(); };
+        btnOk.Click += (_, _) => dialog.DialogResult = DialogResult.OK;
+        bool localRequested = false;
+        btnLocal.Click += (_, _) => { localRequested = true; dialog.DialogResult = DialogResult.OK; };
+
+        dialog.Controls.Add(list);
+        dialog.Controls.Add(filterBox);
+        dialog.Controls.Add(bottom);
+        dialog.AcceptButton = btnOk;
+        dialog.CancelButton = btnCancel;
+        Fill();
+
+        if (dialog.ShowDialog(_form.Form) != DialogResult.OK) return null;
+
+        if (localRequested)
+        {
+            using var ofd = new OpenFileDialog
+            {
+                Title = title,
+                Filter = "音频文件|*.mp3;*.wav;*.m4a;*.aac;*.flac;*.ogg;*.wma",
+                InitialDirectory = Path.GetDirectoryName(_form.CurrentPdfPath)
+            };
+            return ofd.ShowDialog(_form.Form) == DialogResult.OK ? ToProfilePath(ofd.FileName) : null;
+        }
+
+        if (list.SelectedIndex < 0 || list.SelectedIndex >= visible.Count) return null;
+        return visible[list.SelectedIndex].RelativePath;
+    }
+
+    private bool MatchesFilter(AudioTrack track, string key)
+    {
+        if (string.IsNullOrEmpty(key)) return true;
+        if (track.FileName.Contains(key, StringComparison.OrdinalIgnoreCase)) return true;
+        if (track.RelativePath.Contains(key, StringComparison.OrdinalIgnoreCase)) return true;
+        // 支持输入 P12 直接定位这一页绑定的曲目
+        if (key.Length > 1 && char.ToUpperInvariant(key[0]) == 'P'
+            && int.TryParse(key[1..], out var page)
+            && _manager.Result != null
+            && _manager.Result.PageIndex.TryGetValue(page - 1, out var resolved))
+            return string.Equals(resolved.FilePath, track.FilePath, StringComparison.OrdinalIgnoreCase);
+        return false;
+    }
+
+    private string DescribeTrackPages(AudioTrack track)
+    {
+        var pages = _manager.Result?.PageIndex
+            .Where(kv => string.Equals(kv.Value.FilePath, track.FilePath, StringComparison.OrdinalIgnoreCase))
+            .Select(kv => kv.Key + 1)
+            .OrderBy(p => p)
+            .ToList() ?? new List<int>();
+        if (pages.Count == 0) return "未匹配";
+        if (pages.Count >= _manager.PageCount && _manager.PageCount > 0) return "全篇";
+        return pages.Count == 1 ? $"P{pages[0]}" : $"P{pages[0]}–P{pages[^1]}";
     }
 
     private void OnRules()
@@ -351,62 +717,6 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         using var dlg = new PdfAudioRuleDialog(_manager.Profile, _form, _manager);
         if (dlg.ShowDialog(_form.Form) == DialogResult.OK)
             _manager.SaveRulesAndRematch();
-    }
-
-    private void OnManual()
-    {
-        if (string.IsNullOrEmpty(_form.CurrentPdfPath)) { _form.ShowWarning("请先打开 PDF"); return; }
-        if (_manager.Profile?.MatchMode == PdfAudioMatchMode.SingleAudio)
-        { _form.ShowWarning("当前为整篇单音频模式，请在“匹配规则”中切换为按页匹配后再手动指定"); return; }
-        using var ofd = new OpenFileDialog
-        {
-            Title = "为当前页手动指定音频",
-            Filter = "音频文件|*.mp3;*.wav;*.m4a;*.aac;*.flac;*.ogg;*.wma",
-            InitialDirectory = Path.GetDirectoryName(_form.CurrentPdfPath)
-        };
-        if (ofd.ShowDialog(_form.Form) == DialogResult.OK)
-        {
-            // 目录内文件存相对路径，目录外保留绝对路径，避免解析到错误的同名文件
-            _manager.SetManualOverride(_form.CurrentPageIndex, ToProfilePath(ofd.FileName));
-            RefreshData();
-            var resolved = _manager.Result?.PageIndex.GetValueOrDefault(_form.CurrentPageIndex);
-            if (resolved != null) SelectTrackInList(resolved);
-        }
-    }
-
-    private void OnManualFromList()
-    {
-        if (_manager.Profile?.MatchMode == PdfAudioMatchMode.SingleAudio)
-        { _form.ShowWarning("当前为整篇单音频模式，请在“匹配规则”中切换为按页匹配后再手动指定"); return; }
-        var result = _manager.Result;
-        if (result == null || result.Tracks.Count == 0) { _form.ShowWarning("当前目录没有扫描到音频，请先重新扫描"); return; }
-
-        using var dlg = new Form
-        {
-            Text = $"选择音频（第 {_form.CurrentPageIndex + 1} 页）",
-            StartPosition = FormStartPosition.CenterParent,
-            ClientSize = new Size(440, 360),
-            Font = Font,
-            MinimizeBox = false,
-            MaximizeBox = false,
-            ShowInTaskbar = false
-        };
-        var list = new ListBox { Dock = DockStyle.Fill, IntegralHeight = false };
-        foreach (var t in result.Tracks)
-            list.Items.Add(t.RelativePath + (t.SubtitlePath != null ? "  [有字幕]" : ""));
-
-        var btnOk = new Button { Text = "确定", Dock = DockStyle.Bottom, Height = 36, DialogResult = DialogResult.OK };
-        dlg.Controls.Add(list);
-        dlg.Controls.Add(btnOk);
-        dlg.AcceptButton = btnOk;
-
-        if (dlg.ShowDialog(_form.Form) == DialogResult.OK && list.SelectedIndex >= 0)
-        {
-            _manager.SetManualOverride(_form.CurrentPageIndex, result.Tracks[list.SelectedIndex].RelativePath);
-            RefreshData();
-            var resolved = _manager.Result?.PageIndex.GetValueOrDefault(_form.CurrentPageIndex);
-            if (resolved != null) SelectTrackInList(resolved);
-        }
     }
 
     /// <summary>选择外部音频目录并合并到当前曲目列表</summary>
@@ -421,7 +731,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         };
         if (dialog.ShowDialog(_form.Form) != DialogResult.OK) return;
 
-        _btnAddDir.Enabled = false;
+        _menuAddDir.Enabled = false;
         try
         {
             var added = await _manager.AddExternalDirectoryAsync(dialog.SelectedPath);
@@ -434,7 +744,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         }
         finally
         {
-            _btnAddDir.Enabled = true;
+            _menuAddDir.Enabled = true;
         }
     }
 
@@ -454,13 +764,12 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
             return;
         }
 
-        _btnAiMatch.Enabled = false;
-        _btnAddDir.Enabled = false;
-        var originalText = _btnAiMatch.Text;
+        _menuAi.Enabled = false;
+        _menuAddDir.Enabled = false;
         UseWaitCursor = true;
         try
         {
-            var progress = new Progress<string>(message => InvokeIfReady(() => _labelInfo.Text = message));
+            var progress = new Progress<string>(message => InvokeIfReady(() => ShowStatus(message, isError: false)));
             var suggestions = await _aiMatcher.SuggestAsync(
                 _form.CurrentPdfPath, _manager.PageCount, result.Tracks, progress);
             if (suggestions.Count == 0)
@@ -483,10 +792,12 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         }
         finally
         {
-            _btnAiMatch.Text = originalText;
-            _btnAiMatch.Enabled = true;
-            _btnAddDir.Enabled = true;
+            _menuAi.Enabled = true;
+            _menuAddDir.Enabled = true;
             UseWaitCursor = false;
+            var error = _manager.LoadErrorMessage;
+            ShowStatus(!string.IsNullOrEmpty(error) ? error : _manager.ScopeCorrectionMessage,
+                isError: !string.IsNullOrEmpty(error));
             OnCurrentPageChanged();
         }
     }
@@ -511,6 +822,15 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         }
     }
 
+    private void SelectCurrentTrackInList()
+    {
+        bool singleMode = _manager.Profile?.MatchMode == PdfAudioMatchMode.SingleAudio;
+        var track = _manager.CurrentTrack
+            ?? (singleMode ? _manager.Result?.Tracks.FirstOrDefault() : null)
+            ?? (_manager.Result?.PageIndex.GetValueOrDefault(_form.CurrentPageIndex));
+        if (track != null) SelectTrackInList(track);
+    }
+
     private string ToProfilePath(string fullPath)
     {
         var pdfDir = Path.GetDirectoryName(_form.CurrentPdfPath ?? "");
@@ -521,35 +841,6 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
             return Path.GetRelativePath(baseDir, target);
         return target;
     }
-
-    private void UpdateLoopLabel()
-    {
-        var (a, b) = _manager.Playback.Player.AbLoop;
-        _labelLoop.Text = (a is not null && b is not null) ? $"复读 {a:mm\\:ss} ~ {b:mm\\:ss} 循环" : "复读：未设置";
-    }
-
-    private void UpdateSubtitle(TimeSpan position)
-    {
-        var cues = _manager.Playback.Player.SubtitleCues;
-        if (cues == null || cues.Count == 0) { _labelSubtitle.Text = ""; return; }
-        var cue = cues.LastOrDefault(c => c.StartTime <= position);
-        _labelSubtitle.Text = cue?.Text ?? "";
-    }
-
-    private void OnProfileLoaded(object? sender, EventArgs e) => InvokeIfReady(() =>
-    {
-        RefreshData();
-        // 档案损坏优先提示，且管理器已禁止回写，避免覆盖原文件
-        var error = _manager.LoadErrorMessage;
-        if (!string.IsNullOrEmpty(error))
-        {
-            _labelInfo.Text = error;
-            return;
-        }
-        // 打开档案时若发生播放范围自动纠正，在这里提示一次，不弹模态框
-        var correction = _manager.ScopeCorrectionMessage;
-        if (!string.IsNullOrEmpty(correction)) _labelInfo.Text = correction;
-    });
 
     private void HandleAudioError(string message, Exception ex)
     {
@@ -573,17 +864,79 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         {
             if (_manager != null)
             {
-                _manager.Playback.Player.StateChanged -= OnPlayerStateChanged;
-                _manager.Playback.Player.PositionChanged -= OnPlayerPositionChanged;
                 _manager.ProfileLoaded -= OnProfileLoaded;
                 _manager.TrackChanged -= OnTrackChanged;
                 _manager.PageHintChanged -= OnPageHintChanged;
+                _manager.SettingsChanged -= OnSettingsChanged;
             }
-            if (_recordingCompletedHandler != null && _form != null && _form.AudioRecorderService != null)
-                _form.AudioRecorderService.RecordingCompleted -= _recordingCompletedHandler;
+            _menuSource.Dispose();
+            _menuMatch.Dispose();
             _listFont?.Dispose();
             components?.Dispose();
         }
         base.Dispose(disposing);
+    }
+
+    /// <summary>轻量开关：胶囊轨道 + 圆形滑块，避免侧栏使用系统 CheckBox 的外观。</summary>
+    private sealed class ToggleSwitch : CheckBox
+    {
+        public ToggleSwitch()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint
+                | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+            AutoSize = false;
+            Size = new Size(36, 18);
+            Cursor = Cursors.Hand;
+            Text = string.Empty;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var palette = PdfSidebarTheme.PaletteFor(this);
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+
+            var track = new Rectangle(1, 2, Math.Max(10, Width - 2), Math.Max(10, Height - 4));
+            using (var path = GdiHelper.CreateRoundedRectPath(track, track.Height / 2))
+            using (var background = new SolidBrush(Enabled
+                ? (Checked ? PdfSidebarTheme.Brand : palette.SurfaceAlt)
+                : palette.Border))
+            {
+                e.Graphics.FillPath(background, path);
+            }
+
+            int knobSize = Math.Max(8, track.Height - 4);
+            int knobX = Checked ? track.Right - knobSize - 2 : track.Left + 2;
+            using (var knob = new SolidBrush(Checked ? Color.White : palette.Muted))
+            {
+                e.Graphics.FillEllipse(knob, knobX, track.Top + 2, knobSize, knobSize);
+            }
+        }
+    }
+
+    /// <summary>当前页卡片：品牌浅底 + 圆角描边，与普通白色卡片区分层级。</summary>
+    private sealed class PageCardPanel : Panel, ISidebarThemeAware
+    {
+        public PageCardPanel()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint
+                | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        }
+
+        public void ApplyTheme(bool isDark)
+        {
+            BackColor = new PdfSidebarPalette(isDark).BrandSoft;
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            var rect = new Rectangle(0, 0, Math.Max(1, Width - 1), Math.Max(1, Height - 1));
+            using var path = GdiHelper.CreateRoundedRectPath(rect, 10);
+            using (var background = new SolidBrush(BackColor))
+                e.Graphics.FillPath(background, path);
+            using (var border = new Pen(Color.FromArgb(95, PdfSidebarTheme.Brand)))
+                e.Graphics.DrawPath(border, path);
+        }
     }
 }

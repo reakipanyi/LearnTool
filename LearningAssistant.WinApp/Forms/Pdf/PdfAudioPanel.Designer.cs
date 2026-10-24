@@ -16,43 +16,44 @@ partial class PdfAudioPanel
         root = new TableLayoutPanel();
         statusPanel = new Panel();
         _labelInfo = new Label();
+        bookBar = new Panel();
+        _labelBook = new Label();
+        _btnBookSwitch = new Button();
+        _segments = new SegmentedTabs();
+        followRow = new TableLayoutPanel();
+        followLabel = new Label();
+        pageCard = new PageCardPanel();
+        pageLayout = new TableLayoutPanel();
+        pageTop = new TableLayoutPanel();
+        _labelPageTitle = new Label();
+        _labelPageSource = new Label();
+        _labelPageTrack = new Label();
+        _labelPageMeta = new Label();
+        pageActions = new FlowLayoutPanel();
+        _btnBind = new Button();
+        _btnClearPage = new Button();
+        _btnPreview = new Button();
         listCard = new SidebarCard();
         _listTracks = new ListBox();
-        playbackCard = new SidebarCard();
-        playback = new TableLayoutPanel();
-        transport = new FlowLayoutPanel();
-        _btnPrev = new Button();
-        _btnPlay = new Button();
-        _btnNext = new Button();
-        _btnLoop = new Button();
-        abRow = new TableLayoutPanel();
-        _btnSetA = new Button();
-        _btnSetB = new Button();
-        _btnClearAb = new Button();
-        _labelLoop = new Label();
-        speedRow = new TableLayoutPanel();
-        speedLabel = new Label();
-        _comboSpeed = new ComboBox();
-        speedNote = new Label();
-        _labelSubtitle = new Label();
-        sourceCard = new SidebarCard();
-        sourceGrid = new TableLayoutPanel();
-        _btnAddDir = new Button();
-        _btnAiMatch = new Button();
-        _btnRules = new Button();
-        _btnManual = new Button();
-        _btnManualFromList = new Button();
-        _btnRescan = new Button();
-        _btnFollowRead = new Button();
-        _chkSubDir = new CheckBox();
+        advancedPanel = new TableLayoutPanel();
+        advSource = new Panel();
+        _labelAdvSource = new Label();
+        _labelAdvSourceChevron = new Label();
+        advMatch = new Panel();
+        _labelAdvMatch = new Label();
+        _labelAdvMatchChevron = new Label();
         _tooltip = new ToolTip(components);
         root.SuspendLayout();
         statusPanel.SuspendLayout();
-        playback.SuspendLayout();
-        transport.SuspendLayout();
-        abRow.SuspendLayout();
-        speedRow.SuspendLayout();
-        sourceGrid.SuspendLayout();
+        bookBar.SuspendLayout();
+        followRow.SuspendLayout();
+        pageCard.SuspendLayout();
+        pageLayout.SuspendLayout();
+        pageTop.SuspendLayout();
+        pageActions.SuspendLayout();
+        advancedPanel.SuspendLayout();
+        advSource.SuspendLayout();
+        advMatch.SuspendLayout();
         SuspendLayout();
         // 
         // root
@@ -61,18 +62,24 @@ partial class PdfAudioPanel
         root.ColumnCount = 1;
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         root.Controls.Add(statusPanel, 0, 0);
-        root.Controls.Add(listCard, 0, 1);
-        root.Controls.Add(playbackCard, 0, 2);
-        root.Controls.Add(sourceCard, 0, 3);
+        root.Controls.Add(bookBar, 0, 1);
+        root.Controls.Add(_segments, 0, 2);
+        root.Controls.Add(followRow, 0, 3);
+        root.Controls.Add(pageCard, 0, 4);
+        root.Controls.Add(listCard, 0, 5);
+        root.Controls.Add(advancedPanel, 0, 6);
         root.Dock = DockStyle.Fill;
         root.Location = new Point(6, 2);
         root.Margin = new Padding(0);
         root.Name = "root";
-        root.RowCount = 4;
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
+        root.RowCount = 7;
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 0F));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 140F));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 198F));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 188F));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72F));
         root.Size = new Size(308, 624);
         root.TabIndex = 0;
         // 
@@ -84,34 +91,293 @@ partial class PdfAudioPanel
         statusPanel.Location = new Point(0, 0);
         statusPanel.Margin = new Padding(0, 0, 0, 4);
         statusPanel.Name = "statusPanel";
-        statusPanel.Padding = new Padding(10, 6, 10, 4);
-        statusPanel.Size = new Size(308, 42);
+        statusPanel.Padding = new Padding(10, 5, 10, 3);
+        statusPanel.Size = new Size(308, 32);
         statusPanel.TabIndex = 0;
         statusPanel.Tag = "surface";
+        statusPanel.Visible = false;
         // 
         // _labelInfo
         // 
         _labelInfo.AutoEllipsis = true;
-        _labelInfo.Dock = DockStyle.Top;
-        _labelInfo.Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold);
-        _labelInfo.ForeColor = Color.FromArgb(15, 23, 42);
-        _labelInfo.Location = new Point(10, 6);
+        _labelInfo.Dock = DockStyle.Fill;
+        _labelInfo.Font = new Font("Microsoft YaHei UI", 9F);
+        _labelInfo.ForeColor = Color.FromArgb(100, 116, 139);
+        _labelInfo.Location = new Point(10, 5);
         _labelInfo.Name = "_labelInfo";
-        _labelInfo.Size = new Size(288, 28);
+        _labelInfo.Size = new Size(288, 24);
         _labelInfo.TabIndex = 0;
-        _labelInfo.Text = "本页：无音频";
+        _labelInfo.Text = "";
         _labelInfo.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // bookBar
+        // 
+        bookBar.BackColor = Color.FromArgb(247, 248, 251);
+        bookBar.Controls.Add(_labelBook);
+        bookBar.Controls.Add(_btnBookSwitch);
+        bookBar.Dock = DockStyle.Fill;
+        bookBar.Location = new Point(0, 0);
+        bookBar.Margin = new Padding(0, 0, 0, 4);
+        bookBar.Name = "bookBar";
+        bookBar.Size = new Size(308, 34);
+        bookBar.TabIndex = 1;
+        // 
+        // _labelBook
+        // 
+        _labelBook.AutoEllipsis = true;
+        _labelBook.Cursor = Cursors.Hand;
+        _labelBook.Dock = DockStyle.Fill;
+        _labelBook.Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold);
+        _labelBook.ForeColor = Color.FromArgb(15, 23, 42);
+        _labelBook.Location = new Point(0, 0);
+        _labelBook.Name = "_labelBook";
+        _labelBook.Size = new Size(244, 34);
+        _labelBook.TabIndex = 0;
+        _labelBook.Text = "未打开文档";
+        _labelBook.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // _btnBookSwitch
+        // 
+        _btnBookSwitch.BackColor = Color.White;
+        _btnBookSwitch.Cursor = Cursors.Hand;
+        _btnBookSwitch.Dock = DockStyle.Right;
+        _btnBookSwitch.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        _btnBookSwitch.FlatStyle = FlatStyle.Flat;
+        _btnBookSwitch.Font = new Font("Microsoft YaHei UI", 8.5F);
+        _btnBookSwitch.ForeColor = Color.FromArgb(71, 85, 105);
+        _btnBookSwitch.Location = new Point(244, 3);
+        _btnBookSwitch.Margin = new Padding(0, 3, 0, 3);
+        _btnBookSwitch.Name = "_btnBookSwitch";
+        _btnBookSwitch.Size = new Size(64, 28);
+        _btnBookSwitch.TabIndex = 1;
+        _btnBookSwitch.Tag = "keep";
+        _btnBookSwitch.Text = "切换";
+        _btnBookSwitch.UseVisualStyleBackColor = false;
+        // 
+        // _segments
+        // 
+        _segments.BackColor = Color.FromArgb(247, 248, 251);
+        _segments.Dock = DockStyle.Fill;
+        _segments.Location = new Point(0, 42);
+        _segments.Margin = new Padding(0, 0, 0, 4);
+        _segments.Name = "_segments";
+        _segments.Size = new Size(308, 32);
+        _segments.TabIndex = 2;
+        // 
+        // followRow
+        // 
+        followRow.BackColor = Color.FromArgb(247, 248, 251);
+        followRow.ColumnCount = 2;
+        followRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        followRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 48F));
+        followRow.Controls.Add(followLabel, 0, 0);
+        followRow.Dock = DockStyle.Fill;
+        followRow.Location = new Point(0, 78);
+        followRow.Margin = new Padding(0, 0, 0, 4);
+        followRow.Name = "followRow";
+        followRow.RowCount = 1;
+        followRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        followRow.Size = new Size(308, 26);
+        followRow.TabIndex = 3;
+        // 
+        // followLabel
+        // 
+        followLabel.Dock = DockStyle.Fill;
+        followLabel.Font = new Font("Microsoft YaHei UI", 9F);
+        followLabel.ForeColor = Color.FromArgb(100, 116, 139);
+        followLabel.Location = new Point(0, 0);
+        followLabel.Margin = new Padding(0);
+        followLabel.Name = "followLabel";
+        followLabel.Size = new Size(260, 26);
+        followLabel.TabIndex = 0;
+        followLabel.Tag = "muted";
+        followLabel.Text = "翻页自动跟随";
+        followLabel.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // pageCard
+        // 
+        pageCard.BackColor = Color.FromArgb(243, 240, 255);
+        pageCard.Controls.Add(pageLayout);
+        pageCard.Dock = DockStyle.Fill;
+        pageCard.Location = new Point(0, 108);
+        pageCard.Margin = new Padding(0, 0, 0, 4);
+        pageCard.Name = "pageCard";
+        pageCard.Padding = new Padding(10, 7, 10, 7);
+        pageCard.Size = new Size(308, 136);
+        pageCard.TabIndex = 4;
+        // 
+        // pageLayout
+        // 
+        pageLayout.BackColor = Color.Transparent;
+        pageLayout.ColumnCount = 1;
+        pageLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        pageLayout.Controls.Add(pageTop, 0, 0);
+        pageLayout.Controls.Add(_labelPageTrack, 0, 1);
+        pageLayout.Controls.Add(_labelPageMeta, 0, 2);
+        pageLayout.Controls.Add(pageActions, 0, 3);
+        pageLayout.Dock = DockStyle.Fill;
+        pageLayout.Location = new Point(10, 7);
+        pageLayout.Margin = new Padding(0);
+        pageLayout.Name = "pageLayout";
+        pageLayout.RowCount = 4;
+        pageLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 18F));
+        pageLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));
+        pageLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 18F));
+        pageLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        pageLayout.Size = new Size(288, 122);
+        pageLayout.TabIndex = 0;
+        // 
+        // pageTop
+        // 
+        pageTop.BackColor = Color.Transparent;
+        pageTop.ColumnCount = 2;
+        pageTop.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        pageTop.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        pageTop.Controls.Add(_labelPageTitle, 0, 0);
+        pageTop.Controls.Add(_labelPageSource, 1, 0);
+        pageTop.Dock = DockStyle.Fill;
+        pageTop.Location = new Point(0, 0);
+        pageTop.Margin = new Padding(0);
+        pageTop.Name = "pageTop";
+        pageTop.RowCount = 1;
+        pageTop.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        pageTop.Size = new Size(288, 18);
+        pageTop.TabIndex = 0;
+        // 
+        // _labelPageTitle
+        // 
+        _labelPageTitle.AutoEllipsis = true;
+        _labelPageTitle.Dock = DockStyle.Fill;
+        _labelPageTitle.Font = new Font("Microsoft YaHei UI", 8.5F);
+        _labelPageTitle.ForeColor = Color.FromArgb(100, 116, 139);
+        _labelPageTitle.Location = new Point(0, 0);
+        _labelPageTitle.Margin = new Padding(0);
+        _labelPageTitle.Name = "_labelPageTitle";
+        _labelPageTitle.Size = new Size(248, 18);
+        _labelPageTitle.TabIndex = 0;
+        _labelPageTitle.Tag = "muted";
+        _labelPageTitle.Text = "当前页 · P1";
+        _labelPageTitle.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // _labelPageSource
+        // 
+        _labelPageSource.AutoSize = true;
+        _labelPageSource.Dock = DockStyle.Fill;
+        _labelPageSource.Font = new Font("Microsoft YaHei UI", 8.5F, FontStyle.Bold);
+        _labelPageSource.ForeColor = Color.FromArgb(108, 92, 231);
+        _labelPageSource.Location = new Point(248, 0);
+        _labelPageSource.Margin = new Padding(0);
+        _labelPageSource.Name = "_labelPageSource";
+        _labelPageSource.Size = new Size(40, 18);
+        _labelPageSource.TabIndex = 1;
+        _labelPageSource.Tag = "accent";
+        _labelPageSource.Text = "未绑定";
+        _labelPageSource.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _labelPageTrack
+        // 
+        _labelPageTrack.AutoEllipsis = true;
+        _labelPageTrack.Dock = DockStyle.Fill;
+        _labelPageTrack.Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold);
+        _labelPageTrack.ForeColor = Color.FromArgb(15, 23, 42);
+        _labelPageTrack.Location = new Point(0, 18);
+        _labelPageTrack.Margin = new Padding(0);
+        _labelPageTrack.Name = "_labelPageTrack";
+        _labelPageTrack.Size = new Size(288, 24);
+        _labelPageTrack.TabIndex = 1;
+        _labelPageTrack.Text = "本页未绑定音频";
+        _labelPageTrack.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // _labelPageMeta
+        // 
+        _labelPageMeta.AutoEllipsis = true;
+        _labelPageMeta.Dock = DockStyle.Fill;
+        _labelPageMeta.Font = new Font("Microsoft YaHei UI", 8.5F);
+        _labelPageMeta.ForeColor = Color.FromArgb(100, 116, 139);
+        _labelPageMeta.Location = new Point(0, 42);
+        _labelPageMeta.Margin = new Padding(0);
+        _labelPageMeta.Name = "_labelPageMeta";
+        _labelPageMeta.Size = new Size(288, 18);
+        _labelPageMeta.TabIndex = 2;
+        _labelPageMeta.Tag = "muted";
+        _labelPageMeta.Text = "点「更换绑定」选择这一页的音频";
+        _labelPageMeta.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // pageActions
+        // 
+        pageActions.BackColor = Color.Transparent;
+        pageActions.Controls.Add(_btnBind);
+        pageActions.Controls.Add(_btnClearPage);
+        pageActions.Controls.Add(_btnPreview);
+        pageActions.Dock = DockStyle.Fill;
+        pageActions.Location = new Point(0, 64);
+        pageActions.Margin = new Padding(0, 4, 0, 0);
+        pageActions.Name = "pageActions";
+        pageActions.Size = new Size(288, 34);
+        pageActions.TabIndex = 3;
+        pageActions.WrapContents = false;
+        // 
+        // _btnBind
+        // 
+        _btnBind.BackColor = Color.FromArgb(108, 92, 231);
+        _btnBind.Cursor = Cursors.Hand;
+        _btnBind.FlatAppearance.BorderSize = 0;
+        _btnBind.FlatStyle = FlatStyle.Flat;
+        _btnBind.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
+        _btnBind.ForeColor = Color.White;
+        _btnBind.Location = new Point(0, 0);
+        _btnBind.Margin = new Padding(0, 0, 6, 0);
+        _btnBind.Name = "_btnBind";
+        _btnBind.Size = new Size(86, 30);
+        _btnBind.TabIndex = 0;
+        _btnBind.Tag = "accent";
+        _btnBind.Text = "更换绑定";
+        _btnBind.UseVisualStyleBackColor = false;
+        // 
+        // _btnClearPage
+        // 
+        _btnClearPage.BackColor = Color.White;
+        _btnClearPage.Cursor = Cursors.Hand;
+        _btnClearPage.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        _btnClearPage.FlatStyle = FlatStyle.Flat;
+        _btnClearPage.Font = new Font("Microsoft YaHei UI", 9F);
+        _btnClearPage.ForeColor = Color.FromArgb(71, 85, 105);
+        _btnClearPage.Location = new Point(92, 0);
+        _btnClearPage.Margin = new Padding(0, 0, 6, 0);
+        _btnClearPage.Name = "_btnClearPage";
+        _btnClearPage.Size = new Size(76, 30);
+        _btnClearPage.TabIndex = 1;
+        _btnClearPage.Tag = "keep";
+        _btnClearPage.Text = "清除本页";
+        _btnClearPage.UseVisualStyleBackColor = false;
+        // 
+        // _btnPreview
+        // 
+        _btnPreview.BackColor = Color.White;
+        _btnPreview.Cursor = Cursors.Hand;
+        _btnPreview.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        _btnPreview.FlatStyle = FlatStyle.Flat;
+        _btnPreview.Font = new Font("Microsoft YaHei UI", 9F);
+        _btnPreview.ForeColor = Color.FromArgb(71, 85, 105);
+        _btnPreview.Location = new Point(174, 0);
+        _btnPreview.Margin = new Padding(0);
+        _btnPreview.Name = "_btnPreview";
+        _btnPreview.Size = new Size(54, 30);
+        _btnPreview.TabIndex = 2;
+        _btnPreview.Tag = "keep";
+        _btnPreview.Text = "试听";
+        _btnPreview.UseVisualStyleBackColor = false;
         // 
         // listCard
         // 
         listCard.BackColor = Color.FromArgb(247, 248, 251);
         listCard.Dock = DockStyle.Fill;
-        listCard.Location = new Point(0, 46);
+        listCard.Location = new Point(0, 248);
         listCard.Margin = new Padding(0, 0, 0, 4);
         listCard.Name = "listCard";
         listCard.Padding = new Padding(2, 1, 2, 1);
-        listCard.Size = new Size(308, 188);
-        listCard.TabIndex = 1;
+        listCard.Size = new Size(308, 298);
+        listCard.TabIndex = 5;
         listCard.Title = "曲目";
         // 
         // _listTracks
@@ -125,487 +391,107 @@ partial class PdfAudioPanel
         _listTracks.ItemHeight = 30;
         _listTracks.Location = new Point(10, 30);
         _listTracks.Name = "_listTracks";
-        _listTracks.Size = new Size(284, 146);
+        _listTracks.Size = new Size(284, 256);
         _listTracks.TabIndex = 0;
         // 
-        // playbackCard
+        // advancedPanel
         // 
-        playbackCard.BackColor = Color.FromArgb(247, 248, 251);
-        playbackCard.Dock = DockStyle.Fill;
-        playbackCard.Location = new Point(0, 238);
-        playbackCard.Margin = new Padding(0, 0, 0, 4);
-        playbackCard.Name = "playbackCard";
-        playbackCard.Padding = new Padding(2, 1, 2, 1);
-        playbackCard.Size = new Size(308, 194);
-        playbackCard.TabIndex = 2;
-        playbackCard.Title = "播放";
+        advancedPanel.BackColor = Color.FromArgb(247, 248, 251);
+        advancedPanel.ColumnCount = 1;
+        advancedPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        advancedPanel.Controls.Add(advSource, 0, 0);
+        advancedPanel.Controls.Add(advMatch, 0, 1);
+        advancedPanel.Dock = DockStyle.Fill;
+        advancedPanel.Location = new Point(0, 550);
+        advancedPanel.Margin = new Padding(0);
+        advancedPanel.Name = "advancedPanel";
+        advancedPanel.RowCount = 2;
+        advancedPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        advancedPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+        advancedPanel.Size = new Size(308, 72);
+        advancedPanel.TabIndex = 6;
         // 
-        // playback
+        // advSource
         // 
-        playback.BackColor = Color.Transparent;
-        playback.ColumnCount = 1;
-        playback.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        playback.Controls.Add(transport, 0, 0);
-        playback.Controls.Add(abRow, 0, 1);
-        playback.Controls.Add(_labelLoop, 0, 2);
-        playback.Controls.Add(speedRow, 0, 3);
-        playback.Controls.Add(_labelSubtitle, 0, 4);
-        playback.Dock = DockStyle.Fill;
-        playback.Location = new Point(10, 30);
-        playback.Margin = new Padding(0);
-        playback.Name = "playback";
-        playback.RowCount = 5;
-        playback.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
-        playback.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
-        playback.RowStyles.Add(new RowStyle(SizeType.Absolute, 22F));
-        playback.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));
-        playback.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        playback.Size = new Size(284, 152);
-        playback.TabIndex = 0;
+        advSource.BackColor = Color.FromArgb(247, 248, 251);
+        advSource.Controls.Add(_labelAdvSource);
+        advSource.Controls.Add(_labelAdvSourceChevron);
+        advSource.Cursor = Cursors.Hand;
+        advSource.Dock = DockStyle.Fill;
+        advSource.Location = new Point(0, 0);
+        advSource.Margin = new Padding(0);
+        advSource.Name = "advSource";
+        advSource.Size = new Size(308, 34);
+        advSource.TabIndex = 0;
         // 
-        // transport
+        // _labelAdvSource
         // 
-        transport.AutoSize = true;
-        transport.AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        transport.BackColor = Color.Transparent;
-        transport.Controls.Add(_btnPrev);
-        transport.Controls.Add(_btnPlay);
-        transport.Controls.Add(_btnNext);
-        transport.Controls.Add(_btnLoop);
-        transport.Location = new Point(0, 0);
-        transport.Margin = new Padding(0);
-        transport.Name = "transport";
-        transport.Size = new Size(132, 34);
-        transport.TabIndex = 0;
-        transport.WrapContents = false;
+        _labelAdvSource.Dock = DockStyle.Fill;
+        _labelAdvSource.Font = new Font("Microsoft YaHei UI", 9F);
+        _labelAdvSource.ForeColor = Color.FromArgb(100, 116, 139);
+        _labelAdvSource.Location = new Point(0, 0);
+        _labelAdvSource.Margin = new Padding(0);
+        _labelAdvSource.Name = "_labelAdvSource";
+        _labelAdvSource.Size = new Size(286, 34);
+        _labelAdvSource.TabIndex = 0;
+        _labelAdvSource.Tag = "muted";
+        _labelAdvSource.Text = "音频来源与扫描";
+        _labelAdvSource.TextAlign = ContentAlignment.MiddleLeft;
         // 
-        // _btnPrev
+        // _labelAdvSourceChevron
         // 
-        _btnPrev.BackColor = Color.White;
-        _btnPrev.Cursor = Cursors.Hand;
-        _btnPrev.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
-        _btnPrev.FlatStyle = FlatStyle.Flat;
-        _btnPrev.Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold);
-        _btnPrev.ForeColor = Color.FromArgb(15, 23, 42);
-        _btnPrev.Location = new Point(3, 0);
-        _btnPrev.Margin = new Padding(3, 0, 3, 0);
-        _btnPrev.Name = "_btnPrev";
-        _btnPrev.Size = new Size(34, 34);
-        _btnPrev.TabIndex = 0;
-        _btnPrev.Tag = "transport";
-        _btnPrev.Text = "⏮";
-        _btnPrev.UseVisualStyleBackColor = false;
+        _labelAdvSourceChevron.Dock = DockStyle.Right;
+        _labelAdvSourceChevron.Font = new Font("Microsoft YaHei UI", 10F);
+        _labelAdvSourceChevron.ForeColor = Color.FromArgb(148, 163, 184);
+        _labelAdvSourceChevron.Location = new Point(286, 0);
+        _labelAdvSourceChevron.Margin = new Padding(0);
+        _labelAdvSourceChevron.Name = "_labelAdvSourceChevron";
+        _labelAdvSourceChevron.Size = new Size(22, 34);
+        _labelAdvSourceChevron.TabIndex = 1;
+        _labelAdvSourceChevron.Tag = "muted";
+        _labelAdvSourceChevron.Text = "›";
+        _labelAdvSourceChevron.TextAlign = ContentAlignment.MiddleRight;
         // 
-        // _btnPlay
+        // advMatch
         // 
-        _btnPlay.BackColor = Color.FromArgb(108, 92, 231);
-        _btnPlay.Cursor = Cursors.Hand;
-        _btnPlay.FlatAppearance.BorderSize = 0;
-        _btnPlay.FlatStyle = FlatStyle.Flat;
-        _btnPlay.Font = new Font("Microsoft YaHei UI", 11F, FontStyle.Bold);
-        _btnPlay.ForeColor = Color.White;
-        _btnPlay.Location = new Point(43, 0);
-        _btnPlay.Margin = new Padding(3, 0, 3, 0);
-        _btnPlay.Name = "_btnPlay";
-        _btnPlay.Size = new Size(46, 34);
-        _btnPlay.TabIndex = 1;
-        _btnPlay.Tag = "accent";
-        _btnPlay.Text = "▶";
-        _btnPlay.UseVisualStyleBackColor = false;
+        advMatch.BackColor = Color.FromArgb(247, 248, 251);
+        advMatch.Controls.Add(_labelAdvMatch);
+        advMatch.Controls.Add(_labelAdvMatchChevron);
+        advMatch.Cursor = Cursors.Hand;
+        advMatch.Dock = DockStyle.Fill;
+        advMatch.Location = new Point(0, 34);
+        advMatch.Margin = new Padding(0);
+        advMatch.Name = "advMatch";
+        advMatch.Size = new Size(308, 34);
+        advMatch.TabIndex = 1;
         // 
-        // _btnNext
+        // _labelAdvMatch
         // 
-        _btnNext.BackColor = Color.White;
-        _btnNext.Cursor = Cursors.Hand;
-        _btnNext.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
-        _btnNext.FlatStyle = FlatStyle.Flat;
-        _btnNext.Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold);
-        _btnNext.ForeColor = Color.FromArgb(15, 23, 42);
-        _btnNext.Location = new Point(95, 0);
-        _btnNext.Margin = new Padding(3, 0, 3, 0);
-        _btnNext.Name = "_btnNext";
-        _btnNext.Size = new Size(34, 34);
-        _btnNext.TabIndex = 2;
-        _btnNext.Tag = "transport";
-        _btnNext.Text = "⏭";
-        _btnNext.UseVisualStyleBackColor = false;
+        _labelAdvMatch.Dock = DockStyle.Fill;
+        _labelAdvMatch.Font = new Font("Microsoft YaHei UI", 9F);
+        _labelAdvMatch.ForeColor = Color.FromArgb(100, 116, 139);
+        _labelAdvMatch.Location = new Point(0, 0);
+        _labelAdvMatch.Margin = new Padding(0);
+        _labelAdvMatch.Name = "_labelAdvMatch";
+        _labelAdvMatch.Size = new Size(286, 34);
+        _labelAdvMatch.TabIndex = 0;
+        _labelAdvMatch.Tag = "muted";
+        _labelAdvMatch.Text = "高级匹配 · AI / 规则";
+        _labelAdvMatch.TextAlign = ContentAlignment.MiddleLeft;
         // 
-        // abRow
+        // _labelAdvMatchChevron
         // 
-        abRow.BackColor = Color.Transparent;
-        abRow.ColumnCount = 3;
-        abRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.4F));
-        abRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.3F));
-        abRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.3F));
-        abRow.Controls.Add(_btnSetA, 0, 0);
-        abRow.Controls.Add(_btnSetB, 1, 0);
-        abRow.Controls.Add(_btnClearAb, 2, 0);
-        abRow.Dock = DockStyle.Fill;
-        abRow.Location = new Point(0, 40);
-        abRow.Margin = new Padding(0);
-        abRow.Name = "abRow";
-        abRow.RowCount = 1;
-        abRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        abRow.Size = new Size(284, 36);
-        abRow.TabIndex = 1;
-        // 
-        // _btnSetA
-        // 
-        _btnSetA.AutoEllipsis = true;
-        _btnSetA.BackColor = Color.White;
-        _btnSetA.Cursor = Cursors.Hand;
-        _btnSetA.Dock = DockStyle.Fill;
-        _btnSetA.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
-        _btnSetA.FlatAppearance.MouseOverBackColor = Color.FromArgb(241, 245, 249);
-        _btnSetA.FlatStyle = FlatStyle.Flat;
-        _btnSetA.Font = new Font("Microsoft YaHei UI", 9F);
-        _btnSetA.ForeColor = Color.FromArgb(15, 23, 42);
-        _btnSetA.Location = new Point(0, 0);
-        _btnSetA.Margin = new Padding(0, 0, 4, 0);
-        _btnSetA.Name = "_btnSetA";
-        _btnSetA.Size = new Size(90, 36);
-        _btnSetA.TabIndex = 0;
-        _btnSetA.Tag = "secondary";
-        _btnSetA.Text = "设起点";
-        _btnSetA.UseVisualStyleBackColor = false;
-        // 
-        // _btnSetB
-        // 
-        _btnSetB.AutoEllipsis = true;
-        _btnSetB.BackColor = Color.White;
-        _btnSetB.Cursor = Cursors.Hand;
-        _btnSetB.Dock = DockStyle.Fill;
-        _btnSetB.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
-        _btnSetB.FlatAppearance.MouseOverBackColor = Color.FromArgb(241, 245, 249);
-        _btnSetB.FlatStyle = FlatStyle.Flat;
-        _btnSetB.Font = new Font("Microsoft YaHei UI", 9F);
-        _btnSetB.ForeColor = Color.FromArgb(15, 23, 42);
-        _btnSetB.Location = new Point(94, 0);
-        _btnSetB.Margin = new Padding(0, 0, 4, 0);
-        _btnSetB.Name = "_btnSetB";
-        _btnSetB.Size = new Size(90, 36);
-        _btnSetB.TabIndex = 1;
-        _btnSetB.Tag = "secondary";
-        _btnSetB.Text = "设终点";
-        _btnSetB.UseVisualStyleBackColor = false;
-        // 
-        // _btnClearAb
-        // 
-        _btnClearAb.AutoEllipsis = true;
-        _btnClearAb.BackColor = Color.White;
-        _btnClearAb.Cursor = Cursors.Hand;
-        _btnClearAb.Dock = DockStyle.Fill;
-        _btnClearAb.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
-        _btnClearAb.FlatAppearance.MouseOverBackColor = Color.FromArgb(241, 245, 249);
-        _btnClearAb.FlatStyle = FlatStyle.Flat;
-        _btnClearAb.Font = new Font("Microsoft YaHei UI", 9F);
-        _btnClearAb.ForeColor = Color.FromArgb(15, 23, 42);
-        _btnClearAb.Location = new Point(188, 0);
-        _btnClearAb.Margin = new Padding(0);
-        _btnClearAb.Name = "_btnClearAb";
-        _btnClearAb.Size = new Size(96, 36);
-        _btnClearAb.TabIndex = 2;
-        _btnClearAb.Tag = "secondary";
-        _btnClearAb.Text = "取消复读";
-        _btnClearAb.UseVisualStyleBackColor = false;
-        // 
-        // _labelLoop
-        // 
-        _labelLoop.AutoEllipsis = true;
-        _labelLoop.Dock = DockStyle.Fill;
-        _labelLoop.Font = new Font("Microsoft YaHei UI", 8.5F);
-        _labelLoop.ForeColor = Color.FromArgb(100, 116, 139);
-        _labelLoop.Location = new Point(3, 76);
-        _labelLoop.Name = "_labelLoop";
-        _labelLoop.Size = new Size(278, 22);
-        _labelLoop.TabIndex = 2;
-        _labelLoop.Tag = "muted";
-        _labelLoop.Text = "复读：未设置";
-        _labelLoop.TextAlign = ContentAlignment.MiddleLeft;
-        // 
-        // speedRow
-        // 
-        speedRow.BackColor = Color.Transparent;
-        speedRow.ColumnCount = 3;
-        speedRow.ColumnStyles.Add(new ColumnStyle());
-        speedRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118F));
-        speedRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        speedRow.Controls.Add(speedLabel, 0, 0);
-        speedRow.Controls.Add(_comboSpeed, 1, 0);
-        speedRow.Controls.Add(speedNote, 2, 0);
-        speedRow.Dock = DockStyle.Fill;
-        speedRow.Location = new Point(0, 98);
-        speedRow.Margin = new Padding(0);
-        speedRow.Name = "speedRow";
-        speedRow.RowCount = 1;
-        speedRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-        speedRow.Size = new Size(284, 32);
-        speedRow.TabIndex = 3;
-        // 
-        // speedLabel
-        // 
-        speedLabel.Anchor = AnchorStyles.Left;
-        speedLabel.AutoSize = true;
-        speedLabel.Font = new Font("Microsoft YaHei UI", 8.5F, FontStyle.Bold);
-        speedLabel.ForeColor = Color.FromArgb(100, 116, 139);
-        speedLabel.Location = new Point(0, 7);
-        speedLabel.Margin = new Padding(0, 0, 6, 0);
-        speedLabel.Name = "speedLabel";
-        speedLabel.Size = new Size(32, 17);
-        speedLabel.TabIndex = 0;
-        speedLabel.Tag = "muted";
-        speedLabel.Text = "倍速";
-        // 
-        // _comboSpeed
-        // 
-        _comboSpeed.BackColor = Color.White;
-        _comboSpeed.Dock = DockStyle.Fill;
-        _comboSpeed.DropDownStyle = ComboBoxStyle.DropDownList;
-        _comboSpeed.Enabled = false;
-        _comboSpeed.ForeColor = Color.FromArgb(15, 23, 42);
-        _comboSpeed.Items.AddRange(new object[] { "1.0x（不变调）" });
-        _comboSpeed.Location = new Point(38, 0);
-        _comboSpeed.Margin = new Padding(0, 0, 6, 0);
-        _comboSpeed.Name = "_comboSpeed";
-        _comboSpeed.Size = new Size(112, 25);
-        _comboSpeed.TabIndex = 1;
-        // 
-        // speedNote
-        // 
-        speedNote.AutoEllipsis = true;
-        speedNote.Dock = DockStyle.Fill;
-        speedNote.Font = new Font("Microsoft YaHei UI", 8.5F);
-        speedNote.ForeColor = Color.FromArgb(100, 116, 139);
-        speedNote.Location = new Point(156, 0);
-        speedNote.Margin = new Padding(0);
-        speedNote.Name = "speedNote";
-        speedNote.Size = new Size(128, 32);
-        speedNote.TabIndex = 2;
-        speedNote.Tag = "muted";
-        speedNote.Text = "引擎待评估";
-        speedNote.TextAlign = ContentAlignment.MiddleLeft;
-        // 
-        // _labelSubtitle
-        // 
-        _labelSubtitle.AutoEllipsis = true;
-        _labelSubtitle.Dock = DockStyle.Fill;
-        _labelSubtitle.Font = new Font("Microsoft YaHei UI", 8.5F);
-        _labelSubtitle.ForeColor = Color.FromArgb(139, 92, 246);
-        _labelSubtitle.Location = new Point(3, 130);
-        _labelSubtitle.MaximumSize = new Size(300, 0);
-        _labelSubtitle.Name = "_labelSubtitle";
-        _labelSubtitle.Size = new Size(278, 22);
-        _labelSubtitle.TabIndex = 4;
-        _labelSubtitle.Tag = "score";
-        _labelSubtitle.TextAlign = ContentAlignment.MiddleLeft;
-        // 
-        // sourceCard
-        // 
-        sourceCard.BackColor = Color.FromArgb(247, 248, 251);
-        sourceCard.Dock = DockStyle.Fill;
-        sourceCard.Location = new Point(0, 436);
-        sourceCard.Margin = new Padding(0);
-        sourceCard.Name = "sourceCard";
-        sourceCard.Padding = new Padding(2, 1, 2, 1);
-        sourceCard.Size = new Size(308, 188);
-        sourceCard.TabIndex = 3;
-        sourceCard.Title = "音频来源与匹配";
-        // 
-        // sourceGrid
-        // 
-        sourceGrid.BackColor = Color.Transparent;
-        sourceGrid.ColumnCount = 2;
-        sourceGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-        sourceGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-        sourceGrid.Controls.Add(_btnAddDir, 0, 0);
-        sourceGrid.Controls.Add(_btnAiMatch, 1, 0);
-        sourceGrid.Controls.Add(_btnRules, 0, 1);
-        sourceGrid.Controls.Add(_btnManual, 1, 1);
-        sourceGrid.Controls.Add(_btnManualFromList, 0, 2);
-        sourceGrid.Controls.Add(_btnRescan, 1, 2);
-        sourceGrid.Controls.Add(_btnFollowRead, 0, 3);
-        sourceGrid.Controls.Add(_chkSubDir, 1, 3);
-        sourceGrid.Dock = DockStyle.Fill;
-        sourceGrid.Location = new Point(10, 30);
-        sourceGrid.Margin = new Padding(0);
-        sourceGrid.Name = "sourceGrid";
-        sourceGrid.RowCount = 4;
-        sourceGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
-        sourceGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
-        sourceGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
-        sourceGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 36F));
-        sourceGrid.Size = new Size(284, 146);
-        sourceGrid.TabIndex = 0;
-        // 
-        // _btnAddDir
-        // 
-        _btnAddDir.AutoEllipsis = true;
-        _btnAddDir.BackColor = Color.White;
-        _btnAddDir.Cursor = Cursors.Hand;
-        _btnAddDir.Dock = DockStyle.Fill;
-        _btnAddDir.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
-        _btnAddDir.FlatAppearance.MouseOverBackColor = Color.FromArgb(241, 245, 249);
-        _btnAddDir.FlatStyle = FlatStyle.Flat;
-        _btnAddDir.Font = new Font("Microsoft YaHei UI", 9F);
-        _btnAddDir.ForeColor = Color.FromArgb(15, 23, 42);
-        _btnAddDir.Location = new Point(0, 0);
-        _btnAddDir.Margin = new Padding(0, 0, 4, 6);
-        _btnAddDir.Name = "_btnAddDir";
-        _btnAddDir.Size = new Size(138, 30);
-        _btnAddDir.TabIndex = 0;
-        _btnAddDir.Tag = "secondary";
-        _btnAddDir.Text = "📁 添加音频目录";
-        _btnAddDir.UseVisualStyleBackColor = false;
-        // 
-        // _btnAiMatch
-        // 
-        _btnAiMatch.AutoEllipsis = true;
-        _btnAiMatch.BackColor = Color.White;
-        _btnAiMatch.Cursor = Cursors.Hand;
-        _btnAiMatch.Dock = DockStyle.Fill;
-        _btnAiMatch.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
-        _btnAiMatch.FlatAppearance.MouseOverBackColor = Color.FromArgb(241, 245, 249);
-        _btnAiMatch.FlatStyle = FlatStyle.Flat;
-        _btnAiMatch.Font = new Font("Microsoft YaHei UI", 9F);
-        _btnAiMatch.ForeColor = Color.FromArgb(15, 23, 42);
-        _btnAiMatch.Location = new Point(146, 0);
-        _btnAiMatch.Margin = new Padding(4, 0, 0, 6);
-        _btnAiMatch.Name = "_btnAiMatch";
-        _btnAiMatch.Size = new Size(138, 30);
-        _btnAiMatch.TabIndex = 1;
-        _btnAiMatch.Tag = "secondary";
-        _btnAiMatch.Text = "✨ AI 匹配";
-        _btnAiMatch.UseVisualStyleBackColor = false;
-        // 
-        // _btnRules
-        // 
-        _btnRules.AutoEllipsis = true;
-        _btnRules.BackColor = Color.White;
-        _btnRules.Cursor = Cursors.Hand;
-        _btnRules.Dock = DockStyle.Fill;
-        _btnRules.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
-        _btnRules.FlatAppearance.MouseOverBackColor = Color.FromArgb(241, 245, 249);
-        _btnRules.FlatStyle = FlatStyle.Flat;
-        _btnRules.Font = new Font("Microsoft YaHei UI", 9F);
-        _btnRules.ForeColor = Color.FromArgb(15, 23, 42);
-        _btnRules.Location = new Point(0, 36);
-        _btnRules.Margin = new Padding(0, 0, 4, 6);
-        _btnRules.Name = "_btnRules";
-        _btnRules.Size = new Size(138, 30);
-        _btnRules.TabIndex = 2;
-        _btnRules.Tag = "secondary";
-        _btnRules.Text = "规则";
-        _btnRules.UseVisualStyleBackColor = false;
-        // 
-        // _btnManual
-        // 
-        _btnManual.AutoEllipsis = true;
-        _btnManual.BackColor = Color.White;
-        _btnManual.Cursor = Cursors.Hand;
-        _btnManual.Dock = DockStyle.Fill;
-        _btnManual.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
-        _btnManual.FlatAppearance.MouseOverBackColor = Color.FromArgb(241, 245, 249);
-        _btnManual.FlatStyle = FlatStyle.Flat;
-        _btnManual.Font = new Font("Microsoft YaHei UI", 9F);
-        _btnManual.ForeColor = Color.FromArgb(15, 23, 42);
-        _btnManual.Location = new Point(146, 36);
-        _btnManual.Margin = new Padding(4, 0, 0, 6);
-        _btnManual.Name = "_btnManual";
-        _btnManual.Size = new Size(138, 30);
-        _btnManual.TabIndex = 3;
-        _btnManual.Tag = "secondary";
-        _btnManual.Text = "手动指定";
-        _btnManual.UseVisualStyleBackColor = false;
-        // 
-        // _btnManualFromList
-        // 
-        _btnManualFromList.AutoEllipsis = true;
-        _btnManualFromList.BackColor = Color.White;
-        _btnManualFromList.Cursor = Cursors.Hand;
-        _btnManualFromList.Dock = DockStyle.Fill;
-        _btnManualFromList.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
-        _btnManualFromList.FlatAppearance.MouseOverBackColor = Color.FromArgb(241, 245, 249);
-        _btnManualFromList.FlatStyle = FlatStyle.Flat;
-        _btnManualFromList.Font = new Font("Microsoft YaHei UI", 9F);
-        _btnManualFromList.ForeColor = Color.FromArgb(15, 23, 42);
-        _btnManualFromList.Location = new Point(0, 72);
-        _btnManualFromList.Margin = new Padding(0, 0, 4, 6);
-        _btnManualFromList.Name = "_btnManualFromList";
-        _btnManualFromList.Size = new Size(138, 30);
-        _btnManualFromList.TabIndex = 4;
-        _btnManualFromList.Tag = "secondary";
-        _btnManualFromList.Text = "从列表选";
-        _btnManualFromList.UseVisualStyleBackColor = false;
-        // 
-        // _btnRescan
-        // 
-        _btnRescan.AutoEllipsis = true;
-        _btnRescan.BackColor = Color.White;
-        _btnRescan.Cursor = Cursors.Hand;
-        _btnRescan.Dock = DockStyle.Fill;
-        _btnRescan.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
-        _btnRescan.FlatAppearance.MouseOverBackColor = Color.FromArgb(241, 245, 249);
-        _btnRescan.FlatStyle = FlatStyle.Flat;
-        _btnRescan.Font = new Font("Microsoft YaHei UI", 9F);
-        _btnRescan.ForeColor = Color.FromArgb(15, 23, 42);
-        _btnRescan.Location = new Point(146, 72);
-        _btnRescan.Margin = new Padding(4, 0, 0, 6);
-        _btnRescan.Name = "_btnRescan";
-        _btnRescan.Size = new Size(138, 30);
-        _btnRescan.TabIndex = 5;
-        _btnRescan.Tag = "secondary";
-        _btnRescan.Text = "重新扫描";
-        _btnRescan.UseVisualStyleBackColor = false;
-        // 
-        // _btnFollowRead
-        // 
-        _btnFollowRead.AutoEllipsis = true;
-        _btnFollowRead.BackColor = Color.FromArgb(239, 68, 68);
-        _btnFollowRead.Cursor = Cursors.Hand;
-        _btnFollowRead.Dock = DockStyle.Fill;
-        _btnFollowRead.FlatAppearance.BorderSize = 0;
-        _btnFollowRead.FlatAppearance.MouseOverBackColor = Color.FromArgb(220, 38, 38);
-        _btnFollowRead.FlatStyle = FlatStyle.Flat;
-        _btnFollowRead.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
-        _btnFollowRead.ForeColor = Color.White;
-        _btnFollowRead.Location = new Point(0, 108);
-        _btnFollowRead.Margin = new Padding(0, 0, 4, 0);
-        _btnFollowRead.Name = "_btnFollowRead";
-        _btnFollowRead.Size = new Size(138, 38);
-        _btnFollowRead.TabIndex = 6;
-        _btnFollowRead.Tag = "danger";
-        _btnFollowRead.Text = "● 整页录音";
-        _btnFollowRead.UseVisualStyleBackColor = false;
-        // 
-        // _chkSubDir
-        // 
-        _chkSubDir.Dock = DockStyle.Fill;
-        _chkSubDir.Font = new Font("Microsoft YaHei UI", 9F);
-        _chkSubDir.ForeColor = Color.FromArgb(15, 23, 42);
-        _chkSubDir.Location = new Point(150, 108);
-        _chkSubDir.Margin = new Padding(8, 0, 0, 0);
-        _chkSubDir.Name = "_chkSubDir";
-        _chkSubDir.Size = new Size(134, 38);
-        _chkSubDir.TabIndex = 7;
-        _chkSubDir.Text = "包含子目录";
-        // 
-        // _btnLoop
-        // 
-        _btnLoop.BackColor = Color.White;
-        _btnLoop.Cursor = Cursors.Hand;
-        _btnLoop.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
-        _btnLoop.FlatAppearance.BorderSize = 1;
-        _btnLoop.FlatStyle = FlatStyle.Flat;
-        _btnLoop.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
-        _btnLoop.ForeColor = Color.FromArgb(15, 23, 42);
-        _btnLoop.Location = new Point(129, 0);
-        _btnLoop.Margin = new Padding(3, 0, 3, 0);
-        _btnLoop.Name = "_btnLoop";
-        _btnLoop.Size = new Size(70, 34);
-        _btnLoop.TabIndex = 3;
-        _btnLoop.Tag = "transport";
-        _btnLoop.Text = "🔁 关闭";
-        _btnLoop.UseVisualStyleBackColor = false;
+        _labelAdvMatchChevron.Dock = DockStyle.Right;
+        _labelAdvMatchChevron.Font = new Font("Microsoft YaHei UI", 10F);
+        _labelAdvMatchChevron.ForeColor = Color.FromArgb(148, 163, 184);
+        _labelAdvMatchChevron.Location = new Point(286, 0);
+        _labelAdvMatchChevron.Margin = new Padding(0);
+        _labelAdvMatchChevron.Name = "_labelAdvMatchChevron";
+        _labelAdvMatchChevron.Size = new Size(22, 34);
+        _labelAdvMatchChevron.TabIndex = 1;
+        _labelAdvMatchChevron.Tag = "muted";
+        _labelAdvMatchChevron.Text = "›";
+        _labelAdvMatchChevron.TextAlign = ContentAlignment.MiddleRight;
         // 
         // PdfAudioPanel
         // 
@@ -615,16 +501,20 @@ partial class PdfAudioPanel
         Controls.Add(root);
         Name = "PdfAudioPanel";
         Padding = new Padding(6, 2, 6, 6);
-        Size = new Size(320, 632);
+        Size = new Size(320, 640);
         root.ResumeLayout(false);
         statusPanel.ResumeLayout(false);
-        playback.ResumeLayout(false);
-        playback.PerformLayout();
-        transport.ResumeLayout(false);
-        abRow.ResumeLayout(false);
-        speedRow.ResumeLayout(false);
-        speedRow.PerformLayout();
-        sourceGrid.ResumeLayout(false);
+        bookBar.ResumeLayout(false);
+        followRow.ResumeLayout(false);
+        pageCard.ResumeLayout(false);
+        pageLayout.ResumeLayout(false);
+        pageLayout.PerformLayout();
+        pageTop.ResumeLayout(false);
+        pageTop.PerformLayout();
+        pageActions.ResumeLayout(false);
+        advancedPanel.ResumeLayout(false);
+        advSource.ResumeLayout(false);
+        advMatch.ResumeLayout(false);
         ResumeLayout(false);
     }
 
@@ -633,34 +523,31 @@ partial class PdfAudioPanel
     private TableLayoutPanel root;
     private Panel statusPanel;
     private Label _labelInfo;
+    private Panel bookBar;
+    private Label _labelBook;
+    private Button _btnBookSwitch;
+    private SegmentedTabs _segments;
+    private TableLayoutPanel followRow;
+    private Label followLabel;
+    private PageCardPanel pageCard;
+    private TableLayoutPanel pageLayout;
+    private TableLayoutPanel pageTop;
+    private Label _labelPageTitle;
+    private Label _labelPageSource;
+    private Label _labelPageTrack;
+    private Label _labelPageMeta;
+    private FlowLayoutPanel pageActions;
+    private Button _btnBind;
+    private Button _btnClearPage;
+    private Button _btnPreview;
     private SidebarCard listCard;
     private ListBox _listTracks;
-    private SidebarCard playbackCard;
-    private TableLayoutPanel playback;
-    private FlowLayoutPanel transport;
-    private Button _btnPrev;
-    private Button _btnPlay;
-    private Button _btnNext;
-    private Button _btnLoop;
-    private TableLayoutPanel abRow;
-    private Button _btnSetA;
-    private Button _btnSetB;
-    private Button _btnClearAb;
-    private Label _labelLoop;
-    private TableLayoutPanel speedRow;
-    private Label speedLabel;
-    private ComboBox _comboSpeed;
-    private Label speedNote;
-    private Label _labelSubtitle;
-    private SidebarCard sourceCard;
-    private TableLayoutPanel sourceGrid;
-    private Button _btnAddDir;
-    private Button _btnAiMatch;
-    private Button _btnRules;
-    private Button _btnManual;
-    private Button _btnManualFromList;
-    private Button _btnRescan;
-    private Button _btnFollowRead;
-    private CheckBox _chkSubDir;
+    private TableLayoutPanel advancedPanel;
+    private Panel advSource;
+    private Label _labelAdvSource;
+    private Label _labelAdvSourceChevron;
+    private Panel advMatch;
+    private Label _labelAdvMatch;
+    private Label _labelAdvMatchChevron;
     private ToolTip _tooltip;
 }

@@ -31,6 +31,9 @@ public sealed class PdfAudioPlayerBar : UserControl
     private readonly ToolTip _tooltip = new();
     private readonly ContextMenuStrip _loopMenu = new();
     private readonly ToolStripMenuItem _menuSyncPage = new("切歌同步页码");
+    private readonly ToolStripMenuItem _menuSetA = new("设复读起点 A");
+    private readonly ToolStripMenuItem _menuSetB = new("设复读终点 B");
+    private readonly ToolStripMenuItem _menuClearAb = new("清除 A-B 复读");
 
     private bool _dragging;
     private double _lastVolume = 1.0;
@@ -233,6 +236,11 @@ public sealed class PdfAudioPlayerBar : UserControl
             UpdateLoopChecks();
         };
         _loopMenu.Items.Add(_menuSyncPage);
+        _loopMenu.Items.Add(new ToolStripSeparator());
+        _loopMenu.Items.Add(_menuSetA);
+        _loopMenu.Items.Add(_menuSetB);
+        _loopMenu.Items.Add(_menuClearAb);
+        _loopMenu.Opening += (_, _) => UpdateAbLoopMenu();
         return right;
     }
 
@@ -269,6 +277,25 @@ public sealed class PdfAudioPlayerBar : UserControl
 
         _btnMore.Click += (_, _) => _loopMenu.Show(_btnMore, new Point(0, _btnMore.Height));
 
+        _menuSetA.Click += (_, _) =>
+        {
+            var player = _manager.Playback.Player;
+            _manager.Playback.SetAbLoop(player.Position, player.AbLoop.B);
+            UpdateAbLoopMenu();
+        };
+        _menuSetB.Click += (_, _) =>
+        {
+            var player = _manager.Playback.Player;
+            _manager.Playback.SetAbLoop(player.AbLoop.A, player.Position);
+            UpdateAbLoopMenu();
+        };
+        _menuClearAb.Click += (_, _) =>
+        {
+            _manager.Playback.SetAbLoop(null, null);
+            _manager.Playback.Player.LoopMode = MediaLoopMode.None;
+            UpdateAbLoopMenu();
+        };
+
         _track.MouseDown += (_, _) => _dragging = true;
         _track.MouseUp += (_, _) => CommitSeek();
         _track.Scroll += (_, _) =>
@@ -279,6 +306,7 @@ public sealed class PdfAudioPlayerBar : UserControl
         _manager.ProfileLoaded += OnProfileLoaded;
         _manager.TrackChanged += OnTrackChanged;
         _manager.PageHintChanged += OnPageHintChanged;
+        _manager.SettingsChanged += OnSettingsChanged;
         _manager.Playback.Player.PositionChanged += OnPositionChanged;
         _manager.Playback.Player.StateChanged += OnStateChanged;
         PdfSidebarTheme.ThemeChanged += OnThemeChanged;
@@ -287,6 +315,15 @@ public sealed class PdfAudioPlayerBar : UserControl
     private void OnProfileLoaded(object? sender, EventArgs e) => RefreshAll();
     private void OnTrackChanged(object? sender, AudioTrack track) => RefreshTrack();
     private void OnPageHintChanged(object? sender, string? hint) => RefreshTrack();
+
+    /// <summary>侧栏或播放器自身修改设置后，统一刷新开关、按钮与曲目信息。</summary>
+    private void OnSettingsChanged(object? sender, EventArgs e)
+    {
+        UpdateFollowButton();
+        UpdateLoopChecks();
+        UpdateTransport();
+        RefreshTrack();
+    }
     /// <summary>翻页后由宿主调用，更新页徽标与空态提示。</summary>
     public void RefreshPage() => RefreshTrack();
 
@@ -427,12 +464,30 @@ public sealed class PdfAudioPlayerBar : UserControl
 
     private void UpdateFollowButton()
     {
-        bool follow = _manager.FollowPage;
         var palette = PdfSidebarTheme.PaletteFor(this);
+        if (_manager.Profile?.PlaybackScope == PlaybackScope.WholeBook)
+        {
+            _btnFollow.Text = "整篇";
+            _btnFollow.Enabled = false;
+            _btnFollow.BackColor = palette.SurfaceAlt;
+            _btnFollow.ForeColor = palette.Muted;
+            _tooltip.SetToolTip(_btnFollow, "整篇音频不随翻页切换");
+            return;
+        }
+
+        bool follow = _manager.FollowPage;
+        _btnFollow.Enabled = true;
         _btnFollow.Text = follow ? "跟随" : "不跟随";
         _btnFollow.BackColor = follow ? palette.BrandSoft : palette.SurfaceAlt;
         _btnFollow.ForeColor = follow ? PdfSidebarTheme.Brand : palette.Text;
         _tooltip.SetToolTip(_btnFollow, follow ? "翻页自动切换音频（点击关闭）" : "翻页不切换音频（点击开启）");
+    }
+
+    /// <summary>同步 A-B 菜单可用状态；未设置端点时禁用清除。</summary>
+    private void UpdateAbLoopMenu()
+    {
+        var (a, b) = _manager.Playback.Player.AbLoop;
+        _menuClearAb.Enabled = a != null || b != null;
     }
 
     private void SetLoopMode(MediaLoopMode mode)
@@ -550,6 +605,7 @@ public sealed class PdfAudioPlayerBar : UserControl
             _manager.ProfileLoaded -= OnProfileLoaded;
             _manager.TrackChanged -= OnTrackChanged;
             _manager.PageHintChanged -= OnPageHintChanged;
+            _manager.SettingsChanged -= OnSettingsChanged;
             _manager.Playback.Player.PositionChanged -= OnPositionChanged;
             _manager.Playback.Player.StateChanged -= OnStateChanged;
             PdfSidebarTheme.ThemeChanged -= OnThemeChanged;
