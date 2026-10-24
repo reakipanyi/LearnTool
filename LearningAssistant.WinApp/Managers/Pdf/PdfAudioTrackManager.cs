@@ -130,6 +130,11 @@ public class PdfAudioTrackManager : IDisposable
     public async Task LoadProfileAsync(string pdfPath, int pageCount, CancellationToken cancellationToken = default)
     {
         var generation = ++_loadGeneration;
+        // 切换到其它文档时先停掉上一本的音频，避免旧曲目继续出声
+        bool documentChanged = !string.IsNullOrEmpty(_currentPdfPath)
+            && !string.Equals(_currentPdfPath, pdfPath, StringComparison.OrdinalIgnoreCase);
+        if (documentChanged) ResetPlaybackForDocumentSwitch();
+
         _currentPdfPath = pdfPath;
         _pageCount = pageCount;
         var loaded = _store.Load(pdfPath, pageCount);
@@ -167,6 +172,18 @@ public class PdfAudioTrackManager : IDisposable
         ProfileLoaded?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>切换文档时收尾：写回旧文档播放进度并停止播放，清空曲目相关状态。</summary>
+    private void ResetPlaybackForDocumentSwitch()
+    {
+        SavePlaybackState();
+        _playback.Stop();
+        _loadedTrack = null;
+        _result = null;
+        _playlistIndex = -1;
+        _currentPageIndex = -1;
+        SetPageHint(null);
+    }
+
     private void ApplyLoadedProfile(string pdfPath, int pageCount, List<AudioTrack> tracks, string fingerprint)
     {
         var profile = _profile!;
@@ -175,6 +192,18 @@ public class PdfAudioTrackManager : IDisposable
         // 倍速按书记忆；打开书籍时先把目标值同步给播放器，后续 Load 按该倍速搭建输出链
         _playback.SetSpeed(profile.PlaybackSpeed);
         ScopeCorrectionMessage = null;
+
+        // 默认整篇听：未手动选过播放范围时，有同名/唯一整篇音频就直接进入整篇模式
+        if (!profile.ScopeExplicit && string.IsNullOrWhiteSpace(profile.SingleAudioFile))
+        {
+            var auto = ResolveAutoSingleAudio(pdfPath, tracks);
+            if (auto != null)
+            {
+                profile.SingleAudioFile = auto;
+                profile.MatchMode = PdfAudioMatchMode.SingleAudio;
+                profile.PlaybackScope = PlaybackScope.WholeBook;
+            }
+        }
 
         // A41：整篇单音频与“跟随翻页”互斥，打开时纠正并提示一次
         if (!string.IsNullOrWhiteSpace(profile.SingleAudioFile)
@@ -488,10 +517,15 @@ public class PdfAudioTrackManager : IDisposable
         if (!string.IsNullOrWhiteSpace(_profile.SingleAudioFile)) return _profile.SingleAudioFile;
 
         var tracks = _result?.Tracks ?? _profile.Tracks;
+        return ResolveAutoSingleAudio(_currentPdfPath, tracks);
+    }
+
+    /// <summary>从曲目列表里找出可作整篇音频的那一条：同名音频优先，其次目录只有一条音频。</summary>
+    private string? ResolveAutoSingleAudio(string pdfPath, IReadOnlyList<AudioTrack> tracks)
+    {
         if (tracks.Count == 0) return null;
 
-        var sameName = PdfAudioMatcher.FindSameNameTracks(_currentPdfPath, tracks);
-
+        var sameName = PdfAudioMatcher.FindSameNameTracks(pdfPath, tracks);
         var track = sameName.Count == 1 ? sameName[0] : tracks.Count == 1 ? tracks[0] : null;
         return track == null ? null : ToProfilePath(track.FilePath);
     }
@@ -534,6 +568,12 @@ public class PdfAudioTrackManager : IDisposable
         if (_profile.PlaybackScope != scope)
         {
             _profile.PlaybackScope = scope;
+            changed = true;
+        }
+        // 用户手动切换过播放范围后，打开书籍不再自动改回整篇听
+        if (!_profile.ScopeExplicit)
+        {
+            _profile.ScopeExplicit = true;
             changed = true;
         }
         if (!changed) return;
@@ -717,7 +757,8 @@ public class PdfAudioTrackManager : IDisposable
             case MediaPlaybackState.Idle:
             case MediaPlaybackState.Stopped:
                 // 已加载曲目从当前位置继续；已播完则从头开始
-                if (_playback.Player.Duration > TimeSpan.Zero)
+                // 切换文档后播放器仍残留旧文件的时长，必须确认当前曲目已加载，避免续播上一本的声音
+                if (_loadedTrack != null && _playback.Player.Duration > TimeSpan.Zero)
                 {
                     if (_playback.Player.Position >= _playback.Player.Duration - TimeSpan.FromMilliseconds(50))
                         _playback.Seek(TimeSpan.Zero);
@@ -856,6 +897,7 @@ public class PdfAudioTrackManager : IDisposable
         _profile.SingleAudioFile = null;
         _profile.MatchMode = PdfAudioMatchMode.PerPage;
         _profile.PlaybackScope = PlaybackScope.FollowPage;
+        _profile.ScopeExplicit = false;
         SaveRulesAndRematch();
     }
 

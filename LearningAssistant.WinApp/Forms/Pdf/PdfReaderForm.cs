@@ -6869,6 +6869,18 @@ namespace LearningAssistant.Forms.Pdf
             OpenShadowingWindow();
         }
 
+        /// <summary>翻译页「句子跟读」：与「打开配套音频」一致，弹出可关闭的右侧抽屉。</summary>
+        private void ButtonTranslateShadowing_Click()
+        {
+            if (CountReadableSentences(_textBoxOriginal?.Text) == 0)
+            {
+                ShowToast("请先识别原文，再开始跟读");
+                return;
+            }
+
+            ShowAudioDrawer(AudioDrawerMode.Shadowing);
+        }
+
         private static void StyleSidebarButton(Button? button, string text, int width, int height = 30)
         {
             if (button == null) return;
@@ -6922,6 +6934,7 @@ namespace LearningAssistant.Forms.Pdf
             _translateHeader = _translatePanel.Header;
             _translatePanel.Header.ActionButton!.Click += (_, _) => ButtonTranslate_Click(null, EventArgs.Empty);
             _translatePanel.OcrButton.Click += (_, _) => OcrPageClicked?.Invoke(this, EventArgs.Empty);
+            _translatePanel.ShadowingButton.Click += (_, _) => ButtonTranslateShadowing_Click();
             _translatePanel.OriginalCard.ActionButton!.Click += (_, _) => ButtonSpeakOriginal_Click(null, EventArgs.Empty);
             _translatePanel.TranslationCard.ActionButton!.Click += (_, _) => ButtonSpeakTranslation_Click(null, EventArgs.Empty);
             _translatePanel.GlossaryButton.Click += (_, _) => ShowTranslationGlossaryDialog();

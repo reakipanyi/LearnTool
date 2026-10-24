@@ -268,6 +268,14 @@ public partial class PdfAudioRuleDialog : Form
 
         _profile.MatchMode = mode;
         _profile.SingleAudioFile = _singleAudioFile;
+        // 在规则表里切换匹配方式等于手动选择播放范围，避免下次打开被默认整篇听覆盖
+        if (modeChanged || singleChanged)
+        {
+            _profile.ScopeExplicit = true;
+            _profile.PlaybackScope = mode == PdfAudioMatchMode.SingleAudio
+                ? PlaybackScope.WholeBook
+                : PlaybackScope.FollowPage;
+        }
         _profile.Rules = _rules;
         DialogResult = DialogResult.OK;
         // 非模态窗口必须显式关闭，否则 FormClosed 不触发、规则不会保存

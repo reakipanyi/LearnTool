@@ -31,6 +31,7 @@ public partial class PdfTranslatePanel : UserControl
         originalCard.Body.Controls.Add(originalBox);
         translationCard.Body.Controls.Add(translationBox);
         _tip.SetToolTip(ocrButton, "仅识别本页文字，不翻译；无文本层时自动调用 OCR");
+        _tip.SetToolTip(shadowingButton, "用当前页原文打开句子跟读面板（可关闭）");
         _tip.SetToolTip(addToLearningButton, "把选区或本页原文加入个人学习库");
         _tip.SetToolTip(autoTranslateCheck, "识别后自动翻译原文");
         _tip.SetToolTip(autoSpeakCheck, "识别后自动朗读原文");
@@ -94,6 +95,11 @@ public partial class PdfTranslatePanel : UserControl
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Button OcrButton => ocrButton;
+
+    /// <summary>句子跟读按钮。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button ShadowingButton => shadowingButton;
 
     /// <summary>添加到学习按钮。</summary>
     [Browsable(false)]

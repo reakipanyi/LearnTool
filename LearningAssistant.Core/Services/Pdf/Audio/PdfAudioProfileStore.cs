@@ -334,6 +334,7 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
                 : PdfAudioMatchMode.SingleAudio,
             SingleAudioFile = singleAudio,
             PlaybackScope = playbackScope,
+            ScopeExplicit = book?.ScopeExplicit ?? false,
             IncludeSubDirectories = doc.Defaults.IncludeSubDirectories,
             ExternalAudioDirectories = doc.Sources
                 .Where(s => !string.Equals(s, AudioSource, StringComparison.OrdinalIgnoreCase))
@@ -406,6 +407,7 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
         SetNode(book, "pageCount", profile.PageCount);
         SetNode(book, "singleAudio", profile.SingleAudioFile);
         SetNode(book, "playbackScope", profile.PlaybackScope.ToString());
+        SetNode(book, "scopeExplicit", profile.ScopeExplicit);
         SetNode(book, "followPage", profile.FollowPage);
         SetNode(book, "syncPageOnTrackChange", profile.SyncPageOnTrackChange);
         // 书级用户状态：倍速与上次播放位置，按书记忆（与机器缓存分离）

@@ -25,6 +25,8 @@ namespace LearningAssistant.Models.Pdf
         public int PageCount { get; set; }
         /// <summary>播放范围：跟随翻页或整篇单音频；与 MatchMode 冲突时打开时自动纠正</summary>
         public PlaybackScope PlaybackScope { get; set; } = PlaybackScope.FollowPage;
+        /// <summary>用户是否手动选择过播放范围；未选过时打开书籍默认识别整篇音频并入「整篇听」</summary>
+        public bool ScopeExplicit { get; set; }
         /// <summary>翻页是否自动切换音频（与“切歌同步页码”相互独立）</summary>
         public bool FollowPage { get; set; } = true;
         /// <summary>上一曲/下一曲或列表选曲后，正文是否跳到该曲目起始页</summary>

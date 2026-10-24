@@ -23,6 +23,7 @@ partial class PdfTranslatePanel
         translationBox = new SyncedTextBox();
         actions = new FlowLayoutPanel();
         ocrButton = new Button();
+        shadowingButton = new Button();
         addToLearningButton = new Button();
         options = new FlowLayoutPanel();
         autoTranslateCheck = new CheckBox();
@@ -156,6 +157,7 @@ partial class PdfTranslatePanel
         // 
         actions.BackColor = Color.FromArgb(247, 248, 251);
         actions.Controls.Add(ocrButton);
+        actions.Controls.Add(shadowingButton);
         actions.Controls.Add(addToLearningButton);
         actions.Dock = DockStyle.Fill;
         actions.Location = new Point(10, 452);
@@ -184,6 +186,24 @@ partial class PdfTranslatePanel
         ocrButton.Text = "🔍 整页识别";
         ocrButton.UseVisualStyleBackColor = false;
         // 
+        // shadowingButton
+        // 
+        shadowingButton.BackColor = Color.White;
+        shadowingButton.Cursor = Cursors.Hand;
+        shadowingButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        shadowingButton.FlatAppearance.BorderSize = 1;
+        shadowingButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(241, 245, 249);
+        shadowingButton.FlatStyle = FlatStyle.Flat;
+        shadowingButton.Font = new Font("Microsoft YaHei UI", 9F);
+        shadowingButton.ForeColor = Color.FromArgb(15, 23, 42);
+        shadowingButton.Margin = new Padding(0, 0, 8, 0);
+        shadowingButton.Name = "shadowingButton";
+        shadowingButton.Size = new Size(104, 28);
+        shadowingButton.TabIndex = 1;
+        shadowingButton.Tag = "secondary";
+        shadowingButton.Text = "✂ 句子跟读";
+        shadowingButton.UseVisualStyleBackColor = false;
+        // 
         // addToLearningButton
         // 
         addToLearningButton.BackColor = Color.White;
@@ -197,7 +217,7 @@ partial class PdfTranslatePanel
         addToLearningButton.Margin = new Padding(0);
         addToLearningButton.Name = "addToLearningButton";
         addToLearningButton.Size = new Size(120, 28);
-        addToLearningButton.TabIndex = 1;
+        addToLearningButton.TabIndex = 2;
         addToLearningButton.Tag = "secondary";
         addToLearningButton.Text = "➕ 加入本页译文";
         addToLearningButton.UseVisualStyleBackColor = false;
@@ -382,6 +402,7 @@ partial class PdfTranslatePanel
     private SyncedTextBox translationBox;
     private FlowLayoutPanel actions;
     private Button ocrButton;
+    private Button shadowingButton;
     private Button addToLearningButton;
     private FlowLayoutPanel options;
     private CheckBox autoTranslateCheck;

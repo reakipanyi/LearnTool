@@ -42,6 +42,8 @@ namespace LearningAssistant.Models.Pdf
         /// <summary>整篇单音频的唯一真相；非空即 WholeBook</summary>
         public string? SingleAudio { get; set; }
         public PlaybackScope PlaybackScope { get; set; } = PlaybackScope.FollowPage;
+        /// <summary>用户是否手动选择过播放范围；未选过时打开书籍默认识别整篇音频并入「整篇听」</summary>
+        public bool ScopeExplicit { get; set; }
         /// <summary>书级规则增量补丁；null 表示完全继承目录规则</summary>
         public PdfAudioRulePatch? RulePatch { get; set; }
         public Dictionary<int, PdfAudioOverride> Overrides { get; set; } = new();
