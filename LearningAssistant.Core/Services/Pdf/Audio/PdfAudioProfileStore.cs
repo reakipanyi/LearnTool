@@ -131,29 +131,28 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
                 root = new JsonObject();
             }
 
-            root["schemaVersion"] = 3;
-            root["scope"] = BuildScopeNode(directory, pdfPath);
-            root["sources"] = BuildSourcesNode(profile);
-            root["defaults"] = BuildDefaultsNode(root["defaults"] as JsonObject, profile);
+            // 旧迁移档案由 JsonHelper 写出 PascalCase 键，这里统一按不区分大小写读写，
+            // 避免只认 camelCase 时把其它书的分区整块丢掉
+            SetNode(root, "schemaVersion", 3);
+            SetNode(root, "scope", BuildScopeNode(directory, pdfPath));
+            SetNode(root, "sources", BuildSourcesNode(profile));
+            SetNode(root, "defaults", BuildDefaultsNode(GetObject(root, "defaults"), profile));
 
-            var books = root["books"] as JsonObject ?? new JsonObject();
-            // 规则是目录级共享数据：新书或空规则不覆盖已有规则；
-            // 有书级补丁时不回写目录规则，避免覆盖别人的增量
+            var books = GetObject(root, "books") ?? new JsonObject();
+            // 有书级补丁时 Rules 是合并结果，不能回写目录规则；无补丁时 Rules 即目录规则
+            if (profile.RulePatch == null)
+                SetNode(root, "rules", JsonSerializer.SerializeToNode(profile.Rules, WriteOptions) ?? new JsonArray());
+            else if (GetNode(root, "rules") == null)
+                SetNode(root, "rules", new JsonArray());
+
             var existingBook = FindBookNode(books, fileName);
             var effectiveBook = existingBook.Value;
-            if (effectiveBook?["rulePatch"] == null
-                && (root["rules"] == null || profile.Rules.Count > 0))
-            {
-                root["rules"] = JsonSerializer.SerializeToNode(profile.Rules, WriteOptions);
-            }
-            if (root["rules"] == null)
-                root["rules"] = new JsonArray();
 
             if (existingBook.Key != null && !string.Equals(existingBook.Key, fileName, StringComparison.Ordinal))
                 books.Remove(existingBook.Key);
 
             books[fileName] = BuildBookNode(effectiveBook, profile, pdfPath);
-            root["books"] = books;
+            SetNode(root, "books", books);
 
             WriteAtomic(profilePath, root.ToJsonString(WriteOptions));
         }
@@ -228,47 +227,12 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
                                ?? new Dictionary<int, string>(),
             FollowPage = book?.FollowPage ?? true,
             SyncPageOnTrackChange = book?.SyncPageOnTrackChange ?? true,
-            Rules = BuildEffectiveRules(doc.Rules, book?.RulePatch)
+            DirectoryRules = doc.Rules.ToList(),
+            RulePatch = book?.RulePatch,
+            Rules = PdfAudioRuleMerger.Merge(doc.Rules, book?.RulePatch)
         };
         return profile;
     }
-
-    private static List<AudioMatchRule> BuildEffectiveRules(List<AudioMatchRule> directoryRules, PdfAudioRulePatch? patch)
-    {
-        if (patch == null) return directoryRules.ToList();
-
-        if (patch.ReplaceAll)
-            return patch.ExtraRules.ToList();
-
-        var disabled = patch.DisabledRuleIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var effective = directoryRules
-            .Where(r => !disabled.Contains(r.Id))
-            .Select(CloneRule)
-            .ToList();
-
-        foreach (var extra in patch.ExtraRules)
-        {
-            int existing = effective.FindIndex(r => string.Equals(r.Id, extra.Id, StringComparison.OrdinalIgnoreCase));
-            if (existing >= 0) effective[existing] = CloneRule(extra);
-            else effective.Add(CloneRule(extra));
-        }
-        return effective;
-    }
-
-    private static AudioMatchRule CloneRule(AudioMatchRule rule) => new()
-    {
-        Id = rule.Id,
-        Name = rule.Name,
-        FileNamePattern = rule.FileNamePattern,
-        PatternMode = rule.PatternMode,
-        CaptureGroupIndex = rule.CaptureGroupIndex,
-        CaptureGroupName = rule.CaptureGroupName,
-        MapMode = rule.MapMode,
-        PageOffset = rule.PageOffset,
-        PagesPerUnit = rule.PagesPerUnit,
-        Enabled = rule.Enabled,
-        Priority = rule.Priority
-    };
 
     #endregion
 
@@ -315,16 +279,17 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
     {
         var book = existing != null ? (JsonObject)existing.DeepClone() : new JsonObject();
 
-        book["quickFingerprint"] = ComputeQuickFingerprint(pdfPath);
-        book["fullFingerprint"] = ComputeFullFingerprint(pdfPath, profile.PageCount);
-        book["pageCount"] = profile.PageCount;
-        book["singleAudio"] = profile.SingleAudioFile;
-        book["playbackScope"] = profile.PlaybackScope.ToString();
-        book["followPage"] = profile.FollowPage;
-        book["syncPageOnTrackChange"] = profile.SyncPageOnTrackChange;
+        // 迁移档案是 PascalCase，统一用大小写无关写入，避免同名字段重复
+        SetNode(book, "quickFingerprint", ComputeQuickFingerprint(pdfPath));
+        SetNode(book, "fullFingerprint", ComputeFullFingerprint(pdfPath, profile.PageCount));
+        SetNode(book, "pageCount", profile.PageCount);
+        SetNode(book, "singleAudio", profile.SingleAudioFile);
+        SetNode(book, "playbackScope", profile.PlaybackScope.ToString());
+        SetNode(book, "followPage", profile.FollowPage);
+        SetNode(book, "syncPageOnTrackChange", profile.SyncPageOnTrackChange);
 
         // 覆盖项合并：保留原有 source/createdAt，仅更新路径
-        var existingOverrides = book["overrides"] as JsonObject;
+        var existingOverrides = GetObject(book, "overrides");
         var overrides = new JsonObject();
         foreach (var kv in profile.ManualOverrides)
         {
@@ -333,26 +298,39 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
             overrides[key] = new JsonObject
             {
                 ["path"] = kv.Value,
-                ["source"] = old?["source"]?.GetValue<string>() ?? "manual",
-                ["createdAt"] = old?["createdAt"]?.GetValue<string>() ?? DateTime.Now.ToString("O")
+                ["source"] = old == null ? "manual" : GetString(old, "source") ?? "manual",
+                ["createdAt"] = old == null ? DateTime.Now.ToString("O") : GetString(old, "createdAt") ?? DateTime.Now.ToString("O")
             };
         }
-        book["overrides"] = overrides;
+        SetNode(book, "overrides", overrides);
 
         var pageIndex = new JsonObject();
         foreach (var kv in profile.PageIndex.OrderBy(kv => kv.Key))
             pageIndex[kv.Key.ToString()] = kv.Value;
 
-        book["cache"] = new JsonObject
+        SetNode(book, "cache", new JsonObject
         {
             ["pageIndex"] = pageIndex,
             ["scanFingerprint"] = profile.ScanFingerprint,
             ["updatedAt"] = DateTime.Now.ToString("O")
-        };
+        });
 
-        // rulePatch 属于用户/导入数据，程序不生成；存在时保持原样
-        if (book["rulePatch"] == null) book["rulePatch"] = null;
+        SetNode(book, "rulePatch", profile.RulePatch == null ? null : BuildRulePatchNode(profile.RulePatch));
         return book;
+    }
+
+    private static JsonObject BuildRulePatchNode(PdfAudioRulePatch patch)
+    {
+        var disabled = new JsonArray();
+        foreach (var id in patch.DisabledRuleIds.Where(id => !string.IsNullOrWhiteSpace(id)))
+            disabled.Add(id);
+
+        return new JsonObject
+        {
+            ["disabledRuleIds"] = disabled,
+            ["extraRules"] = JsonSerializer.SerializeToNode(patch.ExtraRules, WriteOptions) ?? new JsonArray(),
+            ["replaceAll"] = patch.ReplaceAll
+        };
     }
 
     private static (string? Key, JsonObject? Value) FindBookNode(JsonObject books, string fileName)
@@ -557,6 +535,545 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
                 // 归档失败不影响新档案使用
             }
         }
+    }
+
+    #endregion
+
+    #region 导入导出
+
+    /// <summary>导出整个目录档案：保留用户字段，剔除 cache。</summary>
+    public PdfAudioExportResult ExportDirectory(string pdfPath)
+    {
+        try
+        {
+            pdfPath = Path.GetFullPath(pdfPath);
+            var profilePath = GetProfilePath(pdfPath);
+
+            JsonObject root;
+            lock (WriteLock)
+            {
+                if (!File.Exists(profilePath))
+                    return PdfAudioExportResult.Fail("当前目录还没有可导出的匹配档案");
+                root = ParseRoot(File.ReadAllText(profilePath), out var error)
+                       ?? throw new InvalidOperationException(error);
+            }
+
+            int version = GetInt(root, "schemaVersion") ?? 3;
+            if (version > 3)
+                return PdfAudioExportResult.Fail($"档案版本 {version} 高于当前支持版本 3，无法导出");
+
+            var directory = GetDirectory(pdfPath);
+            var name = SanitizeFileName(new DirectoryInfo(directory).Name) + ".audio.json";
+            var export = BuildExportRoot(root, "directory", GetObject(root, "books") ?? new JsonObject());
+            return PdfAudioExportResult.Ok(export.ToJsonString(WriteOptions), name);
+        }
+        catch (Exception ex)
+        {
+            return PdfAudioExportResult.Fail($"导出目录档案失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>导出当前书：目录规则快照 + 一个书级分区，导入时只影响同名书。</summary>
+    public PdfAudioExportResult ExportBook(string pdfPath)
+    {
+        try
+        {
+            pdfPath = Path.GetFullPath(pdfPath);
+            var profilePath = GetProfilePath(pdfPath);
+            var fileName = Path.GetFileName(pdfPath);
+
+            JsonObject root;
+            lock (WriteLock)
+            {
+                if (!File.Exists(profilePath))
+                    return PdfAudioExportResult.Fail("当前书籍还没有可导出的匹配配置");
+                root = ParseRoot(File.ReadAllText(profilePath), out var error)
+                       ?? throw new InvalidOperationException(error);
+            }
+
+            var books = GetObject(root, "books") ?? new JsonObject();
+            var book = FindBookNode(books, fileName).Value;
+            if (book == null)
+            {
+                // 文件改名后按快速指纹找回分区
+                var quick = ComputeQuickFingerprint(pdfPath);
+                if (!string.IsNullOrEmpty(quick))
+                {
+                    var candidates = new List<JsonObject>();
+                    foreach (var kv in books)
+                    {
+                        if (kv.Value is JsonObject candidate
+                            && string.Equals(GetString(candidate, "quickFingerprint"), quick,
+                                StringComparison.OrdinalIgnoreCase))
+                            candidates.Add(candidate);
+                    }
+                    if (candidates.Count == 1) book = candidates[0];
+                }
+            }
+
+            if (book == null)
+                return PdfAudioExportResult.Fail("当前书籍还没有可导出的匹配配置");
+
+            var single = new JsonObject { [fileName] = book.DeepClone() };
+            var export = BuildExportRoot(root, "book", single);
+            var suggested = SanitizeFileName(Path.GetFileNameWithoutExtension(pdfPath)) + ".audio.json";
+            return PdfAudioExportResult.Ok(export.ToJsonString(WriteOptions), suggested);
+        }
+        catch (Exception ex)
+        {
+            return PdfAudioExportResult.Fail($"导出当前书失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>解析并校验导入文件，生成差异摘要；不写盘。</summary>
+    public PdfAudioImportPreview PreviewImport(string pdfPath, string json)
+    {
+        try
+        {
+            var root = ParseRoot(json, out var parseError);
+            if (root == null) return PdfAudioImportPreview.Fail(parseError!);
+
+            int? version = GetInt(root, "schemaVersion");
+            if (version == null) return PdfAudioImportPreview.Fail("档案缺少 schemaVersion");
+            if (version > 3)
+                return PdfAudioImportPreview.Fail($"档案版本 {version} 高于当前支持版本 3，请升级程序后再导入");
+
+            var kind = (GetString(root, "kind") ?? "").Trim().ToLowerInvariant();
+            if (kind != "directory" && kind != "book")
+                return PdfAudioImportPreview.Fail("无法识别档案类型：kind 必须是 directory 或 book");
+
+            var books = GetObject(root, "books");
+            if (books == null || books.Count == 0)
+                return PdfAudioImportPreview.Fail("档案中没有可导入的书籍分区");
+
+            var fullPath = Path.GetFullPath(pdfPath);
+            var fileName = Path.GetFileName(fullPath);
+            if (kind == "book")
+            {
+                if (books.Count != 1)
+                    return PdfAudioImportPreview.Fail("单书档案只能包含一个书籍分区");
+                var key = books.First().Key;
+                if (!string.Equals(key, fileName, StringComparison.OrdinalIgnoreCase))
+                    return PdfAudioImportPreview.Fail(
+                        $"单书档案属于「{key}」，与当前打开的「{fileName}」不一致；请打开对应 PDF 后再导入");
+            }
+
+            var errors = new List<string>();
+            var warnings = new List<string>();
+
+            ValidatePlaybackScope(GetObject(root, "defaults"), "目录默认值", errors);
+            ValidateRules(GetArray(root, "rules"), "目录规则", errors, warnings);
+
+            var items = new List<string>();
+            var directory = GetDirectory(fullPath);
+            foreach (var kv in books)
+            {
+                if (string.IsNullOrWhiteSpace(kv.Key))
+                {
+                    errors.Add("书籍分区存在空文件名");
+                    continue;
+                }
+                if (kv.Value is not JsonObject book)
+                {
+                    errors.Add($"书籍「{kv.Key}」的分区不是 JSON 对象");
+                    continue;
+                }
+
+                ValidatePlaybackScope(book, $"「{kv.Key}」", errors);
+                ValidateRules(GetArray(GetObject(book, "rulePatch"), "extraRules"),
+                    $"「{kv.Key}」附加规则", errors, warnings);
+                ValidateOverrides(book, kv.Key, errors);
+
+                var overrides = GetObject(book, "overrides")?.Count ?? 0;
+                var single = GetString(book, "singleAudio");
+                var patch = GetObject(book, "rulePatch");
+                var patchText = patch == null
+                    ? "继承目录规则"
+                    : GetBool(patch, "replaceAll") == true
+                        ? "规则完全独立"
+                        : $"禁用 {(GetArray(patch, "disabledRuleIds")?.Count ?? 0)} 条 · 追加 {(GetArray(patch, "extraRules")?.Count ?? 0)} 条";
+                var scopeText = string.IsNullOrWhiteSpace(single) ? "按页匹配" : "整篇音频";
+                var missing = kind == "directory" && !File.Exists(Path.Combine(directory, kv.Key));
+                items.Add($"{(missing ? "[本目录无此文件] " : "")}{kv.Key}：覆盖 {overrides} 页 · {scopeText} · {patchText}");
+                if (missing)
+                    warnings.Add($"本目录没有「{kv.Key}」，将只保存其配置，打开该书时生效");
+            }
+
+            if (errors.Count > 0)
+                return PdfAudioImportPreview.Fail(string.Join(Environment.NewLine, errors.Take(5)));
+
+            int ruleCount = GetArray(root, "rules")?.Count ?? 0;
+            int sourceCount = GetArray(root, "sources")?.Count ?? 0;
+            return new PdfAudioImportPreview
+            {
+                Success = true,
+                Kind = kind,
+                Title = kind == "directory" ? "目录档案" : "单书档案",
+                Summary = kind == "directory"
+                    ? $"目录规则 {ruleCount} 条 · 来源 {sourceCount} 个 · 书籍 {books.Count} 本"
+                    : $"本书 {fileName} · 目录规则 {ruleCount} 条",
+                Items = items,
+                Warnings = warnings,
+                Root = root
+            };
+        }
+        catch (Exception ex)
+        {
+            return PdfAudioImportPreview.Fail($"导入校验失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>按预览结果写盘：规则按 id 合并、来源并集、默认值覆盖、按书合并并保留本机缓存。</summary>
+    public void ApplyImport(string pdfPath, PdfAudioImportPreview preview)
+    {
+        if (!preview.Success || preview.Root == null)
+            throw new InvalidOperationException(preview.Error ?? "导入预览无效");
+
+        var fullPath = Path.GetFullPath(pdfPath);
+        var directory = GetDirectory(fullPath);
+        var profilePath = GetProfilePath(fullPath);
+
+        lock (WriteLock)
+        {
+            JsonObject target;
+            if (File.Exists(profilePath))
+            {
+                target = ParseRoot(File.ReadAllText(profilePath), out var error)
+                         ?? throw new InvalidOperationException(error ?? "档案解析失败");
+            }
+            else
+            {
+                target = new JsonObject();
+            }
+
+            SetNode(target, "schemaVersion", 3);
+            if (GetObject(target, "scope") == null)
+                SetNode(target, "scope", BuildScopeNode(directory, fullPath));
+
+            SetNode(target, "sources", MergeSources(GetNode(target, "sources"), GetNode(preview.Root, "sources")));
+            SetNode(target, "rules", MergeRules(GetNode(target, "rules"), GetNode(preview.Root, "rules")));
+
+            var defaults = GetObject(target, "defaults") ?? new JsonObject();
+            var importedDefaults = GetObject(preview.Root, "defaults");
+            if (importedDefaults != null)
+                foreach (var kv in importedDefaults) defaults[kv.Key] = kv.Value?.DeepClone();
+            SetNode(target, "defaults", defaults);
+
+            var targetBooks = GetObject(target, "books") ?? new JsonObject();
+            var importedBooks = GetObject(preview.Root, "books")!;
+            foreach (var kv in importedBooks)
+            {
+                if (kv.Value is not JsonObject importedBook) continue;
+                var key = FindExistingBookKey(targetBooks, kv.Key) ?? kv.Key;
+                var existing = targetBooks[key] as JsonObject;
+                targetBooks[key] = MergeBookNode(existing, importedBook, directory, key);
+            }
+            SetNode(target, "books", targetBooks);
+
+            WriteAtomic(profilePath, target.ToJsonString(WriteOptions));
+        }
+    }
+
+    private static JsonObject BuildExportRoot(JsonObject root, string kind, JsonObject books)
+        => new()
+        {
+            ["schemaVersion"] = 3,
+            ["kind"] = kind,
+            ["exportedAt"] = DateTime.Now.ToString("O"),
+            ["scope"] = GetObject(root, "scope")?.DeepClone() ?? new JsonObject(),
+            ["defaults"] = GetObject(root, "defaults")?.DeepClone() ?? new JsonObject(),
+            ["sources"] = GetArray(root, "sources")?.DeepClone() ?? new JsonArray(),
+            ["rules"] = GetArray(root, "rules")?.DeepClone() ?? new JsonArray(),
+            ["books"] = StripCaches(books)
+        };
+
+    /// <summary>导出剔除缓存：缓存只留 AppData，不随档案迁移。</summary>
+    private static JsonObject StripCaches(JsonObject books)
+    {
+        var result = new JsonObject();
+        foreach (var kv in books)
+        {
+            if (kv.Value is JsonObject book)
+            {
+                var clone = (JsonObject)book.DeepClone();
+                RemoveIgnoreCase(clone, "cache");
+                result[kv.Key] = clone;
+            }
+            else
+            {
+                result[kv.Key] = kv.Value?.DeepClone();
+            }
+        }
+        return result;
+    }
+
+    private static JsonObject MergeBookNode(JsonObject? existing, JsonObject imported,
+        string directory, string key)
+    {
+        var book = existing != null ? (JsonObject)existing.DeepClone() : new JsonObject();
+
+        foreach (var field in new[] { "singleAudio", "playbackScope", "followPage", "syncPageOnTrackChange" })
+        {
+            if (TryGetNode(imported, field, out var node))
+                SetNode(book, field, node?.DeepClone());
+        }
+        if (TryGetNode(imported, "rulePatch", out var patchNode))
+            SetNode(book, "rulePatch", NormalizeRulePatch(patchNode));
+
+        var overrides = GetObject(book, "overrides") ?? new JsonObject();
+        var importedOverrides = GetObject(imported, "overrides");
+        if (importedOverrides != null)
+        {
+            foreach (var kv in importedOverrides)
+                if (kv.Value != null) overrides[kv.Key] = kv.Value.DeepClone();
+        }
+        SetNode(book, "overrides", overrides);
+
+        // 已有书：指纹、页数与缓存都是本机机器字段，保持原值
+        if (existing == null)
+        {
+            int pageCount = GetInt(imported, "pageCount") ?? 0;
+            SetNode(book, "pageCount", pageCount);
+            var pdfPath = Path.Combine(directory, key);
+            var quick = ComputeQuickFingerprint(pdfPath);
+            SetNode(book, "quickFingerprint", quick);
+            SetNode(book, "fullFingerprint", quick == null ? null : ComputeFullFingerprint(pdfPath, pageCount));
+        }
+
+        return book;
+    }
+
+    private static JsonNode? NormalizeRulePatch(JsonNode? node)
+    {
+        if (node is not JsonObject patch) return null;
+        return new JsonObject
+        {
+            ["disabledRuleIds"] = GetArray(patch, "disabledRuleIds")?.DeepClone() ?? new JsonArray(),
+            ["extraRules"] = GetArray(patch, "extraRules")?.DeepClone() ?? new JsonArray(),
+            ["replaceAll"] = GetBool(patch, "replaceAll") ?? false
+        };
+    }
+
+    private static JsonArray MergeSources(JsonNode? existing, JsonNode? imported)
+    {
+        var result = new JsonArray();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        seen.Add(AudioSource);
+        result.Add(AudioSource);
+
+        void AddAll(JsonNode? node)
+        {
+            if (node is not JsonArray array) return;
+            foreach (var item in array)
+            {
+                if (item is JsonValue value && value.TryGetValue<string>(out var text)
+                    && !string.IsNullOrWhiteSpace(text) && seen.Add(text))
+                    result.Add(text);
+            }
+        }
+
+        AddAll(existing);
+        AddAll(imported);
+        return result;
+    }
+
+    /// <summary>规则按 id 合并：已存在同 id 时导入内容覆盖，其余保留。</summary>
+    private static JsonArray MergeRules(JsonNode? existing, JsonNode? imported)
+    {
+        var order = new List<string>();
+        var byId = new Dictionary<string, JsonObject>(StringComparer.OrdinalIgnoreCase);
+        var idless = new List<JsonObject>();
+
+        void AddAll(JsonNode? node, bool overwrite)
+        {
+            if (node is not JsonArray array) return;
+            foreach (var item in array)
+            {
+                if (item is not JsonObject rule) continue;
+                var id = GetString(rule, "id");
+                if (string.IsNullOrWhiteSpace(id))
+                {
+                    if (overwrite) idless.Add((JsonObject)rule.DeepClone());
+                    continue;
+                }
+                if (!byId.ContainsKey(id)) order.Add(id);
+                if (overwrite || !byId.ContainsKey(id))
+                    byId[id] = (JsonObject)rule.DeepClone();
+            }
+        }
+
+        AddAll(existing, overwrite: false);
+        AddAll(imported, overwrite: true);
+
+        var result = new JsonArray();
+        foreach (var id in order) result.Add(byId[id]);
+        foreach (var rule in idless) result.Add(rule);
+        return result;
+    }
+
+    private static void ValidatePlaybackScope(JsonObject? owner, string label, List<string> errors)
+    {
+        if (owner == null) return;
+        var scope = GetString(owner, "playbackScope");
+        if (!string.IsNullOrWhiteSpace(scope)
+            && !Enum.TryParse<PlaybackScope>(scope, ignoreCase: true, out _))
+            errors.Add($"{label}的 playbackScope「{scope}」无效");
+    }
+
+    private static void ValidateRules(JsonArray? rules, string label, List<string> errors, List<string> warnings)
+    {
+        if (rules == null) return;
+        int index = 0;
+        foreach (var node in rules)
+        {
+            index++;
+            if (node is not JsonObject ruleNode)
+            {
+                errors.Add($"{label}第 {index} 条不是 JSON 对象");
+                continue;
+            }
+
+            AudioMatchRule? rule;
+            try
+            {
+                rule = JsonSerializer.Deserialize<AudioMatchRule>(ruleNode.ToJsonString(), ReadOptions);
+            }
+            catch (JsonException ex)
+            {
+                errors.Add($"{label}第 {index} 条格式错误：{ex.Message}");
+                continue;
+            }
+            if (rule == null)
+            {
+                errors.Add($"{label}第 {index} 条内容为空");
+                continue;
+            }
+            if (!rule.Enabled) continue;
+            if (string.IsNullOrWhiteSpace(rule.Name)) rule.Name = $"{label}第 {index} 条";
+
+            var regex = PdfAudioPatternCompiler.TryCompile(rule, out var diagnostic);
+            if (regex == null) errors.Add($"{label}「{rule.Name}」：{diagnostic}");
+            else if (!string.IsNullOrWhiteSpace(diagnostic)) warnings.Add($"{label}「{rule.Name}」：{diagnostic}");
+        }
+    }
+
+    private static void ValidateOverrides(JsonObject book, string bookKey, List<string> errors)
+    {
+        var overrides = GetObject(book, "overrides");
+        if (overrides == null) return;
+        int pageCount = GetInt(book, "pageCount") ?? 0;
+        foreach (var kv in overrides)
+        {
+            if (!int.TryParse(kv.Key, out var page) || page < 0)
+            {
+                errors.Add($"「{bookKey}」的覆盖项页码「{kv.Key}」无效");
+                continue;
+            }
+            if (pageCount > 0 && page >= pageCount)
+                errors.Add($"「{bookKey}」的覆盖项页码 {page + 1} 超出页数 {pageCount}");
+            if (kv.Value is not JsonObject)
+                errors.Add($"「{bookKey}」第 {page + 1} 页的覆盖项不是 JSON 对象");
+        }
+    }
+
+    private static JsonObject? ParseRoot(string json, out string? error)
+    {
+        error = null;
+        try
+        {
+            var node = JsonNode.Parse(json, null, new JsonDocumentOptions
+            {
+                CommentHandling = JsonCommentHandling.Skip,
+                AllowTrailingCommas = true
+            });
+            if (node is JsonObject root) return root;
+            error = "档案根节点必须是 JSON 对象";
+            return null;
+        }
+        catch (JsonException ex)
+        {
+            error = $"档案解析失败（第 {ex.LineNumber + 1} 行）：{ex.Message}";
+            return null;
+        }
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var builder = new StringBuilder();
+        foreach (var ch in name)
+            builder.Append(invalid.Contains(ch) ? '_' : ch);
+        var result = builder.ToString().Trim();
+        return string.IsNullOrEmpty(result) ? "audio" : result;
+    }
+
+    #endregion
+
+    #region JsonNode 大小写无关读写
+
+    private static JsonNode? GetNode(JsonObject obj, string name)
+        => TryGetNode(obj, name, out var node) ? node : null;
+
+    private static bool TryGetNode(JsonObject obj, string name, out JsonNode? node)
+    {
+        if (obj.TryGetPropertyValue(name, out node)) return true;
+        foreach (var kv in obj)
+        {
+            if (!string.Equals(kv.Key, name, StringComparison.OrdinalIgnoreCase)) continue;
+            node = kv.Value;
+            return true;
+        }
+        node = null;
+        return false;
+    }
+
+    private static JsonObject? GetObject(JsonObject? obj, string name)
+        => obj != null && TryGetNode(obj, name, out var node) ? node as JsonObject : null;
+
+    private static JsonArray? GetArray(JsonObject? obj, string name)
+        => obj != null && TryGetNode(obj, name, out var node) ? node as JsonArray : null;
+
+    private static string? GetString(JsonObject obj, string name)
+        => TryGetNode(obj, name, out var node)
+           && node is JsonValue value
+           && value.TryGetValue<string>(out var text)
+            ? text
+            : null;
+
+    private static int? GetInt(JsonObject obj, string name)
+    {
+        if (!TryGetNode(obj, name, out var node) || node is not JsonValue value) return null;
+        if (value.TryGetValue<int>(out var number)) return number;
+        return value.TryGetValue<string>(out var text) && int.TryParse(text, out var parsed) ? parsed : null;
+    }
+
+    private static bool? GetBool(JsonObject obj, string name)
+    {
+        if (!TryGetNode(obj, name, out var node) || node is not JsonValue value) return null;
+        if (value.TryGetValue<bool>(out var flag)) return flag;
+        return value.TryGetValue<string>(out var text) && bool.TryParse(text, out var parsed) ? parsed : null;
+    }
+
+    private static void SetNode(JsonObject obj, string name, JsonNode? node)
+    {
+        RemoveIgnoreCase(obj, name);
+        obj[name] = node;
+    }
+
+    private static void RemoveIgnoreCase(JsonObject obj, string name)
+    {
+        var keys = obj
+            .Where(kv => string.Equals(kv.Key, name, StringComparison.OrdinalIgnoreCase))
+            .Select(kv => kv.Key)
+            .ToList();
+        foreach (var key in keys) obj.Remove(key);
+    }
+
+    private static string? FindExistingBookKey(JsonObject books, string fileName)
+    {
+        foreach (var kv in books)
+            if (string.Equals(kv.Key, fileName, StringComparison.OrdinalIgnoreCase)) return kv.Key;
+        return null;
     }
 
     #endregion

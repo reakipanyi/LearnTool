@@ -669,10 +669,56 @@ public class PdfAudioTrackManager : IDisposable
         await LoadProfileAsync(_currentPdfPath, _pageCount);
     }
 
+    /// <summary>应用/清除书级规则补丁，并按“目录规则 + 补丁”重算生效规则。</summary>
+    public void ApplyRulePatch(PdfAudioRulePatch? patch)
+    {
+        if (_profile == null) return;
+
+        // 空补丁等同于完全继承，存 null 让档案更干净
+        if (patch != null && !patch.ReplaceAll
+            && patch.DisabledRuleIds.Count == 0 && patch.ExtraRules.Count == 0)
+            patch = null;
+
+        _profile.RulePatch = patch;
+        _profile.Rules = PdfAudioRuleMerger.Merge(_profile.DirectoryRules, patch);
+        SaveRulesAndRematch();
+    }
+
+    /// <summary>导出整个目录档案（不含缓存）。</summary>
+    public PdfAudioExportResult ExportDirectory()
+        => _currentPdfPath == null
+            ? PdfAudioExportResult.Fail("请先打开 PDF")
+            : _store.ExportDirectory(_currentPdfPath);
+
+    /// <summary>导出当前书档案（不含缓存）。</summary>
+    public PdfAudioExportResult ExportBook()
+        => _currentPdfPath == null
+            ? PdfAudioExportResult.Fail("请先打开 PDF")
+            : _store.ExportBook(_currentPdfPath);
+
+    /// <summary>解析导入内容并生成差异预览，不写盘。</summary>
+    public PdfAudioImportPreview PreviewImport(string json)
+        => _currentPdfPath == null
+            ? PdfAudioImportPreview.Fail("请先打开 PDF")
+            : _store.PreviewImport(_currentPdfPath, json);
+
+    /// <summary>按预览结果合并写入并重新加载当前书。</summary>
+    public async Task ApplyImportAsync(PdfAudioImportPreview preview)
+    {
+        if (_currentPdfPath == null) throw new InvalidOperationException("请先打开 PDF");
+        if (!preview.Success) throw new InvalidOperationException(preview.Error ?? "导入预览无效");
+
+        _store.ApplyImport(_currentPdfPath, preview);
+        await LoadProfileAsync(_currentPdfPath, _pageCount);
+    }
+
     /// <summary>规则或匹配方式变更后直接用已扫描曲目重算，无需再次扫描目录</summary>
     public void SaveRulesAndRematch()
     {
         if (_profile == null || _currentPdfPath == null) return;
+        // 无补丁时 Rules 就是目录规则原文，保持 DirectoryRules 同步供补丁对话框使用
+        if (_profile.RulePatch == null)
+            _profile.DirectoryRules = _profile.Rules.Select(PdfAudioRuleMerger.Clone).ToList();
         _result = _matcher.Match(_currentPdfPath, _pageCount, _profile.Tracks,
             _profile.Rules, _profile.ManualOverrides,
             _profile.MatchMode, _profile.SingleAudioFile);
@@ -690,6 +736,8 @@ public class PdfAudioTrackManager : IDisposable
     {
         if (_profile == null) return;
         _profile.Rules.Clear();
+        _profile.DirectoryRules.Clear();
+        _profile.RulePatch = null;
         _profile.ManualOverrides.Clear();
         _profile.PageIndex.Clear();
         _profile.SingleAudioFile = null;

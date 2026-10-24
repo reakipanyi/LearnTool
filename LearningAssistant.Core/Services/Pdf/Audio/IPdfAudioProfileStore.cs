@@ -8,4 +8,16 @@ public interface IPdfAudioProfileStore
     void Save(PdfAudioProfile profile);
     /// <summary>目录档案文件路径（dir-*.json），用于展示与排查。</summary>
     string GetProfilePath(string pdfPath);
+
+    /// <summary>导出整个目录档案（不含缓存）。</summary>
+    PdfAudioExportResult ExportDirectory(string pdfPath);
+
+    /// <summary>导出当前书档案（目录规则快照 + 单书分区，不含缓存）。</summary>
+    PdfAudioExportResult ExportBook(string pdfPath);
+
+    /// <summary>解析并校验导入内容，生成差异摘要；不写盘。</summary>
+    PdfAudioImportPreview PreviewImport(string pdfPath, string json);
+
+    /// <summary>按预览结果合并写入，保留本机缓存与其它书的分区。</summary>
+    void ApplyImport(string pdfPath, PdfAudioImportPreview preview);
 }

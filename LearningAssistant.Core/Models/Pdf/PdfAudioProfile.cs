@@ -7,7 +7,12 @@ namespace LearningAssistant.Models.Pdf
         public PdfAudioMatchMode MatchMode { get; set; } = PdfAudioMatchMode.PerPage;
         /// <summary>整篇单音频模式下选定的音频；PDF 同目录内存相对路径，目录外存绝对路径</summary>
         public string? SingleAudioFile { get; set; }
+        /// <summary>当前生效规则：目录规则按 RulePatch 合并后的结果</summary>
         public List<AudioMatchRule> Rules { get; set; } = new();
+        /// <summary>目录共享规则原文；Rules 为其与 RulePatch 合并后的结果</summary>
+        public List<AudioMatchRule> DirectoryRules { get; set; } = new();
+        /// <summary>书级规则增量补丁；null 表示完全继承目录规则</summary>
+        public PdfAudioRulePatch? RulePatch { get; set; }
         public Dictionary<int, string> ManualOverrides { get; set; } = new();
         /// <summary>页 → 音频相对路径的匹配结果缓存；用于指纹命中时恢复正则匹配，避免重开后丢失</summary>
         public Dictionary<int, string> PageIndex { get; set; } = new();

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using FluentAssertions;
 using LearningAssistant.Common;
 using LearningAssistant.Models.Pdf;
@@ -151,8 +152,262 @@ public class PdfAudioProfileStoreTests
         }
     }
 
-    private static string NewPdfPath()
-        => Path.Combine(Path.GetTempPath(), "lt_pdfaudio_" + Guid.NewGuid().ToString("N"), "a.pdf");
+    [Fact]
+    public void 导出目录档案_保留用户字段且剔除缓存()
+    {
+        var store = new PdfAudioProfileStore();
+        var pdf = NewPdfPath();
+        try
+        {
+            var profile = new PdfAudioProfile { PdfPath = pdf, PageCount = 5 };
+            profile.Rules.Add(new AudioMatchRule { Id = "r1", Name = "规则", FileNamePattern = @"(\d+)" });
+            profile.ManualOverrides[2] = "m2.mp3";
+            profile.PageIndex[0] = "u1.mp3";
+            store.Save(profile);
+
+            var export = store.ExportDirectory(pdf);
+            export.Success.Should().BeTrue();
+            export.Json.Should().NotBeNullOrWhiteSpace();
+            export.Json.Should().NotContain("cache");
+            export.Json.Should().NotContain("Cache");
+            export.SuggestedFileName.Should().EndWith(".audio.json");
+
+            using var document = JsonDocument.Parse(export.Json!);
+            document.RootElement.GetProperty("kind").GetString().Should().Be("directory");
+            document.RootElement.GetProperty("books").TryGetProperty("a.pdf", out var book).Should().BeTrue();
+            book.GetProperty("overrides").TryGetProperty("2", out _).Should().BeTrue();
+        }
+        finally
+        {
+            Cleanup(store, pdf);
+        }
+    }
+
+    [Fact]
+    public void 导入单书档案_只合并同名书且保留本机缓存()
+    {
+        var store = new PdfAudioProfileStore();
+        var sourceDir = NewTempDir();
+        var targetDir = NewTempDir();
+        var sourcePdf = Path.Combine(sourceDir, "a.pdf");
+        var targetA = Path.Combine(targetDir, "a.pdf");
+        var targetB = Path.Combine(targetDir, "b.pdf");
+        try
+        {
+            var source = new PdfAudioProfile
+            {
+                PdfPath = sourcePdf,
+                PageCount = 5,
+                SingleAudioFile = "full.mp3",
+                PlaybackScope = PlaybackScope.WholeBook
+            };
+            source.ManualOverrides[1] = "s1.mp3";
+            store.Save(source);
+
+            var export = store.ExportBook(sourcePdf);
+            export.Success.Should().BeTrue();
+
+            var a = new PdfAudioProfile { PdfPath = targetA, PageCount = 5 };
+            a.PageIndex[0] = "local.mp3";
+            store.Save(a);
+            var b = new PdfAudioProfile { PdfPath = targetB, PageCount = 8, SingleAudioFile = "b-full.mp3" };
+            b.ManualOverrides[3] = "b3.mp3";
+            store.Save(b);
+
+            var preview = store.PreviewImport(targetA, export.Json!);
+            preview.Success.Should().BeTrue(preview.Error);
+            preview.Kind.Should().Be("book");
+
+            store.ApplyImport(targetA, preview);
+
+            var loadedA = store.Load(targetA).Profile!;
+            loadedA.SingleAudioFile.Should().Be("full.mp3");
+            loadedA.PlaybackScope.Should().Be(PlaybackScope.WholeBook);
+            loadedA.ManualOverrides[1].Should().Be("s1.mp3");
+            loadedA.PageIndex[0].Should().Be("local.mp3", "导入保留本机缓存");
+
+            var loadedB = store.Load(targetB).Profile!;
+            loadedB.SingleAudioFile.Should().Be("b-full.mp3");
+            loadedB.ManualOverrides[3].Should().Be("b3.mp3");
+        }
+        finally
+        {
+            Cleanup(store, sourcePdf);
+            Cleanup(store, targetA);
+            Cleanup(store, targetB);
+        }
+    }
+
+    [Fact]
+    public void 导入档案_版本过新拒绝()
+    {
+        var store = new PdfAudioProfileStore();
+        var pdf = NewPdfPath();
+        try
+        {
+            var json = """
+                       { "schemaVersion": 4, "kind": "book", "books": { "a.pdf": {} } }
+                       """;
+            var preview = store.PreviewImport(pdf, json);
+            preview.Success.Should().BeFalse();
+            preview.Error.Should().Contain("高于当前支持版本");
+        }
+        finally
+        {
+            Cleanup(store, pdf);
+        }
+    }
+
+    [Fact]
+    public void 导入单书档案_文件名不一致拒绝()
+    {
+        var store = new PdfAudioProfileStore();
+        var pdf = NewPdfPath();
+        try
+        {
+            var json = """
+                       { "schemaVersion": 3, "kind": "book", "books": { "other.pdf": {} } }
+                       """;
+            var preview = store.PreviewImport(pdf, json);
+            preview.Success.Should().BeFalse();
+            preview.Error.Should().Contain("不一致");
+        }
+        finally
+        {
+            Cleanup(store, pdf);
+        }
+    }
+
+    [Fact]
+    public void 规则补丁_持久化并按目录规则合并()
+    {
+        var store = new PdfAudioProfileStore();
+        var pdf = NewPdfPath();
+        var other = Path.Combine(Path.GetDirectoryName(pdf)!, "b.pdf");
+        try
+        {
+            var seed = new PdfAudioProfile { PdfPath = pdf, PageCount = 10 };
+            seed.Rules.Add(new AudioMatchRule { Id = "r1", Name = "保留", FileNamePattern = @"a(\d+)" });
+            seed.Rules.Add(new AudioMatchRule { Id = "r2", Name = "禁用", FileNamePattern = @"b(\d+)" });
+            store.Save(seed);
+
+            var profile = store.Load(pdf).Profile!;
+            profile.RulePatch = new PdfAudioRulePatch
+            {
+                DisabledRuleIds = new List<string> { "r2" },
+                ExtraRules = new List<AudioMatchRule>
+                {
+                    new() { Id = "r3", Name = "本书追加", FileNamePattern = @"c(\d+)" }
+                }
+            };
+            profile.Rules = PdfAudioRuleMerger.Merge(profile.DirectoryRules, profile.RulePatch);
+            store.Save(profile);
+
+            var loaded = store.Load(pdf).Profile!;
+            loaded.RulePatch.Should().NotBeNull();
+            loaded.DirectoryRules.Select(r => r.Id).Should().BeEquivalentTo(new[] { "r1", "r2" });
+            loaded.Rules.Select(r => r.Id).Should().BeEquivalentTo(new[] { "r1", "r3" });
+
+            // 同目录其它书保存时只动自己的分区，不应覆盖目录规则或本书补丁
+            var otherProfile = store.Load(other).Profile!;
+            otherProfile.ManualOverrides[0] = "b0.mp3";
+            store.Save(otherProfile);
+
+            var again = store.Load(pdf).Profile!;
+            again.RulePatch.Should().NotBeNull();
+            again.DirectoryRules.Select(r => r.Id).Should().BeEquivalentTo(new[] { "r1", "r2" });
+            again.Rules.Select(r => r.Id).Should().BeEquivalentTo(new[] { "r1", "r3" });
+        }
+        finally
+        {
+            Cleanup(store, pdf);
+            Cleanup(store, other);
+        }
+    }
+
+    [Fact]
+    public void 导入目录档案_规则按id合并且不覆盖其它书()
+    {
+        var store = new PdfAudioProfileStore();
+        var directory = NewTempDir();
+        var pdfA = Path.Combine(directory, "a.pdf");
+        var pdfB = Path.Combine(directory, "b.pdf");
+        try
+        {
+            var a = new PdfAudioProfile { PdfPath = pdfA, PageCount = 5 };
+            a.Rules.Add(new AudioMatchRule { Id = "r1", Name = "旧规则一", FileNamePattern = @"old(\d+)" });
+            a.Rules.Add(new AudioMatchRule { Id = "r3", Name = "本地规则三", FileNamePattern = @"local(\d+)" });
+            a.ManualOverrides[0] = "a0.mp3";
+            a.PageIndex[0] = "a0.mp3";
+            store.Save(a);
+
+            var b = store.Load(pdfB).Profile!;
+            b.PageCount = 8;
+            b.SingleAudioFile = "b-full.mp3";
+            b.ManualOverrides[2] = "b2.mp3";
+            store.Save(b);
+
+            var json = """
+                       {
+                         "schemaVersion": 3,
+                         "kind": "directory",
+                         "sources": ["audio", "D:\\ext\\audio"],
+                         "defaults": { "playbackScope": "FollowPage", "includeSubDirectories": true },
+                         "rules": [
+                           { "id": "r1", "name": "新规则一", "fileNamePattern": "new(\\d+)", "patternMode": "Regex", "mapMode": "PageIndex", "enabled": true },
+                           { "id": "r2", "name": "新增规则二", "fileNamePattern": "extra(\\d+)", "patternMode": "Regex", "mapMode": "PageIndex", "enabled": true }
+                         ],
+                         "books": {
+                           "a.pdf": {
+                             "pageCount": 5,
+                             "singleAudio": "full.mp3",
+                             "playbackScope": "WholeBook",
+                             "overrides": { "1": { "path": "s1.mp3", "source": "manual", "createdAt": "2026-10-20T10:12:00" } },
+                             "rulePatch": { "disabledRuleIds": ["r3"], "extraRules": [], "replaceAll": false }
+                           }
+                         }
+                       }
+                       """;
+
+            var preview = store.PreviewImport(pdfA, json);
+            preview.Success.Should().BeTrue(preview.Error);
+            preview.Kind.Should().Be("directory");
+
+            store.ApplyImport(pdfA, preview);
+
+            var loadedA = store.Load(pdfA).Profile!;
+            loadedA.Rules.Single(r => r.Id == "r1").Name.Should().Be("新规则一");
+            loadedA.DirectoryRules.Select(r => r.Id).Should().BeEquivalentTo(new[] { "r1", "r2", "r3" });
+            loadedA.Rules.Select(r => r.Id).Should().BeEquivalentTo(new[] { "r1", "r2" });
+            loadedA.RulePatch.Should().NotBeNull();
+            loadedA.RulePatch!.DisabledRuleIds.Should().Contain("r3");
+            loadedA.SingleAudioFile.Should().Be("full.mp3");
+            loadedA.ManualOverrides[0].Should().Be("a0.mp3");
+            loadedA.ManualOverrides[1].Should().Be("s1.mp3");
+            loadedA.PageIndex[0].Should().Be("a0.mp3", "导入保留本机缓存");
+            loadedA.IncludeSubDirectories.Should().BeTrue();
+            loadedA.ExternalAudioDirectories.Should().Contain(@"D:\ext\audio");
+
+            var loadedB = store.Load(pdfB).Profile!;
+            loadedB.SingleAudioFile.Should().Be("b-full.mp3");
+            loadedB.ManualOverrides[2].Should().Be("b2.mp3");
+            loadedB.ManualOverrides.Should().NotContainKey(0);
+        }
+        finally
+        {
+            Cleanup(store, pdfA);
+            Cleanup(store, pdfB);
+        }
+    }
+
+    private static string NewTempDir()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "lt_pdfaudio_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        return directory;
+    }
+
+    private static string NewPdfPath() => Path.Combine(NewTempDir(), "a.pdf");
 
     private static string LegacyPath(string pdfPath)
     {

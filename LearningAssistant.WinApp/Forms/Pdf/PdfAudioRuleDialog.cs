@@ -42,7 +42,7 @@ public partial class PdfAudioRuleDialog : Form
 
         var pdfName = Path.GetFileName(_profile.PdfPath);
         if (!string.IsNullOrEmpty(pdfName))
-            Text = $"音频匹配规则 - {pdfName}（仅作用于本文件）";
+            Text = $"音频匹配规则 - {pdfName}（作用于本目录所有书）";
 
         cmbSyntax.Items.Add("正则表达式");
         cmbSyntax.Items.Add("通配符");
@@ -129,7 +129,8 @@ public partial class PdfAudioRuleDialog : Form
     {
         if (_rules.Count == 0) return;
         if (MessageBox.Show(this,
-                $"确定清空当前文件的 {_rules.Count} 条匹配规则？\n点「保存并关闭」后生效，只影响本 PDF。",
+                $"确定清空本目录共享的 {_rules.Count} 条匹配规则？\n点「保存并关闭」后生效，会影响本目录所有书。" +
+                "\n如需只调整本书，请改用「本书规则补丁…」。",
                 "清空规则", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
             return;
 
@@ -142,9 +143,9 @@ public partial class PdfAudioRuleDialog : Form
     {
         var pdfName = string.IsNullOrEmpty(_profile.PdfPath) ? "当前文件" : Path.GetFileName(_profile.PdfPath);
         if (MessageBox.Show(this,
-                $"将清空「{pdfName}」的全部匹配规则、手动匹配、匹配缓存与整篇音频设置，恢复默认匹配。\n" +
-                "该操作立即生效，且只影响这一个 PDF，确定继续？",
-                "重置本文件", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+                $"将清空本目录共享的匹配规则与「{pdfName}」的书级补丁、手动匹配、匹配缓存、整篇音频设置。\n" +
+                "该操作立即生效，规则变更会影响本目录所有书，确定继续？",
+                "重置本目录规则", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
             return;
 
         _manager?.ResetMatching();

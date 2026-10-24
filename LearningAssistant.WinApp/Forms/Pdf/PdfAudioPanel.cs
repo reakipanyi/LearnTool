@@ -14,11 +14,17 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
     private readonly ToggleSwitch _chkFollow = new();
     private readonly ContextMenuStrip _menuSource = new();
     private readonly ContextMenuStrip _menuMatch = new();
+    private readonly ContextMenuStrip _menuBook = new();
     private readonly ToolStripMenuItem _menuAddDir = new("添加音频目录…");
     private readonly ToolStripMenuItem _menuRescan = new("重新扫描");
     private readonly ToolStripMenuItem _menuSubDir = new("包含子目录");
     private readonly ToolStripMenuItem _menuAi = new("AI 自动匹配…");
     private readonly ToolStripMenuItem _menuRules = new("匹配规则…");
+    private readonly ToolStripMenuItem _menuRulePatch = new("本书规则补丁…");
+    private readonly ToolStripMenuItem _menuSwitchBook = new("在文件页切换书籍…");
+    private readonly ToolStripMenuItem _menuExportDirectory = new("导出目录档案…");
+    private readonly ToolStripMenuItem _menuExportBook = new("导出当前书…");
+    private readonly ToolStripMenuItem _menuImport = new("导入匹配档案…");
 
     private bool _suppressAutoPlay;
     private bool _suppressMode;
@@ -71,12 +77,32 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
             _menuSubDir.Checked = _manager.Profile?.IncludeSubDirectories == true;
         };
 
-        _menuMatch.Items.AddRange(new ToolStripItem[] { _menuAi, _menuRules });
+        _menuBook.Items.AddRange(new ToolStripItem[]
+        {
+            _menuSwitchBook, new ToolStripSeparator(),
+            _menuExportDirectory, _menuExportBook, new ToolStripSeparator(), _menuImport
+        });
+        _menuBook.Opening += (_, _) =>
+        {
+            bool hasBook = _manager != null && !string.IsNullOrEmpty(_form.CurrentPdfPath);
+            _menuExportDirectory.Enabled = hasBook;
+            _menuExportBook.Enabled = hasBook;
+            _menuImport.Enabled = hasBook;
+            _menuSwitchBook.Enabled = hasBook;
+        };
+
+        _menuMatch.Items.AddRange(new ToolStripItem[] { _menuAi, _menuRulePatch, _menuRules });
         _menuMatch.Opening += (_, _) =>
         {
             if (_manager == null) return;
             bool single = _manager.Profile?.MatchMode == PdfAudioMatchMode.SingleAudio;
             _menuAi.Enabled = !single;
+            _menuRulePatch.Enabled = !single;
+            // 有书级补丁时 Rules 是合并结果，再用整表编辑器会覆盖目录规则
+            _menuRules.Enabled = !single && _manager.Profile?.RulePatch == null;
+            _menuRules.ToolTipText = _manager.Profile?.RulePatch == null
+                ? "编辑本目录共享的匹配规则"
+                : "本书已使用规则补丁，请用「本书规则补丁…」调整";
         };
 
         pageCard.Resize += (_, _) => pageCard.Invalidate();
@@ -117,9 +143,9 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
 
     private void WireEvents()
     {
-        _labelBook.Click += (_, _) => ShowFilesTab();
-        _btnBookSwitch.Click += (_, _) => ShowFilesTab();
-        _tooltip.SetToolTip(_btnBookSwitch, "在左侧文件页切换书籍");
+        _labelBook.Click += (_, _) => ShowBookMenu();
+        _btnBookSwitch.Click += (_, _) => ShowBookMenu();
+        _tooltip.SetToolTip(_btnBookSwitch, "切换书籍，或导入/导出匹配档案");
 
         _segments.SelectedIndexChanged += (_, _) => OnModeSegmentChanged();
         _chkFollow.CheckedChanged += (_, _) =>
@@ -141,6 +167,11 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
 
         _menuAi.Click += async (_, _) => await OnAiMatchAsync();
         _menuRules.Click += (_, _) => OnRules();
+        _menuRulePatch.Click += (_, _) => OnRulePatch();
+        _menuSwitchBook.Click += (_, _) => ShowFilesTab();
+        _menuExportDirectory.Click += (_, _) => OnExport(exportDirectory: true);
+        _menuExportBook.Click += (_, _) => OnExport(exportDirectory: false);
+        _menuImport.Click += async (_, _) => await OnImportAsync();
         _menuAddDir.Click += async (_, _) => await OnAddDirectoryAsync();
         _menuRescan.Click += async (_, _) =>
         {
@@ -172,6 +203,12 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         var tabs = _form.TabControlLeft;
         if (tabs == null || tabs.TabPages.Count == 0) return;
         tabs.SelectedIndex = 0;
+    }
+
+    private void ShowBookMenu()
+    {
+        if (_manager?.Profile == null) return;
+        _menuBook.Show(_btnBookSwitch, new Point(0, _btnBookSwitch.Height));
     }
 
     private void ShowSourceMenu()
@@ -719,6 +756,185 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
             _manager.SaveRulesAndRematch();
     }
 
+    /// <summary>编辑书级规则补丁：禁用目录规则、追加规则或完全独立。</summary>
+    private void OnRulePatch()
+    {
+        if (_manager.Profile == null) { _form.ShowWarning("尚未加载 profile"); return; }
+        using var dlg = new PdfAudioRulePatchDialog(_manager.Profile);
+        if (dlg.ShowDialog(_form.Form) != DialogResult.OK) return;
+
+        _manager.ApplyRulePatch(dlg.Patch);
+        RefreshData();
+        ShowStatus(dlg.Patch == null ? "已恢复继承目录规则" : "已应用本书规则补丁", isError: false);
+    }
+
+    /// <summary>导出目录档案或当前书档案，由用户选择保存位置。</summary>
+    private void OnExport(bool exportDirectory)
+    {
+        var result = exportDirectory ? _manager.ExportDirectory() : _manager.ExportBook();
+        if (!result.Success || string.IsNullOrEmpty(result.Json))
+        {
+            _form.ShowWarning(result.Error ?? "当前没有可导出的匹配档案");
+            return;
+        }
+
+        using var dialog = new SaveFileDialog
+        {
+            Title = exportDirectory ? "导出目录档案" : "导出当前书",
+            Filter = "音频匹配档案|*.json",
+            FileName = result.SuggestedFileName ?? "audio.json",
+            InitialDirectory = Path.GetDirectoryName(_form.CurrentPdfPath) ?? ""
+        };
+        if (dialog.ShowDialog(_form.Form) != DialogResult.OK) return;
+
+        try
+        {
+            File.WriteAllText(dialog.FileName, result.Json);
+            _form.ShowMessage($"已导出匹配档案：{dialog.FileName}", "导出匹配档案");
+        }
+        catch (Exception ex)
+        {
+            HandleAudioError("导出匹配档案失败", ex);
+        }
+    }
+
+    /// <summary>选择档案 → 校验 → 差异预览 → 确认后按书合并。</summary>
+    private async Task OnImportAsync()
+    {
+        if (string.IsNullOrEmpty(_form.CurrentPdfPath)) { _form.ShowWarning("请先打开 PDF"); return; }
+
+        using var dialog = new OpenFileDialog
+        {
+            Title = "导入匹配档案",
+            Filter = "音频匹配档案|*.json|所有文件|*.*",
+            InitialDirectory = Path.GetDirectoryName(_form.CurrentPdfPath) ?? ""
+        };
+        if (dialog.ShowDialog(_form.Form) != DialogResult.OK) return;
+
+        string json;
+        try
+        {
+            json = File.ReadAllText(dialog.FileName);
+        }
+        catch (Exception ex)
+        {
+            HandleAudioError("读取匹配档案失败", ex);
+            return;
+        }
+
+        var preview = _manager.PreviewImport(json);
+        if (!preview.Success)
+        {
+            _form.ShowWarning($"导入失败：{preview.Error}");
+            return;
+        }
+        if (!ShowImportPreview(preview)) return;
+
+        _menuImport.Enabled = false;
+        UseWaitCursor = true;
+        try
+        {
+            await _manager.ApplyImportAsync(preview);
+            var error = _manager.LoadErrorMessage;
+            if (!string.IsNullOrEmpty(error))
+            {
+                ShowStatus(error, isError: true);
+                _form.ShowWarning(error);
+                return;
+            }
+            RefreshData();
+            OnCurrentPageChanged();
+            ShowStatus($"已导入{preview.Title}：{preview.Summary}", isError: false);
+        }
+        catch (Exception ex)
+        {
+            HandleAudioError("导入匹配档案失败", ex);
+        }
+        finally
+        {
+            _menuImport.Enabled = true;
+            UseWaitCursor = false;
+        }
+    }
+
+    /// <summary>差异预览确认框：展示类型、摘要、逐书差异与警告。</summary>
+    private bool ShowImportPreview(PdfAudioImportPreview preview)
+    {
+        using var dialog = new Form
+        {
+            Text = "导入匹配档案",
+            StartPosition = FormStartPosition.CenterParent,
+            ClientSize = new Size(560, 460),
+            MinimumSize = new Size(480, 360),
+            Font = Font,
+            MinimizeBox = false,
+            MaximizeBox = false,
+            ShowInTaskbar = false
+        };
+
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 4,
+            Padding = new Padding(14, 12, 14, 10)
+        };
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+
+        root.Controls.Add(new Label
+        {
+            AutoSize = true,
+            MaximumSize = new Size(520, 0),
+            Text = $"{preview.Title} · {preview.Summary}",
+            Font = new Font(Font, FontStyle.Bold),
+            Margin = new Padding(0, 0, 0, 8)
+        }, 0, 0);
+
+        var items = new ListBox
+        {
+            Dock = DockStyle.Fill,
+            IntegralHeight = false,
+            SelectionMode = SelectionMode.None,
+            Margin = new Padding(0, 0, 0, 6)
+        };
+        foreach (var item in preview.Items) items.Items.Add(item);
+        root.Controls.Add(items, 0, 1);
+
+        var warningText = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            Multiline = true,
+            ReadOnly = true,
+            ScrollBars = ScrollBars.Vertical,
+            Height = 64,
+            Text = string.Join(Environment.NewLine, preview.Warnings),
+            ForeColor = Color.FromArgb(180, 100, 0),
+            BorderStyle = BorderStyle.FixedSingle,
+            Visible = preview.Warnings.Count > 0
+        };
+        root.Controls.Add(warningText, 0, 2);
+
+        var buttons = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            Padding = new Padding(0, 8, 0, 0)
+        };
+        var btnImport = new Button { Text = "导入", Size = new Size(76, 30), DialogResult = DialogResult.OK, Margin = new Padding(6, 0, 0, 0) };
+        var btnCancel = new Button { Text = "取消", Size = new Size(76, 30), DialogResult = DialogResult.Cancel, Margin = new Padding(6, 0, 0, 0) };
+        buttons.Controls.Add(btnImport);
+        buttons.Controls.Add(btnCancel);
+        root.Controls.Add(buttons, 0, 3);
+
+        dialog.Controls.Add(root);
+        dialog.AcceptButton = btnImport;
+        dialog.CancelButton = btnCancel;
+        return dialog.ShowDialog(_form.Form) == DialogResult.OK;
+    }
+
     /// <summary>选择外部音频目录并合并到当前曲目列表</summary>
     private async Task OnAddDirectoryAsync()
     {
@@ -871,6 +1087,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
             }
             _menuSource.Dispose();
             _menuMatch.Dispose();
+            _menuBook.Dispose();
             _listFont?.Dispose();
             components?.Dispose();
         }
