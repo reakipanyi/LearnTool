@@ -55,6 +55,7 @@ public sealed class PdfAudioPlayerBar : UserControl
     private readonly ToolStripMenuItem _menuSetA = new("设复读起点 A");
     private readonly ToolStripMenuItem _menuSetB = new("设复读终点 B");
     private readonly ToolStripMenuItem _menuClearAb = new("清除 A-B 复读");
+    private readonly ToolStripMenuItem _menuAutoSegment = new("自动断句（建议切片）");
 
     private bool _dragging;
     private double _lastVolume = 1.0;
@@ -289,7 +290,16 @@ public sealed class PdfAudioPlayerBar : UserControl
         _loopMenu.Items.Add(_menuSetA);
         _loopMenu.Items.Add(_menuSetB);
         _loopMenu.Items.Add(_menuClearAb);
-        _loopMenu.Opening += (_, _) => UpdateAbLoopMenu();
+        _loopMenu.Items.Add(new ToolStripSeparator());
+        _menuAutoSegment.Click += async (_, _) => await RunAutoSegmentAsync();
+        _loopMenu.Items.Add(_menuAutoSegment);
+        _loopMenu.Opening += (_, _) =>
+        {
+            UpdateAbLoopMenu();
+            _menuAutoSegment.Enabled = _form.CurrentPdfPath != null
+                                      && _manager.CurrentTrack != null
+                                      && !SessionActive;
+        };
         return right;
     }
 
@@ -791,6 +801,41 @@ public sealed class PdfAudioPlayerBar : UserControl
                 _btnMark.Enabled = _manager.CurrentTrack != null && _form.AudioRecorderService != null;
                 _tooltip.SetToolTip(_btnMark, "跟读打点：播放中点按打断并录音");
                 break;
+        }
+    }
+
+    /// <summary>对当前曲目做能量 VAD 断句，弹出建议切片供勾选/改起止后保存。</summary>
+    private async Task RunAutoSegmentAsync()
+    {
+        string? pdfPath = _form.CurrentPdfPath;
+        var track = _manager.CurrentTrack;
+        if (string.IsNullOrWhiteSpace(pdfPath) || track == null || !File.Exists(track.FilePath))
+        {
+            _manager.SetHint("当前页无可用音频，无法自动断句。");
+            return;
+        }
+
+        bool wasPlaying = _manager.IsPlaying;
+        if (wasPlaying) _manager.Pause();
+
+        using var dialog = new VadSegmentReviewForm(
+            pdfPath,
+            _form.CurrentPageIndex,
+            track.FilePath,
+            _manager.Profile?.PlaybackSpeed ?? 1.0,
+            PdfSidebarTheme.IsDarkFor(this));
+
+        var result = dialog.ShowDialog(FindForm());
+        if (IsDisposed) return;
+
+        if (result == DialogResult.OK && dialog.SavedSegmentCount > 0)
+        {
+            _manager.SetHint($"已生成 {dialog.SavedSegmentCount} 段建议切片 · 可打开跟读练习。");
+            RefreshTrack();
+        }
+        else if (wasPlaying)
+        {
+            _manager.Play();
         }
     }
 
