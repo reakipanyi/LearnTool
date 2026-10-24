@@ -21,7 +21,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
     private readonly ToolStripMenuItem _menuAi = new("AI 自动匹配…");
     private readonly ToolStripMenuItem _menuRules = new("匹配规则…");
     private readonly ToolStripMenuItem _menuRulePatch = new("本书规则补丁…");
-    private readonly ToolStripMenuItem _menuSwitchBook = new("在文件页切换书籍…");
+    private readonly ToolStripMenuItem _menuSwitchBook = new("打开其他书籍…");
     private readonly ToolStripMenuItem _menuEditJson = new("编辑匹配档案（JSON）…");
     private readonly ToolStripMenuItem _menuExportDirectory = new("导出目录档案…");
     private readonly ToolStripMenuItem _menuExportBook = new("导出当前书…");
@@ -241,7 +241,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _menuAi.Click += async (_, _) => await OnAiMatchAsync();
         _menuRules.Click += (_, _) => OnRules();
         _menuRulePatch.Click += (_, _) => OnRulePatch();
-        _menuSwitchBook.Click += (_, _) => ShowFilesTab();
+        _menuSwitchBook.Click += (_, _) => OpenAnotherBook();
         _menuEditJson.Click += async (_, _) => await OnEditProfileJsonAsync();
         _menuExportDirectory.Click += (_, _) => OnExport(exportDirectory: true);
         _menuExportBook.Click += (_, _) => OnExport(exportDirectory: false);
@@ -273,11 +273,34 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _manager.SettingsChanged += OnSettingsChanged;
     }
 
-    private void ShowFilesTab()
+    /// <summary>直接选择另一本 PDF 打开，不再把侧栏强制切回文件页。</summary>
+    private async void OpenAnotherBook()
     {
-        var tabs = _form.TabControlLeft;
-        if (tabs == null || tabs.TabPages.Count == 0) return;
-        tabs.SelectedIndex = 0;
+        string? currentPath = _form?.CurrentPdfPath;
+        using var dialog = new OpenFileDialog
+        {
+            Title = "打开其他书籍",
+            Filter = "PDF 文件 (*.pdf)|*.pdf",
+            CheckFileExists = true
+        };
+        if (!string.IsNullOrEmpty(currentPath))
+        {
+            string? directory = Path.GetDirectoryName(currentPath);
+            if (!string.IsNullOrEmpty(directory))
+                dialog.InitialDirectory = directory;
+        }
+
+        if (dialog.ShowDialog(FindForm()) != DialogResult.OK) return;
+
+        try
+        {
+            if (_form?.Presenter != null)
+                await _form.Presenter.LoadPdf(dialog.FileName);
+        }
+        catch (Exception ex)
+        {
+            HandleAudioError("打开书籍失败", ex);
+        }
     }
 
     private void ShowBookMenu()

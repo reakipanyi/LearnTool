@@ -12,6 +12,8 @@ public partial class PdfStudyPanel : UserControl
         // 卡片内容区由面板自行挂载，避免 VS 设计器回写时丢失
         overviewCard.Body.Controls.Add(overviewLayout);
         actionCard.Body.Controls.Add(actionLayout);
+        audioCard.Body.Controls.Add(audioLayout);
+        practiceCard.Body.Controls.Add(practiceLayout);
         aiCard.Body.Controls.Add(aiLayout);
         listCard.Body.Controls.Add(itemList);
         root.Resize += (_, _) => UpdateRowHeights();
@@ -47,6 +49,16 @@ public partial class PdfStudyPanel : UserControl
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Button FlashcardsButton => flashcardsButton;
+
+    /// <summary>「打开配套音频」按钮。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button AudioOpenButton => audioOpenButton;
+
+    /// <summary>「整页录音」按钮。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button RecordingButton => recordingButton;
 
     /// <summary>「开始本页跟读」按钮。</summary>
     [Browsable(false)]
@@ -89,7 +101,7 @@ public partial class PdfStudyPanel : UserControl
         int buttonHeight = Math.Max(32, addHighlightsButton.Font.Height + 16);
         int statHeight = Math.Max(26, highlightCount.Font.Height + 12);
 
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < 2; i++)
             actionLayout.RowStyles[i].Height = buttonHeight + 6;
 
         int cardWidth = Math.Max(140, root.ClientSize.Width - 12);
@@ -99,14 +111,20 @@ public partial class PdfStudyPanel : UserControl
             TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix).Height);
 
         float overviewHeight = statHeight * 3 + 44;
-        float actionHeight = 40 + 3 * (buttonHeight + 6) + hintHeight + 6 + 4;
+        float actionHeight = 40 + 2 * (buttonHeight + 6) + hintHeight + 6 + 4;
+        float audioHeight = 40 + buttonHeight + 8;
+        float practiceHeight = 40 + 2 * (buttonHeight + 4);
         float aiHeight = 40 + 3 * (buttonHeight + 4);
 
         if (Math.Abs(root.RowStyles[1].Height - overviewHeight) > 0.5f)
             root.RowStyles[1].Height = overviewHeight;
         if (Math.Abs(root.RowStyles[2].Height - actionHeight) > 0.5f)
             root.RowStyles[2].Height = actionHeight;
-        if (root.RowStyles.Count > 3 && Math.Abs(root.RowStyles[3].Height - aiHeight) > 0.5f)
-            root.RowStyles[3].Height = aiHeight;
+        if (root.RowStyles.Count > 3 && Math.Abs(root.RowStyles[3].Height - audioHeight) > 0.5f)
+            root.RowStyles[3].Height = audioHeight;
+        if (root.RowStyles.Count > 4 && Math.Abs(root.RowStyles[4].Height - practiceHeight) > 0.5f)
+            root.RowStyles[4].Height = practiceHeight;
+        if (root.RowStyles.Count > 5 && Math.Abs(root.RowStyles[5].Height - aiHeight) > 0.5f)
+            root.RowStyles[5].Height = aiHeight;
     }
 }

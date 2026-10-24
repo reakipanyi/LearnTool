@@ -141,14 +141,10 @@ namespace LearningAssistant.Forms.Pdf
         private Button? _buttonStudyShadowing;
         private FlowLayoutPanel? _studyItemList;
         private PdfStudyPanel? _studyPanel;
-        // 阶段1：音频页暂时并入学习页，作为学习页内的整页视图，阶段2再迁入抽屉
-        private TableLayoutPanel? _studyAudioLayout;
-        private Panel? _studyAudioOverlay;
         private static string? _lastSidebarTabName;
         private SyncedTextBox _textBoxOriginal;
         private SyncedTextBox _textBoxTranslation;
         private Button _buttonAddToLearningContent;
-        private Button _buttonShadowing;
         private CheckBox _checkBoxAutoSpeak;
         private SpeedSelectorControl _speedSelector;
         private Panel _panelNavigation;
@@ -6447,11 +6443,6 @@ namespace LearningAssistant.Forms.Pdf
             return _textBoxOriginal?.Text?.Trim() ?? string.Empty;
         }
 
-        private void ButtonShadowing_Click(object? sender, EventArgs e)
-        {
-            OpenShadowingWindow();
-        }
-
         #endregion
 
         #region 侧栏构建（阅读 / 翻译 / 标注 / 音频 / 学习）
@@ -6501,6 +6492,10 @@ namespace LearningAssistant.Forms.Pdf
             _buttonStudyFlashcards.Click += ButtonStudyFlashcards_Click;
             _buttonStudyShadowing = _studyPanel.ShadowingButton;
             _buttonStudyShadowing.Click += ButtonStudyShadowing_Click;
+
+            // 音频与跟读收口到学习页：配套音频/整页录音进入右侧抽屉
+            _studyPanel.AudioOpenButton.Click += (_, _) => ShowAudioCompanion();
+            _studyPanel.RecordingButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Recording);
 
             // 「AI 与文件工具」分组入口，复用现有 AI 菜单能力，避免功能藏在右键菜单里
             _studyPanel.SummaryButton.Click += async (_, _) => await SummarizeCurrentPageAsync();
@@ -6894,9 +6889,7 @@ namespace LearningAssistant.Forms.Pdf
             _textBoxOriginal = _translatePanel.OriginalBox;
             _textBoxTranslation = _translatePanel.TranslationBox;
 
-            _buttonShadowing = _translatePanel.ShadowingButton;
             _buttonAddToLearningContent = _translatePanel.AddToLearningButton;
-            _buttonShadowing.Click += ButtonShadowing_Click;
             _buttonAddToLearningContent.Click += ButtonAddToLearningContent_Click;
 
             _checkBoxAutoTranslate = _translatePanel.AutoTranslateCheck;

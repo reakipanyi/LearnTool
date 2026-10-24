@@ -24,8 +24,14 @@ partial class PdfStudyPanel
         actionLayout = new TableLayoutPanel();
         addHighlightsButton = new Button();
         flashcardsButton = new Button();
-        shadowingButton = new Button();
         hint = new Label();
+        audioCard = new SidebarCard();
+        audioLayout = new TableLayoutPanel();
+        audioOpenButton = new Button();
+        practiceCard = new SidebarCard();
+        practiceLayout = new TableLayoutPanel();
+        recordingButton = new Button();
+        shadowingButton = new Button();
         aiCard = new SidebarCard();
         aiLayout = new TableLayoutPanel();
         summaryButton = new Button();
@@ -40,6 +46,10 @@ partial class PdfStudyPanel
         overviewLayout.SuspendLayout();
         actionCard.SuspendLayout();
         actionLayout.SuspendLayout();
+        audioCard.SuspendLayout();
+        audioLayout.SuspendLayout();
+        practiceCard.SuspendLayout();
+        practiceLayout.SuspendLayout();
         aiCard.SuspendLayout();
         aiLayout.SuspendLayout();
         listCard.SuspendLayout();
@@ -53,16 +63,20 @@ partial class PdfStudyPanel
         root.Controls.Add(header, 0, 0);
         root.Controls.Add(overviewCard, 0, 1);
         root.Controls.Add(actionCard, 0, 2);
-        root.Controls.Add(aiCard, 0, 3);
-        root.Controls.Add(listCard, 0, 4);
+        root.Controls.Add(audioCard, 0, 3);
+        root.Controls.Add(practiceCard, 0, 4);
+        root.Controls.Add(aiCard, 0, 5);
+        root.Controls.Add(listCard, 0, 6);
         root.Dock = DockStyle.Fill;
         root.Margin = Padding.Empty;
         root.Name = "root";
         root.Padding = new Padding(6, 2, 6, 6);
-        root.RowCount = 5;
+        root.RowCount = 7;
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 150F));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 150F));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 84F));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 120F));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 158F));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         root.Size = new Size(288, 700);
@@ -168,14 +182,12 @@ partial class PdfStudyPanel
         actionLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         actionLayout.Controls.Add(addHighlightsButton, 0, 0);
         actionLayout.Controls.Add(flashcardsButton, 0, 1);
-        actionLayout.Controls.Add(shadowingButton, 0, 2);
-        actionLayout.Controls.Add(hint, 0, 3);
+        actionLayout.Controls.Add(hint, 0, 2);
         actionLayout.Dock = DockStyle.Fill;
         actionLayout.Margin = Padding.Empty;
         actionLayout.Name = "actionLayout";
         actionLayout.Padding = Padding.Empty;
-        actionLayout.RowCount = 4;
-        actionLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
+        actionLayout.RowCount = 3;
         actionLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
         actionLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
         actionLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
@@ -220,6 +232,106 @@ partial class PdfStudyPanel
         flashcardsButton.Text = "✨ 生成本页闪卡";
         flashcardsButton.TextAlign = ContentAlignment.MiddleLeft;
         // 
+        // hint
+        // 
+        hint.AutoSize = false;
+        hint.Dock = DockStyle.Fill;
+        hint.Font = new Font("Microsoft YaHei UI", 9F);
+        hint.ForeColor = Color.FromArgb(100, 116, 139);
+        hint.Margin = new Padding(0, 6, 0, 0);
+        hint.Name = "hint";
+        hint.Size = new Size(256, 30);
+        hint.TabIndex = 2;
+        hint.Tag = "muted";
+        hint.Text = "高亮与闪卡会写入个人学习库，可在学习窗口按来源筛选。";
+        hint.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // audioCard
+        // 
+        audioCard.Dock = DockStyle.Fill;
+        audioCard.Margin = new Padding(0, 0, 0, 4);
+        audioCard.Name = "audioCard";
+        audioCard.Size = new Size(276, 80);
+        audioCard.TabIndex = 3;
+        audioCard.Title = "配套音频";
+        // 
+        // audioLayout
+        // 
+        audioLayout.BackColor = Color.Transparent;
+        audioLayout.ColumnCount = 1;
+        audioLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        audioLayout.Controls.Add(audioOpenButton, 0, 0);
+        audioLayout.Dock = DockStyle.Fill;
+        audioLayout.Margin = Padding.Empty;
+        audioLayout.Name = "audioLayout";
+        audioLayout.Padding = Padding.Empty;
+        audioLayout.RowCount = 1;
+        audioLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        audioLayout.Size = new Size(256, 42);
+        audioLayout.TabIndex = 0;
+        // 
+        // audioOpenButton
+        // 
+        audioOpenButton.AutoEllipsis = true;
+        audioOpenButton.BackColor = Color.White;
+        audioOpenButton.Cursor = Cursors.Hand;
+        audioOpenButton.Dock = DockStyle.Fill;
+        audioOpenButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        audioOpenButton.FlatAppearance.BorderSize = 1;
+        audioOpenButton.FlatStyle = FlatStyle.Flat;
+        audioOpenButton.Font = new Font("Microsoft YaHei UI", 9F);
+        audioOpenButton.ForeColor = Color.FromArgb(15, 23, 42);
+        audioOpenButton.Margin = Padding.Empty;
+        audioOpenButton.Name = "audioOpenButton";
+        audioOpenButton.Padding = new Padding(10, 0, 0, 0);
+        audioOpenButton.Tag = "secondary";
+        audioOpenButton.Text = "🎧 打开配套音频";
+        audioOpenButton.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // practiceCard
+        // 
+        practiceCard.Dock = DockStyle.Fill;
+        practiceCard.Margin = new Padding(0, 0, 0, 4);
+        practiceCard.Name = "practiceCard";
+        practiceCard.Size = new Size(276, 116);
+        practiceCard.TabIndex = 4;
+        practiceCard.Title = "录音与跟读";
+        // 
+        // practiceLayout
+        // 
+        practiceLayout.BackColor = Color.Transparent;
+        practiceLayout.ColumnCount = 1;
+        practiceLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        practiceLayout.Controls.Add(recordingButton, 0, 0);
+        practiceLayout.Controls.Add(shadowingButton, 0, 1);
+        practiceLayout.Dock = DockStyle.Fill;
+        practiceLayout.Margin = Padding.Empty;
+        practiceLayout.Name = "practiceLayout";
+        practiceLayout.Padding = Padding.Empty;
+        practiceLayout.RowCount = 2;
+        practiceLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+        practiceLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+        practiceLayout.Size = new Size(256, 76);
+        practiceLayout.TabIndex = 0;
+        // 
+        // recordingButton
+        // 
+        recordingButton.AutoEllipsis = true;
+        recordingButton.BackColor = Color.White;
+        recordingButton.Cursor = Cursors.Hand;
+        recordingButton.Dock = DockStyle.Fill;
+        recordingButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        recordingButton.FlatAppearance.BorderSize = 1;
+        recordingButton.FlatStyle = FlatStyle.Flat;
+        recordingButton.Font = new Font("Microsoft YaHei UI", 9F);
+        recordingButton.ForeColor = Color.FromArgb(15, 23, 42);
+        recordingButton.Margin = new Padding(0, 0, 0, 6);
+        recordingButton.Name = "recordingButton";
+        recordingButton.Padding = new Padding(10, 0, 0, 0);
+        recordingButton.Tag = "secondary";
+        recordingButton.Text = "🎙 整页录音";
+        recordingButton.TextAlign = ContentAlignment.MiddleLeft;
+        // 
         // shadowingButton
         // 
         shadowingButton.AutoEllipsis = true;
@@ -231,27 +343,12 @@ partial class PdfStudyPanel
         shadowingButton.FlatStyle = FlatStyle.Flat;
         shadowingButton.Font = new Font("Microsoft YaHei UI", 9F);
         shadowingButton.ForeColor = Color.FromArgb(15, 23, 42);
-        shadowingButton.Margin = new Padding(0, 0, 0, 6);
+        shadowingButton.Margin = Padding.Empty;
         shadowingButton.Name = "shadowingButton";
         shadowingButton.Padding = new Padding(10, 0, 0, 0);
-        shadowingButton.TabIndex = 2;
         shadowingButton.Tag = "secondary";
         shadowingButton.Text = "✂ 开始本页跟读";
         shadowingButton.TextAlign = ContentAlignment.MiddleLeft;
-        // 
-        // hint
-        // 
-        hint.AutoSize = false;
-        hint.Dock = DockStyle.Fill;
-        hint.Font = new Font("Microsoft YaHei UI", 9F);
-        hint.ForeColor = Color.FromArgb(100, 116, 139);
-        hint.Margin = new Padding(0, 6, 0, 0);
-        hint.Name = "hint";
-        hint.Size = new Size(256, 30);
-        hint.TabIndex = 3;
-        hint.Tag = "muted";
-        hint.Text = "高亮与闪卡会写入个人学习库，可在学习窗口按来源筛选。";
-        hint.TextAlign = ContentAlignment.MiddleLeft;
         // 
         // aiCard
         // 
@@ -259,7 +356,7 @@ partial class PdfStudyPanel
         aiCard.Margin = new Padding(0, 0, 0, 4);
         aiCard.Name = "aiCard";
         aiCard.Size = new Size(276, 154);
-        aiCard.TabIndex = 3;
+        aiCard.TabIndex = 5;
         aiCard.Title = "AI 与文件工具";
         // 
         // aiLayout
@@ -362,7 +459,7 @@ partial class PdfStudyPanel
         batchOcrButton.Margin = new Padding(0, 0, 4, 0);
         batchOcrButton.Name = "batchOcrButton";
         batchOcrButton.Tag = "secondary";
-        batchOcrButton.Text = "🔍 批量 OCR";
+        batchOcrButton.Text = "🔍 批量识别导出";
         // 
         // listCard
         // 
@@ -370,7 +467,7 @@ partial class PdfStudyPanel
         listCard.Margin = Padding.Empty;
         listCard.Name = "listCard";
         listCard.Size = new Size(276, 300);
-        listCard.TabIndex = 4;
+        listCard.TabIndex = 6;
         listCard.Title = "本页学习项";
         // 
         // itemList
@@ -402,6 +499,12 @@ partial class PdfStudyPanel
         actionCard.ResumeLayout(false);
         actionCard.PerformLayout();
         actionLayout.ResumeLayout(false);
+        audioCard.ResumeLayout(false);
+        audioCard.PerformLayout();
+        audioLayout.ResumeLayout(false);
+        practiceCard.ResumeLayout(false);
+        practiceCard.PerformLayout();
+        practiceLayout.ResumeLayout(false);
         listCard.ResumeLayout(false);
         listCard.PerformLayout();
         ResumeLayout(false);
@@ -420,8 +523,14 @@ partial class PdfStudyPanel
     private TableLayoutPanel actionLayout;
     private Button addHighlightsButton;
     private Button flashcardsButton;
-    private Button shadowingButton;
     private Label hint;
+    private SidebarCard audioCard;
+    private TableLayoutPanel audioLayout;
+    private Button audioOpenButton;
+    private SidebarCard practiceCard;
+    private TableLayoutPanel practiceLayout;
+    private Button recordingButton;
+    private Button shadowingButton;
     private SidebarCard aiCard;
     private TableLayoutPanel aiLayout;
     private Button summaryButton;
