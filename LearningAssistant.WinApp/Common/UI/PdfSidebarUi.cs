@@ -313,6 +313,8 @@ namespace LearningAssistant.Common.UI
                     _actionButton = SidebarUi.CreateGhostButton(value, 26);
                     _actionButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
                     Controls.Add(_actionButton);
+                    // 内容面板 Dock=Fill 且先加入，会占据最上层；按钮必须提到最前才可见
+                    _actionButton.BringToFront();
                 }
                 _actionButton.Text = value;
             }
@@ -339,6 +341,8 @@ namespace LearningAssistant.Common.UI
 
             Controls.Add(_body);
             Controls.Add(_title);
+            // 标题同样会被 Dock=Fill 的内容面板盖住，一并提到最前
+            _title.BringToFront();
 
             if (!string.IsNullOrEmpty(actionText))
             {
@@ -346,6 +350,8 @@ namespace LearningAssistant.Common.UI
                 _actionButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
                 _actionButton.Click += onAction;
                 Controls.Add(_actionButton);
+                // 内容面板 Dock=Fill 且先加入，会占据最上层；按钮必须提到最前才可见
+                _actionButton.BringToFront();
             }
 
             ApplyTheme(PdfSidebarTheme.IsDark);

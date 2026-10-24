@@ -179,6 +179,8 @@ public partial class PdfTranslatePanel : UserControl
         // keep：主题刷新时保留自定义强调色，只更新表面色与边框
         button.Tag = "keep";
         button.Location = new Point(card.Width - button.Width - 12, 6);
+        // SidebarCard 的 _body 面板 Dock=Fill 会盖住后加入的按钮，必须提到最前，否则按钮不可见
+        button.BringToFront();
     }
 
     /// <summary>填充目标语言下拉框，默认「自动」。</summary>
@@ -223,6 +225,58 @@ public partial class PdfTranslatePanel : UserControl
         }
 
         body.ResumeLayout(true);
+        LayoutBottomRows();
+    }
+
+    /// <summary>底部三行按可用宽度换行，并按换行后的实际行数分配行高，避免按钮被裁掉。</summary>
+    private void LayoutBottomRows()
+    {
+        actions.WrapContents = true;
+        extras.WrapContents = true;
+        options.WrapContents = true;
+
+        int available = root.ClientSize.Width - root.Padding.Horizontal;
+        if (available <= 0) available = root.Width - root.Padding.Horizontal;
+
+        SetRowHeight(2, Math.Max(38, MeasureFlowHeight(actions, available) + 2));
+        SetRowHeight(3, Math.Max(36, MeasureFlowHeight(extras, available) + 2));
+        SetRowHeight(4, Math.Max(30, MeasureFlowHeight(options, available) + 2));
+    }
+
+    /// <summary>按 FlowLayoutPanel 的换行规则估算所需高度，供固定行高的表格分配空间。</summary>
+    private static int MeasureFlowHeight(FlowLayoutPanel flow, int availableWidth)
+    {
+        int paddingLeft = flow.Padding.Left;
+        int limit = availableWidth - flow.Padding.Right;
+        int x = paddingLeft;
+        int y = flow.Padding.Top;
+        int lineHeight = 0;
+
+        foreach (Control child in flow.Controls)
+        {
+            if (!child.Visible) continue;
+            Padding margin = child.Margin;
+            int width = child.Width + margin.Horizontal;
+            int height = child.Height + margin.Vertical;
+            if (x > paddingLeft && x + width > limit)
+            {
+                y += lineHeight;
+                x = paddingLeft;
+                lineHeight = 0;
+            }
+
+            x += width;
+            lineHeight = Math.Max(lineHeight, height);
+        }
+
+        return y + lineHeight + flow.Padding.Bottom;
+    }
+
+    private void SetRowHeight(int index, int height)
+    {
+        if (index >= root.RowStyles.Count) return;
+        if (Math.Abs(root.RowStyles[index].Height - height) < 0.5f) return;
+        root.RowStyles[index].Height = height;
     }
 
     /// <summary>点击某一段落时，选中另一侧相同序号的段落并滚动到可见位置；段数不一致时保持原行为。</summary>
