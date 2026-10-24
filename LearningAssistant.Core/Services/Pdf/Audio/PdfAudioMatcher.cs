@@ -211,23 +211,35 @@ public class PdfAudioMatcher : IPdfAudioMatcher
     }
 
     /// <summary>
-    /// 与 PDF 同名的音频视为整篇音频，始终补齐未匹配页；
-    /// 没有任何启用规则且目录只有一条音频时，也按整篇匹配。
+    /// 确定可作为整篇音频的曲目：优先与 PDF 同名的音频；
+    /// 没有任何启用规则且目录只有一条无数字音频时，也按整篇处理。
     /// 已有规则且未显式同名时不做推断，避免覆盖用户规则的本意。
     /// </summary>
-    private void ApplyWholeBookFallback(string pdfPath, int pageCount, IReadOnlyList<AudioTrack> tracks,
-        Dictionary<int, AudioTrack> pageIndex, bool hasRules)
+    private static AudioTrack? FindWholeBookTrack(string pdfPath, IReadOnlyList<AudioTrack> tracks,
+        bool hasRules, out bool isSameName)
     {
-        if (pageCount <= 0 || tracks.Count == 0) return;
+        isSameName = false;
+        if (tracks.Count == 0) return null;
 
         var sameName = FindSameNameTracks(pdfPath, tracks);
+        if (sameName.Count == 1)
+        {
+            isSameName = true;
+            return sameName[0];
+        }
 
-        AudioTrack? track = null;
-        if (sameName.Count == 1) track = sameName[0];
-        else if (!hasRules && tracks.Count == 1
-                 && !Regex.IsMatch(Path.GetFileNameWithoutExtension(tracks[0].FileName), @"\d"))
-            track = tracks[0];
-        if (track == null) return;
+        if (!hasRules && tracks.Count == 1
+            && !Regex.IsMatch(Path.GetFileNameWithoutExtension(tracks[0].FileName) ?? "", @"\d"))
+            return tracks[0];
+
+        return null;
+    }
+
+    /// <summary>把整篇音频补齐到仍然未匹配的页码。</summary>
+    private void ApplyWholeBookFallback(int pageCount, AudioTrack? track, bool isSameName,
+        Dictionary<int, AudioTrack> pageIndex)
+    {
+        if (track == null || pageCount <= 0) return;
 
         int filled = 0;
         for (int p = 0; p < pageCount; p++)
@@ -240,7 +252,7 @@ public class PdfAudioMatcher : IPdfAudioMatcher
 
         track.MappedPageStart = 0;
         track.MappedPageEnd = pageCount - 1;
-        _diagnostics.Add(sameName.Count == 1
+        _diagnostics.Add(isSameName
             ? $"音频「{track.FileName}」与 PDF 同名，已作为整篇音频匹配到全部 {pageCount} 页"
             : $"目录中只有 1 个音频「{track.FileName}」，已作为整篇音频匹配到全部 {pageCount} 页");
     }
