@@ -32,6 +32,16 @@ namespace LearningAssistant.Forms.Pdf
         private readonly Dictionary<string, string> _sentenceRecordings = new(StringComparer.Ordinal);
         private readonly Dictionary<string, int> _sentenceScores = new(StringComparer.Ordinal);
         private readonly ShadowingStore _store = new();
+        private readonly ShadowingSegmentStore _segmentStore = new();
+        private readonly FlowLayoutPanel _takeActions = new();
+        private readonly Button _btnTakePreview = new();
+        private readonly Button _btnTakeChoose = new();
+        private readonly Button _btnTakeDelete = new();
+        private readonly WaveformThumb _waveform = new();
+        private ShadowingSegmentManifest? _segmentManifest;
+        private IReadOnlyList<ShadowingSegment> _segments = Array.Empty<ShadowingSegment>();
+        private IReadOnlyList<string?>? _practicePresets;
+        private bool _segmentMode;
         private NAudioMediaPlayer? _recordingPlayer;
         private readonly System.Windows.Forms.Timer _countdownTimer = new() { Interval = 700 };
         private readonly System.Windows.Forms.Timer _recordLimitTimer = new();
@@ -68,11 +78,20 @@ namespace LearningAssistant.Forms.Pdf
             WireEvents();
 
             var sentences = SentenceSegmenter.Segment(pageText);
+            _practicePresets = TryLoadSegments();
+            var practiceSentences = _segmentMode ? BuildSegmentSentences() : sentences;
+            if (_segmentMode)
+            {
+                _labelTitle.Text = "原声跟读";
+                Text = $"原声跟读 - {documentTitle}";
+                _takeActions.Visible = true;
+            }
+
             PersistManifest(sentences);
 
-            LoadSentenceRecordings(sentences);
-            LoadSentenceScores(sentences);
-            FillSentenceList(sentences);
+            LoadSentenceRecordings(practiceSentences);
+            LoadSentenceScores(practiceSentences);
+            FillSentenceList(practiceSentences);
             PdfSidebarTheme.ThemeChanged += OnSidebarThemeChanged;
             if (isDark)
             {
@@ -93,14 +112,15 @@ namespace LearningAssistant.Forms.Pdf
                 _scorer = null;
             }
 
-            if (tts == null || subtitleParser == null)
+            if (subtitleParser == null)
             {
-                _labelStatus.Text = "语音服务不可用，暂时无法播放。";
+                _labelStatus.Text = "音频播放组件不可用，暂时无法播放。";
                 _btnPlay.Enabled = false;
             }
             else
             {
-                _practice = new ShadowingPracticeService(sentences, tts, subtitleParser);
+                // tts 允许为空：原声切片模式不依赖语音合成，缺失切片时再回退 TTS
+                _practice = new ShadowingPracticeService(practiceSentences, tts, subtitleParser, _practicePresets);
                 _practice.StateChanged += OnSentenceStateChanged;
                 _practice.SentenceFinished += OnSentenceFinished;
                 _practice.ErrorOccurred += OnPracticeError;
@@ -123,14 +143,158 @@ namespace LearningAssistant.Forms.Pdf
             if (_scorer?.IsAvailable != true)
                 _labelScore.Text = "参考分：—（未安装英语识别器，按完成度评分）";
 
-            if (sentences.Count > 0)
-                SetCurrentIndex(0, play: false);
+            if (practiceSentences.Count > 0)
+                SetCurrentIndex(ResolveInitialIndex(), play: false);
 
             _countdownTimer.Tick += OnCountdownTick;
             _recordLimitTimer.Tick += OnRecordLimitReached;
 
             Shown += OnFormShown;
             FormClosed += OnFormClosed;
+        }
+
+        /// <summary>
+        /// 优先载入本页打点切片；加载失败或没有切片时保持旧的分句模式。
+        /// 返回切片模式下的预设音频路径（null 表示无切片，需回退 TTS）。
+        /// </summary>
+        private IReadOnlyList<string?>? TryLoadSegments()
+        {
+            if (string.IsNullOrWhiteSpace(_pdfPath))
+                return null;
+
+            try
+            {
+                var manifest = _segmentStore.LoadSegments(_pdfPath, _pageIndex);
+                if (manifest?.Segments.Count > 0)
+                {
+                    _segmentManifest = manifest;
+                    _segments = manifest.Segments.OrderBy(s => s.StartMs).ToList();
+                    _segmentMode = true;
+                    foreach (var segment in _segments)
+                        SyncSegmentTake(segment);
+                    return _segments
+                        .Select(s =>
+                        {
+                            string path = _segmentStore.ResolvePath(s.SlicePath);
+                            return File.Exists(path) ? path : null;
+                        })
+                        .ToList();
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"[SentenceShadowing] 读取原声切片失败: {ex.Message}");
+            }
+
+            return null;
+        }
+
+        private List<ShadowingSentence> BuildSegmentSentences()
+            => _segments.Select((segment, index) => new ShadowingSentence
+            {
+                Id = segment.Id,
+                Index = index,
+                Text = string.IsNullOrWhiteSpace(segment.Text)
+                    ? $"第 {index + 1} 段 · {ShadowingMarkSession.FormatTimestamp(segment.StartMs)}"
+                    : segment.Text!
+            }).ToList();
+
+        /// <summary>恢复该页上次练到的切片与播放模式。</summary>
+        private int ResolveInitialIndex()
+        {
+            if (!_segmentMode)
+                return 0;
+
+            try
+            {
+                var progress = _segmentStore.LoadProgress(_pdfPath);
+                if (progress?.Pages.TryGetValue(_pageIndex.ToString(), out var page) != true)
+                    return 0;
+
+                if (!string.IsNullOrWhiteSpace(page.Mode))
+                    _comboMode.SelectedIndex = page.Mode switch
+                    {
+                        "SingleLoop" => 0,
+                        "Continuous" => 2,
+                        _ => 1
+                    };
+
+                if (!string.IsNullOrWhiteSpace(page.LastSegmentId))
+                {
+                    for (int i = 0; i < _segments.Count; i++)
+                    {
+                        if (string.Equals(_segments[i].Id, page.LastSegmentId, StringComparison.Ordinal))
+                            return i;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.TraceWarning($"[SentenceShadowing] 读取跟读进度失败: {ex.Message}");
+            }
+
+            return 0;
+        }
+
+        /// <summary>优先采用手动选中的 take，否则取最高分（同分取最新）。</summary>
+        private static ShadowingTake? CurrentTake(ShadowingSegment segment)
+        {
+            var manual = segment.Takes.FirstOrDefault(t => t.ChosenManual);
+            if (manual != null)
+                return manual;
+            return segment.Takes.FirstOrDefault(t => t.Chosen)
+                   ?? segment.Takes.OrderByDescending(t => t.CreatedAt).FirstOrDefault();
+        }
+
+        private ShadowingSegment? CurrentSegment()
+        {
+            if (!_segmentMode || _practice == null || _currentIndex < 0)
+                return null;
+            string id = _practice.Sentences[_currentIndex].Sentence.Id;
+            return _segments.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.Ordinal));
+        }
+
+        /// <summary>把该段当前 take 的路径与分数同步到列表字典，供行徽标与回放使用。</summary>
+        private void SyncSegmentTake(ShadowingSegment segment)
+        {
+            var take = CurrentTake(segment);
+            if (take == null)
+            {
+                _sentenceRecordings.Remove(segment.Id);
+                _sentenceScores.Remove(segment.Id);
+                return;
+            }
+
+            string path = _segmentStore.ResolvePath(take.Path);
+            if (File.Exists(path))
+                _sentenceRecordings[segment.Id] = path;
+            else
+                _sentenceRecordings.Remove(segment.Id);
+
+            if (take.Score.HasValue)
+                _sentenceScores[segment.Id] = take.Score.Value;
+            else
+                _sentenceScores.Remove(segment.Id);
+        }
+
+        private async Task SaveSegmentManifestAsync()
+        {
+            if (!_segmentMode || _segmentManifest == null)
+                return;
+
+            _segmentManifest.Segments = _segments.ToList();
+            await _segmentStore.SaveSegmentsAsync(_pdfPath, _segmentManifest).ConfigureAwait(true);
+        }
+
+        /// <summary>结束/切换时记录本页进度，失败不影响练习。</summary>
+        private void PersistPracticeProgress()
+        {
+            // 构造期恢复模式时会先触发一次，此时还没选中段，避免把已有进度覆盖成空
+            if (!_segmentMode || _currentIndex < 0)
+                return;
+            string? id = CurrentSegment()?.Id;
+            FireAndForget(_segmentStore.SaveProgressPageAsync(
+                _pdfPath, _pageIndex, id, _mode.ToString()));
         }
 
         /// <summary>把各卡片内容挂到卡片 Body：VS 设计器回写会丢弃 Body.Controls.Add，因此放在构造函数。</summary>
@@ -140,8 +304,54 @@ namespace LearningAssistant.Forms.Pdf
             MountBodyChild(currentCard, _labelCurrent);
             MountBodyChild(currentCard, navigation);
             MountBodyChild(practiceCard, grid);
+
+            // 波形贴卡片底部，先加入避免压住上面的分数与说明
+            _waveform.Dock = DockStyle.Bottom;
+            _waveform.Margin = new Padding(10, 0, 10, 6);
+            MountBodyChild(scoreCard, _waveform);
             MountBodyChild(scoreCard, note);
             MountBodyChild(scoreCard, _labelScore);
+
+            MountTakeActions();
+        }
+
+        /// <summary>在录音行与状态行之间插入 take 的试听/采用/删除操作，不改 Designer 以免设计器回写丢失。</summary>
+        private void MountTakeActions()
+        {
+            _takeActions.Dock = DockStyle.Fill;
+            _takeActions.FlowDirection = FlowDirection.LeftToRight;
+            _takeActions.WrapContents = false;
+            _takeActions.Margin = new Padding(0, 0, 0, 2);
+            _takeActions.BackColor = Color.Transparent;
+            _takeActions.Visible = false;
+            var palette = PdfSidebarTheme.PaletteFor(this);
+            foreach (var button in new[] { _btnTakePreview, _btnTakeChoose, _btnTakeDelete })
+            {
+                button.FlatStyle = FlatStyle.Flat;
+                button.FlatAppearance.BorderSize = 0;
+                button.Font = new Font("Microsoft YaHei UI", 8.5F);
+                button.Size = new Size(64, 26);
+                button.Margin = new Padding(0, 0, 8, 0);
+                button.Cursor = Cursors.Hand;
+                button.BackColor = palette.SurfaceAlt;
+                button.ForeColor = palette.Text;
+                _takeActions.Controls.Add(button);
+            }
+            _btnTakePreview.Text = "试听";
+            _btnTakeChoose.Text = "采用";
+            _btnTakeDelete.Text = "删除";
+
+            if (actions.Controls.Contains(_labelStatus))
+                actions.Controls.Remove(_labelStatus);
+            actions.RowCount = 4;
+            actions.RowStyles.Clear();
+            actions.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
+            actions.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
+            actions.RowStyles.Add(new RowStyle(SizeType.Absolute, 30F));
+            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            actions.Controls.Add(_takeActions, 0, 2);
+            actions.Controls.Add(_labelStatus, 0, 3);
+            _takeActions.Visible = _segmentMode;
         }
 
         private static void MountBodyChild(SidebarCard card, Control child)
@@ -163,6 +373,9 @@ namespace LearningAssistant.Forms.Pdf
 
             _btnRecord.Click += OnRecordButtonClicked;
             _btnReplayRecording.Click += OnReplayRecordingClicked;
+            _btnTakePreview.Click += (_, _) => PreviewCurrentTake();
+            _btnTakeChoose.Click += async (_, _) => await ChooseCurrentTakeAsync();
+            _btnTakeDelete.Click += async (_, _) => await DeleteCurrentTakeAsync();
             _comboMode.SelectedIndexChanged += OnModeChanged;
 
             _progressTrack.Paint += ProgressTrack_Paint;
@@ -249,6 +462,24 @@ namespace LearningAssistant.Forms.Pdf
                 ShadowingAudioState.Failed => "合成失败",
                 _ => "待读"
             };
+            if (_segmentMode)
+            {
+                stateText = row.State switch
+                {
+                    ShadowingAudioState.Ready => "原声切片",
+                    ShadowingAudioState.Failed => "缺切片",
+                    ShadowingAudioState.Synthesizing => "回退合成中",
+                    _ => "待读"
+                };
+                if (_practice != null && row.Index < _practice.Sentences.Count)
+                {
+                    var state = _practice.Sentences[row.Index];
+                    if (state.IsTtsFallback)
+                        stateText = "TTS 回退";
+                    else if (row.Index < _segments.Count && _segments[row.Index].Takes.Count > 0)
+                        stateText += $" · {_segments[row.Index].Takes.Count} 次";
+                }
+            }
             TextRenderer.DrawText(e.Graphics, stateText, stateFont,
                 new Rectangle(bounds.X + 62, bounds.Y + 56, 110, 18),
                 palette.Muted, TextFormatFlags.NoPrefix);
@@ -284,11 +515,18 @@ namespace LearningAssistant.Forms.Pdf
                 _listSentences.Items.Clear();
                 for (int i = 0; i < sentences.Count; i++)
                 {
+                    var state = ShadowingAudioState.Pending;
+                    if (_segmentMode && i < _segments.Count)
+                    {
+                        string slice = _segmentStore.ResolvePath(_segments[i].SlicePath);
+                        state = File.Exists(slice) ? ShadowingAudioState.Ready : ShadowingAudioState.Failed;
+                    }
+
                     _listSentences.Items.Add(new SentenceRow
                     {
                         Index = i,
                         Text = sentences[i].Text,
-                        State = ShadowingAudioState.Pending
+                        State = state
                     });
                 }
             }
@@ -302,10 +540,14 @@ namespace LearningAssistant.Forms.Pdf
 
             _labelInfo.Text = sentences.Count == 0
                 ? $"第 {_pageIndex + 1} 页 · 未识别到可跟读的句子"
-                : $"第 {_pageIndex + 1} 页 · 共 {sentences.Count} 句";
+                : _segmentMode
+                    ? $"第 {_pageIndex + 1} 页 · 共 {sentences.Count} 段原声"
+                    : $"第 {_pageIndex + 1} 页 · 共 {sentences.Count} 句";
 
             if (sentences.Count == 0)
                 _labelStatus.Text = "当前页面没有可分句的文本，请先执行 OCR 或翻译取得文本。";
+            else if (_segmentMode)
+                _labelStatus.Text = "已载入原声切片，可逐段跟读或录音。";
         }
 
         private void PersistManifest(List<ShadowingSentence> sentences)
@@ -419,6 +661,144 @@ namespace LearningAssistant.Forms.Pdf
                                  _practice.Sentences[_currentIndex].Sentence.Id, out var path)
                              && File.Exists(path);
             _btnReplayRecording.Enabled = available;
+            UpdateTakeButtons();
+        }
+
+        private void UpdateTakeButtons()
+        {
+            if (!_segmentMode)
+            {
+                _takeActions.Visible = false;
+                return;
+            }
+
+            _takeActions.Visible = true;
+            var segment = CurrentSegment();
+            bool hasTake = segment != null && CurrentTake(segment) != null;
+            _btnTakePreview.Enabled = hasTake;
+            _btnTakeDelete.Enabled = hasTake;
+            _btnTakeChoose.Enabled = hasTake && CurrentTake(segment!)!.ChosenManual == false;
+        }
+
+        private void PreviewCurrentTake()
+        {
+            var take = CurrentSegment() is { } segment ? CurrentTake(segment) : null;
+            if (take == null)
+            {
+                _labelStatus.Text = "该段还没有跟读录音。";
+                return;
+            }
+
+            string path = _segmentStore.ResolvePath(take.Path);
+            if (!File.Exists(path))
+            {
+                _labelStatus.Text = "录音文件已不存在。";
+                return;
+            }
+            PlayRecording(path);
+        }
+
+        private async Task ChooseCurrentTakeAsync()
+        {
+            var segment = CurrentSegment();
+            var take = segment == null ? null : CurrentTake(segment);
+            if (segment == null || take == null)
+                return;
+
+            foreach (var item in segment.Takes)
+            {
+                item.Chosen = ReferenceEquals(item, take);
+                item.ChosenManual = ReferenceEquals(item, take);
+            }
+            SyncSegmentTake(segment);
+            RefreshTakeUi();
+            _labelStatus.Text = "已采用这次跟读。";
+
+            try
+            {
+                await SaveSegmentManifestAsync();
+            }
+            catch (Exception ex)
+            {
+                _labelStatus.Text = $"保存采用结果失败：{ex.Message}";
+            }
+        }
+
+        private async Task DeleteCurrentTakeAsync()
+        {
+            var segment = CurrentSegment();
+            var take = segment == null ? null : CurrentTake(segment);
+            if (segment == null || take == null)
+                return;
+
+            var confirm = MessageBox.Show(
+                this, "删除这次跟读录音？删除后不可恢复。", "删除跟读",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+            if (confirm != DialogResult.Yes)
+                return;
+
+            try
+            {
+                string path = _segmentStore.ResolvePath(take.Path);
+                if (File.Exists(path))
+                    File.Delete(path);
+            }
+            catch (Exception ex)
+            {
+                _labelStatus.Text = $"删除录音文件失败：{ex.Message}";
+            }
+
+            segment.Takes.Remove(take);
+            SelectBestTake(segment);
+            SyncSegmentTake(segment);
+            RefreshTakeUi();
+            _labelStatus.Text = "已删除这次跟读。";
+
+            try
+            {
+                await SaveSegmentManifestAsync();
+            }
+            catch (Exception ex)
+            {
+                _labelStatus.Text = $"保存删除结果失败：{ex.Message}";
+            }
+        }
+
+        /// <summary>手动采用优先；否则取最高分，同分保留最新。</summary>
+        private static void SelectBestTake(ShadowingSegment segment)
+        {
+            if (segment.Takes.Count == 0)
+                return;
+
+            var manual = segment.Takes.FirstOrDefault(t => t.ChosenManual);
+            var best = manual ?? segment.Takes
+                .OrderBy(t => t.Score ?? -1)
+                .ThenBy(t => t.CreatedAt)
+                .Last();
+            foreach (var take in segment.Takes)
+                take.Chosen = ReferenceEquals(take, best);
+        }
+
+        private void RefreshTakeUi()
+        {
+            _listSentences.Invalidate();
+            RefreshScoreLabel();
+            UpdateReplayButtonState();
+            RefreshWaveform();
+        }
+
+        /// <summary>录音完成后刷新波形缩略图：仅切片模式展示当前采用 take。</summary>
+        private void RefreshWaveform()
+        {
+            if (!_segmentMode)
+            {
+                _waveform.Clear();
+                return;
+            }
+
+            var take = CurrentSegment() is { } segment ? CurrentTake(segment) : null;
+            string? path = take == null ? null : _segmentStore.ResolvePath(take.Path);
+            _waveform.LoadFromFile(path);
         }
 
         /// <summary>
@@ -496,6 +876,8 @@ namespace LearningAssistant.Forms.Pdf
             _labelCurrent.Text = _practice.Sentences[index].Sentence.Text;
             RefreshScoreLabel();
             UpdateReplayButtonState();
+            RefreshWaveform();
+            PersistPracticeProgress();
 
             if (play)
                 FireAndForget(PlayIndexAsync(index));
@@ -612,6 +994,7 @@ namespace LearningAssistant.Forms.Pdf
                 2 => PlayMode.Continuous,
                 _ => PlayMode.AutoNext
             };
+            PersistPracticeProgress();
         }
 
         private void OnSentenceStateChanged(object? sender, int index)
@@ -783,7 +1166,11 @@ namespace LearningAssistant.Forms.Pdf
             _recordingIndex = -1;
             _recordingSentenceId = null;
 
-            if (index >= 0 && _practice != null)
+            if (index >= 0 && _practice != null && _segmentMode)
+            {
+                await HandleSegmentRecordingAsync(index, recording);
+            }
+            else if (index >= 0 && _practice != null)
             {
                 var sentence = _practice.Sentences[index].Sentence;
 
@@ -863,6 +1250,140 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
+        /// <summary>
+        /// 切片模式录音落库：把临时 wav 移到 takes/，评分、限 3 次、自动选优并写回 segments.json。
+        /// </summary>
+        private async Task HandleSegmentRecordingAsync(int index, AudioRecording recording)
+        {
+            if (_practice == null)
+                return;
+
+            var sentence = _practice.Sentences[index].Sentence;
+            var segment = _segments.FirstOrDefault(s => string.Equals(s.Id, sentence.Id, StringComparison.Ordinal));
+            if (segment == null)
+            {
+                _labelStatus.Text = "找不到该时间戳对应的原声切片。";
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(recording.FilePath) || !File.Exists(recording.FilePath))
+            {
+                _labelStatus.Text = "录音文件缺失，未保存这次跟读。";
+                return;
+            }
+
+            string destination;
+            try
+            {
+                string relative = _segmentStore.AllocateTakeRelativePath(segment.Id, recording.CreatedAt);
+                destination = _segmentStore.ResolvePath(relative);
+                string? directory = Path.GetDirectoryName(destination);
+                if (!string.IsNullOrWhiteSpace(directory))
+                    Directory.CreateDirectory(directory);
+                File.Move(recording.FilePath, destination, overwrite: true);
+            }
+            catch (Exception ex)
+            {
+                _labelStatus.Text = $"保存跟读录音失败：{ex.Message}";
+                return;
+            }
+
+            int? score = null;
+            string scoreKind = "reference";
+            string scoreText = "参考分：—";
+            int expectedMs = _practice.GetAudioDurationMs(index);
+            if (expectedMs <= 0)
+                expectedMs = Math.Max(0, segment.EndMs - segment.StartMs);
+
+            var spokenText = segment.Text ?? string.Empty;
+            PronunciationScoreResult? result = null;
+            if (_scorer?.IsAvailable == true && !string.IsNullOrWhiteSpace(spokenText))
+            {
+                try
+                {
+                    result = await _scorer.ScoreAsync(spokenText, destination);
+                }
+                catch (Exception ex)
+                {
+                    Trace.TraceWarning($"[SentenceShadowing] 切片评分失败: {ex.Message}");
+                }
+            }
+
+            bool needFallback = result == null || !result.IsValid
+                                || string.IsNullOrWhiteSpace(result.RecognizedText);
+            if (needFallback)
+            {
+                var fallback = TextSimilarityScorer.ScoreCompletion(expectedMs, recording.DurationMs);
+                if (fallback.IsValid)
+                {
+                    result = fallback;
+                    scoreText = $"参考分：{fallback.Score} / 100（按完成度）";
+                }
+            }
+            else
+            {
+                scoreKind = "pronunciation";
+                string missing = result!.MissingWords.Count > 0
+                    ? $"（漏读 {result.MissingWords.Count} 词）"
+                    : string.Empty;
+                scoreText = $"参考分：{result.Score} / 100{missing}";
+            }
+
+            if (result != null && result.IsValid)
+                score = result.Score;
+
+            var take = new ShadowingTake
+            {
+                Id = ShadowingSegmentStore.CreateTakeId(_pageIndex),
+                Path = _segmentStore.ToRelativePath(destination),
+                DurationMs = recording.DurationMs,
+                Score = score,
+                ScoreKind = scoreKind,
+                CreatedAt = recording.CreatedAt
+            };
+            segment.Takes.Add(take);
+            TrimTakes(segment);
+            SelectBestTake(segment);
+            SyncSegmentTake(segment);
+            RefreshTakeUi();
+
+            if (index == _currentIndex)
+                _labelScore.Text = scoreText;
+            _labelStatus.Text = $"已保存第 {segment.Takes.Count} 次跟读"
+                                + (score.HasValue ? $" · 参考分 {score}" : string.Empty);
+
+            try
+            {
+                await SaveSegmentManifestAsync();
+            }
+            catch (Exception ex)
+            {
+                _labelStatus.Text = $"保存切片清单失败：{ex.Message}";
+            }
+        }
+
+        /// <summary>每段最多保留 3 次；优先淘汰未采用的旧 take。</summary>
+        private void TrimTakes(ShadowingSegment segment)
+        {
+            while (segment.Takes.Count > 3)
+            {
+                var victim = segment.Takes
+                                 .OrderBy(t => t.CreatedAt)
+                                 .FirstOrDefault(t => !t.Chosen)
+                             ?? segment.Takes.OrderBy(t => t.CreatedAt).First();
+                segment.Takes.Remove(victim);
+                string path = _segmentStore.ResolvePath(victim.Path);
+                try
+                {
+                    if (File.Exists(path))
+                        File.Delete(path);
+                }
+                catch
+                {
+                }
+            }
+        }
+
         private void StopRecordingIfAny(bool suppressAdvance)
         {
             _recordLimitTimer.Stop();
@@ -922,6 +1443,12 @@ namespace LearningAssistant.Forms.Pdf
             bool isDark = PdfSidebarTheme.IsDarkFor(this);
             BackColor = new PdfSidebarPalette(isDark).Background;
             PdfSidebarTheme.ApplyRecursive(this, isDark);
+            var palette = PdfSidebarTheme.PaletteFor(this);
+            foreach (var button in new[] { _btnTakePreview, _btnTakeChoose, _btnTakeDelete })
+            {
+                button.BackColor = palette.SurfaceAlt;
+                button.ForeColor = palette.Text;
+            }
             Invalidate(true);
         }
 

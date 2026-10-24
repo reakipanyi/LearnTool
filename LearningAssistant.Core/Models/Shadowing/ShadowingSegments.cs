@@ -87,6 +87,9 @@ namespace LearningAssistant.Models.Shadowing
 
         public bool Chosen { get; set; }
 
+        /// <summary>用户手动“采用”的 take：后续新录音不再自动抢占。</summary>
+        public bool ChosenManual { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.Now;
     }
 

@@ -23,6 +23,9 @@ namespace LearningAssistant.Services.Shadowing
 
         public int DurationMs { get; internal set; }
 
+        /// <summary>切片缺失后回退 TTS 合成；界面需标注，避免误认为原声。</summary>
+        public bool IsTtsFallback { get; internal set; }
+
         public ShadowingSentenceState(ShadowingSentence sentence) => Sentence = sentence;
     }
 
@@ -32,9 +35,11 @@ namespace LearningAssistant.Services.Shadowing
     /// </summary>
     public sealed class ShadowingPracticeService : IDisposable
     {
-        private readonly ITTSService _tts;
+        private readonly ITTSService? _tts;
         private readonly NAudioMediaPlayer _player;
         private readonly IReadOnlyList<ShadowingSentenceState> _states;
+        /// <summary>非空表示进入“原声切片”模式：优先播放切片，缺失时才回退 TTS。</summary>
+        private readonly IReadOnlyList<string?>? _presetAudioPaths;
         private readonly SemaphoreSlim _synthesisLock = new(1, 1);
         private readonly CancellationTokenSource _lifetime = new();
         private readonly SynchronizationContext? _uiContext;
@@ -47,14 +52,16 @@ namespace LearningAssistant.Services.Shadowing
 
         public IReadOnlyList<ShadowingSentenceState> Sentences => _states;
 
-        public bool IsAvailable => _tts.Available;
+        public bool IsAvailable => _tts?.Available == true || HasAnyPreset();
 
         public ShadowingPracticeService(
             IEnumerable<ShadowingSentence> sentences,
-            ITTSService tts,
-            ISubtitleParser subtitleParser)
+            ITTSService? tts,
+            ISubtitleParser subtitleParser,
+            IReadOnlyList<string?>? presetAudioPaths = null)
         {
             _tts = tts;
+            _presetAudioPaths = presetAudioPaths;
             _player = new NAudioMediaPlayer(subtitleParser);
             _states = sentences.Select(s => new ShadowingSentenceState(s)).ToList();
             _uiContext = SynchronizationContext.Current;
@@ -95,6 +102,8 @@ namespace LearningAssistant.Services.Shadowing
             {
                 return true;
             }
+            if (TryApplyPreset(index, state))
+                return true;
 
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(
                 cancellationToken, _lifetime.Token);
@@ -107,6 +116,18 @@ namespace LearningAssistant.Services.Shadowing
                     && File.Exists(state.AudioPath))
                 {
                     return true;
+                }
+                if (TryApplyPreset(index, state))
+                    return true;
+
+                if (_tts == null || !_tts.Available)
+                {
+                    state.AudioState = ShadowingAudioState.Failed;
+                    RaiseStateChanged(index);
+                    RaiseError(_presetAudioPaths != null
+                        ? "原声切片缺失，且语音服务不可用。"
+                        : "语音服务不可用。");
+                    return false;
                 }
 
                 state.AudioState = ShadowingAudioState.Synthesizing;
@@ -128,6 +149,8 @@ namespace LearningAssistant.Services.Shadowing
                 state.AudioPath = path;
                 state.AudioState = ShadowingAudioState.Ready;
                 state.DurationMs = ReadDurationMs(path);
+                // 切片模式下的合成结果必须标注为回退，避免被当成原声
+                state.IsTtsFallback = _presetAudioPaths != null;
                 RaiseStateChanged(index);
                 return true;
             }
@@ -221,6 +244,27 @@ namespace LearningAssistant.Services.Shadowing
             else
                 action();
         }
+
+        /// <summary>切片模式：索引对应的原声切片存在则直接就绪，无需合成。</summary>
+        private bool TryApplyPreset(int index, ShadowingSentenceState state)
+        {
+            if (_presetAudioPaths == null || index < 0 || index >= _presetAudioPaths.Count)
+                return false;
+
+            string? path = _presetAudioPaths[index];
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+                return false;
+
+            state.AudioPath = path;
+            state.DurationMs = ReadDurationMs(path);
+            state.IsTtsFallback = false;
+            state.AudioState = ShadowingAudioState.Ready;
+            RaiseStateChanged(index);
+            return true;
+        }
+
+        private bool HasAnyPreset()
+            => _presetAudioPaths?.Any(p => !string.IsNullOrWhiteSpace(p) && File.Exists(p)) == true;
 
         private static string DetectLanguage(string text)
         {

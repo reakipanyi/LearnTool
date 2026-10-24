@@ -103,6 +103,36 @@ namespace LearningAssistant.Services.Shadowing
             }
         }
 
+        /// <summary>同步读取本页切片清单（窗口构造期使用，文件很小）。</summary>
+        public ShadowingSegmentManifest? LoadSegments(string pdfPath, int pageIndex)
+        {
+            var gate = GetLock(pdfPath);
+            gate.Wait();
+            try
+            {
+                return JsonHelper.LoadFromFile<ShadowingSegmentManifest>(GetSegmentsPath(pdfPath, pageIndex));
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
+        /// <summary>同步读取练习进度（窗口构造期使用，文件很小）。</summary>
+        public ShadowingProgress? LoadProgress(string pdfPath)
+        {
+            var gate = GetLock(pdfPath);
+            gate.Wait();
+            try
+            {
+                return JsonHelper.LoadFromFile<ShadowingProgress>(GetProgressPath(pdfPath));
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
         public async Task<ShadowingSegmentManifest?> LoadSegmentsAsync(
             string pdfPath, int pageIndex, CancellationToken cancellationToken = default)
         {
