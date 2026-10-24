@@ -3,6 +3,7 @@ using LearningAssistant.Abstractions.Media;
 using LearningAssistant.Common.UI;
 using LearningAssistant.Managers;
 using LearningAssistant.Models.Pdf;
+using LearningAssistant.Services.Shadowing;
 
 namespace LearningAssistant.Forms.Pdf;
 
@@ -29,6 +30,11 @@ public sealed class PdfAudioPlayerBar : UserControl
     private readonly Button _btnVolume = new();
     private readonly Button _btnFollow = new();
     private readonly Button _btnMore = new();
+    private readonly Button _btnMark = new();
+    private readonly Button _btnMarkAgain = new();
+    private readonly Button _btnMarkEnd = new();
+    private readonly Label _labelMark = new();
+    private readonly System.Windows.Forms.Timer _markTimer = new() { Interval = 500 };
     private readonly ToolTip _tooltip = new();
     private readonly ContextMenuStrip _loopMenu = new();
     private readonly ToolStripMenuItem _menuSyncPage = new("切歌同步页码");
@@ -41,6 +47,9 @@ public sealed class PdfAudioPlayerBar : UserControl
     /// <summary>进度条刷新时钟；按 10Hz 限频，避免高频 PositionChanged 造成无效重绘</summary>
     private readonly Stopwatch _progressClock = Stopwatch.StartNew();
     private TimeSpan _lastProgressAt;
+
+    private ShadowingMarkSession? _markSession;
+    private DateTime _markHintUntil = DateTime.MinValue;
 
     private const int SliderMax = 1000;
 
@@ -153,11 +162,12 @@ public sealed class PdfAudioPlayerBar : UserControl
         var buttons = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 5,
+            ColumnCount = 6,
             RowCount = 1,
             Margin = new Padding(0)
         };
         buttons.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        buttons.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         buttons.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         buttons.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         buttons.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -170,9 +180,13 @@ public sealed class PdfAudioPlayerBar : UserControl
         _btnPrev.Margin = new Padding(0, 0, 6, 0);
         _btnNext.Margin = new Padding(6, 0, 0, 0);
 
+        StyleMarkButton();
+        _btnMark.Margin = new Padding(10, 0, 0, 0);
+
         buttons.Controls.Add(_btnPrev, 1, 0);
         buttons.Controls.Add(_btnPlay, 2, 0);
-        buttons.Controls.Add(_btnNext, 3, 0);
+        buttons.Controls.Add(_btnMark, 3, 0);
+        buttons.Controls.Add(_btnNext, 4, 0);
 
         var progress = new TableLayoutPanel
         {
@@ -227,10 +241,22 @@ public sealed class PdfAudioPlayerBar : UserControl
         _btnSpeed.Enabled = false;
         _tooltip.SetToolTip(_btnSpeed, "变速引擎待验证，当前固定 1.0x");
 
+        _labelMark.AutoSize = true;
+        _labelMark.Font = new Font("Consolas", 8.5F);
+        _labelMark.Margin = new Padding(4, 8, 2, 0);
+        _labelMark.Visible = false;
+        StylePill(_btnMarkAgain, "⟳ 再录", 52);
+        StylePill(_btnMarkEnd, "结束", 44);
+        _btnMarkAgain.Visible = false;
+        _btnMarkEnd.Visible = false;
+
         right.Controls.Add(_btnMore);
         right.Controls.Add(_btnFollow);
         right.Controls.Add(_btnVolume);
         right.Controls.Add(_btnSpeed);
+        right.Controls.Add(_labelMark);
+        right.Controls.Add(_btnMarkAgain);
+        right.Controls.Add(_btnMarkEnd);
 
         _loopMenu.Items.Add("不循环", null, (_, _) => SetLoopMode(MediaLoopMode.None));
         _loopMenu.Items.Add("列表循环", null, (_, _) => SetLoopMode(MediaLoopMode.RepeatAll));
@@ -283,6 +309,11 @@ public sealed class PdfAudioPlayerBar : UserControl
 
         _btnMore.Click += (_, _) => _loopMenu.Show(_btnMore, new Point(0, _btnMore.Height));
 
+        _btnMark.Click += async (_, _) => await OnMarkClickedAsync();
+        _btnMarkAgain.Click += (_, _) => StartMarkRecording();
+        _btnMarkEnd.Click += async (_, _) => await FinishMarkSessionAsync();
+        _markTimer.Tick += (_, _) => UpdateMarkStatus();
+
         _menuSetA.Click += (_, _) =>
         {
             var player = _manager.Playback.Player;
@@ -320,7 +351,14 @@ public sealed class PdfAudioPlayerBar : UserControl
 
     private void OnProfileLoaded(object? sender, EventArgs e) => RefreshAll();
     private void OnTrackChanged(object? sender, AudioTrack track) => RefreshTrack();
-    private void OnPageHintChanged(object? sender, string? hint) => RefreshTrack();
+
+    private void OnPageHintChanged(object? sender, string? hint)
+    {
+        RefreshTrack();
+        // 打点锁定页时翻页提示只走到 PageHint，借状态行把原因说清楚
+        if (SessionActive && !string.IsNullOrWhiteSpace(hint))
+            ShowMarkHint(hint);
+    }
 
     /// <summary>侧栏或播放器自身修改设置后，统一刷新开关、按钮与曲目信息。</summary>
     private void OnSettingsChanged(object? sender, EventArgs e)
@@ -404,6 +442,7 @@ public sealed class PdfAudioPlayerBar : UserControl
         UpdateLoopChecks();
         UpdateTransport();
         RefreshTrack();
+        UpdateSessionControls();
     }
 
     private void RefreshTrack()
@@ -462,10 +501,229 @@ public sealed class PdfAudioPlayerBar : UserControl
     private void UpdateTransport()
     {
         bool hasTracks = (_manager.Result?.Tracks.Count ?? 0) > 0;
-        _btnPrev.Enabled = hasTracks && _manager.CanGoPrev;
-        _btnNext.Enabled = hasTracks && _manager.CanGoNext;
-        _btnPlay.Enabled = hasTracks || _manager.CurrentTrack != null;
+        bool locked = SessionActive;
+        _btnPrev.Enabled = !locked && hasTracks && _manager.CanGoPrev;
+        _btnNext.Enabled = !locked && hasTracks && _manager.CanGoNext;
+        _btnPlay.Enabled = !locked && (hasTracks || _manager.CurrentTrack != null);
         _btnPlay.Text = _manager.IsPlaying ? "⏸" : "▶";
+        _track.Enabled = !locked;
+        UpdateMarkButton();
+    }
+
+    private bool SessionActive => _markSession is { State: not ShadowingMarkState.Idle };
+
+    private bool EnsureMarkSession()
+    {
+        if (_markSession != null)
+            return true;
+        if (string.IsNullOrWhiteSpace(_form.CurrentPdfPath))
+        {
+            _manager.SetHint("未打开文档，无法进入跟读打点。");
+            return false;
+        }
+
+        var recorder = _form.AudioRecorderService;
+        if (recorder == null)
+        {
+            _manager.SetHint("录音服务不可用，无法进入跟读打点。");
+            return false;
+        }
+
+        _markSession = new ShadowingMarkSession(
+            _manager, recorder, _form.CurrentPdfPath, _form.CurrentPageIndex);
+        _markSession.StateChanged += (_, _) =>
+        {
+            UpdateMarkButton();
+            UpdateMarkStatus();
+            UpdateSessionControls();
+            UpdateTransport();
+        };
+        _markSession.HintChanged += (_, message) => ShowMarkHint(message);
+        _markSession.Completed += (_, summary) =>
+            ShowMarkHint(summary.CreatedSegments > 0
+                ? $"已生成 {summary.CreatedSegments} 段原声，可打开跟读练习。"
+                : "本次打点没有生成原声切片。");
+        return true;
+    }
+
+    private async Task OnMarkClickedAsync()
+    {
+        if (!EnsureMarkSession())
+            return;
+
+        var session = _markSession!;
+        switch (session.State)
+        {
+            case ShadowingMarkState.Idle:
+                session.Begin();
+                break;
+            case ShadowingMarkState.Playing:
+                session.Mark();
+                break;
+            case ShadowingMarkState.Marked:
+                if (session.PendingTakeCount > 0)
+                    session.ResumeFromMark();
+                else
+                    session.StartRecording();
+                break;
+            case ShadowingMarkState.Recording:
+                session.StopRecording();
+                break;
+        }
+
+        UpdateMarkButton();
+        UpdateMarkStatus();
+        UpdateSessionControls();
+    }
+
+    private void StartMarkRecording()
+    {
+        if (_markSession is { State: ShadowingMarkState.Marked })
+            _markSession.StartRecording();
+        UpdateMarkButton();
+        UpdateSessionControls();
+    }
+
+    private async Task FinishMarkSessionAsync()
+    {
+        if (_markSession == null || !SessionActive)
+            return;
+        _btnMarkEnd.Enabled = false;
+        await _markSession.FinishAsync();
+        _btnMarkEnd.Enabled = true;
+        UpdateMarkButton();
+        UpdateSessionControls();
+    }
+
+    private void UpdateMarkButton()
+    {
+        var palette = PdfSidebarTheme.PaletteFor(this);
+        var state = _markSession?.State ?? ShadowingMarkState.Idle;
+        _btnMark.UseVisualStyleBackColor = false;
+        _btnMark.FlatAppearance.MouseOverBackColor = ControlPaint.Dark(PdfSidebarTheme.Brand, 0.08f);
+        _btnMark.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(PdfSidebarTheme.Brand, 0.16f);
+
+        switch (state)
+        {
+            case ShadowingMarkState.Playing:
+                _btnMark.Text = "● 打断";
+                _btnMark.Size = new Size(78, 28);
+                _btnMark.BackColor = PdfSidebarTheme.Danger;
+                _btnMark.ForeColor = Color.White;
+                _btnMark.Enabled = true;
+                _tooltip.SetToolTip(_btnMark, "打断当前播放并记录时间戳");
+                break;
+            case ShadowingMarkState.Marked:
+                bool hasTake = _markSession!.PendingTakeCount > 0;
+                _btnMark.Text = hasTake ? "▶ 续播" : "⦿ 开始跟读";
+                _btnMark.Size = new Size(hasTake ? 72 : 92, 28);
+                _btnMark.BackColor = PdfSidebarTheme.Brand;
+                _btnMark.ForeColor = Color.White;
+                _btnMark.Enabled = true;
+                _tooltip.SetToolTip(_btnMark, hasTake ? "从打断位置继续播放" : "开始录音");
+                break;
+            case ShadowingMarkState.Recording:
+                _btnMark.Text = "■ 结束录音";
+                _btnMark.Size = new Size(92, 28);
+                _btnMark.BackColor = PdfSidebarTheme.Danger;
+                _btnMark.ForeColor = Color.White;
+                _btnMark.Enabled = true;
+                _tooltip.SetToolTip(_btnMark, "结束本次跟读录音");
+                break;
+            case ShadowingMarkState.Slicing:
+                _btnMark.Text = $"{_markSession!.SlicingDone}/{_markSession.SlicingTotal}";
+                _btnMark.Size = new Size(56, 28);
+                _btnMark.BackColor = palette.SurfaceAlt;
+                _btnMark.ForeColor = palette.Muted;
+                _btnMark.Enabled = false;
+                _tooltip.SetToolTip(_btnMark, "正在后台切原声，请稍候");
+                break;
+            default:
+                _btnMark.Text = "⦿ 打点";
+                _btnMark.Size = new Size(78, 28);
+                _btnMark.BackColor = PdfSidebarTheme.Brand;
+                _btnMark.ForeColor = Color.White;
+                _btnMark.Enabled = _manager.CurrentTrack != null && _form.AudioRecorderService != null;
+                _tooltip.SetToolTip(_btnMark, "跟读打点：播放中点按打断并录音");
+                break;
+        }
+    }
+
+    private void UpdateSessionControls()
+    {
+        bool active = SessionActive;
+        var state = _markSession?.State ?? ShadowingMarkState.Idle;
+
+        // 会话期间隐藏常驻设置，给时间戳与结束按钮让位，避免窄窗口裁切
+        foreach (var button in new[] { _btnMore, _btnFollow, _btnVolume, _btnSpeed })
+            button.Visible = !active;
+
+        _labelMark.Visible = active;
+        _btnMarkAgain.Visible = active && state == ShadowingMarkState.Marked
+                                && _markSession!.PendingTakeCount > 0;
+        _btnMarkEnd.Visible = active && state is (ShadowingMarkState.Playing or ShadowingMarkState.Marked);
+
+        if (active)
+        {
+            if (!_markTimer.Enabled) _markTimer.Start();
+            UpdateMarkStatus();
+        }
+        else
+        {
+            _markTimer.Stop();
+            _markHintUntil = DateTime.MinValue;
+        }
+    }
+
+    /// <summary>状态行：播放中显示页码/段数，待录显示时间戳，录音显示时长，切片显示进度。</summary>
+    private void UpdateMarkStatus()
+    {
+        if (!SessionActive)
+            return;
+        if (DateTime.Now < _markHintUntil)
+            return;
+
+        var session = _markSession!;
+        _labelMark.ForeColor = session.State == ShadowingMarkState.Recording
+            ? PdfSidebarTheme.Danger
+            : PdfSidebarTheme.Brand;
+        _labelMark.Text = session.State switch
+        {
+            ShadowingMarkState.Playing => $"P{_form.CurrentPageIndex + 1} · {session.SegmentCount}段",
+            ShadowingMarkState.Marked => ShadowingMarkSession.FormatTimestamp(session.CurrentTimestampMs ?? 0),
+            ShadowingMarkState.Recording => $"● {FormatTime(TimeSpan.FromMilliseconds(session.RecordingElapsedMs))}",
+            ShadowingMarkState.Slicing => $"切原声 {session.SlicingDone}/{session.SlicingTotal}",
+            _ => string.Empty
+        };
+    }
+
+    private void ShowMarkHint(string message)
+    {
+        if (SessionActive)
+        {
+            _markHintUntil = DateTime.Now.AddSeconds(3);
+            _labelMark.Visible = true;
+            _labelMark.Text = message;
+            _labelMark.ForeColor = PdfSidebarTheme.PaletteFor(this).Muted;
+            _tooltip.SetToolTip(_labelMark, message);
+            return;
+        }
+
+        // 会话结束后状态行已隐藏，用气泡提示保留结果信息
+        _tooltip.Show(message, _btnMark, new Point(-60, -34), 4000);
+    }
+
+    private void StyleMarkButton()
+    {
+        _btnMark.Text = "⦿ 打点";
+        _btnMark.Size = new Size(78, 28);
+        _btnMark.FlatStyle = FlatStyle.Flat;
+        _btnMark.FlatAppearance.BorderSize = 0;
+        _btnMark.Font = new Font("Microsoft YaHei UI", 8.5F, FontStyle.Bold);
+        _btnMark.Cursor = Cursors.Hand;
+        _btnMark.Margin = new Padding(0);
+        _btnMark.TabStop = false;
+        _btnMark.UseVisualStyleBackColor = false;
     }
 
     private void UpdateVolumeButton()
@@ -549,10 +807,23 @@ public sealed class PdfAudioPlayerBar : UserControl
             button.FlatAppearance.MouseDownBackColor = palette.BrandSoft;
         }
 
+        foreach (var button in new[] { _btnMarkAgain, _btnMarkEnd })
+        {
+            button.BackColor = palette.SurfaceAlt;
+            button.ForeColor = palette.Text;
+            button.FlatAppearance.MouseOverBackColor = palette.Hover;
+            button.FlatAppearance.MouseDownBackColor = palette.BrandSoft;
+        }
+
+        if (_labelMark.BackColor != palette.Surface)
+            _labelMark.BackColor = palette.Surface;
+        _labelMark.ForeColor = PdfSidebarTheme.Brand;
+
         _loopMenu.BackColor = palette.Surface;
         _loopMenu.ForeColor = palette.Text;
         UpdateFollowButton();
         UpdateLoopChecks();
+        UpdateMarkButton();
         Invalidate();
     }
 
@@ -622,6 +893,9 @@ public sealed class PdfAudioPlayerBar : UserControl
             _manager.Playback.Player.PositionChanged -= OnPositionChanged;
             _manager.Playback.Player.StateChanged -= OnStateChanged;
             PdfSidebarTheme.ThemeChanged -= OnThemeChanged;
+            _markTimer.Stop();
+            _markTimer.Dispose();
+            _markSession?.Dispose();
             _tooltip.Dispose();
             _loopMenu.Dispose();
         }

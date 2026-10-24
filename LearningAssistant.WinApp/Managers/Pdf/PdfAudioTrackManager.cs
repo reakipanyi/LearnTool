@@ -35,6 +35,9 @@ public class PdfAudioTrackManager : IDisposable
     public AudioTrack? CurrentTrack => _loadedTrack;
     public bool IsPlaying => _playback.Player.State == MediaPlaybackState.Playing;
 
+    /// <summary>跟读打点期间锁定的页码；非空时翻页只提示、不切换音频。</summary>
+    public int? PageLock { get; set; }
+
     /// <summary>是否跟随翻页切换音频；关闭后翻页完全不动作</summary>
     public bool FollowPage { get; private set; } = true;
     /// <summary>上一曲/下一曲/列表选曲后，正文是否跳到曲目起始页；与 FollowPage 独立</summary>
@@ -362,6 +365,14 @@ public class PdfAudioTrackManager : IDisposable
         if (_disposed || token.IsCancellationRequested) return;
         // 已翻到其它页，丢弃过期请求
         if (pageIndex != _currentPageIndex || _result == null) return;
+
+        // 打点会话锁定当前页：翻页只提示，不切歌
+        if (PageLock.HasValue)
+        {
+            if (pageIndex != PageLock.Value)
+                SetPageHint($"打点中，已锁定 P{PageLock.Value + 1}");
+            return;
+        }
 
         var target = _result.PageIndex.GetValueOrDefault(pageIndex);
         var decision = PlaybackDecision.Resolve(
