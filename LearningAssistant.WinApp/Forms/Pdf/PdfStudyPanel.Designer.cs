@@ -28,6 +28,7 @@ partial class PdfStudyPanel
         audioCard = new SidebarCard();
         audioLayout = new TableLayoutPanel();
         audioOpenButton = new Button();
+        translateButton = new Button();
         practiceCard = new SidebarCard();
         practiceLayout = new TableLayoutPanel();
         recordingButton = new Button();
@@ -251,9 +252,9 @@ partial class PdfStudyPanel
         audioCard.Dock = DockStyle.Fill;
         audioCard.Margin = new Padding(0, 0, 0, 4);
         audioCard.Name = "audioCard";
-        audioCard.Size = new Size(276, 80);
+        audioCard.Size = new Size(276, 116);
         audioCard.TabIndex = 3;
-        audioCard.Title = "配套音频";
+        audioCard.Title = "音频与翻译";
         // 
         // audioLayout
         // 
@@ -261,12 +262,14 @@ partial class PdfStudyPanel
         audioLayout.ColumnCount = 1;
         audioLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         audioLayout.Controls.Add(audioOpenButton, 0, 0);
+        audioLayout.Controls.Add(translateButton, 0, 1);
         audioLayout.Dock = DockStyle.Fill;
         audioLayout.Margin = Padding.Empty;
         audioLayout.Name = "audioLayout";
         audioLayout.Padding = Padding.Empty;
-        audioLayout.RowCount = 1;
-        audioLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        audioLayout.RowCount = 2;
+        audioLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+        audioLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
         audioLayout.Size = new Size(256, 42);
         audioLayout.TabIndex = 0;
         // 
@@ -281,12 +284,30 @@ partial class PdfStudyPanel
         audioOpenButton.FlatStyle = FlatStyle.Flat;
         audioOpenButton.Font = new Font("Microsoft YaHei UI", 9F);
         audioOpenButton.ForeColor = Color.FromArgb(15, 23, 42);
-        audioOpenButton.Margin = Padding.Empty;
+        audioOpenButton.Margin = new Padding(0, 0, 0, 6);
         audioOpenButton.Name = "audioOpenButton";
         audioOpenButton.Padding = new Padding(10, 0, 0, 0);
         audioOpenButton.Tag = "secondary";
         audioOpenButton.Text = "🎧 打开配套音频";
         audioOpenButton.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // translateButton
+        // 
+        translateButton.AutoEllipsis = true;
+        translateButton.BackColor = Color.White;
+        translateButton.Cursor = Cursors.Hand;
+        translateButton.Dock = DockStyle.Fill;
+        translateButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        translateButton.FlatAppearance.BorderSize = 1;
+        translateButton.FlatStyle = FlatStyle.Flat;
+        translateButton.Font = new Font("Microsoft YaHei UI", 9F);
+        translateButton.ForeColor = Color.FromArgb(15, 23, 42);
+        translateButton.Margin = Padding.Empty;
+        translateButton.Name = "translateButton";
+        translateButton.Padding = new Padding(10, 0, 0, 0);
+        translateButton.Tag = "secondary";
+        translateButton.Text = "🌐 打开翻译面板";
+        translateButton.TextAlign = ContentAlignment.MiddleLeft;
         // 
         // practiceCard
         // 
@@ -527,6 +548,7 @@ partial class PdfStudyPanel
     private SidebarCard audioCard;
     private TableLayoutPanel audioLayout;
     private Button audioOpenButton;
+    private Button translateButton;
     private SidebarCard practiceCard;
     private TableLayoutPanel practiceLayout;
     private Button recordingButton;

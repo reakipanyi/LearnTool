@@ -55,6 +55,11 @@ public partial class PdfStudyPanel : UserControl
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Button AudioOpenButton => audioOpenButton;
 
+    /// <summary>「打开翻译面板」按钮。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button TranslateButton => translateButton;
+
     /// <summary>「整页录音」按钮。</summary>
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -112,7 +117,7 @@ public partial class PdfStudyPanel : UserControl
 
         float overviewHeight = statHeight * 3 + 44;
         float actionHeight = 40 + 2 * (buttonHeight + 6) + hintHeight + 6 + 4;
-        float audioHeight = 40 + buttonHeight + 8;
+        float audioHeight = 40 + 2 * (buttonHeight + 4);
         float practiceHeight = 40 + 2 * (buttonHeight + 4);
         float aiHeight = 40 + 3 * (buttonHeight + 4);
 
