@@ -511,6 +511,10 @@ namespace LearningAssistant.Forms.Pdf
                 {
                     _audioTrackManager = new PdfAudioTrackManager(_logger, matcher, scanner, store, subParser);
                     _audioTrackManager.PageSyncRequested += OnAudioPageSyncRequested;
+                    // 音频档案加载/变更后按当前文档是否真的有音频来决定播放条显隐
+                    _audioTrackManager.ProfileLoaded += OnAudioAvailabilityChanged;
+                    _audioTrackManager.SettingsChanged += OnAudioAvailabilityChanged;
+                    _audioTrackManager.TrackChanged += OnAudioTrackChangedForBar;
                     if (_audioSidebar != null)
                     {
                         // AI 匹配只按需读取页面文本，使用独立的 PDF 服务实例避免干扰阅读器自己的文档句柄
@@ -525,7 +529,11 @@ namespace LearningAssistant.Forms.Pdf
                         _audioSidebar.CompanionPage.Controls.Add(_audioPanel);
 
                         // 底部播放器是配套音频的唯一播放入口，挂到画布底部、状态栏之上
-                        _audioPlayerBar = new PdfAudioPlayerBar(_audioTrackManager, this, ShowAudioCompanion);
+                        // 默认隐藏：等新文档的音频档案加载完成并确认存在曲目后再显示，避免无音频时占用画布高度
+                        _audioPlayerBar = new PdfAudioPlayerBar(_audioTrackManager, this, ShowAudioCompanion)
+                        {
+                            Visible = false
+                        };
                         _panelPdf.Controls.Add(_audioPlayerBar);
                     }
                 }
@@ -1654,6 +1662,41 @@ namespace LearningAssistant.Forms.Pdf
             if (_audioSidebar != null) _audioSidebar.Segments.SelectedIndex = 0;
         }
 
+        private void OnAudioAvailabilityChanged(object? sender, EventArgs e)
+            => UpdateAudioPlayerBarVisibility();
+
+        private void OnAudioTrackChangedForBar(object? sender, AudioTrack track)
+            => UpdateAudioPlayerBarVisibility();
+
+        /// <summary>切换文档时先收起播放条，等新文档的音频档案加载完成后再决定是否显示。</summary>
+        private void HideAudioPlayerBarForDocumentSwitch()
+        {
+            if (_audioPlayerBar == null) return;
+            _audioPlayerBar.Visible = false;
+        }
+
+        /// <summary>
+        /// 只有当前文档确实扫描到配套音频时才显示底部播放条；
+        /// 无音频时保持隐藏，把 64px 高度还给画布。
+        /// </summary>
+        private void UpdateAudioPlayerBarVisibility()
+        {
+            if (_audioPlayerBar == null || _audioTrackManager == null || IsDisposed) return;
+
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(UpdateAudioPlayerBarVisibility));
+                return;
+            }
+
+            bool hasTracks = _audioTrackManager.Result?.Tracks.Count > 0;
+            if (_audioPlayerBar.Visible == hasTracks) return;
+
+            _audioPlayerBar.Visible = hasTracks;
+            _panelPdf.PerformLayout();
+            if (hasTracks) _audioPlayerBar.RefreshPage();
+        }
+
         /// <summary>
         /// 设置当前PDF文件路径，并刷新相关UI状态
         /// </summary>
@@ -1665,6 +1708,8 @@ namespace LearningAssistant.Forms.Pdf
             ClearThumbnails();
             _thumbnailsLoaded = false;
             _currentPdfPath = pdfPath;
+            // 新文档的音频档案是异步加载的：先收起播放条，避免上一本文档的曲目或空条残留
+            HideAudioPlayerBarForDocumentSwitch();
             RefreshHighlightList();
             // 打开文档时渲染器尚未初始化，优先使用调用方传入的页数，避免按 0 页匹配导致配套音频不加载
             int resolvedPageCount = pageCount >= 0 ? pageCount : (_presenter?.PageCount ?? 0);
