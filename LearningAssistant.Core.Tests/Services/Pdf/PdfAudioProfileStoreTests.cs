@@ -55,6 +55,34 @@ public class PdfAudioProfileStoreTests
     }
 
     [Fact]
+    public void 按书记忆播放进度与倍速_持久化()
+    {
+        var store = new PdfAudioProfileStore();
+        var pdf = NewPdfPath();
+        try
+        {
+            var profile = new PdfAudioProfile
+            {
+                PdfPath = pdf,
+                PageCount = 10,
+                PlaybackSpeed = 1.25,
+                LastPositionSeconds = 42.5,
+                LastTrackPath = "audio/01.mp3"
+            };
+            store.Save(profile);
+
+            var loaded = store.Load(pdf).Profile!;
+            loaded.PlaybackSpeed.Should().Be(1.25);
+            loaded.LastPositionSeconds.Should().Be(42.5);
+            loaded.LastTrackPath.Should().Be("audio/01.mp3");
+        }
+        finally
+        {
+            Cleanup(store, pdf);
+        }
+    }
+
+    [Fact]
     public void 加载不存在_返回空结果()
     {
         var store = new PdfAudioProfileStore();

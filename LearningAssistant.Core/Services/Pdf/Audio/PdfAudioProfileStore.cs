@@ -227,6 +227,9 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
                                ?? new Dictionary<int, string>(),
             FollowPage = book?.FollowPage ?? true,
             SyncPageOnTrackChange = book?.SyncPageOnTrackChange ?? true,
+            PlaybackSpeed = Math.Clamp(book?.PlaybackSpeed ?? doc.Defaults.PlaybackSpeed, 0.6, 2.0),
+            LastPositionSeconds = Math.Max(0, book?.PositionSeconds ?? 0),
+            LastTrackPath = book?.LastTrack,
             DirectoryRules = doc.Rules.ToList(),
             RulePatch = book?.RulePatch,
             Rules = PdfAudioRuleMerger.Merge(doc.Rules, book?.RulePatch)
@@ -287,6 +290,10 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
         SetNode(book, "playbackScope", profile.PlaybackScope.ToString());
         SetNode(book, "followPage", profile.FollowPage);
         SetNode(book, "syncPageOnTrackChange", profile.SyncPageOnTrackChange);
+        // 书级用户状态：倍速与上次播放位置，按书记忆（与机器缓存分离）
+        SetNode(book, "playbackSpeed", Math.Clamp(profile.PlaybackSpeed, 0.6, 2.0));
+        SetNode(book, "positionSeconds", Math.Max(0, profile.LastPositionSeconds));
+        SetNode(book, "lastTrack", profile.LastTrackPath);
 
         // 覆盖项合并：保留原有 source/createdAt，仅更新路径
         var existingOverrides = GetObject(book, "overrides");
@@ -812,7 +819,11 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
     {
         var book = existing != null ? (JsonObject)existing.DeepClone() : new JsonObject();
 
-        foreach (var field in new[] { "singleAudio", "playbackScope", "followPage", "syncPageOnTrackChange" })
+        foreach (var field in new[]
+                 {
+                     "singleAudio", "playbackScope", "followPage", "syncPageOnTrackChange",
+                     "playbackSpeed", "positionSeconds", "lastTrack"
+                 })
         {
             if (TryGetNode(imported, field, out var node))
                 SetNode(book, field, node?.DeepClone());

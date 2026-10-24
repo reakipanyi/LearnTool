@@ -219,7 +219,9 @@ public sealed class PdfAudioPlayerBar : UserControl
         StylePill(_btnFollow, "跟随", 52);
         StylePill(_btnVolume, "🔊", 34);
         StylePill(_btnSpeed, "1.0x", 48);
+        // 变速引擎尚未验证（设计要求不能发布可点却无效的控件），只记录书级倍速，暂不开放
         _btnSpeed.Enabled = false;
+        _tooltip.SetToolTip(_btnSpeed, "变速引擎待验证，当前固定 1.0x");
 
         right.Controls.Add(_btnMore);
         right.Controls.Add(_btnFollow);

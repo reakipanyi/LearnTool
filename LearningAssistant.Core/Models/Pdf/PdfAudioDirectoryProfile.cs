@@ -47,6 +47,12 @@ namespace LearningAssistant.Models.Pdf
         public Dictionary<int, PdfAudioOverride> Overrides { get; set; } = new();
         public bool FollowPage { get; set; } = true;
         public bool SyncPageOnTrackChange { get; set; } = true;
+        /// <summary>书级倍速覆盖；null 表示继承目录 defaults.playbackSpeed</summary>
+        public double? PlaybackSpeed { get; set; }
+        /// <summary>按书记忆的播放位置（秒）</summary>
+        public double PositionSeconds { get; set; }
+        /// <summary>按书记忆的曲目标识（相对路径优先）</summary>
+        public string? LastTrack { get; set; }
         public PdfAudioBookCache? Cache { get; set; }
     }
 

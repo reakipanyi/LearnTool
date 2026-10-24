@@ -168,6 +168,8 @@ public class PdfAudioTrackManager : IDisposable
         var profile = _profile!;
         FollowPage = profile.FollowPage;
         SyncPageOnTrackChange = profile.SyncPageOnTrackChange;
+        // 倍速按书记忆；引擎未支持时 SetSpeed 内部会保持 1.0，不影响播放
+        _playback.SetSpeed(profile.PlaybackSpeed);
         ScopeCorrectionMessage = null;
 
         // A41：整篇单音频与“跟随翻页”互斥，打开时纠正并提示一次
@@ -378,6 +380,7 @@ public class PdfAudioTrackManager : IDisposable
                 LoadCore(target!, syncPage: false);
                 break;
             case PlaybackAction.StopWithHint:
+                SavePlaybackState();
                 _playback.Stop();
                 _loadedTrack = null;
                 _playlistIndex = -1;
@@ -424,9 +427,27 @@ public class PdfAudioTrackManager : IDisposable
 
     private void LoadCore(AudioTrack track, bool syncPage)
     {
+        // 先取出上次记录再换曲，换曲后该字段会覆盖为当前曲目
+        var savedTrack = _profile?.LastTrackPath;
+        double savedSeconds = _profile?.LastPositionSeconds ?? 0;
+
         _playback.Load(track);
         _loadedTrack = track;
         _playlistIndex = IndexOfTrack(track);
+
+        if (_profile != null)
+        {
+            var resume = TimeSpan.Zero;
+            if (!string.IsNullOrWhiteSpace(savedTrack)
+                && string.Equals(savedTrack, GetTrackKey(track), StringComparison.OrdinalIgnoreCase))
+                resume = ClampResume(TimeSpan.FromSeconds(savedSeconds));
+            if (resume > TimeSpan.Zero) _playback.Seek(resume);
+
+            _profile.LastTrackPath = GetTrackKey(track);
+            _profile.LastPositionSeconds = Math.Max(0, _playback.Player.Position.TotalSeconds);
+            SaveProfile();
+        }
+
         TrackChanged?.Invoke(this, track);
 
         if (!syncPage || !SyncPageOnTrackChange) return;
@@ -556,6 +577,46 @@ public class PdfAudioTrackManager : IDisposable
         => _loadedTrack != null
            && string.Equals(_loadedTrack.FilePath, track.FilePath, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>曲目稳定标识：优先相对路径，外部目录本身就是绝对路径。</summary>
+    private static string GetTrackKey(AudioTrack track)
+        => string.IsNullOrWhiteSpace(track.RelativePath) ? track.FileName : track.RelativePath;
+
+    /// <summary>恢复进度时的边界处理：距结尾 3 秒内视为已播完，下次从头开始。</summary>
+    private TimeSpan ClampResume(TimeSpan position)
+    {
+        var duration = _playback.Player.Duration;
+        if (position <= TimeSpan.Zero) return TimeSpan.Zero;
+        if (duration <= TimeSpan.Zero) return position;
+        if (duration - position <= TimeSpan.FromSeconds(3)) return TimeSpan.Zero;
+        return position >= duration ? duration - TimeSpan.FromSeconds(1) : position;
+    }
+
+    /// <summary>把当前曲目与播放位置按书写回档案；暂停、播完、切曲与关闭时调用。</summary>
+    public void SavePlaybackState()
+    {
+        if (_profile == null || _loadedTrack == null) return;
+        var player = _playback.Player;
+        double seconds = Math.Max(0, player.Position.TotalSeconds);
+        // 已播到结尾：下次从头开始
+        if (player.Duration > TimeSpan.Zero && player.Duration - player.Position <= TimeSpan.FromSeconds(3))
+            seconds = 0;
+        _profile.LastTrackPath = GetTrackKey(_loadedTrack);
+        _profile.LastPositionSeconds = seconds;
+        SaveProfile();
+    }
+
+    /// <summary>设置并持久化本书播放倍速（0.6–2.0）；引擎未支持时仅记录目标值。</summary>
+    public void SetPlaybackSpeed(double speed)
+    {
+        if (_profile == null) return;
+        speed = Math.Clamp(speed, 0.6, 2.0);
+        if (Math.Abs(_profile.PlaybackSpeed - speed) < 0.001) return;
+        _profile.PlaybackSpeed = speed;
+        _playback.SetSpeed(speed);
+        SaveProfile();
+        SettingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     public void Next() => Move(1);
     public void Prev() => Move(-1);
 
@@ -598,6 +659,7 @@ public class PdfAudioTrackManager : IDisposable
     private void HandlePlaybackFinished()
     {
         if (_disposed) return;
+        SavePlaybackState();
         switch (LoopMode)
         {
             case MediaLoopMode.RepeatOne:
@@ -645,6 +707,7 @@ public class PdfAudioTrackManager : IDisposable
     {
         if (!IsPlaying) return false;
         _playback.Pause();
+        SavePlaybackState();
         return true;
     }
 
@@ -801,6 +864,8 @@ public class PdfAudioTrackManager : IDisposable
     public void Dispose()
     {
         if (_disposed) return;
+        // 关闭前把当前曲目位置写回，避免下次打开丢失进度
+        SavePlaybackState();
         _disposed = true;
         _pageChangeCts?.Cancel();
         _pageChangeCts?.Dispose();
