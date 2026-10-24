@@ -24,6 +24,12 @@ public interface IPdfAudioProfileStore
     /// <summary>导出当前书档案（目录规则快照 + 单书分区，不含缓存）。</summary>
     PdfAudioExportResult ExportBook(string pdfPath);
 
+    /// <summary>读取目录档案原文，供应用内手动编辑。</summary>
+    PdfAudioExportResult ReadDirectoryJson(string pdfPath);
+
+    /// <summary>校验并写入手动编辑后的目录档案原文。</summary>
+    PdfAudioExportResult SaveDirectoryJson(string pdfPath, string json);
+
     /// <summary>解析并校验导入内容，生成差异摘要；不写盘。</summary>
     PdfAudioImportPreview PreviewImport(string pdfPath, string json);
 

@@ -185,41 +185,15 @@ public class PdfAudioTrackManager : IDisposable
             SaveProfile();
         }
 
-        var scanChanged = fingerprint != profile.ScanFingerprint || profile.Tracks.Count == 0;
-        var pageCountChanged = profile.PageCount != pageCount;
-        // 指纹与页数均未变化时复用缓存映射；否则重算，避免规则结果丢失或页数变化后映射越界
-        // 整篇单音频模式缓存里只有一条曲目，直接重算更简单，也避免与切换后的选择不一致
-        if (profile.MatchMode == PdfAudioMatchMode.SingleAudio
-            || scanChanged || pageCountChanged || profile.PageIndex.Count == 0)
-        {
-            _result = _matcher.Match(pdfPath, pageCount, tracks, profile.Rules, profile.ManualOverrides,
-                profile.MatchMode, profile.SingleAudioFile);
-            profile.Tracks = tracks;
-            profile.ScanFingerprint = fingerprint;
-            profile.PageCount = pageCount;
-            PersistPageIndex();
-            SaveProfile();
-        }
-        else
-        {
-            // 目录档案不持久化曲目清单，指纹命中时用本次扫描结果重建
-            _result = new AudioMatchResult { Tracks = tracks };
-            profile.Tracks = tracks;
-            foreach (var kv in profile.PageIndex)
-            {
-                if (kv.Key < 0 || kv.Key >= pageCount) continue;
-                _result.PageIndex[kv.Key] = ResolveTrack(kv.Value, markManual: false);
-            }
-            // 手动覆盖始终最高优先级
-            foreach (var kv in profile.ManualOverrides)
-            {
-                if (kv.Key < 0 || kv.Key >= pageCount) continue;
-                _result.PageIndex[kv.Key] = ResolveTrack(kv.Value, markManual: true);
-            }
-            _result.UnmatchedPages.Clear();
-            for (int p = 0; p < pageCount; p++)
-                if (!_result.PageIndex.ContainsKey(p)) _result.UnmatchedPages.Add(p);
-        }
+        // 每次打开都按当前规则重算：规则、手动覆盖与手动编辑过的档案修改必须立即生效，
+        // 不再用扫描指纹命中旧缓存，避免“改了规则还是旧结果”
+        _result = _matcher.Match(pdfPath, pageCount, tracks, profile.Rules, profile.ManualOverrides,
+            profile.MatchMode, profile.SingleAudioFile);
+        profile.Tracks = tracks;
+        profile.ScanFingerprint = fingerprint;
+        profile.PageCount = pageCount;
+        PersistPageIndex();
+        SaveProfile();
         _currentPageIndex = -1;
     }
 
@@ -502,6 +476,24 @@ public class PdfAudioTrackManager : IDisposable
             SaveProfile();
         }
         SettingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// 自动识别整篇音频：优先使用已保存的选择，否则取与 PDF 同名的音频；
+    /// 目录里只有一条音频时也直接返回。识别不到返回 null，由调用方再让用户选择。
+    /// </summary>
+    public string? AutoResolveSingleAudio()
+    {
+        if (_profile == null || _currentPdfPath == null) return null;
+        if (!string.IsNullOrWhiteSpace(_profile.SingleAudioFile)) return _profile.SingleAudioFile;
+
+        var tracks = _result?.Tracks ?? _profile.Tracks;
+        if (tracks.Count == 0) return null;
+
+        var sameName = PdfAudioMatcher.FindSameNameTracks(_currentPdfPath, tracks);
+
+        var track = sameName.Count == 1 ? sameName[0] : tracks.Count == 1 ? tracks[0] : null;
+        return track == null ? null : ToProfilePath(track.FilePath);
     }
 
     /// <summary>
@@ -798,6 +790,24 @@ public class PdfAudioTrackManager : IDisposable
         => _currentPdfPath == null
             ? PdfAudioExportResult.Fail("请先打开 PDF")
             : _store.ExportBook(_currentPdfPath);
+
+    /// <summary>读取当前目录档案原文，供应用内手动编辑。</summary>
+    public PdfAudioExportResult ReadProfileJson()
+        => _currentPdfPath == null
+            ? PdfAudioExportResult.Fail("请先打开 PDF")
+            : _store.ReadDirectoryJson(_currentPdfPath);
+
+    /// <summary>保存手动编辑后的档案原文，并重新加载当前书使修改立即生效。</summary>
+    public async Task<PdfAudioExportResult> SaveProfileJsonAsync(string json)
+    {
+        if (_currentPdfPath == null) return PdfAudioExportResult.Fail("请先打开 PDF");
+
+        var result = _store.SaveDirectoryJson(_currentPdfPath, json);
+        if (!result.Success) return result;
+
+        await LoadProfileAsync(_currentPdfPath, _pageCount);
+        return result;
+    }
 
     /// <summary>解析导入内容并生成差异预览，不写盘。</summary>
     public PdfAudioImportPreview PreviewImport(string json)

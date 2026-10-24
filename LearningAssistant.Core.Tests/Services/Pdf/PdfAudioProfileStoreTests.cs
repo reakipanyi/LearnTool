@@ -356,18 +356,60 @@ public class PdfAudioProfileStoreTests
     }
 
     [Fact]
-    public void 导入单书档案_文件名不一致拒绝()
+    public void 导入单书档案_书名不一致时改落到当前书()
     {
         var store = new PdfAudioProfileStore();
         var pdf = NewPdfPath();
         try
         {
             var json = """
-                       { "schemaVersion": 3, "kind": "book", "books": { "other.pdf": {} } }
+                       {
+                         "schemaVersion": 3,
+                         "kind": "book",
+                         "books": {
+                           "other.pdf": {
+                             "overrides": { "1": { "path": "p2.mp3", "source": "manual" } }
+                           }
+                         }
+                       }
                        """;
             var preview = store.PreviewImport(pdf, json);
-            preview.Success.Should().BeFalse();
-            preview.Error.Should().Contain("不一致");
+            preview.Success.Should().BeTrue(preview.Error);
+            preview.Warnings.Should().Contain(w => w.Contains("原属"));
+
+            store.ApplyImport(pdf, preview);
+
+            var loaded = store.Load(pdf).Profile!;
+            loaded.ManualOverrides[1].Should().Be("p2.mp3");
+        }
+        finally
+        {
+            Cleanup(store, pdf);
+        }
+    }
+
+    [Fact]
+    public void 手动编辑档案原文_校验后保存并生效()
+    {
+        var store = new PdfAudioProfileStore();
+        var pdf = NewPdfPath();
+        try
+        {
+            var profile = new PdfAudioProfile { PdfPath = pdf, PageCount = 10 };
+            profile.Rules.Add(new AudioMatchRule { Id = "r1", Name = "原文规则", FileNamePattern = @"a(\d+)" });
+            store.Save(profile);
+
+            var read = store.ReadDirectoryJson(pdf);
+            read.Success.Should().BeTrue(read.Error);
+
+            var edited = read.Json!.Replace(@"a(\\d+)", @"b(\\d+)");
+            var saved = store.SaveDirectoryJson(pdf, edited);
+            saved.Success.Should().BeTrue(saved.Error);
+
+            var loaded = store.Load(pdf).Profile!;
+            loaded.Rules.Single().FileNamePattern.Should().Be(@"b(\d+)");
+
+            store.SaveDirectoryJson(pdf, "{ bad json").Success.Should().BeFalse();
         }
         finally
         {

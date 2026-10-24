@@ -255,4 +255,79 @@ public class PdfAudioMatcherTests
         r.PageIndex.Should().BeEmpty();
         Matcher.Diagnostics.Should().Contain(d => d.Contains("整篇单音频"));
     }
+
+    [Fact]
+    public void 扩展名里的数字不当作页码()
+    {
+        var r = Matcher.Match(@"C:\pdf\a.pdf", 5,
+            new[] { T("book.mp3"), T("notes.mp3") }, Array.Empty<AudioMatchRule>(), null);
+
+        r.PageIndex.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void 与PDF同名的音频_自动作为整篇音频()
+    {
+        var r = Matcher.Match(@"C:\pdf\第1课.pdf", 8, new[] { T("第1课.mp3") },
+            Array.Empty<AudioMatchRule>(), null);
+
+        r.PageIndex.Should().HaveCount(8);
+        r.PageIndex[0].FileName.Should().Be("第1课.mp3");
+        r.UnmatchedPages.Should().BeEmpty();
+        Matcher.Diagnostics.Should().Contain(d => d.Contains("同名"));
+    }
+
+    [Fact]
+    public void 同名音频_即使有启用规则_也补齐未匹配页()
+    {
+        var rule = new AudioMatchRule { FileNamePattern = @"P(\d+)\.mp3$", MapMode = AudioPageMapMode.PageIndex };
+
+        var r = Matcher.Match(@"C:\pdf\第1课.pdf", 6, new[] { T("第1课.mp3"), T("P3.mp3") },
+            new[] { rule }, null);
+
+        r.PageIndex[2].FileName.Should().Be("P3.mp3");
+        r.PageIndex.Should().HaveCount(6);
+        r.PageIndex[0].FileName.Should().Be("第1课.mp3");
+    }
+
+    [Fact]
+    public void 同名音频_忽略空格与下划线差异_自动作为整篇音频()
+    {
+        var r = Matcher.Match(@"C:\pdf\02_IGo.pdf", 6,
+            new[] { T("02_I Go.mp3"), T("03_Bird Goes Home.mp3") },
+            Array.Empty<AudioMatchRule>(), null);
+
+        r.PageIndex.Should().HaveCount(6);
+        r.PageIndex[0].FileName.Should().Be("02_I Go.mp3");
+    }
+
+    [Fact]
+    public void 同目录多本书_只取与当前PDF最接近的同名音频()
+    {
+        var r = Matcher.Match(@"C:\pdf\03_Bird Goes Home.pdf", 4,
+            new[] { T("01_Vegetables.mp3"), T("03_BirdGoesHome.mp3"), T("04_Fruit.mp3") },
+            Array.Empty<AudioMatchRule>(), null);
+
+        r.PageIndex.Should().HaveCount(4);
+        r.PageIndex[0].FileName.Should().Be("03_BirdGoesHome.mp3");
+    }
+
+    [Fact]
+    public void 规则命中但提取不到页码_按文件名顺序兜底()
+    {
+        var rule = new AudioMatchRule
+        {
+            Name = "无数字",
+            FileNamePattern = "第*课.mp3",
+            PatternMode = AudioPatternMode.Wildcard,
+            MapMode = AudioPageMapMode.PageIndex
+        };
+
+        var r = Matcher.Match(@"C:\pdf\a.pdf", 10,
+            new[] { T("第二课.mp3"), T("第一课.mp3") }, new[] { rule }, null);
+
+        r.PageIndex[0].FileName.Should().Be("第一课.mp3");
+        r.PageIndex[1].FileName.Should().Be("第二课.mp3");
+        Matcher.Diagnostics.Should().Contain(d => d.Contains("按文件名顺序"));
+    }
 }

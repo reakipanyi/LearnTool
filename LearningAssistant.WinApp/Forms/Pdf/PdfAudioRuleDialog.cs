@@ -14,6 +14,8 @@ public partial class PdfAudioRuleDialog : Form
     private readonly PdfAudioTrackManager? _manager;
     private readonly PdfAudioMatchMode _originalMatchMode;
     private string? _singleAudioFile;
+    /// <summary>字段区当前对应的规则；切换选择前先把未点“应用修改”的编辑回写</summary>
+    private AudioMatchRule? _editingRule;
 
     private readonly List<AudioPageMapMode> _modes = new()
     { AudioPageMapMode.PageIndex, AudioPageMapMode.Sequence, AudioPageMapMode.Range };
@@ -52,8 +54,16 @@ public partial class PdfAudioRuleDialog : Form
         InitializeModeSelector();
         foreach (var r in _rules) AddListItem(r);
         if (lvRules.Items.Count > 0) lvRules.Items[0].Selected = true;
+        PopulateFields();
         UpdateModeHint();
         RefreshPreview();
+
+        // 非模态窗口里按钮的 DialogResult 不会自动关窗，必须显式关闭
+        btnCancel.Click += (_, _) =>
+        {
+            DialogResult = DialogResult.Cancel;
+            Close();
+        };
     }
 
     /// <summary>初始化匹配方式下拉框，并按保存的配置恢复选择。</summary>
@@ -106,6 +116,10 @@ public partial class PdfAudioRuleDialog : Form
     private void CmbMatchMode_SelectedIndexChanged(object? sender, EventArgs e)
     {
         if (_populating) return;
+        // 切到整篇单音频时自动带入与 PDF 同名的音频，免去逐本手动选择
+        if (SelectedMatchMode == PdfAudioMatchMode.SingleAudio && string.IsNullOrWhiteSpace(_singleAudioFile))
+            _singleAudioFile = _manager?.AutoResolveSingleAudio();
+        UpdateSingleAudioLabel();
         UpdateModeAvailability();
         SchedulePreview();
     }
@@ -137,6 +151,7 @@ public partial class PdfAudioRuleDialog : Form
 
         _rules.Clear();
         lvRules.Items.Clear();
+        _editingRule = null;
         RefreshPreview();
     }
 
@@ -153,6 +168,7 @@ public partial class PdfAudioRuleDialog : Form
 
         _rules.Clear();
         lvRules.Items.Clear();
+        _editingRule = null;
         _singleAudioFile = null;
         cmbMatchMode.SelectedIndex = 0;
         UpdateSingleAudioLabel();
@@ -162,9 +178,17 @@ public partial class PdfAudioRuleDialog : Form
 
     private void LvRules_SelectedIndexChanged(object? sender, EventArgs e)
     {
+        var selected = SelectedRule;
+        // 切换行之前把字段区未点“应用修改”的编辑回写，避免改完直接点下一行就丢了
+        if (_editingRule != null && !ReferenceEquals(_editingRule, selected))
+            ApplyFieldsTo(_editingRule);
+        _editingRule = selected;
         PopulateFields();
         SchedulePreview();
     }
+
+    private AudioMatchRule? SelectedRule
+        => lvRules.SelectedItems.Count > 0 && lvRules.SelectedItems[0].Tag is AudioMatchRule r ? r : null;
 
     private void Field_TextChanged(object? sender, EventArgs e) => SchedulePreview();
 
@@ -245,7 +269,9 @@ public partial class PdfAudioRuleDialog : Form
         _profile.MatchMode = mode;
         _profile.SingleAudioFile = _singleAudioFile;
         _profile.Rules = _rules;
-        btnOk.DialogResult = DialogResult.OK;
+        DialogResult = DialogResult.OK;
+        // 非模态窗口必须显式关闭，否则 FormClosed 不触发、规则不会保存
+        Close();
     }
 
     /// <summary>PDF 同目录内保存相对路径，目录外保存绝对路径。</summary>
@@ -341,6 +367,7 @@ public partial class PdfAudioRuleDialog : Form
         if (lvRules.SelectedItems.Count == 0) return;
         var item = lvRules.SelectedItems[0];
         if (item.Tag is AudioMatchRule r) _rules.Remove(r);
+        _editingRule = null;
         lvRules.Items.Remove(item);
         RefreshPreview();
     }
@@ -371,8 +398,8 @@ public partial class PdfAudioRuleDialog : Form
 
     private void PopulateFields()
     {
-        if (lvRules.SelectedItems.Count == 0) return;
-        if (lvRules.SelectedItems[0].Tag is not AudioMatchRule r) return;
+        var r = SelectedRule;
+        if (r == null) return;
         _populating = true;
         try
         {
@@ -396,8 +423,12 @@ public partial class PdfAudioRuleDialog : Form
 
     private void ApplyToSelected()
     {
-        if (lvRules.SelectedItems.Count == 0) return;
-        if (lvRules.SelectedItems[0].Tag is not AudioMatchRule r) return;
+        if (SelectedRule is AudioMatchRule r) ApplyFieldsTo(r);
+    }
+
+    /// <summary>把字段区内容写回指定规则，并同步列表行显示。</summary>
+    private void ApplyFieldsTo(AudioMatchRule r)
+    {
         r.Name = txtName.Text.Trim();
         r.FileNamePattern = txtPattern.Text;
         r.PatternMode = GetSelectedPatternMode();
@@ -407,11 +438,16 @@ public partial class PdfAudioRuleDialog : Form
         r.PagesPerUnit = (int)numPagesPerUnit.Value;
         r.Priority = (int)numPriority.Value;
         r.Enabled = chkEnabled.Checked;
-        RefreshListItem(lvRules.SelectedItems[0], r);
+        foreach (ListViewItem item in lvRules.Items)
+        {
+            if (!ReferenceEquals(item.Tag, r)) continue;
+            RefreshListItem(item, r);
+            break;
+        }
         ValidatePatternField();
     }
 
-    private void RefreshListItem(ListViewItem item, AudioMatchRule r)
+    private static void RefreshListItem(ListViewItem item, AudioMatchRule r)
     {
         item.Text = r.Name;
         item.SubItems[1].Text = r.MapMode.ToString();

@@ -1,4 +1,5 @@
 using LearningAssistant.Models.Pdf;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace LearningAssistant.Services.Pdf;
@@ -21,8 +22,11 @@ public class PdfAudioMatcher : IPdfAudioMatcher
         var priorityMap = new Dictionary<int, int>(); // page -> assigned priority
 
         var enabledRules = rules.Where(r => r.Enabled).OrderByDescending(r => r.Priority).ToList();
+        // 同名音频（或目录内唯一的音频）代表整本书，优先级应高于“文件名数字猜页码”，
+        // 否则 01_Vegetables.mp3 会被错误塞到当前书的第 1 页
+        var wholeBook = FindWholeBookTrack(pdfPath, tracks, enabledRules.Count > 0, out var wholeBookIsSameName);
         // 没有任何启用的规则时按文件名数字兜底，避免首次使用全部显示“未匹配”
-        if (enabledRules.Count == 0)
+        if (enabledRules.Count == 0 && wholeBook == null)
             ApplyDefaultMatching(pageIndex, pageCount, tracks);
 
         foreach (var rule in enabledRules)
@@ -60,8 +64,32 @@ public class PdfAudioMatcher : IPdfAudioMatcher
                 var ordered = hits.OrderBy(h => h.Value ?? 0).ThenBy(h => h.Track.RelativePath, StringComparer.OrdinalIgnoreCase).ToList();
                 for (int i = 0; i < ordered.Count; i++)
                     Assign(pageIndex, priorityMap, i + rule.PageOffset, pageCount, ordered[i].Track, rule.Priority);
+                continue;
             }
-            else foreach (var h in hits)
+
+            // 命中了文件却提取不到页码（如整本同名音频、无数字文件名）时按文件名顺序兜底，
+            // 避免规则表里看着已启用、结果却是全部未匹配
+            if (hits.All(h => h.Value == null))
+            {
+                var ordered = hits.OrderBy(h => h.Track.RelativePath, StringComparer.OrdinalIgnoreCase).ToList();
+                for (int i = 0; i < ordered.Count; i++)
+                {
+                    if (rule.MapMode == AudioPageMapMode.Range)
+                    {
+                        for (int p = 0; p < rule.PagesPerUnit; p++)
+                            Assign(pageIndex, priorityMap, i * rule.PagesPerUnit + rule.PageOffset + p,
+                                pageCount, ordered[i].Track, rule.Priority);
+                    }
+                    else
+                    {
+                        Assign(pageIndex, priorityMap, i + rule.PageOffset, pageCount, ordered[i].Track, rule.Priority);
+                    }
+                }
+                _diagnostics.Add($"规则「{rule.Name}」未从文件名提取到页码，已按文件名顺序依次匹配");
+                continue;
+            }
+
+            foreach (var h in hits)
             {
                 if (h.Value is not int v) continue;
                 var pages = rule.MapMode switch
@@ -73,6 +101,9 @@ public class PdfAudioMatcher : IPdfAudioMatcher
                 foreach (var p in pages) Assign(pageIndex, priorityMap, p, pageCount, h.Track, rule.Priority);
             }
         }
+
+        // 同名音频或目录内唯一音频视为整篇音频，补齐规则未覆盖的页码
+        ApplyWholeBookFallback(pageCount, wholeBook, wholeBookIsSameName, pageIndex);
 
         if (manualOverrides != null)
             foreach (var kv in manualOverrides)
@@ -165,7 +196,8 @@ public class PdfAudioMatcher : IPdfAudioMatcher
 
         foreach (var track in tracks)
         {
-            var match = Regex.Match(track.FileName, @"\d+");
+            // 只在去掉扩展名后的文件名里找数字，避免把 .mp3 的 3 当成页码
+            var match = Regex.Match(Path.GetFileNameWithoutExtension(track.FileName), @"\d+");
             if (!match.Success || !int.TryParse(match.Value, out var number)) continue;
 
             var page = number - 1;
@@ -176,6 +208,82 @@ public class PdfAudioMatcher : IPdfAudioMatcher
             track.MappedPageStart = page;
             track.MappedPageEnd = page;
         }
+    }
+
+    /// <summary>
+    /// 与 PDF 同名的音频视为整篇音频，始终补齐未匹配页；
+    /// 没有任何启用规则且目录只有一条音频时，也按整篇匹配。
+    /// 已有规则且未显式同名时不做推断，避免覆盖用户规则的本意。
+    /// </summary>
+    private void ApplyWholeBookFallback(string pdfPath, int pageCount, IReadOnlyList<AudioTrack> tracks,
+        Dictionary<int, AudioTrack> pageIndex, bool hasRules)
+    {
+        if (pageCount <= 0 || tracks.Count == 0) return;
+
+        var sameName = FindSameNameTracks(pdfPath, tracks);
+
+        AudioTrack? track = null;
+        if (sameName.Count == 1) track = sameName[0];
+        else if (!hasRules && tracks.Count == 1
+                 && !Regex.IsMatch(Path.GetFileNameWithoutExtension(tracks[0].FileName), @"\d"))
+            track = tracks[0];
+        if (track == null) return;
+
+        int filled = 0;
+        for (int p = 0; p < pageCount; p++)
+        {
+            if (pageIndex.ContainsKey(p)) continue;
+            pageIndex[p] = track;
+            filled++;
+        }
+        if (filled == 0) return;
+
+        track.MappedPageStart = 0;
+        track.MappedPageEnd = pageCount - 1;
+        _diagnostics.Add(sameName.Count == 1
+            ? $"音频「{track.FileName}」与 PDF 同名，已作为整篇音频匹配到全部 {pageCount} 页"
+            : $"目录中只有 1 个音频「{track.FileName}」，已作为整篇音频匹配到全部 {pageCount} 页");
+    }
+
+    /// <summary>
+    /// 找出与 PDF 同名的音频：先按去掉扩展名的完全同名匹配；
+    /// 没有完全同名时退化为归一化比较（忽略空格、下划线、连字符与大小写），
+    /// 例如「02_I Go.mp3」可以匹配「02_IGo.pdf」。
+    /// </summary>
+    public static List<AudioTrack> FindSameNameTracks(string pdfPath, IReadOnlyList<AudioTrack> tracks)
+    {
+        if (string.IsNullOrWhiteSpace(pdfPath) || tracks.Count == 0) return new List<AudioTrack>();
+
+        var pdfStem = Path.GetFileNameWithoutExtension(pdfPath);
+        var exact = tracks
+            .Where(t => string.Equals(Path.GetFileNameWithoutExtension(t.FileName) ?? "",
+                pdfStem ?? "", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (exact.Count > 0) return exact;
+
+        var pdfKey = NormalizeBookName(pdfPath);
+        if (pdfKey.Length == 0) return new List<AudioTrack>();
+        return tracks
+            .Where(t => string.Equals(NormalizeBookName(t.FileName), pdfKey, StringComparison.Ordinal))
+            .ToList();
+    }
+
+    /// <summary>
+    /// 书名归一化：去掉扩展名、空白与常见分隔符后转小写，用于宽松的同名音频识别。
+    /// </summary>
+    public static string NormalizeBookName(string? nameOrPath)
+    {
+        if (string.IsNullOrWhiteSpace(nameOrPath)) return string.Empty;
+        var stem = Path.GetFileNameWithoutExtension(nameOrPath);
+        if (string.IsNullOrEmpty(stem)) return string.Empty;
+
+        var builder = new StringBuilder(stem.Length);
+        foreach (var ch in stem)
+        {
+            if (char.IsWhiteSpace(ch) || ch == '_' || ch == '-' || ch == '·') continue;
+            builder.Append(char.ToLowerInvariant(ch));
+        }
+        return builder.ToString();
     }
 
     private static int? ExtractValue(Match m, AudioMatchRule rule, AudioTrack track)
@@ -199,9 +307,9 @@ public class PdfAudioMatcher : IPdfAudioMatcher
             return firstGroup;
         }
 
-        // 没有可用的捕获组时，退化为取文件名中的第一个数字，
+        // 没有可用的捕获组时，退化为取文件名（去扩展名）中的第一个数字，
         // 避免“明明匹配上了却因为没写捕获组而映射不到页码”
-        var fallback = Regex.Match(track.FileName, @"\d+");
+        var fallback = Regex.Match(Path.GetFileNameWithoutExtension(track.FileName), @"\d+");
         if (fallback.Success && int.TryParse(fallback.Value, out var number))
             return number;
 

@@ -729,24 +729,6 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
             var books = GetObject(root, "books") ?? new JsonObject();
             var book = FindBookNode(books, fileName).Value;
             if (book == null)
-            {
-                // 文件改名后按快速指纹找回分区
-                var quick = ComputeQuickFingerprint(pdfPath);
-                if (!string.IsNullOrEmpty(quick))
-                {
-                    var candidates = new List<JsonObject>();
-                    foreach (var kv in books)
-                    {
-                        if (kv.Value is JsonObject candidate
-                            && string.Equals(GetString(candidate, "quickFingerprint"), quick,
-                                StringComparison.OrdinalIgnoreCase))
-                            candidates.Add(candidate);
-                    }
-                    if (candidates.Count == 1) book = candidates[0];
-                }
-            }
-
-            if (book == null)
                 return PdfAudioExportResult.Fail("当前书籍还没有可导出的匹配配置");
 
             var single = new JsonObject { [fileName] = book.DeepClone() };
@@ -757,6 +739,87 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
         catch (Exception ex)
         {
             return PdfAudioExportResult.Fail($"导出当前书失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>读取目录档案原文（含本机字段），供应用内手动编辑。</summary>
+    public PdfAudioExportResult ReadDirectoryJson(string pdfPath)
+    {
+        try
+        {
+            pdfPath = Path.GetFullPath(pdfPath);
+            var profilePath = GetProfilePath(pdfPath);
+            WriteGate.Wait();
+            try
+            {
+                if (!File.Exists(profilePath))
+                    return PdfAudioExportResult.Fail("当前目录还没有匹配档案");
+                var root = ParseRoot(File.ReadAllText(profilePath), out var error);
+                if (root == null) return PdfAudioExportResult.Fail(error ?? "档案解析失败");
+                return PdfAudioExportResult.Ok(root.ToJsonString(WriteOptions), Path.GetFileName(profilePath));
+            }
+            finally
+            {
+                WriteGate.Release();
+            }
+        }
+        catch (Exception ex)
+        {
+            return PdfAudioExportResult.Fail($"读取档案失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>校验并写入手动编辑后的目录档案原文，不校验书名与指纹。</summary>
+    public PdfAudioExportResult SaveDirectoryJson(string pdfPath, string json)
+    {
+        try
+        {
+            pdfPath = Path.GetFullPath(pdfPath);
+            var root = ParseRoot(json, out var parseError);
+            if (root == null) return PdfAudioExportResult.Fail(parseError!);
+
+            int? version = GetInt(root, "schemaVersion");
+            if (version == null) return PdfAudioExportResult.Fail("档案缺少 schemaVersion");
+            if (version > 3)
+                return PdfAudioExportResult.Fail($"档案版本 {version} 高于当前支持版本 3，无法保存");
+
+            var books = GetObject(root, "books");
+            if (books == null) return PdfAudioExportResult.Fail("档案缺少 books");
+
+            var errors = new List<string>();
+            var warnings = new List<string>();
+            ValidatePlaybackScope(GetObject(root, "defaults"), "目录默认值", errors);
+            ValidateRules(GetArray(root, "rules"), "目录规则", errors, warnings);
+            foreach (var kv in books)
+            {
+                if (kv.Value is not JsonObject book)
+                {
+                    errors.Add($"书籍「{kv.Key}」的分区不是 JSON 对象");
+                    continue;
+                }
+                ValidatePlaybackScope(book, $"「{kv.Key}」", errors);
+                ValidateRules(GetArray(GetObject(book, "rulePatch"), "extraRules"),
+                    $"「{kv.Key}」附加规则", errors, warnings);
+                ValidateOverrides(book, kv.Key, errors);
+            }
+            if (errors.Count > 0)
+                return PdfAudioExportResult.Fail(string.Join(Environment.NewLine, errors.Take(5)));
+
+            var profilePath = GetProfilePath(pdfPath);
+            WriteGate.Wait();
+            try
+            {
+                WriteAtomic(profilePath, root.ToJsonString(WriteOptions));
+            }
+            finally
+            {
+                WriteGate.Release();
+            }
+            return PdfAudioExportResult.Ok(root.ToJsonString(WriteOptions), Path.GetFileName(profilePath));
+        }
+        catch (Exception ex)
+        {
+            return PdfAudioExportResult.Fail($"保存档案失败：{ex.Message}");
         }
     }
 
@@ -783,18 +846,21 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
 
             var fullPath = Path.GetFullPath(pdfPath);
             var fileName = Path.GetFileName(fullPath);
+            string? renamedFrom = null;
             if (kind == "book")
             {
                 if (books.Count != 1)
                     return PdfAudioImportPreview.Fail("单书档案只能包含一个书籍分区");
                 var key = books.First().Key;
+                // 允许手动改书名后导入：不按指纹/文件名强制校验，落到当前打开的书上
                 if (!string.Equals(key, fileName, StringComparison.OrdinalIgnoreCase))
-                    return PdfAudioImportPreview.Fail(
-                        $"单书档案属于「{key}」，与当前打开的「{fileName}」不一致；请打开对应 PDF 后再导入");
+                    renamedFrom = key;
             }
 
             var errors = new List<string>();
             var warnings = new List<string>();
+            if (renamedFrom != null)
+                warnings.Add($"单书档案原属「{renamedFrom}」，将按当前打开的「{fileName}」导入");
 
             ValidatePlaybackScope(GetObject(root, "defaults"), "目录默认值", errors);
             ValidateRules(GetArray(root, "rules"), "目录规则", errors, warnings);
@@ -897,10 +963,14 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
 
             var targetBooks = GetObject(target, "books") ?? new JsonObject();
             var importedBooks = GetObject(preview.Root, "books")!;
+            // 单书档案落在当前打开的书上，手改书名也能导入
+            var forcedKey = preview.Kind == "book" ? Path.GetFileName(fullPath) : null;
             foreach (var kv in importedBooks)
             {
                 if (kv.Value is not JsonObject importedBook) continue;
-                var key = FindExistingBookKey(targetBooks, kv.Key) ?? kv.Key;
+                var key = forcedKey != null
+                    ? FindExistingBookKey(targetBooks, forcedKey) ?? forcedKey
+                    : FindExistingBookKey(targetBooks, kv.Key) ?? kv.Key;
                 var existing = targetBooks[key] as JsonObject;
                 targetBooks[key] = MergeBookNode(existing, importedBook, directory, key);
             }
@@ -927,7 +997,10 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
             ["books"] = StripCaches(books)
         };
 
-    /// <summary>导出剔除缓存：缓存只留 AppData，不随档案迁移。</summary>
+    /// <summary>
+    /// 导出剔除本机机器字段：缓存与内容指纹只留 AppData，不随档案迁移，
+    /// 便于用户直接手改导出文件后导入。
+    /// </summary>
     private static JsonObject StripCaches(JsonObject books)
     {
         var result = new JsonObject();
@@ -937,6 +1010,8 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
             {
                 var clone = (JsonObject)book.DeepClone();
                 RemoveIgnoreCase(clone, "cache");
+                RemoveIgnoreCase(clone, "quickFingerprint");
+                RemoveIgnoreCase(clone, "fullFingerprint");
                 result[kv.Key] = clone;
             }
             else

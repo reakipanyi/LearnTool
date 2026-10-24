@@ -22,6 +22,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
     private readonly ToolStripMenuItem _menuRules = new("匹配规则…");
     private readonly ToolStripMenuItem _menuRulePatch = new("本书规则补丁…");
     private readonly ToolStripMenuItem _menuSwitchBook = new("在文件页切换书籍…");
+    private readonly ToolStripMenuItem _menuEditJson = new("编辑匹配档案（JSON）…");
     private readonly ToolStripMenuItem _menuExportDirectory = new("导出目录档案…");
     private readonly ToolStripMenuItem _menuExportBook = new("导出当前书…");
     private readonly ToolStripMenuItem _menuImport = new("导入匹配档案…");
@@ -89,11 +90,13 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _menuBook.Items.AddRange(new ToolStripItem[]
         {
             _menuSwitchBook, new ToolStripSeparator(),
+            _menuEditJson, new ToolStripSeparator(),
             _menuExportDirectory, _menuExportBook, new ToolStripSeparator(), _menuImport, _menuReattach
         });
         _menuBook.Opening += (_, _) =>
         {
             bool hasBook = _manager != null && !string.IsNullOrEmpty(_form.CurrentPdfPath);
+            _menuEditJson.Enabled = hasBook;
             _menuExportDirectory.Enabled = hasBook;
             _menuExportBook.Enabled = hasBook;
             _menuImport.Enabled = hasBook;
@@ -239,6 +242,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _menuRules.Click += (_, _) => OnRules();
         _menuRulePatch.Click += (_, _) => OnRulePatch();
         _menuSwitchBook.Click += (_, _) => ShowFilesTab();
+        _menuEditJson.Click += async (_, _) => await OnEditProfileJsonAsync();
         _menuExportDirectory.Click += (_, _) => OnExport(exportDirectory: true);
         _menuExportBook.Click += (_, _) => OnExport(exportDirectory: false);
         _menuImport.Click += async (_, _) => await OnImportAsync();
@@ -416,7 +420,8 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         {
             if (_manager.Profile.PlaybackScope != PlaybackScope.WholeBook)
             {
-                var path = PickAudioPath("选择整篇音频");
+                // 与 PDF 同名的音频自动作为整篇音频，不再逐本弹出选择框
+                var path = _manager.AutoResolveSingleAudio() ?? PickAudioPath("选择整篇音频");
                 if (path == null)
                 {
                     SyncModeControls();
@@ -959,6 +964,47 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _manager.ApplyRulePatch(dlg.Patch);
         RefreshData();
         ShowStatus(dlg.Patch == null ? "已恢复继承目录规则" : "已应用本书规则补丁", isError: false);
+    }
+
+    /// <summary>直接编辑目录档案原文；保存后立即按新内容重新匹配。</summary>
+    private async Task OnEditProfileJsonAsync()
+    {
+        if (string.IsNullOrEmpty(_form.CurrentPdfPath)) { _form.ShowWarning("请先打开 PDF"); return; }
+
+        var read = _manager.ReadProfileJson();
+        if (!read.Success || string.IsNullOrEmpty(read.Json))
+        {
+            _form.ShowWarning(read.Error ?? "当前目录还没有匹配档案");
+            return;
+        }
+
+        using var dlg = new PdfAudioJsonDialog(read.Json!, Path.GetFileName(_form.CurrentPdfPath));
+        if (dlg.ShowDialog(_form.Form) != DialogResult.OK) return;
+
+        _menuEditJson.Enabled = false;
+        UseWaitCursor = true;
+        try
+        {
+            var save = await _manager.SaveProfileJsonAsync(dlg.Json);
+            if (!save.Success)
+            {
+                ShowStatus(save.Error, isError: true);
+                _form.ShowWarning($"保存档案失败：{save.Error}");
+                return;
+            }
+            RefreshData();
+            OnCurrentPageChanged();
+            ShowStatus("已保存手动编辑的匹配档案，并按新规则重新匹配", isError: false);
+        }
+        catch (Exception ex)
+        {
+            HandleAudioError("保存匹配档案失败", ex);
+        }
+        finally
+        {
+            _menuEditJson.Enabled = true;
+            UseWaitCursor = false;
+        }
     }
 
     /// <summary>导出目录档案或当前书档案，由用户选择保存位置。</summary>
