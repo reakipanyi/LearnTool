@@ -37,7 +37,9 @@ namespace LearningAssistant.Forms.Pdf
         private readonly Button _btnTakePreview = new();
         private readonly Button _btnTakeChoose = new();
         private readonly Button _btnTakeDelete = new();
+        private readonly Button _btnCompose = new();
         private readonly WaveformThumb _waveform = new();
+        private readonly ShadowingComposeService _composer = new();
         private ShadowingSegmentManifest? _segmentManifest;
         private IReadOnlyList<ShadowingSegment> _segments = Array.Empty<ShadowingSegment>();
         private IReadOnlyList<string?>? _practicePresets;
@@ -85,6 +87,7 @@ namespace LearningAssistant.Forms.Pdf
                 _labelTitle.Text = "原声跟读";
                 Text = $"原声跟读 - {documentTitle}";
                 _takeActions.Visible = true;
+                _btnCompose.Visible = true;
             }
 
             PersistManifest(sentences);
@@ -341,6 +344,19 @@ namespace LearningAssistant.Forms.Pdf
             _btnTakeChoose.Text = "采用";
             _btnTakeDelete.Text = "删除";
 
+            // 合成按钮放在页脚左侧，避免 4 个按钮在窄侧栏被裁切
+            _btnCompose.FlatStyle = FlatStyle.Flat;
+            _btnCompose.FlatAppearance.BorderSize = 0;
+            _btnCompose.Font = new Font("Microsoft YaHei UI", 8.5F);
+            _btnCompose.Size = new Size(82, 24);
+            _btnCompose.Location = new Point(12, 4);
+            _btnCompose.Cursor = Cursors.Hand;
+            _btnCompose.BackColor = palette.SurfaceAlt;
+            _btnCompose.ForeColor = palette.Text;
+            _btnCompose.Text = "合成成品";
+            _btnCompose.Visible = false;
+            footer.Controls.Add(_btnCompose);
+
             if (actions.Controls.Contains(_labelStatus))
                 actions.Controls.Remove(_labelStatus);
             actions.RowCount = 4;
@@ -376,6 +392,7 @@ namespace LearningAssistant.Forms.Pdf
             _btnTakePreview.Click += (_, _) => PreviewCurrentTake();
             _btnTakeChoose.Click += async (_, _) => await ChooseCurrentTakeAsync();
             _btnTakeDelete.Click += async (_, _) => await DeleteCurrentTakeAsync();
+            _btnCompose.Click += async (_, _) => await ComposePageAsync();
             _comboMode.SelectedIndexChanged += OnModeChanged;
 
             _progressTrack.Paint += ProgressTrack_Paint;
@@ -678,6 +695,7 @@ namespace LearningAssistant.Forms.Pdf
             _btnTakePreview.Enabled = hasTake;
             _btnTakeDelete.Enabled = hasTake;
             _btnTakeChoose.Enabled = hasTake && CurrentTake(segment!)!.ChosenManual == false;
+            _btnCompose.Enabled = _segments.Any(s => CurrentTake(s) != null);
         }
 
         private void PreviewCurrentTake()
@@ -761,6 +779,77 @@ namespace LearningAssistant.Forms.Pdf
             catch (Exception ex)
             {
                 _labelStatus.Text = $"保存删除结果失败：{ex.Message}";
+            }
+        }
+
+        /// <summary>
+        /// 合成本页成品：按段序拼接所有“采用”的 take，段间 400ms 静音；
+        /// 清单记录 segmentRefs/takeRefs，源 take 删除后仍可追溯。
+        /// </summary>
+        private async Task ComposePageAsync()
+        {
+            if (!_segmentMode || _segmentManifest == null)
+                return;
+
+            var items = new List<ShadowingComposeItem>();
+            foreach (var segment in _segments)
+            {
+                var take = CurrentTake(segment);
+                if (take == null)
+                    continue;
+                string path = _segmentStore.ResolvePath(take.Path);
+                if (File.Exists(path))
+                    items.Add(new ShadowingComposeItem(segment.Id, take.Id, path));
+            }
+
+            if (items.Count == 0)
+            {
+                _labelStatus.Text = "还没有已采用的跟读录音，先录制并采用至少一段。";
+                return;
+            }
+
+            _btnCompose.Enabled = false;
+            _labelStatus.Text = "正在合成跟读成品…";
+            try
+            {
+                string relative = _segmentStore.AllocateComposedRelativePath(_pageIndex, DateTime.Now);
+                string output = _segmentStore.ResolvePath(relative);
+                var result = await _composer.ComposeAsync(output, items);
+
+                if (!result.Success)
+                {
+                    _labelStatus.Text = $"合成失败：{result.Error}";
+                    return;
+                }
+
+                _segmentManifest.Composed.Add(new ShadowingComposedAudio
+                {
+                    Path = _segmentStore.ToRelativePath(result.OutputPath!),
+                    SegmentCount = result.SegmentCount,
+                    SegmentRefs = result.SegmentRefs.ToList(),
+                    TakeRefs = result.TakeRefs.ToList(),
+                    DurationMs = result.DurationMs,
+                    CreatedAt = DateTime.Now
+                });
+                await SaveSegmentManifestAsync();
+
+                string minutes = TimeSpan.FromMilliseconds(result.DurationMs).ToString(@"mm\:ss");
+                string skipped = result.MissingSegmentIds.Count > 0
+                    ? $"，跳过 {result.MissingSegmentIds.Count} 段缺失录音"
+                    : string.Empty;
+                _labelStatus.Text = $"已合成 {result.SegmentCount} 段 · {minutes}";
+                MessageBox.Show(
+                    this,
+                    $"已合成 {result.SegmentCount} 段跟读成品（{minutes}）{skipped}。\n\n{result.OutputPath}",
+                    "合成完成", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                _labelStatus.Text = $"合成失败：{ex.Message}";
+            }
+            finally
+            {
+                _btnCompose.Enabled = _segments.Any(s => CurrentTake(s) != null);
             }
         }
 
@@ -1444,7 +1533,7 @@ namespace LearningAssistant.Forms.Pdf
             BackColor = new PdfSidebarPalette(isDark).Background;
             PdfSidebarTheme.ApplyRecursive(this, isDark);
             var palette = PdfSidebarTheme.PaletteFor(this);
-            foreach (var button in new[] { _btnTakePreview, _btnTakeChoose, _btnTakeDelete })
+            foreach (var button in new[] { _btnTakePreview, _btnTakeChoose, _btnTakeDelete, _btnCompose })
             {
                 button.BackColor = palette.SurfaceAlt;
                 button.ForeColor = palette.Text;
