@@ -536,6 +536,13 @@ public sealed class PdfAudioPlayerBar : UserControl
             : $"{time.Minutes:00}:{time.Seconds:00}";
     }
 
+    protected override void OnParentChanged(EventArgs e)
+    {
+        base.OnParentChanged(e);
+        // 构造时尚未挂到窗体，取不到夜间模式；挂载后重新取色
+        ApplyTheme();
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
