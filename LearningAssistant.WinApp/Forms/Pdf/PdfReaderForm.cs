@@ -409,6 +409,11 @@ namespace LearningAssistant.Forms.Pdf
             if (e.CloseReason != CloseReason.UserClosing || _closeConfirmed)
                 return;
 
+            // 多窗口并存时本窗口可能不在前台：先提到最前，避免确认框被其它阅读器窗口挡住，
+            // 让人以为窗口被禁用、关不掉
+            Activate();
+            BringToFront();
+
             var result = MessageBox.Show(
                 this,
                 "确定要关闭 PDF 阅读器吗？",

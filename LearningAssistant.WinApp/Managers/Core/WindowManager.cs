@@ -293,7 +293,9 @@ namespace LearningAssistant.Managers
                 var presenter = scopedProvider.GetRequiredService<PdfPresenter>();
 
                 form.SetPresenter(presenter);
-                form.StartPosition = FormStartPosition.CenterParent;
+                // 多开时错开摆放：首个窗口最大化，后续窗口级联，避免所有窗口都最大化互相完全遮挡，
+                // 导致之前的窗口既拖不动也点不到
+                PlaceReaderWindow(form, GetWindows<PdfReaderForm>());
                 // 从学习项回跳：窗口显示后加载指定 PDF 并定位到来源页
                 if (!string.IsNullOrWhiteSpace(pdfPath) && File.Exists(pdfPath))
                 {
@@ -445,6 +447,41 @@ namespace LearningAssistant.Managers
             RegisterForm(form, onClosed: () => scope.Dispose());
             // 非模态显示，允许多窗口并存
             form.Show();
+        }
+
+        /// <summary>
+        /// 安排 PDF 阅读器窗口的位置：首个窗口最大化，之后再开的新窗口在工作区内级联错开，
+        /// 保证每个窗口都露出可拖动的标题栏，也能随时切换回去。
+        /// </summary>
+        private static void PlaceReaderWindow(Form form, IReadOnlyList<PdfReaderForm> existing)
+        {
+            if (existing.Count == 0)
+            {
+                form.WindowState = FormWindowState.Maximized;
+                return;
+            }
+
+            // 以当前活跃窗口所在屏幕为基准，避免多显示器时错开到别的屏幕
+            var reference = existing.FirstOrDefault(f => f.ContainsFocus)
+                ?? existing.LastOrDefault(f => f.WindowState != FormWindowState.Minimized)
+                ?? existing[^1];
+            var area = Screen.FromControl(reference).WorkingArea;
+
+            var size = new Size(
+                Math.Max(form.MinimumSize.Width, area.Width * 2 / 3),
+                Math.Max(form.MinimumSize.Height, area.Height * 3 / 4));
+
+            // 最多累计 8 级偏移，避免开太多窗口后跑到屏幕外
+            int offset = Math.Min(existing.Count, 8) * 32;
+            int left = area.Left + (area.Width - size.Width) / 2 + offset;
+            int top = area.Top + (area.Height - size.Height) / 2 + offset;
+            if (left + size.Width > area.Right) left = area.Left + (area.Width - size.Width) / 2;
+            if (top + size.Height > area.Bottom) top = area.Top + (area.Height - size.Height) / 2;
+
+            // 必须先退出最大化再设 Bounds，否则位置与尺寸会被最大化状态覆盖
+            form.WindowState = FormWindowState.Normal;
+            form.StartPosition = FormStartPosition.Manual;
+            form.Bounds = new Rectangle(new Point(left, top), size);
         }
 
         /// <summary>
