@@ -55,7 +55,19 @@ namespace LearningAssistant.Forms.Pdf
         private PdfAudioTrackManager? _audioTrackManager;
         private PdfAudioPanel? _audioPanel;
         private PdfAudioPlayerBar? _audioPlayerBar;
-        private PdfAudioSidebarPanel? _audioSidebar;
+        private Panel? _recordingHost;
+        private bool _recordingServiceAvailable;
+        // 阶段2：音频内容从顶层页签迁入右侧抽屉（配套音频 / 整页录音 / 句子跟读）
+        private Panel? _audioDrawer;
+        private Panel? _audioDrawerContent;
+        private Label? _audioDrawerTitle;
+        private Label? _audioDrawerSubtitle;
+        private Button? _audioDrawerAudioButton;
+        private Button? _audioDrawerRecordingButton;
+        private Button? _audioDrawerShadowingButton;
+        private Label? _audioUnavailableLabel;
+        private Label? _recordingUnavailableLabel;
+        private AudioDrawerMode _audioDrawerMode;
         private PdfReadingSidebarPanel? _readingSidebar;
         private SidebarHeaderBar? _translateHeader;
         private PdfTranslatePanel? _translatePanel;
@@ -68,6 +80,13 @@ namespace LearningAssistant.Forms.Pdf
 
         private readonly Pen _pen = new Pen(Color.Red, 4f);
         private bool _disposed = false;
+
+        private enum AudioDrawerMode
+        {
+            Audio,
+            Recording,
+            Shadowing
+        }
 
         private Panel? _ocrPanel;
         private PictureBox? _ocrPictureBox;
@@ -491,19 +510,8 @@ namespace LearningAssistant.Forms.Pdf
                 _pictureBoxPdf.MouseUp += PictureBoxPdf_MouseUp;
             }
 
-            // 音频 Tab 采用「配套音频 / 整页录音 / 句子跟读」三段式结构
-            TabPage? recordingPage = _tabPageAudio;
-            if (_tabPageAudio != null)
-            {
-                _audioSidebar = new PdfAudioSidebarPanel();
-                _audioSidebar.Dock = DockStyle.Fill;
-                _audioSidebar.SelectedIndexChanged += (_, _) =>
-                {
-                    if (_audioSidebar?.SelectedIndex == 2) UpdateShadowingSummary();
-                };
-                _tabPageAudio.Controls.Add(_audioSidebar);
-                recordingPage = _audioSidebar.RecordingPage;
-            }
+            // 阶段2：音频内容统一收进右侧抽屉，不再创建顶层「音频」三段式侧栏
+            _recordingHost = new Panel { Dock = DockStyle.Fill, Visible = false };
 
             // 初始化配套音频跟踪管理器（与录音服务解耦，独立于录音可用性）
             try
@@ -520,27 +528,24 @@ namespace LearningAssistant.Forms.Pdf
                     _audioTrackManager.ProfileLoaded += OnAudioAvailabilityChanged;
                     _audioTrackManager.SettingsChanged += OnAudioAvailabilityChanged;
                     _audioTrackManager.TrackChanged += OnAudioTrackChangedForBar;
-                    if (_audioSidebar != null)
+
+                    // AI 匹配只按需读取页面文本，使用独立的 PDF 服务实例避免干扰阅读器自己的文档句柄
+                    var aiService = Program.ServiceProvider?.GetService(typeof(IAIService)) as IAIService;
+                    var pdfTextLogger = Program.ServiceProvider?
+                        .GetService(typeof(ILogger<PdfiumPdfService>)) as ILogger<PdfiumPdfService>;
+                    var aiMatcher = aiService != null && pdfTextLogger != null
+                        ? new PdfAudioAiMatcher(aiService, new PdfiumPdfService(pdfTextLogger), _logger)
+                        : null;
+
+                    _audioPanel = new PdfAudioPanel(_audioTrackManager, this, aiMatcher) { Dock = DockStyle.Fill };
+
+                    // 底部播放器是配套音频的唯一播放入口，挂到画布底部、状态栏之上
+                    // 默认隐藏：等新文档的音频档案加载完成并确认存在曲目后再显示，避免无音频时占用画布高度
+                    _audioPlayerBar = new PdfAudioPlayerBar(_audioTrackManager, this, ShowAudioCompanion)
                     {
-                        // AI 匹配只按需读取页面文本，使用独立的 PDF 服务实例避免干扰阅读器自己的文档句柄
-                        var aiService = Program.ServiceProvider?.GetService(typeof(IAIService)) as IAIService;
-                        var pdfTextLogger = Program.ServiceProvider?
-                            .GetService(typeof(ILogger<PdfiumPdfService>)) as ILogger<PdfiumPdfService>;
-                        var aiMatcher = aiService != null && pdfTextLogger != null
-                            ? new PdfAudioAiMatcher(aiService, new PdfiumPdfService(pdfTextLogger), _logger)
-                            : null;
-
-                        _audioPanel = new PdfAudioPanel(_audioTrackManager, this, aiMatcher) { Dock = DockStyle.Fill };
-                        _audioSidebar.CompanionPage.Controls.Add(_audioPanel);
-
-                        // 底部播放器是配套音频的唯一播放入口，挂到画布底部、状态栏之上
-                        // 默认隐藏：等新文档的音频档案加载完成并确认存在曲目后再显示，避免无音频时占用画布高度
-                        _audioPlayerBar = new PdfAudioPlayerBar(_audioTrackManager, this, ShowAudioCompanion)
-                        {
-                            Visible = false
-                        };
-                        _panelPdf.Controls.Add(_audioPlayerBar);
-                    }
+                        Visible = false
+                    };
+                    _panelPdf.Controls.Add(_audioPlayerBar);
                 }
             }
             catch { /* 配套音频管理器初始化失败，不阻断 PDF 阅读 */ }
@@ -557,16 +562,9 @@ namespace LearningAssistant.Forms.Pdf
                 var pdfAiSummaryStore = Program.ServiceProvider?.GetService(typeof(IPdfAiSummaryStore)) as IPdfAiSummaryStore;
                 _audioManager = new PdfReaderAudioManager(_logger, this, audioRecorderService,
                     _pdfAiService, pdfAiSummaryStore, _annotationService)
-                { MountTabPage = recordingPage };
+                { MountHost = _recordingHost };
                 _audioManager.Initialize();
-            }
-            else
-            {
-                // 录音服务不可用时，在「整页录音」子页上显示提示
-                if (_audioSidebar != null)
-                {
-                    _audioSidebar.RecordingUnavailableLabel.Visible = true;
-                }
+                _recordingServiceAvailable = true;
             }
 
 
@@ -1242,7 +1240,7 @@ namespace LearningAssistant.Forms.Pdf
         private bool IsMediaShortcutScope()
             => _audioPlayerBar?.ContainsFocus == true
                || _audioPanel?.ContainsFocus == true
-               || _audioSidebar?.ContainsFocus == true;
+               || _audioDrawer?.ContainsFocus == true;
 
         /// <summary>相对当前进度快进/快退指定秒数，并夹在 [0, 时长] 内。</summary>
         private void SeekAudio(double seconds)
@@ -1671,13 +1669,11 @@ namespace LearningAssistant.Forms.Pdf
 
         #region 文档加载与页面渲染
 
-        /// <summary>打开「学习」页内的音频与录音视图，供播放器空态/去绑定入口调用。</summary>
+        /// <summary>打开右侧音频抽屉的「配套音频」视图，供播放器空态/去绑定入口调用。</summary>
         public void ShowAudioCompanion()
         {
-            if (_tabControlLeft == null || _tabPageStudy == null) return;
-            _tabControlLeft.SelectedTab = _tabPageStudy;
-            SetStudyAudioVisible(true);
-            if (_audioSidebar != null) _audioSidebar.Segments.SelectedIndex = 0;
+            ShowAudioDrawer(AudioDrawerMode.Audio);
+            _audioPanel?.RefreshData();
         }
 
         private void OnAudioAvailabilityChanged(object? sender, EventArgs e)
@@ -6465,10 +6461,14 @@ namespace LearningAssistant.Forms.Pdf
         /// <summary>把翻译 / 高亮 / 听读三个侧栏面板统一到同一套卡片式设计语言。</summary>
         private void ApplySidebarRedesign()
         {
+            // 阶段2：音频不再是顶层页签，三个子视图统一收进右侧抽屉
+            if (_tabPageAudio != null && _tabControlLeft.TabPages.Contains(_tabPageAudio))
+                _tabControlLeft.TabPages.Remove(_tabPageAudio);
+
             BuildReadingSidebar();
             BuildTranslateSidebar();
             BuildHighlightSidebar();
-            BuildAudioSidebar();
+            BuildAudioDrawer();
             BuildStudySidebar();
 
             // 夜间状态按窗口记录，避免新建窗口覆盖其他阅读窗口的主题
@@ -6489,26 +6489,7 @@ namespace LearningAssistant.Forms.Pdf
             _studyPanel.Dock = DockStyle.Fill;
             _studyPanel.Margin = Padding.Empty;
             _studyPanel.Header.ActionButton!.Click += (_, _) => UpdateStudyTab();
-
-            // 阶段1：学习页 = 学习内容 + 底部「音频与录音」入口；音频面板以整页视图展开，避免压缩学习内容
-            _studyAudioLayout = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 1,
-                RowCount = 2,
-                BackColor = PdfSidebarTheme.Background,
-                Margin = Padding.Empty,
-                Padding = Padding.Empty
-            };
-            _studyAudioLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            _studyAudioLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            _studyAudioLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, _audioSidebar != null ? 38F : 0F));
-            _studyAudioLayout.Controls.Add(_studyPanel, 0, 0);
-
-            if (_audioSidebar != null)
-                _studyAudioLayout.Controls.Add(BuildStudyAudioEntry(), 0, 1);
-
-            _tabPageStudy.Controls.Add(_studyAudioLayout);
+            _tabPageStudy.Controls.Add(_studyPanel);
 
             _studyHighlightCount = _studyPanel.HighlightCountLabel;
             _studyLearningCount = _studyPanel.LearningCountLabel;
@@ -6530,162 +6511,6 @@ namespace LearningAssistant.Forms.Pdf
 
             _studyItemList = _studyPanel.ItemList;
             _studyItemList.ClientSizeChanged += (_, _) => ResizeStudyItemRows();
-
-            MergeAudioSidebarIntoStudy();
-        }
-
-        /// <summary>学习页底部的「音频与录音」入口条，阶段2迁入抽屉后可删除。</summary>
-        private Panel BuildStudyAudioEntry()
-        {
-            var entry = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = PdfSidebarTheme.Surface,
-                Cursor = Cursors.Hand,
-                Margin = Padding.Empty,
-                Tag = "surface"
-            };
-
-            var icon = new Label
-            {
-                Text = "🎧",
-                Font = new Font("Segoe UI Emoji", 11F),
-                AutoSize = true,
-                Location = new Point(10, 8)
-            };
-            var title = new Label
-            {
-                Text = "音频与录音",
-                Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                AutoSize = true,
-                Location = new Point(34, 3)
-            };
-            var subtitle = new Label
-            {
-                Text = "配套音频 / 整页录音 / 句子跟读",
-                Font = new Font("Microsoft YaHei UI", 8F),
-                ForeColor = PdfSidebarTheme.Muted,
-                Tag = "muted",
-                AutoSize = true,
-                Location = new Point(34, 21)
-            };
-            var chevron = new Label
-            {
-                Text = "打开 ▸",
-                Font = new Font("Microsoft YaHei UI", 8.5F),
-                ForeColor = PdfSidebarTheme.Muted,
-                Tag = "muted",
-                Dock = DockStyle.Right,
-                Width = 76,
-                TextAlign = ContentAlignment.MiddleCenter
-            };
-
-            void OpenAudio(object? _, EventArgs __) => OpenStudyAudio();
-
-            entry.Click += OpenAudio;
-            icon.Click += OpenAudio;
-            title.Click += OpenAudio;
-            subtitle.Click += OpenAudio;
-            chevron.Click += OpenAudio;
-
-            entry.Controls.Add(icon);
-            entry.Controls.Add(title);
-            entry.Controls.Add(subtitle);
-            entry.Controls.Add(chevron);
-
-            entry.Paint += (_, e) =>
-            {
-                var palette = PdfSidebarTheme.PaletteFor(entry);
-                using var pen = new Pen(palette.Border, 1);
-                e.Graphics.DrawLine(pen, 0, 0, entry.Width, 0);
-            };
-
-            return entry;
-        }
-
-        /// <summary>在学习页内打开音频与录音视图，保留音频面板现有的子页选择。</summary>
-        private void OpenStudyAudio()
-        {
-            SetStudyAudioVisible(true);
-        }
-
-        /// <summary>学习内容与音频视图互斥显示，避免音频面板挤压学习页固定高度的卡片。</summary>
-        private void SetStudyAudioVisible(bool showAudio)
-        {
-            if (_studyAudioLayout == null) return;
-            if (showAudio && _studyAudioOverlay == null) return;
-
-            _studyAudioLayout.Visible = !showAudio;
-            if (_studyAudioOverlay != null) _studyAudioOverlay.Visible = showAudio;
-        }
-
-        /// <summary>把音频页从顶层页签移出并合并进学习页的音频视图，保留全部原有功能。</summary>
-        private void MergeAudioSidebarIntoStudy()
-        {
-            if (_tabControlLeft != null && _tabPageAudio != null)
-                _tabControlLeft.TabPages.Remove(_tabPageAudio);
-
-            if (_audioSidebar == null) return;
-
-            _audioSidebar.Parent?.Controls.Remove(_audioSidebar);
-            _audioSidebar.Dock = DockStyle.Fill;
-            _audioSidebar.Margin = Padding.Empty;
-
-            _studyAudioOverlay = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = PdfSidebarTheme.Background,
-                Margin = Padding.Empty,
-                Padding = Padding.Empty,
-                Visible = false
-            };
-
-            var overlayLayout = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 1,
-                RowCount = 2,
-                Margin = Padding.Empty,
-                Padding = Padding.Empty
-            };
-            overlayLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            overlayLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
-            overlayLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-
-            var backBar = new Panel
-            {
-                Dock = DockStyle.Fill,
-                BackColor = PdfSidebarTheme.Surface,
-                Margin = Padding.Empty,
-                Tag = "surface"
-            };
-            var backLabel = new Label
-            {
-                Text = "← 返回学习",
-                Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                AutoSize = true,
-                Location = new Point(10, 9),
-                Cursor = Cursors.Hand
-            };
-            var hint = new Label
-            {
-                Text = "音频与录音",
-                Font = new Font("Microsoft YaHei UI", 8.5F),
-                ForeColor = PdfSidebarTheme.Muted,
-                Tag = "muted",
-                AutoSize = true,
-                Anchor = AnchorStyles.Top | AnchorStyles.Right
-            };
-            backBar.Controls.Add(backLabel);
-            backBar.Controls.Add(hint);
-            backBar.Resize += (_, _) => hint.Location =
-                new Point(Math.Max(100, backBar.Width - hint.Width - 10), 11);
-            backLabel.Click += (_, _) => SetStudyAudioVisible(false);
-
-            overlayLayout.Controls.Add(backBar, 0, 0);
-            overlayLayout.Controls.Add(_audioSidebar, 0, 1);
-            _studyAudioOverlay.Controls.Add(overlayLayout);
-            _tabPageStudy.Controls.Add(_studyAudioOverlay);
         }
 
         /// <summary>
@@ -7024,8 +6849,8 @@ namespace LearningAssistant.Forms.Pdf
         }
 
         /// <summary>
-        /// 侧栏二级分组之一「阅读与视图」：把原「文件」与「缩略图」两个页签合并为一个页，
-        /// 用分段条切换，形成 阅读 / 标注 / 翻译与OCR / 音频 / AI与文件 五组。
+        /// 「目录」页：把原「文件」与「缩略图」两个页签合并为一个页，
+        /// 由页头双图标切换视图，形成 目录 / 标注 / 翻译 / 学习 四组。
         /// </summary>
         private void BuildReadingSidebar()
         {
@@ -7046,7 +6871,6 @@ namespace LearningAssistant.Forms.Pdf
             _tabPageFiles.Text = "📖";
             _tabPageBookmarksAndHighlights.Text = "📑";
             _tabPageTranslate.Text = "🌐";
-            _tabPageAudio.Text = "🎤";
             _tabPageStudy.Text = "🤖";
 
             foreach (TabPage page in _tabControlLeft.TabPages)
@@ -7261,25 +7085,317 @@ namespace LearningAssistant.Forms.Pdf
             };
         }
 
-        private void BuildAudioSidebar()
+        /// <summary>
+        /// 构建右侧音频抽屉：配套音频 / 整页录音 / 句子跟读共用一个内容区，
+        /// 不再占用顶层页签，也不再使用「音频」内部的二级页签。
+        /// </summary>
+        private void BuildAudioDrawer()
         {
-            if (_audioSidebar == null) return;
+            if (_audioDrawer != null) return;
 
-            BuildShadowingPage();
-            UpdateShadowingSummary();
+            BuildShadowingPanel();
+
+            _audioDrawer = new Panel
+            {
+                Visible = false,
+                BackColor = PdfSidebarTheme.Background,
+                Padding = Padding.Empty,
+                Margin = Padding.Empty
+            };
+            _audioDrawer.Paint += (_, e) =>
+            {
+                var palette = PdfSidebarTheme.PaletteFor(_audioDrawer);
+                using var pen = new Pen(palette.Border, 1);
+                e.Graphics.DrawLine(pen, 0, 0, 0, _audioDrawer.Height);
+                // 左侧渐隐，模拟抽屉浮起
+                using var brush = new SolidBrush(Color.FromArgb(18, palette.Border));
+                for (int i = 1; i <= 6; i++)
+                    e.Graphics.FillRectangle(brush, i, 0, 1, _audioDrawer.Height);
+            };
+
+            var layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                BackColor = PdfSidebarTheme.Background,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 92F));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+            layout.Controls.Add(BuildAudioDrawerHeader(), 0, 0);
+            layout.Controls.Add(BuildAudioDrawerContent(), 0, 1);
+            _audioDrawer.Controls.Add(layout);
+
+            Controls.Add(_audioDrawer);
+            _tabControlLeft.SizeChanged += (_, _) => PositionAudioDrawer();
+            UpdateAudioDrawerHeader();
+            UpdateAudioDrawerModeStyles();
+            PdfSidebarTheme.ApplyRecursive(_audioDrawer);
         }
 
-        private void BuildShadowingPage()
+        private Control BuildAudioDrawerHeader()
         {
-            if (_audioSidebar == null || _shadowingPanel != null) return;
+            var header = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                BackColor = PdfSidebarTheme.Surface,
+                Tag = "surface",
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            header.RowStyles.Add(new RowStyle(SizeType.Absolute, 52F));
+            header.RowStyles.Add(new RowStyle(SizeType.Absolute, 40F));
 
-            _shadowingPanel = new PdfShadowingPanel();
-            _shadowingPanel.Dock = DockStyle.Fill;
+            var titleRow = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = Color.Transparent,
+                Margin = Padding.Empty
+            };
+            _audioDrawerTitle = new Label
+            {
+                Text = "配套音频",
+                Font = new Font("Microsoft YaHei UI", 10.5F, FontStyle.Bold),
+                AutoSize = true,
+                Location = new Point(14, 8)
+            };
+            _audioDrawerSubtitle = new Label
+            {
+                Text = string.Empty,
+                Font = new Font("Microsoft YaHei UI", 8F),
+                ForeColor = PdfSidebarTheme.Muted,
+                Tag = "muted",
+                AutoSize = true,
+                Location = new Point(14, 29)
+            };
+            var closeButton = new Button
+            {
+                Text = "✕",
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI Symbol", 11F),
+                Size = new Size(30, 30),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                TabStop = true,
+                Cursor = Cursors.Hand,
+                UseVisualStyleBackColor = false,
+                Tag = "keep",
+                AccessibleName = "关闭音频抽屉"
+            };
+            closeButton.FlatAppearance.BorderSize = 0;
+            closeButton.Click += (_, _) => HideAudioDrawer();
+            titleRow.Resize += (_, _) =>
+                closeButton.Location = new Point(
+                    Math.Max(0, titleRow.Width - closeButton.Width - 10), 10);
+
+            titleRow.Controls.Add(_audioDrawerTitle);
+            titleRow.Controls.Add(_audioDrawerSubtitle);
+            titleRow.Controls.Add(closeButton);
+
+            var modeBar = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 3,
+                RowCount = 1,
+                Margin = Padding.Empty,
+                Padding = new Padding(10, 4, 10, 4)
+            };
+            for (int i = 0; i < 3; i++)
+                modeBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
+
+            _audioDrawerAudioButton = CreateAudioDrawerModeButton("配套音频");
+            _audioDrawerRecordingButton = CreateAudioDrawerModeButton("整页录音");
+            _audioDrawerShadowingButton = CreateAudioDrawerModeButton("句子跟读");
+            _audioDrawerAudioButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Audio);
+            _audioDrawerRecordingButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Recording);
+            _audioDrawerShadowingButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Shadowing);
+            _audioDrawerAudioButton.Margin = new Padding(0, 0, 4, 0);
+            _audioDrawerRecordingButton.Margin = new Padding(2, 0, 2, 0);
+            _audioDrawerShadowingButton.Margin = new Padding(4, 0, 0, 0);
+
+            modeBar.Controls.Add(_audioDrawerAudioButton, 0, 0);
+            modeBar.Controls.Add(_audioDrawerRecordingButton, 1, 0);
+            modeBar.Controls.Add(_audioDrawerShadowingButton, 2, 0);
+
+            header.Controls.Add(titleRow, 0, 0);
+            header.Controls.Add(modeBar, 0, 1);
+            return header;
+        }
+
+        private static Button CreateAudioDrawerModeButton(string text)
+        {
+            var button = new Button
+            {
+                Text = text,
+                Dock = DockStyle.Fill,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft YaHei UI", 8.5F, FontStyle.Bold),
+                TabStop = true,
+                Cursor = Cursors.Hand,
+                UseVisualStyleBackColor = false,
+                Tag = "keep"
+            };
+            button.FlatAppearance.BorderSize = 0;
+            return button;
+        }
+
+        private Control BuildAudioDrawerContent()
+        {
+            _audioDrawerContent = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = PdfSidebarTheme.Background,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+
+            if (_audioPanel != null)
+                _audioDrawerContent.Controls.Add(_audioPanel);
+            else
+            {
+                _audioUnavailableLabel = CreateAudioDrawerEmptyLabel(
+                    "当前版本未启用配套音频服务。");
+                _audioDrawerContent.Controls.Add(_audioUnavailableLabel);
+            }
+
+            _audioDrawerContent.Controls.Add(_recordingHost!);
+            if (!_recordingServiceAvailable)
+            {
+                _recordingUnavailableLabel = CreateAudioDrawerEmptyLabel(
+                    "录音服务不可用，暂不能整页录音。");
+                _recordingHost!.Controls.Add(_recordingUnavailableLabel);
+            }
+
+            if (_shadowingPanel != null)
+                _audioDrawerContent.Controls.Add(_shadowingPanel);
+
+            return _audioDrawerContent;
+        }
+
+        private static Label CreateAudioDrawerEmptyLabel(string text)
+            => new()
+            {
+                Text = text,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter,
+                ForeColor = PdfSidebarTheme.Muted,
+                Tag = "muted",
+                Font = new Font("Microsoft YaHei UI", 9F),
+                Padding = new Padding(24)
+            };
+
+        /// <summary>显示音频抽屉并切换到指定视图。</summary>
+        private void ShowAudioDrawer(AudioDrawerMode mode)
+        {
+            if (_audioDrawer == null) BuildAudioDrawer();
+            if (_audioDrawer == null) return;
+
+            SetAudioDrawerMode(mode);
+            PositionAudioDrawer();
+            _audioDrawer.Visible = true;
+            _audioDrawer.BringToFront();
+        }
+
+        private void HideAudioDrawer()
+        {
+            if (_audioDrawer != null) _audioDrawer.Visible = false;
+        }
+
+        private void SetAudioDrawerMode(AudioDrawerMode mode)
+        {
+            _audioDrawerMode = mode;
+
+            if (_audioPanel != null) _audioPanel.Visible = mode == AudioDrawerMode.Audio;
+            if (_audioUnavailableLabel != null) _audioUnavailableLabel.Visible = mode == AudioDrawerMode.Audio;
+            if (_recordingHost != null) _recordingHost.Visible = mode == AudioDrawerMode.Recording;
+            if (_shadowingPanel != null) _shadowingPanel.Visible = mode == AudioDrawerMode.Shadowing;
+
+            switch (mode)
+            {
+                case AudioDrawerMode.Audio:
+                    _audioPanel?.RefreshData();
+                    break;
+                case AudioDrawerMode.Recording:
+                    _audioManager?.RefreshTimestampList();
+                    _audioManager?.RefreshSummaryList();
+                    break;
+                case AudioDrawerMode.Shadowing:
+                    UpdateShadowingSummary();
+                    break;
+            }
+
+            UpdateAudioDrawerHeader();
+            UpdateAudioDrawerModeStyles();
+        }
+
+        private void UpdateAudioDrawerHeader()
+        {
+            if (_audioDrawerTitle == null) return;
+
+            _audioDrawerTitle.Text = _audioDrawerMode switch
+            {
+                AudioDrawerMode.Recording => "整页录音",
+                AudioDrawerMode.Shadowing => "句子跟读",
+                _ => "配套音频"
+            };
+
+            string document = string.IsNullOrWhiteSpace(_currentPdfPath)
+                ? "未打开文档"
+                : Path.GetFileNameWithoutExtension(_currentPdfPath);
+            _audioDrawerSubtitle!.Text = $"{document} · 第 {_currentPageIndex + 1} 页";
+        }
+
+        private void UpdateAudioDrawerModeStyles()
+        {
+            if (_audioDrawerAudioButton == null || _audioDrawerRecordingButton == null
+                || _audioDrawerShadowingButton == null) return;
+
+            var palette = PdfSidebarTheme.PaletteFor(this);
+            StyleAudioDrawerModeButton(_audioDrawerAudioButton, _audioDrawerMode == AudioDrawerMode.Audio, palette);
+            StyleAudioDrawerModeButton(_audioDrawerRecordingButton, _audioDrawerMode == AudioDrawerMode.Recording, palette);
+            StyleAudioDrawerModeButton(_audioDrawerShadowingButton, _audioDrawerMode == AudioDrawerMode.Shadowing, palette);
+        }
+
+        private static void StyleAudioDrawerModeButton(Button button, bool selected, PdfSidebarPalette palette)
+        {
+            button.BackColor = selected ? palette.BrandSoft : palette.Surface;
+            button.ForeColor = selected ? PdfSidebarTheme.Brand : palette.Muted;
+            button.FlatAppearance.MouseOverBackColor = palette.Hover;
+            button.FlatAppearance.MouseDownBackColor = palette.BrandSoft;
+        }
+
+        /// <summary>抽屉覆盖侧栏右侧、不遮挡 PDF 画布；跟随侧栏尺寸变化重新定位。</summary>
+        private void PositionAudioDrawer()
+        {
+            if (_audioDrawer == null || _tabControlLeft == null || !IsHandleCreated) return;
+
+            var sidebarScreen = _tabControlLeft.PointToScreen(Point.Empty);
+            var formScreen = PointToScreen(Point.Empty);
+            int width = Math.Min(420, Math.Max(320, _tabControlLeft.Width - 24));
+            int x = sidebarScreen.X - formScreen.X + _tabControlLeft.Width - width;
+            int y = sidebarScreen.Y - formScreen.Y;
+            _audioDrawer.Bounds = new Rectangle(x, y, width, _tabControlLeft.Height);
+        }
+
+        /// <summary>创建跟读内容面板；不再挂到「音频」子页，仅由抽屉按需显示。</summary>
+        private void BuildShadowingPanel()
+        {
+            if (_shadowingPanel != null) return;
+
+            _shadowingPanel = new PdfShadowingPanel
+            {
+                Dock = DockStyle.Fill,
+                Visible = false
+            };
             _shadowingPanel.OpenButton.Click += (_, _) => OpenShadowingWindow();
             _shadowingSummary = _shadowingPanel.SummaryLabel;
-
-            _audioSidebar.ShadowingPage.Controls.Add(_shadowingPanel);
-            _audioSidebar.ShadowingPage.BackColor = PdfSidebarTheme.Background;
+            UpdateShadowingSummary();
         }
 
         private void UpdateShadowingSummary()
@@ -7623,7 +7739,7 @@ namespace LearningAssistant.Forms.Pdf
             {
                 "_tabPageFiles" => "目录：文件、页面与缩略图",
                 "_tabPageTranslate" => "翻译：翻译与 OCR",
-                "_tabPageStudy" => "学习：AI 工具、配套音频、录音与跟读",
+                "_tabPageStudy" => "学习：AI 工具与学习整理",
                 "_tabPageBookmarksAndHighlights" => "标注：高亮与标注列表",
                 _ => page.Text
             };

@@ -20,10 +20,10 @@ namespace LearningAssistant.Managers
         private readonly IAnnotationService? _annotationService;
         private bool _disposed;
 
-        private TabPage? _tabPage;
+        private Control? _host;
 
-        /// <summary>录音 UI 的挂载页（默认挂到「音频」Tab；三段式模式下指向「整页录音」子页）</summary>
-        public TabPage? MountTabPage { get; set; }
+        /// <summary>录音 UI 的挂载宿主（默认挂到「音频」Tab；抽屉模式下指向录音内容面板）</summary>
+        public Control? MountHost { get; set; }
         private TableLayoutPanel? _layout;
         private PdfRecordingPanel? _panel;
         private bool _timestampsExpanded;
@@ -83,8 +83,8 @@ namespace LearningAssistant.Managers
 
         public void Initialize()
         {
-            _tabPage = MountTabPage ?? _form.TabPageAudio;
-            if (_tabPage == null) return;
+            _host = MountHost ?? _form.TabPageAudio;
+            if (_host == null) return;
 
             CreateControls();
             UpdateUIState();
@@ -94,10 +94,10 @@ namespace LearningAssistant.Managers
 
         private void CreateControls()
         {
-            if (_tabPage == null) return;
+            if (_host == null) return;
 
             _panel = new PdfRecordingPanel { Dock = DockStyle.Fill };
-            _tabPage.Controls.Add(_panel);
+            _host.Controls.Add(_panel);
 
             BindPanelControls();
             ApplySectionState();
@@ -546,8 +546,8 @@ namespace LearningAssistant.Managers
         /// <summary>刷新当前页的时间戳标注列表（仅显示录制期间创建的标注）</summary>
         public void RefreshTimestampList()
         {
-            if (_listTimestamps == null || _labelNoTimestamps == null || _tabPage == null) return;
-            if (_tabPage.IsDisposed) return;
+            if (_listTimestamps == null || _labelNoTimestamps == null || _host == null) return;
+            if (_host.IsDisposed) return;
 
             if (_form.Form.InvokeRequired)
             {
@@ -665,8 +665,8 @@ namespace LearningAssistant.Managers
         /// <summary>刷新全书 AI 摘要列表（可按页跳转并从时间戳回放）</summary>
         public void RefreshSummaryList()
         {
-            if (_listSummaries == null || _labelNoSummaries == null || _tabPage == null) return;
-            if (_tabPage.IsDisposed) return;
+            if (_listSummaries == null || _labelNoSummaries == null || _host == null) return;
+            if (_host.IsDisposed) return;
 
             if (_form.Form.InvokeRequired)
             {
