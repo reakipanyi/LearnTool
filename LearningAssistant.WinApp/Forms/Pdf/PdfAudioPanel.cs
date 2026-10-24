@@ -480,31 +480,54 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
                     pagesByTrack[kv.Value.FilePath] = pages = new List<int>();
                 pages.Add(kv.Key + 1);
             }
+            // 页码只排序一次，避免每个曲目重复 OrderBy
+            foreach (var list in pagesByTrack.Values) list.Sort();
         }
 
-        _listTracks.BeginUpdate();
-        _listTracks.Items.Clear();
+        var texts = new List<string>(result?.Tracks.Count ?? 0);
         if (result != null)
         {
             foreach (var t in result.Tracks)
             {
                 if (singleMode)
                 {
-                    _listTracks.Items.Add($"全篇  {t.FileName}{(t.IsSingleAudio ? "  [整篇音频]" : "")}");
+                    texts.Add($"全篇  {t.FileName}{(t.IsSingleAudio ? "  [整篇音频]" : "")}");
                     continue;
                 }
-                var pages = pagesByTrack.TryGetValue(t.FilePath, out var list) ? list.OrderBy(p => p).ToList() : new List<int>();
+                var pages = pagesByTrack.TryGetValue(t.FilePath, out var list) ? list : new List<int>();
                 var pageText = pages.Count > 0 ? string.Join(",", pages.Take(4)) + (pages.Count > 4 ? "…" : "") : "未匹配";
                 // 外部目录曲目用目录名辅助区分同名文件
                 var folderHint = Path.IsPathRooted(t.RelativePath)
                     ? $"  ({Path.GetFileName(Path.GetDirectoryName(t.FilePath))})"
                     : "";
-                _listTracks.Items.Add($"第{pageText}页  {t.FileName}{folderHint}{(t.IsManual ? "  [手动]" : "")}");
+                texts.Add($"第{pageText}页  {t.FileName}{folderHint}{(t.IsManual ? "  [手动]" : "")}");
             }
             if (!singleMode && result.UnmatchedPages.Count > 0)
-                _listTracks.Items.Add($"未匹配页：{string.Join(",", result.UnmatchedPages.Select(p => p + 1).Take(20))}");
+                texts.Add($"未匹配页：{string.Join(",", result.UnmatchedPages.Select(p => p + 1).Take(20))}");
         }
-        _listTracks.EndUpdate();
+
+        // 增量刷新：条目数一致时只替换变化项，避免整表重建丢失滚动位置与选中
+        _listTracks.BeginUpdate();
+        try
+        {
+            if (_listTracks.Items.Count == texts.Count)
+            {
+                for (int i = 0; i < texts.Count; i++)
+                {
+                    if (!string.Equals(_listTracks.Items[i] as string, texts[i], StringComparison.Ordinal))
+                        _listTracks.Items[i] = texts[i];
+                }
+            }
+            else
+            {
+                _listTracks.Items.Clear();
+                _listTracks.Items.AddRange(texts.ToArray());
+            }
+        }
+        finally
+        {
+            _listTracks.EndUpdate();
+        }
 
         int count = result?.Tracks.Count ?? 0;
         int matched = result?.PageIndex.Count ?? 0;

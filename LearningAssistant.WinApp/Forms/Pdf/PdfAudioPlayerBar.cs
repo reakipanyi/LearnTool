@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LearningAssistant.Abstractions.Media;
 using LearningAssistant.Common.UI;
 using LearningAssistant.Managers;
@@ -37,6 +38,9 @@ public sealed class PdfAudioPlayerBar : UserControl
 
     private bool _dragging;
     private double _lastVolume = 1.0;
+    /// <summary>进度条刷新时钟；按 10Hz 限频，避免高频 PositionChanged 造成无效重绘</summary>
+    private readonly Stopwatch _progressClock = Stopwatch.StartNew();
+    private TimeSpan _lastProgressAt;
 
     private const int SliderMax = 1000;
 
@@ -329,7 +333,14 @@ public sealed class PdfAudioPlayerBar : UserControl
     /// <summary>翻页后由宿主调用，更新页徽标与空态提示。</summary>
     public void RefreshPage() => RefreshTrack();
 
-    private void OnPositionChanged(object? sender, TimeSpan position) => UpdateProgress(position);
+    /// <summary>进度条按 10Hz 刷新，避免高频 PositionChanged 造成无效重绘</summary>
+    private void OnPositionChanged(object? sender, TimeSpan position)
+    {
+        var now = _progressClock.Elapsed;
+        if (now - _lastProgressAt < TimeSpan.FromMilliseconds(100)) return;
+        _lastProgressAt = now;
+        UpdateProgress(position);
+    }
     private void OnStateChanged(object? sender, MediaPlaybackState state) => UpdateTransport();
 
     private void OnThemeChanged(object? sender, EventArgs e) => ApplyTheme();
