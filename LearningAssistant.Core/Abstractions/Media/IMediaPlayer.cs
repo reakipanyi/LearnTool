@@ -27,4 +27,6 @@ public interface IMediaPlayer : IDisposable
     event EventHandler<TimeSpan>? PositionChanged;
     event EventHandler<MediaPlaybackState>? StateChanged;
     event EventHandler? PlaybackFinished;
+    /// <summary>系统默认播放设备变化时触发，供上层重新加载到新设备</summary>
+    event EventHandler? OutputDeviceChanged;
 }

@@ -1,5 +1,6 @@
 using LearningAssistant.Abstractions.Media;
 using LearningAssistant.Services.Media;
+using NAudio.CoreAudioApi;
 using NAudio.Wave;
 
 namespace LearningAssistant.Platform.Media;
@@ -16,10 +17,15 @@ public class NAudioMediaPlayer : IMediaPlayer
     private double _volume = 1.0;
     private System.Windows.Forms.Timer? _fadeTimer;
     private int _fadeGeneration;
+    private MMDeviceEnumerator? _deviceEnumerator;
+    private System.Windows.Forms.Timer? _deviceTimer;
+    private string? _lastDeviceId;
 
     public event EventHandler<TimeSpan>? PositionChanged;
     public event EventHandler<MediaPlaybackState>? StateChanged;
     public event EventHandler? PlaybackFinished;
+    /// <summary>系统默认播放设备变化（拔插/切换默认设备）时触发</summary>
+    public event EventHandler? OutputDeviceChanged;
 
     public MediaPlaybackState State { get; private set; } = MediaPlaybackState.Idle;
     public TimeSpan Position => _reader?.CurrentTime ?? TimeSpan.Zero;
@@ -57,7 +63,57 @@ public class NAudioMediaPlayer : IMediaPlayer
     public (TimeSpan? A, TimeSpan? B) AbLoop { get => (_abLoop.A, _abLoop.B); set => (_abLoop.A, _abLoop.B) = value; }
     public IReadOnlyList<SubtitleCue>? SubtitleCues { get; private set; }
 
-    public NAudioMediaPlayer(ISubtitleParser subtitleParser) => _subtitleParser = subtitleParser;
+    public NAudioMediaPlayer(ISubtitleParser subtitleParser)
+    {
+        _subtitleParser = subtitleParser;
+        StartDeviceWatch();
+    }
+
+    /// <summary>
+    /// 监听系统默认播放设备变化；无声卡或系统不支持 CoreAudio 时静默降级，
+    /// 不影响正常播放。MMDeviceEnumerator 未暴露事件，这里用 2 秒轮询设备 ID。
+    /// </summary>
+    private void StartDeviceWatch()
+    {
+        try
+        {
+            _deviceEnumerator = new MMDeviceEnumerator();
+            _lastDeviceId = GetDefaultDeviceId();
+            _deviceTimer = new System.Windows.Forms.Timer { Interval = 2000 };
+            _deviceTimer.Tick += (_, _) => CheckDefaultDevice();
+            _deviceTimer.Start();
+        }
+        catch (Exception ex)
+        {
+            _deviceTimer?.Dispose();
+            _deviceTimer = null;
+            _deviceEnumerator?.Dispose();
+            _deviceEnumerator = null;
+            System.Diagnostics.Trace.TraceWarning($"[NAudioMediaPlayer] 无法监听音频设备变化: {ex.Message}");
+        }
+    }
+
+    private string? GetDefaultDeviceId()
+    {
+        try
+        {
+            using var device = _deviceEnumerator?.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+            return device?.ID;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private void CheckDefaultDevice()
+    {
+        var current = GetDefaultDeviceId();
+        if (string.Equals(current, _lastDeviceId, StringComparison.OrdinalIgnoreCase)) return;
+        // 设备切换或设备被移除都会改变默认设备 ID，通知上层重载到新设备
+        _lastDeviceId = current;
+        OutputDeviceChanged?.Invoke(this, EventArgs.Empty);
+    }
 
     public void Load(string mediaPath)
     {
@@ -223,6 +279,11 @@ public class NAudioMediaPlayer : IMediaPlayer
 
     public void Dispose()
     {
+        _deviceTimer?.Stop();
+        _deviceTimer?.Dispose();
+        _deviceTimer = null;
+        _deviceEnumerator?.Dispose();
+        _deviceEnumerator = null;
         CancelFade();
         _timer?.Stop();
         _timer?.Dispose();

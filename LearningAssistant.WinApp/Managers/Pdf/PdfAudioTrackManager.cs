@@ -114,6 +114,7 @@ public class PdfAudioTrackManager : IDisposable
         _store = store;
         _playback = new PdfAudioPlaybackService(new NAudioMediaPlayer(subtitleParser));
         _playback.Player.PlaybackFinished += OnPlaybackFinished;
+        _playback.Player.OutputDeviceChanged += OnOutputDeviceChanged;
     }
 
     private int _loadGeneration;
@@ -671,6 +672,19 @@ public class PdfAudioTrackManager : IDisposable
             HandlePlaybackFinished();
     }
 
+    /// <summary>系统默认播放设备变化：用新设备重新加载当前曲目，保持进度与播放状态。</summary>
+    private void OnOutputDeviceChanged(object? sender, EventArgs e)
+    {
+        if (_disposed || _loadedTrack == null) return;
+        var track = _loadedTrack;
+        bool wasPlaying = _playback.Player.State == MediaPlaybackState.Playing;
+        var position = _playback.Player.Position;
+        _playback.Load(track);
+        if (position > TimeSpan.Zero) _playback.Seek(position);
+        if (wasPlaying) _ = _playback.PlayAsync();
+        SetPageHint("系统默认播放设备已变化，已重新加载音频");
+    }
+
     private void HandlePlaybackFinished()
     {
         if (_disposed) return;
@@ -886,6 +900,7 @@ public class PdfAudioTrackManager : IDisposable
         _pageChangeCts?.Dispose();
         _pageChangeCts = null;
         _playback.Player.PlaybackFinished -= OnPlaybackFinished;
+        _playback.Player.OutputDeviceChanged -= OnOutputDeviceChanged;
         _playback.Stop();
         _playback.Player.Dispose();
     }
