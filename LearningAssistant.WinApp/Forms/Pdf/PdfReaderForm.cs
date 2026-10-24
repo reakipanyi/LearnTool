@@ -122,6 +122,10 @@ namespace LearningAssistant.Forms.Pdf
         private Button? _buttonStudyShadowing;
         private FlowLayoutPanel? _studyItemList;
         private PdfStudyPanel? _studyPanel;
+        // 阶段1：音频页暂时并入学习页，作为学习页内的整页视图，阶段2再迁入抽屉
+        private TableLayoutPanel? _studyAudioLayout;
+        private Panel? _studyAudioOverlay;
+        private static string? _lastSidebarTabName;
         private SyncedTextBox _textBoxOriginal;
         private SyncedTextBox _textBoxTranslation;
         private Button _buttonAddToLearningContent;
@@ -146,9 +150,10 @@ namespace LearningAssistant.Forms.Pdf
         private TabPage _tabPageFiles;
         private Panel _panelLeftContainer;
 
-        // 侧栏页签改为自绘图标：悬停页索引与统一图标字体
+        // 侧栏页签改为自绘「图标 + 名称」：悬停索引、图标字体与名称字体
         private int _sidebarHoveredTabIndex = -1;
         private Font? _sidebarTabFont;
+        private Font? _sidebarTabLabelFont;
         // 悬停提示延迟显示，避免鼠标划过页签时提示框反复弹出/收回造成闪烁
         private System.Windows.Forms.Timer? _sidebarTipTimer;
 
@@ -933,7 +938,8 @@ namespace LearningAssistant.Forms.Pdf
         private void PdfReaderFormV2_Load(object? sender, EventArgs e)
         {
             _tabControlLeft.SelectedIndexChanged += TabControlLeft_SelectedIndexChanged;
-            // 图标式页签：自绘 + 宽度自适应 + 悬停提示
+            RestoreSidebarTabSelection();
+            // 「图标 + 名称」页签：自绘 + 宽度自适应 + 悬停提示
             _tabControlLeft.DrawItem += TabControlLeft_DrawItem;
             _tabControlLeft.MouseMove += TabControlLeft_MouseMove;
             _tabControlLeft.MouseLeave += TabControlLeft_MouseLeave;
@@ -945,8 +951,9 @@ namespace LearningAssistant.Forms.Pdf
                 ShowSidebarTabToolTip(_sidebarHoveredTabIndex);
             };
             _sidebarTabFont ??= new Font("Segoe UI Emoji", 12F);
+            _sidebarTabLabelFont ??= new Font("Microsoft YaHei UI", 9.5F, FontStyle.Bold);
             UpdateSidebarTabItemSize();
-            // 页签不再显示文字，补上无障碍名称，屏幕阅读器仍可读出中文标签
+            // 页签已显示名称，无障碍名称补充完整分组说明
             foreach (TabPage page in _tabControlLeft.TabPages)
                 page.AccessibleName = GetSidebarTabTitle(page);
 
@@ -973,6 +980,16 @@ namespace LearningAssistant.Forms.Pdf
                 if (e.Control && e.KeyCode == Keys.Space && _audioTrackManager != null)
                 {
                     _audioTrackManager.TogglePlayback();
+                    e.Handled = e.SuppressKeyPress = true;
+                    return;
+                }
+
+                // Ctrl+1..4 直达侧栏四个工作页
+                if (e.Control && e.KeyCode >= Keys.D1 && e.KeyCode <= Keys.D4)
+                {
+                    int tabIndex = e.KeyCode - Keys.D1;
+                    if (tabIndex < _tabControlLeft.TabPages.Count)
+                        _tabControlLeft.SelectedIndex = tabIndex;
                     e.Handled = e.SuppressKeyPress = true;
                     return;
                 }
@@ -1654,11 +1671,12 @@ namespace LearningAssistant.Forms.Pdf
 
         #region 文档加载与页面渲染
 
-        /// <summary>打开左侧「配套音频」页并定位到首个子页，供播放器空态/去绑定入口调用。</summary>
+        /// <summary>打开「学习」页内的音频与录音视图，供播放器空态/去绑定入口调用。</summary>
         public void ShowAudioCompanion()
         {
-            if (_tabControlLeft == null || _tabPageAudio == null) return;
-            _tabControlLeft.SelectedTab = _tabPageAudio;
+            if (_tabControlLeft == null || _tabPageStudy == null) return;
+            _tabControlLeft.SelectedTab = _tabPageStudy;
+            SetStudyAudioVisible(true);
             if (_audioSidebar != null) _audioSidebar.Segments.SelectedIndex = 0;
         }
 
@@ -6469,8 +6487,28 @@ namespace LearningAssistant.Forms.Pdf
 
             _studyPanel = new PdfStudyPanel();
             _studyPanel.Dock = DockStyle.Fill;
+            _studyPanel.Margin = Padding.Empty;
             _studyPanel.Header.ActionButton!.Click += (_, _) => UpdateStudyTab();
-            _tabPageStudy.Controls.Add(_studyPanel);
+
+            // 阶段1：学习页 = 学习内容 + 底部「音频与录音」入口；音频面板以整页视图展开，避免压缩学习内容
+            _studyAudioLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                BackColor = PdfSidebarTheme.Background,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            _studyAudioLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            _studyAudioLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            _studyAudioLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, _audioSidebar != null ? 38F : 0F));
+            _studyAudioLayout.Controls.Add(_studyPanel, 0, 0);
+
+            if (_audioSidebar != null)
+                _studyAudioLayout.Controls.Add(BuildStudyAudioEntry(), 0, 1);
+
+            _tabPageStudy.Controls.Add(_studyAudioLayout);
 
             _studyHighlightCount = _studyPanel.HighlightCountLabel;
             _studyLearningCount = _studyPanel.LearningCountLabel;
@@ -6492,6 +6530,162 @@ namespace LearningAssistant.Forms.Pdf
 
             _studyItemList = _studyPanel.ItemList;
             _studyItemList.ClientSizeChanged += (_, _) => ResizeStudyItemRows();
+
+            MergeAudioSidebarIntoStudy();
+        }
+
+        /// <summary>学习页底部的「音频与录音」入口条，阶段2迁入抽屉后可删除。</summary>
+        private Panel BuildStudyAudioEntry()
+        {
+            var entry = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = PdfSidebarTheme.Surface,
+                Cursor = Cursors.Hand,
+                Margin = Padding.Empty,
+                Tag = "surface"
+            };
+
+            var icon = new Label
+            {
+                Text = "🎧",
+                Font = new Font("Segoe UI Emoji", 11F),
+                AutoSize = true,
+                Location = new Point(10, 8)
+            };
+            var title = new Label
+            {
+                Text = "音频与录音",
+                Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
+                AutoSize = true,
+                Location = new Point(34, 3)
+            };
+            var subtitle = new Label
+            {
+                Text = "配套音频 / 整页录音 / 句子跟读",
+                Font = new Font("Microsoft YaHei UI", 8F),
+                ForeColor = PdfSidebarTheme.Muted,
+                Tag = "muted",
+                AutoSize = true,
+                Location = new Point(34, 21)
+            };
+            var chevron = new Label
+            {
+                Text = "打开 ▸",
+                Font = new Font("Microsoft YaHei UI", 8.5F),
+                ForeColor = PdfSidebarTheme.Muted,
+                Tag = "muted",
+                Dock = DockStyle.Right,
+                Width = 76,
+                TextAlign = ContentAlignment.MiddleCenter
+            };
+
+            void OpenAudio(object? _, EventArgs __) => OpenStudyAudio();
+
+            entry.Click += OpenAudio;
+            icon.Click += OpenAudio;
+            title.Click += OpenAudio;
+            subtitle.Click += OpenAudio;
+            chevron.Click += OpenAudio;
+
+            entry.Controls.Add(icon);
+            entry.Controls.Add(title);
+            entry.Controls.Add(subtitle);
+            entry.Controls.Add(chevron);
+
+            entry.Paint += (_, e) =>
+            {
+                var palette = PdfSidebarTheme.PaletteFor(entry);
+                using var pen = new Pen(palette.Border, 1);
+                e.Graphics.DrawLine(pen, 0, 0, entry.Width, 0);
+            };
+
+            return entry;
+        }
+
+        /// <summary>在学习页内打开音频与录音视图，保留音频面板现有的子页选择。</summary>
+        private void OpenStudyAudio()
+        {
+            SetStudyAudioVisible(true);
+        }
+
+        /// <summary>学习内容与音频视图互斥显示，避免音频面板挤压学习页固定高度的卡片。</summary>
+        private void SetStudyAudioVisible(bool showAudio)
+        {
+            if (_studyAudioLayout == null) return;
+            if (showAudio && _studyAudioOverlay == null) return;
+
+            _studyAudioLayout.Visible = !showAudio;
+            if (_studyAudioOverlay != null) _studyAudioOverlay.Visible = showAudio;
+        }
+
+        /// <summary>把音频页从顶层页签移出并合并进学习页的音频视图，保留全部原有功能。</summary>
+        private void MergeAudioSidebarIntoStudy()
+        {
+            if (_tabControlLeft != null && _tabPageAudio != null)
+                _tabControlLeft.TabPages.Remove(_tabPageAudio);
+
+            if (_audioSidebar == null) return;
+
+            _audioSidebar.Parent?.Controls.Remove(_audioSidebar);
+            _audioSidebar.Dock = DockStyle.Fill;
+            _audioSidebar.Margin = Padding.Empty;
+
+            _studyAudioOverlay = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = PdfSidebarTheme.Background,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty,
+                Visible = false
+            };
+
+            var overlayLayout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 2,
+                Margin = Padding.Empty,
+                Padding = Padding.Empty
+            };
+            overlayLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            overlayLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
+            overlayLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+            var backBar = new Panel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = PdfSidebarTheme.Surface,
+                Margin = Padding.Empty,
+                Tag = "surface"
+            };
+            var backLabel = new Label
+            {
+                Text = "← 返回学习",
+                Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
+                AutoSize = true,
+                Location = new Point(10, 9),
+                Cursor = Cursors.Hand
+            };
+            var hint = new Label
+            {
+                Text = "音频与录音",
+                Font = new Font("Microsoft YaHei UI", 8.5F),
+                ForeColor = PdfSidebarTheme.Muted,
+                Tag = "muted",
+                AutoSize = true,
+                Anchor = AnchorStyles.Top | AnchorStyles.Right
+            };
+            backBar.Controls.Add(backLabel);
+            backBar.Controls.Add(hint);
+            backBar.Resize += (_, _) => hint.Location =
+                new Point(Math.Max(100, backBar.Width - hint.Width - 10), 11);
+            backLabel.Click += (_, _) => SetStudyAudioVisible(false);
+
+            overlayLayout.Controls.Add(backBar, 0, 0);
+            overlayLayout.Controls.Add(_audioSidebar, 0, 1);
+            _studyAudioOverlay.Controls.Add(overlayLayout);
+            _tabPageStudy.Controls.Add(_studyAudioOverlay);
         }
 
         /// <summary>
@@ -6848,7 +7042,7 @@ namespace LearningAssistant.Forms.Pdf
                 }
             };
 
-            // 页签仅显示图标，完整分组名在悬停提示中展示
+            // 页签图标；短名称与图标一起由自绘逻辑绘制
             _tabPageFiles.Text = "📖";
             _tabPageBookmarksAndHighlights.Text = "📑";
             _tabPageTranslate.Text = "🌐";
@@ -7384,8 +7578,22 @@ namespace LearningAssistant.Forms.Pdf
                 UpdateStudyTab();
             else if (_tabControlLeft.SelectedTab == _tabPageBookmarksAndHighlights)
                 UpdateHighlightEmptyState();
-            else if (_tabControlLeft.SelectedTab == _tabPageAudio && _audioSidebar?.SelectedIndex == 2)
-                UpdateShadowingSummary();
+
+            if (_tabControlLeft.SelectedTab != null)
+                _lastSidebarTabName = _tabControlLeft.SelectedTab.Name;
+        }
+
+        /// <summary>恢复上次使用的侧栏页签；页签被删除或不存在时回落到「目录」。</summary>
+        private void RestoreSidebarTabSelection()
+        {
+            if (_tabControlLeft == null || string.IsNullOrEmpty(_lastSidebarTabName)) return;
+
+            foreach (TabPage page in _tabControlLeft.TabPages)
+            {
+                if (!string.Equals(page.Name, _lastSidebarTabName, StringComparison.Ordinal)) continue;
+                _tabControlLeft.SelectedTab = page;
+                return;
+            }
         }
 
         /// <summary>按侧栏实际宽度均分页签尺寸，确保任意 DPI 下都保持单行且不溢出。</summary>
@@ -7394,8 +7602,8 @@ namespace LearningAssistant.Forms.Pdf
             if (_tabControlLeft == null) return;
             int count = Math.Max(1, _tabControlLeft.TabPages.Count);
             int tabWidth = Math.Max(40, (_tabControlLeft.ClientSize.Width - 6) / count);
-            // 高度跟随图标字体，避免高 DPI 下图标被裁切
-            int tabHeight = (_sidebarTabFont?.Height ?? 16) + 10;
+            // 高度需要同时容纳图标与名称，跟随字体高度避免高 DPI 下被裁切
+            int tabHeight = Math.Max(38, (_sidebarTabFont?.Height ?? 16) + 18);
             var size = new Size(tabWidth, tabHeight);
             if (_tabControlLeft.ItemSize != size)
             {
@@ -7407,17 +7615,30 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
-        /// <summary>页签只显示图标，完整名称用于悬停提示。</summary>
+        /// <summary>页签的完整名称，用于悬停提示与无障碍说明。</summary>
         private static string GetSidebarTabTitle(TabPage? page)
         {
             if (page == null) return string.Empty;
             return page.Name switch
             {
-                "_tabPageFiles" => "阅读与视图（文件 / 缩略图）",
-                "_tabPageTranslate" => "翻译与 OCR",
-                "_tabPageStudy" => "AI 与文件工具",
-                "_tabPageBookmarksAndHighlights" => "标注工具",
-                "_tabPageAudio" => "音频与录音",
+                "_tabPageFiles" => "目录：文件、页面与缩略图",
+                "_tabPageTranslate" => "翻译：翻译与 OCR",
+                "_tabPageStudy" => "学习：AI 工具、配套音频、录音与跟读",
+                "_tabPageBookmarksAndHighlights" => "标注：高亮与标注列表",
+                _ => page.Text
+            };
+        }
+
+        /// <summary>页签上显示的短名称，与图标一起自绘。</summary>
+        private static string GetSidebarTabLabel(TabPage? page)
+        {
+            if (page == null) return string.Empty;
+            return page.Name switch
+            {
+                "_tabPageFiles" => "目录",
+                "_tabPageTranslate" => "翻译",
+                "_tabPageStudy" => "学习",
+                "_tabPageBookmarksAndHighlights" => "标注",
                 _ => page.Text
             };
         }
@@ -7452,9 +7673,28 @@ namespace LearningAssistant.Forms.Pdf
             }
 
             string glyph = _tabControlLeft.TabPages[e.Index].Text;
+            string label = GetSidebarTabLabel(_tabControlLeft.TabPages[e.Index]);
             _sidebarTabFont ??= new Font("Segoe UI Emoji", 12F);
-            TextRenderer.DrawText(e.Graphics, glyph, _sidebarTabFont, e.Bounds, iconColor,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            _sidebarTabLabelFont ??= new Font("Microsoft YaHei UI", 9.5F, FontStyle.Bold);
+
+            Size glyphSize = TextRenderer.MeasureText(glyph, _sidebarTabFont, Size.Empty,
+                TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+            Size labelSize = TextRenderer.MeasureText(label, _sidebarTabLabelFont, Size.Empty,
+                TextFormatFlags.NoPadding | TextFormatFlags.SingleLine);
+            const int gap = 6;
+            int contentWidth = glyphSize.Width + gap + labelSize.Width;
+            int startX = e.Bounds.Left + Math.Max(0, (e.Bounds.Width - contentWidth) / 2);
+            var flags = TextFormatFlags.Left | TextFormatFlags.VerticalCenter
+                | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine;
+
+            TextRenderer.DrawText(e.Graphics, glyph, _sidebarTabFont,
+                new Rectangle(startX, e.Bounds.Top, glyphSize.Width, e.Bounds.Height), iconColor, flags);
+            TextRenderer.DrawText(e.Graphics, label, _sidebarTabLabelFont,
+                new Rectangle(startX + glyphSize.Width + gap, e.Bounds.Top, labelSize.Width + 1, e.Bounds.Height),
+                iconColor, flags);
+
+            if ((e.State & DrawItemState.Focus) == DrawItemState.Focus)
+                ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(e.Bounds, -4, -4));
         }
 
         private void TabControlLeft_MouseMove(object? sender, MouseEventArgs e)
