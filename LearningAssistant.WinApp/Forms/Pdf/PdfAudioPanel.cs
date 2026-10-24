@@ -539,6 +539,13 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
     private void OnProfileLoaded(object? sender, EventArgs e) => InvokeIfReady(() =>
     {
         RefreshData();
+        // 档案损坏优先提示，且管理器已禁止回写，避免覆盖原文件
+        var error = _manager.LoadErrorMessage;
+        if (!string.IsNullOrEmpty(error))
+        {
+            _labelInfo.Text = error;
+            return;
+        }
         // 打开档案时若发生播放范围自动纠正，在这里提示一次，不弹模态框
         var correction = _manager.ScopeCorrectionMessage;
         if (!string.IsNullOrEmpty(correction)) _labelInfo.Text = correction;

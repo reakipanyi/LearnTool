@@ -112,6 +112,9 @@ public class PdfAudioTrackManager : IDisposable
     }
 
     private int _loadGeneration;
+    private bool _profileStoreWritable = true;
+    /// <summary>档案解析失败信息；非空时禁止回写，避免覆盖损坏文件</summary>
+    public string? LoadErrorMessage { get; private set; }
     /// <summary>异步加载/重新扫描完成后触发，供 UI 刷新</summary>
     public event EventHandler? ProfileLoaded;
 
@@ -120,7 +123,10 @@ public class PdfAudioTrackManager : IDisposable
         var generation = ++_loadGeneration;
         _currentPdfPath = pdfPath;
         _pageCount = pageCount;
-        _profile = _store.Load(pdfPath) ?? new PdfAudioProfile { PdfPath = pdfPath };
+        var loaded = _store.Load(pdfPath);
+        LoadErrorMessage = loaded.Error;
+        _profileStoreWritable = loaded.Error == null;
+        _profile = loaded.Profile ?? new PdfAudioProfile { PdfPath = pdfPath };
         // 扫描期间不沿用上一份文档的匹配结果，避免翻页播放错音频
         _result = null;
         _loadedTrack = null;
@@ -165,7 +171,7 @@ public class PdfAudioTrackManager : IDisposable
         {
             profile.PlaybackScope = PlaybackScope.WholeBook;
             ScopeCorrectionMessage = "已按整篇模式修正播放范围";
-            _store.Save(profile);
+            SaveProfile();
         }
 
         var scanChanged = fingerprint != profile.ScanFingerprint || profile.Tracks.Count == 0;
@@ -181,11 +187,13 @@ public class PdfAudioTrackManager : IDisposable
             profile.ScanFingerprint = fingerprint;
             profile.PageCount = pageCount;
             PersistPageIndex();
-            _store.Save(profile);
+            SaveProfile();
         }
         else
         {
-            _result = new AudioMatchResult { Tracks = profile.Tracks };
+            // 目录档案不持久化曲目清单，指纹命中时用本次扫描结果重建
+            _result = new AudioMatchResult { Tracks = tracks };
+            profile.Tracks = tracks;
             foreach (var kv in profile.PageIndex)
             {
                 if (kv.Key < 0 || kv.Key >= pageCount) continue;
@@ -202,6 +210,25 @@ public class PdfAudioTrackManager : IDisposable
                 if (!_result.PageIndex.ContainsKey(p)) _result.UnmatchedPages.Add(p);
         }
         _currentPageIndex = -1;
+    }
+
+    /// <summary>统一持久化入口：解析失败时禁止回写，写盘异常只记录不打断播放。</summary>
+    private void SaveProfile()
+    {
+        if (_profile == null) return;
+        if (!_profileStoreWritable)
+        {
+            _logger.LogWarning("跳过档案回写：{Error}", LoadErrorMessage);
+            return;
+        }
+        try
+        {
+            _store.Save(_profile);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "保存音频档案失败");
+        }
     }
 
     /// <summary>扫描 PDF 同目录及已登记的外部音频目录，按完整路径去重</summary>
@@ -242,7 +269,7 @@ public class PdfAudioTrackManager : IDisposable
                 string.Equals(d, fullPath, StringComparison.OrdinalIgnoreCase)))
         {
             _profile.ExternalAudioDirectories.Add(fullPath);
-            _store.Save(_profile);
+            SaveProfile();
             await LoadProfileAsync(_currentPdfPath, _pageCount);
         }
         return _profile.Tracks.Count(t => !before.Contains(t.FilePath));
@@ -421,7 +448,7 @@ public class PdfAudioTrackManager : IDisposable
         FollowPage = follow;
         if (_profile == null) return;
         _profile.FollowPage = follow;
-        _store.Save(_profile);
+        SaveProfile();
     }
 
     /// <summary>切换“切歌同步页码”并写回档案。</summary>
@@ -430,7 +457,7 @@ public class PdfAudioTrackManager : IDisposable
         SyncPageOnTrackChange = sync;
         if (_profile == null) return;
         _profile.SyncPageOnTrackChange = sync;
-        _store.Save(_profile);
+        SaveProfile();
     }
 
     private int IndexOfTrack(AudioTrack track)
@@ -551,7 +578,7 @@ public class PdfAudioTrackManager : IDisposable
         if (_profile == null || _currentPdfPath == null) return;
         if (_profile.IncludeSubDirectories == value) return;
         _profile.IncludeSubDirectories = value;
-        _store.Save(_profile);
+        SaveProfile();
         await LoadProfileAsync(_currentPdfPath, _pageCount);
     }
 
@@ -563,7 +590,7 @@ public class PdfAudioTrackManager : IDisposable
             _profile.Rules, _profile.ManualOverrides,
             _profile.MatchMode, _profile.SingleAudioFile);
         PersistPageIndex();
-        _store.Save(_profile);
+        SaveProfile();
         _currentPageIndex = -1;
         ProfileLoaded?.Invoke(this, EventArgs.Empty);
     }
@@ -589,7 +616,7 @@ public class PdfAudioTrackManager : IDisposable
         _profile.ManualOverrides[page] = file;
         // 同步缓存映射，避免指纹命中时恢复到手动指定前的旧结果
         _profile.PageIndex[page] = file;
-        _store.Save(_profile);
+        SaveProfile();
         if (_result != null)
         {
             _result.PageIndex[page] = ResolveTrack(file, markManual: true);
