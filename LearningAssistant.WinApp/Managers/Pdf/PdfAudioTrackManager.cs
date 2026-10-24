@@ -128,7 +128,7 @@ public class PdfAudioTrackManager : IDisposable
         var generation = ++_loadGeneration;
         _currentPdfPath = pdfPath;
         _pageCount = pageCount;
-        var loaded = _store.Load(pdfPath);
+        var loaded = _store.Load(pdfPath, pageCount);
         LoadErrorMessage = loaded.Error;
         _profileStoreWritable = loaded.Error == null;
         _profile = loaded.Profile ?? new PdfAudioProfile { PdfPath = pdfPath };

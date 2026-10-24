@@ -11,13 +11,14 @@ namespace LearningAssistant.Services.Pdf;
 
 /// <summary>
 /// 目录级音频档案存储：同一目录的 PDF 共享规则与来源，书级配置按文件名分区。
-/// 所有写入都在进程级锁内完成“读-改-写”，并用临时文件原子替换。
+/// 所有读写都在进程内 SemaphoreSlim 内完成"读-改-写"，并用临时文件原子替换。
 /// </summary>
 public class PdfAudioProfileStore : IPdfAudioProfileStore
 {
     private const string AudioSource = "audio";
 
-    private static readonly object WriteLock = new();
+    /// <summary>进程内串行化档案读写；同步实现，SemaphoreSlim 便于后续异步化。</summary>
+    private static readonly SemaphoreSlim WriteGate = new(1, 1);
 
     private static readonly JsonSerializerOptions ReadOptions = new()
     {
@@ -34,7 +35,7 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
         Converters = { new JsonStringEnumConverter() }
     };
 
-    public PdfAudioProfileLoadResult Load(string pdfPath)
+    public PdfAudioProfileLoadResult Load(string pdfPath, int pageCount = 0)
     {
         try
         {
@@ -46,7 +47,8 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
             bool migrated = false;
             string? migrationError = null;
 
-            lock (WriteLock)
+            WriteGate.Wait();
+            try
             {
                 if (File.Exists(profilePath))
                 {
@@ -63,11 +65,15 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
                             : PdfAudioProfileLoadResult.Fail(migrationError);
                 }
             }
+            finally
+            {
+                WriteGate.Release();
+            }
 
             var fileName = Path.GetFileName(pdfPath);
             var (bookKey, book) = FindBook(document!, fileName);
 
-            // 文件被改名：按内容快速指纹接管书级配置
+            // 文件被改名：quickFingerprint 先筛候选，再用 fullFingerprint（含页数）确认
             if (book == null)
             {
                 var quick = ComputeQuickFingerprint(pdfPath);
@@ -76,6 +82,14 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
                     var candidates = document!.Books
                         .Where(kv => string.Equals(kv.Value.QuickFingerprint, quick, StringComparison.OrdinalIgnoreCase))
                         .ToList();
+                    if (candidates.Count > 1 && pageCount > 0)
+                    {
+                        var full = ComputeFullFingerprint(pdfPath, pageCount);
+                        var confirmed = candidates
+                            .Where(kv => string.Equals(kv.Value.FullFingerprint, full, StringComparison.OrdinalIgnoreCase))
+                            .ToList();
+                        if (confirmed.Count > 0) candidates = confirmed;
+                    }
                     if (candidates.Count == 1)
                     {
                         bookKey = candidates[0].Key;
@@ -105,7 +119,8 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
         var fileName = Path.GetFileName(pdfPath);
         var profilePath = GetProfilePath(pdfPath);
 
-        lock (WriteLock)
+        WriteGate.Wait();
+        try
         {
             JsonObject root;
             if (File.Exists(profilePath))
@@ -155,6 +170,10 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
             SetNode(root, "books", books);
 
             WriteAtomic(profilePath, root.ToJsonString(WriteOptions));
+        }
+        finally
+        {
+            WriteGate.Release();
         }
     }
 
@@ -557,12 +576,17 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
             var profilePath = GetProfilePath(pdfPath);
 
             JsonObject root;
-            lock (WriteLock)
+            WriteGate.Wait();
+            try
             {
                 if (!File.Exists(profilePath))
                     return PdfAudioExportResult.Fail("当前目录还没有可导出的匹配档案");
                 root = ParseRoot(File.ReadAllText(profilePath), out var error)
                        ?? throw new InvalidOperationException(error);
+            }
+            finally
+            {
+                WriteGate.Release();
             }
 
             int version = GetInt(root, "schemaVersion") ?? 3;
@@ -590,12 +614,17 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
             var fileName = Path.GetFileName(pdfPath);
 
             JsonObject root;
-            lock (WriteLock)
+            WriteGate.Wait();
+            try
             {
                 if (!File.Exists(profilePath))
                     return PdfAudioExportResult.Fail("当前书籍还没有可导出的匹配配置");
                 root = ParseRoot(File.ReadAllText(profilePath), out var error)
                        ?? throw new InvalidOperationException(error);
+            }
+            finally
+            {
+                WriteGate.Release();
             }
 
             var books = GetObject(root, "books") ?? new JsonObject();
@@ -740,7 +769,8 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
         var directory = GetDirectory(fullPath);
         var profilePath = GetProfilePath(fullPath);
 
-        lock (WriteLock)
+        WriteGate.Wait();
+        try
         {
             JsonObject target;
             if (File.Exists(profilePath))
@@ -778,6 +808,10 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
             SetNode(target, "books", targetBooks);
 
             WriteAtomic(profilePath, target.ToJsonString(WriteOptions));
+        }
+        finally
+        {
+            WriteGate.Release();
         }
     }
 

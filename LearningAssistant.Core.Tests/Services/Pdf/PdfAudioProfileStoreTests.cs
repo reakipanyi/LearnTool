@@ -83,6 +83,32 @@ public class PdfAudioProfileStoreTests
     }
 
     [Fact]
+    public void 文件改名_按指纹找回书级配置()
+    {
+        var store = new PdfAudioProfileStore();
+        var pdf = NewPdfPath();
+        var renamed = Path.Combine(Path.GetDirectoryName(pdf)!, "renamed.pdf");
+        try
+        {
+            // 指纹基于真实文件内容，先写入一份假 PDF
+            File.WriteAllBytes(pdf, Encoding.UTF8.GetBytes("fake pdf content"));
+            var profile = new PdfAudioProfile { PdfPath = pdf, PageCount = 12, FollowPage = false };
+            profile.ManualOverrides[4] = "m4.mp3";
+            store.Save(profile);
+
+            File.Move(pdf, renamed);
+            var loaded = store.Load(renamed, 12).Profile!;
+            loaded.FollowPage.Should().BeFalse();
+            loaded.ManualOverrides[4].Should().Be("m4.mp3");
+        }
+        finally
+        {
+            Cleanup(store, pdf);
+            if (File.Exists(renamed)) File.Delete(renamed);
+        }
+    }
+
+    [Fact]
     public void 加载不存在_返回空结果()
     {
         var store = new PdfAudioProfileStore();
