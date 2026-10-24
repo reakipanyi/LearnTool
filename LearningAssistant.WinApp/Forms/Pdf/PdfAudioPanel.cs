@@ -33,6 +33,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
     private readonly Button _btnEmptySecond = new();
     private Action? _emptyPrimaryAction;
     private Action? _emptySecondAction;
+    private PdfAudioRuleDialog? _ruleDialog;
 
     private bool _suppressAutoPlay;
     private bool _suppressMode;
@@ -915,12 +916,37 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         return pages.Count == 1 ? $"P{pages[0]}" : $"P{pages[0]}–P{pages[^1]}";
     }
 
+    /// <summary>
+    /// 规则改为非模态的抽屉式窗口：编辑期间仍可翻页/播放，实时预览；
+    /// 点保存关闭后统一重算，取消关闭无副作用。
+    /// </summary>
     private void OnRules()
     {
         if (_manager.Profile == null) { _form.ShowWarning("尚未加载 profile"); return; }
-        using var dlg = new PdfAudioRuleDialog(_manager.Profile, _form, _manager);
-        if (dlg.ShowDialog(_form.Form) == DialogResult.OK)
-            _manager.SaveRulesAndRematch();
+        if (_ruleDialog is { IsDisposed: false })
+        {
+            _ruleDialog.Activate();
+            return;
+        }
+
+        var dlg = new PdfAudioRuleDialog(_manager.Profile, _form, _manager);
+        _ruleDialog = dlg;
+        dlg.FormClosed += (_, _) =>
+        {
+            _ruleDialog = null;
+            try
+            {
+                if (dlg.DialogResult == DialogResult.OK)
+                    _manager.SaveRulesAndRematch();
+                RefreshData();
+                OnCurrentPageChanged();
+            }
+            finally
+            {
+                dlg.Dispose();
+            }
+        };
+        dlg.Show(_form.Form);
     }
 
     /// <summary>编辑书级规则补丁：禁用目录规则、追加规则或完全独立。</summary>

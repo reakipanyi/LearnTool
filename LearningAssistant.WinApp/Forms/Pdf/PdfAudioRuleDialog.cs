@@ -39,6 +39,7 @@ public partial class PdfAudioRuleDialog : Form
         _rules = _profile.Rules.OrderByDescending(r => r.Priority).Select(CloneRule).ToList();
 
         InitializeComponent();
+        lvRules.ShowItemToolTips = true;
 
         var pdfName = Path.GetFileName(_profile.PdfPath);
         if (!string.IsNullOrEmpty(pdfName))
@@ -488,6 +489,52 @@ public partial class PdfAudioRuleDialog : Form
         labelDiagnostics.Text = _manager.Diagnostics.Count > 0
             ? string.Join("；", _manager.Diagnostics)
             : "";
+
+        UpdateRuleStates();
+    }
+
+    /// <summary>
+    /// 行内可见性：0 命中的启用规则标黄并给出提示，禁用的规则置灰。
+    /// 仅按文件名/相对路径统计，避免为每条规则重复跑整轮页码映射。
+    /// </summary>
+    private void UpdateRuleStates()
+    {
+        var tracks = _profile.Tracks;
+        var defaultColor = lvRules.ForeColor;
+        var warningColor = Color.FromArgb(180, 95, 6);
+        for (int i = 0; i < lvRules.Items.Count && i < _rules.Count; i++)
+        {
+            var rule = _rules[i];
+            var item = lvRules.Items[i];
+            if (!rule.Enabled)
+            {
+                item.ForeColor = SystemColors.GrayText;
+                item.ToolTipText = "规则已禁用，不参与匹配";
+                item.SubItems[4].Text = rule.FileNamePattern;
+                continue;
+            }
+
+            int hits = tracks.Count == 0 ? -1 : CountPatternMatches(rule, tracks);
+            item.ForeColor = hits == 0 ? warningColor : defaultColor;
+            item.ToolTipText = hits == 0
+                ? "未命中任何音频文件：请检查模式或文件名示例"
+                : $"命中 {hits} 个音频文件";
+            item.SubItems[4].Text = hits == 0
+                ? rule.FileNamePattern + "  · 0 命中"
+                : rule.FileNamePattern;
+        }
+    }
+
+    private static int CountPatternMatches(AudioMatchRule rule, IReadOnlyList<AudioTrack> tracks)
+    {
+        var regex = PdfAudioPatternCompiler.TryCompile(rule, out _);
+        if (regex == null) return 0;
+        int count = 0;
+        foreach (var track in tracks)
+        {
+            if (regex.IsMatch(track.FileName) || regex.IsMatch(track.RelativePath)) count++;
+        }
+        return count;
     }
 
     private AudioPatternMode GetSelectedPatternMode()
