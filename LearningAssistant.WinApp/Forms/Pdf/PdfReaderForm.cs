@@ -67,6 +67,8 @@ namespace LearningAssistant.Forms.Pdf
         private Button? _audioDrawerShadowingButton;
         private Label? _audioUnavailableLabel;
         private Label? _recordingUnavailableLabel;
+        private Button? _audioDrawerCloseButton;
+        private Control? _audioDrawerReturnFocus;
         private AudioDrawerMode _audioDrawerMode;
         private PdfReadingSidebarPanel? _readingSidebar;
         private SidebarHeaderBar? _translateHeader;
@@ -970,6 +972,14 @@ namespace LearningAssistant.Forms.Pdf
         {
             try
             {
+                // 抽屉打开时 Esc 优先关闭抽屉，避免误触退出全屏或切到其他模式
+                if (e.KeyCode == Keys.Escape && _audioDrawer?.Visible == true && _audioDrawer.ContainsFocus)
+                {
+                    HideAudioDrawer();
+                    e.Handled = e.SuppressKeyPress = true;
+                    return;
+                }
+
                 // 全局媒体键：Ctrl+Space 在任何位置都能切换播放
                 if (e.Control && e.KeyCode == Keys.Space && _audioTrackManager != null)
                 {
@@ -6467,6 +6477,13 @@ namespace LearningAssistant.Forms.Pdf
             PdfSidebarTheme.ApplyRecursive(_tabControlLeft);
         }
 
+        /// <summary>抽屉与页签共用同一套主题令牌；夜间模式切换时由管理器统一调用。</summary>
+        public void ApplySidebarTheme()
+        {
+            if (_audioDrawer != null)
+                PdfSidebarTheme.ApplyRecursive(_audioDrawer);
+        }
+
         /// <summary>
         /// 「学习」Tab（P3）：汇总本页高亮/已加入学习项/可跟读句子，并提供一键动作。
         /// </summary>
@@ -7183,6 +7200,7 @@ namespace LearningAssistant.Forms.Pdf
             };
             closeButton.FlatAppearance.BorderSize = 0;
             closeButton.Click += (_, _) => HideAudioDrawer();
+            _audioDrawerCloseButton = closeButton;
             titleRow.Resize += (_, _) =>
                 closeButton.Location = new Point(
                     Math.Max(0, titleRow.Width - closeButton.Width - 10), 10);
@@ -7289,15 +7307,27 @@ namespace LearningAssistant.Forms.Pdf
             if (_audioDrawer == null) BuildAudioDrawer();
             if (_audioDrawer == null) return;
 
+            // 首次打开时记录触发控件，关闭后把焦点还回去，形成键盘闭环
+            if (!_audioDrawer.Visible && ActiveControl != null && !_audioDrawer.Contains(ActiveControl))
+                _audioDrawerReturnFocus = ActiveControl;
+
             SetAudioDrawerMode(mode);
             PositionAudioDrawer();
             _audioDrawer.Visible = true;
             _audioDrawer.BringToFront();
+            _audioDrawerCloseButton?.Focus();
         }
 
         private void HideAudioDrawer()
         {
-            if (_audioDrawer != null) _audioDrawer.Visible = false;
+            if (_audioDrawer == null || !_audioDrawer.Visible) return;
+
+            _audioDrawer.Visible = false;
+
+            var target = _audioDrawerReturnFocus;
+            _audioDrawerReturnFocus = null;
+            if (target != null && !target.IsDisposed && target.Visible && target.CanFocus)
+                target.Focus();
         }
 
         private void SetAudioDrawerMode(AudioDrawerMode mode)

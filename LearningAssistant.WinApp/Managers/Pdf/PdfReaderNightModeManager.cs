@@ -46,6 +46,7 @@ namespace LearningAssistant.Managers
                 if (_form is Form window)
                     PdfSidebarTheme.SetWindowDark(window, _isNightMode);
                 PdfSidebarTheme.ApplyRecursive(_form.TabControlLeft);
+                _form.ApplySidebarTheme();
                 PdfSidebarTheme.NotifyThemeChanged();
             }
             catch (Exception ex)

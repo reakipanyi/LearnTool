@@ -41,6 +41,9 @@ namespace LearningAssistant.Managers
         Panel? PanelLeftContainer { get; }
         TreeView? TreeViewFiles { get; }
         TabControl? TabControlLeft { get; }
+
+        /// <summary>重新应用侧栏主题（四个页签面板与右侧音频抽屉）</summary>
+        void ApplySidebarTheme();
         Panel? PanelThumbnails { get; }
         FlowLayoutPanel? FlowLayoutPanelThumbnails { get; }
 
