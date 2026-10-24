@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using LearningAssistant.Abstractions.Media;
 using LearningAssistant.Common.UI;
 using LearningAssistant.Managers;
@@ -37,6 +38,14 @@ public sealed class PdfAudioPlayerBar : UserControl
     private readonly System.Windows.Forms.Timer _markTimer = new() { Interval = 500 };
     private readonly ToolTip _tooltip = new();
     private readonly ContextMenuStrip _loopMenu = new();
+    private readonly ContextMenuStrip _speedMenu = new();
+    private readonly Panel _speedPanel = new();
+    private readonly FlowLayoutPanel _speedChips = new();
+    private readonly TrackBar _speedSlider = new();
+    private readonly Label _speedTitle = new();
+    private readonly Label _speedValue = new();
+    private bool _syncingSpeed;
+    private static readonly double[] SpeedPresets = { 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0 };
     private readonly ToolStripMenuItem _menuSyncPage = new("切歌同步页码");
     private readonly ToolStripMenuItem _menuSetA = new("设复读起点 A");
     private readonly ToolStripMenuItem _menuSetB = new("设复读终点 B");
@@ -87,6 +96,7 @@ public sealed class PdfAudioPlayerBar : UserControl
         root.Controls.Add(BuildTransport(), 1, 0);
         root.Controls.Add(BuildRightSide(), 2, 0);
         Controls.Add(root);
+        BuildSpeedMenu();
 
         Paint += (_, e) =>
         {
@@ -237,9 +247,7 @@ public sealed class PdfAudioPlayerBar : UserControl
         StylePill(_btnFollow, "跟随", 52);
         StylePill(_btnVolume, "🔊", 34);
         StylePill(_btnSpeed, "1.0x", 48);
-        // 变速引擎尚未验证（设计要求不能发布可点却无效的控件），只记录书级倍速，暂不开放
-        _btnSpeed.Enabled = false;
-        _tooltip.SetToolTip(_btnSpeed, "变速引擎待验证，当前固定 1.0x");
+        _tooltip.SetToolTip(_btnSpeed, "播放速度（右键恢复 1.0x）");
 
         _labelMark.AutoSize = true;
         _labelMark.Font = new Font("Consolas", 8.5F);
@@ -276,6 +284,78 @@ public sealed class PdfAudioPlayerBar : UserControl
         return right;
     }
 
+    /// <summary>点击倍速胶囊弹出的速度面板：7 档预设 + 0.05 步进滑块。</summary>
+    private void BuildSpeedMenu()
+    {
+        _speedPanel.Size = new Size(252, 100);
+        _speedPanel.Margin = new Padding(0);
+
+        _speedTitle.Text = "播放速度";
+        _speedTitle.AutoSize = true;
+        _speedTitle.Location = new Point(10, 7);
+        _speedTitle.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
+
+        _speedChips.Location = new Point(5, 28);
+        _speedChips.Size = new Size(242, 28);
+        _speedChips.FlowDirection = FlowDirection.LeftToRight;
+        _speedChips.WrapContents = false;
+        _speedChips.Margin = new Padding(0);
+        foreach (double preset in SpeedPresets)
+        {
+            var chip = new Button
+            {
+                Text = FormatSpeed(preset),
+                Tag = preset,
+                Size = new Size(32, 26),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Microsoft YaHei UI", 8F),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(1, 0, 1, 0),
+                TabStop = false
+            };
+            chip.FlatAppearance.BorderSize = 0;
+            chip.Click += (_, _) =>
+            {
+                ApplyPlaybackSpeed(preset);
+                _speedMenu.Close();
+            };
+            _speedChips.Controls.Add(chip);
+        }
+
+        _speedSlider.Minimum = 50;
+        _speedSlider.Maximum = 200;
+        _speedSlider.SmallChange = 5;
+        _speedSlider.LargeChange = 25;
+        _speedSlider.TickStyle = TickStyle.None;
+        _speedSlider.Location = new Point(5, 58);
+        _speedSlider.Size = new Size(196, 32);
+        _speedSlider.ValueChanged += OnSpeedSliderValueChanged;
+        // 拖动/键盘调整过程中只更新读数，松手或按键抬起后再真正换挡，避免连续重建输出链
+        _speedSlider.MouseUp += (_, _) => CommitSpeedSlider();
+        _speedSlider.KeyUp += (_, _) => CommitSpeedSlider();
+
+        _speedValue.Location = new Point(200, 64);
+        _speedValue.Size = new Size(46, 22);
+        _speedValue.TextAlign = ContentAlignment.MiddleRight;
+        _speedValue.Font = new Font("Consolas", 9F);
+
+        _speedPanel.Controls.Add(_speedTitle);
+        _speedPanel.Controls.Add(_speedChips);
+        _speedPanel.Controls.Add(_speedSlider);
+        _speedPanel.Controls.Add(_speedValue);
+
+        var host = new ToolStripControlHost(_speedPanel)
+        {
+            Margin = Padding.Empty,
+            Padding = Padding.Empty,
+            AutoSize = false,
+            Size = _speedPanel.Size
+        };
+        _speedMenu.Items.Add(host);
+        _speedMenu.Padding = Padding.Empty;
+        _speedMenu.ShowImageMargin = false;
+    }
+
     private void WireEvents()
     {
         _btnPrev.Click += (_, _) => _manager.Prev();
@@ -305,6 +385,19 @@ public sealed class PdfAudioPlayerBar : UserControl
         {
             _manager.SetFollowPage(!_manager.FollowPage);
             UpdateFollowButton();
+        };
+
+        _btnSpeed.Click += (_, _) =>
+        {
+            SyncSpeedUi();
+            // 播放器贴在窗口底部，面板向上弹出；取不到首选高度时按面板固定高度兜底
+            int height = _speedMenu.GetPreferredSize(Size.Empty).Height;
+            if (height < 20) height = _speedPanel.Height + 8;
+            _speedMenu.Show(_btnSpeed, new Point(0, -height));
+        };
+        _btnSpeed.MouseUp += (_, e) =>
+        {
+            if (e.Button == MouseButtons.Right) ApplyPlaybackSpeed(1.0);
         };
 
         _btnMore.Click += (_, _) => _loopMenu.Show(_btnMore, new Point(0, _btnMore.Height));
@@ -364,6 +457,7 @@ public sealed class PdfAudioPlayerBar : UserControl
     private void OnSettingsChanged(object? sender, EventArgs e)
     {
         UpdateFollowButton();
+        UpdateSpeedButton();
         UpdateLoopChecks();
         UpdateTransport();
         RefreshTrack();
@@ -439,6 +533,7 @@ public sealed class PdfAudioPlayerBar : UserControl
 
         UpdateFollowButton();
         UpdateVolumeButton();
+        UpdateSpeedButton();
         UpdateLoopChecks();
         UpdateTransport();
         RefreshTrack();
@@ -733,6 +828,75 @@ public sealed class PdfAudioPlayerBar : UserControl
         _tooltip.SetToolTip(_btnVolume, muted ? "取消静音" : "静音");
     }
 
+    /// <summary>当前书级倍速；未打开书籍时按 1.0x 显示。</summary>
+    private double CurrentSpeed => _manager.Profile?.PlaybackSpeed ?? 1.0;
+
+    private void ApplyPlaybackSpeed(double speed)
+    {
+        _manager.SetPlaybackSpeed(speed);
+        UpdateSpeedButton();
+        SyncSpeedUi();
+    }
+
+    private void UpdateSpeedButton()
+    {
+        var palette = PdfSidebarTheme.PaletteFor(this);
+        double speed = CurrentSpeed;
+        _btnSpeed.Text = FormatSpeed(speed);
+        bool changed = Math.Abs(speed - 1.0) > 0.001;
+        _btnSpeed.BackColor = changed ? palette.BrandSoft : palette.SurfaceAlt;
+        _btnSpeed.ForeColor = changed ? PdfSidebarTheme.Brand : palette.Text;
+        _tooltip.SetToolTip(_btnSpeed, $"播放速度 {FormatSpeed(speed)}（右键恢复 1.0x）");
+    }
+
+    /// <summary>把书级倍速同步到面板的滑块与预设高亮。</summary>
+    private void SyncSpeedUi()
+    {
+        var palette = PdfSidebarTheme.PaletteFor(this);
+        double speed = CurrentSpeed;
+
+        _syncingSpeed = true;
+        _speedSlider.Value = Math.Clamp((int)Math.Round(speed * 100), _speedSlider.Minimum, _speedSlider.Maximum);
+        _syncingSpeed = false;
+        _speedValue.Text = FormatSpeed(speed);
+
+        foreach (Button chip in _speedChips.Controls)
+        {
+            bool active = chip.Tag is double preset && Math.Abs(preset - speed) < 0.001;
+            chip.BackColor = active ? palette.BrandSoft : palette.SurfaceAlt;
+            chip.ForeColor = active ? PdfSidebarTheme.Brand : palette.Text;
+            chip.FlatAppearance.MouseOverBackColor = palette.Hover;
+            chip.FlatAppearance.MouseDownBackColor = palette.BrandSoft;
+        }
+    }
+
+    private void OnSpeedSliderValueChanged(object? sender, EventArgs e)
+    {
+        if (_syncingSpeed) return;
+        // 拖动中只刷新读数，真正换挡在松手时提交
+        _speedValue.Text = FormatSpeed(SnapSpeed(_speedSlider.Value) / 100.0);
+    }
+
+    private void CommitSpeedSlider()
+    {
+        if (_syncingSpeed) return;
+        int snapped = SnapSpeed(_speedSlider.Value);
+        _syncingSpeed = true;
+        _speedSlider.Value = snapped;
+        _syncingSpeed = false;
+        ApplyPlaybackSpeed(snapped / 100.0);
+    }
+
+    /// <summary>滑块最小步进 5，即 0.05x。</summary>
+    private static int SnapSpeed(int value) => (int)Math.Round(value / 5.0) * 5;
+
+    private static string FormatSpeed(double speed)
+    {
+        var text = speed.ToString("0.00", CultureInfo.InvariantCulture).TrimEnd('0');
+        if (text.EndsWith('.')) text += "0";
+        return text + "x";
+    }
+
     private void UpdateFollowButton()
     {
         var palette = PdfSidebarTheme.PaletteFor(this);
@@ -821,9 +985,17 @@ public sealed class PdfAudioPlayerBar : UserControl
 
         _loopMenu.BackColor = palette.Surface;
         _loopMenu.ForeColor = palette.Text;
+        _speedMenu.BackColor = palette.Surface;
+        _speedMenu.ForeColor = palette.Text;
+        _speedPanel.BackColor = palette.Surface;
+        _speedSlider.BackColor = palette.Surface;
+        _speedTitle.ForeColor = palette.Text;
+        _speedValue.ForeColor = palette.Muted;
         UpdateFollowButton();
+        UpdateSpeedButton();
         UpdateLoopChecks();
         UpdateMarkButton();
+        SyncSpeedUi();
         Invalidate();
     }
 
@@ -898,6 +1070,7 @@ public sealed class PdfAudioPlayerBar : UserControl
             _markSession?.Dispose();
             _tooltip.Dispose();
             _loopMenu.Dispose();
+            _speedMenu.Dispose();
         }
         base.Dispose(disposing);
     }

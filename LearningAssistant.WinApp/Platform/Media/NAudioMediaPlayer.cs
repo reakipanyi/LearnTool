@@ -7,9 +7,14 @@ namespace LearningAssistant.Platform.Media;
 
 public class NAudioMediaPlayer : IMediaPlayer
 {
+    private const double MinSpeed = 0.5;
+    private const double MaxSpeed = 2.0;
+
     private readonly ISubtitleParser _subtitleParser;
     private WaveOutEvent? _waveOut;
     private AudioFileReader? _reader;
+    private VarispeedSampleProvider? _varispeed;
+    private NAudio.Wave.SampleProviders.SmbPitchShiftingSampleProvider? _pitchShift;
     private System.Windows.Forms.Timer? _timer;
     private readonly AbLoopState _abLoop = new();
     private bool _manualStop;
@@ -36,14 +41,11 @@ public class NAudioMediaPlayer : IMediaPlayer
         get => _speed;
         set
         {
-            // 阶段一：倍速引擎尚未落地（待时域拉伸 spike），仅接受 1.0 正常速度，
-            // 其它值忽略以严格保证「不变调」。spike 通过后再接入真正的变速实现。
-            if (value != 1.0)
-            {
-                System.Diagnostics.Trace.TraceWarning($"[NAudioMediaPlayer] 音频倍速尚未实现，忽略请求的倍速 {value}，保持 1.0 不变调。");
-                return;
-            }
-            _speed = value;
+            // 变速不变调：变速取样后串接音高修正，再把音高拉回原调
+            double speed = Math.Clamp(value, MinSpeed, MaxSpeed);
+            if (Math.Abs(_speed - speed) < 0.001) return;
+            _speed = speed;
+            RebuildOutputChain();
         }
     }
 
@@ -131,6 +133,8 @@ public class NAudioMediaPlayer : IMediaPlayer
         }
         _reader?.Dispose();
         _reader = null;
+        _varispeed = null;
+        _pitchShift = null;
         SubtitleCues = null;
         // 换曲时清除上一曲的 A-B 循环，避免沿用旧区间
         _abLoop.A = null;
@@ -141,7 +145,7 @@ public class NAudioMediaPlayer : IMediaPlayer
             _reader = new AudioFileReader(mediaPath);
             _waveOut = new WaveOutEvent { Volume = (float)_volume };
             _waveOut.PlaybackStopped += OnPlaybackStopped;
-            _waveOut.Init(_reader);
+            BuildOutputChain();
             _timer = new System.Windows.Forms.Timer { Interval = 100 };
             _timer.Tick += (_, _) => OnTick();
             _timer.Start();
@@ -166,6 +170,58 @@ public class NAudioMediaPlayer : IMediaPlayer
         }
     }
 
+    /// <summary>
+    /// 按当前倍速搭建输出链：1.0x 直接播放原始流；其它倍速先变速取样，
+    /// 再用音高修正抵消变速带来的音高变化，做到变速不变调。
+    /// </summary>
+    private void BuildOutputChain()
+    {
+        if (_reader == null || _waveOut == null) return;
+
+        _varispeed = null;
+        _pitchShift = null;
+
+        if (Math.Abs(_speed - 1.0) < 0.001)
+        {
+            _waveOut.Init(_reader);
+            return;
+        }
+
+        _varispeed = new VarispeedSampleProvider(_reader, _speed);
+        _pitchShift = new NAudio.Wave.SampleProviders.SmbPitchShiftingSampleProvider(_varispeed)
+        {
+            PitchFactor = (float)Math.Clamp(1.0 / _speed, 0.5, 2.0)
+        };
+        _waveOut.Init(_pitchShift);
+    }
+
+    /// <summary>倍速变化时重建输出链，保持源位置、音量与播放/暂停状态。</summary>
+    private void RebuildOutputChain()
+    {
+        if (_reader == null || _waveOut == null) return;
+
+        bool wasPlaying = State == MediaPlaybackState.Playing;
+        var position = _reader.CurrentTime;
+        float volume = _waveOut.Volume;
+
+        // 主动 Stop 会触发 PlaybackStopped，先标记避免误判为播放结束
+        _manualStop = true;
+        _waveOut.Stop();
+        _manualStop = false;
+        _waveOut.PlaybackStopped -= OnPlaybackStopped;
+        _waveOut.Dispose();
+        _waveOut = null;
+
+        _reader.CurrentTime = position;
+        _varispeed = null;
+        _pitchShift = null;
+
+        _waveOut = new WaveOutEvent { Volume = volume };
+        _waveOut.PlaybackStopped += OnPlaybackStopped;
+        BuildOutputChain();
+        if (wasPlaying) _waveOut.Play();
+    }
+
     public Task PlayAsync(CancellationToken ct = default)
     {
         if (_waveOut == null) return Task.CompletedTask;
@@ -177,8 +233,14 @@ public class NAudioMediaPlayer : IMediaPlayer
 
     public void Pause() { _waveOut?.Pause(); SetState(MediaPlaybackState.Paused); }
     public void Resume() { _ = PlayAsync(); }
-    public void Stop() { _manualStop = true; _waveOut?.Stop(); _reader?.Seek(0, System.IO.SeekOrigin.Begin); SetState(MediaPlaybackState.Stopped); }
-    public void Seek(TimeSpan position) { if (_reader != null && position >= TimeSpan.Zero && position <= _reader.TotalTime) _reader.CurrentTime = position; }
+    public void Stop() { _manualStop = true; _waveOut?.Stop(); _reader?.Seek(0, System.IO.SeekOrigin.Begin); _varispeed?.Reset(); SetState(MediaPlaybackState.Stopped); }
+    public void Seek(TimeSpan position)
+    {
+        if (_reader == null || position < TimeSpan.Zero || position > _reader.TotalTime) return;
+        _reader.CurrentTime = position;
+        // 变速缓冲里可能残留定位前的采样，必须丢弃
+        _varispeed?.Reset();
+    }
 
     public void FadeOut(int milliseconds, bool blocking = false) => FadeTo(0d, milliseconds, blocking);
 
@@ -265,7 +327,7 @@ public class NAudioMediaPlayer : IMediaPlayer
     {
         if (_manualStop) return;
         if (LoopMode == MediaLoopMode.RepeatOne || LoopMode == MediaLoopMode.RepeatAll)
-        { _reader?.Seek(0, System.IO.SeekOrigin.Begin); _waveOut?.Play(); SetState(MediaPlaybackState.Playing); return; }
+        { _reader?.Seek(0, System.IO.SeekOrigin.Begin); _varispeed?.Reset(); _waveOut?.Play(); SetState(MediaPlaybackState.Playing); return; }
         SetState(MediaPlaybackState.Stopped);
         PlaybackFinished?.Invoke(this, EventArgs.Empty);
     }

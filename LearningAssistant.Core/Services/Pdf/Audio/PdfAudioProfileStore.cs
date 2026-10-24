@@ -345,7 +345,7 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
                                ?? new Dictionary<int, string>(),
             FollowPage = book?.FollowPage ?? true,
             SyncPageOnTrackChange = book?.SyncPageOnTrackChange ?? true,
-            PlaybackSpeed = Math.Clamp(book?.PlaybackSpeed ?? doc.Defaults.PlaybackSpeed, 0.6, 2.0),
+            PlaybackSpeed = Math.Clamp(book?.PlaybackSpeed ?? doc.Defaults.PlaybackSpeed, 0.5, 2.0),
             LastPositionSeconds = Math.Max(0, book?.PositionSeconds ?? 0),
             LastTrackPath = book?.LastTrack,
             DirectoryRules = doc.Rules.ToList(),
@@ -409,7 +409,7 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
         SetNode(book, "followPage", profile.FollowPage);
         SetNode(book, "syncPageOnTrackChange", profile.SyncPageOnTrackChange);
         // 书级用户状态：倍速与上次播放位置，按书记忆（与机器缓存分离）
-        SetNode(book, "playbackSpeed", Math.Clamp(profile.PlaybackSpeed, 0.6, 2.0));
+        SetNode(book, "playbackSpeed", Math.Clamp(profile.PlaybackSpeed, 0.5, 2.0));
         SetNode(book, "positionSeconds", Math.Max(0, profile.LastPositionSeconds));
         SetNode(book, "lastTrack", profile.LastTrackPath);
 

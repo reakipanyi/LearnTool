@@ -172,7 +172,7 @@ public class PdfAudioTrackManager : IDisposable
         var profile = _profile!;
         FollowPage = profile.FollowPage;
         SyncPageOnTrackChange = profile.SyncPageOnTrackChange;
-        // 倍速按书记忆；引擎未支持时 SetSpeed 内部会保持 1.0，不影响播放
+        // 倍速按书记忆；打开书籍时先把目标值同步给播放器，后续 Load 按该倍速搭建输出链
         _playback.SetSpeed(profile.PlaybackSpeed);
         ScopeCorrectionMessage = null;
 
@@ -632,11 +632,11 @@ public class PdfAudioTrackManager : IDisposable
         return true;
     }
 
-    /// <summary>设置并持久化本书播放倍速（0.6–2.0）；引擎未支持时仅记录目标值。</summary>
+    /// <summary>设置并持久化本书播放倍速（0.5–2.0），同时立即应用到当前输出链。</summary>
     public void SetPlaybackSpeed(double speed)
     {
         if (_profile == null) return;
-        speed = Math.Clamp(speed, 0.6, 2.0);
+        speed = Math.Clamp(speed, 0.5, 2.0);
         if (Math.Abs(_profile.PlaybackSpeed - speed) < 0.001) return;
         _profile.PlaybackSpeed = speed;
         _playback.SetSpeed(speed);

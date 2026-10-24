@@ -29,7 +29,7 @@ namespace LearningAssistant.Models.Pdf
         public bool FollowPage { get; set; } = true;
         /// <summary>上一曲/下一曲或列表选曲后，正文是否跳到该曲目起始页</summary>
         public bool SyncPageOnTrackChange { get; set; } = true;
-        /// <summary>书级播放倍速（0.6–2.0），按书记忆；默认继承目录默认值</summary>
+        /// <summary>书级播放倍速（0.5–2.0），按书记忆；默认继承目录默认值</summary>
         public double PlaybackSpeed { get; set; } = 1.0;
         /// <summary>上次播放到的位置（秒），按书记忆，换曲或关闭时写回</summary>
         public double LastPositionSeconds { get; set; }

@@ -30,6 +30,6 @@ public class PdfAudioPlaybackService
     public void Resume() => _player.Resume();
     public void Stop() => _player.Stop();
     public void Seek(TimeSpan p) => _player.Seek(p);
-    public void SetSpeed(double s) { if (s >= 0.6 && s <= 2.0) _player.Speed = s; }
+    public void SetSpeed(double s) { if (s >= 0.5 && s <= 2.0) _player.Speed = s; }
     public void SetAbLoop(TimeSpan? a, TimeSpan? b) => _player.AbLoop = (a, b);
 }

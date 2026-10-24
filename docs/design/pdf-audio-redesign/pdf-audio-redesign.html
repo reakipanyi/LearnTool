@@ -1996,7 +1996,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
         <div class="n" style="font-family:var(--mono);font-size:11px;font-weight:700;color:var(--accent)">P0 · 播放正确性</div>
         <h4 style="margin-top:6px">控制器 + 底部播放器</h4>
         <ul style="font-size:12.5px;color:var(--muted);padding-left:18px;margin-bottom:0">
-          <li>倍速 spike（SoundTouch vs MF）并定方案</li>
+          <li>倍速方案已定：NAudio 变速取样 + <code>SmbPitchShifting</code> 音高修正，0.5–2.0x 不变调</li>
           <li><code>PdfAudioSession</code> + <code>PlaybackController</code> + generation</li>
           <li><code>PdfAudioPlayerBar</code>（进度/倍速/音量/循环/音源标签）</li>
           <li><code>PlaybackDecision</code> 纯函数 + 单测</li>
@@ -2093,7 +2093,7 @@ footer{margin-top:70px;border-top:1px solid var(--rule);padding-top:22px;color:v
       </div>
       <div class="card">
         <h4>2. 倍速是否必须不变调</h4>
-        <p>不变调体验更好但需变速管线；可接受变调则成本更低。建议先试听 spike，再定；在此之前倍速入口不会"看起来可用"。</p>
+        <p><b>已定：必须不变调</b>，并已落地。播放链为 <code>AudioFileReader</code> → 变速取样 → <code>SmbPitchShiftingSampleProvider</code> 音高修正，0.5–2.0x 按书记忆；倍速面板提供 7 档预设 + 0.05x 步进滑块，右键恢复 1.0x。</p>
       </div>
       <div class="card">
         <h4>3. 多窗口是否允许同时出声</h4>
