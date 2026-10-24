@@ -174,6 +174,15 @@ namespace LearningAssistant.Forms.Pdf
         // 悬停提示延迟显示，避免鼠标划过页签时提示框反复弹出/收回造成闪烁
         private System.Windows.Forms.Timer? _sidebarTipTimer;
 
+        // 阶段5：页签使用习惯按文档记忆，另提供默认关闭的悬停切换
+        private const string SidebarStateFileName = "pdf-sidebar-state.json";
+        private static bool _sidebarHoverSwitch;
+        private static bool _sidebarStateLoaded;
+        private static Dictionary<string, string> _sidebarTabByDocument = new();
+        private System.Windows.Forms.Timer? _sidebarHoverSwitchTimer;
+        private int _sidebarHoverSwitchCandidate = -1;
+        private ContextMenuStrip? _sidebarTabMenu;
+
         private Label _transitionLabel;
         private Panel _toolbarGroupView;
         //private ToolStrip _toolbarGroupViewZoom;
@@ -933,6 +942,7 @@ namespace LearningAssistant.Forms.Pdf
 
         private void PdfReaderFormV2_Load(object? sender, EventArgs e)
         {
+            EnsureSidebarStateLoaded();
             _tabControlLeft.SelectedIndexChanged += TabControlLeft_SelectedIndexChanged;
             RestoreSidebarTabSelection();
             // 「图标 + 名称」页签：自绘 + 宽度自适应 + 悬停提示
@@ -946,6 +956,9 @@ namespace LearningAssistant.Forms.Pdf
                 _sidebarTipTimer?.Stop();
                 ShowSidebarTabToolTip(_sidebarHoveredTabIndex);
             };
+            _sidebarHoverSwitchTimer = new System.Windows.Forms.Timer { Interval = 400 };
+            _sidebarHoverSwitchTimer.Tick += SidebarHoverSwitchTimer_Tick;
+            BuildSidebarTabContextMenu();
             _sidebarTabFont ??= new Font("Segoe UI Emoji", 12F);
             _sidebarTabLabelFont ??= new Font("Microsoft YaHei UI", 9.5F, FontStyle.Bold);
             UpdateSidebarTabItemSize();
@@ -976,6 +989,14 @@ namespace LearningAssistant.Forms.Pdf
                 if (e.KeyCode == Keys.Escape && _audioDrawer?.Visible == true && _audioDrawer.ContainsFocus)
                 {
                     HideAudioDrawer();
+                    e.Handled = e.SuppressKeyPress = true;
+                    return;
+                }
+
+                // Ctrl+K 命令搜索：把常用入口聚合成一个键盘入口
+                if (e.Control && e.KeyCode == Keys.K)
+                {
+                    ShowCommandPalette();
                     e.Handled = e.SuppressKeyPress = true;
                     return;
                 }
@@ -1727,9 +1748,12 @@ namespace LearningAssistant.Forms.Pdf
             CleanupHighlightLayer();
             ClearThumbnails();
             _thumbnailsLoaded = false;
+            bool documentChanged = !string.Equals(_currentPdfPath, pdfPath, StringComparison.OrdinalIgnoreCase);
             _currentPdfPath = pdfPath;
             // 新文档的音频档案是异步加载的：先收起播放条，避免上一本文档的曲目或空条残留
             HideAudioPlayerBarForDocumentSwitch();
+            if (documentChanged)
+                RestoreSidebarTabSelection();
             RefreshHighlightList();
             // 打开文档时渲染器尚未初始化，优先使用调用方传入的页数，避免按 0 页匹配导致配套音频不加载
             int resolvedPageCount = pageCount >= 0 ? pageCount : (_presenter?.PageCount ?? 0);
@@ -7718,21 +7742,140 @@ namespace LearningAssistant.Forms.Pdf
             else if (_tabControlLeft.SelectedTab == _tabPageBookmarksAndHighlights)
                 UpdateHighlightEmptyState();
 
-            if (_tabControlLeft.SelectedTab != null)
-                _lastSidebarTabName = _tabControlLeft.SelectedTab.Name;
+            if (_tabControlLeft.SelectedTab == null) return;
+
+            _lastSidebarTabName = _tabControlLeft.SelectedTab.Name;
+            if (string.IsNullOrEmpty(_currentPdfPath)) return;
+
+            // 每本文档记住各自最后使用的页签，重新打开时不再统一回到「目录」
+            if (_sidebarTabByDocument.TryGetValue(_currentPdfPath, out var saved) &&
+                string.Equals(saved, _lastSidebarTabName, StringComparison.Ordinal))
+                return;
+
+            _sidebarTabByDocument[_currentPdfPath] = _lastSidebarTabName;
+            SaveSidebarState();
         }
 
-        /// <summary>恢复上次使用的侧栏页签；页签被删除或不存在时回落到「目录」。</summary>
+        /// <summary>恢复当前文档上次使用的侧栏页签；没有记录时回落到会话内页签或「目录」。</summary>
         private void RestoreSidebarTabSelection()
         {
-            if (_tabControlLeft == null || string.IsNullOrEmpty(_lastSidebarTabName)) return;
+            if (_tabControlLeft == null) return;
+
+            string? target = null;
+            if (!string.IsNullOrEmpty(_currentPdfPath))
+                _sidebarTabByDocument.TryGetValue(_currentPdfPath, out target);
+            target ??= _lastSidebarTabName;
+            if (string.IsNullOrEmpty(target)) return;
 
             foreach (TabPage page in _tabControlLeft.TabPages)
             {
-                if (!string.Equals(page.Name, _lastSidebarTabName, StringComparison.Ordinal)) continue;
+                if (!string.Equals(page.Name, target, StringComparison.Ordinal)) continue;
                 _tabControlLeft.SelectedTab = page;
                 return;
             }
+        }
+
+        private static string SidebarStatePath => Path.Combine(AppPaths.ConfigDir, SidebarStateFileName);
+
+        private static void EnsureSidebarStateLoaded()
+        {
+            if (_sidebarStateLoaded) return;
+            _sidebarStateLoaded = true;
+
+            try
+            {
+                if (!File.Exists(SidebarStatePath)) return;
+
+                var state = JsonSerializer.Deserialize<SidebarState>(File.ReadAllText(SidebarStatePath));
+                if (state == null) return;
+
+                _sidebarHoverSwitch = state.HoverSwitch;
+                _sidebarTabByDocument = state.Tabs ?? new Dictionary<string, string>();
+            }
+            catch
+            {
+                // 状态文件损坏时退回默认值，不阻断阅读器启动
+                _sidebarTabByDocument = new Dictionary<string, string>();
+            }
+        }
+
+        private static void SaveSidebarState()
+        {
+            try
+            {
+                Directory.CreateDirectory(AppPaths.ConfigDir);
+                var state = new SidebarState
+                {
+                    HoverSwitch = _sidebarHoverSwitch,
+                    Tabs = _sidebarTabByDocument
+                };
+                File.WriteAllText(SidebarStatePath, JsonSerializer.Serialize(state));
+            }
+            catch
+            {
+                // 记录失败只影响下次恢复，不影响当前会话
+            }
+        }
+
+        private sealed class SidebarState
+        {
+            public bool HoverSwitch { get; set; }
+            public Dictionary<string, string>? Tabs { get; set; } = new();
+        }
+
+        /// <summary>右键页签条可开启「悬停 0.4 秒切换」，默认关闭，避免误触。</summary>
+        private void BuildSidebarTabContextMenu()
+        {
+            _sidebarTabMenu = new ContextMenuStrip();
+            var hoverItem = new ToolStripMenuItem("悬停 0.4 秒自动切换页签")
+            {
+                CheckOnClick = true,
+                Checked = _sidebarHoverSwitch
+            };
+            hoverItem.CheckedChanged += (_, _) =>
+            {
+                _sidebarHoverSwitch = hoverItem.Checked;
+                if (!_sidebarHoverSwitch)
+                {
+                    _sidebarHoverSwitchTimer?.Stop();
+                    _sidebarHoverSwitchCandidate = -1;
+                }
+                SaveSidebarState();
+            };
+            _sidebarTabMenu.Items.Add(hoverItem);
+            _tabControlLeft.ContextMenuStrip = _sidebarTabMenu;
+        }
+
+        private void SidebarHoverSwitchTimer_Tick(object? sender, EventArgs e)
+        {
+            _sidebarHoverSwitchTimer?.Stop();
+            if (!_sidebarHoverSwitch || _tabControlLeft == null) return;
+
+            int index = _sidebarHoverSwitchCandidate;
+            if (index < 0 || index != _sidebarHoveredTabIndex) return;
+            if (index >= _tabControlLeft.TabPages.Count) return;
+            if (index == _tabControlLeft.SelectedIndex) return;
+
+            _tabControlLeft.SelectedIndex = index;
+        }
+
+        /// <summary>Ctrl+K：把常用入口聚合成可搜索的命令面板。</summary>
+        private void ShowCommandPalette()
+        {
+            var commands = new List<PdfCommandPaletteItem>
+            {
+                new("翻译本页", "识别并翻译当前页", OnTranslateClicked),
+                new("整页识别", "只识别当前页文字，不翻译", OnOcrPageClicked),
+                new("开始本页跟读", "打开句子跟读窗口", OpenShadowingWindow),
+                new("配套音频", "在右侧抽屉查看配套音频", ShowAudioCompanion),
+                new("整页录音", "在右侧抽屉为当前页录音", () => ShowAudioDrawer(AudioDrawerMode.Recording)),
+                new("导出学习笔记", "导出当前文档的 AI 学习笔记", async () => await ExportAiStudyNotesAsync()),
+                new("批量识别导出", "识别整本 PDF 并导出文本", BatchOcrExport_Click),
+                new("切换夜间模式", "在浅色与夜间配色之间切换", () => _nightModeManager?.ToggleNightMode())
+            };
+
+            using var dialog = new PdfCommandPaletteDialog(commands);
+            dialog.ShowDialog(this);
         }
 
         /// <summary>按侧栏实际宽度均分页签尺寸，确保任意 DPI 下都保持单行且不溢出。</summary>
@@ -7863,12 +8006,26 @@ namespace LearningAssistant.Forms.Pdf
             _toolTip?.Hide(_tabControlLeft);
             if (hoveredIndex >= 0)
                 _sidebarTipTimer?.Start();
+
+            // 可选增强：悬停稳定 0.4 秒后切换页签，默认关闭
+            _sidebarHoverSwitchTimer?.Stop();
+            if (_sidebarHoverSwitch && hoveredIndex >= 0 && hoveredIndex != _tabControlLeft.SelectedIndex)
+            {
+                _sidebarHoverSwitchCandidate = hoveredIndex;
+                _sidebarHoverSwitchTimer?.Start();
+            }
+            else
+            {
+                _sidebarHoverSwitchCandidate = -1;
+            }
         }
 
         private void TabControlLeft_MouseLeave(object? sender, EventArgs e)
         {
             if (_tabControlLeft == null) return;
             _sidebarTipTimer?.Stop();
+            _sidebarHoverSwitchTimer?.Stop();
+            _sidebarHoverSwitchCandidate = -1;
             if (_sidebarHoveredTabIndex < 0) return;
             int previousIndex = _sidebarHoveredTabIndex;
             _sidebarHoveredTabIndex = -1;
