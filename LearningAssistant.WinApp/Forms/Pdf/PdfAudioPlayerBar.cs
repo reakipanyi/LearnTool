@@ -30,6 +30,7 @@ public sealed class PdfAudioPlayerBar : UserControl
     private readonly Button _btnMore = new();
     private readonly ToolTip _tooltip = new();
     private readonly ContextMenuStrip _loopMenu = new();
+    private readonly ToolStripMenuItem _menuSyncPage = new("切歌同步页码");
 
     private bool _dragging;
     private double _lastVolume = 1.0;
@@ -225,6 +226,13 @@ public sealed class PdfAudioPlayerBar : UserControl
         _loopMenu.Items.Add("不循环", null, (_, _) => SetLoopMode(MediaLoopMode.None));
         _loopMenu.Items.Add("列表循环", null, (_, _) => SetLoopMode(MediaLoopMode.RepeatAll));
         _loopMenu.Items.Add("单曲循环", null, (_, _) => SetLoopMode(MediaLoopMode.RepeatOne));
+        _loopMenu.Items.Add(new ToolStripSeparator());
+        _menuSyncPage.Click += (_, _) =>
+        {
+            _manager.SetSyncPageOnTrackChange(!_manager.SyncPageOnTrackChange);
+            UpdateLoopChecks();
+        };
+        _loopMenu.Items.Add(_menuSyncPage);
         return right;
     }
 
@@ -255,7 +263,7 @@ public sealed class PdfAudioPlayerBar : UserControl
 
         _btnFollow.Click += (_, _) =>
         {
-            _manager.FollowPage = !_manager.FollowPage;
+            _manager.SetFollowPage(!_manager.FollowPage);
             UpdateFollowButton();
         };
 
@@ -439,6 +447,7 @@ public sealed class PdfAudioPlayerBar : UserControl
         if (_loopMenu.Items.Count < 3) return;
         for (int i = 0; i < 3; i++)
             ((ToolStripMenuItem)_loopMenu.Items[i]).Checked = (MediaLoopMode)i == _manager.LoopMode;
+        _menuSyncPage.Checked = _manager.SyncPageOnTrackChange;
         _btnMore.BackColor = _manager.LoopMode == MediaLoopMode.None
             ? PdfSidebarTheme.PaletteFor(this).SurfaceAlt
             : PdfSidebarTheme.PaletteFor(this).BrandSoft;

@@ -536,7 +536,13 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _labelSubtitle.Text = cue?.Text ?? "";
     }
 
-    private void OnProfileLoaded(object? sender, EventArgs e) => InvokeIfReady(RefreshData);
+    private void OnProfileLoaded(object? sender, EventArgs e) => InvokeIfReady(() =>
+    {
+        RefreshData();
+        // 打开档案时若发生播放范围自动纠正，在这里提示一次，不弹模态框
+        var correction = _manager.ScopeCorrectionMessage;
+        if (!string.IsNullOrEmpty(correction)) _labelInfo.Text = correction;
+    });
 
     private void HandleAudioError(string message, Exception ex)
     {

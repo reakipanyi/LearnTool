@@ -36,9 +36,17 @@ public class PdfAudioTrackManager : IDisposable
     public bool IsPlaying => _playback.Player.State == MediaPlaybackState.Playing;
 
     /// <summary>是否跟随翻页切换音频；关闭后翻页完全不动作</summary>
-    public bool FollowPage { get; set; } = true;
+    public bool FollowPage { get; private set; } = true;
+    /// <summary>上一曲/下一曲/列表选曲后，正文是否跳到曲目起始页；与 FollowPage 独立</summary>
+    public bool SyncPageOnTrackChange { get; private set; } = true;
     /// <summary>播放列表循环方式；None 时首尾按钮禁用，不自动环绕</summary>
     public MediaLoopMode LoopMode { get; set; } = MediaLoopMode.None;
+
+    /// <summary>请求正文跳到指定页（由宿主持有导航能力），翻页触发的切换不会触发</summary>
+    public event EventHandler<int>? PageSyncRequested;
+
+    /// <summary>打开档案时自动纠正非法组合的提示，供面板显示一次</summary>
+    public string? ScopeCorrectionMessage { get; private set; }
 
     /// <summary>能否切到下一曲（列表末且未开启循环时为 false）</summary>
     public bool CanGoNext
@@ -147,6 +155,19 @@ public class PdfAudioTrackManager : IDisposable
     private void ApplyLoadedProfile(string pdfPath, int pageCount, List<AudioTrack> tracks, string fingerprint)
     {
         var profile = _profile!;
+        FollowPage = profile.FollowPage;
+        SyncPageOnTrackChange = profile.SyncPageOnTrackChange;
+        ScopeCorrectionMessage = null;
+
+        // A41：整篇单音频与“跟随翻页”互斥，打开时纠正并提示一次
+        if (!string.IsNullOrWhiteSpace(profile.SingleAudioFile)
+            && profile.PlaybackScope == PlaybackScope.FollowPage)
+        {
+            profile.PlaybackScope = PlaybackScope.WholeBook;
+            ScopeCorrectionMessage = "已按整篇模式修正播放范围";
+            _store.Save(profile);
+        }
+
         var scanChanged = fingerprint != profile.ScanFingerprint || profile.Tracks.Count == 0;
         var pageCountChanged = profile.PageCount != pageCount;
         // 指纹与页数均未变化时复用缓存映射；否则重算，避免规则结果丢失或页数变化后映射越界
@@ -309,7 +330,7 @@ public class PdfAudioTrackManager : IDisposable
 
         var target = _result.PageIndex.GetValueOrDefault(pageIndex);
         var decision = PlaybackDecision.Resolve(
-            PlaybackScope.FollowPage,
+            _profile?.PlaybackScope ?? PlaybackScope.FollowPage,
             follow: FollowPage,
             MapPlayerState(),
             _loadedTrack?.FilePath,
@@ -318,11 +339,11 @@ public class PdfAudioTrackManager : IDisposable
         switch (decision)
         {
             case PlaybackAction.LoadAndPlay:
-                Load(target!);
+                LoadCore(target!, syncPage: false);
                 FireAndForget(_playback.PlayAsync(), "PlayAsync");
                 break;
             case PlaybackAction.LoadOnly:
-                Load(target!);
+                LoadCore(target!, syncPage: false);
                 break;
             case PlaybackAction.StopWithHint:
                 _playback.Stop();
@@ -366,13 +387,50 @@ public class PdfAudioTrackManager : IDisposable
     /// <summary>供 UI 在无音频时内联提示，不弹模态框。</summary>
     public void SetHint(string? hint) => SetPageHint(hint);
 
-    /// <summary>加载音频并记录当前曲目，供翻页时判断是否需要切换；同时同步播放列表索引。</summary>
-    public void Load(AudioTrack track)
+    /// <summary>加载音频并记录当前曲目；用户主动切曲时按开关同步正文页码。</summary>
+    public void Load(AudioTrack track) => LoadCore(track, syncPage: true);
+
+    private void LoadCore(AudioTrack track, bool syncPage)
     {
         _playback.Load(track);
         _loadedTrack = track;
         _playlistIndex = IndexOfTrack(track);
         TrackChanged?.Invoke(this, track);
+
+        if (!syncPage || !SyncPageOnTrackChange) return;
+        int page = FindFirstPageForTrack(track);
+        if (page >= 0 && page != _currentPageIndex)
+            PageSyncRequested?.Invoke(this, page);
+    }
+
+    private int FindFirstPageForTrack(AudioTrack track)
+    {
+        if (_result == null) return -1;
+        int best = -1;
+        foreach (var kv in _result.PageIndex)
+        {
+            if (!string.Equals(kv.Value.FilePath, track.FilePath, StringComparison.OrdinalIgnoreCase)) continue;
+            if (best < 0 || kv.Key < best) best = kv.Key;
+        }
+        return best;
+    }
+
+    /// <summary>切换“跟随翻页”并写回档案。</summary>
+    public void SetFollowPage(bool follow)
+    {
+        FollowPage = follow;
+        if (_profile == null) return;
+        _profile.FollowPage = follow;
+        _store.Save(_profile);
+    }
+
+    /// <summary>切换“切歌同步页码”并写回档案。</summary>
+    public void SetSyncPageOnTrackChange(bool sync)
+    {
+        SyncPageOnTrackChange = sync;
+        if (_profile == null) return;
+        _profile.SyncPageOnTrackChange = sync;
+        _store.Save(_profile);
     }
 
     private int IndexOfTrack(AudioTrack track)

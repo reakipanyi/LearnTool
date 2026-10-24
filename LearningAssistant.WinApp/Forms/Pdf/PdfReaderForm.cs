@@ -505,6 +505,7 @@ namespace LearningAssistant.Forms.Pdf
                 if (matcher != null && scanner != null && store != null && subParser != null)
                 {
                     _audioTrackManager = new PdfAudioTrackManager(_logger, matcher, scanner, store, subParser);
+                    _audioTrackManager.PageSyncRequested += OnAudioPageSyncRequested;
                     if (_audioSidebar != null)
                     {
                         // AI 匹配只按需读取页面文本，使用独立的 PDF 服务实例避免干扰阅读器自己的文档句柄
@@ -1197,6 +1198,14 @@ namespace LearningAssistant.Forms.Pdf
             {
                 _logger.LogError(ex, "Error handling keyboard shortcut");
             }
+        }
+
+        /// <summary>切歌同步页码：只移动正文，不反向触发音频切换。</summary>
+        private void OnAudioPageSyncRequested(object? sender, int pageIndex)
+        {
+            if (IsDisposed) return;
+            if (pageIndex < 0 || pageIndex >= (_presenter?.PageCount ?? 0)) return;
+            NavigateToPage(pageIndex);
         }
 
         /// <summary>焦点是否在播放器或音频侧栏内；只有此范围才启用空格/方向键媒体快捷键。</summary>
