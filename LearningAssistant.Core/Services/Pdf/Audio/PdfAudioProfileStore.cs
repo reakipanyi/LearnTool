@@ -184,6 +184,105 @@ public class PdfAudioProfileStore : IPdfAudioProfileStore
         return Path.Combine(AppPaths.AudioProfilesDir, "dir-" + key + ".json");
     }
 
+    /// <summary>按 PDF 文件名集合的 Jaccard 重叠率找出疑似同一目录的旧档案（&gt;80%）。</summary>
+    public IReadOnlyList<PdfAudioDirectoryReattachCandidate> FindReattachCandidates(string pdfPath)
+    {
+        var result = new List<PdfAudioDirectoryReattachCandidate>();
+        if (!Directory.Exists(AppPaths.AudioProfilesDir)) return result;
+
+        var fullPath = Path.GetFullPath(pdfPath);
+        var directory = GetDirectory(fullPath);
+        string currentProfilePath;
+        try
+        {
+            currentProfilePath = GetProfilePath(fullPath);
+        }
+        catch (Exception)
+        {
+            return result;
+        }
+        var currentNames = EnumeratePdfNames(directory);
+        if (currentNames.Count == 0) return result;
+
+        foreach (var file in Directory.EnumerateFiles(AppPaths.AudioProfilesDir, "*.json"))
+        {
+            if (string.Equals(Path.GetFullPath(file), Path.GetFullPath(currentProfilePath),
+                    StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            string text;
+            try { text = File.ReadAllText(file); }
+            catch (IOException) { continue; }
+            var root = ParseRoot(text, out _);
+            if (root == null) continue;
+
+            var books = GetObject(root, "books");
+            if (books == null || books.Count == 0) continue;
+            var bookNames = new HashSet<string>(books.Select(kv => kv.Key), StringComparer.OrdinalIgnoreCase);
+            int shared = currentNames.Count(bookNames.Contains);
+            int union = currentNames.Count + bookNames.Count - shared;
+            if (union == 0) continue;
+            double ratio = (double)shared / union;
+            if (ratio <= 0.8) continue;
+
+            var scope = GetObject(root, "scope");
+            result.Add(new PdfAudioDirectoryReattachCandidate
+            {
+                ProfilePath = file,
+                DirectoryPath = GetString(scope, "path") ?? Path.GetFileNameWithoutExtension(file),
+                OverlapRatio = ratio,
+                SharedBooks = shared,
+                CurrentBookCount = currentNames.Count
+            });
+        }
+
+        return result
+            .OrderByDescending(c => c.OverlapRatio)
+            .ThenBy(c => c.DirectoryPath, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    /// <summary>把候选档案重挂到当前目录：更新 scope 后写入当前键位置，并移除旧档案避免重复。</summary>
+    public bool ReattachDirectory(string pdfPath, string candidateProfilePath)
+    {
+        var fullPath = Path.GetFullPath(pdfPath);
+        var directory = GetDirectory(fullPath);
+        var targetPath = GetProfilePath(fullPath);
+        var sourcePath = Path.GetFullPath(candidateProfilePath);
+        if (!File.Exists(sourcePath)) return false;
+        if (string.Equals(targetPath, sourcePath, StringComparison.OrdinalIgnoreCase)) return false;
+
+        WriteGate.Wait();
+        try
+        {
+            var root = ParseRoot(File.ReadAllText(sourcePath), out var error)
+                       ?? throw new InvalidOperationException(error ?? "候选档案解析失败");
+            SetNode(root, "schemaVersion", 3);
+            SetNode(root, "scope", BuildScopeNode(directory, fullPath));
+            WriteAtomic(targetPath, root.ToJsonString(WriteOptions));
+            File.Delete(sourcePath);
+            return true;
+        }
+        finally
+        {
+            WriteGate.Release();
+        }
+    }
+
+    /// <summary>当前目录下的 PDF 文件名集合（仅顶层，忽略无权限与瞬时 IO 错误）。</summary>
+    private static HashSet<string> EnumeratePdfNames(string directory)
+    {
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(directory, "*.pdf", SearchOption.TopDirectoryOnly))
+                names.Add(Path.GetFileName(file));
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        return names;
+    }
+
     #region 读取与映射
 
     private PdfAudioDirectoryProfile? ReadDocument(string path, out string? error)

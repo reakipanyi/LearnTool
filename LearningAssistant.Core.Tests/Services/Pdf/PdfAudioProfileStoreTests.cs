@@ -109,6 +109,49 @@ public class PdfAudioProfileStoreTests
     }
 
     [Fact]
+    public void 目录移动后_按文件名重叠率重挂档案()
+    {
+        var store = new PdfAudioProfileStore();
+        var sourceDir = NewTempDir();
+        var targetDir = NewTempDir();
+        var suffix = Guid.NewGuid().ToString("N")[..6];
+        var firstName = $"reattach_{suffix}_a.pdf";
+        var secondName = $"reattach_{suffix}_b.pdf";
+        var sourcePdf = Path.Combine(sourceDir, firstName);
+        var sourceSecond = Path.Combine(sourceDir, secondName);
+        var targetPdf = Path.Combine(targetDir, firstName);
+        var targetSecond = Path.Combine(targetDir, secondName);
+        try
+        {
+            foreach (var path in new[] { sourcePdf, sourceSecond, targetPdf, targetSecond })
+                File.WriteAllBytes(path, Encoding.UTF8.GetBytes("fake pdf content"));
+
+            var first = new PdfAudioProfile { PdfPath = sourcePdf, PageCount = 10 };
+            first.ManualOverrides[2] = "02.mp3";
+            store.Save(first);
+            store.Save(new PdfAudioProfile { PdfPath = sourceSecond, PageCount = 10 });
+
+            var candidate = store.FindReattachCandidates(targetPdf)
+                .Single(c => c.CurrentBookCount == 2);
+            candidate.OverlapRatio.Should().Be(1.0);
+            candidate.SharedBooks.Should().Be(2);
+
+            store.ReattachDirectory(targetPdf, candidate.ProfilePath).Should().BeTrue();
+            File.Exists(candidate.ProfilePath).Should().BeFalse();
+
+            var loaded = store.Load(targetPdf, 10).Profile!;
+            loaded.ManualOverrides[2].Should().Be("02.mp3");
+        }
+        finally
+        {
+            Cleanup(store, sourcePdf);
+            Cleanup(store, targetPdf);
+            if (Directory.Exists(sourceDir)) Directory.Delete(sourceDir, true);
+            if (Directory.Exists(targetDir)) Directory.Delete(targetDir, true);
+        }
+    }
+
+    [Fact]
     public void 加载不存在_返回空结果()
     {
         var store = new PdfAudioProfileStore();

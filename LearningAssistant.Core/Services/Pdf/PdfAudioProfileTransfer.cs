@@ -34,4 +34,19 @@ namespace LearningAssistant.Services.Pdf
 
         public static PdfAudioImportPreview Fail(string error) => new() { Error = error };
     }
+
+    /// <summary>
+    /// 疑似同一目录的旧档案：按 PDF 文件名集合的 Jaccard 重叠率找出，
+    /// 供目录被移动/盘符变化后由用户确认重挂。
+    /// </summary>
+    public sealed class PdfAudioDirectoryReattachCandidate
+    {
+        public string ProfilePath { get; init; } = "";
+        /// <summary>档案原记录目录；旧目录不可用时仅作展示</summary>
+        public string DirectoryPath { get; init; } = "";
+        /// <summary>当前目录与档案书名的 Jaccard 重叠率（0–1）</summary>
+        public double OverlapRatio { get; init; }
+        public int SharedBooks { get; init; }
+        public int CurrentBookCount { get; init; }
+    }
 }

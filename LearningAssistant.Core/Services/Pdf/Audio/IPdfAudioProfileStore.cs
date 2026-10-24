@@ -8,6 +8,12 @@ public interface IPdfAudioProfileStore
     /// pageCount 用于改名找回时以 fullFingerprint 复核候选。
     /// </summary>
     PdfAudioProfileLoadResult Load(string pdfPath, int pageCount = 0);
+
+    /// <summary>找出与当前目录 PDF 文件名重叠率 &gt;80% 的旧档案，供用户确认重挂。</summary>
+    IReadOnlyList<PdfAudioDirectoryReattachCandidate> FindReattachCandidates(string pdfPath);
+
+    /// <summary>把候选档案重挂到当前目录（更新 scope 并搬到当前目录档案位置）。</summary>
+    bool ReattachDirectory(string pdfPath, string candidateProfilePath);
     void Save(PdfAudioProfile profile);
     /// <summary>目录档案文件路径（dir-*.json），用于展示与排查。</summary>
     string GetProfilePath(string pdfPath);

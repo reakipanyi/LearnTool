@@ -605,6 +605,21 @@ public class PdfAudioTrackManager : IDisposable
         SaveProfile();
     }
 
+    /// <summary>列出与当前目录文件名重叠率超过 80% 的旧档案，供用户确认重挂。</summary>
+    public IReadOnlyList<PdfAudioDirectoryReattachCandidate> FindReattachCandidates()
+        => _currentPdfPath == null
+            ? Array.Empty<PdfAudioDirectoryReattachCandidate>()
+            : _store.FindReattachCandidates(_currentPdfPath);
+
+    /// <summary>把候选目录档案重挂到当前目录，并重新加载当前书。</summary>
+    public async Task<bool> ReattachDirectoryAsync(string candidateProfilePath)
+    {
+        if (_currentPdfPath == null) return false;
+        if (!_store.ReattachDirectory(_currentPdfPath, candidateProfilePath)) return false;
+        await LoadProfileAsync(_currentPdfPath, _pageCount);
+        return true;
+    }
+
     /// <summary>设置并持久化本书播放倍速（0.6–2.0）；引擎未支持时仅记录目标值。</summary>
     public void SetPlaybackSpeed(double speed)
     {

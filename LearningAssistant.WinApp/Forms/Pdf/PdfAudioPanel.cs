@@ -25,6 +25,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
     private readonly ToolStripMenuItem _menuExportDirectory = new("导出目录档案…");
     private readonly ToolStripMenuItem _menuExportBook = new("导出当前书…");
     private readonly ToolStripMenuItem _menuImport = new("导入匹配档案…");
+    private readonly ToolStripMenuItem _menuReattach = new("重挂目录档案…");
     private readonly Panel _emptyPanel = new();
     private readonly Label _labelEmptyTitle = new();
     private readonly Label _labelEmptySteps = new();
@@ -87,7 +88,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _menuBook.Items.AddRange(new ToolStripItem[]
         {
             _menuSwitchBook, new ToolStripSeparator(),
-            _menuExportDirectory, _menuExportBook, new ToolStripSeparator(), _menuImport
+            _menuExportDirectory, _menuExportBook, new ToolStripSeparator(), _menuImport, _menuReattach
         });
         _menuBook.Opening += (_, _) =>
         {
@@ -95,6 +96,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
             _menuExportDirectory.Enabled = hasBook;
             _menuExportBook.Enabled = hasBook;
             _menuImport.Enabled = hasBook;
+            _menuReattach.Enabled = hasBook;
             _menuSwitchBook.Enabled = hasBook;
         };
 
@@ -239,6 +241,7 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         _menuExportDirectory.Click += (_, _) => OnExport(exportDirectory: true);
         _menuExportBook.Click += (_, _) => OnExport(exportDirectory: false);
         _menuImport.Click += async (_, _) => await OnImportAsync();
+        _menuReattach.Click += (_, _) => ShowReattachMenu();
         _menuAddDir.Click += async (_, _) => await OnAddDirectoryAsync();
         _menuRescan.Click += async (_, _) =>
         {
@@ -995,6 +998,53 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         {
             _menuImport.Enabled = true;
             UseWaitCursor = false;
+        }
+    }
+
+    /// <summary>列出疑似同一目录的旧档案，选中后确认重挂。</summary>
+    private void ShowReattachMenu()
+    {
+        var candidates = _manager.FindReattachCandidates();
+        if (candidates.Count == 0)
+        {
+            ShowStatus("没有找到重叠率超过 80% 的旧目录档案", isError: false);
+            return;
+        }
+
+        var menu = new ContextMenuStrip { ShowImageMargin = false };
+        foreach (var candidate in candidates)
+        {
+            var item = new ToolStripMenuItem(
+                $"{candidate.DirectoryPath} · 重合 {candidate.OverlapRatio:P0}（{candidate.SharedBooks} 本）");
+            item.Click += async (_, _) => await OnReattachAsync(candidate);
+            menu.Items.Add(item);
+        }
+        menu.Closed += (_, _) => menu.Dispose();
+        menu.Show(_menuBook, _menuBook.PointToClient(Cursor.Position));
+    }
+
+    private async Task OnReattachAsync(PdfAudioDirectoryReattachCandidate candidate)
+    {
+        var confirm = MessageBox.Show(this,
+            $"将把「{candidate.DirectoryPath}」的档案重挂到当前目录，并覆盖当前目录已有档案。\n继续？",
+            "重挂目录档案", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+        if (confirm != DialogResult.Yes) return;
+
+        try
+        {
+            bool ok = await _manager.ReattachDirectoryAsync(candidate.ProfilePath);
+            if (!ok)
+            {
+                ShowStatus("重挂失败：档案已不存在", isError: true);
+                return;
+            }
+            RefreshData();
+            OnCurrentPageChanged();
+            ShowStatus($"目录档案已重挂：{candidate.DirectoryPath}", isError: false);
+        }
+        catch (Exception ex)
+        {
+            HandleAudioError("重挂目录档案失败", ex);
         }
     }
 
