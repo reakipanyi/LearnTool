@@ -1616,7 +1616,8 @@ namespace LearningAssistant.Presenters
             // 切换文件时作废旧文件的渲染结果，避免其晚到覆盖新文件首屏
             CancelPendingRender();
 
-            _view?.SetCurrentPdfPath(e.FilePath);
+            // 显式传入页数：此时渲染器尚未 Initialize，从 Presenter 读取会得到 0，导致配套音频匹配不到页码
+            _view?.SetCurrentPdfPath(e.FilePath, e.PageCount);
             _view?.SetImageMode(e.IsImageMode);
             _view?.SetPageCount(e.PageCount);
             _view?.SetCurrentPageIndex(e.InitialPageIndex);

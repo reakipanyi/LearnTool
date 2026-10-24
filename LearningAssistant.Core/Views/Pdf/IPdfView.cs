@@ -45,7 +45,8 @@ namespace LearningAssistant.Views
         /// 设置当前PDF文件路径
         /// </summary>
         /// <param name="filePath">PDF文件路径</param>
-        void SetCurrentPdfPath(string filePath);
+        /// <param name="pageCount">文档页数；渲染器尚未初始化时由调用方传入，-1 表示从 Presenter 读取</param>
+        void SetCurrentPdfPath(string filePath, int pageCount = -1);
 
         /// <summary>
         /// 设置指定页面的文本内容

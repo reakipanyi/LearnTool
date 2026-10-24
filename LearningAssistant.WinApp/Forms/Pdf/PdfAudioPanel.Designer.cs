@@ -34,7 +34,6 @@ partial class PdfAudioPanel
         _btnClearPage = new Button();
         _btnPreview = new Button();
         listCard = new SidebarCard();
-        _listTracks = new ListBox();
         advancedPanel = new TableLayoutPanel();
         advSource = new Panel();
         _labelAdvSource = new Label();
@@ -42,6 +41,7 @@ partial class PdfAudioPanel
         advMatch = new Panel();
         _labelAdvMatch = new Label();
         _labelAdvMatchChevron = new Label();
+        _listTracks = new ListBox();
         _tooltip = new ToolTip(components);
         root.SuspendLayout();
         statusPanel.SuspendLayout();
@@ -80,7 +80,7 @@ partial class PdfAudioPanel
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 140F));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72F));
-        root.Size = new Size(308, 624);
+        root.Size = new Size(308, 632);
         root.TabIndex = 0;
         // 
         // statusPanel
@@ -92,7 +92,7 @@ partial class PdfAudioPanel
         statusPanel.Margin = new Padding(0, 0, 0, 4);
         statusPanel.Name = "statusPanel";
         statusPanel.Padding = new Padding(10, 5, 10, 3);
-        statusPanel.Size = new Size(308, 32);
+        statusPanel.Size = new Size(308, 1);
         statusPanel.TabIndex = 0;
         statusPanel.Tag = "surface";
         statusPanel.Visible = false;
@@ -105,9 +105,8 @@ partial class PdfAudioPanel
         _labelInfo.ForeColor = Color.FromArgb(100, 116, 139);
         _labelInfo.Location = new Point(10, 5);
         _labelInfo.Name = "_labelInfo";
-        _labelInfo.Size = new Size(288, 24);
+        _labelInfo.Size = new Size(288, 0);
         _labelInfo.TabIndex = 0;
-        _labelInfo.Text = "";
         _labelInfo.TextAlign = ContentAlignment.MiddleLeft;
         // 
         // bookBar
@@ -145,10 +144,10 @@ partial class PdfAudioPanel
         _btnBookSwitch.FlatStyle = FlatStyle.Flat;
         _btnBookSwitch.Font = new Font("Microsoft YaHei UI", 8.5F);
         _btnBookSwitch.ForeColor = Color.FromArgb(71, 85, 105);
-        _btnBookSwitch.Location = new Point(244, 3);
+        _btnBookSwitch.Location = new Point(244, 0);
         _btnBookSwitch.Margin = new Padding(0, 3, 0, 3);
         _btnBookSwitch.Name = "_btnBookSwitch";
-        _btnBookSwitch.Size = new Size(64, 28);
+        _btnBookSwitch.Size = new Size(64, 34);
         _btnBookSwitch.TabIndex = 1;
         _btnBookSwitch.Tag = "keep";
         _btnBookSwitch.Text = "切换";
@@ -158,7 +157,7 @@ partial class PdfAudioPanel
         // 
         _segments.BackColor = Color.FromArgb(247, 248, 251);
         _segments.Dock = DockStyle.Fill;
-        _segments.Location = new Point(0, 42);
+        _segments.Location = new Point(0, 38);
         _segments.Margin = new Padding(0, 0, 0, 4);
         _segments.Name = "_segments";
         _segments.Size = new Size(308, 32);
@@ -172,7 +171,7 @@ partial class PdfAudioPanel
         followRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 48F));
         followRow.Controls.Add(followLabel, 0, 0);
         followRow.Dock = DockStyle.Fill;
-        followRow.Location = new Point(0, 78);
+        followRow.Location = new Point(0, 74);
         followRow.Margin = new Padding(0, 0, 0, 4);
         followRow.Name = "followRow";
         followRow.RowCount = 1;
@@ -199,7 +198,7 @@ partial class PdfAudioPanel
         pageCard.BackColor = Color.FromArgb(243, 240, 255);
         pageCard.Controls.Add(pageLayout);
         pageCard.Dock = DockStyle.Fill;
-        pageCard.Location = new Point(0, 108);
+        pageCard.Location = new Point(0, 104);
         pageCard.Margin = new Padding(0, 0, 0, 4);
         pageCard.Name = "pageCard";
         pageCard.Padding = new Padding(10, 7, 10, 7);
@@ -232,7 +231,7 @@ partial class PdfAudioPanel
         pageTop.BackColor = Color.Transparent;
         pageTop.ColumnCount = 2;
         pageTop.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        pageTop.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        pageTop.ColumnStyles.Add(new ColumnStyle());
         pageTop.Controls.Add(_labelPageTitle, 0, 0);
         pageTop.Controls.Add(_labelPageSource, 1, 0);
         pageTop.Dock = DockStyle.Fill;
@@ -253,7 +252,7 @@ partial class PdfAudioPanel
         _labelPageTitle.Location = new Point(0, 0);
         _labelPageTitle.Margin = new Padding(0);
         _labelPageTitle.Name = "_labelPageTitle";
-        _labelPageTitle.Size = new Size(248, 18);
+        _labelPageTitle.Size = new Size(244, 18);
         _labelPageTitle.TabIndex = 0;
         _labelPageTitle.Tag = "muted";
         _labelPageTitle.Text = "当前页 · P1";
@@ -265,10 +264,10 @@ partial class PdfAudioPanel
         _labelPageSource.Dock = DockStyle.Fill;
         _labelPageSource.Font = new Font("Microsoft YaHei UI", 8.5F, FontStyle.Bold);
         _labelPageSource.ForeColor = Color.FromArgb(108, 92, 231);
-        _labelPageSource.Location = new Point(248, 0);
+        _labelPageSource.Location = new Point(244, 0);
         _labelPageSource.Margin = new Padding(0);
         _labelPageSource.Name = "_labelPageSource";
-        _labelPageSource.Size = new Size(40, 18);
+        _labelPageSource.Size = new Size(44, 18);
         _labelPageSource.TabIndex = 1;
         _labelPageSource.Tag = "accent";
         _labelPageSource.Text = "未绑定";
@@ -313,7 +312,7 @@ partial class PdfAudioPanel
         pageActions.Location = new Point(0, 64);
         pageActions.Margin = new Padding(0, 4, 0, 0);
         pageActions.Name = "pageActions";
-        pageActions.Size = new Size(288, 34);
+        pageActions.Size = new Size(288, 58);
         pageActions.TabIndex = 3;
         pageActions.WrapContents = false;
         // 
@@ -372,27 +371,13 @@ partial class PdfAudioPanel
         // 
         listCard.BackColor = Color.FromArgb(247, 248, 251);
         listCard.Dock = DockStyle.Fill;
-        listCard.Location = new Point(0, 248);
+        listCard.Location = new Point(0, 244);
         listCard.Margin = new Padding(0, 0, 0, 4);
         listCard.Name = "listCard";
         listCard.Padding = new Padding(2, 1, 2, 1);
-        listCard.Size = new Size(308, 298);
+        listCard.Size = new Size(308, 312);
         listCard.TabIndex = 5;
         listCard.Title = "曲目";
-        // 
-        // _listTracks
-        // 
-        _listTracks.BackColor = Color.White;
-        _listTracks.BorderStyle = BorderStyle.None;
-        _listTracks.Dock = DockStyle.Fill;
-        _listTracks.DrawMode = DrawMode.OwnerDrawFixed;
-        _listTracks.ForeColor = Color.FromArgb(15, 23, 42);
-        _listTracks.IntegralHeight = false;
-        _listTracks.ItemHeight = 30;
-        _listTracks.Location = new Point(10, 30);
-        _listTracks.Name = "_listTracks";
-        _listTracks.Size = new Size(284, 256);
-        _listTracks.TabIndex = 0;
         // 
         // advancedPanel
         // 
@@ -402,7 +387,7 @@ partial class PdfAudioPanel
         advancedPanel.Controls.Add(advSource, 0, 0);
         advancedPanel.Controls.Add(advMatch, 0, 1);
         advancedPanel.Dock = DockStyle.Fill;
-        advancedPanel.Location = new Point(0, 550);
+        advancedPanel.Location = new Point(0, 560);
         advancedPanel.Margin = new Padding(0);
         advancedPanel.Name = "advancedPanel";
         advancedPanel.RowCount = 2;
@@ -462,7 +447,7 @@ partial class PdfAudioPanel
         advMatch.Location = new Point(0, 34);
         advMatch.Margin = new Padding(0);
         advMatch.Name = "advMatch";
-        advMatch.Size = new Size(308, 34);
+        advMatch.Size = new Size(308, 38);
         advMatch.TabIndex = 1;
         // 
         // _labelAdvMatch
@@ -473,7 +458,7 @@ partial class PdfAudioPanel
         _labelAdvMatch.Location = new Point(0, 0);
         _labelAdvMatch.Margin = new Padding(0);
         _labelAdvMatch.Name = "_labelAdvMatch";
-        _labelAdvMatch.Size = new Size(286, 34);
+        _labelAdvMatch.Size = new Size(286, 38);
         _labelAdvMatch.TabIndex = 0;
         _labelAdvMatch.Tag = "muted";
         _labelAdvMatch.Text = "高级匹配 · AI / 规则";
@@ -487,11 +472,25 @@ partial class PdfAudioPanel
         _labelAdvMatchChevron.Location = new Point(286, 0);
         _labelAdvMatchChevron.Margin = new Padding(0);
         _labelAdvMatchChevron.Name = "_labelAdvMatchChevron";
-        _labelAdvMatchChevron.Size = new Size(22, 34);
+        _labelAdvMatchChevron.Size = new Size(22, 38);
         _labelAdvMatchChevron.TabIndex = 1;
         _labelAdvMatchChevron.Tag = "muted";
         _labelAdvMatchChevron.Text = "›";
         _labelAdvMatchChevron.TextAlign = ContentAlignment.MiddleRight;
+        // 
+        // _listTracks
+        // 
+        _listTracks.BackColor = Color.White;
+        _listTracks.BorderStyle = BorderStyle.None;
+        _listTracks.Dock = DockStyle.Fill;
+        _listTracks.DrawMode = DrawMode.OwnerDrawFixed;
+        _listTracks.ForeColor = Color.FromArgb(15, 23, 42);
+        _listTracks.IntegralHeight = false;
+        _listTracks.ItemHeight = 30;
+        _listTracks.Location = new Point(10, 30);
+        _listTracks.Name = "_listTracks";
+        _listTracks.Size = new Size(284, 256);
+        _listTracks.TabIndex = 0;
         // 
         // PdfAudioPanel
         // 
@@ -508,7 +507,6 @@ partial class PdfAudioPanel
         followRow.ResumeLayout(false);
         pageCard.ResumeLayout(false);
         pageLayout.ResumeLayout(false);
-        pageLayout.PerformLayout();
         pageTop.ResumeLayout(false);
         pageTop.PerformLayout();
         pageActions.ResumeLayout(false);

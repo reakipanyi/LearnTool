@@ -1653,14 +1653,17 @@ namespace LearningAssistant.Forms.Pdf
         /// 设置当前PDF文件路径，并刷新相关UI状态
         /// </summary>
         /// <param name="pdfPath">PDF文件路径</param>
-        public void SetCurrentPdfPath(string pdfPath)
+        /// <param name="pageCount">文档页数；-1 表示从 Presenter 读取</param>
+        public void SetCurrentPdfPath(string pdfPath, int pageCount = -1)
         {
             CleanupHighlightLayer();
             ClearThumbnails();
             _thumbnailsLoaded = false;
             _currentPdfPath = pdfPath;
             RefreshHighlightList();
-            _audioTrackManager?.LoadProfileAsync(pdfPath, _presenter?.PageCount ?? 0)
+            // 打开文档时渲染器尚未初始化，优先使用调用方传入的页数，避免按 0 页匹配导致配套音频不加载
+            int resolvedPageCount = pageCount >= 0 ? pageCount : (_presenter?.PageCount ?? 0);
+            _audioTrackManager?.LoadProfileAsync(pdfPath, resolvedPageCount)
                 .ContinueWith(t => _logger.LogError(t.Exception, "加载PDF配套音频失败: {PdfPath}", pdfPath),
                     TaskContinuationOptions.OnlyOnFaulted);
             _audioPanel?.RefreshData();
