@@ -13,6 +13,7 @@ public class NAudioMediaPlayer : IMediaPlayer
     private readonly AbLoopState _abLoop = new();
     private bool _manualStop;
     private double _speed = 1.0;
+    private double _volume = 1.0;
 
     public event EventHandler<TimeSpan>? PositionChanged;
     public event EventHandler<MediaPlaybackState>? StateChanged;
@@ -35,6 +36,16 @@ public class NAudioMediaPlayer : IMediaPlayer
                 return;
             }
             _speed = value;
+        }
+    }
+
+    public double Volume
+    {
+        get => _volume;
+        set
+        {
+            _volume = Math.Clamp(value, 0d, 1d);
+            if (_waveOut != null) _waveOut.Volume = (float)_volume;
         }
     }
 
@@ -67,7 +78,7 @@ public class NAudioMediaPlayer : IMediaPlayer
         try
         {
             _reader = new AudioFileReader(mediaPath);
-            _waveOut = new WaveOutEvent();
+            _waveOut = new WaveOutEvent { Volume = (float)_volume };
             _waveOut.PlaybackStopped += OnPlaybackStopped;
             _waveOut.Init(_reader);
             _timer = new System.Windows.Forms.Timer { Interval = 100 };

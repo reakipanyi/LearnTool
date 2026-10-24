@@ -54,6 +54,7 @@ namespace LearningAssistant.Forms.Pdf
         private PdfReaderAudioManager? _audioManager;
         private PdfAudioTrackManager? _audioTrackManager;
         private PdfAudioPanel? _audioPanel;
+        private PdfAudioPlayerBar? _audioPlayerBar;
         private PdfAudioSidebarPanel? _audioSidebar;
         private PdfReadingSidebarPanel? _readingSidebar;
         private SidebarHeaderBar? _translateHeader;
@@ -516,6 +517,10 @@ namespace LearningAssistant.Forms.Pdf
 
                         _audioPanel = new PdfAudioPanel(_audioTrackManager, this, aiMatcher) { Dock = DockStyle.Fill };
                         _audioSidebar.CompanionPage.Controls.Add(_audioPanel);
+
+                        // 底部播放器是配套音频的唯一播放入口，挂到画布底部、状态栏之上
+                        _audioPlayerBar = new PdfAudioPlayerBar(_audioTrackManager, this, ShowAudioCompanion);
+                        _panelPdf.Controls.Add(_audioPlayerBar);
                     }
                 }
             }
@@ -950,6 +955,45 @@ namespace LearningAssistant.Forms.Pdf
         {
             try
             {
+                // 全局媒体键：Ctrl+Space 在任何位置都能切换播放
+                if (e.Control && e.KeyCode == Keys.Space && _audioTrackManager != null)
+                {
+                    _audioTrackManager.TogglePlayback();
+                    e.Handled = e.SuppressKeyPress = true;
+                    return;
+                }
+
+                // 输入框内不响应翻页/媒体快捷键，避免吞掉空格与方向键
+                if (ActiveControl is TextBoxBase) return;
+
+                // 焦点在播放器或音频侧栏时，空格/方向键按媒体惯例工作
+                if (_audioTrackManager != null && IsMediaShortcutScope())
+                {
+                    switch (e.KeyCode)
+                    {
+                        case Keys.Space:
+                            _audioTrackManager.TogglePlayback();
+                            e.Handled = e.SuppressKeyPress = true;
+                            return;
+                        case Keys.Left:
+                            SeekAudio(-5);
+                            e.Handled = e.SuppressKeyPress = true;
+                            return;
+                        case Keys.Right:
+                            SeekAudio(5);
+                            e.Handled = e.SuppressKeyPress = true;
+                            return;
+                    }
+                }
+
+                // Shift+←/→ 在任意非输入位置快退/快进 30 秒
+                if (e.Shift && _audioTrackManager != null && (e.KeyCode == Keys.Left || e.KeyCode == Keys.Right))
+                {
+                    SeekAudio(e.KeyCode == Keys.Left ? -30 : 30);
+                    e.Handled = e.SuppressKeyPress = true;
+                    return;
+                }
+
                 switch (e.KeyCode)
                 {
                     case Keys.Left:
@@ -1153,6 +1197,25 @@ namespace LearningAssistant.Forms.Pdf
             {
                 _logger.LogError(ex, "Error handling keyboard shortcut");
             }
+        }
+
+        /// <summary>焦点是否在播放器或音频侧栏内；只有此范围才启用空格/方向键媒体快捷键。</summary>
+        private bool IsMediaShortcutScope()
+            => _audioPlayerBar?.ContainsFocus == true
+               || _audioPanel?.ContainsFocus == true
+               || _audioSidebar?.ContainsFocus == true;
+
+        /// <summary>相对当前进度快进/快退指定秒数，并夹在 [0, 时长] 内。</summary>
+        private void SeekAudio(double seconds)
+        {
+            if (_audioTrackManager == null) return;
+            var player = _audioTrackManager.Playback.Player;
+            if (player.Duration <= TimeSpan.Zero) return;
+
+            var target = player.Position + TimeSpan.FromSeconds(seconds);
+            if (target < TimeSpan.Zero) target = TimeSpan.Zero;
+            if (target > player.Duration) target = player.Duration;
+            _audioTrackManager.Playback.Seek(target);
         }
 
         private void ToggleFullscreen()
@@ -1569,6 +1632,14 @@ namespace LearningAssistant.Forms.Pdf
 
         #region 文档加载与页面渲染
 
+        /// <summary>打开左侧「配套音频」页并定位到首个子页，供播放器空态/去绑定入口调用。</summary>
+        public void ShowAudioCompanion()
+        {
+            if (_tabControlLeft == null || _tabPageAudio == null) return;
+            _tabControlLeft.SelectedTab = _tabPageAudio;
+            if (_audioSidebar != null) _audioSidebar.Segments.SelectedIndex = 0;
+        }
+
         /// <summary>
         /// 设置当前PDF文件路径，并刷新相关UI状态
         /// </summary>
@@ -1758,6 +1829,7 @@ namespace LearningAssistant.Forms.Pdf
             _currentPageIndex = pageIndex;
             _audioTrackManager?.OnPageChanged(pageIndex);
             _audioPanel?.OnCurrentPageChanged();
+            _audioPlayerBar?.RefreshPage();
             _audioManager?.RefreshTimestampList();
             _textBoxPage.Text = (pageIndex + 1).ToString();
             // 页码可能超出进度条范围（如空文档或页码未同步），避免 Value 越界抛异常

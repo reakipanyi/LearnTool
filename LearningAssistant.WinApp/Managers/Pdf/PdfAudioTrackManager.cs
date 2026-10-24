@@ -35,6 +35,33 @@ public class PdfAudioTrackManager : IDisposable
     public AudioTrack? CurrentTrack => _loadedTrack;
     public bool IsPlaying => _playback.Player.State == MediaPlaybackState.Playing;
 
+    /// <summary>是否跟随翻页切换音频；关闭后翻页完全不动作</summary>
+    public bool FollowPage { get; set; } = true;
+    /// <summary>播放列表循环方式；None 时首尾按钮禁用，不自动环绕</summary>
+    public MediaLoopMode LoopMode { get; set; } = MediaLoopMode.None;
+
+    /// <summary>能否切到下一曲（列表末且未开启循环时为 false）</summary>
+    public bool CanGoNext
+    {
+        get
+        {
+            int count = _result?.Tracks.Count ?? 0;
+            if (count == 0) return false;
+            return LoopMode == MediaLoopMode.RepeatAll || _playlistIndex < count - 1;
+        }
+    }
+
+    /// <summary>能否切到上一曲（列表首且未开启循环时为 false）</summary>
+    public bool CanGoPrev
+    {
+        get
+        {
+            int count = _result?.Tracks.Count ?? 0;
+            if (count == 0 || _playlistIndex < 0) return false;
+            return LoopMode == MediaLoopMode.RepeatAll || _playlistIndex > 0;
+        }
+    }
+
     /// <summary>切曲完成后触发（含上一曲/下一曲、列表选择、翻页切曲），供 UI 同步标题与高亮</summary>
     public event EventHandler<AudioTrack>? TrackChanged;
 
@@ -73,6 +100,7 @@ public class PdfAudioTrackManager : IDisposable
         _scanner = scanner;
         _store = store;
         _playback = new PdfAudioPlaybackService(new NAudioMediaPlayer(subtitleParser));
+        _playback.Player.PlaybackFinished += OnPlaybackFinished;
     }
 
     private int _loadGeneration;
@@ -282,7 +310,7 @@ public class PdfAudioTrackManager : IDisposable
         var target = _result.PageIndex.GetValueOrDefault(pageIndex);
         var decision = PlaybackDecision.Resolve(
             PlaybackScope.FollowPage,
-            follow: true,
+            follow: FollowPage,
             MapPlayerState(),
             _loadedTrack?.FilePath,
             target?.FilePath);
@@ -335,6 +363,9 @@ public class PdfAudioTrackManager : IDisposable
         PageHintChanged?.Invoke(this, hint);
     }
 
+    /// <summary>供 UI 在无音频时内联提示，不弹模态框。</summary>
+    public void SetHint(string? hint) => SetPageHint(hint);
+
     /// <summary>加载音频并记录当前曲目，供翻页时判断是否需要切换；同时同步播放列表索引。</summary>
     public void Load(AudioTrack track)
     {
@@ -370,10 +401,41 @@ public class PdfAudioTrackManager : IDisposable
         if (baseIndex < 0)
             baseIndex = delta > 0 ? -1 : 0; // 当前无音频：下一曲从首曲开始，上一曲从末曲开始
 
-        int next = ((baseIndex + delta) % count + count) % count;
+        int next = baseIndex + delta;
+        if (next < 0 || next >= count)
+        {
+            // 未开启列表循环时到边界即止，按钮同步禁用，不做隐式环绕
+            if (LoopMode != MediaLoopMode.RepeatAll) return;
+            next = (next % count + count) % count;
+        }
+
         var track = _result.Tracks[next];
         Load(track);
         FireAndForget(_playback.PlayAsync(), "PlayAsync");
+    }
+
+    /// <summary>播完一首后按循环设置处理；事件可能来自音频线程，统一切回 UI 线程。</summary>
+    private void OnPlaybackFinished(object? sender, EventArgs e)
+    {
+        if (_syncContext != null)
+            _syncContext.Post(_ => HandlePlaybackFinished(), null);
+        else
+            HandlePlaybackFinished();
+    }
+
+    private void HandlePlaybackFinished()
+    {
+        if (_disposed) return;
+        switch (LoopMode)
+        {
+            case MediaLoopMode.RepeatOne:
+                _playback.Seek(TimeSpan.Zero);
+                FireAndForget(_playback.PlayAsync(), "PlayAsync");
+                break;
+            case MediaLoopMode.RepeatAll:
+                Move(1);
+                break;
+        }
     }
 
     /// <summary>幂等播放：已在播放时不做任何事，不依赖 UI 反向推断状态。</summary>
@@ -522,6 +584,7 @@ public class PdfAudioTrackManager : IDisposable
         _pageChangeCts?.Cancel();
         _pageChangeCts?.Dispose();
         _pageChangeCts = null;
+        _playback.Player.PlaybackFinished -= OnPlaybackFinished;
         _playback.Stop();
         _playback.Player.Dispose();
     }
