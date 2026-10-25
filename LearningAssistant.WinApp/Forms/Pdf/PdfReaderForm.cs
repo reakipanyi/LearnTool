@@ -65,6 +65,7 @@ namespace LearningAssistant.Forms.Pdf
         private Button? _audioDrawerAudioButton;
         private Button? _audioDrawerRecordingButton;
         private Button? _audioDrawerTranslateButton;
+        private Button? _audioDrawerHighlightButton;
         private Label? _audioUnavailableLabel;
         private Label? _recordingUnavailableLabel;
         private Button? _audioDrawerCloseButton;
@@ -83,6 +84,7 @@ namespace LearningAssistant.Forms.Pdf
 
         private enum AudioDrawerMode
         {
+            Highlight,
             Audio,
             Recording,
             Translate
@@ -99,11 +101,6 @@ namespace LearningAssistant.Forms.Pdf
         private Button? _buttonRemoveHighlight;
         private Button? _buttonBatchRemoveHighlight;
         private Button? _buttonEditHighlight;
-        private RadioButton? _radioHighlightYellow;
-        private RadioButton? _radioHighlightGreen;
-        private RadioButton? _radioHighlightBlue;
-        private RadioButton? _radioHighlightPink;
-        private RadioButton? _radioHighlightOrange;
 
         private TabPage? _tabPageBookmarksAndHighlights;
         private TabPage? _tabPageAudio;
@@ -1399,54 +1396,6 @@ namespace LearningAssistant.Forms.Pdf
         #endregion
 
         #region 高亮、视图与状态栏
-
-        private void RadioHighlightColor_CheckedChanged(object? sender, EventArgs e)
-        {
-            if (sender is not RadioButton radio) return;
-
-            radio.FlatAppearance.BorderSize = radio.Checked ? 2 : 0;
-            radio.FlatAppearance.BorderColor = Color.FromArgb(64, 150, 255);
-
-            int colorIndex = GetHighlightColorIndex(radio);
-            if (radio.Checked && colorIndex > 0)
-            {
-                var color = (HighlightColor)colorIndex;
-                _currentHighlightColor = color;
-                if (_highlightManager != null)
-                {
-                    _highlightManager.CurrentHighlightColor = color;
-                }
-                _pictureBoxPdf?.Invalidate();
-            }
-        }
-
-        /// <summary>颜色按钮不在 Tag 中存索引（Tag 留给主题系统），改按引用映射。</summary>
-        private int GetHighlightColorIndex(RadioButton radio)
-        {
-            if (ReferenceEquals(radio, _radioHighlightYellow)) return 1;
-            if (ReferenceEquals(radio, _radioHighlightGreen)) return 2;
-            if (ReferenceEquals(radio, _radioHighlightBlue)) return 3;
-            if (ReferenceEquals(radio, _radioHighlightPink)) return 4;
-            if (ReferenceEquals(radio, _radioHighlightOrange)) return 5;
-            return 0;
-        }
-
-        private void RadioHighlightColor_MouseEnter(object? sender, EventArgs e)
-        {
-            if (sender is RadioButton radio && !radio.Checked)
-            {
-                radio.FlatAppearance.BorderSize = 1;
-                radio.FlatAppearance.BorderColor = Color.FromArgb(180, 180, 180);
-            }
-        }
-
-        private void RadioHighlightColor_MouseLeave(object? sender, EventArgs e)
-        {
-            if (sender is RadioButton radio && !radio.Checked)
-            {
-                radio.FlatAppearance.BorderSize = 0;
-            }
-        }
 
         private void ListBoxHighlights_DoubleClick(object? sender, EventArgs e)
         {
@@ -4076,16 +4025,11 @@ namespace LearningAssistant.Forms.Pdf
             return Color.FromArgb(Mix(color.R), Mix(color.G), Mix(color.B));
         }
 
-        /// <summary>从颜色面板选择高亮颜色，并同步高亮标签页的单选项</summary>
+        /// <summary>从颜色面板选择高亮颜色。</summary>
         private void SelectHighlightColor(HighlightColor color)
         {
             _currentHighlightColor = color;
             if (_highlightManager != null) _highlightManager.CurrentHighlightColor = color;
-
-            var radios = new[] { _radioHighlightYellow, _radioHighlightGreen, _radioHighlightBlue, _radioHighlightPink, _radioHighlightOrange };
-            int index = Array.IndexOf(HighlightPalette, color);
-            if (index >= 0 && index < radios.Length && radios[index] != null && !radios[index].Checked)
-                radios[index].Checked = true;
 
             if (_navigationManager != null)
                 _navigationManager.SetHighlightPreviewColor(HighlightService.GetHighlightColor(color).ToColor());
@@ -5301,16 +5245,6 @@ namespace LearningAssistant.Forms.Pdf
                 _buttonCollapseNav.ForeColor = isNightMode ? Color.FromArgb(200, 200, 200) : Color.FromArgb(80, 80, 80);
             }
 
-            // 高亮颜色单选按钮夜间模式
-            var radioButtons = new[] { _radioHighlightYellow, _radioHighlightGreen, _radioHighlightBlue, _radioHighlightPink, _radioHighlightOrange };
-            foreach (var radio in radioButtons)
-            {
-                if (radio != null)
-                {
-                    radio.FlatAppearance.BorderColor = isNightMode ? Color.FromArgb(80, 80, 80) : Color.FromArgb(200, 200, 200);
-                }
-            }
-
             // 自绘页签需要显式重绘，否则主题切换后仍保留旧底色
             _tabControlLeft?.Invalidate();
         }
@@ -6490,6 +6424,9 @@ namespace LearningAssistant.Forms.Pdf
             // 翻译面板改为由学习页入口在右侧抽屉弹出，不再占用顶层页签
             if (_tabPageTranslate != null && _tabControlLeft.TabPages.Contains(_tabPageTranslate))
                 _tabControlLeft.TabPages.Remove(_tabPageTranslate);
+            // 高亮面板同样收进右侧抽屉（第一个模式），不再占用顶层页签
+            if (_tabPageBookmarksAndHighlights != null && _tabControlLeft.TabPages.Contains(_tabPageBookmarksAndHighlights))
+                _tabControlLeft.TabPages.Remove(_tabPageBookmarksAndHighlights);
 
             BuildReadingSidebar();
             BuildTranslateSidebar();
@@ -6500,6 +6437,8 @@ namespace LearningAssistant.Forms.Pdf
             // 夜间状态按窗口记录，避免新建窗口覆盖其他阅读窗口的主题
             PdfSidebarTheme.SetWindowDark(this, _nightModeManager?.IsNightMode ?? false);
             PdfSidebarTheme.ApplyRecursive(_tabControlLeft);
+            // 翻译/高亮面板已迁入抽屉，首帧也要按当前主题上色
+            ApplySidebarTheme();
         }
 
         /// <summary>抽屉与页签共用同一套主题令牌；夜间模式切换时由管理器统一调用。</summary>
@@ -6507,6 +6446,8 @@ namespace LearningAssistant.Forms.Pdf
         {
             if (_audioDrawer != null)
                 PdfSidebarTheme.ApplyRecursive(_audioDrawer);
+            if (_tabControlLeft != null)
+                PdfSidebarTheme.ApplyRecursive(_tabControlLeft);
         }
 
         /// <summary>
@@ -6540,6 +6481,8 @@ namespace LearningAssistant.Forms.Pdf
             _studyPanel.RecordingButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Recording);
             // 翻译面板不再占顶层页签，改为从学习页弹出同一个右侧抽屉
             _studyPanel.TranslateButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Translate);
+            // 高亮面板同样收进抽屉，作为第一个模式
+            _studyPanel.OpenHighlightButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Highlight);
 
             // 「AI 与文件工具」分组入口，复用现有 AI 菜单能力，避免功能藏在右键菜单里
             _studyPanel.SummaryButton.Click += async (_, _) => await SummarizeCurrentPageAsync();
@@ -6920,7 +6863,6 @@ namespace LearningAssistant.Forms.Pdf
 
             // 页签图标；短名称与图标一起由自绘逻辑绘制
             _tabPageFiles.Text = "📖";
-            _tabPageBookmarksAndHighlights.Text = "📑";
             _tabPageStudy.Text = "🤖";
 
             foreach (TabPage page in _tabControlLeft.TabPages)
@@ -7007,26 +6949,16 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
+        /// <summary>创建高亮面板；不再挂到页签，由右侧抽屉的「高亮」模式按需显示。</summary>
         private void BuildHighlightSidebar()
         {
-            if (_tabPageBookmarksAndHighlights == null) return;
-
-            _highlightPanel = new PdfHighlightPanel();
-            _highlightPanel.Dock = DockStyle.Fill;
+            _highlightPanel = new PdfHighlightPanel
+            {
+                Dock = DockStyle.Fill,
+                Visible = false
+            };
             _highlightHeader = _highlightPanel.Header;
             _highlightPanel.Header.ActionButton!.Click += (_, _) => ButtonExportHighlights_Click(null, EventArgs.Empty);
-
-            _radioHighlightYellow = _highlightPanel.YellowButton;
-            _radioHighlightGreen = _highlightPanel.GreenButton;
-            _radioHighlightBlue = _highlightPanel.BlueButton;
-            _radioHighlightPink = _highlightPanel.PinkButton;
-            _radioHighlightOrange = _highlightPanel.OrangeButton;
-            foreach (var radio in new[] { _highlightPanel.YellowButton, _highlightPanel.GreenButton, _highlightPanel.BlueButton, _highlightPanel.PinkButton, _highlightPanel.OrangeButton })
-            {
-                radio.CheckedChanged += RadioHighlightColor_CheckedChanged;
-                radio.MouseEnter += RadioHighlightColor_MouseEnter;
-                radio.MouseLeave += RadioHighlightColor_MouseLeave;
-            }
 
             _listBoxHighlights = _highlightPanel.HighlightList;
             _listBoxHighlights.DrawItem += ListBoxHighlights_DrawItem;
@@ -7040,15 +6972,9 @@ namespace LearningAssistant.Forms.Pdf
             _buttonRemoveHighlight = _highlightPanel.RemoveButton;
             _buttonEditHighlight = _highlightPanel.EditButton;
             _buttonBatchRemoveHighlight = _highlightPanel.BatchRemoveButton;
-            StyleSidebarButton(_buttonRemoveHighlight, "删除", 72, 28);
-            StyleSidebarButton(_buttonEditHighlight, "编辑", 72, 28);
-            StyleSidebarButton(_buttonBatchRemoveHighlight, "批量删除", 92, 28);
             _buttonRemoveHighlight.Click += ButtonRemoveHighlight_Click;
             _buttonEditHighlight.Click += ButtonEditHighlight_Click;
             _buttonBatchRemoveHighlight.Click += ButtonBatchRemoveHighlight_Click;
-
-            _tabPageBookmarksAndHighlights.Controls.Add(_highlightPanel);
-            _highlightPanel.BringToFront();
 
             UpdateHighlightEmptyState();
         }
@@ -7247,27 +7173,31 @@ namespace LearningAssistant.Forms.Pdf
             var modeBar = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 3,
+                ColumnCount = 4,
                 RowCount = 1,
                 Margin = Padding.Empty,
                 Padding = new Padding(10, 4, 10, 4)
             };
-            for (int i = 0; i < 3; i++)
-                modeBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
+            for (int i = 0; i < 4; i++)
+                modeBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
 
+            _audioDrawerHighlightButton = CreateAudioDrawerModeButton("高亮");
             _audioDrawerTranslateButton = CreateAudioDrawerModeButton("翻译");
             _audioDrawerAudioButton = CreateAudioDrawerModeButton("配套音频");
             _audioDrawerRecordingButton = CreateAudioDrawerModeButton("整页录音");
+            _audioDrawerHighlightButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Highlight);
             _audioDrawerTranslateButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Translate);
             _audioDrawerAudioButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Audio);
             _audioDrawerRecordingButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Recording);
-            _audioDrawerTranslateButton.Margin = new Padding(0, 0, 4, 0);
+            _audioDrawerHighlightButton.Margin = new Padding(0, 0, 4, 0);
+            _audioDrawerTranslateButton.Margin = new Padding(2, 0, 2, 0);
             _audioDrawerAudioButton.Margin = new Padding(2, 0, 2, 0);
             _audioDrawerRecordingButton.Margin = new Padding(4, 0, 0, 0);
 
-            modeBar.Controls.Add(_audioDrawerTranslateButton, 0, 0);
-            modeBar.Controls.Add(_audioDrawerAudioButton, 1, 0);
-            modeBar.Controls.Add(_audioDrawerRecordingButton, 2, 0);
+            modeBar.Controls.Add(_audioDrawerHighlightButton, 0, 0);
+            modeBar.Controls.Add(_audioDrawerTranslateButton, 1, 0);
+            modeBar.Controls.Add(_audioDrawerAudioButton, 2, 0);
+            modeBar.Controls.Add(_audioDrawerRecordingButton, 3, 0);
 
             header.Controls.Add(titleRow, 0, 0);
             header.Controls.Add(modeBar, 0, 1);
@@ -7324,6 +7254,12 @@ namespace LearningAssistant.Forms.Pdf
                 _audioDrawerContent.Controls.Add(_translatePanel);
             }
 
+            if (_highlightPanel != null)
+            {
+                _highlightPanel.Visible = false;
+                _audioDrawerContent.Controls.Add(_highlightPanel);
+            }
+
             return _audioDrawerContent;
         }
 
@@ -7376,9 +7312,13 @@ namespace LearningAssistant.Forms.Pdf
             if (_audioUnavailableLabel != null) _audioUnavailableLabel.Visible = mode == AudioDrawerMode.Audio;
             if (_recordingHost != null) _recordingHost.Visible = mode == AudioDrawerMode.Recording;
             if (_translatePanel != null) _translatePanel.Visible = mode == AudioDrawerMode.Translate;
+            if (_highlightPanel != null) _highlightPanel.Visible = mode == AudioDrawerMode.Highlight;
 
             switch (mode)
             {
+                case AudioDrawerMode.Highlight:
+                    RefreshHighlightList();
+                    break;
                 case AudioDrawerMode.Audio:
                     _audioPanel?.RefreshData();
                     break;
@@ -7401,6 +7341,7 @@ namespace LearningAssistant.Forms.Pdf
 
             _audioDrawerTitle.Text = _audioDrawerMode switch
             {
+                AudioDrawerMode.Highlight => "高亮",
                 AudioDrawerMode.Recording => "整页录音",
                 AudioDrawerMode.Translate => "翻译",
                 _ => "配套音频"
@@ -7415,9 +7356,10 @@ namespace LearningAssistant.Forms.Pdf
         private void UpdateAudioDrawerModeStyles()
         {
             if (_audioDrawerAudioButton == null || _audioDrawerRecordingButton == null
-                || _audioDrawerTranslateButton == null) return;
+                || _audioDrawerTranslateButton == null || _audioDrawerHighlightButton == null) return;
 
             var palette = PdfSidebarTheme.PaletteFor(this);
+            StyleAudioDrawerModeButton(_audioDrawerHighlightButton, _audioDrawerMode == AudioDrawerMode.Highlight, palette);
             StyleAudioDrawerModeButton(_audioDrawerTranslateButton, _audioDrawerMode == AudioDrawerMode.Translate, palette);
             StyleAudioDrawerModeButton(_audioDrawerAudioButton, _audioDrawerMode == AudioDrawerMode.Audio, palette);
             StyleAudioDrawerModeButton(_audioDrawerRecordingButton, _audioDrawerMode == AudioDrawerMode.Recording, palette);
@@ -7717,8 +7659,6 @@ namespace LearningAssistant.Forms.Pdf
         {
             if (_tabControlLeft.SelectedTab == _tabPageStudy)
                 UpdateStudyTab();
-            else if (_tabControlLeft.SelectedTab == _tabPageBookmarksAndHighlights)
-                UpdateHighlightEmptyState();
 
             if (_tabControlLeft.SelectedTab == null) return;
 
@@ -7842,6 +7782,7 @@ namespace LearningAssistant.Forms.Pdf
         {
             var commands = new List<PdfCommandPaletteItem>
             {
+                new("打开高亮面板", "在右侧弹出高亮与摘录面板", () => ShowAudioDrawer(AudioDrawerMode.Highlight)),
                 new("打开翻译面板", "在右侧弹出翻译与 OCR 面板", () => ShowAudioDrawer(AudioDrawerMode.Translate)),
                 new("翻译本页", "识别并翻译当前页", () => { ShowAudioDrawer(AudioDrawerMode.Translate); OnTranslateClicked(); }),
                 new("整页识别", "只识别当前页文字，不翻译", () => { ShowAudioDrawer(AudioDrawerMode.Translate); OnOcrPageClicked(); }),
@@ -7884,7 +7825,6 @@ namespace LearningAssistant.Forms.Pdf
             {
                 "_tabPageFiles" => "目录：文件、页面与缩略图",
                 "_tabPageStudy" => "学习：AI 工具与学习整理",
-                "_tabPageBookmarksAndHighlights" => "标注：高亮与标注列表",
                 _ => page.Text
             };
         }
@@ -7897,7 +7837,6 @@ namespace LearningAssistant.Forms.Pdf
             {
                 "_tabPageFiles" => "目录",
                 "_tabPageStudy" => "学习",
-                "_tabPageBookmarksAndHighlights" => "标注",
                 _ => page.Text
             };
         }

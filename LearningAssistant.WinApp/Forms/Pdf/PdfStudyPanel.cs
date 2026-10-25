@@ -45,6 +45,11 @@ public partial class PdfStudyPanel : UserControl
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Button AddHighlightsButton => addHighlightsButton;
 
+    /// <summary>「打开高亮面板」按钮。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button OpenHighlightButton => openHighlightButton;
+
     /// <summary>「生成本页闪卡」按钮。</summary>
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -100,13 +105,13 @@ public partial class PdfStudyPanel : UserControl
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public FlowLayoutPanel ItemList => itemList;
 
-    /// <summary>卡片高度随侧栏宽度/DPI 变化重算：概览三条统计 + 三个按钮 + 会换行的说明文字。</summary>
+    /// <summary>卡片高度随侧栏宽度/DPI 变化重算：概览三条统计 + 四个按钮 + 会换行的说明文字。</summary>
     private void UpdateRowHeights()
     {
         int buttonHeight = Math.Max(32, addHighlightsButton.Font.Height + 16);
         int statHeight = Math.Max(26, highlightCount.Font.Height + 12);
 
-        for (int i = 0; i < 2; i++)
+        for (int i = 0; i < 3; i++)
             actionLayout.RowStyles[i].Height = buttonHeight + 6;
 
         int cardWidth = Math.Max(140, root.ClientSize.Width - 12);
@@ -116,7 +121,7 @@ public partial class PdfStudyPanel : UserControl
             TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix).Height);
 
         float overviewHeight = statHeight * 3 + 44;
-        float actionHeight = 40 + 2 * (buttonHeight + 6) + hintHeight + 6 + 4;
+        float actionHeight = 40 + 3 * (buttonHeight + 6) + hintHeight + 6 + 4;
         float audioHeight = 40 + 2 * (buttonHeight + 4);
         float practiceHeight = 40 + 2 * (buttonHeight + 4);
         float aiHeight = 40 + 3 * (buttonHeight + 4);

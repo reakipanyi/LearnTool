@@ -23,6 +23,7 @@ partial class PdfStudyPanel
         actionCard = new SidebarCard();
         actionLayout = new TableLayoutPanel();
         addHighlightsButton = new Button();
+        openHighlightButton = new Button();
         flashcardsButton = new Button();
         hint = new Label();
         audioCard = new SidebarCard();
@@ -75,7 +76,7 @@ partial class PdfStudyPanel
         root.RowCount = 7;
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48F));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 150F));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 150F));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 188F));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 84F));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 120F));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 158F));
@@ -172,7 +173,7 @@ partial class PdfStudyPanel
         actionCard.Dock = DockStyle.Fill;
         actionCard.Margin = new Padding(0, 0, 0, 4);
         actionCard.Name = "actionCard";
-        actionCard.Size = new Size(276, 146);
+        actionCard.Size = new Size(276, 184);
         actionCard.TabIndex = 2;
         actionCard.Title = "一键操作";
         // 
@@ -182,13 +183,15 @@ partial class PdfStudyPanel
         actionLayout.ColumnCount = 1;
         actionLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         actionLayout.Controls.Add(addHighlightsButton, 0, 0);
-        actionLayout.Controls.Add(flashcardsButton, 0, 1);
-        actionLayout.Controls.Add(hint, 0, 2);
+        actionLayout.Controls.Add(openHighlightButton, 0, 1);
+        actionLayout.Controls.Add(flashcardsButton, 0, 2);
+        actionLayout.Controls.Add(hint, 0, 3);
         actionLayout.Dock = DockStyle.Fill;
         actionLayout.Margin = Padding.Empty;
         actionLayout.Name = "actionLayout";
         actionLayout.Padding = Padding.Empty;
-        actionLayout.RowCount = 3;
+        actionLayout.RowCount = 4;
+        actionLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
         actionLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
         actionLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
         actionLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
@@ -213,6 +216,25 @@ partial class PdfStudyPanel
         addHighlightsButton.Tag = "secondary";
         addHighlightsButton.Text = "➕ 本页高亮全部加入学习";
         addHighlightsButton.TextAlign = ContentAlignment.MiddleLeft;
+        // 
+        // openHighlightButton
+        // 
+        openHighlightButton.AutoEllipsis = true;
+        openHighlightButton.BackColor = Color.White;
+        openHighlightButton.Cursor = Cursors.Hand;
+        openHighlightButton.Dock = DockStyle.Fill;
+        openHighlightButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        openHighlightButton.FlatAppearance.BorderSize = 1;
+        openHighlightButton.FlatStyle = FlatStyle.Flat;
+        openHighlightButton.Font = new Font("Microsoft YaHei UI", 9F);
+        openHighlightButton.ForeColor = Color.FromArgb(15, 23, 42);
+        openHighlightButton.Margin = new Padding(0, 0, 0, 6);
+        openHighlightButton.Name = "openHighlightButton";
+        openHighlightButton.Padding = new Padding(10, 0, 0, 0);
+        openHighlightButton.TabIndex = 1;
+        openHighlightButton.Tag = "secondary";
+        openHighlightButton.Text = "🖍 打开高亮面板";
+        openHighlightButton.TextAlign = ContentAlignment.MiddleLeft;
         // 
         // flashcardsButton
         // 
@@ -543,6 +565,7 @@ partial class PdfStudyPanel
     private SidebarCard actionCard;
     private TableLayoutPanel actionLayout;
     private Button addHighlightsButton;
+    private Button openHighlightButton;
     private Button flashcardsButton;
     private Label hint;
     private SidebarCard audioCard;

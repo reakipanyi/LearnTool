@@ -1,21 +1,22 @@
 using System.ComponentModel;
-using System.Drawing.Drawing2D;
 using LearningAssistant.Common.UI;
 
 namespace LearningAssistant.Forms.Pdf;
 
-/// <summary>「高亮」侧栏面板：页头 + 颜色行 + 摘录列表 + 底部操作。</summary>
+/// <summary>「高亮」侧栏面板：页头（删除 / 编辑 / 批量删除 / 导出）+ 摘录列表。</summary>
 public partial class PdfHighlightPanel : UserControl
 {
     public PdfHighlightPanel()
     {
         InitializeComponent();
-        RoundColorButtons();
-        _tip.SetToolTip(yellowRadio, "黄色高亮");
-        _tip.SetToolTip(greenRadio, "绿色高亮");
-        _tip.SetToolTip(blueRadio, "蓝色高亮");
-        _tip.SetToolTip(pinkRadio, "粉色高亮");
-        _tip.SetToolTip(orangeRadio, "橙色高亮");
+        header.Resize += (_, _) => LayoutHeaderActions();
+        LayoutHeaderActions();
+        _tip.SetToolTip(removeButton, "删除所选高亮");
+        _tip.SetToolTip(editButton, "编辑所选高亮");
+        _tip.SetToolTip(batchRemoveButton, "批量删除所选高亮");
+        removeButton.AccessibleName = "删除所选高亮";
+        editButton.AccessibleName = "编辑所选高亮";
+        batchRemoveButton.AccessibleName = "批量删除所选高亮";
     }
 
     /// <summary>页头，宿主用于更新摘录条数等状态。</summary>
@@ -27,26 +28,6 @@ public partial class PdfHighlightPanel : UserControl
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Panel ListHost => listHost;
-
-    [Browsable(false)]
-    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-    public RadioButton YellowButton => yellowRadio;
-
-    [Browsable(false)]
-    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-    public RadioButton GreenButton => greenRadio;
-
-    [Browsable(false)]
-    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-    public RadioButton BlueButton => blueRadio;
-
-    [Browsable(false)]
-    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-    public RadioButton PinkButton => pinkRadio;
-
-    [Browsable(false)]
-    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-    public RadioButton OrangeButton => orangeRadio;
 
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -64,14 +45,20 @@ public partial class PdfHighlightPanel : UserControl
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Button BatchRemoveButton => batchRemoveButton;
 
-    /// <summary>把颜色按钮裁剪成圆形，设计期与运行期一致。</summary>
-    private void RoundColorButtons()
+    /// <summary>把三个操作按钮排到页头右侧，与「导出」同一行，并压缩副标题宽度避免遮挡。</summary>
+    private void LayoutHeaderActions()
     {
-        foreach (var button in new[] { yellowRadio, greenRadio, blueRadio, pinkRadio, orangeRadio })
+        var exportButton = header.ActionButton;
+        int right = exportButton != null ? exportButton.Left - 4 : header.Width - 4;
+        foreach (var button in new[] { batchRemoveButton, editButton, removeButton })
         {
-            using var path = new GraphicsPath();
-            path.AddEllipse(0, 0, button.Width, button.Height);
-            button.Region = new Region(path);
+            button.Location = new Point(right - button.Width, 11);
+            right = button.Left - 4;
         }
+
+        header.Subtitle.AutoSize = false;
+        header.Subtitle.AutoEllipsis = true;
+        header.Subtitle.Location = new Point(28, 25);
+        header.Subtitle.Size = new Size(Math.Max(40, right - 32), 18);
     }
 }
