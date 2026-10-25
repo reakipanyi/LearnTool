@@ -1017,15 +1017,21 @@ namespace LearningAssistant.Forms.Pdf
                     return;
                 }
 
-                // 焦点在播放器或音频侧栏时，空格/方向键按媒体惯例工作
+                // 空格全局播放/暂停（有配套音频时）；无音频文档仍用空格翻页
+                if (e.KeyCode == Keys.Space && !e.Control && !e.Shift && !e.Alt
+                    && _audioTrackManager != null
+                    && (_audioTrackManager.Result?.Tracks.Count ?? 0) > 0)
+                {
+                    _audioTrackManager.TogglePlayback();
+                    e.Handled = e.SuppressKeyPress = true;
+                    return;
+                }
+
+                // 焦点在播放器或音频侧栏时，方向键按媒体惯例快退/快进
                 if (_audioTrackManager != null && IsMediaShortcutScope())
                 {
                     switch (e.KeyCode)
                     {
-                        case Keys.Space:
-                            _audioTrackManager.TogglePlayback();
-                            e.Handled = e.SuppressKeyPress = true;
-                            return;
                         case Keys.Left:
                             SeekAudio(-5);
                             e.Handled = e.SuppressKeyPress = true;

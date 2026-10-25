@@ -186,6 +186,7 @@ public sealed class PdfAudioPlayerBar : UserControl
 
         StyleTransportButton(_btnPrev, "⏮");
         StyleTransportButton(_btnPlay, "▶");
+        _tooltip.SetToolTip(_btnPlay, "播放/暂停（空格）");
         StyleTransportButton(_btnNext, "⏭");
         _btnPlay.Font = new Font("Segoe UI Symbol", 12F, FontStyle.Bold);
         _btnPrev.Margin = new Padding(0, 0, 6, 0);
