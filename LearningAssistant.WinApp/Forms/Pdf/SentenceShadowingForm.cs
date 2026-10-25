@@ -24,7 +24,9 @@ namespace LearningAssistant.Forms.Pdf
 
         private readonly string _pdfPath;
         private readonly int _pageIndex;
-        private readonly ShadowingPracticeService? _practice;
+        private readonly string _documentTitle;
+        private readonly List<ShadowingSentence> _textSentences;
+        private ShadowingPracticeService? _practice;
         private readonly IAudioRecorderService? _recorder;
         private readonly IPronunciationScorer? _scorer;
         private readonly EventHandler<AudioRecording>? _recordingHandler;
@@ -34,6 +36,11 @@ namespace LearningAssistant.Forms.Pdf
         private readonly ShadowingStore _store = new();
         private readonly ShadowingSegmentStore _segmentStore = new();
         private readonly FlowLayoutPanel _takeActions = new();
+        private readonly FlowLayoutPanel _sourceBar = new();
+        private readonly Label _sourceLabel = new();
+        private readonly RadioButton _radioSourceSegments = new();
+        private readonly RadioButton _radioSourceText = new();
+        private readonly Button _btnClearSegments = new();
         private readonly Button _btnTakePreview = new();
         private readonly Button _btnTakeChoose = new();
         private readonly Button _btnTakeDelete = new();
@@ -44,6 +51,9 @@ namespace LearningAssistant.Forms.Pdf
         private IReadOnlyList<ShadowingSegment> _segments = Array.Empty<ShadowingSegment>();
         private IReadOnlyList<string?>? _practicePresets;
         private bool _segmentMode;
+        private bool _sourceSwitching;
+        private ITTSService? _tts;
+        private ISubtitleParser? _subtitleParser;
         private NAudioMediaPlayer? _recordingPlayer;
         private readonly System.Windows.Forms.Timer _countdownTimer = new() { Interval = 700 };
         private readonly System.Windows.Forms.Timer _recordLimitTimer = new();
@@ -67,6 +77,8 @@ namespace LearningAssistant.Forms.Pdf
         {
             _pdfPath = pdfPath;
             _pageIndex = pageIndex;
+            _documentTitle = documentTitle;
+            _textSentences = SentenceSegmenter.Segment(pageText);
 
             InitializeComponent();
 
@@ -77,24 +89,13 @@ namespace LearningAssistant.Forms.Pdf
             _comboMode.SelectedIndex = 1;
 
             MountCardContents();
+            MountSourceBar();
             WireEvents();
 
-            var sentences = SentenceSegmenter.Segment(pageText);
-            _practicePresets = TryLoadSegments();
-            var practiceSentences = _segmentMode ? BuildSegmentSentences() : sentences;
-            if (_segmentMode)
-            {
-                _labelTitle.Text = "原声跟读";
-                Text = $"原声跟读 - {documentTitle}";
-                _takeActions.Visible = true;
-                _btnCompose.Visible = true;
-            }
+            LoadSegments();
+            _segmentMode = _segments.Count > 0;
+            PersistManifest(_textSentences);
 
-            PersistManifest(sentences);
-
-            LoadSentenceRecordings(practiceSentences);
-            LoadSentenceScores(practiceSentences);
-            FillSentenceList(practiceSentences);
             PdfSidebarTheme.ThemeChanged += OnSidebarThemeChanged;
             if (isDark)
             {
@@ -102,8 +103,9 @@ namespace LearningAssistant.Forms.Pdf
                 PdfSidebarTheme.ApplyRecursive(this, true);
             }
 
-            var tts = Program.ServiceProvider?.GetService(typeof(ITTSService)) as ITTSService;
-            var subtitleParser = Program.ServiceProvider?.GetService(typeof(ISubtitleParser)) as ISubtitleParser;
+            // 先解析服务，再按当前来源创建练习实例
+            _tts = Program.ServiceProvider?.GetService(typeof(ITTSService)) as ITTSService;
+            _subtitleParser = Program.ServiceProvider?.GetService(typeof(ISubtitleParser)) as ISubtitleParser;
             _recorder = Program.ServiceProvider?.GetService(typeof(IAudioRecorderService)) as IAudioRecorderService;
             try
             {
@@ -115,19 +117,9 @@ namespace LearningAssistant.Forms.Pdf
                 _scorer = null;
             }
 
-            if (subtitleParser == null)
+            if (_subtitleParser != null)
             {
-                _labelStatus.Text = "音频播放组件不可用，暂时无法播放。";
-                _btnPlay.Enabled = false;
-            }
-            else
-            {
-                // tts 允许为空：原声切片模式不依赖语音合成，缺失切片时再回退 TTS
-                _practice = new ShadowingPracticeService(practiceSentences, tts, subtitleParser, _practicePresets);
-                _practice.StateChanged += OnSentenceStateChanged;
-                _practice.SentenceFinished += OnSentenceFinished;
-                _practice.ErrorOccurred += OnPracticeError;
-                _recordingPlayer = new NAudioMediaPlayer(subtitleParser);
+                _recordingPlayer = new NAudioMediaPlayer(_subtitleParser);
                 _recordingPlayer.PlaybackFinished += OnRecordingPlaybackFinished;
             }
 
@@ -146,8 +138,13 @@ namespace LearningAssistant.Forms.Pdf
             if (_scorer?.IsAvailable != true)
                 _labelScore.Text = "参考分：—（未安装英语识别器，按完成度评分）";
 
-            if (practiceSentences.Count > 0)
-                SetCurrentIndex(ResolveInitialIndex(), play: false);
+            ApplyActiveSource();
+
+            if (_subtitleParser == null)
+            {
+                _labelStatus.Text = "音频播放组件不可用，暂时无法播放。";
+                _btnPlay.Enabled = false;
+            }
 
             _countdownTimer.Tick += OnCountdownTick;
             _recordLimitTimer.Tick += OnRecordLimitReached;
@@ -157,13 +154,12 @@ namespace LearningAssistant.Forms.Pdf
         }
 
         /// <summary>
-        /// 优先载入本页打点切片；加载失败或没有切片时保持旧的分句模式。
-        /// 返回切片模式下的预设音频路径（null 表示无切片，需回退 TTS）。
+        /// 载入本页打点切片清单；没有切片时保持文字跟读。
         /// </summary>
-        private IReadOnlyList<string?>? TryLoadSegments()
+        private void LoadSegments()
         {
             if (string.IsNullOrWhiteSpace(_pdfPath))
-                return null;
+                return;
 
             try
             {
@@ -172,24 +168,110 @@ namespace LearningAssistant.Forms.Pdf
                 {
                     _segmentManifest = manifest;
                     _segments = manifest.Segments.OrderBy(s => s.StartMs).ToList();
-                    _segmentMode = true;
-                    foreach (var segment in _segments)
-                        SyncSegmentTake(segment);
-                    return _segments
-                        .Select(s =>
-                        {
-                            string path = _segmentStore.ResolvePath(s.SlicePath);
-                            return File.Exists(path) ? path : null;
-                        })
-                        .ToList();
                 }
             }
             catch (Exception ex)
             {
                 Trace.TraceWarning($"[SentenceShadowing] 读取原声切片失败: {ex.Message}");
             }
+        }
 
-            return null;
+        private IReadOnlyList<ShadowingSentence> ActiveSentences()
+            => _segmentMode ? BuildSegmentSentences() : _textSentences;
+
+        /// <summary>切片模式下的预设音频路径（null 表示该段缺切片，需回退 TTS）。</summary>
+        private IReadOnlyList<string?> BuildSegmentPresets()
+            => _segments.Select(s =>
+            {
+                string path = _segmentStore.ResolvePath(s.SlicePath);
+                return File.Exists(path) ? path : null;
+            }).ToList();
+
+        /// <summary>按当前来源重建练习服务、列表与录音/评分缓存。</summary>
+        private void ApplyActiveSource(bool play = false)
+        {
+            _sentenceRecordings.Clear();
+            _sentenceScores.Clear();
+
+            var sentences = ActiveSentences();
+            _practicePresets = _segmentMode ? BuildSegmentPresets() : null;
+            RebuildPractice(sentences);
+
+            if (_segmentMode)
+            {
+                foreach (var segment in _segments)
+                    SyncSegmentTake(segment);
+            }
+
+            LoadSentenceRecordings(sentences);
+            LoadSentenceScores(sentences);
+            FillSentenceList(sentences);
+
+            _labelTitle.Text = _segmentMode ? "原声跟读" : "句子跟读";
+            Text = $"{_labelTitle.Text} - {_documentTitle}";
+            _takeActions.Visible = _segmentMode;
+            _btnCompose.Visible = _segmentMode;
+            UpdateSourceBar();
+
+            if (sentences.Count > 0)
+            {
+                SetCurrentIndex(_segmentMode ? ResolveInitialIndex() : 0, play);
+            }
+            else
+            {
+                _currentIndex = -1;
+                _labelCurrent.Text = "请从左侧选择一句开始跟读";
+                RefreshScoreLabel();
+                UpdateReplayButtonState();
+                RefreshWaveform();
+            }
+        }
+
+        private void RebuildPractice(IReadOnlyList<ShadowingSentence> sentences)
+        {
+            if (_practice != null)
+            {
+                _practice.StateChanged -= OnSentenceStateChanged;
+                _practice.SentenceFinished -= OnSentenceFinished;
+                _practice.ErrorOccurred -= OnPracticeError;
+                _practice.Dispose();
+                _practice = null;
+            }
+
+            if (_subtitleParser == null || sentences.Count == 0)
+                return;
+
+            _practice = new ShadowingPracticeService(sentences, _tts, _subtitleParser, _practicePresets);
+            _practice.StateChanged += OnSentenceStateChanged;
+            _practice.SentenceFinished += OnSentenceFinished;
+            _practice.ErrorOccurred += OnPracticeError;
+        }
+
+        /// <summary>切换跟读来源：原声切片 ↔ 文字跟读。</summary>
+        private void SwitchSource(bool segmentMode, bool play = false)
+        {
+            if (_sourceSwitching || segmentMode == _segmentMode)
+                return;
+            if (segmentMode && _segments.Count == 0)
+                return;
+
+            _sourceSwitching = true;
+            try
+            {
+                StopCountdown();
+                StopRecordingIfAny(suppressAdvance: true);
+                _recordingIndex = -1;
+                _recordingSentenceId = null;
+                _recordingPlayer?.Stop();
+                _practice?.StopPlayback();
+
+                _segmentMode = segmentMode;
+                ApplyActiveSource(play);
+            }
+            finally
+            {
+                _sourceSwitching = false;
+            }
         }
 
         private List<ShadowingSentence> BuildSegmentSentences()
@@ -370,6 +452,142 @@ namespace LearningAssistant.Forms.Pdf
             _takeActions.Visible = _segmentMode;
         }
 
+        /// <summary>在标题栏右侧挂载「跟读来源」单选按钮与「清理原声」入口。</summary>
+        private void MountSourceBar()
+        {
+            var palette = PdfSidebarTheme.PaletteFor(this);
+
+            _sourceLabel.Text = "跟读来源";
+            _sourceLabel.AutoSize = true;
+            _sourceLabel.Font = new Font("Microsoft YaHei UI", 8.5F);
+            _sourceLabel.ForeColor = palette.Muted;
+            _sourceLabel.Margin = new Padding(0, 8, 8, 0);
+            _sourceLabel.Tag = "muted";
+
+            StyleSourceRadio(_radioSourceSegments, "原声切片", palette);
+            StyleSourceRadio(_radioSourceText, "文字跟读", palette);
+
+            _btnClearSegments.Text = "清理原声";
+            _btnClearSegments.FlatStyle = FlatStyle.Flat;
+            _btnClearSegments.FlatAppearance.BorderSize = 0;
+            _btnClearSegments.Font = new Font("Microsoft YaHei UI", 8.5F);
+            _btnClearSegments.Size = new Size(78, 26);
+            _btnClearSegments.Margin = new Padding(6, 2, 0, 0);
+            _btnClearSegments.Cursor = Cursors.Hand;
+            _btnClearSegments.BackColor = palette.SurfaceAlt;
+            _btnClearSegments.ForeColor = palette.Text;
+            _buttonTip.SetToolTip(_btnClearSegments, "删除本页原声切片与该页跟读录音；文字跟读记录保留");
+
+            _sourceBar.FlowDirection = FlowDirection.LeftToRight;
+            _sourceBar.WrapContents = false;
+            _sourceBar.AutoSize = true;
+            _sourceBar.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            _sourceBar.BackColor = palette.Background;
+            _sourceBar.Visible = false;
+            _sourceBar.Controls.Add(_sourceLabel);
+            _sourceBar.Controls.Add(_radioSourceSegments);
+            _sourceBar.Controls.Add(_radioSourceText);
+            _sourceBar.Controls.Add(_btnClearSegments);
+
+            header.Controls.Add(_sourceBar);
+            header.Resize += (_, _) => LayoutSourceBar();
+        }
+
+        private static void StyleSourceRadio(RadioButton radio, string text, PdfSidebarPalette palette)
+        {
+            radio.Text = text;
+            radio.AutoSize = true;
+            radio.Font = new Font("Microsoft YaHei UI", 9F);
+            radio.ForeColor = palette.Text;
+            radio.BackColor = Color.Transparent;
+            radio.Cursor = Cursors.Hand;
+            radio.Margin = new Padding(0, 5, 10, 0);
+        }
+
+        private void LayoutSourceBar()
+        {
+            if (_sourceBar.Parent == null)
+                return;
+
+            var size = _sourceBar.PreferredSize;
+            _sourceBar.Size = size;
+            _sourceBar.Location = new Point(
+                Math.Max(0, header.ClientSize.Width - size.Width),
+                Math.Max(0, (header.ClientSize.Height - size.Height) / 2));
+        }
+
+        /// <summary>仅在有原声切片时显示来源栏；两种来源都存在时才显示单选按钮。</summary>
+        private void UpdateSourceBar()
+        {
+            bool hasSegments = _segments.Count > 0;
+            bool canSwitch = hasSegments && _textSentences.Count > 0;
+
+            _sourceLabel.Visible = canSwitch;
+            _radioSourceSegments.Visible = canSwitch;
+            _radioSourceText.Visible = canSwitch;
+            _btnClearSegments.Visible = hasSegments;
+            _sourceBar.Visible = hasSegments;
+
+            if (canSwitch)
+            {
+                _radioSourceSegments.Checked = _segmentMode;
+                _radioSourceText.Checked = !_segmentMode;
+            }
+
+            LayoutSourceBar();
+        }
+
+        private void OnSourceRadioChanged(object? sender, EventArgs e)
+        {
+            if (_sourceSwitching || sender is not RadioButton radio || !radio.Checked)
+                return;
+            if (ReferenceEquals(radio, _radioSourceSegments) == _segmentMode)
+                return;
+
+            SwitchSource(ReferenceEquals(radio, _radioSourceSegments));
+        }
+
+        /// <summary>清理本页原声切片、跟读 take 与合成成品，并回落到文字跟读。</summary>
+        private async void OnClearSegmentsClicked(object? sender, EventArgs e)
+        {
+            if (_segments.Count == 0)
+                return;
+
+            var confirm = MessageBox.Show(
+                this,
+                "清理本页原声切片？\n\n将删除本页的原声切片、全部跟读录音与合成成品。\n文字跟读的录音和评分会保留。",
+                "清理原声", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+            if (confirm != DialogResult.Yes)
+                return;
+
+            _btnClearSegments.Enabled = false;
+            try
+            {
+                await _segmentStore.DeletePageSegmentsAsync(_pdfPath, _pageIndex);
+            }
+            catch (Exception ex)
+            {
+                _labelStatus.Text = $"清理原声失败：{ex.Message}";
+                return;
+            }
+            finally
+            {
+                _btnClearSegments.Enabled = true;
+            }
+
+            _segmentManifest = null;
+            _segments = Array.Empty<ShadowingSegment>();
+
+            // 切片模式需要重建列表与练习；文字模式下只刷新来源栏
+            if (_segmentMode)
+                SwitchSource(false);
+
+            UpdateSourceBar();
+            _labelStatus.Text = _textSentences.Count > 0
+                ? "已清理本页原声，已切换到文字跟读。"
+                : "已清理本页原声；本页没有可跟读文本，可先执行 OCR 或翻译。";
+        }
+
         private static void MountBodyChild(SidebarCard card, Control child)
         {
             if (child.Parent == null)
@@ -394,6 +612,10 @@ namespace LearningAssistant.Forms.Pdf
             _btnTakeDelete.Click += async (_, _) => await DeleteCurrentTakeAsync();
             _btnCompose.Click += async (_, _) => await ComposePageAsync();
             _comboMode.SelectedIndexChanged += OnModeChanged;
+
+            _radioSourceSegments.CheckedChanged += OnSourceRadioChanged;
+            _radioSourceText.CheckedChanged += OnSourceRadioChanged;
+            _btnClearSegments.Click += OnClearSegmentsClicked;
 
             _progressTrack.Paint += ProgressTrack_Paint;
 

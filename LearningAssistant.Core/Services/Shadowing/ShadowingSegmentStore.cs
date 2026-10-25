@@ -215,6 +215,40 @@ namespace LearningAssistant.Services.Shadowing
             }
         }
 
+        /// <summary>
+        /// 删除本页切片清单及其切片、跟读 take 与合成成品文件；
+        /// 文字跟读的录音与评分不在切片目录内，不受影响。
+        /// </summary>
+        public async Task DeletePageSegmentsAsync(
+            string pdfPath, int pageIndex, CancellationToken cancellationToken = default)
+        {
+            var gate = GetLock(pdfPath);
+            await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                string path = GetSegmentsPath(pdfPath, pageIndex);
+                var manifest = JsonHelper.LoadFromFile<ShadowingSegmentManifest>(path);
+                if (manifest != null)
+                {
+                    foreach (var segment in manifest.Segments)
+                    {
+                        TryDeleteFile(ResolvePath(segment.SlicePath));
+                        foreach (var take in segment.Takes)
+                            TryDeleteFile(ResolvePath(take.Path));
+                    }
+
+                    foreach (var composed in manifest.Composed)
+                        TryDeleteFile(ResolvePath(composed.Path));
+                }
+
+                TryDeleteFile(path);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
         /// <summary>取该 PDF 的目录锁；segments.json 与 progress.json 共用。</summary>
         public SemaphoreSlim GetLock(string pdfPath)
             => _locks.GetOrAdd($"{_rootDir}|{_userId}|{GetDocumentHash(pdfPath)}", _ => new SemaphoreSlim(1, 1));
@@ -250,6 +284,19 @@ namespace LearningAssistant.Services.Shadowing
                 Segments = segments,
                 Composed = composed
             };
+        }
+
+        private static void TryDeleteFile(string path)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                    File.Delete(path);
+            }
+            catch
+            {
+                // 单个文件删除失败不影响其余清理
+            }
         }
 
         private static string GetDocumentHash(string pdfPath)
