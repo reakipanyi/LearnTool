@@ -62,14 +62,16 @@ public partial class PdfReadingSidebarPanel : UserControl, ISidebarThemeAware
             Text = "目录",
             Font = new Font("Microsoft YaHei UI", 10F, FontStyle.Bold),
             AutoSize = true,
-            Location = new Point(0, 10)
+            Location = new Point(84, 10)
         };
 
+        // 靠左放置：右侧抽屉会覆盖侧栏右半区，避免视图切换按钮被遮住
         var toggle = new Panel
         {
-            Dock = DockStyle.Right,
+            Dock = DockStyle.None,
             Width = 78,
             Height = 28,
+            Location = new Point(0, 0),
             BackColor = Color.Transparent,
             Margin = Padding.Empty
         };
