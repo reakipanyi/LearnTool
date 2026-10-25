@@ -478,10 +478,20 @@ public sealed class PdfAudioPlayerBar : UserControl
     /// <summary>进度条按 10Hz 刷新，避免高频 PositionChanged 造成无效重绘</summary>
     private void OnPositionChanged(object? sender, TimeSpan position)
     {
+        // 状态事件可能被列表直连播放等路径错过，这里顺带按实际播放状态校正播放/暂停图标
+        SyncPlayGlyph();
+
         var now = _progressClock.Elapsed;
         if (now - _lastProgressAt < TimeSpan.FromMilliseconds(100)) return;
         _lastProgressAt = now;
         UpdateProgress(position);
+    }
+
+    private void SyncPlayGlyph()
+    {
+        string glyph = _manager.IsPlaying ? "⏸" : "▶";
+        if (!string.Equals(_btnPlay.Text, glyph, StringComparison.Ordinal))
+            _btnPlay.Text = glyph;
     }
     private void OnStateChanged(object? sender, MediaPlaybackState state) => UpdateTransport();
 
