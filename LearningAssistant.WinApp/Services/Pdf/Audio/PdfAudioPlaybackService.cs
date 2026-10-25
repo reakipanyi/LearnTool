@@ -33,14 +33,4 @@ public class PdfAudioPlaybackService
     public void Seek(TimeSpan p) => _player.Seek(p);
     public void SetSpeed(double s) { if (s >= 0.5 && s <= 2.0) _player.Speed = s; }
     public void SetAbLoop(TimeSpan? a, TimeSpan? b) => _player.AbLoop = (a, b);
-
-    /// <summary>取最近播放采样用于实时频谱；非 NAudio 播放器或未加载音频时返回 false。</summary>
-    public bool TryReadSpectrum(float[] destination, out int sampleRate)
-    {
-        if (_player is NAudioMediaPlayer naudio)
-            return naudio.TryReadSpectrum(destination, out sampleRate);
-
-        sampleRate = 0;
-        return false;
-    }
 }

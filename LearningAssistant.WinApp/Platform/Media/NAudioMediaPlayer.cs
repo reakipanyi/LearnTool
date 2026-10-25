@@ -15,7 +15,6 @@ public class NAudioMediaPlayer : IMediaPlayer
     private AudioFileReader? _reader;
     private VarispeedSampleProvider? _varispeed;
     private NAudio.Wave.SampleProviders.SmbPitchShiftingSampleProvider? _pitchShift;
-    private SpectrumTapSampleProvider? _spectrumTap;
     private System.Windows.Forms.Timer? _timer;
     private readonly AbLoopState _abLoop = new();
     private bool _manualStop;
@@ -136,7 +135,6 @@ public class NAudioMediaPlayer : IMediaPlayer
         _reader = null;
         _varispeed = null;
         _pitchShift = null;
-        _spectrumTap = null;
         SubtitleCues = null;
         // 换曲时清除上一曲的 A-B 循环，避免沿用旧区间
         _abLoop.A = null;
@@ -182,7 +180,6 @@ public class NAudioMediaPlayer : IMediaPlayer
 
         _varispeed = null;
         _pitchShift = null;
-        _spectrumTap = null;
 
         ISampleProvider output;
         if (Math.Abs(_speed - 1.0) < 0.001)
@@ -199,9 +196,7 @@ public class NAudioMediaPlayer : IMediaPlayer
             output = _pitchShift;
         }
 
-        // 频谱旁路挂在最终输出前，不改变音频数据
-        _spectrumTap = new SpectrumTapSampleProvider(output);
-        _waveOut.Init(_spectrumTap);
+        _waveOut.Init(output);
     }
 
     /// <summary>倍速变化时重建输出链，保持源位置、音量与播放/暂停状态。</summary>
@@ -224,7 +219,6 @@ public class NAudioMediaPlayer : IMediaPlayer
         _reader.CurrentTime = position;
         _varispeed = null;
         _pitchShift = null;
-        _spectrumTap = null;
 
         _waveOut = new WaveOutEvent { Volume = volume };
         _waveOut.PlaybackStopped += OnPlaybackStopped;
@@ -250,17 +244,6 @@ public class NAudioMediaPlayer : IMediaPlayer
         _reader.CurrentTime = position;
         // 变速缓冲里可能残留定位前的采样，必须丢弃
         _varispeed?.Reset();
-    }
-
-    /// <summary>
-    /// 把最近约 46ms 的单声道采样复制到 destination，供实时频谱使用。
-    /// 未加载音频或采样不足时返回 false。
-    /// </summary>
-    public bool TryReadSpectrum(float[] destination, out int sampleRate)
-    {
-        var tap = _spectrumTap;
-        sampleRate = tap?.WaveFormat.SampleRate ?? 0;
-        return tap != null && tap.TryGetLatest(destination);
     }
 
     public void FadeOut(int milliseconds, bool blocking = false) => FadeTo(0d, milliseconds, blocking);

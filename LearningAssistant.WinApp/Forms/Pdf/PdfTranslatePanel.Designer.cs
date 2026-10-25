@@ -21,7 +21,7 @@ partial class PdfTranslatePanel
         originalBox = new SyncedTextBox();
         translationCard = new SidebarCard();
         translationBox = new SyncedTextBox();
-        actions = new FlowLayoutPanel();
+        actions = new TableLayoutPanel();
         ocrButton = new Button();
         shadowingButton = new Button();
         addToLearningButton = new Button();
@@ -156,69 +156,77 @@ partial class PdfTranslatePanel
         // actions
         // 
         actions.BackColor = Color.FromArgb(247, 248, 251);
-        actions.Controls.Add(ocrButton);
-        actions.Controls.Add(shadowingButton);
-        actions.Controls.Add(addToLearningButton);
+        actions.ColumnCount = 3;
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.34F));
+        actions.Controls.Add(ocrButton, 0, 0);
+        actions.Controls.Add(shadowingButton, 1, 0);
+        actions.Controls.Add(addToLearningButton, 2, 0);
         actions.Dock = DockStyle.Fill;
         actions.Location = new Point(10, 452);
         actions.Margin = new Padding(0, 4, 0, 0);
         actions.Name = "actions";
         actions.Padding = new Padding(0, 5, 0, 0);
+        actions.RowCount = 1;
+        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         actions.Size = new Size(523, 34);
         actions.TabIndex = 2;
-        actions.WrapContents = false;
         // 
         // ocrButton
         // 
-        ocrButton.BackColor = Color.White;
+        ocrButton.BackColor = Color.FromArgb(239, 246, 255);
         ocrButton.Cursor = Cursors.Hand;
-        ocrButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        ocrButton.Dock = DockStyle.Fill;
+        ocrButton.FlatAppearance.BorderColor = Color.FromArgb(191, 219, 254);
         ocrButton.FlatAppearance.BorderSize = 1;
-        ocrButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(241, 245, 249);
+        ocrButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(219, 234, 254);
         ocrButton.FlatStyle = FlatStyle.Flat;
         ocrButton.Font = new Font("Microsoft YaHei UI", 9F);
-        ocrButton.ForeColor = Color.FromArgb(15, 23, 42);
-        ocrButton.Margin = new Padding(0, 0, 8, 0);
+        ocrButton.ForeColor = Color.FromArgb(29, 78, 216);
+        ocrButton.Margin = new Padding(0, 0, 6, 0);
         ocrButton.Name = "ocrButton";
-        ocrButton.Size = new Size(96, 28);
+        ocrButton.Size = new Size(172, 29);
         ocrButton.TabIndex = 0;
-        ocrButton.Tag = "secondary";
+        ocrButton.Tag = "keep";
         ocrButton.Text = "🔍 整页识别";
         ocrButton.UseVisualStyleBackColor = false;
         // 
         // shadowingButton
         // 
-        shadowingButton.BackColor = Color.White;
+        shadowingButton.BackColor = Color.FromArgb(245, 243, 255);
         shadowingButton.Cursor = Cursors.Hand;
-        shadowingButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        shadowingButton.Dock = DockStyle.Fill;
+        shadowingButton.FlatAppearance.BorderColor = Color.FromArgb(221, 214, 254);
         shadowingButton.FlatAppearance.BorderSize = 1;
-        shadowingButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(241, 245, 249);
+        shadowingButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(237, 233, 254);
         shadowingButton.FlatStyle = FlatStyle.Flat;
         shadowingButton.Font = new Font("Microsoft YaHei UI", 9F);
-        shadowingButton.ForeColor = Color.FromArgb(15, 23, 42);
-        shadowingButton.Margin = new Padding(0, 0, 8, 0);
+        shadowingButton.ForeColor = Color.FromArgb(109, 40, 217);
+        shadowingButton.Margin = new Padding(3, 0, 3, 0);
         shadowingButton.Name = "shadowingButton";
-        shadowingButton.Size = new Size(104, 28);
+        shadowingButton.Size = new Size(172, 29);
         shadowingButton.TabIndex = 1;
-        shadowingButton.Tag = "secondary";
+        shadowingButton.Tag = "keep";
         shadowingButton.Text = "✂ 句子跟读";
         shadowingButton.UseVisualStyleBackColor = false;
         // 
         // addToLearningButton
         // 
-        addToLearningButton.BackColor = Color.White;
+        addToLearningButton.BackColor = Color.FromArgb(236, 253, 245);
         addToLearningButton.Cursor = Cursors.Hand;
-        addToLearningButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        addToLearningButton.Dock = DockStyle.Fill;
+        addToLearningButton.FlatAppearance.BorderColor = Color.FromArgb(167, 243, 208);
         addToLearningButton.FlatAppearance.BorderSize = 1;
-        addToLearningButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(241, 245, 249);
+        addToLearningButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(209, 250, 229);
         addToLearningButton.FlatStyle = FlatStyle.Flat;
         addToLearningButton.Font = new Font("Microsoft YaHei UI", 9F);
-        addToLearningButton.ForeColor = Color.FromArgb(15, 23, 42);
-        addToLearningButton.Margin = new Padding(0);
+        addToLearningButton.ForeColor = Color.FromArgb(4, 120, 87);
+        addToLearningButton.Margin = new Padding(6, 0, 0, 0);
         addToLearningButton.Name = "addToLearningButton";
-        addToLearningButton.Size = new Size(120, 28);
+        addToLearningButton.Size = new Size(173, 29);
         addToLearningButton.TabIndex = 2;
-        addToLearningButton.Tag = "secondary";
+        addToLearningButton.Tag = "keep";
         addToLearningButton.Text = "➕ 加入本页译文";
         addToLearningButton.UseVisualStyleBackColor = false;
         // 
@@ -400,7 +408,7 @@ partial class PdfTranslatePanel
     private SyncedTextBox originalBox;
     private SidebarCard translationCard;
     private SyncedTextBox translationBox;
-    private FlowLayoutPanel actions;
+    private TableLayoutPanel actions;
     private Button ocrButton;
     private Button shadowingButton;
     private Button addToLearningButton;

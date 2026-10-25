@@ -988,6 +988,9 @@ namespace LearningAssistant.Forms.Pdf
                     return;
                 }
 
+                // 焦点在文本输入框时只保留 Esc 关闭抽屉，其余快捷键一律不响应，避免吞掉输入与方向键
+                if (IsTextEditingFocused()) return;
+
                 // Ctrl+K 命令搜索：把常用入口聚合成一个键盘入口
                 if (e.Control && e.KeyCode == Keys.K)
                 {
@@ -1013,9 +1016,6 @@ namespace LearningAssistant.Forms.Pdf
                     e.Handled = e.SuppressKeyPress = true;
                     return;
                 }
-
-                // 输入框内不响应翻页/媒体快捷键，避免吞掉空格与方向键
-                if (ActiveControl is TextBoxBase) return;
 
                 // 焦点在播放器或音频侧栏时，空格/方向键按媒体惯例工作
                 if (_audioTrackManager != null && IsMediaShortcutScope())
@@ -1263,6 +1263,20 @@ namespace LearningAssistant.Forms.Pdf
             => _audioPlayerBar?.ContainsFocus == true
                || _audioPanel?.ContainsFocus == true
                || _audioDrawer?.ContainsFocus == true;
+
+        /// <summary>
+        /// 焦点是否落在文本输入控件上。逐层下钻 ActiveControl，
+        /// 因为翻译面板等输入框嵌套在抽屉/面板里，表单的 ActiveControl 只会停在中间容器上。
+        /// </summary>
+        private bool IsTextEditingFocused()
+        {
+            Control? focused = this;
+            while (focused is ContainerControl { ActiveControl: { } next })
+                focused = next;
+
+            return focused is TextBoxBase
+                || focused is ComboBox { DropDownStyle: not ComboBoxStyle.DropDownList };
+        }
 
         /// <summary>相对当前进度快进/快退指定秒数，并夹在 [0, 时长] 内。</summary>
         private void SeekAudio(double seconds)

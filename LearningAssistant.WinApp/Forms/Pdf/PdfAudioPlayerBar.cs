@@ -31,7 +31,6 @@ public sealed class PdfAudioPlayerBar : UserControl
     private readonly Button _btnVolume = new();
     private readonly Button _btnFollow = new();
     private readonly Button _btnMore = new();
-    private readonly Button _btnSpectrum = new();
     private readonly Button _btnMark = new();
     private readonly Button _btnMarkAgain = new();
     private readonly Button _btnMarkEnd = new();
@@ -39,16 +38,12 @@ public sealed class PdfAudioPlayerBar : UserControl
     private readonly System.Windows.Forms.Timer _markTimer = new() { Interval = 500 };
     private readonly ToolTip _tooltip = new();
     private readonly ContextMenuStrip _loopMenu = new();
-    private readonly ContextMenuStrip _speedMenu = new();
     private readonly Panel _speedPanel = new();
     private readonly FlowLayoutPanel _speedChips = new();
     private readonly TrackBar _speedSlider = new();
     private readonly Label _speedTitle = new();
     private readonly Label _speedValue = new();
-    private readonly ContextMenuStrip _spectrumMenu = new();
-    private readonly Panel _spectrumPanel = new();
-    private readonly Label _spectrumTitle = new();
-    private readonly SpectrumView _spectrumView = new();
+    private readonly ContextMenuStrip _speedMenu = new();
     private bool _syncingSpeed;
     private static readonly double[] SpeedPresets = { 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0 };
     private readonly ToolStripMenuItem _menuSyncPage = new("切歌同步页码");
@@ -103,7 +98,6 @@ public sealed class PdfAudioPlayerBar : UserControl
         root.Controls.Add(BuildRightSide(), 2, 0);
         Controls.Add(root);
         BuildSpeedMenu();
-        BuildSpectrumMenu();
 
         Paint += (_, e) =>
         {
@@ -255,8 +249,6 @@ public sealed class PdfAudioPlayerBar : UserControl
         StylePill(_btnVolume, "🔊", 34);
         StylePill(_btnSpeed, "1.0x", 48);
         _tooltip.SetToolTip(_btnSpeed, "播放速度（右键恢复 1.0x）");
-        StylePill(_btnSpectrum, "≈", 34);
-        _tooltip.SetToolTip(_btnSpectrum, "实时频谱");
 
         _labelMark.AutoSize = true;
         _labelMark.Font = new Font("Consolas", 8.5F);
@@ -271,7 +263,6 @@ public sealed class PdfAudioPlayerBar : UserControl
         right.Controls.Add(_btnFollow);
         right.Controls.Add(_btnVolume);
         right.Controls.Add(_btnSpeed);
-        right.Controls.Add(_btnSpectrum);
         right.Controls.Add(_labelMark);
         right.Controls.Add(_btnMarkAgain);
         right.Controls.Add(_btnMarkEnd);
@@ -375,39 +366,6 @@ public sealed class PdfAudioPlayerBar : UserControl
         _speedMenu.ShowImageMargin = false;
     }
 
-    /// <summary>点击频谱胶囊弹出的实时频谱面板；仅在面板打开时取样与刷新。</summary>
-    private void BuildSpectrumMenu()
-    {
-        _spectrumPanel.Size = new Size(320, 132);
-        _spectrumPanel.Margin = new Padding(0);
-
-        _spectrumTitle.Text = "实时频谱";
-        _spectrumTitle.AutoSize = true;
-        _spectrumTitle.Location = new Point(10, 7);
-        _spectrumTitle.Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold);
-
-        _spectrumView.Location = new Point(8, 30);
-        _spectrumView.Size = new Size(304, 94);
-        _spectrumView.SetSampleProvider(buffer =>
-            _manager.Playback.TryReadSpectrum(buffer, out int sampleRate) ? sampleRate : 0);
-
-        _spectrumPanel.Controls.Add(_spectrumTitle);
-        _spectrumPanel.Controls.Add(_spectrumView);
-
-        var host = new ToolStripControlHost(_spectrumPanel)
-        {
-            Margin = Padding.Empty,
-            Padding = Padding.Empty,
-            AutoSize = false,
-            Size = _spectrumPanel.Size
-        };
-        _spectrumMenu.Items.Add(host);
-        _spectrumMenu.Padding = Padding.Empty;
-        _spectrumMenu.ShowImageMargin = false;
-        _spectrumMenu.Opening += (_, _) => _spectrumView.Start();
-        _spectrumMenu.Closed += (_, _) => _spectrumView.Stop();
-    }
-
     private void WireEvents()
     {
         _btnPrev.Click += (_, _) => _manager.Prev();
@@ -453,14 +411,6 @@ public sealed class PdfAudioPlayerBar : UserControl
         };
 
         _btnMore.Click += (_, _) => _loopMenu.Show(_btnMore, new Point(0, _btnMore.Height));
-
-        _btnSpectrum.Click += (_, _) =>
-        {
-            // 面板向上弹出，避免超出窗口底部
-            int height = _spectrumMenu.GetPreferredSize(Size.Empty).Height;
-            if (height < 20) height = _spectrumPanel.Height + 8;
-            _spectrumMenu.Show(_btnSpectrum, new Point(0, -height));
-        };
 
         _btnMark.Click += async (_, _) => await OnMarkClickedAsync();
         _btnMarkAgain.Click += (_, _) => StartMarkRecording();
@@ -845,9 +795,8 @@ public sealed class PdfAudioPlayerBar : UserControl
         var state = _markSession?.State ?? ShadowingMarkState.Idle;
 
         // 会话期间隐藏常驻设置，给时间戳与结束按钮让位，避免窄窗口裁切
-        foreach (var button in new[] { _btnMore, _btnFollow, _btnVolume, _btnSpeed, _btnSpectrum })
+        foreach (var button in new[] { _btnMore, _btnFollow, _btnVolume, _btnSpeed })
             button.Visible = !active;
-        if (active) _spectrumMenu.Close();
 
         _labelMark.Visible = active;
         _btnMarkAgain.Visible = active && state == ShadowingMarkState.Marked
@@ -1059,7 +1008,7 @@ public sealed class PdfAudioPlayerBar : UserControl
         _labelPage.BackColor = palette.SurfaceAlt;
         _labelPage.ForeColor = palette.Muted;
 
-        foreach (var button in new[] { _btnPrev, _btnPlay, _btnNext, _btnSpeed, _btnVolume, _btnFollow, _btnMore, _btnSpectrum })
+        foreach (var button in new[] { _btnPrev, _btnPlay, _btnNext, _btnSpeed, _btnVolume, _btnFollow, _btnMore })
         {
             button.BackColor = palette.SurfaceAlt;
             button.ForeColor = palette.Text;
@@ -1087,11 +1036,6 @@ public sealed class PdfAudioPlayerBar : UserControl
         _speedSlider.BackColor = palette.Surface;
         _speedTitle.ForeColor = palette.Text;
         _speedValue.ForeColor = palette.Muted;
-        _spectrumMenu.BackColor = palette.Surface;
-        _spectrumMenu.ForeColor = palette.Text;
-        _spectrumPanel.BackColor = palette.Surface;
-        _spectrumView.BackColor = palette.Surface;
-        _spectrumTitle.ForeColor = palette.Text;
         UpdateFollowButton();
         UpdateSpeedButton();
         UpdateLoopChecks();
@@ -1172,8 +1116,6 @@ public sealed class PdfAudioPlayerBar : UserControl
             _tooltip.Dispose();
             _loopMenu.Dispose();
             _speedMenu.Dispose();
-            _spectrumMenu.Dispose();
-            _spectrumView.Dispose();
         }
         base.Dispose(disposing);
     }

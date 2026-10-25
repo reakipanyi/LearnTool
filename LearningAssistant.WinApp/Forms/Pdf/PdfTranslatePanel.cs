@@ -228,17 +228,16 @@ public partial class PdfTranslatePanel : UserControl
         LayoutBottomRows();
     }
 
-    /// <summary>底部三行按可用宽度换行，并按换行后的实际行数分配行高，避免按钮被裁掉。</summary>
+    /// <summary>底部两行按可用宽度换行，并按换行后的实际行数分配行高；操作按钮行固定为三等分。</summary>
     private void LayoutBottomRows()
     {
-        actions.WrapContents = true;
         extras.WrapContents = true;
         options.WrapContents = true;
 
         int available = root.ClientSize.Width - root.Padding.Horizontal;
         if (available <= 0) available = root.Width - root.Padding.Horizontal;
 
-        SetRowHeight(2, Math.Max(38, MeasureFlowHeight(actions, available) + 2));
+        SetRowHeight(2, 38);
         SetRowHeight(3, Math.Max(36, MeasureFlowHeight(extras, available) + 2));
         SetRowHeight(4, Math.Max(30, MeasureFlowHeight(options, available) + 2));
     }
