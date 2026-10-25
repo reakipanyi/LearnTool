@@ -298,9 +298,6 @@
 		<Compile Update="Forms\Pdf\SentenceShadowingForm.cs">
 			<SubType>Form</SubType>
 		</Compile>
-		<Compile Update="Forms\Pdf\PdfShadowingPanel.cs">
-			<SubType>UserControl</SubType>
-		</Compile>
 		<Compile Update="Forms\Pdf\PdfTranslatePanel.cs">
 			<SubType>UserControl</SubType>
 		</Compile>

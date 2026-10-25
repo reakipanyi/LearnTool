@@ -57,14 +57,13 @@ namespace LearningAssistant.Forms.Pdf
         private PdfAudioPlayerBar? _audioPlayerBar;
         private Panel? _recordingHost;
         private bool _recordingServiceAvailable;
-        // 阶段2：音频内容从顶层页签迁入右侧抽屉（配套音频 / 整页录音 / 句子跟读）
+        // 阶段2：音频内容从顶层页签迁入右侧抽屉（配套音频 / 整页录音 / 翻译）
         private Panel? _audioDrawer;
         private Panel? _audioDrawerContent;
         private Label? _audioDrawerTitle;
         private Label? _audioDrawerSubtitle;
         private Button? _audioDrawerAudioButton;
         private Button? _audioDrawerRecordingButton;
-        private Button? _audioDrawerShadowingButton;
         private Button? _audioDrawerTranslateButton;
         private Label? _audioUnavailableLabel;
         private Label? _recordingUnavailableLabel;
@@ -77,8 +76,6 @@ namespace LearningAssistant.Forms.Pdf
         private SidebarHeaderBar? _highlightHeader;
         private PdfHighlightPanel? _highlightPanel;
         private Panel? _highlightEmptyHost;
-        private Label? _shadowingSummary;
-        private PdfShadowingPanel? _shadowingPanel;
         private readonly IAudioRecorderService? _audioRecorderService;
 
         private readonly Pen _pen = new Pen(Color.Red, 4f);
@@ -88,7 +85,6 @@ namespace LearningAssistant.Forms.Pdf
         {
             Audio,
             Recording,
-            Shadowing,
             Translate
         }
 
@@ -6876,7 +6872,7 @@ namespace LearningAssistant.Forms.Pdf
             OpenShadowingWindow();
         }
 
-        /// <summary>翻译页「句子跟读」：与「打开配套音频」一致，弹出可关闭的右侧抽屉。</summary>
+        /// <summary>翻译面板「句子跟读」：用当前页原文直接打开分句跟读窗口。</summary>
         private void ButtonTranslateShadowing_Click()
         {
             if (CountReadableSentences(_textBoxOriginal?.Text) == 0)
@@ -6885,7 +6881,7 @@ namespace LearningAssistant.Forms.Pdf
                 return;
             }
 
-            ShowAudioDrawer(AudioDrawerMode.Shadowing);
+            OpenShadowingWindow();
         }
 
         private static void StyleSidebarButton(Button? button, string text, int width, int height = 30)
@@ -7137,14 +7133,12 @@ namespace LearningAssistant.Forms.Pdf
         }
 
         /// <summary>
-        /// 构建右侧音频抽屉：配套音频 / 整页录音 / 句子跟读共用一个内容区，
+        /// 构建右侧侧栏抽屉：翻译 / 配套音频 / 整页录音共用一个内容区，
         /// 不再占用顶层页签，也不再使用「音频」内部的二级页签。
         /// </summary>
         private void BuildAudioDrawer()
         {
             if (_audioDrawer != null) return;
-
-            BuildShadowingPanel();
 
             _audioDrawer = new Panel
             {
@@ -7253,31 +7247,27 @@ namespace LearningAssistant.Forms.Pdf
             var modeBar = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 4,
+                ColumnCount = 3,
                 RowCount = 1,
                 Margin = Padding.Empty,
                 Padding = new Padding(10, 4, 10, 4)
             };
-            for (int i = 0; i < 4; i++)
-                modeBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            for (int i = 0; i < 3; i++)
+                modeBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
 
             _audioDrawerTranslateButton = CreateAudioDrawerModeButton("翻译");
             _audioDrawerAudioButton = CreateAudioDrawerModeButton("配套音频");
             _audioDrawerRecordingButton = CreateAudioDrawerModeButton("整页录音");
-            _audioDrawerShadowingButton = CreateAudioDrawerModeButton("句子跟读");
             _audioDrawerTranslateButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Translate);
             _audioDrawerAudioButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Audio);
             _audioDrawerRecordingButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Recording);
-            _audioDrawerShadowingButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Shadowing);
             _audioDrawerTranslateButton.Margin = new Padding(0, 0, 4, 0);
             _audioDrawerAudioButton.Margin = new Padding(2, 0, 2, 0);
-            _audioDrawerRecordingButton.Margin = new Padding(2, 0, 2, 0);
-            _audioDrawerShadowingButton.Margin = new Padding(4, 0, 0, 0);
+            _audioDrawerRecordingButton.Margin = new Padding(4, 0, 0, 0);
 
             modeBar.Controls.Add(_audioDrawerTranslateButton, 0, 0);
             modeBar.Controls.Add(_audioDrawerAudioButton, 1, 0);
             modeBar.Controls.Add(_audioDrawerRecordingButton, 2, 0);
-            modeBar.Controls.Add(_audioDrawerShadowingButton, 3, 0);
 
             header.Controls.Add(titleRow, 0, 0);
             header.Controls.Add(modeBar, 0, 1);
@@ -7327,9 +7317,6 @@ namespace LearningAssistant.Forms.Pdf
                     "录音服务不可用，暂不能整页录音。");
                 _recordingHost!.Controls.Add(_recordingUnavailableLabel);
             }
-
-            if (_shadowingPanel != null)
-                _audioDrawerContent.Controls.Add(_shadowingPanel);
 
             if (_translatePanel != null)
             {
@@ -7388,7 +7375,6 @@ namespace LearningAssistant.Forms.Pdf
             if (_audioPanel != null) _audioPanel.Visible = mode == AudioDrawerMode.Audio;
             if (_audioUnavailableLabel != null) _audioUnavailableLabel.Visible = mode == AudioDrawerMode.Audio;
             if (_recordingHost != null) _recordingHost.Visible = mode == AudioDrawerMode.Recording;
-            if (_shadowingPanel != null) _shadowingPanel.Visible = mode == AudioDrawerMode.Shadowing;
             if (_translatePanel != null) _translatePanel.Visible = mode == AudioDrawerMode.Translate;
 
             switch (mode)
@@ -7399,9 +7385,6 @@ namespace LearningAssistant.Forms.Pdf
                 case AudioDrawerMode.Recording:
                     _audioManager?.RefreshTimestampList();
                     _audioManager?.RefreshSummaryList();
-                    break;
-                case AudioDrawerMode.Shadowing:
-                    UpdateShadowingSummary();
                     break;
                 case AudioDrawerMode.Translate:
                     UpdateTranslateHeaderStatus();
@@ -7419,7 +7402,6 @@ namespace LearningAssistant.Forms.Pdf
             _audioDrawerTitle.Text = _audioDrawerMode switch
             {
                 AudioDrawerMode.Recording => "整页录音",
-                AudioDrawerMode.Shadowing => "句子跟读",
                 AudioDrawerMode.Translate => "翻译",
                 _ => "配套音频"
             };
@@ -7433,13 +7415,12 @@ namespace LearningAssistant.Forms.Pdf
         private void UpdateAudioDrawerModeStyles()
         {
             if (_audioDrawerAudioButton == null || _audioDrawerRecordingButton == null
-                || _audioDrawerShadowingButton == null || _audioDrawerTranslateButton == null) return;
+                || _audioDrawerTranslateButton == null) return;
 
             var palette = PdfSidebarTheme.PaletteFor(this);
             StyleAudioDrawerModeButton(_audioDrawerTranslateButton, _audioDrawerMode == AudioDrawerMode.Translate, palette);
             StyleAudioDrawerModeButton(_audioDrawerAudioButton, _audioDrawerMode == AudioDrawerMode.Audio, palette);
             StyleAudioDrawerModeButton(_audioDrawerRecordingButton, _audioDrawerMode == AudioDrawerMode.Recording, palette);
-            StyleAudioDrawerModeButton(_audioDrawerShadowingButton, _audioDrawerMode == AudioDrawerMode.Shadowing, palette);
         }
 
         private static void StyleAudioDrawerModeButton(Button button, bool selected, PdfSidebarPalette palette)
@@ -7461,40 +7442,6 @@ namespace LearningAssistant.Forms.Pdf
             int x = sidebarScreen.X - formScreen.X + _tabControlLeft.Width - width;
             int y = sidebarScreen.Y - formScreen.Y;
             _audioDrawer.Bounds = new Rectangle(x, y, width, _tabControlLeft.Height);
-        }
-
-        /// <summary>创建跟读内容面板；不再挂到「音频」子页，仅由抽屉按需显示。</summary>
-        private void BuildShadowingPanel()
-        {
-            if (_shadowingPanel != null) return;
-
-            _shadowingPanel = new PdfShadowingPanel
-            {
-                Dock = DockStyle.Fill,
-                Visible = false
-            };
-            _shadowingPanel.OpenButton.Click += (_, _) => OpenShadowingWindow();
-            _shadowingSummary = _shadowingPanel.SummaryLabel;
-            UpdateShadowingSummary();
-        }
-
-        private void UpdateShadowingSummary()
-        {
-            if (_shadowingSummary == null) return;
-
-            string text = _textBoxOriginal?.Text?.Trim() ?? string.Empty;
-            if (text.Length == 0)
-            {
-                _shadowingSummary.Text = "本页还没有识别到原文，请先在翻译页执行 OCR 或翻译。";
-                _shadowingSummary.ForeColor = PdfSidebarTheme.Muted;
-                _shadowingSummary.Tag = "muted";
-                return;
-            }
-
-            var sentences = LearningAssistant.Services.Shadowing.SentenceSegmenter.Segment(text);
-            _shadowingSummary.Text = $"本页共 {sentences.Count} 句，可逐句跟读并记录参考分。";
-            _shadowingSummary.ForeColor = PdfSidebarTheme.Text;
-            _shadowingSummary.Tag = null;
         }
 
         private void OpenShadowingWindow()
