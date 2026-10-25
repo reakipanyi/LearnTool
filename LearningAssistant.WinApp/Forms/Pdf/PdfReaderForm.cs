@@ -1017,10 +1017,9 @@ namespace LearningAssistant.Forms.Pdf
                     return;
                 }
 
-                // 空格全局播放/暂停（有配套音频时）；无音频文档仍用空格翻页
+                // 空格固定为播放/暂停，不再参与翻页（翻页用 PageDown/→、PageUp/←）
                 if (e.KeyCode == Keys.Space && !e.Control && !e.Shift && !e.Alt
-                    && _audioTrackManager != null
-                    && (_audioTrackManager.Result?.Tracks.Count ?? 0) > 0)
+                    && _audioTrackManager != null)
                 {
                     _audioTrackManager.TogglePlayback();
                     e.Handled = e.SuppressKeyPress = true;
@@ -1060,7 +1059,6 @@ namespace LearningAssistant.Forms.Pdf
                         break;
                     case Keys.Right:
                     case Keys.PageDown:
-                    case Keys.Space:
                         _navigationManager?.NextPage();
                         e.Handled = true;
                         break;
@@ -1264,7 +1262,7 @@ namespace LearningAssistant.Forms.Pdf
             NavigateToPage(pageIndex);
         }
 
-        /// <summary>焦点是否在播放器或音频侧栏内；只有此范围才启用空格/方向键媒体快捷键。</summary>
+        /// <summary>焦点是否在播放器或音频侧栏内；只有此范围才启用方向键快退/快进。</summary>
         private bool IsMediaShortcutScope()
             => _audioPlayerBar?.ContainsFocus == true
                || _audioPanel?.ContainsFocus == true
