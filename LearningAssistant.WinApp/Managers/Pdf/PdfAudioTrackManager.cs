@@ -768,11 +768,36 @@ public class PdfAudioTrackManager : IDisposable
                 break;
         }
 
-        var track = _loadedTrack ?? CurrentPageTrack();
+        var track = _loadedTrack ?? CurrentPageTrack() ?? ResolvePlaybackFallback();
         if (track == null) return false;
         if (!IsLoaded(track)) Load(track);
         FireAndForget(_playback.PlayAsync(), "PlayAsync");
         return true;
+    }
+
+    /// <summary>
+    /// 播放按钮兜底：刚打开或切换文档时管理器可能还没有当前页码（档案异步加载完成会把页码重置为 -1），
+    /// 此时整篇模式取整篇音频，逐页模式取第一页已匹配曲目，避免点播放毫无反应。
+    /// </summary>
+    private AudioTrack? ResolvePlaybackFallback()
+    {
+        if (_result == null || _result.Tracks.Count == 0)
+            return null;
+
+        string? singleFile = _profile?.SingleAudioFile;
+        if (_profile?.MatchMode == PdfAudioMatchMode.SingleAudio
+            && !string.IsNullOrWhiteSpace(singleFile))
+        {
+            var single = _result.Tracks.FirstOrDefault(t =>
+                string.Equals(t.FilePath, singleFile, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(t.RelativePath, singleFile, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(t.FileName, Path.GetFileName(singleFile), StringComparison.OrdinalIgnoreCase));
+            if (single != null)
+                return single;
+        }
+
+        return _result.PageIndex.OrderBy(kv => kv.Key).Select(kv => kv.Value).FirstOrDefault()
+            ?? _result.Tracks[0];
     }
 
     /// <summary>幂等暂停：未在播放时不做任何事。</summary>
