@@ -52,7 +52,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonCollapseNav = new Button();
             _buttonExportAnnotationsAsImage = new Button();
             _toolbarGroupView = new Panel();
-            _trackBarZoom = new TrackBar();
+            _trackBarZoom = new PdfToolbarSlider();
             _buttonDualPage = new Button();
             _buttonResetView = new Button();
             _buttonZoomOut = new Button();
@@ -73,7 +73,7 @@ namespace LearningAssistant.Forms.Pdf
             _buttonOpenFolder = new Button();
             _buttonPrev = new Button();
             _buttonPrevSpread = new Button();
-            _progressBarPage = new ProgressBar();
+            _progressBarPage = new ProgressBarEx();
             _textBoxPage = new TextBox();
             _buttonNext = new Button();
             _buttonNextSpread = new Button();
@@ -163,7 +163,6 @@ namespace LearningAssistant.Forms.Pdf
             _toolbarGroupTools.SuspendLayout();
             panel2.SuspendLayout();
             _toolbarGroupView.SuspendLayout();
-            ((ISupportInitialize)_trackBarZoom).BeginInit();
             pnlPage.SuspendLayout();
             _panelAnnotationOptions.SuspendLayout();
             ((ISupportInitialize)_trackBarThickness).BeginInit();
@@ -429,16 +428,16 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // _trackBarZoom
             // 
-            _trackBarZoom.AutoSize = false;
-            _trackBarZoom.Location = new Point(37, 4);
+            _trackBarZoom.BackColor = System.Drawing.Color.Transparent;
+            _trackBarZoom.Cursor = Cursors.Hand;
+            _trackBarZoom.Location = new Point(37, 6);
             _trackBarZoom.Maximum = 400;
             _trackBarZoom.Minimum = 10;
             _trackBarZoom.Name = "_trackBarZoom";
-            _trackBarZoom.Size = new Size(100, 32);
+            _trackBarZoom.Size = new Size(100, 28);
             _trackBarZoom.TabIndex = 1;
-            _trackBarZoom.TickStyle = TickStyle.None;
             _trackBarZoom.Value = 100;
-            _trackBarZoom.Scroll += TrackBarZoom_Scroll;
+            _trackBarZoom.ValueChanged += TrackBarZoom_Scroll;
             // 
             // _buttonDualPage
             // 
@@ -715,14 +714,13 @@ namespace LearningAssistant.Forms.Pdf
             // 
             // _progressBarPage
             // 
-            _progressBarPage.Location = new Point(235, 7);
+            _progressBarPage.Location = new Point(235, 16);
             _progressBarPage.Maximum = 1;
-            _progressBarPage.Minimum = 1;
             _progressBarPage.Name = "_progressBarPage";
-            _progressBarPage.Size = new Size(106, 24);
-            _progressBarPage.Style = ProgressBarStyle.Continuous;
+            _progressBarPage.Size = new Size(106, 8);
             _progressBarPage.TabIndex = 4;
-            _progressBarPage.Value = 1;
+            // 未打开文档时不显示已填充的进度，避免工具栏出现一条满格品牌色
+            _progressBarPage.Value = 0;
             // 
             // _textBoxPage
             // 
@@ -1551,7 +1549,6 @@ namespace LearningAssistant.Forms.Pdf
             panel2.ResumeLayout(false);
             _toolbarGroupView.ResumeLayout(false);
             _toolbarGroupView.PerformLayout();
-            ((ISupportInitialize)_trackBarZoom).EndInit();
             pnlPage.ResumeLayout(false);
             pnlPage.PerformLayout();
             _panelAnnotationOptions.ResumeLayout(false);

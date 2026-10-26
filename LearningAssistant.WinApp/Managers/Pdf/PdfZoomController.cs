@@ -65,8 +65,9 @@ namespace LearningAssistant.Managers
             if (_form.ButtonLockView != null)
             {
                 _form.ButtonLockView.Text = _isLocked ? "🔒" : "🔓";
-                _form.ButtonLockView.BackColor = _isLocked ? Color.LightSalmon : Color.White;
             }
+            // 开启态统一交给窗体登记，这样夜间切换能按主题令牌重刷，不会残留日间浅紫
+            _form.ApplyLockViewButtonState(_isLocked);
             _form.TrackBarZoom.Enabled = !_isLocked;
         }
 

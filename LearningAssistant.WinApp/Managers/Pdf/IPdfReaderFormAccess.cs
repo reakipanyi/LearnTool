@@ -1,3 +1,4 @@
+using LearningAssistant.Common.UI;
 using LearningAssistant.Presenters;
 
 using LearningAssistant.Services.Pdf;
@@ -21,7 +22,7 @@ namespace LearningAssistant.Managers
         TextBox TextBoxOriginal { get; }
         TextBox TextBoxPage { get; }
         Label LabelZoom { get; }
-        TrackBar TrackBarZoom { get; }
+        PdfToolbarSlider TrackBarZoom { get; }
 
         Button? ButtonNightMode { get; }
         Button? ButtonLanguage { get; }
@@ -50,6 +51,9 @@ namespace LearningAssistant.Managers
         Panel? PageTransitionOverlay { get; }
         System.Windows.Forms.Timer? PageTransitionTimer { get; }
         Button? ButtonLockView { get; }
+
+        /// <summary>刷新工具栏“锁定视图”按钮的开启态配色（锁定 = 品牌柔底）</summary>
+        void ApplyLockViewButtonState(bool isLocked);
 
         Panel? StatusBar { get; }
         Label? StatusLabelLeft { get; }

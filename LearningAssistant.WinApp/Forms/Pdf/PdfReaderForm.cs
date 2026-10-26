@@ -182,13 +182,13 @@ namespace LearningAssistant.Forms.Pdf
         private Label _labelPageCount;
         private Button _buttonNext;
         private Button _buttonNextSpread;
-        private ProgressBar _progressBarPage;
+        private ProgressBarEx _progressBarPage;
         private Button _buttonNightMode;
         private Button _buttonTranslationToggle;
         private Button _buttonAskAi;
         private Button _buttonOpenFolder;
         private Label _labelZoom;
-        private TrackBar _trackBarZoom;
+        private PdfToolbarSlider _trackBarZoom;
         private BufferedTabControl _tabControlLeft;
         private TabPage _tabPageFiles;
         private Panel _panelLeftContainer;
@@ -605,6 +605,8 @@ namespace LearningAssistant.Forms.Pdf
             InitializeHighlightColorSwatches();
             InitializeToolbarButtonHoverEffects();
             InitializeAnnotationToolStrip();
+            // 进度条/缩放滑杆/页码输入框的配色与圆角（日间默认值，夜间切换时由 UpdateToolbarButtonColorsForNightMode 刷新）
+            ApplyToolbarControlTheme();
 
             // 画笔子类型按钮初始隐藏，仅在进入 Pen 模式后显示
             if (_buttonPenTypePencil != null) _buttonPenTypePencil.Visible = false;
@@ -1338,12 +1340,23 @@ namespace LearningAssistant.Forms.Pdf
 
         #region 工具栏颜色常量
 
-        private static readonly Color ToolbarHoverDay = Color.FromArgb(230, 230, 230);   // #e6e6e6
-        private static readonly Color ToolbarHoverNight = Color.FromArgb(60, 60, 60);     // #3c3c3c
+        private static readonly Color ToolbarHoverDay = Color.FromArgb(226, 232, 240);   // #e2e8f0
+        private static readonly Color ToolbarHoverNight = Color.FromArgb(58, 58, 58);    // #3a3a3a
         private static readonly Color ToolbarLeaveDay = Color.Transparent;
         private static readonly Color ToolbarLeaveNight = Color.FromArgb(45, 45, 45);     // #2d2d2d
-        private static readonly Color ToolbarPressedDay = Color.FromArgb(200, 200, 200);  // #c8c8c8
-        private static readonly Color ToolbarPressedNight = Color.FromArgb(42, 42, 42);   // #2a2a2a
+        private static readonly Color ToolbarPressedDay = Color.FromArgb(203, 213, 225);  // #cbd5e1
+        private static readonly Color ToolbarPressedNight = Color.FromArgb(38, 38, 38);   // #262626
+
+        // 图标与辅助文字色：中性石板色，避免纯黑/纯白的生硬对比
+        private static readonly Color ToolbarIconDay = Color.FromArgb(71, 85, 105);       // #475569
+        private static readonly Color ToolbarIconNight = Color.FromArgb(203, 213, 225);   // #cbd5e1
+        private static readonly Color ToolbarMutedDay = Color.FromArgb(100, 116, 139);    // #64748b
+        private static readonly Color ToolbarMutedNight = Color.FromArgb(148, 163, 184);  // #94a3b8
+        // 夜间“开启态”用浅紫图标：品牌色压在深紫柔底上对比度过低
+        private static readonly Color ToolbarBrandNight = Color.FromArgb(196, 181, 253);  // #c4b5fd
+
+        // 已开启的工具栏按钮（当前标注工具、双页模式等）：悬停与夜间配色需要跳过，保持品牌色开启态
+        private readonly HashSet<Button> _activeToolButtons = new();
 
         // 二级选项改为浮层后，工具栏只需容纳单行工具（一级图标条 + 视图/页码组 + 加载指示）
         private const int ToolbarSingleRowHeight = 58;
@@ -1362,7 +1375,7 @@ namespace LearningAssistant.Forms.Pdf
         {
             return new[]
             {
-                _buttonPrev, _buttonNext,
+                _buttonPrev, _buttonNext, _buttonPrevSpread, _buttonNextSpread, _buttonOpenFolder,
                 _buttonZoomOut, _buttonZoomIn, _buttonResetView,
                 _buttonRotate, _buttonLockView, _buttonNightMode,
                 _buttonDualPage, _buttonFullscreen,
@@ -1371,7 +1384,9 @@ namespace LearningAssistant.Forms.Pdf
                 _buttonMosaicMode, _buttonTextMode, _buttonStrikethroughMode,
                 _buttonUndoAnnotation, _buttonClearAllAnnotations, _buttonDashStyle,
                 _buttonToggleAnnotationLayer, _buttonChecklistMode, _buttonImageEmbedMode,
-                _buttonSpotlightMode, _buttonMagnifierMode, _buttonAskAi, _buttonTranslationToggle, _buttonCollapseNav
+                _buttonExportAnnotationsAsImage,
+                _buttonSpotlightMode, _buttonMagnifierMode, _buttonAskAi, _buttonTranslationToggle,
+                _buttonCollapseNav, _buttonMoreTools
             };
         }
 
@@ -1381,6 +1396,7 @@ namespace LearningAssistant.Forms.Pdf
             {
                 if (button != null)
                 {
+                    ApplyToolbarButtonChrome(button);
                     button.MouseEnter += ToolbarButton_MouseEnter;
                     button.MouseLeave += ToolbarButton_MouseLeave;
                     button.MouseDown += ToolbarButton_MouseDown;
@@ -1389,43 +1405,99 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
-        private void ToolbarButton_MouseEnter(object? sender, EventArgs e)
+        /// <summary>
+        /// 工具栏图标按钮统一样式：去掉每个按钮的 1px 灰边框，改为透明底 + 圆角悬停底色，
+        /// 图标色统一为中性石板色；选中态由 <see cref="UpdateToolButtonState"/> 叠加品牌色。
+        /// </summary>
+        private void ApplyToolbarButtonChrome(Button button)
+        {
+            button.FlatStyle = FlatStyle.Flat;
+            button.FlatAppearance.BorderSize = 0;
+            button.FlatAppearance.BorderColor = ToolbarLeaveColor;
+            button.FlatAppearance.MouseOverBackColor = Color.Transparent;
+            button.FlatAppearance.MouseDownBackColor = Color.Transparent;
+            button.UseVisualStyleBackColor = false;
+            button.BackColor = ToolbarButtonSurface(button);
+            button.ForeColor = ToolbarIconColor;
+            button.Cursor = Cursors.Hand;
+
+            button.SizeChanged -= ToolbarButton_SizeChanged;
+            button.SizeChanged += ToolbarButton_SizeChanged;
+            UpdateToolbarButtonRegion(button);
+
+            // AI 入口常驻品牌强调色：登记为“开启态”，悬停与夜间批量配色都会跳过它
+            if (ReferenceEquals(button, _buttonAskAi))
+            {
+                _activeToolButtons.Add(button);
+                button.BackColor = PdfSidebarTheme.PaletteFor(button).BrandSoft;
+                button.ForeColor = ToolbarBrandTextColor;
+            }
+        }
+
+        private void ToolbarButton_SizeChanged(object? sender, EventArgs e)
         {
             if (sender is Button button)
+                UpdateToolbarButtonRegion(button);
+        }
+
+        /// <summary>
+        /// 给按钮套 6px 圆角区域，悬停/按下底色才不会显得方正。
+        /// </summary>
+        private static void UpdateToolbarButtonRegion(Button button)
+        {
+            if (button.Width <= 8 || button.Height <= 8) return;
+
+            using var path = GdiHelper.CreateRoundedRectPath(new Rectangle(0, 0, button.Width, button.Height), 6);
+            var oldRegion = button.Region;
+            button.Region = new Region(path);
+            oldRegion?.Dispose();
+        }
+
+        private Color ToolbarLeaveColor => (_nightModeManager?.IsNightMode ?? false) ? ToolbarLeaveNight : ToolbarLeaveDay;
+        private Color ToolbarIconColor => (_nightModeManager?.IsNightMode ?? false) ? ToolbarIconNight : ToolbarIconDay;
+        private Color ToolbarHoverColor => (_nightModeManager?.IsNightMode ?? false) ? ToolbarHoverNight : ToolbarHoverDay;
+        private Color ToolbarPressedColor => (_nightModeManager?.IsNightMode ?? false) ? ToolbarPressedNight : ToolbarPressedDay;
+        private Color ToolbarBrandTextColor => (_nightModeManager?.IsNightMode ?? false) ? ToolbarBrandNight : PdfSidebarTheme.Brand;
+
+        /// <summary>
+        /// 按钮未开启时的底色。二级选项浮层是固定白底且不参与窗体夜间主题，
+        /// 其内部按钮保持透明，避免夜间配色在白底上留下深色方块。
+        /// </summary>
+        private Color ToolbarButtonSurface(Button button)
+            => IsInAnnotationOptionsFlyout(button) ? ToolbarLeaveDay : ToolbarLeaveColor;
+
+        private bool IsInAnnotationOptionsFlyout(Button button)
+            => _annotationOptionsHost != null && ReferenceEquals(button.Parent?.Parent, _annotationOptionsHost);
+
+        private void ToolbarButton_MouseEnter(object? sender, EventArgs e)
+        {
+            if (sender is Button button && !_activeToolButtons.Contains(button))
             {
-                if (button.FlatAppearance.BorderSize >= 2) return;
-                bool isNightMode = _nightModeManager?.IsNightMode ?? false;
-                button.BackColor = isNightMode ? ToolbarHoverNight : ToolbarHoverDay;
+                button.BackColor = ToolbarHoverColor;
             }
         }
 
         private void ToolbarButton_MouseLeave(object? sender, EventArgs e)
         {
-            if (sender is Button button)
+            if (sender is Button button && !_activeToolButtons.Contains(button))
             {
-                if (button.FlatAppearance.BorderSize >= 2) return;
-                bool isNightMode = _nightModeManager?.IsNightMode ?? false;
-                button.BackColor = isNightMode ? ToolbarLeaveNight : ToolbarLeaveDay;
+                button.BackColor = ToolbarButtonSurface(button);
             }
         }
 
         private void ToolbarButton_MouseDown(object? sender, MouseEventArgs e)
         {
-            if (sender is Button button && e.Button == MouseButtons.Left)
+            if (sender is Button button && e.Button == MouseButtons.Left && !_activeToolButtons.Contains(button))
             {
-                if (button.FlatAppearance.BorderSize >= 2) return;
-                bool isNightMode = _nightModeManager?.IsNightMode ?? false;
-                button.BackColor = isNightMode ? ToolbarPressedNight : ToolbarPressedDay;
+                button.BackColor = ToolbarPressedColor;
             }
         }
 
         private void ToolbarButton_MouseUp(object? sender, MouseEventArgs e)
         {
-            if (sender is Button button && e.Button == MouseButtons.Left)
+            if (sender is Button button && e.Button == MouseButtons.Left && !_activeToolButtons.Contains(button))
             {
-                if (button.FlatAppearance.BorderSize >= 2) return;
-                bool isNightMode = _nightModeManager?.IsNightMode ?? false;
-                button.BackColor = isNightMode ? ToolbarHoverNight : ToolbarHoverDay;
+                button.BackColor = ToolbarHoverColor;
             }
         }
 
@@ -1497,7 +1569,7 @@ namespace LearningAssistant.Forms.Pdf
         public TextBox TextBoxOriginal => _textBoxOriginal;
         public TextBox TextBoxPage => _textBoxPage;
         public Label LabelZoom => _labelZoom;
-        public TrackBar TrackBarZoom => _trackBarZoom;
+        public PdfToolbarSlider TrackBarZoom => _trackBarZoom;
 
         public Button? ButtonNightMode => _buttonNightMode;
         public Button? ButtonAskAi => _buttonAskAi;
@@ -1542,6 +1614,11 @@ namespace LearningAssistant.Forms.Pdf
         public Panel? PageTransitionOverlay => _pageTransitionOverlay;
         public System.Windows.Forms.Timer? PageTransitionTimer => _pageTransitionTimer;
         public Button? ButtonLockView => _buttonLockView;
+
+        /// <summary>
+        /// 锁定视图按钮走统一的开启态登记，锁定/解锁与夜间切换后的配色保持一致。
+        /// </summary>
+        public void ApplyLockViewButtonState(bool isLocked) => UpdateToolButtonState(_buttonLockView, isLocked);
 
         public Panel? StatusBar => _statusBar;
         public Label? StatusLabelLeft => _statusLabelLeft;
@@ -2656,7 +2733,7 @@ namespace LearningAssistant.Forms.Pdf
         public void SetPageCount(int count)
         {
             _labelPageCount.Text = $"/ {count}";
-            // 空文档或加载失败时 count 可能为 0，进度条 Minimum 为 1，Maximum 不得小于 Minimum
+            // 空文档或加载失败时 count 可能为 0，进度条 Maximum 至少为 1
             _progressBarPage.Maximum = Math.Max(1, count);
             UpdateStatusBar();
         }
@@ -2679,8 +2756,8 @@ namespace LearningAssistant.Forms.Pdf
             _audioPlayerBar?.RefreshPage();
             _audioManager?.RefreshTimestampList();
             _textBoxPage.Text = (pageIndex + 1).ToString();
-            // 页码可能超出进度条范围（如空文档或页码未同步），避免 Value 越界抛异常
-            _progressBarPage.Value = Math.Clamp(pageIndex + 1, _progressBarPage.Minimum, _progressBarPage.Maximum);
+            // 页码可能超出进度条范围（如空文档或页码未同步），避免 Value 越界
+            _progressBarPage.Value = Math.Clamp(pageIndex + 1, 1, Math.Max(1, (int)_progressBarPage.Maximum));
             StartPageTransition(isForward);
             UpdateStatusBar();
             // 翻回有译文缓存的页面时自动回显上次译文
@@ -4689,15 +4766,16 @@ namespace LearningAssistant.Forms.Pdf
 
         private void ToolbarGroupTools_Paint(object? sender, PaintEventArgs e)
         {
-            // 绘制按钮组间分隔线：X 坐标随重排结果动态变化，不再使用固定值
+            // 绘制按钮组间分隔线：X 坐标随重排结果动态变化，不再使用固定值。
+            // 短而淡的竖线，避免把工具栏切成一格一格的“表格感”
             bool isNightMode = _nightModeManager?.IsNightMode ?? false;
-            Color sepColor = isNightMode ? Color.FromArgb(60, 60, 60) : Color.FromArgb(224, 224, 224);
+            Color sepColor = isNightMode ? Color.FromArgb(62, 62, 62) : Color.FromArgb(226, 232, 240);
             using var pen = new Pen(sepColor, 1);
 
             if (_toolbarViewSepX > 0)
-                e.Graphics.DrawLine(pen, _toolbarViewSepX, 6, _toolbarViewSepX, 34);
+                e.Graphics.DrawLine(pen, _toolbarViewSepX, 8, _toolbarViewSepX, 32);
             if (_toolbarPageSepX > 0)
-                e.Graphics.DrawLine(pen, _toolbarPageSepX, 6, _toolbarPageSepX, 34);
+                e.Graphics.DrawLine(pen, _toolbarPageSepX, 8, _toolbarPageSepX, 32);
         }
 
         private void ButtonTextMode_Click(object? sender, EventArgs e)
@@ -5101,14 +5179,14 @@ namespace LearningAssistant.Forms.Pdf
                 if (_labelPageCount != null) _labelPageCount.Location = new Point(154, 11);
                 if (_buttonNextSpread != null) _buttonNextSpread.Location = new Point(192, 3);
                 if (_buttonNext != null) _buttonNext.Location = new Point(226, 3);
-                if (_progressBarPage != null) _progressBarPage.Location = new Point(264, 7);
+                if (_progressBarPage != null) _progressBarPage.Location = new Point(264, 16);
             }
             else
             {
                 if (_textBoxPage != null) _textBoxPage.Location = new Point(74, 7);
                 if (_labelPageCount != null) _labelPageCount.Location = new Point(120, 11);
                 if (_buttonNext != null) _buttonNext.Location = new Point(171, 3);
-                if (_progressBarPage != null) _progressBarPage.Location = new Point(211, 7);
+                if (_progressBarPage != null) _progressBarPage.Location = new Point(211, 16);
             }
         }
 
@@ -5132,7 +5210,7 @@ namespace LearningAssistant.Forms.Pdf
 
             if (!compact)
             {
-                if (_trackBarZoom != null) _trackBarZoom.Location = new Point(37, 4);
+                if (_trackBarZoom != null) _trackBarZoom.Location = new Point(37, 6);
                 if (_labelZoom != null) _labelZoom.Location = new Point(141, 12);
             }
 
@@ -5824,23 +5902,30 @@ namespace LearningAssistant.Forms.Pdf
             UpdateStatusBar();
         }
 
+        /// <summary>
+        /// 切换工具栏按钮的“开启”态：品牌柔底 + 品牌色图标，替代原先的 2px 蓝色边框。
+        /// 开启态同时登记到 <see cref="_activeToolButtons"/>，供悬停/夜间配色跳过。
+        /// </summary>
         private void UpdateToolButtonState(Button? button, bool isActive)
         {
             if (button == null) return;
+
+            if (isActive) _activeToolButtons.Add(button);
+            else _activeToolButtons.Remove(button);
+
+            var palette = PdfSidebarTheme.PaletteFor(button);
+            button.FlatAppearance.BorderSize = 0;
+
             if (isActive)
             {
-                // 选中态：浅蓝背景 + 品牌色边框，类似参考图片的 active 风格
-                button.BackColor = Color.FromArgb(230, 244, 255);
-                button.FlatAppearance.BorderColor = Color.FromArgb(64, 150, 255);
-                button.FlatAppearance.BorderSize = 2;
+                button.BackColor = palette.BrandSoft;
+                button.ForeColor = ToolbarBrandTextColor;
                 button.Font = new Font(button.Font, FontStyle.Bold);
             }
             else
             {
-                // 非选中态：透明背景 + 浅灰边框
-                button.BackColor = Color.Transparent;
-                button.FlatAppearance.BorderColor = Color.FromArgb(217, 217, 217);
-                button.FlatAppearance.BorderSize = 1;
+                button.BackColor = ToolbarButtonSurface(button);
+                button.ForeColor = ToolbarIconColor;
                 button.Font = new Font(button.Font, FontStyle.Regular);
             }
         }
@@ -5952,11 +6037,7 @@ namespace LearningAssistant.Forms.Pdf
         private void ButtonDualPage_Click(object? sender, EventArgs e)
         {
             _isDualPage = !_isDualPage;
-            if (_buttonDualPage != null)
-            {
-                _buttonDualPage.BackColor = _isDualPage ? Color.FromArgb(230, 244, 255) : Color.White;
-                _buttonDualPage.FlatAppearance.BorderColor = _isDualPage ? Color.FromArgb(64, 150, 255) : Color.FromArgb(217, 217, 217);
-            }
+            UpdateToolButtonState(_buttonDualPage, _isDualPage);
             UpdateStatusBar();
             // 双页模式下页码组需要额外容纳跨页按钮，重新排布工具栏
             LayoutAnnotationToolStrip();
@@ -6028,21 +6109,65 @@ namespace LearningAssistant.Forms.Pdf
 
             foreach (var button in GetAllToolbarButtons())
             {
-                if (button != null)
-                {
-                    if (button.FlatAppearance.BorderSize >= 2) continue;
-                    button.BackColor = isNightMode ? ToolbarLeaveNight : ToolbarLeaveDay;
-                }
+                if (button == null || _activeToolButtons.Contains(button)) continue;
+
+                button.BackColor = ToolbarButtonSurface(button);
+                button.ForeColor = isNightMode ? ToolbarIconNight : ToolbarIconDay;
             }
 
-            // 折叠按钮文字颜色
+            // 折叠按钮文字颜色（较窄的竖条，用更柔和的灰）
             if (_buttonCollapseNav != null)
             {
-                _buttonCollapseNav.ForeColor = isNightMode ? Color.FromArgb(200, 200, 200) : Color.FromArgb(80, 80, 80);
+                _buttonCollapseNav.ForeColor = isNightMode ? ToolbarMutedNight : ToolbarMutedDay;
             }
+
+            ApplyToolbarControlTheme();
+
+            // 分隔线颜色随主题变化，需重绘整个工具条
+            _toolbarGroupTools?.Invalidate();
 
             // 自绘页签需要显式重绘，否则主题切换后仍保留旧底色
             _tabControlLeft?.Invalidate();
+        }
+
+        /// <summary>
+        /// 同步工具栏中非按钮控件的配色：页码进度条、缩放滑杆、页码输入框与百分比/总页数文字。
+        /// </summary>
+        private void ApplyToolbarControlTheme()
+        {
+            bool isNightMode = _nightModeManager?.IsNightMode ?? false;
+
+            if (_progressBarPage != null)
+            {
+                _progressBarPage.StartColor = PdfSidebarTheme.Brand;
+                _progressBarPage.EndColor = Color.FromArgb(139, 92, 246);
+                _progressBarPage.BackColor2 = isNightMode ? Color.FromArgb(58, 58, 58) : Color.FromArgb(226, 232, 240);
+                _progressBarPage.CornerRadius = Math.Max(2, _progressBarPage.Height / 2);
+                _progressBarPage.Invalidate();
+            }
+
+            _trackBarZoom?.Invalidate();
+
+            if (_labelZoom != null)
+                _labelZoom.ForeColor = isNightMode ? ToolbarMutedNight : ToolbarMutedDay;
+
+            if (_labelPageCount != null)
+                _labelPageCount.ForeColor = isNightMode ? ToolbarMutedNight : ToolbarMutedDay;
+
+            if (_textBoxPage != null)
+            {
+                _textBoxPage.BackColor = isNightMode ? Color.FromArgb(45, 45, 45) : Color.White;
+                _textBoxPage.ForeColor = isNightMode ? Color.FromArgb(226, 232, 240) : Color.FromArgb(30, 41, 59);
+            }
+
+            // 开启态按钮（当前工具、双页、翻译、AI 入口）按新主题重取品牌柔底，
+            // 避免夜间模式下残留日间的浅紫色块
+            foreach (var button in _activeToolButtons)
+            {
+                var palette = PdfSidebarTheme.PaletteFor(button);
+                button.BackColor = palette.BrandSoft;
+                button.ForeColor = ToolbarBrandTextColor;
+            }
         }
 
         private void ButtonAskAi_Click(object? sender, EventArgs e)
@@ -6075,11 +6200,7 @@ namespace LearningAssistant.Forms.Pdf
         private void ButtonTranslationToggle_Click(object? sender, EventArgs e)
         {
             _isTranslationEnabled = !_isTranslationEnabled;
-            if (_buttonTranslationToggle != null)
-            {
-                _buttonTranslationToggle.BackColor = _isTranslationEnabled ? Color.FromArgb(230, 244, 255) : Color.Transparent;
-                _buttonTranslationToggle.FlatAppearance.BorderColor = _isTranslationEnabled ? Color.FromArgb(64, 150, 255) : Color.FromArgb(217, 217, 217);
-            }
+            UpdateToolButtonState(_buttonTranslationToggle, _isTranslationEnabled);
             TranslateClicked?.Invoke(this, EventArgs.Empty);
         }
 

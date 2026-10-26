@@ -102,15 +102,20 @@ namespace LearningAssistant.Managers
         private void UpdateButtonNightModeColor(Button? button, bool isNightMode)
         {
             if (button == null) return;
-            button.BackColor = isNightMode ? Color.FromArgb(45, 45, 45) : Color.White;
-            button.ForeColor = isNightMode ? Color.White : Color.Black;
+
+            // 与工具栏其它图标按钮一致：透明底 + 中性图标色，不再是一块白底方块
+            button.BackColor = Color.Transparent;
+            button.ForeColor = isNightMode ? Color.FromArgb(203, 213, 225) : Color.FromArgb(71, 85, 105);
         }
 
         private void UpdateButtonAiColor(Button? button, bool isNightMode)
         {
             if (button == null) return;
-            button.BackColor = Color.FromArgb(0, 120, 215);
-            button.ForeColor = Color.White;
+
+            // AI 入口保留为强调色，但改成品牌柔底 + 品牌色图标，避免整条工具栏出现唯一的蓝色实心块。
+            // 这里用固定色而不查主题令牌：ApplyNightMode 在登记窗口夜间状态之前调用本方法。
+            button.BackColor = isNightMode ? Color.FromArgb(60, 52, 110) : Color.FromArgb(237, 233, 254);
+            button.ForeColor = isNightMode ? Color.FromArgb(196, 181, 253) : Color.FromArgb(108, 92, 231);
         }
 
         private void ApplyNightModeToTabPageTranslate()
