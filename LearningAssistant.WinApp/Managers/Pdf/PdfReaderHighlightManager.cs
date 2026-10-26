@@ -465,7 +465,7 @@ namespace LearningAssistant.Managers
 
         /// <summary>
         /// 把 OCR 识别文本同步到原文面板，并在需要时触发自动翻译/朗读。
-        /// 自动翻译的译文会回写到高亮实体，避免下次选中时重复翻译。
+        /// 选中高亮后立即翻译：译文显示在顶部译条、回写到高亮实体，并按“文件-页码-OCR文本”缓存。
         /// </summary>
         private async Task SyncOcrTextToPanelAsync(string pdfPath, PdfHighlight highlight, string ocrText)
         {
@@ -473,36 +473,72 @@ namespace LearningAssistant.Managers
 
             _form.TextBoxOriginal.Text = ocrText;
 
-            if (_form.AutoTranslateAfterOcr)
-            {
-                string? translation = null;
-                if (_form.Presenter != null)
-                {
-                    try
-                    {
-                        translation = await _form.Presenter.TranslateTextForRegionAsync(ocrText);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Auto translate highlight text failed");
-                    }
-                }
-
-                if (!string.IsNullOrWhiteSpace(translation))
-                {
-                    if (_form.TextBoxTranslation != null)
-                    {
-                        _form.TextBoxTranslation.Text = translation;
-                    }
-                    highlight.TranslationText = translation;
-                    _highlightService.UpdateHighlightContent(pdfPath, highlight.Id, ocrText, translation);
-                }
-            }
+            await TranslateSelectionToTopBarAsync(pdfPath, highlight, ocrText);
 
             if (_form.AutoSpeakAfterOcr)
             {
                 _ = _form.Presenter?.TryAutoSpeakAsync(ocrText);
             }
+        }
+
+        /// <summary>
+        /// 选区翻译：缓存优先；未命中时请求翻译服务，结果同时回写高亮与顶部译条。
+        /// </summary>
+        private async Task TranslateSelectionToTopBarAsync(string pdfPath, PdfHighlight highlight, string ocrText)
+        {
+            var pageIndex = Math.Max(0, highlight.PageIndex);
+            // 只给当前可见页展示译条；页面已切走时仍写入缓存与高亮，供下次回显
+            var pageVisible = IsTargetPageVisible(pdfPath, pageIndex);
+
+            if (_form.TryGetCachedSelectionTranslation(pageIndex, ocrText, out var cached)
+                && !string.IsNullOrWhiteSpace(cached))
+            {
+                ApplySelectionTranslation(pdfPath, highlight, ocrText, cached);
+                if (pageVisible)
+                {
+                    var cachedRequestId = _form.ShowSelectionTranslationLoading(pageIndex, ocrText);
+                    _form.CompleteSelectionTranslation(cachedRequestId, pageIndex, ocrText, cached, true);
+                }
+                return;
+            }
+
+            var presenter = _form.Presenter;
+            if (presenter == null || !presenter.IsTranslationServiceAvailable())
+                return;
+
+            var requestId = pageVisible ? _form.ShowSelectionTranslationLoading(pageIndex, ocrText) : -1;
+            string? translation = null;
+            try
+            {
+                translation = await presenter.TranslateTextForRegionAsync(ocrText);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Auto translate highlight text failed");
+            }
+
+            if (string.IsNullOrWhiteSpace(translation))
+            {
+                _form.FailSelectionTranslation(requestId, pageIndex, ocrText, "翻译失败，请稍后重试");
+                return;
+            }
+
+            _form.StoreSelectionTranslation(pageIndex, ocrText, translation);
+            ApplySelectionTranslation(pdfPath, highlight, ocrText, translation);
+            // 代次在翻页时已推进，过期回包会被 Complete 内部丢弃
+            _form.CompleteSelectionTranslation(requestId, pageIndex, ocrText, translation, false);
+        }
+
+        /// <summary>把译文同步到翻译面板与高亮实体，避免下次选中重复翻译。</summary>
+        private void ApplySelectionTranslation(string pdfPath, PdfHighlight highlight, string ocrText, string translation)
+        {
+            if (_form.TextBoxTranslation != null)
+            {
+                _form.TextBoxTranslation.Text = translation;
+            }
+
+            highlight.TranslationText = translation;
+            _highlightService.UpdateHighlightContent(pdfPath, highlight.Id, ocrText, translation);
         }
 
         /// <summary>

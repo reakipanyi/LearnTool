@@ -85,5 +85,16 @@ namespace LearningAssistant.Managers
         TabPage? TabPageAudio { get; }
         /// <summary>音频录制服务</summary>
         IAudioRecorderService? AudioRecorderService { get; }
+
+        /// <summary>尝试读取选区翻译缓存；命中时返回本页该文本的译文。</summary>
+        bool TryGetCachedSelectionTranslation(int pageIndex, string ocrText, out string translation);
+        /// <summary>写入选区翻译缓存，供下次翻页回显。</summary>
+        void StoreSelectionTranslation(int pageIndex, string ocrText, string translation);
+        /// <summary>在顶部译条展示翻译加载态，返回本次请求代次。</summary>
+        int ShowSelectionTranslationLoading(int pageIndex, string ocrText);
+        /// <summary>展示翻译结果；过期代次会被丢弃。</summary>
+        void CompleteSelectionTranslation(int requestId, int pageIndex, string ocrText, string translation, bool fromCache);
+        /// <summary>展示翻译失败；过期代次会被丢弃。</summary>
+        void FailSelectionTranslation(int requestId, int pageIndex, string ocrText, string message);
     }
 }

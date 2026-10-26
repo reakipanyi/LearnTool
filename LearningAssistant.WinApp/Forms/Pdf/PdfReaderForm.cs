@@ -1,4 +1,5 @@
 using LearningAssistant.Abstractions;
+using LearningAssistant.Abstractions.Media;
 using LearningAssistant.Common;
 using LearningAssistant.Common.Events;
 using LearningAssistant.Common.UI;
@@ -16,6 +17,7 @@ using LearningAssistant.Services.Learning;
 using LearningAssistant.Services.Media;
 using LearningAssistant.Services.Pdf;
 using LearningAssistant.Services.Practice;
+using LearningAssistant.Services.Shadowing;
 using LearningAssistant.Views;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel;
@@ -77,7 +79,31 @@ namespace LearningAssistant.Forms.Pdf
         private SidebarHeaderBar? _highlightHeader;
         private PdfHighlightPanel? _highlightPanel;
         private Panel? _highlightEmptyHost;
-        private readonly IAudioRecorderService? _audioRecorderService;
+        private IAudioRecorderService? _audioRecorderService;
+
+        // 顶部悬浮译条：选区翻译与“暂停跟读”共用同一浮层
+        private PdfTopTranslationBar? _topTranslationBar;
+        private IPdfSelectionTranslationCache? _selectionTranslationCache;
+        private IPronunciationScorer? _pronunciationScorer;
+        // 选区翻译请求代次：翻页或再次选择时丢弃过期结果
+        private int _selectionTranslationRequestId;
+
+        // 暂停跟读：空格暂停 -> S 录音 -> 空格结束并续播
+        private System.Windows.Forms.Timer? _shadowingTimer;
+        private System.Windows.Forms.Timer? _shadowingResumeTimer;
+        private System.Media.SoundPlayer? _shadowingTakePlayer;
+        private bool _shadowingRecording;
+        private bool _shadowingStartPending;
+        private bool _shadowingDiscardTake;
+        private bool _pendingResumeAfterPageFlip;
+        // 翻页后新页音频可能延迟加载，续播计时器做有限次重试
+        private int _shadowingResumeAttempts;
+        private string? _shadowingSessionTag;
+        private string? _shadowingExpectedText;
+        private string? _shadowingPdfPath;
+        private string? _shadowingTakePath;
+        private int _shadowingPageIndex;
+        private float _shadowingAudioLevel;
 
         private readonly Pen _pen = new Pen(Color.Red, 4f);
         private bool _disposed = false;
@@ -604,6 +630,588 @@ namespace LearningAssistant.Forms.Pdf
 
             // 翻译 / 高亮 / 听读三个侧栏面板统一为同一套设计语言
             ApplySidebarRedesign();
+
+            // 顶部译条与暂停跟读依赖音频/录音服务，放到管理器初始化之后
+            InitializeTopTranslationBar();
+            InitializePauseShadowing();
+        }
+
+        #endregion
+
+        #region 顶部译条与暂停跟读
+
+        /// <summary>
+        /// 顶部译条初始化：解析选区翻译缓存与发音评分器，并挂到画布顶部。
+        /// </summary>
+        private void InitializeTopTranslationBar()
+        {
+            try
+            {
+                _selectionTranslationCache ??=
+                    Program.ServiceProvider?.GetService(typeof(IPdfSelectionTranslationCache)) as IPdfSelectionTranslationCache;
+            }
+            catch { /* 缓存服务不可用时退化为仅在线翻译 */ }
+
+            try
+            {
+                _pronunciationScorer ??=
+                    Program.ServiceProvider?.GetService(typeof(IPronunciationScorer)) as IPronunciationScorer;
+            }
+            catch { /* 评分器不可用时跟读照常进行，只是不出参考分 */ }
+
+            _topTranslationBar = new PdfTopTranslationBar();
+            _topTranslationBar.SpeakRequested += (_, _) => _ = SpeakTopBarOriginalAsync();
+            _topTranslationBar.CopyRequested += (_, _) => CopyTopBarContent();
+            _topTranslationBar.PlayTakeRequested += (_, _) => PlayShadowingTake();
+            // 用户手动关闭译条时丢弃仍在途的翻译回包，避免关闭后又自动弹出
+            _topTranslationBar.CloseRequested += (_, _) => ++_selectionTranslationRequestId;
+            _panelPdf.Controls.Add(_topTranslationBar);
+            _topTranslationBar.BringToFront();
+            _panelPdf.Resize += (_, _) => PositionTopTranslationBar();
+            PositionTopTranslationBar();
+        }
+
+        /// <summary>把译条固定在画布顶部；悬浮但不参与布局，避免页面重排。</summary>
+        private void PositionTopTranslationBar()
+        {
+            if (_topTranslationBar == null) return;
+
+            var top = _panelNavigation is { Visible: true } ? _panelNavigation.Bottom + 8 : 8;
+            var available = Math.Max(240, _panelPdf.ClientSize.Width - 24);
+            var width = Math.Min(980, available);
+            var x = Math.Max(12, (_panelPdf.ClientSize.Width - width) / 2);
+            _topTranslationBar.SetBounds(x, top, width, 58);
+            _topTranslationBar.BringToFront();
+        }
+
+        /// <summary>当前选区翻译使用的目标语言；与翻译面板保持一致。</summary>
+        public string CurrentSelectionTranslationLanguage
+        {
+            get
+            {
+                var language = _translatePanel?.TargetLanguageCode;
+                return string.IsNullOrWhiteSpace(language) ? "auto" : language;
+            }
+        }
+
+        /// <summary>尝试读取选区翻译缓存。</summary>
+        public bool TryGetCachedSelectionTranslation(int pageIndex, string ocrText, out string translation)
+        {
+            translation = string.Empty;
+            if (_selectionTranslationCache == null || string.IsNullOrWhiteSpace(_currentPdfPath))
+                return false;
+
+            return _selectionTranslationCache.TryGet(
+                _currentPdfPath, pageIndex, ocrText, CurrentSelectionTranslationLanguage, out translation);
+        }
+
+        /// <summary>写入选区翻译缓存。</summary>
+        public void StoreSelectionTranslation(int pageIndex, string ocrText, string translation)
+        {
+            if (_selectionTranslationCache == null || string.IsNullOrWhiteSpace(_currentPdfPath))
+                return;
+
+            _selectionTranslationCache.Set(
+                _currentPdfPath, pageIndex, ocrText, CurrentSelectionTranslationLanguage, translation);
+        }
+
+        /// <summary>展示翻译加载态，返回本次请求代次。</summary>
+        public int ShowSelectionTranslationLoading(int pageIndex, string ocrText)
+        {
+            var requestId = ++_selectionTranslationRequestId;
+            _topTranslationBar?.ShowTranslationLoading(pageIndex, ocrText);
+            PositionTopTranslationBar();
+            return requestId;
+        }
+
+        /// <summary>展示翻译结果；过期代次的回包会被丢弃，避免翻页后错显。</summary>
+        public void CompleteSelectionTranslation(
+            int requestId,
+            int pageIndex,
+            string ocrText,
+            string translation,
+            bool fromCache)
+        {
+            if (requestId != _selectionTranslationRequestId)
+                return;
+
+            _topTranslationBar?.ShowTranslationResult(pageIndex, ocrText, translation, fromCache);
+            PositionTopTranslationBar();
+        }
+
+        /// <summary>展示翻译失败；同样丢弃过期回包。</summary>
+        public void FailSelectionTranslation(int requestId, int pageIndex, string ocrText, string message)
+        {
+            if (requestId != _selectionTranslationRequestId)
+                return;
+
+            _topTranslationBar?.ShowTranslationFailure(pageIndex, ocrText, message);
+            PositionTopTranslationBar();
+        }
+
+        /// <summary>翻回有缓存的页面时自动回显本页最近一条译文。</summary>
+        private void RestoreSelectionTranslationForPage(int pageIndex)
+        {
+            if (_selectionTranslationCache == null || string.IsNullOrWhiteSpace(_currentPdfPath))
+                return;
+
+            // 跟读状态条优先展示录音/评分结果，避免被页缓存覆盖
+            if (_topTranslationBar?.IsShadowingMode == true)
+                return;
+
+            var entry = _selectionTranslationCache.GetLatest(
+                _currentPdfPath, pageIndex, CurrentSelectionTranslationLanguage);
+
+            if (entry == null)
+            {
+                if (_topTranslationBar is { IsShadowingMode: false })
+                    _topTranslationBar.HideBar();
+                return;
+            }
+
+            ++_selectionTranslationRequestId;
+            _topTranslationBar?.ShowTranslationResult(pageIndex, entry.OriginalText, entry.Translation, true);
+            PositionTopTranslationBar();
+        }
+
+        private async Task SpeakTopBarOriginalAsync()
+        {
+            var text = _topTranslationBar?.OriginalText?.Trim();
+            if (string.IsNullOrWhiteSpace(text) || _presenter == null)
+                return;
+
+            try
+            {
+                await _presenter.TryAutoSpeakAsync(text);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Speak top translation bar text failed");
+            }
+        }
+
+        private void CopyTopBarContent()
+        {
+            var original = _topTranslationBar?.OriginalText ?? string.Empty;
+            var translation = _topTranslationBar?.TranslationText ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(original) && string.IsNullOrWhiteSpace(translation))
+                return;
+
+            try
+            {
+                Clipboard.SetText($"{original}{Environment.NewLine}{translation}");
+                ShowToast("已复制");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Copy top translation bar content failed");
+                ShowToast("复制失败");
+            }
+        }
+
+        /// <summary>初始化暂停跟读的两个计时器（录音计时、翻页后续播延迟）。</summary>
+        private void InitializePauseShadowing()
+        {
+            _shadowingTimer = new System.Windows.Forms.Timer { Interval = 200 };
+            _shadowingTimer.Tick += ShadowingTimer_Tick;
+
+            _shadowingResumeTimer = new System.Windows.Forms.Timer { Interval = 320 };
+            _shadowingResumeTimer.Tick += ShadowingResumeTimer_Tick;
+
+            // 构造函数可能未注入录音服务，这里兜底解析，避免跟读前置条件永远不成立
+            try
+            {
+                _audioRecorderService ??=
+                    Program.ServiceProvider?.GetService(typeof(IAudioRecorderService)) as IAudioRecorderService;
+            }
+            catch { /* 录音服务不可用时仅禁用暂停跟读 */ }
+
+            if (_audioRecorderService != null)
+                _audioRecorderService.RecordingCompleted += OnShadowingRecordingCompleted;
+        }
+
+        /// <summary>当前是否满足“已暂停且有配套音频”的跟读前置条件。</summary>
+        private bool IsAudioPausedForShadowing()
+        {
+            if (_audioTrackManager == null || _audioRecorderService == null)
+                return false;
+
+            if (_audioTrackManager.CurrentTrack == null)
+                return false;
+
+            return _audioTrackManager.Playback.Player.State == MediaPlaybackState.Paused;
+        }
+
+        /// <summary>
+        /// 空格暂停后按 S：开始录制本条跟读。返回 true 表示本次按键已被消费。
+        /// </summary>
+        private bool TryStartPauseShadowing()
+        {
+            // 录音中再次按 S 视为无效按键，避免重复启动
+            if (_shadowingRecording || _shadowingStartPending)
+                return true;
+
+            if (!IsAudioPausedForShadowing() || string.IsNullOrWhiteSpace(_currentPdfPath))
+                return false;
+
+            var recorder = _audioRecorderService;
+            if (recorder == null || recorder.State == AudioRecorderState.Recording)
+                return false;
+
+            _shadowingStartPending = true;
+            try
+            {
+                _shadowingSessionTag = $"pauseread_{Guid.NewGuid():N}"[..18];
+                _shadowingExpectedText = GetShadowingReferenceText();
+                _shadowingPdfPath = _currentPdfPath;
+                _shadowingPageIndex = _currentPageIndex;
+                _shadowingDiscardTake = false;
+                _shadowingTakePath = null;
+                _shadowingAudioLevel = 0F;
+                _pendingResumeAfterPageFlip = false;
+                _shadowingResumeTimer?.Stop();
+                _shadowingTakePlayer?.Stop();
+
+                recorder.AudioLevelChanged += OnShadowingAudioLevelChanged;
+                recorder.StartRecording(
+                    _currentPdfPath,
+                    _currentPageIndex,
+                    Path.GetFileName(_currentPdfPath),
+                    AudioRecordingScope.Sentence,
+                    _shadowingSessionTag);
+
+                _shadowingRecording = true;
+                _topTranslationBar?.ShowShadowingRecording(TimeSpan.Zero, 0F);
+                PositionTopTranslationBar();
+                _shadowingTimer?.Start();
+                UpdateStatusBar();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Start pause shadowing recording failed");
+                try { recorder.AudioLevelChanged -= OnShadowingAudioLevelChanged; } catch { }
+                try { recorder.StopRecording(); } catch { }
+                _shadowingRecording = false;
+                _shadowingTimer?.Stop();
+                ShowToast("无法开始跟读，请检查麦克风");
+            }
+            finally
+            {
+                _shadowingStartPending = false;
+            }
+
+            // 即使用户按 S 的瞬间因设备问题失败，也消费本次按键，避免误切到选择工具
+            return true;
+        }
+
+        /// <summary>取当前翻译面板的原文作为跟读参考；整页长文本不作为评分参考。</summary>
+        private string GetShadowingReferenceText()
+        {
+            var text = _textBoxOriginal?.Text?.Trim() ?? string.Empty;
+            if (text.Length == 0 || text.Length > 400)
+                return string.Empty;
+
+            return text;
+        }
+
+        private void ShadowingTimer_Tick(object? sender, EventArgs e)
+        {
+            if (!_shadowingRecording)
+            {
+                _shadowingTimer?.Stop();
+                return;
+            }
+
+            var elapsed = _audioRecorderService?.CurrentPosition ?? TimeSpan.Zero;
+            _topTranslationBar?.ShowShadowingRecording(elapsed, _shadowingAudioLevel);
+        }
+
+        private void OnShadowingAudioLevelChanged(object? sender, float level)
+        {
+            if (!_shadowingRecording)
+                return;
+
+            _shadowingAudioLevel = Math.Clamp(level, 0F, 1F);
+        }
+
+        /// <summary>
+        /// 结束跟读：save=false 为取消；resume=true 时立即从暂停位置续播。
+        /// </summary>
+        private void EndPauseShadowing(bool save, bool resume)
+        {
+            if (!_shadowingRecording)
+                return;
+
+            _shadowingRecording = false;
+            _shadowingTimer?.Stop();
+            _shadowingAudioLevel = 0F;
+
+            try { _audioRecorderService?.AudioLevelChanged -= OnShadowingAudioLevelChanged; } catch { }
+
+            if (!save)
+                _shadowingDiscardTake = true;
+
+            try
+            {
+                _audioRecorderService?.StopRecording();
+                if (save)
+                {
+                    _topTranslationBar?.ShowShadowingSaving();
+                    PositionTopTranslationBar();
+                }
+                else
+                {
+                    // 取消提示统一由录音完成回调给出，避免重复 Toast
+                    _topTranslationBar?.HideBar();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Stop pause shadowing recording failed");
+                _shadowingDiscardTake = false;
+                _topTranslationBar?.HideBar();
+                ShowToast("跟读录音保存失败");
+            }
+
+            if (resume && _audioTrackManager?.CurrentTrack != null)
+            {
+                try { _audioTrackManager.Play(); } catch (Exception ex) { _logger.LogWarning(ex, "Resume audio after shadowing failed"); }
+            }
+
+            UpdateStatusBar();
+        }
+
+        /// <summary>录音完成：落盘到 takes 目录并按需计算参考分。</summary>
+        private void OnShadowingRecordingCompleted(object? sender, AudioRecording recording)
+        {
+            if (recording == null || string.IsNullOrWhiteSpace(_shadowingSessionTag))
+                return;
+
+            if (!string.Equals(recording.SentenceId, _shadowingSessionTag, StringComparison.Ordinal))
+                return;
+
+            // 录音服务是单例，多个阅读窗口共享；只处理本窗口发起且同文档的录音
+            if (!string.IsNullOrWhiteSpace(_shadowingPdfPath)
+                && !string.Equals(recording.PdfPath, _shadowingPdfPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            if (IsDisposed)
+                return;
+
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(() => OnShadowingRecordingCompleted(sender, recording)));
+                return;
+            }
+
+            var discard = _shadowingDiscardTake;
+            _shadowingDiscardTake = false;
+
+            // 录音可能因设备异常被动结束；这里统一收口状态，避免跟读态悬挂
+            _shadowingRecording = false;
+            _shadowingStartPending = false;
+            _shadowingTimer?.Stop();
+            try { _audioRecorderService?.AudioLevelChanged -= OnShadowingAudioLevelChanged; } catch { }
+
+            if (discard)
+            {
+                TryDeleteShadowingFile(recording.FilePath);
+                _topTranslationBar?.HideBar();
+                ShowToast("已取消跟读");
+                return;
+            }
+
+            var finalPath = MoveShadowingTakeToStore(recording);
+            _shadowingTakePath = string.IsNullOrWhiteSpace(finalPath) ? null : finalPath;
+            var hasTake = !string.IsNullOrWhiteSpace(_shadowingTakePath) && File.Exists(_shadowingTakePath);
+
+            var expectedText = _shadowingExpectedText ?? string.Empty;
+            var canScore = _pronunciationScorer?.IsAvailable == true
+                           && !string.IsNullOrWhiteSpace(expectedText)
+                           && IsLikelyEnglish(expectedText);
+
+            _topTranslationBar?.ShowShadowingSaved(
+                recording.DurationMs,
+                scorePending: canScore,
+                scoreAvailable: _pronunciationScorer?.IsAvailable == true,
+                hasTake: hasTake);
+            PositionTopTranslationBar();
+
+            if (canScore && hasTake)
+            {
+                _ = ScoreShadowingTakeAsync(_shadowingTakePath!, expectedText, _shadowingSessionTag);
+            }
+        }
+
+        private async Task ScoreShadowingTakeAsync(string takePath, string expectedText, string sessionTag)
+        {
+            var scorer = _pronunciationScorer;
+            if (scorer == null || !scorer.IsAvailable)
+                return;
+
+            try
+            {
+                var result = await scorer.ScoreAsync(expectedText, takePath);
+                if (IsDisposed || !string.Equals(_shadowingSessionTag, sessionTag, StringComparison.Ordinal))
+                    return;
+
+                if (InvokeRequired)
+                {
+                    BeginInvoke(new Action(() => _topTranslationBar?.SetShadowingScore(result?.Score)));
+                    return;
+                }
+
+                _topTranslationBar?.SetShadowingScore(result?.Score);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Score pause shadowing take failed");
+            }
+        }
+
+        /// <summary>把临时录音移动到跟读 takes 目录；失败时保留临时文件。</summary>
+        private string? MoveShadowingTakeToStore(AudioRecording recording)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(recording.FilePath) || !File.Exists(recording.FilePath))
+                    return null;
+
+                var store = new ShadowingSegmentStore();
+                var relative = store.AllocateTakeRelativePath($"pause_p{_shadowingPageIndex + 1:000}", DateTime.Now);
+                var target = store.ResolvePath(relative);
+                var directory = Path.GetDirectoryName(target);
+                if (!string.IsNullOrEmpty(directory))
+                    Directory.CreateDirectory(directory);
+
+                File.Move(recording.FilePath, target, true);
+                return target;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Move pause shadowing take failed");
+                return recording.FilePath;
+            }
+        }
+
+        private void TryDeleteShadowingFile(string? path)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+                    File.Delete(path);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Delete cancelled shadowing take failed");
+            }
+        }
+
+        private void PlayShadowingTake()
+        {
+            if (string.IsNullOrWhiteSpace(_shadowingTakePath) || !File.Exists(_shadowingTakePath))
+            {
+                ShowToast("跟读录音不可用");
+                return;
+            }
+
+            try
+            {
+                var previousPlayer = _shadowingTakePlayer;
+                _shadowingTakePlayer?.Stop();
+                _shadowingTakePlayer = new System.Media.SoundPlayer(_shadowingTakePath);
+                _shadowingTakePlayer.Play();
+                previousPlayer?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Play pause shadowing take failed");
+                ShowToast("回放失败");
+            }
+        }
+
+        private void ShadowingResumeTimer_Tick(object? sender, EventArgs e)
+        {
+            if (!_pendingResumeAfterPageFlip)
+            {
+                _shadowingResumeTimer?.Stop();
+                return;
+            }
+
+            var track = _audioTrackManager?.CurrentTrack;
+            // 翻页判定有 250ms 防抖：轨道尚未切到新页时继续等，避免续播到上一页音频
+            var trackMatchesPage = track != null
+                && (track.MappedPageStart < 0
+                    || (_currentPageIndex >= track.MappedPageStart && _currentPageIndex <= track.MappedPageEnd));
+
+            if (track == null || !trackMatchesPage)
+            {
+                // 新页音频可能仍在加载；有限次重试后放弃，避免无音频页面一直等待
+                if (++_shadowingResumeAttempts < 10)
+                    return;
+
+                _pendingResumeAfterPageFlip = false;
+                _shadowingResumeTimer?.Stop();
+                UpdateStatusBar();
+                return;
+            }
+
+            _pendingResumeAfterPageFlip = false;
+            _shadowingResumeTimer?.Stop();
+            try { _audioTrackManager.Play(); } catch (Exception ex) { _logger.LogWarning(ex, "Resume after page flip failed"); }
+            UpdateStatusBar();
+        }
+
+        /// <summary>录音中翻页：先保存当前跟读，待新页音频就绪后再续播；新页无音频则保持暂停。</summary>
+        private void HandleShadowingPageChange()
+        {
+            if (!_shadowingRecording)
+                return;
+
+            EndPauseShadowing(save: true, resume: false);
+            _pendingResumeAfterPageFlip = true;
+            _shadowingResumeAttempts = 0;
+            _shadowingResumeTimer?.Stop();
+            _shadowingResumeTimer?.Start();
+        }
+
+        /// <summary>播放切换后更新跟读提示：暂停时提示按 S，恢复播放时收起跟读条。</summary>
+        private void UpdateShadowingHintAfterToggle(bool wasPlaying)
+        {
+            if (_shadowingRecording)
+                return;
+
+            if (wasPlaying && _audioTrackManager?.CurrentTrack != null && !_audioTrackManager.IsPlaying)
+            {
+                _topTranslationBar?.ShowShadowingHint();
+                PositionTopTranslationBar();
+                return;
+            }
+
+            if (_topTranslationBar?.IsShadowingMode == true)
+                _topTranslationBar.HideBar();
+        }
+
+        /// <summary>参考文本是否适合英文识别引擎；含中日韩文字时不出参考分。</summary>
+        private static bool IsLikelyEnglish(string text)
+        {
+            var letterCount = 0;
+            foreach (var ch in text)
+            {
+                if ((ch >= '\u4E00' && ch <= '\u9FFF') ||
+                    (ch >= '\u3040' && ch <= '\u30FF') ||
+                    (ch >= '\uAC00' && ch <= '\uD7AF'))
+                {
+                    return false;
+                }
+
+                if (char.IsLetter(ch))
+                    letterCount++;
+            }
+
+            return letterCount >= 2;
         }
 
         #endregion
@@ -626,6 +1234,24 @@ namespace LearningAssistant.Forms.Pdf
             if (!string.IsNullOrWhiteSpace(highlight.TranslationText))
                 _textBoxTranslation.Text = highlight.TranslationText;
             UpdateStatusBar();
+
+            // 顶部译条优先回显高亮已保存的译文，其次读取本地缓存
+            var translation = highlight.TranslationText;
+            var fromCache = false;
+            if (string.IsNullOrWhiteSpace(translation)
+                && TryGetCachedSelectionTranslation(highlight.PageIndex, highlight.Text, out var cached)
+                && !string.IsNullOrWhiteSpace(cached))
+            {
+                translation = cached;
+                fromCache = true;
+            }
+
+            if (string.IsNullOrWhiteSpace(translation)) return;
+
+            ++_selectionTranslationRequestId;
+            _topTranslationBar?.ShowTranslationResult(
+                highlight.PageIndex, highlight.Text, translation, fromCache);
+            PositionTopTranslationBar();
         }
 
         private void OnAnnotationSelected(AnnotationStroke stroke, int index, bool isDoubleClick)
@@ -980,6 +1606,14 @@ namespace LearningAssistant.Forms.Pdf
         {
             try
             {
+                // 录音中 Esc 优先取消跟读；再次按下才走抽屉/全屏等原有逻辑
+                if (e.KeyCode == Keys.Escape && _shadowingRecording)
+                {
+                    EndPauseShadowing(save: false, resume: true);
+                    e.Handled = e.SuppressKeyPress = true;
+                    return;
+                }
+
                 // 抽屉打开时 Esc 优先关闭抽屉，避免误触退出全屏或切到其他模式
                 if (e.KeyCode == Keys.Escape && _audioDrawer?.Visible == true && _audioDrawer.ContainsFocus)
                 {
@@ -1018,10 +1652,20 @@ namespace LearningAssistant.Forms.Pdf
                 }
 
                 // 空格固定为播放/暂停，不再参与翻页（翻页用 PageDown/→、PageUp/←）
+                // 跟读录音中按空格则结束跟读并立即续播
                 if (e.KeyCode == Keys.Space && !e.Control && !e.Shift && !e.Alt
                     && _audioTrackManager != null)
                 {
-                    _audioTrackManager.TogglePlayback();
+                    if (_shadowingRecording)
+                    {
+                        EndPauseShadowing(save: true, resume: true);
+                    }
+                    else
+                    {
+                        var wasPlaying = _audioTrackManager.IsPlaying;
+                        _audioTrackManager.TogglePlayback();
+                        UpdateShadowingHintAfterToggle(wasPlaying);
+                    }
                     e.Handled = e.SuppressKeyPress = true;
                     return;
                 }
@@ -1207,6 +1851,11 @@ namespace LearningAssistant.Forms.Pdf
                         if (e.Control)
                         {
                             _presenter?.ExportHighlights();
+                            e.Handled = true;
+                        }
+                        else if (!e.Shift && !e.Alt && TryStartPauseShadowing())
+                        {
+                            // 已暂停且有配套音频时 S 开始跟读；其余情况仍切回选择工具
                             e.Handled = true;
                         }
                         else
@@ -1896,7 +2545,13 @@ namespace LearningAssistant.Forms.Pdf
             bool isForward = pageIndex > _currentPageIndex;
             // 翻页（页码变化）时同步清除上一页的选中状态，避免选中残留到新页
             if (pageIndex != _currentPageIndex)
+            {
                 _navigationManager?.ClearSelection();
+                // 翻页后丢弃上一页仍在途的翻译回包
+                ++_selectionTranslationRequestId;
+                // 录音中翻页：先保存当前跟读，再延迟续播新页音频
+                HandleShadowingPageChange();
+            }
             _currentPageIndex = pageIndex;
             _audioTrackManager?.OnPageChanged(pageIndex);
             _audioPanel?.OnCurrentPageChanged();
@@ -1907,6 +2562,8 @@ namespace LearningAssistant.Forms.Pdf
             _progressBarPage.Value = Math.Clamp(pageIndex + 1, _progressBarPage.Minimum, _progressBarPage.Maximum);
             StartPageTransition(isForward);
             UpdateStatusBar();
+            // 翻回有译文缓存的页面时自动回显上次译文
+            RestoreSelectionTranslationForPage(pageIndex);
         }
 
         public void SetPageText(int pageIndex, string text)
@@ -7188,16 +7845,18 @@ namespace LearningAssistant.Forms.Pdf
             titleRow.Controls.Add(_audioDrawerSubtitle);
             titleRow.Controls.Add(closeButton);
 
+            var showRecordingMode = PdfHiddenFeatures.EnablePageRecording;
             var modeBar = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 4,
+                ColumnCount = showRecordingMode ? 4 : 3,
                 RowCount = 1,
                 Margin = Padding.Empty,
                 Padding = new Padding(10, 4, 10, 4)
             };
-            for (int i = 0; i < 4; i++)
-                modeBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            var columnPercent = 100F / modeBar.ColumnCount;
+            for (int i = 0; i < modeBar.ColumnCount; i++)
+                modeBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, columnPercent));
 
             _audioDrawerHighlightButton = CreateAudioDrawerModeButton("高亮");
             _audioDrawerTranslateButton = CreateAudioDrawerModeButton("翻译");
@@ -7215,7 +7874,15 @@ namespace LearningAssistant.Forms.Pdf
             modeBar.Controls.Add(_audioDrawerHighlightButton, 0, 0);
             modeBar.Controls.Add(_audioDrawerTranslateButton, 1, 0);
             modeBar.Controls.Add(_audioDrawerAudioButton, 2, 0);
-            modeBar.Controls.Add(_audioDrawerRecordingButton, 3, 0);
+            if (showRecordingMode)
+            {
+                modeBar.Controls.Add(_audioDrawerRecordingButton, 3, 0);
+            }
+            else
+            {
+                // 整页录音入口已下线：按钮保留但完全不出现在模式栏
+                _audioDrawerRecordingButton.Visible = false;
+            }
 
             header.Controls.Add(titleRow, 0, 0);
             header.Controls.Add(modeBar, 0, 1);
@@ -7296,6 +7963,10 @@ namespace LearningAssistant.Forms.Pdf
         /// <summary>显示音频抽屉并切换到指定视图。</summary>
         private void ShowAudioDrawer(AudioDrawerMode mode)
         {
+            // 整页录音入口已下线：任何残存调用都不再打开该视图
+            if (mode == AudioDrawerMode.Recording && !PdfHiddenFeatures.EnablePageRecording)
+                return;
+
             if (_audioDrawer == null) BuildAudioDrawer();
             if (_audioDrawer == null) return;
 
@@ -7481,6 +8152,22 @@ namespace LearningAssistant.Forms.Pdf
                 _pageTransitionTimer?.Dispose();
                 _sidebarTipTimer?.Stop();
                 _sidebarTipTimer?.Dispose();
+
+                // 暂停跟读：先解除事件订阅并停止录音，避免回调进入已释放控件
+                _shadowingRecording = false;
+                _shadowingDiscardTake = true;
+                try { _audioRecorderService?.RecordingCompleted -= OnShadowingRecordingCompleted; } catch { }
+                try { _audioRecorderService?.AudioLevelChanged -= OnShadowingAudioLevelChanged; } catch { }
+                try { _audioRecorderService?.StopRecording(); } catch { }
+                _shadowingTimer?.Stop();
+                _shadowingTimer?.Dispose();
+                _shadowingResumeTimer?.Stop();
+                _shadowingResumeTimer?.Dispose();
+                _shadowingTakePlayer?.Stop();
+                _shadowingTakePlayer?.Dispose();
+                _shadowingTakePlayer = null;
+                _topTranslationBar?.Dispose();
+                _topTranslationBar = null;
 
                 // 释放容器资源
                 components?.Dispose();
@@ -7806,11 +8493,13 @@ namespace LearningAssistant.Forms.Pdf
                 new("整页识别", "只识别当前页文字，不翻译", () => { ShowAudioDrawer(AudioDrawerMode.Translate); OnOcrPageClicked(); }),
                 new("开始本页跟读", "打开句子跟读窗口", OpenShadowingWindow),
                 new("配套音频", "在右侧抽屉查看配套音频", ShowAudioCompanion),
-                new("整页录音", "在右侧抽屉为当前页录音", () => ShowAudioDrawer(AudioDrawerMode.Recording)),
-                new("导出学习笔记", "导出当前文档的 AI 学习笔记", async () => await ExportAiStudyNotesAsync()),
-                new("批量识别导出", "识别整本 PDF 并导出文本", BatchOcrExport_Click),
-                new("切换夜间模式", "在浅色与夜间配色之间切换", () => _nightModeManager?.ToggleNightMode())
             };
+            // 整页录音入口已下线：命令面板不再出现该项
+            if (PdfHiddenFeatures.EnablePageRecording)
+                commands.Add(new("整页录音", "在右侧抽屉为当前页录音", () => ShowAudioDrawer(AudioDrawerMode.Recording)));
+            commands.Add(new PdfCommandPaletteItem("导出学习笔记", "导出当前文档的 AI 学习笔记", async () => await ExportAiStudyNotesAsync()));
+            commands.Add(new PdfCommandPaletteItem("批量识别导出", "识别整本 PDF 并导出文本", BatchOcrExport_Click));
+            commands.Add(new PdfCommandPaletteItem("切换夜间模式", "在浅色与夜间配色之间切换", () => _nightModeManager?.ToggleNightMode()));
 
             using var dialog = new PdfCommandPaletteDialog(commands);
             dialog.ShowDialog(this);

@@ -9,6 +9,15 @@ public partial class PdfStudyPanel : UserControl
     public PdfStudyPanel()
     {
         InitializeComponent();
+        // 整页录音入口已下线：隐藏按钮并让跟读按钮占满原本两行区域
+        if (!PdfHiddenFeatures.EnablePageRecording)
+        {
+            recordingButton.Visible = false;
+            practiceLayout.SetRow(shadowingButton, 0);
+            practiceLayout.RowCount = 1;
+            practiceLayout.RowStyles.Clear();
+            practiceLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        }
         // 卡片内容区由面板自行挂载，避免 VS 设计器回写时丢失
         overviewCard.Body.Controls.Add(overviewLayout);
         actionCard.Body.Controls.Add(actionLayout);

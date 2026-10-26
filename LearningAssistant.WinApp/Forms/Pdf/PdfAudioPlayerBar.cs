@@ -284,6 +284,8 @@ public sealed class PdfAudioPlayerBar : UserControl
         _loopMenu.Items.Add(_menuClearAb);
         _loopMenu.Items.Add(new ToolStripSeparator());
         _menuAutoSegment.Click += async (_, _) => await RunAutoSegmentAsync();
+        // 自动断句属于旧打点流程的入口，默认整体从菜单移除
+        _menuAutoSegment.Available = PdfHiddenFeatures.EnableShadowingMark;
         _loopMenu.Items.Add(_menuAutoSegment);
         _loopMenu.Opening += (_, _) =>
         {
@@ -630,6 +632,10 @@ public sealed class PdfAudioPlayerBar : UserControl
 
     private bool EnsureMarkSession()
     {
+        // 跟读打点入口已下线：保留完整实现，仅阻止任何界面路径创建会话
+        if (!PdfHiddenFeatures.EnableShadowingMark)
+            return false;
+
         if (_markSession != null)
             return true;
         if (string.IsNullOrWhiteSpace(_form.CurrentPdfPath))
@@ -875,6 +881,8 @@ public sealed class PdfAudioPlayerBar : UserControl
         _btnMark.Margin = new Padding(0);
         _btnMark.TabStop = false;
         _btnMark.UseVisualStyleBackColor = false;
+        // 旧打点入口已下线，按钮保留但不参与布局与显示
+        _btnMark.Visible = PdfHiddenFeatures.EnableShadowingMark;
     }
 
     private void UpdateVolumeButton()

@@ -249,6 +249,10 @@ namespace LearningAssistant.Common
                 AppPaths.PdfAiCacheDir,
                 logger: sp.GetService<ILogger<PdfAiCacheService>>()));
 
+            // PDF 选区翻译缓存：按文档指纹/页码/OCR 文本哈希落盘，供翻页回显
+            services.AddScoped<IPdfSelectionTranslationCache>(_ =>
+                new PdfSelectionTranslationCache(AppPaths.PdfSelectionTranslationDir));
+
             // PDF AI 摘要条目：按文档哈希落盘，带页码/录音锚点
             services.AddScoped<IPdfAiSummaryStore>(_ => new PdfAiSummaryStore());
 
