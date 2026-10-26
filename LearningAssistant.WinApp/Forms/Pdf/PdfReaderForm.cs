@@ -138,6 +138,11 @@ namespace LearningAssistant.Forms.Pdf
         private ToolStripMenuItem? _menuItemDelete;
         // 当前根目录（加载文件夹的共同父目录），禁止删除/重命名根目录本身
         private string _rootFolderPath = string.Empty;
+        // 文件树中当前打开文件的节点：加粗突出显示，失焦后选中底色仍保留
+        private TreeNode? _currentFileTreeNode;
+        private Font? _currentFileNodeFont;
+        // 程序化设置 SelectedNode 时抑制 AfterSelect，避免重复加载同一文件
+        private bool _suppressFileTreeSelection;
         // 右键菜单操作目标：路径与是否文件夹
         private string? _contextMenuTargetPath;
         private bool _contextMenuTargetIsFolder;
@@ -2378,6 +2383,16 @@ namespace LearningAssistant.Forms.Pdf
 
             LoadHighlightsForCurrentPage();
             Text = $"{AppTitle} - {Path.GetFileName(pdfPath)}";
+
+            // 记录“目录 -> 上次打开的文件”，并在左侧文件树中突出显示当前文件，
+            // 下次打开同一目录可直接定位到上次阅读的记录
+            if (!string.IsNullOrEmpty(pdfPath))
+            {
+                if (!string.IsNullOrEmpty(_rootFolderPath) && IsUnderFolder(pdfPath, _rootFolderPath))
+                    _presenter?.SetLastFileForFolder(_rootFolderPath, pdfPath);
+
+                SyncFileTreeSelection(pdfPath);
+            }
         }
 
         /// <summary>
@@ -2402,6 +2417,8 @@ namespace LearningAssistant.Forms.Pdf
 
         private void UpdateFileListDisplay()
         {
+            // 旧节点即将随 Nodes.Clear() 销毁：先清除高亮引用并回收加粗字体
+            ApplyCurrentFileNodeHighlight(null);
             _treeViewFiles.Nodes.Clear();
             string filter = _textBoxFilter?.Text?.Trim() ?? string.Empty;
 
@@ -2438,14 +2455,111 @@ namespace LearningAssistant.Forms.Pdf
                 BuildTreeViewHierarchy(_treeViewFiles.Nodes, filteredFiles, commonRoot);
             }
 
+            // 当前打开的文件优先在目录树中定位（跳过“最近打开”区，保证高亮落在真实目录位置）
+            TreeNode? targetNode = null;
             if (!string.IsNullOrEmpty(_currentPdfPath))
+                targetNode = FindNodeByTag(_treeViewFiles.Nodes, _currentPdfPath, skipRecent: true);
+
+            // 当前文档不属于本次加载的目录（或已被过滤）时，回退到该目录上次打开的文件
+            if (targetNode == null && !string.IsNullOrEmpty(_rootFolderPath))
             {
-                var currentNode = FindNodeByTag(_treeViewFiles.Nodes, _currentPdfPath);
-                if (currentNode != null)
-                {
-                    _treeViewFiles.SelectedNode = currentNode;
-                    currentNode.EnsureVisible();
-                }
+                var lastFile = _presenter?.GetLastFileForFolder(_rootFolderPath);
+                if (!string.IsNullOrEmpty(lastFile))
+                    targetNode = FindNodeByTag(_treeViewFiles.Nodes, lastFile, skipRecent: true);
+            }
+
+            // 目录树中确实没有时才退回“最近打开”节点
+            if (targetNode == null && !string.IsNullOrEmpty(_currentPdfPath))
+                targetNode = FindNodeByTag(_treeViewFiles.Nodes, _currentPdfPath);
+
+            if (targetNode != null)
+                SelectTreeNodeProgrammatically(targetNode);
+        }
+
+        /// <summary>
+        /// 在文件树中选中并滚动到当前打开的文件；节点不存在时保持现状。
+        /// 优先命中目录节点，避免选中“最近打开”区里的同名项。
+        /// </summary>
+        private void SyncFileTreeSelection(string filePath)
+        {
+            if (string.IsNullOrEmpty(filePath) || _treeViewFiles.Nodes.Count == 0) return;
+
+            var node = FindNodeByTag(_treeViewFiles.Nodes, filePath, skipRecent: true)
+                ?? FindNodeByTag(_treeViewFiles.Nodes, filePath);
+            if (node == null) return;
+
+            SelectTreeNodeProgrammatically(node);
+        }
+
+        /// <summary>
+        /// 程序化选中节点并标记为当前文件：选中期间抑制 AfterSelect，避免重复加载同一文件。
+        /// </summary>
+        private void SelectTreeNodeProgrammatically(TreeNode node)
+        {
+            ApplyCurrentFileNodeHighlight(node);
+
+            bool previousSuppress = _suppressFileTreeSelection;
+            _suppressFileTreeSelection = true;
+            try
+            {
+                _treeViewFiles.SelectedNode = node;
+                node.EnsureVisible();
+            }
+            finally
+            {
+                _suppressFileTreeSelection = previousSuppress;
+            }
+        }
+
+        /// <summary>
+        /// 给当前文件节点加粗突出显示；传入 null 时仅清除旧节点的突出显示。
+        /// 只改字体不改颜色：选中底色 + 加粗在浅色/深色主题下都清晰可读。
+        /// </summary>
+        private void ApplyCurrentFileNodeHighlight(TreeNode? node)
+        {
+            var previousNode = _currentFileTreeNode;
+            var previousFont = _currentFileNodeFont;
+
+            if (previousNode != null)
+                previousNode.NodeFont = null;
+
+            _currentFileTreeNode = node;
+            _currentFileNodeFont = null;
+
+            if (node != null)
+            {
+                _currentFileNodeFont = new Font(_treeViewFiles.Font, FontStyle.Bold);
+                node.NodeFont = _currentFileNodeFont;
+            }
+
+            previousFont?.Dispose();
+        }
+
+        /// <summary>
+        /// 判断文件是否位于指定目录（含子目录）内。
+        /// </summary>
+        private static bool IsUnderFolder(string filePath, string folderPath)
+        {
+            if (string.IsNullOrEmpty(filePath) || string.IsNullOrEmpty(folderPath)) return false;
+
+            try
+            {
+                string file = Path.GetFullPath(filePath);
+                string folder = Path.GetFullPath(folderPath);
+                string root = Path.GetPathRoot(folder) ?? string.Empty;
+                if (folder.Length > root.Length)
+                    folder = folder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+                string prefix = folder.EndsWith(Path.DirectorySeparatorChar) || folder.EndsWith(Path.AltDirectorySeparatorChar)
+                    ? folder
+                    : folder + Path.DirectorySeparatorChar;
+
+                return file.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(file, folder, StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
             }
         }
 
@@ -2511,14 +2625,21 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
-        private static TreeNode? FindNodeByTag(TreeNodeCollection nodes, string tag)
+        /// <summary>
+        /// 在树中按 Tag 查找节点；skipRecent 为 true 时跳过“最近打开”区，
+        /// 便于优先命中目录树里的真实节点而不是最近打开的同路径项。
+        /// </summary>
+        private static TreeNode? FindNodeByTag(TreeNodeCollection nodes, string tag, bool skipRecent = false)
         {
             foreach (TreeNode node in nodes)
             {
+                if (skipRecent && node.Tag is string header && header == "__RECENT_HEADER__")
+                    continue;
+
                 if (node.Tag is string s && s == tag)
                     return node;
 
-                var found = FindNodeByTag(node.Nodes, tag);
+                var found = FindNodeByTag(node.Nodes, tag, skipRecent);
                 if (found != null)
                     return found;
             }
@@ -6624,6 +6745,10 @@ namespace LearningAssistant.Forms.Pdf
 
         private void TreeViewFiles_AfterSelect(object? sender, TreeViewEventArgs e)
         {
+            // 程序化同步“当前文件”选中态时不要触发加载，避免同一文件被重复打开
+            if (_suppressFileTreeSelection)
+                return;
+
             // 文件夹节点不触发 PDF 加载（其 Tag 为目录路径，非 PDF 文件）
             if (e.Node != null && string.Equals(e.Node.ImageKey, "Folder", StringComparison.Ordinal))
                 return;
@@ -6644,6 +6769,10 @@ namespace LearningAssistant.Forms.Pdf
             _menuItemRename.Click += MenuItemRename_Click;
             _menuItemDelete.Click += MenuItemDelete_Click;
             _contextMenuFiles.Items.AddRange(new ToolStripItem[] { _menuItemRename, _menuItemDelete });
+
+            // 焦点移到 PDF 画布后仍保留当前文件的选中底色；整行高亮更醒目
+            _treeViewFiles.HideSelection = false;
+            _treeViewFiles.FullRowSelect = true;
 
             // 右键选中节点并弹出菜单
             _treeViewFiles.NodeMouseClick += TreeViewFiles_NodeMouseClick;
@@ -6765,6 +6894,13 @@ namespace LearningAssistant.Forms.Pdf
 
                 _logger?.LogInformation("Renamed {Type} \"{Old}\" -> \"{New}\"", isFolder ? "folder" : "file", targetPath, newPath);
                 RefreshFileListAfterFsChange();
+
+                // 当前文件重命名后同步“目录 -> 上次文件”记录，避免下次定位到失效路径
+                if (!string.IsNullOrEmpty(_currentPdfPath) && !string.IsNullOrEmpty(_rootFolderPath) &&
+                    IsUnderFolder(_currentPdfPath, _rootFolderPath))
+                {
+                    _presenter?.SetLastFileForFolder(_rootFolderPath, _currentPdfPath);
+                }
             }
             catch (Exception ex)
             {
@@ -8116,7 +8252,31 @@ namespace LearningAssistant.Forms.Pdf
             if (dialog.ShowDialog(this) == DialogResult.OK)
             {
                 _presenter?.LoadFolder(dialog.SelectedPath);
+                // 重新打开目录时直接回到该目录上次阅读的文件
+                LoadLastFileOfFolderIfNeeded();
             }
+        }
+
+        /// <summary>
+        /// 当前文档不属于刚打开的目录时，自动打开该目录上次阅读的文件；
+        /// 没有记录时保持原状（由用户自行点选）。
+        /// </summary>
+        private void LoadLastFileOfFolderIfNeeded()
+        {
+            if (string.IsNullOrEmpty(_rootFolderPath)) return;
+
+            // 当前文件就在新目录内，无需打断当前阅读
+            if (!string.IsNullOrEmpty(_currentPdfPath) && IsUnderFolder(_currentPdfPath, _rootFolderPath))
+                return;
+
+            var lastFile = _presenter?.GetLastFileForFolder(_rootFolderPath);
+            if (string.IsNullOrEmpty(lastFile)) return;
+
+            // 记录中的文件可能已被移出目录，只有确实在本次扫描结果里才打开
+            if (!_allFiles.Any(f => string.Equals(f, lastFile, StringComparison.OrdinalIgnoreCase)))
+                return;
+
+            _ = _presenter?.LoadPdf(lastFile);
         }
 
         protected override void Dispose(bool disposing)
@@ -8168,6 +8328,11 @@ namespace LearningAssistant.Forms.Pdf
                 _shadowingTakePlayer = null;
                 _topTranslationBar?.Dispose();
                 _topTranslationBar = null;
+
+                // 当前文件节点的加粗字体（节点随控件释放，这里单独回收字体）
+                _currentFileNodeFont?.Dispose();
+                _currentFileNodeFont = null;
+                _currentFileTreeNode = null;
 
                 // 释放容器资源
                 components?.Dispose();

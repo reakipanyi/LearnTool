@@ -569,6 +569,7 @@ public sealed class PdfAudioPlayerBar : UserControl
         {
             _labelTrack.Text = "未绑定音频 · 去绑定";
             _labelPage.Text = "P—";
+            UpdateBookLabelVisibility();
             UpdateTransport();
             return;
         }
@@ -587,6 +588,8 @@ public sealed class PdfAudioPlayerBar : UserControl
             _labelPage.Text = DescribeTrackPages(track);
         }
 
+        UpdateBookLabelVisibility();
+
         if (!_manager.IsPlaying && _manager.Playback.Player.Duration > TimeSpan.Zero)
             UpdateProgress(_manager.Playback.Player.Position);
         else if (_manager.Playback.Player.Duration <= TimeSpan.Zero)
@@ -597,6 +600,17 @@ public sealed class PdfAudioPlayerBar : UserControl
         }
 
         UpdateTransport();
+    }
+
+    /// <summary>
+    /// 音频名与文档名相同时只保留下方加粗的曲目名，避免同一个名称在播放条上显示两次。
+    /// 曲目名与文档名不同（如按页切片）时恢复显示文档名。
+    /// </summary>
+    private void UpdateBookLabelVisibility()
+    {
+        bool duplicated = !string.IsNullOrWhiteSpace(_labelTrack.Text)
+            && string.Equals(_labelBook.Text, _labelTrack.Text, StringComparison.OrdinalIgnoreCase);
+        _labelBook.Visible = !duplicated;
     }
 
     private string DescribeTrackPages(AudioTrack track)

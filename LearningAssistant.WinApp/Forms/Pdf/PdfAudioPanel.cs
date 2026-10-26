@@ -41,6 +41,8 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
     private bool _suppressFollow;
     private float _statusHeight;
     private Font? _listFont;
+    private Font? _listPlayingFont;
+    private Font? _listMarkerFont;
 
     /// <summary>供 Visual Studio 设计器实例化；运行时请使用带依赖的构造函数。</summary>
     public PdfAudioPanel()
@@ -325,31 +327,50 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
     {
         var palette = PdfSidebarTheme.PaletteFor(this);
         bool selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+        int playingIndex = _manager?.CurrentPlaylistIndex ?? -1;
+        bool playing = e.Index >= 0 && e.Index == playingIndex;
 
         using (var background = new SolidBrush(selected ? palette.BrandSoft : palette.Surface))
             e.Graphics.FillRectangle(background, e.Bounds);
+
+        // 正在播放但未选中时叠加一层品牌色底，保证播放行始终醒目
+        if (playing && !selected)
+        {
+            using var overlay = new SolidBrush(Color.FromArgb(palette.IsDark ? 70 : 36, PdfSidebarTheme.Brand));
+            e.Graphics.FillRectangle(overlay, e.Bounds);
+        }
 
         if (e.Index < 0 || e.Index >= _listTracks.Items.Count) return;
 
         using (var pen = new Pen(palette.Border))
             e.Graphics.DrawLine(pen, e.Bounds.Left + 4, e.Bounds.Bottom - 1, e.Bounds.Right - 4, e.Bounds.Bottom - 1);
 
-        // 正在播放的曲目用左侧色条标识，避免列表滚动后看不出当前曲目
-        int playingIndex = _manager?.CurrentPlaylistIndex ?? -1;
-        if (e.Index == playingIndex)
+        // 正在播放的曲目：左侧加粗色条 + 播放三角，避免列表滚动后看不出当前曲目
+        int textLeft = e.Bounds.Left + 10;
+        if (playing)
         {
             using var bar = new SolidBrush(PdfSidebarTheme.Brand);
-            e.Graphics.FillRectangle(bar, e.Bounds.Left, e.Bounds.Top + 6, 3, e.Bounds.Height - 12);
+            e.Graphics.FillRectangle(bar, e.Bounds.Left, e.Bounds.Top + 4, 3, e.Bounds.Height - 8);
+
+            _listMarkerFont ??= new Font("Segoe UI Symbol", 8F);
+            TextRenderer.DrawText(e.Graphics, "▶",
+                _listMarkerFont,
+                new Rectangle(e.Bounds.Left + 8, e.Bounds.Top, 16, e.Bounds.Height),
+                PdfSidebarTheme.Brand,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
+            textLeft = e.Bounds.Left + 26;
         }
 
-        var textRect = new Rectangle(e.Bounds.Left + 10, e.Bounds.Top,
-            Math.Max(10, e.Bounds.Width - 16), e.Bounds.Height);
+        var textRect = new Rectangle(textLeft, e.Bounds.Top,
+            Math.Max(10, e.Bounds.Right - textLeft - 6), e.Bounds.Height);
         Color foreColor = selected
             ? (palette.IsDark ? Color.White : PdfSidebarTheme.Brand)
-            : palette.Text;
+            : playing ? PdfSidebarTheme.Brand : palette.Text;
         _listFont ??= new Font("Microsoft YaHei UI", 9.5F);
+        if (playing)
+            _listPlayingFont ??= new Font(_listFont, FontStyle.Bold);
         TextRenderer.DrawText(e.Graphics, _listTracks.Items[e.Index]?.ToString() ?? string.Empty,
-            _listFont, textRect, foreColor,
+            playing ? _listPlayingFont! : _listFont, textRect, foreColor,
             TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
     }
 
@@ -752,7 +773,12 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
         });
 
     private void OnPageHintChanged(object? sender, string? hint)
-        => InvokeIfReady(UpdatePageCard);
+        => InvokeIfReady(() =>
+        {
+            UpdatePageCard();
+            // 本页无音频时管理器会清空当前曲目，刷新列表避免播放色条停在旧行
+            _listTracks.Invalidate();
+        });
 
     private void OnSettingsChanged(object? sender, EventArgs e)
         => InvokeIfReady(() =>
@@ -1351,6 +1377,8 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
     {
         bool singleMode = _manager.Profile?.MatchMode == PdfAudioMatchMode.SingleAudio;
         var track = _manager.CurrentTrack
+            // 档案记忆优先：重新打开文档时直接定位到上次播放的曲目
+            ?? _manager.LastPlayedTrack()
             ?? (singleMode ? _manager.Result?.Tracks.FirstOrDefault() : null)
             ?? (_manager.Result?.PageIndex.GetValueOrDefault(_form.CurrentPageIndex));
         if (track != null) SelectTrackInList(track);
@@ -1398,6 +1426,8 @@ public partial class PdfAudioPanel : UserControl, ISidebarThemeAware
             _menuMatch.Dispose();
             _menuBook.Dispose();
             _listFont?.Dispose();
+            _listPlayingFont?.Dispose();
+            _listMarkerFont?.Dispose();
             components?.Dispose();
         }
         base.Dispose(disposing);

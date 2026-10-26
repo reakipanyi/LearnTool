@@ -269,6 +269,22 @@ namespace LearningAssistant.Presenters
             return _pdfFileManager.RecentFiles;
         }
 
+        /// <summary>
+        /// 获取指定目录上次打开的文件（用于左侧文件树定位）。
+        /// </summary>
+        public string? GetLastFileForFolder(string folderPath)
+        {
+            return _pdfFileManager.GetLastFileForFolder(folderPath);
+        }
+
+        /// <summary>
+        /// 记录指定目录最后打开的文件（用于左侧文件树定位）。
+        /// </summary>
+        public void SetLastFileForFolder(string folderPath, string filePath)
+        {
+            _pdfFileManager.SetLastFileForFolder(folderPath, filePath);
+        }
+
         public async Task RenderPage(int pageIndex)
         {
             int maxPage = _pdfRenderer.PageCount;

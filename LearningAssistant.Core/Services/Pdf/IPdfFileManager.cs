@@ -66,6 +66,19 @@ namespace LearningAssistant.Services.Pdf
         List<string> RecentFiles { get; }
 
         /// <summary>
+        /// 获取指定目录上次打开的文件；没有记录或文件已不存在时返回 null。
+        /// </summary>
+        /// <param name="folderPath">目录路径</param>
+        string? GetLastFileForFolder(string folderPath);
+
+        /// <summary>
+        /// 记录指定目录最后打开的文件，用于重新打开该目录时在文件树中定位。
+        /// </summary>
+        /// <param name="folderPath">目录路径</param>
+        /// <param name="filePath">文件完整路径</param>
+        void SetLastFileForFolder(string folderPath, string filePath);
+
+        /// <summary>
         /// 文件加载完成事件
         /// </summary>
         event EventHandler<FileLoadedEventArgs>? FileLoaded;

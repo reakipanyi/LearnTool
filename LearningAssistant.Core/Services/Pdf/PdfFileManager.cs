@@ -21,6 +21,8 @@ namespace LearningAssistant.Services.Pdf
         private readonly List<string> _imageFiles = new List<string>();
         private readonly Dictionary<string, int> _filePageMap = new Dictionary<string, int>();
         private readonly List<string> _recentFiles = new List<string>();
+        // 目录 -> 上次打开的文件：重新打开同一目录时用于在文件树中定位
+        private readonly Dictionary<string, string> _folderFileMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private const int MaxRecentFiles = 10;
 
 
@@ -70,14 +72,19 @@ namespace LearningAssistant.Services.Pdf
             string? Folder,
             string? FilePath,
             Dictionary<string, int> FilePageMap,
-            List<string>? RecentFiles
+            List<string>? RecentFiles,
+            // 目录 -> 上次打开的文件；旧版本会话没有该字段时反序列化为 null
+            Dictionary<string, string>? FolderFileMap = null
         );
 
         public void SaveSession()
         {
             try
             {
-                var data = new SessionData(_lastFolderPath, _currentPdfPath, new Dictionary<string, int>(_filePageMap), new List<string>(_recentFiles));
+                var data = new SessionData(_lastFolderPath, _currentPdfPath,
+                    new Dictionary<string, int>(_filePageMap),
+                    new List<string>(_recentFiles),
+                    new Dictionary<string, string>(_folderFileMap));
                 var json = JsonSerializer.Serialize(data);
 
                 using var db = _dbContextFactory.CreateDbContext();
@@ -125,6 +132,28 @@ namespace LearningAssistant.Services.Pdf
                     {
                         if (File.Exists(f))
                             _recentFiles.Add(f);
+                    }
+                }
+
+                // 恢复目录 -> 上次文件映射；目录已移动/文件已删除的记录直接丢弃
+                _folderFileMap.Clear();
+                if (data.FolderFileMap != null)
+                {
+                    foreach (var kvp in data.FolderFileMap)
+                    {
+                        if (string.IsNullOrWhiteSpace(kvp.Key) || string.IsNullOrWhiteSpace(kvp.Value))
+                            continue;
+                        if (!File.Exists(kvp.Value))
+                            continue;
+
+                        try
+                        {
+                            _folderFileMap[NormalizeFolder(kvp.Key)] = kvp.Value;
+                        }
+                        catch
+                        {
+                            // 非法路径不参与定位，跳过即可
+                        }
                     }
                 }
 
@@ -239,7 +268,10 @@ namespace LearningAssistant.Services.Pdf
                 if (Path.IsPathRooted(fileName))
                 {
                     filePath = fileName;
-                    _lastFolderPath = Path.GetDirectoryName(filePath) ?? "";
+                    // 文件仍在已加载目录内时保留原目录，避免会话把根目录改写成子目录，
+                    // 导致下次启动只恢复子目录、左侧目录树被截断
+                    if (string.IsNullOrEmpty(_lastFolderPath) || !IsUnderFolder(filePath, _lastFolderPath))
+                        _lastFolderPath = Path.GetDirectoryName(filePath) ?? "";
                 }
                 else
                 {
@@ -353,6 +385,80 @@ namespace LearningAssistant.Services.Pdf
             {
                 _recentFiles.RemoveAt(_recentFiles.Count - 1);
             }
+        }
+
+        /// <summary>
+        /// 获取指定目录上次打开的文件；没有记录或文件已不存在时返回 null。
+        /// </summary>
+        public string? GetLastFileForFolder(string folderPath)
+        {
+            if (string.IsNullOrWhiteSpace(folderPath)) return null;
+
+            try
+            {
+                if (_folderFileMap.TryGetValue(NormalizeFolder(folderPath), out var filePath) && File.Exists(filePath))
+                    return filePath;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to get last file for folder: {Folder}", folderPath);
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 记录指定目录最后打开的文件，用于重新打开该目录时在文件树中定位。
+        /// </summary>
+        public void SetLastFileForFolder(string folderPath, string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(folderPath) || string.IsNullOrWhiteSpace(filePath)) return;
+
+            try
+            {
+                string folderKey = NormalizeFolder(folderPath);
+                string fullPath = Path.GetFullPath(filePath);
+                // 记录未变化时不写库，避免每次点开同一文件都触发一次会话保存
+                if (_folderFileMap.TryGetValue(folderKey, out var existing)
+                    && string.Equals(existing, fullPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                _folderFileMap[folderKey] = fullPath;
+                SaveSession();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to set last file for folder: {Folder}", folderPath);
+            }
+        }
+
+        /// <summary>
+        /// 目录键统一为绝对路径并去掉末尾分隔符；盘符根目录（如 E:\）保持原样。
+        /// </summary>
+        private static string NormalizeFolder(string folderPath)
+        {
+            string full = Path.GetFullPath(folderPath);
+            string root = Path.GetPathRoot(full) ?? string.Empty;
+            return full.Length > root.Length
+                ? full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                : full;
+        }
+
+        /// <summary>
+        /// 判断文件是否位于指定目录（含子目录）内。
+        /// </summary>
+        private static bool IsUnderFolder(string filePath, string folderPath)
+        {
+            string file = Path.GetFullPath(filePath);
+            string folder = NormalizeFolder(folderPath);
+            string prefix = folder.EndsWith(Path.DirectorySeparatorChar) || folder.EndsWith(Path.AltDirectorySeparatorChar)
+                ? folder
+                : folder + Path.DirectorySeparatorChar;
+
+            return file.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(file, folder, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

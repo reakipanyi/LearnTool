@@ -768,11 +768,24 @@ public class PdfAudioTrackManager : IDisposable
                 break;
         }
 
-        var track = _loadedTrack ?? CurrentPageTrack() ?? ResolvePlaybackFallback();
+        var track = _loadedTrack ?? LastPlayedTrack() ?? CurrentPageTrack() ?? ResolvePlaybackFallback();
         if (track == null) return false;
         if (!IsLoaded(track)) Load(track);
         FireAndForget(_playback.PlayAsync(), "PlayAsync");
         return true;
+    }
+
+    /// <summary>档案中记录的上次播放曲目；曲目已不在扫描结果中时返回 null。</summary>
+    public AudioTrack? LastPlayedTrack()
+    {
+        var key = _profile?.LastTrackPath;
+        if (_profile == null || string.IsNullOrWhiteSpace(key)) return null;
+
+        return _profile.Tracks.FirstOrDefault(t =>
+            File.Exists(t.FilePath)
+            && (string.Equals(t.FilePath, key, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(t.RelativePath, key, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(t.FileName, key, StringComparison.OrdinalIgnoreCase)));
     }
 
     /// <summary>
