@@ -24,6 +24,8 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
         private readonly FlowLayoutPanel _panelStats = new();
         private readonly FlowLayoutPanel _panelActions = new();
         private readonly List<StatItem> _statItems = new();
+        // 快捷入口按钮：与「今日概览」统计卡片同款白底/主色文字，不再使用彩色实心块
+        private readonly List<Button> _actionButtons = new();
         private string _userName = "同学";
 
         public event EventHandler<string>? QuickActionRequested;
@@ -99,12 +101,12 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             AddStat("🎯", "今日挑战");
             AddStat("📝", "笔记数");
 
-            AddAction("learning", "📚", "开始学习", Color.FromArgb(99, 102, 241));
-            AddAction("pdf", "📖", "PDF阅读", Color.FromArgb(34, 197, 94));
-            AddAction("browser", "🌐", "浏览器", Color.FromArgb(14, 165, 233));
-            AddAction("editor", "✏️", "内容编辑", Color.FromArgb(167, 139, 250));
-            AddAction("data", "📊", "学习数据", Color.FromArgb(236, 72, 153));
-            AddAction("settings", "⚙️", "设置", Color.FromArgb(108, 117, 125));
+            AddAction("learning", "📚", "开始学习");
+            AddAction("pdf", "📖", "PDF阅读");
+            AddAction("browser", "🌐", "浏览器");
+            AddAction("editor", "✏️", "内容编辑");
+            AddAction("data", "📊", "学习数据");
+            AddAction("settings", "⚙️", "设置");
         }
 
         private void AddStat(string icon, string caption)
@@ -165,24 +167,34 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
             });
         }
 
-        private void AddAction(string key, string icon, string title, Color color)
+        /// <summary>
+        /// 快捷入口：与「今日概览」卡片保持同一视觉语言（白底、主文字色、无彩色块），
+        /// 只用图标区分入口类型，悬停时给一层浅色反馈。
+        /// </summary>
+        private void AddAction(string key, string icon, string title)
         {
             var button = new Button
             {
                 Width = ActionWidth,
                 Height = ActionHeight,
                 Margin = new Padding(0, 0, ItemSpacing, ItemSpacing),
-                Text = $"{icon}  {title}",
+                Text = $"{icon}   {title}",
                 Tag = key,
                 FlatStyle = FlatStyle.Flat,
-                BackColor = color,
-                ForeColor = Color.White,
+                BackColor = Color.White,
+                ForeColor = Color.FromArgb(33, 33, 33),
                 Font = new Font("微软雅黑", 11F, FontStyle.Bold),
-                Cursor = Cursors.Hand
+                TextAlign = ContentAlignment.MiddleLeft,
+                Padding = new Padding(14, 0, 0, 0),
+                Cursor = Cursors.Hand,
+                UseVisualStyleBackColor = false
             };
             button.FlatAppearance.BorderSize = 0;
+            button.FlatAppearance.MouseOverBackColor = Color.FromArgb(248, 249, 252);
+            button.FlatAppearance.MouseDownBackColor = Color.FromArgb(240, 241, 246);
             button.Click += (_, _) => QuickActionRequested?.Invoke(this, (string)button.Tag);
             _panelActions.Controls.Add(button);
+            _actionButtons.Add(button);
         }
 
         public void UpdateStats(int todayStudyMinutes, int streakDays, int totalXP,
@@ -271,6 +283,15 @@ namespace LearningAssistant.Forms.UserControls.Dashboard
                 item.Panel.BackColor = colors.Surface;
                 item.Value.ForeColor = colors.TextPrimary;
                 item.Caption.ForeColor = colors.TextSecondary;
+            }
+
+            // 快捷入口与统计卡片共用 Surface 底色，夜间不再是刺眼的白色块
+            foreach (var button in _actionButtons)
+            {
+                button.BackColor = colors.Surface;
+                button.ForeColor = colors.TextPrimary;
+                button.FlatAppearance.MouseOverBackColor = colors.SurfaceElevated;
+                button.FlatAppearance.MouseDownBackColor = colors.SurfaceElevated;
             }
         }
 

@@ -1119,6 +1119,9 @@ namespace LearningAssistant.Forms.Main
             // 
             splitContainerMain.Dock = DockStyle.Fill;
             splitContainerMain.FixedPanel = FixedPanel.Panel1;
+            // 左侧导航宽度固定：不允许拖动分隔条，也不随窗口缩放变化，
+            // 避免调整后宽度小于菜单文字所需空间导致菜单项被裁切
+            splitContainerMain.IsSplitterFixed = true;
             splitContainerMain.Location = new Point(0, 0);
             splitContainerMain.Name = "splitContainerMain";
             // 
@@ -1131,7 +1134,8 @@ namespace LearningAssistant.Forms.Main
             splitContainerMain.Panel2.Controls.Add(panelContent);
             splitContainerMain.Panel2.Controls.Add(panelTopBar);
             splitContainerMain.Size = new Size(1593, 690);
-            splitContainerMain.SplitterDistance = 121;
+            // 与 SideNavigationPanel 的展开宽度（220）保持一致
+            splitContainerMain.SplitterDistance = 220;
             splitContainerMain.SplitterWidth = 1;
             splitContainerMain.TabIndex = 1;
             // 
@@ -1142,7 +1146,7 @@ namespace LearningAssistant.Forms.Main
             sideNavigation.Dock = DockStyle.Fill;
             sideNavigation.Location = new Point(0, 0);
             sideNavigation.Name = "sideNavigation";
-            sideNavigation.Size = new Size(200, 690);
+            sideNavigation.Size = new Size(220, 690);
             sideNavigation.TabIndex = 0;
             sideNavigation.NavigationItemClicked += OnNavigationItemClicked;
             // 

@@ -389,6 +389,8 @@ namespace LearningAssistant.Forms.Pdf
         private bool _closeConfirmed = false;
         private bool _isDualPage = false;
         private bool _isFullscreen = false;
+        // 进入全屏前的窗口状态：退出全屏时恢复，避免从最大化退回成小窗口
+        private FormWindowState _windowStateBeforeFullscreen = FormWindowState.Maximized;
         private Bitmap? _highlightBitmap;
         private ToolStripMenuItem menuItemCopy;
         private ToolStripMenuItem menuItemSearch;
@@ -1413,7 +1415,8 @@ namespace LearningAssistant.Forms.Pdf
         {
             button.FlatStyle = FlatStyle.Flat;
             button.FlatAppearance.BorderSize = 0;
-            button.FlatAppearance.BorderColor = ToolbarLeaveColor;
+            // BorderColor 不接受 Transparent（NotSupportedException），
+            // 而这里边框宽度已为 0，无需设置边框色
             button.FlatAppearance.MouseOverBackColor = Color.Transparent;
             button.FlatAppearance.MouseDownBackColor = Color.Transparent;
             button.UseVisualStyleBackColor = false;
@@ -1682,6 +1685,27 @@ namespace LearningAssistant.Forms.Pdf
             _navigationManager?.SetPenWidth(3f);
             UpdateDashStyleButtonState();
             UpdatePenTypeButtonState();
+        }
+
+        /// <summary>
+        /// 全屏时 Esc 在命令键阶段就地处理：此时焦点可能落在文本输入框或二级浮层上，
+        /// KeyDown 会被 IsTextEditingFocused 的守卫拦下，或被子控件的对话框键吃掉，
+        /// 导致“全屏按 Esc 退不出去”。录音中与抽屉内的既有优先级保持不变，仍交给 KeyDown。
+        /// </summary>
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == Keys.Escape
+                && !_shadowingRecording
+                && !(_audioDrawer?.Visible == true && _audioDrawer.ContainsFocus)
+                && (_isFullscreen || FormBorderStyle == FormBorderStyle.None))
+            {
+                // 无边框窗口只可能来自全屏，状态标记若因异常未同步则在此兜底
+                _isFullscreen = true;
+                ToggleFullscreen();
+                return true;
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
         }
 
         private void PdfReaderFormV2_KeyDown(object? sender, KeyEventArgs e)
@@ -2032,6 +2056,8 @@ namespace LearningAssistant.Forms.Pdf
             {
                 if (!_isFullscreen)
                 {
+                    // 记录进入全屏前的状态，退出时按原样恢复
+                    _windowStateBeforeFullscreen = WindowState;
                     FormBorderStyle = FormBorderStyle.None;
                     WindowState = FormWindowState.Maximized;
                     if (_panelNavigation != null)
@@ -2043,7 +2069,9 @@ namespace LearningAssistant.Forms.Pdf
                 else
                 {
                     FormBorderStyle = FormBorderStyle.Sizable;
-                    WindowState = FormWindowState.Normal;
+                    WindowState = _windowStateBeforeFullscreen == FormWindowState.Minimized
+                        ? FormWindowState.Normal
+                        : _windowStateBeforeFullscreen;
                     if (_panelNavigation != null)
                         _panelNavigation.Visible = true;
                     if (_statusBar != null)
