@@ -1,4 +1,4 @@
-﻿using LearningAssistant.Abstractions;
+using LearningAssistant.Abstractions;
 using Microsoft.Extensions.Logging;
 using System.Drawing.Drawing2D;
 
