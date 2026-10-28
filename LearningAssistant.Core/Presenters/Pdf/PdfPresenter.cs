@@ -1323,6 +1323,22 @@ namespace LearningAssistant.Presenters
             }
         }
 
+        /// <summary>
+        /// 读取指定页的文字层，供无字幕跟读时匹配参考原文；页面未加载或读取失败时返回空字符串。
+        /// </summary>
+        public string GetPageText(int pageIndex)
+        {
+            try
+            {
+                return _pdfService.GetPdfText(pageIndex) ?? string.Empty;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "读取页面文字层失败: page {Page}", pageIndex);
+                return string.Empty;
+            }
+        }
+
 
         public (string? Folder, string? FilePath, Dictionary<string, int>? FilePageMap) LoadSession()
         {

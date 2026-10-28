@@ -66,10 +66,14 @@ public sealed class PdfTopTranslationBar : Panel
     /// <summary>当前显示的下行文本（译文或跟读说明）。</summary>
     public string TranslationText => _translation.Text;
 
+    /// <summary>当前译文对应的页码（0 基）；非译文态为 -1。</summary>
+    public int PageIndex { get; private set; } = -1;
+
     /// <summary>展示翻译加载态。</summary>
     public void ShowTranslationLoading(int pageIndex, string originalText)
     {
         _mode = BarMode.Translation;
+        PageIndex = pageIndex;
         _isRecording = false;
         _badge.Text = $"P{pageIndex + 1}";
         _original.Text = originalText;
@@ -91,6 +95,7 @@ public sealed class PdfTopTranslationBar : Panel
         bool fromCache)
     {
         _mode = BarMode.Translation;
+        PageIndex = pageIndex;
         _isRecording = false;
         _badge.Text = fromCache ? $"P{pageIndex + 1} 缓存" : $"P{pageIndex + 1}";
         _original.Text = originalText;
@@ -108,6 +113,7 @@ public sealed class PdfTopTranslationBar : Panel
     public void ShowTranslationFailure(int pageIndex, string originalText, string message)
     {
         _mode = BarMode.Translation;
+        PageIndex = pageIndex;
         _isRecording = false;
         _badge.Text = $"P{pageIndex + 1}";
         _original.Text = originalText;
@@ -184,7 +190,9 @@ public sealed class PdfTopTranslationBar : Panel
             ? "录音保存失败，本次不出参考分"
             : scorePending
                 ? "参考分计算中…"
-                : scoreAvailable ? "参考分暂不可用" : "未取到英文原文，本次不出参考分";
+                : scoreAvailable
+                    ? "未取到英文原文，本次不出参考分"
+                    : "未安装英语语音识别器，本次不出参考分";
         _translation.ForeColor = PdfSidebarTheme.Muted;
         ShowShadowingActions(canPlay: true, canClose: true);
         Visible = true;
@@ -224,6 +232,7 @@ public sealed class PdfTopTranslationBar : Panel
     public void HideBar()
     {
         _mode = BarMode.Hidden;
+        PageIndex = -1;
         _isRecording = false;
         _audioLevel = 0F;
         Visible = false;

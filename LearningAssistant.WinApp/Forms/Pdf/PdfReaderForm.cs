@@ -24,6 +24,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace LearningAssistant.Forms.Pdf
 {
@@ -100,6 +101,10 @@ namespace LearningAssistant.Forms.Pdf
         private int _shadowingResumeAttempts;
         private string? _shadowingSessionTag;
         private string? _shadowingExpectedText;
+        // 暂停时译条会被跟读提示覆盖，先缓存暂停前本页译条原文，供按 S 时取参考
+        private string _shadowingBarReferenceText = string.Empty;
+        // 无字幕/无选区时，从本页文字层提取的候选句；录音结束后用识别文本自动匹配其中一句
+        private List<string> _shadowingPageCandidates = new();
         private string? _shadowingPdfPath;
         private string? _shadowingTakePath;
         private int _shadowingPageIndex;
@@ -872,9 +877,33 @@ namespace LearningAssistant.Forms.Pdf
             try
             {
                 _shadowingSessionTag = $"pauseread_{Guid.NewGuid():N}"[..18];
-                _shadowingExpectedText = GetShadowingReferenceText();
                 _shadowingPdfPath = _currentPdfPath;
                 _shadowingPageIndex = _currentPageIndex;
+                _shadowingExpectedText = GetShadowingReferenceText();
+                var scorerAvailable = _pronunciationScorer?.IsAvailable == true;
+                if (!scorerAvailable)
+                {
+                    _logger?.LogInformation(
+                        "暂停跟读评分不可用：{Reason}",
+                        _pronunciationScorer?.UnavailableReason ?? "未知原因");
+                }
+                _shadowingPageCandidates = string.IsNullOrWhiteSpace(_shadowingExpectedText) && scorerAvailable
+                    ? GetShadowingPageCandidates(_shadowingPdfPath, _shadowingPageIndex)
+                    : new List<string>();
+                if (string.IsNullOrWhiteSpace(_shadowingExpectedText))
+                {
+                    // 无原文时仍允许保存录音，但提前说明评分的来源，避免录音结束后才困惑
+                    if (!scorerAvailable)
+                    {
+                        ShowToast("未安装英语语音识别器：本次只保存录音；安装后无需字幕即可按本页文字评分", 6000);
+                    }
+                    else
+                    {
+                        ShowToast(_shadowingPageCandidates.Count > 0
+                            ? "未选中原文：结束后按本页文字自动匹配参考分"
+                            : "未取到英文原文：本次只保存录音，不出参考分。可先选中句子再跟读", 4500);
+                    }
+                }
                 _shadowingDiscardTake = false;
                 _shadowingTakePath = null;
                 _shadowingAudioLevel = 0F;
@@ -916,41 +945,199 @@ namespace LearningAssistant.Forms.Pdf
 
         /// <summary>
         /// 取暂停跟读的参考原文：优先当前播放位置的字幕句，其次当前选中高亮，
-        /// 最后才回退到翻译面板原文。整页长文本不作为评分参考。
+        /// 再回退到本页译条/本页翻译缓存，最后才用唯一的本页高亮或翻译面板原文。
+        /// 整页长文本不作为评分参考。
         /// </summary>
         private string GetShadowingReferenceText()
         {
             var subtitle = GetCurrentPlaybackSubtitleText();
             if (IsUsableShadowingReference(subtitle))
-                return subtitle.Trim();
+                return UseShadowingReference("音频字幕", subtitle);
 
             var highlightText = _navigationManager?.SelectedHighlight?.Text;
             if (IsUsableShadowingReference(highlightText))
-                return highlightText!.Trim();
+                return UseShadowingReference("选中高亮", highlightText!);
+
+            var barText = GetShadowingBarReferenceText();
+            if (IsUsableShadowingReference(barText))
+                return UseShadowingReference("译条原文", barText);
+
+            var cachedText = GetCachedPageShadowingReferenceText();
+            if (IsUsableShadowingReference(cachedText))
+                return UseShadowingReference("本页翻译缓存", cachedText);
+
+            // 当前页只有一条已识别高亮时，用它兜底，避免播放过音频却取不到原文
+            var pageHighlights = GetUsablePageShadowingHighlights();
+            if (pageHighlights.Count == 1)
+                return UseShadowingReference("本页唯一高亮", pageHighlights[0].Text);
 
             var text = _textBoxOriginal?.Text?.Trim() ?? string.Empty;
             if (IsUsableShadowingReference(text))
-                return text;
+                return UseShadowingReference("翻译面板原文", text);
 
-            // 当前页只有一条已识别高亮时，用它兜底，避免播放过音频却取不到原文
-            if (!string.IsNullOrWhiteSpace(_currentPdfPath))
+            _logger?.LogInformation(
+                "暂停跟读快速参考原文未命中：页码 {PageIndex}，字幕条数 {CueCount}，选中高亮 {HasSelectedHighlight}，译条 {HasBarText}，本页缓存 {HasCachedText}，本页可用高亮 {PageHighlightCount}，翻译面板长度 {TextBoxLength}；将继续尝试本页文字匹配",
+                _currentPageIndex + 1,
+                _audioTrackManager?.Playback.Player.SubtitleCues?.Count ?? 0,
+                !string.IsNullOrWhiteSpace(_navigationManager?.SelectedHighlight?.Text),
+                !string.IsNullOrWhiteSpace(barText),
+                !string.IsNullOrWhiteSpace(cachedText),
+                pageHighlights.Count,
+                _textBoxOriginal?.TextLength ?? 0);
+            return string.Empty;
+        }
+
+        /// <summary>
+        /// 取本页可作为跟读参考的英文候选句。没有字幕/选区时，录音结束后用识别文本从中匹配一句。
+        /// </summary>
+        private List<string> GetShadowingPageCandidates(string? pdfPath, int pageIndex)
+        {
+            if (_presenter == null || string.IsNullOrWhiteSpace(pdfPath))
+                return new List<string>();
+
+            try
             {
-                try
-                {
-                    var pageHighlights = _highlightService
-                        .GetHighlightsForPage(_currentPdfPath, _currentPageIndex)
-                        .Where(h => IsUsableShadowingReference(h.Text))
-                        .ToList();
-                    if (pageHighlights.Count == 1)
-                        return pageHighlights[0].Text.Trim();
-                }
-                catch (Exception ex)
-                {
-                    _logger?.LogWarning(ex, "读取当前页高亮原文失败");
-                }
+                return ExtractShadowingPageCandidates(_presenter.GetPageText(pageIndex), pdfPath);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "提取本页跟读候选句失败");
+                return new List<string>();
+            }
+        }
+
+        /// <summary>
+        /// 从页面文字层逐行去掉书名、级别、页码和网站信息，再分句；避免把页眉当成原句。
+        /// </summary>
+        private static List<string> ExtractShadowingPageCandidates(string? rawText, string pdfPath)
+        {
+            var result = new List<string>();
+            if (string.IsNullOrWhiteSpace(rawText))
+                return result;
+
+            var title = Regex.Replace(Path.GetFileNameWithoutExtension(pdfPath) ?? string.Empty,
+                    @"^\d+[\s._-]*", string.Empty)
+                .Trim();
+
+            var contentLines = new List<string>();
+            foreach (var rawLine in rawText.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
+            {
+                var line = rawLine.Trim();
+                if (line.Length == 0)
+                    continue;
+
+                if (title.Length > 0)
+                    line = Regex.Replace(line, Regex.Escape(title), " ", RegexOptions.IgnoreCase);
+                line = Regex.Replace(line, @"\bLevel\s+[A-Za-z0-9\-]+\b", " ", RegexOptions.IgnoreCase);
+                line = Regex.Replace(line, @"\bLeveled\s+Book\b", " ", RegexOptions.IgnoreCase);
+                line = Regex.Replace(line, @"(?:www\.)?readinga-z\.com", " ", RegexOptions.IgnoreCase);
+                // 去掉行首残留的页码、项目符号和分隔线
+                line = Regex.Replace(line, @"^[\s•·\-–—\d]+", " ");
+                line = Regex.Replace(line, @"[•·]", " ");
+                line = Regex.Replace(line, @"\s+", " ").Trim();
+
+                if (LooksLikeShadowingPageSentence(line))
+                    contentLines.Add(line);
             }
 
-            return string.Empty;
+            var sentences = SentenceSegmenter.Segment(string.Join(" ", contentLines));
+            foreach (var sentence in sentences)
+            {
+                var text = sentence.Text.Trim();
+                if (!IsUsableShadowingReference(text) || !LooksLikeShadowingPageSentence(text))
+                    continue;
+                if (result.Contains(text, StringComparer.OrdinalIgnoreCase))
+                    continue;
+
+                result.Add(text);
+            }
+
+            return result;
+        }
+
+        /// <summary>过滤页眉、版权页等非正文英文行，保留至少两个英文单词的正文候选。</summary>
+        private static bool LooksLikeShadowingPageSentence(string text)
+        {
+            if (text.Length < 8)
+                return false;
+            if (text.Contains("reading a-z", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("reading a–z", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("www.", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("all rights reserved", StringComparison.OrdinalIgnoreCase)
+                || text.Contains("photo credits", StringComparison.OrdinalIgnoreCase)
+                || text.StartsWith("Written by", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            // 全大写标题/页码不作文本参考
+            if (!text.Any(char.IsLower))
+                return false;
+
+            return Regex.Matches(text, @"[A-Za-z][A-Za-z']*").Count >= 2;
+        }
+
+        /// <summary>记录本次参考原文来源，不输出原文内容。</summary>
+        private string UseShadowingReference(string source, string text)
+        {
+            var trimmed = text.Trim();
+            _logger?.LogInformation("暂停跟读参考原文取自 {Source}，长度 {Length}", source, trimmed.Length);
+            return trimmed;
+        }
+
+        /// <summary>
+        /// 译条在暂停时会被“按 S 开始跟读”覆盖，因此优先读暂停前缓存的原文；
+        /// 若当前仍是译文态（例如 Ctrl+Space 暂停），直接读译条，但页码必须与本页一致。
+        /// </summary>
+        private string GetShadowingBarReferenceText()
+        {
+            if (_topTranslationBar is { IsShadowingMode: false }
+                && _topTranslationBar.PageIndex == _currentPageIndex)
+            {
+                return _topTranslationBar.OriginalText?.Trim() ?? string.Empty;
+            }
+
+            return _shadowingBarReferenceText;
+        }
+
+        /// <summary>取当前页最近一次选区翻译的原文，避免误用其他页残留的面板文本。</summary>
+        private string GetCachedPageShadowingReferenceText()
+        {
+            if (_selectionTranslationCache == null || string.IsNullOrWhiteSpace(_currentPdfPath))
+                return string.Empty;
+
+            try
+            {
+                return _selectionTranslationCache
+                           .GetLatest(_currentPdfPath, _currentPageIndex, CurrentSelectionTranslationLanguage)
+                           ?.OriginalText
+                       ?? string.Empty;
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "读取本页翻译缓存原文失败");
+                return string.Empty;
+            }
+        }
+
+        /// <summary>取当前页可用于跟读评分的高亮文本。</summary>
+        private List<PdfHighlight> GetUsablePageShadowingHighlights()
+        {
+            if (string.IsNullOrWhiteSpace(_currentPdfPath))
+                return new List<PdfHighlight>();
+
+            try
+            {
+                return _highlightService
+                    .GetHighlightsForPage(_currentPdfPath, _currentPageIndex)
+                    .Where(h => IsUsableShadowingReference(h.Text))
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "读取当前页高亮原文失败");
+                return new List<PdfHighlight>();
+            }
         }
 
         /// <summary>取播放器当前位置对应的字幕文本。</summary>
@@ -1089,20 +1276,31 @@ namespace LearningAssistant.Forms.Pdf
             var hasTake = !string.IsNullOrWhiteSpace(_shadowingTakePath) && File.Exists(_shadowingTakePath);
 
             var expectedText = _shadowingExpectedText ?? string.Empty;
-            var canScore = _pronunciationScorer?.IsAvailable == true
+            var scorerAvailable = _pronunciationScorer?.IsAvailable == true;
+            var canScore = scorerAvailable
                            && !string.IsNullOrWhiteSpace(expectedText)
                            && IsLikelyEnglish(expectedText);
+            // 无字幕/无选区时，本页文字层的候选句先取出；录音结束后用识别文本自动匹配其中一句
+            var canMatchPageSentence = !canScore
+                                       && scorerAvailable
+                                       && hasTake
+                                       && _shadowingPageCandidates.Count > 0;
 
             _topTranslationBar?.ShowShadowingSaved(
                 recording.DurationMs,
-                scorePending: canScore,
-                scoreAvailable: _pronunciationScorer?.IsAvailable == true,
+                scorePending: canScore || canMatchPageSentence,
+                scoreAvailable: scorerAvailable,
                 hasTake: hasTake);
             PositionTopTranslationBar();
 
             if (canScore && hasTake)
             {
                 _ = ScoreShadowingTakeAsync(_shadowingTakePath!, expectedText, _shadowingSessionTag);
+            }
+            else if (canMatchPageSentence)
+            {
+                _ = ScoreShadowingTakeWithPageTextAsync(
+                    _shadowingTakePath!, _shadowingPageCandidates, _shadowingSessionTag);
             }
         }
 
@@ -1130,6 +1328,107 @@ namespace LearningAssistant.Forms.Pdf
             {
                 _logger.LogWarning(ex, "Score pause shadowing take failed");
             }
+        }
+
+        /// <summary>
+        /// 无字幕/无选区时的自动评分：先识别本次录音，再从本页文字候选句中选最匹配的一句作为参考。
+        /// 匹配度不足时不出分，避免拿页眉或用户没读的句子硬评。
+        /// </summary>
+        private async Task ScoreShadowingTakeWithPageTextAsync(
+            string takePath,
+            IReadOnlyList<string> candidates,
+            string sessionTag)
+        {
+            var scorer = _pronunciationScorer;
+            if (scorer == null || !scorer.IsAvailable)
+            {
+                SetShadowingScoreSafe(null);
+                return;
+            }
+
+            try
+            {
+                var recognized = await scorer.RecognizeTextAsync(takePath);
+                if (IsDisposed || !string.Equals(_shadowingSessionTag, sessionTag, StringComparison.Ordinal))
+                    return;
+
+                if (string.IsNullOrWhiteSpace(recognized))
+                {
+                    _logger?.LogInformation("按本页文字自动评分失败：录音未识别出文本");
+                    SetShadowingScoreSafe(null);
+                    return;
+                }
+
+                PronunciationScoreResult? best = null;
+                string? matchedText = null;
+                foreach (var candidate in candidates)
+                {
+                    var result = TextSimilarityScorer.Score(candidate, recognized);
+                    if (!result.IsValid)
+                        continue;
+                    if (best == null || result.Score > best.Score)
+                    {
+                        best = result;
+                        matchedText = candidate;
+                    }
+                }
+
+                // 至少覆盖候选句一半的单词且分数达到阈值，才算匹配成功
+                const int minScore = 45;
+                const double minCoverage = 0.5;
+                if (best == null || best.Score < minScore || best.Coverage < minCoverage)
+                {
+                    _logger?.LogInformation(
+                        "按本页文字自动评分未匹配：识别长度 {Length}，最高分 {Score}，覆盖率 {Coverage}",
+                        recognized.Length,
+                        best?.Score ?? 0,
+                        best?.Coverage ?? 0);
+                    SetShadowingScoreSafe(null);
+                    ShowToastSafe("未匹配到本页原文，本次不出参考分");
+                    return;
+                }
+
+                _logger?.LogInformation(
+                    "按本页文字自动评分匹配成功：分数 {Score}，原文长度 {Length}",
+                    best.Score,
+                    matchedText?.Length ?? 0);
+                SetShadowingScoreSafe(best.Score);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "按本页文字自动评分失败");
+                SetShadowingScoreSafe(null);
+            }
+        }
+
+        /// <summary>从任意线程安全更新参考分。</summary>
+        private void SetShadowingScoreSafe(int? score)
+        {
+            if (IsDisposed)
+                return;
+
+            if (InvokeRequired)
+            {
+                try { BeginInvoke(new Action(() => _topTranslationBar?.SetShadowingScore(score))); } catch { }
+                return;
+            }
+
+            _topTranslationBar?.SetShadowingScore(score);
+        }
+
+        /// <summary>从任意线程安全弹出短提示。</summary>
+        private void ShowToastSafe(string message)
+        {
+            if (IsDisposed)
+                return;
+
+            if (InvokeRequired)
+            {
+                try { BeginInvoke(new Action(() => ShowToast(message, 3000))); } catch { }
+                return;
+            }
+
+            ShowToast(message, 3000);
         }
 
         /// <summary>把临时录音移动到跟读 takes 目录；失败时保留临时文件。</summary>
@@ -1246,6 +1545,11 @@ namespace LearningAssistant.Forms.Pdf
 
             if (wasPlaying && _audioTrackManager?.CurrentTrack != null && !_audioTrackManager.IsPlaying)
             {
+                // 跟读提示会覆盖译条原文，先保存暂停前本页译条的原文
+                _shadowingBarReferenceText = _topTranslationBar is { IsShadowingMode: false }
+                                             && _topTranslationBar.PageIndex == _currentPageIndex
+                    ? _topTranslationBar.OriginalText.Trim()
+                    : string.Empty;
                 _topTranslationBar?.ShowShadowingHint();
                 PositionTopTranslationBar();
                 return;
@@ -2827,6 +3131,10 @@ namespace LearningAssistant.Forms.Pdf
                 _navigationManager?.ClearSelection();
                 // 翻页后丢弃上一页仍在途的翻译回包
                 ++_selectionTranslationRequestId;
+                // 暂停时缓存的译条原文只属于上一页
+                _shadowingBarReferenceText = string.Empty;
+                // 本页候选句同样只属于上一页
+                _shadowingPageCandidates = new List<string>();
                 // 录音中翻页：先保存当前跟读，再延迟续播新页音频
                 HandleShadowingPageChange();
             }

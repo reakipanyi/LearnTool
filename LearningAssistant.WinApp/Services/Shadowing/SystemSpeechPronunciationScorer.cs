@@ -40,6 +40,24 @@ namespace LearningAssistant.Services.Shadowing
         {
             if (!IsAvailable || string.IsNullOrWhiteSpace(expectedText))
                 return null;
+
+            var recognizedText = await RecognizeTextAsync(wavFilePath, cancellationToken).ConfigureAwait(false);
+            if (recognizedText == null)
+                return null;
+
+            return TextSimilarityScorer.Score(expectedText, recognizedText);
+        }
+
+        /// <summary>
+        /// 只做语音识别，返回识别文本；无可用引擎、录音无效或识别失败时返回 null。
+        /// 与评分共用同一个识别引擎和串行锁，避免并发使用非线程安全的 SpeechRecognitionEngine。
+        /// </summary>
+        public async Task<string?> RecognizeTextAsync(
+            string wavFilePath,
+            CancellationToken cancellationToken = default)
+        {
+            if (!IsAvailable)
+                return null;
             if (string.IsNullOrWhiteSpace(wavFilePath) || !File.Exists(wavFilePath))
                 return null;
 
@@ -56,8 +74,7 @@ namespace LearningAssistant.Services.Shadowing
                     _engine ??= CreateEngine();
                     _engine.SetInputToWaveFile(wavFilePath);
                     RecognitionResult? result = _engine.Recognize();
-
-                    return TextSimilarityScorer.Score(expectedText, result?.Text ?? string.Empty);
+                    return result?.Text;
                 }, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
@@ -67,7 +84,7 @@ namespace LearningAssistant.Services.Shadowing
             catch (Exception ex)
             {
                 System.Diagnostics.Trace.TraceWarning(
-                    $"[PronunciationScorer] 评分失败: {ex.Message}");
+                    $"[PronunciationScorer] 识别失败: {ex.Message}");
                 return null;
             }
             finally

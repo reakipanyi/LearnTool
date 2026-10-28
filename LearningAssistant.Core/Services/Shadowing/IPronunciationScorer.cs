@@ -22,5 +22,13 @@ namespace LearningAssistant.Services.Shadowing
             string expectedText,
             string wavFilePath,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 仅识别录音文本，不评分；用于无字幕/无选区时从本页文字中匹配用户实际跟读的句子。
+        /// 不可用或录音无效时返回 null。
+        /// </summary>
+        Task<string?> RecognizeTextAsync(
+            string wavFilePath,
+            CancellationToken cancellationToken = default);
     }
 }
