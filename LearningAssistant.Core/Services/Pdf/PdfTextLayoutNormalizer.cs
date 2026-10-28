@@ -47,6 +47,18 @@ public sealed class PdfTextLayoutNormalizer
         @"^(?:[•·▪◦●○■□►▶]|[-–—*]\s|\d{1,3}[.)、．]\s*|\(\d{1,3}\)\s*|第[一二三四五六七八九十百零〇\d]+[章节页条部分])",
         RegexOptions.Compiled);
 
+    /// <summary>判断一行是否为纯页码行（可在自动框选时排除页码）</summary>
+    public static bool IsPageNumberLine(string? line)
+    {
+        return !string.IsNullOrWhiteSpace(line) && PageNumberLineRegex.IsMatch(line.Trim());
+    }
+
+    /// <summary>判断一行是否以列表标记/章节编号开头（自动框选时分块使用）</summary>
+    public static bool IsListMarkerLine(string? line)
+    {
+        return !string.IsNullOrWhiteSpace(line) && ListMarkerRegex.IsMatch(line.Trim());
+    }
+
     /// <summary>
     /// 从多页文本中推断重复出现的页眉页脚模板行；少于 3 页时返回空集合。
     /// 模板会把数字统一替换为 #，因此 “第 3 页” 与 “第 12 页” 视为同一模板。

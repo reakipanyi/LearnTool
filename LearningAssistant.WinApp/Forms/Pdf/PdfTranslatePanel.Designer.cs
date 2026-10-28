@@ -25,6 +25,7 @@ partial class PdfTranslatePanel
         ocrButton = new Button();
         shadowingButton = new Button();
         addToLearningButton = new Button();
+        autoHighlightButton = new Button();
         options = new FlowLayoutPanel();
         autoTranslateCheck = new CheckBox();
         autoSpeakCheck = new CheckBox();
@@ -156,13 +157,15 @@ partial class PdfTranslatePanel
         // actions
         // 
         actions.BackColor = Color.FromArgb(247, 248, 251);
-        actions.ColumnCount = 3;
-        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
-        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
-        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.34F));
+        actions.ColumnCount = 4;
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
         actions.Controls.Add(ocrButton, 0, 0);
         actions.Controls.Add(shadowingButton, 1, 0);
         actions.Controls.Add(addToLearningButton, 2, 0);
+        actions.Controls.Add(autoHighlightButton, 3, 0);
         actions.Dock = DockStyle.Fill;
         actions.Location = new Point(10, 452);
         actions.Margin = new Padding(0, 4, 0, 0);
@@ -184,9 +187,9 @@ partial class PdfTranslatePanel
         ocrButton.FlatStyle = FlatStyle.Flat;
         ocrButton.Font = new Font("Microsoft YaHei UI", 9F);
         ocrButton.ForeColor = Color.FromArgb(29, 78, 216);
-        ocrButton.Margin = new Padding(0, 0, 6, 0);
+        ocrButton.Margin = new Padding(0, 0, 3, 0);
         ocrButton.Name = "ocrButton";
-        ocrButton.Size = new Size(172, 29);
+        ocrButton.Size = new Size(127, 29);
         ocrButton.TabIndex = 0;
         ocrButton.Tag = "keep";
         ocrButton.Text = "🔍 整页识别";
@@ -205,7 +208,7 @@ partial class PdfTranslatePanel
         shadowingButton.ForeColor = Color.FromArgb(109, 40, 217);
         shadowingButton.Margin = new Padding(3, 0, 3, 0);
         shadowingButton.Name = "shadowingButton";
-        shadowingButton.Size = new Size(172, 29);
+        shadowingButton.Size = new Size(127, 29);
         shadowingButton.TabIndex = 1;
         shadowingButton.Tag = "keep";
         shadowingButton.Text = "✂ 句子跟读";
@@ -222,13 +225,32 @@ partial class PdfTranslatePanel
         addToLearningButton.FlatStyle = FlatStyle.Flat;
         addToLearningButton.Font = new Font("Microsoft YaHei UI", 9F);
         addToLearningButton.ForeColor = Color.FromArgb(4, 120, 87);
-        addToLearningButton.Margin = new Padding(6, 0, 0, 0);
+        addToLearningButton.Margin = new Padding(3, 0, 3, 0);
         addToLearningButton.Name = "addToLearningButton";
-        addToLearningButton.Size = new Size(173, 29);
+        addToLearningButton.Size = new Size(127, 29);
         addToLearningButton.TabIndex = 2;
         addToLearningButton.Tag = "keep";
         addToLearningButton.Text = "➕ 加入本页译文";
         addToLearningButton.UseVisualStyleBackColor = false;
+        // 
+        // autoHighlightButton
+        // 
+        autoHighlightButton.BackColor = Color.FromArgb(255, 247, 237);
+        autoHighlightButton.Cursor = Cursors.Hand;
+        autoHighlightButton.Dock = DockStyle.Fill;
+        autoHighlightButton.FlatAppearance.BorderColor = Color.FromArgb(253, 186, 116);
+        autoHighlightButton.FlatAppearance.BorderSize = 1;
+        autoHighlightButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(255, 237, 213);
+        autoHighlightButton.FlatStyle = FlatStyle.Flat;
+        autoHighlightButton.Font = new Font("Microsoft YaHei UI", 9F);
+        autoHighlightButton.ForeColor = Color.FromArgb(194, 65, 12);
+        autoHighlightButton.Margin = new Padding(3, 0, 0, 0);
+        autoHighlightButton.Name = "autoHighlightButton";
+        autoHighlightButton.Size = new Size(130, 29);
+        autoHighlightButton.TabIndex = 3;
+        autoHighlightButton.Tag = "keep";
+        autoHighlightButton.Text = "🖍 自动高亮";
+        autoHighlightButton.UseVisualStyleBackColor = false;
         // 
         // options
         // 
@@ -412,6 +434,7 @@ partial class PdfTranslatePanel
     private Button ocrButton;
     private Button shadowingButton;
     private Button addToLearningButton;
+    private Button autoHighlightButton;
     private FlowLayoutPanel options;
     private CheckBox autoTranslateCheck;
     private CheckBox autoSpeakCheck;

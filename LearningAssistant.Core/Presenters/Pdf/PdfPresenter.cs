@@ -1340,6 +1340,31 @@ namespace LearningAssistant.Presenters
         }
 
 
+        /// <summary>
+        /// 读取指定页的文字层行框，供「自动高亮」框选正文区域；无文本层时返回空集合。
+        /// </summary>
+        public IReadOnlyList<PdfTextLine> GetPageTextLines(int pageIndex)
+        {
+            try
+            {
+                return _pdfService.GetTextLines(pageIndex);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "读取页面文字层行框失败: page {Page}", pageIndex);
+                return Array.Empty<PdfTextLine>();
+            }
+        }
+
+        /// <summary>OCR 初始化失败信息（自动高亮扫描页时用于给出提示）。</summary>
+        public string? OcrInitErrorMessage => _pdfOcrService.InitErrorMessage;
+
+        /// <summary>
+        /// 对页面图像执行带行框的 OCR，供自动高亮生成扫描页文字块。
+        /// </summary>
+        public Task<OcrLayoutResult?> RecognizeLayoutWithAutoLanguageAsync(byte[] image)
+            => _pdfOcrService.RecognizeLayoutWithAutoLanguageAsync(image);
+
         public (string? Folder, string? FilePath, Dictionary<string, int>? FilePageMap) LoadSession()
         {
             return _pdfFileManager.LoadSession();

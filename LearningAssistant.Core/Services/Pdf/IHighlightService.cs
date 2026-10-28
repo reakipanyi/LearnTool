@@ -67,6 +67,32 @@ namespace LearningAssistant.Services.Pdf
         Task<string> AddHighlightAsync(string pdfPath, int pageIndex, float normalizedX, float normalizedY, float normalizedWidth, float normalizedHeight, string text = "", HighlightColor color = HighlightColor.Yellow);
 
         /// <summary>
+        /// 批量添加高亮（自动框选使用）：只计算一次文件哈希、只写一次磁盘。
+        /// </summary>
+        /// <param name="pdfPath">PDF文件路径</param>
+        /// <param name="highlights">待添加的高亮集合，Id 为空时自动生成</param>
+        /// <returns>已落库的高亮集合（含最终 Id）</returns>
+        Task<IReadOnlyList<PdfHighlight>> AddHighlightsAsync(
+            string pdfPath,
+            IReadOnlyList<PdfHighlight> highlights);
+
+        /// <summary>
+        /// 删除指定页面由自动高亮生成的高亮。
+        /// </summary>
+        /// <param name="pdfPath">PDF文件路径</param>
+        /// <param name="pageIndex">页码索引</param>
+        /// <param name="autoGroupId">可选：只删除指定自动组</param>
+        /// <returns>被删除的高亮集合</returns>
+        List<PdfHighlight> RemoveAutoHighlightsForPage(string pdfPath, int pageIndex, string? autoGroupId = null);
+
+        /// <summary>
+        /// 删除指定文档的所有自动高亮。
+        /// </summary>
+        /// <param name="pdfPath">PDF文件路径</param>
+        /// <returns>被删除的高亮集合</returns>
+        List<PdfHighlight> RemoveAllAutoHighlights(string pdfPath);
+
+        /// <summary>
         /// 添加带笔记的高亮
         /// </summary>
         /// <param name="pdfPath">PDF文件路径</param>

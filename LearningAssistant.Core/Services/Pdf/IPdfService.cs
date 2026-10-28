@@ -60,6 +60,14 @@ namespace LearningAssistant.Services.Pdf
         string GetPdfText(int pageIndex);
 
         /// <summary>
+        /// 提取指定页面的文本行及其页面归一化坐标（左上原点）。
+        /// 用于自动框选：文本层为空时应返回空集合，由调用方决定是否走 OCR。
+        /// </summary>
+        /// <param name="pageIndex">页码索引（从0开始）</param>
+        /// <returns>文本行集合；无文本层或失败时返回空集合</returns>
+        IReadOnlyList<LearningAssistant.Models.Pdf.PdfTextLine> GetTextLines(int pageIndex);
+
+        /// <summary>
         /// 获取PDF文件的总页数（无需加载整个文件）
         /// </summary>
         /// <param name="pdfPath">PDF文件的完整路径</param>

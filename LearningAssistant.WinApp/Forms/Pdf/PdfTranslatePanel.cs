@@ -33,6 +33,7 @@ public partial class PdfTranslatePanel : UserControl
         _tip.SetToolTip(ocrButton, "仅识别本页文字，不翻译；无文本层时自动调用 OCR");
         _tip.SetToolTip(shadowingButton, "用当前页原文直接开始分句跟读");
         _tip.SetToolTip(addToLearningButton, "把选区或本页原文加入个人学习库");
+        _tip.SetToolTip(autoHighlightButton, "自动框选当前页正文区域（排除页码）；再次点击清除本页自动框选；右键可整本框选");
         _tip.SetToolTip(autoTranslateCheck, "识别后自动翻译原文");
         _tip.SetToolTip(autoSpeakCheck, "识别后自动朗读原文");
         _tip.SetToolTip(aiPolishCheck, "使用 AI 术语表润色译文，保持术语前后一致（失败时自动保留机器译文）");
@@ -105,6 +106,27 @@ public partial class PdfTranslatePanel : UserControl
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Button AddToLearningButton => addToLearningButton;
+
+    /// <summary>自动高亮（自动框选正文）按钮。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button AutoHighlightButton => autoHighlightButton;
+
+    /// <summary>
+    /// 更新自动高亮按钮状态：任务进行中禁用并提示；当前页已有自动框选时显示清除文案。
+    /// </summary>
+    public void UpdateAutoHighlightState(bool busy, bool hasAutoHighlights)
+    {
+        if (busy)
+        {
+            autoHighlightButton.Enabled = false;
+            autoHighlightButton.Text = "⏳ 正在框选";
+            return;
+        }
+
+        autoHighlightButton.Enabled = true;
+        autoHighlightButton.Text = hasAutoHighlights ? "🧹 清除本页" : "🖍 自动高亮";
+    }
 
     /// <summary>识别后自动翻译。</summary>
     [Browsable(false)]

@@ -147,6 +147,8 @@ public class PdfDocumentTextIndexTests
         public Bitmap? RenderPageBitmap(int pageIndex, int width, int height) => new Bitmap(10, 10);
         public SizeFInfo GetPageSize(int pageIndex) => new SizeFInfo(100, 140);
         public string GetPdfText(int pageIndex) => Texts.TryGetValue(pageIndex, out var text) ? text : string.Empty;
+        public IReadOnlyList<LearningAssistant.Models.Pdf.PdfTextLine> GetTextLines(int pageIndex) =>
+            Array.Empty<LearningAssistant.Models.Pdf.PdfTextLine>();
 
         public int GetPageCount(string pdfPath) => PageCount;
 
@@ -169,6 +171,8 @@ public class PdfDocumentTextIndexTests
         public Task<string?> RecognizeTextAsync(byte[] image, RectInt region) => Task.FromResult(Result);
         public Task<string?> RecognizeTextWithAutoLanguageAsync(byte[] image) => Task.FromResult(Result);
         public Task<string?> RecognizeTextWithAutoLanguageAsync(byte[] image, RectInt region) => Task.FromResult(Result);
+        public Task<LearningAssistant.Models.Pdf.OcrLayoutResult?> RecognizeLayoutWithAutoLanguageAsync(byte[] image) =>
+            Task.FromResult<LearningAssistant.Models.Pdf.OcrLayoutResult?>(null);
         public bool SetLanguage(string language) => true;
     }
 }

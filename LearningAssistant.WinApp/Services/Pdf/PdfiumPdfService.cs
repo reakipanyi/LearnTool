@@ -154,6 +154,144 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
+        public IReadOnlyList<LearningAssistant.Models.Pdf.PdfTextLine> GetTextLines(int pageIndex)
+        {
+            if (pageIndex < 0)
+                throw new ArgumentOutOfRangeException(nameof(pageIndex), "Page index cannot be negative.");
+
+            lock (_lockObj)
+            {
+                if (_pdf == null || pageIndex >= _pdf.PageCount)
+                    return Array.Empty<LearningAssistant.Models.Pdf.PdfTextLine>();
+
+                SizeFInfo pageSize;
+                if (_pdf.PageSizes != null && _pdf.PageSizes.Count > pageIndex)
+                {
+                    var size = _pdf.PageSizes[pageIndex];
+                    pageSize = new SizeFInfo(size.Width, size.Height);
+                }
+                else
+                {
+                    pageSize = SizeFInfo.Empty;
+                }
+
+                if (pageSize.Width <= 0 || pageSize.Height <= 0)
+                    return Array.Empty<LearningAssistant.Models.Pdf.PdfTextLine>();
+
+                string rawText;
+                try
+                {
+                    rawText = _pdf.GetPdfText(pageIndex) ?? string.Empty;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to read text layer for page {PageIndex}", pageIndex);
+                    return Array.Empty<LearningAssistant.Models.Pdf.PdfTextLine>();
+                }
+
+                if (rawText.Length == 0)
+                    return Array.Empty<LearningAssistant.Models.Pdf.PdfTextLine>();
+
+                var lines = new List<LearningAssistant.Models.Pdf.PdfTextLine>();
+                int lineStart = 0;
+                for (int i = 0; i <= rawText.Length; i++)
+                {
+                    bool isBreak = i == rawText.Length || rawText[i] == '\n' || rawText[i] == '\r';
+                    if (!isBreak) continue;
+
+                    AddTextLine(_pdf, pageIndex, rawText, lineStart, i, pageSize, lines);
+
+                    // 跳过 CRLF 中的 LF，保证下一行偏移正确
+                    if (i < rawText.Length && rawText[i] == '\r' &&
+                        i + 1 < rawText.Length && rawText[i + 1] == '\n')
+                    {
+                        i++;
+                    }
+
+                    lineStart = i + 1;
+                }
+
+                _logger.LogDebug("Extracted {Count} text lines from page {PageIndex}", lines.Count, pageIndex);
+                return lines;
+            }
+        }
+
+        /// <summary>按原始字符串偏移提取单行文字，并合并该行所有词级矩形为行包围盒。</summary>
+        private static void AddTextLine(
+            PdfDocument document,
+            int pageIndex,
+            string rawText,
+            int start,
+            int end,
+            SizeFInfo pageSize,
+            List<LearningAssistant.Models.Pdf.PdfTextLine> destination)
+        {
+            while (start < end && char.IsWhiteSpace(rawText[start])) start++;
+            while (end > start && char.IsWhiteSpace(rawText[end - 1])) end--;
+            if (end <= start) return;
+
+            string text = rawText.Substring(start, end - start).Trim();
+            if (text.Length == 0) return;
+
+            IList<PdfRectangle> rectangles;
+            try
+            {
+                rectangles = document.GetTextBounds(new PdfTextSpan(pageIndex, start, end - start));
+            }
+            catch
+            {
+                // 个别字体/编码无法取到行框时跳过该行，不影响其余文本
+                return;
+            }
+
+            if (rectangles == null || rectangles.Count == 0) return;
+
+            float left = float.MaxValue;
+            float right = float.MinValue;
+            float top = float.MinValue;
+            float bottom = float.MaxValue;
+            bool hasBounds = false;
+
+            foreach (var rectangle in rectangles)
+            {
+                var bounds = rectangle.Bounds;
+                if (bounds.Width <= 0 || bounds.Height == 0) continue;
+
+                float rectBottom = bounds.Y;
+                float rectTop = bounds.Y + bounds.Height;
+                if (rectBottom > rectTop)
+                {
+                    (rectBottom, rectTop) = (rectTop, rectBottom);
+                }
+
+                left = Math.Min(left, bounds.X);
+                right = Math.Max(right, bounds.X + bounds.Width);
+                top = Math.Max(top, rectTop);
+                bottom = Math.Min(bottom, rectBottom);
+                hasBounds = true;
+            }
+
+            if (!hasBounds || right <= left || top <= bottom) return;
+
+            float x = left / pageSize.Width;
+            float y = (pageSize.Height - top) / pageSize.Height;
+            float width = (right - left) / pageSize.Width;
+            float height = (top - bottom) / pageSize.Height;
+
+            if (width <= 0 || height <= 0) return;
+            if (x < -0.02f || y < -0.02f || x > 1.02f || y > 1.02f) return;
+
+            destination.Add(new LearningAssistant.Models.Pdf.PdfTextLine
+            {
+                Text = text,
+                X = Math.Clamp(x, 0f, 1f),
+                Y = Math.Clamp(y, 0f, 1f),
+                Width = Math.Min(width, 1f - Math.Clamp(x, 0f, 1f)),
+                Height = Math.Min(height, 1f - Math.Clamp(y, 0f, 1f)),
+                FontSize = top - bottom
+            });
+        }
+
         public int GetPageCount(string pdfPath)
         {
             if (string.IsNullOrWhiteSpace(pdfPath))

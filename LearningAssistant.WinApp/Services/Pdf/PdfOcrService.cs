@@ -105,6 +105,19 @@ namespace LearningAssistant.Services.Pdf
             return recognizedText;
         }
 
+        public async Task<LearningAssistant.Models.Pdf.OcrLayoutResult?> RecognizeLayoutWithAutoLanguageAsync(byte[] image)
+        {
+            if (!_ocrService.IsAvailable)
+                return null;
+
+            var layout = await _ocrService.RecognizeLayoutAsync(image);
+            if (layout != null && !string.IsNullOrWhiteSpace(layout.Text))
+            {
+                await AutoDetectAndSetLanguageAsync(layout.Text);
+            }
+            return layout;
+        }
+
         private async Task AutoDetectAndSetLanguageAsync(string text)
         {
             var langType = StringLanguageDetector.DetectLanguage(text);

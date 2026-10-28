@@ -70,6 +70,8 @@ namespace LearningAssistant.Managers
         void ShowWarning(string message);
         bool ShowConfirm(string message, string title);
         void ShowMessage(string message, string title);
+        /// <summary>在窗口底部显示短暂提示</summary>
+        void ShowToast(string message, int duration = 2000);
 
         event EventHandler? TranslateClicked;
         event EventHandler? SelectOcrClicked;

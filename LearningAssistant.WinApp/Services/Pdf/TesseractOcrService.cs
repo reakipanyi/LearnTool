@@ -203,6 +203,74 @@ namespace LearningAssistant.Services.Pdf
             });
         }
 
+        public async Task<LearningAssistant.Models.Pdf.OcrLayoutResult?> RecognizeLayoutAsync(byte[] image)
+        {
+            if (_engine == null) return null;
+
+            var bmp = BytesToBitmap(image);
+            if (bmp == null) return null;
+
+            return await Task.Run(() =>
+            {
+                _engineLock.Wait();
+                try
+                {
+                    var engine = _engine;
+                    if (engine == null) return null;
+
+                    using var ms = new MemoryStream();
+                    bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                    ms.Position = 0;
+
+                    using var pix = Pix.LoadFromMemory(ms.ToArray());
+                    using var page = engine.Process(pix);
+
+                    var result = new LearningAssistant.Models.Pdf.OcrLayoutResult
+                    {
+                        ImageWidth = bmp.Width,
+                        ImageHeight = bmp.Height,
+                        Text = page.GetText()?.Trim() ?? string.Empty
+                    };
+
+                    using var iterator = page.GetIterator();
+                    iterator.Begin();
+                    do
+                    {
+                        if (!iterator.TryGetBoundingBox(PageIteratorLevel.TextLine, out var rect))
+                            continue;
+
+                        var lineText = iterator.GetText(PageIteratorLevel.TextLine);
+                        if (string.IsNullOrWhiteSpace(lineText))
+                            continue;
+
+                        int width = rect.X2 - rect.X1;
+                        int height = rect.Y2 - rect.Y1;
+                        if (width <= 0 || height <= 0)
+                            continue;
+
+                        result.Lines.Add(new LearningAssistant.Models.Pdf.OcrTextLine
+                        {
+                            Text = System.Text.RegularExpressions.Regex.Replace(lineText, @"\s+", " ").Trim(),
+                            Bounds = new RectInt(rect.X1, rect.Y1, width, height)
+                        });
+                    }
+                    while (iterator.Next(PageIteratorLevel.TextLine));
+
+                    return result;
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogError(ex, "OCR 行框识别失败");
+                    return null;
+                }
+                finally
+                {
+                    bmp.Dispose();
+                    _engineLock.Release();
+                }
+            });
+        }
+
         public async Task<string> RecognizeTextAsync(byte[] image, RectInt region)
         {
             if (_engine == null)

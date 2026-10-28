@@ -24,6 +24,13 @@ namespace LearningAssistant.Services.Pdf
         Task<string> RecognizeTextAsync(byte[] image, RectInt region);
 
         /// <summary>
+        /// 识别图片中的文字并返回逐行包围盒（自动框选使用）。
+        /// </summary>
+        /// <param name="image">图片byte[]</param>
+        /// <returns>识别结果；服务不可用或失败时返回null</returns>
+        Task<LearningAssistant.Models.Pdf.OcrLayoutResult?> RecognizeLayoutAsync(byte[] image);
+
+        /// <summary>
         /// OCR服务是否可用
         /// </summary>
         bool IsAvailable { get; }

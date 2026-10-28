@@ -48,6 +48,13 @@ namespace LearningAssistant.Services.Pdf
         Task<string?> RecognizeTextWithAutoLanguageAsync(byte[] image, RectInt region);
 
         /// <summary>
+        /// 识别图片中的文字并返回逐行包围盒，自动检测/切换 OCR 语言（自动框选使用）。
+        /// </summary>
+        /// <param name="image">图片byte[]</param>
+        /// <returns>识别结果；服务不可用或失败时返回null</returns>
+        Task<LearningAssistant.Models.Pdf.OcrLayoutResult?> RecognizeLayoutWithAutoLanguageAsync(byte[] image);
+
+        /// <summary>
         /// 设置OCR识别语言
         /// </summary>
         /// <param name="language">语言代码（如 eng, chi_sim）</param>
