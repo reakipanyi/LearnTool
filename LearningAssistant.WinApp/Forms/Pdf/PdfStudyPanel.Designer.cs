@@ -34,6 +34,7 @@ partial class PdfStudyPanel
         practiceLayout = new TableLayoutPanel();
         recordingButton = new Button();
         shadowingButton = new Button();
+        wholeBookShadowingButton = new Button();
         aiCard = new SidebarCard();
         aiLayout = new TableLayoutPanel();
         summaryButton = new Button();
@@ -347,13 +348,15 @@ partial class PdfStudyPanel
         practiceLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
         practiceLayout.Controls.Add(recordingButton, 0, 0);
         practiceLayout.Controls.Add(shadowingButton, 0, 1);
+        practiceLayout.Controls.Add(wholeBookShadowingButton, 0, 2);
         practiceLayout.Dock = DockStyle.Fill;
         practiceLayout.Margin = Padding.Empty;
         practiceLayout.Name = "practiceLayout";
         practiceLayout.Padding = Padding.Empty;
-        practiceLayout.RowCount = 2;
-        practiceLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
-        practiceLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+        practiceLayout.RowCount = 3;
+        practiceLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.4F));
+        practiceLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.3F));
+        practiceLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 33.3F));
         practiceLayout.Size = new Size(256, 76);
         practiceLayout.TabIndex = 0;
         // 
@@ -386,13 +389,30 @@ partial class PdfStudyPanel
         shadowingButton.FlatStyle = FlatStyle.Flat;
         shadowingButton.Font = new Font("Microsoft YaHei UI", 9F);
         shadowingButton.ForeColor = Color.FromArgb(15, 23, 42);
-        shadowingButton.Margin = Padding.Empty;
+        shadowingButton.Margin = new Padding(0, 0, 0, 6);
         shadowingButton.Name = "shadowingButton";
         shadowingButton.Padding = new Padding(10, 0, 0, 0);
         shadowingButton.Tag = "secondary";
         shadowingButton.Text = "✂ 开始本页跟读";
         shadowingButton.TextAlign = ContentAlignment.MiddleLeft;
-        // 
+        //
+        // wholeBookShadowingButton
+        //
+        wholeBookShadowingButton.AutoEllipsis = true;
+        wholeBookShadowingButton.BackColor = Color.White;
+        wholeBookShadowingButton.Cursor = Cursors.Hand;
+        wholeBookShadowingButton.Dock = DockStyle.Fill;
+        wholeBookShadowingButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        wholeBookShadowingButton.FlatAppearance.BorderSize = 1;
+        wholeBookShadowingButton.FlatStyle = FlatStyle.Flat;
+        wholeBookShadowingButton.Font = new Font("Microsoft YaHei UI", 9F);
+        wholeBookShadowingButton.ForeColor = Color.FromArgb(15, 23, 42);
+        wholeBookShadowingButton.Margin = Padding.Empty;
+        wholeBookShadowingButton.Name = "wholeBookShadowingButton";
+        wholeBookShadowingButton.Padding = new Padding(10, 0, 0, 0);
+        wholeBookShadowingButton.Tag = "secondary";
+        wholeBookShadowingButton.Text = "📖 整本跟读";
+        wholeBookShadowingButton.TextAlign = ContentAlignment.MiddleLeft;
         // aiCard
         // 
         aiCard.Dock = DockStyle.Fill;
@@ -576,6 +596,7 @@ partial class PdfStudyPanel
     private TableLayoutPanel practiceLayout;
     private Button recordingButton;
     private Button shadowingButton;
+    private Button wholeBookShadowingButton;
     private SidebarCard aiCard;
     private TableLayoutPanel aiLayout;
     private Button summaryButton;

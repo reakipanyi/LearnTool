@@ -9,14 +9,16 @@ public partial class PdfStudyPanel : UserControl
     public PdfStudyPanel()
     {
         InitializeComponent();
-        // 整页录音入口已下线：隐藏按钮并让跟读按钮占满原本两行区域
+        // 整页录音入口已下线：隐藏按钮，由「本页跟读」与「整本跟读」占两行区域
         if (!PdfHiddenFeatures.EnablePageRecording)
         {
             recordingButton.Visible = false;
             practiceLayout.SetRow(shadowingButton, 0);
-            practiceLayout.RowCount = 1;
+            practiceLayout.SetRow(wholeBookShadowingButton, 1);
+            practiceLayout.RowCount = 2;
             practiceLayout.RowStyles.Clear();
-            practiceLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            practiceLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+            practiceLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
         }
         // 卡片内容区由面板自行挂载，避免 VS 设计器回写时丢失
         overviewCard.Body.Controls.Add(overviewLayout);
@@ -84,6 +86,11 @@ public partial class PdfStudyPanel : UserControl
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Button ShadowingButton => shadowingButton;
 
+    /// <summary>「整本跟读」按钮。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button WholeBookShadowingButton => wholeBookShadowingButton;
+
     /// <summary>「AI 总结」按钮。</summary>
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -132,7 +139,9 @@ public partial class PdfStudyPanel : UserControl
         float overviewHeight = statHeight * 3 + 44;
         float actionHeight = 40 + 3 * (buttonHeight + 6) + hintHeight + 6 + 4;
         float audioHeight = 40 + 2 * (buttonHeight + 4);
-        float practiceHeight = 40 + 2 * (buttonHeight + 4);
+        // 录音按钮显示时三行（录音/本页跟读/整本跟读），隐藏时两行（本页/整本）
+        int practiceRows = recordingButton.Visible ? 3 : 2;
+        float practiceHeight = 40 + practiceRows * (buttonHeight + 6);
         float aiHeight = 40 + 3 * (buttonHeight + 4);
 
         if (Math.Abs(root.RowStyles[1].Height - overviewHeight) > 0.5f)

@@ -167,6 +167,7 @@ namespace LearningAssistant.Forms.Pdf
         private Button? _buttonStudyAddHighlights;
         private Button? _buttonStudyFlashcards;
         private Button? _buttonStudyShadowing;
+        private Button? _buttonStudyWholeBookShadowing;
         private FlowLayoutPanel? _studyItemList;
         private PdfStudyPanel? _studyPanel;
         private static string? _lastSidebarTabName;
@@ -913,14 +914,65 @@ namespace LearningAssistant.Forms.Pdf
             return true;
         }
 
-        /// <summary>取当前翻译面板的原文作为跟读参考；整页长文本不作为评分参考。</summary>
+        /// <summary>
+        /// 取暂停跟读的参考原文：优先当前播放位置的字幕句，其次当前选中高亮，
+        /// 最后才回退到翻译面板原文。整页长文本不作为评分参考。
+        /// </summary>
         private string GetShadowingReferenceText()
         {
+            var subtitle = GetCurrentPlaybackSubtitleText();
+            if (IsUsableShadowingReference(subtitle))
+                return subtitle.Trim();
+
+            var highlightText = _navigationManager?.SelectedHighlight?.Text;
+            if (IsUsableShadowingReference(highlightText))
+                return highlightText!.Trim();
+
             var text = _textBoxOriginal?.Text?.Trim() ?? string.Empty;
-            if (text.Length == 0 || text.Length > 400)
+            if (IsUsableShadowingReference(text))
+                return text;
+
+            // 当前页只有一条已识别高亮时，用它兜底，避免播放过音频却取不到原文
+            if (!string.IsNullOrWhiteSpace(_currentPdfPath))
+            {
+                try
+                {
+                    var pageHighlights = _highlightService
+                        .GetHighlightsForPage(_currentPdfPath, _currentPageIndex)
+                        .Where(h => IsUsableShadowingReference(h.Text))
+                        .ToList();
+                    if (pageHighlights.Count == 1)
+                        return pageHighlights[0].Text.Trim();
+                }
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "读取当前页高亮原文失败");
+                }
+            }
+
+            return string.Empty;
+        }
+
+        /// <summary>取播放器当前位置对应的字幕文本。</summary>
+        private string GetCurrentPlaybackSubtitleText()
+        {
+            var cues = _audioTrackManager?.Playback.Player.SubtitleCues;
+            if (cues == null || cues.Count == 0)
                 return string.Empty;
 
-            return text;
+            var position = _audioTrackManager!.Playback.Player.Position;
+            var cue = cues.FirstOrDefault(c => c.StartTime <= position && position <= c.EndTime)
+                      ?? cues.LastOrDefault(c => c.StartTime <= position);
+            return cue?.Text ?? string.Empty;
+        }
+
+        private static bool IsUsableShadowingReference(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
+
+            var trimmed = text.Trim();
+            return trimmed.Length <= 400 && IsLikelyEnglish(trimmed);
         }
 
         private void ShadowingTimer_Tick(object? sender, EventArgs e)
@@ -7435,6 +7487,8 @@ namespace LearningAssistant.Forms.Pdf
             _buttonStudyFlashcards.Click += ButtonStudyFlashcards_Click;
             _buttonStudyShadowing = _studyPanel.ShadowingButton;
             _buttonStudyShadowing.Click += ButtonStudyShadowing_Click;
+            _buttonStudyWholeBookShadowing = _studyPanel.WholeBookShadowingButton;
+            _buttonStudyWholeBookShadowing.Click += ButtonStudyWholeBookShadowing_Click;
 
             // 音频与跟读收口到学习页：配套音频/整页录音进入右侧抽屉
             _studyPanel.AudioOpenButton.Click += (_, _) => ShowAudioCompanion();
@@ -7503,6 +7557,24 @@ namespace LearningAssistant.Forms.Pdf
                 _buttonStudyAddHighlights.Enabled = highlightCount > 0;
             if (_buttonStudyShadowing != null)
                 _buttonStudyShadowing.Enabled = sentenceCount > 0;
+            if (_buttonStudyWholeBookShadowing != null)
+            {
+                bool hasBookHighlights = false;
+                if (!string.IsNullOrWhiteSpace(_currentPdfPath) && _highlightService != null)
+                {
+                    try
+                    {
+                        hasBookHighlights = _highlightService
+                            .GetHighlights(_currentPdfPath)
+                            .Any(h => !string.IsNullOrWhiteSpace(h.Text));
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogWarning(ex, "统计全书高亮失败");
+                    }
+                }
+                _buttonStudyWholeBookShadowing.Enabled = hasBookHighlights;
+            }
 
             RefreshStudyItemList(pageItems);
         }
@@ -7773,6 +7845,12 @@ namespace LearningAssistant.Forms.Pdf
             }
 
             OpenShadowingWindow();
+        }
+
+        /// <summary>整本跟读：按全书高亮的识别文本逐条练习，不再逐页 OCR。</summary>
+        private void ButtonStudyWholeBookShadowing_Click(object? sender, EventArgs e)
+        {
+            OpenWholeBookShadowingWindow();
         }
 
         /// <summary>翻译面板「句子跟读」：用当前页原文直接打开分句跟读窗口。</summary>
@@ -8360,6 +8438,28 @@ namespace LearningAssistant.Forms.Pdf
             _audioDrawer.Bounds = new Rectangle(x, y, width, _tabControlLeft.Height);
         }
 
+        /// <summary>
+        /// 同一文档只保留一个跟读窗口：模式相同则激活，模式不同则关闭旧窗口后重建。
+        /// </summary>
+        /// <returns>已有窗口且模式一致并已激活时返回 true。</returns>
+        private bool TryActivateShadowingWindow(bool wholeBook)
+        {
+            if (_shadowingForm == null || _shadowingForm.IsDisposed)
+                return false;
+
+            if (_shadowingForm.IsWholeBook != wholeBook)
+            {
+                // 单页跟读与整本跟读互斥，切换入口时重建窗口，避免旧窗口拦截新入口
+                _shadowingForm.Close();
+                return false;
+            }
+
+            if (_shadowingForm.WindowState == FormWindowState.Minimized)
+                _shadowingForm.WindowState = FormWindowState.Normal;
+            _shadowingForm.Activate();
+            return true;
+        }
+
         private void OpenShadowingWindow()
         {
             if (string.IsNullOrEmpty(_currentPdfPath))
@@ -8375,21 +8475,75 @@ namespace LearningAssistant.Forms.Pdf
                 return;
             }
 
-            // 同一文档只保留一个跟读窗口，重复点击时激活已有窗口
-            if (_shadowingForm != null && !_shadowingForm.IsDisposed)
+            // 同一文档只保留一个跟读窗口：模式一致时激活已有窗口，模式不同时切换重建
+            if (TryActivateShadowingWindow(wholeBook: false))
+                return;
+
+            string documentTitle = Path.GetFileNameWithoutExtension(_currentPdfPath);
+            var window = new SentenceShadowingForm(
+                _currentPdfPath, _currentPageIndex, originalText, documentTitle,
+                _nightModeManager?.IsNightMode ?? false);
+            // 只清理当前窗口，避免旧窗口关闭事件误清空新窗口引用
+            window.FormClosed += (_, _) =>
             {
-                if (_shadowingForm.WindowState == FormWindowState.Minimized)
-                    _shadowingForm.WindowState = FormWindowState.Normal;
-                _shadowingForm.Activate();
+                if (ReferenceEquals(_shadowingForm, window))
+                    _shadowingForm = null;
+            };
+            _shadowingForm = window;
+            window.Show(this);
+        }
+
+        /// <summary>
+        /// 整本跟读：直接使用全书已缓存的高亮识别文本，避免整页 OCR 带入页眉标题与乱码。
+        /// 从当前阅读页对应的第一条高亮开始，录音与评分仍写回高亮所属页。
+        /// </summary>
+        private void OpenWholeBookShadowingWindow()
+        {
+            if (string.IsNullOrEmpty(_currentPdfPath))
+            {
+                ShowWarning("请先打开 PDF 文档。");
+                return;
+            }
+
+            // 同一文档只保留一个跟读窗口：模式一致时激活已有窗口，模式不同时切换重建
+            if (TryActivateShadowingWindow(wholeBook: true))
+                return;
+
+            ShadowingHighlightPlan plan;
+            try
+            {
+                plan = ShadowingHighlightSource.Build(_highlightService.GetAllHighlights(_currentPdfPath));
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "读取全书高亮失败");
+                ShowWarning("读取全书高亮失败，请稍后重试。");
+                return;
+            }
+
+            if (plan.Sentences.Count == 0)
+            {
+                ShowWarning("本书还没有可用于跟读的高亮文本，请先划选高亮并完成识别。");
                 return;
             }
 
             string documentTitle = Path.GetFileNameWithoutExtension(_currentPdfPath);
-            _shadowingForm = new SentenceShadowingForm(
-                _currentPdfPath, _currentPageIndex, originalText, documentTitle,
+            var window = new SentenceShadowingForm(
+                _currentPdfPath, plan.Sentences, _currentPageIndex, documentTitle,
                 _nightModeManager?.IsNightMode ?? false);
-            _shadowingForm.FormClosed += (_, _) => _shadowingForm = null;
-            _shadowingForm.Show(this);
+            // 只清理当前窗口，避免旧窗口关闭事件误清空新窗口引用
+            window.FormClosed += (_, _) =>
+            {
+                if (ReferenceEquals(_shadowingForm, window))
+                    _shadowingForm = null;
+            };
+            _shadowingForm = window;
+            window.Show(this);
+
+            if (plan.SkippedCount > 0)
+            {
+                ShowToast($"已载入 {plan.Sentences.Count} 条高亮，跳过 {plan.SkippedCount} 条无识别文本的高亮");
+            }
         }
 
         #endregion
@@ -8806,6 +8960,7 @@ namespace LearningAssistant.Forms.Pdf
                 new("翻译本页", "识别并翻译当前页", () => { ShowAudioDrawer(AudioDrawerMode.Translate); OnTranslateClicked(); }),
                 new("整页识别", "只识别当前页文字，不翻译", () => { ShowAudioDrawer(AudioDrawerMode.Translate); OnOcrPageClicked(); }),
                 new("开始本页跟读", "打开句子跟读窗口", OpenShadowingWindow),
+                new("整本跟读", "按全书高亮逐条跟读", OpenWholeBookShadowingWindow),
                 new("配套音频", "在右侧抽屉查看配套音频", ShowAudioCompanion),
             };
             // 整页录音入口已下线：命令面板不再出现该项

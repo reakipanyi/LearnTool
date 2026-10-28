@@ -26,6 +26,9 @@ namespace LearningAssistant.Forms.Pdf
         private readonly int _pageIndex;
         private readonly string _documentTitle;
         private readonly List<ShadowingSentence> _textSentences;
+        private readonly bool _wholeBook;
+        private readonly List<int> _sentencePageIndexes = new();
+        private readonly Dictionary<string, int> _sentencePageById = new(StringComparer.Ordinal);
         private ShadowingPracticeService? _practice;
         private readonly IAudioRecorderService? _recorder;
         private readonly IPronunciationScorer? _scorer;
@@ -69,22 +72,63 @@ namespace LearningAssistant.Forms.Pdf
         private sealed class SentenceRow
         {
             public int Index { get; init; }
+            public int PageIndex { get; init; }
             public string Text { get; init; } = string.Empty;
             public ShadowingAudioState State { get; set; } = ShadowingAudioState.Pending;
         }
 
+        /// <summary>是否为整本高亮跟读模式。</summary>
+        public bool IsWholeBook => _wholeBook;
+
         public SentenceShadowingForm(string pdfPath, int pageIndex, string pageText, string documentTitle, bool isDark = false)
+            : this(pdfPath, pageIndex, SentenceSegmenter.Segment(pageText), null, false, documentTitle, isDark)
+        {
+        }
+
+        /// <summary>
+        /// 整本跟读：按全书高亮顺序逐条练习，每条录音与评分仍写回所属页。
+        /// </summary>
+        public SentenceShadowingForm(string pdfPath, IReadOnlyList<ShadowingHighlightSentence> highlights, int startPageIndex, string documentTitle, bool isDark = false)
+            : this(
+                pdfPath,
+                startPageIndex,
+                highlights.Select(h => h.Sentence).ToList(),
+                highlights.Select(h => h.PageIndex).ToList(),
+                true,
+                documentTitle,
+                isDark)
+        {
+        }
+
+        private SentenceShadowingForm(
+            string pdfPath,
+            int pageIndex,
+            List<ShadowingSentence> textSentences,
+            IReadOnlyList<int>? sentencePageIndexes,
+            bool wholeBook,
+            string documentTitle,
+            bool isDark)
         {
             _pdfPath = pdfPath;
             _pageIndex = pageIndex;
             _documentTitle = documentTitle;
-            _textSentences = SentenceSegmenter.Segment(pageText);
+            _textSentences = textSentences;
+            _wholeBook = wholeBook;
+
+            for (int i = 0; i < _textSentences.Count; i++)
+            {
+                int sentencePage = sentencePageIndexes != null && i < sentencePageIndexes.Count
+                    ? sentencePageIndexes[i]
+                    : pageIndex;
+                _sentencePageIndexes.Add(sentencePage);
+                _sentencePageById[_textSentences[i].Id] = sentencePage;
+            }
 
             InitializeComponent();
 
-            Text = $"句子跟读 - {documentTitle}";
+            Text = _wholeBook ? $"整本跟读 - {documentTitle}" : $"句子跟读 - {documentTitle}";
             BackColor = PdfSidebarTheme.Background;
-            _labelInfo.Text = $"第 {_pageIndex + 1} 页";
+            _labelInfo.Text = _wholeBook ? "整本高亮" : $"第 {_pageIndex + 1} 页";
             _comboMode.Items.AddRange(new object[] { "单句循环", "自动下一句", "整段连读" });
             _comboMode.SelectedIndex = 1;
 
@@ -92,9 +136,13 @@ namespace LearningAssistant.Forms.Pdf
             MountSourceBar();
             WireEvents();
 
-            LoadSegments();
-            _segmentMode = _segments.Count > 0;
-            PersistManifest(_textSentences);
+            // 整本模式使用高亮原文，不读取单页原声切片，也不写入单页分句清单
+            if (!_wholeBook)
+            {
+                LoadSegments();
+                _segmentMode = _segments.Count > 0;
+                PersistManifest(_textSentences);
+            }
 
             PdfSidebarTheme.ThemeChanged += OnSidebarThemeChanged;
             if (isDark)
@@ -207,7 +255,7 @@ namespace LearningAssistant.Forms.Pdf
             LoadSentenceScores(sentences);
             FillSentenceList(sentences);
 
-            _labelTitle.Text = _segmentMode ? "原声跟读" : "句子跟读";
+            _labelTitle.Text = _wholeBook ? "整本跟读" : _segmentMode ? "原声跟读" : "句子跟读";
             Text = $"{_labelTitle.Text} - {_documentTitle}";
             _takeActions.Visible = _segmentMode;
             _btnCompose.Visible = _segmentMode;
@@ -215,7 +263,10 @@ namespace LearningAssistant.Forms.Pdf
 
             if (sentences.Count > 0)
             {
-                SetCurrentIndex(_segmentMode ? ResolveInitialIndex() : 0, play);
+                int initialIndex = _wholeBook
+                    ? ResolveWholeBookInitialIndex()
+                    : _segmentMode ? ResolveInitialIndex() : 0;
+                SetCurrentIndex(initialIndex, play);
             }
             else
             {
@@ -319,6 +370,38 @@ namespace LearningAssistant.Forms.Pdf
             }
 
             return 0;
+        }
+
+        /// <summary>整本模式从当前阅读页对应的第一条高亮开始。</summary>
+        private int ResolveWholeBookInitialIndex()
+        {
+            for (int i = 0; i < _sentencePageIndexes.Count; i++)
+            {
+                if (_sentencePageIndexes[i] >= _pageIndex)
+                    return i;
+            }
+
+            return 0;
+        }
+
+        /// <summary>句子所属页码：单页模式固定为当前页，整本模式取高亮页码。</summary>
+        private int ResolveSentencePage(int index)
+        {
+            if (!_wholeBook)
+                return _pageIndex;
+            return index >= 0 && index < _sentencePageIndexes.Count
+                ? _sentencePageIndexes[index]
+                : _pageIndex;
+        }
+
+        private void UpdateHeaderInfo(int index)
+        {
+            if (!_wholeBook)
+                return;
+
+            int total = _practice?.Sentences.Count ?? _textSentences.Count;
+            int page = ResolveSentencePage(index);
+            _labelInfo.Text = $"整本 · 第 {page + 1} 页 · 共 {total} 条高亮";
         }
 
         /// <summary>优先采用手动选中的 take，否则取最高分（同分取最新）。</summary>
@@ -719,8 +802,10 @@ namespace LearningAssistant.Forms.Pdf
                         stateText += $" · {_segments[row.Index].Takes.Count} 次";
                 }
             }
+            if (_wholeBook)
+                stateText = $"{row.PageIndex + 1} 页 · {stateText}";
             TextRenderer.DrawText(e.Graphics, stateText, stateFont,
-                new Rectangle(bounds.X + 62, bounds.Y + 56, 110, 18),
+                new Rectangle(bounds.X + 62, bounds.Y + 56, 150, 18),
                 palette.Muted, TextFormatFlags.NoPrefix);
             stateFont.Dispose();
 
@@ -764,6 +849,9 @@ namespace LearningAssistant.Forms.Pdf
                     _listSentences.Items.Add(new SentenceRow
                     {
                         Index = i,
+                        PageIndex = _wholeBook && i < _sentencePageIndexes.Count
+                            ? _sentencePageIndexes[i]
+                            : _pageIndex,
                         Text = sentences[i].Text,
                         State = state
                     });
@@ -778,20 +866,29 @@ namespace LearningAssistant.Forms.Pdf
             _progressTrack.Invalidate();
 
             _labelInfo.Text = sentences.Count == 0
-                ? $"第 {_pageIndex + 1} 页 · 未识别到可跟读的句子"
-                : _segmentMode
-                    ? $"第 {_pageIndex + 1} 页 · 共 {sentences.Count} 段原声"
-                    : $"第 {_pageIndex + 1} 页 · 共 {sentences.Count} 句";
+                ? _wholeBook
+                    ? "整本 · 没有可跟读的高亮文本"
+                    : $"第 {_pageIndex + 1} 页 · 未识别到可跟读的句子"
+                : _wholeBook
+                    ? $"整本 · 共 {sentences.Count} 条高亮"
+                    : _segmentMode
+                        ? $"第 {_pageIndex + 1} 页 · 共 {sentences.Count} 段原声"
+                        : $"第 {_pageIndex + 1} 页 · 共 {sentences.Count} 句";
 
             if (sentences.Count == 0)
-                _labelStatus.Text = "当前页面没有可分句的文本，请先执行 OCR 或翻译取得文本。";
+                _labelStatus.Text = _wholeBook
+                    ? "全书没有可用于跟读的高亮文本，请先划选高亮并完成识别。"
+                    : "当前页面没有可分句的文本，请先执行 OCR 或翻译取得文本。";
+            else if (_wholeBook)
+                _labelStatus.Text = "已载入全书高亮，可逐条跟读或录音。";
             else if (_segmentMode)
                 _labelStatus.Text = "已载入原声切片，可逐段跟读或录音。";
         }
 
         private void PersistManifest(List<ShadowingSentence> sentences)
         {
-            if (string.IsNullOrWhiteSpace(_pdfPath) || sentences.Count == 0)
+            // 整本模式不生成单页分句清单，录音键按高亮 ID 独立保存
+            if (_wholeBook || string.IsNullOrWhiteSpace(_pdfPath) || sentences.Count == 0)
                 return;
 
             try
@@ -821,13 +918,16 @@ namespace LearningAssistant.Forms.Pdf
 
             try
             {
-                var saved = _store.LoadSentenceRecordings(_pdfPath, _pageIndex);
                 var validIds = new HashSet<string>(sentences.Select(s => s.Id), StringComparer.Ordinal);
-                foreach (var pair in saved)
+                foreach (int pageIndex in RecordingPages())
                 {
-                    if (!validIds.Contains(pair.Key) || !File.Exists(pair.Value))
-                        continue;
-                    _sentenceRecordings[pair.Key] = pair.Value;
+                    var saved = _store.LoadSentenceRecordings(_pdfPath, pageIndex);
+                    foreach (var pair in saved)
+                    {
+                        if (!validIds.Contains(pair.Key) || !File.Exists(pair.Value))
+                            continue;
+                        _sentenceRecordings[pair.Key] = pair.Value;
+                    }
                 }
             }
             catch (Exception ex)
@@ -846,13 +946,16 @@ namespace LearningAssistant.Forms.Pdf
 
             try
             {
-                var saved = _store.LoadSentenceScores(_pdfPath, _pageIndex);
                 var validIds = new HashSet<string>(sentences.Select(s => s.Id), StringComparer.Ordinal);
-                foreach (var pair in saved)
+                foreach (int pageIndex in RecordingPages())
                 {
-                    if (!validIds.Contains(pair.Key) || pair.Value < 0 || pair.Value > 100)
-                        continue;
-                    _sentenceScores[pair.Key] = pair.Value;
+                    var saved = _store.LoadSentenceScores(_pdfPath, pageIndex);
+                    foreach (var pair in saved)
+                    {
+                        if (!validIds.Contains(pair.Key) || pair.Value < 0 || pair.Value > 100)
+                            continue;
+                        _sentenceScores[pair.Key] = pair.Value;
+                    }
                 }
             }
             catch (Exception ex)
@@ -861,14 +964,56 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
-        private void PersistSentenceRecordings()
+        /// <summary>需要读取录音/评分的页码：单页模式只有当前页，整本模式覆盖所有高亮页。</summary>
+        private IEnumerable<int> RecordingPages()
+        {
+            if (!_wholeBook)
+                return new[] { _pageIndex };
+            return _sentencePageIndexes.Distinct();
+        }
+
+        /// <summary>只把指定页的条目写回该页，避免整本模式把其他页的记录写串。</summary>
+        private Dictionary<string, string> RecordingsForPage(int pageIndex)
+        {
+            if (!_wholeBook)
+                return new Dictionary<string, string>(_sentenceRecordings, StringComparer.Ordinal);
+
+            var result = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var pair in _sentenceRecordings)
+            {
+                if (_sentencePageById.TryGetValue(pair.Key, out int ownerPage) && ownerPage == pageIndex)
+                    result[pair.Key] = pair.Value;
+            }
+            return result;
+        }
+
+        private Dictionary<string, int> ScoresForPage(int pageIndex)
+        {
+            if (!_wholeBook)
+                return new Dictionary<string, int>(_sentenceScores, StringComparer.Ordinal);
+
+            var result = new Dictionary<string, int>(StringComparer.Ordinal);
+            foreach (var pair in _sentenceScores)
+            {
+                if (_sentencePageById.TryGetValue(pair.Key, out int ownerPage) && ownerPage == pageIndex)
+                    result[pair.Key] = pair.Value;
+            }
+            return result;
+        }
+
+        private void PersistSentenceRecordings(int pageIndex)
         {
             if (string.IsNullOrWhiteSpace(_pdfPath))
                 return;
 
             try
             {
-                _store.SaveSentenceRecordings(_pdfPath, _pageIndex, _sentenceRecordings);
+                // 整本高亮录音与单页分句录音共用页级存储，保存前合并，避免互相覆盖
+                var merged = new Dictionary<string, string>(
+                    _store.LoadSentenceRecordings(_pdfPath, pageIndex), StringComparer.Ordinal);
+                foreach (var pair in RecordingsForPage(pageIndex))
+                    merged[pair.Key] = pair.Value;
+                _store.SaveSentenceRecordings(_pdfPath, pageIndex, merged);
             }
             catch (Exception ex)
             {
@@ -876,14 +1021,19 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
-        private void PersistSentenceScores()
+        private void PersistSentenceScores(int pageIndex)
         {
             if (string.IsNullOrWhiteSpace(_pdfPath))
                 return;
 
             try
             {
-                _store.SaveSentenceScores(_pdfPath, _pageIndex, _sentenceScores);
+                // 整本高亮评分与单页分句评分共用页级存储，保存前合并，避免互相覆盖
+                var merged = new Dictionary<string, int>(
+                    _store.LoadSentenceScores(_pdfPath, pageIndex), StringComparer.Ordinal);
+                foreach (var pair in ScoresForPage(pageIndex))
+                    merged[pair.Key] = pair.Value;
+                _store.SaveSentenceScores(_pdfPath, pageIndex, merged);
             }
             catch (Exception ex)
             {
@@ -1185,6 +1335,7 @@ namespace LearningAssistant.Forms.Pdf
             _listSentences.Invalidate();
             _progressTrack.Invalidate();
             _labelCurrent.Text = _practice.Sentences[index].Sentence.Text;
+            UpdateHeaderInfo(index);
             RefreshScoreLabel();
             UpdateReplayButtonState();
             RefreshWaveform();
@@ -1239,6 +1390,7 @@ namespace LearningAssistant.Forms.Pdf
             _listSentences.Invalidate();
             _progressTrack.Invalidate();
             _labelCurrent.Text = _practice.Sentences[index].Sentence.Text;
+            UpdateHeaderInfo(index);
             RefreshScoreLabel();
             UpdateReplayButtonState();
 
@@ -1269,7 +1421,7 @@ namespace LearningAssistant.Forms.Pdf
                 default:
                     if (finishedIndex + 1 >= _practice.Sentences.Count)
                     {
-                        _labelStatus.Text = "已播放到最后一页句子。";
+                        _labelStatus.Text = _wholeBook ? "已播放完全书高亮句子。" : "已播放到最后一页句子。";
                         _btnRecord.Text = "🎤 录音";
                         return;
                     }
@@ -1407,7 +1559,7 @@ namespace LearningAssistant.Forms.Pdf
 
                 _recorder.StartRecording(
                     _pdfPath,
-                    _pageIndex,
+                    ResolveSentencePage(index),
                     Path.GetFileName(_pdfPath),
                     AudioRecordingScope.Sentence,
                     _recordingSentenceId);
@@ -1489,7 +1641,7 @@ namespace LearningAssistant.Forms.Pdf
                 if (!string.IsNullOrWhiteSpace(recording.FilePath) && File.Exists(recording.FilePath))
                 {
                     _sentenceRecordings[sentence.Id] = recording.FilePath;
-                    PersistSentenceRecordings();
+                    PersistSentenceRecordings(ResolveSentencePage(index));
                 }
                 UpdateReplayButtonState();
 
@@ -1533,7 +1685,7 @@ namespace LearningAssistant.Forms.Pdf
                     if (result != null && result.IsValid)
                     {
                         _sentenceScores[sentence.Id] = result.Score;
-                        PersistSentenceScores();
+                        PersistSentenceScores(ResolveSentencePage(index));
                         if (IsHandleCreated) _listSentences.Invalidate();
                     }
                 }
@@ -1716,7 +1868,11 @@ namespace LearningAssistant.Forms.Pdf
                 return;
 
             // 单句合成实测 P50 约 6 秒，打开窗口后立即顺序预热前三句，首句优先。
-            FireAndForget(_practice.PrefetchAsync(0, Math.Min(3, _practice.Sentences.Count)));
+            // 整本模式可能从书中间打开，因此从当前句开始预热。
+            int start = _currentIndex < 0 ? 0 : _currentIndex;
+            int count = Math.Min(3, _practice.Sentences.Count - start);
+            if (count > 0)
+                FireAndForget(_practice.PrefetchAsync(start, count));
         }
 
         private void OnFormClosed(object? sender, FormClosedEventArgs e)
