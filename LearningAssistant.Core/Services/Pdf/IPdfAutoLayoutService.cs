@@ -8,6 +8,12 @@ namespace LearningAssistant.Services.Pdf
     /// </summary>
     public interface IPdfAutoLayoutService
     {
+        /// <summary>OCR 是否可用；扫描页整本框选依赖该能力。</summary>
+        bool IsOcrAvailable { get; }
+
+        /// <summary>OCR 初始化失败信息。</summary>
+        string? OcrInitErrorMessage { get; }
+
         /// <summary>计算文档指纹；缓存与指纹绑定，文件变化后自动失效。</summary>
         string GetFingerprint(string pdfPath);
 
@@ -36,7 +42,7 @@ namespace LearningAssistant.Services.Pdf
         /// <param name="allowOcr">无文本层的页是否回退 OCR</param>
         /// <param name="progress">进度回调</param>
         /// <param name="cancellationToken">取消令牌</param>
-        Task BuildDocumentAsync(
+        Task<PdfAutoLayoutSummary> BuildDocumentAsync(
             string pdfPath,
             bool allowOcr,
             IProgress<PdfAutoLayoutProgress>? progress = null,

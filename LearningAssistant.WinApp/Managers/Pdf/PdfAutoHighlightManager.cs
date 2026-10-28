@@ -46,8 +46,11 @@ namespace LearningAssistant.Managers
         /// <summary>是否正在执行整本自动框选。</summary>
         public bool IsWholeBookRunning { get; private set; }
 
-        /// <summary>整本任务是否支持 OCR（决定右键菜单文案与缓存策略）。</summary>
+        /// <summary>整本任务是否可用（依赖版面服务）。</summary>
         public bool CanUseWholeBook => _autoLayoutService != null;
+
+        /// <summary>整本任务是否可使用 OCR（扫描页框选前提）。</summary>
+        public bool CanUseWholeBookOcr => _autoLayoutService?.IsOcrAvailable == true;
 
         /// <summary>当前可见页是否已有自动高亮（双页模式检查两页）。</summary>
         public bool HasAutoHighlightsForVisiblePages()
@@ -127,13 +130,23 @@ namespace LearningAssistant.Managers
                     ? "开始整本框选（含扫描页 OCR）..."
                     : "开始整本框选（文本层）...");
 
-                await _autoLayoutService.BuildDocumentAsync(
+                if (allowOcr && !_autoLayoutService.IsOcrAvailable)
+                {
+                    _form.ShowToast(_autoLayoutService.OcrInitErrorMessage
+                        ?? "OCR 不可用，本次只处理文本层页面");
+                }
+
+                var summary = await _autoLayoutService.BuildDocumentAsync(
                     pdfPath, allowOcr, progress, _wholeBookCts.Token);
 
                 foreach (var page in GetVisiblePages())
                     await EnsurePageMaterializedAsync(page);
 
-                _form.ShowToast("整本自动框选已就绪，浏览页面时自动加载");
+                var parts = new List<string> { $"文本层 {summary.TextLayerPages} 页" };
+                if (summary.OcrPages > 0) parts.Add($"OCR {summary.OcrPages} 页");
+                if (summary.SkippedPages > 0) parts.Add($"跳过 {summary.SkippedPages} 页");
+                if (summary.FailedPages > 0) parts.Add($"失败 {summary.FailedPages} 页");
+                _form.ShowToast("整本框选完成：" + string.Join("，", parts));
             }
             catch (OperationCanceledException)
             {

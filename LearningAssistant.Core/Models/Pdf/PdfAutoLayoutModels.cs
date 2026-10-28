@@ -70,6 +70,16 @@ namespace LearningAssistant.Models.Pdf
         public bool Skipped { get; set; }
     }
 
+    /// <summary>整本自动框选结果汇总。</summary>
+    public sealed class PdfAutoLayoutSummary
+    {
+        public int TotalPages { get; set; }
+        public int TextLayerPages { get; set; }
+        public int OcrPages { get; set; }
+        public int SkippedPages { get; set; }
+        public int FailedPages { get; set; }
+    }
+
     /// <summary>OCR 行框识别结果（图像像素坐标）。</summary>
     public sealed class OcrLayoutResult
     {

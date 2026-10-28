@@ -53,6 +53,10 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
+        public bool IsOcrAvailable => _ocrService?.IsAvailable == true;
+
+        public string? OcrInitErrorMessage => _ocrService?.InitErrorMessage;
+
         public string GetFingerprint(string pdfPath)
         {
             if (string.IsNullOrWhiteSpace(pdfPath)) return "missing";
@@ -129,12 +133,14 @@ namespace LearningAssistant.Services.Pdf
             }
         }
 
-        public async Task BuildDocumentAsync(
+        public async Task<PdfAutoLayoutSummary> BuildDocumentAsync(
             string pdfPath,
             bool allowOcr,
             IProgress<PdfAutoLayoutProgress>? progress = null,
             CancellationToken cancellationToken = default)
         {
+            var summary = new PdfAutoLayoutSummary();
+
             int totalPages;
             try
             {
@@ -143,14 +149,17 @@ namespace LearningAssistant.Services.Pdf
             catch (Exception ex)
             {
                 _logger?.LogWarning(ex, "读取 PDF 页数失败: {Path}", pdfPath);
-                return;
+                return summary;
             }
+
+            summary.TotalPages = totalPages;
 
             for (int pageIndex = 0; pageIndex < totalPages; pageIndex++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
                 PdfAutoLayoutPage page;
+                bool failed = false;
                 try
                 {
                     page = await GetOrBuildPageAsync(
@@ -164,11 +173,28 @@ namespace LearningAssistant.Services.Pdf
                 catch (Exception ex)
                 {
                     _logger?.LogWarning(ex, "整本自动框选失败: page {Page}", pageIndex);
+                    failed = true;
                     page = new PdfAutoLayoutPage
                     {
                         PageIndex = pageIndex,
                         Source = PdfTextLineSource.None
                     };
+                }
+
+                // 单页失败不阻断整本任务，继续处理后续页面
+                if (failed)
+                    summary.FailedPages++;
+                else if (page.Blocks.Count == 0)
+                    summary.SkippedPages++;
+
+                switch (page.Source)
+                {
+                    case PdfTextLineSource.TextLayer:
+                        summary.TextLayerPages++;
+                        break;
+                    case PdfTextLineSource.Ocr:
+                        summary.OcrPages++;
+                        break;
                 }
 
                 progress?.Report(new PdfAutoLayoutProgress
@@ -179,6 +205,8 @@ namespace LearningAssistant.Services.Pdf
                     Skipped = page.Blocks.Count == 0
                 });
             }
+
+            return summary;
         }
 
         public PdfAutoLayoutState LoadState(string pdfPath)

@@ -29,6 +29,8 @@ public sealed class PdfAutoLayoutServiceTests : IDisposable
         {
             TextLine("Page two body text", 0.1f, 0.30f, 0.6f, 0.02f)
         };
+        // 第 3 页模拟扫描页：没有文本层
+        _pdfService.Pages[2] = Array.Empty<PdfTextLine>();
     }
 
     public void Dispose()
@@ -69,9 +71,66 @@ public sealed class PdfAutoLayoutServiceTests : IDisposable
 
         await service.BuildDocumentAsync(_pdfPath, allowOcr: false, progress);
 
-        Assert.Equal(2, _pdfService.TextLineCalls);
+        Assert.Equal(3, _pdfService.TextLineCalls);
         Assert.NotNull(service.TryGetCachedPage(_pdfPath, 0));
         Assert.NotNull(service.TryGetCachedPage(_pdfPath, 1));
+        Assert.NotNull(service.TryGetCachedPage(_pdfPath, 2));
+    }
+
+    [Fact]
+    public async Task ScannedPage_WithoutOcr_ReturnsNone()
+    {
+        var ocr = new FakeOcrService();
+        var service = CreateService(ocr);
+
+        var page = await service.GetOrBuildPageAsync(_pdfPath, 2, allowOcr: false);
+
+        Assert.Equal(PdfTextLineSource.None, page.Source);
+        Assert.Empty(page.Blocks);
+        Assert.Equal(0, ocr.Calls);
+    }
+
+    [Fact]
+    public async Task ScannedPage_WithOcr_BuildsBlocksAndCachesResult()
+    {
+        var ocr = new FakeOcrService();
+        var service = CreateService(ocr);
+
+        var first = await service.GetOrBuildPageAsync(_pdfPath, 2, allowOcr: true);
+        var second = await service.GetOrBuildPageAsync(_pdfPath, 2, allowOcr: true);
+
+        Assert.Equal(PdfTextLineSource.Ocr, first.Source);
+        Assert.NotEmpty(first.Blocks);
+        Assert.Equal(1, ocr.Calls);
+        Assert.Equal(first.Blocks.Count, second.Blocks.Count);
+    }
+
+    [Fact]
+    public async Task BuildDocumentAsync_WithOcr_ReportsOcrAndTextLayerPages()
+    {
+        var ocr = new FakeOcrService();
+        var service = CreateService(ocr);
+
+        var summary = await service.BuildDocumentAsync(_pdfPath, allowOcr: true);
+
+        Assert.Equal(3, summary.TotalPages);
+        Assert.Equal(2, summary.TextLayerPages);
+        Assert.Equal(1, summary.OcrPages);
+        Assert.Equal(0, summary.FailedPages);
+    }
+
+    [Fact]
+    public async Task BuildDocumentAsync_OcrFailure_DoesNotBreakWholeDocument()
+    {
+        var ocr = new FakeOcrService { Result = null };
+        var service = CreateService(ocr);
+
+        var summary = await service.BuildDocumentAsync(_pdfPath, allowOcr: true);
+
+        Assert.Equal(3, summary.TotalPages);
+        Assert.Equal(2, summary.TextLayerPages);
+        Assert.Equal(0, summary.OcrPages);
+        Assert.Equal(1, summary.SkippedPages);
     }
 
     [Fact]
@@ -94,11 +153,11 @@ public sealed class PdfAutoLayoutServiceTests : IDisposable
         Assert.Empty(cleared.SuppressedPages);
     }
 
-    private PdfAutoLayoutService CreateService()
+    private PdfAutoLayoutService CreateService(IPdfOcrService? ocrService = null)
     {
         return new PdfAutoLayoutService(
             _pdfService,
-            ocrService: null,
+            ocrService: ocrService,
             textIndex: null,
             logger: null,
             rootDir: Path.Combine(_tempRoot, "cache"));
@@ -115,6 +174,37 @@ public sealed class PdfAutoLayoutServiceTests : IDisposable
             Height = height,
             FontSize = height * 800f
         };
+    }
+
+    private sealed class FakeOcrService : IPdfOcrService
+    {
+        public int Calls { get; private set; }
+        public OcrLayoutResult? Result { get; set; } = new()
+        {
+            ImageWidth = 1000,
+            ImageHeight = 1000,
+            Text = "OCR line one\nOCR line two",
+            Lines =
+            {
+                new OcrTextLine { Text = "OCR line one", Bounds = new RectInt(100, 100, 600, 30) },
+                new OcrTextLine { Text = "OCR line two", Bounds = new RectInt(100, 150, 600, 30) }
+            }
+        };
+
+        public bool IsAvailable => true;
+        public string? InitErrorMessage => null;
+
+        public Task<OcrLayoutResult?> RecognizeLayoutWithAutoLanguageAsync(byte[] image)
+        {
+            Calls++;
+            return Task.FromResult(Result);
+        }
+
+        public Task<string?> RecognizeTextAsync(byte[] image) => Task.FromResult<string?>(null);
+        public Task<string?> RecognizeTextAsync(byte[] image, RectInt region) => Task.FromResult<string?>(null);
+        public Task<string?> RecognizeTextWithAutoLanguageAsync(byte[] image) => Task.FromResult<string?>(null);
+        public Task<string?> RecognizeTextWithAutoLanguageAsync(byte[] image, RectInt region) => Task.FromResult<string?>(null);
+        public bool SetLanguage(string language) => true;
     }
 
     private sealed class FakePdfService : IPdfService

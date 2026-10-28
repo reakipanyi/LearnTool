@@ -8270,8 +8270,9 @@ namespace LearningAssistant.Forms.Pdf
             {
                 bool running = _autoHighlightManager?.IsWholeBookRunning == true;
                 bool available = _autoHighlightManager?.CanUseWholeBook == true;
+                bool ocrAvailable = _autoHighlightManager?.CanUseWholeBookOcr == true;
                 if (_autoHighlightWholeTextItem != null) _autoHighlightWholeTextItem.Enabled = available && !running;
-                if (_autoHighlightWholeOcrItem != null) _autoHighlightWholeOcrItem.Enabled = available && !running;
+                if (_autoHighlightWholeOcrItem != null) _autoHighlightWholeOcrItem.Enabled = available && ocrAvailable && !running;
                 if (_autoHighlightCancelItem != null) _autoHighlightCancelItem.Enabled = running;
                 if (_autoHighlightClearAllItem != null) _autoHighlightClearAllItem.Enabled = !running;
             };
@@ -8294,7 +8295,9 @@ namespace LearningAssistant.Forms.Pdf
                 {
                     if (_translatePanel == null || _translatePanel.IsDisposed) return;
                     int current = Math.Min(p.CurrentPage + 1, p.TotalPages);
-                    _translatePanel.AutoHighlightButton.Text = $"⏳ {current}/{p.TotalPages}";
+                    string suffix = p.Source == PdfTextLineSource.Ocr ? " OCR" : string.Empty;
+                    _translatePanel.AutoHighlightButton.Text =
+                        $"⏳ {current}/{p.TotalPages}{suffix}";
                 });
 
                 await _autoHighlightManager.BuildWholeDocumentAsync(allowOcr, progress);
