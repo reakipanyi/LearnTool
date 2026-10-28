@@ -1,4 +1,5 @@
 using LearningAssistant.Common.UI;
+using LearningAssistant.Models.Pdf;
 using LearningAssistant.Presenters;
 
 using LearningAssistant.Services.Pdf;
@@ -108,5 +109,11 @@ namespace LearningAssistant.Managers
         /// 避免翻译面板内容被误当成当前显示页的文本。
         /// </summary>
         void SetOriginalTextForPage(int pageIndex, string text);
+
+        /// <summary>
+        /// 把高亮送入翻译面板的「摘录」槽；用于显式翻译、自动框点击等一次性关联，
+        /// 不改变整页槽内容。
+        /// </summary>
+        void ShowHighlightInTranslatePanel(PdfHighlight highlight);
     }
 }

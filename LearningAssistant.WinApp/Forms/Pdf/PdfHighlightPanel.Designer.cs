@@ -20,6 +20,7 @@ partial class PdfHighlightPanel
         removeButton = new Button();
         editButton = new Button();
         batchRemoveButton = new Button();
+        autoHighlightButton = new Button();
         _tip = new ToolTip(components);
         root.SuspendLayout();
         listHost.SuspendLayout();
@@ -45,6 +46,7 @@ partial class PdfHighlightPanel
         // header
         // 
         header.ActionText = "⬇ 导出";
+        header.Controls.Add(autoHighlightButton);
         header.Controls.Add(batchRemoveButton);
         header.Controls.Add(editButton);
         header.Controls.Add(removeButton);
@@ -133,6 +135,23 @@ partial class PdfHighlightPanel
         batchRemoveButton.Text = "🧹";
         batchRemoveButton.UseVisualStyleBackColor = false;
         // 
+        // autoHighlightButton
+        // 
+        autoHighlightButton.BackColor = Color.FromArgb(255, 247, 237);
+        autoHighlightButton.Cursor = Cursors.Hand;
+        autoHighlightButton.FlatAppearance.BorderColor = Color.FromArgb(253, 186, 116);
+        autoHighlightButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(254, 215, 170);
+        autoHighlightButton.FlatStyle = FlatStyle.Flat;
+        autoHighlightButton.Font = new Font("Segoe UI Emoji", 9F);
+        autoHighlightButton.ForeColor = Color.FromArgb(194, 65, 12);
+        autoHighlightButton.Margin = Padding.Empty;
+        autoHighlightButton.Name = "autoHighlightButton";
+        autoHighlightButton.Size = new Size(32, 26);
+        autoHighlightButton.TabIndex = 4;
+        autoHighlightButton.Tag = "keep";
+        autoHighlightButton.Text = "🖍";
+        autoHighlightButton.UseVisualStyleBackColor = false;
+        // 
         // PdfHighlightPanel
         // 
         AutoScaleDimensions = new SizeF(7F, 17F);
@@ -156,5 +175,6 @@ partial class PdfHighlightPanel
     private Button removeButton;
     private Button editButton;
     private Button batchRemoveButton;
+    private Button autoHighlightButton;
     private ToolTip _tip;
 }

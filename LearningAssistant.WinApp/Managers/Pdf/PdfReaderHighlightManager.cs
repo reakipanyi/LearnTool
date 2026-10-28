@@ -489,8 +489,8 @@ namespace LearningAssistant.Managers
         {
             if (string.IsNullOrEmpty(ocrText) || _form.TextBoxOriginal == null) return;
 
-            // 双页模式下选区可能落在第二页，显式记录来源页，避免“本页跟读”串用
-            _form.SetOriginalTextForPage(highlight.PageIndex, ocrText);
+            // 新建/选中的高亮进入「摘录」槽；双页模式下也保留真实来源页
+            _form.ShowHighlightInTranslatePanel(highlight);
 
             await TranslateSelectionToTopBarAsync(pdfPath, highlight, ocrText);
 
@@ -555,13 +555,11 @@ namespace LearningAssistant.Managers
         /// <summary>把译文同步到翻译面板与高亮实体，避免下次选中重复翻译。</summary>
         private void ApplySelectionTranslation(string pdfPath, PdfHighlight highlight, string ocrText, string translation)
         {
-            if (_form.TextBoxTranslation != null)
-            {
-                _form.TextBoxTranslation.Text = translation;
-            }
-
             highlight.TranslationText = translation;
             _highlightService.UpdateHighlightContent(pdfPath, highlight.Id, ocrText, translation);
+
+            // 译文回写到「摘录」槽，列表刷新后可直接显示「已译」
+            _form.ShowHighlightInTranslatePanel(highlight);
         }
 
         /// <summary>
@@ -828,13 +826,15 @@ namespace LearningAssistant.Managers
 
                 // 使用 HashSet 按 Id 去重，防止同一高亮/标注被重复添加
                 var addedIds = new HashSet<string>();
+                // 不按页分组：先汇总，再统一按页码、页面纵向位置排序，保证自动框选与手动摘录混排有序
+                var items = new List<object>();
 
                 var highlights = _highlightService.GetHighlights(_form.CurrentPdfPath);
                 foreach (var highlight in highlights)
                 {
                     if (addedIds.Add(highlight.Id))
                     {
-                        listBox.Items.Add(highlight);
+                        items.Add(highlight);
                     }
                 }
 
@@ -884,16 +884,52 @@ namespace LearningAssistant.Managers
                                 IsAiGenerated = text.IsAiGenerated,
                                 AiReferencePages = text.AiReferencePages
                             };
-                            listBox.Items.Add(annotationItem);
+                            items.Add(annotationItem);
                         }
                     }
                 }
+
+                items.Sort(CompareHighlightListItems);
+                listBox.Items.AddRange(items.ToArray());
             }
             finally
             {
                 listBox.EndUpdate();
             }
         }
+
+        /// <summary>列表排序：页码优先，其次页面纵向位置，最后按创建时间兜底。</summary>
+        private static int CompareHighlightListItems(object? left, object? right)
+        {
+            int result = GetItemPage(left).CompareTo(GetItemPage(right));
+            if (result != 0) return result;
+
+            result = GetItemY(left).CompareTo(GetItemY(right));
+            if (result != 0) return result;
+
+            return GetItemCreatedAt(left).CompareTo(GetItemCreatedAt(right));
+        }
+
+        private static int GetItemPage(object? item) => item switch
+        {
+            PdfHighlight highlight => highlight.PageIndex,
+            PdfAnnotationItem annotation => annotation.PageIndex,
+            _ => int.MaxValue
+        };
+
+        private static float GetItemY(object? item) => item switch
+        {
+            PdfHighlight highlight => highlight.NormalizedY,
+            PdfAnnotationItem annotation => annotation.NormalizedY,
+            _ => 0f
+        };
+
+        private static DateTime GetItemCreatedAt(object? item) => item switch
+        {
+            PdfHighlight highlight => highlight.CreatedAt,
+            PdfAnnotationItem annotation => annotation.CreatedAt,
+            _ => DateTime.MinValue
+        };
 
         public void LoadHighlightsForCurrentPage()
         {

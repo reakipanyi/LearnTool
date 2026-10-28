@@ -75,13 +75,11 @@ namespace LearningAssistant.Forms.Pdf
         private Label? _audioDrawerSubtitle;
         private Button? _audioDrawerAudioButton;
         private Button? _audioDrawerRecordingButton;
-        private Button? _audioDrawerTranslateButton;
-        private Button? _audioDrawerHighlightButton;
         private Label? _audioUnavailableLabel;
         private Label? _recordingUnavailableLabel;
         private Button? _audioDrawerCloseButton;
         private Control? _audioDrawerReturnFocus;
-        private AudioDrawerMode _audioDrawerMode;
+        private AudioDrawerMode _audioDrawerMode = AudioDrawerMode.Audio;
         private PdfReadingSidebarPanel? _readingSidebar;
         private SidebarHeaderBar? _translateHeader;
         private PdfTranslatePanel? _translatePanel;
@@ -142,6 +140,8 @@ namespace LearningAssistant.Forms.Pdf
         private bool _isTranslationEnabled = false;
 
         private ListBox? _listBoxHighlights;
+        // 摘录行内「译」快捷按钮的悬停索引，仅用于重绘命中行
+        private int _highlightTranslateHoverIndex = -1;
         private Button? _buttonRemoveHighlight;
         private Button? _buttonBatchRemoveHighlight;
         private Button? _buttonEditHighlight;
@@ -188,6 +188,8 @@ namespace LearningAssistant.Forms.Pdf
         private Button? _buttonStudyWholeBookShadowing;
         private FlowLayoutPanel? _studyItemList;
         private PdfStudyPanel? _studyPanel;
+        // 学习页签内的工作台：摘录/翻译独立面板 + 显式联动
+        private PdfWorkbenchPanel? _workbench;
         private static string? _lastSidebarTabName;
         private SyncedTextBox _textBoxOriginal;
         private SyncedTextBox _textBoxTranslation;
@@ -224,6 +226,10 @@ namespace LearningAssistant.Forms.Pdf
         private static bool _sidebarHoverSwitch;
         private static bool _sidebarStateLoaded;
         private static Dictionary<string, string> _sidebarTabByDocument = new();
+        // 工作台偏好：翻译是否开启、联动是否开启、双开分屏比例
+        private static bool _workbenchTranslateVisible;
+        private static bool _workbenchLinkEnabled;
+        private static double _workbenchSplitRatio = 0.55;
         private System.Windows.Forms.Timer? _sidebarHoverSwitchTimer;
         private int _sidebarHoverSwitchCandidate = -1;
         private ContextMenuStrip? _sidebarTabMenu;
@@ -786,9 +792,24 @@ namespace LearningAssistant.Forms.Pdf
         /// </summary>
         public void SetOriginalTextForPage(int pageIndex, string text)
         {
-            _textBoxOriginal.Text = text ?? string.Empty;
+            // 页级写入必须落在「整页」槽，避免覆盖用户正在查看的摘录槽
+            if (_translatePanel is { IsDisposed: false })
+                _translatePanel.SetPageOriginalText(text ?? string.Empty);
+            else
+                _textBoxOriginal.Text = text ?? string.Empty;
+
             _originalTextSourcePdfPath = _currentPdfPath ?? string.Empty;
             _originalTextSourcePageIndex = pageIndex;
+        }
+
+        /// <summary>把一条摘录送入翻译面板的「摘录」槽（显式关联用，不强制打开模块）。</summary>
+        public void ShowHighlightInTranslatePanel(PdfHighlight highlight)
+        {
+            if (highlight == null || string.IsNullOrWhiteSpace(highlight.Text)) return;
+            _translatePanel?.ShowHighlightSource(
+                highlight.PageIndex,
+                highlight.Text,
+                highlight.TranslationText ?? string.Empty);
         }
 
         /// <summary>翻译面板当前原文是否确实来自当前文档的当前页。</summary>
@@ -827,12 +848,16 @@ namespace LearningAssistant.Forms.Pdf
             _suppressOriginalTextSourceTracking = true;
             try
             {
-                if (!string.Equals(_textBoxOriginal.Text, original, StringComparison.Ordinal))
-                    _textBoxOriginal.Text = original;
-                if (_textBoxTranslation != null
-                    && !string.Equals(_textBoxTranslation.Text, translation, StringComparison.Ordinal))
+                if (_translatePanel is { IsDisposed: false })
                 {
-                    _textBoxTranslation.Text = translation;
+                    _translatePanel.SetPageOriginalText(original);
+                    _translatePanel.SetPageTranslationText(translation);
+                }
+                else if (!string.Equals(_textBoxOriginal.Text, original, StringComparison.Ordinal))
+                {
+                    _textBoxOriginal.Text = original;
+                    if (_textBoxTranslation != null)
+                        _textBoxTranslation.Text = translation;
                 }
 
                 _originalTextSourcePdfPath = _currentPdfPath ?? string.Empty;
@@ -1723,11 +1748,10 @@ namespace LearningAssistant.Forms.Pdf
             // 没有缓存文本时保持现状，避免清空用户当前正在查看的内容
             if (string.IsNullOrWhiteSpace(highlight.Text)) return;
 
-            // 记录高亮所属页，跨页模式下选中的可能是第二页的高亮
-            SetOriginalTextForPage(highlight.PageIndex, highlight.Text);
-            // 译文同样判空：高亮尚未翻译时保留用户当前正在查看的译文
-            if (!string.IsNullOrWhiteSpace(highlight.TranslationText))
-                _textBoxTranslation.Text = highlight.TranslationText;
+            // 联动关闭时两个模块互相独立：选中摘录不修改翻译面板内容。
+            // 联动开启时才把摘录送入「摘录」槽；译文判空，未翻译时保留已有译文。
+            ApplyWorkbenchLink(highlight);
+
             UpdateStatusBar();
 
             // 顶部译条优先回显高亮已保存的译文，其次读取本地缓存
@@ -2236,6 +2260,28 @@ namespace LearningAssistant.Forms.Pdf
                 // 焦点在文本输入框时只保留 Esc 关闭抽屉，其余快捷键一律不响应，避免吞掉输入与方向键
                 if (IsTextEditingFocused()) return;
 
+                // 工作台快捷入口：Ctrl+Shift+T 切换翻译模块，Ctrl+Shift+L 切换联动
+                if (e.Control && e.Shift && e.KeyCode == Keys.T)
+                {
+                    if (_tabControlLeft != null && _tabPageStudy != null)
+                        _tabControlLeft.SelectedTab = _tabPageStudy;
+                    _workbench?.ToggleModule(PdfWorkbenchModule.Translate);
+                    if (_workbench?.IsModuleVisible(PdfWorkbenchModule.Translate) == true)
+                        UpdateTranslateHeaderStatus();
+                    e.Handled = e.SuppressKeyPress = true;
+                    return;
+                }
+                if (e.Control && e.Shift && e.KeyCode == Keys.L)
+                {
+                    if (_workbench != null)
+                    {
+                        _workbench.LinkEnabled = !_workbench.LinkEnabled;
+                        ShowToast(_workbench.LinkEnabled ? "已开启摘录到翻译联动" : "已关闭联动");
+                    }
+                    e.Handled = e.SuppressKeyPress = true;
+                    return;
+                }
+
                 // Ctrl+K 命令搜索：把常用入口聚合成一个键盘入口
                 if (e.Control && e.KeyCode == Keys.K)
                 {
@@ -2734,7 +2780,110 @@ namespace LearningAssistant.Forms.Pdf
 
             // 在当前页，直接选中
             _navigationManager?.SelectAnnotationById(id);
+
+            // 联动开启时，列表选中也立即送入翻译面板，不必等画布回传选中事件
+            if (_listBoxHighlights.SelectedItem is PdfHighlight linked)
+                ApplyWorkbenchLink(linked);
         }
+
+        /// <summary>
+        /// 单向联动：仅在开关开启时把摘录送入翻译面板，并展开翻译模块；
+        /// 关闭时两个模块完全互不影响。
+        /// </summary>
+        private void ApplyWorkbenchLink(PdfHighlight highlight)
+        {
+            if (_workbench?.LinkEnabled != true) return;
+            _workbench.SetModuleVisible(PdfWorkbenchModule.Translate, true);
+            ShowHighlightInTranslatePanel(highlight);
+        }
+
+        #region 摘录行内快捷翻译
+
+        private void ListBoxHighlights_MouseMove(object? sender, MouseEventArgs e)
+        {
+            if (_listBoxHighlights == null) return;
+
+            int index = _listBoxHighlights.IndexFromPoint(e.Location);
+            bool overTranslate = TryGetHighlightTranslateRect(index, out var rect)
+                                 && rect.Contains(e.Location);
+
+            int hoverIndex = overTranslate ? index : -1;
+            _listBoxHighlights.Cursor = overTranslate ? Cursors.Hand : Cursors.Default;
+            if (hoverIndex == _highlightTranslateHoverIndex) return;
+
+            int previous = _highlightTranslateHoverIndex;
+            _highlightTranslateHoverIndex = hoverIndex;
+            InvalidateHighlightRow(previous);
+            InvalidateHighlightRow(hoverIndex);
+        }
+
+        private void ListBoxHighlights_MouseLeave(object? sender, EventArgs e)
+        {
+            if (_highlightTranslateHoverIndex < 0) return;
+            int previous = _highlightTranslateHoverIndex;
+            _highlightTranslateHoverIndex = -1;
+            if (_listBoxHighlights != null) _listBoxHighlights.Cursor = Cursors.Default;
+            InvalidateHighlightRow(previous);
+        }
+
+        private void ListBoxHighlights_MouseClick(object? sender, MouseEventArgs e)
+        {
+            if (_listBoxHighlights == null || e.Button != MouseButtons.Left) return;
+
+            int index = _listBoxHighlights.IndexFromPoint(e.Location);
+            if (!TryGetHighlightTranslateRect(index, out var rect) || !rect.Contains(e.Location))
+                return;
+
+            if (_listBoxHighlights.Items[index] is PdfHighlight highlight)
+                TranslateHighlightFromList(highlight);
+        }
+
+        private void InvalidateHighlightRow(int index)
+        {
+            if (_listBoxHighlights == null || index < 0 || index >= _listBoxHighlights.Items.Count)
+                return;
+            _listBoxHighlights.Invalidate(_listBoxHighlights.GetItemRectangle(index));
+        }
+
+        private bool TryGetHighlightTranslateRect(int index, out Rectangle rect)
+        {
+            rect = Rectangle.Empty;
+            if (_listBoxHighlights == null || index < 0 || index >= _listBoxHighlights.Items.Count)
+                return false;
+            if (_listBoxHighlights.Items[index] is not PdfHighlight)
+                return false;
+
+            var itemRect = _listBoxHighlights.GetItemRectangle(index);
+            rect = new Rectangle(itemRect.Right - 40, itemRect.Y + 14, 30, 24);
+            return true;
+        }
+
+        /// <summary>行内「译」：一次性关联到翻译面板并触发翻译，不改变联动开关。</summary>
+        private void TranslateHighlightFromList(PdfHighlight highlight)
+        {
+            if (highlight == null) return;
+
+            ShowWorkbenchModule(PdfWorkbenchModule.Translate);
+            ShowHighlightInTranslatePanel(highlight);
+
+            if (highlight.IsAutoGenerated)
+            {
+                _ = _autoHighlightManager?.HandleHighlightSelectedAsync(highlight);
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(highlight.TranslationText)) return;
+            if (string.IsNullOrWhiteSpace(highlight.Text))
+            {
+                ShowToast("该摘录没有可翻译文字");
+                return;
+            }
+
+            if (_highlightManager != null && !string.IsNullOrWhiteSpace(_currentPdfPath))
+                _ = _highlightManager.TranslateHighlightAsync(_currentPdfPath, highlight, highlight.Text);
+        }
+
+        #endregion
 
         private void NavigateToItem(IPdfNavigatable item)
         {
@@ -3954,7 +4103,12 @@ namespace LearningAssistant.Forms.Pdf
 
         public void SetTranslationText(string text)
         {
-            _textBoxTranslation.Text = text;
+            // 整页翻译结果只写整页槽；摘录译文由高亮流程单独回写
+            if (_translatePanel is { IsDisposed: false })
+                _translatePanel.SetPageTranslationText(text);
+            else
+                _textBoxTranslation.Text = text;
+
             PersistTranslationToSelectedHighlight(text);
         }
 
@@ -7846,6 +8000,8 @@ namespace LearningAssistant.Forms.Pdf
 
         private void ButtonTranslate_Click(object? sender, EventArgs e)
         {
+            // 页头「翻译」针对整页，先切回整页槽，避免把摘录槽内容当成整页提交
+            _translatePanel?.ShowPageSource();
             TranslateClicked?.Invoke(this, EventArgs.Empty);
         }
 
@@ -7927,10 +8083,10 @@ namespace LearningAssistant.Forms.Pdf
             // 阶段2：音频不再是顶层页签，三个子视图统一收进右侧抽屉
             if (_tabPageAudio != null && _tabControlLeft.TabPages.Contains(_tabPageAudio))
                 _tabControlLeft.TabPages.Remove(_tabPageAudio);
-            // 翻译面板改为由学习页入口在右侧抽屉弹出，不再占用顶层页签
+            // 翻译面板改为学习页工作台内的独立模块，不再占用顶层页签
             if (_tabPageTranslate != null && _tabControlLeft.TabPages.Contains(_tabPageTranslate))
                 _tabControlLeft.TabPages.Remove(_tabPageTranslate);
-            // 高亮面板同样收进右侧抽屉（第一个模式），不再占用顶层页签
+            // 高亮面板同样迁入学习页工作台，不再占用顶层页签
             if (_tabPageBookmarksAndHighlights != null && _tabControlLeft.TabPages.Contains(_tabPageBookmarksAndHighlights))
                 _tabControlLeft.TabPages.Remove(_tabPageBookmarksAndHighlights);
 
@@ -7957,7 +8113,8 @@ namespace LearningAssistant.Forms.Pdf
         }
 
         /// <summary>
-        /// 「学习」Tab（P3）：汇总本页高亮/已加入学习项/可跟读句子，并提供一键动作。
+        /// 「学习」Tab：双面板工作台。摘录与翻译各自完整独立，
+        /// 顶部模块开关决定单开/双开，联动开关只在需要时建立单向关联。
         /// </summary>
         private void BuildStudySidebar()
         {
@@ -7965,50 +8122,54 @@ namespace LearningAssistant.Forms.Pdf
 
             _tabPageStudy.Controls.Clear();
 
-            _studyPanel = new PdfStudyPanel();
-            _studyPanel.Dock = DockStyle.Fill;
-            _studyPanel.Margin = Padding.Empty;
-            _studyPanel.Header.ActionButton!.Click += (_, _) => UpdateStudyTab();
-            _tabPageStudy.Controls.Add(_studyPanel);
+            _workbench = new PdfWorkbenchPanel
+            {
+                Dock = DockStyle.Fill,
+                Margin = Padding.Empty
+            };
+            _tabPageStudy.Controls.Add(_workbench);
 
-            _studyHighlightCount = _studyPanel.HighlightCountLabel;
-            _studyLearningCount = _studyPanel.LearningCountLabel;
-            _studySentenceCount = _studyPanel.SentenceCountLabel;
+            // 面板只挂载一次：从音频抽屉的候选内容迁移到工作台
+            if (_highlightPanel != null && _translatePanel != null)
+                _workbench.AttachContent(_highlightPanel, _translatePanel);
 
-            // 自动高亮不再只藏在翻译抽屉：学习页一键操作区直接提供入口
-            _studyPanel.AutoHighlightButton.Click += (_, _) => ButtonAutoHighlight_Click();
-            // 与翻译面板共用同一个右键菜单，整本框选/清除入口在两处保持一致
-            BuildAutoHighlightContextMenu(_studyPanel.AutoHighlightButton);
+            _workbench.AudioRequested += (_, _) => ShowAudioCompanion();
+            _workbench.ShadowingRequested += (_, _) => ButtonStudyShadowing_Click(null, EventArgs.Empty);
+            _workbench.WholeBookShadowingRequested += (_, _) => ButtonStudyWholeBookShadowing_Click(null, EventArgs.Empty);
+            _workbench.FlashcardsRequested += (_, _) => ButtonStudyFlashcards_Click(null, EventArgs.Empty);
+            _workbench.AddHighlightsRequested += (_, _) => ButtonStudyAddHighlights_Click(null, EventArgs.Empty);
+            _workbench.AiActionRequested += (_, action) => _ = RunWorkbenchAiActionAsync(action);
 
-            _buttonStudyAddHighlights = _studyPanel.AddHighlightsButton;
-            _buttonStudyAddHighlights.Click += ButtonStudyAddHighlights_Click;
-            _buttonStudyFlashcards = _studyPanel.FlashcardsButton;
-            _buttonStudyFlashcards.Click += ButtonStudyFlashcards_Click;
-            _buttonStudyShadowing = _studyPanel.ShadowingButton;
-            _buttonStudyShadowing.Click += ButtonStudyShadowing_Click;
-            _buttonStudyWholeBookShadowing = _studyPanel.WholeBookShadowingButton;
-            _buttonStudyWholeBookShadowing.Click += ButtonStudyWholeBookShadowing_Click;
+            // 默认只开摘录；之后按用户上次的模块/联动/分屏比例恢复
+            _workbench.RestoreState(_workbenchTranslateVisible, _workbenchLinkEnabled, _workbenchSplitRatio);
+            _workbench.StateChanged += (_, _) => SaveWorkbenchState();
 
-            // 音频与跟读收口到学习页：配套音频/整页录音进入右侧抽屉
-            _studyPanel.AudioOpenButton.Click += (_, _) => ShowAudioCompanion();
-            _studyPanel.RecordingButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Recording);
-            // 翻译面板不再占顶层页签，改为从学习页弹出同一个右侧抽屉
-            _studyPanel.TranslateButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Translate);
-            // 高亮面板同样收进抽屉，作为第一个模式
-            _studyPanel.OpenHighlightButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Highlight);
-
-            // 「AI 与文件工具」分组入口，复用现有 AI 菜单能力，避免功能藏在右键菜单里
-            _studyPanel.SummaryButton.Click += async (_, _) => await SummarizeCurrentPageAsync();
-            _studyPanel.AskButton.Click += async (_, _) => await AskDocumentByRetrievalAsync();
-            _studyPanel.OutlineButton.Click += async (_, _) => await GenerateDocumentOutlineAsync();
-            _studyPanel.NotesButton.Click += async (_, _) => await ExportAiStudyNotesAsync();
-            _studyPanel.BatchOcrButton.Click += (_, _) => BatchOcrExport_Click();
-
-            _studyItemList = _studyPanel.ItemList;
-            _studyItemList.ClientSizeChanged += (_, _) => ResizeStudyItemRows();
-
-            // 初次构建时同步按钮文案（已有自动框选时显示「清除本页」）
+            // 初次构建时同步自动高亮文案（已有自动框选时显示清除语义）
             UpdateAutoHighlightButtonState(busy: false);
+            UpdateStudyTab();
+        }
+
+        /// <summary>底部「✨ AI」菜单统一分发到已有的 AI / 文件工具能力。</summary>
+        private async Task RunWorkbenchAiActionAsync(PdfWorkbenchAiAction action)
+        {
+            switch (action)
+            {
+                case PdfWorkbenchAiAction.Summary:
+                    await SummarizeCurrentPageAsync();
+                    break;
+                case PdfWorkbenchAiAction.Ask:
+                    await AskDocumentByRetrievalAsync();
+                    break;
+                case PdfWorkbenchAiAction.Outline:
+                    await GenerateDocumentOutlineAsync();
+                    break;
+                case PdfWorkbenchAiAction.Notes:
+                    await ExportAiStudyNotesAsync();
+                    break;
+                case PdfWorkbenchAiAction.BatchOcr:
+                    BatchOcrExport_Click();
+                    break;
+            }
         }
 
         /// <summary>
@@ -8016,7 +8177,7 @@ namespace LearningAssistant.Forms.Pdf
         /// </summary>
         private void UpdateStudyTab()
         {
-            if (_tabPageStudy == null || _studyHighlightCount == null) return;
+            if (_tabPageStudy == null) return;
 
             int highlightCount = 0;
             if (!string.IsNullOrWhiteSpace(_currentPdfPath) && _highlightService != null && _currentPageIndex >= 0)
@@ -8054,32 +8215,30 @@ namespace LearningAssistant.Forms.Pdf
                 ? CountReadableSentences(_textBoxOriginal?.Text)
                 : 0;
 
-            _studyHighlightCount.Text = $"🖍 本页高亮：{highlightCount} 条";
-            _studyLearningCount.Text = $"📚 已加入学习：{learningCount} 项";
-            _studySentenceCount.Text = $"🎙 可跟读句子：{sentenceCount} 句";
-
-            if (_buttonStudyAddHighlights != null)
-                _buttonStudyAddHighlights.Enabled = highlightCount > 0;
-            if (_buttonStudyShadowing != null)
-                _buttonStudyShadowing.Enabled = sentenceCount > 0;
-            if (_buttonStudyWholeBookShadowing != null)
+            bool hasBookHighlights = false;
+            int totalHighlightCount = 0;
+            if (!string.IsNullOrWhiteSpace(_currentPdfPath) && _highlightService != null)
             {
-                bool hasBookHighlights = false;
-                if (!string.IsNullOrWhiteSpace(_currentPdfPath) && _highlightService != null)
+                try
                 {
-                    try
-                    {
-                        hasBookHighlights = _highlightService
-                            .GetHighlights(_currentPdfPath)
-                            .Any(h => !string.IsNullOrWhiteSpace(h.Text));
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger?.LogWarning(ex, "统计全书高亮失败");
-                    }
+                    var allHighlights = _highlightService.GetHighlights(_currentPdfPath);
+                    totalHighlightCount = allHighlights.Count(h => !string.IsNullOrWhiteSpace(h.Text));
+                    hasBookHighlights = totalHighlightCount > 0;
                 }
-                _buttonStudyWholeBookShadowing.Enabled = hasBookHighlights;
+                catch (Exception ex)
+                {
+                    _logger?.LogWarning(ex, "统计全书高亮失败");
+                }
             }
+
+            // 统计信息收敛到摘录面板副标题，工作台不再保留概览卡
+            _highlightHeader?.SetSubtitle(totalHighlightCount == 0
+                ? "全书暂无摘录"
+                : $"本页 {highlightCount} 条 · 全书 {totalHighlightCount} 条");
+
+            // 底部入口与 AI 菜单按当前页数据启用，避免点了才发现无内容
+            _workbench?.SetAddHighlightsEnabled(highlightCount > 0);
+            _workbench?.SetShadowingEnabled(sentenceCount > 0, hasBookHighlights);
 
             RefreshStudyItemList(pageItems);
         }
@@ -8477,12 +8636,8 @@ namespace LearningAssistant.Forms.Pdf
                 var progress = new Progress<PdfAutoLayoutProgress>(p =>
                 {
                     int current = Math.Min(p.CurrentPage + 1, p.TotalPages);
-                    string suffix = p.Source == PdfTextLineSource.Ocr ? " OCR" : string.Empty;
-                    string text = $"⏳ {current}/{p.TotalPages}{suffix}";
-                    if (_translatePanel is { IsDisposed: false })
-                        _translatePanel.AutoHighlightButton.Text = text;
-                    if (_studyPanel is { IsDisposed: false })
-                        _studyPanel.AutoHighlightButton.Text = text;
+                    if (_highlightPanel is { IsDisposed: false })
+                        _highlightPanel.ShowAutoHighlightProgress(current, p.TotalPages, p.Source == PdfTextLineSource.Ocr);
                 });
 
                 await _autoHighlightManager.BuildWholeDocumentAsync(allowOcr, progress);
@@ -8518,16 +8673,14 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
-        /// <summary>同步自动高亮按钮的忙碌/清除文案状态（学习页与翻译抽屉共用）。</summary>
+        /// <summary>同步自动高亮按钮的忙碌/清除文案状态（摘录面板为主，其余入口同步）。</summary>
         private void UpdateAutoHighlightButtonState(bool busy)
         {
             try
             {
                 bool hasAutoHighlights = _autoHighlightManager?.HasAutoHighlightsForVisiblePages() ?? false;
-                if (_translatePanel is { IsDisposed: false })
-                    _translatePanel.UpdateAutoHighlightState(busy, hasAutoHighlights);
-                if (_studyPanel is { IsDisposed: false })
-                    _studyPanel.UpdateAutoHighlightState(busy, hasAutoHighlights);
+                if (_highlightPanel is { IsDisposed: false })
+                    _highlightPanel.UpdateAutoHighlightState(busy, hasAutoHighlights);
             }
             catch (Exception ex)
             {
@@ -8586,10 +8739,13 @@ namespace LearningAssistant.Forms.Pdf
             };
             _translateHeader = _translatePanel.Header;
             _translatePanel.Header.ActionButton!.Click += (_, _) => ButtonTranslate_Click(null, EventArgs.Empty);
-            _translatePanel.OcrButton.Click += (_, _) => OcrPageClicked?.Invoke(this, EventArgs.Empty);
+            _translatePanel.OcrButton.Click += (_, _) =>
+            {
+                // 整页识别只作用于整页槽
+                _translatePanel.ShowPageSource();
+                OcrPageClicked?.Invoke(this, EventArgs.Empty);
+            };
             _translatePanel.ShadowingButton.Click += (_, _) => ButtonTranslateShadowing_Click();
-            _translatePanel.AutoHighlightButton.Click += (_, _) => ButtonAutoHighlight_Click();
-            BuildAutoHighlightContextMenu(_translatePanel.AutoHighlightButton);
             _translatePanel.OriginalCard.ActionButton!.Click += (_, _) => ButtonSpeakOriginal_Click(null, EventArgs.Empty);
             _translatePanel.TranslationCard.ActionButton!.Click += (_, _) => ButtonSpeakTranslation_Click(null, EventArgs.Empty);
             _translatePanel.GlossaryButton.Click += (_, _) => ShowTranslationGlossaryDialog();
@@ -8619,7 +8775,22 @@ namespace LearningAssistant.Forms.Pdf
                 UpdateTranslateHeaderStatus();
             };
             _textBoxTranslation.TextChanged += (_, _) => UpdateTranslateHeaderStatus();
+            // 来源切换后修正文本来源页，避免「本页跟读」误用跨页摘录
+            _translatePanel.SourceChanged += (_, _) => OnTranslateSourceChanged();
             UpdateTranslateHeaderStatus();
+        }
+
+        private void OnTranslateSourceChanged()
+        {
+            if (_translatePanel == null) return;
+            bool highlightSource = _translatePanel.Source == PdfTranslateSource.Highlight;
+            _originalTextSourcePdfPath = _currentPdfPath ?? string.Empty;
+            _originalTextSourcePageIndex = highlightSource
+                ? _translatePanel.HighlightPageIndex
+                : _currentPageIndex;
+
+            UpdateTranslateHeaderStatus();
+            UpdateStudyTab();
         }
 
         private void UpdateTranslateHeaderStatus()
@@ -8629,7 +8800,13 @@ namespace LearningAssistant.Forms.Pdf
             int translationLength = _textBoxTranslation?.Text?.Length ?? 0;
             string original = originalLength == 0 ? "未识别" : $"{originalLength} 字";
             string translation = translationLength == 0 ? "未翻译" : $"{translationLength} 字";
-            _translateHeader.SetSubtitle($"第 {_currentPageIndex + 1} 页 · 原文 {original} · 译文 {translation}");
+
+            bool highlightSource = _translatePanel?.Source == PdfTranslateSource.Highlight;
+            int pageIndex = highlightSource && _translatePanel!.HighlightPageIndex >= 0
+                ? _translatePanel.HighlightPageIndex
+                : _currentPageIndex;
+            string prefix = highlightSource ? $"摘录 · 第 {pageIndex + 1} 页" : $"第 {pageIndex + 1} 页";
+            _translateHeader.SetSubtitle($"{prefix} · 原文 {original} · 译文 {translation}");
         }
 
         /// <summary>打开翻译术语表对话框：读取（必要时由 AI 构建）本文件术语表，保存后立即用于后续润色。</summary>
@@ -8680,10 +8857,16 @@ namespace LearningAssistant.Forms.Pdf
             _highlightHeader = _highlightPanel.Header;
             _highlightPanel.Header.ActionButton!.Click += (_, _) => ButtonExportHighlights_Click(null, EventArgs.Empty);
 
+            _highlightPanel.AutoHighlightButton.Click += (_, _) => ButtonAutoHighlight_Click();
+            BuildAutoHighlightContextMenu(_highlightPanel.AutoHighlightButton);
+
             _listBoxHighlights = _highlightPanel.HighlightList;
             _listBoxHighlights.DrawItem += ListBoxHighlights_DrawItem;
             _listBoxHighlights.SelectedIndexChanged += ListBoxHighlights_SelectedIndexChanged;
             _listBoxHighlights.DoubleClick += ListBoxHighlights_DoubleClick;
+            _listBoxHighlights.MouseMove += ListBoxHighlights_MouseMove;
+            _listBoxHighlights.MouseLeave += ListBoxHighlights_MouseLeave;
+            _listBoxHighlights.MouseClick += ListBoxHighlights_MouseClick;
 
             _highlightEmptyHost = SidebarUi.CreateEmptyState("📑", "还没有摘录\n选中文字后用高亮工具即可保存");
             _highlightEmptyHost.Visible = false;
@@ -8738,7 +8921,13 @@ namespace LearningAssistant.Forms.Pdf
                 case PdfHighlight highlight:
                     color = MapHighlightColor(highlight.Color);
                     title = string.IsNullOrWhiteSpace(highlight.Text) ? highlight.Note : highlight.Text;
-                    meta = $"第 {highlight.PageIndex + 1} 页 · {highlight.CreatedAt:MM-dd HH:mm}";
+                    var metaParts = new List<string>();
+                    // 自动框选与手动摘录共用一张列表：用文字标记来源，保持同一排序与视觉权重。
+                    if (highlight.IsAutoGenerated) metaParts.Add("自动");
+                    metaParts.Add($"第 {highlight.PageIndex + 1} 页");
+                    if (!string.IsNullOrWhiteSpace(highlight.TranslationText)) metaParts.Add("已译");
+                    metaParts.Add(highlight.CreatedAt.ToString("MM-dd HH:mm"));
+                    meta = string.Join(" · ", metaParts);
                     break;
                 case PdfAnnotationItem annotation:
                     color = Color.FromArgb(annotation.ColorArgb);
@@ -8754,16 +8943,48 @@ namespace LearningAssistant.Forms.Pdf
             using (var strip = new SolidBrush(color))
                 e.Graphics.FillRectangle(strip, bounds.X, bounds.Y + 6, 3, bounds.Height - 12);
 
-            var titleRect = new Rectangle(bounds.X + 12, bounds.Y + 6, Math.Max(10, bounds.Width - 24), 30);
+            // 摘录行右侧保留「译」快捷按钮区域，标题/元信息相应收窄
+            bool isHighlight = item is PdfHighlight;
+            int textWidth = Math.Max(10, bounds.Width - (isHighlight ? 56 : 24));
+
+            var titleRect = new Rectangle(bounds.X + 12, bounds.Y + 6, textWidth, 30);
             TextRenderer.DrawText(e.Graphics, title, _listBoxHighlights.Font, titleRect,
                 palette.Text,
                 TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
 
             var metaFont = new Font("Microsoft YaHei UI", 8F);
-            var metaRect = new Rectangle(bounds.X + 12, bounds.Y + bounds.Height - 18, Math.Max(10, bounds.Width - 24), 16);
+            var metaRect = new Rectangle(bounds.X + 12, bounds.Y + bounds.Height - 18, textWidth, 16);
             TextRenderer.DrawText(e.Graphics, meta, metaFont, metaRect, palette.Muted,
                 TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
             metaFont.Dispose();
+
+            if (isHighlight)
+                DrawHighlightTranslateAction(e.Graphics, bounds, e.Index, palette);
+        }
+
+        /// <summary>行内「译」按钮：常驻低调显示，悬停时提亮，避免只能靠右键发现。</summary>
+        private void DrawHighlightTranslateAction(
+            Graphics graphics,
+            Rectangle bounds,
+            int index,
+            PdfSidebarPalette palette)
+        {
+            var actionRect = new Rectangle(bounds.Right - 40, bounds.Y + 14, 30, 24);
+            bool hover = index == _highlightTranslateHoverIndex;
+
+            using (var background = new SolidBrush(hover ? palette.BrandSoft : palette.SurfaceAlt))
+                graphics.FillRectangle(background, actionRect);
+            using (var border = new Pen(hover ? PdfSidebarTheme.Brand : palette.Border))
+                graphics.DrawRectangle(border, actionRect);
+
+            using var font = new Font("Microsoft YaHei UI", 8.5F, FontStyle.Bold);
+            TextRenderer.DrawText(
+                graphics,
+                "译",
+                font,
+                actionRect,
+                hover ? PdfSidebarTheme.Brand : palette.Muted,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPrefix);
         }
 
         private static Color MapHighlightColor(HighlightColor color)
@@ -8894,7 +9115,7 @@ namespace LearningAssistant.Forms.Pdf
             var modeBar = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = showRecordingMode ? 4 : 3,
+                ColumnCount = showRecordingMode ? 2 : 1,
                 RowCount = 1,
                 Margin = Padding.Empty,
                 Padding = new Padding(10, 4, 10, 4)
@@ -8903,25 +9124,18 @@ namespace LearningAssistant.Forms.Pdf
             for (int i = 0; i < modeBar.ColumnCount; i++)
                 modeBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, columnPercent));
 
-            _audioDrawerHighlightButton = CreateAudioDrawerModeButton("高亮");
-            _audioDrawerTranslateButton = CreateAudioDrawerModeButton("翻译");
+            // 摘录/翻译已迁入学习页工作台，抽屉只保留音频相关视图
             _audioDrawerAudioButton = CreateAudioDrawerModeButton("配套音频");
             _audioDrawerRecordingButton = CreateAudioDrawerModeButton("整页录音");
-            _audioDrawerHighlightButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Highlight);
-            _audioDrawerTranslateButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Translate);
             _audioDrawerAudioButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Audio);
             _audioDrawerRecordingButton.Click += (_, _) => ShowAudioDrawer(AudioDrawerMode.Recording);
-            _audioDrawerHighlightButton.Margin = new Padding(0, 0, 4, 0);
-            _audioDrawerTranslateButton.Margin = new Padding(2, 0, 2, 0);
-            _audioDrawerAudioButton.Margin = new Padding(2, 0, 2, 0);
-            _audioDrawerRecordingButton.Margin = new Padding(4, 0, 0, 0);
+            _audioDrawerAudioButton.Margin = new Padding(0, 0, showRecordingMode ? 2 : 0, 0);
+            _audioDrawerRecordingButton.Margin = new Padding(showRecordingMode ? 2 : 0, 0, 0, 0);
 
-            modeBar.Controls.Add(_audioDrawerHighlightButton, 0, 0);
-            modeBar.Controls.Add(_audioDrawerTranslateButton, 1, 0);
-            modeBar.Controls.Add(_audioDrawerAudioButton, 2, 0);
+            modeBar.Controls.Add(_audioDrawerAudioButton, 0, 0);
             if (showRecordingMode)
             {
-                modeBar.Controls.Add(_audioDrawerRecordingButton, 3, 0);
+                modeBar.Controls.Add(_audioDrawerRecordingButton, 1, 0);
             }
             else
             {
@@ -8978,18 +9192,7 @@ namespace LearningAssistant.Forms.Pdf
                 _recordingHost!.Controls.Add(_recordingUnavailableLabel);
             }
 
-            if (_translatePanel != null)
-            {
-                _translatePanel.Visible = false;
-                _audioDrawerContent.Controls.Add(_translatePanel);
-            }
-
-            if (_highlightPanel != null)
-            {
-                _highlightPanel.Visible = false;
-                _audioDrawerContent.Controls.Add(_highlightPanel);
-            }
-
+            // 摘录与翻译面板已迁入「学习」页签的双面板工作台，抽屉只保留音频/录音
             return _audioDrawerContent;
         }
 
@@ -9008,6 +9211,18 @@ namespace LearningAssistant.Forms.Pdf
         /// <summary>显示音频抽屉并切换到指定视图。</summary>
         private void ShowAudioDrawer(AudioDrawerMode mode)
         {
+            // 摘录/翻译统一改道到学习页工作台，保证同一面板只有一个宿主
+            if (mode == AudioDrawerMode.Highlight)
+            {
+                ShowWorkbenchModule(PdfWorkbenchModule.Highlight);
+                return;
+            }
+            if (mode == AudioDrawerMode.Translate)
+            {
+                ShowWorkbenchModule(PdfWorkbenchModule.Translate);
+                return;
+            }
+
             // 整页录音入口已下线：任何残存调用都不再打开该视图
             if (mode == AudioDrawerMode.Recording && !PdfHiddenFeatures.EnablePageRecording)
                 return;
@@ -9024,6 +9239,24 @@ namespace LearningAssistant.Forms.Pdf
             _audioDrawer.Visible = true;
             _audioDrawer.BringToFront();
             _audioDrawerCloseButton?.Focus();
+        }
+
+        /// <summary>打开学习页并展开指定模块；供命令面板、右键菜单等旧入口复用。</summary>
+        private void ShowWorkbenchModule(PdfWorkbenchModule module)
+        {
+            HideAudioDrawer();
+
+            if (_tabControlLeft != null && _tabPageStudy != null)
+                _tabControlLeft.SelectedTab = _tabPageStudy;
+
+            _workbench?.ShowModule(module);
+
+            if (module == PdfWorkbenchModule.Highlight)
+                RefreshHighlightList();
+            else
+                UpdateTranslateHeaderStatus();
+
+            UpdateStudyTab();
         }
 
         private void HideAudioDrawer()
@@ -9045,23 +9278,15 @@ namespace LearningAssistant.Forms.Pdf
             if (_audioPanel != null) _audioPanel.Visible = mode == AudioDrawerMode.Audio;
             if (_audioUnavailableLabel != null) _audioUnavailableLabel.Visible = mode == AudioDrawerMode.Audio;
             if (_recordingHost != null) _recordingHost.Visible = mode == AudioDrawerMode.Recording;
-            if (_translatePanel != null) _translatePanel.Visible = mode == AudioDrawerMode.Translate;
-            if (_highlightPanel != null) _highlightPanel.Visible = mode == AudioDrawerMode.Highlight;
 
             switch (mode)
             {
-                case AudioDrawerMode.Highlight:
-                    RefreshHighlightList();
-                    break;
                 case AudioDrawerMode.Audio:
                     _audioPanel?.RefreshData();
                     break;
                 case AudioDrawerMode.Recording:
                     _audioManager?.RefreshTimestampList();
                     _audioManager?.RefreshSummaryList();
-                    break;
-                case AudioDrawerMode.Translate:
-                    UpdateTranslateHeaderStatus();
                     break;
             }
 
@@ -9075,9 +9300,7 @@ namespace LearningAssistant.Forms.Pdf
 
             _audioDrawerTitle.Text = _audioDrawerMode switch
             {
-                AudioDrawerMode.Highlight => "高亮",
                 AudioDrawerMode.Recording => "整页录音",
-                AudioDrawerMode.Translate => "翻译",
                 _ => "配套音频"
             };
 
@@ -9089,12 +9312,9 @@ namespace LearningAssistant.Forms.Pdf
 
         private void UpdateAudioDrawerModeStyles()
         {
-            if (_audioDrawerAudioButton == null || _audioDrawerRecordingButton == null
-                || _audioDrawerTranslateButton == null || _audioDrawerHighlightButton == null) return;
+            if (_audioDrawerAudioButton == null || _audioDrawerRecordingButton == null) return;
 
             var palette = PdfSidebarTheme.PaletteFor(this);
-            StyleAudioDrawerModeButton(_audioDrawerHighlightButton, _audioDrawerMode == AudioDrawerMode.Highlight, palette);
-            StyleAudioDrawerModeButton(_audioDrawerTranslateButton, _audioDrawerMode == AudioDrawerMode.Translate, palette);
             StyleAudioDrawerModeButton(_audioDrawerAudioButton, _audioDrawerMode == AudioDrawerMode.Audio, palette);
             StyleAudioDrawerModeButton(_audioDrawerRecordingButton, _audioDrawerMode == AudioDrawerMode.Recording, palette);
         }
@@ -9573,6 +9793,9 @@ namespace LearningAssistant.Forms.Pdf
 
                 _sidebarHoverSwitch = state.HoverSwitch;
                 _sidebarTabByDocument = state.Tabs ?? new Dictionary<string, string>();
+                _workbenchTranslateVisible = state.WorkbenchTranslateVisible;
+                _workbenchLinkEnabled = state.WorkbenchLinkEnabled;
+                _workbenchSplitRatio = Math.Clamp(state.WorkbenchSplitRatio, 0.2, 0.8);
             }
             catch
             {
@@ -9589,7 +9812,10 @@ namespace LearningAssistant.Forms.Pdf
                 var state = new SidebarState
                 {
                     HoverSwitch = _sidebarHoverSwitch,
-                    Tabs = _sidebarTabByDocument
+                    Tabs = _sidebarTabByDocument,
+                    WorkbenchTranslateVisible = _workbenchTranslateVisible,
+                    WorkbenchLinkEnabled = _workbenchLinkEnabled,
+                    WorkbenchSplitRatio = _workbenchSplitRatio
                 };
                 File.WriteAllText(SidebarStatePath, JsonSerializer.Serialize(state));
             }
@@ -9603,6 +9829,19 @@ namespace LearningAssistant.Forms.Pdf
         {
             public bool HoverSwitch { get; set; }
             public Dictionary<string, string>? Tabs { get; set; } = new();
+            public bool WorkbenchTranslateVisible { get; set; }
+            public bool WorkbenchLinkEnabled { get; set; }
+            public double WorkbenchSplitRatio { get; set; } = 0.55;
+        }
+
+        /// <summary>把工作台的模块/联动/分屏比例写回侧栏状态文件。</summary>
+        private void SaveWorkbenchState()
+        {
+            if (_workbench == null) return;
+            _workbenchTranslateVisible = _workbench.IsModuleVisible(PdfWorkbenchModule.Translate);
+            _workbenchLinkEnabled = _workbench.LinkEnabled;
+            _workbenchSplitRatio = _workbench.SplitterRatio;
+            SaveSidebarState();
         }
 
         /// <summary>右键页签条可开启「悬停 0.4 秒切换」，默认关闭，避免误触。</summary>

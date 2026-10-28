@@ -5,8 +5,15 @@ using LearningAssistant.Forms.UserControls.Common;
 
 namespace LearningAssistant.Forms.Pdf;
 
-/// <summary>「翻译」侧栏面板：页头 + 原文/译文卡片 + 操作区 + 选项区。</summary>
-public partial class PdfTranslatePanel : UserControl
+/// <summary>翻译面板的内容来源。</summary>
+public enum PdfTranslateSource
+{
+    Page,
+    Highlight
+}
+
+/// <summary>「翻译」侧栏面板：页头 + 来源切换 + 原文/译文卡片 + 操作区 + 选项区。</summary>
+public partial class PdfTranslatePanel : UserControl, ISidebarThemeAware
 {
     /// <summary>目标语言：显示名与百度翻译语言代码一一对应</summary>
     private static readonly (string Label, string Code)[] TargetLanguages =
@@ -22,10 +29,24 @@ public partial class PdfTranslatePanel : UserControl
         ("Русский", "ru")
     };
 
+    private readonly TableLayoutPanel sourceBar;
+    private readonly Button pageSourceButton;
+    private readonly Button highlightSourceButton;
+    private readonly Label sourceBadge;
+    private string _pageOriginalText = string.Empty;
+    private string _pageTranslationText = string.Empty;
+    private string _highlightOriginalText = string.Empty;
+    private string _highlightTranslationText = string.Empty;
+    private int _highlightPageIndex = -1;
+    private bool _switchingSource;
+    private PdfTranslateSource _source = PdfTranslateSource.Page;
+
     public PdfTranslatePanel()
     {
         InitializeComponent();
         InitTargetLanguageOptions();
+        sourceBar = BuildSourceBar(out pageSourceButton, out highlightSourceButton, out sourceBadge);
+        InsertSourceBar();
         // 卡片内容区由面板自行挂载：VS 设计器无法序列化自定义容器的 Body，
         // 放在构造里可保证设计视图与运行期都能看到文本框。
         originalCard.Body.Controls.Add(originalBox);
@@ -33,7 +54,6 @@ public partial class PdfTranslatePanel : UserControl
         _tip.SetToolTip(ocrButton, "仅识别本页文字，不翻译；无文本层时自动调用 OCR");
         _tip.SetToolTip(shadowingButton, "用当前页原文直接开始分句跟读");
         _tip.SetToolTip(addToLearningButton, "把选区或本页原文加入个人学习库");
-        _tip.SetToolTip(autoHighlightButton, "自动框选当前页正文区域（排除页码）；再次点击清除本页自动框选；右键可整本框选");
         _tip.SetToolTip(autoTranslateCheck, "识别后自动翻译原文");
         _tip.SetToolTip(autoSpeakCheck, "识别后自动朗读原文");
         _tip.SetToolTip(aiPolishCheck, "使用 AI 术语表润色译文，保持术语前后一致（失败时自动保留机器译文）");
@@ -106,27 +126,6 @@ public partial class PdfTranslatePanel : UserControl
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Button AddToLearningButton => addToLearningButton;
-
-    /// <summary>自动高亮（自动框选正文）按钮。</summary>
-    [Browsable(false)]
-    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
-    public Button AutoHighlightButton => autoHighlightButton;
-
-    /// <summary>
-    /// 更新自动高亮按钮状态：任务进行中禁用并提示；当前页已有自动框选时显示清除文案。
-    /// </summary>
-    public void UpdateAutoHighlightState(bool busy, bool hasAutoHighlights)
-    {
-        if (busy)
-        {
-            autoHighlightButton.Enabled = false;
-            autoHighlightButton.Text = "⏳ 正在框选";
-            return;
-        }
-
-        autoHighlightButton.Enabled = true;
-        autoHighlightButton.Text = hasAutoHighlights ? "🧹 清除本页" : "🖍 自动高亮";
-    }
 
     /// <summary>识别后自动翻译。</summary>
     [Browsable(false)]
@@ -213,10 +212,230 @@ public partial class PdfTranslatePanel : UserControl
         targetLanguageCombo.SelectedIndex = 0;
     }
 
-    /// <summary>窄侧栏上下堆叠、宽侧栏左右对照。</summary>
+    /// <summary>当前内容来源：整页或选中摘录。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public PdfTranslateSource Source => _source;
+
+    /// <summary>当前摘录所属页；无摘录时为 -1。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public int HighlightPageIndex => _highlightPageIndex;
+
+    /// <summary>来源切换完成事件；宿主据此修正文本来源页与页头副标题。</summary>
+    public event EventHandler? SourceChanged;
+
+    /// <summary>切换来源；先把当前文本存回原槽位，再载入目标槽位，互不覆盖。</summary>
+    public void SwitchSource(PdfTranslateSource source)
+    {
+        if (_source == source)
+        {
+            UpdateSourceBar();
+            return;
+        }
+
+        SaveCurrentSlot();
+        _source = source;
+        LoadCurrentSlot();
+        UpdateSourceBar();
+        SourceChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>切回整页槽。</summary>
+    public void ShowPageSource() => SwitchSource(PdfTranslateSource.Page);
+
+    /// <summary>把一条摘录送入「摘录」槽并切换过去。</summary>
+    public void ShowHighlightSource(int pageIndex, string original, string translation)
+    {
+        SaveCurrentSlot();
+        _source = PdfTranslateSource.Highlight;
+        _highlightPageIndex = pageIndex;
+        _highlightOriginalText = original ?? string.Empty;
+        _highlightTranslationText = translation ?? string.Empty;
+        LoadCurrentSlot();
+        UpdateSourceBar();
+        SourceChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>页级流程写入原文：切回整页槽，避免覆盖摘录槽内容。</summary>
+    public void SetPageOriginalText(string text)
+    {
+        _pageOriginalText = text ?? string.Empty;
+        if (_source != PdfTranslateSource.Page)
+            SwitchSource(PdfTranslateSource.Page);
+        else
+            SetBoxText(originalBox, _pageOriginalText);
+    }
+
+    /// <summary>页级流程写入译文：只更新整页槽，不打断用户正在查看的摘录。</summary>
+    public void SetPageTranslationText(string text)
+    {
+        _pageTranslationText = text ?? string.Empty;
+        if (_source == PdfTranslateSource.Page)
+            SetBoxText(translationBox, _pageTranslationText);
+    }
+
+    /// <summary>更新当前摘录槽的译文（例如翻译回包）。</summary>
+    public void SetHighlightTranslation(int pageIndex, string original, string translation)
+    {
+        // 来源页或原文已变化时按新摘录处理，避免把旧译文贴到新内容上
+        if (_source == PdfTranslateSource.Highlight && _highlightPageIndex == pageIndex)
+        {
+            _highlightTranslationText = translation ?? string.Empty;
+            SetBoxText(translationBox, _highlightTranslationText);
+            return;
+        }
+
+        ShowHighlightSource(pageIndex, original, translation);
+    }
+
+    public void ApplyTheme(bool isDark) => UpdateSourceBar();
+
+    private void SaveCurrentSlot()
+    {
+        if (_switchingSource) return;
+        if (_source == PdfTranslateSource.Page)
+        {
+            _pageOriginalText = originalBox.Text;
+            _pageTranslationText = translationBox.Text;
+        }
+        else
+        {
+            _highlightOriginalText = originalBox.Text;
+            _highlightTranslationText = translationBox.Text;
+        }
+    }
+
+    private void LoadCurrentSlot()
+    {
+        _switchingSource = true;
+        try
+        {
+            originalBox.Text = _source == PdfTranslateSource.Page
+                ? _pageOriginalText
+                : _highlightOriginalText;
+            translationBox.Text = _source == PdfTranslateSource.Page
+                ? _pageTranslationText
+                : _highlightTranslationText;
+        }
+        finally
+        {
+            _switchingSource = false;
+        }
+    }
+
+    private void SetBoxText(TextBox box, string text)
+    {
+        if (string.Equals(box.Text, text, StringComparison.Ordinal)) return;
+        _switchingSource = true;
+        try
+        {
+            box.Text = text;
+        }
+        finally
+        {
+            _switchingSource = false;
+        }
+    }
+
+    private static TableLayoutPanel BuildSourceBar(
+        out Button pageButton,
+        out Button highlightButton,
+        out Label badge)
+    {
+        var bar = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 3,
+            RowCount = 1,
+            Margin = Padding.Empty,
+            Padding = new Padding(2, 1, 2, 1),
+            BackColor = Color.Transparent,
+            Name = "sourceBar"
+        };
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78F));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78F));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        bar.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+        pageButton = CreateSourceButton("📄 整页", "查看整页原文与译文");
+        highlightButton = CreateSourceButton("✍ 摘录", "查看选中摘录的原文与译文");
+        badge = new Label
+        {
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleRight,
+            Font = new Font("Microsoft YaHei UI", 8.5F),
+            AutoEllipsis = true,
+            Margin = new Padding(2, 0, 0, 0),
+            Text = "整页"
+        };
+
+        bar.Controls.Add(pageButton, 0, 0);
+        bar.Controls.Add(highlightButton, 1, 0);
+        bar.Controls.Add(badge, 2, 0);
+        return bar;
+    }
+
+    private static Button CreateSourceButton(string text, string accessibleName)
+        => new()
+        {
+            Text = text,
+            Dock = DockStyle.Fill,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Microsoft YaHei UI", 8.5F),
+            Margin = new Padding(0, 0, 2, 0),
+            Cursor = Cursors.Hand,
+            UseVisualStyleBackColor = false,
+            Tag = "keep",
+            AccessibleName = accessibleName
+        };
+
+    /// <summary>把来源切换条插到页头下方，并把原有行整体下移一行。</summary>
+    private void InsertSourceBar()
+    {
+        root.RowCount += 1;
+        root.RowStyles.Insert(1, new RowStyle(SizeType.Absolute, 30F));
+        foreach (var control in new Control[] { body, actions, extras, options })
+            root.SetRow(control, root.GetRow(control) + 1);
+        root.Controls.Add(sourceBar, 0, 1);
+
+        pageSourceButton.Click += (_, _) => ShowPageSource();
+        highlightSourceButton.Click += (_, _) => SwitchSource(PdfTranslateSource.Highlight);
+        UpdateSourceBar();
+    }
+
+    private void UpdateSourceBar()
+    {
+        var palette = PdfSidebarTheme.PaletteFor(this);
+        bool isDark = PdfSidebarTheme.IsDarkFor(this);
+        StyleSourceButton(pageSourceButton, _source == PdfTranslateSource.Page, palette, isDark);
+        StyleSourceButton(highlightSourceButton, _source == PdfTranslateSource.Highlight, palette, isDark);
+        highlightSourceButton.Enabled = _source == PdfTranslateSource.Highlight
+            || !string.IsNullOrWhiteSpace(_highlightOriginalText);
+        sourceBadge.ForeColor = palette.Muted;
+        sourceBadge.Text = _source == PdfTranslateSource.Highlight
+            ? (_highlightPageIndex >= 0 ? $"第 {_highlightPageIndex + 1} 页摘录" : "当前摘录")
+            : "整页";
+    }
+
+    private static void StyleSourceButton(
+        Button button,
+        bool selected,
+        PdfSidebarPalette palette,
+        bool isDark)
+    {
+        button.BackColor = selected ? palette.BrandSoft : palette.SurfaceAlt;
+        button.ForeColor = selected ? PdfSidebarTheme.Brand : palette.Muted;
+        button.FlatAppearance.BorderSize = 1;
+        button.FlatAppearance.BorderColor = selected ? PdfSidebarTheme.Brand : palette.Border;
+        button.FlatAppearance.MouseOverBackColor = selected ? palette.BrandSoft : palette.Hover;
+        button.Cursor = button.Enabled ? Cursors.Hand : Cursors.Default;
+    }
+
+    /// <summary>窄侧栏上下堆叠、宽侧栏左右对照；高度不足（双开）时强制左右对照。</summary>
     private void LayoutCards()
     {
-        bool wide = body.ClientSize.Width >= 420;
+        bool wide = body.ClientSize.Width >= 420 || body.ClientSize.Height < 260;
         body.SuspendLayout();
         body.ColumnStyles.Clear();
         body.RowStyles.Clear();

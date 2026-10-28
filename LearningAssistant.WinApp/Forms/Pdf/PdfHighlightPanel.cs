@@ -15,9 +15,11 @@ public partial class PdfHighlightPanel : UserControl
         _tip.SetToolTip(removeButton, "删除所选高亮");
         _tip.SetToolTip(editButton, "编辑所选高亮");
         _tip.SetToolTip(batchRemoveButton, "批量删除所选高亮");
+        _tip.SetToolTip(autoHighlightButton, "自动高亮：框选本页文字（右键整本）");
         removeButton.AccessibleName = "删除所选高亮";
         editButton.AccessibleName = "编辑所选高亮";
         batchRemoveButton.AccessibleName = "批量删除所选高亮";
+        autoHighlightButton.AccessibleName = "自动高亮";
     }
 
     /// <summary>
@@ -73,7 +75,40 @@ public partial class PdfHighlightPanel : UserControl
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Button BatchRemoveButton => batchRemoveButton;
 
-    /// <summary>把三个操作按钮排到页头右侧，与「导出」同一行，并压缩副标题宽度避免遮挡。</summary>
+    /// <summary>自动高亮入口；右键菜单由宿主挂接。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button AutoHighlightButton => autoHighlightButton;
+
+    /// <summary>
+    /// 同步自动高亮按钮状态：忙碌时禁用；本页已有自动框时切换为「清除」语义。
+    /// </summary>
+    public void UpdateAutoHighlightState(bool busy, bool hasAutoHighlights)
+    {
+        if (busy)
+        {
+            autoHighlightButton.Enabled = false;
+            autoHighlightButton.Text = "⏳";
+            return;
+        }
+
+        autoHighlightButton.Enabled = true;
+        autoHighlightButton.Text = "🖍";
+        autoHighlightButton.BackColor = hasAutoHighlights
+            ? Color.FromArgb(255, 237, 213)
+            : Color.FromArgb(255, 247, 237);
+        _tip.SetToolTip(
+            autoHighlightButton,
+            hasAutoHighlights ? "清除本页自动高亮（右键整本）" : "自动高亮：框选本页文字（右键整本）");
+    }
+
+    /// <summary>整本框选进度收敛到页头副标题，避免挤压 32px 图标按钮。</summary>
+    public void ShowAutoHighlightProgress(int current, int total, bool ocr)
+    {
+        header.Subtitle.Text = $"框选中 {current}/{total}{(ocr ? " · OCR" : string.Empty)}";
+    }
+
+    /// <summary>把三个操作按钮和自动高亮排到页头右侧，与「导出」同一行，并压缩副标题宽度。</summary>
     private void LayoutHeaderActions()
     {
         var exportButton = header.ActionButton;
@@ -81,7 +116,7 @@ public partial class PdfHighlightPanel : UserControl
             exportButton.Location = new Point(exportButton.Left, 11);
 
         int right = exportButton != null ? exportButton.Left - 4 : header.Width - 4;
-        foreach (var button in new[] { batchRemoveButton, editButton, removeButton })
+        foreach (var button in new[] { autoHighlightButton, batchRemoveButton, editButton, removeButton })
         {
             button.Location = new Point(right - button.Width, 11);
             right = button.Left - 4;
