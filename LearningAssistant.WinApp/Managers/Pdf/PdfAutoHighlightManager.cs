@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace LearningAssistant.Managers
 {
     /// <summary>
-    /// PDF「自动高亮」控制器：把当前页正文行整理成段落框并落库，点击框时复用选区翻译。
+    /// PDF「自动高亮」控制器：当前页按需框选、整本按页缓存并懒加载，点击框时复用选区翻译。
     /// </summary>
     public sealed class PdfAutoHighlightManager
     {
@@ -19,21 +19,35 @@ namespace LearningAssistant.Managers
         private readonly IPdfReaderFormAccess _form;
         private readonly IHighlightService _highlightService;
         private readonly PdfReaderHighlightManager _highlightManager;
+        private readonly IPdfAutoLayoutService? _autoLayoutService;
+
+        /// <summary>正在惰性落库的页，避免翻页/双页显示时重复生成</summary>
+        private readonly HashSet<int> _materializingPages = new();
+
+        private CancellationTokenSource? _wholeBookCts;
 
         public PdfAutoHighlightManager(
             ILogger logger,
             IPdfReaderFormAccess form,
             IHighlightService highlightService,
-            PdfReaderHighlightManager highlightManager)
+            PdfReaderHighlightManager highlightManager,
+            IPdfAutoLayoutService? autoLayoutService = null)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _form = form ?? throw new ArgumentNullException(nameof(form));
             _highlightService = highlightService ?? throw new ArgumentNullException(nameof(highlightService));
             _highlightManager = highlightManager ?? throw new ArgumentNullException(nameof(highlightManager));
+            _autoLayoutService = autoLayoutService;
         }
 
-        /// <summary>是否正在生成框选，避免重复点击。</summary>
+        /// <summary>是否正在生成当前页框选，避免重复点击。</summary>
         public bool IsBusy { get; private set; }
+
+        /// <summary>是否正在执行整本自动框选。</summary>
+        public bool IsWholeBookRunning { get; private set; }
+
+        /// <summary>整本任务是否支持 OCR（决定右键菜单文案与缓存策略）。</summary>
+        public bool CanUseWholeBook => _autoLayoutService != null;
 
         /// <summary>当前可见页是否已有自动高亮（双页模式检查两页）。</summary>
         public bool HasAutoHighlightsForVisiblePages()
@@ -46,7 +60,7 @@ namespace LearningAssistant.Managers
         /// </summary>
         public async Task ToggleVisiblePagesAsync()
         {
-            if (IsBusy) return;
+            if (IsBusy || IsWholeBookRunning) return;
 
             var pdfPath = _form.CurrentPdfPath;
             if (string.IsNullOrWhiteSpace(pdfPath)) return;
@@ -74,19 +88,138 @@ namespace LearningAssistant.Managers
         /// <summary>清除当前可见页的自动高亮。</summary>
         public async Task ClearVisiblePagesAsync()
         {
-            if (IsBusy) return;
+            var pdfPath = _form.CurrentPdfPath;
+            if (string.IsNullOrWhiteSpace(pdfPath)) return;
+
+            await ClearPagesAsync(pdfPath, GetVisiblePages());
+        }
+
+        /// <summary>
+        /// 整本自动框选：逐页生成版面缓存；完成后只把当前可见页转成高亮，其余页浏览时懒加载。
+        /// </summary>
+        /// <param name="allowOcr">无文本层的页是否使用 OCR（整本扫描件）</param>
+        /// <param name="progress">逐页进度回调</param>
+        public async Task BuildWholeDocumentAsync(
+            bool allowOcr,
+            IProgress<PdfAutoLayoutProgress>? progress = null)
+        {
+            if (IsBusy || IsWholeBookRunning) return;
 
             var pdfPath = _form.CurrentPdfPath;
             if (string.IsNullOrWhiteSpace(pdfPath)) return;
 
-            IsBusy = true;
+            if (_autoLayoutService == null)
+            {
+                _form.ShowWarning("整本自动框选服务未初始化");
+                return;
+            }
+
+            IsWholeBookRunning = true;
+            _wholeBookCts = new CancellationTokenSource();
             try
             {
-                await ClearPagesAsync(pdfPath, GetVisiblePages());
+                var state = _autoLayoutService.LoadState(pdfPath);
+                state.WholeBookEnabled = true;
+                state.SuppressedPages.Clear();
+                _autoLayoutService.SaveState(pdfPath, state);
+
+                _form.ShowToast(allowOcr
+                    ? "开始整本框选（含扫描页 OCR）..."
+                    : "开始整本框选（文本层）...");
+
+                await _autoLayoutService.BuildDocumentAsync(
+                    pdfPath, allowOcr, progress, _wholeBookCts.Token);
+
+                foreach (var page in GetVisiblePages())
+                    await EnsurePageMaterializedAsync(page);
+
+                _form.ShowToast("整本自动框选已就绪，浏览页面时自动加载");
+            }
+            catch (OperationCanceledException)
+            {
+                _form.ShowToast("已取消整本自动框选，已完成页会保留");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "整本自动框选失败");
+                _form.ShowWarning("整本自动框选失败，请稍后重试");
             }
             finally
             {
-                IsBusy = false;
+                IsWholeBookRunning = false;
+                _wholeBookCts?.Dispose();
+                _wholeBookCts = null;
+            }
+        }
+
+        /// <summary>取消正在执行的整本任务；已完成的页面缓存会保留。</summary>
+        public void CancelWholeDocument()
+        {
+            try
+            {
+                _wholeBookCts?.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // 任务恰好结束时忽略
+            }
+        }
+
+        /// <summary>清除本文档所有自动高亮，并删除整本版面缓存与状态。</summary>
+        public async Task ClearWholeDocumentAsync()
+        {
+            var pdfPath = _form.CurrentPdfPath;
+            if (string.IsNullOrWhiteSpace(pdfPath)) return;
+
+            if (IsWholeBookRunning)
+                CancelWholeDocument();
+
+            await Task.Run(() => _highlightService.RemoveAllAutoHighlights(pdfPath));
+            _autoLayoutService?.ClearDocument(pdfPath);
+
+            _highlightManager.RefreshHighlightList();
+            foreach (var page in GetVisiblePages())
+                _highlightManager.RefreshHighlightLayerForPage(page);
+            _highlightManager.UpdateSecondHighlightLayer();
+            _form.PictureBoxPdf?.Invalidate();
+            _form.ShowToast("已清除整本自动框选");
+        }
+
+        /// <summary>
+        /// 页面显示后调用：整本模式开启时，把该页已缓存的版面懒加载为自动高亮。
+        /// </summary>
+        public async Task EnsurePageMaterializedAsync(int pageIndex)
+        {
+            if (_autoLayoutService == null || pageIndex < 0) return;
+
+            var pdfPath = _form.CurrentPdfPath;
+            if (string.IsNullOrWhiteSpace(pdfPath)) return;
+            if (!_materializingPages.Add(pageIndex)) return;
+
+            try
+            {
+                var state = _autoLayoutService.LoadState(pdfPath);
+                if (!state.WholeBookEnabled || state.SuppressedPages.Contains(pageIndex))
+                    return;
+
+                if (GetAutoHighlights(pageIndex).Count > 0)
+                    return;
+
+                var layout = await Task.Run(() => _autoLayoutService.TryGetCachedPage(pdfPath, pageIndex));
+                if (layout == null || layout.Blocks.Count == 0)
+                    return;
+
+                var highlights = CreateHighlights(pdfPath, pageIndex, layout.Blocks);
+                await _highlightService.AddHighlightsAsync(pdfPath, highlights);
+                RefreshAfterChange(new[] { pageIndex });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "懒加载第 {Page} 页自动框选失败", pageIndex);
+            }
+            finally
+            {
+                _materializingPages.Remove(pageIndex);
             }
         }
 
@@ -151,11 +284,28 @@ namespace LearningAssistant.Managers
 
         private async Task ClearPagesAsync(string pdfPath, IReadOnlyList<int> pages)
         {
+            if (pages.Count == 0) return;
+
             await Task.Run(() =>
             {
                 foreach (var page in pages)
+                {
                     _highlightService.RemoveAutoHighlightsForPage(pdfPath, page);
+                    _autoLayoutService?.RemovePageCache(pdfPath, page);
+                }
             });
+
+            // 整本模式下，被手动清除的页记录为抑制页，翻页回来不再自动恢复
+            if (_autoLayoutService != null)
+            {
+                var state = _autoLayoutService.LoadState(pdfPath);
+                if (state.WholeBookEnabled)
+                {
+                    foreach (var page in pages)
+                        state.SuppressedPages.Add(page);
+                    _autoLayoutService.SaveState(pdfPath, state);
+                }
+            }
 
             RefreshAfterChange(pages);
             _form.ShowToast("已清除本页自动框选");
@@ -169,7 +319,7 @@ namespace LearningAssistant.Managers
 
             foreach (var page in pages)
             {
-                var result = await BuildLayoutAsync(page);
+                var result = await BuildLayoutAsync(pdfPath, page, allowOcr: true);
                 if (result.Layout.Blocks.Count == 0)
                 {
                     skipped++;
@@ -180,6 +330,20 @@ namespace LearningAssistant.Managers
                 var highlights = CreateHighlights(pdfPath, page, result.Layout.Blocks);
                 await _highlightService.AddHighlightsAsync(pdfPath, highlights);
                 added += highlights.Count;
+            }
+
+            // 单页重新生成时，从整本模式的抑制页集合中移除
+            if (added > 0 && _autoLayoutService != null)
+            {
+                var state = _autoLayoutService.LoadState(pdfPath);
+                if (state.WholeBookEnabled)
+                {
+                    bool changed = false;
+                    foreach (var page in pages)
+                        changed |= state.SuppressedPages.Remove(page);
+                    if (changed)
+                        _autoLayoutService.SaveState(pdfPath, state);
+                }
             }
 
             RefreshAfterChange(pages);
@@ -199,7 +363,10 @@ namespace LearningAssistant.Managers
         {
             _highlightManager.RefreshHighlightList();
             foreach (var page in pages)
-                _highlightManager.RefreshHighlightLayerForPage(page);
+            {
+                if (page == _form.CurrentPageIndex)
+                    _highlightManager.RefreshHighlightLayerForPage(page);
+            }
             _highlightManager.UpdateSecondHighlightLayer();
             _form.PictureBoxPdf?.Invalidate();
         }
@@ -241,7 +408,30 @@ namespace LearningAssistant.Managers
             return "auto-" + Convert.ToHexString(hash, 0, 8).ToLowerInvariant();
         }
 
-        private async Task<PageLayoutResult> BuildLayoutAsync(int pageIndex)
+        private async Task<PageLayoutResult> BuildLayoutAsync(
+            string pdfPath,
+            int pageIndex,
+            bool allowOcr)
+        {
+            if (_autoLayoutService != null)
+            {
+                try
+                {
+                    var page = await _autoLayoutService.GetOrBuildPageAsync(
+                        pdfPath, pageIndex, allowOcr);
+                    return new PageLayoutResult(page, null);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "生成第 {Page} 页自动框选版面失败", pageIndex);
+                }
+            }
+
+            // 服务不可用时的降级路径：仅处理当前可见页
+            return await BuildLayoutInlineAsync(pageIndex, allowOcr);
+        }
+
+        private async Task<PageLayoutResult> BuildLayoutInlineAsync(int pageIndex, bool allowOcr)
         {
             var presenter = _form.Presenter;
             if (presenter == null)
@@ -267,6 +457,13 @@ namespace LearningAssistant.Managers
                     Source = PdfTextLineSource.TextLayer,
                     Blocks = blocks.ToList()
                 }, null);
+            }
+
+            if (!allowOcr)
+            {
+                return new PageLayoutResult(
+                    new PdfAutoLayoutPage { PageIndex = pageIndex, Source = PdfTextLineSource.None },
+                    null);
             }
 
             // 无文本层时回退到 OCR 行框（扫描页）

@@ -50,6 +50,26 @@ namespace LearningAssistant.Models.Pdf
         public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
     }
 
+    /// <summary>
+    /// 文档级自动框选状态：记录整本模式是否开启，以及被用户手动清除、不再自动恢复的页。
+    /// </summary>
+    public sealed class PdfAutoLayoutState
+    {
+        public string Fingerprint { get; set; } = string.Empty;
+        public bool WholeBookEnabled { get; set; }
+        public HashSet<int> SuppressedPages { get; set; } = new();
+        public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
+    }
+
+    /// <summary>整本自动框选进度。</summary>
+    public sealed class PdfAutoLayoutProgress
+    {
+        public int CurrentPage { get; set; }
+        public int TotalPages { get; set; }
+        public PdfTextLineSource Source { get; set; }
+        public bool Skipped { get; set; }
+    }
+
     /// <summary>OCR 行框识别结果（图像像素坐标）。</summary>
     public sealed class OcrLayoutResult
     {

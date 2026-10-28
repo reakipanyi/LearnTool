@@ -244,6 +244,14 @@ namespace LearningAssistant.Common
                 sp.GetService<ILogger<PdfDocumentTextIndex>>(),
                 AppPaths.PdfTextIndexDir));
 
+            // PDF 自动框选版面：文本层优先、扫描页可选 OCR，一页一缓存文件
+            services.AddScoped<IPdfAutoLayoutService>(sp => new PdfAutoLayoutService(
+                sp.GetRequiredService<IPdfService>(),
+                sp.GetService<IPdfOcrService>(),
+                sp.GetService<IPdfDocumentTextIndex>(),
+                sp.GetService<ILogger<PdfAutoLayoutService>>(),
+                AppPaths.PdfAutoLayoutDir));
+
             // PDF AI 结果磁盘缓存：按指纹/页码/功能/模型分键，LRU 淘汰
             services.AddScoped<IPdfAiCacheService>(sp => new PdfAiCacheService(
                 AppPaths.PdfAiCacheDir,

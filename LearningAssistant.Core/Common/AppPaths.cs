@@ -164,6 +164,11 @@ namespace LearningAssistant.Common
         public static string PdfSelectionTranslationDir => Path.Combine(CurrentUserDir, "pdf_selection_translations");
 
         /// <summary>
+        /// PDF 自动框选版面缓存目录（按用户 + 文档指纹 + 页码存放段落块）
+        /// </summary>
+        public static string PdfAutoLayoutDir => Path.Combine(CurrentUserDir, "pdf_auto_layout");
+
+        /// <summary>
         /// TTS 缓存目录
         /// </summary>
         public static string TTSCacheDir => Path.Combine(CacheDir, "tts");
@@ -254,6 +259,7 @@ namespace LearningAssistant.Common
             EnsureDirectoryExists(PdfAiSummaryDir);
             EnsureDirectoryExists(PdfTranslationGlossaryDir);
             EnsureDirectoryExists(PdfSelectionTranslationDir);
+            EnsureDirectoryExists(PdfAutoLayoutDir);
             EnsureDirectoryExists(TTSCacheDir);
             EnsureDirectoryExists(TesseractDataDir);
         }
@@ -455,6 +461,7 @@ namespace LearningAssistant.Common
             EnsureDirectoryExists(GetUserPdfAiSummaryDir(userId));
             EnsureDirectoryExists(GetUserPdfTranslationGlossaryDir(userId));
             EnsureDirectoryExists(GetUserPdfSelectionTranslationDir(userId));
+            EnsureDirectoryExists(Path.Combine(GetUserDir(userId), "pdf_auto_layout"));
             EnsureDirectoryExists(GetTtsCacheDir());
             EnsureDirectoryExists(GetUserAutoSaveDir(userId));
             EnsureDirectoryExists(GetUserBackupDir(userId));

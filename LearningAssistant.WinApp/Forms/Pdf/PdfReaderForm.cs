@@ -42,6 +42,7 @@ namespace LearningAssistant.Forms.Pdf
         private readonly IEventBus? _eventBus;
         private readonly IPdfAiService? _pdfAiService;
         private readonly IPdfDocumentTextIndex? _documentTextIndex;
+        private readonly IPdfAutoLayoutService? _autoLayoutService;
         private readonly Services.Learning.ISpacedRepetitionService? _spacedRepetitionService;
         private readonly Services.Learning.INoteService? _noteService;
         private readonly Services.Learning.IUserSessionService? _userSessionService;
@@ -54,6 +55,11 @@ namespace LearningAssistant.Forms.Pdf
         private PdfReaderNightModeManager? _nightModeManager;
         private PdfReaderHighlightManager? _highlightManager;
         private PdfAutoHighlightManager? _autoHighlightManager;
+        private ContextMenuStrip? _autoHighlightMenu;
+        private ToolStripMenuItem? _autoHighlightWholeTextItem;
+        private ToolStripMenuItem? _autoHighlightWholeOcrItem;
+        private ToolStripMenuItem? _autoHighlightCancelItem;
+        private ToolStripMenuItem? _autoHighlightClearAllItem;
         private PdfReaderNavigationManager? _navigationManager;
         private PdfReaderAudioManager? _audioManager;
         private PdfAudioTrackManager? _audioTrackManager;
@@ -442,7 +448,7 @@ namespace LearningAssistant.Forms.Pdf
             _logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<PdfReaderForm>.Instance;
         }
 
-        public PdfReaderForm(ILogger<PdfReaderForm> logger, IAIPanelPopupService? aiPanelPopupService = null, Services.Learning.IPendingContentService? pendingContentService = null, IHighlightService? highlightService = null, IAnnotationService? annotationService = null, IEventBus? eventBus = null, IAudioRecorderService? audioRecorderService = null, IPdfAiService? pdfAiService = null, IPdfDocumentTextIndex? documentTextIndex = null, Services.Learning.ISpacedRepetitionService? spacedRepetitionService = null, Services.Learning.INoteService? noteService = null, Services.Learning.IUserSessionService? userSessionService = null, Services.Learning.IStudyEntryService? studyEntryService = null, AppConfig? appConfig = null)
+        public PdfReaderForm(ILogger<PdfReaderForm> logger, IAIPanelPopupService? aiPanelPopupService = null, Services.Learning.IPendingContentService? pendingContentService = null, IHighlightService? highlightService = null, IAnnotationService? annotationService = null, IEventBus? eventBus = null, IAudioRecorderService? audioRecorderService = null, IPdfAiService? pdfAiService = null, IPdfDocumentTextIndex? documentTextIndex = null, Services.Learning.ISpacedRepetitionService? spacedRepetitionService = null, Services.Learning.INoteService? noteService = null, Services.Learning.IUserSessionService? userSessionService = null, Services.Learning.IStudyEntryService? studyEntryService = null, AppConfig? appConfig = null, IPdfAutoLayoutService? autoLayoutService = null)
         {
             InitializeComponent();
             WindowState = FormWindowState.Maximized;
@@ -455,6 +461,7 @@ namespace LearningAssistant.Forms.Pdf
             _audioRecorderService = audioRecorderService;
             _pdfAiService = pdfAiService;
             _documentTextIndex = documentTextIndex;
+            _autoLayoutService = autoLayoutService;
             _spacedRepetitionService = spacedRepetitionService;
             _noteService = noteService;
             _userSessionService = userSessionService;
@@ -501,7 +508,8 @@ namespace LearningAssistant.Forms.Pdf
         {
             _nightModeManager = new PdfReaderNightModeManager(_logger, this);
             _highlightManager = new PdfReaderHighlightManager(_logger, this, _highlightService, _annotationService, _eventBus);
-            _autoHighlightManager = new PdfAutoHighlightManager(_logger, this, _highlightService, _highlightManager);
+            _autoHighlightManager = new PdfAutoHighlightManager(
+                _logger, this, _highlightService, _highlightManager, _autoLayoutService);
             _navigationManager = new PdfReaderNavigationManager(_logger, this);
 
             // 订阅两个 Manager 的撤销动作入栈事件，统一记录到 _unifiedUndoStack，
@@ -3218,6 +3226,9 @@ namespace LearningAssistant.Forms.Pdf
                 // 翻页后同步自动高亮按钮文案（已有自动框选时显示「清除本页」）
                 UpdateAutoHighlightButtonState(busy: false);
 
+                // 整本框选开启时，把当前页已缓存的版面懒加载成高亮
+                _ = _autoHighlightManager?.EnsurePageMaterializedAsync(_currentPageIndex);
+
                 // 处理跨页选中：用户在列表中点击了其他页的标注，导航到此页后执行选中
                 if (_pendingSelectionId != null)
                 {
@@ -3455,6 +3466,9 @@ namespace LearningAssistant.Forms.Pdf
 
                 _pictureBoxPdf.Invalidate();
                 UpdateAutoHighlightButtonState(busy: false);
+
+                // 双页模式：第二页同样按需懒加载自动框选
+                _ = _autoHighlightManager?.EnsurePageMaterializedAsync(_currentPageIndex + 1);
             }
             catch (Exception ex)
             {
@@ -8212,6 +8226,110 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
+        /// <summary>
+        /// 自动高亮右键菜单：整本框选、取消整本任务、清除整本自动高亮。
+        /// </summary>
+        private void BuildAutoHighlightContextMenu(Button button)
+        {
+            if (_autoHighlightMenu != null)
+            {
+                button.ContextMenuStrip = _autoHighlightMenu;
+                return;
+            }
+
+            _autoHighlightMenu = new ContextMenuStrip
+            {
+                ShowImageMargin = false
+            };
+
+            _autoHighlightWholeTextItem = new ToolStripMenuItem("整本自动框选（文本层）")
+            {
+                ToolTipText = "只处理有文本层的页面，扫描页会跳过；完成后浏览页面时自动加载框选"
+            };
+            _autoHighlightWholeTextItem.Click += async (_, _) => await RunWholeBookAsync(allowOcr: false);
+
+            _autoHighlightWholeOcrItem = new ToolStripMenuItem("整本自动框选（含扫描页 OCR）")
+            {
+                ToolTipText = "无文本层的页面使用 OCR 行框；扫描版 PDF 耗时较长，可随时取消"
+            };
+            _autoHighlightWholeOcrItem.Click += async (_, _) => await RunWholeBookAsync(allowOcr: true);
+
+            _autoHighlightCancelItem = new ToolStripMenuItem("取消整本框选");
+            _autoHighlightCancelItem.Click += (_, _) => _autoHighlightManager?.CancelWholeDocument();
+
+            _autoHighlightClearAllItem = new ToolStripMenuItem("清除整本自动高亮");
+            _autoHighlightClearAllItem.Click += async (_, _) => await ClearWholeDocumentAsync();
+
+            _autoHighlightMenu.Items.Add(_autoHighlightWholeTextItem);
+            _autoHighlightMenu.Items.Add(_autoHighlightWholeOcrItem);
+            _autoHighlightMenu.Items.Add(new ToolStripSeparator());
+            _autoHighlightMenu.Items.Add(_autoHighlightCancelItem);
+            _autoHighlightMenu.Items.Add(_autoHighlightClearAllItem);
+
+            _autoHighlightMenu.Opening += (_, _) =>
+            {
+                bool running = _autoHighlightManager?.IsWholeBookRunning == true;
+                bool available = _autoHighlightManager?.CanUseWholeBook == true;
+                if (_autoHighlightWholeTextItem != null) _autoHighlightWholeTextItem.Enabled = available && !running;
+                if (_autoHighlightWholeOcrItem != null) _autoHighlightWholeOcrItem.Enabled = available && !running;
+                if (_autoHighlightCancelItem != null) _autoHighlightCancelItem.Enabled = running;
+                if (_autoHighlightClearAllItem != null) _autoHighlightClearAllItem.Enabled = !running;
+            };
+
+            button.ContextMenuStrip = _autoHighlightMenu;
+        }
+
+        private async Task RunWholeBookAsync(bool allowOcr)
+        {
+            if (_autoHighlightManager == null || string.IsNullOrWhiteSpace(_currentPdfPath))
+            {
+                ShowToast("请先打开 PDF 再使用整本自动框选");
+                return;
+            }
+
+            UpdateAutoHighlightButtonState(busy: true);
+            try
+            {
+                var progress = new Progress<PdfAutoLayoutProgress>(p =>
+                {
+                    if (_translatePanel == null || _translatePanel.IsDisposed) return;
+                    int current = Math.Min(p.CurrentPage + 1, p.TotalPages);
+                    _translatePanel.AutoHighlightButton.Text = $"⏳ {current}/{p.TotalPages}";
+                });
+
+                await _autoHighlightManager.BuildWholeDocumentAsync(allowOcr, progress);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "整本自动框选失败");
+                ShowToast("整本自动框选失败，请稍后重试");
+            }
+            finally
+            {
+                UpdateAutoHighlightButtonState(busy: false);
+            }
+        }
+
+        private async Task ClearWholeDocumentAsync()
+        {
+            if (_autoHighlightManager == null || string.IsNullOrWhiteSpace(_currentPdfPath))
+                return;
+
+            try
+            {
+                await _autoHighlightManager.ClearWholeDocumentAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "清除整本自动框选失败");
+                ShowToast("清除整本自动框选失败");
+            }
+            finally
+            {
+                UpdateAutoHighlightButtonState(busy: false);
+            }
+        }
+
         /// <summary>同步自动高亮按钮的忙碌/清除文案状态。</summary>
         private void UpdateAutoHighlightButtonState(bool busy)
         {
@@ -8282,6 +8400,7 @@ namespace LearningAssistant.Forms.Pdf
             _translatePanel.OcrButton.Click += (_, _) => OcrPageClicked?.Invoke(this, EventArgs.Empty);
             _translatePanel.ShadowingButton.Click += (_, _) => ButtonTranslateShadowing_Click();
             _translatePanel.AutoHighlightButton.Click += (_, _) => ButtonAutoHighlight_Click();
+            BuildAutoHighlightContextMenu(_translatePanel.AutoHighlightButton);
             _translatePanel.OriginalCard.ActionButton!.Click += (_, _) => ButtonSpeakOriginal_Click(null, EventArgs.Empty);
             _translatePanel.TranslationCard.ActionButton!.Click += (_, _) => ButtonSpeakTranslation_Click(null, EventArgs.Empty);
             _translatePanel.GlossaryButton.Click += (_, _) => ShowTranslationGlossaryDialog();
