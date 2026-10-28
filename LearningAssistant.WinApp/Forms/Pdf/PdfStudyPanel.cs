@@ -27,6 +27,9 @@ public partial class PdfStudyPanel : UserControl
         practiceCard.Body.Controls.Add(practiceLayout);
         aiCard.Body.Controls.Add(aiLayout);
         listCard.Body.Controls.Add(itemList);
+        var tip = new ToolTip(components);
+        tip.SetToolTip(autoHighlightButton,
+            "自动框选当前页正文区域（排除页码）；再次点击清除本页框选；右键可整本框选");
         root.Resize += (_, _) => UpdateRowHeights();
         UpdateRowHeights();
     }
@@ -50,6 +53,27 @@ public partial class PdfStudyPanel : UserControl
     [Browsable(false)]
     [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public Label SentenceCountLabel => sentenceCount;
+
+    /// <summary>「自动高亮」按钮。</summary>
+    [Browsable(false)]
+    [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public Button AutoHighlightButton => autoHighlightButton;
+
+    /// <summary>
+    /// 更新自动高亮按钮状态：任务进行中禁用并提示；当前页已有自动框选时显示清除文案。
+    /// </summary>
+    public void UpdateAutoHighlightState(bool busy, bool hasAutoHighlights)
+    {
+        if (busy)
+        {
+            autoHighlightButton.Enabled = false;
+            autoHighlightButton.Text = "⏳ 正在框选";
+            return;
+        }
+
+        autoHighlightButton.Enabled = true;
+        autoHighlightButton.Text = hasAutoHighlights ? "🧹 清除本页" : "🖍 自动高亮";
+    }
 
     /// <summary>「本页高亮全部加入学习」按钮。</summary>
     [Browsable(false)]
@@ -127,7 +151,7 @@ public partial class PdfStudyPanel : UserControl
         int buttonHeight = Math.Max(32, addHighlightsButton.Font.Height + 16);
         int statHeight = Math.Max(26, highlightCount.Font.Height + 12);
 
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < 4; i++)
             actionLayout.RowStyles[i].Height = buttonHeight + 6;
 
         int cardWidth = Math.Max(140, root.ClientSize.Width - 12);
@@ -137,7 +161,7 @@ public partial class PdfStudyPanel : UserControl
             TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix).Height);
 
         float overviewHeight = statHeight * 3 + 44;
-        float actionHeight = 40 + 3 * (buttonHeight + 6) + hintHeight + 6 + 4;
+        float actionHeight = 40 + 4 * (buttonHeight + 6) + hintHeight + 6 + 4;
         float audioHeight = 40 + 2 * (buttonHeight + 4);
         // 录音按钮显示时三行（录音/本页跟读/整本跟读），隐藏时两行（本页/整本）
         int practiceRows = recordingButton.Visible ? 3 : 2;

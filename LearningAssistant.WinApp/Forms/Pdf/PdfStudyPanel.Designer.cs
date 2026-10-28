@@ -22,6 +22,7 @@ partial class PdfStudyPanel
         sentenceCount = new Label();
         actionCard = new SidebarCard();
         actionLayout = new TableLayoutPanel();
+        autoHighlightButton = new Button();
         addHighlightsButton = new Button();
         openHighlightButton = new Button();
         flashcardsButton = new Button();
@@ -183,21 +184,42 @@ partial class PdfStudyPanel
         actionLayout.BackColor = Color.Transparent;
         actionLayout.ColumnCount = 1;
         actionLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-        actionLayout.Controls.Add(addHighlightsButton, 0, 0);
-        actionLayout.Controls.Add(openHighlightButton, 0, 1);
-        actionLayout.Controls.Add(flashcardsButton, 0, 2);
-        actionLayout.Controls.Add(hint, 0, 3);
+        actionLayout.Controls.Add(autoHighlightButton, 0, 0);
+        actionLayout.Controls.Add(addHighlightsButton, 0, 1);
+        actionLayout.Controls.Add(openHighlightButton, 0, 2);
+        actionLayout.Controls.Add(flashcardsButton, 0, 3);
+        actionLayout.Controls.Add(hint, 0, 4);
         actionLayout.Dock = DockStyle.Fill;
         actionLayout.Margin = Padding.Empty;
         actionLayout.Name = "actionLayout";
         actionLayout.Padding = Padding.Empty;
-        actionLayout.RowCount = 4;
+        actionLayout.RowCount = 5;
+        actionLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
         actionLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
         actionLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
         actionLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
         actionLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
         actionLayout.Size = new Size(256, 106);
         actionLayout.TabIndex = 0;
+        // 
+        // autoHighlightButton
+        // 
+        autoHighlightButton.AutoEllipsis = true;
+        autoHighlightButton.BackColor = Color.White;
+        autoHighlightButton.Cursor = Cursors.Hand;
+        autoHighlightButton.Dock = DockStyle.Fill;
+        autoHighlightButton.FlatAppearance.BorderColor = Color.FromArgb(226, 232, 240);
+        autoHighlightButton.FlatAppearance.BorderSize = 1;
+        autoHighlightButton.FlatStyle = FlatStyle.Flat;
+        autoHighlightButton.Font = new Font("Microsoft YaHei UI", 9F);
+        autoHighlightButton.ForeColor = Color.FromArgb(15, 23, 42);
+        autoHighlightButton.Margin = new Padding(0, 0, 0, 6);
+        autoHighlightButton.Name = "autoHighlightButton";
+        autoHighlightButton.Padding = new Padding(10, 0, 0, 0);
+        autoHighlightButton.TabIndex = 0;
+        autoHighlightButton.Tag = "secondary";
+        autoHighlightButton.Text = "🖍 自动高亮";
+        autoHighlightButton.TextAlign = ContentAlignment.MiddleLeft;
         // 
         // addHighlightsButton
         // 
@@ -584,6 +606,7 @@ partial class PdfStudyPanel
     private Label sentenceCount;
     private SidebarCard actionCard;
     private TableLayoutPanel actionLayout;
+    private Button autoHighlightButton;
     private Button addHighlightsButton;
     private Button openHighlightButton;
     private Button flashcardsButton;

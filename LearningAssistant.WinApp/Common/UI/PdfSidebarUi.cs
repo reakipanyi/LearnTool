@@ -262,7 +262,8 @@ namespace LearningAssistant.Common.UI
             BackColor = palette.Background;
             _title.ForeColor = palette.Text;
             _subtitle.ForeColor = palette.Muted;
-            if (_action != null)
+            // Tag 为 keep 的页头操作由宿主自定义配色（如高亮页的导出按钮），主题切换时不要覆盖
+            if (_action != null && (_action.Tag is not string actionTag || actionTag != "keep"))
             {
                 _action.BackColor = PdfSidebarTheme.Brand;
                 _action.ForeColor = Color.White;

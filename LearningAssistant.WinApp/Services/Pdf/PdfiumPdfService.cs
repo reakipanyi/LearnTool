@@ -192,6 +192,10 @@ namespace LearningAssistant.Services.Pdf
                 if (rawText.Length == 0)
                     return Array.Empty<LearningAssistant.Models.Pdf.PdfTextLine>();
 
+                // 同一页共用一个页坐标→渲染坐标变换，避免每个文字矩形都重新加载 PDF 页面
+                if (!TryBuildPageToDeviceTransform(_pdf, pageIndex, out var pageTransform))
+                    return Array.Empty<LearningAssistant.Models.Pdf.PdfTextLine>();
+
                 var lines = new List<LearningAssistant.Models.Pdf.PdfTextLine>();
                 int lineStart = 0;
                 for (int i = 0; i <= rawText.Length; i++)
@@ -199,7 +203,7 @@ namespace LearningAssistant.Services.Pdf
                     bool isBreak = i == rawText.Length || rawText[i] == '\n' || rawText[i] == '\r';
                     if (!isBreak) continue;
 
-                    AddTextLine(_pdf, pageIndex, rawText, lineStart, i, pageSize, lines);
+                    AddTextLine(_pdf, pageIndex, rawText, lineStart, i, pageSize, pageTransform, lines);
 
                     // 跳过 CRLF 中的 LF，保证下一行偏移正确
                     if (i < rawText.Length && rawText[i] == '\r' &&
@@ -224,6 +228,7 @@ namespace LearningAssistant.Services.Pdf
             int start,
             int end,
             SizeFInfo pageSize,
+            PageToDeviceTransform pageTransform,
             List<LearningAssistant.Models.Pdf.PdfTextLine> destination)
         {
             while (start < end && char.IsWhiteSpace(rawText[start])) start++;
@@ -248,8 +253,8 @@ namespace LearningAssistant.Services.Pdf
 
             float left = float.MaxValue;
             float right = float.MinValue;
-            float top = float.MinValue;
-            float bottom = float.MaxValue;
+            float top = float.MaxValue;
+            float bottom = float.MinValue;
             bool hasBounds = false;
 
             foreach (var rectangle in rectangles)
@@ -257,26 +262,46 @@ namespace LearningAssistant.Services.Pdf
                 var bounds = rectangle.Bounds;
                 if (bounds.Width <= 0 || bounds.Height == 0) continue;
 
-                float rectBottom = bounds.Y;
-                float rectTop = bounds.Y + bounds.Height;
-                if (rectBottom > rectTop)
+                // 文本矩形是页坐标，必须经页面变换转到渲染坐标后再归一化。
+                // 带负 CropBox 原点或页面旋转的 PDF，如果直接除以页宽，
+                // 自动高亮会整体偏移，导致文字框选不全。
+                float rawLeft = Math.Min(bounds.Left, bounds.Right);
+                float rawRight = Math.Max(bounds.Left, bounds.Right);
+                float rawTop = Math.Min(bounds.Top, bounds.Bottom);
+                float rawBottom = Math.Max(bounds.Top, bounds.Bottom);
+
+                double rectLeft = double.MaxValue;
+                double rectRight = double.MinValue;
+                double rectTop = double.MaxValue;
+                double rectBottom = double.MinValue;
+                foreach (var (rawX, rawY) in new[]
+                         {
+                             (rawLeft, rawTop), (rawLeft, rawBottom),
+                             (rawRight, rawTop), (rawRight, rawBottom)
+                         })
                 {
-                    (rectBottom, rectTop) = (rectTop, rectBottom);
+                    var (deviceX, deviceY) = pageTransform.Map(rawX, rawY);
+                    rectLeft = Math.Min(rectLeft, deviceX);
+                    rectRight = Math.Max(rectRight, deviceX);
+                    rectTop = Math.Min(rectTop, deviceY);
+                    rectBottom = Math.Max(rectBottom, deviceY);
                 }
 
-                left = Math.Min(left, bounds.X);
-                right = Math.Max(right, bounds.X + bounds.Width);
-                top = Math.Max(top, rectTop);
-                bottom = Math.Min(bottom, rectBottom);
+                if (rectRight <= rectLeft || rectBottom <= rectTop) continue;
+
+                left = Math.Min(left, (float)rectLeft);
+                right = Math.Max(right, (float)rectRight);
+                top = Math.Min(top, (float)rectTop);
+                bottom = Math.Max(bottom, (float)rectBottom);
                 hasBounds = true;
             }
 
-            if (!hasBounds || right <= left || top <= bottom) return;
+            if (!hasBounds || right <= left || bottom <= top) return;
 
             float x = left / pageSize.Width;
-            float y = (pageSize.Height - top) / pageSize.Height;
+            float y = top / pageSize.Height;
             float width = (right - left) / pageSize.Width;
-            float height = (top - bottom) / pageSize.Height;
+            float height = (bottom - top) / pageSize.Height;
 
             if (width <= 0 || height <= 0) return;
             if (x < -0.02f || y < -0.02f || x > 1.02f || y > 1.02f) return;
@@ -288,8 +313,73 @@ namespace LearningAssistant.Services.Pdf
                 Y = Math.Clamp(y, 0f, 1f),
                 Width = Math.Min(width, 1f - Math.Clamp(x, 0f, 1f)),
                 Height = Math.Min(height, 1f - Math.Clamp(y, 0f, 1f)),
-                FontSize = top - bottom
+                FontSize = bottom - top
             });
+        }
+
+        /// <summary>
+        /// 建立页坐标到渲染坐标的仿射变换。PDFium 的文本矩形使用页面原始坐标，
+        /// 而渲染结果从 CropBox 原点开始并按 /Rotate 旋转，两者不能直接按页宽归一化。
+        /// </summary>
+        private static bool TryBuildPageToDeviceTransform(
+            PdfDocument document,
+            int pageIndex,
+            out PageToDeviceTransform transform)
+        {
+            const float probe = 1000f;
+            try
+            {
+                var origin = document.RectangleFromPdf(pageIndex, new RectangleF(0f, 0f, 0f, 0f));
+                var xAxis = document.RectangleFromPdf(pageIndex, new RectangleF(probe, 0f, 0f, 0f));
+                var yAxis = document.RectangleFromPdf(pageIndex, new RectangleF(0f, probe, 0f, 0f));
+
+                transform = new PageToDeviceTransform(
+                    origin.X, origin.Y,
+                    (xAxis.X - origin.X) / probe,
+                    (xAxis.Y - origin.Y) / probe,
+                    (yAxis.X - origin.X) / probe,
+                    (yAxis.Y - origin.Y) / probe);
+                return true;
+            }
+            catch
+            {
+                transform = default;
+                return false;
+            }
+        }
+
+        /// <summary>页坐标（左下原点、Y 向上）到渲染坐标（左上原点、Y 向下）的仿射变换。</summary>
+        private readonly struct PageToDeviceTransform
+        {
+            private readonly double _originX;
+            private readonly double _originY;
+            private readonly double _scaleXx;
+            private readonly double _scaleXy;
+            private readonly double _scaleYx;
+            private readonly double _scaleYy;
+
+            public PageToDeviceTransform(
+                double originX,
+                double originY,
+                double scaleXx,
+                double scaleXy,
+                double scaleYx,
+                double scaleYy)
+            {
+                _originX = originX;
+                _originY = originY;
+                _scaleXx = scaleXx;
+                _scaleXy = scaleXy;
+                _scaleYx = scaleYx;
+                _scaleYy = scaleYy;
+            }
+
+            public (double X, double Y) Map(double x, double y)
+            {
+                return (
+                    _originX + x * _scaleXx + y * _scaleYx,
+                    _originY + x * _scaleXy + y * _scaleYy);
+            }
         }
 
         public int GetPageCount(string pdfPath)

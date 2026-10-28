@@ -102,5 +102,11 @@ namespace LearningAssistant.Managers
         void CompleteSelectionTranslation(int requestId, int pageIndex, string ocrText, string translation, bool fromCache);
         /// <summary>展示翻译失败；过期代次会被丢弃。</summary>
         void FailSelectionTranslation(int requestId, int pageIndex, string ocrText, string message);
+
+        /// <summary>
+        /// 写入指定页面的原文；用于跨页高亮 OCR 时保留真实来源页，
+        /// 避免翻译面板内容被误当成当前显示页的文本。
+        /// </summary>
+        void SetOriginalTextForPage(int pageIndex, string text);
     }
 }

@@ -96,6 +96,11 @@ namespace LearningAssistant.Forms.Pdf
         private IPronunciationScorer? _pronunciationScorer;
         // 选区翻译请求代次：翻页或再次选择时丢弃过期结果
         private int _selectionTranslationRequestId;
+        // 翻译面板原文来源：切换文档/翻页后据此判断面板内容是否属于当前页，
+        // 避免“本页跟读”误用上一页或其他文件残留的高亮/OCR 文本
+        private string _originalTextSourcePdfPath = string.Empty;
+        private int _originalTextSourcePageIndex = -1;
+        private bool _suppressOriginalTextSourceTracking;
 
         // 暂停跟读：空格暂停 -> S 录音 -> 空格结束并续播
         private System.Windows.Forms.Timer? _shadowingTimer;
@@ -773,6 +778,76 @@ namespace LearningAssistant.Forms.Pdf
 
             _topTranslationBar?.ShowTranslationFailure(pageIndex, ocrText, message);
             PositionTopTranslationBar();
+        }
+
+        /// <summary>
+        /// 写入指定页面的原文，并记录来源。整页 OCR 或跨页高亮取词时，
+        /// 页码可能不是当前显示页，因此必须显式保留来源页。
+        /// </summary>
+        public void SetOriginalTextForPage(int pageIndex, string text)
+        {
+            _textBoxOriginal.Text = text ?? string.Empty;
+            _originalTextSourcePdfPath = _currentPdfPath ?? string.Empty;
+            _originalTextSourcePageIndex = pageIndex;
+        }
+
+        /// <summary>翻译面板当前原文是否确实来自当前文档的当前页。</summary>
+        private bool IsOriginalTextSourceCurrent()
+        {
+            return string.Equals(
+                       _originalTextSourcePdfPath ?? string.Empty,
+                       _currentPdfPath ?? string.Empty,
+                       StringComparison.OrdinalIgnoreCase)
+                   && _originalTextSourcePageIndex == _currentPageIndex;
+        }
+
+        /// <summary>
+        /// 翻页/切换文档后同步翻译面板：若面板内容来自其他页或其他文件，
+        /// 则回显当前页最近一条译文或清空，避免“本页跟读”串用无关高亮。
+        /// </summary>
+        private void SyncTranslationPanelToCurrentPage(bool restoreCachedEntry)
+        {
+            if (_textBoxOriginal == null || IsDisposed)
+                return;
+            if (IsOriginalTextSourceCurrent())
+                return;
+
+            string original = string.Empty;
+            string translation = string.Empty;
+            if (restoreCachedEntry
+                && _selectionTranslationCache != null
+                && !string.IsNullOrWhiteSpace(_currentPdfPath))
+            {
+                var entry = _selectionTranslationCache.GetLatest(
+                    _currentPdfPath, _currentPageIndex, CurrentSelectionTranslationLanguage);
+                original = entry?.OriginalText?.Trim() ?? string.Empty;
+                translation = entry?.Translation?.Trim() ?? string.Empty;
+            }
+
+            _suppressOriginalTextSourceTracking = true;
+            try
+            {
+                if (!string.Equals(_textBoxOriginal.Text, original, StringComparison.Ordinal))
+                    _textBoxOriginal.Text = original;
+                if (_textBoxTranslation != null
+                    && !string.Equals(_textBoxTranslation.Text, translation, StringComparison.Ordinal))
+                {
+                    _textBoxTranslation.Text = translation;
+                }
+
+                _originalTextSourcePdfPath = _currentPdfPath ?? string.Empty;
+                // 切换文档时只清空、不回显；标记为无来源页，
+                // 等 SetCurrentPageIndex 再按新文档当前页恢复缓存
+                _originalTextSourcePageIndex = restoreCachedEntry ? _currentPageIndex : -1;
+            }
+            finally
+            {
+                _suppressOriginalTextSourceTracking = false;
+            }
+
+            UpdateTranslateHeaderStatus();
+            if (_tabControlLeft != null && _tabControlLeft.SelectedTab == _tabPageStudy)
+                UpdateStudyTab();
         }
 
         /// <summary>翻回有缓存的页面时自动回显本页最近一条译文。</summary>
@@ -1648,7 +1723,8 @@ namespace LearningAssistant.Forms.Pdf
             // 没有缓存文本时保持现状，避免清空用户当前正在查看的内容
             if (string.IsNullOrWhiteSpace(highlight.Text)) return;
 
-            _textBoxOriginal.Text = highlight.Text;
+            // 记录高亮所属页，跨页模式下选中的可能是第二页的高亮
+            SetOriginalTextForPage(highlight.PageIndex, highlight.Text);
             // 译文同样判空：高亮尚未翻译时保留用户当前正在查看的译文
             if (!string.IsNullOrWhiteSpace(highlight.TranslationText))
                 _textBoxTranslation.Text = highlight.TranslationText;
@@ -2104,20 +2180,33 @@ namespace LearningAssistant.Forms.Pdf
         }
 
         /// <summary>
-        /// 全屏时 Esc 在命令键阶段就地处理：此时焦点可能落在文本输入框或二级浮层上，
+        /// 全屏时 Esc 与 PgUp/PgDn 在命令键阶段就地处理：此时焦点可能落在文本输入框或二级浮层上，
         /// KeyDown 会被 IsTextEditingFocused 的守卫拦下，或被子控件的对话框键吃掉，
-        /// 导致“全屏按 Esc 退不出去”。录音中与抽屉内的既有优先级保持不变，仍交给 KeyDown。
+        /// 导致“全屏按 Esc 退不出去 / PgUp、PgDn 不翻页”。录音中与抽屉内的既有优先级保持不变，仍交给 KeyDown。
         /// </summary>
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
-            if (keyData == Keys.Escape
-                && !_shadowingRecording
-                && !(_audioDrawer?.Visible == true && _audioDrawer.ContainsFocus)
-                && (_isFullscreen || FormBorderStyle == FormBorderStyle.None))
+            bool isFullscreenSurface = _isFullscreen || FormBorderStyle == FormBorderStyle.None;
+            bool shortcutsSuspended = _shadowingRecording
+                || (_audioDrawer?.Visible == true && _audioDrawer.ContainsFocus);
+
+            if (keyData == Keys.Escape && !shortcutsSuspended && isFullscreenSurface)
             {
                 // 无边框窗口只可能来自全屏，状态标记若因异常未同步则在此兜底
                 _isFullscreen = true;
                 ToggleFullscreen();
+                return true;
+            }
+
+            // 全屏下工具栏被隐藏，焦点可能落在页码输入框、侧栏控件等上面而吞掉翻页键；
+            // 这里在命令键阶段直接翻页，保证全屏阅读时 PgUp/PgDn 始终可用
+            if ((keyData == Keys.PageUp || keyData == Keys.PageDown)
+                && !shortcutsSuspended && isFullscreenSurface)
+            {
+                if (keyData == Keys.PageDown)
+                    _navigationManager?.NextPage();
+                else
+                    _navigationManager?.PreviousPage();
                 return true;
             }
 
@@ -2474,12 +2563,20 @@ namespace LearningAssistant.Forms.Pdf
                 {
                     // 记录进入全屏前的状态，退出时按原样恢复
                     _windowStateBeforeFullscreen = WindowState;
+                    // 隐藏前先判断焦点是否落在即将隐藏的工具栏/状态栏内：
+                    // 隐藏后焦点若残留在其中（如页码输入框），快捷键会先被输入框守卫拦下
+                    bool focusInsideHiddenBar = _panelNavigation?.ContainsFocus == true
+                        || _statusBar?.ContainsFocus == true;
+
                     FormBorderStyle = FormBorderStyle.None;
                     WindowState = FormWindowState.Maximized;
                     if (_panelNavigation != null)
                         _panelNavigation.Visible = false;
                     if (_statusBar != null)
                         _statusBar.Visible = false;
+                    // 焦点收回窗体，保证全屏下 PgUp/PgDn、Esc 等阅读快捷键直达窗体
+                    if (focusInsideHiddenBar)
+                        ResetKeyboardFocusToForm();
                     _isFullscreen = true;
                 }
                 else
@@ -2499,6 +2596,14 @@ namespace LearningAssistant.Forms.Pdf
             {
                 _logger.LogError(ex, "Error toggling fullscreen");
             }
+        }
+
+        /// <summary>把键盘焦点从子控件收回窗体本身，避免焦点残留在已隐藏的工具栏/输入框里。</summary>
+        private void ResetKeyboardFocusToForm()
+        {
+            ActiveControl = null;
+            if (!Focused)
+                Focus();
         }
 
         private void PdfReaderFormV2_Resize(object? sender, EventArgs e)
@@ -2893,7 +2998,12 @@ namespace LearningAssistant.Forms.Pdf
             // 新文档的音频档案是异步加载的：先收起播放条，避免上一本文档的曲目或空条残留
             HideAudioPlayerBarForDocumentSwitch();
             if (documentChanged)
+            {
                 RestoreSidebarTabSelection();
+                // 面板原文/译文可能来自上一本文档的高亮或 OCR，先清空，
+                // 等 SetCurrentPageIndex 再从新文档的页缓存回显
+                SyncTranslationPanelToCurrentPage(restoreCachedEntry: false);
+            }
             RefreshHighlightList();
             // 打开文档时渲染器尚未初始化，优先使用调用方传入的页数，避免按 0 页匹配导致配套音频不加载
             int resolvedPageCount = pageCount >= 0 ? pageCount : (_presenter?.PageCount ?? 0);
@@ -2902,7 +3012,10 @@ namespace LearningAssistant.Forms.Pdf
                     TaskContinuationOptions.OnlyOnFaulted);
             _audioPanel?.RefreshData();
 
-            LoadHighlightsForCurrentPage();
+            // 切换文档时当前页位图仍是上一本文档的，直接叠新文档高亮会短暂显示错页高亮；
+            // 等新页渲染完成后的 DisplayImage 再统一刷新高亮层
+            if (!documentChanged)
+                LoadHighlightsForCurrentPage();
             Text = $"{AppTitle} - {Path.GetFileName(pdfPath)}";
 
             // 记录“目录 -> 上次打开的文件”，并在左侧文件树中突出显示当前文件，
@@ -3210,6 +3323,9 @@ namespace LearningAssistant.Forms.Pdf
             UpdateStatusBar();
             // 翻回有译文缓存的页面时自动回显上次译文
             RestoreSelectionTranslationForPage(pageIndex);
+            // 翻译面板若残留上一页/上一本文档的高亮文本，回显本页缓存或清空，
+            // 保证学习页的“可跟读句子”和“本页跟读”只使用当前页内容
+            SyncTranslationPanelToCurrentPage(restoreCachedEntry: true);
         }
 
         public void SetPageText(int pageIndex, string text)
@@ -3863,12 +3979,12 @@ namespace LearningAssistant.Forms.Pdf
 
         public void SetOriginalText(string text)
         {
-            _textBoxOriginal.Text = text;
+            SetOriginalTextForPage(_currentPageIndex, text);
         }
 
         public void SetOcrResultText(string text)
         {
-            _textBoxOriginal.Text = text;
+            SetOriginalTextForPage(_currentPageIndex, text);
         }
 
         public byte[]? GetCurrentImage()
@@ -7859,6 +7975,11 @@ namespace LearningAssistant.Forms.Pdf
             _studyLearningCount = _studyPanel.LearningCountLabel;
             _studySentenceCount = _studyPanel.SentenceCountLabel;
 
+            // 自动高亮不再只藏在翻译抽屉：学习页一键操作区直接提供入口
+            _studyPanel.AutoHighlightButton.Click += (_, _) => ButtonAutoHighlight_Click();
+            // 与翻译面板共用同一个右键菜单，整本框选/清除入口在两处保持一致
+            BuildAutoHighlightContextMenu(_studyPanel.AutoHighlightButton);
+
             _buttonStudyAddHighlights = _studyPanel.AddHighlightsButton;
             _buttonStudyAddHighlights.Click += ButtonStudyAddHighlights_Click;
             _buttonStudyFlashcards = _studyPanel.FlashcardsButton;
@@ -7885,6 +8006,9 @@ namespace LearningAssistant.Forms.Pdf
 
             _studyItemList = _studyPanel.ItemList;
             _studyItemList.ClientSizeChanged += (_, _) => ResizeStudyItemRows();
+
+            // 初次构建时同步按钮文案（已有自动框选时显示「清除本页」）
+            UpdateAutoHighlightButtonState(busy: false);
         }
 
         /// <summary>
@@ -7925,7 +8049,10 @@ namespace LearningAssistant.Forms.Pdf
                 _logger?.LogWarning(ex, "统计本页已加入学习项失败");
             }
 
-            int sentenceCount = CountReadableSentences(_textBoxOriginal?.Text);
+            // 只统计确实属于当前页的原文，避免切换文档/翻页后旧高亮文本继续计入
+            int sentenceCount = IsOriginalTextSourceCurrent()
+                ? CountReadableSentences(_textBoxOriginal?.Text)
+                : 0;
 
             _studyHighlightCount.Text = $"🖍 本页高亮：{highlightCount} 条";
             _studyLearningCount.Text = $"📚 已加入学习：{learningCount} 项";
@@ -8216,13 +8343,25 @@ namespace LearningAssistant.Forms.Pdf
 
         private void ButtonStudyShadowing_Click(object? sender, EventArgs e)
         {
-            if (CountReadableSentences(_textBoxOriginal?.Text) == 0)
+            if (!EnsureTranslationPanelForCurrentPage())
             {
-                ShowToast("请先在翻译面板识别原文，再开始跟读");
+                ShowToast("请先在翻译面板识别当前页原文，再开始跟读");
                 return;
             }
 
             OpenShadowingWindow();
+        }
+
+        /// <summary>
+        /// 打开跟读前校正翻译面板：若文本来自其他页/其他文档，
+        /// 回显本页缓存或清空，避免把无关高亮文本带进跟读窗口。
+        /// </summary>
+        private bool EnsureTranslationPanelForCurrentPage()
+        {
+            if (!IsOriginalTextSourceCurrent())
+                SyncTranslationPanelToCurrentPage(restoreCachedEntry: true);
+
+            return CountReadableSentences(_textBoxOriginal?.Text) > 0;
         }
 
         /// <summary>整本跟读：按全书高亮的识别文本逐条练习，不再逐页 OCR。</summary>
@@ -8234,9 +8373,9 @@ namespace LearningAssistant.Forms.Pdf
         /// <summary>翻译面板「句子跟读」：用当前页原文直接打开分句跟读窗口。</summary>
         private void ButtonTranslateShadowing_Click()
         {
-            if (CountReadableSentences(_textBoxOriginal?.Text) == 0)
+            if (!EnsureTranslationPanelForCurrentPage())
             {
-                ShowToast("请先识别原文，再开始跟读");
+                ShowToast("请先识别当前页原文，再开始跟读");
                 return;
             }
 
@@ -8337,11 +8476,13 @@ namespace LearningAssistant.Forms.Pdf
             {
                 var progress = new Progress<PdfAutoLayoutProgress>(p =>
                 {
-                    if (_translatePanel == null || _translatePanel.IsDisposed) return;
                     int current = Math.Min(p.CurrentPage + 1, p.TotalPages);
                     string suffix = p.Source == PdfTextLineSource.Ocr ? " OCR" : string.Empty;
-                    _translatePanel.AutoHighlightButton.Text =
-                        $"⏳ {current}/{p.TotalPages}{suffix}";
+                    string text = $"⏳ {current}/{p.TotalPages}{suffix}";
+                    if (_translatePanel is { IsDisposed: false })
+                        _translatePanel.AutoHighlightButton.Text = text;
+                    if (_studyPanel is { IsDisposed: false })
+                        _studyPanel.AutoHighlightButton.Text = text;
                 });
 
                 await _autoHighlightManager.BuildWholeDocumentAsync(allowOcr, progress);
@@ -8377,15 +8518,16 @@ namespace LearningAssistant.Forms.Pdf
             }
         }
 
-        /// <summary>同步自动高亮按钮的忙碌/清除文案状态。</summary>
+        /// <summary>同步自动高亮按钮的忙碌/清除文案状态（学习页与翻译抽屉共用）。</summary>
         private void UpdateAutoHighlightButtonState(bool busy)
         {
-            if (_translatePanel == null || _translatePanel.IsDisposed) return;
-
             try
             {
                 bool hasAutoHighlights = _autoHighlightManager?.HasAutoHighlightsForVisiblePages() ?? false;
-                _translatePanel.UpdateAutoHighlightState(busy, hasAutoHighlights);
+                if (_translatePanel is { IsDisposed: false })
+                    _translatePanel.UpdateAutoHighlightState(busy, hasAutoHighlights);
+                if (_studyPanel is { IsDisposed: false })
+                    _studyPanel.UpdateAutoHighlightState(busy, hasAutoHighlights);
             }
             catch (Exception ex)
             {
@@ -8465,7 +8607,17 @@ namespace LearningAssistant.Forms.Pdf
             _speedSelector = _translatePanel.TtsSpeedSelector;
 
             SubscribeTranslationScrollSync();
-            _textBoxOriginal.TextChanged += (_, _) => UpdateTranslateHeaderStatus();
+            _textBoxOriginal.TextChanged += (_, _) =>
+            {
+                // 面板文本被程序或用户改写时，默认归属当前文档当前页；
+                // 跨页写词由 SetOriginalTextForPage 显式覆盖来源页
+                if (!_suppressOriginalTextSourceTracking)
+                {
+                    _originalTextSourcePdfPath = _currentPdfPath ?? string.Empty;
+                    _originalTextSourcePageIndex = _currentPageIndex;
+                }
+                UpdateTranslateHeaderStatus();
+            };
             _textBoxTranslation.TextChanged += (_, _) => UpdateTranslateHeaderStatus();
             UpdateTranslateHeaderStatus();
         }
@@ -9002,6 +9154,13 @@ namespace LearningAssistant.Forms.Pdf
             if (originalText.Length == 0)
             {
                 ShowWarning("请先识别或输入原文，再开始句子跟读。");
+                return;
+            }
+
+            // 原文必须来自当前文档当前页，防止把其他文件/页面的高亮文本带进跟读
+            if (!IsOriginalTextSourceCurrent())
+            {
+                ShowWarning("翻译面板原文属于其他页面或文件，请先识别当前页原文。");
                 return;
             }
 

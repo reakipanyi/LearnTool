@@ -9,6 +9,7 @@ public partial class PdfHighlightPanel : UserControl
     public PdfHighlightPanel()
     {
         InitializeComponent();
+        ConfigureExportButton();
         header.Resize += (_, _) => LayoutHeaderActions();
         LayoutHeaderActions();
         _tip.SetToolTip(removeButton, "删除所选高亮");
@@ -17,6 +18,33 @@ public partial class PdfHighlightPanel : UserControl
         removeButton.AccessibleName = "删除所选高亮";
         editButton.AccessibleName = "编辑所选高亮";
         batchRemoveButton.AccessibleName = "批量删除所选高亮";
+    }
+
+    /// <summary>
+    /// 把页头的「导出」改成与删除/编辑/批量删除一致的图标按钮，
+    /// 四个操作保持相同尺寸、圆角边框和配色体系。
+    /// </summary>
+    private void ConfigureExportButton()
+    {
+        var exportButton = header.ActionButton;
+        if (exportButton == null) return;
+
+        exportButton.Text = "⬇";
+        exportButton.Size = new Size(32, 26);
+        exportButton.Font = new Font("Segoe UI Emoji", 9F);
+        exportButton.FlatStyle = FlatStyle.Flat;
+        exportButton.BackColor = Color.FromArgb(220, 252, 231);
+        exportButton.ForeColor = Color.FromArgb(22, 101, 52);
+        exportButton.FlatAppearance.BorderSize = 1;
+        exportButton.FlatAppearance.BorderColor = Color.FromArgb(134, 239, 172);
+        exportButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(187, 247, 208);
+        exportButton.FlatAppearance.MouseDownBackColor = Color.FromArgb(134, 239, 172);
+        exportButton.Cursor = Cursors.Hand;
+        exportButton.Margin = Padding.Empty;
+        // keep：主题切换时保留这组自定义配色，交给 PdfHighlightPanel 自己维护
+        exportButton.Tag = "keep";
+        exportButton.AccessibleName = "导出高亮";
+        _tip.SetToolTip(exportButton, "导出高亮");
     }
 
     /// <summary>页头，宿主用于更新摘录条数等状态。</summary>
@@ -49,6 +77,9 @@ public partial class PdfHighlightPanel : UserControl
     private void LayoutHeaderActions()
     {
         var exportButton = header.ActionButton;
+        if (exportButton != null)
+            exportButton.Location = new Point(exportButton.Left, 11);
+
         int right = exportButton != null ? exportButton.Left - 4 : header.Width - 4;
         foreach (var button in new[] { batchRemoveButton, editButton, removeButton })
         {

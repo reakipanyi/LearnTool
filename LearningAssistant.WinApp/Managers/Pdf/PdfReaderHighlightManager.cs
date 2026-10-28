@@ -489,7 +489,8 @@ namespace LearningAssistant.Managers
         {
             if (string.IsNullOrEmpty(ocrText) || _form.TextBoxOriginal == null) return;
 
-            _form.TextBoxOriginal.Text = ocrText;
+            // 双页模式下选区可能落在第二页，显式记录来源页，避免“本页跟读”串用
+            _form.SetOriginalTextForPage(highlight.PageIndex, ocrText);
 
             await TranslateSelectionToTopBarAsync(pdfPath, highlight, ocrText);
 

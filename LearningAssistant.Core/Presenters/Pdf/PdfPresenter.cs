@@ -590,6 +590,11 @@ namespace LearningAssistant.Presenters
 
         public async Task OcrCropAndTranslateAsync(byte[] imageData, RectInt selRect, RectInt imgDisplayRect)
         {
+            // 记录 OCR 发起时的文档与页码：识别/翻译期间用户可能翻页或换文件，
+            // 结果只能回填到原始页，否则会把无关文本显示到当前页
+            var sourcePdfPath = _pdfFileManager.CurrentFilePath;
+            var sourcePageIndex = _pdfFileManager.CurrentPageIndex;
+
             if (!_pdfOcrService.IsAvailable)
             {
                 var errorMsg = _pdfOcrService.InitErrorMessage ?? "OCR服务未配置";
@@ -615,11 +620,13 @@ namespace LearningAssistant.Presenters
                 if (_view?.AutoTranslateAfterOcr == true)
                 {
                     var result = await _pdfTranslationService.OcrAndTranslateAsync(imageData);
+                    if (!IsSourcePageStillCurrent(sourcePdfPath, sourcePageIndex)) return;
                     UpdateOcrResult(result.Original, result.Translation);
                 }
                 else
                 {
                     var original = await OcrBitmapAsync(imageData);
+                    if (!IsSourcePageStillCurrent(sourcePdfPath, sourcePageIndex)) return;
                     UpdateOcrResult(original, null);
                 }
                 return;
@@ -688,11 +695,14 @@ namespace LearningAssistant.Presenters
                 _logger.LogWarning(ex, "High DPI OCR render failed, fallback to displayed image");
             }
 
+            if (!IsSourcePageStillCurrent(sourcePdfPath, sourcePageIndex)) return;
+
             try
             {
                 if (_view?.AutoTranslateAfterOcr == true)
                 {
                     var result = await _pdfTranslationService.OcrAndTranslateAsync(ocrImageData, ocrRect, GetTargetLanguageOverride());
+                    if (!IsSourcePageStillCurrent(sourcePdfPath, sourcePageIndex)) return;
                     UpdateOcrResult(result.Original, result.Translation);
                 }
                 else
@@ -706,6 +716,7 @@ namespace LearningAssistant.Presenters
                         return;
                     }
                     var original = await OcrBitmapAsync(croppedData);
+                    if (!IsSourcePageStillCurrent(sourcePdfPath, sourcePageIndex)) return;
                     UpdateOcrResult(original, null);
                 }
             }
@@ -768,6 +779,16 @@ namespace LearningAssistant.Presenters
             using var ms = new MemoryStream();
             cropped.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
             return ms.ToArray();
+        }
+
+        /// <summary>异步 OCR 回包到达时，确认发起识别的文档与页码仍是当前页。</summary>
+        private bool IsSourcePageStillCurrent(string? sourcePdfPath, int sourcePageIndex)
+        {
+            return sourcePageIndex == _pdfFileManager.CurrentPageIndex
+                   && string.Equals(
+                       sourcePdfPath ?? string.Empty,
+                       _pdfFileManager.CurrentFilePath ?? string.Empty,
+                       StringComparison.OrdinalIgnoreCase);
         }
 
         private void UpdateOcrResult(string? original, string? translation)
@@ -1914,6 +1935,7 @@ namespace LearningAssistant.Presenters
         private async Task OcrFullPageAsync()
         {
             var pageIndex = _pdfFileManager.CurrentPageIndex;
+            var sourcePdfPath = _pdfFileManager.CurrentFilePath;
             var cacheKey = TryBuildPageCacheKey(pageIndex);
 
             // 已缓存过原文时直接回显，避免重复识别
@@ -1928,7 +1950,9 @@ namespace LearningAssistant.Presenters
             {
                 if (cacheKey != null)
                     StorePageCache(cacheKey, textLayer, null);
-                UpdateOcrResult(textLayer, null);
+                // 文本层读取是异步的，翻页/换文档后旧页结果不再回填面板
+                if (IsSourcePageStillCurrent(sourcePdfPath, pageIndex))
+                    UpdateOcrResult(textLayer, null);
                 return;
             }
 
@@ -1950,6 +1974,9 @@ namespace LearningAssistant.Presenters
             try
             {
                 var original = await OcrBitmapAsync(img);
+                // OCR 期间翻页/换文档时直接丢弃，避免提示或文本出现在新页面
+                if (!IsSourcePageStillCurrent(sourcePdfPath, pageIndex)) return;
+
                 if (string.IsNullOrWhiteSpace(original))
                 {
                     _view?.ShowWarning("本页未识别到文字");
